@@ -58,12 +58,12 @@ test.describe("Customize > Modules", () => {
     await signIn("root", MODULES);
     await expect(page.getByRole("heading", { name: "Modules", level: 2 })).toBeVisible();
     // The header names the core the instance runs and what that means.
-    await expect(page.getByText("Core 0.2.0", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("Core 0.2.1", { exact: true }).first()).toBeVisible();
     await expect(page.getByText(/every module runs on/)).toBeVisible();
 
     // A built-in module has the same facts as a package.
     const contacts = card(page, "Contacts");
-    await expect(contacts).toContainText("0.2.0 · SpaceCorps");
+    await expect(contacts).toContainText("0.2.1 · SpaceCorps");
     await expect(contacts).toContainText("Apache-2.0");
     await expect(contacts).toContainText("Stable");
     await expect(contacts).toContainText("Works with core 0.2");
@@ -222,7 +222,7 @@ test.describe("Customize > Modules", () => {
       .fill(pkg("futurepack", "1.0.0").replace('requires_core = "^0.2"', 'requires_core = ">=9"'));
     const check = page.locator(".mods-check");
     await expect(check.getByText("This package cannot be installed here")).toBeVisible();
-    await expect(check).toContainText("futurepack 1.0.0 needs core >=9, you run 0.2.0");
+    await expect(check).toContainText("futurepack 1.0.0 needs core >=9, you run 0.2.1");
     await expect(check.getByRole("button", { name: "Install" })).toBeDisabled();
     // The server refuses it too, whatever the page says.
     const r = await api.post(
@@ -236,7 +236,7 @@ test.describe("Customize > Modules", () => {
       await api.token("root"),
     );
     expect(r.status).toBe(400);
-    expect(r.json.error).toBe("futurepack 1.0.0 needs core >=9, you run 0.2.0");
+    expect(r.json.error).toBe("futurepack 1.0.0 needs core >=9, you run 0.2.1");
     expect(await installed(api)).not.toContain("futurepack");
   });
 
@@ -324,7 +324,7 @@ test.describe("Customize > Modules", () => {
       await panel.getByRole("tab", { name: "Dependencies" }).click();
       await expect(page).toHaveURL(/section=dependencies/);
       await expect(panel.getByText("Field Service needs core ^0.2")).toBeVisible();
-      await expect(panel.getByText("you run 0.2.0").first()).toBeVisible();
+      await expect(panel.getByText("you run 0.2.1").first()).toBeVisible();
       const tree = panel.getByRole("list", { name: "Dependencies of Field Service" }).first();
       const hr = tree.getByRole("listitem").filter({ hasText: "Human Resources" }).first();
       await expect(hr).toContainText("≥0.2, <1");
@@ -332,7 +332,7 @@ test.describe("Customize > Modules", () => {
       await expect(hr).toContainText("Satisfied");
       const base = tree.getByRole("listitem").filter({ hasText: "Contacts" }).first();
       await expect(base).toContainText("Built in");
-      await expect(base).toContainText("installed 0.2.0");
+      await expect(base).toContainText("installed 0.2.1");
       // A module in the tree opens its own panel; Required by lists the dependents.
       await hr.getByRole("link", { name: "Human Resources" }).click();
       await expect(page).toHaveURL(/id=hr/);
