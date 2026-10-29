@@ -189,6 +189,22 @@ final class MileageDrive: XCTestCase {
     print("RESTORED-BANNER-SHOWN")
   }
 
+  /// Opens Account and prints what it says (the server address, the version, the storage line with
+  /// the SQLCipher version, the upload line, the name of this phone). No secret is on that screen.
+  func test13_AccountFacts() {
+    app.activate()
+    waitFor(app.buttons["open-account"], 20, "Home")
+    app.buttons["open-account"].tap()
+    let storage = app.descendants(matching: .any)
+      .matching(NSPredicate(format: "label BEGINSWITH 'Storage'")).firstMatch
+    waitFor(storage, 20, "the Account screen")
+    shot("account-1")
+    for text in app.staticTexts.allElementsBoundByIndex { print("ACCOUNT-TEXT: \(text.label)") }
+    app.swipeUp()
+    shot("account-2")
+    for text in app.staticTexts.allElementsBoundByIndex { print("ACCOUNT-TEXT-2: \(text.label)") }
+  }
+
   /// A build made without OBOP_ALLOW_CLEARTEXT (the plain one, bundle id org.obop.mileage) refuses an
   /// http address on the sign-in screen and starts no browser sheet (docs/spec/mobile.md 8.8).
   func test12_PlainBuildRefusesHttp() {
