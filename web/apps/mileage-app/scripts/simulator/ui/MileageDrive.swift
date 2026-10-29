@@ -10,6 +10,7 @@
 //   OBOP_DRIVER_USER          user name for the sign-in page of the instance
 //   OBOP_DRIVER_PASSWORD      its password (typed into the page; never printed or put in a screenshot)
 //   OBOP_SHOT_DIR             a directory for screenshots (PNG)
+//   OBOP_SERVER_ADDRESS       optional: an address to type into the sign-in field instead of the build's default
 //
 // docs/spec/mobile.md 8.8. A test tool for the Mac; it is not part of the app, its build or any image.
 import XCTest
@@ -117,6 +118,20 @@ final class MileageDrive: XCTestCase {
     waitFor(address, 20, "the Sign in screen")
     print("SERVER-ADDRESS: \(address.value as? String ?? "")")
     shot("signin-1-screen")
+    // Another instance than the build's default (a test over the local network): the field is
+    // emptied and the address typed, then the keyboard is put away so that the button is in reach.
+    if let wanted = env["OBOP_SERVER_ADDRESS"], !wanted.isEmpty {
+      let current = address.value as? String ?? ""
+      if current != wanted {
+        address.tap()
+        address.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count))
+        address.typeText(wanted)
+        print("SERVER-ADDRESS-TYPED: \(address.value as? String ?? "")")
+        shot("signin-1b-address")
+        let ret = app.keyboards.buttons["Return"]
+        if ret.exists { ret.tap() }
+      }
+    }
     app.buttons["signin-button"].tap()
     let cont = springboard.alerts.firstMatch.buttons["Continue"]
     waitFor(cont, 20, "the system sign-in alert")

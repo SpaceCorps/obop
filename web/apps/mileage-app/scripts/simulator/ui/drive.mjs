@@ -11,8 +11,9 @@
 // whole trip), --no-route (do not start the route), --speed M/S, --interval S or --distance M (as route.mjs).
 // Environment: OBOP_DRIVER_USER, OBOP_DRIVER_PASSWORD (read from the environment only, never from a
 // file or an argument, and removed from everything that is printed or logged), OBOP_APP_BUNDLE_ID
-// (default org.obop.mileage.test), OBOP_BUILD_ROOT (where the test project, its build and its
-// logs go; default the temporary directory).
+// (default org.obop.mileage.test), OBOP_SERVER_ADDRESS (optional: typed into the address field of
+// the sign-in instead of the build's default), OBOP_BUILD_ROOT (where the test project, its build
+// and its logs go; default the temporary directory).
 //
 // (From web/apps/mileage-app, on the Mac. A test script run by Node; it is not part of the app, its
 // build, any image or the shipped toolchain. It runs no shell: every command gets an argument list.

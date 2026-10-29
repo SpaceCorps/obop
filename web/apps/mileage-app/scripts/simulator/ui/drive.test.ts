@@ -48,11 +48,13 @@ describe("the environment of the runner", () => {
     OBOP_DRIVER_USER: "ivy",
     OBOP_DRIVER_PASSWORD: "p4ssw0rd-p4ssw0rd",
     OBOP_SHOT_DIR: "/b/shots",
+    OBOP_SERVER_ADDRESS: "http://192.168.1.132:18084",
     OTHER: "x",
   };
 
-  test("hands the four names on with the prefix xcodebuild strips", () => {
+  test("hands the names the Swift file reads on with the prefix xcodebuild strips", () => {
     const out = runnerEnv(env);
+    expect(out.TEST_RUNNER_OBOP_SERVER_ADDRESS).toBe("http://192.168.1.132:18084");
     expect(out.TEST_RUNNER_OBOP_DRIVER_USER).toBe("ivy");
     expect(out.TEST_RUNNER_OBOP_DRIVER_PASSWORD).toBe("p4ssw0rd-p4ssw0rd");
     expect(out.TEST_RUNNER_OBOP_SHOT_DIR).toBe("/b/shots");

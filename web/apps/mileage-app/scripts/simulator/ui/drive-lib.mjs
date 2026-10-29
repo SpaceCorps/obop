@@ -24,6 +24,7 @@ const RUNNER_VARIABLES = [
   "OBOP_DRIVER_USER",
   "OBOP_DRIVER_PASSWORD",
   "OBOP_SHOT_DIR",
+  "OBOP_SERVER_ADDRESS",
 ];
 
 /**
@@ -70,8 +71,8 @@ export function testArgs(options) {
 
 /**
  * The environment for `xcodebuild`: the process environment plus the runner variables with the
- * prefix that `xcodebuild` strips (`TEST_RUNNER_`). Only the four names the Swift file reads are
- * passed on, and the user and the password must be there.
+ * prefix that `xcodebuild` strips (`TEST_RUNNER_`). Only the names the Swift file reads are passed
+ * on, and the user and the password must be there.
  *
  * @param {Record<string, string | undefined>} env
  * @returns {Record<string, string | undefined>}
