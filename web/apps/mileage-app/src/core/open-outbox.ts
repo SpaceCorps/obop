@@ -1,5 +1,6 @@
 import { createSqlDb, type RawDb, type SqlDb } from "./sql.ts";
 import { createSqlStore, migrate } from "./sql-store.ts";
+import type { OutboxStore } from "./store.ts";
 import { instant } from "./values.ts";
 
 /**
@@ -23,6 +24,16 @@ import { instant } from "./values.ts";
 
 /** The note in the outbox that says a database file was found that no key fits and was replaced. */
 export const META_STALE_FILE_RECOVERED = "stale_file_recovered_at";
+
+/** When the file of a restored backup was replaced, or `null` when there is nothing to tell (or the driver has read it). */
+export function staleFileRecoveredAt(store: Pick<OutboxStore, "getMeta">): Promise<string | null> {
+  return store.getMeta(META_STALE_FILE_RECOVERED);
+}
+
+/** The driver has read the note about the replaced file. */
+export function dismissStaleFileNote(store: Pick<OutboxStore, "setMeta">): Promise<void> {
+  return store.setMeta(META_STALE_FILE_RECOVERED, null);
+}
 
 /** An open database file. */
 export interface FileHandle extends RawDb {

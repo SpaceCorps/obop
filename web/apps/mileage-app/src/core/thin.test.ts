@@ -1,3 +1,4 @@
+import { distanceMeters } from "@obop/trip-core";
 import { describe, expect, test } from "vite-plus/test";
 import { createSqlStore, migrate } from "./sql-store.ts";
 import { keepFix, RECORDING_THINNING, type Anchor } from "./thin.ts";
@@ -29,6 +30,14 @@ describe("which fixes are kept", () => {
   test("a fix that is far from the last one is kept even when it comes soon", () => {
     expect(keepFix(here(T0), here(T0 + 500, farM + 1), RECORDING_THINNING)).toBe(true);
     expect(keepFix(here(T0), here(T0 + 500, farM - 5), RECORDING_THINNING)).toBe(false);
+  });
+
+  test("a fix exactly as far as the limit is kept", () => {
+    const a = here(T0);
+    const b = here(T0 + 500, 30);
+    const exactly = { minGapMs: 10_000, farM: distanceMeters(a, b) };
+    expect(keepFix(a, b, exactly)).toBe(true);
+    expect(keepFix(a, b, { ...exactly, farM: exactly.farM + 0.001 })).toBe(false);
   });
 });
 

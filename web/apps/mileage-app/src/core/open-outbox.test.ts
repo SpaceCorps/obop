@@ -2,9 +2,11 @@ import { describe, expect, test } from "vite-plus/test";
 import { FakeDatabaseFile, FakeSecrets, fakePorts } from "../test-support/fake-file.ts";
 import {
   META_STALE_FILE_RECOVERED,
+  dismissStaleFileNote,
   isNotADatabase,
   openOutbox,
   policyFor,
+  staleFileRecoveredAt,
   type OpenNames,
 } from "./open-outbox.ts";
 import { createSqlStore } from "./sql-store.ts";
@@ -66,6 +68,16 @@ describe("opening the database", () => {
     expect(file.deletes).toBe(0);
   });
 
+  test("a stored value that is not a key is not used as one", async () => {
+    const file = new FakeDatabaseFile();
+    const secrets = new FakeSecrets();
+    secrets.items.set("db-key", "not-a-key");
+    const opened = await openOutbox(fakePorts(file, secrets, { key: KEY }), NAMES, ANDROID);
+    expect(secrets.items.get("db-key")).toBe(KEY);
+    expect(file.keyOfFile).toBe(KEY);
+    expect(opened.fresh).toBe(true);
+  });
+
   test("a plain SQLite is refused, the handle is closed, and nothing is replaced", async () => {
     const file = new FakeDatabaseFile();
     file.cipherVersion = null;
@@ -102,6 +114,29 @@ describe("a file that no key fits", () => {
         .sqlite!.prepare("SELECT name FROM sqlite_master WHERE name = 'secret_of_the_old_phone'")
         .all(),
     ).toEqual([]);
+  });
+
+  test("the note about the replaced file stays until the driver has read it", async () => {
+    const file = new FakeDatabaseFile();
+    file.plantStaleFile();
+    const secrets = new FakeSecrets();
+    const opened = await openOutbox(
+      fakePorts(file, secrets, { key: KEY, now: Date.parse("2026-10-30T10:00:00Z") }),
+      NAMES,
+      IOS,
+    );
+    const store = createSqlStore(opened.db);
+    expect(await staleFileRecoveredAt(store)).toBe("2026-10-30T10:00:00.000Z");
+    // Still there at the next start of the app: the database is the same and so is the note.
+    expect(await staleFileRecoveredAt(createSqlStore(opened.db))).toBe("2026-10-30T10:00:00.000Z");
+    await dismissStaleFileNote(store);
+    expect(await staleFileRecoveredAt(store)).toBeNull();
+  });
+
+  test("there is no note when nothing was replaced", async () => {
+    const file = new FakeDatabaseFile();
+    const opened = await openOutbox(fakePorts(file, new FakeSecrets(), { key: KEY }), NAMES, IOS);
+    expect(await staleFileRecoveredAt(createSqlStore(opened.db))).toBeNull();
   });
 
   test("on Android the file is left alone and the error is shown, as before", async () => {

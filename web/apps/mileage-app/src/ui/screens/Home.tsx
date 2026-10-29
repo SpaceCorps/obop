@@ -6,12 +6,13 @@ import { hasWork } from "../../core/store.ts";
 import { PURPOSES, type Purpose } from "../../core/types.ts";
 import { formatDateTime, t, tp, type MessageKey } from "../../i18n/index.ts";
 import type { Runtime } from "../../native/runtime.ts";
-import { useOutbox, useSyncStatus } from "../hooks.ts";
+import { useOutbox, useStaleFileNote, useSyncStatus } from "../hooks.ts";
 import type { Nav } from "../router.ts";
 
 export function Home({ rt, nav }: { rt: Runtime; nav: Nav }) {
   const { trips, active } = useOutbox(rt);
   const sync = useSyncStatus(rt);
+  const restored = useStaleFileNote(rt);
   const [purpose, setPurpose] = useState<Purpose>("business");
 
   const last = trips.find((trip) => trip.clientTripId !== active?.clientTripId);
@@ -45,6 +46,15 @@ export function Home({ rt, nav }: { rt: Runtime; nav: Nav }) {
           message={t("home.open.message", { when: formatDateTime(active.startedAt) })}
           action={{ label: t("home.open.action"), onPress: () => nav.push({ name: "recording" }) }}
           testID="open-trip-banner"
+        />
+      ) : null}
+      {restored.recoveredAt !== null ? (
+        <Banner
+          tone="warning"
+          title={t("home.restored.title")}
+          message={t("home.restored.message")}
+          action={{ label: t("home.restored.action"), onPress: restored.dismiss }}
+          testID="restored-banner"
         />
       ) : null}
       {problem ? (

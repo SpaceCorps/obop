@@ -72,6 +72,10 @@ export const en = {
   "home.open.title": "A trip is still open",
   "home.open.message": "Started {when}. Stop it or discard it.",
   "home.open.action": "Open trip",
+  "home.restored.title": "A backup brought back an unreadable trip database",
+  "home.restored.message":
+    "The key of the old database stays on the phone it was made on, so it could not be opened here and was replaced by an empty one. Trips that were not uploaded before the backup was made are lost. Trips that were uploaded are on the server.",
+  "home.restored.action": "Got it",
   "home.waiting.title": "Waiting to upload",
   "home.waiting.message.one":
     "{count} trip is on this phone and not on the server yet. It is safe.",

@@ -22,6 +22,7 @@ describe("a position of the location service as a fix", () => {
     expect(toFix(at({ speed: -1 })).speedMps).toBeNull();
     expect(toFix(at({ speed: -0.01 })).speedMps).toBeNull();
     expect(toFix(at({ speed: Number.NaN })).speedMps).toBeNull();
+    expect(toFix(at({ speed: Number.POSITIVE_INFINITY })).speedMps).toBeNull();
     expect(toFix(at({ speed: null })).speedMps).toBeNull();
     // A standing phone has a speed of zero, and that is a speed.
     expect(toFix(at({ speed: 0 })).speedMps).toBe(0);
