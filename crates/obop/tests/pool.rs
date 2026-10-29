@@ -79,12 +79,25 @@ impl Drop for Server {
     }
 }
 
+/// A port nobody listens on, and one this test binary has not handed out before. The tests of a
+/// binary run side by side and each starts servers: a port that is free when it is chosen is not
+/// bound until the server has opened its database, and in that time another test could be given
+/// the same port. Two servers then ask for one port, the later one exits, and the test talks to
+/// the other test's server (a token of one database refused as unknown by the "other process").
 fn free_port() -> u16 {
-    TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap()
-        .port()
+    static GIVEN: std::sync::Mutex<Vec<u16>> = std::sync::Mutex::new(Vec::new());
+    loop {
+        let port = TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        let mut given = GIVEN.lock().unwrap_or_else(|e| e.into_inner());
+        if !given.contains(&port) {
+            given.push(port);
+            return port;
+        }
+    }
 }
 
 fn obop() -> Command {
@@ -108,9 +121,15 @@ fn start(db: &str, env: &[(&str, &str)]) -> Server {
         .stderr(std::fs::File::create(&log).unwrap())
         .spawn()
         .expect("spawn obop serve");
-    let s = Server { child, port, log };
+    let mut s = Server { child, port, log };
     let deadline = Instant::now() + Duration::from_secs(60);
     loop {
+        if let Some(status) = s.child.try_wait().expect("wait for obop serve") {
+            panic!(
+                "obop serve exited ({status}) before it came up: {}",
+                std::fs::read_to_string(&s.log).unwrap_or_default()
+            );
+        }
         if TcpStream::connect(("127.0.0.1", port)).is_ok() {
             return s;
         }
@@ -291,6 +310,31 @@ fn series(text: &str, name: &str) -> f64 {
         .unwrap_or_else(|| panic!("no series {name} in:\n{text}"))
 }
 
+/// The metrics at the first moment the gauge `name` reads `want`, asked again every 50 ms for at
+/// most 30 s; the last reading is in the failure.
+///
+/// A gauge of the pool is the reading of one instant, and the server is never quite idle: the
+/// connectors worker of `obop serve` takes a connection for a few tens of milliseconds every five
+/// seconds of uptime (its `tick`, at uptime 5, 10, 15, ... s) and after a create (it reads the
+/// connections to deliver the event). A test that reads "nothing in use" once, at the wrong
+/// instant, finds that worker (the CI run that failed read `in_use` 1 at uptime 10.5 s). What is
+/// asserted is that the pool gets back to nothing in use and nobody waiting: a connection that is
+/// never given back, or a caller that never leaves the queue, still fails, at the deadline.
+fn metrics_when(port: u16, name: &str, want: f64) -> String {
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        let m = metrics(port);
+        if series(&m, name) == want {
+            return m;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "{name} did not get back to {want} within 30 s:\n{m}"
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
 #[test]
 fn an_exhausted_pool_answers_503_with_retry_after_never_a_401_and_the_server_recovers() {
     let Some(base) = pg_base() else { return };
@@ -416,11 +460,9 @@ fn an_exhausted_pool_answers_503_with_retry_after_never_a_401_and_the_server_rec
             >= 190.0
     );
     assert!(series(&m, "obop_db_statement_timeouts_total") >= 1.0);
-    assert_eq!(
-        series(&m, "obop_db_pool_waiting{pool=\"main\"}"),
-        0.0,
-        "{m}"
-    );
+    // Nobody is left in the queue: the 200 requests are answered, and the worker of the server,
+    // which may be queued behind them, leaves it within the acquire timeout.
+    metrics_when(port, "obop_db_pool_waiting{pool=\"main\"}", 0.0);
 
     // `/readyz` stays ready while every connection is busy: the database is there, it is only
     // full of work. (Two requests hold both connections until their time limit.)
@@ -460,7 +502,12 @@ fn an_exhausted_pool_answers_503_with_retry_after_never_a_401_and_the_server_rec
         "{}",
         ready.body
     );
-    assert!(ready.took < Duration::from_secs(3), "{:?}", ready.took);
+    // The probe is answered at its own limit at the latest: `READY_TIMEOUT` is 3 s (obop-http,
+    // ops.rs), and a probe that has not finished by then, with the pool full, answers ready at that
+    // limit, which is a few milliseconds after the 3 s (3.0016 s in 2 of 208 runs, where a bound
+    // of exactly 3 s counted them as failures). What is told apart here is a probe that answers
+    // from one that hangs (the reads of `http` stop after 60 s).
+    assert!(ready.took < Duration::from_secs(10), "{:?}", ready.took);
 
     // Four times as many requests: the wait queue is bounded, so memory does not follow the load.
     let (more, _, rss_peak_more) = stampede(port, &token, pid, 800);
@@ -516,8 +563,8 @@ fn an_exhausted_pool_answers_503_with_retry_after_never_a_401_and_the_server_rec
         Some(&json!({"name": "Acme Ltd"})),
     );
     assert_eq!(made.status, 200, "{}", made.body);
-    let m = metrics(port);
-    assert_eq!(series(&m, "obop_db_pool_in_use{pool=\"main\"}"), 0.0, "{m}");
+    // Every connection comes back: none is lost to the requests that were stuck behind the lock.
+    metrics_when(port, "obop_db_pool_in_use{pool=\"main\"}", 0.0);
     let log = std::fs::read_to_string(&server.log).unwrap_or_default();
     assert!(
         !log.contains("panicked"),
