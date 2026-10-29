@@ -28,6 +28,8 @@ mod import_cmd;
 #[cfg(test)]
 mod kinds_tests;
 #[cfg(test)]
+mod limits_tests;
+#[cfg(test)]
 mod mcp_tests;
 #[cfg(test)]
 mod mfa_tests;
@@ -65,7 +67,7 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 const USAGE: &str = "usage: obop <command>
-  --version                                     the name, the core version and the commit the build was made from: obop 0.2.0 (abcdef012345)
+  --version                                     the name, the core version and the commit the build was made from: obop 0.2.1 (abcdef012345)
   modules labels TARGET LANG                    a label template (every translatable text, English values) for a module, bundled package or FILE
   modules check [--complete] [--catalog] [FILE...]
                                                 the install gate over linked modules, or over package files (no database):
