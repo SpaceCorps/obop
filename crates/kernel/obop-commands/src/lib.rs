@@ -1738,3 +1738,7 @@ mod shows_option_tests;
 mod sysfields_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod unique_bench;
+#[cfg(test)]
+mod unique_tests;

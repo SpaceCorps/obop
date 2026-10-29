@@ -207,6 +207,14 @@ impl Backend for Guarded {
     fn find(&self, model: &str, field: &str, value: &J) -> Result<Vec<(String, Fields)>> {
         self.inner.find(model, field, value)
     }
+    fn find_unique(
+        &self,
+        model: &str,
+        fields: &[&str],
+        values: &[J],
+    ) -> Result<Vec<(String, Fields)>> {
+        self.inner.find_unique(model, fields, values)
+    }
     fn ensure_unique(&self, name: &str, model: &str, fields: &[&str]) -> Result<()> {
         fault::before_write()?;
         let r = self.inner.ensure_unique(name, model, fields);
