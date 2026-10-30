@@ -59,14 +59,49 @@ describe("a release build", () => {
     expect(checkBuild(built, { mode: "release" }).ok).toBe(true);
   });
 
-  test("a leftover of the development client is reported", () => {
+  test("the Bonjour service of the development client fails a release build", () => {
     const built = plain();
     built.infoPlist.NSBonjourServices = ["_expo._tcp"];
     const result = checkBuild(built, { mode: "release" });
+    expect(result.ok).toBe(false);
+    expect(failures(result)).toEqual([
+      expect.stringContaining("NSBonjourServices holds _expo._tcp"),
+    ]);
+  });
+
+  test("the URL scheme of the development client fails a release build", () => {
+    const built = plain();
+    built.infoPlist.CFBundleURLTypes = [
+      { CFBundleURLSchemes: ["org.obop.mileage"] },
+      { CFBundleURLSchemes: ["exp+obop-mileage"] },
+    ];
+    const result = checkBuild(built, { mode: "release" });
+    expect(result.ok).toBe(false);
+    expect(failures(result)).toEqual([expect.stringContaining("exp+obop-mileage")]);
+  });
+
+  test("the app's own scheme and another Bonjour service are not the development client", () => {
+    const built = plain();
+    built.infoPlist.CFBundleURLTypes = [{ CFBundleURLSchemes: ["org.obop.mileage"] }];
+    built.infoPlist.NSBonjourServices = ["_other._tcp"];
+    const result = checkBuild(built, { mode: "release" });
     expect(result.ok).toBe(true);
-    expect(
-      result.findings.some((f) => f.level === "warn" && /NSBonjourServices/.test(f.text)),
-    ).toBe(true);
+    expect(result.findings.some((f) => f.level === "warn" && /_other/.test(f.text))).toBe(true);
+  });
+
+  test("a build that stores every fix is not a release build", () => {
+    const built = plain();
+    built.config.extra = { cleartextAllowed: false, defaultServer: "", thinningOff: true };
+    const result = checkBuild(built, { mode: "release" });
+    expect(result.ok).toBe(false);
+    expect(failures(result)).toEqual([expect.stringContaining("thinningOff=true")]);
+    // Also when the build allows plain http: both are reported.
+    built.config.extra = { cleartextAllowed: true, defaultServer: "", thinningOff: true };
+    expect(failures(checkBuild(built, { mode: "release" }))).toHaveLength(2);
+  });
+
+  test("the plain build says that the thinning is on", () => {
+    expect(checkBuild(plain(), { mode: "release" }).facts.thinningOff).toBe("false");
   });
 });
 
@@ -79,6 +114,31 @@ describe("a test build", () => {
     expect(
       result.findings.some((f) => f.level === "ok" && /plain http is allowed/.test(f.text)),
     ).toBe(true);
+  });
+
+  test("may store every fix and says so", () => {
+    const built = plain();
+    built.config.extra = {
+      cleartextAllowed: true,
+      defaultServer: "http://192.168.1.132:18081",
+      thinningOff: true,
+    };
+    const result = checkBuild(built, { mode: "test" });
+    expect(result.ok).toBe(true);
+    expect(result.facts.thinningOff).toBe("true");
+    expect(result.findings.some((f) => f.level === "ok" && /without thinning/.test(f.text))).toBe(
+      true,
+    );
+  });
+
+  test("an entry of the development client is a warning, not a failure", () => {
+    const built = plain();
+    built.config.extra = { cleartextAllowed: true, defaultServer: "" };
+    built.infoPlist.NSBonjourServices = ["_expo._tcp"];
+    built.infoPlist.CFBundleURLTypes = [{ CFBundleURLSchemes: ["exp+obop-mileage"] }];
+    const result = checkBuild(built, { mode: "test" });
+    expect(result.ok).toBe(true);
+    expect(result.findings.filter((f) => f.level === "warn")).toHaveLength(2);
   });
 });
 

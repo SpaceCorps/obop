@@ -16,12 +16,18 @@ interface Introspected {
   scheme: string;
   android: { package: string };
   ios: { bundleIdentifier: string; infoPlist: Plist };
-  extra: { cleartextAllowed: boolean; defaultServer: string };
+  extra: { cleartextAllowed: boolean; defaultServer: string; thinningOff: boolean };
 }
 
 function run(env: Record<string, string> = {}) {
   const base = { ...process.env };
-  for (const name of ["OBOP_ALLOW_CLEARTEXT", "OBOP_DEFAULT_SERVER", "OBOP_IOS_BUNDLE_ID"]) {
+  for (const name of [
+    "OBOP_ALLOW_CLEARTEXT",
+    "OBOP_DEFAULT_SERVER",
+    "OBOP_IOS_BUNDLE_ID",
+    "OBOP_RECORD_THINNING",
+    "OBOP_DEV_CLIENT",
+  ]) {
     delete base[name];
   }
   return spawnSync(
@@ -37,13 +43,15 @@ function introspect(env: Record<string, string> = {}): Introspected {
   return JSON.parse(result.stdout) as Introspected;
 }
 
-describe("the configuration that expo prebuild gets", () => {
+// Each test starts the Expo CLI (about a second alone, several when the machine is busy): the
+// default of 5 s was exceeded under load.
+describe("the configuration that expo prebuild gets", { timeout: 30_000 }, () => {
   test("a build without the test variables is the plain one", () => {
     const c = introspect();
     expect(c.scheme).toBe("org.obop.mileage");
     expect(c.ios.bundleIdentifier).toBe("org.obop.mileage");
     expect(c.android.package).toBe("org.obop.mileage");
-    expect(c.extra).toEqual({ cleartextAllowed: false, defaultServer: "" });
+    expect(c.extra).toEqual({ cleartextAllowed: false, defaultServer: "", thinningOff: false });
   });
 
   test("a test build has its own bundle id and keeps the sign-in scheme and the Android package", () => {
@@ -58,7 +66,27 @@ describe("the configuration that expo prebuild gets", () => {
     expect(c.extra).toEqual({
       cleartextAllowed: true,
       defaultServer: "http://192.168.1.132:18081",
+      thinningOff: false,
     });
+  });
+
+  test("OBOP_RECORD_THINNING=off reaches the app, and a typo stops the build", () => {
+    expect(introspect({ OBOP_RECORD_THINNING: "off" }).extra.thinningOff).toBe(true);
+    const result = run({ OBOP_RECORD_THINNING: "of" });
+    expect(result.status).not.toBe(0);
+    expect(`${result.stdout}${result.stderr}`).toContain("OBOP_RECORD_THINNING");
+  });
+
+  test("the entries of the development client are not in the Info.plist unless OBOP_DEV_CLIENT=1", () => {
+    const plain = introspect().ios.infoPlist;
+    expect(plain).not.toHaveProperty("NSBonjourServices");
+    expect(JSON.stringify(plain.CFBundleURLTypes)).not.toContain("exp+");
+    // The sign-in scheme stays.
+    expect(JSON.stringify(plain.CFBundleURLTypes)).toContain("org.obop.mileage");
+
+    const dev = introspect({ OBOP_DEV_CLIENT: "1" }).ios.infoPlist;
+    expect(dev.NSBonjourServices).toEqual(["_expo._tcp"]);
+    expect(JSON.stringify(dev.CFBundleURLTypes)).toContain("exp+obop-mileage");
   });
 
   test("a bundle id of the wrong form stops the build before anything is generated", () => {

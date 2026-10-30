@@ -5,7 +5,12 @@ import {
   withInfoPlist,
   type ConfigPlugin,
 } from "expo/config-plugins";
-import { iosBundleId, withoutFetchMode } from "./config/ios.ts";
+import {
+  iosBundleId,
+  recordThinningOff,
+  withoutDevClientEntries,
+  withoutFetchMode,
+} from "./config/ios.ts";
 
 // PLACEHOLDER: "org.obop.mileage" is a stand-in application id and bundle id. It is not registered
 // anywhere and no store account, signing key or publication exists (Q37 of docs/DECISIONS.md).
@@ -34,6 +39,19 @@ const IOS_BUNDLE_ID = iosBundleId(process.env.OBOP_IOS_BUNDLE_ID, APPLICATION_ID
 const CLEARTEXT = process.env.OBOP_ALLOW_CLEARTEXT === "1";
 const DEFAULT_SERVER = process.env.OBOP_DEFAULT_SERVER ?? "";
 
+// A test build made with OBOP_RECORD_THINNING=off stores every fix the phone delivers (no thinning,
+// src/core/thin.ts), so that one drive shows the cadence of the system and the thinning rules can be
+// replayed over it (scripts/emulator/thinning-replay.mjs). The app honours it only where plain http
+// is allowed too, i.e. in a test build, and `scripts/ios/gate.mjs` fails a release build that
+// carries it.
+const THINNING_OFF = recordThinningOff(process.env.OBOP_RECORD_THINNING);
+
+// `expo-dev-client` is in the plugins for the development build (`vp run start`). Its iOS entries in
+// Info.plist (the Bonjour service `_expo._tcp` and the URL scheme `exp+obop-mileage`) belong to that
+// build only and are removed from every other one; OBOP_DEV_CLIENT=1 keeps them. The plugin stays in
+// the list because it also configures Android, which this change does not touch.
+const DEV_CLIENT = process.env.OBOP_DEV_CLIENT === "1";
+
 const withCleartext: ConfigPlugin = (config) =>
   withAndroidManifest(config, (c) => {
     const application = c.modResults.manifest.application?.[0];
@@ -59,10 +77,12 @@ const withMinSdk: ConfigPlugin = (config) =>
 // plugin of expo-task-manager also adds `fetch`, which the app never uses, and an unused mode is a
 // store review question. Mods run in the reverse order of their definition and the plugins of the
 // `plugins` list are applied after this wrapper, so this one runs after all of them (checked in the
-// generated Info.plist, docs/spec/mobile.md 8.8).
-const withIosBackgroundModes: ConfigPlugin = (config) =>
+// generated Info.plist, docs/spec/mobile.md 8.8). The same place removes the entries of the
+// development client unless OBOP_DEV_CLIENT=1.
+const withIosPlistCleanup: ConfigPlugin = (config) =>
   withInfoPlist(config, (c) => {
     c.modResults.UIBackgroundModes = withoutFetchMode(c.modResults.UIBackgroundModes);
+    if (!DEV_CLIENT) c.modResults = withoutDevClientEntries(c.modResults);
     return c;
   });
 
@@ -106,12 +126,12 @@ const config: ExpoConfig = {
     infoPlist: {
       // iOS 14 and later ask the person for local network access the first time the app reaches an
       // address on the local network (a test instance), and show this text. No Bonjour keys: the
-      // app does no discovery.
+      // app does no discovery (the ones of the development client are removed, see DEV_CLIENT).
       NSLocalNetworkUsageDescription:
         "obop Mileage connects to the obop server whose address you enter. If that server is on your local network, iOS asks you to allow this.",
     },
   },
-  extra: { cleartextAllowed: CLEARTEXT, defaultServer: DEFAULT_SERVER },
+  extra: { cleartextAllowed: CLEARTEXT, defaultServer: DEFAULT_SERVER, thinningOff: THINNING_OFF },
   plugins: [
     "expo-dev-client",
     [
@@ -150,4 +170,4 @@ const config: ExpoConfig = {
   ],
 };
 
-export default withIosBackgroundModes(withMinSdk(withCleartext(config)));
+export default withIosPlistCleanup(withMinSdk(withCleartext(config)));

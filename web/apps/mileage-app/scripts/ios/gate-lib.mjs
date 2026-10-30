@@ -50,6 +50,17 @@ export function checkBuild(built, { mode }) {
       "the embedded config has no extra.cleartextAllowed: the build was not made from this app.config.ts",
     );
   }
+  // Fixes stored without thinning (OBOP_RECORD_THINNING=off) are for the first drive of a test build.
+  const thinningOff = extra.thinningOff;
+  if (thinningOff === true) {
+    if (mode === "release") {
+      fail(
+        "the embedded config has thinningOff=true: this build stores every fix and is not a release build",
+      );
+    } else {
+      ok("test build: fixes are stored without thinning (thinningOff=true)");
+    }
+  }
   if (mode === "release" && defaultServer !== "" && !/^https:\/\//i.test(defaultServer)) {
     fail(
       `the default server of a release build must be an https address, got ${JSON.stringify(defaultServer)}`,
@@ -112,10 +123,25 @@ export function checkBuild(built, { mode }) {
   } else {
     ok("Info.plist: the local network text is the app's own");
   }
+  // The development client's entries (app.config.ts takes them out unless OBOP_DEV_CLIENT=1).
   const bonjour = Array.isArray(plist.NSBonjourServices) ? plist.NSBonjourServices : [];
-  if (mode === "release" && bonjour.length > 0) {
-    warn(
-      `Info.plist: NSBonjourServices is set (${bonjour.join(", ")}): a leftover of the development client`,
+  const urlTypes = Array.isArray(plist.CFBundleURLTypes) ? plist.CFBundleURLTypes : [];
+  const devSchemes = urlTypes
+    .flatMap((type) =>
+      isObject(type) && Array.isArray(type.CFBundleURLSchemes) ? type.CFBundleURLSchemes : [],
+    )
+    .filter((scheme) => typeof scheme === "string" && scheme.startsWith("exp+"));
+  const devClientEntry = (text) => (mode === "release" ? fail(text) : warn(text));
+  if (bonjour.includes("_expo._tcp")) {
+    devClientEntry(
+      "Info.plist: NSBonjourServices holds _expo._tcp, an entry of the development client that a build for a phone does not need",
+    );
+  } else if (bonjour.length > 0 && mode === "release") {
+    warn(`Info.plist: NSBonjourServices is set (${bonjour.join(", ")})`);
+  }
+  if (devSchemes.length > 0) {
+    devClientEntry(
+      `Info.plist: the URL scheme ${devSchemes.join(", ")} is an entry of the development client that a build for a phone does not need`,
     );
   }
 
@@ -124,6 +150,7 @@ export function checkBuild(built, { mode }) {
     cleartextAllowed: String(cleartext),
     defaultServer: defaultServer === "" ? "(none)" : defaultServer,
     backgroundModes: JSON.stringify(modes),
+    thinningOff: String(thinningOff === true),
     mode,
   };
   return { ok: !findings.some((f) => f.level === "fail"), findings, facts };
