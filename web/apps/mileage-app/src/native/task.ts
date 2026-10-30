@@ -1,6 +1,6 @@
 import * as Location from "expo-location";
 import * as TaskManager from "expo-task-manager";
-import type { NewFix } from "../core/types.ts";
+import { toFix } from "../core/fix.ts";
 import { emitChange } from "./bus.ts";
 import { LOCATION_TASK } from "./config.ts";
 import { getStore } from "./store.ts";
@@ -9,23 +9,14 @@ import { getStore } from "./store.ts";
  * The background location task. It must be defined at the top level of a module that the entry
  * point imports before the app starts (expo-task-manager runs it when the service delivers a
  * fix, also when no screen exists). It does one thing: write the fixes to the encrypted outbox
- * before anything else can go wrong. Uploading is the app's job, in `runtime.ts`.
+ * before anything else can go wrong. Uploading is the app's job, in `runtime.ts`. The conversion
+ * of a position (`toFix`) and the thinning of fixes that come too close together (`appendFixes`)
+ * are in `core/`, where they are tested.
  *
  * Nothing here logs a coordinate or a token.
  */
 interface LocationTaskData {
   locations?: Location.LocationObject[];
-}
-
-export function toFix(location: Location.LocationObject): NewFix {
-  const { coords } = location;
-  return {
-    t: location.timestamp,
-    lat: coords.latitude,
-    lon: coords.longitude,
-    accuracyM: coords.accuracy,
-    speedMps: coords.speed,
-  };
 }
 
 TaskManager.defineTask<LocationTaskData>(LOCATION_TASK, async ({ data, error }) => {
