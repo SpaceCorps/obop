@@ -17,6 +17,7 @@
 // so that it does not land in a shell history). The exit status is 0 when everything holds and 1
 // when a check failed.
 import { haversine } from "./route.mjs";
+import { connect, findTrip, tripPoints } from "./server-lib.mjs";
 
 const args = process.argv.slice(2);
 const option = (name, fallback) => {
@@ -43,56 +44,21 @@ const report = (ok, text) => {
   console.log(`${ok ? "ok  " : "FAIL"} ${text}`);
 };
 
-const login = await fetch(`${server}/api/auth/login`, {
-  method: "POST",
-  headers: { "content-type": "application/json" },
-  body: JSON.stringify({ username: user, password }),
-}).then((r) => r.json());
-if (typeof login.token !== "string") {
+let call;
+try {
+  call = await connect({ server, user, password });
+} catch {
   console.error("sign-in failed");
   process.exit(2);
 }
-const call = async (path, payload) => {
-  const response = await fetch(`${server}${path}`, {
-    method: "POST",
-    headers: { authorization: `Bearer ${login.token}`, "content-type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  const body = await response.json();
-  if (!response.ok)
-    throw new Error(`${path}: ${response.status} ${JSON.stringify(body).slice(0, 200)}`);
-  return body.value;
-};
 
 try {
-  const filter = tripId
-    ? [{ field: "id", op: "eq", value: tripId }]
-    : driver
-      ? [{ field: "driver", op: "eq", value: driver }]
-      : [];
-  const found = await call("/api/mileage_trip/search", {
-    filter,
-    order: [{ field: "started_at", dir: "desc" }],
-    limit: 1,
-  });
-  const trip = found.rows[0];
-  if (!trip)
-    throw new Error("no trip found (a reviewer sees only trips that are submitted or later)");
+  const trip = await findTrip(call, { tripId, driver });
   console.log(
     `trip ${trip.id} of ${trip.driver}: state ${trip.state}, started ${trip.started_at}, ended ${trip.ended_at}`,
   );
 
-  let points = [];
-  for (let offset = 0; ; offset += 100) {
-    const page = await call("/api/mileage_point/search", {
-      filter: [{ field: "trip", op: "eq", value: trip.id }],
-      order: [{ field: "seq", dir: "asc" }],
-      limit: 100,
-      offset,
-    });
-    points = points.concat(page.rows);
-    if (page.rows.length < 100) break;
-  }
+  const points = await tripPoints(call, trip.id);
   const seqs = points.map((p) => p.seq);
   const inOrder = seqs.every((s, i) => i === 0 || s > seqs[i - 1]);
   const gaps = seqs.filter((s, i) => i > 0 && s !== seqs[i - 1] + 1).length;

@@ -59,6 +59,16 @@ describe("texts", () => {
     });
   });
 
+  test("a negative speed or accuracy is no number to store (CoreLocation says -1 for none)", () => {
+    const p = toStored(1, { t: 1, lat: 52, lon: 13, accuracyM: -1, speedMps: -1 });
+    expect(p.accuracyM).toBeNull();
+    expect(p.speedMps).toBeNull();
+    // Zero is a value.
+    const zero = toStored(1, { t: 1, lat: 52, lon: 13, accuracyM: 0, speedMps: 0 });
+    expect(zero.accuracyM).toBe("0.00");
+    expect(zero.speedMps).toBe("0.00");
+  });
+
   test("a row leaves out the fields the phone did not have", () => {
     const row = pointRow(
       "t-1",

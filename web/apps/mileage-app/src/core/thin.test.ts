@@ -1,7 +1,7 @@
 import { distanceMeters } from "@obop/trip-core";
 import { describe, expect, test } from "vite-plus/test";
 import { createSqlStore, migrate } from "./sql-store.ts";
-import { keepFix, RECORDING_THINNING, type Anchor } from "./thin.ts";
+import { keepFix, RECORDING_THINNING, thinningFor, type Anchor } from "./thin.ts";
 import type { NewFix } from "./types.ts";
 import { memoryDb } from "../test-support/memory-db.ts";
 
@@ -98,5 +98,37 @@ describe("thinning in the outbox", () => {
   test("without a thinning every fix is stored", async () => {
     const store = await rig({ thinning: null });
     expect(await store.appendFixes("c1", drive(10, 1000, 14))).toBe(10);
+  });
+
+  test("a batch that arrives out of order is sorted first and thinned in time order", async () => {
+    // Without the sort the first fix is t=5000, and the next two (t=0, t=2500) are older than the
+    // anchor or closer than the gap to it: one point instead of three. Sorted, they are 2500 ms
+    // apart and all kept.
+    const store = await rig();
+    const fix = (t: number): NewFix => ({
+      t: T0 + t,
+      lat: north(0),
+      lon: 13,
+      accuracyM: 5,
+      speedMps: 0,
+    });
+    expect(await store.appendFixes("c1", [fix(5000), fix(0), fix(2500)])).toBe(3);
+    expect((await store.points("c1")).map((p) => p.t - T0)).toEqual([0, 2500, 5000]);
+  });
+});
+
+describe("the thinning of a build", () => {
+  test("is the rule unless a test build was made without it", () => {
+    expect(thinningFor(undefined)).toBe(RECORDING_THINNING);
+    expect(thinningFor({})).toBe(RECORDING_THINNING);
+    expect(thinningFor({ cleartextAllowed: false, thinningOff: false })).toBe(RECORDING_THINNING);
+    expect(thinningFor({ cleartextAllowed: true, thinningOff: true })).toBeNull();
+  });
+
+  test("a build that does not allow plain http keeps the rule whatever else it says", () => {
+    expect(thinningFor({ cleartextAllowed: false, thinningOff: true })).toBe(RECORDING_THINNING);
+    expect(thinningFor({ thinningOff: true })).toBe(RECORDING_THINNING);
+    expect(thinningFor({ cleartextAllowed: true })).toBe(RECORDING_THINNING);
+    expect(thinningFor({ cleartextAllowed: true, thinningOff: "off" })).toBe(RECORDING_THINNING);
   });
 });

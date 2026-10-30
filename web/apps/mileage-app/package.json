@@ -22,6 +22,7 @@
     "emulator:route": "node scripts/emulator/route.mjs",
     "emulator:drive": "node scripts/emulator/drive.mjs",
     "emulator:check": "node scripts/emulator/check-trip.mjs",
+    "emulator:thinning": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/emulator/thinning-replay.mjs",
     "simulator:route": "node scripts/simulator/route.mjs",
     "simulator:drive": "node scripts/simulator/ui/drive.mjs"
   },
