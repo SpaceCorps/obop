@@ -39,7 +39,7 @@ const IOS_BUNDLE_ID = iosBundleId(process.env.OBOP_IOS_BUNDLE_ID, APPLICATION_ID
 const CLEARTEXT = process.env.OBOP_ALLOW_CLEARTEXT === "1";
 const DEFAULT_SERVER = process.env.OBOP_DEFAULT_SERVER ?? "";
 
-// A test build made with OBOP_RECORD_THINNING=off stores every fix the phone delivers (no thinning,
+// A test build made with OBOP_RECORD_THINNING=off does not thin the fixes the phone delivers (
 // src/core/thin.ts), so that one drive shows the cadence of the system and the thinning rules can be
 // replayed over it (scripts/emulator/thinning-replay.mjs). The app honours it only where plain http
 // is allowed too, i.e. in a test build, and `scripts/ios/gate.mjs` fails a release build that
@@ -48,8 +48,9 @@ const THINNING_OFF = recordThinningOff(process.env.OBOP_RECORD_THINNING);
 
 // `expo-dev-client` is in the plugins for the development build (`vp run start`). Its iOS entries in
 // Info.plist (the Bonjour service `_expo._tcp` and the URL scheme `exp+obop-mileage`) belong to that
-// build only and are removed from every other one; OBOP_DEV_CLIENT=1 keeps them. The plugin stays in
-// the list because it also configures Android, which this change does not touch.
+// build only and are removed from every other one; OBOP_DEV_CLIENT=1 keeps them, so an iOS
+// development build needs it exported at `expo prebuild` (`vp run start` does not set it). The plugin
+// stays in the list because it also configures Android, which this change does not touch.
 const DEV_CLIENT = process.env.OBOP_DEV_CLIENT === "1";
 
 const withCleartext: ConfigPlugin = (config) =>

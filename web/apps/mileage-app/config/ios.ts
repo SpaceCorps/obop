@@ -34,9 +34,12 @@ export function withoutFetchMode(modes: unknown): string[] {
  * The entries that `expo-dev-client` adds to Info.plist for a development build: the Bonjour
  * service `_expo._tcp` (finding a dev server on the network) and the URL scheme `exp+<slug>`
  * (opening a project from the launcher). A build that is not a development build has no use for
- * either. The strip step of the dev launcher that is meant to remove them from a Release build did
- * not run before the plist was processed in an incremental build (docs/spec/mobile.md 8.8), so
- * they are taken out of the generated project and not left to that step.
+ * either. The dev launcher has a build phase of its own that is meant to remove the Bonjour service
+ * from a Release build (`[Expo Dev Launcher] Strip Local Network Keys for Release`, expo-dev-launcher
+ * 58.0.14): it deletes only `_expo._tcp` and never the URL scheme, and in an incremental Xcode build
+ * it can run before the Info.plist is processed, so a build that started from a generated plist
+ * with the entries can ship them (docs/spec/mobile.md 8.8, item 6). Hence they are taken out of the
+ * generated project and not left to that phase.
  */
 export function withoutDevClientEntries<T extends object>(plist: T): T {
   const result = { ...plist } as Record<string, unknown>;
@@ -65,7 +68,7 @@ export function withoutDevClientEntries<T extends object>(plist: T): T {
 }
 
 /**
- * `OBOP_RECORD_THINNING`: `off` stores every fix the phone delivers (a TEST build only: the app
+ * `OBOP_RECORD_THINNING`: `off` does not thin the fixes the phone delivers (a TEST build only: the app
  * honours it only where plain http is allowed too, and the release gate fails a release build that
  * carries it). Unset or empty keeps the thinning. Anything else is a typo and stops the build.
  */

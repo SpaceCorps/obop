@@ -228,7 +228,7 @@ async function clearActive(tx: SqlTx, clientTripId: string): Promise<void> {
 
 /**
  * The outbox over a SQL database. Run `migrate` on the database first. `thinning` decides which
- * of the fixes that come close together are stored (`thin.ts`); `null` stores every fix.
+ * of the fixes that come close together are stored (`thin.ts`); `null` does not thin them.
  */
 export function createSqlStore(
   db: SqlDb,
