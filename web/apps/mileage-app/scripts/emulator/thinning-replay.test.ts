@@ -1,9 +1,17 @@
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { createServer, type IncomingMessage } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, test } from "vite-plus/test";
 import { createSqlStore, migrate } from "../../src/core/sql-store.ts";
@@ -586,7 +594,15 @@ describe("the command", () => {
         expect(result.status, result.stderr).toBe(0);
         const absolute = resolve(dir, name);
         expect(existsSync(absolute)).toBe(true);
-        expect(result.stdout).toContain(`saved 241 points of trip trip-1 of dave to ${absolute}`);
+        // The path the script prints is absolute and names the file that was written. It is compared
+        // by realpath: on macOS the temporary folder is reached through a symbolic link (/var is
+        // /private/var), and the script, started in it, prints the folder it is really in.
+        const printed = /^saved 241 points of trip trip-1 of dave to (.+)$/m.exec(
+          result.stdout,
+        )?.[1];
+        expect(printed, result.stdout).toBeDefined();
+        expect(isAbsolute(printed ?? "")).toBe(true);
+        expect(realpathSync(printed ?? "")).toBe(realpathSync(absolute));
         expect(result.stdout).not.toContain(`to ${name}`);
       });
     });
