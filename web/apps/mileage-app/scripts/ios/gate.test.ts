@@ -89,7 +89,7 @@ describe("a release build", () => {
     expect(result.findings.some((f) => f.level === "warn" && /_other/.test(f.text))).toBe(true);
   });
 
-  test("a build that stores every fix is not a release build", () => {
+  test("a build with the thinning off is not a release build", () => {
     const built = plain();
     built.config.extra = { cleartextAllowed: false, defaultServer: "", thinningOff: true };
     const result = checkBuild(built, { mode: "release" });
@@ -400,6 +400,24 @@ describe("a build for the first drive on a phone (--drive)", () => {
       );
     });
 
+    test("a bundle id that only starts with the expected one, or ends with it, is another id", () => {
+      for (const other of [
+        "org.obop.mileage.test2",
+        "org.obop.mileage.test.extra",
+        "com.org.obop.mileage.test",
+      ]) {
+        const built = forPc();
+        built.infoPlist.CFBundleIdentifier = other;
+        const result = expecting(built, { expectBundleId: BUNDLE });
+        expect(result.ok, other).toBe(false);
+        const lines = driveLines(failures(result));
+        expect(lines, other).toHaveLength(2);
+        expect(lines[0], other).toContain(
+          `the bundle id is ${JSON.stringify(other)}, it must be ${BUNDLE} (set OBOP_IOS_BUNDLE_ID=${BUNDLE})`,
+        );
+      }
+    });
+
     test("both wrong gives both lines and one remedy", () => {
       const built = withServer("http://10.0.0.1:1");
       built.infoPlist.CFBundleIdentifier = "org.obop.mileage";
@@ -641,6 +659,18 @@ describe("the command", () => {
         expect(wrongBundle.status).toBe(1);
         expect(wrongBundle.stdout).toContain("OBOP_IOS_BUNDLE_ID=org.obop.mileage.test");
         expect(run(bundle, "--test-build", "--drive").status).toBe(0);
+      });
+
+      test("exit 1 for a bundle id that only starts with the expected one", () => {
+        const prefixed = forPc();
+        prefixed.infoPlist.CFBundleIdentifier = "org.obop.mileage.test2";
+        const result = run(prefixed, ...expectBoth);
+        expect(result.status, result.stdout + result.stderr).toBe(1);
+        expect(result.stdout).toContain(
+          'FAIL  drive build: the bundle id is "org.obop.mileage.test2", it must be org.obop.mileage.test',
+        );
+        expect(result.stdout).not.toContain("the bundle id is org.obop.mileage.test, as expected");
+        expect(result.stdout).toContain("gate FAILED (test build)");
       });
 
       test("exit 2 without --drive, without a value, or with an address that is not http", () => {
