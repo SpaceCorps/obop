@@ -3,7 +3,14 @@ export interface Finding {
   text: string;
 }
 
+export function addressOf(text: string): string | undefined;
+
 export function checkBuild(
   built: { config: unknown; infoPlist: unknown },
-  options: { mode: "release" | "test"; drive?: boolean },
+  options: {
+    mode: "release" | "test";
+    drive?: boolean;
+    expectServer?: string;
+    expectBundleId?: string;
+  },
 ): { ok: boolean; findings: Finding[]; facts: Record<string, string> };

@@ -21,7 +21,10 @@ export COCOAPODS_DISABLE_STATS=1
 # Vite+ (`vp`) and its Node.
 [ -f "$HOME/.config/vite-plus/env" ] && . "$HOME/.config/vite-plus/env"
 export CP_HOME_DIR="$OBOP_TOOLS/cocoapods-home"
-export npm_config_store_dir="$OBOP_TOOLS/pnpm-store"
+# pnpm 12.6.0 reads its settings from variables named pnpm_config_<name>; npm_config_store_dir and
+# PNPM_STORE_DIR are ignored by it (on the Mac, 2026-10-30: `pnpm store path` and `vp install` used
+# ~/Library/pnpm/store/v11 with them and $OBOP_TOOLS/pnpm-store/v11 with this one).
+export pnpm_config_store_dir="$OBOP_TOOLS/pnpm-store"
 export __UNSAFE_EXPO_HOME_DIRECTORY="$OBOP_TOOLS/expo-home"
 
 # CI must NOT be set. Expo reads CI=1 as "no person is here" and then refuses the question it asks

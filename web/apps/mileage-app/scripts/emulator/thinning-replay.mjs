@@ -21,7 +21,12 @@
 // `--save-points FILE` (with --server) writes the time and position of every point it fetched to
 // FILE as JSON, the form `--points FILE` reads, so that the drive can be replayed again after the
 // test instance is deleted (the points exist nowhere else). It refuses to overwrite a file. The
-// file holds the route that was driven, and nothing else of the trip.
+// file holds the route that was driven, and nothing else of the trip: it is the owner's file, so
+// give an absolute path outside any repository (on Windows for example
+// $env:USERPROFILE\iphone-trip-points.json): a relative name is written to the folder the command
+// runs in, which for `vp run` is web/apps/mileage-app inside the checkout. To replay it with other
+// start phases run `--points FILE --skip N`, not this line again with --skip (it refuses to
+// overwrite). The line it prints names the absolute path that was written.
 //
 // `--skip N` drops the first N fixes before the replay, which varies the phase of the feed. On a
 // feed of one fix per second the 2 s rule keeps every second fix, and what it costs depends on
@@ -101,9 +106,12 @@ if (pointsFile !== "") {
     rows = await tripPoints(call, trip.id);
     label = `trip ${trip.id} of ${trip.driver}`;
     if (saveOption !== "") {
-      // "wx": never over an existing file. The file holds a route, so it is private to the owner.
       writeFileSync(saveOption, `${JSON.stringify(savedPoints(rows), null, 1)}\n`, {
+        // Never over an existing file. The check above (before the fetch) stops that case; this flag
+        // only closes the gap between that check and this write, a race that no test can make.
         flag: "wx",
+        // The file holds a route, so it is private to its owner. Honoured on macOS and Linux; Windows
+        // does not apply it, so the test checks the mode only where it is honoured.
         mode: 0o600,
       });
       console.log(`saved ${rows.length} points of ${label} to ${resolve(saveOption)}`);

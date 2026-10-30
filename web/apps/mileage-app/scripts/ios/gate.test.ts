@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, test } from "vite-plus/test";
-import { checkBuild } from "./gate-lib.mjs";
+import { addressOf, checkBuild } from "./gate-lib.mjs";
 
 const plain = () => ({
   config: { extra: { cleartextAllowed: false, defaultServer: "" } } as Record<string, unknown>,
@@ -239,7 +239,9 @@ describe("a build for the first drive on a phone (--drive)", () => {
     expect(text).toMatch(/cleartextAllowed is false.*OBOP_ALLOW_CLEARTEXT=1/);
     expect(text).toMatch(/thinningOff is undefined.*OBOP_RECORD_THINNING=off/);
     expect(text).toMatch(/defaultServer is empty.*OBOP_DEFAULT_SERVER=http:\/\/ADDRESS:PORT/);
-    expect(text).toMatch(/env \| grep OBOP_.*vp run ios:run:device.*this gate again/);
+    expect(text).toMatch(
+      /env \| grep OBOP_.*`vp run ios:run:device` for the phone, `vp run ios:build:simulator Release` for a Simulator build.*this gate again/,
+    );
     expect(checkBuild(rebuilt, { mode: "test", drive: true }).ok).toBe(false);
   });
 
@@ -276,14 +278,27 @@ describe("a build for the first drive on a phone (--drive)", () => {
       built.config.extra = extra;
       const result = checkBuild(built, { mode: "test", drive: true });
       expect(result.ok, name).toBe(false);
-      // The one fact plus the remedy line, and no other fact.
-      const lines = driveLines(failures(result));
+      // The one fact plus the remedy line, and no other fact. (Plain http off with the thinning
+      // flag on also gives the failure "the build ignores OBOP_RECORD_THINNING", with the prefix.)
+      const lines = driveLines(failures(result)).filter((text) => !/build ignores/.test(text));
       expect(lines, name).toHaveLength(2);
       expect(lines[0], name).toMatch(pattern);
       expect(lines[1], name).toMatch(/env \| grep OBOP_/);
       // Without the flag the same build is not refused for it.
       expect(driveLines(failures(checkBuild(built, { mode: "test" }))), name).toEqual([]);
     }
+  });
+
+  test("the failure for thinning without plain http has the drive prefix with --drive and none without", () => {
+    const built = driveBuild();
+    built.config.extra = { ...(built.config.extra as object), cleartextAllowed: false };
+    const ignores = (list: string[]) => list.filter((text) => /build ignores/.test(text));
+    const withDrive = ignores(driveFailures(built));
+    expect(withDrive).toHaveLength(1);
+    expect(withDrive[0]).toMatch(/^drive build: the build ignores OBOP_RECORD_THINNING/);
+    const without = ignores(failures(checkBuild(built, { mode: "test" })));
+    expect(without).toHaveLength(1);
+    expect(without[0]).toMatch(/^the build ignores OBOP_RECORD_THINNING/);
   });
 
   test("an uppercase scheme is still an http address", () => {
@@ -302,6 +317,115 @@ describe("a build for the first drive on a phone (--drive)", () => {
     expect(result.ok).toBe(true);
     expect(result.findings.filter((f) => f.level === "warn")).toHaveLength(1);
     expect(result.findings.some((f) => f.text.startsWith("drive build:"))).toBe(false);
+  });
+
+  describe("--expect-server and --expect-bundle-id", () => {
+    const SERVER = "http://192.168.1.57:18080";
+    const BUNDLE = "org.obop.mileage.test";
+    const expecting = (built: ReturnType<typeof plain>, expectation: object) =>
+      checkBuild(built, { mode: "test", drive: true, ...expectation });
+    const forPc = () => {
+      const built = driveBuild();
+      built.config.extra = { ...(built.config.extra as object), defaultServer: SERVER };
+      return built;
+    };
+    const withServer = (defaultServer: string) => {
+      const built = forPc();
+      built.config.extra = { ...(built.config.extra as object), defaultServer };
+      return built;
+    };
+
+    test("a build that points at the expected instance with the expected bundle id passes and says so", () => {
+      const result = expecting(forPc(), { expectServer: SERVER, expectBundleId: BUNDLE });
+      expect(failures(result)).toEqual([]);
+      const ok = result.findings.filter((f) => f.level === "ok").map((f) => f.text);
+      expect(ok).toContain(`drive build: the default server is ${SERVER}, as expected`);
+      expect(ok).toContain(`drive build: the bundle id is ${BUNDLE}, as expected`);
+    });
+
+    test("the address is compared as an address: a trailing slash, the case of the host and a default port do not matter", () => {
+      for (const defaultServer of [
+        `${SERVER}/`,
+        "HTTP://192.168.1.57:18080",
+        "http://192.168.1.57:18080//",
+      ]) {
+        expect(
+          failures(expecting(withServer(defaultServer), { expectServer: SERVER })),
+          defaultServer,
+        ).toEqual([]);
+      }
+      expect(
+        failures(expecting(withServer("http://PC.local:80"), { expectServer: "http://pc.local/" })),
+      ).toEqual([]);
+      expect(addressOf("http://PC.local:80/a/")).toBe("http://pc.local/a");
+      expect(addressOf("not an address")).toBeUndefined();
+    });
+
+    test("another address fails with its own line, the variable that fixes it and the remedy", () => {
+      for (const defaultServer of [
+        "http://192.168.1.1:18080",
+        "http://192.168.1.57:18081",
+        "http://192.168.1.57:18080/api",
+        "http://192.168.1.57",
+      ]) {
+        const built = withServer(defaultServer);
+        const result = expecting(built, { expectServer: SERVER });
+        expect(result.ok, defaultServer).toBe(false);
+        const lines = driveLines(failures(result));
+        expect(lines, defaultServer).toHaveLength(2);
+        expect(lines[0], defaultServer).toContain(
+          `defaultServer is ${JSON.stringify(defaultServer)}, it must be ${SERVER} (set OBOP_DEFAULT_SERVER=${SERVER})`,
+        );
+        expect(lines[1], defaultServer).toMatch(/env \| grep OBOP_/);
+        // Without the option the same build passes.
+        expect(failures(expecting(built, {})), defaultServer).toEqual([]);
+      }
+    });
+
+    test("another bundle id, or none, fails with the variable that fixes it", () => {
+      const other = forPc();
+      other.infoPlist.CFBundleIdentifier = "org.obop.mileage";
+      const result = expecting(other, { expectBundleId: BUNDLE });
+      expect(result.ok).toBe(false);
+      const lines = driveLines(failures(result));
+      expect(lines).toHaveLength(2);
+      expect(lines[0]).toContain(
+        `the bundle id is "org.obop.mileage", it must be ${BUNDLE} (set OBOP_IOS_BUNDLE_ID=${BUNDLE})`,
+      );
+      expect(failures(expecting(other, {}))).toEqual([]);
+      const none = forPc();
+      delete none.infoPlist.CFBundleIdentifier;
+      expect(driveLines(failures(expecting(none, { expectBundleId: BUNDLE })))[0]).toContain(
+        "the bundle id is missing from Info.plist",
+      );
+    });
+
+    test("both wrong gives both lines and one remedy", () => {
+      const built = withServer("http://10.0.0.1:1");
+      built.infoPlist.CFBundleIdentifier = "org.obop.mileage";
+      const lines = driveLines(
+        failures(expecting(built, { expectServer: SERVER, expectBundleId: BUNDLE })),
+      );
+      expect(lines).toHaveLength(3);
+    });
+
+    test("an empty default server is reported once, as not an http address", () => {
+      const lines = driveLines(failures(expecting(withServer(""), { expectServer: SERVER })));
+      expect(lines).toHaveLength(2);
+      expect(lines[0]).toMatch(/defaultServer is empty/);
+    });
+
+    test("the options need the drive check, and the server must be an http address", () => {
+      expect(() => checkBuild(forPc(), { mode: "test", expectServer: SERVER })).toThrow(
+        /belong to the drive check/,
+      );
+      expect(() => checkBuild(forPc(), { mode: "test", expectBundleId: BUNDLE })).toThrow(
+        /belong to the drive check/,
+      );
+      for (const bad of ["https://192.168.1.57:18080", "192.168.1.57:18080", ""]) {
+        expect(() => expecting(forPc(), { expectServer: bad }), bad).toThrow(/http:\/\/ address/);
+      }
+    });
   });
 
   test("a release build cannot be checked as a drive build", () => {
@@ -469,6 +593,96 @@ describe("the command", () => {
       const result = run(driveBuild(), "--drive");
       expect(result.status).toBe(2);
       expect(result.stderr).toContain("--drive is for a test build");
+    });
+
+    describe("--expect-server and --expect-bundle-id", () => {
+      const forPc = () => {
+        const built = driveBuild();
+        built.config.extra = {
+          cleartextAllowed: true,
+          defaultServer: "http://192.168.1.57:18080",
+          thinningOff: true,
+        };
+        return built;
+      };
+      const expectBoth = [
+        "--test-build",
+        "--drive",
+        "--expect-server",
+        "http://192.168.1.57:18080/",
+        "--expect-bundle-id",
+        "org.obop.mileage.test",
+      ];
+
+      test("exit 0 and the lines 'as expected' when the build is the expected one", () => {
+        const result = run(forPc(), ...expectBoth);
+        expect(result.status, result.stdout + result.stderr).toBe(0);
+        expect(result.stdout).toContain(
+          "the default server is http://192.168.1.57:18080/, as expected",
+        );
+        expect(result.stdout).toContain("the bundle id is org.obop.mileage.test, as expected");
+        expect(result.stdout).toContain("gate passed (test build)");
+      });
+
+      test("exit 1 for another server or another bundle id, and 0 without the options", () => {
+        const server = forPc();
+        server.config.extra = {
+          ...(server.config.extra as object),
+          defaultServer: "http://192.168.1.1:18080",
+        };
+        const wrongServer = run(server, ...expectBoth);
+        expect(wrongServer.status).toBe(1);
+        expect(wrongServer.stdout).toContain("OBOP_DEFAULT_SERVER=http://192.168.1.57:18080/");
+        expect(wrongServer.stdout).toContain("gate FAILED (test build)");
+        expect(run(server, "--test-build", "--drive").status).toBe(0);
+        const bundle = forPc();
+        bundle.infoPlist.CFBundleIdentifier = "org.obop.mileage";
+        const wrongBundle = run(bundle, ...expectBoth);
+        expect(wrongBundle.status).toBe(1);
+        expect(wrongBundle.stdout).toContain("OBOP_IOS_BUNDLE_ID=org.obop.mileage.test");
+        expect(run(bundle, "--test-build", "--drive").status).toBe(0);
+      });
+
+      test("exit 2 without --drive, without a value, or with an address that is not http", () => {
+        const noDrive = run(
+          forPc(),
+          "--test-build",
+          "--expect-server",
+          "http://192.168.1.57:18080",
+        );
+        expect(noDrive.status).toBe(2);
+        expect(noDrive.stderr).toContain("--expect-server belongs to --drive");
+        const noValue = run(forPc(), "--test-build", "--drive", "--expect-bundle-id");
+        expect(noValue.status).toBe(2);
+        expect(noValue.stderr).toContain("--expect-bundle-id takes a value");
+        const flagAsValue = run(
+          forPc(),
+          "--test-build",
+          "--drive",
+          "--expect-server",
+          "--expect-bundle-id",
+          "x",
+        );
+        expect(flagAsValue.status).toBe(2);
+        expect(flagAsValue.stderr).toContain("--expect-server takes a value");
+        const https = run(
+          forPc(),
+          "--test-build",
+          "--drive",
+          "--expect-server",
+          "https://192.168.1.57:18080",
+        );
+        expect(https.status).toBe(2);
+        expect(https.stderr).toContain("--expect-server must be an http:// address");
+      });
+
+      test("the value of an option is not taken for the path of the app", () => {
+        const result = spawnSync(process.execPath, [script, "APP.app", ...expectBoth], {
+          encoding: "utf8",
+        });
+        expect(result.status).toBe(2);
+        expect(result.stderr).not.toContain("give the path of one built .app");
+      });
     });
   });
 

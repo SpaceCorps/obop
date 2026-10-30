@@ -45,7 +45,7 @@ describe.skipIf(!hasShell)("scripts/ios/env.sh", () => {
 
   test("it sets the language, the caches and the tools under OBOP_TOOLS, default ~/build/tools", () => {
     const [gemHome, lang, store, path] = sourced(
-      ["GEM_HOME", "LANG", "npm_config_store_dir", "PATH"],
+      ["GEM_HOME", "LANG", "pnpm_config_store_dir", "PATH"],
       {},
     );
     expect(gemHome).toBe(`${shHome}/build/tools/gems`);

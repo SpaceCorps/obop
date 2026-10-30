@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync 
 import { createServer, type IncomingMessage } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, test } from "vite-plus/test";
 import { createSqlStore, migrate } from "../../src/core/sql-store.ts";
@@ -500,15 +500,13 @@ describe("the command", () => {
       }
     }
 
-    const runAsync = (...args: string[]) =>
+    const appFolder = fileURLToPath(new URL("../..", import.meta.url));
+    const runIn = (cwd: string, ...args: string[]) =>
       new Promise<{ status: number | null; stdout: string; stderr: string }>((done) => {
         const child = spawn(
           process.execPath,
           ["--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", script, ...args],
-          {
-            cwd: fileURLToPath(new URL("../..", import.meta.url)),
-            env: { ...process.env, OBOP_CHECK_PASSWORD: "pw" },
-          },
+          { cwd, env: { ...process.env, OBOP_CHECK_PASSWORD: "pw" } },
         );
         let stdout = "";
         let stderr = "";
@@ -516,6 +514,7 @@ describe("the command", () => {
         child.stderr.on("data", (chunk) => (stderr += chunk));
         child.on("close", (status) => done({ status, stdout, stderr }));
       });
+    const runAsync = (...args: string[]) => runIn(appFolder, ...args);
 
     const tableOf = (stdout: string) => stdout.slice(stdout.indexOf("\n\n"));
 
@@ -544,6 +543,51 @@ describe("the command", () => {
         expect(later.status, later.stderr).toBe(0);
         expect(tableOf(later.stdout)).toBe(tableOf(live.stdout));
         expect(later.stdout).toMatch(/241 points over 240 s/);
+      });
+    });
+
+    test("with --skip it still saves every fix of the trip, and the replay uses the skipped ones", async () => {
+      const target = join(dir, "saved-skip.json");
+      await withServer({}, async (url) => {
+        const live = await runAsync(
+          "--server",
+          url,
+          "--user",
+          "rita",
+          "--driver",
+          "dave",
+          "--skip",
+          "3",
+          "--save-points",
+          target,
+        );
+        expect(live.status, live.stderr).toBe(0);
+        expect(live.stdout).toContain(`saved 241 points of trip trip-1 of dave to ${target}`);
+        const saved = JSON.parse(readFileSync(target, "utf8")) as Array<{ recorded_at: string }>;
+        expect(saved).toHaveLength(241);
+        expect(saved[0]?.recorded_at).toBe(rows[0]?.recorded_at);
+        expect(saved.at(-1)?.recorded_at).toBe(rows.at(-1)?.recorded_at);
+        // The replay is over the 238 fixes that were left, as without --save-points.
+        expect(live.stdout).toContain(
+          "the first 3 fixes of the trip are dropped before the replay",
+        );
+        expect(live.stdout).toMatch(/238 points over 237 s/);
+        // And the saved file replays the same table with the same --skip later.
+        const later = await runAsync("--points", target, "--skip", "3");
+        expect(later.status, later.stderr).toBe(0);
+        expect(tableOf(later.stdout)).toBe(tableOf(live.stdout));
+      });
+    });
+
+    test("a relative file name is announced with its absolute path", async () => {
+      const name = "relative-saved.json";
+      await withServer({}, async (url) => {
+        const result = await runIn(dir, "--server", url, "--user", "rita", "--save-points", name);
+        expect(result.status, result.stderr).toBe(0);
+        const absolute = resolve(dir, name);
+        expect(existsSync(absolute)).toBe(true);
+        expect(result.stdout).toContain(`saved 241 points of trip trip-1 of dave to ${absolute}`);
+        expect(result.stdout).not.toContain(`to ${name}`);
       });
     });
 

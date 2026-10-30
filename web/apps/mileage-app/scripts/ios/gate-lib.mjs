@@ -20,13 +20,35 @@ const TEST_BUNDLE_ID = "org.obop.mileage.test";
 const isObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 
 /**
+ * An address as the gate compares two of them: scheme, host (lower case), port and path, a trailing
+ * slash ignored. `undefined` when the text is not an address.
+ * @param {string} text
+ * @returns {string | undefined}
+ */
+export function addressOf(text) {
+  try {
+    const url = new URL(text);
+    return `${url.protocol}//${url.host}${url.pathname.replace(/\/+$/, "")}`;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * @param {{ config: unknown, infoPlist: unknown }} built the embedded app config (EXConstants.bundle/app.config) and the Info.plist of the built app, as JSON values
- * @param {{ mode: "release" | "test", drive?: boolean }} options `release` fails a build that allows plain http; `test` reports it; `drive` (test mode only) is "this build is for the first drive on a phone" and fails a build that lacks plain http, the store-every-fix flag or an http default server
+ * @param {{ mode: "release" | "test", drive?: boolean, expectServer?: string, expectBundleId?: string }} options `release` fails a build that allows plain http; `test` reports it; `drive` (test mode only) is "this build is for the first drive on a phone" and fails a build that lacks plain http, the store-every-fix flag or an http default server; with `drive`, `expectServer` (an http:// address) and `expectBundleId` also fail a build whose default server or bundle id is another one
  * @returns {{ ok: boolean, findings: Finding[], facts: Record<string, string> }}
  */
-export function checkBuild(built, { mode, drive = false }) {
+export function checkBuild(built, { mode, drive = false, expectServer, expectBundleId }) {
   if (drive && mode !== "test") {
     throw new Error("the drive check is for a test build: it needs mode `test`");
+  }
+  if (!drive && (expectServer !== undefined || expectBundleId !== undefined)) {
+    throw new Error("expectServer and expectBundleId belong to the drive check: they need `drive`");
+  }
+  const expectedServer = expectServer === undefined ? undefined : addressOf(expectServer);
+  if (expectServer !== undefined && !expectedServer?.startsWith("http://")) {
+    throw new Error(`expectServer must be an http:// address, got ${JSON.stringify(expectServer)}`);
   }
   /** @type {Finding[]} */
   const findings = [];
@@ -67,8 +89,9 @@ export function checkBuild(built, { mode, drive = false }) {
     } else if (cleartext === true) {
       ok("test build: fixes are stored without thinning (thinningOff=true)");
     } else {
+      // With --drive this is one of the three facts of the drive build, so it carries the same prefix.
       fail(
-        "the build ignores OBOP_RECORD_THINNING because plain http is not allowed (set OBOP_ALLOW_CLEARTEXT=1 too): it would thin the fixes",
+        `${drive ? "drive build: " : ""}the build ignores OBOP_RECORD_THINNING because plain http is not allowed (set OBOP_ALLOW_CLEARTEXT=1 too): it would thin the fixes`,
       );
     }
   }
@@ -101,15 +124,30 @@ export function checkBuild(built, { mode, drive = false }) {
       missing.push(
         `defaultServer is ${defaultServer === "" ? "empty" : JSON.stringify(defaultServer)}, it must be an http:// address (set OBOP_DEFAULT_SERVER=http://ADDRESS:PORT)`,
       );
+    } else if (expectedServer !== undefined && addressOf(defaultServer) !== expectedServer) {
+      missing.push(
+        `defaultServer is ${JSON.stringify(defaultServer)}, it must be ${expectServer} (set OBOP_DEFAULT_SERVER=${expectServer})`,
+      );
+    }
+    if (expectBundleId !== undefined && bundleId !== expectBundleId) {
+      missing.push(
+        `the bundle id is ${bundleId === "" ? "missing from Info.plist" : JSON.stringify(bundleId)}, it must be ${expectBundleId} (set OBOP_IOS_BUNDLE_ID=${expectBundleId})`,
+      );
     }
     if (missing.length === 0) {
       ok(
         "drive build: plain http is allowed, the fixes are stored without thinning and the default server is an http address",
       );
+      if (expectedServer !== undefined) {
+        ok(`drive build: the default server is ${expectServer}, as expected`);
+      }
+      if (expectBundleId !== undefined) {
+        ok(`drive build: the bundle id is ${expectBundleId}, as expected`);
+      }
     } else {
       for (const text of missing) fail(`drive build: ${text}`);
       fail(
-        "drive build: in this Terminal run `env | grep OBOP_`, export what is missing, run `vp run ios:run:device` again, then this gate again",
+        "drive build: in this Terminal run `env | grep OBOP_`, export what is missing, build again (`vp run ios:run:device` for the phone, `vp run ios:build:simulator Release` for a Simulator build), then run this gate again",
       );
     }
   }
