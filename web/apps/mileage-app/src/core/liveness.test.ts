@@ -96,3 +96,23 @@ describe("the accuracy of a granted permission on either platform", () => {
     expect(ready({})).toBe("ready");
   });
 });
+
+describe("iOS names the switch of the phone before the permission", () => {
+  const off = { granted: false, accuracy: undefined, servicesEnabled: false };
+  test("with Location Services off the refusal that iOS reports is not what the driver is told", () => {
+    expect(readiness({ ...off, servicesFirst: true })).toBe("services_off");
+    expect(readiness({ ...off, granted: true, accuracy: "fine", servicesFirst: true })).toBe(
+      "services_off",
+    );
+  });
+  test("with the switch on the order does not matter", () => {
+    const on = { ...off, servicesEnabled: true, servicesFirst: true };
+    expect(readiness(on)).toBe("no_permission");
+    expect(readiness({ ...on, granted: true, accuracy: "coarse" })).toBe("approximate");
+    expect(readiness({ ...on, granted: true, accuracy: "fine" })).toBe("ready");
+  });
+  test("Android's order is the default", () => {
+    expect(readiness(off)).toBe("no_permission");
+    expect(readiness({ ...off, servicesFirst: false })).toBe("no_permission");
+  });
+});

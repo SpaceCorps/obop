@@ -67,12 +67,19 @@ export function reportedAccuracy(permission: {
 /**
  * Whether the phone can record a trip now. `accuracy` is `fine` or `coarse` as `reportedAccuracy`
  * gives it; it is `undefined` where the platform has no such choice.
+ *
+ * `servicesFirst` is iOS: with Location Services switched off the status of the app is "denied",
+ * the same as a refusal, so the switch has to be named before the permission or the driver is told
+ * that the app has no permission when the whole phone has none to give. On Android the status is
+ * "granted" with the switch off, and the permission is named first.
  */
 export function readiness(input: {
   granted: boolean;
   accuracy: string | undefined;
   servicesEnabled: boolean;
+  servicesFirst?: boolean;
 }): Readiness {
+  if (input.servicesFirst === true && !input.servicesEnabled) return "services_off";
   if (!input.granted) return "no_permission";
   if (input.accuracy !== undefined && input.accuracy !== "fine") return "approximate";
   return input.servicesEnabled ? "ready" : "services_off";
