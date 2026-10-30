@@ -26,6 +26,17 @@ export function toFixes(rows) {
 }
 
 /**
+ * What `--save-points` writes from the rows of the server: the time and position of every point, in
+ * the order the server gave them, and nothing else of the row (no id, no accuracy, no speed). It is
+ * what `--points FILE` reads back, with the values as the server holds them.
+ * @param {Array<Record<string, unknown>>} rows
+ * @returns {Array<{ recorded_at: unknown, lat: unknown, lon: unknown }>}
+ */
+export function savedPoints(rows) {
+  return rows.map((row) => ({ recorded_at: row.recorded_at, lat: row.lat, lon: row.lon }));
+}
+
+/**
  * The fixes without the first `n` of them (in time order): the same track as if the feed had started
  * `n` fixes later. The cost of the 2 s rule on a feed of one fix per second depends on which of the
  * two parities the rule lands in, so this is how the start phase is varied in a replay.

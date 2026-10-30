@@ -9,6 +9,9 @@ export interface TimedFix {
 }
 export const RULES: { name: string; thinning: Thinning | null }[];
 export function toFixes(rows: Array<Record<string, unknown>>): TimedFix[];
+export function savedPoints(
+  rows: Array<Record<string, unknown>>,
+): Array<{ recorded_at: unknown; lat: unknown; lon: unknown }>;
 export function dropFirst(fixes: TimedFix[], n: number): TimedFix[];
 export function percent(fraction: number): string;
 export function replay(

@@ -1,5 +1,7 @@
-import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { createServer, type IncomingMessage } from "node:http";
+import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,6 +9,8 @@ import { afterAll, describe, expect, test } from "vite-plus/test";
 import { createSqlStore, migrate } from "../../src/core/sql-store.ts";
 import { RECORDING_THINNING } from "../../src/core/thin.ts";
 import { memoryDb } from "../../src/test-support/memory-db.ts";
+import { routeFeed } from "./route-feed.mjs";
+import { START, haversine } from "./route.mjs";
 import {
   RULES,
   cadence,
@@ -14,6 +18,7 @@ import {
   looksThinned,
   percent,
   replay,
+  savedPoints,
   toFixes,
   type TimedFix,
 } from "./thinning-lib.mjs";
@@ -143,6 +148,95 @@ describe("the start phase", () => {
   });
 });
 
+describe("the clean synthetic feed (route-feed.mjs)", () => {
+  const feed = routeFeed();
+  const asFixes = (skip: number) => dropFirst(toFixes(feed), skip);
+  const shortfall = (skip: number, thinning: (typeof RULES)[number]["thinning"]) => {
+    const fixes = asFixes(skip);
+    const all = replay(fixes, null);
+    const kept = replay(fixes, thinning);
+    return {
+      kept: kept.kept,
+      metres: kept.distanceM,
+      all: all.distanceM,
+      text: percent((kept.distanceM - all.distanceM) / all.distanceM),
+    };
+  };
+
+  test("is 241 fixes, one per second, from the first waypoint to the last", () => {
+    expect(feed).toHaveLength(241);
+    expect(cadence(toFixes(feed)).gapsS).toEqual({ smallest: 1, median: 1, largest: 1 });
+    expect(cadence(toFixes(feed)).spanS).toBe(240);
+    // A closed rectangle: it starts at the first waypoint and ends within a metre of it.
+    expect(feed[0]).toMatchObject(START);
+    expect(haversine(feed[0]!, feed[240]!)).toBeLessThan(1);
+    expect(replay(toFixes(feed), null).distanceM).toBeCloseTo(3989.44, 2);
+  });
+
+  test("replays to the series that the documents state: 0, 1.15, 0, 1.16, 0, 1.17 % short, 121 to 118 points kept", () => {
+    const wanted = [
+      { kept: 121, text: "0.00 %", all: 3989.44, metres: 3989.44 },
+      { kept: 120, text: "-1.15 %", all: 3972.81, metres: 3926.99 },
+      { kept: 120, text: "0.00 %", all: 3956.17, metres: 3956.17 },
+      { kept: 119, text: "-1.16 %", all: 3939.54, metres: 3893.73 },
+      { kept: 119, text: "0.00 %", all: 3922.91, metres: 3922.91 },
+      { kept: 118, text: "-1.17 %", all: 3906.27, metres: 3860.46 },
+    ];
+    // The 1.5 s rule keeps the same fixes of a feed of one per second as the 2 s rule does.
+    for (const rule of [RULES[0]!, RULES[1]!]) {
+      wanted.forEach((want, skip) => {
+        const got = shortfall(skip, rule.thinning);
+        const label = `${rule.name} --skip ${skip}`;
+        expect(got.kept, label).toBe(want.kept);
+        expect(got.text, label).toBe(want.text);
+        expect(got.all, label).toBeCloseTo(want.all, 2);
+        expect(got.metres, label).toBeCloseTo(want.metres, 2);
+      });
+    }
+  });
+
+  test("the loss is three corners of 9.7 m and the last step, and only on the odd phases", () => {
+    const odd = shortfall(1, RULES[0]!.thinning);
+    expect(odd.all - odd.metres).toBeGreaterThan(45.7);
+    expect(odd.all - odd.metres).toBeLessThan(45.9);
+    const even = shortfall(2, RULES[0]!.thinning);
+    expect(even.all - even.metres).toBeCloseTo(0, 6);
+  });
+
+  test("the command writes the JSON that --points reads, to stdout or to a file that does not exist yet", () => {
+    const script = fileURLToPath(new URL("./route-feed.mjs", import.meta.url));
+    const out = spawnSync(process.execPath, [script], { encoding: "utf8" });
+    expect(out.status, out.stderr).toBe(0);
+    expect(JSON.parse(out.stdout)).toEqual(feed);
+    const dir2 = mkdtempSync(join(tmpdir(), "route-feed-"));
+    try {
+      const target = join(dir2, "feed.json");
+      expect(spawnSync(process.execPath, [script, target], { encoding: "utf8" }).status).toBe(0);
+      expect(JSON.parse(readFileSync(target, "utf8"))).toEqual(feed);
+      // A second run does not overwrite it.
+      expect(spawnSync(process.execPath, [script, target], { encoding: "utf8" }).status).not.toBe(
+        0,
+      );
+      const replayed = spawnSync(
+        process.execPath,
+        [
+          "--disable-warning=MODULE_TYPELESS_PACKAGE_JSON",
+          fileURLToPath(new URL("./thinning-replay.mjs", import.meta.url)),
+          "--points",
+          target,
+          "--skip",
+          "1",
+        ],
+        { encoding: "utf8", cwd: fileURLToPath(new URL("../..", import.meta.url)) },
+      );
+      expect(replayed.status, replayed.stderr).toBe(0);
+      expect(replayed.stdout).toMatch(/2 s \/ 50 m \(the default\)\s+120\s+3926\.99\s+-1\.15 %/);
+    } finally {
+      rmSync(dir2, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("the cadence of a track", () => {
   test("is the points per minute and the gaps between neighbours", () => {
     const c = cadence(ell(10));
@@ -169,6 +263,37 @@ describe("the cadence of a track", () => {
     expect(looksThinned(thinned)).toBe(true);
     // Too short to say.
     expect(looksThinned(thinned.slice(0, 5))).toBe(false);
+  });
+});
+
+describe("the points that --save-points writes", () => {
+  test("are the time and position of each row and nothing else", () => {
+    const rows = [
+      {
+        id: "p1",
+        trip: "t1",
+        seq: 1,
+        recorded_at: "2026-10-30T09:00:00.000Z",
+        lat: "52.0000000",
+        lon: "13.0000000",
+        accuracy_m: "4.0",
+        speed_mps: "1.5",
+      },
+      {
+        id: "p2",
+        trip: "t1",
+        seq: 2,
+        recorded_at: "2026-10-30T09:00:01.000Z",
+        lat: "52.0001000",
+        lon: "13.0001000",
+      },
+    ];
+    expect(savedPoints(rows)).toEqual([
+      { recorded_at: "2026-10-30T09:00:00.000Z", lat: "52.0000000", lon: "13.0000000" },
+      { recorded_at: "2026-10-30T09:00:01.000Z", lat: "52.0001000", lon: "13.0001000" },
+    ]);
+    // What --points reads back is the same fixes.
+    expect(toFixes(savedPoints(rows))).toEqual(toFixes(rows));
   });
 });
 
@@ -275,6 +400,35 @@ describe("the command", () => {
     expect(result.stdout).toContain("probably thinned when it was stored");
   });
 
+  test("a percentage that rounds to zero below the reference has no minus sign in that column", () => {
+    // ell(10) from fix 0: the default rule keeps the corner and the end, so its distance is the
+    // distance of the row "off"; a reference a hair longer puts the column at -0.0000x %.
+    const fixes = ell(10);
+    const file = join(dir, "zero.json");
+    writeFileSync(
+      file,
+      JSON.stringify(
+        fixes.map((f) => ({ recorded_at: new Date(f.t).toISOString(), lat: f.lat, lon: f.lon })),
+      ),
+    );
+    const reference = (replay(fixes, null).distanceM + 0.001).toFixed(3);
+    const result = run("--points", file, "--reference-m", reference);
+    expect(result.status, result.stderr).toBe(0);
+    const row = result.stdout
+      .split("\n")
+      .find((line) => line.startsWith("2 s / 50 m (the default)"))!;
+    expect(row).toMatch(/\s0\.00 %\s+0\.00 %$/);
+    expect(result.stdout).not.toContain("-0.00");
+  });
+
+  test("says in the table that the row off need not equal the distance of the trip", () => {
+    const file = join(dir, "table.json");
+    writeFileSync(file, JSON.stringify(ell(3).map((f) => ({ t: f.t, lat: f.lat, lon: f.lon }))));
+    const result = run("--points", file);
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain("the row 'off' need not equal the distance_m of the trip");
+  });
+
   test("asks for what it needs and reads nothing without a password", () => {
     const result = spawnSync(
       process.execPath,
@@ -283,5 +437,151 @@ describe("the command", () => {
     );
     expect(result.status).toBe(2);
     expect(result.stderr).toContain("usage:");
+  });
+
+  describe("--save-points", () => {
+    type Seen = { path: string; authorization: string | undefined; body: Record<string, unknown> };
+    const rows = routeFeed().map((f, i) => ({
+      id: `p${i}`,
+      trip: "trip-1",
+      seq: i + 1,
+      recorded_at: f.recorded_at,
+      lat: f.lat.toFixed(7),
+      lon: f.lon.toFixed(7),
+      accuracy_m: "5.0",
+    }));
+
+    /** A server that answers the three calls the script makes, and remembers them. */
+    async function withServer<T>(
+      options: { trips?: unknown[] },
+      body: (url: string, seen: Seen[]) => Promise<T>,
+    ): Promise<T> {
+      const seen: Seen[] = [];
+      const server = createServer((req: IncomingMessage, res) => {
+        let text = "";
+        req.on("data", (chunk) => (text += chunk));
+        req.on("end", () => {
+          const payload = text === "" ? {} : (JSON.parse(text) as Record<string, unknown>);
+          seen.push({
+            path: req.url ?? "",
+            authorization: req.headers.authorization,
+            body: payload,
+          });
+          const reply = (value: unknown) => {
+            res.setHeader("content-type", "application/json");
+            res.end(JSON.stringify(value));
+          };
+          if (req.url === "/api/auth/login") {
+            return reply(
+              payload.username === "rita" && payload.password === "pw" ? { token: "tok" } : {},
+            );
+          }
+          if (req.headers.authorization !== "Bearer tok") {
+            res.statusCode = 401;
+            return reply({});
+          }
+          if (req.url === "/api/mileage_trip/search") {
+            return reply({ value: { rows: options.trips ?? [{ id: "trip-1", driver: "dave" }] } });
+          }
+          if (req.url === "/api/mileage_point/search") {
+            const offset = Number(payload.offset ?? 0);
+            const limit = Number(payload.limit ?? 100);
+            return reply({ value: { rows: rows.slice(offset, offset + limit) } });
+          }
+          res.statusCode = 404;
+          return reply({});
+        });
+      });
+      await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
+      try {
+        return await body(`http://127.0.0.1:${(server.address() as AddressInfo).port}`, seen);
+      } finally {
+        await new Promise((done) => server.close(done));
+      }
+    }
+
+    const runAsync = (...args: string[]) =>
+      new Promise<{ status: number | null; stdout: string; stderr: string }>((done) => {
+        const child = spawn(
+          process.execPath,
+          ["--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", script, ...args],
+          {
+            cwd: fileURLToPath(new URL("../..", import.meta.url)),
+            env: { ...process.env, OBOP_CHECK_PASSWORD: "pw" },
+          },
+        );
+        let stdout = "";
+        let stderr = "";
+        child.stdout.on("data", (chunk) => (stdout += chunk));
+        child.stderr.on("data", (chunk) => (stderr += chunk));
+        child.on("close", (status) => done({ status, stdout, stderr }));
+      });
+
+    const tableOf = (stdout: string) => stdout.slice(stdout.indexOf("\n\n"));
+
+    test("writes every point it fetched, so that --points replays the same table later", async () => {
+      const target = join(dir, "saved.json");
+      await withServer({}, async (url) => {
+        const live = await runAsync(
+          "--server",
+          url,
+          "--user",
+          "rita",
+          "--driver",
+          "dave",
+          "--save-points",
+          target,
+        );
+        expect(live.status, live.stderr).toBe(0);
+        expect(live.stdout).toContain(`saved 241 points of trip trip-1 of dave to ${target}`);
+        const saved = JSON.parse(readFileSync(target, "utf8"));
+        expect(saved).toHaveLength(241);
+        expect(saved).toEqual(savedPoints(rows));
+        expect(Object.keys(saved[0]).sort()).toEqual(["lat", "lon", "recorded_at"]);
+        if (process.platform !== "win32") expect(statSync(target).mode & 0o777).toBe(0o600);
+        // Later, with the instance gone: the same cadence line and the same table.
+        const later = await runAsync("--points", target);
+        expect(later.status, later.stderr).toBe(0);
+        expect(tableOf(later.stdout)).toBe(tableOf(live.stdout));
+        expect(later.stdout).toMatch(/241 points over 240 s/);
+      });
+    });
+
+    test("does not overwrite a file, and asks the server nothing then", async () => {
+      const target = join(dir, "exists.json");
+      writeFileSync(target, "keep me");
+      await withServer({}, async (url, seen) => {
+        const result = await runAsync("--server", url, "--user", "rita", "--save-points", target);
+        expect(result.status).toBe(2);
+        expect(result.stderr).toContain("exists already");
+        expect(readFileSync(target, "utf8")).toBe("keep me");
+        expect(seen).toEqual([]);
+      });
+    });
+
+    test("writes nothing when there is no trip, and refuses to be used with --points", async () => {
+      const target = join(dir, "none.json");
+      await withServer({ trips: [] }, async (url) => {
+        const result = await runAsync("--server", url, "--user", "rita", "--save-points", target);
+        expect(result.status).toBe(2);
+        expect(result.stderr).toContain("no trip found");
+        expect(existsSync(target)).toBe(false);
+      });
+      const points = join(dir, "in.json");
+      writeFileSync(points, JSON.stringify(rows));
+      const both = await runAsync("--points", points, "--save-points", target);
+      expect(both.status).toBe(2);
+      expect(both.stderr).toContain("use it with --server");
+      expect(existsSync(target)).toBe(false);
+      const unnamed = await runAsync(
+        "--server",
+        "http://127.0.0.1:1",
+        "--user",
+        "rita",
+        "--save-points",
+      );
+      expect(unnamed.status).toBe(2);
+      expect(unnamed.stderr).toContain("takes the name of the file");
+    });
   });
 });
