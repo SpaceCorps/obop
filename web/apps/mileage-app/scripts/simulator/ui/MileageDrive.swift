@@ -126,6 +126,24 @@ final class MileageDrive: XCTestCase {
 
   // MARK: steps
 
+  /// A device that has never saved a password shows the system sheet "Save Password?" after the
+  /// sign-in page is submitted, over the consent page. It belongs to the system, not to the app, so
+  /// it is looked for in the tree of the app and in the tree of the springboard, and answered
+  /// "Not Now" (a test must not save a password). Seen on a fresh Simulator device in the review of
+  /// PR 34; the runs before it were on a device that had been through the sheet already.
+  func dismissSavePasswordPrompt() {
+    for (name, host) in [("app", app), ("springboard", springboard)] {
+      let notNow = host.descendants(matching: .any)
+        .matching(NSPredicate(format: "label == %@", "Not Now")).firstMatch
+      if notNow.exists {
+        print("SAVE-PASSWORD-PROMPT-DISMISSED (found in \(name))")
+        shot("signin-3c-save-password-prompt")
+        notNow.tap()
+        return
+      }
+    }
+  }
+
   /// Signs in through the system browser sheet (ASWebAuthenticationSession), as the driver.
   func signIn() {
     let address = app.textFields["signin-address"]
@@ -149,9 +167,11 @@ final class MileageDrive: XCTestCase {
     app.webViews.buttons["Sign in"].firstMatch.tap()
     for second in [1, 3, 6] {
       sleep(UInt32(second == 1 ? 1 : second - (second == 3 ? 1 : 3)))
+      dismissSavePasswordPrompt()
       shot("signin-3b-after-tap-\(second)s")
     }
     let allow = app.webViews.buttons["Allow"].firstMatch
+    if !allow.waitForExistence(timeout: 10) { dismissSavePasswordPrompt() }
     waitFor(allow, 30, "the consent page")
     shot("signin-4-consent")
     allow.tap()
