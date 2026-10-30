@@ -119,6 +119,16 @@ async function openWithKey(
   }
 }
 
+/**
+ * Where a key is kept until a database has been opened with it for the first time. Where the
+ * stale-file recovery is on, a key that was just made is stored as `pending:<key>` and made plain
+ * after the first successful open. A start that finds a pending key knows that no file has been
+ * opened with it yet and may still be stale; so a failed deletion, or a kill between the storing of
+ * the key and the replacing of the file, is put right by the next start and not left as "file is
+ * not a database" for good.
+ */
+const PENDING = /^pending:([0-9a-f]{64})$/;
+
 export async function openOutbox(
   ports: OpenPorts,
   names: OpenNames,
@@ -126,12 +136,17 @@ export async function openOutbox(
 ): Promise<Opened> {
   const known = await ports.secrets.get(names.databaseKey);
   let key: string;
+  // The key has not been proven by an open yet: the file, if there is one, may be a stale one.
   let generated = false;
+  const pending = known === null ? null : PENDING.exec(known);
   if (known !== null && /^[0-9a-f]{64}$/.test(known)) {
     key = known;
+  } else if (pending !== null && policy.recoverStaleFile) {
+    key = pending[1]!;
+    generated = true;
   } else {
     key = await ports.randomKey();
-    await ports.secrets.set(names.databaseKey, key);
+    await ports.secrets.set(names.databaseKey, policy.recoverStaleFile ? `pending:${key}` : key);
     generated = true;
   }
 
@@ -152,5 +167,7 @@ export async function openOutbox(
   if (recoveredStaleFile) {
     await createSqlStore(opened.db).setMeta(META_STALE_FILE_RECOVERED, instant(ports.now()));
   }
+  // The key is proven now: it opened a file. Last, so that a kill before this line is met again.
+  if (generated && policy.recoverStaleFile) await ports.secrets.set(names.databaseKey, key);
   return { ...opened, recoveredStaleFile };
 }

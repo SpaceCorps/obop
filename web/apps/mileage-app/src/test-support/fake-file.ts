@@ -20,6 +20,8 @@ export class FakeDatabaseFile {
   private openHandles = 0;
   /** An error that the next `openFile` throws (a disk error), once. */
   failNextOpenWith: Error | null = null;
+  /** An error that the next `deleteFile` throws, once. */
+  failNextDeleteWith: Error | null = null;
 
   /** A file that came back with a restore of a backup: encrypted with a key that is not on this phone. */
   plantStaleFile(key = "f".repeat(64)): void {
@@ -105,6 +107,11 @@ export class FakeDatabaseFile {
   }
 
   async deleteFile(): Promise<void> {
+    if (this.failNextDeleteWith) {
+      const error = this.failNextDeleteWith;
+      this.failNextDeleteWith = null;
+      throw error;
+    }
     if (this.openHandles > 0) throw new Error("Cannot delete a database that is open");
     this.deletes += 1;
     this.keyOfFile = null;

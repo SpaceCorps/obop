@@ -177,6 +177,87 @@ describe("a file that no key fits", () => {
     expect(file.deletes).toBe(0);
   });
 
+  test("a deletion that fails is put right by the next start (the key was stored before it)", async () => {
+    const file = new FakeDatabaseFile();
+    file.plantStaleFile();
+    file.failNextDeleteWith = new Error("The file is in use");
+    const secrets = new FakeSecrets();
+    const ports = fakePorts(file, secrets, { key: KEY });
+    await expect(openOutbox(ports, NAMES, IOS)).rejects.toThrow("The file is in use");
+    expect(file.deletes).toBe(0);
+    // The key stays where the next start finds it, marked as one that opened nothing yet.
+    expect(secrets.items.get("db-key")).toBe(`pending:${KEY}`);
+
+    const opened = await openOutbox(ports, NAMES, IOS);
+    expect(opened).toMatchObject({ recoveredStaleFile: true, fresh: true });
+    expect(file.deletes).toBe(1);
+    expect(file.keyOfFile).toBe(KEY);
+    expect(secrets.items.get("db-key")).toBe(KEY);
+    expect(await staleFileRecoveredAt(createSqlStore(opened.db))).not.toBeNull();
+  });
+
+  test("a start that was cut off after the key was stored is put right by the next one", async () => {
+    const file = new FakeDatabaseFile();
+    file.plantStaleFile();
+    // The first open of the first start fails with something that is not a wrong key (the process
+    // died, the disk failed): the key is in the Keychain, the stale file is still there.
+    file.failNextOpenWith = new Error("disk I/O error");
+    const secrets = new FakeSecrets();
+    const ports = fakePorts(file, secrets, { key: KEY });
+    await expect(openOutbox(ports, NAMES, IOS)).rejects.toThrow("disk I/O error");
+    expect(file.keyOfFile).toBe("f".repeat(64));
+    expect(secrets.items.get("db-key")).toBe(`pending:${KEY}`);
+
+    const opened = await openOutbox(ports, NAMES, IOS);
+    expect(opened.recoveredStaleFile).toBe(true);
+    expect(file.deletes).toBe(1);
+    expect(file.keyOfFile).toBe(KEY);
+    expect(secrets.items.get("db-key")).toBe(KEY);
+  });
+
+  test("a cut off start whose file did open is not mistaken for a stale one", async () => {
+    // The key was made and the file was made with it, and the process died before the key became
+    // plain: the next start opens the file with the pending key and keeps everything in it.
+    const file = new FakeDatabaseFile();
+    await file.makeFile(KEY);
+    const secrets = new FakeSecrets();
+    secrets.items.set("db-key", `pending:${KEY}`);
+    const opened = await openOutbox(fakePorts(file, secrets, { key: OTHER }), NAMES, IOS);
+    expect(opened).toMatchObject({ recoveredStaleFile: false, fresh: false });
+    expect(file.deletes).toBe(0);
+    expect(secrets.items.get("db-key")).toBe(KEY);
+  });
+
+  test("the key becomes plain only after a database was opened with it", async () => {
+    const file = new FakeDatabaseFile();
+    const secrets = new FakeSecrets();
+    const stored: (string | null)[] = [];
+    const ports = fakePorts(file, secrets, { key: KEY });
+    const openFile = ports.openFile.bind(ports);
+    ports.openFile = async () => {
+      stored.push(secrets.items.get("db-key") ?? null);
+      return openFile();
+    };
+    await openOutbox(ports, NAMES, IOS);
+    expect(stored).toEqual([`pending:${KEY}`]);
+    expect(secrets.items.get("db-key")).toBe(KEY);
+  });
+
+  test("on Android the key is plain from the first moment, as before", async () => {
+    const file = new FakeDatabaseFile();
+    const secrets = new FakeSecrets();
+    const stored: (string | null)[] = [];
+    const ports = fakePorts(file, secrets, { key: KEY });
+    const openFile = ports.openFile.bind(ports);
+    ports.openFile = async () => {
+      stored.push(secrets.items.get("db-key") ?? null);
+      return openFile();
+    };
+    await openOutbox(ports, NAMES, ANDROID);
+    expect(stored).toEqual([KEY]);
+    expect(secrets.log.filter((line) => line === "set db-key")).toHaveLength(1);
+  });
+
   test("the words of SQLite for a key that does not fit", () => {
     expect(isNotADatabase(new Error("Error code 26: file is not a database"))).toBe(true);
     expect(isNotADatabase(new Error("file is encrypted or is not a database"))).toBe(true);
