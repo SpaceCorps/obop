@@ -462,4 +462,17 @@ describe("a deadline that fires after the app was suspended", () => {
     await vi.advanceTimersByTimeAsync(60_000);
     expect(await failure).toMatchObject({ code: "network_error", timedOut: true });
   });
+
+  test("a delay just over the slack of 5 seconds is a nap and gets the grace", async () => {
+    vi.useFakeTimers();
+    const call = held();
+    const result = refresh(call.deps);
+    const settled = vi.fn();
+    result.then(settled, settled);
+    vi.setSystemTime(Date.now() + 6_000);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(settled).not.toHaveBeenCalled();
+    call.release(json(answer));
+    expect((await result).refreshToken).toBe("RT-2");
+  });
 });
