@@ -10,16 +10,23 @@
 // Options: --device UDID (required: `xcrun simctl list devices`), --steps a,b,c (default: the
 // whole trip), --no-route (do not start the route), --speed M/S, --interval S or --distance M (as route.mjs).
 // Environment: OBOP_DRIVER_USER, OBOP_DRIVER_PASSWORD (read from the environment only, never from a
-// file or an argument, and removed from everything that is printed or logged), OBOP_APP_BUNDLE_ID
+// file or an argument, and removed from what THIS script prints and writes to its own log: not from
+// what `xcodebuild` itself keeps, see below), OBOP_APP_BUNDLE_ID
 // (default org.obop.mileage.test), OBOP_SERVER_ADDRESS (optional: typed into the address field of
 // the sign-in instead of the build's default), OBOP_BUILD_ROOT (where the test project, its build
 // and its logs go; default the temporary directory).
+//
+// What stays on the machine: `xcodebuild test` hands the password to the test runner as an
+// environment variable (TEST_RUNNER_...) and may keep the environment in its DerivedData and in the
+// .xcresult, which this script cannot clean. So the folder `<OBOP_BUILD_ROOT>/uitest` is made
+// readable by its owner only (mode 700) and holds a password: use a throwaway password, and delete
+// the folder when the drive is done (`rm -rf <OBOP_BUILD_ROOT>/uitest`).
 //
 // (From web/apps/mileage-app, on the Mac. A test script run by Node; it is not part of the app, its
 // build, any image or the shipped toolchain. It runs no shell: every command gets an argument list.
 // docs/spec/mobile.md 8.8.)
 import { spawn, spawnSync } from "node:child_process";
-import { createWriteStream, mkdirSync } from "node:fs";
+import { chmodSync, createWriteStream, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
@@ -52,7 +59,13 @@ const stamp = new Date().toISOString().replace(/[:.]/g, "-");
 const swift = fileURLToPath(new URL("./MileageDrive.swift", import.meta.url));
 const generator = fileURLToPath(new URL("./make-project.rb", import.meta.url));
 const shots = join(root, "shots");
-mkdirSync(shots, { recursive: true });
+mkdirSync(shots, { recursive: true, mode: 0o700 });
+// `mkdir -p` keeps the mode of a folder that was there already: make it private in any case.
+try {
+  chmodSync(root, 0o700);
+} catch {
+  // Not POSIX (the drive runs on a Mac only): nothing to do.
+}
 
 let env;
 try {
