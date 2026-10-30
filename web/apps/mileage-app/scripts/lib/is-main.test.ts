@@ -21,12 +21,6 @@ describe("isMain", () => {
     expect(isMain(pathToFileURL(here).href, "")).toBe(false);
     expect(isMain(pathToFileURL(here).href, join(tmpdir(), "obop-no-such-file.mjs"))).toBe(false);
   });
-
-  test("the old comparison failed for the path of a Mac", () => {
-    const url = "file:///Users/someone/route.mjs";
-    const old = (argv1: string) => url === `file:///${argv1.replaceAll("\\", "/")}`;
-    expect(old("/Users/someone/route.mjs")).toBe(false);
-  });
 });
 
 describe("the route script, started and imported", () => {

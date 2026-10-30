@@ -69,11 +69,23 @@ describe("sentences for the system the app runs on", () => {
     );
   });
 
+  const holders = (text: string) => (text.match(/\{\w+\}/g) ?? []).sort().join(" ");
+
+  test("the check of placeholders tells a sentence with one from a sentence without", () => {
+    // The check below can only fail if this one can: an earlier pattern matched the literal text
+    // "{w}" and never failed.
+    expect(holders("Started {when}. Stop it.")).toBe("{when}");
+    expect(holders("The last position is {count} minutes old")).not.toBe(
+      holders("The last position is old"),
+    );
+    expect(holders("{b} then {a}")).toBe(holders("{a} then {b}"));
+    expect(holders("no placeholder")).toBe("");
+  });
+
   test("every iOS sentence belongs to a sentence of the catalogue and has its placeholders", () => {
     expect(iosKeys.length).toBeGreaterThan(0);
-    const holders = (text: string) => (text.match(/{w+}/g) ?? []).sort().join(" ");
     for (const key of iosKeys) {
-      const base = key.replace(/.ios$/, "");
+      const base = key.replace(/\.ios$/, "");
       expect(Object.keys(en), key).toContain(base);
       expect(holders(record[key]!), key).toBe(holders(record[base]!));
     }
