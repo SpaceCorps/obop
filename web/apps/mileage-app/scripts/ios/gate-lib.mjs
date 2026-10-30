@@ -14,6 +14,9 @@ const WHEN_IN_USE_ONLY_KEYS = [
   "NSLocationAlwaysUsageDescription",
 ];
 
+/** The bundle id of the owner's test builds (OBOP_IOS_BUNDLE_ID, docs/spec/mobile.md 8.8). */
+const TEST_BUNDLE_ID = "org.obop.mileage.test";
+
 const isObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 
 /**
@@ -51,15 +54,29 @@ export function checkBuild(built, { mode }) {
     );
   }
   // Fixes stored without thinning (OBOP_RECORD_THINNING=off) are for the first drive of a test build.
+  // The app (src/core/thin.ts, `thinningFor`) honours the flag only when plain http is also allowed.
   const thinningOff = extra.thinningOff;
   if (thinningOff === true) {
     if (mode === "release") {
       fail(
-        "the embedded config has thinningOff=true: this build stores every fix and is not a release build",
+        "the embedded config has thinningOff=true: OBOP_RECORD_THINNING=off was set for this build (the app then does not thin the fixes if plain http is also allowed, and ignores the flag if not); a release build must not carry it",
       );
-    } else {
+    } else if (cleartext === true) {
       ok("test build: fixes are stored without thinning (thinningOff=true)");
+    } else {
+      fail(
+        "the build ignores OBOP_RECORD_THINNING because plain http is not allowed (set OBOP_ALLOW_CLEARTEXT=1 too): it would thin the fixes",
+      );
     }
+  }
+  // A test bundle id with plain http off: the Xcode phase of expo-constants evaluates app.config.ts
+  // again with the environment of the build, so a rebuild in a shell without the OBOP_ variables
+  // keeps the test bundle id and drops the rest.
+  const bundleId = typeof plist.CFBundleIdentifier === "string" ? plist.CFBundleIdentifier : "";
+  if (mode === "test" && bundleId === TEST_BUNDLE_ID && cleartext === false) {
+    warn(
+      `the bundle id is ${TEST_BUNDLE_ID} but cleartextAllowed=false: was the build made without the OBOP_ variables exported? (it speaks https only and thins the fixes; rebuild with the variables exported and read the facts above)`,
+    );
   }
   if (mode === "release" && defaultServer !== "" && !/^https:\/\//i.test(defaultServer)) {
     fail(
@@ -146,7 +163,7 @@ export function checkBuild(built, { mode }) {
   }
 
   const facts = {
-    bundleId: typeof plist.CFBundleIdentifier === "string" ? plist.CFBundleIdentifier : "(unknown)",
+    bundleId: bundleId === "" ? "(unknown)" : bundleId,
     cleartextAllowed: String(cleartext),
     defaultServer: defaultServer === "" ? "(none)" : defaultServer,
     backgroundModes: JSON.stringify(modes),

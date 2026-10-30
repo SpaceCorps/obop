@@ -131,6 +131,56 @@ describe("a test build", () => {
     );
   });
 
+  test("a build that would ignore OBOP_RECORD_THINNING because plain http is off fails", () => {
+    // thin.ts honours thinningOff only when cleartextAllowed is true as well.
+    for (const cleartextAllowed of [false, undefined]) {
+      const built = plain();
+      built.config.extra = { cleartextAllowed, defaultServer: "", thinningOff: true };
+      const result = checkBuild(built, { mode: "test" });
+      expect(result.ok, String(cleartextAllowed)).toBe(false);
+      expect(failures(result).join("\n")).toMatch(
+        /ignores OBOP_RECORD_THINNING because plain http is not allowed \(set OBOP_ALLOW_CLEARTEXT=1 too\)/,
+      );
+      expect(result.findings.some((f) => f.level === "ok" && /without thinning/.test(f.text))).toBe(
+        false,
+      );
+    }
+  });
+
+  test("the release failure for thinningOff says what the app does with it", () => {
+    const built = plain();
+    built.config.extra = { cleartextAllowed: false, defaultServer: "", thinningOff: true };
+    expect(failures(checkBuild(built, { mode: "release" })).join("\n")).toMatch(
+      /OBOP_RECORD_THINNING=off was set.*ignores the flag if not/,
+    );
+  });
+
+  test("the test bundle id with plain http off warns that the variables may not have been exported", () => {
+    const built = plain();
+    built.infoPlist.CFBundleIdentifier = "org.obop.mileage.test";
+    built.config.extra = { cleartextAllowed: false, defaultServer: "" };
+    const result = checkBuild(built, { mode: "test" });
+    expect(result.ok).toBe(true);
+    expect(
+      result.findings.filter(
+        (f) => f.level === "warn" && /without the OBOP_ variables/.test(f.text),
+      ),
+    ).toHaveLength(1);
+    // Neither the plain bundle id nor a test build that does allow http warns.
+    expect(
+      checkBuild(plain(), { mode: "test" }).findings.filter((f) => f.level === "warn"),
+    ).toEqual([]);
+    built.config.extra = { cleartextAllowed: true, defaultServer: "" };
+    expect(checkBuild(built, { mode: "test" }).findings.filter((f) => f.level === "warn")).toEqual(
+      [],
+    );
+    // A release build says nothing of the kind: it is the expected state of one.
+    built.config.extra = { cleartextAllowed: false, defaultServer: "" };
+    expect(
+      checkBuild(built, { mode: "release" }).findings.filter((f) => /OBOP_ variables/.test(f.text)),
+    ).toEqual([]);
+  });
+
   test("an entry of the development client is a warning, not a failure", () => {
     const built = plain();
     built.config.extra = { cleartextAllowed: true, defaultServer: "" };
