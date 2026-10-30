@@ -151,7 +151,7 @@ describe("a file that no key fits", () => {
     expect(file.closes).toBe(file.opens);
   });
 
-  test("a key that was read is never followed by a deletion, also on iOS", async () => {
+  test("a key that has already opened a file is never followed by a deletion, also on iOS", async () => {
     const file = new FakeDatabaseFile();
     file.plantStaleFile(OTHER);
     const secrets = new FakeSecrets();
@@ -213,6 +213,54 @@ describe("a file that no key fits", () => {
     expect(file.deletes).toBe(1);
     expect(file.keyOfFile).toBe(KEY);
     expect(secrets.items.get("db-key")).toBe(KEY);
+  });
+
+  test("a promotion that fails closes the open file, and the next start gets the file and the key right", async () => {
+    const file = new FakeDatabaseFile();
+    file.plantStaleFile();
+    const secrets = new FakeSecrets();
+    const set = secrets.set;
+    let failPromotion = true;
+    secrets.set = async (name, value) => {
+      // The promotion is the write of the plain key; the write of `pending:<key>` goes through.
+      if (failPromotion && value === KEY) {
+        failPromotion = false;
+        throw new Error("The Keychain is not available");
+      }
+      return set(name, value);
+    };
+    const ports = fakePorts(file, secrets, { key: KEY });
+    await expect(openOutbox(ports, NAMES, IOS)).rejects.toThrow("The Keychain is not available");
+    // Every file that was opened was closed, also the one that opened fine (the stale one failed
+    // and was closed before the deletion).
+    expect(file.opens).toBe(2);
+    expect(file.closes).toBe(2);
+    expect(file.keyOfFile).toBe(KEY);
+    expect(secrets.items.get("db-key")).toBe(`pending:${KEY}`);
+
+    // The retry opens the file again (a handle is not left behind by the first start), keeps what
+    // is in it, and makes the key plain. The note of the replaced file was not written the second
+    // time: the file is no longer stale.
+    const opened = await openOutbox(ports, NAMES, IOS);
+    expect(opened).toMatchObject({ recoveredStaleFile: false, fresh: false });
+    expect(file.deletes).toBe(1);
+    expect(file.closes).toBe(2);
+    expect(file.opens).toBe(3);
+    expect(secrets.items.get("db-key")).toBe(KEY);
+  });
+
+  test("a failure while the sign-in of a new database is dropped closes the file too", async () => {
+    const file = new FakeDatabaseFile();
+    const secrets = new FakeSecrets();
+    signedIn(secrets);
+    secrets.delete = async () => {
+      throw new Error("The Keychain is not available");
+    };
+    await expect(openOutbox(fakePorts(file, secrets, { key: KEY }), NAMES, IOS)).rejects.toThrow(
+      "The Keychain is not available",
+    );
+    expect(file.opens).toBe(1);
+    expect(file.closes).toBe(1);
   });
 
   test("a cut off start whose file did open is not mistaken for a stale one", async () => {

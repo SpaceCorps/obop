@@ -15,8 +15,10 @@ import { instant } from "./values.ts";
  *   another phone. After such a restore the file is there and the key is not: a key made now does
  *   not fit it. Android has no such case (its backup is off). The file cannot be read by anyone,
  *   so it is removed and a new one is made, and the driver is told (`META_STALE_FILE_RECOVERED`).
- *   This is done only for a key that was made in this very start. A key that was read is never
- *   followed by a deletion: the file is left as it is and the error is shown, as on Android.
+ *   This is done only for a key that was made in this very start, or one that is still `pending`
+ *   (stored by an earlier start and not yet proven by an open). A key that has already opened a file
+ *   is never followed by a deletion: the file is left as it is and the error is shown, as on
+ *   Android. A pending key has opened nothing yet, so it is followed by one.
  * - The Keychain survives an uninstall and the files of the app do not. After a reinstall the
  *   database is new and the server address and tokens are still there; a new database means a new
  *   installation, so the stored sign-in is dropped and the app starts signed out.
@@ -91,10 +93,14 @@ export function isNotADatabase(error: unknown): boolean {
   );
 }
 
-async function openWithKey(
-  ports: OpenPorts,
-  key: string,
-): Promise<{ db: SqlDb; cipherVersion: string; fresh: boolean }> {
+interface OpenFile {
+  file: FileHandle;
+  db: SqlDb;
+  cipherVersion: string;
+  fresh: boolean;
+}
+
+async function openWithKey(ports: OpenPorts, key: string): Promise<OpenFile> {
   const file = await ports.openFile();
   try {
     // The key goes first; nothing else may read the file before it.
@@ -112,7 +118,7 @@ async function openWithKey(
     const row = await db.one<{ user_version: number }>("PRAGMA user_version");
     const fresh = Number(row?.user_version ?? 0) === 0;
     await migrate(db);
-    return { db, cipherVersion, fresh };
+    return { file, db, cipherVersion, fresh };
   } catch (error) {
     await file.close().catch(() => undefined);
     throw error;
@@ -150,7 +156,7 @@ export async function openOutbox(
     generated = true;
   }
 
-  let opened: { db: SqlDb; cipherVersion: string; fresh: boolean };
+  let opened: OpenFile;
   let recoveredStaleFile = false;
   try {
     opened = await openWithKey(ports, key);
@@ -161,13 +167,25 @@ export async function openOutbox(
     opened = await openWithKey(ports, key);
   }
 
-  if (opened.fresh && policy.forgetSessionOnFreshDatabase) {
-    for (const name of names.session) await ports.secrets.delete(name);
+  try {
+    if (opened.fresh && policy.forgetSessionOnFreshDatabase) {
+      for (const name of names.session) await ports.secrets.delete(name);
+    }
+    if (recoveredStaleFile) {
+      await createSqlStore(opened.db).setMeta(META_STALE_FILE_RECOVERED, instant(ports.now()));
+    }
+    // The key is proven now: it opened a file. Last, so that a kill before this line is met again.
+    if (generated && policy.recoverStaleFile) await ports.secrets.set(names.databaseKey, key);
+  } catch (error) {
+    // The file is open and nobody gets the handle: close it, or a retry of the start (the caller
+    // forgets a failed open) opens the file a second time.
+    await opened.file.close().catch(() => undefined);
+    throw error;
   }
-  if (recoveredStaleFile) {
-    await createSqlStore(opened.db).setMeta(META_STALE_FILE_RECOVERED, instant(ports.now()));
-  }
-  // The key is proven now: it opened a file. Last, so that a kill before this line is met again.
-  if (generated && policy.recoverStaleFile) await ports.secrets.set(names.databaseKey, key);
-  return { ...opened, recoveredStaleFile };
+  return {
+    db: opened.db,
+    cipherVersion: opened.cipherVersion,
+    fresh: opened.fresh,
+    recoveredStaleFile,
+  };
 }
