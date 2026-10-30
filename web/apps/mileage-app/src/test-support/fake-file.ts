@@ -16,12 +16,23 @@ export class FakeDatabaseFile {
   cipherVersion: string | null = "4.17.0 community";
   opens = 0;
   closes = 0;
+  /** Every call of `close` on a handle, also the repeated and the failing ones: `closes` counts only the first that works. */
+  closeCalls = 0;
   deletes = 0;
   private openHandles = 0;
   /** An error that the next `openFile` throws (a disk error), once. */
   failNextOpenWith: Error | null = null;
   /** An error that the next `deleteFile` throws, once. */
   failNextDeleteWith: Error | null = null;
+  private closeFailure: { error: Error; sync: boolean } | null = null;
+
+  /**
+   * The next `close` of any handle fails, once, and leaves the handle open. It rejects, or with
+   * `{ sync: true }` throws before it returns a promise, as a plain method of a driver can.
+   */
+  failNextCloseWith(error: Error, { sync = false }: { sync?: boolean } = {}): void {
+    this.closeFailure = { error, sync };
+  }
 
   /** A file that came back with a restore of a backup: encrypted with a key that is not on this phone. */
   plantStaleFile(key = "f".repeat(64)): void {
@@ -97,11 +108,20 @@ export class FakeDatabaseFile {
           .all(...(params as SqlValue[]))
           .map((row) => ({ ...row }) as Record<string, SqlValue>);
       },
-      close: async () => {
-        if (closed) return;
-        closed = true;
-        this.closes += 1;
-        this.openHandles -= 1;
+      close: () => {
+        this.closeCalls += 1;
+        const failure = this.closeFailure;
+        if (failure !== null) {
+          this.closeFailure = null;
+          if (failure.sync) throw failure.error;
+          return Promise.reject(failure.error);
+        }
+        if (!closed) {
+          closed = true;
+          this.closes += 1;
+          this.openHandles -= 1;
+        }
+        return Promise.resolve();
       },
     };
   }

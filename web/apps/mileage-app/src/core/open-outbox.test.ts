@@ -151,7 +151,7 @@ describe("a file that no key fits", () => {
     expect(file.closes).toBe(file.opens);
   });
 
-  test("a key that has already opened a file is never followed by a deletion, also on iOS", async () => {
+  test("a plain key is never followed by a deletion, also on iOS", async () => {
     const file = new FakeDatabaseFile();
     file.plantStaleFile(OTHER);
     const secrets = new FakeSecrets();
@@ -165,6 +165,23 @@ describe("a file that no key fits", () => {
     expect(secrets.items.get("db-key")).toBe(KEY);
     // And the sign-in is still there: nothing was declared fresh.
     expect(secrets.items.has("tokens")).toBe(true);
+  });
+
+  test("a pending key is followed by a deletion when its file is not a database, also if an earlier start opened a file with it", async () => {
+    // The first start made the file with KEY and was cut off before the key became plain. Before
+    // the next start the file was replaced by another that KEY does not fit (a restore of a backup):
+    // a pending key cannot tell this from a stale file, and the file is replaced.
+    const file = new FakeDatabaseFile();
+    await file.makeFile(KEY);
+    expect(file.keyOfFile).toBe(KEY);
+    file.plantStaleFile(OTHER);
+    const secrets = new FakeSecrets();
+    secrets.items.set("db-key", `pending:${KEY}`);
+    const opened = await openOutbox(fakePorts(file, secrets, { key: "c".repeat(64) }), NAMES, IOS);
+    expect(opened).toMatchObject({ recoveredStaleFile: true, fresh: true });
+    expect(file.deletes).toBe(1);
+    expect(file.keyOfFile).toBe(KEY);
+    expect(secrets.items.get("db-key")).toBe(KEY);
   });
 
   test("an error that is not 'file is not a database' is not taken for a stale file", async () => {
@@ -235,6 +252,8 @@ describe("a file that no key fits", () => {
     // and was closed before the deletion).
     expect(file.opens).toBe(2);
     expect(file.closes).toBe(2);
+    // ... and each was closed once: a failure does not close a file a second time.
+    expect(file.closeCalls).toBe(2);
     expect(file.keyOfFile).toBe(KEY);
     expect(secrets.items.get("db-key")).toBe(`pending:${KEY}`);
 
@@ -261,6 +280,69 @@ describe("a file that no key fits", () => {
     );
     expect(file.opens).toBe(1);
     expect(file.closes).toBe(1);
+    expect(file.closeCalls).toBe(1);
+  });
+
+  test("a failure while the note of the replaced file is written closes the file too", async () => {
+    const file = new FakeDatabaseFile();
+    file.plantStaleFile();
+    const secrets = new FakeSecrets();
+    const ports = fakePorts(file, secrets, { key: KEY });
+    const openFile = ports.openFile.bind(ports);
+    ports.openFile = async () => {
+      const handle = await openFile();
+      return {
+        ...handle,
+        run: async (sql, params) => {
+          if (params.includes(META_STALE_FILE_RECOVERED)) throw new Error("The disk is full");
+          return handle.run(sql, params);
+        },
+      };
+    };
+    await expect(openOutbox(ports, NAMES, IOS)).rejects.toThrow("The disk is full");
+    // The stale file (closed before it was replaced) and the new one, each closed once.
+    expect(file.deletes).toBe(1);
+    expect(file.opens).toBe(2);
+    expect(file.closes).toBe(2);
+    expect(file.closeCalls).toBe(2);
+    // The key is still pending: the next start opens the new file and makes it plain.
+    expect(secrets.items.get("db-key")).toBe(`pending:${KEY}`);
+  });
+
+  describe("a close that fails does not replace the error that is on its way", () => {
+    const failure = (message: string) => new Error(message);
+
+    for (const sync of [false, true]) {
+      const how = sync ? "throws before it returns a promise" : "rejects";
+
+      test(`a promotion that fails: the promotion's error is the one given when close ${how}`, async () => {
+        const file = new FakeDatabaseFile();
+        const secrets = new FakeSecrets();
+        const set = secrets.set;
+        secrets.set = async (name, value) => {
+          if (value === KEY) throw new Error("The Keychain is not available");
+          return set(name, value);
+        };
+        file.failNextCloseWith(failure("close failed"), { sync });
+        await expect(
+          openOutbox(fakePorts(file, secrets, { key: KEY }), NAMES, IOS),
+        ).rejects.toThrow("The Keychain is not available");
+        // close was called once and failed; the handle stays open, and nothing closed it twice.
+        expect(file.opens).toBe(1);
+        expect(file.closeCalls).toBe(1);
+      });
+
+      test(`an open that fails: the error of the open is the one given when close ${how}`, async () => {
+        const file = new FakeDatabaseFile();
+        file.cipherVersion = null; // plain SQLite: openWithKey refuses it and closes the file
+        const secrets = new FakeSecrets();
+        file.failNextCloseWith(failure("close failed"), { sync });
+        await expect(
+          openOutbox(fakePorts(file, secrets, { key: KEY }), NAMES, IOS),
+        ).rejects.toThrow("The database is not encrypted");
+        expect(file.closeCalls).toBe(1);
+      });
+    }
   });
 
   test("a cut off start whose file did open is not mistaken for a stale one", async () => {

@@ -16,9 +16,11 @@ import { instant } from "./values.ts";
  *   not fit it. Android has no such case (its backup is off). The file cannot be read by anyone,
  *   so it is removed and a new one is made, and the driver is told (`META_STALE_FILE_RECOVERED`).
  *   This is done only for a key that was made in this very start, or one that is still `pending`
- *   (stored by an earlier start and not yet proven by an open). A key that has already opened a file
- *   is never followed by a deletion: the file is left as it is and the error is shown, as on
- *   Android. A pending key has opened nothing yet, so it is followed by one.
+ *   (stored by an earlier start and not yet made plain, which happens after the first successful
+ *   open). A plain key is never followed by a deletion: the file is left as it is and the error is
+ *   shown, as on Android. A pending key may be, when the file it meets is not a database, whether or
+ *   not an earlier start opened a file with it (a start cut off before the promotion, or a
+ *   promotion that failed, leaves a pending key that did open one).
  * - The Keychain survives an uninstall and the files of the app do not. After a reinstall the
  *   database is new and the server address and tokens are still there; a new database means a new
  *   installation, so the stored sign-in is dropped and the app starts signed out.
@@ -100,6 +102,19 @@ interface OpenFile {
   fresh: boolean;
 }
 
+/**
+ * Closes a file on a path where another error is already on its way, and lets nothing that the
+ * close does replace it: a `close` that rejects, and one that throws before it returns a promise
+ * (the driver's is a plain method), are both absorbed.
+ */
+async function closeQuietly(file: FileHandle): Promise<void> {
+  try {
+    await Promise.resolve().then(() => file.close());
+  } catch {
+    // The caller rethrows the error that matters.
+  }
+}
+
 async function openWithKey(ports: OpenPorts, key: string): Promise<OpenFile> {
   const file = await ports.openFile();
   try {
@@ -120,7 +135,7 @@ async function openWithKey(ports: OpenPorts, key: string): Promise<OpenFile> {
     await migrate(db);
     return { file, db, cipherVersion, fresh };
   } catch (error) {
-    await file.close().catch(() => undefined);
+    await closeQuietly(file);
     throw error;
   }
 }
@@ -128,10 +143,12 @@ async function openWithKey(ports: OpenPorts, key: string): Promise<OpenFile> {
 /**
  * Where a key is kept until a database has been opened with it for the first time. Where the
  * stale-file recovery is on, a key that was just made is stored as `pending:<key>` and made plain
- * after the first successful open. A start that finds a pending key knows that no file has been
- * opened with it yet and may still be stale; so a failed deletion, or a kill between the storing of
- * the key and the replacing of the file, is put right by the next start and not left as "file is
- * not a database" for good.
+ * after the first successful open. A start that finds a pending key cannot tell whether a file was
+ * opened with it (the start may have been cut off after the open and before the promotion), and
+ * the file may still be stale; so a "file is not a database" on a pending key is taken for a stale
+ * file and the file is replaced. That puts right a failed deletion, or a kill between the storing
+ * of the key and the replacing of the file, instead of leaving "file is not a database" for good.
+ * It is the one case in which a key that did open a file can be followed by a deletion.
  */
 const PENDING = /^pending:([0-9a-f]{64})$/;
 
@@ -179,7 +196,7 @@ export async function openOutbox(
   } catch (error) {
     // The file is open and nobody gets the handle: close it, or a retry of the start (the caller
     // forgets a failed open) opens the file a second time.
-    await opened.file.close().catch(() => undefined);
+    await closeQuietly(opened.file);
     throw error;
   }
   return {

@@ -39,10 +39,10 @@ const IOS_BUNDLE_ID = iosBundleId(process.env.OBOP_IOS_BUNDLE_ID, APPLICATION_ID
 const CLEARTEXT = process.env.OBOP_ALLOW_CLEARTEXT === "1";
 const DEFAULT_SERVER = process.env.OBOP_DEFAULT_SERVER ?? "";
 
-// A test build made with OBOP_RECORD_THINNING=off does not thin the fixes the phone delivers (
-// src/core/thin.ts), so that one drive shows the cadence of the system and the thinning rules can be
-// replayed over it (scripts/emulator/thinning-replay.mjs). The app honours it only where plain http
-// is allowed too, i.e. in a test build, and `scripts/ios/gate.mjs` fails a release build that
+// A test build made with OBOP_RECORD_THINNING=off does not thin the fixes the phone delivers
+// (src/core/thin.ts), so that one drive shows the cadence of the system and the thinning rules can
+// be replayed over it (scripts/emulator/thinning-replay.mjs). The app honours it only where plain
+// http is allowed too, i.e. in a test build, and `scripts/ios/gate.mjs` fails a release build that
 // carries it.
 const THINNING_OFF = recordThinningOff(process.env.OBOP_RECORD_THINNING);
 

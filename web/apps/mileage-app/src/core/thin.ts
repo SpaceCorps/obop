@@ -21,10 +21,11 @@ export const RECORDING_THINNING: Thinning = { minGapMs: 2000, farM: 50 };
  * The thinning of a build. A TEST build made with `OBOP_RECORD_THINNING=off` (`extra.thinningOff`)
  * does not thin the fixes the phone delivers (`appendFixes` still drops an implausible fix, one not
  * later than the last stored and one older than the trip start by more than 10 s, and stops at
- * 20,000 points), so that one drive shows the cadence of the system and the rules can be replayed over it (`scripts/emulator/thinning-replay.mjs`). Only a build that also
- * allows plain http is a test build (`extra.cleartextAllowed`); a release build keeps the rule
- * whatever its configuration says, and the release gate fails a release build that carries the
- * variable (`scripts/ios/gate.mjs`).
+ * 20,000 points), so that one drive shows the cadence of the system and the rules can be replayed
+ * over it (`scripts/emulator/thinning-replay.mjs`). Only a build that also allows plain http is a
+ * test build (`extra.cleartextAllowed`); a release build keeps the rule whatever its configuration
+ * says, and the release gate fails a release build that carries the variable
+ * (`scripts/ios/gate.mjs`).
  */
 export function thinningFor(extra: Record<string, unknown> | undefined | null): Thinning | null {
   return extra?.thinningOff === true && extra?.cleartextAllowed === true
