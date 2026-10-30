@@ -21,10 +21,13 @@ const isObject = (value) => typeof value === "object" && value !== null && !Arra
 
 /**
  * @param {{ config: unknown, infoPlist: unknown }} built the embedded app config (EXConstants.bundle/app.config) and the Info.plist of the built app, as JSON values
- * @param {{ mode: "release" | "test" }} options `release` fails a build that allows plain http; `test` reports it
+ * @param {{ mode: "release" | "test", drive?: boolean }} options `release` fails a build that allows plain http; `test` reports it; `drive` (test mode only) is "this build is for the first drive on a phone" and fails a build that lacks plain http, the store-every-fix flag or an http default server
  * @returns {{ ok: boolean, findings: Finding[], facts: Record<string, string> }}
  */
-export function checkBuild(built, { mode }) {
+export function checkBuild(built, { mode, drive = false }) {
+  if (drive && mode !== "test") {
+    throw new Error("the drive check is for a test build: it needs mode `test`");
+  }
   /** @type {Finding[]} */
   const findings = [];
   const fail = (text) => findings.push({ level: "fail", text });
@@ -75,8 +78,40 @@ export function checkBuild(built, { mode }) {
   const bundleId = typeof plist.CFBundleIdentifier === "string" ? plist.CFBundleIdentifier : "";
   if (mode === "test" && bundleId === TEST_BUNDLE_ID && cleartext === false) {
     warn(
-      `the bundle id is ${TEST_BUNDLE_ID} but cleartextAllowed=false: was the build made without the OBOP_ variables exported? (it speaks https only and thins the fixes; rebuild with the variables exported and read the facts above)`,
+      `the bundle id is ${TEST_BUNDLE_ID} but cleartextAllowed=false: OBOP_ALLOW_CLEARTEXT was not set for this build (it speaks https only and thins the fixes; if this build is for a drive, rebuild with the variables exported, and check it with --drive)`,
     );
+  }
+  // The build for the first drive on a phone (--drive): the three settings that make it useful must
+  // all be in the embedded config. The rules above only warn about a missing one, because a test
+  // build can be made for other reasons; for the drive a build without them is useless (it speaks
+  // https only to a test instance on http, or thins the fixes the drive is meant to keep).
+  if (drive) {
+    const missing = [];
+    if (cleartext !== true) {
+      missing.push(
+        `cleartextAllowed is ${String(cleartext)}, it must be true (set OBOP_ALLOW_CLEARTEXT=1)`,
+      );
+    }
+    if (thinningOff !== true) {
+      missing.push(
+        `thinningOff is ${String(thinningOff)}, it must be true (set OBOP_RECORD_THINNING=off)`,
+      );
+    }
+    if (!/^http:\/\//i.test(defaultServer)) {
+      missing.push(
+        `defaultServer is ${defaultServer === "" ? "empty" : JSON.stringify(defaultServer)}, it must be an http:// address (set OBOP_DEFAULT_SERVER=http://ADDRESS:PORT)`,
+      );
+    }
+    if (missing.length === 0) {
+      ok(
+        "drive build: plain http is allowed, the fixes are stored without thinning and the default server is an http address",
+      );
+    } else {
+      for (const text of missing) fail(`drive build: ${text}`);
+      fail(
+        "drive build: in this Terminal run `env | grep OBOP_`, export what is missing, run `vp run ios:run:device` again, then this gate again",
+      );
+    }
   }
   if (mode === "release" && defaultServer !== "" && !/^https:\/\//i.test(defaultServer)) {
     fail(

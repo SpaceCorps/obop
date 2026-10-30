@@ -3,7 +3,13 @@
 //
 //   node scripts/ios/gate.mjs path/to/App.app                 # a release build: fails on plain http
 //   node scripts/ios/gate.mjs path/to/App.app --test-build    # a test build: reports it
-//   node scripts/ios/gate.mjs --info-plist-json FILE --app-config FILE [--test-build]   # from files, any OS
+//   node scripts/ios/gate.mjs path/to/App.app --test-build --drive   # the build for the first drive on a phone
+//   node scripts/ios/gate.mjs --info-plist-json FILE --app-config FILE [--test-build [--drive]]   # from files, any OS
+//
+// --drive ("this build is for the first drive"): the gate also fails unless the embedded config has
+// cleartextAllowed=true, thinningOff=true and an http:// default server, i.e. unless the build was
+// made with OBOP_ALLOW_CLEARTEXT=1, OBOP_RECORD_THINNING=off and OBOP_DEFAULT_SERVER=http://... It
+// needs --test-build.
 //
 // A `.app` is read with `plutil` (macOS only). Exit status: 0 passed, 1 failed, 2 wrong use.
 import { spawnSync } from "node:child_process";
@@ -13,15 +19,17 @@ import { checkBuild } from "./gate-lib.mjs";
 
 function usage(message) {
   console.error(`gate.mjs: ${message}`);
-  console.error("usage: node scripts/ios/gate.mjs APP.app [--test-build]");
+  console.error("usage: node scripts/ios/gate.mjs APP.app [--test-build [--drive]]");
   console.error(
-    "       node scripts/ios/gate.mjs --info-plist-json FILE --app-config FILE [--test-build]",
+    "       node scripts/ios/gate.mjs --info-plist-json FILE --app-config FILE [--test-build [--drive]]",
   );
   process.exit(2);
 }
 
 const args = process.argv.slice(2);
 const mode = args.includes("--test-build") ? "test" : "release";
+const drive = args.includes("--drive");
+if (drive && mode !== "test") usage("--drive is for a test build: add --test-build");
 const valueOf = (name) => {
   const at = args.indexOf(name);
   return at >= 0 ? args[at + 1] : undefined;
@@ -59,7 +67,7 @@ try {
   usage(error instanceof Error ? error.message : String(error));
 }
 
-const result = checkBuild({ config, infoPlist }, { mode });
+const result = checkBuild({ config, infoPlist }, { mode, drive });
 for (const [name, value] of Object.entries(result.facts)) {
   console.log(`${name.padEnd(17)} ${value}`);
 }

@@ -155,7 +155,7 @@ describe("a test build", () => {
     );
   });
 
-  test("the test bundle id with plain http off warns that the variables may not have been exported", () => {
+  test("the test bundle id with plain http off warns that OBOP_ALLOW_CLEARTEXT was not set", () => {
     const built = plain();
     built.infoPlist.CFBundleIdentifier = "org.obop.mileage.test";
     built.config.extra = { cleartextAllowed: false, defaultServer: "" };
@@ -163,7 +163,7 @@ describe("a test build", () => {
     expect(result.ok).toBe(true);
     expect(
       result.findings.filter(
-        (f) => f.level === "warn" && /without the OBOP_ variables/.test(f.text),
+        (f) => f.level === "warn" && /OBOP_ALLOW_CLEARTEXT was not set for this build/.test(f.text),
       ),
     ).toHaveLength(1);
     // Neither the plain bundle id nor a test build that does allow http warns.
@@ -177,8 +177,22 @@ describe("a test build", () => {
     // A release build says nothing of the kind: it is the expected state of one.
     built.config.extra = { cleartextAllowed: false, defaultServer: "" };
     expect(
-      checkBuild(built, { mode: "release" }).findings.filter((f) => /OBOP_ variables/.test(f.text)),
+      checkBuild(built, { mode: "release" }).findings.filter((f) =>
+        /OBOP_ALLOW_CLEARTEXT/.test(f.text),
+      ),
     ).toEqual([]);
+  });
+
+  test("the test bundle id with no cleartextAllowed in the config fails and does not warn", () => {
+    // The warning is for `cleartextAllowed=false`; a config that says nothing is the failure of
+    // "not made from this app.config.ts" and gets no second line about the bundle id.
+    const built = plain();
+    built.infoPlist.CFBundleIdentifier = "org.obop.mileage.test";
+    built.config.extra = { defaultServer: "" };
+    const result = checkBuild(built, { mode: "test" });
+    expect(result.ok).toBe(false);
+    expect(failures(result).join("\n")).toMatch(/no extra\.cleartextAllowed/);
+    expect(result.findings.filter((f) => f.level === "warn")).toEqual([]);
   });
 
   test("an entry of the development client is a warning, not a failure", () => {
@@ -189,6 +203,117 @@ describe("a test build", () => {
     const result = checkBuild(built, { mode: "test" });
     expect(result.ok).toBe(true);
     expect(result.findings.filter((f) => f.level === "warn")).toHaveLength(2);
+  });
+});
+
+describe("a build for the first drive on a phone (--drive)", () => {
+  const driveBuild = () => {
+    const built = plain();
+    built.infoPlist.CFBundleIdentifier = "org.obop.mileage.test";
+    built.config.extra = {
+      cleartextAllowed: true,
+      defaultServer: "http://192.168.1.132:18081",
+      thinningOff: true,
+    };
+    return built;
+  };
+  const driveFailures = (built: ReturnType<typeof plain>) =>
+    failures(checkBuild(built, { mode: "test", drive: true }));
+  const driveLines = (list: string[]) => list.filter((text) => text.startsWith("drive build:"));
+
+  test("passes when plain http, the unthinned fixes and an http default server are all set", () => {
+    const result = checkBuild(driveBuild(), { mode: "test", drive: true });
+    expect(failures(result)).toEqual([]);
+    expect(result.ok).toBe(true);
+    expect(result.findings.some((f) => f.level === "ok" && f.text.startsWith("drive build:"))).toBe(
+      true,
+    );
+  });
+
+  test("fails on the build that was rebuilt without the variables, and says what fixes each", () => {
+    // The case the trap is about: a rebuild in a Terminal without the variables keeps the test
+    // bundle id and writes cleartext false, no default server and thinning on.
+    const rebuilt = driveBuild();
+    rebuilt.config.extra = { cleartextAllowed: false, defaultServer: "" };
+    const text = driveFailures(rebuilt).join("\n");
+    expect(text).toMatch(/cleartextAllowed is false.*OBOP_ALLOW_CLEARTEXT=1/);
+    expect(text).toMatch(/thinningOff is undefined.*OBOP_RECORD_THINNING=off/);
+    expect(text).toMatch(/defaultServer is empty.*OBOP_DEFAULT_SERVER=http:\/\/ADDRESS:PORT/);
+    expect(text).toMatch(/env \| grep OBOP_.*vp run ios:run:device.*this gate again/);
+    expect(checkBuild(rebuilt, { mode: "test", drive: true }).ok).toBe(false);
+  });
+
+  test("fails on each of the settings missing alone, with its own line and the remedy", () => {
+    const base = driveBuild().config.extra as Record<string, unknown>;
+    const cases: Array<[string, Record<string, unknown>, RegExp]> = [
+      ["cleartext false", { ...base, cleartextAllowed: false }, /cleartextAllowed is false/],
+      [
+        "cleartext undefined",
+        { ...base, cleartextAllowed: undefined },
+        /cleartextAllowed is undefined/,
+      ],
+      [
+        "thinning false",
+        { ...base, thinningOff: false },
+        /thinningOff is false.*OBOP_RECORD_THINNING=off/,
+      ],
+      ["thinning missing", { ...base, thinningOff: undefined }, /thinningOff is undefined/],
+      ["server empty", { ...base, defaultServer: "" }, /defaultServer is empty/],
+      ["server missing", { ...base, defaultServer: undefined }, /defaultServer is empty/],
+      [
+        "server https",
+        { ...base, defaultServer: "https://obop.example.org" },
+        /defaultServer is "https:\/\/obop\.example\.org".*an http:\/\/ address/,
+      ],
+      [
+        "server without a scheme",
+        { ...base, defaultServer: "192.168.1.132:18081" },
+        /defaultServer is "192\.168\.1\.132:18081"/,
+      ],
+    ];
+    for (const [name, extra, pattern] of cases) {
+      const built = driveBuild();
+      built.config.extra = extra;
+      const result = checkBuild(built, { mode: "test", drive: true });
+      expect(result.ok, name).toBe(false);
+      // The one fact plus the remedy line, and no other fact.
+      const lines = driveLines(failures(result));
+      expect(lines, name).toHaveLength(2);
+      expect(lines[0], name).toMatch(pattern);
+      expect(lines[1], name).toMatch(/env \| grep OBOP_/);
+      // Without the flag the same build is not refused for it.
+      expect(driveLines(failures(checkBuild(built, { mode: "test" }))), name).toEqual([]);
+    }
+  });
+
+  test("an uppercase scheme is still an http address", () => {
+    const built = driveBuild();
+    built.config.extra = {
+      ...(built.config.extra as object),
+      defaultServer: "HTTP://192.168.1.132:18081",
+    };
+    expect(driveFailures(built)).toEqual([]);
+  });
+
+  test("without the flag nothing changes: the rebuilt build passes with its warning", () => {
+    const rebuilt = driveBuild();
+    rebuilt.config.extra = { cleartextAllowed: false, defaultServer: "" };
+    const result = checkBuild(rebuilt, { mode: "test" });
+    expect(result.ok).toBe(true);
+    expect(result.findings.filter((f) => f.level === "warn")).toHaveLength(1);
+    expect(result.findings.some((f) => f.text.startsWith("drive build:"))).toBe(false);
+  });
+
+  test("a release build cannot be checked as a drive build", () => {
+    expect(() => checkBuild(driveBuild(), { mode: "release", drive: true })).toThrow(/test build/);
+  });
+
+  test("the other findings still apply", () => {
+    const built = driveBuild();
+    built.infoPlist.UIBackgroundModes = ["location", "fetch"];
+    const result = checkBuild(built, { mode: "test", drive: true });
+    expect(result.ok).toBe(false);
+    expect(failures(result)).toEqual([expect.stringContaining("UIBackgroundModes")]);
   });
 });
 
@@ -288,6 +413,63 @@ describe("the command", () => {
     const test = run(built, "--test-build");
     expect(test.status).toBe(0);
     expect(test.stdout).toContain("gate passed (test build)");
+  });
+
+  describe("--drive", () => {
+    const driveBuild = () => {
+      const built = plain();
+      built.infoPlist.CFBundleIdentifier = "org.obop.mileage.test";
+      built.config.extra = {
+        cleartextAllowed: true,
+        defaultServer: "http://192.168.1.132:18081",
+        thinningOff: true,
+      };
+      return built;
+    };
+
+    test("exits 0 and says gate passed (test build) when the three settings are set", () => {
+      const result = run(driveBuild(), "--test-build", "--drive");
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain("gate passed (test build)");
+      expect(result.stdout).toContain("drive build:");
+    });
+
+    test("exits 1 for the build rebuilt without the variables, which passes without the flag", () => {
+      const rebuilt = driveBuild();
+      rebuilt.config.extra = { cleartextAllowed: false, defaultServer: "" };
+      const without = run(rebuilt, "--test-build");
+      expect(without.status).toBe(0);
+      expect(without.stdout).toContain("gate passed (test build)");
+      const withFlag = run(rebuilt, "--test-build", "--drive");
+      expect(withFlag.status).toBe(1);
+      expect(withFlag.stdout).toContain("gate FAILED (test build)");
+      expect(withFlag.stdout).toContain("OBOP_ALLOW_CLEARTEXT=1");
+      expect(withFlag.stdout).toContain("OBOP_RECORD_THINNING=off");
+      expect(withFlag.stdout).toContain("OBOP_DEFAULT_SERVER=http://ADDRESS:PORT");
+      expect(withFlag.stdout).toContain("env | grep OBOP_");
+    });
+
+    const alone: Array<[string, Record<string, unknown>]> = [
+      [
+        "cleartext",
+        { cleartextAllowed: false, defaultServer: "http://10.0.0.5:18081", thinningOff: false },
+      ],
+      ["thinning", { cleartextAllowed: true, defaultServer: "http://10.0.0.5:18081" }],
+      ["the server", { cleartextAllowed: true, defaultServer: "", thinningOff: true }],
+    ];
+    for (const [name, extra] of alone) {
+      test(`exits 1 when only ${name} is missing`, () => {
+        const built = driveBuild();
+        built.config.extra = extra;
+        expect(run(built, "--test-build", "--drive").status).toBe(1);
+      });
+    }
+
+    test("exits 2 without --test-build", () => {
+      const result = run(driveBuild(), "--drive");
+      expect(result.status).toBe(2);
+      expect(result.stderr).toContain("--drive is for a test build");
+    });
   });
 
   test("exits 2 when it is not told what to read", () => {
