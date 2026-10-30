@@ -7,7 +7,16 @@ import { afterAll, describe, expect, test } from "vite-plus/test";
 import { createSqlStore, migrate } from "../../src/core/sql-store.ts";
 import { RECORDING_THINNING } from "../../src/core/thin.ts";
 import { memoryDb } from "../../src/test-support/memory-db.ts";
-import { RULES, cadence, looksThinned, replay, toFixes, type TimedFix } from "./thinning-lib.mjs";
+import {
+  RULES,
+  cadence,
+  dropFirst,
+  looksThinned,
+  percent,
+  replay,
+  toFixes,
+  type TimedFix,
+} from "./thinning-lib.mjs";
 
 const T0 = Date.parse("2026-10-30T09:00:00Z");
 /** Metres per degree of latitude, as the server's sphere has it (2 * pi * 6371008.8 / 360). */
@@ -103,6 +112,37 @@ describe("the replay", () => {
   });
 });
 
+describe("the start phase", () => {
+  test("dropFirst drops the first n fixes in time order", () => {
+    const fixes = ell(10);
+    expect(dropFirst(fixes, 0)).toEqual(fixes);
+    expect(dropFirst([...fixes].reverse(), 3).map((f) => f.t)).toEqual(
+      fixes.slice(3).map((f) => f.t),
+    );
+    expect(dropFirst(fixes, 100)).toEqual([]);
+  });
+
+  test("the cost of the default rule alternates with the parity of the first fix kept", () => {
+    // ell(10): fixes 0..20, the corner is fix 10. The rule keeps every second fix of what it is given.
+    const cost = (skip: number) => {
+      const sub = dropFirst(ell(10), skip);
+      const all = replay(sub, null).distanceM;
+      return (all - replay(sub, RULES[0]!.thinning).distanceM) / all;
+    };
+    expect(cost(0)).toBeCloseTo(0, 9); // keeps 0, 2, ..., 20: the corner and the end
+    expect(cost(1)).toBeGreaterThan(0.05); // keeps 1, 3, ..., 19: skips the corner and the last fix
+    expect(cost(2)).toBeCloseTo(0, 9);
+    expect(cost(3)).toBeGreaterThan(0.05);
+  });
+
+  test("a rounded-to-zero percentage has no minus sign", () => {
+    expect(percent(-0.0000001)).toBe("0.00 %");
+    expect(percent(0)).toBe("0.00 %");
+    expect(percent(-0.0123)).toBe("-1.23 %");
+    expect(percent(0.0115)).toBe("1.15 %");
+  });
+});
+
 describe("the cadence of a track", () => {
   test("is the points per minute and the gaps between neighbours", () => {
     const c = cadence(ell(10));
@@ -172,6 +212,52 @@ describe("the command", () => {
     expect(result.stdout).toMatch(/1\.5 s \/ 50 m\s+10\s+/);
     expect(result.stdout).toContain("against the reference");
     expect(result.stdout).not.toContain("note: no two neighbouring points");
+  });
+
+  test("--skip drops the first fixes and the cost of the rule follows the phase", () => {
+    const file = join(dir, "phase.json");
+    writeFileSync(
+      file,
+      JSON.stringify(
+        ell(10).map((f) => ({
+          recorded_at: new Date(f.t).toISOString(),
+          lat: f.lat,
+          lon: f.lon,
+        })),
+      ),
+    );
+    const defaultRow = (out: string) =>
+      out.split("\n").find((line) => line.startsWith("2 s / 50 m (the default)"))!;
+    const zero = run("--points", file);
+    expect(zero.status, zero.stderr).toBe(0);
+    expect(zero.stdout).not.toContain("are dropped before the replay");
+    expect(zero.stdout).toContain("21 points over 20 s");
+    expect(defaultRow(zero.stdout)).toMatch(/\s+11\s+280\.\d\d\s+0\.00 %/);
+    const one = run("--points", file, "--skip", "1");
+    expect(one.status, one.stderr).toBe(0);
+    expect(one.stdout).toContain("(the first 1 fixes of the trip are dropped before the replay)");
+    // The reference does not fit a track that lost its start: it is not printed.
+    const withReference = run("--points", file, "--skip", "1", "--reference-m", "266");
+    expect(withReference.stdout).toContain("--reference-m is not used");
+    expect(withReference.stdout).not.toContain("against the reference");
+    expect(one.stdout).toContain("20 points over 19 s");
+    expect(defaultRow(one.stdout)).toMatch(/\s+10\s+\d+\.\d\d\s+-\d+\.\d\d %/);
+    // The rows say what the distance is.
+    expect(one.stdout).toContain("without the server's accuracy and speed filters");
+    expect(zero.stdout).not.toContain("-0.00");
+  });
+
+  test("--skip must be a whole number, and not leave fewer than two fixes", () => {
+    const file = join(dir, "skip.json");
+    writeFileSync(file, JSON.stringify(ell(3).map((f) => ({ t: f.t, lat: f.lat, lon: f.lon }))));
+    for (const bad of ["abc", "-1", "1.5", ""]) {
+      const result = run("--points", file, "--skip", bad);
+      expect(result.status, bad).toBe(2);
+      expect(result.stderr, bad).toContain("--skip takes a whole number");
+    }
+    const tooMany = run("--points", file, "--skip", "6");
+    expect(tooMany.status).toBe(2);
+    expect(tooMany.stderr).toContain("nothing to replay");
   });
 
   test("says so when the track was thinned already", () => {

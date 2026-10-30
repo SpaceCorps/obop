@@ -81,8 +81,10 @@ try {
   const startedMs = Date.parse(trip.started_at);
   const early = points.filter((p) => Date.parse(p.recorded_at) < startedMs - 10_000).length;
   report(early === 0, `${early} points are older than the start by more than 10 s`);
-  // Reported, not pass or fail: how dense the stored track is (the thinning gap of the iOS app is
-  // judged by it, docs/spec/mobile.md 8.8 and 9.2).
+  // Reported, not pass or fail: how dense the stored track is. These are the points the app
+  // stored, so they show the cadence of the phone only for a build made with OBOP_RECORD_THINNING=off
+  // (a normal build thins at write time); the gap itself is chosen from the replay of
+  // scripts/emulator/thinning-replay.mjs (docs/spec/mobile.md 8.8 and 9.2).
   if (points.length > 1) {
     const times = points.map((p) => Date.parse(p.recorded_at));
     const spanS = (Math.max(...times) - Math.min(...times)) / 1000;

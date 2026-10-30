@@ -26,6 +26,23 @@ export function toFixes(rows) {
 }
 
 /**
+ * The fixes without the first `n` of them (in time order): the same track as if the feed had started
+ * `n` fixes later. The cost of the 2 s rule on a feed of one fix per second depends on which of the
+ * two parities the rule lands in, so this is how the start phase is varied in a replay.
+ * @param {Array<{ t: number, lat: number, lon: number }>} fixes
+ * @param {number} n
+ */
+export function dropFirst(fixes, n) {
+  return [...fixes].sort((a, b) => a.t - b.t).slice(n);
+}
+
+/** `-0.00 %` is `0.00 %`: a value that rounds to zero has no sign. */
+export function percent(fraction) {
+  const text = (fraction * 100).toFixed(2);
+  return `${/^-0\.00$/.test(text) ? "0.00" : text} %`;
+}
+
+/**
  * What `appendFixes` would have stored from these fixes under `thinning` (`null` is no thinning):
  * a fix is dropped when it is not later than the last stored one, or when `keepFix` says so.
  * @param {Array<{ t: number, lat: number, lon: number }>} fixes

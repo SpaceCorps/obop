@@ -7,16 +7,33 @@
 // so when the track looks like that.
 //
 //   vp run emulator:thinning -- --server http://127.0.0.1:18080 --user rita [--driver dave] \
-//        [--trip ID] [--reference-m 3989.44]
-//   vp run emulator:thinning -- --points FILE.json      # an array of {recorded_at|t, lat, lon}
+//        [--trip ID] [--reference-m 3989.44] [--skip N]
+//   vp run emulator:thinning -- --points FILE.json [--skip N]   # an array of {recorded_at|t, lat, lon}
 //
 // (From web/apps/mileage-app, with OBOP_CHECK_PASSWORD set in the environment for the first form.)
 // For each rule it prints the points kept and the distance of the kept track against the sum over
-// every delivered fix: the cost of the rule on this drive. The distance is the server's own formula
-// (`distanceMeters` of @obop/trip-core), and the rule is the app's own `keepFix`.
+// every fix it was given: the cost of the rule on this drive. The rule is the app's own `keepFix`.
+// The distance is the haversine of the server (`distanceMeters` of @obop/trip-core) WITHOUT the
+// server's two filters, a fix with an accuracy radius over 100 m and a step that needs more than
+// 70 m/s (crates/modules/mileage/src/track.rs): the sum is over every stored fix, so the row "off"
+// need not equal the `distance_m` of the trip.
+//
+// `--skip N` drops the first N fixes before the replay, which varies the phase of the feed. On a
+// feed of one fix per second the 2 s rule keeps every second fix, and what it costs depends on
+// which of the two parities it lands in; run it for N = 0, 1, 2, ... to see both. The dropped
+// fixes take their part of the route with them, so with --skip the reference is not used and only
+// the column "against all fixes" (against the fixes that were left) means anything.
 import { readFileSync } from "node:fs";
 import { connect, findTrip, tripPoints } from "./server-lib.mjs";
-import { RULES, cadence, looksThinned, replay, toFixes } from "./thinning-lib.mjs";
+import {
+  RULES,
+  cadence,
+  dropFirst,
+  looksThinned,
+  percent,
+  replay,
+  toFixes,
+} from "./thinning-lib.mjs";
 
 const args = process.argv.slice(2);
 const option = (name, fallback) => {
@@ -25,7 +42,15 @@ const option = (name, fallback) => {
 };
 const pointsFile = option("--points", "");
 const referenceOption = option("--reference-m", "");
-const referenceM = referenceOption === "" ? null : Number(referenceOption);
+const skipOption = option("--skip", "0");
+const skip = /^\d+$/.test(skipOption) ? Number(skipOption) : Number.NaN;
+if (Number.isNaN(skip)) {
+  console.error(`--skip takes a whole number of fixes, got ${JSON.stringify(skipOption)}`);
+  process.exit(2);
+}
+// The fixes that --skip drops take the distance of the start of the route with them, so the
+// reference no longer fits the track: with --skip the comparison is against the fixes it was given.
+const referenceM = referenceOption === "" || skip > 0 ? null : Number(referenceOption);
 
 let rows;
 let label;
@@ -56,10 +81,17 @@ if (pointsFile !== "") {
   }
 }
 
-const fixes = toFixes(rows);
+const fixes = dropFirst(toFixes(rows), skip);
 if (fixes.length < 2) {
-  console.error(`${label}: ${fixes.length} points, nothing to replay`);
+  console.error(
+    `${label}: ${fixes.length} points${skip > 0 ? ` after dropping the first ${skip}` : ""}, nothing to replay`,
+  );
   process.exit(2);
+}
+if (skip > 0) {
+  console.log(
+    `(the first ${skip} fixes of the trip are dropped before the replay${referenceOption === "" ? "" : "; --reference-m is not used, because the dropped fixes take their distance with them"})`,
+  );
 }
 const c = cadence(fixes);
 console.log(
@@ -76,14 +108,15 @@ console.log("");
 console.log(
   `${"rule".padEnd(26)}${"points".padStart(8)}${"distance m".padStart(13)}${"against all fixes".padStart(20)}${referenceM === null ? "" : "   against the reference"}`,
 );
+console.log(
+  "(distance: haversine over the kept fixes, without the server's accuracy and speed filters; 'all fixes' is the row 'off')",
+);
 for (const { name, thinning } of [...RULES].reverse()) {
   const r = replay(fixes, thinning);
   const against = (r.distanceM - all.distanceM) / all.distanceM;
   const reference =
-    referenceM === null
-      ? ""
-      : `   ${(((r.distanceM - referenceM) / referenceM) * 100).toFixed(2)} %`;
+    referenceM === null ? "" : `   ${percent((r.distanceM - referenceM) / referenceM)}`;
   console.log(
-    `${name.padEnd(26)}${String(r.kept).padStart(8)}${r.distanceM.toFixed(2).padStart(13)}${`${(against * 100).toFixed(2)} %`.padStart(20)}${reference}`,
+    `${name.padEnd(26)}${String(r.kept).padStart(8)}${r.distanceM.toFixed(2).padStart(13)}${percent(against).padStart(20)}${reference}`,
   );
 }

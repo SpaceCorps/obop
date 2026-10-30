@@ -9,6 +9,8 @@ export interface TimedFix {
 }
 export const RULES: { name: string; thinning: Thinning | null }[];
 export function toFixes(rows: Array<Record<string, unknown>>): TimedFix[];
+export function dropFirst(fixes: TimedFix[], n: number): TimedFix[];
+export function percent(fraction: number): string;
 export function replay(
   fixes: TimedFix[],
   thinning: Thinning | null,

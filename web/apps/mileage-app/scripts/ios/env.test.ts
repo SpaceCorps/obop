@@ -55,7 +55,18 @@ describe.skipIf(!hasShell)("scripts/ios/env.sh", () => {
     expect(sourced(["GEM_HOME"], { OBOP_TOOLS: "/opt/t" })).toEqual(["/opt/t/gems"]);
   });
 
-  test("it sets no variable that changes the app", () => {
+  test("it sets no variable that changes the app: the only OBOP_ variable it exports is OBOP_BUILD_ROOT", () => {
+    const result = spawnSync("sh", ["-c", `. "${script.replaceAll("\\", "/")}"; env`], {
+      encoding: "utf8",
+      env: cleanEnv({ HOME: home }),
+    });
+    expect(result.status, result.stderr).toBe(0);
+    const exported = result.stdout
+      .split("\n")
+      .map((line) => /^(OBOP_[A-Z0-9_]*)=/.exec(line)?.[1])
+      .filter((name): name is string => name !== undefined);
+    expect(exported).toEqual(["OBOP_BUILD_ROOT"]);
+    // And the named ones are unset, in the shell as well.
     const names = [
       "OBOP_ALLOW_CLEARTEXT",
       "OBOP_DEFAULT_SERVER",
