@@ -79,6 +79,11 @@ export function startIdp(port: number) {
     const path = url.pathname;
     try {
       if (path === "/health") return json(res, 200, { ok: true });
+      // Browsers ask for an icon; an empty answer keeps the console guard of the specs quiet.
+      if (path === "/favicon.ico") {
+        res.statusCode = 204;
+        return void res.end();
+      }
       if (req.method === "GET" && path === `/${t}/v2.0/.well-known/openid-configuration`)
         return json(res, 200, {
           issuer: `${authority}/${t}/v2.0`,
