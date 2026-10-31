@@ -233,6 +233,8 @@ test.describe("switching the language with the account menu, on a screen that st
       // Every name, and every label built from it, is Swedish: the field shows what the app is called.
       const field = nameField("sv", sv);
       await expect(field).toHaveValue(sv);
+      // The element itself, to see further down that a rename does not replace it.
+      const node = await field.elementHandle();
       await expect(
         page.getByLabel(say("sv", "Move {name} up").replace("{name}", sv)),
       ).toBeVisible();
@@ -253,16 +255,15 @@ test.describe("switching the language with the account menu, on a screen that st
       await expect.poll(async () => (await names()).invoicing).toBe(renamed);
       expect(writes.map((w) => JSON.parse(w).apps?.names)).toEqual([{ invoicing: renamed }]);
 
-      // The saved name is in the app list now, and the field is still the one the person was typing
-      // in: it is not made again, which would drop what is typed next.
+      // The saved name is in the app list now (the label of the field follows it), and the field is
+      // the element the person was typing in. Made again, it would take what is typed next with it.
       const saved = nameField("sv", renamed);
       await expect(saved).toHaveValue(renamed);
-      const node = await saved.elementHandle();
+      expect(await node!.evaluate((n) => n.isConnected), "the field was made again").toBe(true);
       await saved.focus();
       await page.keyboard.press("End");
       await page.keyboard.type("!");
       await expect(saved).toHaveValue(`${renamed}!`);
-      expect(await node!.evaluate((n) => n.isConnected), "the field was made again").toBe(true);
       await saved.blur();
       await expect.poll(async () => (await names()).invoicing).toBe(`${renamed}!`);
 
