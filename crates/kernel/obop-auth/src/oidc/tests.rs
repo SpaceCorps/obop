@@ -452,6 +452,15 @@ fn the_account_and_the_provider_are_checked_again_when_the_code_is_spent() {
         sso(&r).exchange(&code, BINDER),
         Err(MfaError::Expired)
     ));
+    // Refused by the exchange itself, and the line says why (the first factor would refuse it
+    // later as well, with a word of its own).
+    assert!(
+        events(&r, "oidc_refused")
+            .iter()
+            .any(|d| d.contains("credentials of the account changed before the sign-in finished")),
+        "{:?}",
+        events(&r, "oidc_refused")
+    );
     // Unbound in between.
     let code = sso(&r).begin(&id, BINDER).unwrap();
     sso(&r).unbind(&admin("root1"), "ada").unwrap();
@@ -588,6 +597,27 @@ fn an_anonymous_line_is_one_per_source_and_kind_whatever_its_text_and_has_an_hou
         1,
         "reported once"
     );
+    // Another hour: the report reset what it reported, so nothing is left to say.
+    r.b.counter_reset(super::ANON_COUNT_KEY).unwrap();
+    sso(&r).audit_throttled("192.0.2.3", "oidc_error", "z");
+    assert_eq!(
+        lines("oidc_error")
+            .into_iter()
+            .filter(|l| l.contains("were not written"))
+            .count(),
+        1,
+        "not reported again"
+    );
+    // Only the sign-in kinds can be written through the throttled port as well: another kind
+    // becomes an `oidc_error` line and is never a line of its own kind.
+    let other = world();
+    sso(&other).audit_throttled(
+        "203.0.113.9",
+        "login_ok",
+        "pretending to be a password sign-in",
+    );
+    assert!(events(&other, "login_ok").is_empty());
+    assert_eq!(events(&other, "oidc_error").len(), 1);
 }
 
 #[test]
