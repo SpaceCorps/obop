@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { setInstanceDefaults, t, useI18n } from "@obop/ui";
+import { describeFor, setInstanceDefaults, t, useI18n } from "@obop/ui";
 import { loadSettings, meta, type ModuleMeta, type Settings } from "./api.ts";
 import { AppIcon, Launcher, Palette, TopBar, appBlurb, appHref, buildApps } from "./Chrome.tsx";
 import { ConnectorsApp, ConnectorsNav } from "./connectors/ConnectorsApp.tsx";
@@ -339,7 +339,7 @@ export function App() {
                       key={m.name}
                       href={href({ app: app.id, model: m.name })}
                       aria-current={!onBoard && model?.name === m.name ? "page" : undefined}
-                      title={m.description}
+                      title={describeFor(m)}
                     >
                       {modelTitle(m, app.module.id)}
                     </a>
