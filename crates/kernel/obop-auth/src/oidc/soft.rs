@@ -14,6 +14,8 @@ use ring::signature::{RSA_PKCS1_SHA256, RsaKeyPair};
 use serde_json::{Value as J, json};
 
 const RSA_FIXTURE: &[u8] = include_bytes!("../../testdata/rsa2048-test-key.der");
+/// A second, unrelated test key: a token signed with it verifies against no key set of the first.
+const RSA_FIXTURE_B: &[u8] = include_bytes!("../../testdata/rsa2048-test-key-b.der");
 
 /// The kid the stand-in publishes.
 pub const KID: &str = "standin-key-1";
@@ -38,9 +40,26 @@ impl StandIn {
         }
     }
 
+    /// A stand-in with the other key, under the same `kid`: what a forger who knows the key's name
+    /// but not the key would have.
+    pub fn with_other_key() -> Self {
+        Self {
+            key: RsaKeyPair::from_der(RSA_FIXTURE_B).expect("the second fixture key"),
+            kid: KID.into(),
+        }
+    }
+
     fn jwk(&self, kid: &str) -> J {
         let (n, e) = split_rsa_der(self.key.public().as_ref());
-        json!({"kty": "RSA", "use": "sig", "alg": "RS256", "kid": kid, "n": b64url(n), "e": b64url(e)})
+        // The shape of the keys of Microsoft's key set: no `alg`, and the thumbprint, the
+        // certificate chain and the cloud name next to the key itself.
+        json!({
+            "kty": "RSA", "use": "sig", "kid": kid, "x5t": kid,
+            "n": b64url(n), "e": b64url(e),
+            "x5c": ["MIIC-stand-in-certificate-not-parsed-by-anyone"],
+            "cloud_instance_name": "microsoftonline.com",
+            "issuer": "https://login.microsoftonline.com/{tenantid}/v2.0",
+        })
     }
 
     /// The key set the stand-in publishes.
@@ -80,8 +99,9 @@ impl StandIn {
         .to_string()
     }
 
-    /// The claims of a good id token for `oid` at time `now`: v2.0 issuer, the tenant, the
-    /// client, the nonce, valid for an hour, and `amr` of a password and a second factor.
+    /// The claims of a good id token for `oid` at time `now` with everything Entra can put in
+    /// one: the `profile` scope was granted and the optional claims `amr` and `auth_time` are
+    /// configured. [`StandIn::claims_for`] makes the claims of a request that got less.
     pub fn claims(
         authority: &str,
         tenant: &str,
@@ -90,20 +110,56 @@ impl StandIn {
         oid: &str,
         now: u64,
     ) -> J {
-        json!({
+        Self::claims_for(
+            authority,
+            tenant,
+            client_id,
+            nonce,
+            oid,
+            now,
+            &Entra::configured("openid profile"),
+        )
+    }
+
+    /// The claims of an id token as Microsoft's documentation describes them for `entra`: the
+    /// default claims always (issuer, `tid`, audience, `sub`, nonce, times); `oid`,
+    /// `preferred_username` and `name` only when the `profile` scope was granted; `amr` and
+    /// `auth_time` only when they are configured as optional claims of the app registration. A
+    /// test that asks for less sees what a real tenant would send, so the code cannot lean on a
+    /// claim the stand-in hands out for free.
+    pub fn claims_for(
+        authority: &str,
+        tenant: &str,
+        client_id: &str,
+        nonce: &str,
+        oid: &str,
+        now: u64,
+        entra: &Entra,
+    ) -> J {
+        let mut c = json!({
             "iss": format!("{authority}/{tenant}/v2.0"),
             "tid": tenant,
             "aud": client_id,
             "sub": "standin-subject-per-application",
-            "oid": oid,
             "nonce": nonce,
             "ver": "2.0",
             "iat": now,
             "nbf": now,
             "exp": now + 3600,
-            "auth_time": now,
-            "amr": ["pwd", "mfa"],
-        })
+        });
+        let m = c.as_object_mut().expect("an object");
+        if entra.scope.split(' ').any(|s| s == "profile") {
+            m.insert("oid".into(), J::from(oid));
+            m.insert("preferred_username".into(), J::from("ada@example.test"));
+            m.insert("name".into(), J::from("Ada Example"));
+        }
+        if entra.optional_amr {
+            m.insert("amr".into(), json!(["pwd", "mfa"]));
+        }
+        if entra.optional_auth_time {
+            m.insert("auth_time".into(), J::from(now));
+        }
+        c
     }
 
     /// A compact JWS over `header` and `claims`, signed with RS256 by the stand-in's key.
@@ -131,5 +187,34 @@ impl StandIn {
             &json!({"alg": "RS256", "typ": "JWT", "kid": self.kid}),
             claims,
         )
+    }
+}
+
+/// What an app registration and a request get from Entra: the scope that was granted and whether
+/// the optional claims `amr` and `auth_time` are configured on the registration.
+#[derive(Debug, Clone)]
+pub struct Entra {
+    pub scope: String,
+    pub optional_amr: bool,
+    pub optional_auth_time: bool,
+}
+
+impl Entra {
+    /// A registration with the optional claims `amr` and `auth_time` added to the ID token.
+    pub fn configured(scope: &str) -> Self {
+        Self {
+            scope: scope.into(),
+            optional_amr: true,
+            optional_auth_time: true,
+        }
+    }
+
+    /// A registration with no optional claims.
+    pub fn plain(scope: &str) -> Self {
+        Self {
+            scope: scope.into(),
+            optional_amr: false,
+            optional_auth_time: false,
+        }
     }
 }

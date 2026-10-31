@@ -443,6 +443,13 @@ impl Auth {
             ));
         }
         let u = self.user_record(name)?;
+        // A Microsoft-only account has no password to change (the hash that is left is not
+        // accepted by `password_ok`); say so instead of "wrong password".
+        if u["sso_only"].as_bool() == Some(true) {
+            return Err(MfaError::Invalid(
+                "this account signs in with Microsoft only: there is no password to change".into(),
+            ));
+        }
         if !self.password_ok(name, current)? {
             self.record_failure(name).map_err(MfaError::Unavailable)?;
             self.event(
@@ -580,22 +587,6 @@ impl Auth {
         Ok(json!({"users": users}))
     }
 
-    /// How many enabled administrators there are. A refused list is the store's trouble, not
-    /// "none": the callers refuse to take the last administrator away, and must not do that (a 400)
-    /// or skip it (a lockout) because the lookup failed.
-    pub(crate) fn enabled_admins(&self) -> Result<usize, MfaError> {
-        Ok(self
-            .backend
-            .list("auth_user")
-            .map_err(MfaError::Unavailable)?
-            .into_iter()
-            .filter(|(_, u)| {
-                str_list(&u["groups"]).iter().any(|g| g == ADMIN_GROUP)
-                    && u.get("disabled").and_then(J::as_bool) != Some(true)
-            })
-            .count())
-    }
-
     pub(crate) fn set_user_disabled_impl(
         &self,
         admin: &Principal,
@@ -627,11 +618,20 @@ impl Auth {
         let u = self.known_user(&target)?;
         let is_admin = str_list(&u["groups"]).iter().any(|g| g == ADMIN_GROUP);
         let was = u["disabled"].as_bool() == Some(true);
-        if disabled && !was && is_admin && self.enabled_admins()? <= 1 {
+        // The rule counts the administrators who sign in without Microsoft only (D91): an
+        // account that has no sign-in of its own does not keep the instance reachable. A refused
+        // list is the store's trouble, not "none".
+        if disabled && !was && is_admin && self.other_local_admins(&target)? == 0 {
             return Err(MfaError::Invalid(
                 "the last enabled administrator cannot be disabled".into(),
             ));
         }
+        // While accounts depend on Microsoft, two administrators keep a sign-in of their own.
+        let warning = if disabled && !was {
+            self.guard_break_glass(&target, actor_user.is_none())?
+        } else {
+            None
+        };
         let mut patch = Fields::new();
         patch.insert("disabled".into(), J::Bool(disabled));
         bump_epoch(&mut patch);
@@ -669,7 +669,10 @@ impl Auth {
                 &target,
                 "user_disable",
                 actor,
-                &format!("account disabled; {n} session(s) signed out; its tokens stop working"),
+                &format!(
+                    "account disabled; {n} session(s) signed out; its tokens stop working{}",
+                    warning.map(|w| format!("; {w}")).unwrap_or_default()
+                ),
             );
         } else if was_offboarded {
             self.event(

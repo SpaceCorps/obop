@@ -660,7 +660,7 @@ Pain ranks are from the voice-of-customer study [R04 s1]: 1 upgrades, 2 open-cor
 
 ## 10. Sources
 
-Decision IDs (D1 to D90), owner rulings (OR-1 to OR-37) and owner questions (Q1 to Q61) refer to [DECISIONS.md](../DECISIONS.md); the spellings of shared names are those of [CONVENTIONS.md](../CONVENTIONS.md). Research tags map to the files below; "s" numbers are section numbers inside each file, and "Implications n" refers to the numbered list in its "Implications for obop" section.
+Decision IDs (D1 to D91), owner rulings (OR-1 to OR-37) and owner questions (Q1 to Q61) refer to [DECISIONS.md](../DECISIONS.md); the spellings of shared names are those of [CONVENTIONS.md](../CONVENTIONS.md). Research tags map to the files below; "s" numbers are section numbers inside each file, and "Implications n" refers to the numbered list in its "Implications for obop" section.
 
 | Tag | File |
 |---|---|

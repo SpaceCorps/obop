@@ -22,7 +22,7 @@ pub fn sso_provider_model() -> ModelDef {
     // tool list; they refuse an agent (and the proposal of one) when they run.
     let configure = CommandDef::new(
         "configure",
-        "Set the Microsoft Entra tenant people sign in with. Give tenant (the tenant id, a GUID; common, organizations and consumers are refused), client_id (the application id of the app registration) and, the first time, client_secret; enabled defaults to true. Accounts are bound with user_account.bind_sso. Refused for agents",
+        "Set the Microsoft Entra tenant people sign in with. Give tenant (the tenant id, a GUID; common, organizations and consumers are refused), client_id (the application id of the app registration) and, the first time, client_secret; enabled keeps its stored value (a first configuration is switched on). Accounts are bound with user_account.bind_sso. Refused for agents",
         ADMIN_GROUP,
     );
     let clear = CommandDef::new(
@@ -138,10 +138,10 @@ pub(crate) fn register(d: &Arc<Dispatcher>, auth: Arc<dyn Authenticator>) {
             let tenant = text(x, "tenant").ok_or("missing tenant (the tenant id, a GUID)")?;
             let client_id = text(x, "client_id").ok_or("missing client_id")?;
             let enabled = match x.get("enabled") {
-                None | Some(Value::Null) => true,
-                Some(Value::Bool(b)) => *b,
-                Some(Value::Text(t)) if t == "true" => true,
-                Some(Value::Text(t)) if t == "false" => false,
+                None | Some(Value::Null) => None,
+                Some(Value::Bool(b)) => Some(*b),
+                Some(Value::Text(t)) if t == "true" => Some(true),
+                Some(Value::Text(t)) if t == "false" => Some(false),
                 Some(_) => return Err("enabled must be true or false".into()),
             };
             api(auth)?

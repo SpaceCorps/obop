@@ -2,7 +2,7 @@
 //! must be refused; the first row is the token that must pass. A check that is left out of
 //! `verify` makes exactly its row fail (see the mutation list in the pull request).
 
-use super::soft::StandIn;
+use super::soft::{Entra, StandIn};
 use super::verify::*;
 use crate::webauthn::{b64url, b64url_decode};
 use serde_json::{Value as J, json};
@@ -60,6 +60,28 @@ fn with(f: impl FnOnce(&mut J)) -> (StandIn, String) {
 fn check(f: impl FnOnce(&mut J), why: &str) {
     let (s, t) = with(f);
     refused(verify_id_token(&t, &keys(&s), &expect()), why);
+}
+
+/// A GUID is the same GUID in any case: the pinned tenant and the binding key are made from the
+/// lower-case form, so a token that spells the tenant or the object id in capitals is the same
+/// sign-in (and an identity is never two bindings). The tenant here has letters in it, so that
+/// capitals are not the same text.
+#[test]
+fn the_tenant_and_the_object_id_are_compared_as_guids_not_as_text() {
+    const LETTERS: &str = "abcdef01-2222-3333-4444-555555555555";
+    let s = StandIn::new();
+    let mut c = StandIn::claims(AUTHORITY, LETTERS, CLIENT, NONCE, OID, NOW);
+    c["tid"] = J::from(LETTERS.to_uppercase());
+    c["oid"] = J::from(OID.to_uppercase());
+    assert_ne!(c["tid"], LETTERS);
+    assert_ne!(c["oid"], OID);
+    let exp = Expect {
+        tenant: LETTERS,
+        ..expect()
+    };
+    let id = verify_id_token(&s.token(&c), &keys(&s), &exp).unwrap();
+    assert_eq!(id.tenant, LETTERS);
+    assert_eq!(id.oid, OID);
 }
 
 #[test]
@@ -131,6 +153,9 @@ fn the_tenant_in_the_configuration_is_a_guid_and_never_a_multi_tenant_authority(
         "Common",
         "organizations",
         "consumers",
+        // The GUID form of `consumers`: every personal Microsoft account.
+        "9188040d-6c67-4c5b-b112-36a304b66dad",
+        "9188040D-6C67-4C5B-B112-36A304B66DAD",
         "contoso.onmicrosoft.com",
         "",
         "11111111-2222-3333-4444-55555555555",
@@ -333,7 +358,6 @@ fn keys_come_from_the_pinned_key_set_by_kid_and_nowhere_else() {
         verify_id_token(&t, &k, &expect()),
         Err(VerifyError::UnknownKey)
     );
-    assert!(!k.knows("rotated-key") && k.knows(&s.kid));
     // A key carried in the header is never used, whatever it says.
     let jwk = s.jwk_for("rotated-key");
     let t = s.sign(
@@ -463,8 +487,22 @@ fn the_key_set_keeps_only_keys_that_can_verify_rs256() {
     bigexp["e"] = J::from(b64url(&[1u8, 0, 0, 0, 1]));
     let mut noid = s.jwk_for("x");
     noid["kid"] = J::Null;
-    let set = Jwks::parse(StandIn::jwks_of(&[good, short, ec, noverify, bigexp, noid]).as_bytes())
-        .unwrap();
+    let mut other_alg = s.jwk_for("rs384");
+    other_alg["alg"] = J::from("RS384");
+    let mut encryption = s.jwk_for("enc");
+    encryption["use"] = J::from("enc");
+    // The key as Microsoft publishes it carries no `alg` and a certificate chain: it stays.
+    let good = {
+        assert!(good.get("alg").is_none() && good.get("x5c").is_some());
+        good
+    };
+    let set = Jwks::parse(
+        StandIn::jwks_of(&[
+            good, short, ec, noverify, bigexp, noid, other_alg, encryption,
+        ])
+        .as_bytes(),
+    )
+    .unwrap();
     assert_eq!(
         set.keys.iter().map(|k| k.kid.as_str()).collect::<Vec<_>>(),
         ["good"]
@@ -489,8 +527,6 @@ fn the_key_set_keeps_only_keys_that_can_verify_rs256() {
         .collect::<Vec<_>>();
     assert!(Jwks::parse(StandIn::jwks_of(&many).as_bytes()).is_err());
     assert!(Jwks::parse(&vec![b' '; MAX_JWKS_BYTES + 1]).is_err());
-    assert_eq!(kid_of(&s.token(&claims())).as_deref(), Some(s.kid.as_str()));
-    assert_eq!(kid_of("garbage"), None);
 }
 
 #[test]
@@ -512,6 +548,9 @@ fn the_discovery_document_is_the_pinned_tenants_and_points_only_under_it() {
     // Another issuer: the document of another tenant, or the template with {tenantid} in it.
     assert!(doc(&|d| d["issuer"] = J::from(format!("{AUTHORITY}/{OTHER_TENANT}/v2.0"))).is_err());
     assert!(doc(&|d| d["issuer"] = J::from(format!("{AUTHORITY}/{{tenantid}}/v2.0"))).is_err());
+    // The right issuer with something after it is another issuer (a prefix is not a match).
+    assert!(doc(&|d| d["issuer"] = J::from(format!("{AUTHORITY}/{TENANT}/v2.0/"))).is_err());
+    assert!(doc(&|d| d["issuer"] = J::from(format!("{AUTHORITY}/{TENANT}/v2.0x"))).is_err());
     assert!(
         doc(&|d| {
             d.as_object_mut().unwrap().remove("issuer");
@@ -561,4 +600,186 @@ fn the_discovery_document_is_the_pinned_tenants_and_points_only_under_it() {
     );
     assert!(parse_discovery(b"not json", AUTHORITY, TENANT).is_err());
     assert!(parse_discovery(&vec![b' '; MAX_JWKS_BYTES + 1], AUTHORITY, TENANT).is_err());
+}
+
+/// What an app registration that asks for `openid` only gets from Entra, by Microsoft's
+/// documentation: no `oid`. The refusal says what to look at.
+#[test]
+fn a_token_without_the_profile_scope_has_no_object_id_and_the_refusal_says_what_to_check() {
+    let s = StandIn::new();
+    let c = StandIn::claims_for(
+        AUTHORITY,
+        TENANT,
+        CLIENT,
+        NONCE,
+        OID,
+        NOW,
+        &Entra::configured("openid"),
+    );
+    assert!(
+        c.get("oid").is_none() && c.get("preferred_username").is_none() && c.get("name").is_none()
+    );
+    refused(
+        verify_id_token(&s.token(&c), &keys(&s), &expect()),
+        "profile scope",
+    );
+    // With the scope it is a sign-in, and none of the profile claims is part of the identity.
+    let c = StandIn::claims_for(
+        AUTHORITY,
+        TENANT,
+        CLIENT,
+        NONCE,
+        OID,
+        NOW,
+        &Entra::configured("openid profile"),
+    );
+    assert!(c["preferred_username"].is_string() && c["name"].is_string());
+    let id = verify_id_token(&s.token(&c), &keys(&s), &expect()).unwrap();
+    assert_eq!(id.oid, OID);
+}
+
+/// An app registration with no optional claims gets no `amr` and no `auth_time`: no second factor
+/// is reported, and the sign-in is still a sign-in.
+#[test]
+fn without_the_optional_claims_there_is_no_amr_and_no_auth_time() {
+    let s = StandIn::new();
+    let c = StandIn::claims_for(
+        AUTHORITY,
+        TENANT,
+        CLIENT,
+        NONCE,
+        OID,
+        NOW,
+        &Entra::plain("openid profile"),
+    );
+    assert!(c.get("amr").is_none() && c.get("auth_time").is_none());
+    let id = verify_id_token(&s.token(&c), &keys(&s), &expect()).unwrap();
+    assert!(!id.mfa());
+    assert_eq!(id.auth_time, None);
+    assert_eq!(id.oid, OID);
+}
+
+/// Microsoft documents more values than `mfa` (`ngcmfa`, `wiaormfa`, `otp`, ...). D91 accepts the
+/// exact string `mfa` and nothing that merely contains it.
+#[test]
+fn only_the_exact_value_mfa_counts_as_a_second_factor() {
+    let id = |amr: J| {
+        let (s, t) = with(|c| c["amr"] = amr);
+        verify_id_token(&t, &keys(&s), &expect()).unwrap()
+    };
+    assert!(id(json!(["mfa"])).mfa());
+    assert!(id(json!(["pwd", "mfa"])).mfa());
+    assert!(id(json!(["pwd", "otp", "mfa", "fed"])).mfa());
+    for other in [
+        "wiaormfa",
+        "ngcmfa",
+        "nomfa",
+        "mfa ",
+        " mfa",
+        "mfa
+",
+        "multifactor",
+        "otp",
+        "pwd",
+        "fido",
+    ] {
+        assert!(
+            !id(json!(["pwd", other])).mfa(),
+            "{other:?} is not the value mfa"
+        );
+    }
+}
+
+/// The e-mail address, the user principal name, the display name and `sub` are not the identity:
+/// the same `oid` is the same person whatever they say, and an address with another `oid` is
+/// somebody else.
+#[test]
+fn the_identity_is_the_object_id_and_no_address_or_name_changes_it() {
+    let who = |f: fn(&mut J)| {
+        let (s, t) = with(f);
+        verify_id_token(&t, &keys(&s), &expect()).unwrap()
+    };
+    let base = who(|_| {});
+    let changed = who(|c| {
+        c["email"] = J::from("someone.else@example.test");
+        c["upn"] = J::from("someone.else@example.test");
+        c["preferred_username"] = J::from("someone.else@example.test");
+        c["unique_name"] = J::from("someone.else@example.test");
+        c["name"] = J::from("Somebody Else");
+        c["sub"] = J::from("another-pairwise-subject");
+    });
+    assert_eq!(base, changed);
+    // The bound person's address, and another object id: another identity (the binding decides).
+    let other = who(|c| {
+        c["preferred_username"] = J::from("ada@example.test");
+        c["email"] = J::from("ada@example.test");
+        c["oid"] = J::from("0e0e0e0e-1111-2222-3333-444444444444");
+    });
+    assert_ne!(base.oid, other.oid);
+    // An address and a name and no object id at all are no identity.
+    check(
+        |c| {
+            remove(c, "oid");
+            c["email"] = J::from("ada@example.test");
+            c["upn"] = J::from("ada@example.test");
+            c["preferred_username"] = J::from("ada@example.test");
+        },
+        "object id",
+    );
+}
+
+/// A token another key signed under the right key name: the signature is checked with a real
+/// second RSA key, so the refusal is a failed verification and not a rejected key.
+#[test]
+fn a_token_signed_by_another_key_under_the_right_name_is_refused() {
+    let published = StandIn::new();
+    let forger = StandIn::with_other_key();
+    assert_eq!(forger.kid, published.kid);
+    refused(
+        verify_id_token(&forger.token(&claims()), &keys(&published), &expect()),
+        "signature",
+    );
+    // The forger's own key set accepts it, so the refusal above is about the key and nothing else.
+    assert!(verify_id_token(&forger.token(&claims()), &keys(&forger), &expect()).is_ok());
+}
+
+/// The size of a key is the size of the number, not the length of its encoding: a 1024-bit
+/// modulus padded with zeros up to 2048 bits is not a 2048-bit key.
+#[test]
+fn a_short_key_padded_with_zeros_is_not_a_2048_bit_key() {
+    let s = StandIn::new();
+    let mut n = vec![0u8; 128];
+    let mut short = vec![0xB5u8; 128];
+    short[127] |= 1;
+    n.extend_from_slice(&short);
+    assert_eq!(n.len(), 256);
+    let jwk = json!({"kty": "RSA", "use": "sig", "alg": "RS256", "kid": "padded", "n": b64url(&n), "e": b64url(&[1, 0, 1])});
+    assert!(Jwks::parse(StandIn::jwks_of(std::slice::from_ref(&jwk)).as_bytes()).is_err());
+    // Next to a real key it is left out, not trusted.
+    let set = Jwks::parse(StandIn::jwks_of(&[jwk, s.jwk_for("real")]).as_bytes()).unwrap();
+    let t = s.sign(&json!({"alg": "RS256", "kid": "padded"}), &claims());
+    assert_eq!(
+        verify_id_token(&t, &set, &expect()),
+        Err(VerifyError::UnknownKey)
+    );
+}
+
+#[test]
+fn rows_the_review_of_the_mutations_found_missing() {
+    // aud as a list that does not hold the client, with an azp that is the client (M6a).
+    check(
+        |c| {
+            c["aud"] = json!(["someone-else"]);
+            c["azp"] = J::from(CLIENT);
+        },
+        "audience",
+    );
+    // The nonce is compared as it is, not case-insensitively (M9a).
+    check(|c| c["nonce"] = J::from(NONCE.to_uppercase()), "nonce");
+    // The tenant id of the token is read in lower case, so an upper-case one is the same tenant (M18b).
+    let (s, t) = with(|c| c["tid"] = J::from(TENANT.to_uppercase()));
+    assert_eq!(
+        verify_id_token(&t, &keys(&s), &expect()).unwrap().tenant,
+        TENANT
+    );
 }

@@ -135,17 +135,24 @@ pub trait SsoApi: Send + Sync {
     /// Write a line to the security log (`oidc_*`); never a token, a code or a secret.
     fn audit(&self, user: &str, kind: &str, detail: &str);
 
+    /// The line of a request nobody signed in for (an unknown flow, a failed callback, a refused
+    /// exchange of the provider): at most one security event per `source`, kind and text in ten
+    /// minutes, so an anonymous caller cannot fill the append-only log. The later ones are
+    /// counted by the store and not written.
+    fn audit_throttled(&self, source: &str, kind: &str, detail: &str);
+
     // ---- administration (an administrator whose session is whole; agents only propose) ----
 
     /// Store the configuration. The tenant must be a GUID (`common`, `organizations`,
-    /// `consumers` and anything else are refused). `client_secret` `None` keeps the stored one.
+    /// `consumers` and anything else are refused). `client_secret` `None` keeps the stored one,
+    /// and `enabled` `None` keeps the stored switch (a first configuration is switched on).
     fn configure(
         &self,
         admin: &Principal,
         tenant: &str,
         client_id: &str,
         client_secret: Option<&str>,
-        enabled: bool,
+        enabled: Option<bool>,
     ) -> Result<SsoProvider, SsoError>;
 
     /// Remove the configuration (the bindings stay; nobody can sign in with Microsoft meanwhile).

@@ -64,6 +64,9 @@ pub fn is_guid(s: &str) -> bool {
         })
 }
 
+/// Microsoft's documented tenant id of personal accounts (the GUID that `consumers` stands for).
+const CONSUMERS_TENANT: &str = "9188040d-6c67-4c5b-b112-36a304b66dad";
+
 /// The configured tenant: a GUID, lower case. The multi-tenant authorities and anything that is
 /// not a GUID are refused, with the reason.
 pub fn tenant_id(raw: &str) -> Result<String, String> {
@@ -71,6 +74,10 @@ pub fn tenant_id(raw: &str) -> Result<String, String> {
     match t.as_str() {
         "common" | "organizations" | "consumers" => Err(format!(
             "{t:?} is a multi-tenant authority: sign-in is pinned to one tenant, given as its id (a GUID)"
+        )),
+        // The consumer (personal Microsoft account) tenant by its id: the GUID form of `consumers`.
+        CONSUMERS_TENANT => Err(format!(
+            "{t:?} is the tenant of personal Microsoft accounts, the same as consumers: sign-in is pinned to one organisation's tenant"
         )),
         _ if is_guid(&t) => Ok(t),
         _ => Err(
@@ -150,6 +157,11 @@ impl Jwks {
             };
             let n = k["n"].as_str().and_then(b64url_decode);
             let e = k["e"].as_str().and_then(b64url_decode);
+            // The size is that of the number: zeros in front do not make a 1024-bit key a 2048-bit one.
+            let n = n.map(|n| {
+                let lead = n.iter().take_while(|b| **b == 0).count();
+                n[lead..].to_vec()
+            });
             if let (Some(n), Some(e)) = (n, e)
                 && (256..=512).contains(&n.len())
                 && !e.is_empty()
@@ -176,19 +188,6 @@ impl Jwks {
             (Some(_), Some(_)) => refuse("two keys in the key set have the same kid"),
         }
     }
-
-    /// Whether the key a token names is in the set (for deciding to fetch the set again).
-    pub fn knows(&self, kid: &str) -> bool {
-        self.keys.iter().any(|k| k.kid == kid)
-    }
-}
-
-/// The `kid` of a token's header, when the token has a readable one: for deciding whether to fetch
-/// the key set again. Checks nothing else.
-pub fn kid_of(token: &str) -> Option<String> {
-    let header = token.split('.').next()?;
-    let h: J = serde_json::from_slice(&b64url_decode(header)?).ok()?;
-    h["kid"].as_str().map(String::from)
 }
 
 // ---- the discovery document ---------------------------------------------------------------------
@@ -372,7 +371,9 @@ fn claims(c: &J, exp: &Expect<'_>) -> Result<SsoIdentity, VerifyError> {
     }
     let oid = text(c, "oid").map(str::to_ascii_lowercase);
     let Some(oid) = oid.filter(|o| is_guid(o)) else {
-        return refuse("the token carries no object id");
+        return refuse(
+            "the token carries no object id (oid); Entra sends it only when the profile scope is asked for and granted, so the scope, the app registration's permissions or the administrator's consent may be missing",
+        );
     };
     // `amr` is a list of strings. Anything else says nothing about a second factor.
     let amr: Vec<String> = c["amr"]

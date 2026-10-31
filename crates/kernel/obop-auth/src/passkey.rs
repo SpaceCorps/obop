@@ -827,6 +827,11 @@ impl PasskeyApi for Auth {
                 "your administrator requires a second factor, and this is your last one: add another passkey or an authenticator app first".into(),
             ));
         }
+        // The last passkey of an administrator who has no authenticator app that works: while
+        // accounts depend on Microsoft, two administrators keep a sign-in of their own (D91).
+        if left == 0 && !self.working_totp(name, &self.user_record(name)?) {
+            self.guard_break_glass(name, false)?;
+        }
         let keep = token_hash(session);
         let mut patch = Fields::new();
         if !all

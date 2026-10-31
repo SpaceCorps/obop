@@ -101,9 +101,10 @@ const USAGE: &str = "usage: obop <command>
                                                 All rows are checked first; one bad row creates nothing. At most 1000 rows
   admin sso status | clear                      Sign in with Microsoft (D91): show the provider, the bindings and the break-glass
                                                 administrators, or remove the configuration (bindings stay)
-  admin sso configure --tenant GUID --client-id GUID [--secret-stdin] [--disabled]
+  admin sso configure --tenant GUID --client-id GUID [--secret-stdin] [--enabled|--disabled]
                                                 set the one Microsoft Entra tenant; the client secret is read from stdin and sealed
-                                                under OBOP_SECRET_KEY (needed the first time)
+                                                under OBOP_SECRET_KEY (needed the first time; a later call without one keeps it, and
+                                                without --enabled or --disabled keeps the switch)
   admin sso bind USER OID | unbind USER         bind an existing account to a person's object id in the directory, or remove that
   admin sso only USER on|off                    make USER sign in with Microsoft only (needs a binding and two other administrators
                                                 who keep a password and a second factor), or turn that off
@@ -326,6 +327,7 @@ fn main() -> ExitCode {
                 | "--dry-run"
                 | "--secret-stdin"
                 | "--disabled"
+                | "--enabled"
         )
     });
     let has = |f: &str| flags.contains(&f);
@@ -403,7 +405,14 @@ fn main() -> ExitCode {
             sso_tenant,
             sso_client,
             has("--secret-stdin"),
-            has("--disabled"),
+            match (has("--enabled"), has("--disabled")) {
+                (true, true) => {
+                    return fail("give --enabled or --disabled, not both");
+                }
+                (true, false) => Some(true),
+                (false, true) => Some(false),
+                (false, false) => None,
+            },
         ),
         ["admin", "sso", "clear"] => accounts_cmd::sso_clear(&opts),
         ["admin", "sso", verb @ ("bind" | "unbind" | "only"), user] => {

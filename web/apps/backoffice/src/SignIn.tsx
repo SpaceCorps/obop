@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { LanguageSelect, TwoFactorStep, t, twoFactorMessage, useI18n, type Factor } from "@obop/ui";
 import {
   SSO_START,
+  forgetPlace,
   login,
   loginMfa,
+  rememberPlace,
   ssoEnabled,
   ssoExchange,
   takeSsoReturn,
@@ -53,6 +55,9 @@ export function SignIn({
   );
   const [asking, setAsking] = useState(false);
   const [microsoft, setMicrosoft] = useState(false);
+  // The browser is on its way to Microsoft: the button waits, so that a second click does not
+  // begin a second sign-in.
+  const [leaving, setLeaving] = useState(false);
   const i18n = useI18n();
 
   // The button is shown only where an administrator turned the sign-in on.
@@ -69,6 +74,7 @@ export function SignIn({
     const back = takeSsoReturn();
     if (!back) return;
     if ("error" in back) {
+      forgetPlace();
       setError(ssoMessage(back.error));
       return;
     }
@@ -224,7 +230,16 @@ export function SignIn({
             </Button>
           )}
           {microsoft && (
-            <Button icon="shield-check" size="lg" onClick={() => location.assign(SSO_START)}>
+            <Button
+              icon="shield-check"
+              size="lg"
+              loading={leaving}
+              onClick={() => {
+                setLeaving(true);
+                rememberPlace();
+                location.assign(SSO_START);
+              }}
+            >
               {t("Sign in with Microsoft")}
             </Button>
           )}

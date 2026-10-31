@@ -476,6 +476,50 @@ export function takeSsoReturn(): SsoReturn | null {
   return r;
 }
 
+/**
+ * A return that nobody will handle: the tab already holds a session, so the sign-in page never
+ * mounts. Dropped, so that it cannot surface after a later sign-out as a notice nobody caused.
+ */
+export function discardSsoReturn(): void {
+  ssoReturn = null;
+}
+
+const SSO_PLACE = "obop-sso-place";
+
+/**
+ * The router address of a deep link, kept in this tab across the round trip to Microsoft (the
+ * server returns to the root, and the fragment is cleaned). A password sign-in keeps the address
+ * by itself; this gives the Microsoft sign-in the same.
+ */
+export function rememberPlace(): void {
+  try {
+    if (/^#\/[\w\-./?=&%:~]{1,512}$/.test(location.hash))
+      sessionStorage.setItem(SSO_PLACE, location.hash);
+    else sessionStorage.removeItem(SSO_PLACE);
+  } catch {
+    /* a private window: the person lands on the launcher */
+  }
+}
+
+export function forgetPlace(): void {
+  try {
+    sessionStorage.removeItem(SSO_PLACE);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Go back to the remembered place, once; nothing remembered, nothing happens. */
+export function restorePlace(): void {
+  try {
+    const h = sessionStorage.getItem(SSO_PLACE);
+    sessionStorage.removeItem(SSO_PLACE);
+    if (h && /^#\/[\w\-./?=&%:~]{1,512}$/.test(h)) location.hash = h;
+  } catch {
+    /* ignore */
+  }
+}
+
 /** Whether the sign-in page offers Sign in with Microsoft. Nothing is offered on any doubt. */
 export async function ssoEnabled(): Promise<boolean> {
   try {

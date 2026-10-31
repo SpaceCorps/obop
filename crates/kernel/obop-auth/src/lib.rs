@@ -116,6 +116,9 @@ impl Auth {
         let params = Params::new(8, 1, 1, None).expect("valid params");
         Self {
             hasher: Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params),
+            // A test chooses its authority (`set_oidc_authority_for_test`); the environment of the
+            // process that runs the tests does not.
+            oidc_authority: std::sync::RwLock::new(None),
             ..Self::with_config(backend, config)
         }
     }

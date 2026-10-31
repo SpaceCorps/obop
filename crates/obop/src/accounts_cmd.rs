@@ -183,14 +183,14 @@ pub fn sso_status(o: &Opts) -> Exit {
     Ok(())
 }
 
-/// `obop admin sso configure --tenant GUID --client-id GUID [--secret-stdin] [--disabled]`. The
+/// `obop admin sso configure --tenant GUID --client-id GUID [--secret-stdin] [--enabled|--disabled]`. The
 /// client secret is read from stdin, never from an argument, and sealed under `OBOP_SECRET_KEY`.
 pub fn sso_configure(
     o: &Opts,
     tenant: Option<&str>,
     client_id: Option<&str>,
     secret_stdin: bool,
-    disabled: bool,
+    enabled: Option<bool>,
 ) -> Exit {
     let tenant = tenant.ok_or_else(|| fail("give --tenant (the tenant id, a GUID)"))?;
     let client_id = client_id
@@ -207,7 +207,7 @@ pub fn sso_configure(
     };
     let (_, auth) = accounts_app(o)?;
     let p = auth
-        .operator_sso_configure(tenant, client_id, secret.as_deref(), !disabled)
+        .operator_sso_configure(tenant, client_id, secret.as_deref(), enabled)
         .map_err(|e| fail(&e))?;
     println!(
         "Microsoft sign-in: tenant {}, client id {}, {}; recorded in the security log",

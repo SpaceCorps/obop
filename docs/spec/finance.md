@@ -784,7 +784,7 @@ Kept from Odoo (behaviour from public docs, Odoo only as a black-box oracle, F3)
 
 ## 10. Sources
 
-Decisions and rulings cited by ID (D1-D90, OR-1 to OR-37, F3 to F6, I-1 to I-4, Q1-Q61) are in [DECISIONS.md](../DECISIONS.md); names of events, permission groups, data classes, states, account roles and ports follow [CONVENTIONS.md](../CONVENTIONS.md); the command grammar and output contracts are in [cli.md](cli.md); neighbouring specs are linked in section 1.3.
+Decisions and rulings cited by ID (D1-D91, OR-1 to OR-37, F3 to F6, I-1 to I-4, Q1-Q61) are in [DECISIONS.md](../DECISIONS.md); names of events, permission groups, data classes, states, account roles and ports follow [CONVENTIONS.md](../CONVENTIONS.md); the command grammar and output contracts are in [cli.md](cli.md); neighbouring specs are linked in section 1.3.
 
 | Tag | File |
 |---|---|

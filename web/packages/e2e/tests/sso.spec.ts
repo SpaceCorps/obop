@@ -2,7 +2,7 @@
 // Microsoft Entra on loopback, and what the page and the server keep afterwards. The stand-in is not
 // Entra (see support/idp.ts); nothing here talks to Microsoft. The Rust tests cover the checks of the
 // id token and the server's side of the flow; these tests cover what only a browser shows.
-import type { APIRequestContext } from "@playwright/test";
+import type { APIRequestContext, Playwright } from "@playwright/test";
 import { idpUrl, sso, ssoUrl } from "../support/env.ts";
 import { expect, test } from "../support/fixtures.ts";
 import { base32Decode, hotp, STEP } from "../support/totp.ts";
@@ -68,6 +68,9 @@ test.describe.configure({ mode: "serial" });
 
 test.describe("sign in with Microsoft", () => {
   test.beforeAll(async ({ playwright }) => {
+    // Four accounts with an authenticator app, each several Argon2 hashes of a debug binary: more
+    // than the 30 seconds of a test when the machine is busy.
+    test.setTimeout(120_000);
     const request = await playwright.request.newContext();
     // Three administrators keep a password and an authenticator app: the break-glass accounts
     // that an SSO-only account needs (D91).
@@ -120,12 +123,74 @@ test.describe("sign in with Microsoft", () => {
     expect(mine.status()).toBe(200);
   });
 
+  test("the request asks for openid and profile, and nothing else", async ({ request }) => {
+    const scopes = (await (await request.get(`${idpUrl()}/control/scopes`)).json()) as string[];
+    expect(scopes.length).toBeGreaterThan(0);
+    for (const s of scopes) expect(s).toBe("openid profile");
+  });
+
+  test("a registration without the consent for profile gets no object id: a plain message here, the reason in the log", async ({
+    page,
+    request,
+  }) => {
+    await request.get(`${idpUrl()}/control?consent=0`);
+    try {
+      await page.goto(ssoUrl());
+      await page.getByRole("button", { name: "Sign in with Microsoft" }).click();
+      await atMicrosoft(page, "bea");
+      await expect(page.getByText(FAILED)).toBeVisible();
+      await expect(page.locator(".topbar")).toHaveCount(0);
+    } finally {
+      await request.get(`${idpUrl()}/control?consent=1`);
+    }
+    // The administrator finds what to check in the log, not on the page.
+    const log = await post(request, "/api/security_event/list", { limit: 1000 }, admin);
+    const text = JSON.stringify(log.json);
+    expect(text).toMatch(/no object id/);
+    expect(text).toMatch(/profile scope/);
+    expect(text).toMatch(/consent/);
+  });
+
+  test("a registration without the optional claims reports no second factor, and the log says so", async ({
+    page,
+    request,
+  }) => {
+    await request.get(`${idpUrl()}/control?optional_claims=0`);
+    try {
+      await page.goto(ssoUrl());
+      await page.getByRole("button", { name: "Sign in with Microsoft" }).click();
+      await atMicrosoft(page, "bea");
+      // An ordinary person still signs in (the policy asks nothing of them)...
+      await expect(page.locator(".topbar")).toBeVisible();
+    } finally {
+      await request.get(`${idpUrl()}/control?optional_claims=1`);
+    }
+    // ...but Microsoft was not heard to say that a second factor was used.
+    const log = await post(request, "/api/security_event/list", { limit: 1000 }, admin);
+    expect(JSON.stringify(log.json)).toMatch(/does not report a second factor/);
+  });
+
   test("a person who signs in with Microsoft only cannot use the password, and Microsoft still works", async ({
     page,
     request,
     allowHttpErrors,
   }) => {
-    allowHttpErrors(401);
+    allowHttpErrors(400, 401);
+    // Bound is not tried: until the person has signed in once with the button, the administrator
+    // is told to ask for that first (a wrong object id would otherwise be a lockout).
+    const early = await post(
+      request,
+      "/api/user_account/set_sso_only",
+      { id: "ada", sso_only: true },
+      admin,
+    );
+    expect(early.status).toBe(400);
+    expect(JSON.stringify(early.json)).toMatch(/never signed in/);
+    await page.goto(ssoUrl());
+    await page.getByRole("button", { name: "Sign in with Microsoft" }).click();
+    await atMicrosoft(page, "ada");
+    await expect(page.locator(".topbar")).toBeVisible();
+    await page.evaluate(() => sessionStorage.clear());
     const made = await post(
       request,
       "/api/user_account/set_sso_only",
@@ -183,40 +248,61 @@ test.describe("sign in with Microsoft", () => {
     expect(page.url()).toBe(`${ssoUrl()}/`);
   });
 
-  test("a one-time code is worth nothing to another browser, and nothing the second time", async ({
-    page,
-    context,
+  /**
+   * The round trip without a browser: the code of a callback that nobody has spent, with the
+   * cookie jar of the browser that made it. (The page would exchange it at once.)
+   */
+  async function callbackCode(playwright: Playwright, who: string) {
+    const jar = await playwright.request.newContext();
+    const start = await jar.get(`${ssoUrl()}/api/auth/oidc/start`, { maxRedirects: 0 });
+    expect(start.status()).toBe(303);
+    const authorize = await jar.get(start.headers()["location"]!, { maxRedirects: 0 });
+    const pick = new RegExp(`href="([^"]*who=${who})"`).exec(await authorize.text())?.[1];
+    expect(pick, "the stand-in's page offers the person").toBeTruthy();
+    const chosen = await jar.get(`${idpUrl()}${pick!.replace(/&amp;/g, "&")}`, { maxRedirects: 0 });
+    const back = await jar.get(chosen.headers()["location"]!, { maxRedirects: 0 });
+    const fragment = /#oidc=(obopsso_[0-9a-f]{64})$/.exec(back.headers()["location"] ?? "")?.[1];
+    expect(fragment, `the callback redirected to ${back.headers()["location"]}`).toBeTruthy();
+    return { jar, code: fragment! };
+  }
+
+  test("a one-time code is worth nothing to another browser, works once for the right one, and not twice", async ({
+    playwright,
     browser,
     allowHttpErrors,
   }) => {
     allowHttpErrors(401);
-    let location = "";
-    page.on("response", (r) => {
-      if (new URL(r.url()).pathname === "/api/auth/oidc/callback")
-        location = r.headers()["location"] ?? "";
-    });
-    await page.goto(ssoUrl());
-    await page.getByRole("button", { name: "Sign in with Microsoft" }).click();
-    await atMicrosoft(page, "bea");
-    await expect(page.locator(".topbar")).toBeVisible();
-    const fragment = /#oidc=(obopsso_[0-9a-f]{64})$/.exec(location)?.[0];
-    expect(fragment, `the callback redirected to ${location}`).toBeTruthy();
+    const exchange = (jar: APIRequestContext, code: string) =>
+      jar.post(`${ssoUrl()}/api/auth/oidc/exchange`, { data: { code } });
 
-    // Another browser that follows the same link (login CSRF) is not signed in.
+    // Another browser (login CSRF) follows a link that carries a fresh, unspent code: it has not
+    // the cookie of the browser that signed in, and gets a plain failure and no session.
+    const lure = await callbackCode(playwright, "bea");
     const other = await browser.newContext();
     const stranger = await other.newPage();
-    await stranger.goto(`${ssoUrl()}/${fragment}`);
+    await stranger.goto(`${ssoUrl()}/#oidc=${lure.code}`);
     await expect(stranger.getByText(FAILED)).toBeVisible();
     await expect(stranger.locator(".topbar")).toHaveCount(0);
     expect(await stranger.evaluate(() => sessionStorage.getItem("obop-token"))).toBeNull();
     await other.close();
+    await lure.jar.dispose();
 
-    // The same browser, in a new tab, after the code was spent: no session either.
-    const again = await context.newPage();
-    await again.goto(`${ssoUrl()}/${fragment}`);
-    await expect(again.locator(".topbar")).toHaveCount(0);
-    expect(await again.evaluate(() => sessionStorage.getItem("obop-token"))).toBeNull();
-    await again.close();
+    // The same at the API: the only difference to the next case is the browser.
+    const victim = await callbackCode(playwright, "bea");
+    const nobody = await playwright.request.newContext();
+    expect((await exchange(nobody, victim.code)).status()).toBe(401);
+    await nobody.dispose();
+
+    // The right browser with its own fresh code: a session, and a replay of the same code gets none.
+    const mine = await callbackCode(playwright, "bea");
+    const first = await exchange(mine.jar, mine.code);
+    expect(first.status()).toBe(200);
+    expect(((await first.json()) as Json).token).toMatch(/^obop_[0-9a-f]{64}$/);
+    // The done cookie is spent with the code: a replay needs both again, and has neither.
+    const replay = await exchange(mine.jar, mine.code);
+    expect(replay.status(), "a spent code is refused").toBe(401);
+    await mine.jar.dispose();
+    await victim.jar.dispose();
   });
 
   test("the sign-in page offers the button only where an administrator set it up", async ({

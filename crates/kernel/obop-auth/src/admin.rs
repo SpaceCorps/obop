@@ -316,11 +316,17 @@ impl Auth {
                         .into(),
                 ));
             }
-            if u["disabled"].as_bool() != Some(true) && self.enabled_admins()? <= 1 {
+            if u["disabled"].as_bool() != Some(true) && self.other_local_admins(&target)? == 0 {
                 return Err(MfaError::Invalid(
                     "the last enabled administrator keeps the group; make another administrator first"
                         .into(),
                 ));
+            }
+            // While accounts depend on Microsoft, two administrators keep a sign-in of their own.
+            if u["disabled"].as_bool() != Some(true)
+                && let Some(w) = self.guard_break_glass(&target, actor_user.is_none())?
+            {
+                detail.push_str(&format!("; {w}"));
             }
         }
         let mut patch = Fields::new();
@@ -363,11 +369,18 @@ impl Auth {
         let _g = self.mfa_guard()?;
         let u = self.known_user(&target)?;
         let is_admin = str_list(&u["groups"]).iter().any(|g| g == ADMIN_GROUP);
-        if is_admin && u["disabled"].as_bool() != Some(true) && self.enabled_admins()? <= 1 {
+        let enabled_now = u["disabled"].as_bool() != Some(true);
+        if is_admin && enabled_now && self.other_local_admins(&target)? == 0 {
             return Err(MfaError::Invalid(
                 "the last enabled administrator cannot be offboarded".into(),
             ));
         }
+        // While accounts depend on Microsoft, two administrators keep a sign-in of their own.
+        let warning = if enabled_now {
+            self.guard_break_glass(&target, actor_user.is_none())?
+        } else {
+            None
+        };
         let note = clean_note(note);
         // Disable first: from here no token of the account resolves, whatever happens next.
         let mut patch = Fields::new();
@@ -419,6 +432,9 @@ impl Auth {
         );
         if !note.is_empty() {
             detail.push_str(&format!("; note: {note}"));
+        }
+        if let Some(w) = warning {
+            detail.push_str(&format!("; {w}"));
         }
         self.event(&target, "user_offboard", actor, &detail);
         Ok(json!({

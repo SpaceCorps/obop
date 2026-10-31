@@ -48,6 +48,8 @@ pub const CODE_SECS: u64 = 60;
 /// is made SSO-only.
 pub const BREAK_GLASS_MIN: usize = 2;
 const MAX_SECRET_CHARS: usize = 512;
+/// How long an anonymous refusal is written once (`audit_throttled`), in milliseconds.
+const THROTTLE_MS: u64 = 10 * 60 * 1000;
 
 /// The `OBOP_OIDC_TEST_AUTHORITY` of a development instance: a literal loopback address over
 /// http that stands in for `https://login.microsoftonline.com`. For tests only, like
@@ -174,11 +176,104 @@ impl Auth {
             .map(|(k, f)| (k, J::Object(f))))
     }
 
-    /// A working second factor: a passkey, or an authenticator app when the key ring that opens
-    /// its secret is there. A lookup the store refused is "none" (the guard fails closed).
+    /// A working second factor: a passkey, or an authenticator app whose secret the key ring
+    /// of this server really opens (a replaced `OBOP_SECRET_KEY` leaves the flag on and the
+    /// secret unreadable). A lookup the store refused is "none" (the guard fails closed).
     fn working_second_factor(&self, name: &str, u: &J) -> bool {
-        (u["mfa_enabled"].as_bool() == Some(true) && !self.config.keys.is_empty())
-            || self.passkeys_checked(name).is_ok_and(|p| !p.is_empty())
+        self.working_totp(name, u) || self.passkeys_checked(name).is_ok_and(|p| !p.is_empty())
+    }
+
+    /// An authenticator app that is on and whose secret this server's key ring opens.
+    pub(crate) fn working_totp(&self, name: &str, u: &J) -> bool {
+        u["mfa_enabled"].as_bool() == Some(true)
+            && u["totp_secret"]
+                .as_str()
+                .is_some_and(|sealed| self.open_secret(name, sealed).is_ok())
+    }
+
+    /// Whether `u` is a break-glass administrator: enabled, in the administrator group, not
+    /// Microsoft-only, with a working second factor.
+    fn is_break_glass(&self, name: &str, u: &J) -> bool {
+        str_list(&u["groups"]).iter().any(|g| g == ADMIN_GROUP)
+            && u["disabled"].as_bool() != Some(true)
+            && u["sso_only"].as_bool() != Some(true)
+            && self.working_second_factor(name, u)
+    }
+
+    /// How many enabled administrators other than `except` sign in without Microsoft only. The
+    /// "last administrator" rule of disabling, offboarding and removing the group counts these,
+    /// not the Microsoft-only ones: an administrator who has no sign-in of their own does not
+    /// keep the instance reachable when Microsoft is not.
+    pub(crate) fn other_local_admins(&self, except: &str) -> Result<usize, MfaError> {
+        Ok(self
+            .backend
+            .list("auth_user")
+            .map_err(MfaError::Unavailable)?
+            .into_iter()
+            .filter(|(name, u)| {
+                name != except
+                    && str_list(&u["groups"]).iter().any(|g| g == ADMIN_GROUP)
+                    && u.get("disabled").and_then(J::as_bool) != Some(true)
+                    && u.get("sso_only").and_then(J::as_bool) != Some(true)
+            })
+            .count())
+    }
+
+    /// Whether taking away the local sign-in of `target` (the account is disabled, offboarded,
+    /// loses the administrator group, or its last second factor goes) would leave fewer than
+    /// [`BREAK_GLASS_MIN`] break-glass administrators while an enabled account signs in with
+    /// Microsoft only. `Some(why)` when it would. Only an account that is a break-glass
+    /// administrator now can be the cause, so every other change passes.
+    pub(crate) fn break_glass_shortfall(&self, target: &str) -> Result<Option<String>, MfaError> {
+        let users = self
+            .backend
+            .list("auth_user")
+            .map_err(MfaError::Unavailable)?;
+        let microsoft_only = users
+            .iter()
+            .filter(|(n, u)| {
+                n != target
+                    && u.get("sso_only").and_then(J::as_bool) == Some(true)
+                    && u.get("disabled").and_then(J::as_bool) != Some(true)
+            })
+            .count();
+        if microsoft_only == 0 {
+            return Ok(None);
+        }
+        let Some((_, me)) = users.iter().find(|(n, _)| n == target) else {
+            return Ok(None);
+        };
+        if !self.is_break_glass(target, &J::Object(me.clone())) {
+            return Ok(None);
+        }
+        let rest = self
+            .break_glass(Some(target))
+            .map_err(|e| MfaError::Unavailable(describe_sso(e)))?;
+        if rest.len() >= BREAK_GLASS_MIN {
+            return Ok(None);
+        }
+        Ok(Some(format!(
+            "{microsoft_only} account(s) sign in with Microsoft only, and {target} is one of the administrators who can still sign in without it; {} would remain, fewer than {BREAK_GLASS_MIN}. Add another administrator with a password and a second factor first, or give the Microsoft-only accounts their own sign-in back",
+            rest.len()
+        )))
+    }
+
+    /// The guard for a request of a person (REST, MCP, the sign-in page): refuse. For the
+    /// operator at the command line (database access is the authority, and the way out when an
+    /// account is compromised) the same finding is a warning in the log and on screen.
+    pub(crate) fn guard_break_glass(
+        &self,
+        target: &str,
+        operator: bool,
+    ) -> Result<Option<String>, MfaError> {
+        match self.break_glass_shortfall(target)? {
+            None => Ok(None),
+            Some(why) if operator => {
+                eprintln!("WARNING: {why}");
+                Ok(Some(format!("WARNING: {why}")))
+            }
+            Some(why) => Err(MfaError::Invalid(why)),
+        }
     }
 
     /// The enabled administrators other than `except` that are not SSO-only and hold a working
@@ -208,6 +303,36 @@ impl Auth {
     /// administrator signs in as (an approved proposal of an agent runs as `alice/agent`).
     fn sso_admin<'a>(&self, p: &'a Principal) -> Result<(&'a str, &'a str), SsoError> {
         crate::admin::admin_of(p).map_err(|_| SsoError::NotFound)
+    }
+
+    /// The binding a one-time code was issued for, if it is still the account's and the provider
+    /// that vouched for it is still on and still the tenant of that binding. Read again when the
+    /// code is spent: unbinding, switching the provider off or clearing it ends a code that is
+    /// in the air (the person has up to 60 seconds).
+    fn binding_holds(&self, user: &str, link_id: &str) -> Result<Option<&'static str>, MfaError> {
+        let link = self
+            .backend
+            .get(LINK_TABLE, link_id)
+            .map_err(MfaError::Unavailable)?;
+        let Some(link) = link.map(J::Object) else {
+            return Ok(Some("the account was unbound before the sign-in finished"));
+        };
+        if link["user"].as_str() != Some(user) {
+            return Ok(Some("the binding belongs to another account now"));
+        }
+        let provider = self
+            .provider_record()
+            .map_err(|e| MfaError::Unavailable(describe_sso(e)))?;
+        match provider.map(|p| Self::view(&p)) {
+            Some(v) if v.enabled && link["tid"].as_str() == Some(v.tenant.as_str()) => Ok(None),
+            Some(v) if !v.enabled => Ok(Some(
+                "the provider was switched off before the sign-in finished",
+            )),
+            Some(_) => Ok(Some(
+                "the provider is of another tenant than the binding, since the sign-in began",
+            )),
+            None => Ok(Some("the provider was removed before the sign-in finished")),
+        }
     }
 
     // ---- the one-time code -----------------------------------------------------------------
@@ -240,7 +365,7 @@ impl Auth {
         tenant: &str,
         client_id: &str,
         client_secret: Option<&str>,
-        enabled: bool,
+        enabled: Option<bool>,
     ) -> Result<SsoProvider, String> {
         self.configure_as("operator", tenant, client_id, client_secret, enabled)
             .map_err(describe_sso)
@@ -263,7 +388,7 @@ impl Auth {
         tenant: &str,
         client_id: &str,
         client_secret: Option<&str>,
-        enabled: bool,
+        enabled: Option<bool>,
     ) -> Result<SsoProvider, SsoError> {
         let tenant = verify::tenant_id(tenant).map_err(SsoError::Invalid)?;
         let client_id = clean_client_id(client_id)?;
@@ -302,19 +427,27 @@ impl Auth {
         if sealed.is_none() {
             return Err(invalid("a client secret is needed"));
         }
-        if let Some(b) = &before
-            && b["tenant"].as_str() != Some(tenant.as_str())
-            && b["tenant"].is_string()
-            && !self
-                .backend
-                .list(LINK_TABLE)
-                .map_err(unavailable)?
-                .is_empty()
-        {
-            return Err(invalid(
-                "accounts are bound to the current tenant: unbind them before the tenant changes",
-            ));
+        // Whatever the record says (it may have been cleared): no binding of another tenant stays
+        // under a provider of this one. Such a binding could never match a sign-in, and an account
+        // made Microsoft-only on it would be locked out.
+        let foreign = self
+            .backend
+            .list(LINK_TABLE)
+            .map_err(unavailable)?
+            .into_iter()
+            .filter(|(_, l)| l.get("tid").and_then(J::as_str) != Some(tenant.as_str()))
+            .count();
+        if foreign > 0 {
+            return Err(invalid(format!(
+                "{foreign} account(s) are bound to another tenant: unbind them before this tenant is set"
+            )));
         }
+        // A first configuration is switched on; a later one keeps the switch unless it is given.
+        let enabled = enabled.unwrap_or_else(|| {
+            before
+                .as_ref()
+                .is_none_or(|b| b["enabled"].as_bool() == Some(true))
+        });
         let mut f = Fields::new();
         f.insert("kind".into(), J::from("entra"));
         f.insert("tenant".into(), J::from(tenant.as_str()));
@@ -388,14 +521,15 @@ impl Auth {
                 "the object id is the user's object id in the directory, a GUID",
             ));
         }
+        let _g = self
+            .mfa_guard()
+            .map_err(|e| unavailable(format!("{e:?}")))?;
+        // Read under the lock: a provider changed in between cannot get a binding of its old tenant.
         let provider = self
             .provider_record()?
             .ok_or_else(|| invalid("configure the provider before binding an account"))?;
         let tenant = provider["tenant"].as_str().unwrap_or("").to_string();
         let issuer = verify::issuer(&self.oidc_authority(), &tenant);
-        let _g = self
-            .mfa_guard()
-            .map_err(|e| unavailable(format!("{e:?}")))?;
         let u = self.user_record(&user).map_err(|e| match e {
             MfaError::NotFound => invalid(format!("no user {user}")),
             other => unavailable(format!("{other:?}")),
@@ -449,26 +583,53 @@ impl Auth {
                 "the account signs in with Microsoft only: turn that off before unbinding it",
             ));
         }
+        let ch = Change::new(&user, "oidc_unbind", actor, "unbound from Microsoft");
         let Some((id, link)) = self.link_of(&user)? else {
+            // The repeat of an unbinding that could not end the sessions finishes that (D74).
+            if let Some(n) = self
+                .finish_owed(&user, "sso_unbind", &ch)
+                .map_err(|e| unavailable(format!("{e:?}")))?
+            {
+                self.sso_event(
+                    &user,
+                    "oidc_unbind",
+                    actor,
+                    &format!("unbound; {n} session(s) signed out (repeated)"),
+                );
+                return Ok(json!({"user": user, "changed": false, "sessions_ended": n}));
+            }
             return Err(invalid(format!(
                 "{user} is not bound to a Microsoft identity"
             )));
         };
-        self.backend.delete(LINK_TABLE, &id).map_err(unavailable)?;
-        // A sign-in that began with the binding must not finish after it: the epoch changes.
+        // What a binding gave the account (sessions, and a sign-in in the air) ends with it. The
+        // note is written first, the credential epoch must change (a code issued before this
+        // cannot be spent after it), then the binding goes and the sessions end.
+        let previous = self
+            .owe_revocation(&user, "sso_unbind", None)
+            .map_err(|e| unavailable(format!("{e:?}")))?;
+        let before = obop_storage::fault::change_count();
         let mut p = Fields::new();
         bump_epoch(&mut p);
-        let _ = self.put(&user, &p);
+        if let Err(e) = self.put(&user, &p) {
+            self.retract_owed(&user, "sso_unbind", &e, before, previous);
+            return Err(unavailable(format!("{e:?}")));
+        }
+        self.backend.delete(LINK_TABLE, &id).map_err(unavailable)?;
+        let n = self
+            .revoke_user_sessions(&user, None, &ch)
+            .map_err(|e| unavailable(format!("{e:?}")))?;
+        self.clear_owed(&user, "sso_unbind");
         self.sso_event(
             &user,
             "oidc_unbind",
             actor,
             &format!(
-                "unbound from object id {}",
+                "unbound from object id {}; {n} session(s) signed out; agent tokens made in those sessions keep working until the account is offboarded",
                 link["oid"].as_str().unwrap_or("?")
             ),
         );
-        Ok(json!({"user": user, "oid": link["oid"]}))
+        Ok(json!({"user": user, "oid": link["oid"], "changed": true, "sessions_ended": n}))
     }
 
     fn sso_only_as(&self, actor: &str, user: &str, on: bool) -> Result<J, SsoError> {
@@ -507,6 +668,9 @@ impl Auth {
         if !on {
             let mut p = Fields::new();
             p.insert("sso_only".into(), J::Bool(false));
+            // A password that has been unused since the account was made Microsoft-only is not
+            // handed back as it was: the person has to choose a new one.
+            p.insert("must_change_password".into(), J::Bool(true));
             bump_epoch(&mut p);
             self.put(&user, &p)
                 .map_err(|e| unavailable(format!("{e:?}")))?;
@@ -514,7 +678,7 @@ impl Auth {
                 &user,
                 "oidc_sso_only",
                 actor,
-                "turned off: the account may use its password again",
+                "turned off: the account may use its password again (it must be changed at the next sign-in)",
             );
             return Ok(json!({"user": user, "sso_only": false, "changed": true}));
         }
@@ -528,9 +692,29 @@ impl Auth {
         if u["disabled"].as_bool() == Some(true) {
             return Err(invalid("the account is disabled: enable it first"));
         }
-        if self.link_of(&user)?.is_none() {
+        let Some((_, link)) = self.link_of(&user)? else {
             return Err(invalid(format!(
                 "{user} is not bound to a Microsoft identity: bind it first, or the person could not sign in"
+            )));
+        };
+        let current = provider.as_ref().map(|p| Self::view(p).tenant);
+        if link["tid"].as_str() != current.as_deref()
+            || link["issuer"].as_str()
+                != current
+                    .as_deref()
+                    .map(|t| verify::issuer(&self.oidc_authority(), t))
+                    .as_deref()
+        {
+            return Err(invalid(format!(
+                "the binding of {user} is not to the tenant of the provider (the provider was changed after it was made): unbind and bind again"
+            )));
+        }
+        // The first real use of a binding proves the object id is the person's and that Entra
+        // sends what this server needs (the profile scope, the optional claims): without it a
+        // wrong id or an app registration that does not work would lock the person out.
+        if link["last_login_at"].as_str().is_none() {
+            return Err(invalid(format!(
+                "{user} has never signed in with Microsoft on this binding: ask them to sign in once with the button first, so that a wrong object id or an app registration that does not work shows now and not as a lockout"
             )));
         }
         let rest = self.break_glass(Some(&user))?;
@@ -577,16 +761,21 @@ impl Auth {
 
     fn bindings_impl(&self) -> Result<J, SsoError> {
         let links = self.backend.list(LINK_TABLE).map_err(unavailable)?;
+        let provider_tenant = self.provider_record()?.map(|r| Self::view(&r).tenant);
         let mut rows: Vec<J> = Vec::new();
         for (name, u) in self.backend.list("auth_user").map_err(unavailable)? {
             let link = links
                 .iter()
                 .find(|(_, l)| l.get("user").and_then(J::as_str) == Some(name.as_str()));
+            let current = provider_tenant.as_deref();
             rows.push(json!({
                 "name": name,
                 "bound": link.is_some(),
                 "oid": link.and_then(|(_, l)| l.get("oid")).cloned().unwrap_or(J::Null),
                 "sso_only": u.get("sso_only").and_then(J::as_bool) == Some(true),
+                // A binding of another tenant than the provider's can never match a sign-in.
+                "binding_current": link.map(|(_, l)| l.get("tid").and_then(J::as_str) == current),
+                "last_login_at": link.and_then(|(_, l)| l.get("last_login_at")).cloned().unwrap_or(J::Null),
             }));
         }
         rows.sort_by(|a, b| a["name"].as_str().cmp(&b["name"].as_str()));
@@ -738,6 +927,7 @@ impl SsoApi for Auth {
         let code = format!("obopsso_{}", hex(&random_bytes::<32>()));
         let rec = json!({
             "user": user,
+            "link": id,
             "epoch": epoch_of(&u),
             "mfa": identity.mfa(),
             "binder": binder_hash(binder),
@@ -792,6 +982,21 @@ impl SsoApi for Auth {
             );
             return Err(MfaError::Expired);
         }
+        // The binding and the provider as they are now, not as they were when the code was made.
+        if let Some(why) = self.binding_holds(&name, rec["link"].as_str().unwrap_or(""))? {
+            self.event(&name, "oidc_refused", "-", why);
+            return Err(MfaError::Expired);
+        }
+        // The first sign-in on a binding is what lets an administrator make the account
+        // Microsoft-only. A refused write only means the administrator is asked to sign in again.
+        if let Ok(Some((id, _))) = self.link_of(&name) {
+            let mut p = Fields::new();
+            p.insert(
+                "last_login_at".into(),
+                J::from(obop_commands::audit::rfc3339(self.now())),
+            );
+            let _ = self.backend.update(LINK_TABLE, &id, &p);
+        }
         let sso_only = u["sso_only"].as_bool() == Some(true);
         self.purge_tokens();
         let out = if sso_only && mfa {
@@ -800,8 +1005,15 @@ impl SsoApi for Auth {
             self.session_outcome(&name, false, &pending)
                 .map_err(SessionError::mfa)?
         } else {
-            self.after_first_factor(&name, &pending)
-                .map_err(MfaError::Unavailable)?
+            // A refusal at this point (the account went while the sign-in finished) is answered
+            // like any other expired sign-in; only the store's own trouble is a 503.
+            self.after_first_factor(&name, &pending).map_err(|e| {
+                if e == "invalid username or password" {
+                    MfaError::Expired
+                } else {
+                    MfaError::Unavailable(e)
+                }
+            })?
         };
         self.event(
             &name,
@@ -832,13 +1044,39 @@ impl SsoApi for Auth {
         self.event(user, kind, "-", detail);
     }
 
+    fn audit_throttled(&self, source: &str, kind: &str, detail: &str) {
+        let kind = match kind {
+            "oidc_refused" | "oidc_start" | "oidc_cancelled" | "oidc_error" => kind,
+            _ => "oidc_error",
+        };
+        // One event per source, kind and text in ten minutes, whichever process sees it first;
+        // the store counts the others. An unreadable counter writes the event (an unthrottled
+        // line is better than a missing one).
+        let key = format!(
+            "auth.evt:sso:{}",
+            hex(&sha256(format!("{source}\n{kind}\n{detail}").as_bytes()))
+        );
+        let first = self
+            .backend
+            .counter_add(&key, THROTTLE_MS, false)
+            .map_or(true, |n| n == 1);
+        if first {
+            self.event(
+                "-",
+                kind,
+                "-",
+                &format!("{detail} (more of the same from this address in the next 10 minutes are counted, not written)"),
+            );
+        }
+    }
+
     fn configure(
         &self,
         admin: &Principal,
         tenant: &str,
         client_id: &str,
         client_secret: Option<&str>,
-        enabled: bool,
+        enabled: Option<bool>,
     ) -> Result<SsoProvider, SsoError> {
         let (actor, _) = self.sso_admin(admin)?;
         self.configure_as(actor, tenant, client_id, client_secret, enabled)

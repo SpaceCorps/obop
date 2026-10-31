@@ -8,7 +8,7 @@ use crate::app::App;
 use crate::mfa_tests::{PW, Rig, T0, enrol, first_step, post, send};
 use axum::{body::Body, http::Request};
 use http_body_util::BodyExt;
-use obop_auth::oidc::soft::StandIn;
+use obop_auth::oidc::soft::{Entra, StandIn};
 use obop_auth::{Auth, AuthConfig};
 use obop_commands::Authenticator;
 use obop_connectors::{Config as ConnectorConfig, Runtime, SecretBox};
@@ -26,9 +26,11 @@ const CLIENT_SECRET: &str = "http-test-client-secret-7c1d";
 const ADA_OID: &str = "0f0f0f0f-1111-2222-3333-444444444444";
 const BOB_OID: &str = "0b0b0b0b-1111-2222-3333-444444444444";
 const STRANGER_OID: &str = "0c0c0c0c-1111-2222-3333-444444444444";
+const BOSS_OID: &str = "0d0d0d0d-1111-2222-3333-444444444444";
 const ACCESS_TOKEN: &str = "AT-the-provider-sends-this-and-it-must-not-be-kept";
 const HOST: &str = "obop.test";
 const CALLBACK: &str = "http://obop.test/api/auth/oidc/callback";
+const CALLBACK_HTTPS: &str = "https://obop.test/api/auth/oidc/callback";
 
 // ---- the stand-in provider ---------------------------------------------------------------------
 
@@ -39,6 +41,8 @@ struct Issued {
     nonce: String,
     oid: String,
     redirect_uri: String,
+    /// What the authorization request asked for.
+    scope: String,
 }
 
 struct IdpState {
@@ -56,6 +60,19 @@ struct IdpState {
     /// `METHOD /path` of every request that reached it, and the form of the token requests.
     requests: Vec<String>,
     forms: Vec<HashMap<String, String>>,
+    /// Like Entra: the app registration has the optional claims `amr` and `auth_time` added to
+    /// the ID token (without them the token has neither).
+    optional_amr: bool,
+    optional_auth_time: bool,
+    /// Like Entra: the permissions for `profile` are consented to. Without consent the scope that
+    /// is granted is `openid` only, and the token has no `oid` and no `preferred_username`.
+    consent: bool,
+    /// The `scope` of every authorization request that came to the authorization endpoint.
+    scopes: Vec<String>,
+    /// How long the discovery document takes to answer.
+    discovery_delay_ms: u64,
+    /// The status the key set answers (200 unless a test says otherwise).
+    jwks_status: u16,
 }
 
 struct Idp {
@@ -106,6 +123,12 @@ impl Idp {
             token_status: 200,
             requests: Vec::new(),
             forms: Vec::new(),
+            optional_amr: true,
+            optional_auth_time: true,
+            consent: true,
+            scopes: Vec::new(),
+            discovery_delay_ms: 0,
+            jwks_status: 200,
         }));
         let stop = Arc::new(AtomicBool::new(false));
         let (state, halt) = (st.clone(), stop.clone());
@@ -180,6 +203,18 @@ impl Idp {
         s.token_status = 200;
         s.kid = obop_auth::oidc::soft::KID.into();
         s.published = vec![obop_auth::oidc::soft::KID.into()];
+        s.optional_amr = true;
+        s.optional_auth_time = true;
+        s.consent = true;
+        s.discovery_delay_ms = 0;
+        s.jwks_status = 200;
+    }
+
+    /// A registration without the optional claims `amr` and `auth_time` (Entra's default).
+    fn without_optional_claims(&self) {
+        let mut s = self.st.lock().unwrap();
+        s.optional_amr = false;
+        s.optional_auth_time = false;
     }
 
     fn hits(&self, what: &str) -> usize {
@@ -205,6 +240,9 @@ impl Idp {
         let stand = StandIn::new();
         match (method, path) {
             ("GET", p) if p == format!("/{TENANT}/v2.0/.well-known/openid-configuration") => {
+                if s.discovery_delay_ms > 0 {
+                    std::thread::sleep(std::time::Duration::from_millis(s.discovery_delay_ms));
+                }
                 let mut d: J = serde_json::from_str(&stand.discovery(&authority, TENANT)).unwrap();
                 if let Some(f) = &s.discovery {
                     f(&mut d);
@@ -212,6 +250,9 @@ impl Idp {
                 (200, d.to_string())
             }
             ("GET", p) if p == format!("/{TENANT}/discovery/v2.0/keys") => {
+                if s.jwks_status != 200 {
+                    return (s.jwks_status, json!({"error": "unavailable"}).to_string());
+                }
                 let keys: Vec<J> = s.published.iter().map(|k| stand.jwk_for(k)).collect();
                 (200, StandIn::jwks_of(&keys))
             }
@@ -234,7 +275,21 @@ impl Idp {
                 if !ok {
                     return (400, json!({"error": "invalid_client"}).to_string());
                 }
-                let mut claims = StandIn::claims(&authority, TENANT, CLIENT, &i.nonce, &i.oid, T0);
+                // What Entra grants: the scope asked for, less `profile` where nobody consented, and
+                // the claims that go with it. Nothing here leans on the scope being `openid`.
+                let granted: Vec<&str> = i
+                    .scope
+                    .split(' ')
+                    .filter(|w| *w != "profile" || s.consent)
+                    .collect();
+                let granted = granted.join(" ");
+                let entra = Entra {
+                    scope: granted.clone(),
+                    optional_amr: s.optional_amr,
+                    optional_auth_time: s.optional_auth_time,
+                };
+                let mut claims =
+                    StandIn::claims_for(&authority, TENANT, CLIENT, &i.nonce, &i.oid, T0, &entra);
                 if let Some(e) = &s.edit {
                     e(&mut claims);
                 }
@@ -245,7 +300,7 @@ impl Idp {
                 (
                     200,
                     json!({
-                        "token_type": "Bearer", "scope": "openid", "expires_in": 3599,
+                        "token_type": "Bearer", "scope": granted, "expires_in": 3599,
                         "access_token": ACCESS_TOKEN, "id_token": token,
                     })
                     .to_string(),
@@ -267,15 +322,28 @@ impl Idp {
         assert_eq!(p["client_id"], CLIENT);
         assert_eq!(p["response_type"], "code");
         assert_eq!(p["response_mode"], "query");
-        assert_eq!(p["scope"], "openid", "no offline_access, no other scope");
+        let asked: Vec<&str> = p["scope"].split(' ').collect();
+        assert!(
+            asked.contains(&"openid"),
+            "an OpenID Connect request: {asked:?}"
+        );
+        assert!(
+            !asked.contains(&"offline_access") && !p["scope"].contains("User.Read"),
+            "no refresh token, no access to anything: {asked:?}"
+        );
         assert_eq!(p["code_challenge_method"], "S256");
-        assert_eq!(p["redirect_uri"], CALLBACK);
+        assert!(
+            p["redirect_uri"] == CALLBACK || p["redirect_uri"] == CALLBACK_HTTPS,
+            "{}",
+            p["redirect_uri"]
+        );
         assert_eq!(p["state"].len(), 64);
         assert!(p["nonce"].len() >= 32 && p["code_challenge"].len() >= 43);
         assert!(!p.contains_key("login_hint") && !p.contains_key("prompt"));
         let mut s = self.st.lock().unwrap();
         s.n += 1;
         let code = format!("idp-code-{}", s.n);
+        s.scopes.push(p["scope"].clone());
         s.issued.insert(
             code.clone(),
             Issued {
@@ -283,6 +351,7 @@ impl Idp {
                 nonce: p["nonce"].clone(),
                 oid: oid.into(),
                 redirect_uri: p["redirect_uri"].clone(),
+                scope: p["scope"].clone(),
             },
         );
         format!("/api/auth/oidc/callback?code={code}&state={}", p["state"])
@@ -351,13 +420,14 @@ struct World {
 }
 
 async fn world(configure: bool) -> World {
+    world_with(configure, AuthConfig::insecure_dev(), None).await
+}
+
+async fn world_with(configure: bool, config: AuthConfig, prefix: Option<&str>) -> World {
     let idp = Idp::start();
     let app = App::new();
     app.seed_demo();
-    let auth = Arc::new(Auth::with_test_config(
-        app.store.backend(),
-        AuthConfig::insecure_dev(),
-    ));
+    let auth = Arc::new(Auth::with_test_config(app.store.backend(), config));
     auth.set_clock_for_test(T0);
     auth.set_oidc_authority_for_test(&idp.authority());
     for (name, group) in [
@@ -382,6 +452,9 @@ async fn world(configure: bool) -> World {
     );
     let state = obop_http::HttpState::new(app.dispatcher.clone(), auth.clone());
     state.set_connectors(rt);
+    if let Some(p) = prefix {
+        state.set_sso_return_prefix(p);
+    }
     let router = obop_http::router(state, None);
     let w = World {
         app,
@@ -400,7 +473,7 @@ async fn world(configure: bool) -> World {
     }
     if configure {
         w.auth
-            .operator_sso_configure(TENANT, CLIENT, Some(CLIENT_SECRET), true)
+            .operator_sso_configure(TENANT, CLIENT, Some(CLIENT_SECRET), Some(true))
             .unwrap();
         w.auth.operator_sso_bind("ada", ADA_OID).unwrap();
         w.auth.operator_sso_bind("bob", BOB_OID).unwrap();
@@ -410,6 +483,17 @@ async fn world(configure: bool) -> World {
 
 impl World {
     async fn send(&self, method: &str, uri: &str, jar: &Jar, body: Option<&str>) -> Raw {
+        self.send_h(method, uri, jar, body, &[]).await
+    }
+
+    async fn send_h(
+        &self,
+        method: &str,
+        uri: &str,
+        jar: &Jar,
+        body: Option<&str>,
+        extra: &[(&str, &str)],
+    ) -> Raw {
         let mut req = Request::builder()
             .method(method)
             .uri(uri)
@@ -417,6 +501,9 @@ impl World {
             .header("content-type", "application/json");
         if let Some(c) = jar.header() {
             req = req.header("cookie", c);
+        }
+        for (k, v) in extra {
+            req = req.header(*k, *v);
         }
         let resp = self
             .router
@@ -518,6 +605,13 @@ impl World {
                 );
             }
         }
+        // The short-lived values (flows, one-time codes, counters) as well.
+        for (k, v) in b.kv_scan("").unwrap() {
+            assert!(
+                !k.contains(needle) && !v.contains(needle),
+                "{needle} stored in the value {k}"
+            );
+        }
     }
 }
 
@@ -538,8 +632,12 @@ fn failed(r: &Raw, word: &str) {
     );
 }
 
-/// Ada is made SSO-only, which the three break-glass administrators allow.
+/// Ada signs in once with the button, as the administrator asks before making the account
+/// Microsoft-only, and is then made SSO-only, which the three break-glass administrators allow.
 async fn ada_sso_only(w: &World) {
+    let mut jar = Jar::default();
+    let back = w.sign_in(&mut jar, ADA_OID).await;
+    assert_eq!(w.exchange(&mut jar, &code_of(&back)).await.status, 200);
     w.auth.operator_sso_only("ada", true).unwrap();
 }
 
@@ -549,6 +647,7 @@ async fn ada_sso_only(w: &World) {
 async fn flow_round_trip_ends_in_a_bearer_token_and_keeps_nothing_of_the_provider() {
     let w = world(true).await;
     ada_sso_only(&w).await;
+    let first_forms = w.idp.st.lock().unwrap().forms.len();
     let none = Jar::default();
     // The button is offered.
     let s = w.send("GET", "/api/auth/sso", &none, None).await;
@@ -625,15 +724,20 @@ async fn flow_round_trip_ends_in_a_bearer_token_and_keeps_nothing_of_the_provide
     assert_eq!((s, b), (s2, b2));
     assert_eq!(s, 401);
     // The log has the sign-in and the refusal; nothing the provider sent is kept anywhere.
-    assert_eq!(w.events("oidc_login").len(), 1);
-    assert!(w.events("oidc_login")[0].contains("reports a second factor"));
+    // The first sign-in (before the account was Microsoft-only) and this one.
+    assert_eq!(w.events("oidc_login").len(), 2);
+    assert!(w.events("oidc_login")[1].contains("reports a second factor"));
+    // A start is one line per address and ten minutes, not one per request.
     assert_eq!(w.events("oidc_start").len(), 1);
     assert!(!w.events("login_refused").is_empty());
     let id_token = {
         let st = w.idp.st.lock().unwrap();
         st.forms.len()
     };
-    assert_eq!(id_token, 1);
+    assert_eq!(id_token, first_forms + 1);
+    // The profile claims the token carried (name, preferred_username) are read by nobody.
+    w.assert_nowhere("Ada Example");
+    w.assert_nowhere("ada@example.test");
     w.assert_nowhere(CLIENT_SECRET);
     w.assert_nowhere(ACCESS_TOKEN);
     w.assert_not_stored(&code); // only its hash is kept, and only for 60 seconds
@@ -674,14 +778,12 @@ async fn flow_a_person_with_an_obop_second_factor_still_gives_it() {
 #[tokio::test]
 async fn failures_are_one_redirect_and_the_reason_is_in_the_log_only() {
     let w = world(true).await;
-    let mut n_logged = 0;
-    let mut expect_log = |w: &World, kind: &str, part: &str| {
+    let expect_log = |w: &World, kind: &str, part: &str| {
         let lines = w.events(kind);
         assert!(
             lines.iter().any(|l| l.contains(part)),
             "no {kind} line with {part:?} in {lines:?}"
         );
-        n_logged += 1;
     };
 
     // The browser that comes back is not the one that left: no cookie, and another flow's cookie.
@@ -718,7 +820,6 @@ async fn failures_are_one_redirect_and_the_reason_is_in_the_log_only() {
         .await,
         "failed",
     );
-    expect_log(&w, "oidc_refused", "no valid state");
     let unknown = format!("/api/auth/oidc/callback?code=x&state={}", "ab".repeat(32));
     failed(&w.callback(&mut Jar::default(), &unknown).await, "failed");
 
@@ -753,6 +854,9 @@ async fn failures_are_one_redirect_and_the_reason_is_in_the_log_only() {
         .await,
         "failed",
     );
+    // Only the person's own "no" is a cancellation; the provider's error is an error.
+    expect_log(&w, "oidc_error", "server_error");
+    assert_eq!(w.events("oidc_cancelled").len(), 1);
     let mut jar = Jar::default();
     let s = w.start(&mut jar).await;
     let state = pairs(s.location().split_once('?').unwrap().1)["state"].clone();
@@ -776,6 +880,7 @@ async fn failures_are_one_redirect_and_the_reason_is_in_the_log_only() {
     w.auth.operator_set_disabled("bob", false).unwrap();
 
     // Tokens that are wrong in one way each.
+    let idp_authority = w.idp.authority();
     let cases: Vec<(&str, Edit, &str)> = vec![
         (
             "nonce",
@@ -788,15 +893,20 @@ async fn failures_are_one_redirect_and_the_reason_is_in_the_log_only() {
             "audience",
         ),
         (
-            "tenant",
-            Arc::new(|c| {
-                c["tid"] = json!("99999999-2222-3333-4444-555555555555");
+            // The issuer is the stand-in's own host with another tenant in it: only the tenant
+            // is wrong.
+            "issuer of another tenant",
+            Arc::new(move |c| {
                 c["iss"] = json!(format!(
-                    "{}/99999999-2222-3333-4444-555555555555/v2.0",
-                    "http://127.0.0.1:1"
+                    "{idp_authority}/99999999-2222-3333-4444-555555555555/v2.0"
                 ));
             }),
             "issuer",
+        ),
+        (
+            "tid of another tenant",
+            Arc::new(|c| c["tid"] = json!("99999999-2222-3333-4444-555555555555")),
+            "tenant",
         ),
         (
             "expiry",
@@ -842,7 +952,13 @@ async fn failures_are_one_redirect_and_the_reason_is_in_the_log_only() {
     let back = w.sign_in(&mut jar, ADA_OID).await;
     let ex = w.exchange(&mut jar, &code_of(&back)).await;
     assert_eq!(ex.status, 200, "{}", ex.body);
-    assert!(n_logged >= 10);
+    // Every refusal above left its own line (they differ in words, so none was folded into
+    // another by the throttle).
+    assert!(
+        w.events("oidc_refused").len() >= 10,
+        "{:?}",
+        w.events("oidc_refused")
+    );
     w.assert_nowhere(CLIENT_SECRET);
     w.assert_nowhere("AADSTS");
     w.assert_nowhere(ACCESS_TOKEN);
@@ -987,7 +1103,7 @@ async fn flow_is_offered_only_with_a_provider_and_a_burst_of_starts_is_limited()
     assert_eq!(s.json(), json!({"enabled": false}));
     failed(&w.start(&mut Jar::default()).await, "unavailable");
     w.auth
-        .operator_sso_configure(TENANT, CLIENT, Some(CLIENT_SECRET), true)
+        .operator_sso_configure(TENANT, CLIENT, Some(CLIENT_SECRET), Some(true))
         .unwrap();
     assert_eq!(
         w.send("GET", "/api/auth/sso", &none, None).await.json(),
@@ -995,7 +1111,7 @@ async fn flow_is_offered_only_with_a_provider_and_a_burst_of_starts_is_limited()
     );
     // Switched off, nothing is offered and nothing starts.
     w.auth
-        .operator_sso_configure(TENANT, CLIENT, None, false)
+        .operator_sso_configure(TENANT, CLIENT, None, Some(false))
         .unwrap();
     assert_eq!(
         w.send("GET", "/api/auth/sso", &none, None).await.json(),
@@ -1003,7 +1119,7 @@ async fn flow_is_offered_only_with_a_provider_and_a_burst_of_starts_is_limited()
     );
     failed(&w.start(&mut Jar::default()).await, "unavailable");
     w.auth
-        .operator_sso_configure(TENANT, CLIENT, None, true)
+        .operator_sso_configure(TENANT, CLIENT, None, Some(true))
         .unwrap();
     // The limit is per address and per minute.
     let mut words = Vec::new();
@@ -1032,7 +1148,12 @@ async fn failures_a_discovery_document_that_points_elsewhere_is_not_followed() {
             .any(|l| l.contains("discovery document"))
     );
     assert_eq!(w.idp.hits("/token"), 0);
-    w.idp.reset();
+    // The failure is remembered for a short while: a second start does not ask again.
+    let asked = w.idp.hits("openid-configuration");
+    failed(&w.start(&mut Jar::default()).await, "unavailable");
+    assert_eq!(w.idp.hits("openid-configuration"), asked);
+    // Another wrong document, in a world with no memory of the first.
+    let w = world(true).await;
     w.idp.discovery(|d| {
         d["issuer"] = json!("http://127.0.0.1:1/other/v2.0");
     });
@@ -1100,6 +1221,19 @@ async fn admin_the_command_api_binds_configures_and_keeps_agents_out_of_the_prov
     .await;
     assert_eq!(s, 200, "{b}");
     assert_eq!(b["value"]["sso_oid"], ADA_OID);
+    // Bound is not tried: the person signs in once with the button first.
+    let (s, b) = post(
+        r,
+        Some(&boss),
+        "/api/user_account/set_sso_only",
+        json!({"id": "ada", "sso_only": true}),
+    )
+    .await;
+    assert_ne!(s, 200, "{b}");
+    assert!(b.to_string().contains("never signed in"), "{b}");
+    let mut jar = Jar::default();
+    let back = w.sign_in(&mut jar, ADA_OID).await;
+    assert_eq!(w.exchange(&mut jar, &code_of(&back)).await.status, 200);
     let (s, b) = post(
         r,
         Some(&boss),
@@ -1170,7 +1304,7 @@ async fn admin_the_command_api_binds_configures_and_keeps_agents_out_of_the_prov
     )
     .await;
     assert_eq!(g["value"]["tenant"], TENANT);
-    // Over MCP the tools are listed (D41: every surface or none) and refuse an agent the same way.
+    // Over MCP the tool of the account commands is listed (D41: every surface or none).
     let admin_p = obop_commands::Principal::user("boss", &["platform.admin"]);
     let tools: Vec<String> = obop_mcp::schema::tools(&w.app.dispatcher, &admin_p)
         .iter()
@@ -1183,4 +1317,507 @@ async fn admin_the_command_api_binds_configures_and_keeps_agents_out_of_the_prov
     w.assert_nowhere(CLIENT_SECRET);
     w.assert_nowhere("attacker-secret");
     assert_eq!(w.events("oidc_bind").len(), 1);
+}
+
+// ---- what the request asks for and what the token carries (scope, profile, optional claims) ---
+
+fn flow_rows(w: &World) -> Vec<(String, J)> {
+    w.app
+        .store
+        .backend()
+        .kv_scan("auth.sso.flow:")
+        .unwrap()
+        .into_iter()
+        .map(|(k, v)| (k, serde_json::from_str(&v).unwrap()))
+        .collect()
+}
+
+fn oidc_rows(w: &World) -> usize {
+    w.app
+        .store
+        .backend()
+        .list("security_event")
+        .unwrap()
+        .into_iter()
+        .filter(|(_, f)| f["kind"].as_str().is_some_and(|k| k.starts_with("oidc_")))
+        .count()
+}
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64
+}
+
+#[tokio::test]
+async fn flow_asks_for_openid_and_profile_and_nothing_else_and_keeps_no_profile_claim() {
+    // Microsoft sends the object id only with the `profile` scope; the name and the user name
+    // that come with it are read by nobody and kept nowhere.
+    let w = world(true).await;
+    let mut jar = Jar::default();
+    let s = w.start(&mut jar).await;
+    let asked = pairs(s.location().split_once('?').unwrap().1);
+    assert_eq!(asked["scope"], "openid profile");
+    let uri = w.idp.authorize(&s.location(), ADA_OID);
+    let back = w.callback(&mut jar, &uri).await;
+    assert_eq!(w.exchange(&mut jar, &code_of(&back)).await.status, 200);
+    assert_eq!(
+        w.idp.st.lock().unwrap().scopes,
+        vec!["openid profile".to_string()]
+    );
+    for needle in ["Ada Example", "ada@example.test", "preferred_username"] {
+        w.assert_nowhere(needle);
+    }
+    // The binding holds the identity and when it was made and used, and nothing of the person.
+    let links = w.app.store.backend().list("auth_sso_link").unwrap();
+    assert_eq!(links.len(), 2);
+    for (_, f) in links {
+        let mut keys: Vec<&str> = f.keys().map(String::as_str).collect();
+        keys.sort_unstable();
+        let known = [
+            "bound_at",
+            "bound_by",
+            "issuer",
+            "last_login_at",
+            "oid",
+            "tid",
+            "user",
+        ];
+        assert!(keys.iter().all(|k| known.contains(k)), "{keys:?}");
+    }
+}
+
+#[tokio::test]
+async fn failures_a_registration_without_the_profile_permission_gets_no_object_id_and_the_log_says_so()
+ {
+    // The scope is asked for, the permission is not consented to: the token has no `oid`. That is
+    // what a real tenant does with "assignment required" before an administrator consents.
+    let w = world(true).await;
+    w.idp.st.lock().unwrap().consent = false;
+    failed(&w.sign_in(&mut Jar::default(), ADA_OID).await, "failed");
+    let lines = w.events("oidc_refused");
+    assert!(
+        lines.iter().any(|l| l.contains("no object id")
+            && l.contains("profile scope")
+            && l.contains("consent")),
+        "{lines:?}"
+    );
+    // The person is told nothing more than the fixed word, and nobody has a session.
+    assert_eq!(w.events("oidc_login").len(), 0);
+    // With the consent given the same sign-in works.
+    w.idp.reset();
+    let back = w.sign_in(&mut Jar::default(), ADA_OID).await;
+    assert!(back.location().starts_with("/#oidc="));
+}
+
+#[tokio::test]
+async fn flow_without_the_optional_claims_nothing_stands_for_a_second_factor() {
+    // The registration has no optional claims: the token has no `amr` and no `auth_time`, so
+    // Microsoft is not heard to say that a second factor was used (D53 follows). An administrator
+    // who signs in with Microsoft only is limited to enrolment, exactly as with a password.
+    let cfg = AuthConfig {
+        default_require_admins: true,
+        ..AuthConfig::insecure_dev()
+    };
+    let w = world_with(true, cfg, None).await;
+    w.auth.operator_sso_bind("boss", BOSS_OID).unwrap();
+    // Before Microsoft-only: an administrator without a second factor is limited anyway.
+    let mut jar = Jar::default();
+    let back = w.sign_in(&mut jar, BOSS_OID).await;
+    let ex = w.exchange(&mut jar, &code_of(&back)).await;
+    assert_eq!(ex.json()["mfa_enrolment_required"], true, "{}", ex.body);
+    w.auth.operator_sso_only("boss", true).unwrap();
+    // The optional claims are configured: Microsoft's word stands for the second factor.
+    let mut jar = Jar::default();
+    let back = w.sign_in(&mut jar, BOSS_OID).await;
+    let ex = w.exchange(&mut jar, &code_of(&back)).await;
+    assert_eq!(ex.status, 200, "{}", ex.body);
+    assert!(ex.json()["token"].is_string());
+    assert!(
+        ex.json().get("mfa_enrolment_required").is_none(),
+        "{}",
+        ex.body
+    );
+    // They are not: no second factor, a session that may only enrol.
+    w.idp.without_optional_claims();
+    let mut jar = Jar::default();
+    let back = w.sign_in(&mut jar, BOSS_OID).await;
+    let ex = w.exchange(&mut jar, &code_of(&back)).await;
+    assert_eq!(ex.json()["mfa_enrolment_required"], true, "{}", ex.body);
+    let lines = w.events("oidc_login");
+    assert!(
+        lines.last().unwrap().contains("does not report"),
+        "{lines:?}"
+    );
+    assert!(lines[lines.len() - 2].contains("reports a second factor"));
+    // And the other claims stay what they were: the same object id is the same person.
+    assert_eq!(
+        w.auth.operator_sso_status().unwrap()["accounts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|a| a["sso_only"] == true)
+            .count(),
+        1
+    );
+}
+
+// ---- lifetimes and single use -------------------------------------------------------------
+
+#[tokio::test]
+async fn flow_the_flow_lives_ten_minutes_and_the_one_time_code_one_minute() {
+    let w = world(true).await;
+    let mut jar = Jar::default();
+    let started = w.start(&mut jar).await;
+    let cookie = started.all("set-cookie")[0].to_string();
+    assert!(cookie.contains("Max-Age=600;"), "{cookie}");
+    // The row in the store is hashed by the state, and says itself when it ends.
+    let rows = flow_rows(&w);
+    assert_eq!(rows.len(), 1);
+    let until = rows[0].1["expires_at_ms"].as_u64().unwrap();
+    let now = now_ms();
+    assert!(
+        until > now + 590_000 && until < now + 610_000,
+        "a finite lifetime of about ten minutes: {} s from now",
+        (until as i64 - now as i64) / 1000
+    );
+    let uri = w.idp.authorize(&started.location(), ADA_OID);
+    let state = pairs(uri.split_once('?').unwrap().1)["state"].clone();
+    assert!(
+        !rows[0].0.contains(&state),
+        "the key is a hash of the state"
+    );
+    // A row that has outlived its time (a store that cleans up late) is not a flow, and the
+    // cookie is cleared.
+    let (key, mut rec) = rows[0].clone();
+    rec["expires_at_ms"] = json!(1);
+    let backend = w.app.store.backend();
+    backend
+        .kv_put(&key, &rec.to_string(), Some(600_000))
+        .unwrap();
+    let back = w.callback(&mut jar, &uri).await;
+    failed(&back, "failed");
+    assert!(
+        back.all("set-cookie")
+            .iter()
+            .any(|c| c.starts_with("obop_sso_") && c.contains("Max-Age=0")),
+        "the flow cookie is cleared: {:?}",
+        back.all("set-cookie")
+    );
+    assert!(
+        w.events("oidc_refused")
+            .iter()
+            .any(|l| l.contains("unknown, already used or expired"))
+    );
+    assert_eq!(
+        w.idp.hits("/token"),
+        0,
+        "an expired flow never reaches the provider"
+    );
+    // A row with no expiry at all is no flow either.
+    let mut jar = Jar::default();
+    let started = w.start(&mut jar).await;
+    let uri = w.idp.authorize(&started.location(), ADA_OID);
+    let (key, mut rec) = flow_rows(&w).remove(0);
+    rec.as_object_mut().unwrap().remove("expires_at_ms");
+    backend
+        .kv_put(&key, &rec.to_string(), Some(600_000))
+        .unwrap();
+    failed(&w.callback(&mut jar, &uri).await, "failed");
+    assert_eq!(w.idp.hits("/token"), 0);
+
+    // The one-time code: good at 59 seconds, gone at 60.
+    let mut late = Jar::default();
+    let code_a = code_of(&w.sign_in(&mut late, ADA_OID).await);
+    w.auth.set_clock_for_test(T0 + 59);
+    assert_eq!(w.exchange(&mut late, &code_a).await.status, 200);
+    w.auth.set_clock_for_test(T0);
+    let mut later = Jar::default();
+    let code_b = code_of(&w.sign_in(&mut later, ADA_OID).await);
+    w.auth.set_clock_for_test(T0 + 60);
+    assert_eq!(w.exchange(&mut later, &code_b).await.status, 401);
+    w.auth.set_clock_for_test(T0);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn flow_a_flow_and_a_one_time_code_are_spent_once_when_two_requests_race() {
+    let w = world(true).await;
+    for round in 0..6 {
+        let mut jar = Jar::default();
+        let s = w.start(&mut jar).await;
+        let uri = w.idp.authorize(&s.location(), ADA_OID);
+        let (mut a, mut b) = (jar.clone(), jar.clone());
+        let (x, y) = tokio::join!(w.callback(&mut a, &uri), w.callback(&mut b, &uri));
+        let won = |r: &Raw| r.location().starts_with("/#oidc=");
+        assert_eq!(
+            usize::from(won(&x)) + usize::from(won(&y)),
+            1,
+            "round {round}: exactly one callback gets the flow: {} / {}",
+            x.location(),
+            y.location()
+        );
+        let (code, winner) = if won(&x) {
+            (code_of(&x), a)
+        } else {
+            (code_of(&y), b)
+        };
+        let (mut c, mut d) = (winner.clone(), winner);
+        let (p, q) = tokio::join!(w.exchange(&mut c, &code), w.exchange(&mut d, &code));
+        assert_eq!(
+            [p.status, q.status].iter().filter(|s| **s == 200).count(),
+            1,
+            "round {round}: exactly one exchange gets the code: {} / {}",
+            p.status,
+            q.status
+        );
+    }
+    assert_eq!(
+        w.idp.hits("/token"),
+        6,
+        "the provider was asked once per flow"
+    );
+}
+
+#[tokio::test]
+async fn failures_a_cookie_with_the_right_name_and_a_wrong_value_is_another_browser() {
+    let w = world(true).await;
+    let mut jar = Jar::default();
+    let s = w.start(&mut jar).await;
+    let uri = w.idp.authorize(&s.location(), ADA_OID);
+    let name = jar
+        .0
+        .keys()
+        .find(|k| k.starts_with("obop_sso_"))
+        .unwrap()
+        .clone();
+    let mut wrong = Jar::default();
+    wrong.0.insert(name, "A".repeat(43));
+    failed(&w.callback(&mut wrong, &uri).await, "failed");
+    assert!(
+        w.events("oidc_refused")
+            .iter()
+            .any(|l| l.contains("not the one that began"))
+    );
+    assert_eq!(
+        w.idp.hits("/token"),
+        0,
+        "refused before the provider is asked"
+    );
+}
+
+#[tokio::test]
+async fn flow_behind_https_the_cookies_are_secure_and_the_return_goes_to_the_back_office() {
+    let w = world_with(true, AuthConfig::insecure_dev(), Some("/admin")).await;
+    let https = [("x-forwarded-proto", "https")];
+    let mut jar = Jar::default();
+    let s = w
+        .send_h("GET", "/api/auth/oidc/start", &jar, None, &https)
+        .await;
+    jar.absorb(&s);
+    let cookie = s.all("set-cookie")[0].to_string();
+    assert!(
+        cookie.contains("; Secure") && cookie.contains("HttpOnly"),
+        "{cookie}"
+    );
+    let asked = pairs(s.location().split_once('?').unwrap().1);
+    assert_eq!(
+        asked["redirect_uri"],
+        "https://obop.test/api/auth/oidc/callback"
+    );
+    let uri = w.idp.authorize(&s.location(), ADA_OID);
+    let back = w.send_h("GET", &uri, &jar, None, &https).await;
+    jar.absorb(&back);
+    // The return is the back office, not the root, and the cookies keep their flags.
+    let l = back.location();
+    assert!(l.starts_with("/admin/#oidc="), "{l}");
+    let set = back.all("set-cookie");
+    assert!(
+        set.iter().all(|c| c.contains("; Secure")),
+        "the cleared flow cookie and the done cookie are Secure: {set:?}"
+    );
+    assert!(
+        set.iter()
+            .any(|c| c.starts_with("obop_sso_done=") && c.contains("Max-Age=60;"))
+    );
+    let code = l.strip_prefix("/admin/#oidc=").unwrap().to_string();
+    assert_eq!(w.exchange(&mut jar, &code).await.status, 200);
+    // A failure goes to the same place.
+    let r = w
+        .callback(&mut Jar::default(), "/api/auth/oidc/callback?state=zz")
+        .await;
+    assert_eq!(r.location(), "/admin/#oidc_error=failed");
+}
+
+// ---- anonymous requests and the hardening of the calls to Microsoft ------------------------
+
+#[tokio::test]
+async fn failures_a_request_that_is_not_a_navigation_does_nothing() {
+    let w = world(true).await;
+    let as_image = [("sec-fetch-mode", "no-cors"), ("sec-fetch-dest", "image")];
+    let r = w
+        .send_h(
+            "GET",
+            "/api/auth/oidc/start",
+            &Jar::default(),
+            None,
+            &as_image,
+        )
+        .await;
+    assert_eq!(r.status, 400, "{}", r.body);
+    assert!(flow_rows(&w).is_empty());
+    assert_eq!(w.idp.hits("openid-configuration"), 0);
+    // A click, a typed address and the redirect back from Microsoft are navigations.
+    let nav = [
+        ("sec-fetch-mode", "navigate"),
+        ("sec-fetch-dest", "document"),
+        ("sec-fetch-site", "cross-site"),
+    ];
+    let mut jar = Jar::default();
+    let s = w
+        .send_h("GET", "/api/auth/oidc/start", &jar, None, &nav)
+        .await;
+    jar.absorb(&s);
+    let uri = w.idp.authorize(&s.location(), ADA_OID);
+    // The same address inside a frame is not, and does not spend the flow.
+    let framed = [("sec-fetch-mode", "navigate"), ("sec-fetch-dest", "iframe")];
+    let r = w.send_h("GET", &uri, &jar, None, &framed).await;
+    assert_eq!(r.status, 400, "{}", r.body);
+    assert_eq!(flow_rows(&w).len(), 1, "the flow is still there");
+    let back = w.send_h("GET", &uri, &jar, None, &nav).await;
+    assert!(
+        back.location().starts_with("/#oidc="),
+        "{}",
+        back.location()
+    );
+}
+
+#[tokio::test]
+async fn failures_anonymous_requests_do_not_fill_the_log_or_use_up_the_limits() {
+    let w = world(true).await;
+    let before = oidc_rows(&w);
+    // A callback with no valid state is nothing: no line, no flow, no count against the address.
+    for i in 0..200 {
+        let uri = match i % 3 {
+            0 => "/api/auth/oidc/callback",
+            1 => "/api/auth/oidc/callback?state=zz&code=x",
+            _ => "/api/auth/oidc/callback?error=access_denied",
+        };
+        failed(&w.callback(&mut Jar::default(), uri).await, "failed");
+    }
+    assert_eq!(
+        oidc_rows(&w),
+        before,
+        "no line for requests with no valid state"
+    );
+    // The address still has its allowance.
+    let mut jar = Jar::default();
+    let back = w.sign_in(&mut jar, ADA_OID).await;
+    assert!(back.location().starts_with("/#oidc="));
+    // Starts: up to the limit, and one line for all of them.
+    for _ in 0..28 {
+        assert_eq!(w.start(&mut Jar::default()).await.status, 303);
+    }
+    assert_eq!(
+        w.events("oidc_start").len(),
+        1,
+        "one line per address and ten minutes"
+    );
+    // A state that looks right and is unknown: one line for the lot, until the limit.
+    let mut busy = 0;
+    for i in 0..130 {
+        let state = format!("{:064x}", i + 1);
+        let r = w
+            .callback(
+                &mut Jar::default(),
+                &format!("/api/auth/oidc/callback?code=x&state={state}"),
+            )
+            .await;
+        if r.location().ends_with("busy") {
+            busy += 1;
+        }
+    }
+    assert!(
+        busy > 0,
+        "well-formed states that are no flow are limited per address"
+    );
+    let unknown: Vec<String> = w
+        .events("oidc_refused")
+        .into_iter()
+        .filter(|l| l.contains("unknown, already used or expired"))
+        .collect();
+    assert_eq!(unknown.len(), 1, "{unknown:?}");
+    assert!(unknown[0].contains("counted, not written"));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn failures_a_cold_cache_and_many_starts_ask_the_provider_once() {
+    let w = world(true).await;
+    w.idp.st.lock().unwrap().discovery_delay_ms = 200;
+    let (mut a, mut b, mut c, mut d) = (
+        Jar::default(),
+        Jar::default(),
+        Jar::default(),
+        Jar::default(),
+    );
+    let (r1, r2, r3, r4) = tokio::join!(
+        w.start(&mut a),
+        w.start(&mut b),
+        w.start(&mut c),
+        w.start(&mut d)
+    );
+    for r in [r1, r2, r3, r4] {
+        assert_eq!(r.status, 303);
+    }
+    assert_eq!(
+        w.idp.hits("openid-configuration"),
+        1,
+        "one fetch of the discovery document, the others waited for it"
+    );
+}
+
+#[tokio::test]
+async fn failures_a_key_set_that_cannot_be_fetched_is_remembered_for_a_short_while() {
+    let w = world(true).await;
+    w.idp.st.lock().unwrap().jwks_status = 503;
+    let mut words = Vec::new();
+    for _ in 0..4 {
+        let r = w.sign_in(&mut Jar::default(), ADA_OID).await;
+        words.push(r.location().rsplit('=').next().unwrap().to_string());
+    }
+    assert_eq!(words, ["unavailable"; 4]);
+    assert_eq!(
+        w.idp.hits("/discovery/v2.0/keys"),
+        1,
+        "the provider is not asked again for every sign-in"
+    );
+    assert!(
+        w.events("oidc_error")
+            .iter()
+            .any(|l| l.contains("key set could not be fetched"))
+    );
+}
+
+#[tokio::test]
+async fn failures_exchanges_are_limited_per_address_and_the_limit_is_a_429() {
+    let w = world(true).await;
+    let before = oidc_rows(&w);
+    let mut last = 0;
+    let mut limited = 0;
+    for _ in 0..40 {
+        let r = w.exchange(&mut Jar::default(), "obopsso_nothing").await;
+        last = r.status;
+        if r.status == 429 {
+            limited += 1;
+            assert_eq!(r.json()["code"], "rate_limited");
+        }
+    }
+    assert_eq!(last, 429);
+    assert_eq!(limited, 10, "30 a minute, the rest answered at once");
+    // The answer of a refused exchange is the same plain failure as for any other.
+    assert_eq!(
+        oidc_rows(&w),
+        before,
+        "an exchange of nothing writes no line"
+    );
 }

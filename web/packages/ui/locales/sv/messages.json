@@ -71,7 +71,7 @@
   "That code is not valid. Check the time on your device and try again.": "Koden är inte giltig. Kontrollera klockan på enheten och försök igen.",
   "That password is not right.": "Lösenordet stämmer inte.",
   "They are shown only now": "De visas bara nu",
-  "This sign-in has expired. Enter your password again.": "Inloggningen har gått ut. Ange lösenordet igen.",
+  "This sign-in has expired. Start again.": "Inloggningen har gått ut. Börja om.",
   "Time-based, 6 digits, account {account}.": "Tidsbaserad, 6 siffror, konto {account}.",
   "Too many attempts. Wait a minute and try again.": "För många försök. Vänta en minut och försök igen.",
   "Turn off": "Stäng av",

@@ -3,8 +3,13 @@
 // PKCE and the client secret checked. It signs id tokens with a key it makes when it starts.
 //
 // It is not Entra and proves nothing about Entra: it speaks the protocol as the decision record
-// reads it (claims `iss`, `tid`, `aud`, `oid`, `nonce`, `amr`...). Nothing here reaches a network
-// beyond loopback. Test code only.
+// reads it, and it hands out the claims the way Microsoft's documentation says Entra does: the
+// default claims always (`iss`, `tid`, `aud`, `sub`, `nonce`, times); `oid`, `preferred_username`
+// and `name` only when the `profile` scope was asked for and is consented to; `amr` and `auth_time`
+// only when the app registration has them as optional claims. `GET /control?optional_claims=0|1`
+// and `consent=0|1` change what the registration is like, and `GET /control/scopes` lists the
+// scopes the authorization requests asked for. Nothing here reaches a network beyond loopback.
+// Test code only.
 import { createHash, createPrivateKey, generateKeyPairSync, randomBytes, sign } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { sso } from "./env.ts";
@@ -41,6 +46,7 @@ type Flow = {
   state: string;
   nonce: string;
   challenge: string;
+  scope: string;
 };
 type Issued = Flow & { oid: string; mfa: boolean };
 
@@ -52,23 +58,45 @@ export function startIdp(port: number) {
   const flows = new Map<string, Flow>();
   const codes = new Map<string, Issued>();
   const t = sso.tenant;
+  // What the app registration is like: the optional claims added to the ID token, and the consent
+  // for the permissions of the `profile` scope.
+  const registration = { optionalClaims: true, consent: true };
+  const asked: string[] = [];
+
+  /** The scope Entra grants for what was asked: `profile` only where it is consented to. */
+  const granted = (scope: string) =>
+    scope
+      .split(" ")
+      .filter((s) => s && (s !== "profile" || registration.consent))
+      .join(" ");
 
   const idToken = (i: Issued): string => {
     const now = Math.floor(Date.now() / 1000);
     const header = { alg: "RS256", typ: "JWT", kid: KID };
-    const claims = {
+    const profile = granted(i.scope).split(" ").includes("profile");
+    const claims: Record<string, unknown> = {
       iss: `${authority}/${t}/v2.0`,
       tid: t,
       aud: i.clientId,
       sub: `pairwise-${i.oid}`,
-      oid: i.oid,
       nonce: i.nonce,
       ver: "2.0",
       iat: now,
       nbf: now,
       exp: now + 3600,
-      auth_time: now,
-      amr: i.mfa ? ["pwd", "mfa"] : ["pwd"],
+      // The claims of the `profile` scope: the object id the binding is made on, and two that the
+      // server reads and keeps nowhere.
+      ...(profile
+        ? {
+            oid: i.oid,
+            preferred_username: `${i.oid.slice(0, 8)}@example.test`,
+            name: "Stand-in Person",
+          }
+        : {}),
+      // The optional claims of the registration.
+      ...(registration.optionalClaims
+        ? { auth_time: now, amr: i.mfa ? ["pwd", "mfa"] : ["pwd"] }
+        : {}),
     };
     const input = `${b64url(JSON.stringify(header))}.${b64url(JSON.stringify(claims))}`;
     return `${input}.${b64url(sign("RSA-SHA256", Buffer.from(input), key))}`;
@@ -79,6 +107,15 @@ export function startIdp(port: number) {
     const path = url.pathname;
     try {
       if (path === "/health") return json(res, 200, { ok: true });
+      // The registration of the stand-in, for the specs.
+      if (path === "/control") {
+        const q = url.searchParams;
+        if (q.has("optional_claims"))
+          registration.optionalClaims = q.get("optional_claims") === "1";
+        if (q.has("consent")) registration.consent = q.get("consent") === "1";
+        return json(res, 200, registration);
+      }
+      if (path === "/control/scopes") return json(res, 200, asked);
       // Browsers ask for an icon; an empty answer keeps the console guard of the specs quiet.
       if (path === "/favicon.ico") {
         res.statusCode = 204;
@@ -102,15 +139,18 @@ export function startIdp(port: number) {
         const bad =
           q.get("client_id") !== sso.clientId ||
           q.get("response_type") !== "code" ||
-          q.get("scope") !== "openid" ||
+          !(q.get("scope") ?? "").split(" ").includes("openid") ||
+          (q.get("scope") ?? "").includes("offline_access") ||
           q.get("code_challenge_method") !== "S256" ||
           !q.get("code_challenge") ||
           !q.get("nonce") ||
           !q.get("state") ||
           !q.get("redirect_uri");
         if (bad) return page(res, 400, "<p>Bad authorization request.</p>");
+        asked.push(q.get("scope")!);
         const id = randomBytes(12).toString("hex");
         flows.set(id, {
+          scope: q.get("scope")!,
           clientId: q.get("client_id")!,
           redirectUri: q.get("redirect_uri")!,
           state: q.get("state")!,
@@ -172,7 +212,7 @@ export function startIdp(port: number) {
         if (!ok || !i) return json(res, 400, { error: "invalid_grant" });
         return json(res, 200, {
           token_type: "Bearer",
-          scope: "openid",
+          scope: granted(i.scope),
           expires_in: 3599,
           access_token: "e2e-access-token-the-server-must-not-keep",
           id_token: idToken(i),

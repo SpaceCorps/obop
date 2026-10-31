@@ -1426,7 +1426,7 @@
             "type": "string"
           },
           "kind": {
-            "description": "What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, device_limit, mileage_route_read, mileage_discard_stuck, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless",
+            "description": "What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, device_limit, mileage_route_read, mileage_discard_stuck, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless, oidc_provider_configured, oidc_provider_cleared, oidc_bind, oidc_unbind, oidc_sso_only, oidc_start, oidc_login, oidc_refused, oidc_cancelled, oidc_error",
             "type": "string"
           },
           "user": {
@@ -27263,7 +27263,7 @@
             "bearerAuth": []
           }
         ],
-        "summary": "Set the Microsoft Entra tenant people sign in with. Give tenant (the tenant id, a GUID; common, organizations and consumers are refused), client_id (the application id of the app registration) and, the first time, client_secret; enabled defaults to true. Accounts are bound with user_account.bind_sso. Refused for agents",
+        "summary": "Set the Microsoft Entra tenant people sign in with. Give tenant (the tenant id, a GUID; common, organizations and consumers are refused), client_id (the application id of the app registration) and, the first time, client_secret; enabled keeps its stored value (a first configuration is switched on). Accounts are bound with user_account.bind_sso. Refused for agents",
         "tags": [
           "Customize"
         ]
