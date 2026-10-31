@@ -82,6 +82,7 @@ Command line flags win over variables. Secrets are set as secret environment var
 | `OBOP_TRUST_PROXY`, `OBOP_PUBLIC_SITE`, `OBOP_ADMIN_PREFIX` | Public site settings (`--trust-proxy`, `--public-site`, `--admin-prefix`). Behind a proxy set `OBOP_TRUST_PROXY=1`, or every visitor shares the proxy's address in the rate limits. |
 | `OBOP_MARKETPLACE_URL` | An extra module catalogue. |
 | `OBOP_CONNECTORS_ALLOW_LOOPBACK` | `1` lets connections reach loopback addresses. Tests only. |
+| `OBOP_OIDC_TEST_AUTHORITY` | `http://127.0.0.1:PORT` (or `[::1]`) makes the Microsoft sign-in (D91) talk to a stand-in at that address instead of `https://login.microsoftonline.com`. Tests only: any other value is ignored, a warning is printed when it is accepted, and it works only together with `OBOP_CONNECTORS_ALLOW_LOOPBACK=1`. Never set it on an instance people use. |
 | `OBOP_TOKEN` | The bearer token for `obop mcp`, `obop call`, `obop commands`. |
 
 ### Control plane only
@@ -330,6 +331,7 @@ What is shared through the database, and how:
 | Forum and status page | The database is the truth; each process keeps a copy that it reloads when a shared version number moves (checked at most every 250 ms). A post made on one process shows on the others within that. Writes take a database lock first, so ids are never handed out twice. One process per interval runs the status checks. |
 | Connector retry queue and dead letters | Rows with a lease: a worker claims due deliveries for 120 seconds; if it dies, another takes them. Delivery is at-least-once, and the delivery id is stable, so a receiver can deduplicate. Due pulls and the daily purge run once across processes. |
 | OAuth sign-in (D64): clients, grants, refresh tokens, codes, flows | Registered clients, grants and refresh tokens are records (hashed refresh tokens, so a rotation is a compare-and-set and a reused token is seen by whichever process gets it); codes (60 s) and sign-in flows (10 min) are expiring values, spent by whoever deletes them first; registration, authorize, sign-in and token rate limits are counters. Revoking on one process revokes on all. |
+| Microsoft sign-in (D91): flows, one-time codes, the key-set refetch limit | Expiring records keyed by a hash (a flow lives 10 minutes and is spent by its first try, a one-time code 60 seconds), so a sign-in may begin on one process and finish on another. The provider, the bindings and the `sso_only` flag are records. The discovery document and the key set are cached per process (10 minutes and one hour). |
 
 What is *not* shared: small per-process caches (site settings for a few seconds, the forum and status copies between version checks, the operator's host allow-list of the connectors, which every process reads again every five seconds, so a save through one process reaches the others within that time). SQLite supports several processes on **one machine** too (file locks next to the database), but not on a network file system; use PostgreSQL to scale out.
 
@@ -733,11 +735,53 @@ obop admin import users.csv --out passwords.csv     # create them; temporary pas
 - **Who may.** A signed-in administrator whose session is not limited to two-factor enrolment; the operator with database access (the CLI); agents only propose (an administrator approves, and the proposal is checked again against the administrator's stored account when it runs). No step-up re-authentication is asked for these actions, as for the other administrator actions (issue E7f).
 - **Not tried** against a multi-process PostgreSQL deployment under concurrent edits (the read-modify-write sits under the same cross-process lock as two-factor changes), or with real OAuth clients (only our own, in Rust).
 
+## Sign in with Microsoft (D91, Proposed)
+
+**Status: PROPOSED, built, never run against a real Microsoft Entra tenant.** The tests use a stand-in for Entra (Rust and Playwright); the first real sign-in may find differences in the claims or the discovery document ([DECISIONS.md](DECISIONS.md) D91, Consequences). It signs people in to the back office; it creates no account and gives no permission. The phone apps, a Microsoft button on the OAuth pages of D64, mapping of directory groups, SCIM and the first-bind rule (3b) are not part of it.
+
+**Before you start.** You need `OBOP_SECRET_KEY` (the client secret is sealed under it; without a key configuring is refused, and `obop secrets rotate` re-seals the secret, so a rotation keeps the sign-in working), `OBOP_PUBLIC_URL` set to the address people type (the callback address is derived from it, as for the OAuth pages of D64; add `--trust-proxy` behind a proxy you control), and **at least three administrators with a password and a working second factor** (an authenticator app or a passkey), because an account is made "Microsoft only" only while two others can still sign in locally.
+
+**1. Register the application in the Microsoft Entra admin centre** (from Microsoft's documentation; check each step in your tenant). A single-tenant application registration; a "Web" redirect address `<OBOP_PUBLIC_URL>/api/auth/oidc/callback` (exactly, over https); a client secret. Note the **tenant id** (a GUID) and the **application (client) id** (a GUID). Nothing else is needed: obop asks for the scope `openid` only, so it reads no profile, no mail address and no directory data, and keeps no token of Microsoft. To limit who can reach obop at all, switch on "assignment required" for the enterprise application and assign people or groups (a tenant policy; obop does not read it). A conditional-access policy that asks for a second factor makes Microsoft say so in the token (`amr` containing `mfa`), which obop uses for "Microsoft only" accounts (step 4).
+
+**2. Configure the provider** (an administrator, over REST at `POST /api/sso_provider/configure`, as a proposal in Customize, or with the command line; agents may not):
+
+```bash
+echo '<client secret>' | obop admin sso configure --tenant <tenant GUID> --client-id <application GUID> --secret-stdin --db postgres://...
+obop admin sso status --db postgres://...   # provider, who is bound, who is Microsoft-only, the break-glass administrators
+```
+
+`common`, `organizations` and `consumers` are refused as a tenant: the sign-in is pinned to one tenant by its id. The secret is read from standard input, never from an argument, and is not shown by `status`, the API, the log or an error. `--disabled` stores the configuration without switching the button on. The button "Sign in with Microsoft" appears on the sign-in page of the back office once the provider is enabled.
+
+**3. Bind people.** An administrator binds an existing account to the person's **object id** in the directory (the GUID of the user in Entra, shown on the user's page; **not** an e-mail address or a user principal name, which can change or be reused):
+
+```bash
+obop admin sso bind alice 0f0f0f0f-1111-2222-3333-444444444444 --db postgres://...
+obop admin sso unbind alice --db postgres://...
+```
+
+or `POST /api/user_account/bind_sso` with `{"id","oid"}` (a proposal when an agent makes it). One identity is bound to one account and one account has one identity. Binding creates no account and no group: a person nobody is bound to who signs in with Microsoft is refused, with the same sentence as for any other failure. A bound person who signs in with Microsoft is signed in like after a password: **an account that has an authenticator app or a passkey of its own is still asked for it** (D53, D65).
+
+**4. "Microsoft only" (optional).** `obop admin sso only alice on` (or `POST /api/user_account/set_sso_only` with `{"id","sso_only":true}`) makes the account refuse its password and its passkey: it signs in with Microsoft and nothing else, Microsoft's report of a second factor (`amr` containing `mfa`) is taken as its second factor, and an administrator cannot set it a temporary password. It ends the account's sessions once. It is refused unless the provider is enabled, the account is bound and enabled, and **at least two other enabled administrators are not "Microsoft only" and hold a working second factor** (the break-glass accounts; `obop admin sso status` lists them). Keep them: if Microsoft or the tenant is lost, they are how you get in, and `obop admin reset-mfa` (above) still works for them. `obop admin sso only alice off` gives the password back.
+
+**5. Someone leaves (runbook).** Disable the person in the directory **and** in obop: `obop admin offboard alice --note "left the company"` (or the button in Customize > Security > People) disables the account and ends its sessions, agent tokens and connected apps at once. Disabling the person in Entra alone stops new sign-ins with Microsoft, but a session obop already gave them lasts until it ends (12 hours) or you offboard the account, because obop does not ask the directory again after the sign-in. A scheduled check of the directory is a later item.
+
+**What is recorded.** The security log (`security_event`) has `oidc_start`, `oidc_login`, `oidc_refused`, `oidc_cancelled`, `oidc_error`, `oidc_bind`, `oidc_unbind`, `oidc_sso_only`, `oidc_provider_configured` and `oidc_provider_cleared`, each with a reason in words and no token, secret or code. Removing the provider (`obop admin sso clear`) keeps the bindings and says who depends on it. Fixed-window limits per client address and minute: 30 starts, 60 callbacks and 30 exchanges; the key set is fetched again for an unknown key at most six times a minute.
+
+**How it works, briefly.** The browser goes to Microsoft (authorization code with PKCE S256) and comes back to the callback, where the server exchanges the code, checks the id token (RS256 signature against the tenant's key set, issuer, tenant, audience, nonce, times, object id) and drops it. The browser is then sent to `/#oidc=<one-time code>`: a code that lives 60 seconds, is spent by the first use and works only in the browser that began the sign-in (a cookie that the callback sets). The back office exchanges it for the same answer as a password sign-in. There is no cookie session: the bearer token stays in the page's `sessionStorage`, as after a password.
+
+**Limits.**
+
+- A "Microsoft only" account cannot sign in on the pages of the OAuth sign-in for MCP clients (D64: they ask for a password) and cannot use a phone app that signs in with a password; it can make an agent token in the back office. These are for 3b and the phone leg.
+- Signing out of obop does not sign the person out of Microsoft.
+- A key withdrawn at Microsoft is trusted for up to an hour (the key set is cached); a token is accepted within a skew of two minutes.
+- Not tried against a real tenant, a real directory, Safari, Firefox or a phone. The six translations of the button and its messages are machine-drafted.
+
 ## Known limits
 
 - **TLS** terminates at Sliplane's proxy and the instance speaks plain HTTP behind it. Confirm before relying on it. The control plane reaches the cell over the internal network without TLS.
 - **Backups off the host:** scheduled backups, retention and a directory sink exist (D73); an S3-compatible sink is not built (run your own uploader with object lock and drill from the copy), asymmetric keys (a server that cannot read its own backups) are not built, and a restore is one transaction (no resumable chunked restore above 10 GB). Nothing about WAL archiving, point-in-time recovery or encryption at rest has been run against the Sliplane service or a managed PostgreSQL.
 - **The cost of a write by the size of the model.** The uniqueness check of D57 (`unique`, `unique_with`) looks its key up through the unique index of the rule, so a create in a model with such rules costs the same with 50,000 records stored as with 2,500 (SQLite, debug build: 1.96 and 1.72 ms for one create, and 50,000 rows by `bulk_create` in 6.9 s where it took 2,558 s; PostgreSQL: the server fetched 21 rows through its indexes for a seed of 5,000 rows where it fetched 20,710,441; ISSUES M8, DECISIONS D57). Where an index could not be created because the data already holds duplicates, the answer is the same and the check scans. Three paths still read a whole model per call: reading a record that has a computed total over its children, an action effect that loops over or matches records, and a delete (the search for records that refer to it); they cost the size of that model (ISSUES K34, K35, not measured). On PostgreSQL the time of a `bulk_create` is the latency to the server times one statement per row and rule (ISSUES K36). None of this was measured in a release build against PostgreSQL, or against a server that is not a container on the same machine. The commands that print each figure are at the end of the D57 amendment in docs/DECISIONS.md.
+- **Sign in with Microsoft** (D91) has run against a stand-in for Entra only, never against a real tenant, directory or phone.
 - **Instances created before D53** have no `OBOP_SECRET_KEY` unless an operator set one; without it a generated key lives in their database.
 - **Migrations** of the core exist for the two steps above, each with a ledger row and a checksum (D73); a newer version of a package migrates its records only through the `[[migration]]` steps it declares (D63), each with a ledger row. The DDL component, the live-catalogue comparison of `migrate verify`, the check that binary N-1 serves schema N, and the history/freeze/chain/guard checks of the drill wait for D75 to D77.
 - **Updating from inside** has run against the fake provisioner and a loopback control plane, not against live Sliplane; the release feed is unsigned (a digest per release only).
