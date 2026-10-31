@@ -83,11 +83,21 @@ Each has a specimen in the Brand book (Components).
   there when it closes. Wider than that the panel sits beside the list and is not modal.
 - Changing the language does not remount the app (D6): `I18nProvider` clones the root element so the
   whole tree renders again with the new text, and every component keeps its state: the route, an open
-  record panel, a dialog, a draft. Do not wrap components in `memo` and do not cache translated text
-  in `useMemo` without `useI18n().lang` in its dependencies; `web/apps/backoffice/src/i18nDeps.test.ts`
-  fails a `useMemo` that translates, sorts or formats without `lang` or `locale` there (a deliberate
-  exception carries `// i18n-memo-ok: <why>`). A query that the server answers in the collation of the
-  locale (`useServerRows`, `useAggregate`, the Kanban columns) asks again when the locale changes.
+  record panel, a dialog, a draft. Two things keep old text through a change, and the rules follow
+  from them. A `useMemo` (or a `memo` component) that translates, sorts or formats keeps its value
+  unless `lang` (text) or `locale` (collation, number parsing; from `useI18n()`, or `d.lang` of the data
+  context) is among its dependencies. And state must not hold a finished translated sentence: keep the
+  raw message or a code and word it when drawing (`RecordPanel` keeps the server's own words and calls
+  `serverMessage` at render). `web/apps/backoffice/src/i18nDeps.test.ts` guards the first. It reads
+  every source file of the apps and of `packages/ui`, works out from the call graph which functions
+  translate, sort or format (those that use a reader of the i18n store, directly or through other
+  functions: called, handed on as in `.sort(byPosition)`, used as a JSX tag, or a member such as
+  `d.recordLabel`), and fails a `useMemo` or `memo` that uses one of them while its dependencies name
+  neither `lang` nor `locale` (a deliberate exception carries `// i18n-memo-ok: <why>`). It does not
+  read `useCallback`, `useEffect`, a `useState` initialiser, a ref, or state that holds translated text;
+  docs/ISSUES.md D8 to D10 and D14 list what is known to slip through. A query that the server answers
+  in the collation of the locale (a sorted `useServerRows`, the sorted Kanban columns) asks again when
+  the locale changes; one without a sort does not, because the request carries no language.
 - A dropped connection never escapes as an unhandled rejection. Every command answers an error reply
   ("Could not reach the server"); reads (get, list, search, meta) retry twice with a short backoff, writes
   never; a page-wide banner says the app is offline or the server cannot be reached and clears itself
