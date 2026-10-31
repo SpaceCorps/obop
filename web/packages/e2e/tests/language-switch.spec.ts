@@ -378,3 +378,43 @@ test.describe("switching the language with the account menu, on a screen that st
     await expect(cards).toHaveText(["Apfel", "Zebra", "Ärger", "Öle"]);
   });
 });
+
+test.describe("a record panel that stays open while the language changes", () => {
+  // The name of the panel is translated ("{model} record"): find it by what it is.
+  const panelOf = (page: Page) => page.locator("aside.record");
+
+  test("an open record stays open, with what was typed in it, when the sorted list around it asks again", async ({
+    page,
+    signIn,
+    api,
+    scratchModule,
+  }) => {
+    const model = await scratchModule({
+      title: "Open data",
+      fields: [{ name: "title", required: true }, { name: "note" }],
+    });
+    const open = await api.create("root", model, { title: "Ärger" });
+    const others = [
+      "Apfel",
+      ...Array.from({ length: 28 }, (_, i) => `Item ${String(i + 1).padStart(2, "0")}`),
+    ];
+    for (const t of others) await api.create("root", model, { title: t });
+    // Pages of 25: the record is on the first page in English (A, Ä, Item...) and on the second in
+    // Swedish (Ä sorts after Z), so the new first page does not hold it.
+    await page.addInitScript(() => localStorage.setItem("obop-pagesize", "25"));
+    const sorted = encodeURIComponent(JSON.stringify({ s: { f: "title", dir: "asc" } }));
+    await signIn("root", `/${model}/${model}?view=list&st=${sorted}&id=${open.id}`);
+    const titles = page.locator("table.list tbody tr td:nth-child(2)");
+    await expect(titles).toHaveCount(25);
+    await expect(titles.nth(1)).toHaveText("Ärger");
+    const note = page.locator(`#f-${model}-note`);
+    await note.fill("not saved yet");
+
+    await pickInAccountMenu(page, "en", "sv");
+    // The list has asked again and the record is no longer on its page...
+    await expect(titles.filter({ hasText: "Ärger" })).toHaveCount(0);
+    // ...and the panel is the same one, with its draft.
+    await expect(panelOf(page).locator("h2")).toHaveText("Ärger");
+    await expect(note).toHaveValue("not saved yet");
+  });
+});

@@ -72,11 +72,17 @@ export function useServerRows(opts: {
   return st;
 }
 
-/** One record by id: from the rows already on screen when possible, else fetched with `get`. */
+/**
+ * One record by id: from the rows already on screen when possible, else fetched with `get`. While
+ * the rows are being asked for again (a new sort, the language) and the record is no longer among
+ * them, the last row seen stays until the `get` answers: the page unmounts an open record panel
+ * the moment this returns nothing, and a draft in it would be lost.
+ */
 export function useRecord(model: string, id: string, onScreen: Row[]): Row | null | undefined {
   const d = useData();
   const have = id && id !== "new" ? onScreen.find((r) => r.id === id) : undefined;
   const [fetched, setFetched] = useState<{ id: string; row: Row | null } | null>(null);
+  const last = useRef<{ model: string; id: string; row: Row } | null>(null);
   const need = !!id && id !== "new" && !have;
   useEffect(() => {
     if (!need) return;
@@ -88,7 +94,12 @@ export function useRecord(model: string, id: string, onScreen: Row[]): Row | nul
       live = false;
     };
   }, [need, d.token, model, id, d.mutations]);
+  const row =
+    !id || id === "new" ? undefined : (have ?? (fetched?.id === id ? fetched.row : undefined));
+  useEffect(() => {
+    if (row) last.current = { model, id, row };
+  }, [row, model, id]);
   if (!id || id === "new") return undefined;
-  if (have) return have;
-  return fetched?.id === id ? fetched.row : undefined;
+  if (row !== undefined) return row;
+  return last.current?.model === model && last.current.id === id ? last.current.row : undefined;
 }
