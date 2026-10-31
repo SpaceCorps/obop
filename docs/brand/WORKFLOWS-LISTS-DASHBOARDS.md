@@ -84,7 +84,10 @@ Each has a specimen in the Brand book (Components).
 - Changing the language does not remount the app (D6): `I18nProvider` clones the root element so the
   whole tree renders again with the new text, and every component keeps its state: the route, an open
   record panel, a dialog, a draft. Do not wrap components in `memo` and do not cache translated text
-  in `useMemo` without `useI18n().lang` in its dependencies.
+  in `useMemo` without `useI18n().lang` in its dependencies; `web/apps/backoffice/src/i18nDeps.test.ts`
+  fails a `useMemo` that translates, sorts or formats without `lang` or `locale` there (a deliberate
+  exception carries `// i18n-memo-ok: <why>`). A query that the server answers in the collation of the
+  locale (`useServerRows`, `useAggregate`, the Kanban columns) asks again when the locale changes.
 - A dropped connection never escapes as an unhandled rejection. Every command answers an error reply
   ("Could not reach the server"); reads (get, list, search, meta) retry twice with a short backoff, writes
   never; a page-wide banner says the app is offline or the server cannot be reached and clears itself
