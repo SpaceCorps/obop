@@ -1,5 +1,5 @@
 import { useId, useMemo, useRef, useState, type ReactNode } from "react";
-import { inSentence, t, type IconName } from "@obop/ui";
+import { inSentence, t, useI18n, type IconName } from "@obop/ui";
 import type { FieldMeta } from "./api.ts";
 import type { Favorite } from "./favorites.ts";
 import { FilterPanel } from "./FilterPanel.tsx";
@@ -32,6 +32,7 @@ type Props = {
 /** Breadcrumbs, the faceted search box with its Filters/Group By/Favorites panel, and the view switcher. */
 export function ControlPanel(p: Props) {
   const { state, setState, fields, lookup } = p;
+  const { lang } = useI18n();
   const [text, setText] = useState("");
   const [open, setOpen] = useState(false);
   const [suggest, setSuggest] = useState(false);
@@ -60,7 +61,7 @@ export function ControlPanel(p: Props) {
         cond: { op: "contains", f: f.name, v: q },
       });
     return all;
-  }, [text, searchable]);
+  }, [text, searchable, lang]);
 
   const add = (c: Cond) => {
     setState({ ...state, facets: [...state.facets, c] });

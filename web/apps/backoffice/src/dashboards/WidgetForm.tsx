@@ -65,7 +65,7 @@ function useReadable() {
         out.push({ model: m, text: `${a.name} › ${modelTitle(m, a.module.id)}` });
     }
     return out;
-  }, [d.apps]);
+  }, [d.apps, d.lang]);
 }
 
 export function WidgetForm(p: {
