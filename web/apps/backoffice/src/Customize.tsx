@@ -441,6 +441,9 @@ function AppsTab({ apps, settings, isAdmin, token, onSettings, notify }: Props) 
           <li key={a.id} className="row">
             <AppIcon app={a} size={36} />
             <input
+              // The field keeps what it was made with, so it is made again when the name changes
+              // (another language); else leaving it would save the old name for everyone.
+              key={a.name}
               defaultValue={a.name}
               aria-label={t("Name of {name}", { name: a.name })}
               onBlur={(e) =>

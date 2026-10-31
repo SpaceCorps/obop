@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { setInstanceDefaults, t } from "@obop/ui";
+import { setInstanceDefaults, t, useI18n } from "@obop/ui";
 import { loadSettings, meta, type ModuleMeta, type Settings } from "./api.ts";
 import { AppIcon, Launcher, Palette, TopBar, appBlurb, appHref, buildApps } from "./Chrome.tsx";
 import { ConnectorsApp, ConnectorsNav } from "./connectors/ConnectorsApp.tsx";
@@ -170,7 +170,13 @@ export function App() {
   const isAdmin = modules.some(
     (m) => m.id === "platform" && m.models.some((x) => x.name === "module"),
   );
-  const apps = useMemo(() => buildApps(modules, settings, isAdmin), [modules, settings, isAdmin]);
+  // The names of the apps and their order are translated and sorted when the list is built, so it is
+  // built again when the language or the region changes (the root renders again, but a memo keeps its value).
+  const { lang, locale } = useI18n();
+  const apps = useMemo(
+    () => buildApps(modules, settings, isAdmin),
+    [modules, settings, isAdmin, lang, locale],
+  );
   const app = apps.find((a) => a.id === route.app);
   // Everyone may set their own theme and read the brand book; the rest of Customize is for admins.
   const personalCustomize =
