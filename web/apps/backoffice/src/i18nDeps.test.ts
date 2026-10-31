@@ -5,13 +5,14 @@
 // dependencies (see `I18nProvider` in @obop/ui).
 //
 // `i18nGuard.ts` reads the source of every app and of the design system, works out from the call
-// graph which functions translate, sort or format, and this test fails when a `useMemo` (or a `memo`
-// component) uses one of them and its dependencies name neither `lang` nor `locale` (`d.lang` of the
-// data context and `useI18n()`'s `i18n` count). What it reads and what it does not is at the top of
-// that file; ISSUES.md D14 lists the blind spots.
+// graph which functions translate, sort or format, and this test fails when a `useMemo` uses one of
+// them and its dependencies name neither `lang` nor `locale` (`d.lang` of the data context and
+// `useI18n()`'s `i18n` count), or when a `memo` component uses one and does not call `useI18n()`.
+// What it reads and what it does not is at the top of that file; ISSUES.md D14 lists the blind spots.
 //
-// A hook that is right although it looks wrong is marked in the source, on the line before it or
-// inside it, with a comment that says why:
+// A hook that is right although it looks wrong is marked in the source with a comment that says
+// why (at least three word characters): on the lines directly above its statement, with no blank
+// line between, as `//` lines or a `/* */` block that has its lines to itself, or inside the call:
 //
 //   // i18n-memo-ok: the callback runs when the button is pressed, so `t()` is read then
 //
@@ -141,6 +142,10 @@ describe("the reader of hooks", () => {
     expect(flagged(app("// i18n-memo-ok: ::"))).toHaveLength(1);
     // A block comment is a comment too.
     expect(flagged(app("/* i18n-memo-ok: runs when pressed */"))).toEqual([]);
+    // The reason needs three word characters: two are not enough, three and four are.
+    expect(flagged(app("// i18n-memo-ok: ok"))).toHaveLength(1);
+    expect(flagged(app("// i18n-memo-ok: why"))).toEqual([]);
+    expect(flagged(app("// i18n-memo-ok: when"))).toEqual([]);
   });
 
   it("marks the statement under the comment, not the one after it", () => {
@@ -162,6 +167,28 @@ describe("the reader of hooks", () => {
     expect(at('// i18n-memo-ok: pressed later\n\nconst a = useMemo(() => t("a"), []);')).toEqual([
       "apps/x/src/a.tsx:4",
       "apps/x/src/a.tsx:5",
+    ]);
+    // The same for a block comment: after code on its line it is that line's, not a marker for the
+    // statement below (this one is flagged, and so is the hook after it).
+    expect(at('const a = useMemo(() => t("a"), []); /* i18n-memo-ok: pressed later */')).toEqual([
+      "apps/x/src/a.tsx:2",
+      "apps/x/src/a.tsx:3",
+    ]);
+    expect(at("const x = 1; /* i18n-memo-ok: pressed later */")).toEqual(["apps/x/src/a.tsx:3"]);
+    // A marker of several lines, `//` or `/* */`, counts for the statement under it.
+    expect(
+      at(
+        "// i18n-memo-ok: pressed later, because\n// the text is made when it is drawn\n// and not before",
+      ),
+    ).toEqual([]);
+    expect(
+      at(
+        "/* i18n-memo-ok: pressed later, because\n   the text is made when it is drawn\n   and not before */",
+      ),
+    ).toEqual([]);
+    // and a block that starts after code on its first line is not one of the comment lines above
+    expect(at("const x = 1; /* i18n-memo-ok: pressed later, because\n   it is long */")).toEqual([
+      "apps/x/src/a.tsx:4",
     ]);
   });
 
@@ -193,6 +220,21 @@ describe("what counts as translating", () => {
     // with the language in the dependencies it is fine
     expect(f('const v = useMemo(() => t("x"), [m, lang]);')).toEqual([]);
     expect(f("const v = useMemo(() => fmt.money(1), [m, d.locale]);")).toEqual([]);
+  });
+
+  it("refuses dependencies it cannot read as a list, and does not take a type argument for them", () => {
+    const refused = ["apps/x/src/a.tsx:2 the dependencies are not a list the guard can read"];
+    for (const deps of ["deps", "deps!", "deps as string[]", "cond ? [a] : [b]", "getDeps()"])
+      expect(f(`const v = useMemo(() => t("x"), ${deps});`), deps).toEqual(refused);
+    // a list is read, with whatever follows it
+    expect(f('const v = useMemo(() => t("x"), [a, lang].concat(b));')).toEqual([]);
+    // and the comma of a type argument is not the one before the dependencies
+    expect(f('const v = useMemo(() => new Map<string, string>([[t("x"), "y"]]), deps);')).toEqual(
+      refused,
+    );
+    expect(
+      f('const v = useMemo(() => new Map<string, string>([[t("x"), "y"]]), [a]);'),
+    ).toHaveLength(1);
   });
 
   it("is a function that calls one of those, however far, in the same file or another", () => {
@@ -289,21 +331,68 @@ describe("what counts as translating", () => {
     const apps = {
       "apps/x/src/data.tsx": `
         import { t } from "@obop/ui";
-        export type Ctx = { refText: (m: string) => string; update: (m: string) => string };
+        export type Ctx = {
+          refText: (m: string) => string;
+          update: (m: string) => string;
+          create: (m: string) => string;
+        };
         export const labelOf = (m: string) => t(m);
         export function provide(): Ctx {
           const refText = (m: string) => labelOf(m);
           const update = (m: string) => labelOf(m);
-          return { refText, update };
+          const create = (m: string) => labelOf(m);
+          return { refText, update, create };
         }`,
     };
     const use = (body: string) =>
       flagged({ ...apps, "apps/x/src/a.tsx": `const v = useMemo(() => ${body}, [rows]);` });
     expect(use("d.update(m)")).toHaveLength(1);
     expect(use("lk.refText(m)")).toHaveLength(1);
-    // `update` and `create` are names other objects have too: a hash, a map, a Date
+    expect(use("d.create(m)")).toHaveLength(1);
+    // `update` and `create` are names other objects have too: a hash, `Object.create`
     expect(use("hash.update(m)")).toEqual([]);
     expect(use("Object.create(null)")).toEqual([]);
+  });
+
+  it("is a function that calls one and has a callback or a function type that names a parameter like it", () => {
+    // `CodeBlock` in packages/ui calls t(...) and also maps over tokens with `(t, j) => ...`
+    expect(
+      f(`export function copyText(toks: string[]) {
+        const parts = toks.map((t, j) => String(j) + t);
+        return t("Copied") + parts.join("");
+      }
+      function C() { return useMemo(() => copyText(a), [a]); }`),
+    ).toHaveLength(1);
+    // a parameter whose type is a function with a parameter named t
+    expect(
+      f(`export function label(m: string, done: (t: string) => void) { done(m); return t(m); }
+      function C() { return useMemo(() => label(a, b), [a]); }`),
+    ).toHaveLength(1);
+    // a constant inside a callback of the function is not in scope in the rest of it
+    expect(
+      f(`export function label(m: string) {
+        const lens = m.split("").map((c) => { const t = c; return t.length; });
+        return t(m) + lens.length;
+      }
+      function C() { return useMemo(() => label(a), [a]); }`),
+    ).toHaveLength(1);
+    // but the function's own parameter, or a constant at the level of its body, is
+    expect(
+      f(`export function label(t: (s: string) => string) { return t("a"); }
+      function C() { return useMemo(() => label(a), [a]); }`),
+    ).toEqual([]);
+    expect(
+      f(`export function label(m: string) { const t = (s: string) => s; return t(m); }
+      function C() { return useMemo(() => label(a), [a]); }`),
+    ).toEqual([]);
+    expect(
+      f(`export const label = async <T,>(t: T) => String(t) + (await Promise.resolve(t));
+      function C() { return useMemo(() => label(a), [a]); }`),
+    ).toEqual([]);
+    expect(
+      f(`export const label = useCallback((m: string, t: (s: string) => string) => t(m), []);
+      function C() { return useMemo(() => label(a), [a]); }`),
+    ).toEqual([]);
   });
 
   it("reads a memo whose function has type arguments with a comma", () => {
@@ -384,6 +473,73 @@ describe("what counts as translating", () => {
     ).toEqual([]);
     // a name of the memo's own callback shadows inside the memo
     expect(f(`function C() { return useMemo(() => rows.map((t) => t.id), [rows]); }`)).toEqual([]);
+    // an arrow whose single parameter has no parentheses
+    expect(f(`const C = t => { return useMemo(() => t("a"), []); };`)).toEqual([]);
+  });
+
+  it("takes only the parameters of a function for a shadow, not the names in a function type", () => {
+    // `t` is the name of a parameter of a function TYPE in the annotation, not of anything in scope
+    for (const header of [
+      `{ f }: { f: (t: string) => void }`,
+      `{ onPick }: { onPick: (t: string, tone?: "a" | "b") => void }`,
+      `p = (t: string) => t`,
+      `a: { f: (fmt: string) => void }, b: number`,
+    ])
+      expect(
+        f(`function C(${header}) { return useMemo(() => t("Open"), [rows]); }`),
+        header,
+      ).toHaveLength(1);
+    // a return type that is a function type
+    expect(
+      f(`function C(): ((t: string) => void) { return useMemo(() => t("Open"), [rows]); }`),
+    ).toHaveLength(1);
+    // a header over several lines, as a formatter writes it (brand/Iconography.tsx)
+    expect(
+      f(`export function C({
+        notify,
+      }: {
+        notify: (t: string, tone?: "ok" | "error" | "info") => void;
+      }) {
+        const names = useMemo(() => t("Open"), [rows]);
+        return names;
+      }`),
+    ).toHaveLength(1);
+    // the real parameters still shadow, with a function type next to them
+    expect(
+      f(
+        `function C({ t }: { t: (s: string) => string; n: (x: number) => void }) { return useMemo(() => t("a"), []); }`,
+      ),
+    ).toEqual([]);
+    expect(
+      f(`function C(a: number, t: (s: string) => string) { return useMemo(() => t("a"), []); }`),
+    ).toEqual([]);
+  });
+
+  it("shadows by a constant in a block that holds the memo, not in one beside it", () => {
+    // a constant inside a callback above, or in an if block above, is not in scope at the memo
+    expect(
+      f(`function C() {
+        const add = () => { const t = [1]; return t; };
+        const v = useMemo(() => t("Open"), [rows]);
+        return [add, v];
+      }`),
+    ).toHaveLength(1);
+    expect(
+      f(`function C() {
+        if (rows.length) { const t = 1; void t; }
+        const v = useMemo(() => t("Open"), [rows]);
+        return v;
+      }`),
+    ).toHaveLength(1);
+    // one in a block that holds the memo is
+    expect(
+      f(`function C() {
+        if (rows.length) {
+          const t = (s: string) => s;
+          return useMemo(() => t("Open"), [rows]);
+        }
+      }`),
+    ).toEqual([]);
   });
 
   it("is a helper of the component around the memo", () => {
@@ -464,6 +620,8 @@ describe("the source of the apps", () => {
       "packages/ui/src/i18n/store.ts#compareText",
       "packages/ui/src/i18n/store.ts#t",
       "packages/ui/src/i18n/store.ts#fmt",
+      // calls t("Copied") and also maps tokens with `(t, j) => ...`: a callback's parameter does not hide it
+      "packages/ui/src/extras.tsx#CodeBlock",
     ];
     expect(must.filter((k) => !a.translators.has(k))).toEqual([]);
     // a function that is passed (`.sort(byPosition)`) is followed because it is known as a function

@@ -142,8 +142,11 @@ const MARKER = new RegExp(REASON);
 
 /**
  * Does a comment mark the hook that starts at `at` as right? Either a comment inside the call, or
- * the comment lines directly above the statement that holds the call (no blank line between), so a
- * marker after one hook on its own line never reaches the next.
+ * the comment lines directly above the statement that holds the call (no blank line between; `//`
+ * lines and `/* *\/` blocks that have their lines to themselves). A comment after code on its line
+ * belongs to that line, so a marker after one hook never reaches the next. A statement is cut at
+ * `;`, `{` and `}`, not at a comma: a marker above the first property of an object reaches the
+ * others (ISSUES.md D14).
  */
 function marked(src: string, masked: string, at: number, end: number): boolean {
   if (MARKER_IN_CODE.test(src.slice(at, end))) return true;
@@ -159,11 +162,13 @@ function marked(src: string, masked: string, at: number, end: number): boolean {
       if (MARKER.test(text)) return true;
       k--;
     } else if (text.endsWith("*/")) {
-      // a block comment: up to the line that opens it
-      let block = text;
-      while (!block.includes("/*") && k > 0) block = `${lines[--k]!.trim()}\n${block}`;
-      if (MARKER.test(block)) return true;
-      k--;
+      // a block comment on lines of its own: up to the line that opens it, which must start with it
+      // (code before a comment makes the line a statement, and the comment belongs to that statement)
+      let first = k;
+      while (first > 0 && !lines[first]!.includes("/*")) first--;
+      if (!lines[first]!.trim().startsWith("/*")) break;
+      if (MARKER.test(lines.slice(first, k + 1).join("\n"))) return true;
+      k = first - 1;
     } else break;
   }
   return false;
@@ -182,6 +187,20 @@ export type Hook = {
   /** Where in the masked source the call starts. */
   at: number;
 };
+
+/** Are the type arguments in `text` (an argument of a call, up to a comma) closed? */
+function argumentComplete(text: string): boolean {
+  let angle = 0;
+  let depth = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]!;
+    if ("([{".includes(c)) depth++;
+    else if (")]}".includes(c)) depth--;
+    else if (depth === 0 && c === "<" && /[\w$]/.test(text[i - 1] ?? "")) angle++;
+    else if (depth === 0 && c === ">" && text[i - 1] !== "=" && angle > 0) angle--;
+  }
+  return angle === 0;
+}
 
 /** Every `useMemo` and `memo` call of a source file. */
 export function hooks(src: string, masked: string = code(src)): Hook[] {
@@ -221,12 +240,12 @@ export function hooks(src: string, masked: string = code(src)): Hook[] {
     let fnEnd = end;
     let deps: string | null = null;
     const last = commas[commas.length - 1];
-    if (last !== undefined) {
-      const tail = masked.slice(last + 1, end).trim();
-      if (tail.startsWith("[") || /^[\w$.]+$/.test(tail)) {
-        fnEnd = last;
-        deps = tail;
-      }
+    // What follows the last comma is the dependencies, whatever it looks like (a list, a variable,
+    // `deps!`, a conditional): `problem()` says when it is not a list it can read. It is not them
+    // when the text before the comma is not yet a whole argument (`new Map<string, string>(...)`).
+    if (last !== undefined && argumentComplete(masked.slice(start, last))) {
+      fnEnd = last;
+      deps = masked.slice(last + 1, end).trim();
     }
     const line = src.slice(0, m.index).split("\n").length;
     found.push({
@@ -258,6 +277,8 @@ type Decl = {
   end: number;
   /** A function (or a constant that holds one), as against a plain value such as `fmt`. */
   fn: boolean;
+  /** Where the parameters are looked for: the `(` of a `function`, the text after the `=` of a constant. */
+  params: number;
 };
 
 /** The bracket depth before each character of `masked`, and after the last. */
@@ -313,7 +334,13 @@ function declarations(masked: string, depth: Int32Array, nested: boolean): Decl[
         j = closer(depth, j, n); // a type literal: `(): { a: string } {`
       } else if (c === ";" && angle === 0) break; // an overload, no body
     }
-    out.push({ name: m[1]!, start: m.index!, end: closer(depth, j, n) + 1, fn: true });
+    out.push({
+      name: m[1]!,
+      start: m.index!,
+      end: closer(depth, j, n) + 1,
+      fn: true,
+      params: i,
+    });
   }
   for (const m of masked.matchAll(/(?<![.\w$])(?:const|let|var)\s+([A-Za-z_$][\w$]*)/g)) {
     if (!keep(m.index!)) continue;
@@ -344,7 +371,7 @@ function declarations(masked: string, depth: Int32Array, nested: boolean): Decl[
       /^\s*(?:async\s+)?function\b/.test(init) ||
       /^\s*useCallback\s*(?:<[^(]*>)?\s*\(/.test(init) ||
       (/^\s*(?:async\s+)?(?:<[^>(]*>\s*)?(?:\(|[A-Za-z_$][\w$]*\s*=>)/.test(init) && arrow);
-    out.push({ name: m[1]!, start: m.index!, end, fn });
+    out.push({ name: m[1]!, start: m.index!, end, fn, params: start });
   }
   return out.sort((a, b) => a.start - b.start);
 }
@@ -645,11 +672,47 @@ function scopeAt(file: File, top: Decl, at: number): Set<string> {
     if (masked[j] !== ")" || depth[j] !== level + 1) continue;
     let o = j - 1;
     while (o >= top.start && !(masked[o] === "(" && depth[o] === level)) o--;
+    // only what the header binds: its parameters, and the variable of a `for (const x of ...)`. A
+    // function type in an annotation (`{ f }: { f: (t: string) => void }`) binds nothing here.
     const header = masked.slice(o + 1, j);
     for (const n of bindings(header, false)) out.add(n);
-    for (const n of localsOf(header)) out.add(n);
+    for (const x of declared(header)) out.add(x.name);
   }
   return out;
+}
+
+/**
+ * The names the parameters of a declaration bind: `function f(a, { b })`, `const f = async <T>(a) =>`,
+ * `const f = a =>`, `const f = useCallback((a) => ...)`. A function type in an annotation and the
+ * parameters of a callback in the body bind nothing here.
+ */
+function parametersOf(masked: string, d: Decl): string[] {
+  let i = d.params;
+  const skip = () => {
+    while (/\s/.test(masked[i] ?? "")) i++;
+  };
+  const eat = (re: RegExp) => {
+    const m = re.exec(masked.slice(i, i + 200));
+    if (m) i += m[0].length;
+  };
+  skip();
+  eat(/^useCallback\s*(?:<[^(]*>)?\s*\(/);
+  skip();
+  eat(/^async\s+/);
+  eat(/^function\s*\*?\s*[\w$]*\s*/);
+  if (masked[i] === "<") {
+    // type parameters: an arrow's `=>` does not close them
+    let angle = 0;
+    for (; i < masked.length; i++) {
+      if (masked[i] === "<") angle++;
+      else if (masked[i] === ">" && masked[i - 1] !== "=" && --angle === 0) break;
+    }
+    i++;
+    skip();
+  }
+  if (masked[i] === "(") return bindings(masked.slice(i + 1, matchClose(masked, i)), false);
+  const single = /^([A-Za-z_$][\w$]*)\s*=>/.exec(masked.slice(i, i + 200));
+  return single ? [single[1]!] : [];
 }
 
 export type Refs = {
@@ -739,10 +802,14 @@ export function analyse(sources: Source[]): Analysis {
   type Node = { key: string; file: File; decl: Decl; refs: Refs; seed: boolean };
   const nodes: Node[] = [];
   const own = (file: File, d: Decl, nested: boolean) => {
-    // a declaration's parameters are its own. A top-level function does not shadow itself; one
-    // declared inside another does, so a local `const t = (s) => s` is not a use of the imported `t`
+    // What a declaration gives its own names to: its parameters and the constants at the level of its
+    // body, not the parameters of a callback in it or of a function type in an annotation (the same
+    // rule as `scopeAt`). A top-level function does not shadow itself; one declared inside another
+    // does, so a local `const t = (s) => s` is not a use of the imported `t`.
     const text = file.masked.slice(d.start, d.end);
-    const shadow = localsOf(text);
+    const shadow = new Set(parametersOf(file.masked, d));
+    const base = file.depth[d.start]!;
+    for (const x of declared(text)) if (file.depth[d.start + x.at]! - base <= 1) shadow.add(x.name);
     if (!nested) shadow.delete(d.name);
     return { text, shadow };
   };
