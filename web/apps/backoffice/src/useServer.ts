@@ -37,7 +37,9 @@ export function useServerRows(opts: {
   const [st, setSt] = useState<ServerRows>(idle);
   const seq = useRef(0);
   const { enabled, model, filter, order, offset, limit } = opts;
-  // The locale is part of the query only where the request carries it (`lang`, api.ts): a sort.
+  // Every request carries `?lang=` and `Accept-Language`, but the `lang` in the body of a search,
+  // which picks the collation, is sent only with an `order` (api.ts). So the locale is part of the
+  // query for a sort and for nothing else: an unsorted list does not ask again for a new locale.
   const key = JSON.stringify([model, filter, order, offset, limit, order.length ? locale : null]);
 
   useEffect(() => {
@@ -98,6 +100,9 @@ export function useRecord(model: string, id: string, onScreen: Row[]): Row | nul
     !id || id === "new" ? undefined : (have ?? (fetched?.id === id ? fetched.row : undefined));
   useEffect(() => {
     if (row) last.current = { model, id, row };
+    // the `get` answered "no such record" (deleted, or no access): nothing is left to keep, and a
+    // later look at the same id must not bring the old row back while it is fetched again
+    else if (row === null) last.current = null;
   }, [row, model, id]);
   if (!id || id === "new") return undefined;
   if (row !== undefined) return row;
