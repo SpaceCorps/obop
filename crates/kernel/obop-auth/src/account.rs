@@ -540,6 +540,20 @@ impl Auth {
                 *passkeys.entry(o.to_string()).or_default() += 1;
             }
         }
+        // Who is bound to a Microsoft identity (D91): the object id, never a name or an address.
+        let mut bound: std::collections::HashMap<String, String> = Default::default();
+        for (_, l) in self
+            .backend
+            .list(crate::oidc::LINK_TABLE)
+            .unwrap_or_default()
+        {
+            if let (Some(u), Some(o)) = (
+                l.get("user").and_then(J::as_str),
+                l.get("oid").and_then(J::as_str),
+            ) {
+                bound.insert(u.to_string(), o.to_string());
+            }
+        }
         let mut users: Vec<J> = self
             .backend
             .list("auth_user")
@@ -547,6 +561,8 @@ impl Auth {
             .into_iter()
             .map(|(name, u)| {
                 json!({
+                    "sso_only": u.get("sso_only").and_then(J::as_bool) == Some(true),
+                    "sso_oid": bound.get(&name),
                     "name": name,
                     "groups": str_list(&u["groups"]),
                     "admin": str_list(&u["groups"]).iter().any(|g| g == ADMIN_GROUP),

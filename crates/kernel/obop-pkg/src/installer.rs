@@ -2312,6 +2312,7 @@ pub fn admin_module() -> Module {
                 ext: Default::default(),
             },
             crate::accounts::user_account_model(),
+            crate::sso::sso_provider_model(),
             ModelDef {
                 name: "marketplace_listing",
                 description: "A module offered by the marketplace",

@@ -12,6 +12,7 @@ pub mod migrate;
 pub mod resolve;
 pub mod semver;
 pub mod spdx;
+mod sso;
 mod sync;
 pub mod views;
 

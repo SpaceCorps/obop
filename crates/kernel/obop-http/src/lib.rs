@@ -29,6 +29,7 @@ pub mod payments;
 pub mod public;
 pub(crate) mod shared;
 pub mod shell;
+pub(crate) mod sso;
 pub mod website;
 
 #[cfg(test)]
@@ -55,6 +56,8 @@ pub struct HttpState {
     /// The instance default language (`OBOP_DEFAULT_LANGUAGE`), added to the served back office
     /// shell for the screens that come before sign-in; set once by the composition root.
     default_language: std::sync::OnceLock<&'static str>,
+    /// What this process remembers of the Microsoft sign-in provider (D91): caches only.
+    sso: sso::Cache,
 }
 
 impl HttpState {
@@ -86,6 +89,7 @@ impl HttpState {
             payments: std::sync::OnceLock::new(),
             ops: ops::Ops::new(),
             default_language: std::sync::OnceLock::new(),
+            sso: sso::Cache::default(),
         })
     }
 
@@ -255,6 +259,13 @@ pub(crate) fn api_routes(state: Arc<HttpState>) -> Router {
         .route("/readyz", get(ops::readyz))
         .route("/metrics", get(ops::metrics))
         .route("/api/auth/login", post(login))
+        .route("/api/auth/sso", get(sso::status))
+        .route("/api/auth/oidc/start", get(sso::start))
+        .route("/api/auth/oidc/callback", get(sso::callback))
+        .route(
+            "/api/auth/oidc/exchange",
+            post(sso::exchange).layer(axum::extract::DefaultBodyLimit::max(sso::MAX_BODY)),
+        )
         .route("/api/auth/agent-token", post(agent_token))
         .route("/api/commands", get(commands))
         .route("/api/meta", get(meta))

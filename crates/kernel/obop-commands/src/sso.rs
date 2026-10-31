@@ -119,12 +119,16 @@ pub trait SsoApi: Send + Sync {
 
     /// A verified identity asks to sign in: find the account it is bound to and, if that account
     /// may sign in, return a one-time code (single use, 60 seconds, stored hashed) for
-    /// `exchange`. Every refusal is `Refused`; the log says which. `ip` is for the log only.
-    fn begin(&self, identity: &SsoIdentity, ip: &str) -> Result<String, SsoError>;
+    /// `exchange`. Every refusal is `Refused`; the log says which. `binder` is a secret that only
+    /// the browser that signed in holds (an HttpOnly cookie): the code is worth nothing to a
+    /// browser that does not present it, so a code cannot be carried to another browser in a link
+    /// (login CSRF). Only its hash is stored.
+    fn begin(&self, identity: &SsoIdentity, binder: &str) -> Result<String, SsoError>;
 
     /// Spend the one-time code and give the sign-in step its result, as the password step does:
-    /// a session, a session limited to enrolment, or the demand for an obop second factor.
-    fn exchange(&self, code: &str) -> Result<LoginOutcome, MfaError>;
+    /// a session, a session limited to enrolment, or the demand for an obop second factor. The
+    /// code is spent also when `binder` is not the one it was issued for.
+    fn exchange(&self, code: &str, binder: &str) -> Result<LoginOutcome, MfaError>;
 
     /// Write a line to the security log (`oidc_*`); never a token, a code or a secret.
     fn audit(&self, user: &str, kind: &str, detail: &str);

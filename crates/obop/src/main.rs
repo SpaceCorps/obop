@@ -54,6 +54,8 @@ mod payments_tests;
 mod public_site_tests;
 #[cfg(test)]
 mod settings_cmd_tests;
+#[cfg(test)]
+mod sso_tests;
 mod storage_cli;
 mod update_cmd;
 #[cfg(test)]
@@ -97,6 +99,14 @@ const USAGE: &str = "usage: obop <command>
                                                 create many users from a CSV (columns name, groups); each gets a generated temporary
                                                 password to change at the first sign-in, printed once or written to FILE (mode 0600).
                                                 All rows are checked first; one bad row creates nothing. At most 1000 rows
+  admin sso status | clear                      Sign in with Microsoft (D91): show the provider, the bindings and the break-glass
+                                                administrators, or remove the configuration (bindings stay)
+  admin sso configure --tenant GUID --client-id GUID [--secret-stdin] [--disabled]
+                                                set the one Microsoft Entra tenant; the client secret is read from stdin and sealed
+                                                under OBOP_SECRET_KEY (needed the first time)
+  admin sso bind USER OID | unbind USER         bind an existing account to a person's object id in the directory, or remove that
+  admin sso only USER on|off                    make USER sign in with Microsoft only (needs a binding and two other administrators
+                                                who keep a password and a second factor), or turn that off
   admin reset-mfa USER --db URL                break-glass: remove USER's two-factor (app and passkeys) and sessions (needs database
                                                 access; writes an audit record); see docs/DEPLOY.md
   agent-token USER --scopes a,b [--label TEXT]  issue a scoped agent token (shown once)
@@ -301,6 +311,8 @@ fn main() -> ExitCode {
     let (note, args) = take_opt(&args, "--note");
     let (mode, args) = take_opt(&args, "--mode");
     let (idem_key, args) = take_opt(&args, "--key");
+    let (sso_tenant, args) = take_opt(&args, "--tenant");
+    let (sso_client, args) = take_opt(&args, "--client-id");
     let (flags, args): (Vec<&str>, Vec<&str>) = args.into_iter().partition(|a| {
         matches!(
             *a,
@@ -312,6 +324,8 @@ fn main() -> ExitCode {
                 | "--complete"
                 | "--catalog"
                 | "--dry-run"
+                | "--secret-stdin"
+                | "--disabled"
         )
     });
     let has = |f: &str| flags.contains(&f);
@@ -383,6 +397,21 @@ fn main() -> ExitCode {
         ["admin", "offboard", user] => accounts_cmd::offboard(&opts, user, note),
         ["admin", "disable", user] => accounts_cmd::disable(&opts, user, true),
         ["admin", "enable", user] => accounts_cmd::disable(&opts, user, false),
+        ["admin", "sso", "status"] => accounts_cmd::sso_status(&opts),
+        ["admin", "sso", "configure"] => accounts_cmd::sso_configure(
+            &opts,
+            sso_tenant,
+            sso_client,
+            has("--secret-stdin"),
+            has("--disabled"),
+        ),
+        ["admin", "sso", "clear"] => accounts_cmd::sso_clear(&opts),
+        ["admin", "sso", verb @ ("bind" | "unbind" | "only"), user] => {
+            accounts_cmd::sso_account(&opts, verb, user, None)
+        }
+        ["admin", "sso", verb @ ("bind" | "only"), user, arg] => {
+            accounts_cmd::sso_account(&opts, verb, user, Some(arg))
+        }
         ["admin", "import", file] => accounts_cmd::import(&opts, file, has("--dry-run"), out_file),
         ["admin", "create", user] => admin_create(&opts, user, groups, has("--all-groups")),
         ["agent-token", user] => agent_token(&opts, user, scopes, label),

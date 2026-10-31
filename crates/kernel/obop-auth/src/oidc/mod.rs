@@ -92,6 +92,13 @@ pub fn link_key(issuer: &str, tenant: &str, oid: &str) -> String {
     ))
 }
 
+/// The shortest browser secret `begin` accepts (the cookie is 43 characters).
+const MIN_BINDER: usize = 16;
+
+fn binder_hash(binder: &str) -> String {
+    hex(&sha256(format!("obop-sso-binder\n{binder}").as_bytes()))
+}
+
 fn code_key(code: &str) -> String {
     format!("auth.sso:{}", hex(&sha256(code.as_bytes())))
 }
@@ -686,8 +693,10 @@ impl SsoApi for Auth {
         })
     }
 
-    fn begin(&self, identity: &SsoIdentity, ip: &str) -> Result<String, SsoError> {
-        let _ = ip;
+    fn begin(&self, identity: &SsoIdentity, binder: &str) -> Result<String, SsoError> {
+        if binder.len() < MIN_BINDER {
+            return Err(invalid("the browser secret of the sign-in is missing"));
+        }
         let refuse = |user: &str, why: &str| -> SsoError {
             self.event(user, "oidc_refused", "-", why);
             SsoError::Refused(why.to_string())
@@ -731,6 +740,7 @@ impl SsoApi for Auth {
             "user": user,
             "epoch": epoch_of(&u),
             "mfa": identity.mfa(),
+            "binder": binder_hash(binder),
             "expires_at": self.now() + CODE_SECS,
         });
         self.backend
@@ -739,9 +749,24 @@ impl SsoApi for Auth {
         Ok(code)
     }
 
-    fn exchange(&self, code: &str) -> Result<LoginOutcome, MfaError> {
+    fn exchange(&self, code: &str, binder: &str) -> Result<LoginOutcome, MfaError> {
         let rec = self.code_take(code).ok_or(MfaError::Expired)?;
         let name = rec["user"].as_str().ok_or(MfaError::Expired)?.to_string();
+        // The code is spent. Presented by another browser than the one that signed in, it is
+        // worth nothing: a link that carries a code to someone else signs that person in as the
+        // one who made the link.
+        let held = rec["binder"].as_str().unwrap_or("");
+        if binder.len() < MIN_BINDER
+            || !crate::totp::ct_eq(held.as_bytes(), binder_hash(binder).as_bytes())
+        {
+            self.event(
+                &name,
+                "oidc_refused",
+                "-",
+                "the one-time code was presented by another browser than the one that signed in",
+            );
+            return Err(MfaError::Expired);
+        }
         let pending: Epoch = rec["epoch"].as_str().map(String::from);
         let mfa = rec["mfa"].as_bool() == Some(true);
         // The account as it is now: disabled, removed or changed since the callback is no sign-in.

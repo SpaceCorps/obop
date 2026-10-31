@@ -64,7 +64,7 @@ fn pct_decode(s: &str) -> Option<String> {
 }
 
 /// `a=1&b=2` into pairs; `None` when it is not valid percent-encoded UTF-8.
-fn parse_pairs(s: &str) -> Option<Vec<(String, String)>> {
+pub(crate) fn parse_pairs(s: &str) -> Option<Vec<(String, String)>> {
     s.split('&')
         .filter(|p| !p.is_empty())
         .map(|p| {
@@ -74,12 +74,12 @@ fn parse_pairs(s: &str) -> Option<Vec<(String, String)>> {
         .collect()
 }
 
-fn pair<'a>(pairs: &'a [(String, String)], k: &str) -> Option<&'a str> {
+pub(crate) fn pair<'a>(pairs: &'a [(String, String)], k: &str) -> Option<&'a str> {
     pairs.iter().find(|(n, _)| n == k).map(|(_, v)| v.as_str())
 }
 
 /// Headers every page and every token response carries.
-fn harden(r: &mut Response) {
+pub(crate) fn harden(r: &mut Response) {
     let h = r.headers_mut();
     for (k, v) in [
         ("x-content-type-options", "nosniff"),
@@ -130,7 +130,7 @@ fn html(status: StatusCode, page: Rendered, cookie: Option<String>) -> Response 
     r
 }
 
-fn see_other(location: &str) -> Response {
+pub(crate) fn see_other(location: &str) -> Response {
     let mut r = StatusCode::SEE_OTHER.into_response();
     if let Ok(v) = HeaderValue::from_str(location) {
         r.headers_mut().insert(header::LOCATION, v);
@@ -181,7 +181,7 @@ fn cookie_name(flow: &str) -> String {
     format!("obop_oauth_{}", flow.get(..12).unwrap_or("x"))
 }
 
-fn cookie_value(h: &HeaderMap, name: &str) -> Option<String> {
+pub(crate) fn cookie_value(h: &HeaderMap, name: &str) -> Option<String> {
     h.get(header::COOKIE)
         .and_then(|v| v.to_str().ok())?
         .split(';')

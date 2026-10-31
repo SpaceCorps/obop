@@ -26,6 +26,7 @@ const CLIENT: &str = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 const ADA_OID: &str = "0f0f0f0f-1111-2222-3333-444444444444";
 const BOB_OID: &str = "0b0b0b0b-1111-2222-3333-444444444444";
 const NONCE: &str = "nonce-of-this-sign-in";
+const BINDER: &str = "browser-secret-of-this-sign-in-0123456789";
 const SECRET: &str = "client-secret-value-9f3a";
 
 fn sso(r: &Rig) -> &dyn obop_commands::SsoApi {
@@ -271,7 +272,7 @@ fn one_identity_one_account_and_the_binding_is_the_object_id() {
     sso(&r).unbind(&a, "ada").unwrap();
     assert!(invalid(sso(&r).unbind(&a, "ada")).contains("not bound"));
     assert!(matches!(
-        sso(&r).begin(&id, "203.0.113.9"),
+        sso(&r).begin(&id, BINDER),
         Err(SsoError::Refused(_))
     ));
 }
@@ -296,12 +297,12 @@ fn the_tenant_cannot_change_under_bound_accounts() {
 fn a_bound_identity_gets_a_one_time_code_that_is_spent_once_and_expires() {
     let r = world();
     let id = identity(&r, ADA_OID);
-    let code = sso(&r).begin(&id, "203.0.113.9").unwrap();
+    let code = sso(&r).begin(&id, BINDER).unwrap();
     assert!(code.starts_with("obopsso_") && code.len() > 40);
     // Stored hashed, with an expiry; the code itself is not a key.
     assert!(r.b.kv_get(&format!("auth.sso:{code}")).unwrap().is_none());
     assert!(r.b.kv_get(&code_key(&code)).unwrap().is_some());
-    let (token, limited) = session_of(sso(&r).exchange(&code).unwrap());
+    let (token, limited) = session_of(sso(&r).exchange(&code, BINDER).unwrap());
     assert!(!limited);
     assert_eq!(r.a.resolve(&token).unwrap().id, "ada");
     // The session is the one a password gives: bearer, the same lifetime.
@@ -309,21 +310,27 @@ fn a_bound_identity_gets_a_one_time_code_that_is_spent_once_and_expires() {
     assert_eq!(stored["expires_at"], json!(T0 + SESSION_SECS));
     assert_eq!(stored["kind"], "user");
     // Spent.
-    assert!(matches!(sso(&r).exchange(&code), Err(MfaError::Expired)));
+    assert!(matches!(
+        sso(&r).exchange(&code, BINDER),
+        Err(MfaError::Expired)
+    ));
     assert!(r.b.kv_get(&code_key(&code)).unwrap().is_none());
     // A code nobody issued, and one that waited too long.
     assert!(matches!(
-        sso(&r).exchange("obopsso_made_up"),
+        sso(&r).exchange("obopsso_made_up", BINDER),
         Err(MfaError::Expired)
     ));
-    let late = sso(&r).begin(&id, "203.0.113.9").unwrap();
+    let late = sso(&r).begin(&id, BINDER).unwrap();
     r.a.set_clock_for_test(T0 + CODE_SECS + 1);
-    assert!(matches!(sso(&r).exchange(&late), Err(MfaError::Expired)));
+    assert!(matches!(
+        sso(&r).exchange(&late, BINDER),
+        Err(MfaError::Expired)
+    ));
     // Two sign-ins get two codes.
     r.a.set_clock_for_test(T0);
     assert_ne!(
-        sso(&r).begin(&id, "x").unwrap(),
-        sso(&r).begin(&id, "x").unwrap()
+        sso(&r).begin(&id, BINDER).unwrap(),
+        sso(&r).begin(&id, BINDER).unwrap()
     );
     assert_eq!(events(&r, "oidc_login").len(), 1);
     // Neither the code nor the secret is in the log.
@@ -334,12 +341,49 @@ fn a_bound_identity_gets_a_one_time_code_that_is_spent_once_and_expires() {
 }
 
 #[test]
+fn a_code_is_worth_nothing_to_another_browser_than_the_one_that_signed_in() {
+    // Login CSRF: someone signs in at Microsoft in their own browser, gets the one-time code and
+    // puts it in a link for a victim. The victim's browser does not hold the browser secret.
+    let r = world();
+    let id = identity(&r, ADA_OID);
+    let code = sso(&r).begin(&id, BINDER).unwrap();
+    assert!(matches!(
+        sso(&r).exchange(&code, "another-browsers-secret-0123456789"),
+        Err(MfaError::Expired)
+    ));
+    assert!(matches!(
+        sso(&r).exchange(&code, ""),
+        Err(MfaError::Expired)
+    ));
+    // The code was spent by the attempt: the right browser cannot use it afterwards either.
+    assert!(matches!(
+        sso(&r).exchange(&code, BINDER),
+        Err(MfaError::Expired)
+    ));
+    assert!(
+        events(&r, "oidc_refused")
+            .iter()
+            .any(|d| d.contains("another browser"))
+    );
+    // Only its hash is kept with the code.
+    let code = sso(&r).begin(&id, BINDER).unwrap();
+    let stored = r.b.kv_get(&code_key(&code)).unwrap().unwrap();
+    assert!(!stored.contains(BINDER));
+    // No browser secret, no code.
+    assert!(matches!(sso(&r).begin(&id, ""), Err(SsoError::Invalid(_))));
+    assert!(matches!(
+        sso(&r).begin(&id, "short"),
+        Err(SsoError::Invalid(_))
+    ));
+}
+
+#[test]
 fn an_identity_nobody_is_bound_to_signs_in_as_nobody() {
     let r = world();
     // Another object id in the right tenant, however well signed.
     let stranger = identity(&r, BOB_OID);
     assert!(matches!(
-        sso(&r).begin(&stranger, "203.0.113.9"),
+        sso(&r).begin(&stranger, BINDER),
         Err(SsoError::Refused(_))
     ));
     assert_eq!(events(&r, "oidc_refused").len(), 1);
@@ -347,10 +391,10 @@ fn an_identity_nobody_is_bound_to_signs_in_as_nobody() {
     // The same object id in another tenant or under another issuer is another identity.
     let mut forged = identity(&r, ADA_OID);
     forged.tenant = OTHER_TENANT.into();
-    assert!(sso(&r).begin(&forged, "x").is_err());
+    assert!(sso(&r).begin(&forged, BINDER).is_err());
     let mut forged = identity(&r, ADA_OID);
     forged.issuer = format!("{AUTHORITY}/{OTHER_TENANT}/v2.0");
-    assert!(sso(&r).begin(&forged, "x").is_err());
+    assert!(sso(&r).begin(&forged, BINDER).is_err());
 }
 
 #[test]
@@ -359,33 +403,51 @@ fn the_account_and_the_provider_are_checked_again_when_the_code_is_spent() {
     let id = identity(&r, ADA_OID);
     // Disabled before the code is issued.
     r.a.operator_set_disabled("ada", true).unwrap();
-    assert!(matches!(sso(&r).begin(&id, "x"), Err(SsoError::Refused(_))));
+    assert!(matches!(
+        sso(&r).begin(&id, BINDER),
+        Err(SsoError::Refused(_))
+    ));
     r.a.operator_set_disabled("ada", false).unwrap();
     // Disabled between the callback and the exchange.
-    let code = sso(&r).begin(&id, "x").unwrap();
+    let code = sso(&r).begin(&id, BINDER).unwrap();
     r.a.operator_set_disabled("ada", true).unwrap();
-    assert!(matches!(sso(&r).exchange(&code), Err(MfaError::Expired)));
+    assert!(matches!(
+        sso(&r).exchange(&code, BINDER),
+        Err(MfaError::Expired)
+    ));
     r.a.operator_set_disabled("ada", false).unwrap();
     // Offboarded in between.
-    let code = sso(&r).begin(&id, "x").unwrap();
+    let code = sso(&r).begin(&id, BINDER).unwrap();
     r.a.operator_offboard("ada", "left").unwrap();
-    assert!(matches!(sso(&r).exchange(&code), Err(MfaError::Expired)));
+    assert!(matches!(
+        sso(&r).exchange(&code, BINDER),
+        Err(MfaError::Expired)
+    ));
     r.a.operator_set_disabled("ada", false).unwrap();
     // The credentials changed in between (a reset, new groups): the half-finished sign-in ends.
-    let code = sso(&r).begin(&id, "x").unwrap();
+    let code = sso(&r).begin(&id, BINDER).unwrap();
     let mut patch = Fields::new();
     bump_epoch(&mut patch);
     r.b.update("auth_user", "ada", &patch).unwrap();
-    assert!(matches!(sso(&r).exchange(&code), Err(MfaError::Expired)));
+    assert!(matches!(
+        sso(&r).exchange(&code, BINDER),
+        Err(MfaError::Expired)
+    ));
     // Unbound in between.
-    let code = sso(&r).begin(&id, "x").unwrap();
+    let code = sso(&r).begin(&id, BINDER).unwrap();
     sso(&r).unbind(&admin("root1"), "ada").unwrap();
-    assert!(matches!(sso(&r).exchange(&code), Err(MfaError::Expired)));
+    assert!(matches!(
+        sso(&r).exchange(&code, BINDER),
+        Err(MfaError::Expired)
+    ));
     // The provider switched off between the verification and the code.
     r.a.operator_sso_bind("ada", ADA_OID).unwrap();
     r.a.operator_sso_configure(TENANT, CLIENT, None, false)
         .unwrap();
-    assert!(matches!(sso(&r).begin(&id, "x"), Err(SsoError::Refused(_))));
+    assert!(matches!(
+        sso(&r).begin(&id, BINDER),
+        Err(SsoError::Refused(_))
+    ));
     assert!(!events(&r, "oidc_refused").is_empty());
 }
 
@@ -394,8 +456,9 @@ fn an_account_with_its_own_second_factor_still_gets_asked_for_it() {
     let r = world();
     let (secret, _) = enrol(&r.a, "ada");
     // Microsoft says mfa, but ada is not SSO-only: her obop second factor stays.
-    let code = sso(&r).begin(&identity(&r, ADA_OID), "x").unwrap();
-    let LoginOutcome::MfaRequired { mfa_token: t } = sso(&r).exchange(&code).unwrap() else {
+    let code = sso(&r).begin(&identity(&r, ADA_OID), BINDER).unwrap();
+    let LoginOutcome::MfaRequired { mfa_token: t } = sso(&r).exchange(&code, BINDER).unwrap()
+    else {
         panic!("an obop second factor was expected")
     };
     assert!(r.a.resolve(&t).is_none(), "an mfa token is not a session");
@@ -408,9 +471,9 @@ fn an_account_with_its_own_second_factor_still_gets_asked_for_it() {
     // And without `mfa` in amr nothing changes.
     let id = identity_with(&r, ADA_OID, without_mfa);
     assert!(!id.mfa());
-    let code = sso(&r).begin(&id, "x").unwrap();
+    let code = sso(&r).begin(&id, BINDER).unwrap();
     assert!(matches!(
-        sso(&r).exchange(&code).unwrap(),
+        sso(&r).exchange(&code, BINDER).unwrap(),
         LoginOutcome::MfaRequired { .. }
     ));
 }
@@ -426,17 +489,17 @@ fn an_sso_only_account_takes_microsofts_second_factor_as_its_own() {
     assert!(limited, "the policy limits a password session of an admin");
     sso_only(&r, "boss", true).unwrap();
     // Microsoft reports a second factor: a whole session, no obop code.
-    let code = sso(&r).begin(&identity(&r, BOB_OID), "x").unwrap();
-    let (token, limited) = session_of(sso(&r).exchange(&code).unwrap());
+    let code = sso(&r).begin(&identity(&r, BOB_OID), BINDER).unwrap();
+    let (token, limited) = session_of(sso(&r).exchange(&code, BINDER).unwrap());
     assert!(!limited);
     let p = r.a.resolve(&token).unwrap();
     assert!(p.allows(ADMIN_GROUP) && !p.mfa_limited);
     // Microsoft does not report one: nothing stands for the second factor, so the session is
     // limited to enrolment, exactly as for a password.
     let code = sso(&r)
-        .begin(&identity_with(&r, BOB_OID, without_mfa), "x")
+        .begin(&identity_with(&r, BOB_OID, without_mfa), BINDER)
         .unwrap();
-    let (token, limited) = session_of(sso(&r).exchange(&code).unwrap());
+    let (token, limited) = session_of(sso(&r).exchange(&code, BINDER).unwrap());
     assert!(limited);
     assert!(r.a.resolve(&token).unwrap().mfa_limited);
     let line = events(&r, "oidc_login");
@@ -588,7 +651,10 @@ fn clearing_the_provider_keeps_the_bindings_and_says_who_depends_on_it() {
     sso(&r).clear(&admin("root1")).unwrap();
     assert!(!sso(&r).offered() && sso(&r).provider().unwrap().is_none());
     assert!(sso(&r).leg().unwrap().is_none());
-    assert!(matches!(sso(&r).begin(&id, "x"), Err(SsoError::Refused(_))));
+    assert!(matches!(
+        sso(&r).begin(&id, BINDER),
+        Err(SsoError::Refused(_))
+    ));
     let line = events(&r, "oidc_provider_cleared");
     assert_eq!(line.len(), 1);
     assert!(line[0].contains("1 SSO-only"), "{}", line[0]);
