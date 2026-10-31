@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useI18n } from "@obop/ui";
 import { call, search, type Row, type ServerFilter, type ServerOrder } from "./api.ts";
 import { useData } from "./data.tsx";
+import { remember, remembered, type Last } from "./lastRecord.ts";
 
 export type ServerRows = {
   rows: Row[];
@@ -37,9 +38,10 @@ export function useServerRows(opts: {
   const [st, setSt] = useState<ServerRows>(idle);
   const seq = useRef(0);
   const { enabled, model, filter, order, offset, limit } = opts;
-  // Every request carries `?lang=` and `Accept-Language`, but the `lang` in the body of a search,
-  // which picks the collation, is sent only with an `order` (api.ts). So the locale is part of the
+  // Every command carries `?lang=` and `Accept-Language` (api.ts `send`). In the body, `search()`
+  // adds the `lang` that picks the collation only with an `order`, so the locale is part of this
   // query for a sort and for nothing else: an unsorted list does not ask again for a new locale.
+  // (`aggregate()` always adds it; that is not asked again either, see the docs on the language.)
   const key = JSON.stringify([model, filter, order, offset, limit, order.length ? locale : null]);
 
   useEffect(() => {
@@ -78,13 +80,18 @@ export function useServerRows(opts: {
  * One record by id: from the rows already on screen when possible, else fetched with `get`. While
  * the rows are being asked for again (a new sort, the language) and the record is no longer among
  * them, the last row seen stays until the `get` answers: the page unmounts an open record panel
- * the moment this returns nothing, and a draft in it would be lost.
+ * the moment this returns nothing, and a draft in it would be lost. What is kept, and when it is
+ * forgotten, is in `lastRecord.ts`: when the route holds no record (the panel is closed, so a
+ * record deleted from it is not shown again by Back) and when the `get` does not return it (gone,
+ * no access, or failed). `fetched` is dropped when the route holds no record, and not otherwise: a
+ * record fetched by its address, left for one that is on the page and opened again while it is not,
+ * shows the row fetched before until its `get` answers.
  */
 export function useRecord(model: string, id: string, onScreen: Row[]): Row | null | undefined {
   const d = useData();
   const have = id && id !== "new" ? onScreen.find((r) => r.id === id) : undefined;
   const [fetched, setFetched] = useState<{ id: string; row: Row | null } | null>(null);
-  const last = useRef<{ model: string; id: string; row: Row } | null>(null);
+  const last = useRef<Last | null>(null);
   const need = !!id && id !== "new" && !have;
   useEffect(() => {
     if (!need) return;
@@ -99,12 +106,10 @@ export function useRecord(model: string, id: string, onScreen: Row[]): Row | nul
   const row =
     !id || id === "new" ? undefined : (have ?? (fetched?.id === id ? fetched.row : undefined));
   useEffect(() => {
-    if (row) last.current = { model, id, row };
-    // the `get` answered "no such record" (deleted, or no access): nothing is left to keep, and a
-    // later look at the same id must not bring the old row back while it is fetched again
-    else if (row === null) last.current = null;
+    last.current = remember(last.current, { model, id, row });
+    if (!id || id === "new") setFetched(null);
   }, [row, model, id]);
   if (!id || id === "new") return undefined;
   if (row !== undefined) return row;
-  return last.current?.model === model && last.current.id === id ? last.current.row : undefined;
+  return remembered(last.current, model, id);
 }
