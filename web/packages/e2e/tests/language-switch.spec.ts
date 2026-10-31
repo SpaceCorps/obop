@@ -404,13 +404,19 @@ test.describe("switching the language with the account menu, on a screen that st
     const cards = page.locator(".kcard .ktitle");
     await expect(cards).toHaveCount(4);
 
-    // Every request for the model's data after this point, in the order it was sent.
-    const asked: { command: string; order?: unknown[]; lang?: string }[] = [];
+    // Every request for the model's data after this point, in the order it was sent, told apart by
+    // its body: an aggregate is a search with an `aggregate` in it (api.ts), a sort has an `order`.
+    type Asked = "aggregate" | "sorted search" | "search without a sort";
+    const asked: { kind: Asked; lang?: string }[] = [];
     page.on("request", (r) => {
-      if (r.method() !== "POST") return;
-      for (const command of ["search", "aggregate"])
-        if (isCommand(r.url(), model, command))
-          asked.push({ command, ...JSON.parse(r.postData() ?? "{}") });
+      if (r.method() !== "POST" || !isCommand(r.url(), model, "search")) return;
+      const body = JSON.parse(r.postData() ?? "{}");
+      const kind: Asked = body.aggregate
+        ? "aggregate"
+        : body.order?.length
+          ? "sorted search"
+          : "search without a sort";
+      asked.push({ kind, lang: body.lang });
     });
     await pickInAccountMenu(page, "en", "sv");
 
@@ -419,13 +425,14 @@ test.describe("switching the language with the account menu, on a screen that st
     const sorted = encodeURIComponent(JSON.stringify({ s: { f: "title", dir: "asc" } }));
     await page.evaluate((h) => (location.hash = h), `/${model}/${model}?view=kanban&st=${sorted}`);
     await expect(cards).toHaveText(["Apfel", "Zebra", "Ärger", "Öle"]);
-    expect(asked.map((a) => a.command)).not.toContain("aggregate");
+    // What was asked is the sort and nothing else: no aggregate (the counts of the columns) and no
+    // search without a sort (their cards) because the language changed.
+    expect(
+      asked.filter((a) => a.kind !== "sorted search"),
+      "requests the switch made that the sort does not explain",
+    ).toEqual([]);
     expect(asked.length).toBeGreaterThan(0);
-    for (const a of asked) {
-      expect(a.command).toBe("search");
-      expect(a.order, "a request that does not sort").toHaveLength(1);
-      expect(a.lang).toMatch(/^sv/);
-    }
+    for (const a of asked) expect(a.lang).toMatch(/^sv/);
   });
 });
 
@@ -722,13 +729,67 @@ write_group = "base.user"
       await held;
       await route.continue();
     });
+    // The `get` goes out from an effect of the render that shows (or does not show) the panel.
+    const asked = page.waitForRequest((r) => isCommand(r.url(), model, "get"));
     await page.evaluate(
       (h) => (location.hash = h),
       `/${model}/${model}?view=list&st=${sorted}&id=${rows[26]!.id}`,
     );
+    await asked;
     // While it is held there is nothing to show for it: not the row of "Item 01" under its address.
     await expect(panelOf(page)).toHaveCount(0);
     release();
     await expect(panelOf(page).locator("h2")).toHaveText("Item 27");
+  });
+
+  test("a record deleted from its panel is not brought back with its old data by Back", async ({
+    page,
+    signIn,
+    api,
+    scratchModule,
+    allowHttpErrors,
+  }) => {
+    allowHttpErrors(400); // the get of a record that is gone
+    const model = await scratchModule({
+      title: "Gone data",
+      fields: [{ name: "title", required: true }],
+    });
+    // Pages of 25, in the order the records were made: "Doomed" is the 26th, on the second page,
+    // so the page never has its row and it is opened by address (fetched with a `get`).
+    const fillers = Array.from({ length: 25 }, (_, i) => `Item ${String(i + 1).padStart(2, "0")}`);
+    for (const title of fillers) await api.create("root", model, { title });
+    const doomed = await api.create("root", model, { title: "Doomed" });
+    await page.addInitScript(() => localStorage.setItem("obop-pagesize", "25"));
+    await signIn("root", `/${model}/${model}?view=list&id=${doomed.id}`);
+    await expect(panelOf(page).locator("h2")).toHaveText("Doomed");
+    const titles = page.locator("table.list tbody tr td:nth-child(2)");
+    await expect(titles).toHaveCount(25);
+
+    // Deleted from the panel, which closes.
+    await panelOf(page)
+      .getByRole("button", { name: say("en", "Delete") })
+      .click();
+    await page
+      .getByRole("alertdialog")
+      .getByRole("button", { name: say("en", "Delete"), exact: true })
+      .click();
+    await expect(panelOf(page)).toHaveCount(0);
+
+    // Back to the address of the deleted record, with its `get` held back.
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    await page.route(commandUrl(model, "get"), async (route) => {
+      await held;
+      await route.continue();
+    });
+    const asked = page.waitForRequest((r) => isCommand(r.url(), model, "get"));
+    await page.goBack();
+    await asked;
+    // Nothing is known of it: not the row that was in the panel when it was deleted.
+    await expect(panelOf(page)).toHaveCount(0);
+    release();
+    // and the `get` finds nothing, so there is still no panel
+    await expect(panelOf(page)).toHaveCount(0);
+    await expect(titles).toHaveCount(25);
   });
 });
