@@ -5,9 +5,11 @@
 // It is not Entra and proves nothing about Entra: it speaks the protocol as the decision record
 // reads it, and it hands out the claims the way Microsoft's documentation says Entra does: the
 // default claims always (`iss`, `tid`, `aud`, `sub`, `nonce`, times); `oid`, `preferred_username`
-// and `name` only when the `profile` scope was asked for and is consented to; `amr` and `auth_time`
+// and `name` only when the `profile` scope was asked for and is granted; `amr` and `auth_time`
 // only when the app registration has them as optional claims. `GET /control?optional_claims=0|1`
-// and `consent=0|1` change what the registration is like, and `GET /control/scopes` lists the
+// and `profile=0|1` change what the registration is like (`profile=0` models a request or a
+// registration that lacks `profile`, not a missing administrator consent: Microsoft answers that
+// with an error page of its own), and `GET /control/scopes` lists the
 // scopes the authorization requests asked for. Nothing here reaches a network beyond loopback.
 // Test code only.
 import { createHash, createPrivateKey, generateKeyPairSync, randomBytes, sign } from "node:crypto";
@@ -58,16 +60,16 @@ export function startIdp(port: number) {
   const flows = new Map<string, Flow>();
   const codes = new Map<string, Issued>();
   const t = sso.tenant;
-  // What the app registration is like: the optional claims added to the ID token, and the consent
-  // for the permissions of the `profile` scope.
-  const registration = { optionalClaims: true, consent: true };
+  // What the app registration is like: the optional claims added to the ID token, and whether the
+  // `profile` scope that is asked for is granted.
+  const registration = { optionalClaims: true, grantsProfile: true };
   const asked: string[] = [];
 
-  /** The scope Entra grants for what was asked: `profile` only where it is consented to. */
+  /** The scope Entra grants for what was asked: `profile` only where it is granted. */
   const granted = (scope: string) =>
     scope
       .split(" ")
-      .filter((s) => s && (s !== "profile" || registration.consent))
+      .filter((s) => s && (s !== "profile" || registration.grantsProfile))
       .join(" ");
 
   const idToken = (i: Issued): string => {
@@ -112,7 +114,7 @@ export function startIdp(port: number) {
         const q = url.searchParams;
         if (q.has("optional_claims"))
           registration.optionalClaims = q.get("optional_claims") === "1";
-        if (q.has("consent")) registration.consent = q.get("consent") === "1";
+        if (q.has("profile")) registration.grantsProfile = q.get("profile") === "1";
         return json(res, 200, registration);
       }
       if (path === "/control/scopes") return json(res, 200, asked);
@@ -130,7 +132,8 @@ export function startIdp(port: number) {
         });
       if (req.method === "GET" && path === `/${t}/discovery/v2.0/keys`)
         return json(res, 200, {
-          keys: [{ kty: "RSA", use: "sig", alg: "RS256", kid: KID, n: jwk.n, e: jwk.e }],
+          // The shape of Microsoft's key set that the Rust stand-in uses too: no `alg` on the key.
+          keys: [{ kty: "RSA", use: "sig", kid: KID, n: jwk.n, e: jwk.e }],
         });
 
       // The page of "Microsoft": who signs in?

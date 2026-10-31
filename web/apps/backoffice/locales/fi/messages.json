@@ -1981,5 +1981,6 @@
   "Verifies you": "Tunnistaa sinut",
   "You will no longer be able to sign in with it. Your other sessions are signed out.": "Et voi enää kirjautua sillä. Muut istuntosi kirjataan ulos.",
   "Your passkeys": "Pääsyavaimesi",
-  "Your second step: touch or unlock the passkey.": "Toinen vaiheesi: kosketa tai avaa pääsyavain."
+  "Your second step: touch or unlock the passkey.": "Toinen vaiheesi: kosketa tai avaa pääsyavain.",
+  "Going to Microsoft": "Siirrytään Microsoftiin"
 }

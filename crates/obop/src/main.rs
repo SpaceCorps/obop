@@ -106,8 +106,9 @@ const USAGE: &str = "usage: obop <command>
                                                 under OBOP_SECRET_KEY (needed the first time; a later call without one keeps it, and
                                                 without --enabled or --disabled keeps the switch)
   admin sso bind USER OID | unbind USER         bind an existing account to a person's object id in the directory, or remove that
-  admin sso only USER on|off                    make USER sign in with Microsoft only (needs a binding and two other administrators
-                                                who keep a password and a second factor), or turn that off
+  admin sso only USER on|off                    make USER sign in with Microsoft only (needs a binding, one sign-in with the button
+                                                after it, and two other administrators who keep a password
+                                                and a second factor), or turn that off
   admin reset-mfa USER --db URL                break-glass: remove USER's two-factor (app and passkeys) and sessions (needs database
                                                 access; writes an audit record); see docs/DEPLOY.md
   agent-token USER --scopes a,b [--label TEXT]  issue a scoped agent token (shown once)

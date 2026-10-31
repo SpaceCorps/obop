@@ -155,7 +155,8 @@ fn the_provider_is_configured_shown_kept_and_removed_from_the_command_line() {
     let status = ok(obop(&url, &["admin", "sso", "status"], None));
     assert!(
         status.contains(TENANT)
-            && status.contains("enabled")
+            && status.contains(", enabled,")
+            && !status.contains("not enabled")
             && status.contains("client secret stored"),
         "{status}"
     );
@@ -177,6 +178,8 @@ fn the_provider_is_configured_shown_kept_and_removed_from_the_command_line() {
         None,
     ));
     assert!(off.contains("not enabled"), "{off}");
+    let status = ok(obop(&url, &["admin", "sso", "status"], None));
+    assert!(status.contains(", not enabled,"), "{status}");
     let kept = ok(obop(
         &url,
         &[

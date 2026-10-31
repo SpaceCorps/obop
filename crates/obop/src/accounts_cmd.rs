@@ -150,13 +150,22 @@ pub fn sso_status(o: &Opts) -> Exit {
     for a in s["accounts"].as_array().into_iter().flatten() {
         if a["bound"] == true || a["sso_only"] == true {
             println!(
-                "{:<24} oid={}  {}",
+                "{:<24} oid={}  {}; {}{}",
                 a["name"].as_str().unwrap_or(""),
                 a["oid"].as_str().unwrap_or("-"),
                 if a["sso_only"] == true {
                     "signs in with Microsoft only"
                 } else {
                     "bound"
+                },
+                match a["last_login_at"].as_str() {
+                    Some(t) => format!("last signed in with Microsoft {t}"),
+                    None => "has not signed in with Microsoft yet".to_string(),
+                },
+                if a["binding_current"] == false {
+                    "; the binding is not to the tenant of the provider"
+                } else {
+                    ""
                 }
             );
         }

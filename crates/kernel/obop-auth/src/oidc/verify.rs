@@ -16,7 +16,7 @@
 //!    exactly one), `azp` the client id when present, `nonce` equal to the one of this flow,
 //!    `exp` in the future, `nbf` and `iat` not in the future (a skew of two minutes), `oid` and
 //!    `tid` GUIDs, `amr` read as a list of strings (absent or of another type: no `mfa`), and
-//!    `auth_time` kept when it is a number.
+//!    `auth_time` kept when it is a non-negative whole number.
 //!
 //! The issuer format `https://login.microsoftonline.com/<tenant id>/v2.0` is Microsoft's
 //! documented one for v2.0 tokens (general knowledge, not tried against a real tenant).
@@ -372,7 +372,7 @@ fn claims(c: &J, exp: &Expect<'_>) -> Result<SsoIdentity, VerifyError> {
     let oid = text(c, "oid").map(str::to_ascii_lowercase);
     let Some(oid) = oid.filter(|o| is_guid(o)) else {
         return refuse(
-            "the token carries no object id (oid); Entra sends it only when the profile scope is asked for and granted, so the scope, the app registration's permissions or the administrator's consent may be missing",
+            "the token carries no object id (oid); Entra sends it only when the profile scope is asked for and granted, so the scope that was asked for, or the permissions of the app registration, is the usual cause",
         );
     };
     // `amr` is a list of strings. Anything else says nothing about a second factor.

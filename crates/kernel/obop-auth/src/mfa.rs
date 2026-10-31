@@ -247,11 +247,12 @@ impl Auth {
     /// lockout of a person who typed the right one.
     ///
     /// An account that signs in with Microsoft only (D91) has no password: what is left in the
-    /// record is no proof for any step that asks for it (changing the password, turning the app
-    /// off, new recovery codes, adding or removing a passkey, and every re-authentication built on
-    /// this later), so for such an account the answer is "no", counted like a wrong password. The
-    /// hash is kept (turning the flag off hands the password back); the sign-in step reads the
-    /// flag itself and uses [`Auth::password_check`].
+    /// record is no proof for any step that asks for it (turning the app off, new recovery codes,
+    /// adding or removing a passkey, and every re-authentication built on this later), so for such
+    /// an account the answer is "no", counted like a wrong password. Changing the password does
+    /// not come here: it says there is no password to change and is not counted. The hash is kept
+    /// (turning the flag off hands the password back); the sign-in step reads the flag itself and
+    /// uses [`Auth::password_check`].
     pub(crate) fn password_ok(&self, name: &str, password: &str) -> Result<bool, MfaError> {
         let ok = self
             .password_check(name, password)

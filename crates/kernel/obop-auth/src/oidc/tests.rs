@@ -470,6 +470,126 @@ fn the_account_and_the_provider_are_checked_again_when_the_code_is_spent() {
     assert!(!events(&r, "oidc_refused").is_empty());
 }
 
+/// `binding_holds` is the defence for a code that is made in the moment between the epoch bump of
+/// an unbind and its delete of the link (the comparison of the epochs cannot see that moment). The
+/// record is changed here without a bump, as that moment leaves it.
+#[test]
+fn a_code_for_a_binding_that_is_gone_or_now_another_accounts_is_not_spent() {
+    let r = world();
+    let id = identity(&r, ADA_OID);
+    let link = link_key(&format!("{AUTHORITY}/{TENANT}/v2.0"), TENANT, ADA_OID);
+    // The link of the account belongs to somebody else now.
+    let code = sso(&r).begin(&id, BINDER).unwrap();
+    let mut f = Fields::new();
+    f.insert("user".into(), json!("bob"));
+    r.b.update(LINK_TABLE, &link, &f).unwrap();
+    assert!(matches!(
+        sso(&r).exchange(&code, BINDER),
+        Err(MfaError::Expired)
+    ));
+    assert!(
+        events(&r, "oidc_refused")
+            .iter()
+            .any(|d| d.contains("belongs to another account")),
+        "{:?}",
+        events(&r, "oidc_refused")
+    );
+    // The link is gone, and the account's credentials were not touched.
+    f.insert("user".into(), json!("ada"));
+    r.b.update(LINK_TABLE, &link, &f).unwrap();
+    let code = sso(&r).begin(&id, BINDER).unwrap();
+    r.b.delete(LINK_TABLE, &link).unwrap();
+    assert!(matches!(
+        sso(&r).exchange(&code, BINDER),
+        Err(MfaError::Expired)
+    ));
+    assert!(
+        events(&r, "oidc_refused")
+            .iter()
+            .any(|d| d.contains("unbound before the sign-in finished")),
+        "{:?}",
+        events(&r, "oidc_refused")
+    );
+}
+
+/// An unbind and a bind of the same object id make the same link again: a code that was made
+/// before finds a link that is there, and only the change of the credential epoch refuses it.
+#[test]
+fn a_code_made_before_an_unbind_is_not_spent_after_the_same_identity_is_bound_again() {
+    let r = world();
+    let id = identity(&r, ADA_OID);
+    let code = sso(&r).begin(&id, BINDER).unwrap();
+    sso(&r).unbind(&admin("root1"), "ada").unwrap();
+    sso(&r).bind(&admin("root1"), "ada", ADA_OID).unwrap();
+    assert!(matches!(
+        sso(&r).exchange(&code, BINDER),
+        Err(MfaError::Expired)
+    ));
+    // A code made after the new binding is spent.
+    let fresh = sso(&r).begin(&id, BINDER).unwrap();
+    assert!(sso(&r).exchange(&fresh, BINDER).is_ok());
+}
+
+/// The lines of requests nobody signed in for: one per source and kind in ten minutes whatever
+/// the text says, and a ceiling for all sources together.
+#[test]
+fn an_anonymous_line_is_one_per_source_and_kind_whatever_its_text_and_has_an_hourly_ceiling() {
+    let r = world();
+    let lines = |kind: &str| events(&r, kind);
+    // The text is not in the key: forty texts, one line.
+    for i in 0..40 {
+        sso(&r).audit_throttled("203.0.113.1", "oidc_error", &format!("text number {i}"));
+    }
+    assert_eq!(lines("oidc_error").len(), 1);
+    assert!(lines("oidc_error")[0].contains("text number 0"));
+    assert!(lines("oidc_error")[0].contains("not written for 10 minutes"));
+    // Another kind, and another source, are lines of their own.
+    sso(&r).audit_throttled("203.0.113.1", "oidc_refused", "x");
+    sso(&r).audit_throttled("203.0.113.2", "oidc_error", "x");
+    assert_eq!(
+        (lines("oidc_refused").len(), lines("oidc_error").len()),
+        (1, 2)
+    );
+    // A hundred more sources: the ceiling for all of them, then one line that says so.
+    let before = lines("oidc_error").len() + lines("oidc_refused").len();
+    for i in 0..100 {
+        sso(&r).audit_throttled(&format!("198.51.100.{i}"), "oidc_error", "y");
+    }
+    let written = lines("oidc_error").len() + lines("oidc_refused").len();
+    assert_eq!(
+        written as u64,
+        super::ANON_LINES_PER_HOUR + 1,
+        "{before} before, the ceiling, and the summary"
+    );
+    let said: Vec<String> = lines("oidc_error")
+        .into_iter()
+        .filter(|l| l.contains("ceiling"))
+        .collect();
+    assert_eq!(said.len(), 1, "{said:?}");
+    // The hour ends: the first line of the next one says how many were left out, once.
+    let left_out = 100 + 3 - super::ANON_LINES_PER_HOUR;
+    r.b.counter_reset(super::ANON_COUNT_KEY).unwrap();
+    sso(&r).audit_throttled("192.0.2.1", "oidc_error", "z");
+    let reports: Vec<String> = lines("oidc_error")
+        .into_iter()
+        .filter(|l| l.contains("were not written"))
+        .collect();
+    assert_eq!(reports.len(), 1, "{reports:?}");
+    assert!(
+        reports[0].starts_with(&format!("{left_out} line(s)")),
+        "{reports:?}"
+    );
+    sso(&r).audit_throttled("192.0.2.2", "oidc_error", "z");
+    assert_eq!(
+        lines("oidc_error")
+            .into_iter()
+            .filter(|l| l.contains("were not written"))
+            .count(),
+        1,
+        "reported once"
+    );
+}
+
 #[test]
 fn the_disabled_flag_alone_ends_a_half_finished_sign_in() {
     // Every path that disables an account also changes its credential epoch today; the exchange
@@ -783,14 +903,58 @@ fn the_provider_port_checks_the_token_against_this_instance() {
     ));
 }
 
+/// D91 Decision 1: the variable has no effect without `OBOP_CONNECTORS_ALLOW_LOOPBACK`. It must
+/// not change the issuer of a binding (and so the identity of a person) on an instance that is not
+/// a test instance.
+#[test]
+fn the_test_authority_is_ignored_without_the_loopback_flag() {
+    use super::authority_from;
+    let lo = "http://127.0.0.1:4455";
+    // The variable alone, and the flag in any spelling the outbound client does not read.
+    assert_eq!(authority_from(Some(lo), None), None);
+    for flag in ["", "0", "yes", "TRUE", "on", " 1"] {
+        assert_eq!(authority_from(Some(lo), Some(flag)), None, "flag {flag:?}");
+    }
+    // The two spellings of `obop_connectors::runtime::Config::from_env`.
+    for flag in ["1", "true"] {
+        assert_eq!(authority_from(Some(lo), Some(flag)).as_deref(), Some(lo));
+    }
+    // An instance that started with the variable alone trusts Microsoft's own authority, and a
+    // binding made under it holds the real issuer; with the flag too, the stand-in's.
+    let issuer_of_a_binding = |authority: Option<String>, user: &str, oid: &str| {
+        let r = world();
+        *r.a.oidc_authority.write().unwrap() = authority;
+        user_with(&r.a, user, &["base.user"]);
+        r.a.operator_sso_bind(user, oid).unwrap();
+        let rows: Vec<String> =
+            r.b.list(LINK_TABLE)
+                .unwrap()
+                .into_iter()
+                .filter(|(_, f)| f["user"] == user)
+                .map(|(_, f)| f["issuer"].as_str().unwrap().to_string())
+                .collect();
+        assert_eq!(rows.len(), 1);
+        rows[0].clone()
+    };
+    assert_eq!(
+        issuer_of_a_binding(authority_from(Some(lo), None), "eve", BOB_OID),
+        format!("{AUTHORITY}/{TENANT}/v2.0")
+    );
+    assert_eq!(
+        issuer_of_a_binding(authority_from(Some(lo), Some("1")), "eve", BOB_OID),
+        format!("{lo}/{TENANT}/v2.0")
+    );
+}
+
 #[test]
 fn the_stand_in_authority_is_loopback_over_http_or_nothing() {
     use super::authority_from;
-    assert_eq!(authority_from(None), None);
-    assert_eq!(authority_from(Some("")), None);
-    assert_eq!(authority_from(Some(AUTHORITY)), None);
+    let on = Some("1");
+    assert_eq!(authority_from(None, on), None);
+    assert_eq!(authority_from(Some(""), on), None);
+    assert_eq!(authority_from(Some(AUTHORITY), on), None);
     assert_eq!(
-        authority_from(Some(" http://127.0.0.1:4455/ ")).as_deref(),
+        authority_from(Some(" http://127.0.0.1:4455/ "), on).as_deref(),
         Some("http://127.0.0.1:4455")
     );
     for bad in [
@@ -800,7 +964,7 @@ fn the_stand_in_authority_is_loopback_over_http_or_nothing() {
         "https://127.0.0.1:4455",
         "http://127.0.0.1:4455/tenant",
     ] {
-        assert_eq!(authority_from(Some(bad)), None, "{bad}");
+        assert_eq!(authority_from(Some(bad), on), None, "{bad}");
     }
     // The authority a test sets is the one the tokens are checked under.
     let r = world();
@@ -999,7 +1163,14 @@ fn the_last_administrator_rule_does_not_count_microsoft_only_administrators() {
             .map(|_| ()),
     ] {
         match refusal {
-            Err(MfaError::Invalid(m)) => assert!(m.contains("last enabled administrator"), "{m}"),
+            Err(MfaError::Invalid(m)) => {
+                assert!(m.contains("last enabled administrator"), "{m}");
+                // The way out is named, because the list of administrators shows others.
+                assert!(
+                    m.contains("not counted") && m.contains("obop admin sso only NAME off"),
+                    "{m}"
+                );
+            }
             other => panic!("expected the last-administrator refusal, got {other:?}"),
         }
     }
@@ -1310,12 +1481,20 @@ fn a_code_begun_on_one_server_is_spent_on_another_and_by_only_one_of_two_racers(
         sso(&r).exchange(&code, BINDER),
         Err(MfaError::Expired)
     ));
-    // Two racers for one code, one on each server: exactly one wins, every time.
+    // Two racers for one code, one on each server, released together: exactly one wins, every
+    // time. (The sharper race, eight racers and 300 rounds, is the next test.)
     for round in 0..25 {
         let code = sso(&r).begin(&id, BINDER).unwrap();
+        let gate = std::sync::Barrier::new(2);
         let (x, y) = std::thread::scope(|s| {
-            let a = s.spawn(|| sso(&r).exchange(&code, BINDER).is_ok());
-            let b = s.spawn(|| other.sso().unwrap().exchange(&code, BINDER).is_ok());
+            let a = s.spawn(|| {
+                gate.wait();
+                sso(&r).exchange(&code, BINDER).is_ok()
+            });
+            let b = s.spawn(|| {
+                gate.wait();
+                other.sso().unwrap().exchange(&code, BINDER).is_ok()
+            });
             (a.join().unwrap(), b.join().unwrap())
         });
         assert_eq!(
@@ -1323,6 +1502,45 @@ fn a_code_begun_on_one_server_is_spent_on_another_and_by_only_one_of_two_racers(
             1,
             "round {round}: one winner"
         );
+    }
+}
+
+/// Many readers of one code: only the one whose delete removed it may go on (D59: several server
+/// processes on one database). `code_take` reads the code and then deletes it, and only the delete
+/// is the claim, so the racers are released at once by a barrier, eight of them, in many rounds;
+/// without the barrier a thread that starts first has finished before the next one is running.
+#[test]
+fn eight_racers_for_one_code_leave_exactly_one_winner_in_every_round() {
+    let (_flaky, db) = obop_storage::testing::Flaky::memory();
+    let a = Auth::with_test_config(db.clone(), AuthConfig::insecure_dev());
+    a.set_clock_for_test(T0);
+    for round in 0..300 {
+        let code = format!("obopsso_race_{round}");
+        let rec = json!({
+            "user": "ada",
+            "binder": "-",
+            "expires_at": T0 + CODE_SECS,
+        });
+        db.kv_put(&code_key(&code), &rec.to_string(), Some(CODE_SECS * 1000))
+            .unwrap();
+        let gate = std::sync::Barrier::new(8);
+        let winners = std::thread::scope(|s| {
+            let racers: Vec<_> = (0..8)
+                .map(|_| {
+                    s.spawn(|| {
+                        gate.wait();
+                        a.code_take(&code).is_some()
+                    })
+                })
+                .collect();
+            racers
+                .into_iter()
+                .map(|h| h.join().unwrap())
+                .filter(|won| *won)
+                .count()
+        });
+        assert_eq!(winners, 1, "round {round}: one winner");
+        assert!(db.kv_get(&code_key(&code)).unwrap().is_none());
     }
 }
 
@@ -1367,13 +1585,24 @@ fn sign_in_with_microsoft_works_on_postgres_when_available() {
         AuthConfig::insecure_dev(),
     );
     other.set_clock_for_test(T0);
-    let code = api.begin(&id, BINDER).unwrap();
-    let (x, y) = std::thread::scope(|sc| {
-        let h1 = sc.spawn(|| api.exchange(&code, BINDER).is_ok());
-        let h2 = sc.spawn(|| other.sso().unwrap().exchange(&code, BINDER).is_ok());
-        (h1.join().unwrap(), h2.join().unwrap())
-    });
-    assert_eq!(usize::from(x) + usize::from(y), 1);
+    // Several rounds, the racers released together; a round's winner is the one whose delete
+    // removed the code.
+    for round in 0..10 {
+        let code = api.begin(&id, BINDER).unwrap();
+        let gate = std::sync::Barrier::new(2);
+        let (x, y) = std::thread::scope(|sc| {
+            let h1 = sc.spawn(|| {
+                gate.wait();
+                api.exchange(&code, BINDER).is_ok()
+            });
+            let h2 = sc.spawn(|| {
+                gate.wait();
+                other.sso().unwrap().exchange(&code, BINDER).is_ok()
+            });
+            (h1.join().unwrap(), h2.join().unwrap())
+        });
+        assert_eq!(usize::from(x) + usize::from(y), 1, "round {round}");
+    }
     // Unbinding ends the session this made.
     let admin = Principal::user("root", &[ADMIN_GROUP]);
     let done = api.unbind(&admin, &user).unwrap();
@@ -1393,8 +1622,9 @@ fn a_right_password_on_a_microsoft_only_account_locks_it_like_a_wrong_one() {
     for _ in 0..4 {
         said(&r, PW);
     }
-    // Five right passwords in a row, and the sixth attempt is the lockout's answer, as after five
-    // wrong ones.
+    // Five failures lock the account whatever was typed: the two attempts above and the first
+    // three of the loop are five (right passwords count like wrong ones), and the sixth and the
+    // seventh attempt get the lockout's answer, as after five wrong ones.
     assert!(said(&r, PW).contains("too many attempts"), "locked");
     assert!(said(&r, "not the password").contains("too many attempts"));
 }

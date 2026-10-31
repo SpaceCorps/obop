@@ -37,13 +37,14 @@ function tab(hash: string) {
   const store = new Map<string, string>();
   const loc = { hash, pathname: "/", search: "" };
   vi.stubGlobal("location", loc);
-  vi.stubGlobal("history", { replaceState: () => undefined });
+  const replaced: unknown[][] = [];
+  vi.stubGlobal("history", { replaceState: (...a: unknown[]) => void replaced.push(a) });
   vi.stubGlobal("sessionStorage", {
     getItem: (k: string) => store.get(k) ?? null,
     setItem: (k: string, v: string) => void store.set(k, v),
     removeItem: (k: string) => void store.delete(k),
   });
-  return { loc, store };
+  return { loc, store, replaced };
 }
 
 describe("the deep link across the round trip to Microsoft (D91)", () => {
@@ -85,14 +86,18 @@ describe("the deep link across the round trip to Microsoft (D91)", () => {
   });
 
   it("drops a return that nobody handles, so it cannot surface after a sign-out", async () => {
+    // A module that reads the address stubbed here, whatever ran before this test.
+    vi.resetModules();
     tab("#oidc=" + CODE);
     const api = await import("./api.ts");
     api.discardSsoReturn();
     expect(api.takeSsoReturn()).toBeNull();
-    // The control: left alone, the return is handed out once.
+    // The control: the same address, left alone, is handed out once, and the address is cleaned
+    // when it is read.
     vi.resetModules();
-    tab("#oidc=" + CODE);
+    const { replaced } = tab("#oidc=" + CODE);
     const other = await import("./api.ts");
+    expect(replaced, "the fragment is cleared from the address").toEqual([[null, "", "/"]]);
     expect(other.takeSsoReturn()).toEqual({ code: CODE });
     expect(other.takeSsoReturn()).toBeNull();
   });

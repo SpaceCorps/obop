@@ -38,7 +38,8 @@ pub struct Auth {
     config: AuthConfig,
     fake_now: AtomicU64,
     /// The authority Microsoft sign-in trusts: `None` is Microsoft's own (D91); a loopback
-    /// address stands in for it in tests (`OBOP_OIDC_TEST_AUTHORITY`).
+    /// address stands in for it in tests (`OBOP_OIDC_TEST_AUTHORITY`, honoured only together with
+    /// `OBOP_CONNECTORS_ALLOW_LOOPBACK`).
     oidc_authority: std::sync::RwLock<Option<String>>,
 }
 

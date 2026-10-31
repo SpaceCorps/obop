@@ -2853,7 +2853,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Remove the Microsoft sign-in configuration. Bindings stay. Accounts that sign in with Microsoft only can then sign in only through the administrators who keep a password and a second factor. Refused for agents */
+        /** Remove the Microsoft sign-in configuration. Bindings stay. Accounts that sign in with Microsoft only cannot then sign in at all until the sign-in is configured again or an administrator turns Microsoft only off for them (the administrators who keep a password and a second factor can). Refused for agents */
         post: operations["sso_provider.clear"];
         delete?: never;
         options?: never;
@@ -3161,7 +3161,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Make an account sign in with Microsoft only (it then refuses its password and its passkey on their own), or turn that off again. Give id and sso_only (true or false). Needs the account bound, and at least two other administrators who still sign in locally with a second factor. Ends the account's sessions
+         * Make an account sign in with Microsoft only (it then refuses its password and its passkey on their own), or turn that off again. Give id and sso_only (true or false). Needs the account bound, to have signed in once with the button after it was bound (that proves the object id; the log line oidc_login says whether Microsoft reported a second factor, which is not checked here), and at least two other administrators who still sign in locally with a second factor. Ends the account's sessions
          * @description Irreversible or money-moving: an agent token only proposes this and a human approves.
          */
         post: operations["user_account.set_sso_only"];

@@ -92,7 +92,7 @@ pub fn user_account_model() -> ModelDef {
             .approval(),
             CommandDef::new(
                 "set_sso_only",
-                "Make an account sign in with Microsoft only (it then refuses its password and its passkey on their own), or turn that off again. Give id and sso_only (true or false). Needs the account bound, and at least two other administrators who still sign in locally with a second factor. Ends the account's sessions",
+                "Make an account sign in with Microsoft only (it then refuses its password and its passkey on their own), or turn that off again. Give id and sso_only (true or false). Needs the account bound, to have signed in once with the button after it was bound (that proves the object id; the log line oidc_login says whether Microsoft reported a second factor, which is not checked here), and at least two other administrators who still sign in locally with a second factor. Ends the account's sessions",
                 ADMIN_GROUP,
             )
             .approval(),

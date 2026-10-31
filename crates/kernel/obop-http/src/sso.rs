@@ -59,16 +59,26 @@ const JWKS_TTL: Duration = Duration::from_secs(60 * 60);
 /// How long a failed fetch of the discovery document or the key set is answered from memory
 /// before Microsoft is asked again: a provider that does not answer is not asked once per request.
 const NEGATIVE_TTL: Duration = Duration::from_secs(45);
-/// The most calls to Microsoft that one server process has in the air at once (the fetches and
-/// the exchange of a code). More are answered "busy" at once and hold no thread.
+/// The most calls to Microsoft that one server process has in the air at once (the fetches of
+/// the discovery document and the key set, and the exchange of a code; each holds one place only
+/// while its own call is in the air). More are refused at once and hold no thread: the exchange of
+/// a code answers "busy", the fetches fail as "unavailable".
 const MAX_IN_FLIGHT: usize = 8;
-/// How long a call to Microsoft may take (the egress client's own limit is 20 seconds, which is
-/// for connectors; a person is not kept waiting that long, and the blocking threads that serve
-/// the break-glass sign-in are not either).
+/// The most requests that wait for the fetch of the discovery document or the key set that
+/// another request has in the air. More are refused at once ("unavailable"), holding no thread.
+const MAX_WAITING: usize = 8;
+/// How long a call to Microsoft may take once its connection is being made, and how long a
+/// request waits for the fetch another request has in the air (the egress client's own limit is
+/// 20 seconds, which is for connectors; a person is not kept waiting that long). The system
+/// resolver is not under this limit: `Client::send_within` resolves the host name first, and a
+/// resolver that hangs holds the thread of the request that is resolving it. Of those there are
+/// at most `MAX_IN_FLIGHT`, and `MAX_WAITING` more that wait up to this long: at most sixteen
+/// blocking threads of the server belong to the Microsoft sign-in at any time.
 const SSO_TIMEOUT: Duration = Duration::from_secs(6);
 /// How often the key set may be fetched again because a token named a key the cache lacks
-/// (all server processes together): a stream of tokens with made-up key names cannot make this
-/// server hammer the provider.
+/// (all server processes together). The token comes only in the provider's own answer to the
+/// exchange of a code, so no caller can bring a key name of its own: the cap is for a provider
+/// that rotates its keys or misbehaves, so that this server does not hammer it.
 const JWKS_REFETCH_PER_MIN: u64 = 6;
 
 /// What this process remembers of the provider: the checked addresses of its discovery document
@@ -84,6 +94,19 @@ pub(crate) struct Cache {
     discovery_flight: Mutex<()>,
     jwks_flight: Mutex<()>,
     in_flight: std::sync::atomic::AtomicUsize,
+    /// Requests that wait for a fetch another request has in the air.
+    waiting: std::sync::atomic::AtomicUsize,
+    /// The limit of a call, in milliseconds; 0 is `SSO_TIMEOUT` (a test shortens it).
+    timeout_ms: std::sync::atomic::AtomicU64,
+}
+
+/// A place among the requests that wait for a fetch; given back when dropped.
+struct Waiting<'a>(&'a std::sync::atomic::AtomicUsize);
+
+impl Drop for Waiting<'_> {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+    }
 }
 
 /// One of the calls to Microsoft this process may have in the air; given back when dropped.
@@ -92,6 +115,35 @@ pub(crate) struct Permit<'a>(&'a std::sync::atomic::AtomicUsize);
 impl Drop for Permit<'_> {
     fn drop(&mut self) {
         self.0.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+impl HttpState {
+    /// For tests: shorten the limit of a call to Microsoft (and of the wait for another request's
+    /// call), so that a slow stand-in does not make a test wait six seconds.
+    #[doc(hidden)]
+    pub fn set_sso_timeout_for_test(&self, limit: Duration) {
+        self.sso.timeout_ms.store(
+            limit.as_millis().max(1) as u64,
+            std::sync::atomic::Ordering::SeqCst,
+        );
+    }
+
+    /// For tests: forget the discovery document, the key set and the remembered failures, as ten
+    /// minutes (or a restart) would.
+    #[doc(hidden)]
+    pub fn forget_sso_cache_for_test(&self) {
+        for slot in [&self.sso.discovery_failed, &self.sso.jwks_failed] {
+            if let Ok(mut g) = slot.lock() {
+                *g = None;
+            }
+        }
+        if let Ok(mut g) = self.sso.discovery.lock() {
+            *g = None;
+        }
+        if let Ok(mut g) = self.sso.jwks.lock() {
+            *g = None;
+        }
     }
 }
 
@@ -123,13 +175,51 @@ fn host_of(authority: &str) -> String {
     host.to_ascii_lowercase()
 }
 
-/// A short, log-safe piece of what the provider said about an error (its `error` code; never the
-/// description, which the provider may fill with anything).
-fn clean(s: &str) -> String {
-    s.chars()
-        .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'))
-        .take(48)
-        .collect()
+/// The `error` codes of OAuth 2.0 (RFC 6749 sections 4.1.2.1 and 5.2), of OpenID Connect and the
+/// ones Microsoft documents for the authorization and token endpoints that the log keeps by name.
+const KNOWN_ERRORS: [&str; 12] = [
+    "access_denied",
+    "interaction_required",
+    "login_required",
+    "consent_required",
+    "invalid_request",
+    "invalid_scope",
+    "invalid_client",
+    "invalid_grant",
+    "unauthorized_client",
+    "unsupported_grant_type",
+    "server_error",
+    "temporarily_unavailable",
+];
+
+/// What the log keeps of an `error` that came back to the callback or from the token endpoint: one
+/// word out of [`KNOWN_ERRORS`], or `other`. The code in the query of the callback is whatever
+/// the caller wrote, so no text of it reaches a line or a key; the description is never read.
+fn error_class(code: &str) -> &'static str {
+    KNOWN_ERRORS
+        .iter()
+        .find(|k| **k == code)
+        .copied()
+        .unwrap_or("other")
+}
+
+/// The address a request is counted and logged under: an IPv6 address by its /64 (one subscriber
+/// has 2^64 of them), an IPv4-mapped one as the IPv4 address, anything else as it is.
+fn source_bucket(addr: &str) -> String {
+    match addr.parse::<std::net::Ipv6Addr>() {
+        Ok(a) => match a.to_ipv4_mapped() {
+            Some(v4) => v4.to_string(),
+            None => {
+                let g = a.segments();
+                format!("{:x}:{:x}:{:x}:{:x}::/64", g[0], g[1], g[2], g[3])
+            }
+        },
+        Err(_) => addr.to_string(),
+    }
+}
+
+fn source_of(s: &HttpState, parts: &Parts) -> String {
+    source_bucket(&client_ip(s, parts))
 }
 
 fn describe(e: &SsoError) -> String {
@@ -150,6 +240,52 @@ impl Cache {
             return Err("too many calls to the provider are in the air".into());
         }
         Ok(Permit(&self.in_flight))
+    }
+
+    /// The limit of a call to Microsoft, and of the wait for another request's call.
+    pub(crate) fn timeout(&self) -> Duration {
+        match self.timeout_ms.load(std::sync::atomic::Ordering::SeqCst) {
+            0 => SSO_TIMEOUT,
+            ms => Duration::from_millis(ms),
+        }
+    }
+
+    /// The right to fetch: one request at a time holds `lock`. A request that finds it taken waits
+    /// for the fetch in the air, at most `wait`, and at most `MAX_WAITING` requests wait at all;
+    /// the others get an error at once and hold no thread. (A request that gets in finds the
+    /// answer of the fetch it waited for in the cache, good or bad.)
+    fn one_at_a_time<'a>(
+        &self,
+        lock: &'a Mutex<()>,
+        wait: Duration,
+    ) -> Result<std::sync::MutexGuard<'a, ()>, String> {
+        use std::sync::TryLockError;
+        use std::sync::atomic::Ordering;
+        match lock.try_lock() {
+            Ok(g) => return Ok(g),
+            Err(TryLockError::Poisoned(p)) => return Ok(p.into_inner()),
+            Err(TryLockError::WouldBlock) => {}
+        }
+        if self.waiting.fetch_add(1, Ordering::SeqCst) >= MAX_WAITING {
+            self.waiting.fetch_sub(1, Ordering::SeqCst);
+            return Err("too many requests are waiting for the provider".into());
+        }
+        let _place = Waiting(&self.waiting);
+        let until = Instant::now() + wait;
+        loop {
+            match lock.try_lock() {
+                Ok(g) => return Ok(g),
+                Err(TryLockError::Poisoned(p)) => return Ok(p.into_inner()),
+                Err(TryLockError::WouldBlock) => {
+                    if Instant::now() >= until {
+                        return Err(
+                            "the provider's answer to another request did not come in time".into(),
+                        );
+                    }
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+            }
+        }
     }
 
     fn discovery(
@@ -173,7 +309,7 @@ impl Cache {
             return Err(format!("{why} (not tried again yet)"));
         }
         // One fetch at a time: the requests that wait find its answer, good or bad, when they get in.
-        let _one = self.discovery_flight.lock();
+        let _one = self.one_at_a_time(&self.discovery_flight, self.timeout())?;
         if let Some(ep) = cached() {
             return Ok(ep);
         }
@@ -185,7 +321,7 @@ impl Cache {
             "{}/{}/v2.0/.well-known/openid-configuration",
             leg.authority, leg.tenant
         );
-        let got = fetch(rt, &url, &host_of(&leg.authority))
+        let got = fetch(rt, &url, &host_of(&leg.authority), self.timeout())
             .and_then(|body| api.endpoints(&body).map_err(|e| describe(&e)));
         match got {
             Ok(ep) => {
@@ -226,7 +362,7 @@ impl Cache {
         if let Some(why) = failed_recently(&self.jwks_failed, &key) {
             return Err(format!("{why} (not tried again yet)"));
         }
-        let _one = self.jwks_flight.lock();
+        let _one = self.one_at_a_time(&self.jwks_flight, self.timeout())?;
         if let Some(doc) = cached() {
             return Ok(doc);
         }
@@ -240,7 +376,7 @@ impl Cache {
             return Err("the key set was fetched too often; not fetched again".into());
         }
         let _permit = self.permit()?;
-        match fetch(rt, &ep.jwks, &host_of(&leg.authority)) {
+        match fetch(rt, &ep.jwks, &host_of(&leg.authority), self.timeout()) {
             Ok(doc) => {
                 if let Ok(mut g) = self.jwks.lock() {
                     *g = Some((key, Instant::now(), doc.clone()));
@@ -262,7 +398,12 @@ impl Cache {
 }
 
 /// A GET through the hardened egress client. The text of an error has no URL, header or body in it.
-fn fetch(rt: &obop_connectors::Runtime, url: &str, host: &str) -> Result<Vec<u8>, String> {
+fn fetch(
+    rt: &obop_connectors::Runtime,
+    url: &str,
+    host: &str,
+    limit: Duration,
+) -> Result<Vec<u8>, String> {
     let r = rt
         .client
         .send_within(
@@ -273,7 +414,7 @@ fn fetch(rt: &obop_connectors::Runtime, url: &str, host: &str) -> Result<Vec<u8>
                 body: None,
                 allowed_hosts: &[host.to_string()],
             },
-            SSO_TIMEOUT,
+            limit,
         )
         .map_err(|e| e.to_string())?;
     if r.status != 200 {
@@ -382,7 +523,7 @@ fn start_blocking(s: &HttpState, parts: &Parts) -> Response {
     if !is_navigation(parts) {
         return not_a_navigation();
     }
-    let ip = client_ip(s, parts);
+    let ip = source_of(s, parts);
     s.shared.maybe_purge();
     if limited(s, "start", &ip, 30) {
         return back(s, "busy", &[]);
@@ -486,7 +627,7 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
     if !is_navigation(parts) {
         return not_a_navigation();
     }
-    let ip = client_ip(s, parts);
+    let ip = source_of(s, parts);
     s.shared.maybe_purge();
     let (Some(api), Some(rt)) = (s.auth.sso(), s.connectors.get()) else {
         return back(s, "unavailable", &[]);
@@ -535,7 +676,7 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
         return back(s, "failed", &[clear_flow]);
     }
     if let Some(err) = pair(&pairs, "error") {
-        let err = clean(err);
+        let err = error_class(err);
         // Only the person's own refusal is a cancellation; any other answer is the provider's
         // error, and is logged and worded as one.
         let cancelled = err == "access_denied";
@@ -594,30 +735,34 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
         pct(&leg.client_secret),
         pct(&verifier),
     );
-    let Ok(_permit) = s.sso.permit() else {
-        api.audit_throttled(
-            &ip,
-            "oidc_error",
-            "too many calls to the provider are in the air; this sign-in was not tried",
-        );
-        return back(s, "busy", &[clear_flow]);
+    // The place among the calls in the air is held for this call only: the key set, which may
+    // need a place of its own, is fetched after it is given back.
+    let resp = {
+        let Ok(_permit) = s.sso.permit() else {
+            api.audit_throttled(
+                &ip,
+                "oidc_error",
+                "too many calls to the provider are in the air; this sign-in was not tried",
+            );
+            return back(s, "busy", &[clear_flow]);
+        };
+        rt.client.send_within(
+            Request {
+                method: "POST",
+                url: &ep.token,
+                headers: vec![
+                    (
+                        "Content-Type".into(),
+                        "application/x-www-form-urlencoded".into(),
+                    ),
+                    ("Accept".into(), "application/json".into()),
+                ],
+                body: Some(form.into_bytes()),
+                allowed_hosts: &[host_of(&leg.authority)],
+            },
+            s.sso.timeout(),
+        )
     };
-    let resp = rt.client.send_within(
-        Request {
-            method: "POST",
-            url: &ep.token,
-            headers: vec![
-                (
-                    "Content-Type".into(),
-                    "application/x-www-form-urlencoded".into(),
-                ),
-                ("Accept".into(), "application/json".into()),
-            ],
-            body: Some(form.into_bytes()),
-            allowed_hosts: &[host_of(&leg.authority)],
-        },
-        SSO_TIMEOUT,
-    );
     let resp = match resp {
         Ok(r) => r,
         Err(e) => {
@@ -629,6 +774,16 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
             return back(s, "unavailable", &[clear_flow]);
         }
     };
+    // 429 and 5xx: the provider is not well, it has not said no. Like the other outages (the
+    // fetches, an endpoint that cannot be reached) that is "try again", not "ask the administrator".
+    if resp.status == 429 || resp.status >= 500 {
+        api.audit_throttled(
+            &ip,
+            "oidc_error",
+            &format!("the token endpoint answered {}", resp.status),
+        );
+        return back(s, "unavailable", &[clear_flow]);
+    }
     let answer: J = serde_json::from_slice(&resp.body).unwrap_or(J::Null);
     let id_token = answer["id_token"].as_str().unwrap_or("");
     if resp.status != 200 || id_token.is_empty() {
@@ -640,7 +795,7 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
                 resp.status,
                 answer["error"]
                     .as_str()
-                    .map(|e| format!(" {:?}", clean(e)))
+                    .map(|e| format!(" {:?}", error_class(e)))
                     .unwrap_or_default()
             ),
         );
@@ -722,7 +877,7 @@ pub(crate) async fn exchange(State(s): Shared, parts: Parts, body: Bytes) -> Res
 }
 
 fn exchange_blocking(s: &HttpState, parts: &Parts, body: &[u8]) -> Response {
-    let ip = client_ip(s, parts);
+    let ip = source_of(s, parts);
     let clear = set_cookie(DONE_COOKIE, "", 0, false);
     let r = if limited(s, "ex", &ip, 30) {
         api_error(
@@ -783,6 +938,59 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_request_waits_for_another_requests_fetch_a_little_and_only_so_many_wait() {
+        use std::sync::atomic::Ordering;
+        let c = Cache::default();
+        let lock = Mutex::new(());
+        // Nobody has the fetch in the air: the place is given at once.
+        drop(c.one_at_a_time(&lock, Duration::from_millis(50)).unwrap());
+        let held = lock.lock().unwrap();
+        // A request waits for the fetch that is in the air, at most the limit it was given.
+        let t = Instant::now();
+        assert!(c.one_at_a_time(&lock, Duration::from_millis(150)).is_err());
+        let waited = t.elapsed();
+        assert!(
+            waited >= Duration::from_millis(120) && waited < Duration::from_secs(3),
+            "{waited:?}"
+        );
+        assert_eq!(
+            c.waiting.load(Ordering::SeqCst),
+            0,
+            "the place was given back"
+        );
+        // MAX_WAITING requests wait; the next one is refused at once and holds no thread.
+        std::thread::scope(|s| {
+            let waiters: Vec<_> = (0..MAX_WAITING)
+                .map(|_| s.spawn(|| c.one_at_a_time(&lock, Duration::from_millis(1500)).is_err()))
+                .collect();
+            let t = Instant::now();
+            while c.waiting.load(Ordering::SeqCst) < MAX_WAITING {
+                assert!(
+                    t.elapsed() < Duration::from_secs(5),
+                    "the waiters did not arrive"
+                );
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            let t = Instant::now();
+            let refused = c.one_at_a_time(&lock, Duration::from_millis(1500));
+            assert!(refused.is_err());
+            assert!(
+                t.elapsed() < Duration::from_millis(300),
+                "{:?}",
+                t.elapsed()
+            );
+            assert_eq!(c.waiting.load(Ordering::SeqCst), MAX_WAITING);
+            for w in waiters {
+                assert!(w.join().unwrap(), "each waiter gave up at its limit");
+            }
+        });
+        assert_eq!(c.waiting.load(Ordering::SeqCst), 0);
+        // The fetch ends: the next request gets in.
+        drop(held);
+        assert!(c.one_at_a_time(&lock, Duration::from_millis(50)).is_ok());
+    }
+
+    #[test]
     fn a_flow_is_spent_by_exactly_one_of_several_racing_callbacks() {
         // Many readers of one row: only the one whose delete removed it may go on (D59: several
         // server processes on one database). Many rounds, many threads released at once.
@@ -829,10 +1037,35 @@ mod tests {
     }
 
     #[test]
-    fn what_the_provider_says_about_an_error_is_cut_down_before_it_is_logged() {
-        assert_eq!(clean("access_denied"), "access_denied");
-        assert_eq!(clean("a b\nc<script>"), "abcscript");
-        assert_eq!(clean(&"x".repeat(500)).len(), 48);
+    fn what_the_provider_says_about_an_error_is_one_word_of_a_fixed_set_before_it_is_logged() {
+        for known in KNOWN_ERRORS {
+            assert_eq!(error_class(known), known);
+        }
+        assert_eq!(KNOWN_ERRORS.len(), 12);
+        // Anything else, whatever it looks like, is "other": no text of the caller's survives.
+        for other in [
+            "",
+            "a b\nc<script>",
+            "Access_Denied",
+            "access_denied ",
+            "access_denied2",
+            &"x".repeat(500),
+        ] {
+            assert_eq!(error_class(other), "other", "{other:?}");
+        }
+    }
+
+    #[test]
+    fn an_ipv6_address_is_counted_by_its_64_and_an_ipv4_mapped_one_as_ipv4() {
+        assert_eq!(source_bucket("203.0.113.9"), "203.0.113.9");
+        assert_eq!(source_bucket("::ffff:203.0.113.9"), "203.0.113.9");
+        assert_eq!(source_bucket(""), "");
+        assert_eq!(source_bucket("not an address"), "not an address");
+        let a = source_bucket("2001:db8:1:2:aaaa:bbbb:cccc:dddd");
+        assert_eq!(a, "2001:db8:1:2::/64");
+        assert_eq!(a, source_bucket("2001:db8:1:2::1"));
+        assert_ne!(a, source_bucket("2001:db8:1:3::1"));
+        assert_eq!(source_bucket("::1"), "0:0:0:0::/64");
     }
 
     #[test]

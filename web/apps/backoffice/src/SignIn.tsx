@@ -60,6 +60,16 @@ export function SignIn({
   const [leaving, setLeaving] = useState(false);
   const i18n = useI18n();
 
+  // The Back button of the browser restores this page as it was left, from its back/forward cache
+  // (`persisted`), with the button still waiting: it must be usable again.
+  useEffect(() => {
+    const restored = (e: PageTransitionEvent) => {
+      if (e.persisted) setLeaving(false);
+    };
+    window.addEventListener("pageshow", restored);
+    return () => window.removeEventListener("pageshow", restored);
+  }, []);
+
   // The button is shown only where an administrator turned the sign-in on.
   useEffect(() => {
     let live = true;
@@ -84,9 +94,13 @@ export function SignIn({
       if (r.kind === "session") onDone(r.token, r.user ?? "", r.enrolment);
       else if (r.kind === "mfa")
         setStep({ mfaToken: r.mfaToken, user: r.user ?? "", methods: r.methods });
-      else if (r.status === 429) setError(ssoMessage("busy"));
-      else if (r.status === 0 || r.status >= 500) setError(ssoMessage("unavailable"));
-      else setError(ssoMessage("failed"));
+      else {
+        // The round trip failed: the place kept for it is not for a later password sign-in.
+        forgetPlace();
+        if (r.status === 429) setError(ssoMessage("busy"));
+        else if (r.status === 0 || r.status >= 500) setError(ssoMessage("unavailable"));
+        else setError(ssoMessage("failed"));
+      }
     });
   }, [onDone]);
 
@@ -230,18 +244,23 @@ export function SignIn({
             </Button>
           )}
           {microsoft && (
-            <Button
-              icon="shield-check"
-              size="lg"
-              loading={leaving}
-              onClick={() => {
-                setLeaving(true);
-                rememberPlace();
-                location.assign(SSO_START);
-              }}
-            >
-              {t("Sign in with Microsoft")}
-            </Button>
+            <>
+              <Button
+                icon="shield-check"
+                size="lg"
+                loading={leaving}
+                onClick={() => {
+                  setLeaving(true);
+                  rememberPlace();
+                  location.assign(SSO_START);
+                }}
+              >
+                {t("Sign in with Microsoft")}
+              </Button>
+              <span className="sr-only" role="status" aria-live="polite">
+                {leaving ? t("Going to Microsoft") : ""}
+              </span>
+            </>
           )}
           <LanguageSelect value={i18n.lang} onChange={(l) => void i18n.setLanguage(l)} />
         </form>

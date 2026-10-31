@@ -622,9 +622,10 @@ impl Auth {
         // account that has no sign-in of its own does not keep the instance reachable. A refused
         // list is the store's trouble, not "none".
         if disabled && !was && is_admin && self.other_local_admins(&target)? == 0 {
-            return Err(MfaError::Invalid(
-                "the last enabled administrator cannot be disabled".into(),
-            ));
+            return Err(MfaError::Invalid(format!(
+                "the last enabled administrator cannot be disabled{}",
+                self.microsoft_only_admins_note()
+            )));
         }
         // While accounts depend on Microsoft, two administrators keep a sign-in of their own.
         let warning = if disabled && !was {

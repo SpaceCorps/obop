@@ -1,6 +1,7 @@
 //! The id token checks of D91 as a table: every row is a way a token can be wrong, and every one
 //! must be refused; the first row is the token that must pass. A check that is left out of
-//! `verify` makes exactly its row fail (see the mutation list in the pull request).
+//! `verify` makes exactly its row fail (the mutations that were tried are listed in
+//! docs/ISSUES.md, "Mutation checks of D91").
 
 use super::soft::{Entra, StandIn};
 use super::verify::*;
@@ -287,6 +288,15 @@ fn amr_is_a_list_and_absence_is_not_mfa() {
         id(|c| c["auth_time"] = J::from("yesterday")).auth_time,
         None
     );
+    // Only a non-negative whole number is kept.
+    assert_eq!(id(|c| c["auth_time"] = json!(-1)).auth_time, None);
+    assert_eq!(id(|c| c["auth_time"] = json!(1.5)).auth_time, None);
+    assert_eq!(id(|c| c["auth_time"] = json!(true)).auth_time, None);
+    assert_eq!(id(|c| c["auth_time"] = J::Null).auth_time, None);
+    assert_eq!(
+        id(|c| c["auth_time"] = json!(1_700_000_000u64)).auth_time,
+        Some(1_700_000_000)
+    );
 }
 
 #[test]
@@ -393,7 +403,8 @@ fn keys_come_from_the_pinned_key_set_by_kid_and_nowhere_else() {
         verify_id_token(&s.token(&claims()), &set, &expect()),
         Err(VerifyError::UnknownKey)
     );
-    // Another key under the right name: the signature does not verify.
+    // A key set that publishes another modulus under the right name: the signature does not
+    // verify.
     let wrong = Jwks::parse(s.jwks_with_wrong_modulus().as_bytes()).unwrap();
     refused(
         verify_id_token(&s.token(&claims()), &wrong, &expect()),
@@ -659,8 +670,12 @@ fn without_the_optional_claims_there_is_no_amr_and_no_auth_time() {
     assert_eq!(id.oid, OID);
 }
 
-/// Microsoft documents more values than `mfa` (`ngcmfa`, `wiaormfa`, `otp`, ...). D91 accepts the
-/// exact string `mfa` and nothing that merely contains it.
+/// Microsoft documents more values than `mfa`: `ngcmfa` is "Equivalent to `mfa`, used for
+/// provisioning of certain advanced credential types" and `wiaormfa` is "The user used Windows or
+/// an MFA credential to authenticate" (the access token claims reference). D91 accepts the exact
+/// string `mfa` and nothing that merely contains it, as its own conservative choice. In
+/// Microsoft's table of values per method the methods that carry `ngcmfa` carry `mfa` too (the
+/// optional claims reference), so they count; the last check pins that.
 #[test]
 fn only_the_exact_value_mfa_counts_as_a_second_factor() {
     let id = |amr: J| {
@@ -676,8 +691,7 @@ fn only_the_exact_value_mfa_counts_as_a_second_factor() {
         "nomfa",
         "mfa ",
         " mfa",
-        "mfa
-",
+        "mfa\n",
         "multifactor",
         "otp",
         "pwd",
@@ -688,6 +702,11 @@ fn only_the_exact_value_mfa_counts_as_a_second_factor() {
             "{other:?} is not the value mfa"
         );
     }
+    // The sets Microsoft lists for Authenticator push and for Windows Hello for Business carry
+    // `mfa` next to `ngcmfa`: they count. `ngcmfa` alone does not.
+    assert!(id(json!(["rsa", "ngcmfa", "mfa"])).mfa());
+    assert!(id(json!(["hwk", "mfa", "ngcmfa"])).mfa());
+    assert!(!id(json!(["hwk", "ngcmfa"])).mfa());
 }
 
 /// The e-mail address, the user principal name, the display name and `sub` are not the identity:

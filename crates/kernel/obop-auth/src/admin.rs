@@ -317,10 +317,10 @@ impl Auth {
                 ));
             }
             if u["disabled"].as_bool() != Some(true) && self.other_local_admins(&target)? == 0 {
-                return Err(MfaError::Invalid(
-                    "the last enabled administrator keeps the group; make another administrator first"
-                        .into(),
-                ));
+                return Err(MfaError::Invalid(format!(
+                    "the last enabled administrator keeps the group; make another administrator first{}",
+                    self.microsoft_only_admins_note()
+                )));
             }
             // While accounts depend on Microsoft, two administrators keep a sign-in of their own.
             if u["disabled"].as_bool() != Some(true)
@@ -371,9 +371,10 @@ impl Auth {
         let is_admin = str_list(&u["groups"]).iter().any(|g| g == ADMIN_GROUP);
         let enabled_now = u["disabled"].as_bool() != Some(true);
         if is_admin && enabled_now && self.other_local_admins(&target)? == 0 {
-            return Err(MfaError::Invalid(
-                "the last enabled administrator cannot be offboarded".into(),
-            ));
+            return Err(MfaError::Invalid(format!(
+                "the last enabled administrator cannot be offboarded{}",
+                self.microsoft_only_admins_note()
+            )));
         }
         // While accounts depend on Microsoft, two administrators keep a sign-in of their own.
         let warning = if enabled_now {

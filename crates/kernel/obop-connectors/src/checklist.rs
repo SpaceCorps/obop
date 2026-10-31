@@ -18,6 +18,27 @@ fn item(id: &str, status: &str, title: &str, detail: String, subjects: Vec<Strin
     json!({"id": id, "status": status, "title": title, "detail": detail, "subjects": subjects})
 }
 
+/// The warning for `OBOP_OIDC_TEST_AUTHORITY` (D91): a development setting that points the
+/// Microsoft sign-in at a loopback address. `loopback` is whether loopback addresses are allowed
+/// (`OBOP_CONNECTORS_ALLOW_LOOPBACK`); without that the sign-in ignores the variable.
+fn test_authority_item(value: Option<&str>, loopback: bool) -> Option<J> {
+    if value?.trim().is_empty() {
+        return None;
+    }
+    let detail = if loopback {
+        "OBOP_OIDC_TEST_AUTHORITY is set and loopback addresses are allowed: the Microsoft sign-in trusts that address instead of Microsoft, and the bindings made now carry it in their key. Use it for tests only."
+    } else {
+        "OBOP_OIDC_TEST_AUTHORITY is set. Without OBOP_CONNECTORS_ALLOW_LOOPBACK=1 the Microsoft sign-in ignores it; remove it from an instance people use."
+    };
+    Some(item(
+        "oidc_test_authority",
+        "warn",
+        "The Microsoft sign-in is pointed at a test authority",
+        detail.into(),
+        vec![],
+    ))
+}
+
 impl Runtime {
     pub fn checklist(&self) -> J {
         let inst = InstancePolicy::load(&*self.backend);
@@ -182,6 +203,10 @@ impl Runtime {
         if self.cfg.allow_loopback {
             items.push(item("loopback", "warn", "Loopback addresses are allowed for connections", "OBOP_CONNECTORS_ALLOW_LOOPBACK is set. Use it for tests and local development only.".into(), vec![]));
         }
+        items.extend(test_authority_item(
+            std::env::var("OBOP_OIDC_TEST_AUTHORITY").ok().as_deref(),
+            self.cfg.allow_loopback,
+        ));
         if self.cfg.public_url.is_none() {
             items.push(item("public_url", "info", "OBOP_PUBLIC_URL is not set", "Webhook addresses are shown relative to this server and OAuth connections cannot be authorised until it is set.".into(), vec![]));
         }
@@ -207,6 +232,25 @@ mod tests {
     use obop_commands::Dispatcher;
     use serde_json::json;
     use std::sync::Arc;
+
+    #[test]
+    fn the_test_authority_of_the_microsoft_sign_in_is_a_warning_when_it_is_set() {
+        assert!(test_authority_item(None, true).is_none());
+        assert!(test_authority_item(Some("  "), true).is_none());
+        for loopback in [true, false] {
+            let i = test_authority_item(Some("http://127.0.0.1:4455"), loopback).unwrap();
+            assert_eq!(i["id"], "oidc_test_authority");
+            assert_eq!(i["status"], "warn");
+            assert!(
+                i["detail"]
+                    .as_str()
+                    .unwrap()
+                    .contains("OBOP_OIDC_TEST_AUTHORITY")
+            );
+        }
+        let ignored = test_authority_item(Some("http://127.0.0.1:4455"), false).unwrap();
+        assert!(ignored["detail"].as_str().unwrap().contains("ignores it"));
+    }
 
     #[test]
     fn checklist_flags_what_is_missing_and_always_carries_the_disclaimer() {

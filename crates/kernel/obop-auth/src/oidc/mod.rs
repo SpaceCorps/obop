@@ -48,22 +48,52 @@ pub const CODE_SECS: u64 = 60;
 /// is made SSO-only.
 pub const BREAK_GLASS_MIN: usize = 2;
 const MAX_SECRET_CHARS: usize = 512;
-/// How long an anonymous refusal is written once (`audit_throttled`), in milliseconds.
+/// How long an anonymous refusal is written once per source and kind (`audit_throttled`), in
+/// milliseconds.
 const THROTTLE_MS: u64 = 10 * 60 * 1000;
+/// The most lines of requests nobody signed in for that are written in an hour, for all sources
+/// together (`audit_throttled`). Past it one summary line is written and the rest are counted.
+pub const ANON_LINES_PER_HOUR: u64 = 60;
+const ANON_WINDOW_MS: u64 = 60 * 60 * 1000;
+const ANON_COUNT_KEY: &str = "auth.evt:sso:hour";
+const ANON_DROPPED_KEY: &str = "auth.evt:sso:dropped";
 
-/// The `OBOP_OIDC_TEST_AUTHORITY` of a development instance: a literal loopback address over
-/// http that stands in for `https://login.microsoftonline.com`. For tests only, like
-/// `OBOP_CONNECTORS_ALLOW_LOOPBACK` (and, like it, of no use without it: the outbound client
-/// refuses a loopback address unless that is set). Anything else is ignored with a line on stderr.
-pub(crate) fn authority_from_env() -> Option<String> {
-    authority_from(std::env::var("OBOP_OIDC_TEST_AUTHORITY").ok().as_deref())
+/// The counter that says a line of this kind from this source was written lately. The text of the
+/// line is not part of it: it can carry what the caller chose.
+pub fn throttle_key(source: &str, kind: &str) -> String {
+    format!(
+        "auth.evt:sso:{}",
+        hex(&sha256(format!("{source}\n{kind}").as_bytes()))
+    )
 }
 
-/// The checks of [`authority_from_env`] on the value, so a test can try them without the process
-/// environment.
-fn authority_from(value: Option<&str>) -> Option<String> {
+/// The `OBOP_OIDC_TEST_AUTHORITY` of a development instance: a literal loopback address over
+/// http that stands in for `https://login.microsoftonline.com`. For tests only, and only together
+/// with `OBOP_CONNECTORS_ALLOW_LOOPBACK` (`1` or `true`, the spelling the outbound client reads):
+/// without that flag the value is ignored here, with a line on stderr, so that it cannot change
+/// the issuer of the bindings of an instance that does not let the outbound client reach a
+/// loopback address anyway. Any other value is ignored with a line on stderr as well.
+pub(crate) fn authority_from_env() -> Option<String> {
+    authority_from(
+        std::env::var("OBOP_OIDC_TEST_AUTHORITY").ok().as_deref(),
+        std::env::var("OBOP_CONNECTORS_ALLOW_LOOPBACK")
+            .ok()
+            .as_deref(),
+    )
+}
+
+/// The checks of [`authority_from_env`] on the two values, so a test can try them without the
+/// process environment. `loopback_flag` is the value of `OBOP_CONNECTORS_ALLOW_LOOPBACK`.
+fn authority_from(value: Option<&str>, loopback_flag: Option<&str>) -> Option<String> {
     let v = value?.trim().trim_end_matches('/').to_string();
     if v.is_empty() || v == verify::AUTHORITY {
+        return None;
+    }
+    // The same two spellings as `obop_connectors::runtime::Config::from_env`.
+    if !matches!(loopback_flag, Some("1" | "true")) {
+        eprintln!(
+            "OBOP_OIDC_TEST_AUTHORITY is ignored: it works only together with OBOP_CONNECTORS_ALLOW_LOOPBACK=1 (tests only)"
+        );
         return None;
     }
     if verify::authority_ok(&v) {
@@ -128,7 +158,9 @@ impl Auth {
             .unwrap_or_else(|| verify::AUTHORITY.to_string())
     }
 
-    /// For tests: use `authority` (a loopback address) instead of Microsoft's.
+    /// For tests: use `authority` (a loopback address) instead of Microsoft's. Not in a build
+    /// without the `test-support` feature.
+    #[cfg(any(test, feature = "test-support"))]
     pub fn set_oidc_authority_for_test(&self, authority: &str) {
         assert!(verify::authority_ok(authority), "not an authority");
         *self.oidc_authority.write().unwrap() = Some(authority.to_string());
@@ -198,6 +230,23 @@ impl Auth {
             && u["disabled"].as_bool() != Some(true)
             && u["sso_only"].as_bool() != Some(true)
             && self.working_second_factor(name, u)
+    }
+
+    /// What the refusals of the "last administrator" rule add while enabled administrators sign in
+    /// with Microsoft only: they are not counted, and how to give one a password again.
+    pub(crate) fn microsoft_only_admins_note(&self) -> String {
+        let any = self.backend.list("auth_user").is_ok_and(|us| {
+            us.iter().any(|(_, u)| {
+                str_list(&u["groups"]).iter().any(|g| g == ADMIN_GROUP)
+                    && u.get("disabled").and_then(J::as_bool) != Some(true)
+                    && u.get("sso_only").and_then(J::as_bool) == Some(true)
+            })
+        });
+        if any {
+            " (administrators who sign in with Microsoft only are not counted: `obop admin sso only NAME off` gives one of them its password back)".into()
+        } else {
+            String::new()
+        }
     }
 
     /// How many enabled administrators other than `except` sign in without Microsoft only. The
@@ -506,7 +555,7 @@ impl Auth {
             "-",
             "oidc_provider_cleared",
             actor,
-            &format!("the provider's configuration was removed; {only} SSO-only account(s) can sign in only through the break-glass administrators until it is configured again"),
+            &format!("the provider's configuration was removed; {only} SSO-only account(s) cannot sign in until it is configured again or an administrator turns Microsoft-only off for them (the break-glass administrators can)"),
         );
         Ok(())
     }
@@ -625,7 +674,7 @@ impl Auth {
             "oidc_unbind",
             actor,
             &format!(
-                "unbound from object id {}; {n} session(s) signed out; agent tokens made in those sessions keep working until the account is offboarded",
+                "unbound from object id {}; {n} session(s) signed out; agent tokens made in those sessions and apps connected through the OAuth sign-in (their grants and refresh tokens) keep working until the account is offboarded",
                 link["oid"].as_str().unwrap_or("?")
             ),
         );
@@ -709,12 +758,14 @@ impl Auth {
                 "the binding of {user} is not to the tenant of the provider (the provider was changed after it was made): unbind and bind again"
             )));
         }
-        // The first real use of a binding proves the object id is the person's and that Entra
-        // sends what this server needs (the profile scope, the optional claims): without it a
-        // wrong id or an app registration that does not work would lock the person out.
+        // The first real use of a binding proves the object id is the person's and that the
+        // registration sends the profile scope (a token with an object id): without it a wrong id
+        // would lock the person out. It does not prove the optional claims: a token without `amr`
+        // signs in as well. The `oidc_login` line says whether the provider reported a second
+        // factor, which the operator reads before turning this on (docs/DEPLOY.md).
         if link["last_login_at"].as_str().is_none() {
             return Err(invalid(format!(
-                "{user} has never signed in with Microsoft on this binding: ask them to sign in once with the button first, so that a wrong object id or an app registration that does not work shows now and not as a lockout"
+                "{user} has never signed in with Microsoft on this binding: ask them to sign in once with the button first, so that a wrong object id shows now and not as a lockout"
             )));
         }
         let rest = self.break_glass(Some(&user))?;
@@ -1049,25 +1100,55 @@ impl SsoApi for Auth {
             "oidc_refused" | "oidc_start" | "oidc_cancelled" | "oidc_error" => kind,
             _ => "oidc_error",
         };
-        // One event per source, kind and text in ten minutes, whichever process sees it first;
-        // the store counts the others. An unreadable counter writes the event (an unthrottled
-        // line is better than a missing one).
-        let key = format!(
-            "auth.evt:sso:{}",
-            hex(&sha256(format!("{source}\n{kind}\n{detail}").as_bytes()))
-        );
+        // One line per source and kind in ten minutes, whichever process sees it first (the text
+        // is not in the key). An unreadable counter writes the line (an unthrottled line is
+        // better than a missing one).
         let first = self
             .backend
-            .counter_add(&key, THROTTLE_MS, false)
+            .counter_add(&throttle_key(source, kind), THROTTLE_MS, false)
             .map_or(true, |n| n == 1);
-        if first {
+        if !first {
+            return;
+        }
+        // And at most ANON_LINES_PER_HOUR in an hour for all sources together, so that many
+        // addresses do not fill the log either. The first line past the ceiling says so; the
+        // number that was not written is reported by the first line of the next hour.
+        let n = self
+            .backend
+            .counter_add(ANON_COUNT_KEY, ANON_WINDOW_MS, false)
+            .unwrap_or(0);
+        if n > ANON_LINES_PER_HOUR {
+            let _ = self
+                .backend
+                .counter_add(ANON_DROPPED_KEY, 24 * ANON_WINDOW_MS, false);
+            if n == ANON_LINES_PER_HOUR + 1 {
+                self.event(
+                    "-",
+                    "oidc_error",
+                    "-",
+                    &format!("requests nobody signed in for reached the ceiling of {ANON_LINES_PER_HOUR} lines an hour: the others of this hour are not written, their number is written by the first line of the next hour"),
+                );
+            }
+            return;
+        }
+        if n == 1
+            && let Ok(dropped) = self.backend.counter_get(ANON_DROPPED_KEY)
+            && dropped > 0
+        {
+            let _ = self.backend.counter_reset(ANON_DROPPED_KEY);
             self.event(
                 "-",
-                kind,
+                "oidc_error",
                 "-",
-                &format!("{detail} (more of the same from this address in the next 10 minutes are counted, not written)"),
+                &format!("{dropped} line(s) of requests nobody signed in for were not written because the ceiling of {ANON_LINES_PER_HOUR} an hour was reached"),
             );
         }
+        self.event(
+            "-",
+            kind,
+            "-",
+            &format!("{detail} (the next lines of this kind from this address are not written for 10 minutes)"),
+        );
     }
 
     fn configure(

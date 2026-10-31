@@ -123,17 +123,62 @@ test.describe("sign in with Microsoft", () => {
     expect(mine.status()).toBe(200);
   });
 
+  test("a link opened in a deep place of the back office comes back to that place after Microsoft", async ({
+    page,
+  }) => {
+    await page.goto(`${ssoUrl()}/#/crm/lead`);
+    await page.getByRole("button", { name: "Sign in with Microsoft" }).click();
+    await atMicrosoft(page, "bea");
+    await expect(page.locator(".topbar")).toBeVisible();
+    // The fragment of the return was cleaned, and the place of the link is the address again.
+    expect(new URL(page.url()).hash).toBe("#/crm/lead");
+  });
+
+  test("the Microsoft button is usable again when the browser restores the page with its Back button", async ({
+    page,
+  }) => {
+    // Playwright's Chromium does not keep pages in the back/forward cache, so a real Back from
+    // Microsoft cannot be staged here. What is staged: the navigation to Microsoft is answered
+    // with 204 (the page stays, the button waits) and the event the browser fires for a restored
+    // page, `pageshow` with `persisted`, is dispatched by hand. The restore itself is not covered.
+    // The page is read with evaluate: a locator waits for a navigation that never finishes.
+    await page.route("**/api/auth/oidc/start", (route) => route.fulfill({ status: 204 }));
+    await page.goto(ssoUrl());
+    const button = page.getByRole("button", { name: "Sign in with Microsoft" });
+    const state = () =>
+      page.evaluate(() => {
+        const b = [...document.querySelectorAll("button")].find((x) =>
+          x.textContent?.includes("Sign in with Microsoft"),
+        );
+        const s = document.querySelector('span.sr-only[role="status"]');
+        return { disabled: b?.disabled, busy: b?.getAttribute("aria-busy"), said: s?.textContent };
+      });
+    await expect(button).toBeVisible();
+    expect(await state()).toEqual({ disabled: false, busy: null, said: "" });
+    await button.click({ noWaitAfter: true });
+    await expect.poll(state).toEqual({ disabled: true, busy: "true", said: "Going to Microsoft" });
+    // A page shown for the first time is not a restore: nothing changes.
+    await page.evaluate(() =>
+      window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: false })),
+    );
+    expect(await state()).toMatchObject({ disabled: true });
+    await page.evaluate(() =>
+      window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })),
+    );
+    await expect.poll(state).toEqual({ disabled: false, busy: null, said: "" });
+  });
+
   test("the request asks for openid and profile, and nothing else", async ({ request }) => {
     const scopes = (await (await request.get(`${idpUrl()}/control/scopes`)).json()) as string[];
     expect(scopes.length).toBeGreaterThan(0);
     for (const s of scopes) expect(s).toBe("openid profile");
   });
 
-  test("a registration without the consent for profile gets no object id: a plain message here, the reason in the log", async ({
+  test("a request without the profile scope gets no object id: a plain message here, the reason in the log", async ({
     page,
     request,
   }) => {
-    await request.get(`${idpUrl()}/control?consent=0`);
+    await request.get(`${idpUrl()}/control?profile=0`);
     try {
       await page.goto(ssoUrl());
       await page.getByRole("button", { name: "Sign in with Microsoft" }).click();
@@ -141,14 +186,14 @@ test.describe("sign in with Microsoft", () => {
       await expect(page.getByText(FAILED)).toBeVisible();
       await expect(page.locator(".topbar")).toHaveCount(0);
     } finally {
-      await request.get(`${idpUrl()}/control?consent=1`);
+      await request.get(`${idpUrl()}/control?profile=1`);
     }
     // The administrator finds what to check in the log, not on the page.
     const log = await post(request, "/api/security_event/list", { limit: 1000 }, admin);
     const text = JSON.stringify(log.json);
     expect(text).toMatch(/no object id/);
     expect(text).toMatch(/profile scope/);
-    expect(text).toMatch(/consent/);
+    expect(text).toMatch(/permissions of the app registration/);
   });
 
   test("a registration without the optional claims reports no second factor, and the log says so", async ({
@@ -222,7 +267,9 @@ test.describe("sign in with Microsoft", () => {
     await expect(page.getByRole("heading", { name: "Two-factor authentication" })).toBeVisible();
     await expect(page.locator(".topbar")).toHaveCount(0);
     // The next step's code is accepted (one step of clock drift either way).
-    await page.getByLabel("6-digit code").fill(code(bob!.secret, bob!.step + 1));
+    await page
+      .getByLabel("6-digit code")
+      .fill(code(bob!.secret, Math.max(bob!.step + 1, stepNow())));
     await page.getByRole("button", { name: "Verify" }).click();
     await expect(page.locator(".topbar")).toBeVisible();
     expect(await page.evaluate(() => sessionStorage.getItem("obop-user"))).toBe("bob");
@@ -277,6 +324,22 @@ test.describe("sign in with Microsoft", () => {
     allowHttpErrors(401);
     const exchange = (jar: APIRequestContext, code: string) =>
       jar.post(`${ssoUrl()}/api/auth/oidc/exchange`, { data: { code } });
+    /** The exchange from a browser that holds exactly this done cookie. */
+    const nobodyCookie = async (
+      pw: { request: { newContext(): Promise<APIRequestContext> } },
+      value: string,
+      code: string,
+    ) => {
+      const c = await pw.request.newContext();
+      try {
+        return await c.post(`${ssoUrl()}/api/auth/oidc/exchange`, {
+          data: { code },
+          headers: { cookie: `obop_sso_done=${value}` },
+        });
+      } finally {
+        await c.dispose();
+      }
+    };
 
     // Another browser (login CSRF) follows a link that carries a fresh, unspent code: it has not
     // the cookie of the browser that signed in, and gets a plain failure and no session.
@@ -298,11 +361,16 @@ test.describe("sign in with Microsoft", () => {
 
     // The right browser with its own fresh code: a session, and a replay of the same code gets none.
     const mine = await callbackCode(playwright, "bea");
+    // The cookie of the browser, kept as it is before the exchange (which spends it).
+    const done = (await mine.jar.storageState()).cookies.find((c) => c.name === "obop_sso_done");
+    expect(done, "the browser holds the done cookie").toBeTruthy();
     const first = await exchange(mine.jar, mine.code);
     expect(first.status()).toBe(200);
     expect(((await first.json()) as Json).token).toMatch(/^obop_[0-9a-f]{64}$/);
-    // The done cookie is spent with the code: a replay needs both again, and has neither.
-    const replay = await exchange(mine.jar, mine.code);
+    // The replay carries the same cookie by hand, so that only the spent code can refuse it: the
+    // jar has lost the cookie with the exchange, and a replay from the jar would be refused
+    // whether or not the code was spent.
+    const replay = await nobodyCookie(playwright, done!.value, mine.code);
     expect(replay.status(), "a spent code is refused").toBe(401);
     await mine.jar.dispose();
     await victim.jar.dispose();

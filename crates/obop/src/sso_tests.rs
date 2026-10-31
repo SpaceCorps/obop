@@ -64,15 +64,23 @@ struct IdpState {
     /// the ID token (without them the token has neither).
     optional_amr: bool,
     optional_auth_time: bool,
-    /// Like Entra: the permissions for `profile` are consented to. Without consent the scope that
-    /// is granted is `openid` only, and the token has no `oid` and no `preferred_username`.
-    consent: bool,
+    /// Whether the stand-in grants the `profile` scope that was asked for. Without it the scope
+    /// that is granted is `openid` only, and the token has no `oid` and no `preferred_username`:
+    /// this models a request, or a registration, that lacks `profile`. It is not what Entra does
+    /// when an administrator's consent is missing (Microsoft shows its own error page then and the
+    /// browser does not come back; docs/DEPLOY.md).
+    grants_profile: bool,
     /// The `scope` of every authorization request that came to the authorization endpoint.
     scopes: Vec<String>,
-    /// How long the discovery document takes to answer.
+    /// How long the discovery document, the key set and the token endpoint take to answer (the
+    /// answer is slept for without the state locked, so other requests are answered meanwhile).
     discovery_delay_ms: u64,
-    /// The status the key set answers (200 unless a test says otherwise).
+    jwks_delay_ms: u64,
+    token_delay_ms: u64,
+    /// The status the key set and the discovery document answer (200 unless a test says
+    /// otherwise).
     jwks_status: u16,
+    discovery_status: u16,
 }
 
 struct Idp {
@@ -125,10 +133,13 @@ impl Idp {
             forms: Vec::new(),
             optional_amr: true,
             optional_auth_time: true,
-            consent: true,
+            grants_profile: true,
             scopes: Vec::new(),
             discovery_delay_ms: 0,
+            jwks_delay_ms: 0,
+            token_delay_ms: 0,
             jwks_status: 200,
+            discovery_status: 200,
         }));
         let stop = Arc::new(AtomicBool::new(false));
         let (state, halt) = (st.clone(), stop.clone());
@@ -138,40 +149,44 @@ impl Idp {
                     break;
                 }
                 let Ok(mut s) = s else { break };
-                let mut buf = Vec::new();
-                let mut chunk = [0u8; 4096];
-                loop {
-                    let n = s.read(&mut chunk).unwrap_or(0);
-                    if n == 0 {
-                        break;
-                    }
-                    buf.extend_from_slice(&chunk[..n]);
-                    let text = String::from_utf8_lossy(&buf).to_string();
-                    if let Some((head, body)) = text.split_once("\r\n\r\n") {
-                        let want = head
-                            .lines()
-                            .find_map(|l| {
-                                l.to_ascii_lowercase()
-                                    .strip_prefix("content-length:")
-                                    .map(|v| v.trim().parse::<usize>().unwrap_or(0))
-                            })
-                            .unwrap_or(0);
-                        if body.len() >= want {
+                // One thread per connection: a slow answer does not hold up the others.
+                let state = state.clone();
+                std::thread::spawn(move || {
+                    let mut buf = Vec::new();
+                    let mut chunk = [0u8; 4096];
+                    loop {
+                        let n = s.read(&mut chunk).unwrap_or(0);
+                        if n == 0 {
                             break;
                         }
+                        buf.extend_from_slice(&chunk[..n]);
+                        let text = String::from_utf8_lossy(&buf).to_string();
+                        if let Some((head, body)) = text.split_once("\r\n\r\n") {
+                            let want = head
+                                .lines()
+                                .find_map(|l| {
+                                    l.to_ascii_lowercase()
+                                        .strip_prefix("content-length:")
+                                        .map(|v| v.trim().parse::<usize>().unwrap_or(0))
+                                })
+                                .unwrap_or(0);
+                            if body.len() >= want {
+                                break;
+                            }
+                        }
                     }
-                }
-                let req = String::from_utf8_lossy(&buf).to_string();
-                let line = req.lines().next().unwrap_or("");
-                let mut it = line.split(' ');
-                let (method, path) = (it.next().unwrap_or(""), it.next().unwrap_or(""));
-                let body = req.split("\r\n\r\n").nth(1).unwrap_or("");
-                let (status, out) = Idp::answer(&state, port, method, path, body);
-                let reply = format!(
-                    "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{out}",
-                    out.len()
-                );
-                let _ = s.write_all(reply.as_bytes());
+                    let req = String::from_utf8_lossy(&buf).to_string();
+                    let line = req.lines().next().unwrap_or("");
+                    let mut it = line.split(' ');
+                    let (method, path) = (it.next().unwrap_or(""), it.next().unwrap_or(""));
+                    let body = req.split("\r\n\r\n").nth(1).unwrap_or("");
+                    let (status, out) = Idp::answer(&state, port, method, path, body);
+                    let reply = format!(
+                        "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{out}",
+                        out.len()
+                    );
+                    let _ = s.write_all(reply.as_bytes());
+                });
             }
         });
         Idp { port, st, stop }
@@ -205,9 +220,12 @@ impl Idp {
         s.published = vec![obop_auth::oidc::soft::KID.into()];
         s.optional_amr = true;
         s.optional_auth_time = true;
-        s.consent = true;
+        s.grants_profile = true;
         s.discovery_delay_ms = 0;
+        s.jwks_delay_ms = 0;
+        s.token_delay_ms = 0;
         s.jwks_status = 200;
+        s.discovery_status = 200;
     }
 
     /// A registration without the optional claims `amr` and `auth_time` (Entra's default).
@@ -235,13 +253,31 @@ impl Idp {
         body: &str,
     ) -> (u16, String) {
         let authority = format!("http://127.0.0.1:{port}");
+        // A slow provider: the answer is slept for before the state is locked.
+        let delay = {
+            let s = st.lock().unwrap();
+            match path {
+                p if p == format!("/{TENANT}/v2.0/.well-known/openid-configuration") => {
+                    s.discovery_delay_ms
+                }
+                p if p == format!("/{TENANT}/discovery/v2.0/keys") => s.jwks_delay_ms,
+                p if p == format!("/{TENANT}/oauth2/v2.0/token") => s.token_delay_ms,
+                _ => 0,
+            }
+        };
+        if delay > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(delay));
+        }
         let mut s = st.lock().unwrap();
         s.requests.push(format!("{method} {path}"));
         let stand = StandIn::new();
         match (method, path) {
             ("GET", p) if p == format!("/{TENANT}/v2.0/.well-known/openid-configuration") => {
-                if s.discovery_delay_ms > 0 {
-                    std::thread::sleep(std::time::Duration::from_millis(s.discovery_delay_ms));
+                if s.discovery_status != 200 {
+                    return (
+                        s.discovery_status,
+                        json!({"error": "unavailable"}).to_string(),
+                    );
                 }
                 let mut d: J = serde_json::from_str(&stand.discovery(&authority, TENANT)).unwrap();
                 if let Some(f) = &s.discovery {
@@ -275,12 +311,12 @@ impl Idp {
                 if !ok {
                     return (400, json!({"error": "invalid_client"}).to_string());
                 }
-                // What Entra grants: the scope asked for, less `profile` where nobody consented, and
+                // What Entra grants: the scope asked for, less `profile` where it is not granted, and
                 // the claims that go with it. Nothing here leans on the scope being `openid`.
                 let granted: Vec<&str> = i
                     .scope
                     .split(' ')
-                    .filter(|w| *w != "profile" || s.consent)
+                    .filter(|w| *w != "profile" || s.grants_profile)
                     .collect();
                 let granted = granted.join(" ");
                 let entra = Entra {
@@ -414,9 +450,14 @@ impl Jar {
 struct World {
     app: App,
     auth: Arc<Auth>,
+    state: Arc<obop_http::HttpState>,
     router: axum::Router,
     idp: Idp,
     seen: Mutex<Vec<String>>,
+    /// Whether the throttle of the anonymous log lines is left alone (the tests that are about
+    /// it). Otherwise it is forgotten before each start and callback, as ten minutes would: the
+    /// tests send everything from one address and look at what each failure writes.
+    keep_throttle: AtomicBool,
 }
 
 async fn world(configure: bool) -> World {
@@ -451,17 +492,22 @@ async fn world_with(configure: bool, config: AuthConfig, prefix: Option<&str>) -
         },
     );
     let state = obop_http::HttpState::new(app.dispatcher.clone(), auth.clone());
+    // The tests name the address of a request with X-Forwarded-For (where none is named the
+    // request comes from nobody in particular, as before).
+    state.set_trust_proxy(true);
     state.set_connectors(rt);
     if let Some(p) = prefix {
         state.set_sso_return_prefix(p);
     }
-    let router = obop_http::router(state, None);
+    let router = obop_http::router(state.clone(), None);
     let w = World {
         app,
         auth,
+        state,
         router,
         idp,
         seen: Mutex::new(Vec::new()),
+        keep_throttle: AtomicBool::new(false),
     };
     let rig = Rig {
         r: w.router.clone(),
@@ -534,13 +580,49 @@ impl World {
         raw
     }
 
+    /// A start and a callback that carries `error`, as a browser at `ip`.
+    async fn fail_from(&self, ip: &str, error: &str) {
+        let h = [("x-forwarded-for", ip)];
+        let mut jar = Jar::default();
+        let s = self
+            .send_h("GET", "/api/auth/oidc/start", &jar, None, &h)
+            .await;
+        jar.absorb(&s);
+        let state = pairs(s.location().split_once('?').unwrap().1)["state"].clone();
+        let uri = format!("/api/auth/oidc/callback?error={error}&state={state}");
+        let r = self.send_h("GET", &uri, &jar, None, &h).await;
+        assert!(
+            r.location().starts_with("/#oidc_error="),
+            "{}",
+            r.location()
+        );
+    }
+
+    /// Leave the throttle of the anonymous log lines alone from here on.
+    fn keep_throttle(&self) {
+        self.keep_throttle.store(true, Ordering::SeqCst);
+    }
+
+    fn forget_throttle(&self) {
+        if self.keep_throttle.load(Ordering::SeqCst) {
+            return;
+        }
+        let b = self.app.store.backend();
+        for kind in ["oidc_refused", "oidc_error", "oidc_cancelled", "oidc_start"] {
+            // The tests come from no address: the source is empty.
+            let _ = b.counter_reset(&obop_auth::oidc::throttle_key("", kind));
+        }
+    }
+
     async fn start(&self, jar: &mut Jar) -> Raw {
+        self.forget_throttle();
         let r = self.send("GET", "/api/auth/oidc/start", jar, None).await;
         jar.absorb(&r);
         r
     }
 
     async fn callback(&self, jar: &mut Jar, uri: &str) -> Raw {
+        self.forget_throttle();
         let r = self.send("GET", uri, jar, None).await;
         jar.absorb(&r);
         r
@@ -646,6 +728,7 @@ async fn ada_sso_only(w: &World) {
 #[tokio::test]
 async fn flow_round_trip_ends_in_a_bearer_token_and_keeps_nothing_of_the_provider() {
     let w = world(true).await;
+    w.keep_throttle();
     ada_sso_only(&w).await;
     let first_forms = w.idp.st.lock().unwrap().forms.len();
     let none = Jar::default();
@@ -689,6 +772,9 @@ async fn flow_round_trip_ends_in_a_bearer_token_and_keeps_nothing_of_the_provide
         assert_eq!(f["grant_type"], "authorization_code");
         assert!(f["code_verifier"].len() >= 43);
     }
+    // The browser as it is before the exchange, with the done cookie: the replay below carries it.
+    let before_the_exchange = jar.clone();
+    assert!(before_the_exchange.0.contains_key("obop_sso_done"));
     let ex = w.exchange(&mut jar, &code).await;
     assert_eq!(ex.status, 200, "{}", ex.body);
     let token = ex.json()["token"].as_str().unwrap().to_string();
@@ -703,9 +789,12 @@ async fn flow_round_trip_ends_in_a_bearer_token_and_keeps_nothing_of_the_provide
     assert_eq!(s, 200, "{meta}");
     let (s, b) = send(&w.router, "GET", Some(&token), "/api/auth/mfa", json!({})).await;
     assert_eq!(s, 200, "{b}");
-    // The code is spent.
-    let again = w.exchange(&mut jar, &code).await;
-    assert_eq!(again.status, 401);
+    // The code is spent. The replay is made by the same browser with its done cookie (the jar of
+    // the exchange has lost it, and a replay without it would be refused whether or not the code
+    // was spent), so only the spent code can refuse it.
+    let mut same_browser = before_the_exchange;
+    let again = w.exchange(&mut same_browser, &code).await;
+    assert_eq!(again.status, 401, "{}", again.body);
     // The password of an SSO-only account is refused like a wrong password.
     let (s, b) = post(
         &w.router,
@@ -1260,6 +1349,11 @@ async fn admin_the_command_api_binds_configures_and_keeps_agents_out_of_the_prov
     )
     .await;
     assert_ne!(s, 200, "{b}");
+    assert!(
+        b.to_string()
+            .contains("turn that off before setting a password"),
+        "{b}"
+    );
     // An agent of the administrator can propose a binding but not touch the provider.
     let (_, t) = post(
         r,
@@ -1295,6 +1389,10 @@ async fn admin_the_command_api_binds_configures_and_keeps_agents_out_of_the_prov
     );
     let (s, b) = post(r, Some(&agent), "/api/sso_provider/clear", json!({})).await;
     assert_ne!(s, 200, "{b}");
+    assert!(
+        b.to_string().contains("by a person"),
+        "an agent cannot clear the provider: {b}"
+    );
     // The provider is still the one the administrator set.
     let (_, g) = post(
         r,
@@ -1389,23 +1487,22 @@ async fn flow_asks_for_openid_and_profile_and_nothing_else_and_keeps_no_profile_
 }
 
 #[tokio::test]
-async fn failures_a_registration_without_the_profile_permission_gets_no_object_id_and_the_log_says_so()
- {
-    // The scope is asked for, the permission is not consented to: the token has no `oid`. That is
-    // what a real tenant does with "assignment required" before an administrator consents.
+async fn failures_a_request_without_the_profile_scope_gets_no_object_id_and_the_log_says_so() {
+    // A token with no `oid`, as when the request or the registration lacks `profile` (this does
+    // not model a missing administrator consent, which Microsoft answers with an error page).
     let w = world(true).await;
-    w.idp.st.lock().unwrap().consent = false;
+    w.idp.st.lock().unwrap().grants_profile = false;
     failed(&w.sign_in(&mut Jar::default(), ADA_OID).await, "failed");
     let lines = w.events("oidc_refused");
     assert!(
         lines.iter().any(|l| l.contains("no object id")
             && l.contains("profile scope")
-            && l.contains("consent")),
+            && l.contains("permissions of the app registration")),
         "{lines:?}"
     );
     // The person is told nothing more than the fixed word, and nobody has a session.
     assert_eq!(w.events("oidc_login").len(), 0);
-    // With the consent given the same sign-in works.
+    // With `profile` granted the same sign-in works.
     w.idp.reset();
     let back = w.sign_in(&mut Jar::default(), ADA_OID).await;
     assert!(back.location().starts_with("/#oidc="));
@@ -1695,6 +1792,7 @@ async fn failures_a_request_that_is_not_a_navigation_does_nothing() {
 #[tokio::test]
 async fn failures_anonymous_requests_do_not_fill_the_log_or_use_up_the_limits() {
     let w = world(true).await;
+    w.keep_throttle();
     let before = oidc_rows(&w);
     // A callback with no valid state is nothing: no line, no flow, no count against the address.
     for i in 0..200 {
@@ -1747,7 +1845,275 @@ async fn failures_anonymous_requests_do_not_fill_the_log_or_use_up_the_limits() 
         .filter(|l| l.contains("unknown, already used or expired"))
         .collect();
     assert_eq!(unknown.len(), 1, "{unknown:?}");
-    assert!(unknown[0].contains("counted, not written"));
+    assert!(
+        unknown[0].contains("not written for 10 minutes"),
+        "{unknown:?}"
+    );
+}
+
+#[tokio::test]
+async fn failures_a_caller_cannot_fill_the_log_with_error_values() {
+    let w = world(true).await;
+    w.keep_throttle();
+    let before = oidc_rows(&w);
+    // Twenty flows of one address, each ended with another `error` value (long ones too): the
+    // value is none of the log's business, so there is one line, and it names no value.
+    for i in 0..20 {
+        let mut jar = Jar::default();
+        let s = w.start(&mut jar).await;
+        let state = pairs(s.location().split_once('?').unwrap().1)["state"].clone();
+        let error = format!("attack{i}{}", "x".repeat(60));
+        let r = w
+            .callback(
+                &mut jar,
+                &format!("/api/auth/oidc/callback?error={error}&state={state}"),
+            )
+            .await;
+        failed(&r, "failed");
+    }
+    let errors = w.events("oidc_error");
+    assert_eq!(errors.len(), 1, "{errors:?}");
+    assert!(errors[0].contains("\"other\""), "{errors:?}");
+    assert!(!errors[0].contains("attack"), "{errors:?}");
+    assert_eq!(
+        oidc_rows(&w) - before,
+        2,
+        "the first start and the first error, nothing else"
+    );
+    // The words the provider is known to use are kept by name, and still one line per kind.
+    for word in ["server_error", "interaction_required", "access_denied"] {
+        let mut jar = Jar::default();
+        let s = w.start(&mut jar).await;
+        let state = pairs(s.location().split_once('?').unwrap().1)["state"].clone();
+        w.callback(
+            &mut jar,
+            &format!("/api/auth/oidc/callback?error={word}&state={state}"),
+        )
+        .await;
+    }
+    assert_eq!(w.events("oidc_error").len(), 1, "same kind, same address");
+    assert_eq!(
+        w.events("oidc_cancelled").len(),
+        1,
+        "access_denied is a cancellation, a kind of its own"
+    );
+}
+
+#[tokio::test]
+async fn failures_many_addresses_meet_the_hourly_ceiling_and_one_subnet_is_one_address() {
+    let w = world(true).await;
+    w.keep_throttle();
+    let before = oidc_rows(&w);
+    // Twenty-five addresses of one IPv6 /64 are one source: one start line, one error line.
+    for i in 0..25 {
+        w.fail_from(&format!("2001:db8:7:7::{i:x}"), "server_error")
+            .await;
+    }
+    assert_eq!(w.events("oidc_start").len(), 1);
+    assert_eq!(w.events("oidc_error").len(), 1);
+    // A hundred and twenty IPv4 addresses, each with a start and an error of its own: the lines
+    // stop at the ceiling of all sources together, and one line says so.
+    for i in 0..120 {
+        w.fail_from(&format!("203.0.113.{i}"), "server_error").await;
+    }
+    let total = oidc_rows(&w) - before;
+    assert_eq!(
+        total,
+        obop_auth::oidc::ANON_LINES_PER_HOUR as usize + 1,
+        "the ceiling, and the line that says it was reached"
+    );
+    let said: Vec<String> = w
+        .events("oidc_error")
+        .into_iter()
+        .filter(|l| l.contains("ceiling"))
+        .collect();
+    assert_eq!(said.len(), 1, "{said:?}");
+    assert!(said[0].contains("60 lines an hour"), "{said:?}");
+}
+
+fn token_path() -> String {
+    format!("POST /{TENANT}/oauth2/v2.0/token")
+}
+
+/// A slow provider is given the limit at each of the three places the sign-in calls it (the
+/// discovery document, the exchange of the code, the key set) and no more. The limit is shortened
+/// to 300 ms and the provider takes 2 s.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn failures_a_slow_provider_is_given_the_limit_at_each_call_and_no_more() {
+    let w = world(true).await;
+    w.state
+        .set_sso_timeout_for_test(std::time::Duration::from_millis(300));
+    let within = |t: std::time::Instant| {
+        assert!(
+            t.elapsed() < std::time::Duration::from_millis(1500),
+            "the call was not cut at the limit: {:?}",
+            t.elapsed()
+        );
+    };
+    // 1. The discovery document.
+    w.idp.st.lock().unwrap().discovery_delay_ms = 2000;
+    let t = std::time::Instant::now();
+    let r = w.start(&mut Jar::default()).await;
+    within(t);
+    assert_eq!(r.location(), "/#oidc_error=unavailable", "{}", r.location());
+    w.idp.st.lock().unwrap().discovery_delay_ms = 0;
+    w.state.forget_sso_cache_for_test();
+    // 2. The exchange of the code.
+    let mut jar = Jar::default();
+    let s = w.start(&mut jar).await;
+    let uri = w.idp.authorize(&s.location(), ADA_OID);
+    w.idp.st.lock().unwrap().token_delay_ms = 2000;
+    let t = std::time::Instant::now();
+    let r = w.callback(&mut jar, &uri).await;
+    within(t);
+    assert_eq!(r.location(), "/#oidc_error=unavailable", "{}", r.location());
+    assert!(
+        w.events("oidc_error")
+            .iter()
+            .any(|l| l.contains("token endpoint could not be reached")),
+        "{:?}",
+        w.events("oidc_error")
+    );
+    w.idp.st.lock().unwrap().token_delay_ms = 0;
+    // 3. The key set.
+    let mut jar = Jar::default();
+    let s = w.start(&mut jar).await;
+    let uri = w.idp.authorize(&s.location(), ADA_OID);
+    w.idp.st.lock().unwrap().jwks_delay_ms = 2000;
+    let t = std::time::Instant::now();
+    let r = w.callback(&mut jar, &uri).await;
+    within(t);
+    assert_eq!(r.location(), "/#oidc_error=unavailable", "{}", r.location());
+    assert!(
+        w.events("oidc_error")
+            .iter()
+            .any(|l| l.contains("key set could not be fetched")),
+        "{:?}",
+        w.events("oidc_error")
+    );
+}
+
+/// The calls to the provider that one process has in the air are counted where they are made:
+/// the exchange of a code (a ninth is answered "busy"), and the fetches (refused as
+/// "unavailable" while the places are taken); and the place of a callback is given back after the
+/// exchange of its code, so that its own fetch of the key set needs no second one.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn failures_the_calls_in_the_air_are_counted_where_they_are_made() {
+    let w = world(true).await;
+    w.keep_throttle();
+    w.state
+        .set_sso_timeout_for_test(std::time::Duration::from_secs(10));
+    let mut jars: Vec<Jar> = (0..9).map(|_| Jar::default()).collect();
+    let mut uris = Vec::new();
+    for jar in jars.iter_mut() {
+        let s = w.start(jar).await;
+        uris.push(w.idp.authorize(&s.location(), ADA_OID));
+    }
+    // Part 1: nine callbacks at once, the exchange of each takes a second: eight get a place.
+    w.idp.st.lock().unwrap().token_delay_ms = 1000;
+    let [j0, j1, j2, j3, j4, j5, j6, j7, j8] = &mut jars[..] else {
+        unreachable!()
+    };
+    let r = tokio::join!(
+        w.callback(j0, &uris[0]),
+        w.callback(j1, &uris[1]),
+        w.callback(j2, &uris[2]),
+        w.callback(j3, &uris[3]),
+        w.callback(j4, &uris[4]),
+        w.callback(j5, &uris[5]),
+        w.callback(j6, &uris[6]),
+        w.callback(j7, &uris[7]),
+        w.callback(j8, &uris[8]),
+    );
+    let all = [r.0, r.1, r.2, r.3, r.4, r.5, r.6, r.7, r.8];
+    let busy = all
+        .iter()
+        .filter(|r| r.location() == "/#oidc_error=busy")
+        .count();
+    let signed_in = all
+        .iter()
+        .filter(|r| r.location().starts_with("/#oidc="))
+        .count();
+    assert_eq!((busy, signed_in), (1, 8), "{:?}", all.map(|r| r.location()));
+    assert_eq!(
+        w.idp.hits(&token_path()),
+        8,
+        "the ninth never reached Microsoft"
+    );
+
+    // Part 2: while eight exchanges are in the air a start that needs the discovery document
+    // finds no place for its fetch and is told "unavailable".
+    let mut jars: Vec<Jar> = (0..8).map(|_| Jar::default()).collect();
+    let mut uris = Vec::new();
+    for jar in jars.iter_mut() {
+        let s = w.start(jar).await;
+        uris.push(w.idp.authorize(&s.location(), ADA_OID));
+    }
+    w.state.forget_sso_cache_for_test();
+    let hits_before = w.idp.hits("openid-configuration");
+    let [j0, j1, j2, j3, j4, j5, j6, j7] = &mut jars[..] else {
+        unreachable!()
+    };
+    // (The eight callbacks need the discovery document themselves: one of them fetches it and
+    // the others find it in the cache, so the places are taken only by their exchanges.)
+    let mut late = Jar::default();
+    let late_start = async {
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        w.state.forget_sso_cache_for_test();
+        w.start(&mut late).await
+    };
+    let (_, _, _, _, _, _, _, _, started) = tokio::join!(
+        w.callback(j0, &uris[0]),
+        w.callback(j1, &uris[1]),
+        w.callback(j2, &uris[2]),
+        w.callback(j3, &uris[3]),
+        w.callback(j4, &uris[4]),
+        w.callback(j5, &uris[5]),
+        w.callback(j6, &uris[6]),
+        w.callback(j7, &uris[7]),
+        late_start,
+    );
+    assert_eq!(
+        started.location(),
+        "/#oidc_error=unavailable",
+        "a fetch is refused while the places are taken"
+    );
+    assert!(
+        w.idp.hits("openid-configuration") > hits_before,
+        "the callbacks fetched the document themselves"
+    );
+}
+
+/// Callbacks that come back together on a cold key set fetch it once.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn failures_callbacks_that_meet_a_cold_key_set_fetch_it_once() {
+    let w = world(true).await;
+    w.keep_throttle();
+    let mut jars: Vec<Jar> = (0..4).map(|_| Jar::default()).collect();
+    let mut uris = Vec::new();
+    for jar in jars.iter_mut() {
+        let s = w.start(jar).await;
+        uris.push(w.idp.authorize(&s.location(), ADA_OID));
+    }
+    w.state.forget_sso_cache_for_test();
+    w.idp.st.lock().unwrap().jwks_delay_ms = 400;
+    let [j0, j1, j2, j3] = &mut jars[..] else {
+        unreachable!()
+    };
+    let (a, b, c, d) = tokio::join!(
+        w.callback(j0, &uris[0]),
+        w.callback(j1, &uris[1]),
+        w.callback(j2, &uris[2]),
+        w.callback(j3, &uris[3]),
+    );
+    for r in [&a, &b, &c, &d] {
+        assert!(r.location().starts_with("/#oidc="), "{}", r.location());
+    }
+    assert_eq!(
+        w.idp.hits("/discovery/v2.0/keys"),
+        1,
+        "one fetch of the key set"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -1774,6 +2140,114 @@ async fn failures_a_cold_cache_and_many_starts_ask_the_provider_once() {
         1,
         "one fetch of the discovery document, the others waited for it"
     );
+}
+
+#[tokio::test]
+async fn failures_a_discovery_document_that_cannot_be_fetched_is_remembered_for_a_short_while() {
+    let w = world(true).await;
+    w.idp.st.lock().unwrap().discovery_status = 503;
+    let mut words = Vec::new();
+    for _ in 0..4 {
+        let r = w.start(&mut Jar::default()).await;
+        words.push(r.location().rsplit('=').next().unwrap().to_string());
+    }
+    assert_eq!(words, ["unavailable"; 4]);
+    assert_eq!(
+        w.idp.hits("openid-configuration"),
+        1,
+        "the provider is not asked again for every start"
+    );
+    // It is tried again once the provider is back and the short while is over.
+    w.idp.st.lock().unwrap().discovery_status = 200;
+    w.state.forget_sso_cache_for_test();
+    assert_eq!(w.start(&mut Jar::default()).await.status, 303);
+}
+
+#[tokio::test]
+async fn failures_a_token_endpoint_that_is_not_well_is_unavailable_and_one_that_says_no_is_failed()
+{
+    let w = world(true).await;
+    for status in [429, 500, 503] {
+        w.idp.st.lock().unwrap().token_status = status;
+        let r = w.sign_in(&mut Jar::default(), ADA_OID).await;
+        assert_eq!(r.location(), "/#oidc_error=unavailable", "{status}");
+        assert!(
+            w.events("oidc_error")
+                .iter()
+                .any(|l| l.contains(&format!("token endpoint answered {status}"))),
+            "{status}: {:?}",
+            w.events("oidc_error")
+        );
+    }
+    // Not a refusal: nothing was written as one for these.
+    assert!(
+        !w.events("oidc_refused")
+            .iter()
+            .any(|l| l.contains("token endpoint")),
+        "{:?}",
+        w.events("oidc_refused")
+    );
+    // The provider saying no is a refusal and the person is told to ask.
+    w.idp.st.lock().unwrap().token_status = 400;
+    let r = w.sign_in(&mut Jar::default(), ADA_OID).await;
+    assert_eq!(r.location(), "/#oidc_error=failed");
+    assert!(
+        w.events("oidc_refused")
+            .iter()
+            .any(|l| l.contains("token endpoint answered 400"))
+    );
+}
+
+/// 60 callbacks that spent a flow are the most one address may make in a minute (the flows are
+/// begun from many addresses, so the limit of starts does not stand in the way).
+#[tokio::test]
+async fn failures_the_callbacks_that_spent_a_flow_are_limited_per_address() {
+    let w = world(true).await;
+    let mut flows = Vec::new();
+    for i in 0..62 {
+        let ip = format!("10.9.{}.{}", i / 250, i % 250 + 1);
+        let h = [("x-forwarded-for", ip.as_str())];
+        let mut jar = Jar::default();
+        let s = w
+            .send_h("GET", "/api/auth/oidc/start", &jar, None, &h)
+            .await;
+        jar.absorb(&s);
+        let state = pairs(s.location().split_once('?').unwrap().1)["state"].clone();
+        flows.push((jar, state));
+    }
+    let from = |ip: &'static str| [("x-forwarded-for", ip)];
+    let mut words = Vec::new();
+    for (jar, state) in &flows {
+        let uri = format!("/api/auth/oidc/callback?error=access_denied&state={state}");
+        let r = w.send_h("GET", &uri, jar, None, &from("203.0.113.7")).await;
+        words.push(r.location().rsplit('=').next().unwrap().to_string());
+    }
+    assert_eq!(
+        words.iter().filter(|x| *x == "cancelled").count(),
+        60,
+        "{words:?}"
+    );
+    assert_eq!(&words[60..], ["busy", "busy"], "{words:?}");
+    // Another address is not held back by it.
+    let (jar, state) = &flows[61];
+    let mut again = jar.clone();
+    let s = w
+        .send_h(
+            "GET",
+            "/api/auth/oidc/start",
+            &again,
+            None,
+            &from("198.51.100.8"),
+        )
+        .await;
+    again.absorb(&s);
+    let state2 = pairs(s.location().split_once('?').unwrap().1)["state"].clone();
+    assert_ne!(&state2, state);
+    let uri = format!("/api/auth/oidc/callback?error=access_denied&state={state2}");
+    let r = w
+        .send_h("GET", &uri, &again, None, &from("198.51.100.8"))
+        .await;
+    assert_eq!(r.location(), "/#oidc_error=cancelled");
 }
 
 #[tokio::test]

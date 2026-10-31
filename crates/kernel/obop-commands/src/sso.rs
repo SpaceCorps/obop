@@ -136,9 +136,12 @@ pub trait SsoApi: Send + Sync {
     fn audit(&self, user: &str, kind: &str, detail: &str);
 
     /// The line of a request nobody signed in for (an unknown flow, a failed callback, a refused
-    /// exchange of the provider): at most one security event per `source`, kind and text in ten
-    /// minutes, so an anonymous caller cannot fill the append-only log. The later ones are
-    /// counted by the store and not written.
+    /// exchange of the provider): at most one security event per `source` and kind in ten
+    /// minutes (the text is not part of that, it can be the caller's), and at most sixty such
+    /// lines an hour for all sources together; the first one past that says so, and the first
+    /// line of the next hour says how many were not written. `source` is the caller's address as
+    /// the HTTP layer buckets it (an IPv6 address by its /64). `detail` must be a fixed text:
+    /// nothing the caller sent goes into it, except a word out of a fixed set.
     fn audit_throttled(&self, source: &str, kind: &str, detail: &str);
 
     // ---- administration (an administrator whose session is whole; agents only propose) ----

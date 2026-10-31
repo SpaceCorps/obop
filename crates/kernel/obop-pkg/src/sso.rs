@@ -27,7 +27,7 @@ pub fn sso_provider_model() -> ModelDef {
     );
     let clear = CommandDef::new(
         "clear",
-        "Remove the Microsoft sign-in configuration. Bindings stay. Accounts that sign in with Microsoft only can then sign in only through the administrators who keep a password and a second factor. Refused for agents",
+        "Remove the Microsoft sign-in configuration. Bindings stay. Accounts that sign in with Microsoft only cannot then sign in at all until the sign-in is configured again or an administrator turns Microsoft only off for them (the administrators who keep a password and a second factor can). Refused for agents",
         ADMIN_GROUP,
     );
     ModelDef {
