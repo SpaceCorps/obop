@@ -15,12 +15,19 @@
 //   - a plain name that resolves to a translating function or constant (`appTitle(m)`, and also
 //     `.sort(byPosition)`, `.map(shownLabel)`, `fmt.money(1)`: a use, not only a call),
 //   - a JSX tag that resolves to one (`<Badge/>`: a cached element does not render again),
-//   - a member call whose name is a translating function declared inside another one
-//     (`d.recordLabel(...)`, `d.refText(...)`, built in the data provider).
+//   - a member call whose name is a translating function declared inside another one, on the data
+//     context or a lookup (`d.recordLabel(...)`, `d.refText(...)`, `lk.refText(...)`; the receiver
+//     must be `d`, `lk` or `lookup`).
 //
-// Not read (see ISSUES.md D14): `useCallback`, `useEffect`, an initial `useState(() => t(...))`,
-// state that holds a finished translated string, and a translating function reached only through a
-// member of an object whose type the reader cannot see.
+// A name that the code around the hook declares (a constant above it in the same block, a
+// parameter of the function that holds it) or the hook declares itself is not the import of the
+// same name. A hook is marked as right by `// i18n-memo-ok: <reason>` in a comment directly above
+// its statement or inside the call; the reason needs three word characters.
+//
+// Not read (the shapes are listed in ISSUES.md D14): `useCallback`, `useEffect`, an initial
+// `useState(() => t(...))`, state that holds a finished translated string, namespace and default
+// imports, aliased hooks, a translator held in a local alias or a custom hook, and a translating
+// function reached only through a member of an object whose type the reader cannot see.
 
 import { readFileSync, readdirSync } from "node:fs";
 import { join, posix } from "node:path";
@@ -127,7 +134,40 @@ export function code(src: string): string {
 /* Hooks                                                                                           */
 /* ---------------------------------------------------------------------------------------------- */
 
-const EXEMPT = /i18n-memo-ok[ \t]*:[ \t]*\S/;
+/** The marker and a reason of at least three word characters (`: -` is not one). */
+const REASON = String.raw`i18n-memo-ok[ \t]*:[ \t]*(?:[^\w\n]*\w){3}`;
+/** A comment that holds the marker: `//` or `/*` and then the marker, on one line. */
+const MARKER_IN_CODE = new RegExp(String.raw`(?://|/\*)[^\n]*${REASON}`);
+const MARKER = new RegExp(REASON);
+
+/**
+ * Does a comment mark the hook that starts at `at` as right? Either a comment inside the call, or
+ * the comment lines directly above the statement that holds the call (no blank line between), so a
+ * marker after one hook on its own line never reaches the next.
+ */
+function marked(src: string, masked: string, at: number, end: number): boolean {
+  if (MARKER_IN_CODE.test(src.slice(at, end))) return true;
+  // the statement starts after the last `;`, `{` or `}` before the call
+  let s = at;
+  while (s > 0 && !";{}".includes(masked[s - 1]!)) s--;
+  while (s < at && /\s/.test(masked[s]!)) s++;
+  const lines = src.split("\n");
+  let k = src.slice(0, s).split("\n").length - 2; // the line above the statement
+  while (k >= 0) {
+    const text = lines[k]!.trim();
+    if (text.startsWith("//")) {
+      if (MARKER.test(text)) return true;
+      k--;
+    } else if (text.endsWith("*/")) {
+      // a block comment: up to the line that opens it
+      let block = text;
+      while (!block.includes("/*") && k > 0) block = `${lines[--k]!.trim()}\n${block}`;
+      if (MARKER.test(block)) return true;
+      k--;
+    } else break;
+  }
+  return false;
+}
 /** What a dependency list must name. */
 const LANGUAGE_DEP = /(?<![\w$])(?:lang|locale|i18n)(?![\w$])|\.lang(?![\w$])|\.locale(?![\w$])/;
 
@@ -160,33 +200,41 @@ export function hooks(src: string, masked: string = code(src)): Hook[] {
     }
     if (masked[i] !== "(") continue;
     const start = i + 1;
-    const args: [number, number][] = [];
+    const commas: number[] = [];
     let depth = 0;
-    let from = start;
     for (i = start; i < masked.length; i++) {
       const c = masked[i]!;
       if ("([{".includes(c)) depth++;
       else if (")]}".includes(c)) {
         if (depth === 0) break;
         depth--;
-      } else if (c === "," && depth === 0) {
-        args.push([from, i]);
-        from = i + 1;
+      } else if (c === "," && depth === 0) commas.push(i);
+    }
+    // The call is `(fn, deps)` or `(fn)`, maybe with a trailing comma. The comma that matters is
+    // the last one: the commas in the type arguments of `new Map<string, string>(...)` or of a
+    // type parameter list sit at the same depth and come before it.
+    let end = i;
+    if (commas.length && !masked.slice(commas[commas.length - 1]! + 1, end).trim()) {
+      end = commas.pop()!;
+    }
+    if (!masked.slice(start, end).trim()) continue;
+    let fnEnd = end;
+    let deps: string | null = null;
+    const last = commas[commas.length - 1];
+    if (last !== undefined) {
+      const tail = masked.slice(last + 1, end).trim();
+      if (tail.startsWith("[") || /^[\w$.]+$/.test(tail)) {
+        fnEnd = last;
+        deps = tail;
       }
     }
-    if (masked.slice(from, i).trim()) args.push([from, i]);
-    const [fn, deps] = args;
-    if (!fn) continue;
     const line = src.slice(0, m.index).split("\n").length;
-    // The comment may sit on the line before the call or anywhere inside it.
-    const lineStart = src.lastIndexOf("\n", m.index! - 1);
-    const before = src.slice(src.lastIndexOf("\n", lineStart - 1) + 1, m.index);
     found.push({
       hook: m[1]!,
       line,
-      body: masked.slice(fn[0], fn[1]),
-      deps: deps ? masked.slice(deps[0], deps[1]).trim() : null,
-      exempt: EXEMPT.test(before + src.slice(m.index, i)),
+      body: masked.slice(start, fnEnd),
+      deps,
+      exempt: marked(src, masked, m.index!, i),
       at: m.index!,
     });
   }
@@ -285,12 +333,18 @@ function declarations(masked: string, depth: Int32Array, nested: boolean): Decl[
     if (masked[i] !== "=") continue; // `const a;` is not valid; a loop variable has no `=` here
     const start = i + 1;
     const init = masked.slice(start, start + 400);
+    const end = statementEnd(masked, depth, start);
+    // an arrow function has its `=>` at the depth of the declaration, after the parameters; a `;`
+    // inside an object type of the parameters or of the result (`(x: { a: string; b: number }) =>`)
+    // is deeper and does not end it
+    let arrow = false;
+    for (let k = start; k < end - 1 && !arrow; k++)
+      arrow = masked[k] === "=" && masked[k + 1] === ">" && depth[k] === depth[start];
     const fn =
       /^\s*(?:async\s+)?function\b/.test(init) ||
       /^\s*useCallback\s*(?:<[^(]*>)?\s*\(/.test(init) ||
-      (/^\s*(?:async\s+)?(?:<[^>(]*>\s*)?(?:\(|[A-Za-z_$][\w$]*\s*=>)/.test(init) &&
-        /=>/.test(init.split(";")[0]!));
-    out.push({ name: m[1]!, start: m.index!, end: statementEnd(masked, depth, start), fn });
+      (/^\s*(?:async\s+)?(?:<[^>(]*>\s*)?(?:\(|[A-Za-z_$][\w$]*\s*=>)/.test(init) && arrow);
+    out.push({ name: m[1]!, start: m.index!, end, fn });
   }
   return out.sort((a, b) => a.start - b.start);
 }
@@ -462,7 +516,8 @@ function exported(
     const hit = to && exported(files, to, re.name, seen);
     if (hit) return hit;
   }
-  // `import { x } from "./y"; export { x };` and `export default`: follow the import of the same name.
+  // `import { x } from "./y"; export { x };`: follow the import of the same name. A default export
+  // is not followed (nothing is named `default` here); ISSUES.md D14 lists it among the blind spots.
   const imp = f.imports.get(name);
   if (imp && !f.top.has(name)) {
     const to = resolveSpec(files, path, imp.spec);
@@ -487,31 +542,113 @@ function resolveName(files: Map<string, File>, file: File, name: string): string
   return file.top.has(name) ? `${file.path}#${name}` : null;
 }
 
+/** The index of the bracket that closes the one at `open` in a piece of text. */
+function matchClose(text: string, open: number): number {
+  let k = 0;
+  for (let i = open; i < text.length; i++) {
+    if ("([{".includes(text[i]!)) k++;
+    else if (")]}".includes(text[i]!) && --k === 0) return i;
+  }
+  return text.length;
+}
+
+/** `list` split at the commas that are not inside brackets or type arguments. */
+function splitTop(list: string): string[] {
+  const parts: string[] = [];
+  let k = 0;
+  let from = 0;
+  for (let i = 0; i < list.length; i++) {
+    const c = list[i]!;
+    if ("([{".includes(c) || (c === "<" && /[\w$]/.test(list[i - 1] ?? ""))) k++;
+    else if (")]}".includes(c) || (c === ">" && list[i - 1] !== "=" && k > 0)) k--;
+    else if (c === "," && k === 0) {
+      parts.push(list.slice(from, i));
+      from = i + 1;
+    }
+  }
+  parts.push(list.slice(from));
+  return parts;
+}
+
+/**
+ * The names a parameter list or a destructuring pattern binds: `a`, `a?: T`, `a = 1`, `...a`,
+ * `{ b, c: d, e = 1, ...f }`, `[g, h]`. In a pattern `key: value` binds the value, in a parameter
+ * list `name: Type` binds the name.
+ */
+function bindings(list: string, pattern: boolean): string[] {
+  const out: string[] = [];
+  for (const raw of splitTop(list)) {
+    const p = raw.trim().replace(/^\.\.\.\s*/, "");
+    if (!p) continue;
+    if (p[0] === "{" || p[0] === "[") {
+      out.push(...bindings(p.slice(1, matchClose(p, 0)), true));
+      continue;
+    }
+    const m = /^([A-Za-z_$][\w$]*)/.exec(p);
+    if (!m) continue;
+    const rest = p.slice(m[0].length).trimStart();
+    if (pattern && rest.startsWith(":")) out.push(...bindings(rest.slice(1), true));
+    else out.push(m[1]!);
+  }
+  return out;
+}
+
+/** The names `const`, `let` and `var` declare in `masked`, each with the index of its keyword. */
+function declared(masked: string): { name: string; at: number }[] {
+  const out: { name: string; at: number }[] = [];
+  for (const m of masked.matchAll(/(?<![.\w$])(?:const|let|var)\b\s*([{[]|[A-Za-z_$][\w$]*)/g)) {
+    if (m[1] === "{" || m[1] === "[") {
+      const open = m.index! + m[0].length - 1;
+      const inner = masked.slice(open + 1, matchClose(masked, open));
+      for (const name of bindings(inner, true)) out.push({ name, at: m.index! });
+    } else out.push({ name: m[1]!, at: m.index! });
+  }
+  return out;
+}
+
 /** The names a piece of code declares itself: constants, parameters and destructured names. */
 function localsOf(masked: string): Set<string> {
   const out = new Set<string>();
-  const add = (list: string) => {
-    for (const part of list.split(",")) {
-      // `a`, `a = 1`, `a: b`, `...a`, `a?: T`: the name that is bound
-      const p = part.replace(/^\s*\.\.\./, "").trim();
-      const m = /^(?:[A-Za-z_$][\w$]*\s*:\s*)?([A-Za-z_$][\w$]*)/.exec(p);
-      if (m && !/^(?:type|typeof)$/.test(m[1]!)) out.add(m[1]!);
-    }
-  };
-  for (const m of masked.matchAll(/(?<![.\w$])(?:const|let|var)\s+([A-Za-z_$][\w$]*)/g))
-    out.add(m[1]!);
-  for (const m of masked.matchAll(/(?<![.\w$])(?:const|let|var)\s*\{([^}]*)\}/g)) add(m[1]!);
-  for (const m of masked.matchAll(/(?<![.\w$])(?:const|let|var)\s*\[([^\]]*)\]/g)) add(m[1]!);
+  for (const d of declared(masked)) out.add(d.name);
   // parameters: `(a, { b, c }) =>`, `a =>`, `function f(a, b)`
-  for (const m of masked.matchAll(/\(([^()]*)\)\s*(?::[^=;{]*?)?=>/g)) {
-    for (const p of m[1]!.split(/,(?![^{[]*[}\]])/)) {
-      const q = p.trim();
-      if (q.startsWith("{") || q.startsWith("[")) add(q.slice(1, -1));
-      else add(q);
-    }
-  }
+  for (const m of masked.matchAll(/\(([^()]*)\)\s*(?::[^=;{]*?)?=>/g))
+    for (const n of bindings(m[1]!, false)) out.add(n);
   for (const m of masked.matchAll(/(?<![\w$])([A-Za-z_$][\w$]*)\s*=>/g)) out.add(m[1]!);
-  for (const m of masked.matchAll(/function\s*[\w$]*\s*(?:<[^>(]*>)?\s*\(([^()]*)\)/g)) add(m[1]!);
+  for (const m of masked.matchAll(/function\s*[\w$]*\s*(?:<[^>(]*>)?\s*\(([^()]*)\)/g))
+    for (const n of bindings(m[1]!, false)) out.add(n);
+  return out;
+}
+
+/**
+ * The names that code around a hook gives to what the hook uses: the constants declared directly
+ * in each block that holds it, above it, and the parameters of the function whose body that block
+ * is. A parameter named `t` of a callback elsewhere in the component is not among them.
+ */
+function scopeAt(file: File, top: Decl, at: number): Set<string> {
+  const { masked, depth } = file;
+  const out = new Set<string>();
+  let level = depth[at]!;
+  for (let i = at - 1; i >= top.start && level > depth[top.start]!; i--) {
+    if (!"{([".includes(masked[i]!) || depth[i] !== level - 1) continue;
+    const brace = masked[i] === "{";
+    level = depth[i]!;
+    if (!brace) continue;
+    // constants declared directly in this block, above the hook
+    for (const d of declared(masked.slice(i + 1, at)))
+      if (depth[i + 1 + d.at] === level + 1) out.add(d.name);
+    // the parameters of the function this block is the body of, or the header of a `for`
+    const before = masked.slice(top.start, i).trimEnd();
+    const single = /([A-Za-z_$][\w$]*)\s*=>$/.exec(before);
+    if (single) out.add(single[1]!);
+    let j = i - 1;
+    while (j >= top.start && !")};{".includes(masked[j]!)) j--;
+    if (masked[j] !== ")" || depth[j] !== level + 1) continue;
+    let o = j - 1;
+    while (o >= top.start && !(masked[o] === "(" && depth[o] === level)) o--;
+    const header = masked.slice(o + 1, j);
+    for (const n of bindings(header, false)) out.add(n);
+    for (const n of localsOf(header)) out.add(n);
+  }
   return out;
 }
 
@@ -527,6 +664,9 @@ export type Refs = {
   /** Every plain name, resolved or not: a function declared inside another has no node of its own. */
   bare: Set<string>;
 };
+
+/** The receivers a member translator is followed on: the data context `d` and a lookup `lk`/`lookup`. */
+const RECEIVER = "(?:d|lk|lookup)";
 
 /** What `text` (a piece of `file`) refers to. `shadow` names are the code's own and are not imports. */
 function refsOf(files: Map<string, File>, file: File, text: string, shadow: Set<string>): Refs {
@@ -554,9 +694,15 @@ function refsOf(files: Map<string, File>, file: File, text: string, shadow: Set<
   for (const m of text.matchAll(/\.\.\.\s*([A-Za-z_$][\w$]*)/g)) add(m[1]!, false);
   // JSX: `<Name` and `<Name.Part`
   for (const m of text.matchAll(/(?<![\w$])<([A-Z][\w$]*)/g)) add(m[1]!, false);
-  // a member call, or a member passed as an argument
-  for (const m of text.matchAll(/\.\s*([A-Za-z_$][\w$]*)\s*\(/g)) members.add(m[1]!);
-  for (const m of text.matchAll(/[(,]\s*[\w$.]+\.([A-Za-z_$][\w$]*)\s*(?=[,)])/g))
+  // a member call, or a member passed as an argument, of the data context or a lookup (the objects
+  // the members are built into): `h.update(x)` on any other receiver is not `update` of the context
+  for (const m of text.matchAll(
+    new RegExp(String.raw`(?<![\w$])${RECEIVER}\s*\.\s*([A-Za-z_$][\w$]*)\s*\(`, "g"),
+  ))
+    members.add(m[1]!);
+  for (const m of text.matchAll(
+    new RegExp(String.raw`[(,]\s*${RECEIVER}\.([A-Za-z_$][\w$]*)\s*(?=[,)])`, "g"),
+  ))
     members.add(m[1]!);
   return { plain, members, bare };
 }
@@ -592,16 +738,17 @@ export function analyse(sources: Source[]): Analysis {
 
   type Node = { key: string; file: File; decl: Decl; refs: Refs; seed: boolean };
   const nodes: Node[] = [];
-  const own = (file: File, d: Decl) => {
-    // a function does not shadow itself, and a declaration's parameters are its own
+  const own = (file: File, d: Decl, nested: boolean) => {
+    // a declaration's parameters are its own. A top-level function does not shadow itself; one
+    // declared inside another does, so a local `const t = (s) => s` is not a use of the imported `t`
     const text = file.masked.slice(d.start, d.end);
     const shadow = localsOf(text);
-    shadow.delete(d.name);
+    if (!nested) shadow.delete(d.name);
     return { text, shadow };
   };
   for (const file of files.values())
     for (const d of file.top.values()) {
-      const { text, shadow } = own(file, d);
+      const { text, shadow } = own(file, d, false);
       nodes.push({
         key: `${file.path}#${d.name}`,
         file,
@@ -619,7 +766,7 @@ export function analyse(sources: Source[]): Analysis {
       if (!d.fn) continue;
       const outer = [...file.top.values()].find((t) => t.start <= d.start && d.start < t.end);
       if (!outer) continue;
-      const { text, shadow } = own(file, d);
+      const { text, shadow } = own(file, d, true);
       inner.push({
         scope: `${file.path}#${outer.name}`,
         file,
@@ -680,12 +827,14 @@ export function analyse(sources: Source[]): Analysis {
 export function usesTranslators(a: Analysis, path: string, hook: Hook): string[] {
   const file = a.files.get(path);
   if (!file) return [];
-  // the names of the component around the hook are its own: constants and parameters declared there
+  // the names the code around the hook gives to things are its own, as are the hook's: not an
+  // import of the same name. Only what is in scope at the hook counts, not every callback of the
+  // component.
   let outer = new Set<string>();
   let scope = "";
   for (const d of file.top.values())
     if (d.start <= hook.at && hook.at < d.end) {
-      outer = localsOf(file.masked.slice(d.start, d.end));
+      outer = scopeAt(file, d, hook.at);
       scope = `${path}#${d.name}`;
     }
   const shadow = new Set([...outer, ...localsOf(hook.body)]);

@@ -135,8 +135,48 @@ describe("the reader of hooks", () => {
           'import { t } from "@obop/ui";\nconst f = useMemo(\n  // i18n-memo-ok: the text is built when the row is drawn\n  () => t("x"),\n  [],\n);',
       }),
     ).toEqual([]);
-    // A bare marker is not a reason.
+    // A bare marker is not a reason, and neither is a dash.
     expect(flagged(app("// i18n-memo-ok:"))).toHaveLength(1);
+    expect(flagged(app("// i18n-memo-ok: -"))).toHaveLength(1);
+    expect(flagged(app("// i18n-memo-ok: ::"))).toHaveLength(1);
+    // A block comment is a comment too.
+    expect(flagged(app("/* i18n-memo-ok: runs when pressed */"))).toEqual([]);
+  });
+
+  it("marks the statement under the comment, not the one after it", () => {
+    const at = (first: string) =>
+      flagged({
+        "apps/x/src/a.tsx": `import { t } from "@obop/ui";\n${first}\nconst b = useMemo(() => t("b"), []);`,
+      }).map((x) => x.split(" ")[0]);
+    // A comment after a hook on its line is that hook's trailing comment: it is not a marker above
+    // the hook, and it must not reach the hook on the next line either.
+    expect(at('const a = useMemo(() => t("a"), []); // i18n-memo-ok: pressed later')).toEqual([
+      "apps/x/src/a.tsx:2",
+      "apps/x/src/a.tsx:3",
+    ]);
+    // The marker above a statement of several lines counts for the hook in it, and for it alone.
+    expect(at('// i18n-memo-ok: pressed later\nconst a =\n  useMemo(() => t("a"), []);')).toEqual([
+      "apps/x/src/a.tsx:5",
+    ]);
+    // A blank line, or code, between the comment and the statement breaks the link.
+    expect(at('// i18n-memo-ok: pressed later\n\nconst a = useMemo(() => t("a"), []);')).toEqual([
+      "apps/x/src/a.tsx:4",
+      "apps/x/src/a.tsx:5",
+    ]);
+  });
+
+  it("reads the dependencies of a memo whose function has type arguments with a comma", () => {
+    const [h] = hooks(
+      "const v = useMemo(() => new Map<string, string>(ids.map((i) => [i, t(i)])), [ids]);",
+    );
+    expect(h!.deps).toBe("[ids]");
+    expect(h!.body).toContain("t(i)");
+    // no dependencies at all, with the same comma in the type arguments
+    expect(hooks("const v = useMemo(() => new Map<string, string>());")[0]!.deps).toBeNull();
+    // and the trailing comma a formatter writes after the dependencies of a call over several lines
+    const [m] = hooks("const v = useMemo(\n  () => new Map<string, string>(),\n  [a, b],\n);");
+    expect(m!.deps).toBe("[a, b]");
+    expect(m!.body.trim()).toBe("() => new Map<string, string>()");
   });
 });
 
@@ -245,6 +285,107 @@ describe("what counts as translating", () => {
     ).toEqual([]);
   });
 
+  it("follows a member on the data context and on a lookup, not on any receiver", () => {
+    const apps = {
+      "apps/x/src/data.tsx": `
+        import { t } from "@obop/ui";
+        export type Ctx = { refText: (m: string) => string; update: (m: string) => string };
+        export const labelOf = (m: string) => t(m);
+        export function provide(): Ctx {
+          const refText = (m: string) => labelOf(m);
+          const update = (m: string) => labelOf(m);
+          return { refText, update };
+        }`,
+    };
+    const use = (body: string) =>
+      flagged({ ...apps, "apps/x/src/a.tsx": `const v = useMemo(() => ${body}, [rows]);` });
+    expect(use("d.update(m)")).toHaveLength(1);
+    expect(use("lk.refText(m)")).toHaveLength(1);
+    // `update` and `create` are names other objects have too: a hash, a map, a Date
+    expect(use("hash.update(m)")).toEqual([]);
+    expect(use("Object.create(null)")).toEqual([]);
+  });
+
+  it("reads a memo whose function has type arguments with a comma", () => {
+    const memo = (deps: string) =>
+      f(`const v = useMemo(() => new Map<string, string>(ids.map((i) => [i, t(i)])), ${deps});`);
+    expect(memo("[ids]")).toHaveLength(1);
+    expect(memo("[ids, lang]")).toEqual([]);
+    // no dependencies: computed on every render, so nothing to flag and nothing unreadable
+    expect(f("const v = useMemo(() => new Map<string, string>([[t(a), 1]]));")).toEqual([]);
+  });
+
+  it("is a helper whose parameters or result are typed with an object", () => {
+    // a `;` inside the object type must not cut the declaration short
+    expect(
+      f(`function C() {
+        const label = (x: { a: string; b: number }) => t(x.a);
+        const v = useMemo(() => ids.map((i) => label(i)), [ids]);
+        return v;
+      }`),
+    ).toHaveLength(1);
+    expect(
+      f(`function C() {
+        const label = (x: string): { a: string; b: number } => ({ a: t(x), b: 1 });
+        const v = useMemo(() => ids.map((i) => label(i)), [ids]);
+        return v;
+      }`),
+    ).toHaveLength(1);
+    expect(
+      f(`function C() {
+        const label = <T extends { p?: number; title: string }>(x: T) => t(x.title);
+        const v = useMemo(() => ids.map((i) => label(i)), [ids]);
+        return v;
+      }`),
+    ).toHaveLength(1);
+    // a constant that only holds an object with an arrow in it is not a function
+    expect(
+      f(`function C() {
+        const table = (1 + 2) * ids.length + ((x: number) => x)(1) * 0 + (ids.map((i) => t(i)).length);
+        const v = useMemo(() => table, [ids]);
+        return v;
+      }`),
+    ).toEqual([]);
+  });
+
+  it("shadows only what is in scope at the memo, not every callback of the component", () => {
+    // a callback of the component names a parameter `t`; the memo's `t` is still the import
+    expect(
+      f(`function C() {
+        const [rows, setRows] = useState([]);
+        const add = () => setRows((t) => [...t, 1]);
+        const v = useMemo(() => t("Open"), [rows]);
+        return [add, v];
+      }`),
+    ).toHaveLength(1);
+    // so is one below it, a loop variable, and a typed parameter of another function
+    expect(
+      f(`function C() {
+        const v = useMemo(() => t("Open"), [rows]);
+        const w = (t: number) => t + 1;
+        for (const t of rows) { void t; }
+        return [v, w];
+      }`),
+    ).toHaveLength(1);
+    // what is in scope shadows: a constant above, a parameter, a destructured property
+    expect(
+      f(`function C() { const t = (s: string) => s; return useMemo(() => t("a"), []); }`),
+    ).toEqual([]);
+    expect(
+      f(`const C = (t: (s: string) => string) => { return useMemo(() => t("a"), []); };`),
+    ).toEqual([]);
+    expect(
+      f(
+        `function C({ appTitle: t }: { appTitle: (s: string) => string }) { return useMemo(() => t("a"), []); }`,
+      ),
+    ).toEqual([]);
+    expect(
+      f(`function C({ compareText }: Props) { return useMemo(() => compareText(1), []); }`),
+    ).toEqual([]);
+    // a name of the memo's own callback shadows inside the memo
+    expect(f(`function C() { return useMemo(() => rows.map((t) => t.id), [rows]); }`)).toEqual([]);
+  });
+
   it("is a helper of the component around the memo", () => {
     expect(
       f(`function C() {
@@ -325,6 +466,8 @@ describe("the source of the apps", () => {
       "packages/ui/src/i18n/store.ts#fmt",
     ];
     expect(must.filter((k) => !a.translators.has(k))).toEqual([]);
+    // a function that is passed (`.sort(byPosition)`) is followed because it is known as a function
+    expect(a.fns.has("apps/backoffice/src/dashboards/DashboardsApp.tsx#byPosition")).toBe(true);
     // members of the data context, which are built inside the provider
     for (const m of ["recordLabel", "refText"]) expect(a.members.has(m), m).toBe(true);
     // and the set is not everything: functions that only shape data are not in it
@@ -341,8 +484,10 @@ describe("the source of the apps", () => {
         const why = problem(a, s.path, h);
         if (why) found.push(`${s.path}:${h.line} ${h.hook}: ${why}`);
       }
-    // The scan must have found the hooks (a broken reader would find none and pass).
-    expect(seen).toBeGreaterThan(40);
+    // The scan must have found the hooks (a broken reader would find none and pass). There are 60 at
+    // the time of writing; the floor sits just under, so a reader that loses a few of them fails
+    // here, and one that is right after hooks were removed lowers the number on purpose.
+    expect(seen).toBeGreaterThanOrEqual(58);
     expect(
       found,
       "Add lang or locale to the dependencies, or mark the hook with i18n-memo-ok: <why>",
@@ -363,7 +508,8 @@ describe("the source of the apps", () => {
           .replace(/^\[\s*,/, "[");
         if (!problem(a, s.path, { ...h, deps: without })) unguarded.push(`${s.path}:${h.line}`);
       }
-    expect(carrying).toBeGreaterThan(10);
+    // 17 hooks name the language today; a reader that stops seeing the dependencies lowers this
+    expect(carrying).toBeGreaterThanOrEqual(16);
     expect(unguarded).toEqual([]);
   });
 });
