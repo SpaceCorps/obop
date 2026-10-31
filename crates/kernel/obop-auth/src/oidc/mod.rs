@@ -54,12 +54,14 @@ const MAX_SECRET_CHARS: usize = 512;
 /// `OBOP_CONNECTORS_ALLOW_LOOPBACK` (and, like it, of no use without it: the outbound client
 /// refuses a loopback address unless that is set). Anything else is ignored with a line on stderr.
 pub(crate) fn authority_from_env() -> Option<String> {
-    let v = std::env::var("OBOP_OIDC_TEST_AUTHORITY").ok()?;
-    let v = v.trim().trim_end_matches('/').to_string();
-    if v.is_empty() {
-        return None;
-    }
-    if v == verify::AUTHORITY {
+    authority_from(std::env::var("OBOP_OIDC_TEST_AUTHORITY").ok().as_deref())
+}
+
+/// The checks of [`authority_from_env`] on the value, so a test can try them without the process
+/// environment.
+fn authority_from(value: Option<&str>) -> Option<String> {
+    let v = value?.trim().trim_end_matches('/').to_string();
+    if v.is_empty() || v == verify::AUTHORITY {
         return None;
     }
     if verify::authority_ok(&v) {

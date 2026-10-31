@@ -2,8 +2,8 @@
 //! current key does not already protect.
 //!
 //! The inventory below is the one list of where the server keeps sealed material: second-factor
-//! secrets, connector credentials and OAuth tokens, the stored pseudonym keys, the tokens of the
-//! mask vaults, the payloads of queued deliveries, and the short-lived sealed values (approval
+//! secrets, connector credentials and OAuth tokens, the client secret of the Microsoft sign-in, the
+//! stored pseudonym keys, the tokens of the mask vaults, the payloads of queued deliveries, and the short-lived sealed values (approval
 //! plans, REST vaults, MCP sessions). A test in `obop-ops` checks it against the code that seals.
 //!
 //! The run is in two passes. The first only reads: it opens every value with the key ring and
@@ -97,6 +97,12 @@ pub const FIELDS: &[SealedField] = &[
         model: "obop_update",
         field: "token",
         purpose: Purpose::Fixed("update-token"),
+    },
+    // The client secret of the Microsoft sign-in (D91).
+    SealedField {
+        model: "auth_sso_provider",
+        field: "client_secret",
+        purpose: Purpose::Fixed("sso-client-secret"),
     },
 ];
 

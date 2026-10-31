@@ -687,7 +687,15 @@ impl Auth {
             )));
         }
         let _g = self.mfa_guard()?;
-        self.known_user(&target)?;
+        let user = self.known_user(&target)?;
+        // An account that signs in with Microsoft only (D91) has no password sign-in, so a
+        // temporary password would be a way in that the setting was meant to close.
+        if user["sso_only"].as_bool() == Some(true) {
+            return Err(MfaError::Invalid(
+                "the account signs in with Microsoft only: turn that off before setting a password"
+                    .into(),
+            ));
+        }
         let hash = self
             .hash_password(temporary)
             .map_err(MfaError::Unavailable)?;
