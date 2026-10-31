@@ -941,6 +941,7 @@ mod tests {
     fn a_request_waits_for_another_requests_fetch_a_little_and_only_so_many_wait() {
         use std::sync::atomic::Ordering;
         let c = Cache::default();
+        assert_eq!(MAX_WAITING, 8, "the number the documents give");
         let lock = Mutex::new(());
         // Nobody has the fetch in the air: the place is given at once.
         drop(c.one_at_a_time(&lock, Duration::from_millis(50)).unwrap());
