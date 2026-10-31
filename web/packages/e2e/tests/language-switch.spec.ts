@@ -1,8 +1,8 @@
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { tr } from "../support/catalogue.ts";
-import { languageUrl } from "../support/env.ts";
+import { coreVersion, languageUrl } from "../support/env.ts";
 import { Api, expect, test } from "../support/fixtures.ts";
-import { isCommand } from "../support/urls.ts";
+import { commandUrl, isCommand } from "../support/urls.ts";
 
 // Switching the language in the open app, without a reload, must leave nothing in the old language:
 // what a reload shows is what the switch shows. The app names and their order are built once from
@@ -384,6 +384,49 @@ test.describe("switching the language with the account menu, on a screen that st
     await pickInAccountMenu(page, "en", "sv");
     await expect(cards).toHaveText(["Apfel", "Zebra", "Ärger", "Öle"]);
   });
+
+  test("a board with no sort is not asked for again: its columns and cards do not depend on the language", async ({
+    page,
+    signIn,
+    api,
+    scratchModule,
+  }) => {
+    const model = await scratchModule({
+      title: "Plain board",
+      fields: [
+        { name: "title", required: true },
+        { name: "state", kind: "select", options: ["new", "won"] },
+      ],
+    });
+    for (const t of ["Zebra", "Ärger", "Apfel", "Öle"])
+      await api.create("root", model, { title: t, state: "new" });
+    await signIn("root", `/${model}/${model}?view=kanban`);
+    const cards = page.locator(".kcard .ktitle");
+    await expect(cards).toHaveCount(4);
+
+    // Every request for the model's data after this point, in the order it was sent.
+    const asked: { command: string; order?: unknown[]; lang?: string }[] = [];
+    page.on("request", (r) => {
+      if (r.method() !== "POST") return;
+      for (const command of ["search", "aggregate"])
+        if (isCommand(r.url(), model, command))
+          asked.push({ command, ...JSON.parse(r.postData() ?? "{}") });
+    });
+    await pickInAccountMenu(page, "en", "sv");
+
+    // Sort the board now (a client-side navigation). The first request after the switch is the one
+    // that sorts, so the switch itself asked for nothing: neither the columns nor their cards.
+    const sorted = encodeURIComponent(JSON.stringify({ s: { f: "title", dir: "asc" } }));
+    await page.evaluate((h) => (location.hash = h), `/${model}/${model}?view=kanban&st=${sorted}`);
+    await expect(cards).toHaveText(["Apfel", "Zebra", "Ärger", "Öle"]);
+    expect(asked.map((a) => a.command)).not.toContain("aggregate");
+    expect(asked.length).toBeGreaterThan(0);
+    for (const a of asked) {
+      expect(a.command).toBe("search");
+      expect(a.order, "a request that does not sort").toHaveLength(1);
+      expect(a.lang).toMatch(/^sv/);
+    }
+  });
 });
 
 test.describe("a record panel that stays open while the language changes", () => {
@@ -496,5 +539,196 @@ test.describe("a record panel that stays open while the language changes", () =>
     // ...and the panel is the same one, with its draft.
     await expect(panelOf(page).locator("h2")).toHaveText("Ärger");
     await expect(note).toHaveValue("not saved yet");
+  });
+
+  /**
+   * The banner that is on screen, in Swedish, goes to English and back: the sentence is made from
+   * the server's words each time. A sentence kept in the language it was worded in is Swedish by the
+   * time English is asked for, which nothing words in English again.
+   */
+  async function swedishEnglishSwedish(page: Page, banner: Locator, refusal: string) {
+    await expect(banner).toBeVisible();
+    for (const w of wordsOf("sv", refusal)) await expect(banner).toContainText(w);
+    const swedish = (await banner.textContent())!;
+    await pickInAccountMenu(page, "sv", "en");
+    await expect(panelOf(page)).toBeVisible();
+    for (const w of wordsOf("en", refusal)) await expect(banner).toContainText(w);
+    await expect(banner).not.toHaveText(swedish);
+    await pickInAccountMenu(page, "en", "sv");
+    await expect(banner).toHaveText(swedish);
+  }
+
+  const REFUSAL = "{field} must be {from} to do this, it is {current}";
+
+  test("the refusal of a move made with the Move to menu is worded again in the new language", async ({
+    page,
+    signIn,
+    api,
+    uid,
+    scratchModule,
+    allowHttpErrors,
+  }) => {
+    allowHttpErrors(400);
+    // A governed field that is not the status: the panel shows it with a menu (GovernedValue).
+    const model = await scratchModule({
+      title: "Menu data",
+      fields: [
+        { name: "title", required: true },
+        { name: "phase", kind: "select", options: ["draft", "review", "final"] },
+      ],
+      actions: [
+        { name: "submit", field: "phase", from: "draft", to: "review" },
+        { name: "sign_off", field: "phase", from: "review", to: "final", approval: true },
+      ],
+    });
+    const rec = await api.create("root", model, { title: uid("Menu"), phase: "draft" });
+    await signIn("root", `/${model}/${model}?view=list&id=${rec.id}`);
+    await pickInAccountMenu(page, "en", "sv");
+    await expect(panelOf(page).locator(".governed button")).toBeVisible();
+
+    // Someone else moves it on while this page is open; the move the menu offers is refused.
+    await api.run("root", `${model}.submit`, { id: rec.id });
+    await panelOf(page).locator(".governed button").click();
+    await page.getByRole("menuitem").first().click();
+    await swedishEnglishSwedish(page, panelOf(page).locator("p.error.banner"), REFUSAL);
+  });
+
+  test("the refusal of an action button is worded again in the new language", async ({
+    page,
+    signIn,
+    api,
+    uid,
+    scratchModule,
+    allowHttpErrors,
+  }) => {
+    allowHttpErrors(400);
+    const model = await scratchModule({
+      title: "Button data",
+      fields: [
+        { name: "title", required: true },
+        { name: "state", kind: "select", options: ["new", "doing", "done"] },
+      ],
+      actions: [{ name: "start", field: "state", from: "new", to: "doing" }],
+    });
+    const rec = await api.create("root", model, { title: uid("Button"), state: "new" });
+    await signIn("root", `/${model}/${model}?view=list&id=${rec.id}`);
+    await pickInAccountMenu(page, "en", "sv");
+    const start = panelOf(page).locator(".actionrow button").first();
+    await expect(start).not.toHaveAttribute("aria-disabled", "true");
+
+    await api.run("root", `${model}.start`, { id: rec.id });
+    await start.click();
+    await swedishEnglishSwedish(page, panelOf(page).locator("p.error.banner"), REFUSAL);
+  });
+
+  test("the server's refusal of a field is worded again in the new language", async ({
+    page,
+    signIn,
+    api,
+    scratchPackage,
+    uid,
+    allowHttpErrors,
+  }) => {
+    allowHttpErrors(400);
+    const q = JSON.stringify;
+    const id = await scratchPackage(
+      (pkg) => `
+[module]
+id = ${q(pkg)}
+version = "0.1.0"
+name = "Field refusal"
+description = "A field with a limit (end-to-end test module)"
+author = "obop e2e"
+requires_core = ${q(`^${coreVersion}`)}
+
+[[model]]
+name = "${pkg}_note"
+description = "A note"
+read_group = "base.user"
+write_group = "base.user"
+
+  [[model.field]]
+  name = "headline"
+  description = "A headline"
+  class = "none"
+
+  [[model.field]]
+  name = "code"
+  description = "A short code"
+  class = "none"
+  max_length = 10
+`,
+    );
+    const model = `${id}_note`;
+    // A page loaded before the limit was set: its copy of /api/meta has none on the code, so the
+    // browser lets the text go and the server refuses it, naming the field.
+    await page.route(/\/api\/meta(\?.*)?$/, async (route) => {
+      const res = await route.fetch();
+      const body = await res.json();
+      for (const m of body.modules)
+        for (const d of m.models)
+          for (const f of d.fields) if (f.name === "code") delete f.max_length;
+      await route.fulfill({ response: res, json: body });
+    });
+    await signIn("root", `/${id}/${model}?view=list&id=new`);
+    await pickInAccountMenu(page, "en", "sv");
+    await page.locator(`#f-${model}-headline`).fill(uid("Refused"));
+    await page.locator(`#f-${model}-code`).fill("abcdefghijk");
+    await panelOf(page)
+      .getByRole("button", { name: say("sv", "Create") })
+      .click();
+    const alert = page.locator(`#f-${model}-code-err`);
+    await expect(alert).toBeVisible();
+
+    // The server's words are English: shown as they came in English, worded by the catalogue in Swedish.
+    const english = `${model}.code must be at most 10 characters; this has 11`;
+    await expect(alert).not.toContainText("must be at most");
+    await expect(alert).toContainText("10");
+    const swedish = (await alert.textContent())!;
+    await pickInAccountMenu(page, "sv", "en");
+    await expect(alert).toHaveText(english);
+    await pickInAccountMenu(page, "en", "sv");
+    await expect(alert).toHaveText(swedish);
+    expect((await api.list("root", model)).length).toBe(0);
+  });
+
+  test("a record that is not on the page yet does not show the row of the one before it", async ({
+    page,
+    signIn,
+    api,
+    scratchModule,
+  }) => {
+    const model = await scratchModule({
+      title: "Next data",
+      fields: [{ name: "title", required: true }],
+    });
+    const rows = [];
+    for (let i = 1; i <= 27; i++)
+      rows.push(await api.create("root", model, { title: `Item ${String(i).padStart(2, "0")}` }));
+    // Pages of 25: "Item 01" is on the first page, "Item 27" on the second.
+    await page.addInitScript(() => localStorage.setItem("obop-pagesize", "25"));
+    const sorted = encodeURIComponent(JSON.stringify({ s: { f: "title", dir: "asc" } }));
+    await signIn("root", `/${model}/${model}?view=list&st=${sorted}`);
+    const titles = page.locator("table.list tbody tr td:nth-child(2)");
+    await expect(titles).toHaveCount(25);
+    // Opened from the list: the page remembers the row of "Item 01".
+    await titles.first().click();
+    await expect(panelOf(page).locator("h2")).toHaveText("Item 01");
+
+    // Another record of the same model, one the page has not got: its `get` is held back.
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    await page.route(commandUrl(model, "get"), async (route) => {
+      await held;
+      await route.continue();
+    });
+    await page.evaluate(
+      (h) => (location.hash = h),
+      `/${model}/${model}?view=list&st=${sorted}&id=${rows[26]!.id}`,
+    );
+    // While it is held there is nothing to show for it: not the row of "Item 01" under its address.
+    await expect(panelOf(page)).toHaveCount(0);
+    release();
+    await expect(panelOf(page).locator("h2")).toHaveText("Item 27");
   });
 });
