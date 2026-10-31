@@ -20,8 +20,9 @@
 //     must be `d`, `lk` or `lookup`).
 //
 // A name that the code around the hook declares (a constant above it in the same block, a
-// parameter of the function that holds it) or the hook declares itself is not the import of the
-// same name. A hook is marked as right by `// i18n-memo-ok: <reason>` in a comment directly above
+// parameter of the function that holds it; a function type in an annotation binds nothing) or the
+// hook declares itself is not the import of the same name; a function of the call graph is read
+// the same way (its parameters and the constants at the level of its body). A hook is marked as right by `// i18n-memo-ok: <reason>` in a comment directly above
 // its statement or inside the call; the reason needs three word characters.
 //
 // Not read (the shapes are listed in ISSUES.md D14): `useCallback`, `useEffect`, an initial
