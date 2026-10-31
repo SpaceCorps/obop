@@ -16,6 +16,7 @@ import {
   panelId,
   rich,
   t,
+  useI18n,
 } from "@obop/ui";
 import type { ModelMeta, Reply, Row } from "../api.ts";
 import type { App } from "../Chrome.tsx";
@@ -182,6 +183,8 @@ export function DashboardsApp({
   owner: string;
 }) {
   const d = useData();
+  // The order of equal positions is by title, collated in the language of the region.
+  const { locale } = useI18n();
   const boards = useRows("dashboards_dashboard");
   const tiles = useRows("dashboards_widget");
   const dmodel = d.models.get("dashboards_dashboard")?.model;
@@ -201,7 +204,7 @@ export function DashboardsApp({
       (boards.rows as unknown as Dashboard[])
         .filter((b) => canEdit || b.shared !== false || b.owner === owner)
         .sort(byPosition),
-    [boards.rows, canEdit, owner],
+    [boards.rows, canEdit, owner, locale],
   );
   const current = visible.find((b) => b.id === route.id) ?? visible[0];
   const widgets = useMemo(
@@ -209,7 +212,7 @@ export function DashboardsApp({
       (tiles.rows as unknown as Widget[])
         .filter((w) => w.dashboard_id === current?.id)
         .sort(byPosition),
-    [tiles.rows, current?.id],
+    [tiles.rows, current?.id, locale],
   );
 
   const open = (id: string, view = route.view) => go({ app: app.id, model: BOARD, id, view });

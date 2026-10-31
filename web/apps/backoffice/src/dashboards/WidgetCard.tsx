@@ -21,7 +21,8 @@ import {
 /** A widget's data: resolved against what this person may see, then fetched from the server. */
 export function useWidgetData(w: Widget) {
   const d = useData();
-  const r = useMemo(() => resolve(w, d.models), [w, d.models]);
+  // `resolve` writes the "not set up correctly" and "no access" texts, so it runs again in the new language.
+  const r = useMemo(() => resolve(w, d.models), [w, d.models, d.lang]);
   const [got, setGot] = useState<Fetched | null>(null);
   const [attempt, setAttempt] = useState(0);
   const key = JSON.stringify([
