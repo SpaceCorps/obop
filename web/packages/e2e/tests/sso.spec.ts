@@ -37,11 +37,19 @@ async function enrol(request: APIRequestContext, name: keyof typeof sso.users) {
     token,
   );
   expect(done.status, JSON.stringify(done.json)).toBe(200);
-  return { secret: begun.json.secret as string, step, recovery: done.json.recovery_codes as string[] };
+  return {
+    secret: begun.json.secret as string,
+    step,
+    recovery: done.json.recovery_codes as string[],
+  };
 }
 
 /** Sign in as an enrolled administrator with a recovery code: a whole session. */
-async function adminSession(request: APIRequestContext, name: keyof typeof sso.users, recovery: string) {
+async function adminSession(
+  request: APIRequestContext,
+  name: keyof typeof sso.users,
+  recovery: string,
+) {
   const u = sso.users[name];
   const first = await post(request, "/api/auth/login", { username: u.name, password: u.password });
   expect(first.json.mfa_required).toBe(true);
@@ -74,7 +82,9 @@ test.describe("sign in with Microsoft", () => {
   /** Click through the stand-in's page as `who` (or cancel). */
   async function atMicrosoft(page: import("@playwright/test").Page, who: string) {
     await expect(page).toHaveURL(new RegExp(`^${idpUrl()}/`));
-    await page.getByRole("link", { name: who === "cancel" ? "Cancel" : `Sign in as ${who}` }).click();
+    await page
+      .getByRole("link", { name: who === "cancel" ? "Cancel" : `Sign in as ${who}` })
+      .click();
   }
 
   test("the button signs in a bound person with a whole session and leaves nothing of Microsoft behind", async ({
@@ -98,7 +108,9 @@ test.describe("sign in with Microsoft", () => {
     }));
     expect(stored.token).toMatch(/^obop_[0-9a-f]{64}$/);
     expect(stored.user).toBe("bea");
-    expect(stored.all, "no token of the provider in the browser").not.toMatch(/eyJ|e2e-access-token/);
+    expect(stored.all, "no token of the provider in the browser").not.toMatch(
+      /eyJ|e2e-access-token/,
+    );
     expect((await context.cookies()).filter((c) => c.name.startsWith("obop_sso"))).toEqual([]);
 
     // The session works like any other.
@@ -114,7 +126,12 @@ test.describe("sign in with Microsoft", () => {
     allowHttpErrors,
   }) => {
     allowHttpErrors(401);
-    const made = await post(request, "/api/user_account/set_sso_only", { id: "ada", sso_only: true }, admin);
+    const made = await post(
+      request,
+      "/api/user_account/set_sso_only",
+      { id: "ada", sso_only: true },
+      admin,
+    );
     expect(made.status, JSON.stringify(made.json)).toBe(200);
     expect(made.json.value.sso_only).toBe(true);
 
@@ -131,7 +148,9 @@ test.describe("sign in with Microsoft", () => {
     expect(await page.evaluate(() => sessionStorage.getItem("obop-user"))).toBe("ada");
   });
 
-  test("a person with an authenticator app of their own is still asked for it", async ({ page }) => {
+  test("a person with an authenticator app of their own is still asked for it", async ({
+    page,
+  }) => {
     await page.goto(ssoUrl());
     await page.getByRole("button", { name: "Sign in with Microsoft" }).click();
     await atMicrosoft(page, "bob");

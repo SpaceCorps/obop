@@ -139,7 +139,10 @@ export function startIdp(port: number) {
         const back = new URL(f.redirectUri);
         if (who === "cancel") {
           back.searchParams.set("error", "access_denied");
-          back.searchParams.set("error_description", "AADSTS65004: the user declined <b>consent</b>");
+          back.searchParams.set(
+            "error_description",
+            "AADSTS65004: the user declined <b>consent</b>",
+          );
         } else {
           const who_ = sso.identities[who as keyof typeof sso.identities];
           if (!who_) return page(res, 400, "<p>Unknown person.</p>");
