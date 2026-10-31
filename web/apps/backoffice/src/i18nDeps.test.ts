@@ -1,244 +1,97 @@
-// A guard for one mistake that has already cost a bug: text is translated and sorted by calling the
-// global `t()` and friends while a component renders; the language is not a prop or a state, so a
-// `useMemo` that calls them keeps the text of the language it was first computed in unless the
-// language is one of its dependencies (see the comment of `I18nProvider` in @obop/ui). This test
-// reads the source, finds every `useMemo` and `memo` and fails when the function it is given calls
-// one of the translating functions below and the dependencies name neither `lang` nor `locale`
-// (`d.lang` of the data context and `useI18n()`'s `i18n` count).
+// A guard for one mistake that has already cost a bug (the app list, the smart buttons, the dashboards):
+// text is translated, sorted and formatted by calling the global `t()` and the functions built on it
+// while a component renders. The language is not a prop or a state, so a `useMemo` that uses any of
+// them keeps the text of the language it was first computed in unless the language is one of its
+// dependencies (see `I18nProvider` in @obop/ui).
 //
-// `useCallback` is not read: its function runs when it is called, so a `t()` in it reads the language
-// then, and a cached function cannot hold an old text. (Reading it would flag five more hooks, every
-// one of them lazy in this way: a confirm dialog's default texts, an error message, `nameOf`.) The
-// same goes for a function inside a memo that the memo only returns, for example the handlers of a
-// card: mark that memo as below.
+// `i18nGuard.ts` reads the source of every app and of the design system, works out from the call
+// graph which functions translate, sort or format, and this test fails when a `useMemo` (or a `memo`
+// component) uses one of them and its dependencies name neither `lang` nor `locale` (`d.lang` of the
+// data context and `useI18n()`'s `i18n` count). What it reads and what it does not is at the top of
+// that file; ISSUES.md D14 lists the blind spots.
 //
 // A hook that is right although it looks wrong is marked in the source, on the line before it or
 // inside it, with a comment that says why:
 //
 //   // i18n-memo-ok: the callback runs when the button is pressed, so `t()` is read then
 //
-import { readFileSync, readdirSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vite-plus/test";
+import {
+  SEEDS,
+  analyse,
+  code,
+  hooks,
+  namesLanguage,
+  problem,
+  readTree,
+  unclassifiedReaders,
+  type Source,
+} from "./i18nGuard.ts";
 
-/**
- * Functions whose result depends on the language or the region: `t` and `tx`, `rich`, the label
- * helpers of the back office (labels.ts, format.ts), the collation (`compareText`) and the number,
- * money and date formatters of `fmt`.
- */
-export const TRANSLATING = [
-  "t",
-  "tx",
-  "rich",
-  "appTitle",
-  "modelTitle",
-  "fieldTitle",
-  "fieldTitleByName",
-  "actionTitle",
-  "optionLabel",
-  "shownLabel",
-  "describeFor",
-  "labelFor",
-  "compareText",
-  // Helpers of the back office that call the above: the list of apps, built from the modules.
-  "buildApps",
-  "appBlurb",
-];
-/** A call of one of the `names`, or of a formatter of `fmt`. */
-const callsOf = (names: string[]) =>
-  new RegExp(`(?<![.\\w$])(?:${names.join("|")})\\s*\\(|(?<![.\\w$])fmt(?:Locale)?\\s*\\.\\s*\\w+`);
-/** What a dependency list must name. */
-const LANGUAGE_DEP = /(?<![\w$])(?:lang|locale|i18n)(?![\w$])|\.lang(?![\w$])|\.locale(?![\w$])/;
-const EXEMPT = /i18n-memo-ok[ \t]*:[ \t]*\S/;
+/* ---------------------------------------------------------------------------------------------- */
+/* Fixtures: a small design system and some apps, as the reader sees them                          */
+/* ---------------------------------------------------------------------------------------------- */
 
-/** `src` with comments, the text of strings and templates and regular expressions blanked (same length). */
-export function code(src: string): string {
-  const out = src.split("");
-  const n = src.length;
-  const blank = (from: number, to: number) => {
-    for (let k = from; k < to && k < n; k++) if (out[k] !== "\n") out[k] = " ";
-  };
-  const templates: number[] = []; // the brace depth at which each open `${` was entered
-  let depth = 0;
-  let prev = ""; // the last character of code, to tell a division from a regular expression
-  let before = ""; // and the one before it (an arrow `=>` is followed by an expression)
-  let i = 0;
-  // The text of a template literal, from `i` to its closing backtick or the next `${`.
-  const templateText = () => {
-    const from = i;
-    while (i < n) {
-      const c = src[i]!;
-      if (c === "\\") i += 2;
-      else if (c === "`") {
-        blank(from, i);
-        i++;
-        prev = "`";
-        return;
-      } else if (c === "$" && src[i + 1] === "{") {
-        blank(from, i);
-        templates.push(depth);
-        i += 2;
-        prev = "{";
-        return;
-      } else i++;
-    }
-    blank(from, n);
-  };
-  while (i < n) {
-    const c = src[i]!;
-    const d = src[i + 1];
-    if (c === "/" && d === "/") {
-      const e = src.indexOf("\n", i);
-      const end = e < 0 ? n : e;
-      blank(i, end);
-      i = end;
-    } else if (c === "/" && d === "*") {
-      const e = src.indexOf("*/", i + 2);
-      const end = e < 0 ? n : e + 2;
-      blank(i, end);
-      i = end;
-    } else if (c === '"' || c === "'") {
-      let j = i + 1;
-      while (j < n && src[j] !== c && src[j] !== "\n") j += src[j] === "\\" ? 2 : 1;
-      blank(i + 1, j);
-      i = src[j] === c ? j + 1 : j;
-      prev = c;
-    } else if (c === "`") {
-      i++;
-      templateText();
-    } else if (
-      c === "/" &&
-      (prev === "" || "(,=:[!&|?{};".includes(prev) || (prev === ">" && before === "="))
-    ) {
-      let j = i + 1;
-      let inClass = false;
-      while (j < n && src[j] !== "\n" && (inClass || src[j] !== "/")) {
-        if (src[j] === "\\") j++;
-        else if (src[j] === "[") inClass = true;
-        else if (src[j] === "]") inClass = false;
-        j++;
-      }
-      if (src[j] === "/") {
-        blank(i + 1, j);
-        i = j + 1;
-        prev = "/";
-      } else i++;
-    } else {
-      if (c === "{") depth++;
-      else if (c === "}") {
-        if (templates.length && templates[templates.length - 1] === depth) {
-          templates.pop();
-          i++;
-          templateText();
-          continue;
-        }
-        depth--;
-      }
-      if (!/\s/.test(c)) {
-        before = prev;
-        prev = c;
-      }
-      i++;
-    }
-  }
-  return out.join("");
-}
-
-export type Hook = {
-  hook: string;
-  line: number;
-  /** The function passed to the hook, as written. */
-  body: string;
-  /** The dependency list as written; `null` when the hook has none. */
-  deps: string | null;
-  exempt: boolean;
+const UI: Record<string, string> = {
+  "packages/ui/src/index.ts": 'export * from "./i18n/index.ts";',
+  "packages/ui/src/i18n/index.ts":
+    'export { t, fmt, compareText, getLang, setLanguage } from "./store.ts";',
+  "packages/ui/src/i18n/store.ts": `
+    const S = { lang: "en", messages: {} as Record<string, string>, region: "auto" };
+    export function translate(id: string) { return S.messages[id] ?? id; }
+    export function t(id: string) { return translate(id); }
+    export const getLang = () => S.lang;
+    export function formatLocale() { return S.region === "auto" ? S.lang : S.region; }
+    export const fmt = { money: (n: number) => String(n) + formatLocale() };
+    export function compareText(a: string, b: string) { return a.localeCompare(b, formatLocale()); }
+    export async function setLanguage(lang: string) { S.lang = lang; }
+  `,
 };
 
-/** Every `useMemo` and `memo` call of a source file. */
-export function hooks(src: string): Hook[] {
-  const masked = code(src);
-  const found: Hook[] = [];
-  for (const m of masked.matchAll(/(?<![.\w$])(useMemo|memo)\s*(?=[<(])/g)) {
-    let i = m.index! + m[0].length;
-    if (masked[i] === "<") {
-      // Type arguments: skip to the matching `>`, an arrow's `=>` does not close it.
-      let angle = 0;
-      for (; i < masked.length; i++) {
-        if (masked[i] === "<") angle++;
-        else if (masked[i] === ">" && masked[i - 1] !== "=" && --angle === 0) break;
-      }
-      i++;
-      while (/\s/.test(masked[i] ?? "")) i++;
+const sources = (apps: Record<string, string>): Source[] =>
+  Object.entries({ ...UI, ...apps }).map(([path, text]) => ({ path, text }));
+
+/** The problems of every memo in `apps`, as `file:line text`. */
+function flagged(apps: Record<string, string>): string[] {
+  const all = sources(apps);
+  const a = analyse(all);
+  const out: string[] = [];
+  for (const s of all)
+    for (const h of hooks(s.text, a.files.get(s.path)!.masked)) {
+      const why = problem(a, s.path, h);
+      if (why) out.push(`${s.path}:${h.line} ${why}`);
     }
-    if (masked[i] !== "(") continue;
-    const start = i + 1;
-    const args: [number, number][] = [];
-    let depth = 0;
-    let from = start;
-    for (i = start; i < masked.length; i++) {
-      const c = masked[i]!;
-      if ("([{".includes(c)) depth++;
-      else if (")]}".includes(c)) {
-        if (depth === 0) break;
-        depth--;
-      } else if (c === "," && depth === 0) {
-        args.push([from, i]);
-        from = i + 1;
-      }
-    }
-    if (masked.slice(from, i).trim()) args.push([from, i]);
-    const [fn, deps] = args;
-    if (!fn) continue;
-    const line = src.slice(0, m.index).split("\n").length;
-    // The comment may sit on the line before the call or anywhere inside it.
-    const lineStart = src.lastIndexOf("\n", m.index! - 1);
-    const before = src.slice(src.lastIndexOf("\n", lineStart - 1) + 1, m.index);
-    found.push({
-      hook: m[1]!,
-      line,
-      body: masked.slice(fn[0], fn[1]),
-      deps: deps ? masked.slice(deps[0], deps[1]).trim() : null,
-      exempt: EXEMPT.test(before + src.slice(m.index, i)),
-    });
-  }
-  return found;
+  return out;
 }
 
-/** Why a hook can keep an old language, or `null` when it cannot. */
-export function problem(h: Hook, names: string[] = TRANSLATING): string | null {
-  if (h.exempt || !callsOf(names).test(h.body)) return null;
-  if (h.hook === "memo")
-    return /(?<![.\w$])useI18n\s*\(/.test(h.body)
-      ? null
-      : "a memo component translates but does not use useI18n()";
-  if (h.deps === null) return null; // computed on every render
-  if (!h.deps.startsWith("[")) return "the dependencies are not a list the guard can read";
-  return LANGUAGE_DEP.test(h.deps) ? null : "the dependencies do not name lang or locale";
+const web = join(dirname(fileURLToPath(import.meta.url)), "../../..");
+
+/** Brackets left open or closed too often in `src` once text is blanked: a mistake of the reader. */
+function imbalance(src: string): number {
+  let depth = 0;
+  for (const c of code(src)) depth += "{([".includes(c) ? 1 : "})]".includes(c) ? -1 : 0;
+  return depth;
 }
 
-describe("the guard reads hooks", () => {
-  it("flags a memo that translates without the language in its dependencies", () => {
+/* ---------------------------------------------------------------------------------------------- */
+/* The reader                                                                                      */
+/* ---------------------------------------------------------------------------------------------- */
+
+describe("the reader of hooks", () => {
+  it("finds the dependencies of a memo", () => {
     const [h] = hooks(`
-      const a = useMemo(() => buildApps(m).map((x) => t("Open {name}", { name: x })), [m]);`);
-    expect(problem(h!)).toMatch(/do not name lang or locale/);
+      const a = useMemo(() => rows.map((x) => t("Open {name}", { name: x })), [m]);`);
+    expect(h!.deps).toBe("[m]");
+    expect(namesLanguage(h!.deps)).toBe(false);
   });
 
   it("accepts the language or the locale among the dependencies, in any spelling", () => {
     for (const deps of ["[m, lang]", "[m, d.lang]", "[locale, m]", "[m, i18n]", "[m, i18n.lang]"])
-      expect(problem(hooks(`useMemo(() => compareText(a, b), ${deps})`)[0]!), deps).toBeNull();
-  });
-
-  it("looks at every function that translates or sorts", () => {
-    for (const call of [
-      "appTitle(m)",
-      'modelTitle(m, "x")',
-      "fieldTitle(f)",
-      'tx("app", n)',
-      "compareText(a, b)",
-      "fmt.money(1)",
-    ])
-      expect(problem(hooks(`useMemo(() => ${call}, [m])`)[0]!), call).not.toBeNull();
+      expect(namesLanguage(hooks(`useMemo(() => 1, ${deps})`)[0]!.deps), deps).toBe(true);
+    for (const deps of ["[m, language]", "[m, d.version]", "[m, lang2]"])
+      expect(namesLanguage(hooks(`useMemo(() => 1, ${deps})`)[0]!.deps), deps).toBe(false);
   });
 
   it("handles type arguments, nested brackets, arrow functions in the arguments and a second hook", () => {
@@ -249,7 +102,6 @@ describe("the guard reads hooks", () => {
       ["useMemo", "[rows, q]"],
       ["useMemo", "[]"],
     ]);
-    expect(hs.map((h) => problem(h) !== null)).toEqual([true, true]);
   });
 
   it("ignores what is only text: comments, strings, templates and regular expressions", () => {
@@ -260,86 +112,258 @@ describe("the guard reads hooks", () => {
       "const r = /useMemo\\(\\(\\) => t\\('a'\\)/;",
       "const q = `${useMemo(() => 1, [])} useMemo(() => t('a'), [])`;",
       "const ok = useMemo(() => /['\"]/.test(x) && `a${y}b`, [x, y]);",
+      'function csv(s) { return /[",\\n]/.test(s) ? `"${s.replace(/"/g, \'""\')}"` : s; }',
     ].join("\n");
     // What is code stays (`${y}`), what is text is blank.
     expect(hooks(src).map((h) => h.body.trim())).toEqual([
       "() => 1",
       "() => /    /.test(x) && ` ${y} `",
     ]);
-    expect(hooks(src).map((h) => problem(h))).toEqual([null, null]);
-  });
-
-  it("does not take a call of something else for a translation", () => {
-    for (const body of ["() => item.t(1)", "() => format(1)", "() => split(a)", "() => 'tx(' + a"])
-      expect(problem(hooks(`useMemo(${body}, [])`)[0]!), body).toBeNull();
+    // and the brackets of what is left balance, which they do not when a string or a regular
+    // expression is mistaken for code
+    expect(imbalance(src)).toBe(0);
   });
 
   it("lets a hook that is right say so, with a reason", () => {
-    const withReason = "// i18n-memo-ok: runs when pressed\nconst f = useMemo(() => t('x'), []);";
-    expect(problem(hooks(withReason)[0]!)).toBeNull();
-    const inside =
-      "const f = useMemo(\n  // i18n-memo-ok: the text is built when the row is drawn\n  () => t('x'),\n  [],\n);";
-    expect(problem(hooks(inside)[0]!)).toBeNull();
+    const app = (marker: string) => ({
+      "apps/x/src/a.tsx": `import { t } from "@obop/ui";\n${marker}\nconst f = useMemo(() => t("x"), []);`,
+    });
+    expect(flagged(app("// i18n-memo-ok: runs when pressed"))).toEqual([]);
+    expect(
+      flagged({
+        "apps/x/src/a.tsx":
+          'import { t } from "@obop/ui";\nconst f = useMemo(\n  // i18n-memo-ok: the text is built when the row is drawn\n  () => t("x"),\n  [],\n);',
+      }),
+    ).toEqual([]);
     // A bare marker is not a reason.
-    expect(
-      problem(hooks("// i18n-memo-ok:\nconst f = useMemo(() => t('x'), []);")[0]!),
-    ).not.toBeNull();
-  });
-
-  it("holds a memo component to using the language hook", () => {
-    expect(problem(hooks("const C = memo(function C() { return t('x'); });")[0]!)).not.toBeNull();
-    expect(
-      problem(hooks("const C = memo(function C() { useI18n(); return t('x'); });")[0]!),
-    ).toBeNull();
+    expect(flagged(app("// i18n-memo-ok:"))).toHaveLength(1);
   });
 });
 
-/** Every source file of the apps and of the design system that the back office is made of. */
-function sources(): string[] {
-  const here = dirname(fileURLToPath(import.meta.url));
-  const web = join(here, "../../..");
-  const roots = [
-    ...readdirSync(join(web, "apps")).map((a) => join(web, "apps", a, "src")),
-    join(web, "packages/ui/src"),
-  ];
-  const files: string[] = [];
-  const walk = (dir: string) => {
-    let entries;
-    try {
-      entries = readdirSync(dir, { withFileTypes: true });
-    } catch {
-      return; // an app without a src directory
-    }
-    for (const e of entries) {
-      const p = join(dir, e.name);
-      if (e.isDirectory()) walk(p);
-      else if (/\.tsx?$/.test(e.name) && !/\.test\.tsx?$/.test(e.name)) files.push(p);
-    }
-  };
-  roots.forEach(walk);
-  return files.sort();
-}
+describe("what counts as translating", () => {
+  const f = (body: string, extra: Record<string, string> = {}) =>
+    flagged({
+      "apps/x/src/a.tsx": `import { t, fmt, compareText, getLang, setLanguage } from "@obop/ui";\n${body}`,
+      ...extra,
+    });
+
+  it("is a call of t, a formatter of fmt, the collation or the language itself", () => {
+    for (const use of ['t("x")', "fmt.money(1)", "compareText(a, b)", "getLang()"])
+      expect(f(`const v = useMemo(() => ${use}, [m]);`), use).toHaveLength(1);
+    // with the language in the dependencies it is fine
+    expect(f('const v = useMemo(() => t("x"), [m, lang]);')).toEqual([]);
+    expect(f("const v = useMemo(() => fmt.money(1), [m, d.locale]);")).toEqual([]);
+  });
+
+  it("is a function that calls one of those, however far, in the same file or another", () => {
+    const apps = {
+      "apps/x/src/lib.ts": `
+        import { t } from "@obop/ui";
+        export const label = (id: string) => t(id);
+        export function title(m: { name: string }) { return label(m.name); }
+        export const plain = (a: number) => a + 1;`,
+      "apps/x/src/mid.ts": `
+        import { title as nameOf } from "./lib.ts";
+        export const heading = (m: { name: string }) => nameOf(m).toUpperCase();`,
+      "apps/x/src/barrel.ts": `export { heading as top } from "./mid.ts";\nexport * from "./lib.ts";`,
+    };
+    for (const [use, from] of [
+      ["title(m)", `import { title } from "./lib.ts";`],
+      ["heading(m)", `import { heading } from "./mid.ts";`],
+      ["top(m)", `import { top } from "./barrel.ts";`],
+      ["label(m)", `import { label } from "./barrel.ts";`],
+      ["alias(m)", `import { title as alias } from "./lib.ts";`],
+    ] as const)
+      expect(
+        flagged({ ...apps, "apps/x/src/a.tsx": `${from}\nconst v = useMemo(() => ${use}, [m]);` }),
+        use,
+      ).toHaveLength(1);
+    // a function that does not translate is not flagged, nor one of the same name in another file
+    expect(
+      flagged({
+        ...apps,
+        "apps/x/src/a.tsx": `import { plain } from "./lib.ts";\nconst v = useMemo(() => plain(1), [m]);`,
+      }),
+    ).toEqual([]);
+    expect(
+      flagged({
+        ...apps,
+        "apps/x/src/other.ts": "export const title = (m: string) => m;",
+        "apps/x/src/a.tsx": `import { title } from "./other.ts";\nconst v = useMemo(() => title("a"), [m]);`,
+      }),
+    ).toEqual([]);
+  });
+
+  it("is a function that is used and not called: .sort(byPosition), .map(label)", () => {
+    const lib = `const byPosition = (a: { n: string }, b: { n: string }) => compareText(a.n, b.n);
+      const label = (id: string) => t(id);`;
+    expect(f(`${lib}\nconst v = useMemo(() => rows.sort(byPosition), [rows]);`)).toHaveLength(1);
+    expect(f(`${lib}\nconst v = useMemo(() => ids.map(label), [ids]);`)).toHaveLength(1);
+    expect(
+      f(`${lib}\nconst v = useMemo(() => [...rows].sort(byPosition), [rows, locale]);`),
+    ).toEqual([]);
+  });
+
+  it("is a function whose default value calls one: describe(o, lang = getLang())", () => {
+    const lib = "const describe = (o: { d: string }, lang = getLang()) => o.d + lang;";
+    expect(f(`${lib}\nconst v = useMemo(() => describe(o), [o]);`)).toHaveLength(1);
+  });
+
+  it("is a component in a cached element, which does not render again", () => {
+    const lib = 'const Badge = ({ n }: { n: number }) => <b>{t("count")}{n}</b>;';
+    expect(f(`${lib}\nconst v = useMemo(() => <Badge n={1} />, []);`)).toHaveLength(1);
+    expect(
+      f(`${lib}\nconst v = useMemo(() => rows.map((r) => <Badge key={r} n={r} />), [rows]);`),
+    ).toHaveLength(1);
+  });
+
+  it("is a member that the data context builds from a translating function: d.recordLabel, d.refText", () => {
+    const apps = {
+      "apps/x/src/data.tsx": `
+        import { t } from "@obop/ui";
+        export type Ctx = { recordLabel: (m: string) => string; refText: (m: string) => string };
+        export const labelOf = (m: string) => t(m);
+        export function provide(): Ctx {
+          const recordLabel = (m: string) => labelOf(m);
+          const refText = (m: string) => recordLabel(m);
+          return { recordLabel, refText };
+        }`,
+    };
+    for (const use of [
+      "d.recordLabel(m)",
+      "d.refText(m)",
+      "rows.map(d.recordLabel)",
+      "pick(d.refText, 1)",
+    ])
+      expect(
+        flagged({ ...apps, "apps/x/src/a.tsx": `const v = useMemo(() => ${use}, [rows]);` }),
+        use,
+      ).toHaveLength(1);
+    // another method that is not handed out by a translating function is left alone
+    expect(
+      flagged({ ...apps, "apps/x/src/a.tsx": "const v = useMemo(() => d.version(m), [rows]);" }),
+    ).toEqual([]);
+  });
+
+  it("is a helper of the component around the memo", () => {
+    expect(
+      f(`function C() {
+        const label = (id: string) => t(id);
+        const v = useMemo(() => ids.map((i) => label(i)), [ids]);
+        return v;
+      }`),
+    ).toHaveLength(1);
+  });
+
+  it("does not mistake a name of its own for the function: t as a variable, a local compareText", () => {
+    expect(
+      f("const v = useMemo(() => rows.filter((t) => t.ok).map((t) => t.id), [rows]);"),
+    ).toEqual([]);
+    expect(
+      f(`function C() {
+        const compareText = 3;
+        const v = useMemo(() => compareText + 1, []);
+        return v;
+      }`),
+    ).toEqual([]);
+    // and a key of an object literal is not a use
+    expect(f("const v = useMemo(() => ({ t: 1, fmt: 2, compareText: 3 }), []);")).toEqual([]);
+  });
+
+  it("holds a memo component to using the language hook", () => {
+    expect(f('const C = memo(function C() { return t("x"); });')).toHaveLength(1);
+    expect(f('const C = memo(function C() { useI18n(); return t("x"); });')).toEqual([]);
+  });
+
+  it("does not follow what only changes the language", () => {
+    expect(f('const v = useMemo(() => setLanguage("de"), []);')).toEqual([]);
+  });
+});
+
+/* ---------------------------------------------------------------------------------------------- */
+/* The source of the apps                                                                          */
+/* ---------------------------------------------------------------------------------------------- */
 
 describe("the source of the apps", () => {
-  it("has no memo that translates or sorts without the language in its dependencies", () => {
-    const web = join(dirname(fileURLToPath(import.meta.url)), "../../..");
-    const files = sources().map((file) => ({ file, src: readFileSync(file, "utf8") }));
-    const flagged: string[] = [];
+  const tree = readTree(web);
+  const a = analyse(tree);
+  const names = new Set([...a.translators].map((k) => k.split("#")[1]!));
+
+  it("reads every file, and the brackets of each balance once text is blanked", () => {
+    expect(tree.length).toBeGreaterThan(100);
+    expect(tree.filter((s) => imbalance(s.text) !== 0).map((s) => s.path)).toEqual([]);
+  });
+
+  it("knows every function of the i18n store that reads the language", () => {
+    // a new reader must be named in SEEDS (it shows a text) or NOT_DISPLAY (it applies a choice)
+    expect(unclassifiedReaders(tree)).toEqual([]);
+    for (const seed of SEEDS)
+      expect(a.translators.has(`packages/ui/src/i18n/store.ts#${seed}`), seed).toBe(true);
+  });
+
+  it("finds the functions that translate by what they call, not by a list", () => {
+    // Each of these reaches the language only through others; one missing means the reader lost a
+    // link (a changed import, a pattern it cannot read), and the memos that use it are unguarded.
+    const must = [
+      "apps/backoffice/src/labels.ts#appTitle",
+      "apps/backoffice/src/labels.ts#modelTitle",
+      "apps/backoffice/src/labels.ts#fieldTitle",
+      "apps/backoffice/src/format.ts#optionLabel",
+      "apps/backoffice/src/serverMessage.ts#serverMessage",
+      "apps/backoffice/src/Chrome.tsx#buildApps",
+      "apps/backoffice/src/Chrome.tsx#appBlurb",
+      "apps/backoffice/src/data.tsx#recordLabelOf",
+      "apps/backoffice/src/dashboards/DashboardsApp.tsx#byPosition",
+      "apps/backoffice/src/dashboards/widget.ts#resolve",
+      "apps/backoffice/src/serverQuery.ts#toServer",
+      "apps/backoffice/src/query.ts#orderKeys",
+      "apps/backoffice/src/query.ts#groupLabel",
+      "packages/ui/src/i18n/labels.ts#labelFor",
+      "packages/ui/src/i18n/labels.ts#inSentence",
+      "packages/ui/src/i18n/store.ts#compareText",
+      "packages/ui/src/i18n/store.ts#t",
+      "packages/ui/src/i18n/store.ts#fmt",
+    ];
+    expect(must.filter((k) => !a.translators.has(k))).toEqual([]);
+    // members of the data context, which are built inside the provider
+    for (const m of ["recordLabel", "refText"]) expect(a.members.has(m), m).toBe(true);
+    // and the set is not everything: functions that only shape data are not in it
+    for (const plain of ["isEmpty", "keyOf", "slug", "href", "msg", "personalLang", "setLanguage"])
+      expect(names.has(plain), plain).toBe(false);
+  });
+
+  it("has no memo that translates, sorts or formats without the language in its dependencies", () => {
+    const found: string[] = [];
     let seen = 0;
-    for (const { file, src } of files) {
-      const hs = hooks(src);
-      seen += hs.length;
-      for (const h of hs) {
-        const why = problem(h);
-        if (why)
-          flagged.push(`${relative(web, file).replaceAll("\\", "/")}:${h.line} ${h.hook}: ${why}`);
+    for (const s of tree)
+      for (const h of hooks(s.text, a.files.get(s.path)!.masked)) {
+        seen++;
+        const why = problem(a, s.path, h);
+        if (why) found.push(`${s.path}:${h.line} ${h.hook}: ${why}`);
       }
-    }
     // The scan must have found the hooks (a broken reader would find none and pass).
     expect(seen).toBeGreaterThan(40);
     expect(
-      flagged,
+      found,
       "Add lang or locale to the dependencies, or mark the hook with i18n-memo-ok: <why>",
     ).toEqual([]);
+  });
+
+  it("explains every memo that names the language: without it the memo would be flagged", () => {
+    // Take the language out of the dependencies of each hook that has it, in memory. A hook the
+    // reader cannot explain this way has a dependency that nothing protects.
+    const unguarded: string[] = [];
+    let carrying = 0;
+    for (const s of tree)
+      for (const h of hooks(s.text, a.files.get(s.path)!.masked)) {
+        if (!namesLanguage(h.deps) || h.exempt) continue;
+        carrying++;
+        const without = h
+          .deps!.replace(/,?\s*(?:[\w$]+\.)?(?:lang|locale)(?![\w$])/g, "")
+          .replace(/^\[\s*,/, "[");
+        if (!problem(a, s.path, { ...h, deps: without })) unguarded.push(`${s.path}:${h.line}`);
+      }
+    expect(carrying).toBeGreaterThan(10);
+    expect(unguarded).toEqual([]);
   });
 });
