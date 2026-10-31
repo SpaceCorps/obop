@@ -8,9 +8,9 @@ use crate::webauthn::soft::SoftAuthenticator;
 use crate::webauthn::{ALG_EDDSA, ALG_ES256, ALG_RS256, b64url, cbor};
 use obop_commands::{ADMIN_GROUP, PasskeyApi, Reauth, WebauthnCtx};
 
-const ORIGIN: &str = "https://obop.test";
+pub(crate) const ORIGIN: &str = "https://obop.test";
 
-fn ctx() -> WebauthnCtx {
+pub(crate) fn ctx() -> WebauthnCtx {
     WebauthnCtx {
         rp_id: "obop.test".into(),
         origin: ORIGIN.into(),
@@ -19,7 +19,7 @@ fn ctx() -> WebauthnCtx {
     }
 }
 
-fn pw() -> Reauth<'static> {
+pub(crate) fn pw() -> Reauth<'static> {
     Reauth {
         password: PW,
         ..Default::default()
@@ -27,7 +27,7 @@ fn pw() -> Reauth<'static> {
 }
 
 /// Add `auth` as a passkey of the signed-in person.
-fn add(
+pub(crate) fn add(
     r: &Rig,
     token: &str,
     p: &Principal,

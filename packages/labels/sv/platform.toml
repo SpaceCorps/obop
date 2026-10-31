@@ -653,3 +653,75 @@ description = "Familjen av förnyelsetokens som enheten är bunden till (en iden
 [labels.sv.model.device.action.revoke]
 label = "Återkalla"
 description = "Avsluta en enhet för gott: dess förnyelsetokens slutar fungera, dess åtkomsttoken upphör vid nästa anrop och appen måste logga in igen. En person återkallar sina egna enheter; en agent kan bara föreslå det. Ange id"
+
+[labels.sv.model.user_account.field.oid]
+label = "Objekt-ID"
+description = "Indata till bind_sso: personens objekt-ID i Microsofts katalog, ett GUID (inte en e-postadress eller ett huvudnamn)"
+
+[labels.sv.model.user_account.field.sso_oid]
+label = "Microsoft-objekt-ID"
+description = "Objekt-ID:t som kontot är knutet till för inloggning med Microsoft; tomt när kontot inte är knutet"
+
+[labels.sv.model.user_account.field.sso_only]
+label = "Bara Microsoft"
+description = "Om kontot bara loggar in med Microsoft: det har ingen egen inloggning med lösenord eller nyckel. Indata till set_sso_only (true eller false)"
+
+[labels.sv.model.user_account.action.bind_sso]
+label = "Knyt till Microsoft"
+description = "Knyt ett befintligt konto till en persons Microsoft-identitet så att personen kan logga in med Microsoft. Ange id och oid (personens objekt-ID i katalogen, ett GUID). Skapar inget konto och ger ingen behörighet"
+
+[labels.sv.model.user_account.action.unbind_sso]
+label = "Lös från Microsoft"
+description = "Ta bort kontots koppling till en Microsoft-identitet. Nekas medan kontot bara loggar in med Microsoft. Ange id"
+
+[labels.sv.model.user_account.action.set_sso_only]
+label = "Sätt bara Microsoft"
+description = "Låt ett konto logga in bara med Microsoft (det nekar då enbart lösenord och enbart nyckel) eller slå av det igen. Ange id och sso_only (true eller false). Kontot måste vara knutet, och minst två andra administratörer måste fortfarande logga in lokalt med en andra faktor. Avslutar kontots sessioner"
+
+[labels.sv.model.sso_provider]
+name = "Microsoft-inloggning"
+description = "Den Microsoft Entra-klientorganisation som personer loggar in med: en klientorganisation, låst med sitt ID. Ändras bara av administratörer, aldrig av en agent"
+
+[labels.sv.model.sso_provider.field.tenant]
+label = "Klientorganisation"
+description = "Klientorganisationens ID (ett GUID) som varje Microsoft-inloggning kontrolleras mot"
+
+[labels.sv.model.sso_provider.field.client_id]
+label = "Klient-ID"
+description = "Programmets (klientens) ID för appregistreringen i den klientorganisationen"
+
+[labels.sv.model.sso_provider.field.client_secret]
+label = "Klienthemlighet"
+description = "Indata till configure: appregistreringens klienthemlighet, lagrad förseglad under serverhemligheten. Visas aldrig"
+
+[labels.sv.model.sso_provider.field.enabled]
+label = "Aktiverad"
+description = "Om inloggningssidan erbjuder ”Logga in med Microsoft”"
+
+[labels.sv.model.sso_provider.field.secret_set]
+label = "Hemlighet lagrad"
+description = "Om en klienthemlighet är lagrad"
+
+[labels.sv.model.sso_provider.field.modified_at]
+label = "Ändrad"
+description = "När konfigurationen senast ändrades"
+
+[labels.sv.model.sso_provider.field.last_editor]
+label = "Senast ändrad av"
+description = "Vem som ändrade den senast"
+
+[labels.sv.model.sso_provider.field.break_glass]
+label = "Nödadministratörer"
+description = "De administratörer som loggar in lokalt med lösenord och en andra faktor (vägen in när Microsoft inte kan nås), åtskilda med kommatecken"
+
+[labels.sv.model.sso_provider.field.break_glass_enough]
+label = "Tillräckligt med nödadministratörer"
+description = "Om det finns tillräckligt många (minst två) för att ett konto ska få logga in bara med Microsoft"
+
+[labels.sv.model.sso_provider.action.configure]
+label = "Konfigurera"
+description = "Ställ in den Microsoft Entra-klientorganisation som personer loggar in med. Ange tenant (klientorganisationens ID, ett GUID; common, organizations och consumers nekas), client_id (programmets ID för appregistreringen) och första gången client_secret; enabled är som standard true. Konton knyts med user_account.bind_sso. Nekas för agenter"
+
+[labels.sv.model.sso_provider.action.clear]
+label = "Ta bort"
+description = "Ta bort konfigurationen för Microsoft-inloggning. Kopplingarna finns kvar. Konton som bara loggar in med Microsoft kommer då bara in via de administratörer som behåller lösenord och en andra faktor. Nekas för agenter"

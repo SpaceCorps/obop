@@ -29,6 +29,7 @@ pub mod payments;
 pub mod public;
 pub(crate) mod shared;
 pub mod shell;
+pub(crate) mod sso;
 pub mod website;
 
 #[cfg(test)]
@@ -55,6 +56,12 @@ pub struct HttpState {
     /// The instance default language (`OBOP_DEFAULT_LANGUAGE`), added to the served back office
     /// shell for the screens that come before sign-in; set once by the composition root.
     default_language: std::sync::OnceLock<&'static str>,
+    /// What this process remembers of the Microsoft sign-in provider (D91): caches only.
+    sso: sso::Cache,
+    /// Where the browser is sent after the Microsoft round trip: the root of this origin, or the
+    /// back office's own address under a public site. Set by the composition root, never by a
+    /// request.
+    sso_return: std::sync::OnceLock<String>,
 }
 
 impl HttpState {
@@ -86,6 +93,8 @@ impl HttpState {
             payments: std::sync::OnceLock::new(),
             ops: ops::Ops::new(),
             default_language: std::sync::OnceLock::new(),
+            sso: sso::Cache::default(),
+            sso_return: std::sync::OnceLock::new(),
         })
     }
 
@@ -121,6 +130,18 @@ impl HttpState {
     /// The default language the served shell carries, if one was set.
     pub fn default_language(&self) -> Option<&'static str> {
         self.default_language.get().copied()
+    }
+
+    /// Where the back office is when it is not at `/`: the browser comes back from Microsoft to
+    /// `<prefix>/` (the prefix of `--public-site`, one safe path segment such as `/admin`).
+    pub fn set_sso_return_prefix(&self, prefix: &str) {
+        if public::admin_prefix_ok(prefix) {
+            let _ = self.sso_return.set(format!("{prefix}/"));
+        }
+    }
+
+    pub(crate) fn sso_return(&self) -> &str {
+        self.sso_return.get().map_or("/", String::as_str)
     }
 
     /// Who may read `/metrics` (D67). The default is nobody: the route answers 404.
@@ -255,6 +276,13 @@ pub(crate) fn api_routes(state: Arc<HttpState>) -> Router {
         .route("/readyz", get(ops::readyz))
         .route("/metrics", get(ops::metrics))
         .route("/api/auth/login", post(login))
+        .route("/api/auth/sso", get(sso::status))
+        .route("/api/auth/oidc/start", get(sso::start))
+        .route("/api/auth/oidc/callback", get(sso::callback))
+        .route(
+            "/api/auth/oidc/exchange",
+            post(sso::exchange).layer(axum::extract::DefaultBodyLimit::max(sso::MAX_BODY)),
+        )
         .route("/api/auth/agent-token", post(agent_token))
         .route("/api/commands", get(commands))
         .route("/api/meta", get(meta))

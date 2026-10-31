@@ -17,6 +17,7 @@ mod account;
 mod admin;
 mod mfa;
 mod oauth;
+pub mod oidc;
 mod passkey;
 pub mod seal;
 pub mod totp;
@@ -36,6 +37,9 @@ pub struct Auth {
     hasher: Argon2<'static>,
     config: AuthConfig,
     fake_now: AtomicU64,
+    /// The authority Microsoft sign-in trusts: `None` is Microsoft's own (D91); a loopback
+    /// address stands in for it in tests (`OBOP_OIDC_TEST_AUTHORITY`).
+    oidc_authority: std::sync::RwLock<Option<String>>,
 }
 
 fn now_system() -> u64 {
@@ -98,6 +102,7 @@ impl Auth {
             hasher: Argon2::default(),
             config,
             fake_now: AtomicU64::new(0),
+            oidc_authority: std::sync::RwLock::new(oidc::authority_from_env()),
         }
     }
 
@@ -111,6 +116,9 @@ impl Auth {
         let params = Params::new(8, 1, 1, None).expect("valid params");
         Self {
             hasher: Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params),
+            // A test chooses its authority (`set_oidc_authority_for_test`); the environment of the
+            // process that runs the tests does not.
+            oidc_authority: std::sync::RwLock::new(None),
             ..Self::with_config(backend, config)
         }
     }
@@ -508,6 +516,10 @@ impl Authenticator for Auth {
     }
 
     fn passkeys(&self) -> Option<&dyn obop_commands::PasskeyApi> {
+        Some(self)
+    }
+
+    fn sso(&self) -> Option<&dyn obop_commands::SsoApi> {
         Some(self)
     }
 

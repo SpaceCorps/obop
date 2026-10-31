@@ -2844,6 +2844,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sso_provider/clear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Remove the Microsoft sign-in configuration. Bindings stay. Accounts that sign in with Microsoft only can then sign in only through the administrators who keep a password and a second factor. Refused for agents */
+        post: operations["sso_provider.clear"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sso_provider/configure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set the Microsoft Entra tenant people sign in with. Give tenant (the tenant id, a GUID; common, organizations and consumers are refused), client_id (the application id of the app registration) and, the first time, client_secret; enabled keeps its stored value (a first configuration is switched on). Accounts are bound with user_account.bind_sso. Refused for agents */
+        post: operations["sso_provider.configure"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sso_provider/get": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read one sso_provider */
+        post: operations["sso_provider.get"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sso_provider/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** List sso_provider records */
+        post: operations["sso_provider.list"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sso_provider/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Search sso_provider records with filter, order, limit and offset */
+        post: operations["sso_provider.search"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sync_run/get": {
         parameters: {
             query?: never;
@@ -2909,6 +2994,26 @@ export interface paths {
          * @description Irreversible or money-moving: an agent token only proposes this and a human approves.
          */
         post: operations["user_account.add"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/user_account/bind_sso": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bind an existing account to a person's Microsoft identity so that they can sign in with Microsoft. Give id and oid (the person's object id in the directory, a GUID). Creates no account and gives no permission
+         * @description Irreversible or money-moving: an agent token only proposes this and a human approves.
+         */
+        post: operations["user_account.bind_sso"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3040,6 +3145,46 @@ export interface paths {
          * @description Irreversible or money-moving: an agent token only proposes this and a human approves.
          */
         post: operations["user_account.set_groups"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/user_account/set_sso_only": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Make an account sign in with Microsoft only (it then refuses its password and its passkey on their own), or turn that off again. Give id and sso_only (true or false). Needs the account bound, and at least two other administrators who still sign in locally with a second factor. Ends the account's sessions
+         * @description Irreversible or money-moving: an agent token only proposes this and a human approves.
+         */
+        post: operations["user_account.set_sso_only"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/user_account/unbind_sso": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remove the binding of an account to a Microsoft identity. Refused while the account signs in with Microsoft only. Give id
+         * @description Irreversible or money-moving: an agent token only proposes this and a human approves.
+         */
+        post: operations["user_account.unbind_sso"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3799,10 +3944,31 @@ export interface components {
             at?: string;
             /** @description A short note without any code or secret */
             detail?: string;
-            /** @description What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, device_limit, mileage_route_read, mileage_discard_stuck, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless */
+            /** @description What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, device_limit, mileage_route_read, mileage_discard_stuck, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless, oidc_provider_configured, oidc_provider_cleared, oidc_bind, oidc_unbind, oidc_sso_only, oidc_start, oidc_login, oidc_refused, oidc_cancelled, oidc_error */
             kind?: string;
             /** @description The account the event is about */
             user?: string;
+        };
+        /** @description The Microsoft Entra tenant people sign in with: one tenant, pinned by its id. Changed only by administrators, never by an agent */
+        sso_provider: {
+            /** @description The administrators who sign in locally with a password and a second factor (the way in when Microsoft cannot be reached), separated by commas */
+            break_glass?: string;
+            /** @description Whether there are enough of them (at least two) to make an account sign in with Microsoft only */
+            break_glass_enough?: boolean;
+            /** @description The application (client) id of the app registration in that tenant */
+            client_id?: string;
+            /** @description Input of configure: the client secret of the app registration, kept sealed under the server secret. Never shown */
+            client_secret?: string;
+            /** @description Whether the sign-in page offers Sign in with Microsoft */
+            enabled?: boolean;
+            /** @description Who changed it last */
+            last_editor?: string;
+            /** @description When the configuration was last changed */
+            modified_at?: string;
+            /** @description Whether a client secret is stored */
+            secret_set?: boolean;
+            /** @description The tenant id (a GUID) every Microsoft sign-in is checked against */
+            tenant?: string;
         };
         /** @description One run of a connection: when, how many records, and how it ended; never the data */
         sync_run: {
@@ -3854,6 +4020,8 @@ export interface components {
             note?: string;
             /** @description Whether the account was offboarded: disabled, with every session, agent token and connected app revoked for good */
             offboarded?: boolean;
+            /** @description Input of bind_sso: the person's object id in the Microsoft directory, a GUID (not an e-mail address or a user principal name) */
+            oid?: string;
             /** @description Input of add: the initial password (at least 12 characters); the person must choose their own at the first sign-in. Never shown */
             password?: string;
             /** @description Result of set_groups: the groups the account held before */
@@ -3862,6 +4030,10 @@ export interface components {
             revoked?: string;
             /** @description Signed-in sessions that are still valid */
             sessions?: number;
+            /** @description The object id the account is bound to for signing in with Microsoft; empty when it is not bound */
+            sso_oid?: string;
+            /** @description Whether the account signs in with Microsoft only: it has no password or passkey sign-in of its own. Input of set_sso_only (true or false) */
+            sso_only?: boolean;
         };
     };
     responses: never;
@@ -18250,6 +18422,440 @@ export interface operations {
             };
         };
     };
+    "sso_provider.clear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["sso_provider"];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "sso_provider.configure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["sso_provider"];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "sso_provider.get": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["sso_provider"];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "sso_provider.list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Records. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["sso_provider"][];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "sso_provider.search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Groups with counts and sums over every matching record instead of rows */
+                    aggregate?: {
+                        group_by?: (string | {
+                            /** @enum {string} */
+                            bucket?: "day" | "week" | "iso_week" | "month" | "year";
+                            field: string;
+                            /** @description IANA zone name for a datetime, default the platform zone */
+                            zone?: string;
+                        })[];
+                        measures?: {
+                            field?: string;
+                            /** @enum {string} */
+                            op: "count" | "sum" | "min" | "max" | "avg";
+                            /**
+                             * @description avg only
+                             * @enum {string}
+                             */
+                            round?: "half_even" | "half_up" | "down";
+                            /** @description avg only */
+                            scale?: number;
+                        }[];
+                    };
+                    filter?: {
+                        /**
+                         * @description On a date or datetime: compare the period the field falls in (value is the label, 2026-04 or 2026-W15); the explicit date-in-zone conversion
+                         * @enum {string}
+                         */
+                        bucket?: "day" | "week" | "iso_week" | "month" | "year";
+                        field: string;
+                        /** @enum {string} */
+                        op: "eq" | "ne" | "contains" | "in" | "gt" | "gte" | "lt" | "lte" | "is_null";
+                        value?: unknown;
+                        /** @description With bucket on a datetime: an IANA zone name, default the platform zone */
+                        zone?: string;
+                    }[];
+                    /** @description BCP-47 tag that picks the text collation */
+                    lang?: string;
+                    limit?: number;
+                    offset?: number;
+                    order?: {
+                        /** @enum {string} */
+                        dir?: "asc" | "desc";
+                        field?: string;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description A page of records and the total. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        value?: {
+                            groups?: {
+                                count?: number;
+                                key?: Record<string, never>;
+                                measures?: Record<string, never>;
+                            }[];
+                            rows?: components["schemas"]["sso_provider"][];
+                            total?: number;
+                        };
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     "sync_run.get": {
         parameters: {
             query?: never;
@@ -18529,6 +19135,84 @@ export interface operations {
         };
     };
     "user_account.add": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["user_account"];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "user_account.bind_sso": {
         parameters: {
             query?: never;
             header?: never;
@@ -19119,6 +19803,162 @@ export interface operations {
         };
     };
     "user_account.set_groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["user_account"];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "user_account.set_sso_only": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["user_account"];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "user_account.unbind_sso": {
         parameters: {
             query?: never;
             header?: never;

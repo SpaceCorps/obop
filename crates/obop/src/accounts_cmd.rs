@@ -124,6 +124,129 @@ pub fn disable(o: &Opts, user: &str, disabled: bool) -> Exit {
     Ok(())
 }
 
+/// `obop admin sso status`: the provider, who is bound, who signs in with Microsoft only, and the
+/// administrators who are the way in when Microsoft cannot be reached (D91).
+pub fn sso_status(o: &Opts) -> Exit {
+    let (_, auth) = accounts_app(o)?;
+    let s = auth.operator_sso_status().map_err(|e| fail(&e))?;
+    match s["provider"].as_object() {
+        Some(p) => println!(
+            "provider: Microsoft Entra, tenant {}, client id {}, {}, client secret {}",
+            p["tenant"].as_str().unwrap_or(""),
+            p["client_id"].as_str().unwrap_or(""),
+            if p["enabled"] == true {
+                "enabled"
+            } else {
+                "not enabled"
+            },
+            if p["secret_set"] == true {
+                "stored"
+            } else {
+                "not stored"
+            }
+        ),
+        None => println!("provider: none configured"),
+    }
+    for a in s["accounts"].as_array().into_iter().flatten() {
+        if a["bound"] == true || a["sso_only"] == true {
+            println!(
+                "{:<24} oid={}  {}",
+                a["name"].as_str().unwrap_or(""),
+                a["oid"].as_str().unwrap_or("-"),
+                if a["sso_only"] == true {
+                    "signs in with Microsoft only"
+                } else {
+                    "bound"
+                }
+            );
+        }
+    }
+    let bg: Vec<&str> = s["break_glass"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|n| n.as_str())
+        .collect();
+    println!(
+        "break-glass administrators (password and a second factor): {}{}",
+        if bg.is_empty() {
+            "none".to_string()
+        } else {
+            bg.join(", ")
+        },
+        if s["break_glass_enough"] == true {
+            ""
+        } else {
+            "  (fewer than two: no account can be made SSO-only yet)"
+        }
+    );
+    Ok(())
+}
+
+/// `obop admin sso configure --tenant GUID --client-id GUID [--secret-stdin] [--enabled|--disabled]`. The
+/// client secret is read from stdin, never from an argument, and sealed under `OBOP_SECRET_KEY`.
+pub fn sso_configure(
+    o: &Opts,
+    tenant: Option<&str>,
+    client_id: Option<&str>,
+    secret_stdin: bool,
+    enabled: Option<bool>,
+) -> Exit {
+    let tenant = tenant.ok_or_else(|| fail("give --tenant (the tenant id, a GUID)"))?;
+    let client_id = client_id
+        .ok_or_else(|| fail("give --client-id (the application id of the app registration)"))?;
+    let secret = if secret_stdin {
+        eprintln!("client secret of the app registration, then Enter:");
+        let mut line = String::new();
+        std::io::stdin()
+            .read_line(&mut line)
+            .map_err(|e| fail(&e.to_string()))?;
+        Some(line.trim_end_matches(['\r', '\n']).to_string())
+    } else {
+        None
+    };
+    let (_, auth) = accounts_app(o)?;
+    let p = auth
+        .operator_sso_configure(tenant, client_id, secret.as_deref(), enabled)
+        .map_err(|e| fail(&e))?;
+    println!(
+        "Microsoft sign-in: tenant {}, client id {}, {}; recorded in the security log",
+        p.tenant,
+        p.client_id,
+        if p.enabled { "enabled" } else { "not enabled" }
+    );
+    Ok(())
+}
+
+/// `obop admin sso clear`
+pub fn sso_clear(o: &Opts) -> Exit {
+    let (_, auth) = accounts_app(o)?;
+    auth.operator_sso_clear().map_err(|e| fail(&e))?;
+    println!(
+        "Microsoft sign-in configuration removed (bindings stay); recorded in the security log"
+    );
+    Ok(())
+}
+
+/// `obop admin sso bind USER OID | unbind USER | only USER on|off`
+pub fn sso_account(o: &Opts, verb: &str, user: &str, arg: Option<&str>) -> Exit {
+    let (_, auth) = accounts_app(o)?;
+    let done = match (verb, arg) {
+        ("bind", Some(oid)) => auth.operator_sso_bind(user, oid),
+        ("unbind", None) => auth.operator_sso_unbind(user),
+        ("only", Some("on")) => auth.operator_sso_only(user, true),
+        ("only", Some("off")) => auth.operator_sso_only(user, false),
+        _ => {
+            return Err(fail(
+                "usage: obop admin sso bind USER OID | unbind USER | only USER on|off",
+            ));
+        }
+    }
+    .map_err(|e| fail(&e))?;
+    println!("{done}");
+    Ok(())
+}
+
 /// Groups in a cell of an import file: separated by commas, semicolons, bars or spaces.
 pub fn split_cell_groups(cell: &str) -> Vec<String> {
     cell.split([',', ';', '|', ' '])

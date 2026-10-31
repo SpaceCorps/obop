@@ -2312,6 +2312,7 @@ pub fn admin_module() -> Module {
                 ext: Default::default(),
             },
             crate::accounts::user_account_model(),
+            crate::sso::sso_provider_model(),
             ModelDef {
                 name: "marketplace_listing",
                 description: "A module offered by the marketplace",
@@ -2440,7 +2441,7 @@ pub fn admin_module() -> Module {
                     f("user", "The account the event is about"),
                     f(
                         "kind",
-                        "What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, device_limit, mileage_route_read, mileage_discard_stuck, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless",
+                        "What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, device_limit, mileage_route_read, mileage_discard_stuck, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless, oidc_provider_configured, oidc_provider_cleared, oidc_bind, oidc_unbind, oidc_sso_only, oidc_start, oidc_login, oidc_refused, oidc_cancelled, oidc_error",
                     ),
                     f(
                         "actor",

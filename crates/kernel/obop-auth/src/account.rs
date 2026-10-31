@@ -443,6 +443,13 @@ impl Auth {
             ));
         }
         let u = self.user_record(name)?;
+        // A Microsoft-only account has no password to change (the hash that is left is not
+        // accepted by `password_ok`); say so instead of "wrong password".
+        if u["sso_only"].as_bool() == Some(true) {
+            return Err(MfaError::Invalid(
+                "this account signs in with Microsoft only: there is no password to change".into(),
+            ));
+        }
         if !self.password_ok(name, current)? {
             self.record_failure(name).map_err(MfaError::Unavailable)?;
             self.event(
@@ -540,6 +547,20 @@ impl Auth {
                 *passkeys.entry(o.to_string()).or_default() += 1;
             }
         }
+        // Who is bound to a Microsoft identity (D91): the object id, never a name or an address.
+        let mut bound: std::collections::HashMap<String, String> = Default::default();
+        for (_, l) in self
+            .backend
+            .list(crate::oidc::LINK_TABLE)
+            .unwrap_or_default()
+        {
+            if let (Some(u), Some(o)) = (
+                l.get("user").and_then(J::as_str),
+                l.get("oid").and_then(J::as_str),
+            ) {
+                bound.insert(u.to_string(), o.to_string());
+            }
+        }
         let mut users: Vec<J> = self
             .backend
             .list("auth_user")
@@ -547,6 +568,8 @@ impl Auth {
             .into_iter()
             .map(|(name, u)| {
                 json!({
+                    "sso_only": u.get("sso_only").and_then(J::as_bool) == Some(true),
+                    "sso_oid": bound.get(&name),
                     "name": name,
                     "groups": str_list(&u["groups"]),
                     "admin": str_list(&u["groups"]).iter().any(|g| g == ADMIN_GROUP),
@@ -562,22 +585,6 @@ impl Auth {
             .collect();
         users.sort_by(|a, b| a["name"].as_str().cmp(&b["name"].as_str()));
         Ok(json!({"users": users}))
-    }
-
-    /// How many enabled administrators there are. A refused list is the store's trouble, not
-    /// "none": the callers refuse to take the last administrator away, and must not do that (a 400)
-    /// or skip it (a lockout) because the lookup failed.
-    pub(crate) fn enabled_admins(&self) -> Result<usize, MfaError> {
-        Ok(self
-            .backend
-            .list("auth_user")
-            .map_err(MfaError::Unavailable)?
-            .into_iter()
-            .filter(|(_, u)| {
-                str_list(&u["groups"]).iter().any(|g| g == ADMIN_GROUP)
-                    && u.get("disabled").and_then(J::as_bool) != Some(true)
-            })
-            .count())
     }
 
     pub(crate) fn set_user_disabled_impl(
@@ -611,11 +618,20 @@ impl Auth {
         let u = self.known_user(&target)?;
         let is_admin = str_list(&u["groups"]).iter().any(|g| g == ADMIN_GROUP);
         let was = u["disabled"].as_bool() == Some(true);
-        if disabled && !was && is_admin && self.enabled_admins()? <= 1 {
+        // The rule counts the administrators who sign in without Microsoft only (D91): an
+        // account that has no sign-in of its own does not keep the instance reachable. A refused
+        // list is the store's trouble, not "none".
+        if disabled && !was && is_admin && self.other_local_admins(&target)? == 0 {
             return Err(MfaError::Invalid(
                 "the last enabled administrator cannot be disabled".into(),
             ));
         }
+        // While accounts depend on Microsoft, two administrators keep a sign-in of their own.
+        let warning = if disabled && !was {
+            self.guard_break_glass(&target, actor_user.is_none())?
+        } else {
+            None
+        };
         let mut patch = Fields::new();
         patch.insert("disabled".into(), J::Bool(disabled));
         bump_epoch(&mut patch);
@@ -653,7 +669,10 @@ impl Auth {
                 &target,
                 "user_disable",
                 actor,
-                &format!("account disabled; {n} session(s) signed out; its tokens stop working"),
+                &format!(
+                    "account disabled; {n} session(s) signed out; its tokens stop working{}",
+                    warning.map(|w| format!("; {w}")).unwrap_or_default()
+                ),
             );
         } else if was_offboarded {
             self.event(
@@ -687,7 +706,15 @@ impl Auth {
             )));
         }
         let _g = self.mfa_guard()?;
-        self.known_user(&target)?;
+        let user = self.known_user(&target)?;
+        // An account that signs in with Microsoft only (D91) has no password sign-in, so a
+        // temporary password would be a way in that the setting was meant to close.
+        if user["sso_only"].as_bool() == Some(true) {
+            return Err(MfaError::Invalid(
+                "the account signs in with Microsoft only: turn that off before setting a password"
+                    .into(),
+            ));
+        }
         let hash = self
             .hash_password(temporary)
             .map_err(MfaError::Unavailable)?;

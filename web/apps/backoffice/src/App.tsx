@@ -1,6 +1,13 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { setInstanceDefaults, t } from "@obop/ui";
-import { loadSettings, meta, type ModuleMeta, type Settings } from "./api.ts";
+import {
+  discardSsoReturn,
+  loadSettings,
+  meta,
+  restorePlace,
+  type ModuleMeta,
+  type Settings,
+} from "./api.ts";
 import { AppIcon, Launcher, Palette, TopBar, appBlurb, appHref, buildApps } from "./Chrome.tsx";
 import { ConnectorsApp, ConnectorsNav } from "./connectors/ConnectorsApp.tsx";
 import { BOARD, boardHref } from "./dashboards/route.ts";
@@ -84,6 +91,11 @@ export function App() {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [confirmReq, setConfirmReq] = useState<ConfirmRequest | null>(null);
   const toastId = useRef(0);
+
+  // A return from Microsoft in a tab that already holds a session has nobody to handle it.
+  useEffect(() => {
+    if (token) discardSsoReturn();
+  }, [token]);
 
   const signOut = useCallback(() => {
     write("obop-token", "");
@@ -213,6 +225,8 @@ export function App() {
           write("obop-user", u);
           setEmail(u);
           setTokenState(t);
+          // Back to the deep link the person began with, as a password sign-in keeps it.
+          restorePlace();
         }}
       />
     );

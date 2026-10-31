@@ -244,7 +244,7 @@ impl SoftAuthenticator {
 }
 
 /// `(n, e)` of a DER `RSAPublicKey` (SEQUENCE of two INTEGERs), without leading zeros.
-fn split_rsa_der(der: &[u8]) -> (&[u8], &[u8]) {
+pub(crate) fn split_rsa_der(der: &[u8]) -> (&[u8], &[u8]) {
     fn len(b: &[u8]) -> (usize, usize) {
         if b[0] < 0x80 {
             (usize::from(b[0]), 1)

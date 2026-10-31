@@ -380,6 +380,17 @@ impl Client {
     }
 
     pub fn send(&self, req: Request) -> Result<Response, NetError> {
+        self.send_timed(req, self.cfg.timeout)
+    }
+
+    /// Like [`Client::send`] with a limit of its own for the whole call, never longer than the
+    /// client's (a caller that must not hold a thread for twenty seconds). The resolution of the
+    /// host name is not part of the limit.
+    pub fn send_within(&self, req: Request, limit: Duration) -> Result<Response, NetError> {
+        self.send_timed(req, limit.min(self.cfg.timeout))
+    }
+
+    fn send_timed(&self, req: Request, timeout: Duration) -> Result<Response, NetError> {
         if req
             .body
             .as_ref()
@@ -393,7 +404,7 @@ impl Client {
             .max_redirects(0)
             .max_redirects_will_error(false)
             .https_only(false)
-            .timeout_global(Some(self.cfg.timeout))
+            .timeout_global(Some(timeout))
             .user_agent(USER_AGENT)
             .build();
         let agent = ureq::Agent::with_parts(
@@ -875,6 +886,42 @@ mod tests {
             timeout: Duration::from_secs(5),
             ..ClientConfig::default()
         })
+    }
+
+    #[test]
+    fn a_call_with_its_own_limit_gives_up_at_that_limit_and_never_waits_longer_than_the_client() {
+        // A server that takes its time: the one limit is the caller's, the other the client's.
+        let s = serve(|_| {
+            std::thread::sleep(Duration::from_millis(2500));
+            ok("{}")
+        });
+        let allowed = vec!["127.0.0.1".to_string()];
+        let url = format!("http://127.0.0.1:{}/slow", s.port);
+        let req = || Request {
+            method: "GET",
+            url: &url,
+            headers: vec![],
+            body: None,
+            allowed_hosts: &allowed,
+        };
+        let began = std::time::Instant::now();
+        let r = local().send_within(req(), Duration::from_millis(300));
+        assert!(matches!(r, Err(NetError::Timeout)), "{r:?}");
+        assert!(
+            began.elapsed() < Duration::from_millis(2000),
+            "gave up at its own limit, not the client's five seconds: {:?}",
+            began.elapsed()
+        );
+        // A caller cannot ask for more than the client allows.
+        let short = Client::new(ClientConfig {
+            allow_loopback: true,
+            timeout: Duration::from_millis(300),
+            ..ClientConfig::default()
+        });
+        let began = std::time::Instant::now();
+        let r = short.send_within(req(), Duration::from_secs(30));
+        assert!(matches!(r, Err(NetError::Timeout)), "{r:?}");
+        assert!(began.elapsed() < Duration::from_millis(2000));
     }
 
     #[test]

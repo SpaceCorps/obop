@@ -43,6 +43,9 @@ pub fn user_account_model() -> ModelDef {
             f("offboarded", "Whether the account was offboarded: disabled, with every session, agent token and connected app revoked for good").kind(FieldKind::Bool),
             f("mfa_enabled", "Whether the account has a second sign-in factor (an authenticator app or a passkey)").kind(FieldKind::Bool),
             f("sessions", "Signed-in sessions that are still valid").kind(FieldKind::Number),
+            f("oid", "Input of bind_sso: the person's object id in the Microsoft directory, a GUID (not an e-mail address or a user principal name)"),
+            f("sso_oid", "The object id the account is bound to for signing in with Microsoft; empty when it is not bound"),
+            f("sso_only", "Whether the account signs in with Microsoft only: it has no password or passkey sign-in of its own. Input of set_sso_only (true or false)").kind(FieldKind::Bool),
         ],
         commands: vec![
             CommandDef::new(
@@ -75,12 +78,30 @@ pub fn user_account_model() -> ModelDef {
                 ADMIN_GROUP,
             )
             .approval(),
+            CommandDef::new(
+                "bind_sso",
+                "Bind an existing account to a person's Microsoft identity so that they can sign in with Microsoft. Give id and oid (the person's object id in the directory, a GUID). Creates no account and gives no permission",
+                ADMIN_GROUP,
+            )
+            .approval(),
+            CommandDef::new(
+                "unbind_sso",
+                "Remove the binding of an account to a Microsoft identity. Refused while the account signs in with Microsoft only. Give id",
+                ADMIN_GROUP,
+            )
+            .approval(),
+            CommandDef::new(
+                "set_sso_only",
+                "Make an account sign in with Microsoft only (it then refuses its password and its passkey on their own), or turn that off again. Give id and sso_only (true or false). Needs the account bound, and at least two other administrators who still sign in locally with a second factor. Ends the account's sessions",
+                ADMIN_GROUP,
+            )
+            .approval(),
         ],
         ext: Default::default(),
     }
 }
 
-fn s(v: &str) -> Value {
+pub(crate) fn s(v: &str) -> Value {
     Value::text(v)
 }
 
@@ -96,14 +117,14 @@ fn msg(e: MfaError) -> String {
     }
 }
 
-fn input(v: &Value) -> Result<&BTreeMap<String, Value>, String> {
+pub(crate) fn input(v: &Value) -> Result<&BTreeMap<String, Value>, String> {
     match v {
         Value::Map(m) => Ok(m),
         _ => Err("expected an object".into()),
     }
 }
 
-fn text<'a>(x: &'a BTreeMap<String, Value>, k: &str) -> Option<&'a str> {
+pub(crate) fn text<'a>(x: &'a BTreeMap<String, Value>, k: &str) -> Option<&'a str> {
     match x.get(k) {
         Some(Value::Text(t)) if !t.trim().is_empty() => Some(t),
         _ => None,
@@ -145,12 +166,17 @@ fn row(u: &serde_json::Value) -> Value {
         ("mfa_enabled", b("mfa_enabled")),
         ("must_change_password", b("must_change_password")),
         ("sessions", Value::Int(u["sessions"].as_i64().unwrap_or(0))),
+        ("sso_only", b("sso_only")),
+        ("sso_oid", s(u["sso_oid"].as_str().unwrap_or(""))),
     ])
 }
 
 /// The administrator a call runs as: the person, or for an agent the person it acts for, read
 /// again from the stored account.
-fn acting(auth: &dyn Authenticator, x: &BTreeMap<String, Value>) -> Result<Principal, String> {
+pub(crate) fn acting(
+    auth: &dyn Authenticator,
+    x: &BTreeMap<String, Value>,
+) -> Result<Principal, String> {
     let caller = text(x, "_caller").unwrap_or("");
     let user = caller.strip_suffix("/agent").unwrap_or(caller);
     let mut admin = auth
@@ -297,6 +323,51 @@ pub fn register_accounts(d: &Arc<Dispatcher>, auth: Arc<dyn Authenticator>) {
             Ok(Value::Map(r))
         }),
     );
+    reg(
+        "bind_sso",
+        Box::new(|auth, _, v| {
+            let x = input(v)?;
+            let admin = acting(auth, x)?;
+            let id = text(x, "id").ok_or("missing id")?;
+            let oid = text(x, "oid")
+                .ok_or("missing oid (the person's object id in the Microsoft directory)")?;
+            crate::sso::api(auth)?
+                .bind(&admin, id, oid)
+                .map_err(crate::sso::msg)?;
+            user_row(auth, &admin, id)
+        }),
+    );
+    reg(
+        "unbind_sso",
+        Box::new(|auth, _, v| {
+            let x = input(v)?;
+            let admin = acting(auth, x)?;
+            let id = text(x, "id").ok_or("missing id")?;
+            crate::sso::api(auth)?
+                .unbind(&admin, id)
+                .map_err(crate::sso::msg)?;
+            user_row(auth, &admin, id)
+        }),
+    );
+    reg(
+        "set_sso_only",
+        Box::new(|auth, _, v| {
+            let x = input(v)?;
+            let admin = acting(auth, x)?;
+            let id = text(x, "id").ok_or("missing id")?;
+            let on = match x.get("sso_only") {
+                Some(Value::Bool(b)) => *b,
+                Some(Value::Text(t)) if t == "true" => true,
+                Some(Value::Text(t)) if t == "false" => false,
+                _ => return Err("missing sso_only (true or false)".into()),
+            };
+            crate::sso::api(auth)?
+                .set_sso_only(&admin, id, on)
+                .map_err(crate::sso::msg)?;
+            user_row(auth, &admin, id)
+        }),
+    );
+    crate::sso::register(d, auth.clone());
     for (cmd, disabled) in [("disable", true), ("enable", false)] {
         reg(
             cmd,

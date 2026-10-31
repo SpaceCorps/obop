@@ -210,7 +210,7 @@ impl Auth {
         Ok(&self.config.keys)
     }
 
-    fn open_secret(&self, user: &str, sealed: &str) -> Result<Vec<u8>, MfaError> {
+    pub(crate) fn open_secret(&self, user: &str, sealed: &str) -> Result<Vec<u8>, MfaError> {
         seal::open_any(self.ring()?, user, sealed).map_err(MfaError::Unavailable)
     }
 
@@ -245,10 +245,28 @@ impl Auth {
     /// Whether `password` is the account's. A read of the account that the store refused is the
     /// store's trouble (`Unavailable`), not a wrong password: it must not be counted toward the
     /// lockout of a person who typed the right one.
+    ///
+    /// An account that signs in with Microsoft only (D91) has no password: what is left in the
+    /// record is no proof for any step that asks for it (changing the password, turning the app
+    /// off, new recovery codes, adding or removing a passkey, and every re-authentication built on
+    /// this later), so for such an account the answer is "no", counted like a wrong password. The
+    /// hash is kept (turning the flag off hands the password back); the sign-in step reads the
+    /// flag itself and uses [`Auth::password_check`].
     pub(crate) fn password_ok(&self, name: &str, password: &str) -> Result<bool, MfaError> {
-        self.password_check(name, password)
+        let ok = self
+            .password_check(name, password)
             .map(|c| c.0)
-            .map_err(MfaError::Unavailable)
+            .map_err(MfaError::Unavailable)?;
+        if !ok {
+            return Ok(false);
+        }
+        // A read the store refused is its trouble, not "not Microsoft only".
+        let sso_only = self
+            .backend
+            .get("auth_user", name)
+            .map_err(MfaError::Unavailable)?
+            .is_some_and(|u| u.get("sso_only").and_then(J::as_bool) == Some(true));
+        Ok(!sso_only)
     }
 
     /// As [`Auth::password_ok`], and the credential epoch of the account as it was read together
@@ -393,23 +411,48 @@ impl Auth {
             self.event(&name, "login_refused", &name, "the account is disabled");
             return Err("invalid username or password".into());
         }
+        // An account that signs in with Microsoft only (D91) has no password step. Same answer as
+        // a wrong password, and counted like one, so that a right password is not told from a
+        // wrong one by the lockout; the log says what happened.
+        if self.is_sso_only(&name) {
+            self.record_failure(&name)?;
+            self.event(
+                &name,
+                "login_refused",
+                &name,
+                "the account signs in with Microsoft only; the password was not accepted",
+            );
+            return Err("invalid username or password".into());
+        }
         self.purge_tokens();
-        if self.has_second_factor(&name) {
+        self.after_first_factor(&name, &epoch)
+    }
+
+    /// What follows a first factor that is not enough alone for an account: the demand for a
+    /// second factor when the account has one, else a session, limited to enrolment when the
+    /// policy demands a second factor the account lacks. The password step and a Microsoft
+    /// sign-in whose `amr` does not say `mfa` (D91) both end here.
+    pub(crate) fn after_first_factor(
+        &self,
+        name: &str,
+        epoch: &Epoch,
+    ) -> Result<LoginOutcome, String> {
+        if self.has_second_factor(name) {
             let token = format!("obopmfa_{}", hex(&random_bytes::<32>()));
             let mut f = Fields::new();
-            f.insert("user".into(), J::from(name.as_str()));
+            f.insert("user".into(), J::from(name));
             f.insert("expires_at".into(), J::from(self.now() + MFA_TOKEN_SECS));
             f.insert("attempts".into(), J::from(0u64));
-            // What the password was checked against: a change of the credentials before the
+            // What the first factor was checked against: a change of the credentials before the
             // second step ends this sign-in (`refuse_if_disabled`).
-            f.insert("epoch".into(), epoch.map_or(J::Null, J::from));
+            f.insert("epoch".into(), epoch.clone().map_or(J::Null, J::from));
             self.backend
                 .insert(MFA_TOKEN_TABLE, &token_hash(&token), &f)?;
             return Ok(LoginOutcome::MfaRequired { mfa_token: token });
         }
         let groups = self
             .backend
-            .get("auth_user", &name)
+            .get("auth_user", name)
             .ok()
             .flatten()
             .map(|u| str_list(u.get("groups").unwrap_or(&J::Null)))
@@ -417,13 +460,13 @@ impl Auth {
         let limited = self.enrolment_required_for(&groups);
         if limited {
             self.event(
-                &name,
+                name,
                 "limited_session",
-                &name,
+                name,
                 "signed in without two-factor; only enrolment is allowed",
             );
         }
-        self.session_outcome(&name, limited, &epoch)
+        self.session_outcome(name, limited, epoch)
             .map_err(SessionError::message)
     }
 
@@ -629,6 +672,11 @@ impl Auth {
             return Err(MfaError::BadPassword);
         }
         self.check_second_factor(name, code, recovery)?;
+        // An administrator who signs in without Microsoft keeps that ability while accounts depend
+        // on it (D91): turning the app off is refused when it is the last working factor.
+        if self.passkeys_checked(name)?.is_empty() {
+            self.guard_break_glass(name, false)?;
+        }
         let keep = session.map(token_hash);
         // Written before the factor goes: if ending the sessions is then refused, the repeat knows.
         let previous = self.owe_revocation(name, "mfa_disable", keep.as_deref())?;
@@ -682,6 +730,11 @@ impl Auth {
             MfaError::Invalid(m) | MfaError::Unavailable(m) => m,
             other => format!("{other:?}"),
         })?;
+        // The operator is the way out of a lockout and of a compromised account, so this is a
+        // warning and not a refusal (D91): the line says what the reset leaves.
+        let warning = self
+            .guard_break_glass(&name, true)
+            .map_err(|e| format!("{e:?}"))?;
         let passkeys = self.clear_passkeys(&name).map_err(|e| format!("{e:?}"))?;
         self.clear_factor(&name).map_err(|e| format!("{e:?}"))?;
         let ch = Change::new(&name, "reset", "operator", "reset from the command line");
@@ -691,7 +744,10 @@ impl Auth {
             &name,
             "reset",
             "operator",
-            &format!("reset from the command line; {passkeys} passkey(s) removed"),
+            &format!(
+                "reset from the command line; {passkeys} passkey(s) removed{}",
+                warning.map(|w| format!("; {w}")).unwrap_or_default()
+            ),
         );
         Ok(())
     }
@@ -894,6 +950,9 @@ impl MfaApi for Auth {
                 "{target} has no two-factor to reset"
             )));
         }
+        // The reset takes every second factor of the account: while accounts depend on Microsoft,
+        // two administrators keep a sign-in of their own (D91).
+        self.guard_break_glass(&target, false)?;
         let previous = self.owe_revocation(&target, "mfa_reset", None)?;
         let before = obop_storage::fault::change_count();
         let passkeys = match self.clear_passkeys(&target) {
