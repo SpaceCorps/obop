@@ -320,4 +320,61 @@ test.describe("switching the language with the account menu, on a screen that st
     await page.reload();
     await expect(titles).toHaveText(["Apfel", "Item 2", "Item 10", "Zebra", "Ärger", "Öle"]);
   });
+
+  test("a list with no sort is not asked for again: nothing in its answer depends on the language", async ({
+    page,
+    signIn,
+    api,
+    scratchModule,
+  }) => {
+    const model = await scratchModule({
+      title: "Plain data",
+      fields: [{ name: "title", required: true }],
+    });
+    for (const t of ["Zebra", "Ärger", "Apfel"]) await api.create("root", model, { title: t });
+    await signIn("root", `/${model}/${model}?view=list`);
+    const titles = page.locator("table.list tbody tr td:nth-child(2)");
+    await expect(titles).toHaveCount(3);
+
+    const asked: { order?: unknown[]; lang?: string }[] = [];
+    page.on("request", (r) => {
+      if (r.method() === "POST" && isCommand(r.url(), model, "search"))
+        asked.push(JSON.parse(r.postData() ?? "{}"));
+    });
+    await pickInAccountMenu(page, "en", "sv");
+
+    // Sort it now (a client-side navigation). The requests are listed in the order they were sent,
+    // so the one that sorts is the first after the switch when the switch itself asked for nothing.
+    const sorted = encodeURIComponent(JSON.stringify({ s: { f: "title", dir: "asc" } }));
+    await page.evaluate((h) => (location.hash = h), `/${model}/${model}?view=list&st=${sorted}`);
+    await expect(titles).toHaveText(["Apfel", "Zebra", "Ärger"]);
+    expect(asked).toHaveLength(1);
+    expect(asked[0]!.order).toHaveLength(1);
+    expect(asked[0]!.lang).toMatch(/^sv/);
+  });
+
+  test("a sorted board orders the cards of a column in the new language", async ({
+    page,
+    signIn,
+    api,
+    scratchModule,
+  }) => {
+    const model = await scratchModule({
+      title: "Board data",
+      fields: [
+        { name: "title", required: true },
+        { name: "state", kind: "select", options: ["new", "won"] },
+      ],
+    });
+    for (const t of ["Zebra", "Ärger", "Apfel", "Öle"])
+      await api.create("root", model, { title: t, state: "new" });
+    const sorted = encodeURIComponent(JSON.stringify({ s: { f: "title", dir: "asc" } }));
+    await signIn("root", `/${model}/${model}?view=kanban&st=${sorted}`);
+    // Every card is in the one column that has any (the names of the columns are translated).
+    const cards = page.locator(".kcard .ktitle");
+    await expect(cards).toHaveText(["Apfel", "Ärger", "Öle", "Zebra"]);
+
+    await pickInAccountMenu(page, "en", "sv");
+    await expect(cards).toHaveText(["Apfel", "Zebra", "Ärger", "Öle"]);
+  });
 });

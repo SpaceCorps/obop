@@ -18,10 +18,11 @@ export type ServerRows = {
 const idle: ServerRows = { rows: [], total: 0, denied: [], loaded: false, loading: false };
 
 /**
- * One page of a model from `<model>.search`. It asks again when the query changes, when the locale
- * changes (the server sorts text in the collation of the locale it is told) and after any
- * successful write, ignores answers that arrive late, and keeps the previous page on screen while
- * the next one loads so the table does not flash.
+ * One page of a model from `<model>.search`. It asks again when the query changes, after any
+ * successful write and, for a sorted query, when the locale changes (the server sorts text in the
+ * collation of the locale it is told, and `search` tells it only when there is a sort). It ignores
+ * answers that arrive late, and keeps the previous page on screen while the next one loads so the
+ * table does not flash.
  */
 export function useServerRows(opts: {
   enabled: boolean;
@@ -36,7 +37,8 @@ export function useServerRows(opts: {
   const [st, setSt] = useState<ServerRows>(idle);
   const seq = useRef(0);
   const { enabled, model, filter, order, offset, limit } = opts;
-  const key = JSON.stringify([model, filter, order, offset, limit, locale]);
+  // The locale is part of the query only where the request carries it (`lang`, api.ts): a sort.
+  const key = JSON.stringify([model, filter, order, offset, limit, order.length ? locale : null]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -58,7 +60,7 @@ export function useServerRows(opts: {
           loading: false,
         });
     });
-    // The key stands for model, filter, order, offset, limit and locale.
+    // The key stands for model, filter, order, offset, limit and, for a sort, the locale.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, d.token, key, d.mutations]);
 

@@ -69,8 +69,9 @@ type ColumnState = { rows: Row[]; total: number; loading: boolean; error?: strin
 /**
  * The cards of each column from `<model>.search`, one page per column (D4): a column asks for its
  * first cards and again for more when "Load more" raises its limit. Columns refetch after any
- * write or when the search or the locale (the server sorts the cards in its collation) changes; the
- * cards already shown stay until the new ones arrive.
+ * write, when the search changes and, when the cards are sorted, when the locale changes (the
+ * server sorts them in the collation of the locale it is told); the cards already shown stay until
+ * the new ones arrive.
  */
 function useColumnCards(opts: {
   enabled: boolean;
@@ -88,7 +89,15 @@ function useColumnCards(opts: {
   const [cols, setCols] = useState<Record<string, ColumnState>>({});
   const seen = useRef(new Map<string, string>());
   const seq = useRef(0);
-  const baseSig = JSON.stringify([model, base, order, field?.name, d.mutations, locale]);
+  // The locale is part of the query only where the request carries it (`lang`, api.ts): a sort.
+  const baseSig = JSON.stringify([
+    model,
+    base,
+    order,
+    field?.name,
+    d.mutations,
+    order.length ? locale : null,
+  ]);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {

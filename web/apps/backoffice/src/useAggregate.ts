@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { useI18n } from "@obop/ui";
 import {
   aggregate,
   type AggGroup,
@@ -26,10 +25,9 @@ export type Aggregated = {
 const idle: Omit<Aggregated, "retry"> = { groups: [], total: 0, loaded: false, loading: false };
 
 /**
- * Groups and totals from `<model>.search` with `aggregate` (D4). It asks again when the query or the
- * locale changes (the server orders the groups in the collation of the locale it is told) and after
- * any successful write, ignores answers that arrive late and keeps the previous answer on screen
- * while the next one loads.
+ * Groups and totals from `<model>.search` with `aggregate` (D4). It asks again when the query
+ * changes and after any successful write, ignores answers that arrive late and keeps the previous
+ * answer on screen while the next one loads.
  */
 export function useAggregate(opts: {
   enabled: boolean;
@@ -39,12 +37,11 @@ export function useAggregate(opts: {
   measures: AggMeasure[];
 }): Aggregated {
   const d = useData();
-  const { locale } = useI18n();
   const [st, setSt] = useState<Omit<Aggregated, "retry">>(idle);
   const [attempt, setAttempt] = useState(0);
   const seq = useRef(0);
   const { enabled, model, filter, groupBy, measures } = opts;
-  const key = JSON.stringify([model, filter, groupBy, measures, locale]);
+  const key = JSON.stringify([model, filter, groupBy, measures]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -56,7 +53,7 @@ export function useAggregate(opts: {
         setSt((s) => ({ ...s, loading: false, loaded: true, error: r.error, status: r.status }));
       else setSt({ groups: r.groups, total: r.total, loaded: true, loading: false });
     });
-    // The key stands for the model, filter, grouping, measures and locale.
+    // The key stands for the model, filter, grouping and measures.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, d.token, key, d.mutations, attempt]);
 
