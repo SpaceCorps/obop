@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
-import { fmt as fmtLocale, inSentence, t } from "@obop/ui";
+import { fmt as fmtLocale, inSentence, t, useI18n } from "@obop/ui";
 import { search, type FieldMeta, type Row, type ServerFilter } from "../api.ts";
 import { Cell } from "../fields.tsx";
 import { labelField, useData } from "../data.tsx";
@@ -69,7 +69,8 @@ type ColumnState = { rows: Row[]; total: number; loading: boolean; error?: strin
 /**
  * The cards of each column from `<model>.search`, one page per column (D4): a column asks for its
  * first cards and again for more when "Load more" raises its limit. Columns refetch after any
- * write or when the search changes; the cards already shown stay until the new ones arrive.
+ * write or when the search or the locale (the server sorts the cards in its collation) changes; the
+ * cards already shown stay until the new ones arrive.
  */
 function useColumnCards(opts: {
   enabled: boolean;
@@ -82,11 +83,12 @@ function useColumnCards(opts: {
   limits: Record<string, number>;
 }) {
   const d = useData();
+  const { locale } = useI18n();
   const { enabled, model, base, order, field, keys, folded, limits } = opts;
   const [cols, setCols] = useState<Record<string, ColumnState>>({});
   const seen = useRef(new Map<string, string>());
   const seq = useRef(0);
-  const baseSig = JSON.stringify([model, base, order, field?.name, d.mutations]);
+  const baseSig = JSON.stringify([model, base, order, field?.name, d.mutations, locale]);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {

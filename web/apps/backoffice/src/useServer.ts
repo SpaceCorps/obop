@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useI18n } from "@obop/ui";
 import { call, search, type Row, type ServerFilter, type ServerOrder } from "./api.ts";
 import { useData } from "./data.tsx";
 
@@ -17,7 +18,8 @@ export type ServerRows = {
 const idle: ServerRows = { rows: [], total: 0, denied: [], loaded: false, loading: false };
 
 /**
- * One page of a model from `<model>.search`. It asks again when the query changes and after any
+ * One page of a model from `<model>.search`. It asks again when the query changes, when the locale
+ * changes (the server sorts text in the collation of the locale it is told) and after any
  * successful write, ignores answers that arrive late, and keeps the previous page on screen while
  * the next one loads so the table does not flash.
  */
@@ -30,10 +32,11 @@ export function useServerRows(opts: {
   limit: number;
 }): ServerRows {
   const d = useData();
+  const { locale } = useI18n();
   const [st, setSt] = useState<ServerRows>(idle);
   const seq = useRef(0);
   const { enabled, model, filter, order, offset, limit } = opts;
-  const key = JSON.stringify([model, filter, order, offset, limit]);
+  const key = JSON.stringify([model, filter, order, offset, limit, locale]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -55,7 +58,7 @@ export function useServerRows(opts: {
           loading: false,
         });
     });
-    // The key stands for model, filter, order, offset and limit.
+    // The key stands for model, filter, order, offset, limit and locale.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, d.token, key, d.mutations]);
 
