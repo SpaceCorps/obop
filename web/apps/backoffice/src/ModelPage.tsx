@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { fmt, inSentence, msg, t, useI18n } from "@obop/ui";
+import { fmt, inSentence, msg, t } from "@obop/ui";
 import { search, type ModelMeta, type Row } from "./api.ts";
 import { collect } from "./bulk.ts";
 import type { App } from "./Chrome.tsx";
@@ -63,7 +63,6 @@ function storedView(model: string): string {
 
 export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Props) {
   const d = useData();
-  const { locale } = useI18n();
   const title = modelTitle(model, app.module.id);
   const state = useMemo(() => decodeState(route.st), [route.st]);
   // The dialogs a view opens (bulk edit and delete) share one slot, which the list view rewrites
@@ -110,9 +109,10 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
   // the filter is expressible. Anything else (an any-field search, a "contains" on a select, grouping
   // the list, a sort by a ref) loads the records, up to 5,000, and works in the browser. See
   // serverQuery.ts.
-  // A range bound is read with the decimal separator of the region, so what the server can answer
-  // depends on the locale too.
-  const plan = useMemo(() => toServer(state, fields), [state, fields, locale]);
+  // i18n-memo-ok: a range bound is read the same in every language and region (a dot or a comma is
+  // taken as the decimal mark); the only reader of the i18n store is fmt.exponent(), the digits of
+  // the instance currency, which a change of language or region does not change
+  const plan = useMemo(() => toServer(state, fields), [state, fields]);
   const grouped = state.group.length > 0;
   const serverMode = view === "list" && onServer(plan, state);
   const aggMode = view !== "list" && plan.rest.length === 0;
