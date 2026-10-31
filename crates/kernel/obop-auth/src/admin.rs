@@ -45,7 +45,7 @@ pub struct ImportOutcome {
 /// The name the log shows for the actor and the account it signs in as. An approved proposal of
 /// an agent runs as `alice/agent` (what the dispatcher calls the principal), whose account is
 /// `alice`; user names cannot contain `/`, so the two cannot be mistaken for one another.
-fn admin_of(p: &Principal) -> Result<(&str, &str), MfaError> {
+pub(crate) fn admin_of(p: &Principal) -> Result<(&str, &str), MfaError> {
     if p.is_person() && p.groups.contains(ADMIN_GROUP) && !p.mfa_limited {
         Ok((&p.id, p.id.strip_suffix("/agent").unwrap_or(&p.id)))
     } else {

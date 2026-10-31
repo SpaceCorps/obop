@@ -393,23 +393,46 @@ impl Auth {
             self.event(&name, "login_refused", &name, "the account is disabled");
             return Err("invalid username or password".into());
         }
+        // An account that signs in with Microsoft only (D91) has no password step. Same answer as
+        // a wrong password; the log says what happened.
+        if self.is_sso_only(&name) {
+            self.event(
+                &name,
+                "login_refused",
+                &name,
+                "the account signs in with Microsoft only; the password was not accepted",
+            );
+            return Err("invalid username or password".into());
+        }
         self.purge_tokens();
-        if self.has_second_factor(&name) {
+        self.after_first_factor(&name, &epoch)
+    }
+
+    /// What follows a first factor that is not enough alone for an account: the demand for a
+    /// second factor when the account has one, else a session, limited to enrolment when the
+    /// policy demands a second factor the account lacks. The password step and a Microsoft
+    /// sign-in whose `amr` does not say `mfa` (D91) both end here.
+    pub(crate) fn after_first_factor(
+        &self,
+        name: &str,
+        epoch: &Epoch,
+    ) -> Result<LoginOutcome, String> {
+        if self.has_second_factor(name) {
             let token = format!("obopmfa_{}", hex(&random_bytes::<32>()));
             let mut f = Fields::new();
-            f.insert("user".into(), J::from(name.as_str()));
+            f.insert("user".into(), J::from(name));
             f.insert("expires_at".into(), J::from(self.now() + MFA_TOKEN_SECS));
             f.insert("attempts".into(), J::from(0u64));
-            // What the password was checked against: a change of the credentials before the
+            // What the first factor was checked against: a change of the credentials before the
             // second step ends this sign-in (`refuse_if_disabled`).
-            f.insert("epoch".into(), epoch.map_or(J::Null, J::from));
+            f.insert("epoch".into(), epoch.clone().map_or(J::Null, J::from));
             self.backend
                 .insert(MFA_TOKEN_TABLE, &token_hash(&token), &f)?;
             return Ok(LoginOutcome::MfaRequired { mfa_token: token });
         }
         let groups = self
             .backend
-            .get("auth_user", &name)
+            .get("auth_user", name)
             .ok()
             .flatten()
             .map(|u| str_list(u.get("groups").unwrap_or(&J::Null)))
@@ -417,13 +440,13 @@ impl Auth {
         let limited = self.enrolment_required_for(&groups);
         if limited {
             self.event(
-                &name,
+                name,
                 "limited_session",
-                &name,
+                name,
                 "signed in without two-factor; only enrolment is allowed",
             );
         }
-        self.session_outcome(&name, limited, &epoch)
+        self.session_outcome(name, limited, epoch)
             .map_err(SessionError::message)
     }
 

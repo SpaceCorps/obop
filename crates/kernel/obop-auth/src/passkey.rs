@@ -530,6 +530,16 @@ impl Auth {
         credential: &J,
     ) -> Result<LoginOutcome, MfaError> {
         let (name, _, epoch) = self.verify_assertion(ctx, "login", credential, true)?;
+        // An account that signs in with Microsoft only (D91) has no passkey sign-in of its own.
+        if self.is_sso_only(&name) {
+            self.event(
+                &name,
+                "login_refused",
+                &name,
+                "the account signs in with Microsoft only; a passkey alone was not accepted",
+            );
+            return Err(denied("that passkey could not be used to sign in"));
+        }
         self.purge_tokens();
         self.event(
             &name,
