@@ -2,6 +2,7 @@ import type { Page } from "@playwright/test";
 import { tr } from "../support/catalogue.ts";
 import { languageUrl } from "../support/env.ts";
 import { Api, expect, test } from "../support/fixtures.ts";
+import { isCommand } from "../support/urls.ts";
 
 // Switching the language in the open app, without a reload, must leave nothing in the old language:
 // what a reload shows is what the switch shows. The app names and their order are built once from
@@ -59,11 +60,25 @@ async function pickInAccountMenu(page: Page, from: string, to: string) {
   await expect(page.locator("html")).toHaveAttribute("lang", to);
 }
 
+/** The modules `/api/meta` lists, as the app gets them. */
+async function modules(api: Api): Promise<any[]> {
+  const r = await api.get("/api/meta", await api.token("root"));
+  return Array.isArray(r.json) ? r.json : r.json.modules;
+}
+
+/**
+ * The name of a module's app in `lang`, as the app builds it: the module's own label in
+ * `/api/meta` when it has one, else the catalogue's word for the module's English name.
+ */
+async function moduleApp(api: Api, id: string, lang: string): Promise<string> {
+  const m = (await modules(api)).find((x) => x.id === id);
+  expect(m, `module ${id}`).toBeTruthy();
+  return m.labels?.[lang] ?? appName(lang, m.name);
+}
+
 /** What the server sends as the description of a model in `lang` (English is the description itself). */
 async function describe(api: Api, model: string, lang: string): Promise<string> {
-  const r = await api.get("/api/meta", await api.token("root"));
-  const modules: any[] = Array.isArray(r.json) ? r.json : r.json.modules;
-  const m = modules.flatMap((x) => x.models).find((x) => x.name === model);
+  const m = (await modules(api)).flatMap((x) => x.models).find((x) => x.name === model);
   const text = lang === "en" ? m.description : m.descriptions?.[lang];
   expect(text, `a ${lang} description of ${model}`).toBeTruthy();
   return text;
@@ -78,7 +93,7 @@ const savedChoice = (page: Page) => page.evaluate(() => localStorage.getItem("ob
 async function switchInSettings(page: Page, api: Api, from: string, to: string) {
   await goHome(page);
   const before = await tiles(page);
-  const invoicingFrom = appName(from, "Invoicing");
+  const invoicingFrom = await moduleApp(api, "invoicing", from);
   expect(before.map((t) => t.name)).toContain(invoicingFrom);
 
   await openLanguageSettings(page, from);
@@ -98,7 +113,7 @@ async function switchInSettings(page: Page, api: Api, from: string, to: string) 
     live.map((t) => t.app),
     "the order of the apps depends on the language",
   ).not.toEqual(before.map((t) => t.app));
-  const invoicingTo = appName(to, "Invoicing");
+  const invoicingTo = await moduleApp(api, "invoicing", to);
   expect(live.find((t) => t.app === "invoicing")?.name).toBe(invoicingTo);
   expect(live.map((t) => t.name)).not.toContain(invoicingFrom);
 
@@ -182,58 +197,72 @@ test.describe("switching the language in Settings, without a reload", () => {
 });
 
 test.describe("switching the language with the account menu, on a screen that stays open", () => {
-  test("the Apps tab follows, and leaving a name field as it is writes no setting", async ({
+  test("the Apps tab follows; leaving a name field as it is writes nothing, a rename saves and keeps the field", async ({
     page,
     signIn,
     api,
   }) => {
-    const before = (await api.run("root", "setting.get", { id: "instance" })) as { value: string };
+    const settings = async () =>
+      (await api.run("root", "setting.get", { id: "instance" })) as { value: string };
+    const before = await settings();
+    const names = async () => JSON.parse((await settings()).value || "{}").apps?.names ?? {};
+    // Every write of a setting, in the order the page sent them. A request goes out in the handler
+    // of the event that causes it, so what the page did earlier is listed before what it did later.
     const writes: string[] = [];
     page.on("request", (r) => {
-      if (r.method() === "POST" && r.url().endsWith("/api/setting/update")) writes.push(r.url());
+      if (r.method() === "POST" && isCommand(r.url(), "setting", "update"))
+        writes.push(JSON.parse(r.postData() ?? "{}").value);
     });
+    const en = await moduleApp(api, "invoicing", "en");
+    const sv = await moduleApp(api, "invoicing", "sv");
+    expect(sv, "the app has another name in Swedish").not.toBe(en);
     try {
       await signIn("root", "/customize/apps?tab=apps");
       const nameField = (lang: string, app: string) =>
         page.getByLabel(say(lang, "Name of {name}").replace("{name}", app), { exact: true });
-      await expect(nameField("en", "Invoicing")).toHaveValue("Invoicing");
+      await expect(nameField("en", en)).toHaveValue(en);
 
       await pickInAccountMenu(page, "en", "sv");
 
       // Every name, and every label built from it, is Swedish: the field shows what the app is called.
-      const field = nameField("sv", "Fakturering");
-      await expect(field).toHaveValue("Fakturering");
+      const field = nameField("sv", sv);
+      await expect(field).toHaveValue(sv);
       await expect(
-        page.getByLabel(say("sv", "Move {name} up").replace("{name}", "Fakturering")),
+        page.getByLabel(say("sv", "Move {name} up").replace("{name}", sv)),
       ).toBeVisible();
       await expect(
-        page.getByLabel(say("sv", "Colour of {name}").replace("{name}", "Fakturering")),
+        page.getByLabel(say("sv", "Colour of {name}").replace("{name}", sv)),
       ).toBeVisible();
 
       // Clicking into the field and out of it again changes nothing. Were the field to keep the
-      // English name it was made with, this would save "Invoicing" as the name for everyone.
+      // English name it was made with, this would save it as the name for everyone.
       await field.focus();
       await field.blur();
-      // The save would be sent from the blur handler; give it room to show up before looking.
-      await page.waitForTimeout(500);
-      expect(writes, "a setting was written by leaving the field").toEqual([]);
-      const after = (await api.run("root", "setting.get", { id: "instance" })) as {
-        value: string;
-      };
-      expect(after.value).toBe(before.value);
 
-      // A real rename still saves, and the field keeps what was typed.
-      await field.fill("Fakturor");
+      // A real rename saves. It is the first write the page made, so the blur above wrote nothing:
+      // a write it had sent would be listed before this one.
+      const renamed = `${sv} 2`;
+      await field.fill(renamed);
       await field.blur();
-      await expect
-        .poll(async () => {
-          const s = (await api.run("root", "setting.get", { id: "instance" })) as {
-            value: string;
-          };
-          return JSON.parse(s.value || "{}").apps?.names?.invoicing;
-        })
-        .toBe("Fakturor");
-      await expect(nameField("sv", "Fakturor")).toHaveValue("Fakturor");
+      await expect.poll(async () => (await names()).invoicing).toBe(renamed);
+      expect(writes.map((w) => JSON.parse(w).apps?.names)).toEqual([{ invoicing: renamed }]);
+
+      // The saved name is in the app list now, and the field is still the one the person was typing
+      // in: it is not made again, which would drop what is typed next.
+      const saved = nameField("sv", renamed);
+      await expect(saved).toHaveValue(renamed);
+      const node = await saved.elementHandle();
+      await saved.focus();
+      await page.keyboard.press("End");
+      await page.keyboard.type("!");
+      await expect(saved).toHaveValue(`${renamed}!`);
+      expect(await node!.evaluate((n) => n.isConnected), "the field was made again").toBe(true);
+      await saved.blur();
+      await expect.poll(async () => (await names()).invoicing).toBe(`${renamed}!`);
+
+      // Resetting the launcher puts the name of the language back, in the same field.
+      await page.getByRole("button", { name: say("sv", "Reset the launcher") }).click();
+      await expect(nameField("sv", sv)).toHaveValue(sv);
     } finally {
       await api.run("root", "setting.update", { id: "instance", value: before.value });
     }
