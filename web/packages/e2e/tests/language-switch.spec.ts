@@ -18,6 +18,12 @@ test.use({ language: null, locale: "en-US", extraHTTPHeaders: { "Accept-Language
 const say = (lang: string, id: string) => (lang === "en" ? id : tr(lang, id));
 /** The name of a built-in app in `lang` (the message context "app", gettext's "\u0004" separator). */
 const appName = (lang: string, en: string) => (lang === "en" ? en : tr(lang, `app\u0004${en}`));
+/** The words of a message in `lang` that are not placeholders, to look for in text that fills them in. */
+const wordsOf = (lang: string, id: string) =>
+  say(lang, id)
+    .split(/\{[^}]+\}/)
+    .map((w) => w.trim())
+    .filter(Boolean);
 /** The label of the menu of an app: "{app} menu". */
 const menuLabel = (lang: string, app: string) => say(lang, "{app} menu").replace("{app}", app);
 const NATIVE: Record<string, string> = { en: "English", sv: "Svenska" };
@@ -382,6 +388,70 @@ test.describe("switching the language with the account menu, on a screen that st
 test.describe("a record panel that stays open while the language changes", () => {
   // The name of the panel is translated ("{model} record"): find it by what it is.
   const panelOf = (page: Page) => page.locator("aside.record");
+
+  test("a field that failed its check is told again in the new language", async ({
+    page,
+    signIn,
+    scratchModule,
+  }) => {
+    // A field with no translation anywhere, so its title is the same in both languages.
+    const model = await scratchModule({
+      title: "Check data",
+      fields: [{ name: "zork", required: true }],
+    });
+    await signIn("root", `/${model}/${model}?view=list&id=new`);
+    const panel = panelOf(page);
+    await panel.getByRole("button", { name: say("en", "Create") }).click();
+    const alert = panel.locator(".field p.error");
+    await expect(alert).toHaveText(say("en", "{field} is required").replace("{field}", "Zork"));
+
+    await pickInAccountMenu(page, "en", "sv");
+    await expect(panelOf(page)).toBeVisible();
+    // The same message, worded by the Swedish catalogue: its words around the name of the field.
+    await expect(alert).toContainText("Zork");
+    for (const w of wordsOf("sv", "{field} is required")) await expect(alert).toContainText(w);
+    await expect(alert).not.toContainText(wordsOf("en", "{field} is required")[0]!);
+  });
+
+  test("the server's refusal in the banner is worded again in the new language", async ({
+    page,
+    signIn,
+    api,
+    uid,
+    scratchModule,
+    allowHttpErrors,
+  }) => {
+    allowHttpErrors(400);
+    const model = await scratchModule({
+      title: "Refusal data",
+      fields: [
+        { name: "title", required: true },
+        { name: "state", kind: "select", options: ["new", "doing", "done"] },
+      ],
+      actions: [{ name: "start", field: "state", from: "new", to: "doing" }],
+    });
+    const rec = await api.create("root", model, { title: uid("Stale"), state: "new" });
+    await signIn("root", `/${model}/${model}?view=list&id=${rec.id}`);
+    const bar = panelOf(page).getByRole("list", { name: "State" });
+    await expect(bar.getByRole("button", { name: "Doing", exact: true })).not.toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
+
+    // Someone else moves it on while this page is open; the move the page offers is refused.
+    await api.run("root", `${model}.start`, { id: rec.id });
+    await bar.getByRole("button", { name: "Doing", exact: true }).click();
+    const banner = panelOf(page).locator("p.error.banner");
+    await expect(banner).toBeVisible();
+    const english = (await banner.textContent())!;
+    expect(english).toMatch(/to do this/);
+
+    await pickInAccountMenu(page, "en", "sv");
+    await expect(panelOf(page)).toBeVisible();
+    for (const w of wordsOf("sv", "{field} must be {from} to do this, it is {current}"))
+      await expect(banner).toContainText(w);
+    await expect(banner).not.toHaveText(english);
+  });
 
   test("an open record stays open, with what was typed in it, when the sorted list around it asks again", async ({
     page,
