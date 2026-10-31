@@ -21,7 +21,9 @@ import {
 /** A widget's data: resolved against what this person may see, then fetched from the server. */
 export function useWidgetData(w: Widget) {
   const d = useData();
-  // `resolve` writes the "not set up correctly" and "no access" texts, so it runs again in the new language.
+  // `resolve` writes the detail sentence of an invalid tile ("A sum needs a measure field", the
+  // filter's own errors), so it runs again in the new language. The titles "This tile is not set up
+  // correctly" and "No access" are written where the card draws, not here.
   const r = useMemo(() => resolve(w, d.models), [w, d.models, d.lang]);
   const [got, setGot] = useState<Fetched | null>(null);
   const [attempt, setAttempt] = useState(0);

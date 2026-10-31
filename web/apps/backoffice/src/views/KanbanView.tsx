@@ -89,7 +89,9 @@ function useColumnCards(opts: {
   const [cols, setCols] = useState<Record<string, ColumnState>>({});
   const seen = useRef(new Map<string, string>());
   const seq = useRef(0);
-  // The locale is part of the query only where the request carries it (`lang`, api.ts): a sort.
+  // Every request carries `?lang=` and `Accept-Language`, but the `lang` in the body of a search,
+  // which picks the collation, is sent only with an `order` (api.ts): the locale is part of the
+  // query for sorted cards and for nothing else.
   const baseSig = JSON.stringify([
     model,
     base,
