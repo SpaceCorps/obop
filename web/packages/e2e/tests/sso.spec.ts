@@ -2,7 +2,7 @@
 // Microsoft Entra on loopback, and what the page and the server keep afterwards. The stand-in is not
 // Entra (see support/idp.ts); nothing here talks to Microsoft. The Rust tests cover the checks of the
 // id token and the server's side of the flow; these tests cover what only a browser shows.
-import type { APIRequestContext, Playwright } from "@playwright/test";
+import type { APIRequestContext } from "@playwright/test";
 import { idpUrl, sso, ssoUrl } from "../support/env.ts";
 import { expect, test } from "../support/fixtures.ts";
 import { base32Decode, hotp, STEP } from "../support/totp.ts";
@@ -252,7 +252,10 @@ test.describe("sign in with Microsoft", () => {
    * The round trip without a browser: the code of a callback that nobody has spent, with the
    * cookie jar of the browser that made it. (The page would exchange it at once.)
    */
-  async function callbackCode(playwright: Playwright, who: string) {
+  async function callbackCode(
+    playwright: { request: { newContext(): Promise<APIRequestContext> } },
+    who: string,
+  ) {
     const jar = await playwright.request.newContext();
     const start = await jar.get(`${ssoUrl()}/api/auth/oidc/start`, { maxRedirects: 0 });
     expect(start.status()).toBe(303);
