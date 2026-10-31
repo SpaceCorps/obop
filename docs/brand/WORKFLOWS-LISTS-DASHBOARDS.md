@@ -99,9 +99,14 @@ Each has a specimen in the Brand book (Components).
   read `useCallback`, `useEffect`, a `useState` initialiser, a ref, or state that holds translated text;
   docs/ISSUES.md D8 to D10 and D14 list what is known to slip through. A query that the server answers
   in the collation of the locale (a sorted `useServerRows`, the sorted Kanban columns) asks again when
-  the locale changes. Every request carries `?lang=` and `Accept-Language`, but the `lang` in the body
-  of a search, which picks the collation, is sent only with an `order`; so an unsorted query does not
-  ask again.
+  the locale changes. Every command the back office sends (`call` in `api.ts`; not `/api/meta`, sign-in,
+  uploads or the account endpoints) carries `?lang=` and `Accept-Language`, which the server words its
+  refusals by. In the body, `search()` adds the `lang` that picks the collation only with an `order`, so
+  an unsorted query does not ask again. `aggregate()` always adds it, and the server orders the keys of
+  a text group by it; that does not matter while only select, ref, bool and date fields can be grouped
+  (`GROUPABLE` in `query.ts`), and the views put the keys in order on the client (`orderKeys`, through
+  `domainOf`, in memos that carry `d.lang`), so a switch does not ask the aggregates again. A text
+  field that becomes groupable needs the locale in the key of `useAggregate`.
 - A dropped connection never escapes as an unhandled rejection. Every command answers an error reply
   ("Could not reach the server"); reads (get, list, search, meta) retry twice with a short backoff, writes
   never; a page-wide banner says the app is offline or the server cannot be reached and clears itself
