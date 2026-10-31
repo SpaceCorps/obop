@@ -433,25 +433,30 @@ test.describe("a record panel that stays open while the language changes", () =>
     });
     const rec = await api.create("root", model, { title: uid("Stale"), state: "new" });
     await signIn("root", `/${model}/${model}?view=list&id=${rec.id}`);
-    const bar = panelOf(page).getByRole("list", { name: "State" });
-    await expect(bar.getByRole("button", { name: "Doing", exact: true })).not.toHaveAttribute(
-      "aria-disabled",
-      "true",
-    );
+    // Swedish first, and back to English after: a sentence kept in the language it was worded in
+    // is Swedish by then, which nothing words in English again (a kept English one would be worded
+    // in Swedish, because the server's English is what the rules match).
+    await pickInAccountMenu(page, "en", "sv");
+    const steps = panelOf(page).locator("ol.statusbar button");
+    await expect(steps.nth(1)).not.toHaveAttribute("aria-disabled", "true");
 
     // Someone else moves it on while this page is open; the move the page offers is refused.
     await api.run("root", `${model}.start`, { id: rec.id });
-    await bar.getByRole("button", { name: "Doing", exact: true }).click();
+    await steps.nth(1).click();
     const banner = panelOf(page).locator("p.error.banner");
     await expect(banner).toBeVisible();
-    const english = (await banner.textContent())!;
-    expect(english).toMatch(/to do this/);
+    const refusal = "{field} must be {from} to do this, it is {current}";
+    for (const w of wordsOf("sv", refusal)) await expect(banner).toContainText(w);
+    const swedish = (await banner.textContent())!;
 
-    await pickInAccountMenu(page, "en", "sv");
+    await pickInAccountMenu(page, "sv", "en");
     await expect(panelOf(page)).toBeVisible();
-    for (const w of wordsOf("sv", "{field} must be {from} to do this, it is {current}"))
-      await expect(banner).toContainText(w);
-    await expect(banner).not.toHaveText(english);
+    for (const w of wordsOf("en", refusal)) await expect(banner).toContainText(w);
+    await expect(banner).not.toHaveText(swedish);
+
+    // And forward again: the sentence is made from the server's words each time.
+    await pickInAccountMenu(page, "en", "sv");
+    await expect(banner).toHaveText(swedish);
   });
 
   test("an open record stays open, with what was typed in it, when the sorted list around it asks again", async ({
