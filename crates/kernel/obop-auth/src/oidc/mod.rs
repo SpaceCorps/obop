@@ -749,7 +749,7 @@ impl SsoApi for Auth {
         Ok(code)
     }
 
-    fn exchange(&self, code: &str, binder: &str) -> Result<LoginOutcome, MfaError> {
+    fn exchange(&self, code: &str, binder: &str) -> Result<(String, LoginOutcome), MfaError> {
         let rec = self.code_take(code).ok_or(MfaError::Expired)?;
         let name = rec["user"].as_str().ok_or(MfaError::Expired)?.to_string();
         // The code is spent. Presented by another browser than the one that signed in, it is
@@ -820,7 +820,7 @@ impl SsoApi for Auth {
                 }
             ),
         );
-        Ok(out)
+        Ok((name, out))
     }
 
     fn audit(&self, user: &str, kind: &str, detail: &str) {

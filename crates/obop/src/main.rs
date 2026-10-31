@@ -1117,6 +1117,8 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
                 o.admin_prefix
             )));
         }
+        // The browser comes back from Microsoft to the back office, which is not at `/` here.
+        state.set_sso_return_prefix(&o.admin_prefix);
         let site = Arc::new(
             obop_site::Site::new(
                 obop_commands::PublicApi::new(app.dispatcher.clone(), app.store.clone()),

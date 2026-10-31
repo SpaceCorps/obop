@@ -6,6 +6,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { join } from "node:path";
+import { startIdp } from "./idp.ts";
 import {
   backofficeAdminDist,
   backofficeDist,
@@ -14,6 +15,7 @@ import {
   obopBinary,
   secretKey,
   shopOwner,
+  sso,
   siteDir,
   updateToken,
   users,
@@ -53,8 +55,16 @@ if (kind === "market") {
   await new Promise(() => {});
 }
 
-function run(args: string[], input?: string) {
-  const r = spawnSync(bin, args, { input, encoding: "utf8" });
+// A stand-in for Microsoft Entra on loopback for the Microsoft sign-in specs (D91).
+if (kind === "idp") {
+  const server = startIdp(Number(process.env.OBOP_E2E_IDP_PORT));
+  for (const sig of ["SIGTERM", "SIGINT"] as const)
+    process.on(sig, () => server.close(() => process.exit(0)));
+  await new Promise(() => {});
+}
+
+function run(args: string[], input?: string, env?: Record<string, string>) {
+  const r = spawnSync(bin, args, { input, encoding: "utf8", env: { ...process.env, ...env } });
   if (r.status !== 0) throw new Error(`obop ${args.join(" ")} failed:\n${r.stdout}\n${r.stderr}`);
 }
 
@@ -85,6 +95,49 @@ if (kind === "app" || kind === "passkeys" || kind === "language") {
     extraEnv.OBOP_BACKUP_DIR = join(dir, "backups");
     extraEnv.OBOP_MARKETPLACE_URL = `http://127.0.0.1:${process.env.OBOP_E2E_MARKET_PORT}`;
   }
+} else if (kind === "sso") {
+  // The Microsoft sign-in instance (D91): this server trusts the stand-in on loopback as its
+  // Microsoft authority, has the tenant and the app registration configured, and the people of the
+  // spec bound to their object ids. The break-glass administrators enrol an authenticator app in the
+  // spec (the CLI cannot), and the spec makes an account sign in with Microsoft only.
+  const db = `sqlite://${join(dir, "sso.sqlite")}`;
+  const authority = `http://127.0.0.1:${process.env.OBOP_E2E_IDP_PORT}`;
+  const env = {
+    OBOP_SECRET_KEY: secretKey,
+    OBOP_OIDC_TEST_AUTHORITY: authority,
+    OBOP_CONNECTORS_ALLOW_LOOPBACK: "1",
+  };
+  for (const u of Object.values(sso.users))
+    run(["admin", "create", u.name, "--groups", u.groups, "--db", db], `${u.password}\n`);
+  run(
+    [
+      "admin",
+      "sso",
+      "configure",
+      "--tenant",
+      sso.tenant,
+      "--client-id",
+      sso.clientId,
+      "--secret-stdin",
+      "--db",
+      db,
+    ],
+    `${sso.clientSecret}\n`,
+    env,
+  );
+  for (const who of ["bea", "ada", "bob"] as const)
+    run(["admin", "sso", "bind", who, sso.identities[who].oid, "--db", db], undefined, env);
+  args = [
+    "serve",
+    "--addr",
+    `127.0.0.1:${process.env.OBOP_E2E_SSO_PORT}`,
+    "--db",
+    db,
+    "--static",
+    backofficeDist,
+  ];
+  extraEnv.OBOP_PUBLIC_URL = `http://127.0.0.1:${process.env.OBOP_E2E_SSO_PORT}`;
+  extraEnv.OBOP_OIDC_TEST_AUTHORITY = authority;
 } else if (kind === "shop") {
   // A web shop: public site at /, back office at /admin/, the two shop packages, demo content
   // with generated pictures, and the demo payment provider (no money moves, no card is asked).
@@ -173,7 +226,7 @@ if (kind === "app" || kind === "passkeys" || kind === "language") {
     "--static",
     siteDir,
   ];
-} else throw new Error("usage: serve.ts app|passkeys|language|shop|platform|market");
+} else throw new Error("usage: serve.ts app|passkeys|language|sso|idp|shop|platform|market");
 
 // Connectors: the specs run a receiver on loopback, which is refused unless the operator allows it.
 // The secret key is a 32-byte key in the form two-factor authentication and connectors both accept.

@@ -127,8 +127,10 @@ pub trait SsoApi: Send + Sync {
 
     /// Spend the one-time code and give the sign-in step its result, as the password step does:
     /// a session, a session limited to enrolment, or the demand for an obop second factor. The
-    /// code is spent also when `binder` is not the one it was issued for.
-    fn exchange(&self, code: &str, binder: &str) -> Result<LoginOutcome, MfaError>;
+    /// code is spent also when `binder` is not the one it was issued for. The account's name
+    /// comes with the outcome, so the page can show who is signed in (also while a second factor
+    /// is still asked for).
+    fn exchange(&self, code: &str, binder: &str) -> Result<(String, LoginOutcome), MfaError>;
 
     /// Write a line to the security log (`oidc_*`); never a token, a code or a secret.
     fn audit(&self, user: &str, kind: &str, detail: &str);

@@ -1170,18 +1170,16 @@ async fn admin_the_command_api_binds_configures_and_keeps_agents_out_of_the_prov
     )
     .await;
     assert_eq!(g["value"]["tenant"], TENANT);
-    // Neither the provider nor the agent's tools list it for MCP.
-    let agent_p = obop_commands::Principal::user("boss", &["platform.admin"]);
-    let tools: Vec<String> = obop_mcp::schema::tools(&w.app.dispatcher, &agent_p)
+    // Over MCP the tools are listed (D41: every surface or none) and refuse an agent the same way.
+    let admin_p = obop_commands::Principal::user("boss", &["platform.admin"]);
+    let tools: Vec<String> = obop_mcp::schema::tools(&w.app.dispatcher, &admin_p)
         .iter()
         .map(|t| t["name"].as_str().unwrap().to_string())
         .collect();
     assert!(
-        !tools.contains(&"sso_provider__configure".to_string()),
+        tools.contains(&"user_account__bind_sso".to_string()),
         "{tools:?}"
     );
-    assert!(!tools.contains(&"sso_provider__clear".to_string()));
-    assert!(tools.contains(&"user_account__bind_sso".to_string()));
     w.assert_nowhere(CLIENT_SECRET);
     w.assert_nowhere("attacker-secret");
     assert_eq!(w.events("oidc_bind").len(), 1);

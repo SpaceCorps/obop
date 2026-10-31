@@ -302,7 +302,7 @@ fn a_bound_identity_gets_a_one_time_code_that_is_spent_once_and_expires() {
     // Stored hashed, with an expiry; the code itself is not a key.
     assert!(r.b.kv_get(&format!("auth.sso:{code}")).unwrap().is_none());
     assert!(r.b.kv_get(&code_key(&code)).unwrap().is_some());
-    let (token, limited) = session_of(sso(&r).exchange(&code, BINDER).unwrap());
+    let (token, limited) = session_of(sso(&r).exchange(&code, BINDER).unwrap().1);
     assert!(!limited);
     assert_eq!(r.a.resolve(&token).unwrap().id, "ada");
     // The session is the one a password gives: bearer, the same lifetime.
@@ -457,10 +457,12 @@ fn an_account_with_its_own_second_factor_still_gets_asked_for_it() {
     let (secret, _) = enrol(&r.a, "ada");
     // Microsoft says mfa, but ada is not SSO-only: her obop second factor stays.
     let code = sso(&r).begin(&identity(&r, ADA_OID), BINDER).unwrap();
-    let LoginOutcome::MfaRequired { mfa_token: t } = sso(&r).exchange(&code, BINDER).unwrap()
+    let (who, LoginOutcome::MfaRequired { mfa_token: t }) =
+        sso(&r).exchange(&code, BINDER).unwrap()
     else {
         panic!("an obop second factor was expected")
     };
+    assert_eq!(who, "ada", "the page is told who is signing in");
     assert!(r.a.resolve(&t).is_none(), "an mfa token is not a session");
     r.a.set_clock_for_test(T0 + 60);
     let (token, limited) = session_of(
@@ -473,7 +475,7 @@ fn an_account_with_its_own_second_factor_still_gets_asked_for_it() {
     assert!(!id.mfa());
     let code = sso(&r).begin(&id, BINDER).unwrap();
     assert!(matches!(
-        sso(&r).exchange(&code, BINDER).unwrap(),
+        sso(&r).exchange(&code, BINDER).unwrap().1,
         LoginOutcome::MfaRequired { .. }
     ));
 }
@@ -490,7 +492,7 @@ fn an_sso_only_account_takes_microsofts_second_factor_as_its_own() {
     sso_only(&r, "boss", true).unwrap();
     // Microsoft reports a second factor: a whole session, no obop code.
     let code = sso(&r).begin(&identity(&r, BOB_OID), BINDER).unwrap();
-    let (token, limited) = session_of(sso(&r).exchange(&code, BINDER).unwrap());
+    let (token, limited) = session_of(sso(&r).exchange(&code, BINDER).unwrap().1);
     assert!(!limited);
     let p = r.a.resolve(&token).unwrap();
     assert!(p.allows(ADMIN_GROUP) && !p.mfa_limited);
@@ -499,7 +501,7 @@ fn an_sso_only_account_takes_microsofts_second_factor_as_its_own() {
     let code = sso(&r)
         .begin(&identity_with(&r, BOB_OID, without_mfa), BINDER)
         .unwrap();
-    let (token, limited) = session_of(sso(&r).exchange(&code, BINDER).unwrap());
+    let (token, limited) = session_of(sso(&r).exchange(&code, BINDER).unwrap().1);
     assert!(limited);
     assert!(r.a.resolve(&token).unwrap().mfa_limited);
     let line = events(&r, "oidc_login");

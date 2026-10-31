@@ -653,3 +653,75 @@ description = "La familia de tokens de renovación a la que está ligado el disp
 [labels.es.model.device.action.revoke]
 label = "Revocar"
 description = "Terminar un dispositivo para siempre: sus tokens de renovación dejan de funcionar, su token de acceso se detiene en la siguiente solicitud y la aplicación debe iniciar sesión de nuevo. Una persona revoca sus propios dispositivos; un agente solo puede proponerlo. Indique id"
+
+[labels.es.model.user_account.field.oid]
+label = "ID de objeto"
+description = "Entrada de bind_sso: el ID de objeto de la persona en el directorio de Microsoft, un GUID (no una dirección de correo ni un nombre principal de usuario)"
+
+[labels.es.model.user_account.field.sso_oid]
+label = "ID de objeto de Microsoft"
+description = "El ID de objeto al que está vinculada la cuenta para iniciar sesión con Microsoft; vacío si no está vinculada"
+
+[labels.es.model.user_account.field.sso_only]
+label = "Solo Microsoft"
+description = "Si la cuenta inicia sesión solo con Microsoft: no tiene inicio de sesión propio con contraseña ni clave de acceso. Entrada de set_sso_only (true o false)"
+
+[labels.es.model.user_account.action.bind_sso]
+label = "Vincular con Microsoft"
+description = "Vincular una cuenta existente a la identidad Microsoft de una persona para que pueda iniciar sesión con Microsoft. Indique id y oid (el ID de objeto de la persona en el directorio, un GUID). No crea ninguna cuenta ni concede permisos"
+
+[labels.es.model.user_account.action.unbind_sso]
+label = "Desvincular de Microsoft"
+description = "Quitar el vínculo de una cuenta con una identidad Microsoft. Se rechaza mientras la cuenta inicie sesión solo con Microsoft. Indique id"
+
+[labels.es.model.user_account.action.set_sso_only]
+label = "Definir solo Microsoft"
+description = "Hacer que una cuenta inicie sesión solo con Microsoft (rechaza entonces la contraseña y la clave de acceso por sí solas), o desactivarlo. Indique id y sso_only (true o false). La cuenta debe estar vinculada y al menos otros dos administradores deben seguir iniciando sesión localmente con un segundo factor. Cierra las sesiones de la cuenta"
+
+[labels.es.model.sso_provider]
+name = "Inicio de sesión con Microsoft"
+description = "El inquilino de Microsoft Entra con el que inician sesión las personas: un solo inquilino, fijado por su ID. Solo lo cambian los administradores, nunca un agente"
+
+[labels.es.model.sso_provider.field.tenant]
+label = "Inquilino"
+description = "El ID del inquilino (un GUID) con el que se comprueba cada inicio de sesión con Microsoft"
+
+[labels.es.model.sso_provider.field.client_id]
+label = "ID de cliente"
+description = "El ID de aplicación (cliente) del registro de aplicación en ese inquilino"
+
+[labels.es.model.sso_provider.field.client_secret]
+label = "Secreto de cliente"
+description = "Entrada de configure: el secreto de cliente del registro de aplicación, guardado sellado bajo el secreto del servidor. Nunca se muestra"
+
+[labels.es.model.sso_provider.field.enabled]
+label = "Activado"
+description = "Si la página de inicio de sesión ofrece «Iniciar sesión con Microsoft»"
+
+[labels.es.model.sso_provider.field.secret_set]
+label = "Secreto guardado"
+description = "Si hay un secreto de cliente guardado"
+
+[labels.es.model.sso_provider.field.modified_at]
+label = "Modificado el"
+description = "Cuándo se cambió la configuración por última vez"
+
+[labels.es.model.sso_provider.field.last_editor]
+label = "Último editor"
+description = "Quién la cambió por última vez"
+
+[labels.es.model.sso_provider.field.break_glass]
+label = "Administradores de emergencia"
+description = "Los administradores que inician sesión localmente con contraseña y un segundo factor (la vía de entrada cuando no se puede llegar a Microsoft), separados por comas"
+
+[labels.es.model.sso_provider.field.break_glass_enough]
+label = "Suficientes administradores de emergencia"
+description = "Si hay suficientes (al menos dos) para que una cuenta inicie sesión solo con Microsoft"
+
+[labels.es.model.sso_provider.action.configure]
+label = "Configurar"
+description = "Establecer el inquilino de Microsoft Entra con el que inician sesión las personas. Indique tenant (el ID del inquilino, un GUID; common, organizations y consumers se rechazan), client_id (el ID de aplicación del registro de aplicación) y, la primera vez, client_secret; enabled es true por defecto. Las cuentas se vinculan con user_account.bind_sso. Se rechaza para agentes"
+
+[labels.es.model.sso_provider.action.clear]
+label = "Eliminar"
+description = "Eliminar la configuración del inicio de sesión con Microsoft. Los vínculos se conservan. Las cuentas que inician sesión solo con Microsoft solo podrán entrar entonces por los administradores que conservan contraseña y segundo factor. Se rechaza para agentes"

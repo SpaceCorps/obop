@@ -225,8 +225,11 @@ fn with_cookies(mut r: Response, cookies: &[String]) -> Response {
 }
 
 /// The redirect of every failure: the root of this origin and a fixed word.
-fn back(error: &str, cookies: &[String]) -> Response {
-    with_cookies(see_other(&format!("/#oidc_error={error}")), cookies)
+fn back(s: &HttpState, error: &str, cookies: &[String]) -> Response {
+    with_cookies(
+        see_other(&format!("{}#oidc_error={error}", s.sso_return())),
+        cookies,
+    )
 }
 
 fn secure_of(redirect_uri: &str) -> bool {
@@ -259,17 +262,17 @@ pub(crate) async fn start(State(s): Shared, parts: Parts) -> Response {
 fn start_blocking(s: &HttpState, parts: &Parts) -> Response {
     let ip = client_ip(s, parts);
     if limited(s, "start", &ip, 30) {
-        return back("busy", &[]);
+        return back(s, "busy", &[]);
     }
     let (Some(api), Some(rt)) = (s.auth.sso(), s.connectors.get()) else {
-        return back("unavailable", &[]);
+        return back(s, "unavailable", &[]);
     };
     let leg = match api.leg() {
         Ok(Some(l)) => l,
-        Ok(None) => return back("unavailable", &[]),
+        Ok(None) => return back(s, "unavailable", &[]),
         Err(e) => {
             api.audit("-", "oidc_error", &format!("start: {}", describe(&e)));
-            return back("unavailable", &[]);
+            return back(s, "unavailable", &[]);
         }
     };
     let ep = match s.sso.discovery(api, rt, &leg) {
@@ -280,7 +283,7 @@ fn start_blocking(s: &HttpState, parts: &Parts) -> Response {
                 "oidc_error",
                 &format!("start: the discovery document could not be used: {e}"),
             );
-            return back("unavailable", &[]);
+            return back(s, "unavailable", &[]);
         }
     };
     let (verifier, challenge) = pkce_pair();
@@ -297,7 +300,7 @@ fn start_blocking(s: &HttpState, parts: &Parts) -> Response {
         .kv_put(&flow_key(&flow), &rec.to_string(), Some(FLOW_TTL_MS))
         .is_err()
     {
-        return back("unavailable", &[]);
+        return back(s, "unavailable", &[]);
     }
     let url = format!(
         "{}?client_id={}&response_type=code&redirect_uri={}&response_mode=query&scope=openid&state={}&nonce={}&code_challenge={}&code_challenge_method=S256",
@@ -340,10 +343,10 @@ fn take_flow(s: &HttpState, flow: &str) -> Option<J> {
 fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
     let ip = client_ip(s, parts);
     if limited(s, "cb", &ip, 60) {
-        return back("busy", &[]);
+        return back(s, "busy", &[]);
     }
     let (Some(api), Some(rt)) = (s.auth.sso(), s.connectors.get()) else {
-        return back("unavailable", &[]);
+        return back(s, "unavailable", &[]);
     };
     let pairs = parts.uri.query().and_then(parse_pairs).unwrap_or_default();
     let Some(state) = pair(&pairs, "state").filter(|f| is_flow_id(f)) else {
@@ -352,7 +355,7 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
             "oidc_refused",
             "the provider's redirect carried no valid state",
         );
-        return back("failed", &[]);
+        return back(s, "failed", &[]);
     };
     let clear_flow = set_cookie(&flow_cookie(state), "", 0, false);
     // One try per flow: spent before anything else is looked at.
@@ -362,7 +365,7 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
             "oidc_refused",
             "the sign-in flow is unknown, already used or expired",
         );
-        return back("failed", &[clear_flow]);
+        return back(s, "failed", &[clear_flow]);
     };
     let redirect_uri = flow["redirect_uri"].as_str().unwrap_or("").to_string();
     let clear_flow = set_cookie(&flow_cookie(state), "", 0, secure_of(&redirect_uri));
@@ -379,7 +382,7 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
             "oidc_refused",
             "the browser that came back is not the one that began the sign-in",
         );
-        return back("failed", &[clear_flow]);
+        return back(s, "failed", &[clear_flow]);
     }
     if let Some(err) = pair(&pairs, "error") {
         let err = clean(err);
@@ -393,7 +396,7 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
         } else {
             "failed"
         };
-        return back(word, &[clear_flow]);
+        return back(s, word, &[clear_flow]);
     }
     let Some(code) = pair(&pairs, "code").filter(|c| !c.is_empty() && c.len() <= 4096) else {
         api.audit(
@@ -401,7 +404,7 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
             "oidc_refused",
             "the provider's redirect carried no code",
         );
-        return back("failed", &[clear_flow]);
+        return back(s, "failed", &[clear_flow]);
     };
     let leg = match api.leg() {
         Ok(Some(l)) => l,
@@ -411,11 +414,11 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
                 "oidc_refused",
                 "the provider was switched off during the sign-in",
             );
-            return back("failed", &[clear_flow]);
+            return back(s, "failed", &[clear_flow]);
         }
         Err(e) => {
             api.audit("-", "oidc_error", &format!("callback: {}", describe(&e)));
-            return back("unavailable", &[clear_flow]);
+            return back(s, "unavailable", &[clear_flow]);
         }
     };
     let ep = match s.sso.discovery(api, rt, &leg) {
@@ -426,7 +429,7 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
                 "oidc_error",
                 &format!("callback: the discovery document could not be used: {e}"),
             );
-            return back("unavailable", &[clear_flow]);
+            return back(s, "unavailable", &[clear_flow]);
         }
     };
     // The code for the id token: from this server, with the client secret and the verifier.
@@ -459,7 +462,7 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
                 "oidc_error",
                 &format!("the token endpoint could not be reached: {e}"),
             );
-            return back("unavailable", &[clear_flow]);
+            return back(s, "unavailable", &[clear_flow]);
         }
     };
     let answer: J = serde_json::from_slice(&resp.body).unwrap_or(J::Null);
@@ -477,7 +480,7 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
                     .unwrap_or_default()
             ),
         );
-        return back("failed", &[clear_flow]);
+        return back(s, "failed", &[clear_flow]);
     }
     let nonce = flow["nonce"].as_str().unwrap_or("");
     let mut jwks = match s.sso.jwks(rt, &*s.shared.backend, &leg, &ep, false) {
@@ -488,7 +491,7 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
                 "oidc_error",
                 &format!("the key set could not be fetched: {e}"),
             );
-            return back("unavailable", &[clear_flow]);
+            return back(s, "unavailable", &[clear_flow]);
         }
     };
     let mut verified = api.verify(id_token, &jwks, nonce);
@@ -505,7 +508,7 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
                     "oidc_error",
                     &format!("the key set could not be fetched again: {e}"),
                 );
-                return back("unavailable", &[clear_flow]);
+                return back(s, "unavailable", &[clear_flow]);
             }
         }
     }
@@ -518,7 +521,7 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
                 "oidc_error",
                 &format!("the key set could not be used: {m}"),
             );
-            return back("unavailable", &[clear_flow]);
+            return back(s, "unavailable", &[clear_flow]);
         }
         Err(e) => {
             api.audit(
@@ -526,14 +529,14 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
                 "oidc_refused",
                 &format!("the id token was refused: {}", describe(&e)),
             );
-            return back("failed", &[clear_flow]);
+            return back(s, "failed", &[clear_flow]);
         }
     };
     // From here only this browser can spend the one-time code.
     let done = hex(&random::<32>());
     match api.begin(&identity, &done) {
         Ok(one_time) => with_cookies(
-            see_other(&format!("/#oidc={one_time}")),
+            see_other(&format!("{}#oidc={one_time}", s.sso_return())),
             &[
                 clear_flow,
                 set_cookie(DONE_COOKIE, &done, DONE_SECS, secure_of(&redirect_uri)),
@@ -542,9 +545,9 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
         // The reason is in the log already (`begin` wrote it); the person is told nothing more.
         Err(SsoError::Unavailable(m)) => {
             api.audit("-", "oidc_error", &format!("callback: {m}"));
-            back("unavailable", &[clear_flow])
+            back(s, "unavailable", &[clear_flow])
         }
-        Err(_) => back("failed", &[clear_flow]),
+        Err(_) => back(s, "failed", &[clear_flow]),
     }
 }
 
@@ -594,8 +597,10 @@ fn exchange_inner(s: &HttpState, parts: &Parts, body: &[u8]) -> Response {
     }
     let binder = cookie_value(&parts.headers, DONE_COOKIE).unwrap_or_default();
     match api.exchange(&code, &binder) {
-        Ok(out) => {
-            let mut r = mfa::outcome(Some(&*s.auth), out);
+        Ok((user, out)) => {
+            let mut body = mfa::outcome_json(Some(&*s.auth), out);
+            body.0["user"] = J::from(user);
+            let mut r = body.into_response();
             harden(&mut r);
             r
         }

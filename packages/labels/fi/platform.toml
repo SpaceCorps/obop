@@ -653,3 +653,75 @@ description = "Päivitystunnusten perhe, johon laite on sidottu (tunniste, ei tu
 [labels.fi.model.device.action.revoke]
 label = "Mitätöi"
 description = "Päätä laite lopullisesti: sen päivitystunnukset lakkaavat toimimasta, sen käyttötunnus lakkaa toimimasta seuraavassa pyynnössä ja sovelluksen on kirjauduttava uudelleen. Henkilö mitätöi omat laitteensa; agentti voi vain ehdottaa sitä. Anna id"
+
+[labels.fi.model.user_account.field.oid]
+label = "Objektitunnus"
+description = "Komennon bind_sso syöte: henkilön objektitunnus Microsoft-hakemistossa, GUID (ei sähköpostiosoite eikä käyttäjän pääasiallinen nimi)"
+
+[labels.fi.model.user_account.field.sso_oid]
+label = "Microsoft-objektitunnus"
+description = "Objektitunnus, johon tili on sidottu Microsoft-kirjautumista varten; tyhjä, jos tiliä ei ole sidottu"
+
+[labels.fi.model.user_account.field.sso_only]
+label = "Vain Microsoft"
+description = "Kirjautuuko tili vain Microsoftilla: sillä ei ole omaa salasana- tai pääsyavainkirjautumista. Komennon set_sso_only syöte (true tai false)"
+
+[labels.fi.model.user_account.action.bind_sso]
+label = "Sido Microsoftiin"
+description = "Sido olemassa oleva tili henkilön Microsoft-identiteettiin, jotta hän voi kirjautua Microsoftilla. Anna id ja oid (henkilön objektitunnus hakemistossa, GUID). Ei luo tiliä eikä anna oikeuksia"
+
+[labels.fi.model.user_account.action.unbind_sso]
+label = "Poista sidos Microsoftiin"
+description = "Poista tilin sidos Microsoft-identiteettiin. Hylätään, kun tili kirjautuu vain Microsoftilla. Anna id"
+
+[labels.fi.model.user_account.action.set_sso_only]
+label = "Aseta vain Microsoft"
+description = "Tili kirjautuu vain Microsoftilla (se hylkää silloin pelkän salasanan ja pelkän pääsyavaimen) tai asetus poistetaan. Anna id ja sso_only (true tai false). Tilin on oltava sidottu, ja vähintään kahden muun ylläpitäjän on voitava yhä kirjautua paikallisesti toisella tekijällä. Päättää tilin istunnot"
+
+[labels.fi.model.sso_provider]
+name = "Microsoft-kirjautuminen"
+description = "Microsoft Entra -vuokraaja, jolla henkilöt kirjautuvat: yksi vuokraaja, lukittu sen tunnuksella. Vain ylläpitäjät muuttavat sitä, ei koskaan agentti"
+
+[labels.fi.model.sso_provider.field.tenant]
+label = "Vuokraaja"
+description = "Vuokraajan tunnus (GUID), jota vasten jokainen Microsoft-kirjautuminen tarkistetaan"
+
+[labels.fi.model.sso_provider.field.client_id]
+label = "Asiakastunnus"
+description = "Sovellusrekisteröinnin sovellustunnus (asiakastunnus) tässä vuokraajassa"
+
+[labels.fi.model.sso_provider.field.client_secret]
+label = "Asiakassalaisuus"
+description = "Komennon configure syöte: sovellusrekisteröinnin asiakassalaisuus, tallennettuna sinetöitynä palvelimen salaisuudella. Ei koskaan näytetä"
+
+[labels.fi.model.sso_provider.field.enabled]
+label = "Käytössä"
+description = "Tarjoaako kirjautumissivu vaihtoehtoa ”Kirjaudu Microsoftilla”"
+
+[labels.fi.model.sso_provider.field.secret_set]
+label = "Salaisuus tallennettu"
+description = "Onko asiakassalaisuus tallennettu"
+
+[labels.fi.model.sso_provider.field.modified_at]
+label = "Muutettu"
+description = "Milloin asetukset muutettiin viimeksi"
+
+[labels.fi.model.sso_provider.field.last_editor]
+label = "Viimeksi muuttanut"
+description = "Kuka muutti viimeksi"
+
+[labels.fi.model.sso_provider.field.break_glass]
+label = "Varaylläpitäjät"
+description = "Ylläpitäjät, jotka kirjautuvat paikallisesti salasanalla ja toisella tekijällä (tie sisään, kun Microsoftia ei tavoiteta), pilkuilla erotettuina"
+
+[labels.fi.model.sso_provider.field.break_glass_enough]
+label = "Varaylläpitäjiä riittävästi"
+description = "Onko heitä tarpeeksi (vähintään kaksi), jotta tili voi kirjautua vain Microsoftilla"
+
+[labels.fi.model.sso_provider.action.configure]
+label = "Määritä"
+description = "Aseta Microsoft Entra -vuokraaja, jolla henkilöt kirjautuvat. Anna tenant (vuokraajan tunnus, GUID; common, organizations ja consumers hylätään), client_id (sovellusrekisteröinnin sovellustunnus) ja ensimmäisellä kerralla client_secret; enabled on oletuksena true. Tilit sidotaan komennolla user_account.bind_sso. Hylätään agenteilta"
+
+[labels.fi.model.sso_provider.action.clear]
+label = "Poista"
+description = "Poista Microsoft-kirjautumisen asetukset. Sidokset säilyvät. Vain Microsoftilla kirjautuvat tilit pääsevät silloin sisään vain ylläpitäjien kautta, joilla on salasana ja toinen tekijä. Hylätään agenteilta"

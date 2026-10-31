@@ -3,13 +3,14 @@
 //! handlers call the identity provider (`Authenticator::sso`), which holds the rules and seals
 //! the client secret.
 //!
-//! `configure` and `clear` are not offered on the MCP surface and are refused for an agent on any
-//! other: they carry a client secret and decide who may sign in. Binding an account and making it SSO-only are commands of
+//! `configure` and `clear` are refused for an agent, also as an approved proposal: they carry a
+//! client secret and decide who may sign in. (D41 puts a command on every surface or on none, so
+//! they are listed to agents and refuse when they run.) Binding an account and making it SSO-only are commands of
 //! `user_account` (an agent can propose them; a person decides).
 
 use crate::accounts::{acting, input, s, text};
 use obop_commands::{ADMIN_GROUP, Authenticator, Dispatcher, SsoApi, SsoError, Value};
-use obop_registry::{CommandDef, FieldDef, FieldKind, ModelDef, Surfaces};
+use obop_registry::{CommandDef, FieldDef, FieldKind, ModelDef};
 use obop_types::DataClass;
 use std::sync::{Arc, Weak};
 
@@ -17,24 +18,18 @@ use std::sync::{Arc, Weak};
 pub fn sso_provider_model() -> ModelDef {
     let f =
         |name, description| FieldDef::new(name, description, DataClass::None, false, ADMIN_GROUP);
-    // A person at the console or an HTTP client, never an agent: the secret does not travel there.
-    let no_agents = Surfaces {
-        rest: true,
-        mcp: false,
-        cli: true,
-    };
-    let mut configure = CommandDef::new(
+    // D41 puts a command on every surface or on none, so these two cannot be hidden from the MCP
+    // tool list; they refuse an agent (and the proposal of one) when they run.
+    let configure = CommandDef::new(
         "configure",
         "Set the Microsoft Entra tenant people sign in with. Give tenant (the tenant id, a GUID; common, organizations and consumers are refused), client_id (the application id of the app registration) and, the first time, client_secret; enabled defaults to true. Accounts are bound with user_account.bind_sso. Refused for agents",
         ADMIN_GROUP,
     );
-    configure.surfaces = no_agents;
-    let mut clear = CommandDef::new(
+    let clear = CommandDef::new(
         "clear",
         "Remove the Microsoft sign-in configuration. Bindings stay. Accounts that sign in with Microsoft only can then sign in only through the administrators who keep a password and a second factor. Refused for agents",
         ADMIN_GROUP,
     );
-    clear.surfaces = no_agents;
     ModelDef {
         name: "sso_provider",
         description: "The Microsoft Entra tenant people sign in with: one tenant, pinned by its id. Changed only by administrators, never by an agent",
@@ -53,8 +48,8 @@ pub fn sso_provider_model() -> ModelDef {
             ),
             f("enabled", "Whether the sign-in page offers Sign in with Microsoft").kind(FieldKind::Bool),
             f("secret_set", "Whether a client secret is stored").kind(FieldKind::Bool),
-            f("updated_at", "When the configuration was last changed"),
-            f("updated_by", "Who changed it last"),
+            f("modified_at", "When the configuration was last changed"),
+            f("last_editor", "Who changed it last"),
             f("break_glass", "The administrators who sign in locally with a password and a second factor (the way in when Microsoft cannot be reached), separated by commas"),
             f("break_glass_enough", "Whether there are enough of them (at least two) to make an account sign in with Microsoft only").kind(FieldKind::Bool),
         ],

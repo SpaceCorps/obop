@@ -1,15 +1,44 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { LanguageSelect, TwoFactorStep, t, twoFactorMessage, useI18n, type Factor } from "@obop/ui";
-import { login, loginMfa } from "./api.ts";
+import {
+  SSO_START,
+  login,
+  loginMfa,
+  ssoEnabled,
+  ssoExchange,
+  takeSsoReturn,
+  type SsoErrorWord,
+} from "./api.ts";
 import { passkeyMessage } from "./Passkeys.tsx";
 import { passkeysSupported, signInWithPasskey } from "./passkeys.ts";
 import { storageFaultMessage } from "./serverMessage.ts";
 import { Button, Icon, Input, Logo, Notice } from "./ui.tsx";
 
 /**
+ * What the person is told when the sign-in with Microsoft did not go through (D91). Four words
+ * come back from the server and nothing else: the reason is in the security log, not here.
+ */
+function ssoMessage(word: SsoErrorWord): string {
+  switch (word) {
+    case "cancelled":
+      return t("The sign-in with Microsoft was cancelled.");
+    case "unavailable":
+      return t("Sign-in with Microsoft is not available right now. Try again in a few minutes.");
+    case "busy":
+      return t("Too many attempts. Wait a minute and try again.");
+    default:
+      return t(
+        "The sign-in with Microsoft could not be completed. If it keeps happening, ask your administrator.",
+      );
+  }
+}
+
+/**
  * Sign in. A person with two-factor authentication on sees a second step after the password
  * (D53): the code from their app, a recovery code or a passkey (D65). A person who allowed it can
- * also sign in with a passkey alone.
+ * also sign in with a passkey alone, and where an administrator set it up, with Microsoft (D91):
+ * the button leaves for the server, which sends the browser to Microsoft and back with a one-time
+ * code that is exchanged here for the same answer the password gives.
  */
 export function SignIn({
   onDone,
@@ -23,7 +52,37 @@ export function SignIn({
     null,
   );
   const [asking, setAsking] = useState(false);
+  const [microsoft, setMicrosoft] = useState(false);
   const i18n = useI18n();
+
+  // The button is shown only where an administrator turned the sign-in on.
+  useEffect(() => {
+    let live = true;
+    void ssoEnabled().then((on) => live && setMicrosoft(on));
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  // Back from Microsoft: the address carried a one-time code or one word about what went wrong.
+  useEffect(() => {
+    const back = takeSsoReturn();
+    if (!back) return;
+    if ("error" in back) {
+      setError(ssoMessage(back.error));
+      return;
+    }
+    setBusy(true);
+    void ssoExchange(back.code).then((r) => {
+      setBusy(false);
+      if (r.kind === "session") onDone(r.token, r.user ?? "", r.enrolment);
+      else if (r.kind === "mfa")
+        setStep({ mfaToken: r.mfaToken, user: r.user ?? "", methods: r.methods });
+      else if (r.status === 429) setError(ssoMessage("busy"));
+      else if (r.status === 0 || r.status >= 500) setError(ssoMessage("unavailable"));
+      else setError(ssoMessage("failed"));
+    });
+  }, [onDone]);
 
   async function password(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -162,6 +221,11 @@ export function SignIn({
           {passkeysSupported() && (
             <Button icon="key" size="lg" loading={asking} onClick={() => void passwordless()}>
               {t("Sign in with a passkey")}
+            </Button>
+          )}
+          {microsoft && (
+            <Button icon="shield-check" size="lg" onClick={() => location.assign(SSO_START)}>
+              {t("Sign in with Microsoft")}
             </Button>
           )}
           <LanguageSelect value={i18n.lang} onChange={(l) => void i18n.setLanguage(l)} />
