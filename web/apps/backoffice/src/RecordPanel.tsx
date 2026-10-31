@@ -290,7 +290,7 @@ export function RecordPanel({
     return out.map((r) =>
       (models.get(r.title)?.size ?? 0) > 1 ? { ...r, title: `${r.app}: ${r.title}` } : r,
     );
-  }, [d.models, model.name]);
+  }, [d.models, model.name, d.lang]);
 
   return (
     <>
