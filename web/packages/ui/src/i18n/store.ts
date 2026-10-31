@@ -187,11 +187,18 @@ export async function initI18n(opts: { loaders: Loaders[]; doc?: PageDocument })
   if (!own) writeCookie(S.lang);
 }
 
-async function activate(lang: Lang) {
+/**
+ * Make `lang` the active language and tell the subscribers. `persist` runs after the catalogue has
+ * loaded and the state is set but before the subscribers are told: they read the person's saved
+ * choice (`personalLang()`, in `useI18n()`) while they render, so it has to be saved by then. A
+ * language whose catalogue fails to load throws before `persist`, so it is never saved.
+ */
+async function activate(lang: Lang, persist?: () => void) {
   const messages = await loadCatalogue(lang);
   S.lang = lang;
   S.messages = messages;
   applyDocument();
+  persist?.();
   emit();
 }
 
@@ -202,11 +209,15 @@ export function provideCatalogue(lang: Lang, messages: Catalogue) {
 
 /** The person chooses a language: loaded, applied, remembered and sent to the server as a cookie. */
 export async function setLanguage(lang: Lang, persist = true): Promise<void> {
-  await activate(lang);
-  if (persist && !isPseudo(lang)) {
-    lsSet(LS_LANG, lang);
-    writeCookie(lang);
-  }
+  await activate(
+    lang,
+    persist && !isPseudo(lang)
+      ? () => {
+          lsSet(LS_LANG, lang);
+          writeCookie(lang);
+        }
+      : undefined,
+  );
 }
 
 /** Forget the personal choice; the instance default or the browser decides again. */

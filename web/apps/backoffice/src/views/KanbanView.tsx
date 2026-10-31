@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
-import { fmt as fmtLocale, inSentence, t } from "@obop/ui";
+import { fmt as fmtLocale, inSentence, t, useI18n } from "@obop/ui";
 import { search, type FieldMeta, type Row, type ServerFilter } from "../api.ts";
 import { Cell } from "../fields.tsx";
 import { labelField, useData } from "../data.tsx";
@@ -69,7 +69,9 @@ type ColumnState = { rows: Row[]; total: number; loading: boolean; error?: strin
 /**
  * The cards of each column from `<model>.search`, one page per column (D4): a column asks for its
  * first cards and again for more when "Load more" raises its limit. Columns refetch after any
- * write or when the search changes; the cards already shown stay until the new ones arrive.
+ * write, when the search changes and, when the cards are sorted, when the locale changes (the
+ * server sorts them in the collation of the locale it is told); the cards already shown stay until
+ * the new ones arrive.
  */
 function useColumnCards(opts: {
   enabled: boolean;
@@ -82,11 +84,22 @@ function useColumnCards(opts: {
   limits: Record<string, number>;
 }) {
   const d = useData();
+  const { locale } = useI18n();
   const { enabled, model, base, order, field, keys, folded, limits } = opts;
   const [cols, setCols] = useState<Record<string, ColumnState>>({});
   const seen = useRef(new Map<string, string>());
   const seq = useRef(0);
-  const baseSig = JSON.stringify([model, base, order, field?.name, d.mutations]);
+  // Every request carries `?lang=` and `Accept-Language`, but the `lang` in the body of a search,
+  // which picks the collation, is sent only with an `order` (api.ts): the locale is part of the
+  // query for sorted cards and for nothing else.
+  const baseSig = JSON.stringify([
+    model,
+    base,
+    order,
+    field?.name,
+    d.mutations,
+    order.length ? locale : null,
+  ]);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
