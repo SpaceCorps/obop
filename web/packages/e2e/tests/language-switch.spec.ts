@@ -463,7 +463,7 @@ test.describe("a record panel that stays open while the language changes", () =>
       title: "Open data",
       fields: [{ name: "title", required: true }, { name: "note" }],
     });
-    const open = await api.create("root", model, { title: "Ärger" });
+    await api.create("root", model, { title: "Ärger" });
     const others = [
       "Apfel",
       ...Array.from({ length: 28 }, (_, i) => `Item ${String(i + 1).padStart(2, "0")}`),
@@ -473,10 +473,14 @@ test.describe("a record panel that stays open while the language changes", () =>
     // Swedish (Ä sorts after Z), so the new first page does not hold it.
     await page.addInitScript(() => localStorage.setItem("obop-pagesize", "25"));
     const sorted = encodeURIComponent(JSON.stringify({ s: { f: "title", dir: "asc" } }));
-    await signIn("root", `/${model}/${model}?view=list&st=${sorted}&id=${open.id}`);
+    await signIn("root", `/${model}/${model}?view=list&st=${sorted}`);
     const titles = page.locator("table.list tbody tr td:nth-child(2)");
     await expect(titles).toHaveCount(25);
     await expect(titles.nth(1)).toHaveText("Ärger");
+    // Opened from the list, as a person does: the record is known from the list's page only, and
+    // was never fetched on its own, so nothing else keeps it when the page no longer has it.
+    await titles.nth(1).click();
+    await expect(panelOf(page).locator("h2")).toHaveText("Ärger");
     const note = page.locator(`#f-${model}-note`);
     await note.fill("not saved yet");
 
