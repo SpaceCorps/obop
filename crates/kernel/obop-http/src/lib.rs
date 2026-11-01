@@ -19,6 +19,7 @@ pub mod blobs;
 pub mod community;
 pub mod connectors;
 pub mod cors;
+pub mod drive;
 pub mod mcp;
 pub mod mfa;
 pub mod oauth;
@@ -48,6 +49,9 @@ pub struct HttpState {
     connectors: std::sync::OnceLock<Arc<obop_connectors::Runtime>>,
     /// The payment module's webhook door (`/hooks/pay/{provider}`), set by the composition root.
     payments: std::sync::OnceLock<Arc<dyn obop_commands::PaymentHooks>>,
+    /// The Google Drive the back office may browse, set by the composition root when one is
+    /// connected (`OBOP_GDRIVE_BROWSE_REFRESH_TOKEN`).
+    drive: std::sync::OnceLock<Arc<dyn drive::DriveSource>>,
     /// Counters, caches and access rule of `/healthz`, `/readyz` and `/metrics` (D67).
     ops: ops::Ops,
     /// Browser origins allowed to call `/api` from another origin (D68); empty means none.
@@ -84,6 +88,7 @@ impl HttpState {
             shared,
             connectors: std::sync::OnceLock::new(),
             payments: std::sync::OnceLock::new(),
+            drive: std::sync::OnceLock::new(),
             ops: ops::Ops::new(),
             default_language: std::sync::OnceLock::new(),
         })
@@ -136,6 +141,11 @@ impl HttpState {
     /// Serve the payment providers' webhook door.
     pub fn set_payments(&self, hooks: Arc<dyn obop_commands::PaymentHooks>) {
         let _ = self.payments.set(hooks);
+    }
+
+    /// Let the back office browse a Google Drive and import files from it.
+    pub fn set_drive(&self, source: Arc<dyn drive::DriveSource>) {
+        let _ = self.drive.set(source);
     }
 
     /// Serve the connectors' public doors (`/hooks/in/{id}`, `/oauth/callback`).
@@ -276,6 +286,9 @@ pub(crate) fn api_routes(state: Arc<HttpState>) -> Router {
             post(blobs::upload).layer(axum::extract::DefaultBodyLimit::disable()),
         )
         .route("/api/blobs/{id}", get(blobs::download))
+        .route("/api/drive/status", get(drive::status))
+        .route("/api/drive/files", get(drive::files))
+        .route("/api/drive/import", post(drive::import))
         .route("/api/{model}/{command}", post(call))
         .route("/mcp", any(mcp::endpoint))
         .route("/mcp/server-card", get(mcp::server_card_canonical))
