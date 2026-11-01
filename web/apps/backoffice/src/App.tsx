@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { setInstanceDefaults, t } from "@obop/ui";
+import { describeFor, setInstanceDefaults, t, useI18n } from "@obop/ui";
 import {
   discardSsoReturn,
   loadSettings,
@@ -182,7 +182,13 @@ export function App() {
   const isAdmin = modules.some(
     (m) => m.id === "platform" && m.models.some((x) => x.name === "module"),
   );
-  const apps = useMemo(() => buildApps(modules, settings, isAdmin), [modules, settings, isAdmin]);
+  // The names of the apps and their order are translated and sorted when the list is built, so it is
+  // built again when the language or the region changes (the root renders again, but a memo keeps its value).
+  const { lang, locale } = useI18n();
+  const apps = useMemo(
+    () => buildApps(modules, settings, isAdmin),
+    [modules, settings, isAdmin, lang, locale],
+  );
   const app = apps.find((a) => a.id === route.app);
   // Everyone may set their own theme and read the brand book; the rest of Customize is for admins.
   const personalCustomize =
@@ -347,7 +353,7 @@ export function App() {
                       key={m.name}
                       href={href({ app: app.id, model: m.name })}
                       aria-current={!onBoard && model?.name === m.name ? "page" : undefined}
-                      title={m.description}
+                      title={describeFor(m)}
                     >
                       {modelTitle(m, app.module.id)}
                     </a>

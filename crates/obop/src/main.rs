@@ -203,6 +203,12 @@ const USAGE: &str = "usage: obop <command>
   storage check [--db URL] [--plane NAME] [--strict]
                                                 WAL archiving, TLS and durability settings of the PostgreSQL host; age of the last
                                                 verified backup, its off-host copy and its drill; the storage-encryption attestation
+  storage drive-authorize [--scope drive.file|drive]
+                                                get the refresh token for uploaded files on Google Drive (OBOP_GDRIVE_CLIENT_ID and
+                                                OBOP_GDRIVE_CLIENT_SECRET set): prints a link, waits for the browser on a loopback
+                                                port, prints the token once (OBOP_BLOB_STORE=gdrive://FOLDER_ID, docs/DEPLOY.md)
+  storage drive-folder NAME [--parent ID]       create the Drive folder for uploaded files (as this app, which the drive.file scope
+                                                can use) and print its id
   storage attest --host H --provider P --mechanism M --custody C --readers R --evidence E [--plane NAME] [--by WHO]
   storage show                                  record that the storage of a plane is encrypted at rest (AES-256 or stronger, keys
                                                 held outside the reach of database operators): an attestation by a person (--by, default

@@ -81,6 +81,8 @@ Command line flags win over variables. Secrets are set as secret environment var
 | `OBOP_MCP_RATE_PER_MINUTE` | Requests per token per minute on `/mcp`, counted across all processes (default 600; `0` is off). |
 | `OBOP_TRUST_PROXY`, `OBOP_PUBLIC_SITE`, `OBOP_ADMIN_PREFIX` | Public site settings (`--trust-proxy`, `--public-site`, `--admin-prefix`). Behind a proxy set `OBOP_TRUST_PROXY=1`, or every visitor shares the proxy's address in the rate limits. |
 | `OBOP_MARKETPLACE_URL` | An extra module catalogue. |
+| `OBOP_BLOB_STORE`, `OBOP_BLOB_DIR` | Where uploaded pictures and files keep their bytes (D60): `gdrive://<FOLDER_ID>` for a Google Drive folder, or a directory. Set one of them, not both (the server refuses to start); with neither the bytes sit beside a SQLite file or in the database. See "File storage". |
+| `OBOP_GDRIVE_CLIENT_ID`, `OBOP_GDRIVE_CLIENT_SECRET`, `OBOP_GDRIVE_REFRESH_TOKEN` | The Google OAuth client and the refresh token that `OBOP_BLOB_STORE=gdrive://...` acts with. Secrets: on Sliplane `--secret-env`. |
 | `OBOP_CONNECTORS_ALLOW_LOOPBACK` | `1` lets connections reach loopback addresses. Tests only. |
 | `OBOP_OIDC_TEST_AUTHORITY` | `http://127.0.0.1:PORT` (or `[::1]`) makes the Microsoft sign-in (D91) talk to a stand-in at that address instead of `https://login.microsoftonline.com`. Tests only: it is honoured only together with `OBOP_CONNECTORS_ALLOW_LOOPBACK=1` (or `true`); without that it is ignored and a line is printed on standard error, and so it is for a value that is not such a loopback address (an empty value and Microsoft's own address are ignored without a line); a warning is printed when it is accepted. While it is set, the checklist of `egress_policy.checklist` (CONNECTORS.md) carries a warning. Never set it on an instance people use: the bindings made under it carry the stand-in's address, not Microsoft's. |
 | `OBOP_TOKEN` | The bearer token for `obop mcp`, `obop call`, `obop commands`. |
@@ -380,6 +382,53 @@ A native mobile app signs in through the same authorization server as an MCP cli
 - **What the operator sees.** `security_event` records `device_registered` (device, platform, version, app), `device_renamed`, `device_revoked`, `device_limit` and the `oauth_*` events of the family. The entry of `device_revoked` names **who ended the device** as its actor (the person, the administrator, or for an approved proposal the person who approved it, with the agent that proposed it in the text), and what ended it in the text (`revoked by ada`, `ended by password_change`, `ended by user_offboard`, or the cause of a reuse). Each device ended by a change of credentials is written before it is ended, so the entry is not lost when a later step is refused; a store that refused part of a request can make the entry appear twice after the repeat, never zero times. None carries a token or a code. Devices and their families are in the backup like the other records; the sign-in of an app needs no `OBOP_SECRET_KEY`. `obop admin offboard` and the `user_account.offboard` summary print how many devices it ended (`revoked_devices`).
 - **What registering a mobile client can and cannot do.** Registration is open (as MCP clients expect) and the class is a label the client picks, so anyone can register a client that calls itself a mobile app. What that gets them is a client id and nothing else: no code is issued unless a person signs in on the instance's own page and ticks groups. A web address is not a possible redirect, so the page can never stand in front of a web site of the attacker's; the redirect is a scheme on the phone or a program on the computer. The groups it can ask for are the ones it declared, never one a phone may not have, and none is ticked unless the app named it; the person sees the name, the sentence about where the result goes and the groups, and can end the device afterwards. If a person is tricked into approving, the app that owns the scheme gets a token narrowed to the groups they ticked, for `/api` only, ended by revoking the device. It cannot get a code for another client or another redirect (the code is bound to both and to the PKCE verifier), widen beyond what the person holds and ticked, reach `/mcp`, the account routes, approvals or blobs, see, rename or end the person's other devices, hide from the Devices table, or outlive a revocation, a password change, a second factor turned off or an offboarding. What it does get is what a person's own session gets within the ticked groups: **no approval gate stops it and no field is masked** (the protections of D18, D42 and D40 are for AI agents), which is why the groups are the whole boundary and why the page offers so few. Another app on the phone that claims the genuine app's scheme receives the genuine app's code but cannot exchange it without the verifier that only the genuine app holds (RFC 8252 section 8.1); a scheme that is hijacked after the verifier is stolen by an app that can read the first app's process is not something the server can see. What remains is phishing by name: a convincing client name on a consent page that a careless person approves for a group that does matter. The defences are the ones of D64: the limits, the plain-text name beside the scheme, the declared groups, the person's consent, the device list and the log.
 - **Not verified.** The sign-in has been run with a software client in Rust (memory, SQLite and PostgreSQL) and over HTTP against the real router, and the browser pages in Chrome with a loopback redirect. It has not been run with a real app, a phone, `ASWebAuthenticationSession`, Custom Tabs or a private-use scheme in a real system browser, and the consent texts in the six other languages are machine-drafted. There is no push, and the limit of 20 devices has not been tried with real people.
+
+## File storage
+
+Uploaded pictures and files (D60) are stored as content-addressed blobs: the records about them stay in the database, the bytes go where `OBOP_BLOB_STORE` or `OBOP_BLOB_DIR` say.
+
+| Setting | Bytes go to |
+|---|---|
+| neither | the directory `<file>.blobs` beside a SQLite file; the database itself on PostgreSQL; memory for `memory:` |
+| `OBOP_BLOB_DIR=/path` | that directory (mount a volume) |
+| `OBOP_BLOB_STORE=gdrive://<FOLDER_ID>` | one file per blob in that Google Drive folder, named by the blob key |
+| both | **refused at start**: neither could be said to win |
+
+Backups carry the blobs as `blob` lines whichever store holds them (see "Backups"); `obop backup` and `obop restore` read and write through the configured store, so set the same variables for both. The restore drill always uses a scratch store of its own and never touches Drive.
+
+### Google Drive
+
+**Status:** implemented and tested against a fake Drive on a loopback port (`crates/kernel/obop-blob-gdrive`). It has **not** been run against the real Google service; try it with a test folder first.
+
+1. In the [Google Cloud Console](https://console.cloud.google.com/) create or pick a project, enable the **Google Drive API**, configure the OAuth consent screen (an internal or test-mode app for your own account is enough for one business), and create an **OAuth client ID** of type *Desktop app*. Note the client id and secret.
+2. Authorise once, on a machine with a browser:
+
+```bash
+OBOP_GDRIVE_CLIENT_ID=... OBOP_GDRIVE_CLIENT_SECRET=... obop storage drive-authorize
+```
+
+It prints a link, waits for the browser on a loopback port (`http://127.0.0.1:<port>`, PKCE S256), and prints the **refresh token** once on standard output. If Google sends none, remove the app at https://myaccount.google.com/permissions and run it again.
+3. Create the folder:
+
+```bash
+OBOP_GDRIVE_CLIENT_ID=... OBOP_GDRIVE_CLIENT_SECRET=... OBOP_GDRIVE_REFRESH_TOKEN=... obop storage drive-folder "SpaceCorps files"
+```
+
+It prints the folder id. The default scope is `drive.file`, which lets the app see **only files and folders it created itself**: a folder you made by hand in Drive is not visible to it (Drive answers 404). That is why obop creates the folder. To use an existing folder, authorise with `--scope drive` (every file in the account is then within reach of the token; use a dedicated Google account).
+4. Set the three credentials as secrets and the folder as a plain variable on the service, then redeploy. On Sliplane:
+
+```bash
+sliplane services set-env --project-id <project> --service-id <service> -a <account> --key OBOP_GDRIVE_CLIENT_SECRET --value <secret> --secret
+sliplane services set-env ... --key OBOP_GDRIVE_CLIENT_ID --value <id> --secret
+sliplane services set-env ... --key OBOP_GDRIVE_REFRESH_TOKEN --value <token> --secret
+sliplane services set-env ... --key OBOP_BLOB_STORE --value gdrive://<FOLDER_ID>
+```
+
+5. `obop storage check` reports `uploaded files` as reachable or failed (the folder must be visible with these credentials and not in the trash).
+
+How it behaves: the store mints short-lived access tokens from the refresh token itself and reuses them; a 401 refreshes once; 429, 5xx and Drive's rate-limit 403 are retried up to five times with a doubling pause, then the request fails with the last status; any other refusal fails at once with Drive's message. Credentials never appear in a URL, a log line or an error. Files are named by key (64 hex characters, thumbnails with `.w<width>`), so the folder is readable in Drive but meant to be left alone: deleting or renaming a file there loses that picture.
+
+Limits: whole files go up and down in memory (the upload size limits of D60 apply first), one request per blob, Drive's own quotas and per-user rate limits apply, a Drive folder has no per-business prefix (use one folder per instance), and the token of a Google Cloud project in *testing* status expires after seven days: publish the consent screen (internal) or the store starts failing with `invalid_grant`. A shared drive and Google Workspace data-region questions are not looked at. Per-app routing (different apps to different stores) and other providers (S3-compatible, OneDrive) are not built; they would be more implementations of the same `BlobBytes` trait.
 
 ## The server key
 

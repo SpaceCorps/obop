@@ -170,6 +170,7 @@ Not covered by this app: information duties toward data subjects (Articles 13 an
 - **Group snapshot.** A connection stores the owner's groups from the last time the owner changed it and narrows them to the user table at run time. A principal that is not in the user table (the fixed development tokens) keeps the snapshot.
 - **The inbound door's flood limit is a fixed window in the database,** shared by all processes; a burst at a window edge can pass twice the limit.
 - **The catalogue is small and mostly generic.** Two entries are definitions only, six are untested against the real service, and nothing was verified against a vendor's current terms.
+- **Google Drive file storage is a store, not a connector.** `OBOP_BLOB_STORE=gdrive://...` (docs/DEPLOY.md, "File storage") keeps uploaded files in a Drive folder; it does not go through the egress gate or the processing register, so the Drive account is a processor the operator must record themselves. Not tested against the real Google service.
 - **SQLite is outside the compliance claims** (D44): the guarantees that depend on the database exist on PostgreSQL deployments only.
 - **Inbound data subjects** are not informed by obop (Article 14); a connection that receives personal data from a third party leaves that to the owner.
 

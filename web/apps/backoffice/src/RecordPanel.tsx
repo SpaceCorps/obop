@@ -25,6 +25,13 @@ type Props = {
   onSaved: (id: string) => void;
 };
 
+const without = <V,>(m: Record<string, V>, name: string): Record<string, V> =>
+  Object.fromEntries(Object.entries(m).filter(([k]) => k !== name));
+
+/** The sentence of a failed check, or nothing when the value is fine. */
+const errorOf = (r: { value: unknown } | { error: string }): string | undefined =>
+  "error" in r ? r.error : undefined;
+
 /**
  * A smart button: the related records of one model, with their number from the server (D4), so
  * a related model with thousands of records is never loaded just to be counted.
@@ -96,8 +103,16 @@ export function RecordPanel({
   const d = useData();
   const creating = row === null;
   const [draft, setDraft] = useState<Record<string, Edit>>({});
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [error, setError] = useState<string | null>(null);
+  // What went wrong is kept as names and as the server's own words, and the sentence is written
+  // when it is drawn: text kept finished would stay in the language it was written in after a
+  // change of language (the panel keeps its state through one).
+  const [invalid, setInvalid] = useState<Record<string, true>>({}); // failed the check at Save
+  const [refused, setRefused] = useState<Record<string, string>>({}); // the server's words, by field
+  const [error, setError] = useState<{ raw: string } | null>(null); // the server's words, for the form
+  const clearField = (name: string) => {
+    setInvalid((m) => without(m, name));
+    setRefused((m) => without(m, name));
+  };
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const panel = useRef<HTMLElement>(null);
@@ -165,9 +180,9 @@ export function RecordPanel({
     const f = message.startsWith(prefix)
       ? fields.find((x) => message.startsWith(`${prefix}${x.name} `))
       : undefined;
-    // The server's English is matched first, then shown in the person's language.
-    if (f) setErrors((e) => ({ ...e, [f.name]: serverMessage(message) }));
-    else setError(serverMessage(message));
+    // The server's English is matched first, then shown in the person's language (when drawn).
+    if (f) setRefused((e) => ({ ...e, [f.name]: message }));
+    else setError({ raw: message });
   }
 
   async function save() {
@@ -181,7 +196,8 @@ export function RecordPanel({
       // A value left as stored is not held to limits lowered since it was written (D90).
       (f) => !creating && !changed(f),
     );
-    setErrors(errs);
+    setInvalid(Object.fromEntries(Object.keys(errs).map((name) => [name, true as const])));
+    setRefused({});
     if (Object.keys(errs).length) return d.notify(t("Fix the highlighted fields first"), "error");
     const body: Record<string, unknown> = {};
     for (const f of editable) {
@@ -239,7 +255,7 @@ export function RecordPanel({
     } else if (out.kind === "approval") d.notify(out.message, "info");
     else {
       // The server's own words (D48), also inline so they stay readable.
-      setError(out.message);
+      setError({ raw: out.raw });
       d.notify(out.message, "error");
     }
   }
@@ -263,7 +279,7 @@ export function RecordPanel({
       );
     else {
       const message = serverMessage(r.message);
-      setError(message);
+      setError({ raw: r.message });
       d.notify(
         needsApproval ? t("{name} was refused: {reason}", { name, reason: message }) : message,
         "error",
@@ -290,7 +306,7 @@ export function RecordPanel({
     return out.map((r) =>
       (models.get(r.title)?.size ?? 0) > 1 ? { ...r, title: `${r.app}: ${r.title}` } : r,
     );
-  }, [d.models, model.name]);
+  }, [d.models, model.name, d.lang]);
 
   return (
     <>
@@ -471,7 +487,11 @@ export function RecordPanel({
             .map((f) => {
               const isMasked_ = masked(f);
               const fid = `f-${model.name}-${f.name}`;
-              const err = errors[f.name];
+              const err = invalid[f.name]
+                ? errorOf(fromEdit(f, value(f), currency, !creating && !changed(f)))
+                : refused[f.name] !== undefined
+                  ? serverMessage(refused[f.name]!)
+                  : undefined;
               return (
                 <div key={f.name} className={`field${f.kind === "bool" ? " inline" : ""}`}>
                   <label className="flabel" htmlFor={fid}>
@@ -550,7 +570,7 @@ export function RecordPanel({
                           );
                         else if (out.kind === "approval") d.notify(out.message, "info");
                         else {
-                          setError(out.message);
+                          setError({ raw: out.raw });
                           d.notify(out.message, "error");
                         }
                       }}
@@ -574,7 +594,7 @@ export function RecordPanel({
                       unchanged={!creating && !changed(f)}
                       onChange={(v) => {
                         setDraft({ ...draft, [f.name]: v });
-                        if (err) setErrors({ ...errors, [f.name]: "" });
+                        if (err) clearField(f.name);
                       }}
                     />
                   )}
@@ -611,7 +631,7 @@ export function RecordPanel({
           )}
           {error && (
             <p role="alert" className="error banner">
-              {error}
+              {serverMessage(error.raw)}
             </p>
           )}
           <footer className="formbar">
@@ -627,7 +647,8 @@ export function RecordPanel({
               onClick={() => {
                 if (dirty) {
                   setDraft({});
-                  setErrors({});
+                  setInvalid({});
+                  setRefused({});
                   setError(null);
                 } else onClose();
               }}

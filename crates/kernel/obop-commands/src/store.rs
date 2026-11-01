@@ -33,13 +33,13 @@ impl Store {
         Self::open("memory:").expect("memory backend")
     }
 
-    /// Open `memory:`, `sqlite://PATH` or `postgres://...`. Blob bytes go to `OBOP_BLOB_DIR` when
-    /// set, else beside a SQLite file (`<file>.blobs`), else into the database (PostgreSQL), or
-    /// memory for an in-memory database (D60).
+    /// Open `memory:`, `sqlite://PATH` or `postgres://...`. Blob bytes go to `OBOP_BLOB_STORE`
+    /// (`gdrive://<folder id>`) or `OBOP_BLOB_DIR` when set (not both), else beside a SQLite file
+    /// (`<file>.blobs`), else into the database (PostgreSQL), or memory for an in-memory
+    /// database (D60).
     pub fn open(url: &str) -> Result<Self, String> {
         let backend = obop_storage::open(url)?;
-        let dir = std::env::var("OBOP_BLOB_DIR").ok();
-        let bytes = obop_storage::blob::open_bytes(url, dir.as_deref())?;
+        let bytes = obop_blob_gdrive::open_configured(url)?;
         Ok(Self {
             blobs: Arc::new(Catalog::new(backend.clone(), bytes)),
             backend,

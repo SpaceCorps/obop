@@ -1262,6 +1262,7 @@ dependencies = [
  "invoicing",
  "mileage",
  "obop-auth",
+ "obop-blob-gdrive",
  "obop-commands",
  "obop-community",
  "obop-connectors",
@@ -1309,11 +1310,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "obop-blob-gdrive"
+version = "0.2.1"
+dependencies = [
+ "base64 0.22.1",
+ "getrandom 0.4.3",
+ "obop-storage",
+ "serde_json",
+ "sha2",
+ "ureq",
+ "url",
+]
+
+[[package]]
 name = "obop-commands"
 version = "0.2.1"
 dependencies = [
  "icu_collator",
  "icu_locale",
+ "obop-blob-gdrive",
  "obop-keys",
  "obop-masking",
  "obop-media",
