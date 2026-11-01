@@ -49,8 +49,11 @@ fn random_b64(n: usize) -> Result<String> {
 
 /// Run the flow. `show` receives the link the operator must open; the refresh token comes back.
 pub fn authorize(opts: &AuthorizeOptions, show: &mut dyn FnMut(&str)) -> Result<String> {
-    if !matches!(opts.scope.as_str(), "drive.file" | "drive") {
-        return Err("--scope must be drive.file or drive".into());
+    if !matches!(
+        opts.scope.as_str(),
+        "drive.file" | "drive" | "drive.readonly"
+    ) {
+        return Err("--scope must be drive.file, drive.readonly or drive".into());
     }
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).map_err(|e| e.to_string())?;
     listener.set_nonblocking(true).map_err(|e| e.to_string())?;

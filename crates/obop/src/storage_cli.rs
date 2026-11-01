@@ -214,6 +214,22 @@ pub fn storage_cmd(args: &mut Vec<String>) -> Exit {
                     worst = Level::Fail;
                 }
             }
+            // The Drive browser, when `OBOP_GDRIVE_BROWSE_REFRESH_TOKEN` is set.
+            match obop_blob_gdrive::DriveBrowser::from_env().and_then(|b| match b {
+                Some(b) => b.probe().map(Some),
+                None => Ok(None),
+            }) {
+                Ok(None) => {}
+                Ok(Some(who)) => println!(
+                    "{:>5}  {:<22} Google Drive browser signs in as {who}",
+                    Level::Pass.as_str(),
+                    "drive browser"
+                ),
+                Err(e) => {
+                    println!("{:>5}  {:<22} {e}", Level::Fail.as_str(), "drive browser");
+                    worst = Level::Fail;
+                }
+            }
             println!(
                 "{}",
                 match worst {
@@ -255,7 +271,12 @@ Waiting for the browser (5 minutes)..."
                 );
             })
             .map_err(|e| fail(&format!("error: {e}")))?;
-            eprintln!("Set this as the secret OBOP_GDRIVE_REFRESH_TOKEN (it is shown once):");
+            let var_name = if scope == "drive.readonly" {
+                "OBOP_GDRIVE_BROWSE_REFRESH_TOKEN"
+            } else {
+                "OBOP_GDRIVE_REFRESH_TOKEN"
+            };
+            eprintln!("Set this as the secret {var_name} (it is shown once):");
             println!("{token}");
             Ok(())
         }

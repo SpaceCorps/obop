@@ -1982,5 +1982,15 @@
   "You will no longer be able to sign in with it. Your other sessions are signed out.": "Sie können sich damit nicht mehr anmelden. Ihre anderen Sitzungen werden abgemeldet.",
   "Your passkeys": "Ihre Passkeys",
   "Your second step: touch or unlock the passkey.": "Ihr zweiter Schritt: Passkey berühren oder entsperren.",
+  "Add a document from Google Drive": "Dokument aus Google Drive hinzufügen",
+  "Folders": "Ordner",
+  "From Google Drive": "Aus Google Drive",
+  "Google Docs, Sheets and Slides come in as PDF. Files up to the size the document field allows; nothing is changed in Drive.": "Google Docs, Tabellen und Folien werden als PDF übernommen. Dateien bis zu der Größe, die das Dokumentfeld erlaubt; in Drive wird nichts geändert.",
+  "Modified": "Geändert",
+  "My Drive": "Mein Drive",
+  "Search": "Suchen",
+  "Search by name": "Nach Namen suchen",
+  "Show more": "Mehr anzeigen",
+  "Size": "Größe",
   "Going to Microsoft": "Weiter zu Microsoft"
 }

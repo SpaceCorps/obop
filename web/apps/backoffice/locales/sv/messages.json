@@ -1982,5 +1982,15 @@
   "You will no longer be able to sign in with it. Your other sessions are signed out.": "Du kan inte längre logga in med den. Dina andra sessioner loggas ut.",
   "Your passkeys": "Dina passkeys",
   "Your second step: touch or unlock the passkey.": "Ditt andra steg: tryck på eller lås upp passkeyn.",
+  "Add a document from Google Drive": "Lägg till ett dokument från Google Drive",
+  "Folders": "Mappar",
+  "From Google Drive": "Från Google Drive",
+  "Google Docs, Sheets and Slides come in as PDF. Files up to the size the document field allows; nothing is changed in Drive.": "Google Dokument, Kalkylark och Presentationer hämtas som PDF. Filer upp till den storlek som dokumentfältet tillåter; inget ändras i Drive.",
+  "Modified": "Ändrad",
+  "My Drive": "Min enhet",
+  "Search": "Sök",
+  "Search by name": "Sök efter namn",
+  "Show more": "Visa fler",
+  "Size": "Storlek",
   "Going to Microsoft": "Går till Microsoft"
 }
