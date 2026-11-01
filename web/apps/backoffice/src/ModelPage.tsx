@@ -109,6 +109,9 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
   // the filter is expressible. Anything else (an any-field search, a "contains" on a select, grouping
   // the list, a sort by a ref) loads the records, up to 5,000, and works in the browser. See
   // serverQuery.ts.
+  // i18n-memo-ok: a range bound is read the same in every language and region (a dot or a comma is
+  // taken as the decimal mark); the only reader of the i18n store is fmt.exponent(), the digits of
+  // the instance currency, which a change of language or region does not change
   const plan = useMemo(() => toServer(state, fields), [state, fields]);
   const grouped = state.group.length > 0;
   const serverMode = view === "list" && onServer(plan, state);

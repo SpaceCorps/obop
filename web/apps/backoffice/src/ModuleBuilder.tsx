@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { msg, t } from "@obop/ui";
+import { msg, t, useI18n } from "@obop/ui";
 import { call, getCoreVersion, type Kind, type ModuleMeta } from "./api.ts";
 import { label as labelOf } from "./format.ts";
 import { appTitle, modelTitle } from "./labels.ts";
@@ -174,6 +174,7 @@ export function manifest(
 }
 
 export function BuildTab({ token, modules, onModulesChanged, notify }: Props) {
+  const { lang } = useI18n();
   const [name, setName] = useState(() => t("Fleet check"));
   const [modelName, setModelName] = useState(() => t("Inspection"));
   const [fields, setFields] = useState<DField[]>(() => [
@@ -201,7 +202,7 @@ export function BuildTab({ token, modules, onModulesChanged, notify }: Props) {
             text: `${appTitle(m)}: ${modelTitle(x, m.id)}`,
           })),
         ),
-    [modules],
+    [modules, lang],
   );
   // The versions of what is installed, so the ranges the module declares start from what it was
   // built against: the core's series, and for each module it links to, `^<installed version>`.

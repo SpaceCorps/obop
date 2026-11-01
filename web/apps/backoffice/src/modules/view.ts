@@ -104,6 +104,7 @@ export function useModulesView(opts: {
     return null;
   }, [route.id, route.tab, data.installed, data.market]);
 
+  // i18n-memo-ok: the texts are made when a button is pressed, by the handlers this memo returns
   const actions: CardActions = useMemo(
     () => ({
       onInstall: (r) =>
