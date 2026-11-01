@@ -1967,5 +1967,15 @@
   "Verifies you": "Tunnistaa sinut",
   "You will no longer be able to sign in with it. Your other sessions are signed out.": "Et voi enää kirjautua sillä. Muut istuntosi kirjataan ulos.",
   "Your passkeys": "Pääsyavaimesi",
-  "Your second step: touch or unlock the passkey.": "Toinen vaiheesi: kosketa tai avaa pääsyavain."
+  "Your second step: touch or unlock the passkey.": "Toinen vaiheesi: kosketa tai avaa pääsyavain.",
+  "Add a document from Google Drive": "Lisää asiakirja Google Drivestä",
+  "Folders": "Kansiot",
+  "From Google Drive": "Google Drivestä",
+  "Google Docs, Sheets and Slides come in as PDF. Files up to the size the document field allows; nothing is changed in Drive.": "Google Docs-, Sheets- ja Slides-tiedostot tuodaan PDF-muodossa. Tiedostot asiakirjakentän sallimaan kokoon asti; Drivessa ei muuteta mitään.",
+  "Modified": "Muokattu",
+  "My Drive": "Oma Drive",
+  "Search": "Hae",
+  "Search by name": "Hae nimellä",
+  "Show more": "Näytä lisää",
+  "Size": "Koko"
 }

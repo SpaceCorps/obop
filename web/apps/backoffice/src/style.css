@@ -735,3 +735,28 @@
 .kmore {
   align-self: center;
 }
+
+/* ---------- Drive browser ---------- */
+.drive-search {
+  display: flex;
+  align-items: end;
+  gap: 0.5rem;
+}
+.drive-search > :first-child {
+  flex: 1;
+}
+.drive-trail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.15rem;
+  color: var(--text-muted);
+}
+.drive-trail > span {
+  display: inline-flex;
+  align-items: center;
+}
+.drive-actions {
+  text-align: end;
+  white-space: nowrap;
+}
