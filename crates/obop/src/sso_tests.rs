@@ -882,8 +882,8 @@ async fn flow_round_trip_ends_in_a_bearer_token_and_keeps_nothing_of_the_provide
     w.assert_nowhere(ACCESS_TOKEN);
     w.assert_not_stored(&code); // only its hash is kept, and only for 60 seconds
     // No JWT anywhere: the payload of a token (a JSON object, so "eyJ" in base64url) follows its
-    // header and a dot. ("eyJ" alone also turns up by chance in the base64 of a salt or a sealed
-    // value, about once in a few hundred runs; a dot is not in that alphabet.)
+    // header and a dot. ("eyJ" alone also turns up by chance in the base64 text of a stored value of an
+    // account; a dot is not in that alphabet.)
     w.assert_nowhere(".eyJ");
 }
 
