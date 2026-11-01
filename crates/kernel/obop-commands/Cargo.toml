@@ -13,6 +13,7 @@ obop-values.workspace = true
 obop-registry.workspace = true
 obop-masking.workspace = true
 obop-storage.workspace = true
+obop-blob-gdrive.workspace = true
 obop-keys.workspace = true
 obop-media.workspace = true
 
