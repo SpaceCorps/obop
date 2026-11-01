@@ -70,8 +70,9 @@ impl DriveBrowser {
             client_id: need_env("OBOP_GDRIVE_CLIENT_ID")?,
             client_secret: need_env("OBOP_GDRIVE_CLIENT_SECRET")?,
             refresh_token: need_env("OBOP_GDRIVE_BROWSE_REFRESH_TOKEN")?,
-            api_base: API.into(),
-            token_url: TOKEN_URL.into(),
+            api_base: loopback_override("OBOP_GDRIVE_API_BASE").unwrap_or_else(|| API.into()),
+            token_url: loopback_override("OBOP_GDRIVE_TOKEN_URL")
+                .unwrap_or_else(|| TOKEN_URL.into()),
             retry_pause: Duration::from_millis(500),
             max_attempts: 4,
         })?))
@@ -222,6 +223,16 @@ impl DriveBrowser {
             bytes,
         })
     }
+}
+
+/// `OBOP_GDRIVE_API_BASE` and `OBOP_GDRIVE_TOKEN_URL` point the browser at a fake Drive for the end
+/// to end tests. They are honoured only for a loopback address, so no setting can send the
+/// credentials anywhere else.
+fn loopback_override(name: &str) -> Option<String> {
+    let v = std::env::var(name).ok()?;
+    let v = v.trim().trim_end_matches('/');
+    (v.starts_with("http://127.0.0.1:") || v.starts_with("http://localhost:"))
+        .then(|| v.to_string())
 }
 
 fn entry(f: &J) -> Option<Entry> {
