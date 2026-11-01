@@ -13,10 +13,14 @@
 //! been run against the real Google service: the tests use a fake Drive on a loopback port.
 
 mod authorize;
+mod browse;
+#[cfg(test)]
+mod browse_tests;
 #[cfg(test)]
 mod tests;
 
 pub use authorize::{AuthorizeOptions, authorize};
+pub use browse::{DriveBrowser, Entry, Fetched, Page};
 
 use obop_storage::Result;
 use obop_storage::blob::{BlobBytes, valid_key};
