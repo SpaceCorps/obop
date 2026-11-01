@@ -81,6 +81,11 @@ struct IdpState {
     discovery_delay_ms: u64,
     jwks_delay_ms: u64,
     token_delay_ms: u64,
+    /// Endpoints (a part of the path) whose requests are not answered until a test lets go of
+    /// them: a call that is stuck in the air without a guess of how long it takes (a test on a
+    /// busy machine cannot tell a second from ten). The thread of a held request ends after
+    /// 40 s whatever happens.
+    held: Vec<String>,
     /// The status the key set and the discovery document answer (200 unless a test says
     /// otherwise).
     jwks_status: u16,
@@ -143,6 +148,7 @@ impl Idp {
             discovery_delay_ms: 0,
             jwks_delay_ms: 0,
             token_delay_ms: 0,
+            held: Vec::new(),
             jwks_status: 200,
             discovery_status: 200,
         }));
@@ -229,8 +235,19 @@ impl Idp {
         s.discovery_delay_ms = 0;
         s.jwks_delay_ms = 0;
         s.token_delay_ms = 0;
+        s.held.clear();
         s.jwks_status = 200;
         s.discovery_status = 200;
+    }
+
+    /// Requests for `what` (a part of the path) arrive and wait until [`Idp::release`].
+    fn hold(&self, what: &str) {
+        self.st.lock().unwrap().held.push(what.to_string());
+    }
+
+    /// Lets the requests for `what` that are held (and the ones that come later) be answered.
+    fn release(&self, what: &str) {
+        self.st.lock().unwrap().held.retain(|h| h != what);
     }
 
     /// A registration without the optional claims `amr` and `auth_time` (Entra's default).
@@ -284,6 +301,17 @@ impl Idp {
         };
         if delay > 0 {
             std::thread::sleep(std::time::Duration::from_millis(delay));
+        }
+        let held_since = std::time::Instant::now();
+        while held_since.elapsed() < std::time::Duration::from_secs(40)
+            && st
+                .lock()
+                .unwrap()
+                .held
+                .iter()
+                .any(|h| path.contains(h.as_str()))
+        {
+            std::thread::sleep(std::time::Duration::from_millis(5));
         }
         let mut s = st.lock().unwrap();
         s.requests.push(format!("{method} {path}"));
@@ -512,6 +540,10 @@ async fn world_with(configure: bool, config: AuthConfig, prefix: Option<&str>) -
     // The tests name the address of a request with X-Forwarded-For (where none is named the
     // request comes from nobody in particular, as before).
     state.set_trust_proxy(true);
+    // The limit of a call to the provider is 6 s in a server; the tests that are not about it run
+    // with a long one, so that a machine that is busy with other work does not cut a call to the
+    // stand-in. The tests of the limit set their own.
+    state.set_sso_timeout_for_test(std::time::Duration::from_secs(30));
     state.set_connectors(rt);
     if let Some(p) = prefix {
         state.set_sso_return_prefix(p);
@@ -849,7 +881,10 @@ async fn flow_round_trip_ends_in_a_bearer_token_and_keeps_nothing_of_the_provide
     w.assert_nowhere(CLIENT_SECRET);
     w.assert_nowhere(ACCESS_TOKEN);
     w.assert_not_stored(&code); // only its hash is kept, and only for 60 seconds
-    w.assert_nowhere("eyJ"); // no JWT anywhere
+    // No JWT anywhere: the payload of a token (a JSON object, so "eyJ" in base64url) follows its
+    // header and a dot. ("eyJ" alone also turns up by chance in the base64 of a salt or a sealed
+    // value, about once in a few hundred runs; a dot is not in that alphabet.)
+    w.assert_nowhere(".eyJ");
 }
 
 #[tokio::test]
@@ -2065,37 +2100,67 @@ fn token_path() -> String {
     format!("POST /{TENANT}/oauth2/v2.0/token")
 }
 
+/// The endpoints of the stand-in, as the parts of the path that `Idp::hold` and `Idp::arrived` take.
+const TOKEN: &str = "oauth2/v2.0/token";
+const KEYS: &str = "discovery/v2.0/keys";
+const DISCOVERY: &str = "openid-configuration";
+
+/// Waits until `done()` holds, or `give_up` has passed (the assertions of the test then say what
+/// went wrong; a change of the code that never brings the state costs the test this long).
+async fn until(give_up: std::time::Duration, done: impl Fn() -> bool) {
+    let since = std::time::Instant::now();
+    while !done() && since.elapsed() < give_up {
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+    }
+}
+
+/// A request, counted in `answered` when it has been answered.
+async fn counted(
+    answered: &std::sync::atomic::AtomicUsize,
+    f: impl std::future::Future<Output = Raw>,
+) -> Raw {
+    let r = f.await;
+    answered.fetch_add(1, Ordering::SeqCst);
+    r
+}
+
 /// A slow provider is given the limit at each of the three places the sign-in calls it (the
 /// discovery document, the exchange of the code, the key set) and no more. The limit is shortened
-/// to 300 ms and the provider takes 2 s.
+/// to one second at the call under test, and the stand-in does not answer that call at all (it
+/// holds it, so that how slow a busy machine is makes no difference): the call must be cut at the
+/// limit, not before it and not at the six seconds of a server's limit. The calls before it are
+/// given a long limit, so that a busy machine does not cut them.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn failures_a_slow_provider_is_given_the_limit_at_each_call_and_no_more() {
     let w = world(true).await;
-    w.state
-        .set_sso_timeout_for_test(std::time::Duration::from_millis(300));
-    let within = |t: std::time::Instant| {
+    let short = std::time::Duration::from_millis(1000);
+    let long = std::time::Duration::from_secs(30);
+    let cut_at_the_limit = |took: std::time::Duration| {
         assert!(
-            t.elapsed() < std::time::Duration::from_millis(1500),
-            "the call was not cut at the limit: {:?}",
-            t.elapsed()
+            took >= std::time::Duration::from_millis(900)
+                && took < std::time::Duration::from_millis(5000),
+            "the call was not cut at the limit of one second: {took:?}"
         );
     };
     // 1. The discovery document.
-    w.idp.st.lock().unwrap().discovery_delay_ms = 2000;
+    w.state.set_sso_timeout_for_test(short);
+    w.idp.hold(DISCOVERY);
     let t = std::time::Instant::now();
     let r = w.start(&mut Jar::default()).await;
-    within(t);
+    cut_at_the_limit(t.elapsed());
     assert_eq!(r.location(), "/#oidc_error=unavailable", "{}", r.location());
-    w.idp.st.lock().unwrap().discovery_delay_ms = 0;
+    w.idp.release(DISCOVERY);
     w.state.forget_sso_cache_for_test();
     // 2. The exchange of the code.
+    w.state.set_sso_timeout_for_test(long);
     let mut jar = Jar::default();
     let s = w.start(&mut jar).await;
     let uri = w.idp.authorize(&s.location(), ADA_OID);
-    w.idp.st.lock().unwrap().token_delay_ms = 2000;
+    w.state.set_sso_timeout_for_test(short);
+    w.idp.hold(TOKEN);
     let t = std::time::Instant::now();
     let r = w.callback(&mut jar, &uri).await;
-    within(t);
+    cut_at_the_limit(t.elapsed());
     assert_eq!(r.location(), "/#oidc_error=unavailable", "{}", r.location());
     assert!(
         w.events("oidc_error")
@@ -2104,15 +2169,33 @@ async fn failures_a_slow_provider_is_given_the_limit_at_each_call_and_no_more() 
         "{:?}",
         w.events("oidc_error")
     );
-    w.idp.st.lock().unwrap().token_delay_ms = 0;
-    // 3. The key set.
+    w.idp.release(TOKEN);
+    // 3. The key set. The exchange is answered; the limit is shortened while it is in the air (it
+    // has taken the long one), so that the short limit is the key set's alone.
+    w.state.set_sso_timeout_for_test(long);
     let mut jar = Jar::default();
     let s = w.start(&mut jar).await;
     let uri = w.idp.authorize(&s.location(), ADA_OID);
-    w.idp.st.lock().unwrap().jwks_delay_ms = 2000;
-    let t = std::time::Instant::now();
-    let r = w.callback(&mut jar, &uri).await;
-    within(t);
+    w.idp.hold(TOKEN);
+    w.idp.hold(KEYS);
+    let exchanges = w.idp.arrived(TOKEN);
+    let ((r, ended), shortened_at) = tokio::join!(
+        async {
+            let r = w.callback(&mut jar, &uri).await;
+            (r, std::time::Instant::now())
+        },
+        async {
+            until(std::time::Duration::from_secs(20), || {
+                w.idp.arrived(TOKEN) > exchanges
+            })
+            .await;
+            w.state.set_sso_timeout_for_test(short);
+            let at = std::time::Instant::now();
+            w.idp.release(TOKEN);
+            at
+        },
+    );
+    cut_at_the_limit(ended.duration_since(shortened_at));
     assert_eq!(r.location(), "/#oidc_error=unavailable", "{}", r.location());
     assert!(
         w.events("oidc_error")
@@ -2121,39 +2204,48 @@ async fn failures_a_slow_provider_is_given_the_limit_at_each_call_and_no_more() 
         "{:?}",
         w.events("oidc_error")
     );
+    w.idp.release(KEYS);
 }
 
 /// The calls to the provider that one process has in the air are counted where they are made:
 /// the exchange of a code (a ninth is answered "busy"), and the fetches (refused as
 /// "unavailable" while the places are taken); and the place of a callback is given back after the
-/// exchange of its code, so that its own fetch of the key set needs no second one.
+/// exchange of its code, so that its own fetch of the key set needs no second one. The exchanges
+/// are held in the air by the stand-in until the test has seen what it wanted to see.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn failures_the_calls_in_the_air_are_counted_where_they_are_made() {
     let w = world(true).await;
     w.keep_throttle();
-    w.state
-        .set_sso_timeout_for_test(std::time::Duration::from_secs(10));
     let mut jars: Vec<Jar> = (0..9).map(|_| Jar::default()).collect();
     let mut uris = Vec::new();
     for jar in jars.iter_mut() {
         let s = w.start(jar).await;
         uris.push(w.idp.authorize(&s.location(), ADA_OID));
     }
-    // Part 1: nine callbacks at once, the exchange of each takes a second: eight get a place.
-    w.idp.st.lock().unwrap().token_delay_ms = 1000;
+    // Part 1: nine callbacks at once, the exchanges stay in the air until the ninth has been
+    // answered: eight get a place.
+    w.idp.hold(TOKEN);
+    let answered = std::sync::atomic::AtomicUsize::new(0);
     let [j0, j1, j2, j3, j4, j5, j6, j7, j8] = &mut jars[..] else {
         unreachable!()
     };
     let r = tokio::join!(
-        w.callback(j0, &uris[0]),
-        w.callback(j1, &uris[1]),
-        w.callback(j2, &uris[2]),
-        w.callback(j3, &uris[3]),
-        w.callback(j4, &uris[4]),
-        w.callback(j5, &uris[5]),
-        w.callback(j6, &uris[6]),
-        w.callback(j7, &uris[7]),
-        w.callback(j8, &uris[8]),
+        counted(&answered, w.callback(j0, &uris[0])),
+        counted(&answered, w.callback(j1, &uris[1])),
+        counted(&answered, w.callback(j2, &uris[2])),
+        counted(&answered, w.callback(j3, &uris[3])),
+        counted(&answered, w.callback(j4, &uris[4])),
+        counted(&answered, w.callback(j5, &uris[5])),
+        counted(&answered, w.callback(j6, &uris[6])),
+        counted(&answered, w.callback(j7, &uris[7])),
+        counted(&answered, w.callback(j8, &uris[8])),
+        async {
+            until(std::time::Duration::from_secs(20), || {
+                w.idp.arrived(TOKEN) == 8 && answered.load(Ordering::SeqCst) >= 1
+            })
+            .await;
+            w.idp.release(TOKEN);
+        },
     );
     let all = [r.0, r.1, r.2, r.3, r.4, r.5, r.6, r.7, r.8];
     let busy = all
@@ -2180,7 +2272,9 @@ async fn failures_the_calls_in_the_air_are_counted_where_they_are_made() {
         uris.push(w.idp.authorize(&s.location(), ADA_OID));
     }
     w.state.forget_sso_cache_for_test();
-    let hits_before = w.idp.hits("openid-configuration");
+    w.idp.hold(TOKEN);
+    let hits_before = w.idp.hits(DISCOVERY);
+    let exchanges_before = w.idp.arrived(TOKEN);
     let [j0, j1, j2, j3, j4, j5, j6, j7] = &mut jars[..] else {
         unreachable!()
     };
@@ -2188,9 +2282,14 @@ async fn failures_the_calls_in_the_air_are_counted_where_they_are_made() {
     // the others find it in the cache, so the places are taken only by their exchanges.)
     let mut late = Jar::default();
     let late_start = async {
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        until(std::time::Duration::from_secs(20), || {
+            w.idp.arrived(TOKEN) == exchanges_before + 8
+        })
+        .await;
         w.state.forget_sso_cache_for_test();
-        w.start(&mut late).await
+        let started = w.start(&mut late).await;
+        w.idp.release(TOKEN);
+        started
     };
     let (_, _, _, _, _, _, _, _, started) = tokio::join!(
         w.callback(j0, &uris[0]),
@@ -2209,7 +2308,7 @@ async fn failures_the_calls_in_the_air_are_counted_where_they_are_made() {
         "a fetch is refused while the places are taken"
     );
     assert!(
-        w.idp.hits("openid-configuration") > hits_before,
+        w.idp.hits(DISCOVERY) > hits_before,
         "the callbacks fetched the document themselves"
     );
 }
@@ -2283,23 +2382,29 @@ async fn timed(
     (r, t0.elapsed())
 }
 
-/// A callback that is sent `after_ms` after the others (so that the exchanges of a few of them do
-/// not all want a place among the calls in the air in the same moment).
-async fn callback_after(
+/// A callback that is sent when `waiting` requests wait for a fetch another request has in the air
+/// (so that the exchanges of a few of them do not all want a place among the calls in the air in
+/// the same moment, and each arrives after the one before it has taken its place for waiting).
+async fn callback_when_waiting(
     w: &World,
+    waiting: usize,
     t0: std::time::Instant,
-    after_ms: u64,
+    answered: &std::sync::atomic::AtomicUsize,
     jar: &mut Jar,
     uri: &str,
 ) -> (Raw, std::time::Duration) {
-    tokio::time::sleep(std::time::Duration::from_millis(after_ms)).await;
-    timed(t0, w.callback(jar, uri)).await
+    until(std::time::Duration::from_secs(15), || {
+        w.state.sso_waiting_for_test() >= waiting
+    })
+    .await;
+    timed(t0, counted(answered, w.callback(jar, uri))).await
 }
 
 /// The fetch of the discovery document that another request has in the air is waited for by at
 /// most eight requests (at the call site: a plain `lock()` would let all nine wait); the ninth is
 /// told "unavailable" at once, and the eight get the document the one fetch brought. The fetch in
-/// the air is a stuck one, held by the test until the nine are in.
+/// the air is a stuck one, held by the test until eight requests wait for it and the ninth has
+/// been told.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn failures_eight_starts_wait_for_a_stuck_discovery_fetch_and_the_ninth_is_told_at_once() {
     let w = world(true).await;
@@ -2308,23 +2413,26 @@ async fn failures_eight_starts_wait_for_a_stuck_discovery_fetch_and_the_ninth_is
         .set_sso_timeout_for_test(std::time::Duration::from_secs(20));
     let hold = w.state.hold_sso_discovery_fetch_for_test();
     let t0 = std::time::Instant::now();
-    let release = std::time::Duration::from_millis(1500);
+    let answered = std::sync::atomic::AtomicUsize::new(0);
     let mut jars: Vec<Jar> = (0..9).map(|_| Jar::default()).collect();
     let [j0, j1, j2, j3, j4, j5, j6, j7, j8] = &mut jars[..] else {
         unreachable!()
     };
     let (r0, r1, r2, r3, r4, r5, r6, r7, r8, released_at) = tokio::join!(
-        timed(t0, w.start(j0)),
-        timed(t0, w.start(j1)),
-        timed(t0, w.start(j2)),
-        timed(t0, w.start(j3)),
-        timed(t0, w.start(j4)),
-        timed(t0, w.start(j5)),
-        timed(t0, w.start(j6)),
-        timed(t0, w.start(j7)),
-        timed(t0, w.start(j8)),
+        timed(t0, counted(&answered, w.start(j0))),
+        timed(t0, counted(&answered, w.start(j1))),
+        timed(t0, counted(&answered, w.start(j2))),
+        timed(t0, counted(&answered, w.start(j3))),
+        timed(t0, counted(&answered, w.start(j4))),
+        timed(t0, counted(&answered, w.start(j5))),
+        timed(t0, counted(&answered, w.start(j6))),
+        timed(t0, counted(&answered, w.start(j7))),
+        timed(t0, counted(&answered, w.start(j8))),
         async {
-            tokio::time::sleep(release).await;
+            until(std::time::Duration::from_secs(15), || {
+                w.state.sso_waiting_for_test() == 8 && answered.load(Ordering::SeqCst) >= 1
+            })
+            .await;
             drop(hold);
             t0.elapsed()
         },
@@ -2357,7 +2465,7 @@ async fn failures_eight_starts_wait_for_a_stuck_discovery_fetch_and_the_ninth_is
         "they waited for the fetch that was in the air"
     );
     assert_eq!(
-        w.idp.hits("openid-configuration"),
+        w.idp.hits(DISCOVERY),
         1,
         "one fetch brought the document for all of them"
     );
@@ -2378,22 +2486,23 @@ async fn failures_eight_starts_wait_for_a_stuck_discovery_fetch_and_the_ninth_is
 async fn failures_a_start_waits_for_a_stuck_discovery_fetch_no_longer_than_the_limit() {
     let w = world(true).await;
     w.state
-        .set_sso_timeout_for_test(std::time::Duration::from_millis(500));
+        .set_sso_timeout_for_test(std::time::Duration::from_millis(1000));
     let _hold = w.state.hold_sso_discovery_fetch_for_test();
     let t0 = std::time::Instant::now();
     // A wait longer than a few seconds is a failure of the test, not a wait for the real limit.
     let (r, took) = tokio::time::timeout(
-        std::time::Duration::from_secs(8),
+        std::time::Duration::from_secs(12),
         timed(t0, w.start(&mut Jar::default())),
     )
     .await
     .expect("the start waited for the fetch that is in the air longer than the limit");
     assert_eq!(r.location(), "/#oidc_error=unavailable", "{}", r.location());
     assert!(
-        took >= std::time::Duration::from_millis(450) && took < std::time::Duration::from_secs(4),
+        took >= std::time::Duration::from_millis(950)
+            && took < std::time::Duration::from_millis(5500),
         "{took:?}"
     );
-    assert_eq!(w.idp.hits("openid-configuration"), 0, "it did not fetch");
+    assert_eq!(w.idp.hits(DISCOVERY), 0, "it did not fetch");
     assert!(
         w.events("oidc_error")
             .iter()
@@ -2405,7 +2514,8 @@ async fn failures_a_start_waits_for_a_stuck_discovery_fetch_no_longer_than_the_l
 
 /// The same two rules for the key set, at its call site: of nine callbacks that reach a cold key
 /// set while a fetch of it is stuck in the air, eight wait and get what one fetch brings, and the
-/// ninth is told "unavailable" at once.
+/// ninth is told "unavailable" at once. Each callback is sent when the one before it waits, and
+/// the fetch is let go of when eight wait and the ninth has been told.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn failures_eight_callbacks_wait_for_a_stuck_key_set_fetch_and_the_ninth_is_told_at_once() {
     let w = world(true).await;
@@ -2420,22 +2530,25 @@ async fn failures_eight_callbacks_wait_for_a_stuck_key_set_fetch_and_the_ninth_i
     }
     let hold = w.state.hold_sso_key_set_fetch_for_test();
     let t0 = std::time::Instant::now();
-    let release = std::time::Duration::from_millis(3000);
+    let answered = std::sync::atomic::AtomicUsize::new(0);
     let [j0, j1, j2, j3, j4, j5, j6, j7, j8] = &mut jars[..] else {
         unreachable!()
     };
     let (r0, r1, r2, r3, r4, r5, r6, r7, r8, released_at) = tokio::join!(
-        callback_after(&w, t0, 0, j0, &uris[0]),
-        callback_after(&w, t0, 80, j1, &uris[1]),
-        callback_after(&w, t0, 160, j2, &uris[2]),
-        callback_after(&w, t0, 240, j3, &uris[3]),
-        callback_after(&w, t0, 320, j4, &uris[4]),
-        callback_after(&w, t0, 400, j5, &uris[5]),
-        callback_after(&w, t0, 480, j6, &uris[6]),
-        callback_after(&w, t0, 560, j7, &uris[7]),
-        callback_after(&w, t0, 640, j8, &uris[8]),
+        callback_when_waiting(&w, 0, t0, &answered, j0, &uris[0]),
+        callback_when_waiting(&w, 1, t0, &answered, j1, &uris[1]),
+        callback_when_waiting(&w, 2, t0, &answered, j2, &uris[2]),
+        callback_when_waiting(&w, 3, t0, &answered, j3, &uris[3]),
+        callback_when_waiting(&w, 4, t0, &answered, j4, &uris[4]),
+        callback_when_waiting(&w, 5, t0, &answered, j5, &uris[5]),
+        callback_when_waiting(&w, 6, t0, &answered, j6, &uris[6]),
+        callback_when_waiting(&w, 7, t0, &answered, j7, &uris[7]),
+        callback_when_waiting(&w, 8, t0, &answered, j8, &uris[8]),
         async {
-            tokio::time::sleep(release).await;
+            until(std::time::Duration::from_secs(15), || {
+                w.state.sso_waiting_for_test() == 8 && answered.load(Ordering::SeqCst) >= 1
+            })
+            .await;
             drop(hold);
             t0.elapsed()
         },
@@ -2466,10 +2579,12 @@ async fn failures_eight_callbacks_wait_for_a_stuck_key_set_fetch_and_the_ninth_i
         "{:?}",
         shown()
     );
-    assert_eq!(w.idp.hits("/discovery/v2.0/keys"), 1, "one fetch for all");
+    assert_eq!(w.idp.hits(KEYS), 1, "one fetch for all");
 }
 
 /// A callback waits for the key-set fetch another request has in the air no longer than the limit.
+/// The limit is shortened while the exchange of the code is in the air (it has taken the long
+/// one), so that the shortened limit is the wait's alone.
 // The test holds the right to fetch across its awaits on purpose: that is the stuck fetch.
 #[allow(clippy::await_holding_lock)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -2478,23 +2593,39 @@ async fn failures_a_callback_waits_for_a_stuck_key_set_fetch_no_longer_than_the_
     let mut jar = Jar::default();
     let s = w.start(&mut jar).await;
     let uri = w.idp.authorize(&s.location(), ADA_OID);
-    // The limit is the exchange's too: long enough for it to be answered in a busy test run.
-    w.state
-        .set_sso_timeout_for_test(std::time::Duration::from_millis(2000));
     let _hold = w.state.hold_sso_key_set_fetch_for_test();
-    let t0 = std::time::Instant::now();
-    let (r, took) = tokio::time::timeout(
-        std::time::Duration::from_secs(12),
-        timed(t0, w.callback(&mut jar, &uri)),
-    )
-    .await
-    .expect("the callback waited for the fetch that is in the air longer than the limit");
+    w.idp.hold(TOKEN);
+    // A wait longer than a few seconds is a failure of the test, not a wait for the real limit.
+    let ((r, ended), shortened_at) =
+        tokio::time::timeout(std::time::Duration::from_secs(25), async {
+            tokio::join!(
+                async {
+                    let r = w.callback(&mut jar, &uri).await;
+                    (r, std::time::Instant::now())
+                },
+                async {
+                    until(std::time::Duration::from_secs(15), || {
+                        w.idp.arrived(TOKEN) == 1
+                    })
+                    .await;
+                    w.state
+                        .set_sso_timeout_for_test(std::time::Duration::from_millis(1000));
+                    let at = std::time::Instant::now();
+                    w.idp.release(TOKEN);
+                    at
+                },
+            )
+        })
+        .await
+        .expect("the callback waited for the fetch that is in the air longer than the limit");
+    let took = ended.duration_since(shortened_at);
     assert_eq!(r.location(), "/#oidc_error=unavailable", "{}", r.location());
     assert!(
-        took >= std::time::Duration::from_millis(1900) && took < std::time::Duration::from_secs(8),
+        took >= std::time::Duration::from_millis(950)
+            && took < std::time::Duration::from_millis(5500),
         "{took:?}"
     );
-    assert_eq!(w.idp.hits("/discovery/v2.0/keys"), 0, "it did not fetch");
+    assert_eq!(w.idp.hits(KEYS), 0, "it did not fetch");
     assert!(
         w.events("oidc_error")
             .iter()
@@ -2506,45 +2637,55 @@ async fn failures_a_callback_waits_for_a_stuck_key_set_fetch_no_longer_than_the_
 }
 
 /// The fetch of the key set takes a place among the calls to the provider in the air (X8, N20 j):
-/// with one slow key-set fetch in the air, eight exchanges that want a place at the same time find
-/// seven, and the eighth is told "busy". (Without the place of the key-set fetch all eight would
-/// be served.)
+/// with one key-set fetch in the air, seven exchanges find a place and the eighth, which wants a
+/// place at the same time, is told "busy". (Without the place of the key-set fetch all eight would
+/// be served.) The fetch and the exchanges stay in the air, held by the stand-in, until the eighth
+/// has been told.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn failures_a_key_set_fetch_in_the_air_takes_one_of_the_places_of_the_calls() {
     let w = world(true).await;
     w.keep_throttle();
-    w.state
-        .set_sso_timeout_for_test(std::time::Duration::from_secs(20));
     let mut jars: Vec<Jar> = (0..9).map(|_| Jar::default()).collect();
     let mut uris = Vec::new();
     for jar in jars.iter_mut() {
         let s = w.start(jar).await;
         uris.push(w.idp.authorize(&s.location(), ADA_OID));
     }
-    // The key set is cold and slow; the exchanges that come later are slow too.
-    w.idp.st.lock().unwrap().jwks_delay_ms = 2500;
+    // The key set is cold and its fetch stays in the air; the exchanges that come later do too.
+    w.idp.hold(KEYS);
+    let answered = std::sync::atomic::AtomicUsize::new(0);
     let [j0, j1, j2, j3, j4, j5, j6, j7, j8] = &mut jars[..] else {
         unreachable!()
     };
     let first = w.callback(j0, &uris[0]);
     let others = async {
-        // The key set is being fetched (its request has arrived and is being slept on).
-        while w.idp.arrived("/discovery/v2.0/keys") == 0 {
-            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-        }
-        w.idp.st.lock().unwrap().token_delay_ms = 1200;
+        // The key set is being fetched (its request has arrived, so the first exchange is done).
+        until(std::time::Duration::from_secs(15), || {
+            w.idp.arrived(KEYS) == 1
+        })
+        .await;
+        w.idp.hold(TOKEN);
         tokio::join!(
-            w.callback(j1, &uris[1]),
-            w.callback(j2, &uris[2]),
-            w.callback(j3, &uris[3]),
-            w.callback(j4, &uris[4]),
-            w.callback(j5, &uris[5]),
-            w.callback(j6, &uris[6]),
-            w.callback(j7, &uris[7]),
-            w.callback(j8, &uris[8]),
+            counted(&answered, w.callback(j1, &uris[1])),
+            counted(&answered, w.callback(j2, &uris[2])),
+            counted(&answered, w.callback(j3, &uris[3])),
+            counted(&answered, w.callback(j4, &uris[4])),
+            counted(&answered, w.callback(j5, &uris[5])),
+            counted(&answered, w.callback(j6, &uris[6])),
+            counted(&answered, w.callback(j7, &uris[7])),
+            counted(&answered, w.callback(j8, &uris[8])),
         )
     };
-    let (a, o) = tokio::join!(first, others);
+    let letting_go = async {
+        // The first one's exchange and seven more are in the air, and the eighth has been told.
+        until(std::time::Duration::from_secs(20), || {
+            w.idp.arrived(TOKEN) == 8 && answered.load(Ordering::SeqCst) >= 1
+        })
+        .await;
+        w.idp.release(TOKEN);
+        w.idp.release(KEYS);
+    };
+    let (a, o, _) = tokio::join!(first, others, letting_go);
     assert!(a.location().starts_with("/#oidc="), "{}", a.location());
     let rest = [o.0, o.1, o.2, o.3, o.4, o.5, o.6, o.7];
     let busy = rest

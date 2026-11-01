@@ -152,6 +152,14 @@ impl HttpState {
             .unwrap_or_else(|p| p.into_inner())
     }
 
+    /// For tests: how many requests wait now for a fetch another request has in the air (a test
+    /// that holds a fetch lets go of it when the places for waiting are taken, not after a guess
+    /// of how long that takes on a busy machine).
+    #[doc(hidden)]
+    pub fn sso_waiting_for_test(&self) -> usize {
+        self.sso.waiting.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
     /// For tests: forget the discovery document, the key set and the remembered failures, as ten
     /// minutes (or a restart) would.
     #[doc(hidden)]
