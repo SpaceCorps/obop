@@ -34,6 +34,11 @@ impl Drop for Dir {
 }
 
 fn obop(url: &str, args: &[&str], stdin: Option<&str>) -> Output {
+    obop_with(url, args, stdin, &[])
+}
+
+/// [`obop`] with more settings in the environment of the process.
+fn obop_with(url: &str, args: &[&str], stdin: Option<&str>, env: &[(&str, &str)]) -> Output {
     let mut c = Command::new(env!("CARGO_BIN_EXE_obop"));
     c.env_clear();
     for keep in ["SystemRoot", "SYSTEMROOT", "PATH", "TEMP", "TMP", "HOME"] {
@@ -43,6 +48,7 @@ fn obop(url: &str, args: &[&str], stdin: Option<&str>) -> Output {
     }
     c.env("OBOP_SECRET_KEY", KEY)
         .env("OBOP_REQUIRE_MFA_FOR_ADMINS", "0")
+        .envs(env.iter().copied())
         .args(args)
         .args(["--db", url])
         .stdin(Stdio::piped())
@@ -212,6 +218,70 @@ fn the_provider_is_configured_shown_kept_and_removed_from_the_command_line() {
         on.contains("enabled") && !on.contains("not enabled"),
         "{on}"
     );
+}
+
+/// D91 Decision 1 on the real binary: `OBOP_OIDC_TEST_AUTHORITY` is read from the process
+/// environment, it is honoured only together with `OBOP_CONNECTORS_ALLOW_LOOPBACK` in the spelling
+/// the outbound client reads, and each case says so on standard error.
+#[test]
+fn the_test_authority_of_the_process_is_ignored_without_the_loopback_setting_and_says_so() {
+    let dir = Dir::new("authority");
+    let url = dir.url();
+    ok(obop(
+        &url,
+        &["admin", "create", "ada", "--groups", "base.user"],
+        Some(
+            "a long enough password 1
+",
+        ),
+    ));
+    const LO: &str = "http://127.0.0.1:4455";
+    let stderr = |env: &[(&str, &str)]| {
+        let o = obop_with(&url, &["admin", "sso", "status"], None, env);
+        assert!(o.status.success(), "{}", text(&o));
+        String::from_utf8_lossy(&o.stderr).to_string()
+    };
+    let ignored = "OBOP_OIDC_TEST_AUTHORITY is ignored: it works only together with OBOP_CONNECTORS_ALLOW_LOOPBACK=1";
+    // Nothing set, or the flag alone: nothing to say.
+    assert!(!stderr(&[]).contains("OBOP_OIDC_TEST_AUTHORITY"));
+    assert!(
+        !stderr(&[("OBOP_CONNECTORS_ALLOW_LOOPBACK", "1")]).contains("OBOP_OIDC_TEST_AUTHORITY")
+    );
+    // The variable alone, or with a flag the outbound client does not read: ignored, and said.
+    let alone = stderr(&[("OBOP_OIDC_TEST_AUTHORITY", LO)]);
+    assert!(
+        alone.contains(ignored) && !alone.contains("WARNING"),
+        "{alone}"
+    );
+    for flag in ["yes", "0", "", "TRUE", "on"] {
+        let e = stderr(&[
+            ("OBOP_OIDC_TEST_AUTHORITY", LO),
+            ("OBOP_CONNECTORS_ALLOW_LOOPBACK", flag),
+        ]);
+        assert!(
+            e.contains(ignored) && !e.contains("WARNING"),
+            "flag {flag:?}: {e}"
+        );
+    }
+    // Both, in either of the two spellings: honoured, with the warning that says what is trusted.
+    for flag in ["1", "true"] {
+        let e = stderr(&[
+            ("OBOP_OIDC_TEST_AUTHORITY", LO),
+            ("OBOP_CONNECTORS_ALLOW_LOOPBACK", flag),
+        ]);
+        assert!(
+            e.contains(&format!(
+                "WARNING: OBOP_OIDC_TEST_AUTHORITY is set: Microsoft sign-in trusts {LO} as the authority"
+            )) && !e.contains("is ignored"),
+            "flag {flag:?}: {e}"
+        );
+    }
+    // With the flag, a value that is not a loopback address is ignored, and said.
+    let e = stderr(&[
+        ("OBOP_OIDC_TEST_AUTHORITY", "http://localhost:4455"),
+        ("OBOP_CONNECTORS_ALLOW_LOOPBACK", "1"),
+    ]);
+    assert!(e.contains("it must be http://127.0.0.1:<port>"), "{e}");
 }
 
 #[test]

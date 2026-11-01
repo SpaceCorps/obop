@@ -26,7 +26,7 @@ fn test_authority_item(value: Option<&str>, loopback: bool) -> Option<J> {
         return None;
     }
     let detail = if loopback {
-        "OBOP_OIDC_TEST_AUTHORITY is set and loopback addresses are allowed: the Microsoft sign-in trusts that address instead of Microsoft, and the bindings made now carry it in their key. Use it for tests only."
+        "OBOP_OIDC_TEST_AUTHORITY is set and loopback addresses are allowed: if it is http://127.0.0.1:<port> or http://[::1]:<port> the Microsoft sign-in trusts that address instead of Microsoft and the bindings made now carry it in their key; any other value is ignored. Use it for tests only."
     } else {
         "OBOP_OIDC_TEST_AUTHORITY is set. Without OBOP_CONNECTORS_ALLOW_LOOPBACK=1 the Microsoft sign-in ignores it; remove it from an instance people use."
     };
@@ -250,6 +250,14 @@ mod tests {
         }
         let ignored = test_authority_item(Some("http://127.0.0.1:4455"), false).unwrap();
         assert!(ignored["detail"].as_str().unwrap().contains("ignores it"));
+        // With loopback allowed the text does not say that every value is trusted: only a
+        // loopback address is, any other value is ignored (also Microsoft's own, a typo).
+        let on = test_authority_item(Some("http://localhost:4455"), true).unwrap();
+        let on = on["detail"].as_str().unwrap();
+        assert!(
+            on.contains("http://127.0.0.1:<port>") && on.contains("any other value is ignored")
+        );
+        assert!(on.contains("if it is http://"), "{on}");
     }
 
     #[test]

@@ -174,7 +174,7 @@ test.describe("sign in with Microsoft", () => {
     for (const s of scopes) expect(s).toBe("openid profile");
   });
 
-  test("a request without the profile scope gets no object id: a plain message here, the reason in the log", async ({
+  test("a registration that does not grant the profile scope gets no object id: a plain message here, the reason in the log", async ({
     page,
     request,
   }) => {

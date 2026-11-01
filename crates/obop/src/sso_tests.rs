@@ -57,8 +57,11 @@ struct IdpState {
     published: Vec<String>,
     /// The status the token endpoint answers (200 unless a test says otherwise).
     token_status: u16,
-    /// `METHOD /path` of every request that reached it, and the form of the token requests.
+    /// `METHOD /path` of every request that reached it (when it was answered), and the form of the
+    /// token requests.
     requests: Vec<String>,
+    /// `METHOD /path` of every request, noted when it arrives (before a slow answer is slept for).
+    arrived: Vec<String>,
     forms: Vec<HashMap<String, String>>,
     /// Like Entra: the app registration has the optional claims `amr` and `auth_time` added to
     /// the ID token (without them the token has neither).
@@ -66,9 +69,10 @@ struct IdpState {
     optional_auth_time: bool,
     /// Whether the stand-in grants the `profile` scope that was asked for. Without it the scope
     /// that is granted is `openid` only, and the token has no `oid` and no `preferred_username`:
-    /// this models a request, or a registration, that lacks `profile`. It is not what Entra does
-    /// when an administrator's consent is missing (Microsoft shows its own error page then and the
-    /// browser does not come back; docs/DEPLOY.md).
+    /// this models a registration that does not grant `profile` (the request of obop always asks
+    /// for `openid profile`; a test checks it). It is not what Entra does when an administrator's
+    /// consent is missing (Microsoft shows its own error page then and the browser does not come
+    /// back; docs/DEPLOY.md).
     grants_profile: bool,
     /// The `scope` of every authorization request that came to the authorization endpoint.
     scopes: Vec<String>,
@@ -130,6 +134,7 @@ impl Idp {
             published: vec![obop_auth::oidc::soft::KID.into()],
             token_status: 200,
             requests: Vec::new(),
+            arrived: Vec::new(),
             forms: Vec::new(),
             optional_amr: true,
             optional_auth_time: true,
@@ -235,6 +240,17 @@ impl Idp {
         s.optional_auth_time = false;
     }
 
+    /// How many requests for `what` have arrived (also those that are still being slept on).
+    fn arrived(&self, what: &str) -> usize {
+        self.st
+            .lock()
+            .unwrap()
+            .arrived
+            .iter()
+            .filter(|r| r.contains(what))
+            .count()
+    }
+
     fn hits(&self, what: &str) -> usize {
         self.st
             .lock()
@@ -255,7 +271,8 @@ impl Idp {
         let authority = format!("http://127.0.0.1:{port}");
         // A slow provider: the answer is slept for before the state is locked.
         let delay = {
-            let s = st.lock().unwrap();
+            let mut s = st.lock().unwrap();
+            s.arrived.push(format!("{method} {path}"));
             match path {
                 p if p == format!("/{TENANT}/v2.0/.well-known/openid-configuration") => {
                     s.discovery_delay_ms
@@ -609,8 +626,10 @@ impl World {
         }
         let b = self.app.store.backend();
         for kind in ["oidc_refused", "oidc_error", "oidc_cancelled", "oidc_start"] {
-            // The tests come from no address: the source is empty.
-            let _ = b.counter_reset(&obop_auth::oidc::throttle_key("", kind));
+            for line in obop_commands::AnonLine::ALL {
+                // The tests come from no address: the source is empty.
+                let _ = b.counter_reset(&obop_auth::oidc::throttle_key("", kind, line));
+            }
         }
     }
 
@@ -1487,9 +1506,10 @@ async fn flow_asks_for_openid_and_profile_and_nothing_else_and_keeps_no_profile_
 }
 
 #[tokio::test]
-async fn failures_a_request_without_the_profile_scope_gets_no_object_id_and_the_log_says_so() {
-    // A token with no `oid`, as when the request or the registration lacks `profile` (this does
-    // not model a missing administrator consent, which Microsoft answers with an error page).
+async fn failures_a_registration_that_does_not_grant_profile_gets_no_object_id_and_the_log_says_so()
+{
+    // A token with no `oid`, as when the registration does not grant `profile` (this does not
+    // model a missing administrator consent, which Microsoft answers with an error page).
     let w = world(true).await;
     w.idp.st.lock().unwrap().grants_profile = false;
     failed(&w.sign_in(&mut Jar::default(), ADA_OID).await, "failed");
@@ -1911,24 +1931,112 @@ async fn failures_many_addresses_meet_the_hourly_ceiling_and_one_subnet_is_one_a
     }
     assert_eq!(w.events("oidc_start").len(), 1);
     assert_eq!(w.events("oidc_error").len(), 1);
-    // A hundred and twenty IPv4 addresses, each with a start and an error of its own: the lines
-    // stop at the ceiling of all sources together, and one line says so.
+    // A hundred and twenty IPv4 addresses, each with a start and an error of its own: the start
+    // lines stop at the ceiling of all sources together, the lines of the errors at a ceiling of
+    // their own, and each ceiling says so once.
     for i in 0..120 {
         w.fail_from(&format!("203.0.113.{i}"), "server_error").await;
     }
-    let total = oidc_rows(&w) - before;
+    let ceiling = obop_auth::oidc::ANON_LINES_PER_HOUR as usize;
+    assert_eq!(w.events("oidc_start").len(), ceiling);
     assert_eq!(
-        total,
-        obop_auth::oidc::ANON_LINES_PER_HOUR as usize + 1,
-        "the ceiling, and the line that says it was reached"
+        oidc_rows(&w) - before,
+        2 * ceiling + 2,
+        "the lines of both groups, and the line that says each ceiling was reached"
     );
     let said: Vec<String> = w
         .events("oidc_error")
         .into_iter()
         .filter(|l| l.contains("ceiling"))
         .collect();
-    assert_eq!(said.len(), 1, "{said:?}");
-    assert!(said[0].contains("60 lines an hour"), "{said:?}");
+    assert_eq!(said.len(), 2, "{said:?}");
+    assert!(said.iter().all(|l| l.contains("60 an hour")), "{said:?}");
+    assert!(
+        said.iter().any(|l| l.contains("about sign-ins begun")),
+        "{said:?}"
+    );
+    assert!(
+        said.iter()
+            .any(|l| l.contains("about sign-ins that went wrong")),
+        "{said:?}"
+    );
+}
+
+/// R2H-1 at the HTTP leg: a busy hour of begun sign-ins and a stream of callbacks with a made-up
+/// state use up the budgets of their own groups, and the line that says why a real sign-in was
+/// refused (an expired client secret shows as a refusal of the token endpoint) is still written,
+/// also from an address that has just sent a line of the same kind.
+#[tokio::test]
+async fn failures_a_busy_hour_and_noise_do_not_hide_why_a_real_sign_in_was_refused() {
+    let w = world(true).await;
+    w.keep_throttle();
+    let ceiling = obop_auth::oidc::ANON_LINES_PER_HOUR as usize;
+    // Seventy addresses begin a sign-in.
+    for i in 0..70 {
+        let ip = format!("198.51.100.{i}");
+        let r = w
+            .send_h(
+                "GET",
+                "/api/auth/oidc/start",
+                &Jar::default(),
+                None,
+                &[("x-forwarded-for", ip.as_str())],
+            )
+            .await;
+        assert_eq!(r.status, 303);
+    }
+    assert_eq!(w.events("oidc_start").len(), ceiling);
+    // Seventy addresses send a callback whose state is no flow of this server; the first of
+    // them is the address that signs in below.
+    for i in 0..70 {
+        let ip = format!("203.0.113.{i}");
+        let state = format!("{:064x}", i + 1);
+        let r = w
+            .send_h(
+                "GET",
+                &format!("/api/auth/oidc/callback?code=x&state={state}"),
+                &Jar::default(),
+                None,
+                &[("x-forwarded-for", ip.as_str())],
+            )
+            .await;
+        failed(&r, "failed");
+    }
+    let noise = |w: &World| {
+        w.events("oidc_refused")
+            .into_iter()
+            .filter(|l| l.contains("unknown, already used or expired"))
+            .count()
+    };
+    assert_eq!(noise(&w), ceiling);
+    // The client secret has expired: the token endpoint refuses, from the address that sent the
+    // first noise line (kind oidc_refused) and from one that sent none.
+    w.idp.st.lock().unwrap().token_status = 401;
+    for ip in ["203.0.113.0", "192.0.2.77"] {
+        let h = [("x-forwarded-for", ip)];
+        let mut jar = Jar::default();
+        let s = w
+            .send_h("GET", "/api/auth/oidc/start", &jar, None, &h)
+            .await;
+        jar.absorb(&s);
+        let uri = w.idp.authorize(&s.location(), ADA_OID);
+        let r = w.send_h("GET", &uri, &jar, None, &h).await;
+        failed(&r, "failed");
+    }
+    let said_why: Vec<String> = w
+        .events("oidc_refused")
+        .into_iter()
+        .filter(|l| l.contains("token endpoint answered 401"))
+        .collect();
+    assert_eq!(said_why.len(), 2, "{said_why:?}");
+    assert_eq!(noise(&w), ceiling, "no more noise lines were written");
+    // And the ceilings of the two groups that were used up said so.
+    let said: Vec<String> = w
+        .events("oidc_error")
+        .into_iter()
+        .filter(|l| l.contains("ceiling"))
+        .collect();
+    assert_eq!(said.len(), 2, "{said:?}");
 }
 
 fn token_path() -> String {
@@ -2139,6 +2247,302 @@ async fn failures_a_cold_cache_and_many_starts_ask_the_provider_once() {
         w.idp.hits("openid-configuration"),
         1,
         "one fetch of the discovery document, the others waited for it"
+    );
+}
+
+// ---- the waiting for a fetch that another request has in the air, at the two call sites -------
+
+/// A request and how long it took.
+async fn timed(
+    t0: std::time::Instant,
+    f: impl std::future::Future<Output = Raw>,
+) -> (Raw, std::time::Duration) {
+    let r = f.await;
+    (r, t0.elapsed())
+}
+
+/// A callback that is sent `after_ms` after the others (so that the exchanges of a few of them do
+/// not all want a place among the calls in the air in the same moment).
+async fn callback_after(
+    w: &World,
+    t0: std::time::Instant,
+    after_ms: u64,
+    jar: &mut Jar,
+    uri: &str,
+) -> (Raw, std::time::Duration) {
+    tokio::time::sleep(std::time::Duration::from_millis(after_ms)).await;
+    timed(t0, w.callback(jar, uri)).await
+}
+
+/// The fetch of the discovery document that another request has in the air is waited for by at
+/// most eight requests (at the call site: a plain `lock()` would let all nine wait); the ninth is
+/// told "unavailable" at once, and the eight get the document the one fetch brought. The fetch in
+/// the air is a stuck one, held by the test until the nine are in.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn failures_eight_starts_wait_for_a_stuck_discovery_fetch_and_the_ninth_is_told_at_once() {
+    let w = world(true).await;
+    w.keep_throttle();
+    w.state
+        .set_sso_timeout_for_test(std::time::Duration::from_secs(20));
+    let hold = w.state.hold_sso_discovery_fetch_for_test();
+    let t0 = std::time::Instant::now();
+    let release = std::time::Duration::from_millis(1500);
+    let mut jars: Vec<Jar> = (0..9).map(|_| Jar::default()).collect();
+    let [j0, j1, j2, j3, j4, j5, j6, j7, j8] = &mut jars[..] else {
+        unreachable!()
+    };
+    let (r0, r1, r2, r3, r4, r5, r6, r7, r8, released_at) = tokio::join!(
+        timed(t0, w.start(j0)),
+        timed(t0, w.start(j1)),
+        timed(t0, w.start(j2)),
+        timed(t0, w.start(j3)),
+        timed(t0, w.start(j4)),
+        timed(t0, w.start(j5)),
+        timed(t0, w.start(j6)),
+        timed(t0, w.start(j7)),
+        timed(t0, w.start(j8)),
+        async {
+            tokio::time::sleep(release).await;
+            drop(hold);
+            t0.elapsed()
+        },
+    );
+    let all = [r0, r1, r2, r3, r4, r5, r6, r7, r8];
+    let told: Vec<_> = all
+        .iter()
+        .filter(|(r, _)| r.location() == "/#oidc_error=unavailable")
+        .collect();
+    assert_eq!(
+        told.len(),
+        1,
+        "{:?}",
+        all.iter()
+            .map(|(r, t)| (r.location(), *t))
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        told[0].1 < released_at,
+        "the ninth was told only when the fetch was done: {:?} of {released_at:?}",
+        told[0].1
+    );
+    let started: Vec<_> = all
+        .iter()
+        .filter(|(r, _)| r.status == 303 && r.location().contains("/oauth2/v2.0/authorize"))
+        .collect();
+    assert_eq!(started.len(), 8, "the eight that waited got the document");
+    assert!(
+        started.iter().all(|(_, t)| *t >= released_at),
+        "they waited for the fetch that was in the air"
+    );
+    assert_eq!(
+        w.idp.hits("openid-configuration"),
+        1,
+        "one fetch brought the document for all of them"
+    );
+    assert!(
+        w.events("oidc_error")
+            .iter()
+            .any(|l| l.contains("too many requests are waiting for the provider")),
+        "{:?}",
+        w.events("oidc_error")
+    );
+}
+
+/// A request waits for the fetch another request has in the air no longer than the limit of a
+/// call (shortened for the test), and does not fetch meanwhile.
+// The test holds the right to fetch across its awaits on purpose: that is the stuck fetch.
+#[allow(clippy::await_holding_lock)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn failures_a_start_waits_for_a_stuck_discovery_fetch_no_longer_than_the_limit() {
+    let w = world(true).await;
+    w.state
+        .set_sso_timeout_for_test(std::time::Duration::from_millis(500));
+    let _hold = w.state.hold_sso_discovery_fetch_for_test();
+    let t0 = std::time::Instant::now();
+    // A wait longer than a few seconds is a failure of the test, not a wait for the real limit.
+    let (r, took) = tokio::time::timeout(
+        std::time::Duration::from_secs(8),
+        timed(t0, w.start(&mut Jar::default())),
+    )
+    .await
+    .expect("the start waited for the fetch that is in the air longer than the limit");
+    assert_eq!(r.location(), "/#oidc_error=unavailable", "{}", r.location());
+    assert!(
+        took >= std::time::Duration::from_millis(450) && took < std::time::Duration::from_secs(4),
+        "{took:?}"
+    );
+    assert_eq!(w.idp.hits("openid-configuration"), 0, "it did not fetch");
+    assert!(
+        w.events("oidc_error")
+            .iter()
+            .any(|l| l.contains("did not come in time")),
+        "{:?}",
+        w.events("oidc_error")
+    );
+}
+
+/// The same two rules for the key set, at its call site: of nine callbacks that reach a cold key
+/// set while a fetch of it is stuck in the air, eight wait and get what one fetch brings, and the
+/// ninth is told "unavailable" at once.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn failures_eight_callbacks_wait_for_a_stuck_key_set_fetch_and_the_ninth_is_told_at_once() {
+    let w = world(true).await;
+    w.keep_throttle();
+    w.state
+        .set_sso_timeout_for_test(std::time::Duration::from_secs(20));
+    let mut jars: Vec<Jar> = (0..9).map(|_| Jar::default()).collect();
+    let mut uris = Vec::new();
+    for jar in jars.iter_mut() {
+        let s = w.start(jar).await;
+        uris.push(w.idp.authorize(&s.location(), ADA_OID));
+    }
+    let hold = w.state.hold_sso_key_set_fetch_for_test();
+    let t0 = std::time::Instant::now();
+    let release = std::time::Duration::from_millis(3000);
+    let [j0, j1, j2, j3, j4, j5, j6, j7, j8] = &mut jars[..] else {
+        unreachable!()
+    };
+    let (r0, r1, r2, r3, r4, r5, r6, r7, r8, released_at) = tokio::join!(
+        callback_after(&w, t0, 0, j0, &uris[0]),
+        callback_after(&w, t0, 80, j1, &uris[1]),
+        callback_after(&w, t0, 160, j2, &uris[2]),
+        callback_after(&w, t0, 240, j3, &uris[3]),
+        callback_after(&w, t0, 320, j4, &uris[4]),
+        callback_after(&w, t0, 400, j5, &uris[5]),
+        callback_after(&w, t0, 480, j6, &uris[6]),
+        callback_after(&w, t0, 560, j7, &uris[7]),
+        callback_after(&w, t0, 640, j8, &uris[8]),
+        async {
+            tokio::time::sleep(release).await;
+            drop(hold);
+            t0.elapsed()
+        },
+    );
+    let all = [r0, r1, r2, r3, r4, r5, r6, r7, r8];
+    let shown = || {
+        all.iter()
+            .map(|(r, t)| (r.location(), *t))
+            .collect::<Vec<_>>()
+    };
+    let told: Vec<_> = all
+        .iter()
+        .filter(|(r, _)| r.location() == "/#oidc_error=unavailable")
+        .collect();
+    assert_eq!(told.len(), 1, "{:?}", shown());
+    assert!(
+        told[0].1 < released_at,
+        "the ninth was told only when the fetch was done: {:?} of {released_at:?}",
+        told[0].1
+    );
+    let signed_in: Vec<_> = all
+        .iter()
+        .filter(|(r, _)| r.location().starts_with("/#oidc="))
+        .collect();
+    assert_eq!(signed_in.len(), 8, "{:?}", shown());
+    assert!(
+        signed_in.iter().all(|(_, t)| *t >= released_at),
+        "{:?}",
+        shown()
+    );
+    assert_eq!(w.idp.hits("/discovery/v2.0/keys"), 1, "one fetch for all");
+}
+
+/// A callback waits for the key-set fetch another request has in the air no longer than the limit.
+// The test holds the right to fetch across its awaits on purpose: that is the stuck fetch.
+#[allow(clippy::await_holding_lock)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn failures_a_callback_waits_for_a_stuck_key_set_fetch_no_longer_than_the_limit() {
+    let w = world(true).await;
+    let mut jar = Jar::default();
+    let s = w.start(&mut jar).await;
+    let uri = w.idp.authorize(&s.location(), ADA_OID);
+    // The limit is the exchange's too: long enough for it to be answered in a busy test run.
+    w.state
+        .set_sso_timeout_for_test(std::time::Duration::from_millis(2000));
+    let _hold = w.state.hold_sso_key_set_fetch_for_test();
+    let t0 = std::time::Instant::now();
+    let (r, took) = tokio::time::timeout(
+        std::time::Duration::from_secs(12),
+        timed(t0, w.callback(&mut jar, &uri)),
+    )
+    .await
+    .expect("the callback waited for the fetch that is in the air longer than the limit");
+    assert_eq!(r.location(), "/#oidc_error=unavailable", "{}", r.location());
+    assert!(
+        took >= std::time::Duration::from_millis(1900) && took < std::time::Duration::from_secs(8),
+        "{took:?}"
+    );
+    assert_eq!(w.idp.hits("/discovery/v2.0/keys"), 0, "it did not fetch");
+    assert!(
+        w.events("oidc_error")
+            .iter()
+            .any(|l| l.contains("key set could not be fetched")
+                && l.contains("did not come in time")),
+        "{:?}",
+        w.events("oidc_error")
+    );
+}
+
+/// The fetch of the key set takes a place among the calls to the provider in the air (X8, N20 j):
+/// with one slow key-set fetch in the air, eight exchanges that want a place at the same time find
+/// seven, and the eighth is told "busy". (Without the place of the key-set fetch all eight would
+/// be served.)
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn failures_a_key_set_fetch_in_the_air_takes_one_of_the_places_of_the_calls() {
+    let w = world(true).await;
+    w.keep_throttle();
+    w.state
+        .set_sso_timeout_for_test(std::time::Duration::from_secs(20));
+    let mut jars: Vec<Jar> = (0..9).map(|_| Jar::default()).collect();
+    let mut uris = Vec::new();
+    for jar in jars.iter_mut() {
+        let s = w.start(jar).await;
+        uris.push(w.idp.authorize(&s.location(), ADA_OID));
+    }
+    // The key set is cold and slow; the exchanges that come later are slow too.
+    w.idp.st.lock().unwrap().jwks_delay_ms = 2500;
+    let [j0, j1, j2, j3, j4, j5, j6, j7, j8] = &mut jars[..] else {
+        unreachable!()
+    };
+    let first = w.callback(j0, &uris[0]);
+    let others = async {
+        // The key set is being fetched (its request has arrived and is being slept on).
+        while w.idp.arrived("/discovery/v2.0/keys") == 0 {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        w.idp.st.lock().unwrap().token_delay_ms = 1200;
+        tokio::join!(
+            w.callback(j1, &uris[1]),
+            w.callback(j2, &uris[2]),
+            w.callback(j3, &uris[3]),
+            w.callback(j4, &uris[4]),
+            w.callback(j5, &uris[5]),
+            w.callback(j6, &uris[6]),
+            w.callback(j7, &uris[7]),
+            w.callback(j8, &uris[8]),
+        )
+    };
+    let (a, o) = tokio::join!(first, others);
+    assert!(a.location().starts_with("/#oidc="), "{}", a.location());
+    let rest = [o.0, o.1, o.2, o.3, o.4, o.5, o.6, o.7];
+    let busy = rest
+        .iter()
+        .filter(|r| r.location() == "/#oidc_error=busy")
+        .count();
+    let signed_in = rest
+        .iter()
+        .filter(|r| r.location().starts_with("/#oidc="))
+        .count();
+    assert_eq!(
+        (busy, signed_in),
+        (1, 7),
+        "{:?}",
+        rest.map(|r| r.location())
+    );
+    assert_eq!(
+        w.idp.hits(&token_path()),
+        8,
+        "the first one's exchange and seven more; the eighth never reached Microsoft"
     );
 }
 

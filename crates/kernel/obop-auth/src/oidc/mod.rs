@@ -30,8 +30,8 @@ use crate::mfa::SessionError;
 use crate::webauthn::sha256;
 use crate::{Auth, Change, Epoch, bump_epoch, epoch_of, hex, random_bytes, str_list};
 use obop_commands::{
-    ADMIN_GROUP, LoginOutcome, MfaError, Principal, SsoApi, SsoEndpoints, SsoError, SsoIdentity,
-    SsoLeg, SsoProvider,
+    ADMIN_GROUP, AnonGroup, AnonLine, LoginOutcome, MfaError, Principal, SsoApi, SsoEndpoints,
+    SsoError, SsoIdentity, SsoLeg, SsoProvider,
 };
 use obop_storage::Fields;
 use serde_json::{Value as J, json};
@@ -48,37 +48,61 @@ pub const CODE_SECS: u64 = 60;
 /// is made SSO-only.
 pub const BREAK_GLASS_MIN: usize = 2;
 const MAX_SECRET_CHARS: usize = 512;
-/// How long an anonymous refusal is written once per source and kind (`audit_throttled`), in
-/// milliseconds.
+/// How long a line about a sign-in with no account to be named under is written once per source,
+/// kind and [`AnonLine`] (`audit_throttled`), in milliseconds.
 const THROTTLE_MS: u64 = 10 * 60 * 1000;
-/// The most lines of requests nobody signed in for that are written in an hour, for all sources
-/// together (`audit_throttled`). Past it one summary line is written and the rest are counted.
+/// The most such lines that are written in an hour, for all sources together, in each of the
+/// three groups of [`AnonLine::group`] (`audit_throttled`). Past it one summary line is written
+/// and the rest are counted.
 pub const ANON_LINES_PER_HOUR: u64 = 60;
 const ANON_WINDOW_MS: u64 = 60 * 60 * 1000;
-const ANON_COUNT_KEY: &str = "auth.evt:sso:hour";
-const ANON_DROPPED_KEY: &str = "auth.evt:sso:dropped";
+/// How long the number of lines that were left out is kept to be reported by the first line of
+/// the next hour.
+const ANON_DROPPED_MS: u64 = 24 * ANON_WINDOW_MS;
 
-/// The counter that says a line of this kind from this source was written lately. The text of the
-/// line is not part of it: it can carry what the caller chose.
-pub fn throttle_key(source: &str, kind: &str) -> String {
+/// The counter of the lines written in this hour in one group.
+pub fn anon_count_key(group: AnonGroup) -> String {
+    format!("auth.evt:sso:hour:{}", group.word())
+}
+
+/// The counter of the lines of one group that were left out and not reported yet.
+pub fn anon_dropped_key(group: AnonGroup) -> String {
+    format!("auth.evt:sso:dropped:{}", group.word())
+}
+
+/// The counter that says a line of this kind and sort from this source was written lately. The
+/// text of the line is not part of it: it can carry what the caller chose.
+pub fn throttle_key(source: &str, kind: &str, line: AnonLine) -> String {
     format!(
         "auth.evt:sso:{}",
-        hex(&sha256(format!("{source}\n{kind}").as_bytes()))
+        hex(&sha256(
+            format!("{source}\n{kind}\n{}", line.word()).as_bytes()
+        ))
     )
 }
 
+/// The setting that points the sign-in at a test authority.
+const TEST_AUTHORITY_VAR: &str = "OBOP_OIDC_TEST_AUTHORITY";
+
 /// The `OBOP_OIDC_TEST_AUTHORITY` of a development instance: a literal loopback address over
 /// http that stands in for `https://login.microsoftonline.com`. For tests only, and only together
-/// with `OBOP_CONNECTORS_ALLOW_LOOPBACK` (`1` or `true`, the spelling the outbound client reads):
-/// without that flag the value is ignored here, with a line on stderr, so that it cannot change
-/// the issuer of the bindings of an instance that does not let the outbound client reach a
-/// loopback address anyway. Any other value is ignored with a line on stderr as well.
+/// with `OBOP_CONNECTORS_ALLOW_LOOPBACK` (`1` or `true`, read by `obop_types::loopback_allowed`,
+/// the function the outbound client reads it with): without that flag the value is ignored here,
+/// with a line on stderr, so that it cannot change the issuer of the bindings of an instance that
+/// does not let the outbound client reach a loopback address anyway. A value that is not an
+/// `http://127.0.0.1:<port>` or `http://[::1]:<port>` address is ignored with a line on stderr as
+/// well; an empty value, and Microsoft's own authority (which is what the sign-in uses anyway),
+/// are ignored without one.
 pub(crate) fn authority_from_env() -> Option<String> {
+    authority_from_vars(|name| std::env::var(name).ok())
+}
+
+/// [`authority_from_env`] with the environment passed in: the names read and the way the flag is
+/// taken are what a test of the wiring looks at (the process environment is not changed by a test).
+fn authority_from_vars(get: impl Fn(&str) -> Option<String>) -> Option<String> {
     authority_from(
-        std::env::var("OBOP_OIDC_TEST_AUTHORITY").ok().as_deref(),
-        std::env::var("OBOP_CONNECTORS_ALLOW_LOOPBACK")
-            .ok()
-            .as_deref(),
+        get(TEST_AUTHORITY_VAR).as_deref(),
+        get(obop_types::ALLOW_LOOPBACK_ENV).as_deref(),
     )
 }
 
@@ -89,8 +113,7 @@ fn authority_from(value: Option<&str>, loopback_flag: Option<&str>) -> Option<St
     if v.is_empty() || v == verify::AUTHORITY {
         return None;
     }
-    // The same two spellings as `obop_connectors::runtime::Config::from_env`.
-    if !matches!(loopback_flag, Some("1" | "true")) {
+    if !obop_types::loopback_allowed(loopback_flag) {
         eprintln!(
             "OBOP_OIDC_TEST_AUTHORITY is ignored: it works only together with OBOP_CONNECTORS_ALLOW_LOOPBACK=1 (tests only)"
         );
@@ -674,7 +697,7 @@ impl Auth {
             "oidc_unbind",
             actor,
             &format!(
-                "unbound from object id {}; {n} session(s) signed out; agent tokens made in those sessions and apps connected through the OAuth sign-in (their grants and refresh tokens) keep working until the account is offboarded",
+                "unbound from object id {}; {n} session(s) signed out, and the phone apps of the account with them; agent tokens made in those sessions and apps connected through the OAuth sign-in for MCP clients (D64: their grants and refresh tokens) keep working until the account is offboarded",
                 link["oid"].as_str().unwrap_or("?")
             ),
         );
@@ -803,7 +826,7 @@ impl Auth {
             "oidc_sso_only",
             actor,
             &format!(
-                "signs in with Microsoft only; {n} session(s) signed out; {} break-glass administrator(s) remain",
+                "signs in with Microsoft only; {n} session(s) signed out, and the phone apps of the account with them; agent tokens and apps connected through the OAuth sign-in for MCP clients keep working until the account is offboarded; {} break-glass administrator(s) remain",
                 rest.len()
             ),
         );
@@ -1095,59 +1118,69 @@ impl SsoApi for Auth {
         self.event(user, kind, "-", detail);
     }
 
-    fn audit_throttled(&self, source: &str, kind: &str, detail: &str) {
+    fn audit_throttled(&self, source: &str, kind: &str, line: AnonLine, detail: &str) {
         let kind = match kind {
             "oidc_refused" | "oidc_start" | "oidc_cancelled" | "oidc_error" => kind,
             _ => "oidc_error",
         };
-        // One line per source and kind in ten minutes, whichever process sees it first (the text
-        // is not in the key). An unreadable counter writes the line (an unthrottled line is
+        // One line per source, kind and sort in ten minutes, whichever process sees it first (the
+        // text is not in the key). An unreadable counter writes the line (an unthrottled line is
         // better than a missing one).
         let first = self
             .backend
-            .counter_add(&throttle_key(source, kind), THROTTLE_MS, false)
+            .counter_add(&throttle_key(source, kind, line), THROTTLE_MS, false)
             .map_or(true, |n| n == 1);
         if !first {
             return;
         }
-        // And at most ANON_LINES_PER_HOUR in an hour for all sources together, so that many
-        // addresses do not fill the log either. The first line past the ceiling says so; the
-        // number that was not written is reported by the first line of the next hour.
+        // And at most ANON_LINES_PER_HOUR in an hour for all sources together in the group of the
+        // line, so that many addresses do not fill the log either, and so that the harmless lines
+        // of the begun sign-ins and the lines of requests that belong to no sign-in do not use up
+        // the budget of the lines that say why a sign-in went wrong. The first line past the
+        // ceiling says so; the number that was not written is reported by the first line of the
+        // next hour of the group.
+        let group = line.group();
+        let (count_key, dropped_key) = (anon_count_key(group), anon_dropped_key(group));
+        let what = match group {
+            AnonGroup::Start => "sign-ins begun",
+            AnonGroup::NoFlow => "callbacks that belong to no sign-in of this server",
+            AnonGroup::Failed => "sign-ins that went wrong",
+        };
         let n = self
             .backend
-            .counter_add(ANON_COUNT_KEY, ANON_WINDOW_MS, false)
+            .counter_add(&count_key, ANON_WINDOW_MS, false)
             .unwrap_or(0);
         if n > ANON_LINES_PER_HOUR {
             let _ = self
                 .backend
-                .counter_add(ANON_DROPPED_KEY, 24 * ANON_WINDOW_MS, false);
+                .counter_add(&dropped_key, ANON_DROPPED_MS, false);
             if n == ANON_LINES_PER_HOUR + 1 {
                 self.event(
                     "-",
                     "oidc_error",
                     "-",
-                    &format!("requests nobody signed in for reached the ceiling of {ANON_LINES_PER_HOUR} lines an hour: the others of this hour are not written, their number is written by the first line of the next hour"),
+                    &format!("the lines about {what} reached the ceiling of {ANON_LINES_PER_HOUR} an hour: the others of this hour are not written, their number is written by the first line of the next hour"),
                 );
             }
             return;
         }
         if n == 1
-            && let Ok(dropped) = self.backend.counter_get(ANON_DROPPED_KEY)
+            && let Ok(dropped) = self.backend.counter_get(&dropped_key)
             && dropped > 0
         {
-            let _ = self.backend.counter_reset(ANON_DROPPED_KEY);
+            let _ = self.backend.counter_reset(&dropped_key);
             self.event(
                 "-",
                 "oidc_error",
                 "-",
-                &format!("{dropped} line(s) of requests nobody signed in for were not written because the ceiling of {ANON_LINES_PER_HOUR} an hour was reached"),
+                &format!("{dropped} line(s) about {what} were not written because the ceiling of {ANON_LINES_PER_HOUR} an hour was reached"),
             );
         }
         self.event(
             "-",
             kind,
             "-",
-            &format!("{detail} (the next lines of this kind from this address are not written for 10 minutes)"),
+            &format!("{detail} (the next lines like this one from this address are not written for 10 minutes)"),
         );
     }
 

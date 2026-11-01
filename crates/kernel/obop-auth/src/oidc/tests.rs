@@ -14,8 +14,8 @@ use crate::passkey_tests::{ORIGIN, add, ctx, pw};
 use crate::webauthn::soft::SoftAuthenticator;
 use crate::{Auth, AuthConfig, SESSION_SECS, bump_epoch, token_hash};
 use obop_commands::{
-    ADMIN_GROUP, AccountsApi, Authenticator, LoginOutcome, MfaApi, MfaError, PasskeyApi, Principal,
-    SsoError, SsoIdentity,
+    ADMIN_GROUP, AccountsApi, AnonGroup, AnonLine, Authenticator, LoginOutcome, MfaApi, MfaError,
+    PasskeyApi, Principal, SsoError, SsoIdentity,
 };
 use obop_storage::Fields;
 use serde_json::{Value as J, json};
@@ -539,74 +539,48 @@ fn a_code_made_before_an_unbind_is_not_spent_after_the_same_identity_is_bound_ag
     assert!(sso(&r).exchange(&fresh, BINDER).is_ok());
 }
 
-/// The lines of requests nobody signed in for: one per source and kind in ten minutes whatever
-/// the text says, and a ceiling for all sources together.
+/// The lines about a sign-in that has no account to be named under: one per source, kind and sort
+/// in ten minutes whatever the text says.
 #[test]
-fn an_anonymous_line_is_one_per_source_and_kind_whatever_its_text_and_has_an_hourly_ceiling() {
+fn an_anonymous_line_is_one_per_source_kind_and_sort_in_ten_minutes_whatever_its_text() {
     let r = world();
     let lines = |kind: &str| events(&r, kind);
+    let src = "203.0.113.1";
     // The text is not in the key: forty texts, one line.
     for i in 0..40 {
-        sso(&r).audit_throttled("203.0.113.1", "oidc_error", &format!("text number {i}"));
+        sso(&r).audit_throttled(
+            src,
+            "oidc_error",
+            AnonLine::Provider,
+            &format!("text number {i}"),
+        );
     }
     assert_eq!(lines("oidc_error").len(), 1);
     assert!(lines("oidc_error")[0].contains("text number 0"));
     assert!(lines("oidc_error")[0].contains("not written for 10 minutes"));
+    // Another sort of line of the same kind from the same source is a line of its own (the
+    // slot is the reason too: a failure is not swallowed by an earlier line of the kind)...
+    sso(&r).audit_throttled(src, "oidc_error", AnonLine::TokenUnwell, "x");
+    assert_eq!(lines("oidc_error").len(), 2);
+    // ... and a repeat of either is not.
+    sso(&r).audit_throttled(src, "oidc_error", AnonLine::TokenUnwell, "x");
+    sso(&r).audit_throttled(src, "oidc_error", AnonLine::Provider, "x");
+    assert_eq!(lines("oidc_error").len(), 2);
     // Another kind, and another source, are lines of their own.
-    sso(&r).audit_throttled("203.0.113.1", "oidc_refused", "x");
-    sso(&r).audit_throttled("203.0.113.2", "oidc_error", "x");
+    sso(&r).audit_throttled(src, "oidc_refused", AnonLine::Provider, "x");
+    sso(&r).audit_throttled("203.0.113.2", "oidc_error", AnonLine::Provider, "x");
     assert_eq!(
         (lines("oidc_refused").len(), lines("oidc_error").len()),
-        (1, 2)
+        (1, 3)
     );
-    // A hundred more sources: the ceiling for all of them, then one line that says so.
-    let before = lines("oidc_error").len() + lines("oidc_refused").len();
-    for i in 0..100 {
-        sso(&r).audit_throttled(&format!("198.51.100.{i}"), "oidc_error", "y");
-    }
-    let written = lines("oidc_error").len() + lines("oidc_refused").len();
-    assert_eq!(
-        written as u64,
-        super::ANON_LINES_PER_HOUR + 1,
-        "{before} before, the ceiling, and the summary"
-    );
-    let said: Vec<String> = lines("oidc_error")
-        .into_iter()
-        .filter(|l| l.contains("ceiling"))
-        .collect();
-    assert_eq!(said.len(), 1, "{said:?}");
-    // The hour ends: the first line of the next one says how many were left out, once.
-    let left_out = 100 + 3 - super::ANON_LINES_PER_HOUR;
-    r.b.counter_reset(super::ANON_COUNT_KEY).unwrap();
-    sso(&r).audit_throttled("192.0.2.1", "oidc_error", "z");
-    let reports: Vec<String> = lines("oidc_error")
-        .into_iter()
-        .filter(|l| l.contains("were not written"))
-        .collect();
-    assert_eq!(reports.len(), 1, "{reports:?}");
+    // The slot lasts ten minutes (the counter says how long it has to live).
+    let ttl =
+        r.b.counter_ttl_ms(&super::throttle_key(src, "oidc_error", AnonLine::Provider))
+            .unwrap()
+            .expect("the slot is a counter that expires");
     assert!(
-        reports[0].starts_with(&format!("{left_out} line(s)")),
-        "{reports:?}"
-    );
-    sso(&r).audit_throttled("192.0.2.2", "oidc_error", "z");
-    assert_eq!(
-        lines("oidc_error")
-            .into_iter()
-            .filter(|l| l.contains("were not written"))
-            .count(),
-        1,
-        "reported once"
-    );
-    // Another hour: the report reset what it reported, so nothing is left to say.
-    r.b.counter_reset(super::ANON_COUNT_KEY).unwrap();
-    sso(&r).audit_throttled("192.0.2.3", "oidc_error", "z");
-    assert_eq!(
-        lines("oidc_error")
-            .into_iter()
-            .filter(|l| l.contains("were not written"))
-            .count(),
-        1,
-        "not reported again"
+        (10 * 60 * 1000 - 10_000..=10 * 60 * 1000).contains(&ttl),
+        "{ttl} ms"
     );
     // Only the sign-in kinds can be written through the throttled port as well: another kind
     // becomes an `oidc_error` line and is never a line of its own kind.
@@ -614,10 +588,178 @@ fn an_anonymous_line_is_one_per_source_and_kind_whatever_its_text_and_has_an_hou
     sso(&other).audit_throttled(
         "203.0.113.9",
         "login_ok",
+        AnonLine::Provider,
         "pretending to be a password sign-in",
     );
     assert!(events(&other, "login_ok").is_empty());
     assert_eq!(events(&other, "oidc_error").len(), 1);
+}
+
+/// A hundred sources write a line of one sort: sixty are written, the first one past that says so
+/// (and no other), the next hour says how many were left out, once.
+#[test]
+fn a_group_of_anonymous_lines_has_an_hourly_ceiling_of_sixty_that_says_so_and_reports_what_it_left_out()
+ {
+    let r = world();
+    let lines = |kind: &str| events(&r, kind);
+    let ceiling = super::ANON_LINES_PER_HOUR as usize;
+    assert_eq!(ceiling, 60);
+    let write = |i: usize| {
+        sso(&r).audit_throttled(
+            &format!("198.51.100.{i}"),
+            "oidc_error",
+            AnonLine::TokenUnwell,
+            "the token endpoint answered 503",
+        );
+    };
+    let said = || -> Vec<String> {
+        lines("oidc_error")
+            .into_iter()
+            .filter(|l| l.contains("ceiling"))
+            .collect()
+    };
+    // Exactly the ceiling: all written, nothing said.
+    for i in 0..ceiling {
+        write(i);
+    }
+    assert_eq!(lines("oidc_error").len(), ceiling);
+    assert!(said().is_empty());
+    // The first line past it is the line that says so, and nothing else is written.
+    write(ceiling);
+    assert_eq!(lines("oidc_error").len(), ceiling + 1);
+    assert_eq!(said().len(), 1, "{:?}", said());
+    assert!(
+        said()[0].contains("sign-ins that went wrong") && said()[0].contains("60 an hour"),
+        "{:?}",
+        said()
+    );
+    for i in ceiling + 1..100 {
+        write(i);
+    }
+    assert_eq!(
+        lines("oidc_error").len(),
+        ceiling + 1,
+        "the rest is not written"
+    );
+    // The hour is an hour, and what was left out is kept to be reported (a day at most).
+    let ttl = |key: String| {
+        r.b.counter_ttl_ms(&key)
+            .unwrap()
+            .expect("a counter that expires")
+    };
+    let hour = 60 * 60 * 1000;
+    let t = ttl(super::anon_count_key(AnonGroup::Failed));
+    assert!((hour - 10_000..=hour).contains(&t), "{t} ms");
+    let t = ttl(super::anon_dropped_key(AnonGroup::Failed));
+    assert!((23 * hour..=24 * hour).contains(&t), "{t} ms");
+    // The hour ends: the first line of the next one says how many were left out, once.
+    let left_out = 100 - ceiling;
+    r.b.counter_reset(&super::anon_count_key(AnonGroup::Failed))
+        .unwrap();
+    sso(&r).audit_throttled("192.0.2.1", "oidc_error", AnonLine::TokenUnwell, "z");
+    let reports = || -> Vec<String> {
+        lines("oidc_error")
+            .into_iter()
+            .filter(|l| l.contains("were not written"))
+            .collect()
+    };
+    assert_eq!(reports().len(), 1, "{:?}", reports());
+    assert!(
+        reports()[0].starts_with(&format!(
+            "{left_out} line(s) about sign-ins that went wrong"
+        )),
+        "{:?}",
+        reports()
+    );
+    sso(&r).audit_throttled("192.0.2.2", "oidc_error", AnonLine::TokenUnwell, "z");
+    assert_eq!(reports().len(), 1, "reported once");
+    // Another hour: the report reset what it reported, so nothing is left to say.
+    r.b.counter_reset(&super::anon_count_key(AnonGroup::Failed))
+        .unwrap();
+    sso(&r).audit_throttled("192.0.2.3", "oidc_error", AnonLine::TokenUnwell, "z");
+    assert_eq!(reports().len(), 1, "not reported again");
+}
+
+/// R2H-1: the harmless line of a begun sign-in and the lines of callbacks that belong to no
+/// sign-in are counted against ceilings of their own, so a busy hour of sign-ins, or anybody who
+/// sends callbacks with a made-up state, cannot use up the budget of the lines that say why a
+/// sign-in went wrong (an expired client secret shows as a refusal of the token endpoint).
+#[test]
+fn begun_sign_ins_and_callbacks_with_no_flow_cannot_use_up_the_lines_that_say_why_a_sign_in_failed()
+{
+    let r = world();
+    let ceiling = super::ANON_LINES_PER_HOUR as usize;
+    // A busy hour: a hundred addresses begin a sign-in.
+    for i in 0..100 {
+        sso(&r).audit_throttled(
+            &format!("198.51.100.{i}"),
+            "oidc_start",
+            AnonLine::Start,
+            "a sign-in with Microsoft was begun",
+        );
+    }
+    assert_eq!(events(&r, "oidc_start").len(), ceiling);
+    // And a hundred send a callback with a state that is no flow of ours.
+    for i in 0..100 {
+        sso(&r).audit_throttled(
+            &format!("203.0.113.{i}"),
+            "oidc_refused",
+            AnonLine::NoFlow,
+            "the sign-in flow is unknown, already used or expired",
+        );
+    }
+    let refused = events(&r, "oidc_refused");
+    assert_eq!(refused.len(), ceiling);
+    // Each ceiling says what it counts.
+    let said: Vec<String> = events(&r, "oidc_error")
+        .into_iter()
+        .filter(|l| l.contains("ceiling"))
+        .collect();
+    assert_eq!(said.len(), 2, "{said:?}");
+    assert!(
+        said.iter().any(|l| l.contains("about sign-ins begun")),
+        "{said:?}"
+    );
+    assert!(
+        said.iter()
+            .any(|l| l.contains("about callbacks that belong to no sign-in of this server")),
+        "{said:?}"
+    );
+    // The expired secret: the lines that say so are still written, from a new address and from an
+    // address that has been sending noise of the same kind.
+    sso(&r).audit_throttled(
+        "192.0.2.50",
+        "oidc_refused",
+        AnonLine::TokenRefused,
+        "the token endpoint answered 401 \"invalid_client\"",
+    );
+    sso(&r).audit_throttled(
+        "203.0.113.5",
+        "oidc_refused",
+        AnonLine::IdToken,
+        "the id token was refused: the audience is not this client",
+    );
+    let refused = events(&r, "oidc_refused");
+    assert_eq!(refused.len(), ceiling + 2, "{}", refused.len());
+    assert!(
+        refused.iter().any(|l| l.contains("401")),
+        "the failure line is written"
+    );
+    assert!(
+        refused.iter().any(|l| l.contains("audience")),
+        "a failure line of the kind the address's noise line has is written"
+    );
+    // They were counted against the budget of failures, which has room for sixty of them.
+    assert_eq!(
+        r.b.counter_get(&super::anon_count_key(AnonGroup::Failed))
+            .unwrap(),
+        2
+    );
+    assert_eq!(
+        r.b.counter_get(&super::anon_count_key(AnonGroup::Start))
+            .unwrap(),
+        100
+    );
 }
 
 #[test]
@@ -974,6 +1116,60 @@ fn the_test_authority_is_ignored_without_the_loopback_flag() {
         issuer_of_a_binding(authority_from(Some(lo), Some("1")), "eve", BOB_OID),
         format!("{lo}/{TENANT}/v2.0")
     );
+}
+
+/// The wiring of that rule: `Auth::with_config` reads the process environment through
+/// `authority_from_vars`. The test passes the environment in, so that it sees which two settings
+/// are read, that the flag is taken from `OBOP_CONNECTORS_ALLOW_LOOPBACK` (and not assumed) and
+/// that the variable alone, whatever the other setting says, changes nothing. The same read of the
+/// real environment of a real process is in `crates/obop/tests/sso_cli.rs`.
+#[test]
+fn the_test_authority_is_read_from_the_two_settings_it_names_and_the_flag_from_its_own() {
+    use super::authority_from_vars;
+    use std::cell::RefCell;
+    const VAR: &str = "OBOP_OIDC_TEST_AUTHORITY";
+    const FLAG: &str = "OBOP_CONNECTORS_ALLOW_LOOPBACK";
+    let lo = "http://127.0.0.1:4455";
+    let read = |pairs: &[(&str, &str)]| -> (Option<String>, Vec<String>) {
+        let asked = RefCell::new(Vec::new());
+        let got = authority_from_vars(|name| {
+            asked.borrow_mut().push(name.to_string());
+            pairs
+                .iter()
+                .find(|(k, _)| *k == name)
+                .map(|(_, v)| v.to_string())
+        });
+        let mut asked = asked.into_inner();
+        asked.sort();
+        (got, asked)
+    };
+    // Both set: honoured, and exactly these two names are read.
+    let (got, asked) = read(&[(VAR, lo), (FLAG, "1")]);
+    assert_eq!(got.as_deref(), Some(lo));
+    assert_eq!(asked, [FLAG, VAR]);
+    assert_eq!(read(&[(VAR, lo), (FLAG, "true")]).0.as_deref(), Some(lo));
+    // The variable alone is ignored; so is the flag alone; and a flag in a spelling that the
+    // outbound client does not read.
+    assert_eq!(read(&[(VAR, lo)]).0, None);
+    assert_eq!(read(&[(FLAG, "1")]).0, None);
+    assert_eq!(read(&[]).0, None);
+    for flag in ["yes", "0", "", "TRUE", "on", " 1", "false"] {
+        assert_eq!(read(&[(VAR, lo), (FLAG, flag)]).0, None, "flag {flag:?}");
+    }
+    // The flag is judged by the function the outbound client uses.
+    for flag in ["1", "true", "yes", "0", "", "TRUE"] {
+        assert_eq!(
+            read(&[(VAR, lo), (FLAG, flag)]).0.is_some(),
+            obop_types::loopback_allowed(Some(flag)),
+            "flag {flag:?}"
+        );
+    }
+    // Other settings do not stand in for either of them.
+    assert_eq!(
+        read(&[("OBOP_OIDC_TEST_AUTHORITY_2", lo), (FLAG, "1")]).0,
+        None
+    );
+    assert_eq!(read(&[(VAR, lo), ("OBOP_ALLOW_LOOPBACK", "1")]).0, None);
 }
 
 #[test]
@@ -1409,6 +1605,89 @@ fn a_binding_of_another_tenant_than_the_providers_is_not_made_microsoft_only() {
     assert_eq!(row["binding_current"], false);
 }
 
+/// What an unbind ends and what it leaves, as the line of the log says it: the sessions, and with
+/// them the phone apps (a device is a sign-in like a session); not the agent tokens the account
+/// made, and not an application connected through the OAuth sign-in for MCP clients.
+#[test]
+fn an_unbind_ends_the_sessions_and_the_phone_apps_but_not_agent_tokens_or_mcp_apps() {
+    use obop_commands::OAuthTokens;
+    let r = world();
+    signed_in_once(&r, ADA_OID);
+    let (session_token, p) = session(&r.a, "ada");
+    let scopes = vec!["base.user".to_string()];
+    let agent = r.a.issue_agent_token(&p, &scopes, "bot").unwrap();
+    // Two connected applications of the account: a grant that no device record belongs to (an MCP
+    // client), and one that a device record names (a phone app).
+    let connect = |grant: &str| -> String {
+        let mut g = Fields::new();
+        g.insert("owner".into(), J::from("ada"));
+        g.insert("client_id".into(), J::from("c1"));
+        g.insert("revoked".into(), J::Bool(false));
+        g.insert("expires_at".into(), J::from(T0 + 86_400));
+        r.b.insert("oauth_grant", grant, &g).unwrap();
+        let mut rf = Fields::new();
+        rf.insert("grant".into(), J::from(grant));
+        r.b.insert("oauth_refresh", &format!("refresh-{grant}"), &rf)
+            .unwrap();
+        let (token, _) =
+            r.a.issue_oauth_access("ada", &scopes, "app", 3600, "https://x.test/mcp", grant)
+                .unwrap();
+        let mut patch = Fields::new();
+        patch.insert("access_id".into(), J::from(token_hash(&token)));
+        r.b.update("oauth_grant", grant, &patch).unwrap();
+        token
+    };
+    let mcp = connect("grant-mcp");
+    let phone = connect("grant-phone");
+    let mut d = Fields::new();
+    for (k, v) in [
+        ("user", "ada"),
+        ("state", "active"),
+        ("grant", "grant-phone"),
+        ("registered_at", "2026-10-31T10:00:00.000000Z"),
+        ("name", "Ada's phone"),
+        ("platform", "ios"),
+        ("client_name", "obop"),
+    ] {
+        d.insert(k.into(), J::from(v));
+    }
+    r.b.insert("device", "dev-1", &d).unwrap();
+
+    sso(&r).unbind(&admin("root1"), "ada").unwrap();
+
+    let revoked = |table: &str, id: &str| r.b.get(table, id).unwrap().unwrap()["revoked"] == true;
+    // Ended: the session, and the phone (its device, grant, access token and refresh token).
+    assert!(r.a.resolve(&session_token).is_none());
+    assert_eq!(
+        r.b.get("device", "dev-1").unwrap().unwrap()["state"],
+        "revoked"
+    );
+    assert!(revoked("oauth_grant", "grant-phone"));
+    assert!(revoked("auth_token", &token_hash(&phone)));
+    assert!(
+        r.b.get("oauth_refresh", "refresh-grant-phone")
+            .unwrap()
+            .is_none()
+    );
+    // Not ended: the agent token and the MCP application, which the line of the log says.
+    assert!(r.a.resolve(&agent).is_some(), "the agent token works");
+    assert!(!revoked("oauth_grant", "grant-mcp"));
+    assert!(!revoked("auth_token", &token_hash(&mcp)));
+    assert!(
+        r.b.get("oauth_refresh", "refresh-grant-mcp")
+            .unwrap()
+            .is_some()
+    );
+    let line = events(&r, "oidc_unbind").pop().unwrap();
+    assert!(
+        line.contains("the phone apps of the account with them")
+            && line.contains("agent tokens")
+            && line.contains("for MCP clients")
+            && line.contains("keep working"),
+        "{line}"
+    );
+}
+
 #[test]
 fn unbinding_ends_the_sessions_and_a_code_in_the_air_and_says_how_many() {
     let r = world();
@@ -1653,8 +1932,9 @@ fn a_right_password_on_a_microsoft_only_account_locks_it_like_a_wrong_one() {
         said(&r, PW);
     }
     // Five failures lock the account whatever was typed: the two attempts above and the first
-    // three of the loop are five (right passwords count like wrong ones), and the sixth and the
-    // seventh attempt get the lockout's answer, as after five wrong ones.
+    // three of the loop are five (right passwords count like wrong ones), and the attempts after
+    // them get the lockout's answer, as after five wrong ones (the sixth is the last of the loop,
+    // the seventh and the eighth are the two that are asserted).
     assert!(said(&r, PW).contains("too many attempts"), "locked");
     assert!(said(&r, "not the password").contains("too many attempts"));
 }

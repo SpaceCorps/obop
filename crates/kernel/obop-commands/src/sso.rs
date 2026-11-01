@@ -9,6 +9,124 @@
 
 use crate::{LoginOutcome, MfaError, Principal};
 
+/// What a line of [`SsoApi::audit_throttled`] is about. A fixed set: it is part of the key under
+/// which a line is counted, so a caller cannot choose it, and it decides which hourly ceiling
+/// the line is counted against (`group`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AnonLine {
+    /// A sign-in was begun: the harmless line of the success path of the start.
+    Start,
+    /// A callback with a state that is not a flow of this server (unknown, spent or expired):
+    /// nobody has signed in for it, and anybody can send it.
+    NoFlow,
+    // A sign-in went wrong, at its start or after it was begun; each word is what stopped it.
+    /// The provider's settings could not be read.
+    Settings,
+    /// The discovery document could not be used.
+    Discovery,
+    /// The browser that came back is not the one that left.
+    Browser,
+    /// The provider ended the sign-in with an error (or the person said no).
+    Provider,
+    /// The provider's redirect carried no code.
+    NoCode,
+    /// The provider was switched off meanwhile.
+    SwitchedOff,
+    /// Too many calls to the provider were in the air.
+    Busy,
+    /// The token endpoint could not be reached.
+    TokenUnreachable,
+    /// The token endpoint answered 429 or 5xx.
+    TokenUnwell,
+    /// The token endpoint refused (an expired client secret shows here).
+    TokenRefused,
+    /// The key set could not be fetched.
+    KeySet,
+    /// The key set could not be used.
+    KeySetUnusable,
+    /// The id token was refused.
+    IdToken,
+    /// The account side could not finish the sign-in.
+    Begin,
+}
+
+/// The groups of [`AnonLine`] that have an hourly ceiling each.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AnonGroup {
+    /// The lines of begun sign-ins.
+    Start,
+    /// The lines of callbacks that carry no flow of this server.
+    NoFlow,
+    /// The lines of sign-ins that went wrong, at their start or after they were begun.
+    Failed,
+}
+
+impl AnonGroup {
+    pub const ALL: [AnonGroup; 3] = [AnonGroup::Start, AnonGroup::NoFlow, AnonGroup::Failed];
+
+    pub fn word(self) -> &'static str {
+        match self {
+            AnonGroup::Start => "start",
+            AnonGroup::NoFlow => "no_flow",
+            AnonGroup::Failed => "failed",
+        }
+    }
+}
+
+impl AnonLine {
+    /// Every line, so that a test can forget the counters of all of them.
+    pub const ALL: [AnonLine; 16] = [
+        AnonLine::Start,
+        AnonLine::NoFlow,
+        AnonLine::Settings,
+        AnonLine::Discovery,
+        AnonLine::Browser,
+        AnonLine::Provider,
+        AnonLine::NoCode,
+        AnonLine::SwitchedOff,
+        AnonLine::Busy,
+        AnonLine::TokenUnreachable,
+        AnonLine::TokenUnwell,
+        AnonLine::TokenRefused,
+        AnonLine::KeySet,
+        AnonLine::KeySetUnusable,
+        AnonLine::IdToken,
+        AnonLine::Begin,
+    ];
+
+    /// The ceiling the line is counted against: a begun sign-in, a callback that belongs to no
+    /// sign-in of this server, or a sign-in that went wrong after it was begun.
+    pub fn group(self) -> AnonGroup {
+        match self {
+            AnonLine::Start => AnonGroup::Start,
+            AnonLine::NoFlow => AnonGroup::NoFlow,
+            _ => AnonGroup::Failed,
+        }
+    }
+
+    /// The word the line is keyed by.
+    pub fn word(self) -> &'static str {
+        match self {
+            AnonLine::Start => "start",
+            AnonLine::NoFlow => "no_flow",
+            AnonLine::Settings => "settings",
+            AnonLine::Discovery => "discovery",
+            AnonLine::Browser => "browser",
+            AnonLine::Provider => "provider",
+            AnonLine::NoCode => "no_code",
+            AnonLine::SwitchedOff => "switched_off",
+            AnonLine::Busy => "busy",
+            AnonLine::TokenUnreachable => "token_unreachable",
+            AnonLine::TokenUnwell => "token_unwell",
+            AnonLine::TokenRefused => "token_refused",
+            AnonLine::KeySet => "key_set",
+            AnonLine::KeySetUnusable => "key_set_unusable",
+            AnonLine::IdToken => "id_token",
+            AnonLine::Begin => "begin",
+        }
+    }
+}
+
 /// The configuration of the one provider, as an administrator sees it. The client secret is never
 /// part of it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -135,14 +253,16 @@ pub trait SsoApi: Send + Sync {
     /// Write a line to the security log (`oidc_*`); never a token, a code or a secret.
     fn audit(&self, user: &str, kind: &str, detail: &str);
 
-    /// The line of a request nobody signed in for (an unknown flow, a failed callback, a refused
-    /// exchange of the provider): at most one security event per `source` and kind in ten
-    /// minutes (the text is not part of that, it can be the caller's), and at most sixty such
-    /// lines an hour for all sources together; the first one past that says so, and the first
-    /// line of the next hour says how many were not written. `source` is the caller's address as
-    /// the HTTP layer buckets it (an IPv6 address by its /64). `detail` must be a fixed text:
-    /// nothing the caller sent goes into it, except a word out of a fixed set.
-    fn audit_throttled(&self, source: &str, kind: &str, detail: &str);
+    /// A line about a sign-in that has no account to be named under (a begun sign-in, a callback
+    /// that belongs to none, a sign-in that went wrong on the way): at most one security event per
+    /// `source`, kind and [`AnonLine`] in ten minutes (the text is not part of that, it can be
+    /// the caller's), and at most sixty lines an hour for all sources together in each of the
+    /// three groups of [`AnonLine::group`], so that a flood of one group does not hide another.
+    /// The first line past the ceiling of a group says so, and the first line of its next hour
+    /// says how many were not written. `source` is the caller's address as the HTTP layer buckets
+    /// it (an IPv6 address by its /64). `detail` must be a fixed text: nothing the caller sent
+    /// goes into it, except a word out of a fixed set.
+    fn audit_throttled(&self, source: &str, kind: &str, line: AnonLine, detail: &str);
 
     // ---- administration (an administrator whose session is whole; agents only propose) ----
 

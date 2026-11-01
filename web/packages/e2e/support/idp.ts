@@ -7,9 +7,9 @@
 // default claims always (`iss`, `tid`, `aud`, `sub`, `nonce`, times); `oid`, `preferred_username`
 // and `name` only when the `profile` scope was asked for and is granted; `amr` and `auth_time`
 // only when the app registration has them as optional claims. `GET /control?optional_claims=0|1`
-// and `profile=0|1` change what the registration is like (`profile=0` models a request or a
-// registration that lacks `profile`, not a missing administrator consent: Microsoft answers that
-// with an error page of its own), and `GET /control/scopes` lists the
+// and `profile=0|1` change what the registration is like (`profile=0` models a registration that
+// does not grant `profile`, not a missing administrator consent: Microsoft answers that with an
+// error page of its own), and `GET /control/scopes` lists the
 // scopes the authorization requests asked for. Nothing here reaches a network beyond loopback.
 // Test code only.
 import { createHash, createPrivateKey, generateKeyPairSync, randomBytes, sign } from "node:crypto";

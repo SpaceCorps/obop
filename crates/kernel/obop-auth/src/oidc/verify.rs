@@ -16,7 +16,7 @@
 //!    exactly one), `azp` the client id when present, `nonce` equal to the one of this flow,
 //!    `exp` in the future, `nbf` and `iat` not in the future (a skew of two minutes), `oid` and
 //!    `tid` GUIDs, `amr` read as a list of strings (absent or of another type: no `mfa`), and
-//!    `auth_time` kept when it is a non-negative whole number.
+//!    `auth_time` kept when it is a non-negative whole number that fits in 64 bits.
 //!
 //! The issuer format `https://login.microsoftonline.com/<tenant id>/v2.0` is Microsoft's
 //! documented one for v2.0 tokens (general knowledge, not tried against a real tenant).
@@ -346,7 +346,9 @@ fn claims(c: &J, exp: &Expect<'_>) -> Result<SsoIdentity, VerifyError> {
                 .as_u64()
                 .or_else(|| {
                     v.as_f64()
-                        .filter(|f| *f >= 0.0 && f.fract() == 0.0)
+                        .filter(|f| {
+                            *f >= 0.0 && *f < 18_446_744_073_709_551_616.0 && f.fract() == 0.0
+                        })
                         .map(|f| f as u64)
                 })
                 .map(Some)
@@ -372,7 +374,7 @@ fn claims(c: &J, exp: &Expect<'_>) -> Result<SsoIdentity, VerifyError> {
     let oid = text(c, "oid").map(str::to_ascii_lowercase);
     let Some(oid) = oid.filter(|o| is_guid(o)) else {
         return refuse(
-            "the token carries no object id (oid); Entra sends it only when the profile scope is asked for and granted, so the scope that was asked for, or the permissions of the app registration, is the usual cause",
+            "the token carries no object id (oid); Entra sends it only when the profile scope is asked for and granted, and obop always asks for openid and profile, so the permissions of the app registration are the usual cause",
         );
     };
     // `amr` is a list of strings. Anything else says nothing about a second factor.

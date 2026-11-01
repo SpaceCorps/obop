@@ -1,7 +1,7 @@
 //! The id token checks of D91 as a table: every row is a way a token can be wrong, and every one
 //! must be refused; the first row is the token that must pass. A check that is left out of
-//! `verify` makes exactly its row fail (the mutations that were tried are listed in
-//! docs/ISSUES.md, "Mutation checks of D91").
+//! `verify` makes its row fail (the mutations that were tried, each with the tests that then
+//! fail, are listed in docs/ISSUES.md, "Mutation checks of D91").
 
 use super::soft::{Entra, StandIn};
 use super::verify::*;
@@ -265,6 +265,18 @@ fn the_object_id_is_a_guid_and_is_required() {
     assert_eq!(verify_id_token(&t, &keys(&s), &expect()).unwrap().oid, OID);
 }
 
+/// A time that does not fit in 64 bits is not turned into the largest time (a saturating cast
+/// would make an expiry of `1e30` "never"): it is not a time claim at all.
+#[test]
+fn a_time_claim_that_does_not_fit_in_64_bits_is_refused_as_the_expiry() {
+    check(|c| c["exp"] = json!(1e30), "a time claim is not a number");
+    check(
+        |c| c["exp"] = json!(18_446_744_073_709_551_616.0f64),
+        "a time claim is not a number",
+    );
+    check(|c| c["exp"] = json!(-1), "a time claim is not a number");
+}
+
 #[test]
 fn amr_is_a_list_and_absence_is_not_mfa() {
     let id = |f: fn(&mut J)| {
@@ -292,6 +304,13 @@ fn amr_is_a_list_and_absence_is_not_mfa() {
     assert_eq!(id(|c| c["auth_time"] = json!(-1)).auth_time, None);
     assert_eq!(id(|c| c["auth_time"] = json!(1.5)).auth_time, None);
     assert_eq!(id(|c| c["auth_time"] = json!(true)).auth_time, None);
+    // A number that does not fit in 64 bits is not saturated into the largest time: it is dropped
+    // (and as the expiry it is refused, below).
+    assert_eq!(id(|c| c["auth_time"] = json!(1e30)).auth_time, None);
+    assert_eq!(
+        id(|c| c["auth_time"] = json!(18_446_744_073_709_551_616.0f64)).auth_time,
+        None
+    );
     assert_eq!(id(|c| c["auth_time"] = J::Null).auth_time, None);
     assert_eq!(
         id(|c| c["auth_time"] = json!(1_700_000_000u64)).auth_time,

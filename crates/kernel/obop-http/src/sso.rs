@@ -33,7 +33,7 @@ use axum::{
     http::{HeaderValue, StatusCode, header, request::Parts},
     response::{IntoResponse, Response},
 };
-use obop_commands::{MfaError, SsoApi, SsoEndpoints, SsoError, SsoLeg};
+use obop_commands::{AnonLine, MfaError, SsoApi, SsoEndpoints, SsoError, SsoLeg};
 use obop_connectors::net::Request;
 use obop_connectors::oauth::pkce_pair;
 use obop_keys::{hex, random};
@@ -73,7 +73,10 @@ const MAX_WAITING: usize = 8;
 /// resolver is not under this limit: `Client::send_within` resolves the host name first, and a
 /// resolver that hangs holds the thread of the request that is resolving it. Of those there are
 /// at most `MAX_IN_FLIGHT`, and `MAX_WAITING` more that wait up to this long: at most sixteen
-/// blocking threads of the server belong to the Microsoft sign-in at any time.
+/// blocking threads of the server belong to the Microsoft sign-in at any time, plus, for the
+/// moment between taking the right to fetch and asking for a place (which is refused at once when
+/// none is free), the two requests that hold the right of the discovery document and of the key
+/// set: at most eighteen.
 const SSO_TIMEOUT: Duration = Duration::from_secs(6);
 /// How often the key set may be fetched again because a token named a key the cache lacks
 /// (all server processes together). The token comes only in the provider's own answer to the
@@ -129,6 +132,26 @@ impl HttpState {
         );
     }
 
+    /// For tests: take the right to fetch the discovery document, as a fetch that is stuck in the
+    /// air holds it (the limit of a call does not cover the system resolver, so a fetch can be
+    /// stuck for longer than the limit). Given back when the guard is dropped.
+    #[doc(hidden)]
+    pub fn hold_sso_discovery_fetch_for_test(&self) -> std::sync::MutexGuard<'_, ()> {
+        self.sso
+            .discovery_flight
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+    }
+
+    /// For tests: the same for the fetch of the key set.
+    #[doc(hidden)]
+    pub fn hold_sso_key_set_fetch_for_test(&self) -> std::sync::MutexGuard<'_, ()> {
+        self.sso
+            .jwks_flight
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+    }
+
     /// For tests: forget the discovery document, the key set and the remembered failures, as ten
     /// minutes (or a restart) would.
     #[doc(hidden)]
@@ -175,8 +198,10 @@ fn host_of(authority: &str) -> String {
     host.to_ascii_lowercase()
 }
 
-/// The `error` codes of OAuth 2.0 (RFC 6749 sections 4.1.2.1 and 5.2), of OpenID Connect and the
-/// ones Microsoft documents for the authorization and token endpoints that the log keeps by name.
+/// The twelve `error` codes that the log keeps by name, taken from those of OAuth 2.0 (RFC 6749
+/// sections 4.1.2.1 and 5.2), of OpenID Connect and of the errors that Microsoft documents for
+/// its two endpoints. Any other code, also a documented one such as `unsupported_response_type`
+/// or `invalid_resource`, is logged as `other`.
 const KNOWN_ERRORS: [&str; 12] = [
     "access_denied",
     "interaction_required",
@@ -535,7 +560,12 @@ fn start_blocking(s: &HttpState, parts: &Parts) -> Response {
         Ok(Some(l)) => l,
         Ok(None) => return back(s, "unavailable", &[]),
         Err(e) => {
-            api.audit_throttled(&ip, "oidc_error", &format!("start: {}", describe(&e)));
+            api.audit_throttled(
+                &ip,
+                "oidc_error",
+                AnonLine::Settings,
+                &format!("start: {}", describe(&e)),
+            );
             return back(s, "unavailable", &[]);
         }
     };
@@ -545,6 +575,7 @@ fn start_blocking(s: &HttpState, parts: &Parts) -> Response {
             api.audit_throttled(
                 &ip,
                 "oidc_error",
+                AnonLine::Discovery,
                 &format!("start: the discovery document could not be used: {e}"),
             );
             return back(s, "unavailable", &[]);
@@ -579,7 +610,12 @@ fn start_blocking(s: &HttpState, parts: &Parts) -> Response {
         challenge,
     );
     // One line per address and ten minutes, not one per request: a start is a free call.
-    api.audit_throttled(&ip, "oidc_start", "a sign-in with Microsoft was begun");
+    api.audit_throttled(
+        &ip,
+        "oidc_start",
+        AnonLine::Start,
+        "a sign-in with Microsoft was begun",
+    );
     with_cookies(
         see_other(&url),
         &[set_cookie(
@@ -649,6 +685,7 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
         api.audit_throttled(
             &ip,
             "oidc_refused",
+            AnonLine::NoFlow,
             "the sign-in flow is unknown, already used or expired",
         );
         return back(s, "failed", &[clear_flow]);
@@ -671,6 +708,7 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
         api.audit_throttled(
             &ip,
             "oidc_refused",
+            AnonLine::Browser,
             "the browser that came back is not the one that began the sign-in",
         );
         return back(s, "failed", &[clear_flow]);
@@ -687,6 +725,7 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
             } else {
                 "oidc_error"
             },
+            AnonLine::Provider,
             &format!("the provider ended the sign-in with {err:?}"),
         );
         let word = if cancelled { "cancelled" } else { "failed" };
@@ -696,6 +735,7 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
         api.audit_throttled(
             &ip,
             "oidc_refused",
+            AnonLine::NoCode,
             "the provider's redirect carried no code",
         );
         return back(s, "failed", &[clear_flow]);
@@ -706,12 +746,18 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
             api.audit_throttled(
                 &ip,
                 "oidc_refused",
+                AnonLine::SwitchedOff,
                 "the provider was switched off during the sign-in",
             );
             return back(s, "failed", &[clear_flow]);
         }
         Err(e) => {
-            api.audit_throttled(&ip, "oidc_error", &format!("callback: {}", describe(&e)));
+            api.audit_throttled(
+                &ip,
+                "oidc_error",
+                AnonLine::Settings,
+                &format!("callback: {}", describe(&e)),
+            );
             return back(s, "unavailable", &[clear_flow]);
         }
     };
@@ -721,6 +767,7 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
             api.audit_throttled(
                 &ip,
                 "oidc_error",
+                AnonLine::Discovery,
                 &format!("callback: the discovery document could not be used: {e}"),
             );
             return back(s, "unavailable", &[clear_flow]);
@@ -742,6 +789,7 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
             api.audit_throttled(
                 &ip,
                 "oidc_error",
+                AnonLine::Busy,
                 "too many calls to the provider are in the air; this sign-in was not tried",
             );
             return back(s, "busy", &[clear_flow]);
@@ -769,6 +817,7 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
             api.audit_throttled(
                 &ip,
                 "oidc_error",
+                AnonLine::TokenUnreachable,
                 &format!("the token endpoint could not be reached: {e}"),
             );
             return back(s, "unavailable", &[clear_flow]);
@@ -780,6 +829,7 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
         api.audit_throttled(
             &ip,
             "oidc_error",
+            AnonLine::TokenUnwell,
             &format!("the token endpoint answered {}", resp.status),
         );
         return back(s, "unavailable", &[clear_flow]);
@@ -790,6 +840,7 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
         api.audit_throttled(
             &ip,
             "oidc_refused",
+            AnonLine::TokenRefused,
             &format!(
                 "the token endpoint answered {}{}",
                 resp.status,
@@ -808,6 +859,7 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
             api.audit_throttled(
                 &ip,
                 "oidc_error",
+                AnonLine::KeySet,
                 &format!("the key set could not be fetched: {e}"),
             );
             return back(s, "unavailable", &[clear_flow]);
@@ -825,6 +877,7 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
                 api.audit_throttled(
                     &ip,
                     "oidc_error",
+                    AnonLine::KeySet,
                     &format!("the key set could not be fetched again: {e}"),
                 );
                 return back(s, "unavailable", &[clear_flow]);
@@ -838,6 +891,7 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
             api.audit_throttled(
                 &ip,
                 "oidc_error",
+                AnonLine::KeySetUnusable,
                 &format!("the key set could not be used: {m}"),
             );
             return back(s, "unavailable", &[clear_flow]);
@@ -846,6 +900,7 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
             api.audit_throttled(
                 &ip,
                 "oidc_refused",
+                AnonLine::IdToken,
                 &format!("the id token was refused: {}", describe(&e)),
             );
             return back(s, "failed", &[clear_flow]);
@@ -863,7 +918,12 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
         ),
         // The reason is in the log already (`begin` wrote it); the person is told nothing more.
         Err(SsoError::Unavailable(m)) => {
-            api.audit_throttled(&ip, "oidc_error", &format!("callback: {m}"));
+            api.audit_throttled(
+                &ip,
+                "oidc_error",
+                AnonLine::Begin,
+                &format!("callback: {m}"),
+            );
             back(s, "unavailable", &[clear_flow])
         }
         Err(_) => back(s, "failed", &[clear_flow]),

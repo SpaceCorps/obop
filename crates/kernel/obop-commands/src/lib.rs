@@ -1724,7 +1724,9 @@ pub use public::{
     Adjust, Lookup, PublicApi, PublicFilter, PublicRead, PublicReceipt, PublicRecord, PublicSpec,
     PublicSubmit, Receipt, Submission, SubmitError,
 };
-pub use sso::{SsoApi, SsoEndpoints, SsoError, SsoIdentity, SsoLeg, SsoProvider};
+pub use sso::{
+    AnonGroup, AnonLine, SsoApi, SsoEndpoints, SsoError, SsoIdentity, SsoLeg, SsoProvider,
+};
 pub use store::Store;
 
 pub mod names {
