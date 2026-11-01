@@ -1997,6 +1997,22 @@ async fn failures_many_addresses_meet_the_hourly_ceiling_and_one_subnet_is_one_a
     );
 }
 
+/// A start from `ip`: the jar with the cookie of the flow, and the address to send the browser to.
+async fn begin_at(w: &World, ip: &str) -> (Jar, String) {
+    let mut jar = Jar::default();
+    let s = w
+        .send_h(
+            "GET",
+            "/api/auth/oidc/start",
+            &jar,
+            None,
+            &[("x-forwarded-for", ip)],
+        )
+        .await;
+    jar.absorb(&s);
+    (jar, s.location())
+}
+
 /// R2H-1 at the HTTP leg: a busy hour of begun sign-ins and a stream of callbacks with a made-up
 /// state use up the budgets of their own groups, and the line that says why a real sign-in was
 /// refused (an expired client secret shows as a refusal of the token endpoint) is still written,
@@ -2086,6 +2102,44 @@ async fn failures_a_busy_hour_and_noise_do_not_hide_why_a_real_sign_in_was_refus
         "{:?}",
         w.events("oidc_refused")
     );
+    // And three more sorts of failure, each from an address that has sent none of its kind, with
+    // the budget of the noise used up: a browser that is not the one that began the sign-in, a
+    // redirect with no code, and a token endpoint that is not well. Each is counted against the
+    // budget of the failures, so each is written.
+    w.idp.reset();
+    {
+        let h = [("x-forwarded-for", "203.0.113.2")];
+        let (_, to_provider) = begin_at(&w, "203.0.113.2").await;
+        let state = pairs(to_provider.split_once('?').unwrap().1)["state"].clone();
+        let uri = format!("/api/auth/oidc/callback?code=x&state={state}");
+        failed(
+            &w.send_h("GET", &uri, &Jar::default(), None, &h).await,
+            "failed",
+        );
+    }
+    {
+        let h = [("x-forwarded-for", "203.0.113.3")];
+        let (jar, to_provider) = begin_at(&w, "203.0.113.3").await;
+        let state = pairs(to_provider.split_once('?').unwrap().1)["state"].clone();
+        let uri = format!("/api/auth/oidc/callback?state={state}");
+        failed(&w.send_h("GET", &uri, &jar, None, &h).await, "failed");
+    }
+    {
+        w.idp.st.lock().unwrap().token_status = 503;
+        let h = [("x-forwarded-for", "192.0.2.78")];
+        let (jar, to_provider) = begin_at(&w, "192.0.2.78").await;
+        let uri = w.idp.authorize(&to_provider, ADA_OID);
+        let r = w.send_h("GET", &uri, &jar, None, &h).await;
+        assert_eq!(r.location(), "/#oidc_error=unavailable");
+        w.idp.reset();
+    }
+    let lines = |kind: &str, text: &str| w.events(kind).iter().filter(|l| l.contains(text)).count();
+    assert_eq!(
+        lines("oidc_refused", "is not the one that began the sign-in"),
+        1
+    );
+    assert_eq!(lines("oidc_refused", "carried no code"), 1);
+    assert_eq!(lines("oidc_error", "the token endpoint answered 503"), 1);
     assert_eq!(noise(&w), ceiling, "no more noise lines were written");
     // And the ceilings of the two groups that were used up said so.
     let said: Vec<String> = w
@@ -2582,6 +2636,109 @@ async fn failures_eight_callbacks_wait_for_a_stuck_key_set_fetch_and_the_ninth_i
     assert_eq!(w.idp.hits(KEYS), 1, "one fetch for all");
 }
 
+/// The cap of eight waiting requests is one cap for both fetches, the discovery document and the
+/// key set (the bound of eighteen threads of the sign-in depends on it): four callbacks wait for a
+/// stuck fetch of the key set, four starts wait for a stuck fetch of the discovery document, and a
+/// fifth start, the ninth request that waits, is told "unavailable" at once. The two fetches are
+/// let go of when eight wait and the ninth has been told.
+// The test holds the right to fetch of the discovery document across its awaits on purpose: that
+// is the stuck fetch.
+#[allow(clippy::await_holding_lock)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn failures_the_cap_of_eight_waiting_requests_is_shared_by_the_two_fetches() {
+    let w = world(true).await;
+    w.keep_throttle();
+    w.state
+        .set_sso_timeout_for_test(std::time::Duration::from_secs(20));
+    // Four sign-ins begun, for the four callbacks.
+    let mut jars: Vec<Jar> = (0..4).map(|_| Jar::default()).collect();
+    let mut uris = Vec::new();
+    for jar in jars.iter_mut() {
+        let s = w.start(jar).await;
+        uris.push(w.idp.authorize(&s.location(), ADA_OID));
+    }
+    let key_set_hold = w.state.hold_sso_key_set_fetch_for_test();
+    let answered = std::sync::atomic::AtomicUsize::new(0);
+    let [j0, j1, j2, j3] = &mut jars[..] else {
+        unreachable!()
+    };
+    let mut starters: Vec<Jar> = (0..5).map(|_| Jar::default()).collect();
+    let [s0, s1, s2, s3, s4] = &mut starters[..] else {
+        unreachable!()
+    };
+    // The callbacks exchange their codes and then wait for the key set that is held.
+    let callbacks = async {
+        tokio::join!(
+            w.callback(j0, &uris[0]),
+            w.callback(j1, &uris[1]),
+            w.callback(j2, &uris[2]),
+            w.callback(j3, &uris[3]),
+        )
+    };
+    // When the four wait, the discovery document is forgotten and its fetch is held too, and five
+    // starts need it: four wait for it, and the fifth finds the eight places taken.
+    let starts = async {
+        until(std::time::Duration::from_secs(12), || {
+            w.state.sso_waiting_for_test() == 4
+        })
+        .await;
+        w.state.forget_sso_cache_for_test();
+        let discovery_hold = w.state.hold_sso_discovery_fetch_for_test();
+        let (a, b, c, d, e, ()) = tokio::join!(
+            counted(&answered, w.start(s0)),
+            counted(&answered, w.start(s1)),
+            counted(&answered, w.start(s2)),
+            counted(&answered, w.start(s3)),
+            counted(&answered, w.start(s4)),
+            async {
+                until(std::time::Duration::from_secs(12), || {
+                    w.state.sso_waiting_for_test() == 8 && answered.load(Ordering::SeqCst) >= 1
+                })
+                .await;
+                drop(discovery_hold);
+                drop(key_set_hold);
+            },
+        );
+        [a, b, c, d, e]
+    };
+    let (callbacks, starts) = tokio::join!(callbacks, starts);
+    let told = starts
+        .iter()
+        .filter(|r| r.location() == "/#oidc_error=unavailable")
+        .count();
+    let begun = starts
+        .iter()
+        .filter(|r| r.status == 303 && r.location().contains("/oauth2/v2.0/authorize"))
+        .count();
+    assert_eq!(
+        (told, begun),
+        (1, 4),
+        "{:?}",
+        starts.iter().map(|r| r.location()).collect::<Vec<_>>()
+    );
+    let signed_in = [&callbacks.0, &callbacks.1, &callbacks.2, &callbacks.3]
+        .iter()
+        .filter(|r| r.location().starts_with("/#oidc="))
+        .count();
+    assert_eq!(
+        signed_in, 4,
+        "the four callbacks got what one fetch brought"
+    );
+    assert_eq!(w.idp.hits(KEYS), 1, "one fetch of the key set for all four");
+    assert_eq!(
+        w.idp.hits(DISCOVERY),
+        2,
+        "the first start of the test, and one fetch for the four starts that waited"
+    );
+    assert!(
+        w.events("oidc_error")
+            .iter()
+            .any(|l| l.contains("too many requests are waiting for the provider")),
+        "{:?}",
+        w.events("oidc_error")
+    );
+}
+
 /// A callback waits for the key-set fetch another request has in the air no longer than the limit.
 /// The limit is shortened while the exchange of the code is in the air (it has taken the long
 /// one), so that the shortened limit is the wait's alone.
@@ -2636,7 +2793,8 @@ async fn failures_a_callback_waits_for_a_stuck_key_set_fetch_no_longer_than_the_
     );
 }
 
-/// The fetch of the key set takes a place among the calls to the provider in the air (X8, N20 j):
+/// The fetch of the key set takes a place among the calls to the provider in the air (row
+/// `r3-key-set-fetch-takes-no-place` of the mutation table in docs/ISSUES.md):
 /// with one key-set fetch in the air, seven exchanges find a place and the eighth, which wants a
 /// place at the same time, is told "busy". (Without the place of the key-set fetch all eight would
 /// be served.) The fetch and the exchanges stay in the air, held by the stand-in, until the eighth

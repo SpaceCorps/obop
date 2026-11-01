@@ -1765,6 +1765,8 @@ mod limits_tests;
 #[cfg(test)]
 mod shows_option_tests;
 #[cfg(test)]
+mod sso_anon_tests;
+#[cfg(test)]
 mod sysfields_tests;
 #[cfg(test)]
 mod tests;

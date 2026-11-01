@@ -222,7 +222,7 @@ fn the_provider_is_configured_shown_kept_and_removed_from_the_command_line() {
 
 /// D91 Decision 1 on the real binary: `OBOP_OIDC_TEST_AUTHORITY` is read from the process
 /// environment, it is honoured only together with `OBOP_CONNECTORS_ALLOW_LOOPBACK` in the spelling
-/// the outbound client reads, and each case says so on standard error.
+/// the outbound client reads, and each case says so on standard error in one line.
 #[test]
 fn the_test_authority_of_the_process_is_ignored_without_the_loopback_setting_and_says_so() {
     let dir = Dir::new("authority");
@@ -242,6 +242,12 @@ fn the_test_authority_of_the_process_is_ignored_without_the_loopback_setting_and
         String::from_utf8_lossy(&o.stderr).to_string()
     };
     let ignored = "OBOP_OIDC_TEST_AUTHORITY is ignored: it works only together with OBOP_CONNECTORS_ALLOW_LOOPBACK=1";
+    // How many lines of standard error are about the variable (a case says it once).
+    let about = |e: &str| {
+        e.lines()
+            .filter(|l| l.contains("OBOP_OIDC_TEST_AUTHORITY"))
+            .count()
+    };
     // Nothing set, or the flag alone: nothing to say.
     assert!(!stderr(&[]).contains("OBOP_OIDC_TEST_AUTHORITY"));
     assert!(
@@ -253,6 +259,7 @@ fn the_test_authority_of_the_process_is_ignored_without_the_loopback_setting_and
         alone.contains(ignored) && !alone.contains("WARNING"),
         "{alone}"
     );
+    assert_eq!(about(&alone), 1, "{alone}");
     for flag in ["yes", "0", "", "TRUE", "on"] {
         let e = stderr(&[
             ("OBOP_OIDC_TEST_AUTHORITY", LO),
@@ -262,6 +269,7 @@ fn the_test_authority_of_the_process_is_ignored_without_the_loopback_setting_and
             e.contains(ignored) && !e.contains("WARNING"),
             "flag {flag:?}: {e}"
         );
+        assert_eq!(about(&e), 1, "flag {flag:?}: {e}");
     }
     // Both, in either of the two spellings: honoured, with the warning that says what is trusted.
     for flag in ["1", "true"] {
@@ -275,6 +283,7 @@ fn the_test_authority_of_the_process_is_ignored_without_the_loopback_setting_and
             )) && !e.contains("is ignored"),
             "flag {flag:?}: {e}"
         );
+        assert_eq!(about(&e), 1, "flag {flag:?}: {e}");
     }
     // With the flag, a value that is not a loopback address is ignored, and said.
     let e = stderr(&[
@@ -282,6 +291,7 @@ fn the_test_authority_of_the_process_is_ignored_without_the_loopback_setting_and
         ("OBOP_CONNECTORS_ALLOW_LOOPBACK", "1"),
     ]);
     assert!(e.contains("it must be http://127.0.0.1:<port>"), "{e}");
+    assert_eq!(about(&e), 1, "{e}");
 }
 
 #[test]
