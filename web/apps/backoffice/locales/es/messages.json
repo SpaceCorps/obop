@@ -1967,5 +1967,15 @@
   "Verifies you": "Le verifica",
   "You will no longer be able to sign in with it. Your other sessions are signed out.": "Ya no podrá iniciar sesión con ella. Sus otras sesiones se cerrarán.",
   "Your passkeys": "Sus claves de acceso",
-  "Your second step: touch or unlock the passkey.": "Su segundo paso: toque o desbloquee la clave de acceso."
+  "Your second step: touch or unlock the passkey.": "Su segundo paso: toque o desbloquee la clave de acceso.",
+  "Add a document from Google Drive": "Añadir un documento desde Google Drive",
+  "Folders": "Carpetas",
+  "From Google Drive": "Desde Google Drive",
+  "Google Docs, Sheets and Slides come in as PDF. Files up to the size the document field allows; nothing is changed in Drive.": "Los Documentos, Hojas de cálculo y Presentaciones de Google se traen como PDF. Archivos hasta el tamaño que permite el campo del documento; no se cambia nada en Drive.",
+  "Modified": "Modificado",
+  "My Drive": "Mi unidad",
+  "Search": "Buscar",
+  "Search by name": "Buscar por nombre",
+  "Show more": "Mostrar más",
+  "Size": "Tamaño"
 }

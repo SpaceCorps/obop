@@ -20,6 +20,9 @@ mod bulk_tests;
 mod connectors_tests;
 #[cfg(test)]
 mod cors_tests;
+mod drive_source;
+#[cfg(test)]
+mod drive_tests;
 #[cfg(test)]
 mod error_seam_tests;
 #[cfg(test)]
@@ -191,7 +194,7 @@ const USAGE: &str = "usage: obop <command>
   storage check [--db URL] [--plane NAME] [--strict]
                                                 WAL archiving, TLS and durability settings of the PostgreSQL host; age of the last
                                                 verified backup, its off-host copy and its drill; the storage-encryption attestation
-  storage drive-authorize [--scope drive.file|drive]
+  storage drive-authorize [--scope drive.file|drive.readonly|drive]
                                                 get the refresh token for uploaded files on Google Drive (OBOP_GDRIVE_CLIENT_ID and
                                                 OBOP_GDRIVE_CLIENT_SECRET set): prints a link, waits for the browser on a loopback
                                                 port, prints the token once (OBOP_BLOB_STORE=gdrive://FOLDER_ID, docs/DEPLOY.md)
@@ -1044,6 +1047,14 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
     let state = obop_http::HttpState::new(app.dispatcher.clone(), auth);
     state.set_connectors(app.connectors.clone());
     state.set_payments(app.payments.clone());
+    match obop_blob_gdrive::DriveBrowser::from_env() {
+        Ok(Some(b)) => {
+            state.set_drive(std::sync::Arc::new(drive_source::Source(b)));
+            eprintln!("Google Drive browser: on (OBOP_GDRIVE_BROWSE_REFRESH_TOKEN is set)");
+        }
+        Ok(None) => {}
+        Err(e) => return Err(fail(&format!("error: {e}"))),
+    }
     state.set_trust_proxy(o.trust_proxy);
     state.set_default_language(default_language);
     if let Some(l) = default_language {

@@ -428,6 +428,29 @@ How it behaves: the store mints short-lived access tokens from the refresh token
 
 Limits: whole files go up and down in memory (the upload size limits of D60 apply first), one request per blob, Drive's own quotas and per-user rate limits apply, a Drive folder has no per-business prefix (use one folder per instance), and the token of a Google Cloud project in *testing* status expires after seven days: publish the consent screen (internal) or the store starts failing with `invalid_grant`. A shared drive and Google Workspace data-region questions are not looked at. Per-app routing (different apps to different stores) and other providers (S3-compatible, OneDrive) are not built; they would be more implementations of the same `BlobBytes` trait.
 
+### Browsing a Google Drive from Documents
+
+The **From Google Drive** button of the Documents app opens a browser over a Drive: folders, a search by name, and **Add** on a file. The server fetches the file (a Google Doc, Sheet, Slides file or Drawing is exported **as PDF**; any other file comes as it is, up to the size the field allows), stores it as an upload for `documents_document.attachment` and the new document opens in the back office prefilled (title from the file name, `location` set to the Drive link, the file attached, kind *contract*, confidentiality *internal*); the person reviews and saves it like any record. Nothing is ever written to Drive. It is one Drive for the whole instance, and it is independent of the file store above: Drive can be browsed while files are kept in the database, and the other way round.
+
+**Status:** implemented and tested against a fake Drive on a loopback port and in a real browser against such a fake (`crates/kernel/obop-blob-gdrive/src/browse.rs`, `obop-http/src/drive.rs`, `web/apps/backoffice/src/DriveBrowser.tsx`). It has **not** been run against the real Google service.
+
+It needs its own refresh token, because browsing needs the read-only scope `drive.readonly` (see every file of the account) and the file store needs only `drive.file`:
+
+```bash
+OBOP_GDRIVE_CLIENT_ID=... OBOP_GDRIVE_CLIENT_SECRET=... obop storage drive-authorize --scope drive.readonly
+```
+
+Set the printed token as the secret `OBOP_GDRIVE_BROWSE_REFRESH_TOKEN` (the client id and secret are the ones of the file store; one OAuth client serves both) and redeploy. The browser is **off** while that variable is unset. `obop storage check` then adds a `drive browser` line that names the Google account the token belongs to.
+
+| Setting | Meaning |
+|---|---|
+| `OBOP_GDRIVE_CLIENT_ID`, `OBOP_GDRIVE_CLIENT_SECRET` | The OAuth client (secrets), as for the file store. |
+| `OBOP_GDRIVE_BROWSE_REFRESH_TOKEN` | The `drive.readonly` token (secret). Turns the browser on. |
+| `OBOP_DRIVE_BROWSE_GROUP` | The permission group that may browse and import. Default `platform.admin`, because the connection is one Drive for everybody and the token sees all of it. Set `documents.manager` (or another group) to let more people. An agent can never browse. |
+| `OBOP_GDRIVE_API_BASE`, `OBOP_GDRIVE_TOKEN_URL` | End-to-end tests only: point the browser at a fake Drive. Honoured only for `http://127.0.0.1:` and `http://localhost:` addresses, so no setting can send the credentials elsewhere. |
+
+Routes (bearer token of a person): `GET /api/drive/status` (`connected`, `may_browse`), `GET /api/drive/files?parent=&q=&page=`, `POST /api/drive/import` with `{"id", "field": "model.field"}`. An import goes through the same upload service as `POST /api/blobs`, so the field's write rights, size limit, type check and upload rate limit apply; the result is a blob id that a record stores, and each import (or failed import) is written to the security log (`drive_import`, `drive_import_failed`). Limits: My Drive and what is shared with the account, not shared drives; listings are 50 a page; the Drive account is a processor the operator must record themselves (it does not pass the connectors' egress gate); a token in a Google Cloud project in *testing* status expires after seven days.
+
 ## The server key
 
 `OBOP_SECRET_KEY` seals four kinds of secret: two-factor seeds, connection credentials and OAuth tokens (and the keys behind pseudonyms), and the transient sessions, vaults and plans above. Every sealed value names the key that sealed it (an id: the first eight hex digits of a SHA-256, which says nothing usable about the key), so opening picks the right key at once and a missing key is reported by id, never by content.
