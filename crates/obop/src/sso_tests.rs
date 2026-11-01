@@ -2029,6 +2029,28 @@ async fn failures_a_busy_hour_and_noise_do_not_hide_why_a_real_sign_in_was_refus
         .filter(|l| l.contains("token endpoint answered 401"))
         .collect();
     assert_eq!(said_why.len(), 2, "{said_why:?}");
+    // And a token that is refused (a registration that signs for another client), from an address
+    // that sent noise of the same kind.
+    w.idp.reset();
+    w.idp
+        .edit(|c| c["aud"] = json!("99999999-0000-0000-0000-000000000000"));
+    {
+        let h = [("x-forwarded-for", "203.0.113.1")];
+        let mut jar = Jar::default();
+        let s = w
+            .send_h("GET", "/api/auth/oidc/start", &jar, None, &h)
+            .await;
+        jar.absorb(&s);
+        let uri = w.idp.authorize(&s.location(), ADA_OID);
+        failed(&w.send_h("GET", &uri, &jar, None, &h).await, "failed");
+    }
+    assert!(
+        w.events("oidc_refused")
+            .iter()
+            .any(|l| l.contains("the id token was refused") && l.contains("audience")),
+        "{:?}",
+        w.events("oidc_refused")
+    );
     assert_eq!(noise(&w), ceiling, "no more noise lines were written");
     // And the ceilings of the two groups that were used up said so.
     let said: Vec<String> = w
