@@ -355,7 +355,7 @@ export function Palette({ apps, onClose }: { apps: App[]; onClose: () => void })
                 <Icon name="settings" size={14} />
               </span>
             )}
-            <span>{h.title}</span>
+            <span className="pal-title">{h.title}</span>
             <em>{h.hint}</em>
           </li>
         ))}
