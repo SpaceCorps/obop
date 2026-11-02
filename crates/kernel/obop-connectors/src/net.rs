@@ -240,6 +240,11 @@ impl Client {
         Self { cfg, lookup, hosts }
     }
 
+    /// Whether plain http to a literal loopback host is allowed (tests and local development).
+    pub fn allows_loopback(&self) -> bool {
+        self.cfg.allow_loopback
+    }
+
     /// Replace the operator's host allow-list (empty means no extra restriction) with one that is
     /// not followed any more.
     pub fn set_instance_hosts(&self, hosts: Vec<String>) {

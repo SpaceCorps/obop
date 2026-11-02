@@ -1,0 +1,633 @@
+//! The Google Drive page of the back office (the `google_drive` provider) against a fake Google on
+//! a loopback port: client id and secret under the provider policy, the authorization link, the
+//! callback with PKCE, sealed tokens, the Drive browser reading its credentials from the database,
+//! the browse group, and disconnecting. No call goes to Google.
+
+use axum::{body::Body, http::Request};
+use http_body_util::BodyExt;
+use obop_auth::Auth;
+use obop_commands::{Dispatcher, Store};
+use obop_connectors::catalog::providers;
+use obop_connectors::drive::{Endpoints, use_endpoints};
+use obop_connectors::{Config, Runtime, SecretBox};
+use obop_media::fixtures as fx;
+use serde_json::{Value as J, json};
+use std::collections::HashMap;
+use std::io::{Read, Write};
+use std::net::TcpListener;
+use std::sync::{Arc, Mutex, OnceLock};
+use tower::ServiceExt;
+
+use crate::drive_source::Source;
+
+const CLIENT_ID: &str = "1234-abc.apps.googleusercontent.com";
+const CLIENT_SECRET: &str = "GOCSPX-client-secret-for-the-test";
+const REFRESH: &str = "1//refresh-token-for-the-test";
+const PW: &str = "a long enough password";
+
+/// What the fake Google remembers and how it misbehaves on request.
+#[derive(Default)]
+struct Google {
+    /// code -> the PKCE challenge it was issued for
+    codes: HashMap<String, String>,
+    token_calls: Vec<String>,
+    about_status: u16,
+    omit_refresh_token: bool,
+}
+
+struct Fake {
+    state: Mutex<Google>,
+}
+
+/// One fake for every test of this file: the Google addresses are process-wide.
+fn fake() -> &'static Arc<Fake> {
+    static FAKE: OnceLock<Arc<Fake>> = OnceLock::new();
+    FAKE.get_or_init(|| {
+        let l = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = l.local_addr().unwrap().port();
+        let fake = Arc::new(Fake {
+            state: Mutex::new(Google {
+                about_status: 200,
+                ..Google::default()
+            }),
+        });
+        let f = fake.clone();
+        std::thread::spawn(move || {
+            for s in l.incoming() {
+                let Ok(s) = s else { break };
+                let f = f.clone();
+                std::thread::spawn(move || serve(&f, s));
+            }
+        });
+        let base = format!("http://127.0.0.1:{port}");
+        use_endpoints(Some(Endpoints {
+            auth_url: format!("{base}/authorize"),
+            token_url: format!("{base}/token"),
+            api_base: base,
+        }))
+        .unwrap();
+        fake
+    })
+}
+
+fn read_request(s: &mut std::net::TcpStream) -> (String, String, String) {
+    let mut buf = Vec::new();
+    let mut chunk = [0u8; 4096];
+    loop {
+        let n = s.read(&mut chunk).unwrap_or(0);
+        if n == 0 {
+            break;
+        }
+        buf.extend_from_slice(&chunk[..n]);
+        let text = String::from_utf8_lossy(&buf).to_string();
+        if let Some((head, body)) = text.split_once("\r\n\r\n") {
+            let want = head
+                .lines()
+                .find_map(|l| {
+                    l.to_ascii_lowercase()
+                        .strip_prefix("content-length:")
+                        .map(|v| v.trim().parse::<usize>().unwrap_or(0))
+                })
+                .unwrap_or(0);
+            if body.len() >= want {
+                break;
+            }
+        }
+    }
+    let text = String::from_utf8_lossy(&buf).to_string();
+    let (head, body) = text.split_once("\r\n\r\n").unwrap_or((&text, ""));
+    let mut lines = head.lines();
+    let first = lines.next().unwrap_or("");
+    let mut parts = first.split(' ');
+    let method = parts.next().unwrap_or("").to_string();
+    let path = parts.next().unwrap_or("").to_string();
+    let auth = lines
+        .find(|l| l.to_ascii_lowercase().starts_with("authorization:"))
+        .map(|l| l.split_once(':').unwrap().1.trim().to_string())
+        .unwrap_or_default();
+    let _ = method;
+    (path, auth, body.to_string())
+}
+
+fn reply(s: &mut std::net::TcpStream, status: &str, ctype: &str, body: &[u8]) {
+    let head = format!(
+        "HTTP/1.1 {status}\r\ncontent-type: {ctype}\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
+        body.len()
+    );
+    let _ = s.write_all(head.as_bytes());
+    let _ = s.write_all(body);
+}
+
+fn form(body: &str) -> HashMap<String, String> {
+    url::form_urlencoded::parse(body.as_bytes())
+        .into_owned()
+        .collect()
+}
+
+fn serve(f: &Fake, mut s: std::net::TcpStream) {
+    let (path, auth, body) = read_request(&mut s);
+    let png = fx::png(8, 8, 3);
+    if path == "/token" {
+        let p = form(&body);
+        let mut g = f.state.lock().unwrap();
+        g.token_calls.push(p["grant_type"].clone());
+        let ok = p["client_id"] == CLIENT_ID && p["client_secret"] == CLIENT_SECRET;
+        let json = match p["grant_type"].as_str() {
+            "authorization_code"
+                if ok
+                    && g.codes.get(&p["code"]).is_some_and(|c| {
+                        *c == obop_connectors::oauth::challenge_of(&p["code_verifier"])
+                    }) =>
+            {
+                let rt = if g.omit_refresh_token {
+                    String::new()
+                } else {
+                    format!(r#","refresh_token":"{REFRESH}""#)
+                };
+                format!(r#"{{"access_token":"at-1","expires_in":3600{rt}}}"#)
+            }
+            "refresh_token" if ok && p["refresh_token"] == REFRESH => {
+                format!(
+                    r#"{{"access_token":"at-{}","expires_in":3600}}"#,
+                    g.token_calls.len()
+                )
+            }
+            _ => {
+                reply(
+                    &mut s,
+                    "400 Bad Request",
+                    "application/json",
+                    br#"{"error":"invalid_grant"}"#,
+                );
+                return;
+            }
+        };
+        reply(&mut s, "200 OK", "application/json", json.as_bytes());
+        return;
+    }
+    if !auth.starts_with("Bearer at-") {
+        reply(&mut s, "401 Unauthorized", "application/json", b"{}");
+        return;
+    }
+    let (route, query) = path.split_once('?').unwrap_or((&path, ""));
+    let q = form(query);
+    match route {
+        "/drive/v3/about" => {
+            let st = f.state.lock().unwrap().about_status;
+            if st == 200 {
+                reply(
+                    &mut s,
+                    "200 OK",
+                    "application/json",
+                    br#"{"user":{"emailAddress":"ada@example.com"}}"#,
+                );
+            } else {
+                reply(
+                    &mut s,
+                    &format!("{st} Refused"),
+                    "application/json",
+                    br#"{"error":{"message":"Drive API has not been used"}}"#,
+                );
+            }
+        }
+        "/drive/v3/files" => {
+            let body = json!({"files": [{
+                "id": "f1", "name": "NDA - Acme Oy", "mimeType": "image/png",
+                "modifiedTime": "2026-10-30T09:00:00Z", "size": png.len().to_string(),
+                "webViewLink": "https://drive.google.com/file/d/f1/view"
+            }]});
+            reply(
+                &mut s,
+                "200 OK",
+                "application/json",
+                body.to_string().as_bytes(),
+            );
+        }
+        "/drive/v3/files/f1" if q.get("alt").map(String::as_str) == Some("media") => {
+            reply(&mut s, "200 OK", "image/png", &png);
+        }
+        "/drive/v3/files/f1" => {
+            let body = json!({
+                "id": "f1", "name": "Logo.png", "mimeType": "image/png",
+                "modifiedTime": "2026-10-30T09:00:00Z", "size": png.len().to_string(),
+                "webViewLink": "https://drive.google.com/file/d/f1/view"
+            });
+            reply(
+                &mut s,
+                "200 OK",
+                "application/json",
+                body.to_string().as_bytes(),
+            );
+        }
+        _ => reply(&mut s, "404 Not Found", "application/json", b"{}"),
+    }
+}
+
+struct Rig {
+    router: axum::Router,
+    store: Store,
+    admin: String,
+    member: String,
+    outsider: String,
+}
+
+async fn call(r: &axum::Router, req: Request<Body>) -> (u16, String) {
+    let resp = r.clone().oneshot(req).await.unwrap();
+    let status = resp.status().as_u16();
+    let bytes = resp.into_body().collect().await.unwrap().to_bytes();
+    (status, String::from_utf8_lossy(&bytes).to_string())
+}
+
+fn as_json(s: &str) -> J {
+    serde_json::from_str(s).unwrap_or(J::Null)
+}
+
+impl Rig {
+    async fn post(&self, token: Option<&str>, path: &str, body: J) -> (u16, J) {
+        let mut b = Request::post(path).header("content-type", "application/json");
+        if let Some(t) = token {
+            b = b.header("authorization", format!("Bearer {t}"));
+        }
+        let (s, t) = call(&self.router, b.body(Body::from(body.to_string())).unwrap()).await;
+        (s, as_json(&t))
+    }
+
+    async fn get(&self, token: Option<&str>, path: &str) -> (u16, J) {
+        let mut b = Request::get(path);
+        if let Some(t) = token {
+            b = b.header("authorization", format!("Bearer {t}"));
+        }
+        let (s, t) = call(&self.router, b.body(Body::empty()).unwrap()).await;
+        (s, as_json(&t))
+    }
+
+    /// A command that must succeed; its `value`.
+    async fn ok(&self, cmd: &str, body: J) -> J {
+        let (m, c) = cmd.split_once('.').unwrap();
+        let (s, v) = self
+            .post(Some(&self.admin), &format!("/api/{m}/{c}"), body)
+            .await;
+        assert_eq!(s, 200, "{cmd}: {v}");
+        v["value"].clone()
+    }
+
+    async fn status(&self, token: &str) -> J {
+        let (s, v) = self.get(Some(token), "/api/drive/status").await;
+        assert_eq!(s, 200, "{v}");
+        v
+    }
+
+    async fn callback(&self, state: &str, code: &str) -> String {
+        let r = Request::get(format!("/oauth/callback?state={state}&code={code}"))
+            .body(Body::empty())
+            .unwrap();
+        call(&self.router, r).await.1
+    }
+
+    /// The administrator's steps up to the Google link: client entered, connection created,
+    /// authorization started. Returns the query of the link.
+    async fn start(&self, allowed_group: &str) -> (String, HashMap<String, String>) {
+        let pol = self
+            .ok(
+                "provider_policy.create",
+                json!({"provider": "google_drive", "enabled": true,
+                       "oauth_client_id": CLIENT_ID, "oauth_client_secret": CLIENT_SECRET,
+                       "allowed_group": allowed_group}),
+            )
+            .await;
+        let _ = pol;
+        let c = self
+            .ok(
+                "connection.create",
+                json!({"name": "Google Drive", "provider": "google_drive", "owner_scope": "instance"}),
+            )
+            .await;
+        let id = c["id"].as_str().unwrap().to_string();
+        let start = self.ok("connection.oauth_start", json!({"id": id})).await;
+        let link = as_json(start["result"].as_str().unwrap())["url"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        let q = url::Url::parse(&link)
+            .unwrap()
+            .query_pairs()
+            .into_owned()
+            .collect();
+        (id, q)
+    }
+
+    fn events(&self, kind: &str) -> usize {
+        self.store
+            .backend()
+            .list("security_event")
+            .unwrap()
+            .iter()
+            .filter(|(_, e)| e["kind"] == kind)
+            .count()
+    }
+}
+
+async fn rig() -> Rig {
+    let f = fake();
+    {
+        let mut g = f.state.lock().unwrap();
+        *g = Google {
+            about_status: 200,
+            ..Google::default()
+        };
+    }
+    let store = Store::new();
+    let d = Arc::new(Dispatcher::new());
+    let ring = obop_keys::KeyRing::for_backend(&store.backend()).unwrap();
+    d.set_shared(store.backend(), ring);
+    base::register(&d, &store);
+    product::register(&d, &store);
+    let rt = Runtime::with_providers(
+        store.backend(),
+        d.clone(),
+        SecretBox::for_tests(),
+        Config {
+            allow_loopback: true,
+            public_url: Some("http://127.0.0.1:8080".into()),
+        },
+        providers(),
+        None,
+    );
+    connectors::register(&d, &store, &rt);
+    base::seed(&store);
+    let auth = Arc::new(Auth::with_test_params(store.backend()));
+    auth.create_user("admin", PW, &["platform.admin".into()])
+        .unwrap();
+    auth.create_user("member", PW, &["product.manager".into()])
+        .unwrap();
+    auth.create_user("outsider", PW, &["crm.user".into()])
+        .unwrap();
+    let state = obop_http::HttpState::new(d, auth);
+    state.set_connectors(rt.clone());
+    state.set_drive(Arc::new(Source::new(rt, None)));
+    let router = obop_http::router(state, None);
+    let login = |u: &'static str| {
+        let r = router.clone();
+        async move {
+            let b = Request::post("/api/auth/login")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({"username": u, "password": PW}).to_string(),
+                ))
+                .unwrap();
+            let (s, t) = call(&r, b).await;
+            assert_eq!(s, 200, "{t}");
+            as_json(&t)["token"].as_str().unwrap().to_string()
+        }
+    };
+    let (admin, member, outsider) = (
+        login("admin").await,
+        login("member").await,
+        login("outsider").await,
+    );
+    Rig {
+        router,
+        store,
+        admin,
+        member,
+        outsider,
+    }
+}
+
+/// Every stored record and every response must be free of these.
+fn assert_no_plaintext(r: &Rig, secrets: &[&str]) {
+    for model in [
+        "provider_policy",
+        "connection",
+        "connector_oauth_state",
+        "security_event",
+    ] {
+        for (_, f) in r.store.backend().list(model).unwrap_or_default() {
+            let text = serde_json::to_string(&f).unwrap();
+            for s in secrets {
+                assert!(!text.contains(s), "{model} holds {s}");
+            }
+        }
+    }
+}
+
+/// The scenarios share one fake Google (its addresses are process-wide), so they run one after
+/// the other in one test.
+#[tokio::test]
+async fn the_google_drive_page_end_to_end_against_a_fake_google() {
+    an_administrator_connects_a_drive_from_the_back_office_and_the_browser_uses_it().await;
+    a_drive_that_refuses_the_account_is_an_error_with_a_reason_and_browses_nothing().await;
+    a_sign_in_without_a_refresh_token_is_refused_with_the_way_out().await;
+    the_google_addresses_cannot_be_pointed_anywhere_but_loopback();
+}
+
+async fn an_administrator_connects_a_drive_from_the_back_office_and_the_browser_uses_it() {
+    let r = rig().await;
+    let g = fake();
+
+    // Nothing is set: an administrator is told so and where to register the redirect address;
+    // a member is not shown the settings.
+    let v = r.status(&r.admin).await;
+    assert_eq!(
+        (v["connected"].clone(), v["may_configure"].clone()),
+        (json!(false), json!(true))
+    );
+    assert_eq!(v["settings"]["state"], "not_configured");
+    assert_eq!(
+        v["settings"]["redirect_uri"],
+        "http://127.0.0.1:8080/oauth/callback"
+    );
+    assert_eq!(v["settings"]["source"], "admin");
+    let v = r.status(&r.member).await;
+    assert_eq!(v["may_configure"], false);
+    assert!(v.get("settings").is_none());
+
+    // Only an administrator of connectors may configure.
+    let (s, _) = r
+        .post(
+            Some(&r.member),
+            "/api/provider_policy/create",
+            json!({"provider": "google_drive", "enabled": true, "oauth_client_id": "x"}),
+        )
+        .await;
+    assert!(matches!(s, 403 | 404), "refused for a member, got {s}");
+    assert!(
+        r.store
+            .backend()
+            .list("provider_policy")
+            .unwrap()
+            .is_empty()
+    );
+
+    // The client is entered and the authorization started; the secret never comes back.
+    let (id, q) = r.start("product.manager").await;
+    assert_eq!(q["client_id"], CLIENT_ID);
+    assert_eq!(q["scope"], "https://www.googleapis.com/auth/drive.readonly");
+    assert_eq!(q["access_type"], "offline");
+    assert_eq!(q["prompt"], "consent");
+    assert_eq!(q["code_challenge_method"], "S256");
+    assert_eq!(q["redirect_uri"], "http://127.0.0.1:8080/oauth/callback");
+    let stored = r.store.backend().list("provider_policy").unwrap();
+    assert!(
+        stored[0].1["oauth_client_secret"]
+            .as_str()
+            .unwrap()
+            .starts_with("e2.")
+    );
+    let v = r.status(&r.admin).await;
+    assert_eq!(v["settings"]["state"], "needs_consent");
+    assert_eq!(v["settings"]["client_id"], CLIENT_ID);
+    assert_eq!(v["settings"]["secret_set"], true);
+    assert!(!v.to_string().contains(CLIENT_SECRET));
+    assert_eq!(v["connected"], false, "not signed in yet");
+    assert_eq!(r.get(Some(&r.admin), "/api/drive/files").await.0, 404);
+
+    // Google sends the person back with a code bound to the challenge. A guessed state is refused,
+    // the real one works once.
+    g.state
+        .lock()
+        .unwrap()
+        .codes
+        .insert("code-1".into(), q["code_challenge"].clone());
+    let bad = r.callback("guess", "code-1").await;
+    assert!(bad.contains("Not connected") && !bad.contains("guess"));
+    let good = r.callback(&q["state"], "code-1").await;
+    assert!(good.contains("Connected"), "{good}");
+    assert!(
+        good.contains("href=\"/#/connectors/google_drive\""),
+        "{good}"
+    );
+    assert!(
+        r.callback(&q["state"], "code-1")
+            .await
+            .contains("Not connected")
+    );
+
+    // Connected as the Google account; the tokens are sealed, the audit trail has the event.
+    let v = r.status(&r.admin).await;
+    assert_eq!(v["settings"]["state"], "connected");
+    assert_eq!(v["settings"]["account"], "ada@example.com");
+    assert_eq!(v["connected"], true);
+    assert_eq!(v["settings"]["connection"], id);
+    let conn = r.store.backend().get("connection", &id).unwrap().unwrap();
+    assert!(conn["oauth_tokens"].as_str().unwrap().starts_with("e2."));
+    assert_eq!(conn["state"], "connected");
+    assert_eq!(r.events("drive_connected"), 1);
+
+    // The browser reads its credentials from the database: the refresh token mints one access
+    // token that the next requests reuse. The browse group is the one the administrator chose.
+    let (s, v) = r.get(Some(&r.admin), "/api/drive/files").await;
+    assert_eq!(s, 200, "{v}");
+    assert_eq!(v["files"][0]["name"], "NDA - Acme Oy");
+    assert_eq!(r.get(Some(&r.member), "/api/drive/files").await.0, 200);
+    assert_eq!(r.get(Some(&r.outsider), "/api/drive/files").await.0, 403);
+    let refreshes = g
+        .state
+        .lock()
+        .unwrap()
+        .token_calls
+        .iter()
+        .filter(|c| *c == "refresh_token")
+        .count();
+    assert_eq!(refreshes, 1, "one access token, reused");
+    let (s, v) = r
+        .post(
+            Some(&r.admin),
+            "/api/drive/import",
+            json!({"id": "f1", "field": "product.image"}),
+        )
+        .await;
+    assert_eq!(s, 201, "{v}");
+    assert_eq!(v["filename"], "Logo.png");
+    assert_eq!(r.events("drive_import"), 1);
+
+    // Back to the default group: the member loses access.
+    let pid = r.store.backend().list("provider_policy").unwrap()[0]
+        .0
+        .clone();
+    r.ok(
+        "provider_policy.update",
+        json!({"id": pid, "allowed_group": ""}),
+    )
+    .await;
+    assert_eq!(r.get(Some(&r.member), "/api/drive/files").await.0, 403);
+    assert_eq!(
+        r.status(&r.admin).await["settings"]["browse_group"],
+        "platform.admin"
+    );
+
+    // Disconnecting purges the tokens; the client stays so reconnecting needs no new entry.
+    r.ok("connection.revoke", json!({"id": id})).await;
+    let conn = r.store.backend().get("connection", &id).unwrap().unwrap();
+    assert_eq!(conn["oauth_tokens"], "");
+    assert_eq!(conn["state"], "revoked");
+    assert_eq!(r.events("drive_disconnected"), 1);
+    let v = r.status(&r.admin).await;
+    assert_eq!(v["settings"]["state"], "needs_consent");
+    assert_eq!(v["settings"]["secret_set"], true);
+    assert_eq!(v["connected"], false);
+    assert_eq!(r.get(Some(&r.admin), "/api/drive/files").await.0, 404);
+    assert_no_plaintext(&r, &[CLIENT_SECRET, REFRESH, "at-1"]);
+}
+
+async fn a_drive_that_refuses_the_account_is_an_error_with_a_reason_and_browses_nothing() {
+    let r = rig().await;
+    let g = fake();
+    g.state.lock().unwrap().about_status = 403;
+    let (id, q) = r.start("").await;
+    g.state
+        .lock()
+        .unwrap()
+        .codes
+        .insert("code-2".into(), q["code_challenge"].clone());
+    let page = r.callback(&q["state"], "code-2").await;
+    assert!(page.contains("Not connected"), "{page}");
+    let v = r.status(&r.admin).await;
+    assert_eq!(v["settings"]["state"], "error");
+    assert!(
+        v["settings"]["last_error"]
+            .as_str()
+            .unwrap()
+            .contains("Drive API"),
+        "{v}"
+    );
+    assert_eq!(v["connected"], false);
+    assert_eq!(r.get(Some(&r.admin), "/api/drive/files").await.0, 404);
+    assert_eq!(r.events("drive_connect_failed"), 1);
+    let _ = id;
+}
+
+async fn a_sign_in_without_a_refresh_token_is_refused_with_the_way_out() {
+    let r = rig().await;
+    let g = fake();
+    g.state.lock().unwrap().omit_refresh_token = true;
+    let (_, q) = r.start("").await;
+    g.state
+        .lock()
+        .unwrap()
+        .codes
+        .insert("code-3".into(), q["code_challenge"].clone());
+    r.callback(&q["state"], "code-3").await;
+    let v = r.status(&r.admin).await;
+    assert_eq!(v["settings"]["state"], "error");
+    assert!(
+        v["settings"]["last_error"]
+            .as_str()
+            .unwrap()
+            .contains("refresh token")
+    );
+    assert_eq!(v["connected"], false);
+}
+
+fn the_google_addresses_cannot_be_pointed_anywhere_but_loopback() {
+    assert!(
+        use_endpoints(Some(Endpoints {
+            auth_url: "https://evil.example/authorize".into(),
+            token_url: "https://evil.example/token".into(),
+            api_base: "https://evil.example".into(),
+        }))
+        .is_err()
+    );
+    // The fake of the other tests is still in place.
+    let _ = fake();
+}

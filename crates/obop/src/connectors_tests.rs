@@ -485,6 +485,7 @@ async fn the_oauth_flow_runs_against_a_local_fake_provider_and_tokens_stay_seale
         auth_url: Box::leak(format!("http://127.0.0.1:{port}/authorize").into_boxed_str()),
         token_url: Box::leak(format!("http://127.0.0.1:{port}/token").into_boxed_str()),
         scopes: "read",
+        extra: &[],
     });
     let r = rig_with(vec![fake]);
     // Without the administrator's client, there is nothing to start.

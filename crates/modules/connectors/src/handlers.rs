@@ -245,8 +245,23 @@ fn precheck_connect(rt: &Runtime, c: &Connection, p: &Provider) -> Result<(), St
 /// "none" they stayed active on a revoked connection under an answer of "revoked".
 fn revoke_connection(rt: &Runtime, id: &str, by: &str) -> Result<usize, String> {
     use obop_storage::fault::needed;
+    let provider = rt
+        .backend
+        .get(CONNECTION, id)?
+        .map(|f| str_of(&f, "provider").to_string())
+        .unwrap_or_default();
     set(rt, CONNECTION, id, &[("state", "revoked".into())])?;
     let purged = rt.revoke(id)?;
+    if provider == obop_connectors::drive::PROVIDER {
+        obop_commands::audit::record_event(
+            &*rt.backend,
+            now(),
+            by,
+            "drive_disconnected",
+            by,
+            &format!("connection {id}"),
+        );
+    }
     for k in needed(|| try_consents_of(&*rt.backend, id))?
         .iter()
         .filter(|k| k.is_active())
