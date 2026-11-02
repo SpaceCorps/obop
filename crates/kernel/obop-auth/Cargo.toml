@@ -11,6 +11,7 @@ repository.workspace = true
 obop-commands.workspace = true
 obop-storage.workspace = true
 obop-keys.workspace = true
+obop-types.workspace = true
 argon2 = "0.6"
 sha2 = "0.11"
 getrandom = "0.4"
@@ -21,7 +22,8 @@ sha1 = "0.11.0"
 ring = "0.17.14"
 
 [features]
-# A software authenticator for tests of the WebAuthn flows (never enabled in a release build).
+# Test doubles: a software authenticator for the WebAuthn flows, a software Microsoft for the
+# sign-in (`oidc::soft`) and `Auth::set_oidc_authority_for_test`. Never enabled in a release build.
 test-support = []
 
 [lints]

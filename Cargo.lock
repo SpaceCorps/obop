@@ -1302,6 +1302,7 @@ dependencies = [
  "obop-commands",
  "obop-keys",
  "obop-storage",
+ "obop-types",
  "ring",
  "serde_json",
  "sha1",
