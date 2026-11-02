@@ -5,8 +5,10 @@ import { PLURAL_CATEGORIES, type PluralCategory } from "./en.ts";
  * language of `languages.ts`; nothing in the app imports it, so it is not in the bundle.
  *
  * `Translation<...>` in `en.ts` makes the compiler report a missing or an extra key. This check
- * says what a type cannot: a placeholder that differs from the source, an empty text, a text with
- * a stray brace, a text that was left the same as the English one, and it knows the plural
+ * says what a type cannot: a placeholder that differs from the source (compared with how often it
+ * is used, so a translation that drops or adds a repeat is reported and has to be reworded), an
+ * empty text, a text with a stray brace, a text that was left the same as the English one, and it
+ * knows the plural
  * categories of each language, so a language with `few` and `many` (Polish) is checked for those
  * forms and a language without them for their absence.
  */

@@ -57,6 +57,27 @@ describe("the completeness check", () => {
   test("the check is not a pass-through: Swedish with nothing wrong has no problems at all", () => {
     expect(checkCatalogue(source, swedish())).toEqual([]);
   });
+
+  test("a placeholder is counted, not only named: a dropped or an added repeat is reported", () => {
+    // No sentence of the English catalogue uses a name twice today, so a made-up source shows it.
+    const twice: CheckedCatalogue = {
+      code: "en",
+      categories: ["one", "other"],
+      messages: { "a.b": "{n} of {n}, then {m}" },
+    };
+    const target = (text: string): CheckedCatalogue => ({
+      code: "xx",
+      categories: ["one", "other"],
+      messages: { "a.b": text },
+    });
+    expect(checkCatalogue(twice, target("{n} av {n}, sedan {m}"))).toEqual([]);
+    expect(checkCatalogue(twice, target("{n} av alla, sedan {m}"))).toEqual([
+      'xx: "a.b" has the placeholders [{m} {n}] where the source has [{m} {n} {n}]',
+    ]);
+    expect(checkCatalogue(twice, target("{n} av {n} och {n}, sedan {m}"))).toEqual([
+      'xx: "a.b" has the placeholders [{m} {n} {n} {n}] where the source has [{m} {n} {n}]',
+    ]);
+  });
 });
 
 describe("mutations of the Swedish catalogue: each one is reported", () => {
