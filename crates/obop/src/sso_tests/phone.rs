@@ -2386,8 +2386,10 @@ async fn phone_three_lost_races_write_nothing_and_the_person_sees_the_general_fa
         rec["user"].is_null() && rec.get("ms_error").is_none(),
         "{rec}"
     );
-    // What the person sees is the general failure text, not the busy text and not a page of a
-    // person. (The sign-in itself did happen at the provider and is in the log.)
+    // What the person sees is what the record held, which here is nothing: the general failure
+    // text, not the busy text and not a page of a person. (With an older word or a pending
+    // second step in the record, that is what would show. The sign-in itself did happen at the
+    // provider and is in the log.)
     let r = phone.back(&page.flow).await;
     assert!(login_page(&r) && r.body.contains(FAILED), "{}", r.body);
     assert!(!r.body.contains(BUSY));
