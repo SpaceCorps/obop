@@ -248,7 +248,7 @@ fn serve(mut conn: std::net::TcpStream, st: &Arc<Mutex<State>>) {
         m
     };
     if first.starts_with("POST ") {
-        let text = head.splitn(2, "\r\n\r\n").nth(1).unwrap_or("").to_string();
+        let text = head.split_once("\r\n\r\n").map_or("", |x| x.1).to_string();
         s.posts.push((
             u.path().to_string(),
             u.query().unwrap_or("").to_string(),
