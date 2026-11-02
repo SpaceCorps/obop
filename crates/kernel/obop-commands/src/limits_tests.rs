@@ -216,13 +216,32 @@ fn module(p: &str) -> Module {
     }
 }
 
+/// The scratch prefix of the tables of one rig: `l` and ten random hex digits, as in
+/// `l6f2740b8c9`. A message names its table with it (`l6f2740b8c9_doc.title must be ...`).
+fn scratch_prefix() -> String {
+    format!("l{}", &uuid::Uuid::now_v7().simple().to_string()[22..])
+}
+
+/// A scratch prefix whose random digits hold `digits` from the `at`th on, so a test can meet the
+/// unlucky draw (a prefix that spells a number) on every run and not one run in ten.
+fn scratch_prefix_holding(digits: &str, at: usize) -> String {
+    let mut p = scratch_prefix();
+    p.replace_range(1 + at..1 + at + digits.len(), digits);
+    p
+}
+
 fn each(f: impl Fn(&Rig)) {
+    each_with_prefix(scratch_prefix, f)
+}
+
+/// As [`each`] with the scratch prefix of every rig drawn by `prefix`.
+fn each_with_prefix(prefix: impl Fn() -> String, f: impl Fn(&Rig)) {
     let mut urls = vec!["memory:".to_string(), "sqlite::memory:".to_string()];
     if let Ok(u) = std::env::var("OBOP_TEST_POSTGRES_URL") {
         urls.push(u);
     }
     for url in urls {
-        let p = format!("l{}", &uuid::Uuid::now_v7().simple().to_string()[22..]);
+        let p = prefix();
         let store = Store::open(&url).unwrap();
         let d = Arc::new(Dispatcher::new());
         let module = module(&p);
@@ -286,6 +305,12 @@ impl Rig {
             Err(CallError::Handler(m)) => m,
             other => panic!("{model}.{c}: expected a handler error, got {other:?}"),
         }
+    }
+    /// `msg` without the scratch prefix of this rig. A message names its table (`l6f2740b8c9_doc`)
+    /// and the prefix is random hex, which can spell any number: a check that a message does not
+    /// state a number reads it through this, or it fails on the draws that happen to contain it.
+    fn bare(&self, msg: &str) -> String {
+        msg.replace(&self.p, "<scratch>")
     }
     fn ok(&self, model: &str, c: &str, input: Value) -> Value {
         match self.call(model, c, input) {
@@ -864,7 +889,7 @@ const LONG_NAME: &str = "Aleksandra Katarzyna Kowalska-Nowakowska";
 #[test]
 fn an_agent_is_not_told_how_long_a_value_it_only_holds_as_a_token_is() {
     assert_eq!(LONG_NAME.chars().count(), 40);
-    each(|r| {
+    let check = |r: &Rig| {
         let doc = r.create("doc", vec![("title", t("ok")), ("person", t(LONG_NAME))]);
         let bot = r.bot();
         let mut vault = Vault::new();
@@ -940,13 +965,27 @@ fn an_agent_is_not_told_how_long_a_value_it_only_holds_as_a_token_is() {
             )]),
         );
         assert!(e.contains("must be at most 10 characters"), "{e}");
-        assert!(!e.contains("this has") && !e.contains("40"), "{e}");
+        let said = r.bare(&e);
+        assert!(!said.contains("this has") && !said.contains("40"), "{e}");
         assert_eq!(r.count("log"), 0);
 
         // A person who typed the value, on the other hand, is told how long it was.
         let e = r.refused("log", vec![("short", t(LONG_NAME))]);
         assert_limit(&e, "short", "at most 3 characters; this has 40");
-    });
+    };
+    // A message names its table with the random scratch prefix, which may spell "40" itself. Run
+    // the check on every draw, and with a prefix that holds "40" at the start, in the middle and
+    // at the end, so that the unlucky draw is met on every run.
+    each(check);
+    for at in [0, 4, 8] {
+        each_with_prefix(
+            || scratch_prefix_holding("40", at),
+            |r| {
+                assert!(r.p.contains("40"), "the prefix must spell 40: {}", r.p);
+                check(r)
+            },
+        );
+    }
 }
 
 #[test]
