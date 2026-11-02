@@ -35,7 +35,10 @@ describe("the screens say nothing that is not in the catalogue", () => {
       expect(source.text, source.path).not.toMatch(/getLanguage:\s*\(\)\s*=>/);
     }
     const auth = native.find((s) => s.path === "src/native/auth.ts")!;
-    expect(auth.text).toContain("lang: getLanguage()");
+    // The authorization address asks for a language only when the app positively knows it
+    // (`knownLanguage`, tested in language.test.ts), never for the English the app shows by default.
+    expect(auth.text).toContain("lang: languageStore.known() ?? undefined");
+    expect(auth.text).not.toMatch(/lang:\s*getLanguage\(\)/);
   });
 });
 
@@ -78,8 +81,87 @@ describe("the scanner that guards the screens can fail", () => {
     }
   });
 
+  test("it reads every argument of a dialog, not only the title", () => {
+    const message = `Alert.alert(t('x'), 'Are you sure you want to stop the trip?', [{ text: t("y") }]);`;
+    expect(bypassesOf(message)).toMatchObject([
+      { kind: "call", text: "Are you sure you want to stop the trip?" },
+    ]);
+    const both = `Alert.alert("Stop the trip?", \`Delete \${n} trips?\`, [{ text: t("y") }]);`;
+    expect(bypassesOf(both).map((f) => f.text)).toEqual(["Stop the trip?", "Delete trips?"]);
+    expect(bypassesOf(`announce(busy ? "Saving" : t("a.b"))`).map((f) => f.text)).toEqual([
+      "Saving",
+    ]);
+    // The title and the message come from the catalogue, the buttons too.
+    expect(bypassesOf(`Alert.alert(t("a"), t("b"), [{ text: t("c"), style: "cancel" }])`)).toEqual(
+      [],
+    );
+    expect(bypassesOf(`Alert.alert(title, message)`)).toEqual([]);
+  });
+
+  test("it reads the literals inside the value of a text prop, not only a plain literal", () => {
+    const cases: [string, string[]][] = [
+      ["<Button label={busy ? 'Waiting' : 'Start'} />", ["Waiting", "Start"]],
+      ["<Button label={busy ? t('a') : 'Start'} />", ["Start"]],
+      ["<Banner title='Problem' />", ["Problem"]],
+      ["<Field error='Required' />", ["Required"]],
+      ["<Field error={x ? 'Required' : undefined} />", ["Required"]],
+      ['<Banner message={"Saved " + n} />', ["Saved "]],
+      ['<Row title={name ?? "Unknown driver"} />', ["Unknown driver"]],
+      ["<Row subtitle={`Saved ${count} trips`} />", ["Saved  trips"]],
+      ['<Text>{busy ? "Saving" : t("a")}</Text>', ["Saving"]],
+      ['<Text>{ok && "Done"}</Text>', ["Done"]],
+    ];
+    for (const [text, expected] of cases) {
+      const found = bypassesOf(text);
+      expect(
+        found.map((f) => f.text),
+        text,
+      ).toEqual(expected.map((e) => e.trim().replace(/\s+/g, " ")));
+      expect(
+        found.every((f) => f.kind !== "unbalanced"),
+        text,
+      ).toBe(true);
+    }
+  });
+
+  test("it leaves what is not a sentence alone", () => {
+    const quiet = [
+      '<Button label={os === "ios" ? t("a") : t("b")} />',
+      "<Field error={err ? t('e') : undefined} />",
+      '<Row title={t(busy ? "a.b" : "c.d")} subtitle={items.join(", ")} />',
+      "const f = async () => { return 1; };",
+      "const state = { error: 'failed', ok: false };",
+      '<Text>{count > 1 ? t("a") : t("b")}</Text>',
+      '<Button variant="ghost" testID="stop-button" />',
+    ];
+    for (const text of quiet) expect(bypassesOf(text), text).toEqual([]);
+  });
+
+  test("brackets or quotes that do not match are reported, not skipped", () => {
+    const found = bypassesOf('<Button label={busy ? "Waiting" : />');
+    expect(found.map((f) => f.kind)).toEqual(["unbalanced"]);
+    expect(bypassesOf('Alert.alert("Stop?"').map((f) => f.kind)).toEqual(["unbalanced"]);
+  });
+
+  test("what it cannot see stays unseen (ISSUES L55): a variable, a call, an object value, a file it is not given", () => {
+    expect(bypassesOf('const text = "Hello there"; <Banner message={text} />')).toEqual([]);
+    expect(bypassesOf('<Banner message={upper("Hello there")} />')).toEqual([]);
+    expect(bypassesOf('const b = { text: a ? "Hello" : "There" };')).toEqual([]);
+    expect(bypassesOf('<Banner message={(a ? "Hello" : "There")} />')).toEqual([]);
+  });
+
   test("a template that only wraps the catalogue is not a sentence of its own", () => {
     expect(bypassesOf("<Banner message={`${problemText(code)} ${t(hint)}`} />")).toEqual([]);
+  });
+
+  test("a message typed into a dialog of a real screen is found", () => {
+    const account = screenSources().find((s) => s.path === "src/ui/screens/Account.tsx")!;
+    expect(account.text).toContain("Alert.alert(");
+    const broken = account.text.replace(
+      "Alert.alert(",
+      'Alert.alert(t("account.signout"), "Typed English message", ',
+    );
+    expect(bypassesOf(broken).map((f) => f.text)).toEqual(["Typed English message"]);
   });
 
   test("a sentence typed into a real screen is found, with its line", () => {
