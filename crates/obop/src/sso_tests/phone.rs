@@ -795,6 +795,8 @@ async fn phone_the_browser_that_comes_back_must_be_the_one_that_left() {
         cb.location(),
         format!("/oauth/authorize/return?flow={}", page.flow)
     );
+    // The code is not redeemed: the provider's token endpoint is not called at all.
+    assert_eq!(w.idp.hits("/token"), 0);
     assert!(
         w.events("oidc_refused")
             .iter()
@@ -802,6 +804,13 @@ async fn phone_the_browser_that_comes_back_must_be_the_one_that_left() {
         "{:?}",
         w.events("oidc_refused")
     );
+    // The line says what happened and not to whom: no line of the log names the flow.
+    for (id, f) in w.app.store.backend().list("security_event").unwrap() {
+        assert!(
+            !J::Object(f).to_string().contains(&page.flow),
+            "the flow id is in the security event {id}"
+        );
+    }
     // The other browser, which has no cookie of the sign-in pages, is shown no page of the flow.
     let theirs = w
         .browse(
@@ -1897,7 +1906,7 @@ async fn phone_a_store_refusal_anywhere_in_the_decision_never_leaves_a_code_for_
 }
 
 #[tokio::test]
-async fn phone_a_store_refusal_anywhere_in_the_consent_page_never_offers_more_than_the_cap() {
+async fn phone_a_store_refusal_anywhere_in_the_consent_page_is_a_503_and_never_a_90_day_page() {
     use obop_storage::testing::Flaky;
     // Whichever read the store refuses, the answer is a 503 and never a page that offers 90 days.
     // (The layer of D74 answers 503 for any refused read of a request, so what tells a guessed cap
@@ -1939,4 +1948,479 @@ async fn phone_a_store_refusal_anywhere_in_the_consent_page_never_offers_more_th
         clean == 1 && refused_somewhere > 0 && shown >= 1,
         "{clean} {refused_somewhere} {shown}"
     );
+}
+
+// ---- fix round 1 of the pull request: what the independent check found unpinned -----------------
+//
+// Each test below passed on the code as it stood (the check wrote most of them as probes) and
+// fails under the mutation named in docs/ISSUES.md ("Mutations of the independent check").
+
+fn rig_of(w: &World) -> Rig {
+    Rig {
+        r: w.router.clone(),
+        auth: w.auth.clone(),
+    }
+}
+
+#[tokio::test]
+async fn phone_a_failed_password_try_then_the_return_address_mints_no_second_step() {
+    let w = world(true).await;
+    let (_secret, _) = enrol(&rig_of(&w), "ada").await; // ada has an authenticator app
+    let mut phone = Phone::new(&w).await;
+    let page = phone.open().await;
+    // A wrong password for ada: the record now says pre_user = ada.
+    let wrong = phone.password(&page, "ada", "not the password").await;
+    assert!(login_page(&wrong), "{}", wrong.body);
+    assert_eq!(w.oauth_flow(&page.flow).unwrap()["pre_user"], "ada");
+    let tokens = w.app.store.backend().list("auth_mfa_token").unwrap().len();
+    // No Microsoft step was ever done on this flow. The return address must not ask for a code
+    // for the account that a password try named, and must not mint a token for it.
+    let r = phone.back(&page.flow).await;
+    assert!(!asks_for_the_second_step(&r), "{}", r.body);
+    assert!(login_page(&r), "{}", r.body);
+    assert_eq!(
+        w.app.store.backend().list("auth_mfa_token").unwrap().len(),
+        tokens,
+        "a second-step token was minted"
+    );
+}
+
+#[tokio::test]
+async fn phone_a_parameter_on_the_callback_has_no_say_about_which_flow_is_written() {
+    let w = world(true).await;
+    let mut phone1 = Phone::new(&w).await;
+    let mut phone2 = Phone::new(&w).await;
+    let page1 = phone1.open().await;
+    let page2 = phone2.open().await;
+    let tap = phone1.tap(&page1.flow).await;
+    let uri = phone1.at_the_provider(&tap, ADA_OID);
+    // Somebody adds the other browser's flow to the callback address.
+    let uri = format!("{uri}&flow={}", page2.flow);
+    let cb = phone1.callback(&uri).await;
+    assert_eq!(
+        cb.location(),
+        format!("/oauth/authorize/return?flow={}", page1.flow),
+        "{}",
+        cb.body
+    );
+    let theirs = w.oauth_flow(&page2.flow).unwrap();
+    assert!(
+        theirs["user"].is_null()
+            && theirs.get("pre_user").is_none()
+            && theirs.get("ms_error").is_none(),
+        "written into the other flow: {theirs}"
+    );
+    assert_eq!(w.oauth_flow(&page1.flow).unwrap()["user"], "ada");
+}
+
+#[tokio::test]
+async fn phone_no_binder_verifier_or_state_is_stored_or_logged() {
+    let w = world(true).await;
+    let mut phone = Phone::new(&w).await;
+    let page = phone.open().await;
+    let value_of = |phone: &Phone<'_>, prefix: &str| {
+        phone
+            .b
+            .cookies
+            .iter()
+            .find(|c| c.name.starts_with(prefix))
+            .map(|c| c.value.clone())
+            .unwrap_or_else(|| panic!("no cookie {prefix}"))
+    };
+    let binder = value_of(&phone, "obop_oauth_");
+    let tap = phone.tap(&page.flow).await;
+    let verifier = value_of(&phone, "obop_sso_");
+    let state = state_of(&tap);
+    // While the round trip's row exists (the callback spends it, so this is the time to look at
+    // it): in the store (records, flows, counters) and in the lines of the security log.
+    let rows = w.sso_rows();
+    assert_eq!(rows.len(), 1);
+    let mut keys: Vec<String> = rows[0].1.as_object().unwrap().keys().cloned().collect();
+    keys.sort();
+    assert_eq!(
+        keys,
+        [
+            "expires_at_ms",
+            "nonce",
+            "oauth_flow",
+            "purpose",
+            "redirect_uri",
+            "verifier_hash"
+        ],
+        "the row of the round trip holds these and nothing else"
+    );
+    for secret in [&binder, &verifier, &state] {
+        w.assert_not_stored(secret);
+    }
+    let uri = phone.at_the_provider(&tap, ADA_OID);
+    let cb = phone.callback(&uri).await;
+    assert_eq!(
+        cb.location(),
+        format!("/oauth/authorize/return?flow={}", page.flow)
+    );
+    let r = phone.back(&page.flow).await;
+    assert!(consent(&r), "{}", r.body);
+    for secret in [&binder, &verifier, &state] {
+        w.assert_not_stored(secret);
+    }
+}
+
+#[tokio::test]
+async fn phone_a_reload_of_the_second_step_works_for_an_account_with_a_credential_epoch() {
+    let w = world(true).await;
+    let (_secret, _) = enrol(&rig_of(&w), "ada").await;
+    // A change of the account's state gives it a credential epoch (the reload must compare the
+    // epoch the sign-in compared, not "none").
+    w.auth.operator_set_disabled("ada", true).unwrap();
+    w.auth.operator_set_disabled("ada", false).unwrap();
+    let epoch = w.auth.oauth().unwrap().credential_epoch("ada").unwrap();
+    assert!(epoch.is_some(), "this test needs an epoch that is not null");
+    let mut phone = Phone::new(&w).await;
+    let page = phone.open().await;
+    let r = phone.microsoft(&page.flow, ADA_OID).await;
+    assert!(asks_for_the_second_step(&r), "{}", r.body);
+    let rec = w.oauth_flow(&page.flow).unwrap();
+    assert_eq!(rec["mfa_pending"]["epoch"], json!(epoch));
+    // The baseline the consent compares against is the one the sign-in compared, written with the
+    // pending step (and not read later, at the seat).
+    assert_eq!(rec["pre_user"], "ada", "{rec}");
+    assert_eq!(rec["pre_epoch"], json!(epoch), "{rec}");
+    let again = phone.back(&page.flow).await;
+    assert!(asks_for_the_second_step(&again), "{}", again.body);
+}
+
+#[tokio::test]
+async fn phone_a_failed_round_trip_started_earlier_leaves_a_seated_person_as_is() {
+    let w = world(true).await;
+    let mut phone = Phone::new(&w).await;
+    let page = phone.open().await;
+    // Tab 1 taps the link (nobody is signed in yet) and is left at the provider.
+    let tap1 = phone.tap(&page.flow).await;
+    let state1 = state_of(&tap1);
+    // Tab 2 does the whole step and ends on the consent page.
+    let r = phone.microsoft(&page.flow, ADA_OID).await;
+    assert!(consent(&r), "{}", r.body);
+    // Tab 1: the person says no at the provider.
+    let uri = format!("/api/auth/oidc/callback?error=access_denied&state={state1}");
+    let cb = phone.callback(&uri).await;
+    assert_eq!(
+        cb.location(),
+        format!("/oauth/authorize/return?flow={}", page.flow)
+    );
+    let rec = w.oauth_flow(&page.flow).unwrap();
+    assert_eq!(rec["user"], "ada", "un-seated: {rec}");
+    let again = phone.back(&page.flow).await;
+    assert!(consent(&again), "{}", again.body);
+}
+
+#[tokio::test]
+async fn phone_a_reload_of_a_pending_second_step_is_limited_per_address() {
+    let w = world(true).await;
+    let (_secret, _) = enrol(&rig_of(&w), "ada").await;
+    let mut phone = Phone::new(&w).await;
+    let page = phone.open().await;
+    let r = phone.microsoft(&page.flow, ADA_OID).await;
+    assert!(asks_for_the_second_step(&r), "{}", r.body);
+    // Each reload mints a token and counts against the window of the sign-in pages of the
+    // address (30 in ten minutes): an endless reload is not an endless supply of tokens.
+    let mut statuses = Vec::new();
+    for _ in 0..60 {
+        statuses.push(phone.back(&page.flow).await.status);
+    }
+    assert!(statuses.contains(&429), "never limited: {statuses:?}");
+    assert!(
+        statuses.iter().filter(|s| **s == 200).count() <= 30,
+        "{statuses:?}"
+    );
+}
+
+#[tokio::test]
+async fn phone_the_return_address_refuses_what_is_not_a_navigation() {
+    let w = world(true).await;
+    let mut phone = Phone::new(&w).await;
+    let page = phone.open().await;
+    let uri = format!("/oauth/authorize/return?flow={}", page.flow);
+    let r = w
+        .browse(
+            &mut phone.b,
+            "GET",
+            &uri,
+            None,
+            &[("sec-fetch-mode", "cors"), ("sec-fetch-dest", "empty")],
+        )
+        .await;
+    assert_eq!(r.status, 400, "{}", r.body);
+    assert!(!consent(&r) && !login_page(&r));
+}
+
+#[tokio::test]
+async fn phone_a_row_for_an_app_that_names_no_flow_never_ends_with_a_code() {
+    let w = world(true).await;
+    let mut jar = Jar::default();
+    let s = w.start(&mut jar).await;
+    let rows = w.sso_rows();
+    assert_eq!(rows.len(), 1);
+    let (key, mut row) = rows.into_iter().next().unwrap();
+    // A row that says it is an app's and names no flow (nothing writes one; this is a row that
+    // was damaged): it must not be finished as the back office's.
+    row["purpose"] = json!("oauth");
+    w.app
+        .store
+        .backend()
+        .kv_put(&key, &row.to_string(), Some(600_000))
+        .unwrap();
+    let uri = w.idp.authorize(&s.location(), ADA_OID);
+    let cb = w.callback(&mut jar, &uri).await;
+    assert!(
+        !cb.location().contains("#oidc="),
+        "a code was issued: {}",
+        cb.location()
+    );
+    assert_eq!(w.idp.hits("/token"), 0, "the code was not even redeemed");
+}
+
+#[tokio::test]
+async fn phone_not_you_forgets_the_person_on_a_microsoft_flow() {
+    let w = world(true).await;
+    let mut phone = Phone::new(&w).await;
+    let page = phone.open().await;
+    let r = phone.microsoft(&page.flow, ADA_OID).await;
+    assert!(consent(&r), "{}", r.body);
+    let p = page_of(&page.flow, &r);
+    let sw = w
+        .browse(
+            &mut phone.b,
+            "POST",
+            "/oauth/authorize/decision",
+            Some(&[("flow", &p.flow), ("csrf", &p.csrf), ("decision", "switch")]),
+            &[],
+        )
+        .await;
+    assert!(login_page(&sw), "{}", sw.body);
+    assert!(
+        sw.body.contains("/oauth/authorize/microsoft"),
+        "the link is offered again"
+    );
+    let rec = w.oauth_flow(&page.flow).unwrap();
+    assert!(rec["user"].is_null(), "{rec}");
+    // And the return address no longer shows a person.
+    let back = phone.back(&page.flow).await;
+    assert!(!consent(&back), "{}", back.body);
+}
+
+#[tokio::test]
+async fn phone_a_stored_word_outside_the_closed_set_is_shown_as_the_general_failure() {
+    let w = world(true).await;
+    let mut phone = Phone::new(&w).await;
+    let page = phone.open().await;
+    let key = format!("oauth:flow:{}", page.flow);
+    let b = w.app.store.backend();
+    let mut rec: J = serde_json::from_str(&b.kv_get(&key).unwrap().unwrap()).unwrap();
+    // A record written by hand (or by an older build) with the key of a text that is not one of
+    // the six: it must not pick another text of the page catalogue.
+    rec["ms_error"] = json!("err.login");
+    b.kv_put(&key, &rec.to_string(), Some(600_000)).unwrap();
+    let r = phone.back(&page.flow).await;
+    assert!(login_page(&r) && r.body.contains(FAILED), "{}", r.body);
+    assert!(!r.body.contains("The username or password is not right."));
+}
+
+#[tokio::test]
+async fn phone_a_later_failed_step_ends_a_second_step_that_an_earlier_one_left_pending() {
+    let w = world(true).await;
+    let (_secret, _) = enrol(&rig_of(&w), "ada").await;
+    let mut phone = Phone::new(&w).await;
+    let page = phone.open().await;
+    // Step 1: ada's first factor is accepted and the second is asked.
+    let r = phone.microsoft(&page.flow, ADA_OID).await;
+    assert!(asks_for_the_second_step(&r), "{}", r.body);
+    assert!(
+        w.oauth_flow(&page.flow)
+            .unwrap()
+            .get("mfa_pending")
+            .is_some()
+    );
+    // Step 2, from the same page: the person says no at the provider.
+    let tap = phone.tap(&page.flow).await;
+    let state = state_of(&tap);
+    let uri = format!("/api/auth/oidc/callback?error=access_denied&state={state}");
+    let cb = phone.callback(&uri).await;
+    assert_eq!(
+        cb.location(),
+        format!("/oauth/authorize/return?flow={}", page.flow)
+    );
+    // The page shows the latest outcome, and the earlier first factor stands for nothing.
+    let rec = w.oauth_flow(&page.flow).unwrap();
+    assert!(rec.get("mfa_pending").is_none(), "{rec}");
+    let tokens = w.app.store.backend().list("auth_mfa_token").unwrap().len();
+    let r = phone.back(&page.flow).await;
+    assert!(
+        login_page(&r) && r.body.contains(CANCELLED) && !asks_for_the_second_step(&r),
+        "{}",
+        r.body
+    );
+    assert_eq!(
+        w.app.store.backend().list("auth_mfa_token").unwrap().len(),
+        tokens,
+        "a token was minted for a step that had ended"
+    );
+}
+
+#[tokio::test]
+async fn phone_a_provider_switched_off_between_the_hop_and_the_reload_ends_the_second_step() {
+    let w = world(true).await;
+    let (_secret, _) = enrol(&rig_of(&w), "ada").await;
+    let mut phone = Phone::new(&w).await;
+    let page = phone.open().await;
+    let r = phone.microsoft(&page.flow, ADA_OID).await;
+    assert!(asks_for_the_second_step(&r), "{}", r.body);
+    let tokens = w.app.store.backend().list("auth_mfa_token").unwrap().len();
+    // The administrator switches the provider off. The web leg would refuse a code at this point;
+    // the reload must not mint a second-step token for it either.
+    w.auth
+        .operator_sso_configure(TENANT, CLIENT, None, Some(false))
+        .unwrap();
+    let again = phone.back(&page.flow).await;
+    assert!(
+        !asks_for_the_second_step(&again) && !consent(&again),
+        "{}",
+        again.body
+    );
+    assert_eq!(
+        w.app.store.backend().list("auth_mfa_token").unwrap().len(),
+        tokens,
+        "a token was minted after the provider was switched off"
+    );
+    assert!(
+        w.events("oidc_refused")
+            .iter()
+            .any(|l| l.contains("switched off before the sign-in finished")),
+        "{:?}",
+        w.events("oidc_refused")
+    );
+}
+
+#[tokio::test]
+async fn phone_three_lost_races_write_nothing_and_the_person_sees_the_general_failure() {
+    use obop_storage::testing::Flaky;
+    let (flaky, backend) = Flaky::memory();
+    let app = App::with_store(obop_commands::Store::over(backend));
+    let w = world_on(app, true, AuthConfig::insecure_dev(), None).await;
+    let mut phone = Phone::new(&w).await;
+    let page = phone.open().await;
+    let tap = phone.tap(&page.flow).await;
+    let uri = phone.at_the_provider(&tap, ADA_OID);
+    // Three other requests change the record of the flow, one after the other, just before the
+    // callback's write is tried: the callback gives up and writes nothing.
+    let key = format!("oauth:flow:{}", page.flow);
+    fn interfere(flaky: &std::sync::Arc<Flaky>, key: String, left: u32) {
+        if left == 0 {
+            return;
+        }
+        let again = flaky.clone();
+        flaky.before_the_next_kv_swap(Box::new(move |b| {
+            let raw = b.kv_get(&key).unwrap().unwrap();
+            let mut rec: J = serde_json::from_str(&raw).unwrap();
+            rec["marker"] = json!(left);
+            b.kv_put(&key, &rec.to_string(), Some(600_000)).unwrap();
+            interfere(&again, key.clone(), left - 1);
+        }));
+    }
+    interfere(&flaky, key, 3);
+    let cb = phone.callback(&uri).await;
+    assert_eq!(
+        cb.location(),
+        format!("/oauth/authorize/return?flow={}", page.flow),
+        "{}",
+        cb.body
+    );
+    let rec = w.oauth_flow(&page.flow).unwrap();
+    assert!(
+        rec["user"].is_null() && rec.get("ms_error").is_none(),
+        "{rec}"
+    );
+    // What the person sees is the general failure text, not the busy text and not a page of a
+    // person. (The sign-in itself did happen at the provider and is in the log.)
+    let r = phone.back(&page.flow).await;
+    assert!(login_page(&r) && r.body.contains(FAILED), "{}", r.body);
+    assert!(!r.body.contains(BUSY));
+    assert!(!w.events("oidc_login").is_empty());
+    // And the person can go on: a new tap works.
+    let r = phone.microsoft(&page.flow, ADA_OID).await;
+    assert!(consent(&r), "{}", r.body);
+}
+
+#[tokio::test]
+async fn phone_a_bound_account_that_must_choose_a_new_password_is_told_so_after_microsoft() {
+    let w = world(true).await;
+    ada_sso_only(&w).await;
+    // Turning the setting off gives the password back, to be changed at the next sign-in.
+    w.auth.operator_sso_only("ada", false).unwrap();
+    let mut phone = Phone::new(&w).await;
+    let page = phone.open().await;
+    let r = phone.microsoft(&page.flow, ADA_OID).await;
+    assert!(
+        login_page(&r) && r.body.contains("You must choose a new password"),
+        "{}",
+        r.body
+    );
+    let rec = w.oauth_flow(&page.flow).unwrap();
+    assert!(rec["user"].is_null(), "{rec}");
+    assert_eq!(rec["ms_error"], "pwchange");
+    // A failed step names no account in the flow: the page tells the person the word, and the
+    // record does not say who tried.
+    assert!(
+        !rec.to_string().contains("\"ada\""),
+        "the failed step wrote the account into the flow: {rec}"
+    );
+    assert_eq!(w.devices(), 0);
+}
+
+#[tokio::test]
+async fn phone_the_cookies_of_the_round_trip_and_of_the_flow_last_ten_minutes_and_no_longer() {
+    let w = world(true).await;
+    let mut phone = Phone::new(&w).await;
+    let page = phone.open().await;
+    // The lifetime of the cookie of the sign-in pages and of the round trip's verifier, as the
+    // browser keeps them (the jar of this file runs on a clock of its own).
+    let cookie_of = |phone: &Phone<'_>, prefix: &str| {
+        phone
+            .b
+            .cookies
+            .iter()
+            .find(|c| c.name.starts_with(prefix))
+            .cloned()
+            .unwrap_or_else(|| panic!("no cookie {prefix}"))
+    };
+    let binder = cookie_of(&phone, "obop_oauth_");
+    assert_eq!((binder.path.as_str(), binder.until), ("/oauth", Some(600)));
+    let tap = phone.tap(&page.flow).await;
+    let verifier = cookie_of(&phone, "obop_sso_");
+    assert_eq!(
+        (verifier.path.as_str(), verifier.until),
+        ("/api/auth/oidc", Some(600))
+    );
+    let uri = phone.at_the_provider(&tap, ADA_OID);
+    // The person is away for ten minutes and a second: the browser no longer sends either cookie.
+    phone.b.now = 601;
+    assert!(!phone.b.has("obop_oauth_") && !phone.b.has("obop_sso_"));
+    let cb = phone.callback(&uri).await;
+    assert_eq!(
+        cb.location(),
+        format!("/oauth/authorize/return?flow={}", page.flow),
+        "{}",
+        cb.body
+    );
+    assert_eq!(w.idp.hits("/token"), 0, "the code was not redeemed");
+    // The return address is shown to nobody without the cookie of the flow; nothing was seated
+    // and nothing was made again.
+    let r = phone.back(&page.flow).await;
+    assert!(
+        [403, 410].contains(&r.status) && !consent(&r) && !login_page(&r),
+        "{} {}",
+        r.status,
+        r.body
+    );
+    assert!(w.oauth_flow(&page.flow).unwrap()["user"].is_null());
+    assert_eq!(w.devices(), 0);
 }
