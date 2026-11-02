@@ -34,7 +34,7 @@ export const sv: Translation<"one"> = {
   "error.database.hint":
     "Inget har raderats. Försök igen. Så länge resorna inte kan öppnas sparas inga nya positioner. Om registreringen fortfarande pågår kan du stoppa den med knappen på skärmen. Om Försök igen fortsätter att misslyckas kan krypteringsnyckeln för resorna ha gått förlorad, och då går resorna inte att läsa. Den enda utvägen är Inställningar, Appar, obop Mileage, Lagring, Rensa lagringsutrymme. Det raderar de resor som inte har laddats upp.",
   "error.database.hint.ios":
-    "Inget har raderats. Försök igen. Om telefonen precis har startat, lås upp den en gång och försök igen. Så länge resorna inte kan öppnas sparas inga nya positioner. Om registreringen fortfarande pågår kan du stoppa den med knappen på skärmen. Om Försök igen fortsätter att misslyckas kan krypteringsnyckeln för resorna ha gått förlorad, och då går resorna inte att läsa. Den enda utvägen är att ta bort appen från hemskärmen och installera den igen. Det raderar de resor som inte har laddats upp.",
+    "Inget har raderats. Försök igen. Om telefonen precis har startat, lås upp den en gång och försök igen. Så länge resorna inte kan öppnas sparas inga nya positioner. Om registreringen fortfarande pågår kan du stoppa den med knappen på skärmen. Om Försök igen fortsätter att misslyckas kan krypteringsnyckeln för resorna ha gått förlorad, och då går resorna inte att läsa. Den enda utvägen är att radera appen från telefonen och installera den igen (håll ned appikonen, välj Ta bort app och sedan Radera app). Det raderar de resor som inte har laddats upp.",
   "error.database.stop": "Stoppa registreringen",
   "error.database.stopped": "Registreringen stoppades.",
 
@@ -77,7 +77,7 @@ export const sv: Translation<"one"> = {
   "home.start": "Start",
   "home.start.hint": "Börjar registrera en resa",
   "home.purpose": "Syfte med resan",
-  "home.last": "Senaste resan: {distance}, {state}",
+  "home.last": "Senaste resan. Sträcka: {distance}. Status: {state}.",
   "home.none": "Inga resor än.",
   "home.open.title": "En resa är fortfarande öppen",
   "home.open.message": "Startade {when}. Stoppa den eller kassera den.",

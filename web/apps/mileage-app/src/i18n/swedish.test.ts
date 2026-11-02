@@ -4,6 +4,7 @@ import {
   deviceStateText,
   formatDistance,
   integrityLines,
+  statusText,
   unsentSentence,
 } from "../core/present.ts";
 import {
@@ -161,6 +162,40 @@ describe("Swedish sentences with a count", () => {
     expect(deviceStateText("revoked")).toBe("Borttagen");
     expect(deviceStateText("suspended")).toBe("suspended");
     expect(deviceStateText("")).toBe("");
+  });
+});
+
+describe("Swedish sentences that hold a label of the catalogue or an iPhone menu", () => {
+  afterEach(() => setLanguage("en"));
+
+  test("the last trip reads right with a state, which starts with a capital, and with an unknown distance", () => {
+    setLanguage("sv");
+    expect(
+      t("home.last", { distance: formatDistance("12345.67")!, state: statusText("ended") }),
+    ).toBe("Senaste resan. Sträcka: 12,3 km. Status: Avslutad.");
+    expect(t("home.last", { distance: t("common.unknown"), state: statusText("recording") })).toBe(
+      "Senaste resan. Sträcka: Okänd. Status: Pågår.",
+    );
+  });
+
+  test("a state label never follows a comma or a word in the middle of a sentence", () => {
+    // The labels of the states ("Avslutad", "Under granskning") start with a capital letter.
+    for (const [key, text] of Object.entries(LANGUAGES.sv.messages)) {
+      if (!text.includes("{state}")) continue;
+      expect(text, key).toMatch(/(?:^|[.:!?] )\{state\}/);
+    }
+  });
+
+  test("the way out of the screen Failed on an iPhone is to delete the app, not to remove it from the Home Screen", () => {
+    setLanguage("sv");
+    const ios = tOn("ios", "error.database.hint");
+    expect(ios).toContain("Radera app");
+    expect(ios).toContain("radera appen från telefonen");
+    expect(ios).not.toContain("från hemskärmen");
+    expect(tOn("android", "error.database.hint")).toContain("Rensa lagringsutrymme");
+    // The English source says the same: Delete App, not Remove from Home Screen.
+    setLanguage("en");
+    expect(tOn("ios", "error.database.hint")).toContain("choose Remove App, then Delete App");
   });
 });
 
