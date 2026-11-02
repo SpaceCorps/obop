@@ -1,9 +1,9 @@
 {
-  "extends": "expo/tsconfig.base",
+  "extends": "expo/tsconfig.base.json",
   "compilerOptions": {
     "strict": true,
     "allowImportingTsExtensions": true,
-    "types": []
+    "types": ["node"]
   },
   "include": ["**/*.ts", "**/*.tsx"]
 }

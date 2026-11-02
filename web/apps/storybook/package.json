@@ -1,0 +1,26 @@
+{
+  "name": "@obop/storybook",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The web Storybook of the obop front-end packages. It draws the React Native components of @obop/ui-native through react-native-web (OR-34 g, Q42).",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "storybook": "storybook dev --port 6006 --no-open --disable-telemetry",
+    "build-storybook": "storybook build --disable-telemetry"
+  },
+  "dependencies": {
+    "@obop/ui-native": "workspace:*",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-native-web": "0.21.4"
+  },
+  "devDependencies": {
+    "@storybook/react-vite": "10.6.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "storybook": "10.6.3",
+    "typescript": "^7.0.2",
+    "vite": "8.3.4"
+  }
+}

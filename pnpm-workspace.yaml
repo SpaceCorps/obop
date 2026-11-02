@@ -6,3 +6,10 @@ packages:
 # only when it has been published for at least 7 days (minutes), and resolution fails otherwise.
 minimumReleaseAge: 10080
 minimumReleaseAgeStrict: true
+
+# strictDepBuilds: a dependency's install script runs only when listed here and reviewed. `false`
+# is a reviewed refusal. esbuild (a dependency of storybook, web/apps/storybook) has an install
+# script that only swaps its launcher for the platform binary; the binary comes as an optional
+# dependency and works without it, so the script stays off.
+allowBuilds:
+  esbuild: false
