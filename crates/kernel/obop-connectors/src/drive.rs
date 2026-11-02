@@ -27,6 +27,8 @@ use crate::util::{now, str_of};
 pub const PROVIDER: &str = "google_drive";
 const GOOGLE_API: &str = "https://www.googleapis.com";
 const DEFAULT_GROUP: &str = "platform.admin";
+/// The scope that lets obop make folders, Docs and uploads (only what the app creates).
+pub const WRITE_SCOPE: &str = "https://www.googleapis.com/auth/drive.file";
 
 /// An address from `name` when it is plain http on a literal loopback host.
 fn loopback_override(name: &str) -> Option<String> {
@@ -118,6 +120,13 @@ pub struct Status {
     pub connection: Option<String>,
     pub last_error: String,
     pub browse_group: String,
+    /// The drive the instance works in: `root` is My Drive, empty is none chosen.
+    pub workspace_id: String,
+    pub workspace_name: String,
+    /// The group that may create things in the workspace.
+    pub write_group: String,
+    /// Whether the sign-in granted the write scope (an earlier sign-in may not have).
+    pub write_granted: bool,
 }
 
 impl Status {
@@ -131,6 +140,10 @@ impl Status {
             "connection": self.connection,
             "last_error": self.last_error,
             "browse_group": self.browse_group,
+            "workspace_id": self.workspace_id,
+            "workspace_name": self.workspace_name,
+            "write_group": self.write_group,
+            "write_granted": self.write_granted,
         })
     }
 }
@@ -143,6 +156,14 @@ pub struct Credentials {
     pub refresh_token: String,
     pub api_base: String,
     pub token_url: String,
+    /// The scopes the sign-in was granted, space separated.
+    pub scope: String,
+}
+
+impl Credentials {
+    pub fn can_write(&self) -> bool {
+        self.scope.split_whitespace().any(|s| s == WRITE_SCOPE)
+    }
 }
 
 impl std::fmt::Debug for Credentials {
@@ -178,6 +199,36 @@ impl Runtime {
             .unwrap_or_else(|| DEFAULT_GROUP.into())
     }
 
+    /// The group that may create things in the workspace drive: the policy's `write_group`, else
+    /// `platform.admin`.
+    pub fn drive_write_group(&self) -> String {
+        provider_policy(&*self.backend, PROVIDER)
+            .map(|p| p.write_group)
+            .filter(|g| !g.is_empty())
+            .unwrap_or_else(|| DEFAULT_GROUP.into())
+    }
+
+    /// The workspace drive an administrator chose: its id (`root` is My Drive) and its name.
+    pub fn drive_workspace(&self) -> Option<(String, String)> {
+        provider_policy(&*self.backend, PROVIDER)
+            .filter(|p| !p.workspace_id.is_empty())
+            .map(|p| (p.workspace_id, p.workspace_name))
+    }
+
+    /// The scopes the stored sign-in was granted; empty when nobody has signed in.
+    fn drive_scope(&self, c: Option<&Connection>) -> String {
+        let Some(c) = c.filter(|c| !c.oauth_tokens.is_empty()) else {
+            return String::new();
+        };
+        self.secrets
+            .open(PURPOSE_OAUTH, &c.oauth_tokens)
+            .ok()
+            .and_then(|t| serde_json::from_str::<J>(&t).ok())
+            .and_then(|v| Tokens::from_json(&v))
+            .map(|t| t.scope)
+            .unwrap_or_default()
+    }
+
     pub fn drive_status(&self) -> Result<Status, String> {
         let pp = provider_policy(&*self.backend, PROVIDER);
         let client_id = pp.as_ref().map_or("", |p| p.oauth_client_id.as_str());
@@ -203,7 +254,13 @@ impl Runtime {
         } else {
             (State::Connected, String::new())
         };
+        let scope = self.drive_scope(conn.as_ref());
+        let (workspace_id, workspace_name) = self.drive_workspace().unwrap_or_default();
         Ok(Status {
+            write_granted: scope.split_whitespace().any(|s| s == WRITE_SCOPE),
+            workspace_id,
+            workspace_name,
+            write_group: self.drive_write_group(),
             state,
             client_id: client_id.into(),
             secret_set,
@@ -254,6 +311,7 @@ impl Runtime {
             refresh_token,
             api_base: e.api_base,
             token_url: e.token_url,
+            scope: tokens.scope,
         }))
     }
 

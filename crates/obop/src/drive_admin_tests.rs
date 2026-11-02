@@ -33,6 +33,13 @@ struct Google {
     token_calls: Vec<String>,
     about_status: u16,
     omit_refresh_token: bool,
+    /// The `scope` the token endpoint reports as granted; none says nothing (then the requested
+    /// scopes count as granted).
+    scope_response: Option<String>,
+    /// The query of every files.list call.
+    lists: Vec<String>,
+    /// (route, query, body) of every POST to Drive.
+    posts: Vec<(String, String, String)>,
 }
 
 struct Fake {
@@ -70,7 +77,7 @@ fn fake() -> &'static Arc<Fake> {
     })
 }
 
-fn read_request(s: &mut std::net::TcpStream) -> (String, String, String) {
+fn read_request(s: &mut std::net::TcpStream) -> (String, String, String, String) {
     let mut buf = Vec::new();
     let mut chunk = [0u8; 4096];
     loop {
@@ -105,8 +112,7 @@ fn read_request(s: &mut std::net::TcpStream) -> (String, String, String) {
         .find(|l| l.to_ascii_lowercase().starts_with("authorization:"))
         .map(|l| l.split_once(':').unwrap().1.trim().to_string())
         .unwrap_or_default();
-    let _ = method;
-    (path, auth, body.to_string())
+    (method, path, auth, body.to_string())
 }
 
 fn reply(s: &mut std::net::TcpStream, status: &str, ctype: &str, body: &[u8]) {
@@ -125,7 +131,7 @@ fn form(body: &str) -> HashMap<String, String> {
 }
 
 fn serve(f: &Fake, mut s: std::net::TcpStream) {
-    let (path, auth, body) = read_request(&mut s);
+    let (method, path, auth, body) = read_request(&mut s);
     let png = fx::png(8, 8, 3);
     if path == "/token" {
         let p = form(&body);
@@ -144,7 +150,12 @@ fn serve(f: &Fake, mut s: std::net::TcpStream) {
                 } else {
                     format!(r#","refresh_token":"{REFRESH}""#)
                 };
-                format!(r#"{{"access_token":"at-1","expires_in":3600{rt}}}"#)
+                let sc = g
+                    .scope_response
+                    .as_ref()
+                    .map(|v| format!(r#","scope":"{v}""#))
+                    .unwrap_or_default();
+                format!(r#"{{"access_token":"at-1","expires_in":3600{rt}{sc}}}"#)
             }
             "refresh_token" if ok && p["refresh_token"] == REFRESH => {
                 format!(
@@ -171,7 +182,61 @@ fn serve(f: &Fake, mut s: std::net::TcpStream) {
     }
     let (route, query) = path.split_once('?').unwrap_or((&path, ""));
     let q = form(query);
+    if method == "POST" {
+        f.state
+            .lock()
+            .unwrap()
+            .posts
+            .push((route.into(), query.into(), body.clone()));
+        let (name, mime) = if route.starts_with("/upload/") {
+            let meta = body.lines().find(|l| l.starts_with('{')).unwrap_or("{}");
+            let m: J = serde_json::from_str(meta).unwrap_or_default();
+            (
+                m["name"].as_str().unwrap_or("").to_string(),
+                "application/pdf".to_string(),
+            )
+        } else {
+            let m: J = serde_json::from_str(&body).unwrap_or_default();
+            (
+                m["name"].as_str().unwrap_or("").to_string(),
+                m["mimeType"].as_str().unwrap_or("").to_string(),
+            )
+        };
+        let n = f.state.lock().unwrap().posts.len();
+        let out = json!({"id": format!("new-{n}"), "name": name, "mimeType": mime,
+                         "webViewLink": format!("https://drive.google.com/file/d/new-{n}/view")});
+        reply(
+            &mut s,
+            "200 OK",
+            "application/json",
+            out.to_string().as_bytes(),
+        );
+        return;
+    }
     match route {
+        "/drive/v3/drives" => reply(
+            &mut s,
+            "200 OK",
+            "application/json",
+            br#"{"drives":[{"id":"sd1","name":"SpaceCorps shared"}]}"#,
+        ),
+        "/drive/v3/files/sdf1" => reply(
+            &mut s,
+            "200 OK",
+            "application/json",
+            br#"{"id":"sdf1","name":"Legal","mimeType":"application/vnd.google-apps.folder","driveId":"sd1","ownedByMe":false}"#,
+        ),
+        "/drive/v3/files/sdf2" if q.get("alt").map(String::as_str) == Some("media") => {
+            reply(&mut s, "200 OK", "image/png", &png);
+        }
+        "/drive/v3/files/sdf2" => {
+            let body = json!({
+                "id": "sdf2", "name": "Shared logo.png", "mimeType": "image/png",
+                "modifiedTime": "2026-10-30T09:00:00Z", "size": png.len().to_string(),
+                "webViewLink": "https://drive.google.com/file/d/sdf2/view", "driveId": "sd1"
+            });
+            reply(&mut s, "200 OK", "application/json", body.to_string().as_bytes());
+        }
         "/drive/v3/about" => {
             let st = f.state.lock().unwrap().about_status;
             if st == 200 {
@@ -189,6 +254,14 @@ fn serve(f: &Fake, mut s: std::net::TcpStream) {
                     br#"{"error":{"message":"Drive API has not been used"}}"#,
                 );
             }
+        }
+        "/drive/v3/files" if q.contains_key("driveId") => {
+            f.state.lock().unwrap().lists.push(query.to_string());
+            let body = json!({"files": [{
+                "id": "sdf1", "name": "Legal", "mimeType": "application/vnd.google-apps.folder",
+                "modifiedTime": "2026-10-30T09:00:00Z", "webViewLink": "https://drive.google.com/drive/folders/sdf1"
+            }]});
+            reply(&mut s, "200 OK", "application/json", body.to_string().as_bytes());
         }
         "/drive/v3/files" => {
             let body = json!({"files": [{
@@ -418,6 +491,8 @@ async fn the_google_drive_page_end_to_end_against_a_fake_google() {
     an_administrator_connects_a_drive_from_the_back_office_and_the_browser_uses_it().await;
     a_drive_that_refuses_the_account_is_an_error_with_a_reason_and_browses_nothing().await;
     a_sign_in_without_a_refresh_token_is_refused_with_the_way_out().await;
+    a_workspace_drive_scopes_browsing_and_lets_the_write_group_create_files().await;
+    a_sign_in_that_did_not_grant_writing_cannot_create_and_says_how_to_fix_it().await;
     the_google_addresses_cannot_be_pointed_anywhere_but_loopback();
 }
 
@@ -462,7 +537,10 @@ async fn an_administrator_connects_a_drive_from_the_back_office_and_the_browser_
     // The client is entered and the authorization started; the secret never comes back.
     let (id, q) = r.start("product.manager").await;
     assert_eq!(q["client_id"], CLIENT_ID);
-    assert_eq!(q["scope"], "https://www.googleapis.com/auth/drive.readonly");
+    assert_eq!(
+        q["scope"],
+        "https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file"
+    );
     assert_eq!(q["access_type"], "offline");
     assert_eq!(q["prompt"], "consent");
     assert_eq!(q["code_challenge_method"], "S256");
@@ -518,7 +596,7 @@ async fn an_administrator_connects_a_drive_from_the_back_office_and_the_browser_
     // token that the next requests reuse. The browse group is the one the administrator chose.
     let (s, v) = r.get(Some(&r.admin), "/api/drive/files").await;
     assert_eq!(s, 200, "{v}");
-    assert_eq!(v["files"][0]["name"], "NDA - Acme Oy");
+    assert_eq!(v["files"][1]["name"], "NDA - Acme Oy");
     assert_eq!(r.get(Some(&r.member), "/api/drive/files").await.0, 200);
     assert_eq!(r.get(Some(&r.outsider), "/api/drive/files").await.0, 403);
     let refreshes = g
@@ -617,6 +695,270 @@ async fn a_sign_in_without_a_refresh_token_is_refused_with_the_way_out() {
             .contains("refresh token")
     );
     assert_eq!(v["connected"], false);
+}
+
+impl Rig {
+    /// Connect with the given token response scope (`None`: as requested).
+    async fn connect(&self, scope: Option<&str>, code: &str) -> String {
+        let g = fake();
+        g.state.lock().unwrap().scope_response = scope.map(String::from);
+        let (id, q) = self.start("").await;
+        g.state
+            .lock()
+            .unwrap()
+            .codes
+            .insert(code.into(), q["code_challenge"].clone());
+        let page = self.callback(&q["state"], code).await;
+        assert!(page.contains("Connected"), "{page}");
+        id
+    }
+
+    async fn policy(&self, body: J) -> (u16, J) {
+        let pid = self.store.backend().list("provider_policy").unwrap()[0]
+            .0
+            .clone();
+        let mut b = body;
+        b["id"] = json!(pid);
+        self.post(Some(&self.admin), "/api/provider_policy/update", b)
+            .await
+    }
+
+    async fn upload(&self, token: &str, query: &str, ctype: &str, bytes: &[u8]) -> (u16, J) {
+        let req = Request::post(format!("/api/drive/upload{query}"))
+            .header("authorization", format!("Bearer {token}"))
+            .header("content-type", ctype)
+            .body(Body::from(bytes.to_vec()))
+            .unwrap();
+        let (s, t) = call(&self.router, req).await;
+        (s, as_json(&t))
+    }
+}
+
+async fn a_workspace_drive_scopes_browsing_and_lets_the_write_group_create_files() {
+    let r = rig().await;
+    let g = fake();
+    {
+        let mut st = g.state.lock().unwrap();
+        st.lists.clear();
+        st.posts.clear();
+    }
+    r.connect(None, "code-w1").await;
+
+    // Connected with the write scope, no workspace yet: nothing to create in.
+    let v = r.status(&r.admin).await;
+    assert_eq!(v["settings"]["write_granted"], true);
+    assert_eq!(v["settings"]["workspace_id"], "");
+    assert_eq!(v["workspace"], J::Null);
+    assert_eq!(v["may_write"], false);
+    let (s, v) = r
+        .post(Some(&r.admin), "/api/drive/folders", json!({"name": "x"}))
+        .await;
+    assert_eq!(s, 409, "{v}");
+    assert!(v["error"].as_str().unwrap().contains("workspace drive"));
+
+    // The picker lists the shared drives, for administrators of connectors only.
+    let (s, v) = r.get(Some(&r.admin), "/api/drive/drives").await;
+    assert_eq!(s, 200, "{v}");
+    assert_eq!(
+        v["drives"],
+        json!([{"id": "sd1", "name": "SpaceCorps shared"}])
+    );
+    assert_eq!(r.get(Some(&r.member), "/api/drive/drives").await.0, 403);
+
+    // A hostile id or name is refused when it is saved.
+    let (s, _) = r.policy(json!({"workspace_id": "a/../b"})).await;
+    assert_ne!(s, 200);
+    let (s, _) = r.policy(json!({"write_group": "Not A Group"})).await;
+    assert_ne!(s, 200);
+
+    // Choose the workspace.
+    let (s, v) = r
+        .policy(json!({"workspace_id": "sd1", "workspace_name": "SpaceCorps shared"}))
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let v = r.status(&r.admin).await;
+    assert_eq!(
+        v["workspace"],
+        json!({"id": "sd1", "name": "SpaceCorps shared"})
+    );
+    assert_eq!(v["may_write"], true);
+    assert_eq!(v["settings"]["write_group"], "platform.admin");
+
+    // Browsing is scoped to that drive: the listing asks for corpora=drive and driveId.
+    let (s, v) = r.get(Some(&r.admin), "/api/drive/files").await;
+    assert_eq!(s, 200, "{v}");
+    assert_eq!(v["files"][0]["name"], "Legal");
+    let last = g.state.lock().unwrap().lists.last().cloned().unwrap();
+    assert!(
+        last.contains("corpora=drive") && last.contains("driveId=sd1"),
+        "{last}"
+    );
+
+    // Import: a file of the workspace comes in; one outside it is refused and logged.
+    let (s, v) = r
+        .post(
+            Some(&r.admin),
+            "/api/drive/import",
+            json!({"id": "sdf2", "field": "product.image"}),
+        )
+        .await;
+    assert_eq!(s, 201, "{v}");
+    let (s, v) = r
+        .post(
+            Some(&r.admin),
+            "/api/drive/import",
+            json!({"id": "f1", "field": "product.image"}),
+        )
+        .await;
+    assert_eq!(s, 502, "{v}");
+    assert!(
+        v["error"]
+            .as_str()
+            .unwrap()
+            .contains("outside the workspace drive")
+    );
+    assert_eq!(r.events("drive_import"), 1);
+    assert_eq!(r.events("drive_import_failed"), 1);
+
+    // Create a folder at the top, a Doc in a workspace folder and an upload; each is audited and
+    // carries the all-drives flag and the right parent.
+    let (s, v) = r
+        .post(
+            Some(&r.admin),
+            "/api/drive/folders",
+            json!({"name": "Contracts"}),
+        )
+        .await;
+    assert_eq!(s, 201, "{v}");
+    assert_eq!(v["folder"], true);
+    let (s, v) = r
+        .post(
+            Some(&r.admin),
+            "/api/drive/docs",
+            json!({"name": "NDA Abhinav", "parent": "sdf1"}),
+        )
+        .await;
+    assert_eq!(s, 201, "{v}");
+    assert!(
+        v["web_link"]
+            .as_str()
+            .unwrap()
+            .starts_with("https://drive.google.com/")
+    );
+    let (s, v) = r
+        .upload(
+            &r.admin,
+            "?name=signed.pdf&parent=sdf1",
+            "application/pdf",
+            b"%PDF-1.4 x",
+        )
+        .await;
+    assert_eq!(s, 201, "{v}");
+    assert_eq!(v["name"], "signed.pdf");
+    {
+        let st = g.state.lock().unwrap();
+        let posts: Vec<_> = st.posts.iter().collect();
+        assert_eq!(posts.len(), 3, "{posts:?}");
+        assert!(
+            posts[0].2.contains(r#""parents":["sd1"]"#),
+            "{:?}",
+            posts[0]
+        );
+        assert!(posts[0].1.contains("supportsAllDrives=true"));
+        assert!(posts[1].2.contains(r#""parents":["sdf1"]"#));
+        assert!(posts[2].0.starts_with("/upload/") && posts[2].2.contains("%PDF-1.4 x"));
+    }
+    assert_eq!(r.events("drive_create"), 2);
+    assert_eq!(r.events("drive_upload"), 1);
+
+    // A folder outside the workspace is refused before anything is written.
+    let before = g.state.lock().unwrap().posts.len();
+    let (s, _) = r
+        .post(
+            Some(&r.admin),
+            "/api/drive/folders",
+            json!({"name": "x", "parent": "dir-elsewhere"}),
+        )
+        .await;
+    assert_eq!(s, 502);
+    assert_eq!(g.state.lock().unwrap().posts.len(), before);
+    assert_eq!(r.events("drive_create_failed"), 1);
+
+    // Who may write is its own group: browsing alone does not allow it.
+    let (s, _) = r.policy(json!({"allowed_group": "product.manager"})).await;
+    assert_eq!(s, 200);
+    assert_eq!(r.status(&r.member).await["may_write"], false);
+    let (s, _) = r
+        .post(Some(&r.member), "/api/drive/folders", json!({"name": "m"}))
+        .await;
+    assert_eq!(s, 403);
+    r.policy(json!({"write_group": "product.manager"})).await;
+    assert_eq!(r.status(&r.member).await["may_write"], true);
+    let (s, _) = r
+        .post(Some(&r.member), "/api/drive/folders", json!({"name": "m"}))
+        .await;
+    assert_eq!(s, 201);
+    // People outside the browse group are refused, for a folder and for an upload.
+    assert_eq!(
+        r.post(
+            Some(&r.outsider),
+            "/api/drive/folders",
+            json!({"name": "o"})
+        )
+        .await
+        .0,
+        403
+    );
+    assert_eq!(
+        r.upload(&r.outsider, "?name=o.txt", "text/plain", b"o")
+            .await
+            .0,
+        403
+    );
+
+    // Clearing the workspace goes back to the whole Drive and closes writing.
+    r.policy(json!({"workspace_id": "", "workspace_name": ""}))
+        .await;
+    let v = r.status(&r.admin).await;
+    assert_eq!(
+        (v["workspace"].clone(), v["may_write"].clone()),
+        (J::Null, json!(false))
+    );
+    assert_eq!(
+        r.get(Some(&r.admin), "/api/drive/files").await.1["files"][1]["name"],
+        "NDA - Acme Oy"
+    );
+    assert_no_plaintext(&r, &[CLIENT_SECRET, REFRESH, "at-1"]);
+}
+
+async fn a_sign_in_that_did_not_grant_writing_cannot_create_and_says_how_to_fix_it() {
+    let r = rig().await;
+    let g = fake();
+    g.state.lock().unwrap().posts.clear();
+    r.connect(
+        Some("https://www.googleapis.com/auth/drive.readonly"),
+        "code-w2",
+    )
+    .await;
+    r.policy(json!({"workspace_id": "sd1", "workspace_name": "SpaceCorps shared"}))
+        .await;
+    let v = r.status(&r.admin).await;
+    assert_eq!(v["settings"]["write_granted"], false);
+    assert_eq!(v["may_write"], false);
+    // Browsing still works; writing says to sign in again.
+    assert_eq!(r.get(Some(&r.admin), "/api/drive/files").await.0, 200);
+    let (s, v) = r
+        .post(Some(&r.admin), "/api/drive/folders", json!({"name": "x"}))
+        .await;
+    assert_eq!(s, 409);
+    assert!(
+        v["error"]
+            .as_str()
+            .unwrap()
+            .contains("sign in with Google again")
+    );
+    assert!(g.state.lock().unwrap().posts.is_empty());
+    g.state.lock().unwrap().scope_response = None;
 }
 
 fn the_google_addresses_cannot_be_pointed_anywhere_but_loopback() {

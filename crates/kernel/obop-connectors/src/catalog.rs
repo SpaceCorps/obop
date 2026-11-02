@@ -647,8 +647,8 @@ pub fn providers() -> Vec<Provider> {
             auth_kind: "oauth2",
             direction: "inbound",
             max_classes: vec![NoClass, PublicDirectory, Internal],
-            purpose: "Browse a Google Drive from the Documents app and add a file (a Google Doc, Sheet or Slides file as PDF) to obop as a document.",
-            description: "Read-only: obop asks Drive for a folder listing, a name search, or one file, and never writes to Drive. Files you add are copied into obop. Needs your own OAuth client (a Google Cloud project with the consent screen configured); obop ships none. Works through the Drive browser in the Documents app, for the people allowed to browse. Tested against a fake Drive on a local port, not against Google itself.",
+            purpose: "Work in one Google Drive (a shared drive or My Drive) from the Documents app: browse it, add a file (a Google Doc, Sheet or Slides file as PDF) to obop as a document, and make folders, Google Docs and uploads in it.",
+            description: "obop asks Drive for a folder listing, a name search or one file, and, for the people allowed to write, creates a folder, an empty Google Doc or an uploaded file in the workspace drive; it never changes or deletes what is already there. Files you add are copied into obop. Needs your own OAuth client (a Google Cloud project with the consent screen configured); obop ships none. Works through the Drive browser in the Documents app, for the people allowed to browse. Tested against a fake Drive on a local port, not against Google itself.",
             legal_name: "Google (confirm: Google Ireland Limited or Google LLC, depending on your agreement)",
             country: NOT_VERIFIED,
             dpa_url: "https://cloud.google.com/terms/data-processing-addendum",
@@ -661,11 +661,12 @@ pub fn providers() -> Vec<Provider> {
             oauth: Some(OAuthDef {
                 auth_url: "https://accounts.google.com/o/oauth2/v2/auth",
                 token_url: "https://oauth2.googleapis.com/token",
-                scopes: "https://www.googleapis.com/auth/drive.readonly",
+                // Read to browse; drive.file to make folders, Docs and uploads the app creates.
+                scopes: "https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file",
                 extra: &[("access_type", "offline"), ("prompt", "consent")],
             }),
             config: vec![],
-            setup: "1. In Google Cloud Console create a project and enable the Google Drive API. 2. Configure the OAuth consent screen and publish it (a project left in testing makes Google expire the sign-in after 7 days). 3. Create an OAuth client of type Web application and add the redirect address shown on the Google Drive page. 4. Enter its client id and secret there and press Connect.",
+            setup: "1. In Google Cloud Console create a project and enable the Google Drive API. 2. Configure the OAuth consent screen and publish it (a project left in testing makes Google expire the sign-in after 7 days). 3. Add the scopes drive.readonly and drive.file under Data Access. 4. Create an OAuth client of type Web application and add the redirect address shown on the Google Drive page. 5. Enter its client id and secret there, press Connect, then choose the workspace drive.",
             ..base()
         },
         Provider {
