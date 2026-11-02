@@ -94,7 +94,10 @@ export function formatNumber(value: number, maximumFractionDigits = 0): string {
  * `formatNumber` without `Intl`: rounds half away from zero on the decimal text of the value (as
  * `Intl` does: 8.35 with one digit is 8.4, where `toFixed` gives 8.3), drops trailing zeros,
  * groups the thousands and writes the minus sign with the symbols of the language. A number the
- * app never shows (not finite, or too large to scale) is written as JavaScript writes it.
+ * app never shows is not formatted: one that is not finite, or too large to scale (1e21 and
+ * more), is written as JavaScript writes it; one smaller than 1e-6 is "0" (JavaScript writes such
+ * a number with an exponent, and `Intl` writes "0"; a negative that rounds to nothing is "0" too,
+ * where `Intl` writes "-0").
  */
 export function plainNumber(
   value: number,
@@ -102,6 +105,7 @@ export function plainNumber(
   language: Language,
 ): string {
   if (!Number.isFinite(value)) return String(value);
+  if (Math.abs(value) < 1e-6) return "0";
   const digits = Math.min(20, Math.max(0, Math.trunc(maximumFractionDigits)));
   const shifted = Number(`${Math.abs(value)}e${digits}`);
   if (!Number.isFinite(shifted) || shifted >= 1e21) return String(value);

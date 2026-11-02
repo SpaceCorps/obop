@@ -20,7 +20,7 @@ import {
 } from "./index.ts";
 import { LANGUAGES } from "./languages.ts";
 
-describe("the plural tables and number symbols are the rules of CLDR", () => {
+describe("the plural rules and number symbols are the rules of CLDR", () => {
   // Node has the CLDR data in `Intl`; the app does not rely on it (Hermes lacks PluralRules), so the
   // tables of `languages.ts` are compared with it here, where it is available.
   for (const language of Object.values(LANGUAGES)) {
@@ -186,6 +186,36 @@ describe("Swedish sentences that hold a label of the catalogue or an iPhone menu
     }
   });
 
+  test("the words of a problem the app also raises itself name no server; the server's own do", () => {
+    setLanguage("sv");
+    expect(t("trip.problem.title.app")).toBe("Ett steg kunde inte genomföras");
+    expect(t("trip.problem.details.app", { message: "x" })).toBe("Detaljer: x");
+    expect(t("home.problem.message")).toBe(
+      "Ett steg kunde inte genomföras. Öppna resan för att se varför.",
+    );
+    for (const text of [
+      t("trip.problem.title.app"),
+      t("trip.problem.details.app", { message: "x" }),
+      t("home.problem.message"),
+    ]) {
+      expect(text).not.toMatch(/server/i);
+    }
+    expect(t("trip.problem.title")).toBe("Servern godtog inte ett steg");
+    expect(t("trip.problem.details", { message: "x" })).toBe("Detaljer från servern: x");
+    setLanguage("en");
+    expect(t("home.problem.message")).not.toMatch(/server/i);
+    expect(t("trip.problem.title.app")).not.toMatch(/server/i);
+    expect(t("trip.problem.details.app", { message: "x" })).not.toMatch(/server/i);
+  });
+
+  test("the note about a language that could not be saved is Swedish and promises no language", () => {
+    setLanguage("sv");
+    expect(t("language.unsaved")).toBe(
+      "Språket ändrades, men det gick inte att spara på den här telefonen. Nästa gång appen startar kan den använda det språk som sparades tidigare, eller telefonens språk.",
+    );
+    expect(t("language.unsaved")).not.toMatch(/går den tillbaka/);
+  });
+
   test("the way out of the screen Failed on an iPhone is to delete the app, not to remove it from the Home Screen", () => {
     setLanguage("sv");
     const ios = tOn("ios", "error.database.hint");
@@ -247,6 +277,70 @@ describe("Swedish numbers, distances and dates through Intl", () => {
     setLanguage("en");
     expect(formatNumber(12345.67, 1)).toBe("12,345.7");
     expect(formatNumber(-0.5, 1)).toBe("-0.5");
+  });
+
+  /** The text of the instant of a local date and time, as the server gives instants (UTC). */
+  const instantOf = (year: number, month: number, day: number, hour: number, minute: number) =>
+    new Date(year, month - 1, day, hour, minute).toISOString();
+
+  test("the date by hand is the local date and time to the minute, 24 hours, padded", () => {
+    vi.stubGlobal("Intl", {});
+    setLanguage("sv");
+    // Built from local components, so the expected text does not depend on the zone of the machine.
+    expect(formatDateTime(instantOf(2026, 10, 15, 11, 5))).toBe("2026-10-15 11:05");
+    expect(formatDateTime(instantOf(2026, 10, 15, 23, 59))).toBe("2026-10-15 23:59");
+    expect(formatDateTime(instantOf(2026, 1, 2, 0, 7))).toBe("2026-01-02 00:07");
+    expect(formatDateTime(instantOf(2026, 12, 31, 18, 30))).toBe("2026-12-31 18:30");
+    expect(formatDateTime(instantOf(2026, 10, 15, 12, 0))).toBe("2026-10-15 12:00");
+  });
+
+  test("the date by hand is in the zone of the phone, not in UTC (a zone with half hours)", () => {
+    const before = process.env.TZ;
+    process.env.TZ = "Asia/Kolkata"; // UTC+05:30: the hour and the minutes both differ from UTC
+    try {
+      // The runtime has to take the zone for this check to mean anything; if it does not, the
+      // test above still pins the time of day.
+      if (new Date(2026, 9, 15, 11, 5).getTimezoneOffset() !== -330) return;
+      vi.stubGlobal("Intl", {});
+      setLanguage("sv");
+      expect(formatDateTime("2026-10-15T05:35:00Z")).toBe("2026-10-15 11:05");
+      expect(formatDateTime("2026-10-15T20:00:00Z")).toBe("2026-10-16 01:30");
+    } finally {
+      if (before === undefined) delete process.env.TZ;
+      else process.env.TZ = before;
+    }
+  });
+
+  test("the date and the number each look at their own formatter for the language", () => {
+    const sv = { locale: "sv-SE" };
+    const en = { locale: "en-US" };
+    // Swedish number data but no Swedish date data: the number is Intl's, the date is by hand.
+    vi.stubGlobal("Intl", {
+      NumberFormat: class {
+        resolvedOptions = () => sv;
+        format = () => "number from Intl";
+      },
+      DateTimeFormat: class {
+        resolvedOptions = () => en;
+        format = () => "Oct 15, 2026, 9:00 AM";
+      },
+    });
+    setLanguage("sv");
+    expect(formatNumber(1)).toBe("number from Intl");
+    expect(formatDateTime(instantOf(2026, 10, 15, 11, 5))).toBe("2026-10-15 11:05");
+    // And the other way round: Swedish date data but no Swedish number data.
+    vi.stubGlobal("Intl", {
+      NumberFormat: class {
+        resolvedOptions = () => en;
+        format = () => "english number";
+      },
+      DateTimeFormat: class {
+        resolvedOptions = () => sv;
+        format = () => "date from Intl";
+      },
+    });
+    expect(formatNumber(1234.5, 1)).toBe("1 234,5");
+    expect(formatDateTime(instantOf(2026, 10, 15, 11, 5))).toBe("date from Intl");
   });
 
   test("an Intl without data for the language does not leak English into a Swedish app", () => {
@@ -335,6 +429,13 @@ describe("Swedish numbers, distances and dates through Intl", () => {
     expect(plainNumber(1e21, 0, LANGUAGES.sv)).toBe("1e+21");
     // A negative that rounds to nothing has no sign (Intl writes "-0", which no screen wants).
     expect(plainNumber(-0.04, 1, LANGUAGES.sv)).toBe("0");
+    // A number smaller than 1e-6 would come out with an exponent ("1e-7"); Intl writes "0".
+    expect(plainNumber(1e-7, 1, LANGUAGES.sv)).toBe("0");
+    expect(plainNumber(-5e-7, 0, LANGUAGES.sv)).toBe("0");
+    expect(plainNumber(1e-7, 1, LANGUAGES.sv)).toBe(
+      new Intl.NumberFormat("sv", { maximumFractionDigits: 1 }).format(1e-7),
+    );
+    expect(plainNumber(0.000001, 6, LANGUAGES.en)).toBe("0.000001");
   });
 
   test("without Intl.PluralRules Swedish still has its two forms", () => {

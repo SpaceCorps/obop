@@ -154,7 +154,7 @@ describe("the checks of the server", () => {
 describe("a runtime with less Intl than Node", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  test("without Intl.PluralRules the plural table of the language is used", () => {
+  test("without Intl.PluralRules the plural rule of the language is used", () => {
     vi.stubGlobal("Intl", { ...Intl, PluralRules: undefined });
     expect(tp("unit.points", 1)).toBe("1 point");
     expect(tp("unit.points", 2)).toBe("2 points");

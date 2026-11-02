@@ -92,7 +92,7 @@ export const sv: Translation<"one"> = {
   "home.waiting.message.other":
     "{count} resor finns på den här telefonen men inte på servern än. De är säkra.",
   "home.problem.title": "En resa behöver din uppmärksamhet",
-  "home.problem.message": "Servern godtog inte ett steg. Öppna resan för att se varför.",
+  "home.problem.message": "Ett steg kunde inte genomföras. Öppna resan för att se varför.",
   "home.problem.action": "Öppna resor",
   "home.trips": "Resor",
   "home.account": "Konto",
@@ -321,5 +321,5 @@ export const sv: Translation<"one"> = {
   "language.note":
     "Appens språk. Appens namn och texterna i systemets dialogrutor följer telefonens språk.",
   "language.unsaved":
-    "Språket ändrades, men det gick inte att spara på den här telefonen. Nästa gång appen startar går den tillbaka till telefonens språk.",
+    "Språket ändrades, men det gick inte att spara på den här telefonen. Nästa gång appen startar kan den använda det språk som sparades tidigare, eller telefonens språk.",
 };

@@ -87,7 +87,7 @@ export const en = {
   "home.waiting.message.other":
     "{count} trips are on this phone and not on the server yet. They are safe.",
   "home.problem.title": "A trip needs your attention",
-  "home.problem.message": "The server refused a step. Open the trip to see why.",
+  "home.problem.message": "A step could not be done. Open the trip to see why.",
   "home.problem.action": "Open trips",
   "home.trips": "Trips",
   "home.account": "Account",
@@ -314,7 +314,7 @@ export const en = {
   "language.note":
     "The language of the app. The name of the app and the texts of the system dialogs follow the language of the phone.",
   "language.unsaved":
-    "The language was changed, but it could not be saved on this phone. The app goes back to the language of the phone the next time it starts.",
+    "The language was changed, but it could not be saved on this phone. The next time the app starts it may use the language that was saved before, or the language of the phone.",
 } as const;
 
 type EnglishKey = keyof typeof en;
