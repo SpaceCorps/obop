@@ -22,6 +22,11 @@ export function tripStatus(trip: LocalTrip): TripStatus {
 
 export const statusText = (status: TripStatus): string => t(`state.${status}` as MessageKey);
 
+/** The state of this phone on the instance (`active`, `revoked`) as a word; a state the app does not know is shown as it is. */
+export function deviceStateText(state: string): string {
+  return state === "active" || state === "revoked" ? t(`account.device.state.${state}`) : state;
+}
+
 /** A distance in metres given as a decimal text (`"12345.67"`) as kilometres or metres for a driver. */
 export function formatDistance(metres: string | null): string | null {
   if (metres === null) return null;

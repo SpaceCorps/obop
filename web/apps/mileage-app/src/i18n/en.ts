@@ -1,11 +1,14 @@
 /**
- * Every sentence the app shows, in one catalogue (docs/spec/mobile.md 6: English first; the label
- * tables of the other six shipped languages are step 6). A new language is another object with the
- * same keys: `Messages` makes the compiler check that none is missing. Placeholders are `{name}`.
+ * Every sentence the app shows, in one catalogue: this is the English source (docs/spec/mobile.md
+ * 8.9). Another language is another object with the same keys, typed `Translation<...>` with the
+ * plural forms that language needs (`sv.ts`), so the compiler reports a missing or an extra key, and
+ * `check.ts` (run by the tests) reports what a type cannot: placeholders, empty texts, a text that
+ * was left in English. Placeholders are `{name}`.
  *
  * A sentence that depends on a count has one key per plural form (`name.one`, `name.other`; a
- * language adds the forms it has) and is read with `tp(name, count)`. Numbers and dates are
- * formatted with `Intl` in `index.ts`, not written into a sentence.
+ * language adds the forms it has: Polish would add `few` and `many`) and is read with
+ * `tp(name, count)`. Numbers and dates are formatted with `Intl` in `index.ts`, not written into a
+ * sentence. `name.ios` is the version of a sentence for iOS, read with `tOn`.
  */
 export const en = {
   "common.back": "Back",
@@ -264,6 +267,8 @@ export const en = {
   "account.device.revoke": "Remove this phone",
   "account.device.revoke.title": "Remove this phone?",
   "account.device.revoke.message": "The instance ends this sign-in and the app signs out.",
+  "account.device.state.active": "Active",
+  "account.device.state.revoked": "Removed",
   "account.device.list":
     "Other phones are listed in the back office, under Customize, Security, Devices. An app can only see its own phone.",
   "account.device.error": "Could not read this phone from the server.",
@@ -301,9 +306,35 @@ export const en = {
   "account.upload.unavailable": "The server is busy, will retry",
   "account.upload.signed_out": "Signed out",
   "account.upload.now": "Upload now",
+
+  "language.title": "Language",
+  "language.system": "Follow the phone",
+  "language.note":
+    "The language of the app. The name of the app and the texts of the system dialogs follow the language of the phone.",
 } as const;
 
-export type MessageKey = keyof typeof en;
+type EnglishKey = keyof typeof en;
 
-/** The shape every language has: all the keys, plain text. */
-export type Messages = Record<MessageKey, string>;
+/** The keys that have plural forms: `name` where the catalogue holds `name.one`, `name.other`, and so on. */
+export type PluralKey = EnglishKey extends infer K
+  ? K extends `${infer Base}.other`
+    ? Base
+    : never
+  : never;
+
+/** The keys read with `t` (and `tOn`): every key that is not a plural form. */
+export type MessageKey = Exclude<EnglishKey, `${PluralKey}.${"one" | "other"}`>;
+
+/** The plural categories of CLDR; a language uses some of them, and every language uses `other`. */
+export const PLURAL_CATEGORIES = ["zero", "one", "two", "few", "many", "other"] as const;
+export type PluralCategory = (typeof PLURAL_CATEGORIES)[number];
+
+/**
+ * What a language other than English must have: every plain key, and for every plural key one form
+ * per category the language needs (always `other`). `Translation<"one">` is Swedish; Polish would be
+ * `Translation<"one" | "few" | "many">`. Missing keys, extra keys and a missing or unneeded plural
+ * form are compile errors for an object typed with it (`tsc` runs in `vp check`).
+ */
+export type Translation<Category extends PluralCategory> = Readonly<
+  Record<MessageKey, string> & Record<`${PluralKey}.${Category | "other"}`, string>
+>;

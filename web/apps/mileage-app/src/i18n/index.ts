@@ -1,11 +1,37 @@
-import { en, type MessageKey, type Messages } from "./en.ts";
+import type { MessageKey, PluralKey } from "./en.ts";
+import { LANGUAGES, type Language, type LanguageCode } from "./languages.ts";
 
-export type { MessageKey, Messages };
+export type { MessageKey, PluralKey };
+export type { LanguageCode };
 
-const catalogue: Messages = en;
+/**
+ * The active language: what `t`, `tp`, `tOn`, `formatNumber` and `formatDateTime` read. It is
+ * English until `setLanguage` is called (`language.ts` decides which language and calls it; the
+ * tests rely on the default). The screens read these functions while they render, so a change is
+ * shown by rendering again: `App.tsx` renders the whole tree again when the language changes.
+ */
+let active: Language = LANGUAGES.en;
+const listeners = new Set<() => void>();
 
-/** The language of the catalogue and of the numbers and dates the app formats (BCP 47). */
-export const LOCALE = "en";
+export function getLanguage(): LanguageCode {
+  return active.code;
+}
+
+/** Makes `code` the language of the sentences, numbers and dates, and tells the listeners if it changed. */
+export function setLanguage(code: LanguageCode): void {
+  const next = LANGUAGES[code];
+  if (next === active) return;
+  active = next;
+  for (const listener of listeners) listener();
+}
+
+/** `listener` is called after the language changed. Returns the function that stops it. */
+export function onLanguageChange(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
 
 type Params = Record<string, string | number>;
 
@@ -16,9 +42,14 @@ function fill(text: string, params: Params): string {
   });
 }
 
+/** The text of a key in the active language; the English one if the active catalogue lacks it (the tests say it never does). */
+function lookup(key: string): string {
+  return active.messages[key] ?? LANGUAGES.en.messages[key] ?? key;
+}
+
 /** A sentence of the catalogue with its `{placeholders}` filled. */
 export function t(key: MessageKey, params: Params = {}): string {
-  return fill(catalogue[key], params);
+  return fill(lookup(key), params);
 }
 
 /**
@@ -29,55 +60,37 @@ export function t(key: MessageKey, params: Params = {}): string {
  */
 export function tOn(os: string, key: MessageKey, params: Params = {}): string {
   const iosKey = `${key}.ios`;
-  if (os === "ios" && iosKey in catalogue)
-    return fill((catalogue as Record<string, string>)[iosKey]!, params);
-  return fill(catalogue[key], params);
-}
-
-/** The keys that have plural forms: `name` where the catalogue holds `name.one`, `name.other`, and so on. */
-export type PluralKey = MessageKey extends infer K
-  ? K extends `${infer Base}.other`
-    ? Base
-    : never
-  : never;
-
-/** The plural rules of English, for a runtime that has no `Intl.PluralRules` (Hermes on Android has none; iOS was not checked, and the fallback is used wherever it is missing). */
-export const englishPlural = (count: number): "one" | "other" => (count === 1 ? "one" : "other");
-
-let rules: Intl.PluralRules | null = null;
-
-/** The plural category of a count in the language of the catalogue. */
-function pluralCategory(count: number): string {
-  if (typeof Intl !== "undefined" && typeof Intl.PluralRules === "function") {
-    try {
-      rules ??= new Intl.PluralRules(LOCALE);
-      return rules.select(count);
-    } catch {
-      // Fall through to the table.
-    }
-  }
-  return englishPlural(count);
+  if (os === "ios" && iosKey in active.messages) return fill(lookup(iosKey), params);
+  return fill(lookup(key), params);
 }
 
 /** A number in the way the language writes it (decimal separator, grouping). */
 export function formatNumber(value: number, maximumFractionDigits = 0): string {
   try {
-    return new Intl.NumberFormat(LOCALE, { maximumFractionDigits }).format(value);
+    return new Intl.NumberFormat(active.tag, { maximumFractionDigits }).format(value);
   } catch {
-    return String(Number(value.toFixed(maximumFractionDigits)));
+    // No Intl.NumberFormat, or none for this language: the language's own symbols by hand.
+    return plainNumber(value, maximumFractionDigits, active);
   }
+}
+
+/** `formatNumber` without `Intl`: rounds, drops trailing zeros, groups the thousands with the language's symbols. */
+function plainNumber(value: number, maximumFractionDigits: number, language: Language): string {
+  const fixed = Number(value.toFixed(maximumFractionDigits));
+  const [whole = "0", fraction] = String(Math.abs(fixed)).split(".");
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, language.symbols.group);
+  const sign = fixed < 0 ? "-" : "";
+  return sign + grouped + (fraction ? language.symbols.decimal + fraction : "");
 }
 
 /**
  * A sentence that depends on a count: the form is chosen by the plural rules of the language
- * (`Intl.PluralRules`, or the table of English where the runtime has none; English has `one` and
- * `other`, Polish has more) and `{count}` is the number written the way the language writes it. A
- * language lists only the forms it needs, and `other` is the one every language has.
+ * (`plural` of `languages.ts`: English and Swedish have `one` and `other`, Polish would have more)
+ * and `{count}` is the number written the way the language writes it. A language lists only the
+ * forms it needs, and `other` is the one every language has.
  */
 export function tp(key: PluralKey, count: number, params: Params = {}): string {
-  const exact = `${key}.${pluralCategory(count)}`;
-  const text =
-    (catalogue as Record<string, string>)[exact] ?? catalogue[`${key}.other` as MessageKey];
+  const text = active.messages[`${key}.${active.plural(count)}`] ?? lookup(`${key}.other`);
   return fill(text, { ...params, count: formatNumber(count) });
 }
 
@@ -85,10 +98,14 @@ export function tp(key: PluralKey, count: number, params: Params = {}): string {
 export function formatDateTime(iso: string): string {
   const date = new Date(iso);
   try {
-    return new Intl.DateTimeFormat(LOCALE, { dateStyle: "medium", timeStyle: "short" }).format(
+    return new Intl.DateTimeFormat(active.tag, { dateStyle: "medium", timeStyle: "short" }).format(
       date,
     );
   } catch {
-    return date.toLocaleString(LOCALE);
+    try {
+      return date.toLocaleString(active.tag);
+    } catch {
+      return iso;
+    }
   }
 }
