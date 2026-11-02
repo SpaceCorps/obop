@@ -653,3 +653,75 @@ description = "Rodzina tokenów odświeżania, z którą urządzenie jest powią
 [labels.pl.model.device.action.revoke]
 label = "Unieważnij"
 description = "Zakończ urządzenie na dobre: jego tokeny odświeżania przestają działać, token dostępu przestaje działać przy następnym żądaniu, a aplikacja musi zalogować się ponownie. Osoba unieważnia własne urządzenia; agent może to tylko zaproponować. Podaj id"
+
+[labels.pl.model.user_account.field.oid]
+label = "Identyfikator obiektu"
+description = "Dane wejściowe bind_sso: identyfikator obiektu osoby w katalogu Microsoft, GUID (nie adres e-mail ani główna nazwa użytkownika)"
+
+[labels.pl.model.user_account.field.sso_oid]
+label = "Identyfikator obiektu Microsoft"
+description = "Identyfikator obiektu, z którym konto jest powiązane do logowania przez Microsoft; puste, gdy konto nie jest powiązane"
+
+[labels.pl.model.user_account.field.sso_only]
+label = "Tylko Microsoft"
+description = "Czy konto loguje się wyłącznie przez Microsoft: nie ma własnego logowania hasłem ani kluczem dostępu. Dane wejściowe set_sso_only (true lub false)"
+
+[labels.pl.model.user_account.action.bind_sso]
+label = "Powiąż z Microsoft"
+description = "Powiąż istniejące konto z tożsamością Microsoft osoby, aby mogła logować się przez Microsoft. Podaj id i oid (identyfikator obiektu osoby w katalogu, GUID). Nie tworzy konta i nie nadaje uprawnień"
+
+[labels.pl.model.user_account.action.unbind_sso]
+label = "Odłącz od Microsoft"
+description = "Usuń powiązanie konta z tożsamością Microsoft. Odmowa, dopóki konto loguje się wyłącznie przez Microsoft. Podaj id"
+
+[labels.pl.model.user_account.action.set_sso_only]
+label = "Ustaw tylko Microsoft"
+description = "Sprawia, że konto loguje się wyłącznie przez Microsoft (odrzuca wtedy samo hasło i sam klucz dostępu), albo to cofa. Podaj id i sso_only (true lub false). Konto musi być powiązane, a co najmniej dwóch innych administratorów musi nadal logować się lokalnie z drugim składnikiem. Kończy sesje konta"
+
+[labels.pl.model.sso_provider]
+name = "Logowanie przez Microsoft"
+description = "Dzierżawa Microsoft Entra, przez którą logują się osoby: jedna dzierżawa, ustalona jej identyfikatorem. Zmieniają ją tylko administratorzy, nigdy agent"
+
+[labels.pl.model.sso_provider.field.tenant]
+label = "Dzierżawa"
+description = "Identyfikator dzierżawy (GUID), z którym sprawdzane jest każde logowanie przez Microsoft"
+
+[labels.pl.model.sso_provider.field.client_id]
+label = "Identyfikator klienta"
+description = "Identyfikator aplikacji (klienta) rejestracji aplikacji w tej dzierżawie"
+
+[labels.pl.model.sso_provider.field.client_secret]
+label = "Sekret klienta"
+description = "Dane wejściowe configure: sekret klienta rejestracji aplikacji, przechowywany zapieczętowany pod sekretem serwera. Nigdy nie jest wyświetlany"
+
+[labels.pl.model.sso_provider.field.enabled]
+label = "Włączone"
+description = "Czy strona logowania oferuje „Zaloguj się przez Microsoft”"
+
+[labels.pl.model.sso_provider.field.secret_set]
+label = "Sekret zapisany"
+description = "Czy sekret klienta jest zapisany"
+
+[labels.pl.model.sso_provider.field.modified_at]
+label = "Zmieniono"
+description = "Kiedy konfigurację zmieniono po raz ostatni"
+
+[labels.pl.model.sso_provider.field.last_editor]
+label = "Ostatnio zmienił"
+description = "Kto zmienił ją ostatnio"
+
+[labels.pl.model.sso_provider.field.break_glass]
+label = "Administratorzy awaryjni"
+description = "Administratorzy, którzy logują się lokalnie hasłem i drugim składnikiem (droga wejścia, gdy Microsoft jest nieosiągalny), rozdzieleni przecinkami"
+
+[labels.pl.model.sso_provider.field.break_glass_enough]
+label = "Dość administratorów awaryjnych"
+description = "Czy jest ich dość (co najmniej dwóch), aby konto mogło logować się wyłącznie przez Microsoft"
+
+[labels.pl.model.sso_provider.action.configure]
+label = "Skonfiguruj"
+description = "Ustaw dzierżawę Microsoft Entra, przez którą logują się osoby. Podaj tenant (identyfikator dzierżawy, GUID; common, organizations i consumers są odrzucane), client_id (identyfikator aplikacji z rejestracji aplikacji) oraz za pierwszym razem client_secret; enabled domyślnie ma wartość true. Konta wiąże się przez user_account.bind_sso. Odmowa dla agentów"
+
+[labels.pl.model.sso_provider.action.clear]
+label = "Usuń"
+description = "Usuń konfigurację logowania przez Microsoft. Powiązania pozostają. Konta logujące się wyłącznie przez Microsoft mogą wtedy wejść tylko przez administratorów, którzy zachowują hasło i drugi składnik. Odmowa dla agentów"

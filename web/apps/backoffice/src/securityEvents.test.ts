@@ -24,6 +24,23 @@ describe("the kinds of the security log", () => {
       expect(listed, k).toContain(k);
   });
 
+  it("lists the Microsoft sign-in kinds and has words for every one", () => {
+    const oidc = listed.filter((k) => k.startsWith("oidc_"));
+    expect(oidc.sort()).toEqual([
+      "oidc_bind",
+      "oidc_cancelled",
+      "oidc_error",
+      "oidc_login",
+      "oidc_provider_cleared",
+      "oidc_provider_configured",
+      "oidc_refused",
+      "oidc_sso_only",
+      "oidc_start",
+      "oidc_unbind",
+    ]);
+    for (const k of oidc) expect(EVENT_KINDS[k], `no label for ${k}`).toBeDefined();
+  });
+
   it("has words for every device kind", () => {
     const device = listed.filter((k) => k.startsWith("device_"));
     expect(device.length).toBeGreaterThanOrEqual(4);

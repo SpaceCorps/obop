@@ -261,6 +261,7 @@ fn the_inventory_names_every_place_the_server_seals_something() {
         ("connector_oauth_state", "verifier"),
         ("connector_job", "body"),
         ("connector_dead", "body"),
+        ("auth_sso_provider", "client_secret"),
     ] {
         assert!(
             listed.contains(&want),

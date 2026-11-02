@@ -28,6 +28,8 @@ pub struct OAuthConfig {
     pub client_secret: String,
     pub scopes: String,
     pub redirect_uri: String,
+    /// Further query parameters of the authorization request (Google: `access_type=offline`).
+    pub extra: Vec<(String, String)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -92,6 +94,9 @@ pub fn authorization_url(
         .append_pair("state", state)
         .append_pair("code_challenge", challenge)
         .append_pair("code_challenge_method", "S256");
+    for (k, v) in &cfg.extra {
+        u.query_pairs_mut().append_pair(k, v);
+    }
     Ok(u.to_string())
 }
 
@@ -330,6 +335,7 @@ mod tests {
             client_secret: "client-secret-1".into(),
             scopes: "calendar.read".into(),
             redirect_uri: "http://127.0.0.1:8080/oauth/callback".into(),
+            extra: vec![],
         }
     }
 
@@ -449,8 +455,10 @@ mod tests {
         c.auth_url = "http://accounts.example.com/authorize".into();
         assert!(authorization_url(&c, "s", "c").is_err());
         c.auth_url = "https://accounts.example.com/authorize?prompt=consent".into();
+        c.extra = vec![("access_type".into(), "offline".into())];
         let u = authorization_url(&c, "s", "c").unwrap();
         assert!(u.contains("prompt=consent") && u.contains("state=s"));
+        assert!(u.contains("access_type=offline"));
     }
 
     #[test]

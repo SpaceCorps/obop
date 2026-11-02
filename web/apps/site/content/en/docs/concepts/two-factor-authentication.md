@@ -24,7 +24,7 @@ A **passkey** is a second step that cannot be typed into a fake page: your phone
 - **As a second step.** After the password, sign-in offers **Use a passkey** next to the 6-digit code. A passkey satisfies the administrator policy above, alone or beside an authenticator app. The first second factor you add, whichever kind, also gives you the 10 recovery codes.
 - **Instead of the password (optional).** Turn on **Let me sign in with a passkey alone**. Then **Sign in with a passkey** on the sign-in page, and on the sign-in page of an app that connects over MCP, needs no username and no password. It works only with a passkey that verified you (PIN, fingerprint or face) when it was made and again at sign-in. It is off until you turn it on.
 - **Managing them.** The list shows each passkey's name, when it was added and last used, whether it verifies you and whether it is synced by a passkey manager. Renaming, removing and the switch above ask for your password again. Removing a passkey signs out your other sessions, and is refused when it is your last second factor and your administrator requires one.
-- **Lost it.** Use a recovery code, ask an administrator to reset your two-factor, or ask the operator to run `obop admin reset-mfa`. A reset removes your passkeys too.
+- **Lost it.** Use a recovery code, ask an administrator to reset your two-factor (refused while that would leave fewer than two administrators who sign in with a password and a second factor, and any account signs in with Microsoft only), or ask the operator to run `obop admin reset-mfa`. A reset removes your passkeys too.
 - **Needs an address.** Passkeys work when the instance is reached by a host name over https (or `localhost` while developing), and the operator has set `OBOP_PUBLIC_URL` behind a proxy. An IP address or plain http does not work, and Security says so. If the address of an instance changes, passkeys made for the old one stop working and people add new ones.
 
 The server stores only the public key, a name and counters, never anything that could sign in. A counter that goes backwards (a copied passkey) is refused and logged.
@@ -41,7 +41,7 @@ An administrator can change the policy under Customize > Security: **Require 2FA
 
 ## Lost phone and codes
 
-- An **administrator** can reset another person's two-factor under Customize > Security > _Reset someone's two-factor_. The person is signed out and sets it up again. An administrator cannot reset their own that way.
+- An **administrator** can reset another person's two-factor under Customize > Security > _Reset someone's two-factor_. The person is signed out and sets it up again. An administrator cannot reset their own that way, and the reset is refused while it would leave fewer than two administrators who sign in with a password and a second factor and any account signs in with Microsoft only: add an administrator first, or use the operator's command below.
 - If **no administrator** can sign in, the operator uses the break-glass command with access to the database:
 
 ```bash

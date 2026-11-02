@@ -31,21 +31,34 @@ export type DriveDefaults = { title: string; location: string; attachment: strin
 
 const auth = (token: string) => ({ authorization: `Bearer ${token}` });
 
-/** Whether a Drive is connected and this person may browse it (asked once per token). */
-export function useDriveStatus(token: string, wanted: boolean): boolean {
-  const [may, setMay] = useState(false);
+/**
+ * Whether a Drive is connected and this person may browse it, and whether this person could set
+ * one up (an administrator of connectors, while none is connected); asked once per token.
+ */
+export function useDriveStatus(
+  token: string,
+  wanted: boolean,
+): { may: boolean; canSetUp: boolean } {
+  const [st, setSt] = useState({ may: false, canSetUp: false });
   useEffect(() => {
     if (!wanted) return;
     let live = true;
     request("/api/drive/status", { headers: auth(token) }, { retry: true })
       .then((r) => (r.ok ? r.json() : null))
-      .then((v: { may_browse?: boolean } | null) => live && setMay(v?.may_browse === true))
+      .then(
+        (v: { connected?: boolean; may_browse?: boolean; may_configure?: boolean } | null) =>
+          live &&
+          setSt({
+            may: v?.may_browse === true,
+            canSetUp: v?.may_configure === true && v.connected !== true,
+          }),
+      )
       .catch(() => {});
     return () => {
       live = false;
     };
   }, [token, wanted]);
-  return may;
+  return st;
 }
 
 type Crumb = { id: string; name: string };

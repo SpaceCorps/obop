@@ -19,6 +19,7 @@
 
 pub mod catalog;
 pub mod checklist;
+pub mod drive;
 pub mod egress;
 pub mod ingress;
 pub mod model;

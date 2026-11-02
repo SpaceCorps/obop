@@ -33,6 +33,9 @@ pub enum Engine {
     WebhookIn,
     RestPull,
     CsvExport,
+    /// The instance reads on demand through a connected account (a Drive browser): nothing is
+    /// pushed or pulled on a schedule, and no record of obop leaves.
+    Browse,
     /// Nothing runs.
     None,
 }
@@ -44,6 +47,7 @@ impl Engine {
             Self::WebhookIn => "webhook_in",
             Self::RestPull => "rest_pull",
             Self::CsvExport => "csv_export",
+            Self::Browse => "browse",
             Self::None => "none",
         }
     }
@@ -54,6 +58,7 @@ impl Engine {
             Self::WebhookIn,
             Self::RestPull,
             Self::CsvExport,
+            Self::Browse,
             Self::None,
         ]
         .into_iter()
@@ -76,6 +81,9 @@ pub struct OAuthDef {
     pub auth_url: &'static str,
     pub token_url: &'static str,
     pub scopes: &'static str,
+    /// Further query parameters of the authorization request (Google needs `access_type=offline`
+    /// and `prompt=consent` to hand out a refresh token).
+    pub extra: &'static [(&'static str, &'static str)],
 }
 
 #[derive(Debug, Clone)]
@@ -631,6 +639,36 @@ pub fn providers() -> Vec<Provider> {
             ..base()
         },
         Provider {
+            id: "google_drive",
+            name: "Google Drive (browse and add documents)",
+            category: "generic",
+            maturity: Maturity::GenericAdapter,
+            engine: Engine::Browse,
+            auth_kind: "oauth2",
+            direction: "inbound",
+            max_classes: vec![NoClass, PublicDirectory, Internal],
+            purpose: "Browse a Google Drive from the Documents app and add a file (a Google Doc, Sheet or Slides file as PDF) to obop as a document.",
+            description: "Read-only: obop asks Drive for a folder listing, a name search, or one file, and never writes to Drive. Files you add are copied into obop. Needs your own OAuth client (a Google Cloud project with the consent screen configured); obop ships none. Works through the Drive browser in the Documents app, for the people allowed to browse. Tested against a fake Drive on a local port, not against Google itself.",
+            legal_name: "Google (confirm: Google Ireland Limited or Google LLC, depending on your agreement)",
+            country: NOT_VERIFIED,
+            dpa_url: "https://cloud.google.com/terms/data-processing-addendum",
+            eu_adequate: "verify",
+            allowed_hosts: vec![
+                "accounts.google.com",
+                "oauth2.googleapis.com",
+                "www.googleapis.com",
+            ],
+            oauth: Some(OAuthDef {
+                auth_url: "https://accounts.google.com/o/oauth2/v2/auth",
+                token_url: "https://oauth2.googleapis.com/token",
+                scopes: "https://www.googleapis.com/auth/drive.readonly",
+                extra: &[("access_type", "offline"), ("prompt", "consent")],
+            }),
+            config: vec![],
+            setup: "1. In Google Cloud Console create a project and enable the Google Drive API. 2. Configure the OAuth consent screen and publish it (a project left in testing makes Google expire the sign-in after 7 days). 3. Create an OAuth client of type Web application and add the redirect address shown on the Google Drive page. 4. Enter its client id and secret there and press Connect.",
+            ..base()
+        },
+        Provider {
             id: "google_oauth",
             name: "Google (calendar and contacts, read)",
             category: "calendar_contacts",
@@ -655,6 +693,7 @@ pub fn providers() -> Vec<Provider> {
                 auth_url: "https://accounts.google.com/o/oauth2/v2/auth",
                 token_url: "https://oauth2.googleapis.com/token",
                 scopes: "https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/contacts.readonly",
+                extra: &[],
             }),
             config: vec![],
             setup: "Needs your own OAuth client. Create one in Google Cloud, add the redirect address shown in the connectors settings, and enter its client id and secret under the provider policy. Nothing runs until an adapter exists.",
@@ -680,6 +719,7 @@ pub fn providers() -> Vec<Provider> {
                 auth_url: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
                 token_url: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
                 scopes: "offline_access Calendars.Read Contacts.Read",
+                extra: &[],
             }),
             config: vec![],
             setup: "Needs your own OAuth client. Register an app in Microsoft Entra, add the redirect address shown in the connectors settings, and enter its client id and secret under the provider policy. Nothing runs until an adapter exists.",
@@ -879,6 +919,7 @@ mod tests {
             "zapier",
             "make",
             "n8n",
+            "google_drive",
         ] {
             assert_eq!(by(id), Maturity::GenericAdapter, "{id}");
         }
@@ -904,6 +945,7 @@ mod tests {
             Engine::WebhookIn,
             Engine::RestPull,
             Engine::CsvExport,
+            Engine::Browse,
             Engine::None,
         ] {
             assert_eq!(Engine::parse(e.as_str()), Some(e));
