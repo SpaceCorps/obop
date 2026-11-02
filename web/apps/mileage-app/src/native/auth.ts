@@ -16,6 +16,7 @@ import * as WebBrowser from "expo-web-browser";
 import { checkAddress as checkAddressText } from "../core/address.ts";
 import type { Binding, Owner } from "../core/identity.ts";
 import { withDeadline } from "../core/deadline.ts";
+import { getLanguage } from "../i18n/index.ts";
 import {
   clientUnknown,
   needsRegistration,
@@ -90,7 +91,7 @@ async function ownerOf(baseUrl: string, tokens: TokenSet): Promise<Owner> {
   const client = createObopClient({
     baseUrl,
     getToken: async () => tokens.accessToken,
-    getLanguage: () => "en",
+    getLanguage,
   });
   // Bounded: React Native's network stack has no timeout of its own (docs/ISSUES.md L29).
   const { value } = await withDeadline(OWNER_CALL_MS, (signal) =>
@@ -156,6 +157,9 @@ export async function signIn(host: SignInHost, input: string): Promise<void> {
         challenge: pkce.challenge,
         state,
         scope: SCOPE,
+        // The sign-in and consent pages of the instance are in the language of the app (the
+        // instance knows en, de, fr, pl, fi, sv and es; the browser's own language is the fallback).
+        lang: getLanguage(),
       });
     let url = authorizeUrl(config.clientId);
     // A client that is used again may have been forgotten by the instance for a reason other than

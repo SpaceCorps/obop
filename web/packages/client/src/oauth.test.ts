@@ -101,6 +101,22 @@ describe("the authorization address", () => {
     });
   });
 
+  test("carries the language of the app as lang when it is given, and no lang otherwise", () => {
+    const base = {
+      baseUrl: "https://acme.example.com",
+      clientId: "client-1",
+      redirectUri: "org.obop.mileage:/oauth",
+      challenge: "CH",
+      state: "ST",
+    };
+    const query = (lang?: string) =>
+      new URL(buildAuthorizeUrl(lang === undefined ? base : { ...base, lang })).searchParams;
+    expect(query("sv").get("lang")).toBe("sv");
+    expect(query("de-AT").get("lang")).toBe("de-AT");
+    expect(query().has("lang")).toBe(false);
+    expect(query("").has("lang")).toBe(false);
+  });
+
   test("normaliseBaseUrl drops spaces and trailing slashes", () => {
     expect(normaliseBaseUrl("  https://acme.example.com// ")).toBe("https://acme.example.com");
   });

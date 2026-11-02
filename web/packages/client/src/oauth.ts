@@ -244,6 +244,12 @@ export interface AuthorizeOptions {
   state: string;
   /** The groups to tick on the consent page; they must be among those declared at registration. */
   scope?: readonly string[];
+  /**
+   * The language of the sign-in and consent pages (`sv`, `de-AT`), sent as `lang`. The instance
+   * reads `lang` before the `Accept-Language` of the browser, and takes it for the whole flow;
+   * a language it does not ship is skipped and the browser's decides.
+   */
+  lang?: string;
 }
 
 /** The address to open in the system browser: `GET /oauth/authorize` with PKCE S256. */
@@ -256,6 +262,7 @@ export function buildAuthorizeUrl(options: AuthorizeOptions): string {
     code_challenge_method: "S256",
     state: options.state,
     scope: options.scope && options.scope.length > 0 ? options.scope.join(" ") : undefined,
+    lang: options.lang ? options.lang : undefined,
   });
   return `${normaliseBaseUrl(options.baseUrl)}/oauth/authorize?${query}`;
 }
