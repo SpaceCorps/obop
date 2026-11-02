@@ -33,6 +33,8 @@ export function Account({ rt, nav }: { rt: Runtime; nav: Nav }) {
   const [deviceError, setDeviceError] = useState(false);
   const [leaveError, setLeaveError] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  // The choice of language is applied at once; this is set when it could not be stored.
+  const [languageUnsaved, setLanguageUnsaved] = useState(false);
   const [name, setName] = useState("");
   const [saved, setSaved] = useState(false);
   const [cipher, setCipher] = useState<string | null>(null);
@@ -203,12 +205,17 @@ export function Account({ rt, nav }: { rt: Runtime; nav: Nav }) {
             label={choiceLabel(choice)}
             variant={choice === languageChoice ? "primary" : "secondary"}
             selected={choice === languageChoice}
-            onPress={() => void languageStore.choose(choice)}
+            onPress={() => {
+              void languageStore.choose(choice).then((stored) => setLanguageUnsaved(!stored));
+            }}
             testID={`language-${choice}`}
           />
         ))}
       </View>
       <Text tone="muted">{t("language.note")}</Text>
+      {languageUnsaved ? (
+        <Banner tone="warning" title={t("language.unsaved")} testID="language-unsaved" />
+      ) : null}
 
       {leaveError ? (
         <Banner tone="danger" title={t("account.leave.error")} testID="leave-error" />

@@ -311,6 +311,8 @@ export const en = {
   "language.system": "Follow the phone",
   "language.note":
     "The language of the app. The name of the app and the texts of the system dialogs follow the language of the phone.",
+  "language.unsaved":
+    "The language was changed, but it could not be saved on this phone. The app goes back to the language of the phone the next time it starts.",
 } as const;
 
 type EnglishKey = keyof typeof en;

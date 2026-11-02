@@ -318,4 +318,6 @@ export const sv: Translation<"one"> = {
   "language.system": "Följ telefonen",
   "language.note":
     "Appens språk. Appens namn och texterna i systemets dialogrutor följer telefonens språk.",
+  "language.unsaved":
+    "Språket ändrades, men det gick inte att spara på den här telefonen. Nästa gång appen startar går den tillbaka till telefonens språk.",
 };
