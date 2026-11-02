@@ -217,6 +217,9 @@ describe("the scanner that guards the screens can fail", () => {
   test("a single-quoted message with a comma and a bracket, and an unbalanced child expression", () => {
     const dialog = bypassesOf(`Alert.alert(t('a'), 'Really, stop (now)?', [{ text: t('b') }])`);
     expect(dialog.map((f) => [f.kind, f.text])).toEqual([["call", "Really, stop (now)?"]]);
+    // A bracket inside a single-quoted message does not close the call.
+    const smile = bypassesOf(`Alert.alert(t('a'), 'Saved :)', [{ text: t('b') }])`);
+    expect(smile.map((f) => [f.kind, f.text])).toEqual([["call", "Saved :)"]]);
     expect(bypassesOf('<Text>{busy ? "x" :</Text>').map((f) => f.kind)).toEqual(["unbalanced"]);
   });
 
