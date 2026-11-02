@@ -8,7 +8,9 @@
 // that shows it, grouped by that file (a screen, `present.ts` for the words of a trip, the
 // recorder for the notification). A reviewer reads the Swedish next to the English, changes the
 // Swedish in `src/i18n/sv.ts` (the key is the line), and ticks the row. The texts of the system
-// (the name under the icon and the two dialogs of iOS) are listed after the catalogue.
+// (the name under the icon and the two dialogs of iOS) are listed after the catalogue, then the
+// Swedish column of the sign-in and consent pages of the instance (crates/kernel/obop-oauth/src/
+// page.rs), which a Swedish app shows first and which is changed there, not in the app.
 //
 // The sheet is made from the sources and the catalogues; it is not checked in.
 import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
@@ -106,6 +108,12 @@ for (const key of Object.keys(en)) {
   names.add((bases.has(base) ? base : key).replace(/\.ios$/, ""));
 }
 
+/** Rows the reviewer must not take on trust: said once here, shown in the last column. */
+const NOTES = {
+  "error.database.hint.ios":
+    "Confirm the two iPhone menu names (Ta bort app, Radera app) on a Swedish iPhone; written from memory (ISSUES L53)",
+};
+
 /** The files that show a name: the ones that have it as a string, and the ones whose template builds it. */
 function whereIs(name) {
   const where = new Set(files.filter((file) => mentions(file.text, name)).map((file) => file.path));
@@ -174,13 +182,15 @@ lines.push("");
 for (const [group, entries] of [...groups].sort(([a], [b]) => a.localeCompare(b))) {
   lines.push(`## ${group}`);
   lines.push("");
-  lines.push("| Done | Key | English | Svenska | Also shown in |");
+  lines.push("| Done | Key | English | Svenska | Also shown in / note |");
   lines.push("| --- | --- | --- | --- | --- |");
   for (const { name, where } of entries) {
     for (const row of rowsOf(name)) {
-      const also = group === "Several files" ? where.join(", ") : "";
+      const also = [group === "Several files" ? where.join(", ") : "", NOTES[row.key] ?? ""]
+        .filter(Boolean)
+        .join("; ");
       lines.push(
-        `| [ ] | \`${row.key}\` | ${cell(row.english)} | ${cell(row.swedish)} | ${also} |`,
+        `| [ ] | \`${row.key}\` | ${cell(row.english)} | ${cell(row.swedish)} | ${cell(also)} |`,
       );
     }
   }

@@ -248,9 +248,12 @@ export interface AuthorizeOptions {
    * The language of the sign-in and consent pages (`sv`, `de-AT`), sent as `lang`. The instance
    * reads `lang` before the `Accept-Language` of the browser and keeps it for the sign-in, the
    * second-factor and the consent pages of the flow; a language it does not ship is skipped and
-   * the browser's decides. The expiry and refusal pages that follow a step the person submitted
-   * (`err.gone`, `err.forbidden`, `err.busy`) are in the language of the browser. Leave `lang`
-   * out when the app does not know which language the person reads: the browser's decides then.
+   * the browser's decides. Which error pages follow the flow and which the browser: after a
+   * sign-in step (password, second-factor code, passkey) the refusals for a wrong form token
+   * (`err.forbidden`) and for too many attempts (`err.busy`) are in the language of the flow
+   * while it can still be read; the expiry page (`err.gone`), a request from another origin and
+   * every error after the consent or switch-account step are in the browser's language. Leave
+   * `lang` out when the app does not know which language the person reads: the browser's decides.
    */
   lang?: string;
 }
