@@ -3,7 +3,7 @@ import { PURPOSES, SERVER_STATES } from "../core/types.ts";
 import { appSources, screenSources } from "../test-support/app-sources.ts";
 import { en, PLURAL_CATEGORIES } from "./en.ts";
 import { pluralBases } from "./check.ts";
-import { bypassesOf, keyFamilies, mentions } from "./usage.ts";
+import { bypassesOf, JSX_ONLY_PROPS, keyFamilies, mentions, TEXT_PROPS } from "./usage.ts";
 
 const messages = en as Record<string, string>;
 
@@ -25,8 +25,14 @@ describe("the screens say nothing that is not in the catalogue", () => {
       /isServerProblem\(trip\.problem\.code\) \? "trip\.problem\.details" : "trip\.problem\.details\.app"/,
     );
     const account = appSources().find((s) => s.path === "src/ui/screens/Account.tsx")!;
-    expect(account.text).toContain("setLanguageUnsaved(!stored)");
-    expect(account.text).toContain('t("language.unsaved")');
+    const accountFlat = account.text.replace(/\s+/g, " ");
+    // The note: set from the answer of the store, decided by `languageNoteKey` (tested in
+    // language-note.test.ts), shown as a warning, and nothing else sets it.
+    expect(accountFlat).toContain("void languageStore.choose(choice).then(setLanguageStored);");
+    expect(accountFlat).toContain("const languageNote = languageNoteKey(languageStored);");
+    expect(accountFlat).toContain(
+      '{languageNote ? ( <Banner tone="warning" title={t(languageNote)} testID="language-unsaved" /> ) : null}',
+    );
   });
 
   test("the text of the notification of the recording comes from the catalogue", () => {
@@ -157,11 +163,97 @@ describe("the scanner that guards the screens can fail", () => {
     expect(bypassesOf('Alert.alert("Stop?"').map((f) => f.kind)).toEqual(["unbalanced"]);
   });
 
-  test("what it cannot see stays unseen (ISSUES L55): a variable, a call, an object value, a file it is not given", () => {
+  test("every text prop of the list is read, as an attribute and as an object key", () => {
+    // The list is the scanner's own: removing a name from it fails here.
+    expect(TEXT_PROPS).toEqual(
+      expect.arrayContaining([
+        "label",
+        "title",
+        "message",
+        "hint",
+        "helper",
+        "subtitle",
+        "placeholder",
+        "value",
+        "accessibilityLabel",
+        "accessibilityHint",
+        "notificationTitle",
+        "notificationBody",
+        "text",
+      ]),
+    );
+    expect(JSX_ONLY_PROPS).toEqual(["error"]);
+    for (const name of [...TEXT_PROPS, ...JSX_ONLY_PROPS]) {
+      const attribute = bypassesOf(`<X ${name}="Some words here" />`);
+      expect(attribute, name).toHaveLength(1);
+      expect(attribute[0], name).toMatchObject({ kind: "prop", text: "Some words here" });
+    }
+    for (const name of TEXT_PROPS) {
+      const key = bypassesOf(`const a = { ${name}: "Some words here" };`);
+      expect(key, name).toHaveLength(1);
+      expect(key[0], name).toMatchObject({ kind: "object", text: "Some words here" });
+    }
+    // `error` is also a state, so as an object key it is not read.
+    expect(bypassesOf('const a = { error: "Some words here" };')).toEqual([]);
+  });
+
+  test("a child expression with a comparison is read; one that holds an element is not", () => {
+    expect(
+      bypassesOf('<Text>{count < 3 ? "Few trips" : "Many trips"}</Text>').map((f) => f.text),
+    ).toEqual(["Few trips", "Many trips"]);
+    expect(
+      bypassesOf('<Text>{trips.length <= 0 && "No trips yet."}</Text>').map((f) => f.text),
+    ).toEqual(["No trips yet."]);
+    expect(
+      bypassesOf('<Text>{trips.length > 0 && "Some trips"}</Text>').map((f) => f.text),
+    ).toEqual(["Some trips"]);
+    // An element in the expression: its own text is read when the scanner gets to that element.
+    expect(bypassesOf('<View>{ok ? <Text>{t("a")}</Text> : null}</View>')).toEqual([]);
+    expect(bypassesOf("<View>{items.map((x) => <Row title={t(x)} />)}</View>")).toEqual([]);
+    // A comment as a child is skipped, with an apostrophe in it.
+    expect(bypassesOf("<View>{/* the driver's phone */}</View>")).toEqual([]);
+  });
+
+  test("a single-quoted message with a comma and a bracket, and an unbalanced child expression", () => {
+    const dialog = bypassesOf(`Alert.alert(t('a'), 'Really, stop (now)?', [{ text: t('b') }])`);
+    expect(dialog.map((f) => [f.kind, f.text])).toEqual([["call", "Really, stop (now)?"]]);
+    expect(bypassesOf('<Text>{busy ? "x" :</Text>').map((f) => f.kind)).toEqual(["unbalanced"]);
+  });
+
+  test("a type argument, an arrow and an entity are not read as an element or a sentence", () => {
+    expect(bypassesOf('async function save(): Promise<void> { const mode = "edit"; }')).toEqual([]);
+    expect(bypassesOf('const [a, b] = useState<string | null>(null); const k = "kind";')).toEqual(
+      [],
+    );
+    expect(bypassesOf('const f = async (): Promise<Owner> { return await g("it\'s"); }')).toEqual(
+      [],
+    );
+    expect(bypassesOf("<Text>&nbsp;</Text>")).toEqual([]);
+    expect(bypassesOf("<Text>&nbsp;Hello</Text>")).toHaveLength(1);
+  });
+
+  test("what it cannot see stays unseen (ISSUES L55): the list of bypassesOf, one by one", () => {
+    // A text that reaches a prop through a variable.
     expect(bypassesOf('const text = "Hello there"; <Banner message={text} />')).toEqual([]);
+    // A literal inside brackets: a call, a parenthesised ternary.
     expect(bypassesOf('<Banner message={upper("Hello there")} />')).toEqual([]);
-    expect(bypassesOf('const b = { text: a ? "Hello" : "There" };')).toEqual([]);
     expect(bypassesOf('<Banner message={(a ? "Hello" : "There")} />')).toEqual([]);
+    // An object value that is a ternary.
+    expect(bypassesOf('const b = { text: a ? "Hello" : "There" };')).toEqual([]);
+    // A literal beside an element in a child expression (an element of its own is read by itself).
+    expect(bypassesOf('<View>{ok ? <A /> : "Hello there"}</View>')).toEqual([]);
+    // Text mixed with an expression, and text before an element.
+    expect(bypassesOf("<Text>Distance: {km}</Text>")).toEqual([]);
+    expect(bypassesOf("<Text>{n} trips driven</Text>")).toEqual([]);
+    expect(bypassesOf('<Text>Press <B>{t("a")}</B></Text>')).toEqual([]);
+    // A prop that is not in the lists.
+    expect(bypassesOf('<Banner caption="Hello there" />')).toEqual([]);
+  });
+
+  test("a comment with a quote in a dialog is reported as unbalanced, not skipped", () => {
+    expect(
+      bypassesOf("Alert.alert(t('a'), /* the driver's choice */ t('b'))").map((f) => f.kind),
+    ).toEqual(["unbalanced"]);
   });
 
   test("a template that only wraps the catalogue is not a sentence of its own", () => {

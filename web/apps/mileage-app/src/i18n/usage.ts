@@ -12,7 +12,7 @@
  */
 
 /** Props and keys of objects whose value the driver reads (or hears from a screen reader). */
-const TEXT_PROPS = [
+export const TEXT_PROPS = [
   "label",
   "title",
   "message",
@@ -32,7 +32,7 @@ const TEXT_PROPS = [
  * Props that carry words only as a JSX attribute (`<Field error="..." />`). As a key of an object
  * the name is also a state or a field (`{ error: false }`), so the key scan does not read it.
  */
-const JSX_ONLY_PROPS = ["error"];
+export const JSX_ONLY_PROPS = ["error"];
 
 const WORD = /[A-Za-zÅÄÖåäö]{2,}/;
 
@@ -152,20 +152,58 @@ export interface Finding {
 const lineOf = (source: string, index: number): number => source.slice(0, index).split("\n").length;
 
 /**
+ * Where a JSX element opened by the `<` at `from` ends its opening tag, and whether the tag closes
+ * itself (`<A />`). `null` when this `<` does not open a tag: a comparison (`a <b`), a type
+ * argument that was not recognised, or text the brackets and quotes of which do not match.
+ */
+function endOfOpeningTag(
+  source: string,
+  from: number,
+): { end: number; selfClosing: boolean } | null {
+  for (let i = from; i < source.length; i++) {
+    const c = source[i]!;
+    if (c === '"' || c === "'") {
+      const end = endOfString(source, i);
+      if (end < 0) return null;
+      i = end - 1;
+    } else if (c === "{") {
+      const end = closing(source, i);
+      if (end < 0) return null;
+      i = end;
+    } else if (c === "<") {
+      return null;
+    } else if (c === ">") {
+      return { end: i, selfClosing: source[i - 1] === "/" };
+    }
+  }
+  return null;
+}
+
+/**
  * Text in a source that a driver would read and that is not a call of the catalogue. Empty: none.
  *
- * What it reads: JSX text; a text prop (`label`, `title`, ... and `error`) whose value is a literal,
- * a template, or an expression with literals outside brackets (a ternary, `??`, `||`, `+`); a key
- * of an object that holds words (`{ text: "Cancel" }`); every argument of `Alert.alert(...)` and
- * `announce(...)` that has a literal outside brackets (the title AND the message); and a child
- * expression of a JSX element (`<Text>{busy ? "Saving" : t("a")}</Text>`). A finding of kind
- * `unbalanced` means the scanner could not match the brackets or quotes of what it was reading.
+ * What it reads: JSX text directly between a tag and the next closing tag (an entity such as
+ * `&nbsp;` is not a word); a text prop (`label`, `title`, ... and `error`) whose value is a
+ * literal, a template, or an expression with literals outside brackets (a ternary, `??`, `||`,
+ * `+`); a key of an object that holds words (`{ text: "Cancel" }`); every argument of
+ * `Alert.alert(...)` and `announce(...)` that has a literal outside brackets (the title AND the
+ * message); and a child expression of an element (`<Text>{busy ? "Saving" : t("a")}</Text>`,
+ * also with a comparison in it) unless it holds an element. A finding of kind `unbalanced`
+ * means the scanner could not match the brackets or quotes of what it was reading.
  *
- * What it does not read (docs/ISSUES.md L55): a text that reaches a prop through a variable
- * (`const text = "Hello"; <Banner message={text} />`), a literal inside brackets (a call such as
- * `upper("Hello")`, a parenthesised ternary), an object value that is a ternary (`{ text: a ? "x" :
- * "y" }`), a child expression that holds JSX, a prop that is not in the lists above, and any file
- * the callers do not give it.
+ * What it does not read (the one list; docs/ISSUES.md L55 and docs/spec/mobile.md 8.9 repeat it):
+ * - a text that reaches a prop through a variable (`const text = "Hello"; <Banner message={text} />`);
+ * - a literal inside brackets (a call such as `upper("Hello")`, a parenthesised ternary);
+ * - an object value that is a ternary (`{ text: a ? "x" : "y" }`);
+ * - a literal beside an element in a child expression (`{ok ? <A /> : "Hello"}`; an element in it
+ *   is read by itself, as the element it is);
+ * - JSX text mixed with an expression (`<Text>Distance: {km}</Text>`, `<Text>{n} trips</Text>`) and
+ *   text before an element (`<Text>Press <B>Start</B></Text>` reads "Start", not "Press"): only
+ *   text that is followed by a closing tag with no braces in between is read;
+ * - a prop that is not in the lists above, and any file the callers do not give it;
+ * - a comment or a regular expression with a quote or a bracket inside a dialog, a child
+ *   expression or a text prop: the scanner reports `unbalanced` (a loud false alarm, not a miss),
+ *   except the comment `{/* ... *\/}` as a child, which it skips.
  */
 export function bypassesOf(source: string): Finding[] {
   const found: Finding[] = [];
@@ -173,25 +211,34 @@ export function bypassesOf(source: string): Finding[] {
     found.push({ line: lineOf(source, index), kind, text: text.trim().replace(/\s+/g, " ") });
   const addLiterals = (index: number, kind: string, expression: string) => {
     const literals = topLevelLiterals(expression);
+    // The slice was matched by `closing`, so its strings are whole; this is only a safeguard.
     if (literals === null) return add(index, "unbalanced", expression);
     for (const text of literals) if (WORD.test(text)) add(index, kind, text);
   };
 
   // JSX text: words between a tag and the next closing tag.
   for (const m of source.matchAll(/>([^<>{}]*)<\//g)) {
-    if (WORD.test(m[1]!)) add(m.index!, "jsx text", m[1]!);
+    if (WORD.test(m[1]!.replace(/&#?\w+;/g, ""))) add(m.index!, "jsx text", m[1]!);
   }
-  // A child expression of an element: <Text>{busy ? "Saving" : t("a")}</Text>. After `=>` the
-  // brace is the body of a function, not a child.
-  for (const m of source.matchAll(/(?<!=)>\s*\{/g)) {
-    const open = m.index! + m[0].length - 1;
+  // A child expression of an element: <Text>{busy ? "Saving" : t("a")}</Text>. The tag is found
+  // from its `<` (not from a `>`, which is also the end of a type argument or an arrow).
+  for (const m of source.matchAll(/<(?=[A-Za-z>])/g)) {
+    const before = source[m.index! - 1];
+    // `Promise<void>`, `useState<T>(...)`, `items[0]<x`: not the start of an element.
+    if (before !== undefined && /[A-Za-z0-9_$)\]]/.test(before)) continue;
+    const tag = endOfOpeningTag(source, m.index! + 1);
+    if (tag === null || tag.selfClosing) continue;
+    const next = /\S/.exec(source.slice(tag.end + 1));
+    if (next === null || source[tag.end + 1 + next.index] !== "{") continue;
+    const open = tag.end + 1 + next.index;
+    if (/^\{\s*\/\*[\s\S]*?\*\/\s*\}/.test(source.slice(open))) continue; // {/* a comment */}
     const close = closing(source, open);
     if (close < 0) {
       add(open, "unbalanced", source.slice(open, open + 40));
       continue;
     }
     const expression = source.slice(open + 1, close);
-    if (!expression.includes("<")) addLiterals(open, "jsx expression", expression);
+    if (!/<[A-Za-z>]/.test(expression)) addLiterals(open, "jsx expression", expression);
   }
   // A text prop as a JSX attribute: label="Save", label='Save', label={"Save"}, label={`Saved ${n}`},
   // label={busy ? "Waiting" : "Start"}.
@@ -233,6 +280,7 @@ export function bypassesOf(source: string): Finding[] {
   }
   return found.sort((a, b) => a.line - b.line);
 }
+
 /**
  * The prefixes a source builds keys from with a template: t(`purpose.${p}`) gives `purpose`. The
  * key that comes out is only known when the app runs, so a test lists what each family may be.
