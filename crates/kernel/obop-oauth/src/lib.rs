@@ -26,7 +26,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 pub use client::{Class, Client};
-pub use flow::{AuthorizeParams, AuthzError, DecideOut, FlowCtx, FlowError, LoginOut, Validated};
+pub use flow::{
+    AuthorizeParams, AuthzError, DecideOut, FlowCtx, FlowError, LoginOut, MicrosoftOutcome,
+    Validated, microsoft_key,
+};
 pub use token::Form;
 
 /// Limits and lifetimes. The defaults are the ones D64 states.

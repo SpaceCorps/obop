@@ -21,6 +21,14 @@
 //!   demand for an obop second factor). The code is single use, lives 60 seconds and is worth
 //!   something only to the browser that holds the `obop_sso_done` cookie the callback set.
 //!
+//! A round trip that an app's sign-in page began (`GET /oauth/authorize/microsoft`, in `oauth.rs`)
+//! uses the same start-up, the same registered redirect address and this callback. Its stored row
+//! says `purpose: "oauth"` and names the OAuth flow, and the callback then ends differently: it
+//! hands the verified identity to the OAuth flow by id (`OAuth::microsoft_done`: the person, or one
+//! of a fixed set of words, never a code, a token or a claim) and sends the browser to
+//! `/oauth/authorize/return?flow=<id>`. The back office's fragment, its one-time code and its
+//! cookies are not used for it.
+//!
 //! There is no cookie session: the bearer token goes to the page and stays in `sessionStorage`
 //! as after a password. There is no `next` or return address; the target of the redirect is the
 //! root of this origin and cannot be chosen by a request.
@@ -37,6 +45,7 @@ use obop_commands::{AnonLine, MfaError, SsoApi, SsoEndpoints, SsoError, SsoIdent
 use obop_connectors::net::Request;
 use obop_connectors::oauth::pkce_pair;
 use obop_keys::{hex, random};
+use obop_oauth::MicrosoftOutcome;
 use obop_oauth::util::{ct_eq, pct};
 use serde_json::{Value as J, json};
 use sha2::{Digest, Sha256};
@@ -928,6 +937,37 @@ pub(crate) fn now_ms() -> u128 {
         .map_or(0, |d| d.as_millis())
 }
 
+/// Where a callback ends: the back office (a fixed word in the fragment of its root) or, for a
+/// round trip that an app's sign-in page began, the return address of that flow after the word has
+/// been written into it.
+struct Ending<'a> {
+    s: &'a HttpState,
+    /// The OAuth flow of an app's round trip (`purpose == "oauth"`), `None` for the back office.
+    oauth_flow: Option<&'a str>,
+}
+
+impl Ending<'_> {
+    /// The ending of a round trip that did not sign anyone in, for one of the fixed words.
+    fn fail(&self, word: &str, cookies: &[String]) -> Response {
+        match self.oauth_flow {
+            None => back(self.s, word, cookies),
+            Some(flow) => {
+                if let Some(o) = self.s.oauth.as_ref() {
+                    // A flow that is gone or busy is found out at the return address.
+                    let _ = o.microsoft_done(flow, MicrosoftOutcome::Failed(word.to_string()));
+                }
+                with_cookies(see_other(&return_address(flow)), cookies)
+            }
+        }
+    }
+}
+
+/// The address an app's round trip returns to. The flow id is the 32 hex digits the OAuth server
+/// made (checked before it is stored in the row, and again by `microsoft_done`).
+fn return_address(flow: &str) -> String {
+    format!("/oauth/authorize/return?flow={flow}")
+}
+
 fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
     if !is_navigation(parts) {
         return not_a_navigation();
@@ -959,10 +999,30 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
         );
         return back(s, "failed", &[clear_flow]);
     };
+    // What the row says the round trip is for. The row is the server's own record, written by one
+    // of the two start routes, and carries one of two values; anything else is the back office's.
+    let oauth_flow = (flow["purpose"].as_str() == Some("oauth"))
+        .then(|| flow["oauth_flow"].as_str())
+        .flatten()
+        .filter(|f| f.len() == 32 && f.bytes().all(|c| c.is_ascii_hexdigit()));
+    if flow["purpose"].as_str() == Some("oauth") && oauth_flow.is_none() {
+        // A row for an app's round trip that names no flow cannot be finished anywhere.
+        return back(s, "failed", &[clear_flow]);
+    }
+    let end = Ending { s, oauth_flow };
     // Only a callback that spent a flow of this server counts against the address: it is the one
-    // that goes on to call Microsoft.
-    if limited(s, "cb", &ip, 60) {
-        return back(s, "busy", &[clear_flow]);
+    // that goes on to call Microsoft. An app's round trips have a window of their own.
+    if limited(
+        s,
+        if oauth_flow.is_some() {
+            "oauth_cb"
+        } else {
+            "cb"
+        },
+        &ip,
+        60,
+    ) {
+        return end.fail("busy", &[clear_flow]);
     }
     let redirect_uri = flow["redirect_uri"].as_str().unwrap_or("").to_string();
     let clear_flow = set_cookie(&flow_cookie(state), "", 0, secure_of(&redirect_uri));
@@ -980,10 +1040,10 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
             AnonLine::Browser,
             "the browser that came back is not the one that began the sign-in",
         );
-        return back(s, "failed", &[clear_flow]);
+        return end.fail("failed", &[clear_flow]);
     }
     if let Some(err) = pair(&pairs, "error") {
-        return back(s, provider_answer(err).log(api, &ip), &[clear_flow]);
+        return end.fail(provider_answer(err).log(api, &ip), &[clear_flow]);
     }
     let Some(code) = pair(&pairs, "code").filter(|c| !c.is_empty() && c.len() <= 4096) else {
         api.audit_throttled(
@@ -992,7 +1052,7 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
             AnonLine::NoCode,
             "the provider's redirect carried no code",
         );
-        return back(s, "failed", &[clear_flow]);
+        return end.fail("failed", &[clear_flow]);
     };
     let identity = callback_leg(api.leg()).and_then(|leg| {
         let ep = discover(s, api, rt, &leg, "callback")?;
@@ -1010,8 +1070,11 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
     });
     let identity = match identity {
         Ok(i) => i,
-        Err(r) => return back(s, r.log(api, &ip), &[clear_flow]),
+        Err(r) => return end.fail(r.log(api, &ip), &[clear_flow]),
     };
+    if let Some(oauth_flow) = oauth_flow {
+        return app_ending(s, api, &ip, oauth_flow, &identity, clear_flow);
+    }
     // From here only this browser can spend the one-time code.
     let done = hex(&random::<32>());
     match api.begin(&identity, &done) {
@@ -1033,6 +1096,39 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
             back(s, "unavailable", &[clear_flow])
         }
         Err(_) => back(s, "failed", &[clear_flow]),
+    }
+}
+
+/// The end of an app's round trip: the verified identity is signed in for the OAuth flow (no code
+/// is made, nothing of the identity is kept) and the browser goes to the return address. Anything
+/// that is not a person ends as one of the fixed words; the reason is in the security log already.
+fn app_ending(
+    s: &HttpState,
+    api: &dyn SsoApi,
+    ip: &str,
+    oauth_flow: &str,
+    identity: &SsoIdentity,
+    clear_flow: String,
+) -> Response {
+    let end = Ending {
+        s,
+        oauth_flow: Some(oauth_flow),
+    };
+    let Some(o) = s.oauth.as_ref() else {
+        return back(s, "failed", &[clear_flow]);
+    };
+    match api.sign_in_for_flow(identity) {
+        Ok(signed) => {
+            // A flow that is gone, or that someone else changed three times in a row, is found out
+            // at the return address.
+            let _ = o.microsoft_done(oauth_flow, MicrosoftOutcome::SignedIn(signed));
+            with_cookies(see_other(&return_address(oauth_flow)), &[clear_flow])
+        }
+        Err(MfaError::Unavailable(m)) => {
+            api.audit_throttled(ip, "oidc_error", AnonLine::Begin, &format!("callback: {m}"));
+            end.fail("unavailable", &[clear_flow])
+        }
+        Err(_) => end.fail("failed", &[clear_flow]),
     }
 }
 

@@ -32,6 +32,8 @@ const HOST: &str = "obop.test";
 const CALLBACK: &str = "http://obop.test/api/auth/oidc/callback";
 const CALLBACK_HTTPS: &str = "https://obop.test/api/auth/oidc/callback";
 
+mod phone;
+
 // ---- the stand-in provider ---------------------------------------------------------------------
 
 type Edit = Arc<dyn Fn(&mut J) + Send + Sync>;
@@ -510,8 +512,12 @@ async fn world(configure: bool) -> World {
 }
 
 async fn world_with(configure: bool, config: AuthConfig, prefix: Option<&str>) -> World {
+    world_on(App::new(), configure, config, prefix).await
+}
+
+/// As `world_with`, on an app the test made (over a store it can make fail).
+async fn world_on(app: App, configure: bool, config: AuthConfig, prefix: Option<&str>) -> World {
     let idp = Idp::start();
-    let app = App::new();
     app.seed_demo();
     let auth = Arc::new(Auth::with_test_config(app.store.backend(), config));
     auth.set_clock_for_test(T0);
