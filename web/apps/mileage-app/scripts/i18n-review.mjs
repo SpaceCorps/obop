@@ -54,6 +54,45 @@ function sources() {
   return files;
 }
 
+/**
+ * The sign-in and consent pages the system browser shows are the server's (`page.rs` of obop-oauth):
+ * a table of rows `("key", [en, de, fr, pl, fi, sv, es])`. The sheet lists the English text and the
+ * text of `lang` for each row, so the reviewer reads what a Swedish driver sees first.
+ */
+function pageCatalogue(code) {
+  const text = readFileSync(
+    join(appDir, "..", "..", "..", "crates", "kernel", "obop-oauth", "src", "page.rs"),
+    "utf8",
+  );
+  const order = /pub const LANGS: \[&str; \d+\] = \[([^\]]*)\]/
+    .exec(text)?.[1]
+    ?.split(",")
+    .map((x) => x.trim().replaceAll('"', ""));
+  const column = order?.indexOf(code) ?? -1;
+  const table = /pub const CATALOGUE[^=]*=\s*&\[([\s\S]*?)\n\];/.exec(text)?.[1];
+  if (!order || column < 0 || !table) {
+    console.error(
+      "i18n-review: page.rs of obop-oauth has a different shape than this script reads",
+    );
+    process.exit(2);
+  }
+  const unescape = (raw) => raw.replace(/\\(.)/g, (_, c) => (c === "n" ? " " : c));
+  const strings = (line) => [...line.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((m) => unescape(m[1]));
+  const rows = [];
+  for (const line of table.split("\n")) {
+    if (!/^\s*\("/.test(line)) continue;
+    const [key, ...columns] = strings(line);
+    if (columns.length !== order.length) {
+      console.error(
+        `i18n-review: page.rs row ${key} has ${columns.length} texts, not ${order.length}`,
+      );
+      process.exit(2);
+    }
+    rows.push({ key, english: columns[0], text: columns[column] });
+  }
+  return rows;
+}
+
 const files = sources();
 const families = files.flatMap((file) =>
   [...keyFamilies(file.text)].map((family) => [family, file.path]),
@@ -162,6 +201,19 @@ for (const key of Object.keys(placeOf)) {
   lines.push(
     `| [ ] | ${placeOf[key]} | ${cell(NATIVE_TEXTS.en[key])} | ${cell(NATIVE_TEXTS[lang]?.[key])} |`,
   );
+}
+lines.push("");
+lines.push("");
+lines.push("## Sign-in and consent pages of the instance (crates/kernel/obop-oauth/src/page.rs)");
+lines.push("");
+lines.push(
+  "These are the pages the system browser shows for the sign-in of the app. The app asks for the language it knows (`lang`), so a Swedish app shows the Swedish column. It is machine-drafted too (docs/ISSUES.md D7) and is part of the Swedish review: the server, not the app, holds it. Change the text in `page.rs`.",
+);
+lines.push("");
+lines.push("| Done | Key | English | Svenska |");
+lines.push("| --- | --- | --- | --- |");
+for (const row of pageCatalogue(lang)) {
+  lines.push(`| [ ] | \`${row.key}\` | ${cell(row.english)} | ${cell(row.text)} |`);
 }
 lines.push("");
 lines.push(
