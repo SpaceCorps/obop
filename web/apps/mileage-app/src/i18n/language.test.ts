@@ -1,11 +1,14 @@
+import { buildAuthorizeUrl } from "@obop/client";
 import { describe, expect, test } from "vite-plus/test";
 import type { LanguageCode } from "./index.ts";
 import {
   CHOICES,
   createLanguageStore,
+  knownLanguage,
   languageOfTag,
   parseChoice,
   resolveLanguage,
+  supportedPhoneLanguage,
   type LanguagePorts,
 } from "./language.ts";
 
@@ -39,16 +42,99 @@ describe("the choice", () => {
     expect(resolveLanguage("system", ["en-US"])).toBe("en");
     expect(resolveLanguage("system", ["de-DE"])).toBe("en");
     expect(resolveLanguage("system", [])).toBe("en");
-    // The first language of the phone decides, as the rule says; a blank entry is skipped.
-    expect(resolveLanguage("system", ["de-DE", "sv-SE"])).toBe("en");
+    // The first language of the list that the app has decides (iOS picks its own localisations the
+    // same way, so the system dialogs and the app agree); a blank entry is skipped.
+    expect(resolveLanguage("system", ["de-DE", "sv-SE"])).toBe("sv");
+    expect(resolveLanguage("system", ["nb-NO", "fi-FI", "sv-SE", "en-GB"])).toBe("sv");
+    expect(resolveLanguage("system", ["de-DE", "en-GB", "sv-SE"])).toBe("en");
     expect(resolveLanguage("system", ["sv-SE", "en-GB"])).toBe("sv");
+    expect(resolveLanguage("system", ["en-GB", "sv-SE"])).toBe("en");
     expect(resolveLanguage("system", ["", "sv"])).toBe("sv");
+    expect(resolveLanguage("system", ["de-DE", "fr-FR"])).toBe("en");
+  });
+
+  test("the first language of the list that the app has, or none", () => {
+    expect(supportedPhoneLanguage(["de-DE", "sv-SE"])).toBe("sv");
+    expect(supportedPhoneLanguage(["de-DE", "fr-FR"])).toBeNull();
+    expect(supportedPhoneLanguage([])).toBeNull();
   });
 
   test("a chosen language wins over the phone", () => {
     expect(resolveLanguage("en", ["sv-SE"])).toBe("en");
     expect(resolveLanguage("sv", ["en-US"])).toBe("sv");
     expect(resolveLanguage("sv", [])).toBe("sv");
+  });
+});
+
+describe("the language the app positively knows (what the sign-in pages are asked for)", () => {
+  test("a chosen language is known, whatever the phone says", () => {
+    expect(knownLanguage("en", ["de-DE"])).toBe("en");
+    expect(knownLanguage("sv", ["de-DE"])).toBe("sv");
+    expect(knownLanguage("sv", [])).toBe("sv");
+  });
+
+  test("following the phone: known when the phone first language is one the app has", () => {
+    expect(knownLanguage("system", ["sv-SE"])).toBe("sv");
+    expect(knownLanguage("system", ["en-US", "sv-SE"])).toBe("en");
+    expect(knownLanguage("system", ["", "sv"])).toBe("sv");
+  });
+
+  test("a phone in a language the app does not have is not known as English", () => {
+    // The app shows English because it has nothing else; that is not what the person reads.
+    expect(resolveLanguage("system", ["de-DE"])).toBe("en");
+    expect(knownLanguage("system", ["de-DE"])).toBeNull();
+    expect(knownLanguage("system", ["fr_FR"])).toBeNull();
+    expect(knownLanguage("system", [])).toBeNull();
+    // A later language the app has is shown (iOS own rule), but the first one is German: the
+    // browser Accept-Language, which lists German first, decides the pages of the instance.
+    expect(resolveLanguage("system", ["de-DE", "sv-SE"])).toBe("sv");
+    expect(knownLanguage("system", ["de-DE", "sv-SE"])).toBeNull();
+  });
+
+  describe("the address of the authorization page", () => {
+    const base = {
+      baseUrl: "https://acme.example.com",
+      clientId: "c1",
+      redirectUri: "org.obop.mileage:/cb",
+      challenge: "ch",
+      state: "st",
+      scope: ["openid"],
+    };
+    /** The wiring of `native/auth.ts` (`lang: languageStore.known() ?? undefined`), with the phone behind the ports. */
+    const langOf = async (phone: string[], stored: string | null = null) => {
+      const store = createLanguageStore(setup({ phone, stored }).ports);
+      await store.start();
+      const url = new URL(buildAuthorizeUrl({ ...base, lang: store.known() ?? undefined }));
+      return url.searchParams.get("lang");
+    };
+
+    test("a German phone sends no lang, so the browser decides (the instance has German pages)", async () => {
+      expect(await langOf(["de-DE"])).toBeNull();
+      expect(await langOf(["fr_FR"])).toBeNull();
+      expect(await langOf(["pl-PL"])).toBeNull();
+      expect(await langOf([])).toBeNull();
+    });
+
+    test("a Swedish phone sends lang=sv, an English one lang=en", async () => {
+      expect(await langOf(["sv-SE"])).toBe("sv");
+      expect(await langOf(["en-GB"])).toBe("en");
+    });
+
+    test("a chosen language is sent, also on a phone in another language", async () => {
+      expect(await langOf(["de-DE"], "en")).toBe("en");
+      expect(await langOf(["de-DE"], "sv")).toBe("sv");
+      expect(await langOf(["sv-SE"], "en")).toBe("en");
+    });
+
+    test("choosing follow the phone again takes the language away from the address", async () => {
+      const store = createLanguageStore(setup({ phone: ["de-DE"] }).ports);
+      await store.start();
+      await store.choose("sv");
+      expect(store.known()).toBe("sv");
+      await store.choose("system");
+      expect(store.known()).toBeNull();
+      expect(store.language()).toBe("en");
+    });
   });
 });
 

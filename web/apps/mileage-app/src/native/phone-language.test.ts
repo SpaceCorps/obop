@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
-import { resolveLanguage } from "../i18n/language.ts";
+import { knownLanguage, resolveLanguage } from "../i18n/language.ts";
 
 const rn = vi.hoisted(() => ({
   Platform: { OS: "ios" },
@@ -27,7 +27,14 @@ describe("the languages of an iPhone (NSUserDefaults, through Settings)", () => 
     expect(resolveLanguage("system", phoneLanguageTags())).toBe("sv");
     ios({ AppleLanguages: ["en-US", "sv-SE"] });
     expect(resolveLanguage("system", phoneLanguageTags())).toBe("en");
+    // German first, then Swedish: iOS itself picks sv.lproj (the permission dialogs) for this
+    // phone, and so does the app (the first language of the list that it has). The sign-in pages
+    // of the instance are not asked for Swedish: the first language is German, which the
+    // browser's Accept-Language lists first.
     ios({ AppleLanguages: ["de-DE", "sv-SE"] });
+    expect(resolveLanguage("system", phoneLanguageTags())).toBe("sv");
+    expect(knownLanguage("system", phoneLanguageTags())).toBeNull();
+    ios({ AppleLanguages: ["de-DE", "fr-FR"] });
     expect(resolveLanguage("system", phoneLanguageTags())).toBe("en");
   });
 

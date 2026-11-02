@@ -29,15 +29,41 @@ export function languageOfTag(tag: unknown): LanguageCode | null {
 }
 
 /**
- * The language to show. A chosen language is used as it is. Following the phone, the phone's first
- * language decides: Swedish or English when the phone is set to one of them, otherwise English. (The
- * phone's list has more entries on iOS; Android shows only the first one to the app, and the rule
- * is the same on both.)
+ * The first language of the phone's list that the app has a catalogue for, or `null`. This is the
+ * rule iOS applies itself when it picks the `.lproj` of an app (the first preferred language the
+ * app is localised in), so on an iPhone set to German and then Swedish the app and the system's
+ * permission dialogs are both Swedish. Android gives the app one language, so its list has one
+ * entry and the rule has nothing to choose between (ISSUES L49).
+ */
+export function supportedPhoneLanguage(phone: readonly string[]): LanguageCode | null {
+  for (const tag of phone) {
+    const code = languageOfTag(tag);
+    if (code !== null) return code;
+  }
+  return null;
+}
+
+/**
+ * The language to show. A chosen language is used as it is. Following the phone, it is the first
+ * language of the phone's list that the app has (Swedish or English), otherwise English.
  */
 export function resolveLanguage(choice: Choice, phone: readonly string[]): LanguageCode {
   if (choice !== "system") return choice;
-  const first = phone.find((tag) => tag.trim() !== "");
-  return languageOfTag(first) ?? "en";
+  return supportedPhoneLanguage(phone) ?? "en";
+}
+
+/**
+ * The language the app positively knows the person wants: the chosen one, or, following the phone,
+ * the phone's FIRST language when the app has a catalogue for it. `null` otherwise: the phone is
+ * set to a language the app does not have (German, say), so the app shows English because it has
+ * nothing else, and that says nothing about what the person reads. The sign-in and consent pages of
+ * the instance (which exist in more languages than the app) are asked for a language only when
+ * this is not `null`; otherwise the browser's own language decides, as it did before the app
+ * had a language choice (docs/spec/mobile.md 8.9, `native/auth.ts`).
+ */
+export function knownLanguage(choice: Choice, phone: readonly string[]): LanguageCode | null {
+  if (choice !== "system") return choice;
+  return languageOfTag(phone.find((tag) => tag.trim() !== ""));
 }
 
 /** What the store needs from the phone. */
@@ -55,9 +81,11 @@ export interface LanguageStore {
   // Properties, not methods: the hooks hand them to `useSyncExternalStore` unbound.
   choice: () => Choice;
   language: () => LanguageCode;
+  /** `knownLanguage` of the current choice and the phone: `null` when the app only shows English because it has nothing else. */
+  known: () => LanguageCode | null;
   /** Applies the phone's language at once, then the stored choice when it has been read. */
   start: () => Promise<void>;
-  /** Applies the choice at once and stores it. Answers whether it was stored (it is applied either way). */
+  /** Applies the choice at once and stores it. Answers whether it was stored (it is applied either way); the Account screen tells the person when it was not. */
   choose: (choice: Choice) => Promise<boolean>;
   /** `listener` is called when the choice or the language changed. */
   subscribe: (listener: () => void) => () => void;
@@ -91,6 +119,7 @@ export function createLanguageStore(ports: LanguagePorts): LanguageStore {
   return {
     choice: () => choice,
     language: () => language,
+    known: () => knownLanguage(choice, phone()),
     async start() {
       update(choice);
       let stored: string | null = null;
