@@ -13,12 +13,15 @@
 //!   like any other upload; the caller then creates or updates the record with the returned id;
 //! - every import is written to the security event log (`drive_import`).
 //!
-//! Nothing is ever written to Drive.
+//! With a workspace drive chosen and the write scope granted, people in the write group can also
+//! make a folder, an empty Google Doc or an uploaded file in it (`POST /api/drive/folders|docs|
+//! upload`); every such write is logged (`drive_create`, `drive_upload`). Nothing already in Drive
+//! is ever changed or deleted.
 
 use super::{HttpState, blocking};
 use axum::{
-    extract::{Query, State},
-    http::{HeaderMap, StatusCode},
+    extract::{Query, Request, State},
+    http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
 };
 use obop_commands::{BlobError, PrincipalKind};
@@ -57,6 +60,23 @@ pub struct DriveFile {
     pub bytes: Vec<u8>,
 }
 
+/// A folder, Google Doc or file just made in Drive.
+#[derive(Debug, Clone)]
+pub struct DriveCreated {
+    pub id: String,
+    pub name: String,
+    pub mime: String,
+    pub folder: bool,
+    pub web_link: String,
+}
+
+/// The most an upload from the computer may be: what the Documents file field takes (25 MiB).
+pub const UPLOAD_MAX: usize = 25 * 1024 * 1024;
+
+fn unsupported<T>() -> Result<T, String> {
+    Err("this Drive cannot do that".into())
+}
+
 /// A Drive the instance can read, set by the composition root.
 pub trait DriveSource: Send + Sync {
     fn list(&self, parent: &str, search: &str, page: Option<&str>) -> Result<DrivePage, String>;
@@ -73,6 +93,41 @@ pub trait DriveSource: Send + Sync {
     fn settings(&self) -> Option<J> {
         None
     }
+    /// The workspace drive (id and name) the instance works in, when one is chosen. Browsing,
+    /// search and import are limited to it.
+    fn workspace(&self) -> Option<(String, String)> {
+        None
+    }
+    /// The group that may create things in the workspace, when the source knows one.
+    fn write_group(&self) -> Option<String> {
+        None
+    }
+    /// Whether the sign-in was granted the right to create things.
+    fn can_write(&self) -> bool {
+        false
+    }
+    /// The shared drives the account belongs to, as (id, name), for the workspace picker.
+    fn drives(&self) -> Result<Vec<(String, String)>, String> {
+        unsupported()
+    }
+    /// Make a folder in `parent` (empty: the top of the workspace).
+    fn create_folder(&self, _parent: &str, _name: &str) -> Result<DriveCreated, String> {
+        unsupported()
+    }
+    /// Make an empty Google Doc in `parent`.
+    fn create_doc(&self, _parent: &str, _name: &str) -> Result<DriveCreated, String> {
+        unsupported()
+    }
+    /// Upload a file into `parent`.
+    fn upload(
+        &self,
+        _parent: &str,
+        _name: &str,
+        _mime: &str,
+        _bytes: &[u8],
+    ) -> Result<DriveCreated, String> {
+        unsupported()
+    }
 }
 
 /// The group that may browse: `OBOP_DRIVE_BROWSE_GROUP`, else the administrator's choice, else
@@ -84,6 +139,11 @@ fn browse_group(src: &dyn DriveSource) -> String {
         .filter(|g| !g.is_empty())
         .or_else(|| src.browse_group())
         .unwrap_or_else(|| "platform.admin".into())
+}
+
+/// The group that may create things in the workspace.
+fn write_group(src: &dyn DriveSource) -> String {
+    src.write_group().unwrap_or_else(|| "platform.admin".into())
 }
 
 fn error(status: StatusCode, message: &str) -> Response {
@@ -114,8 +174,47 @@ fn gate(s: &Arc<HttpState>, h: &HeaderMap) -> Gate {
     Gate::Open(p, src)
 }
 
+/// Like [`gate`], for a write: a person in the write group, with a workspace chosen and the write
+/// scope granted.
+fn write_gate(s: &Arc<HttpState>, h: &HeaderMap) -> Gate {
+    let (p, src) = match gate(s, h) {
+        Gate::Open(p, src) => (p, src),
+        other => return other,
+    };
+    if !p.allows(&write_group(&*src)) {
+        return Gate::Refused(error(
+            StatusCode::FORBIDDEN,
+            "you may not create things in the connected Google Drive",
+        ));
+    }
+    if src.workspace().is_none() {
+        return Gate::Refused(error(
+            StatusCode::CONFLICT,
+            "choose a workspace drive on the Google Drive page first",
+        ));
+    }
+    if !src.can_write() {
+        return Gate::Refused(error(
+            StatusCode::CONFLICT,
+            "sign in with Google again to allow creating files",
+        ));
+    }
+    Gate::Open(p, src)
+}
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs())
+}
+
+fn created_json(c: &DriveCreated) -> J {
+    json!({"id": c.id, "name": c.name, "mime": c.mime, "folder": c.folder, "web_link": c.web_link})
+}
+
 /// `GET /api/drive/status`: `{"connected": bool, "may_browse": bool}`; the back office shows its
-/// button from it. An administrator of connectors also gets `may_configure` and `settings` (the
+/// button from it. It also says which `workspace` drive is chosen (`{id, name}` or null) and
+/// whether this person `may_write` there. An administrator of connectors also gets `may_configure` and `settings` (the
 /// state of the Google Drive page: client id, whether a secret is stored, the signed-in account,
 /// the redirect address to register with Google, the last error and the browse group).
 pub async fn status(State(s): State<Arc<HttpState>>, h: HeaderMap) -> Response {
@@ -130,8 +229,17 @@ pub async fn status(State(s): State<Arc<HttpState>>, h: HeaderMap) -> Response {
         let may =
             connected && person && src.as_ref().is_some_and(|d| p.allows(&browse_group(&**d)));
         let may_configure = person && p.allows("connectors.admin");
-        let mut out =
-            json!({"connected": connected, "may_browse": may, "may_configure": may_configure});
+        let workspace = src.as_ref().and_then(|d| d.workspace());
+        let may_write = may
+            && workspace.is_some()
+            && src
+                .as_ref()
+                .is_some_and(|d| d.can_write() && p.allows(&write_group(&**d)));
+        let mut out = json!({
+            "connected": connected, "may_browse": may, "may_configure": may_configure,
+            "may_write": may_write,
+            "workspace": workspace.map(|(id, name)| json!({"id": id, "name": name})),
+        });
         if may_configure && let Some(settings) = src.as_ref().and_then(|d| d.settings()) {
             out["settings"] = settings;
         }
@@ -258,6 +366,161 @@ pub async fn import(
                 "could not store the file",
             ),
         }
+    })
+    .await
+}
+
+/// `GET /api/drive/drives` (connectors administrators): the shared drives the connected account
+/// belongs to, for choosing the workspace drive.
+pub async fn drives(State(s): State<Arc<HttpState>>, h: HeaderMap) -> Response {
+    blocking(move || {
+        let (p, _) = match s.auth(&h) {
+            Ok(x) => x,
+            Err(r) => return r.into_response(),
+        };
+        if p.kind == PrincipalKind::Agent || !p.allows("connectors.admin") {
+            return error(StatusCode::FORBIDDEN, "only an administrator of connectors may do that");
+        }
+        let Some(src) = s.drive.get().cloned().filter(|d| d.connected()) else {
+            return error(StatusCode::NOT_FOUND, "no Google Drive is connected");
+        };
+        match src.drives() {
+            Ok(d) => axum::Json(json!({
+                "drives": d.iter().map(|(id, name)| json!({"id": id, "name": name})).collect::<Vec<_>>(),
+            }))
+            .into_response(),
+            Err(m) => error(StatusCode::BAD_GATEWAY, &m),
+        }
+    })
+    .await
+}
+
+fn record(s: &HttpState, who: &str, kind: &str, detail: &str) {
+    obop_commands::audit::record_event(&*s.shared.backend, now_secs(), who, kind, who, detail);
+}
+
+fn create_reply(
+    s: &HttpState,
+    who: &str,
+    kind: &str,
+    parent: &str,
+    made: Result<DriveCreated, String>,
+) -> Response {
+    match made {
+        Ok(c) => {
+            record(
+                s,
+                who,
+                kind,
+                &format!(
+                    "{} ({}) in {}",
+                    c.id,
+                    c.name,
+                    if parent.is_empty() {
+                        "the workspace"
+                    } else {
+                        parent
+                    }
+                ),
+            );
+            (StatusCode::CREATED, axum::Json(created_json(&c))).into_response()
+        }
+        Err(m) => {
+            record(s, who, &format!("{kind}_failed"), &format!("{parent}: {m}"));
+            error(StatusCode::BAD_GATEWAY, &m)
+        }
+    }
+}
+
+/// `POST /api/drive/folders` and `POST /api/drive/docs` with `{"name": ..., "parent": ...}`
+/// (`parent` is optional: the top of the workspace).
+async fn make(s: Arc<HttpState>, h: HeaderMap, body: J, doc: bool) -> Response {
+    blocking(move || {
+        let (p, src) = match write_gate(&s, &h) {
+            Gate::Off => return error(StatusCode::NOT_FOUND, "no Google Drive is connected"),
+            Gate::Refused(r) => return r,
+            Gate::Open(p, src) => (p, src),
+        };
+        let Some(name) = body["name"].as_str() else {
+            return error(
+                StatusCode::BAD_REQUEST,
+                "send {\"name\": ..., \"parent\": ...}",
+            );
+        };
+        let parent = body["parent"].as_str().unwrap_or("");
+        let made = if doc {
+            src.create_doc(parent, name)
+        } else {
+            src.create_folder(parent, name)
+        };
+        create_reply(&s, &p.id, "drive_create", parent, made)
+    })
+    .await
+}
+
+pub async fn create_folder(
+    State(s): State<Arc<HttpState>>,
+    h: HeaderMap,
+    axum::Json(body): axum::Json<J>,
+) -> Response {
+    make(s, h, body, false).await
+}
+
+pub async fn create_doc(
+    State(s): State<Arc<HttpState>>,
+    h: HeaderMap,
+    axum::Json(body): axum::Json<J>,
+) -> Response {
+    make(s, h, body, true).await
+}
+
+/// `POST /api/drive/upload?parent=<folder id>&name=<file name>` with the file as the body and its
+/// type as `Content-Type`: up to [`UPLOAD_MAX`].
+pub async fn upload(
+    State(s): State<Arc<HttpState>>,
+    Query(q): Query<HashMap<String, String>>,
+    req: Request,
+) -> Response {
+    let (parts, body) = req.into_parts();
+    let headers = parts.headers;
+    // Who is asking is decided before the body is read, so a refused caller buffers nothing.
+    let (s2, h2) = (s.clone(), headers.clone());
+    let (p, src) = match blocking(move || write_gate(&s2, &h2)).await {
+        Gate::Off => return error(StatusCode::NOT_FOUND, "no Google Drive is connected"),
+        Gate::Refused(r) => return r,
+        Gate::Open(p, src) => (p, src),
+    };
+    if headers
+        .get(header::CONTENT_LENGTH)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.parse::<usize>().ok())
+        .is_some_and(|n| n > UPLOAD_MAX)
+    {
+        return error(
+            StatusCode::PAYLOAD_TOO_LARGE,
+            &format!("the file is larger than {} MiB", UPLOAD_MAX >> 20),
+        );
+    }
+    let bytes = match axum::body::to_bytes(body, UPLOAD_MAX + 1).await {
+        Ok(b) if b.len() <= UPLOAD_MAX => b,
+        _ => {
+            return error(
+                StatusCode::PAYLOAD_TOO_LARGE,
+                &format!("the file is larger than {} MiB", UPLOAD_MAX >> 20),
+            );
+        }
+    };
+    let name = q.get("name").cloned().unwrap_or_default();
+    let parent = q.get("parent").cloned().unwrap_or_default();
+    let mime = headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .map(|v| v.split(';').next().unwrap_or("").trim().to_string())
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|| "application/octet-stream".into());
+    blocking(move || {
+        let made = src.upload(&parent, &name, &mime, &bytes);
+        create_reply(&s, &p.id, "drive_upload", &parent, made)
     })
     .await
 }

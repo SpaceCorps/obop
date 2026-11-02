@@ -9,9 +9,9 @@
 //!    the tokens of the instance's Drive connection, read at request time, so connecting,
 //!    disconnecting or changing the client takes effect without a restart.
 
-use obop_blob_gdrive::{Config, DriveBrowser};
+use obop_blob_gdrive::{Config, DriveBrowser, Workspace};
 use obop_connectors::Runtime;
-use obop_http::drive::{DriveEntry, DriveFile, DrivePage, DriveSource};
+use obop_http::drive::{DriveCreated, DriveEntry, DriveFile, DrivePage, DriveSource};
 use serde_json::{Value as J, json};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -74,11 +74,38 @@ impl Source {
             None => f(&*self.browser()?),
         }
     }
+
+    /// The workspace an administrator chose on the Google Drive page. A Drive set in the
+    /// environment has none (its token is read-only and instance wide, as before).
+    fn ws(&self) -> Option<Workspace> {
+        if self.env.is_some() {
+            return None;
+        }
+        self.rt
+            .drive_workspace()
+            .and_then(|(id, _)| Workspace::parse(&id))
+    }
+
+    fn made(c: obop_blob_gdrive::Created) -> DriveCreated {
+        DriveCreated {
+            id: c.id,
+            name: c.name,
+            mime: c.mime,
+            folder: c.folder,
+            web_link: c.web_link,
+        }
+    }
+
+    fn need_ws(&self) -> Result<Workspace, String> {
+        self.ws()
+            .ok_or_else(|| "no workspace drive is chosen".to_string())
+    }
 }
 
 impl DriveSource for Source {
     fn list(&self, parent: &str, search: &str, page: Option<&str>) -> Result<DrivePage, String> {
-        let p = self.with(|b| b.list(parent, search, page))?;
+        let ws = self.ws();
+        let p = self.with(|b| b.list_in(ws.as_ref(), parent, search, page))?;
         Ok(DrivePage {
             entries: p
                 .entries
@@ -99,7 +126,8 @@ impl DriveSource for Source {
     }
 
     fn fetch(&self, id: &str, max: usize) -> Result<DriveFile, String> {
-        let f = self.with(|b| b.fetch(id, max))?;
+        let ws = self.ws();
+        let f = self.with(|b| b.fetch_in(ws.as_ref(), id, max))?;
         Ok(DriveFile {
             id: f.id,
             name: f.name,
@@ -116,6 +144,53 @@ impl DriveSource for Source {
 
     fn browse_group(&self) -> Option<String> {
         Some(self.rt.drive_browse_group())
+    }
+
+    fn workspace(&self) -> Option<(String, String)> {
+        if self.env.is_some() {
+            return None;
+        }
+        self.rt.drive_workspace()
+    }
+
+    fn write_group(&self) -> Option<String> {
+        Some(self.rt.drive_write_group())
+    }
+
+    fn can_write(&self) -> bool {
+        self.env.is_none() && matches!(self.rt.drive_credentials(), Ok(Some(c)) if c.can_write())
+    }
+
+    fn drives(&self) -> Result<Vec<(String, String)>, String> {
+        Ok(self
+            .with(|b| b.drives())?
+            .into_iter()
+            .map(|d| (d.id, d.name))
+            .collect())
+    }
+
+    fn create_folder(&self, parent: &str, name: &str) -> Result<DriveCreated, String> {
+        let ws = self.need_ws()?;
+        self.with(|b| b.create_folder_in(&ws, parent, name))
+            .map(Self::made)
+    }
+
+    fn create_doc(&self, parent: &str, name: &str) -> Result<DriveCreated, String> {
+        let ws = self.need_ws()?;
+        self.with(|b| b.create_doc_in(&ws, parent, name))
+            .map(Self::made)
+    }
+
+    fn upload(
+        &self,
+        parent: &str,
+        name: &str,
+        mime: &str,
+        bytes: &[u8],
+    ) -> Result<DriveCreated, String> {
+        let ws = self.need_ws()?;
+        self.with(|b| b.upload_in(&ws, parent, name, mime, bytes))
+            .map(Self::made)
     }
 
     fn settings(&self) -> Option<J> {
