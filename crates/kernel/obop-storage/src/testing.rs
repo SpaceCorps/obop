@@ -146,6 +146,9 @@ pub struct Flaky {
     before_apply: std::sync::Mutex<Option<AfterInsert>>,
     /// Run once, right before the next compare-and-set of a short-lived value is tried.
     before_kv_swap: std::sync::Mutex<Option<AfterInsert>>,
+    /// Run once, right before the next read of a short-lived value whose key starts with the
+    /// prefix.
+    before_kv_get: std::sync::Mutex<Option<(String, AfterInsert)>>,
 }
 
 /// A batch as `apply_tracked` received it: the context, the steps and the tracked models.
@@ -203,6 +206,7 @@ impl Flaky {
             reads: std::sync::Mutex::new(Reads::default()),
             before_apply: std::sync::Mutex::new(None),
             before_kv_swap: std::sync::Mutex::new(None),
+            before_kv_get: std::sync::Mutex::new(None),
         })
     }
 
@@ -288,6 +292,12 @@ impl Flaky {
     /// compare-and-set, with no thread and no sleep.
     pub fn before_the_next_kv_swap(&self, then: AfterInsert) {
         *self.before_kv_swap.lock().unwrap() = Some(then);
+    }
+
+    /// Run `then` once, with the wrapped backend, right before the next `kv_get` of a key that
+    /// starts with `prefix`: another request changing something between two steps of this one.
+    pub fn before_the_next_kv_get_of(&self, prefix: &str, then: AfterInsert) {
+        *self.before_kv_get.lock().unwrap() = Some((prefix.to_string(), then));
     }
 
     fn run_before_apply(&self) {
@@ -728,6 +738,20 @@ impl Backend for Flaky {
         self.inner.kv_put_new(key, value, ttl_ms)
     }
     fn kv_get(&self, key: &str) -> Result<Option<String>> {
+        let hook = {
+            let mut slot = self.before_kv_get.lock().unwrap();
+            if slot
+                .as_ref()
+                .is_some_and(|(p, _)| key.starts_with(p.as_str()))
+            {
+                slot.take().map(|(_, f)| f)
+            } else {
+                None
+            }
+        };
+        if let Some(f) = hook {
+            f(&*self.inner);
+        }
         if self.vanish.swap(false, SeqCst) {
             let _ = self.inner.kv_delete(key);
         }

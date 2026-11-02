@@ -1374,9 +1374,12 @@ async fn phone_a_change_of_credentials_after_the_sign_in_compared_is_seen_by_the
     // writes the person into the flow: the flow holds the epoch the sign-in compared, so the
     // consent step finds the change. (Reading the epoch again at the write would accept it.)
     let auth = w.auth.clone();
-    flaky.before_the_next_kv_swap(Box::new(move |_| {
-        auth.operator_sso_only("ada", false).unwrap();
-    }));
+    flaky.before_the_next_kv_get_of(
+        "oauth:flow:",
+        Box::new(move |_| {
+            auth.operator_sso_only("ada", false).unwrap();
+        }),
+    );
     let cb = phone.callback(&uri).await;
     assert_eq!(
         cb.location(),
@@ -1576,4 +1579,319 @@ async fn phone_the_callbacks_of_an_app_have_windows_of_their_own() {
         )
         .await;
     assert_eq!(r.location(), "/#oidc_error=cancelled");
+}
+
+// ---- the 30-day cap of a Microsoft-only phone (WP5) -----------------------------------------------
+
+/// The values of the options of the select of the consent page.
+fn days_offered(r: &Raw) -> Vec<u32> {
+    let mut out = Vec::new();
+    let mut rest = r.body.as_str();
+    while let Some(i) = rest.find("<option value=\"") {
+        rest = &rest[i + "<option value=\"".len()..];
+        let n: String = rest.chars().take_while(char::is_ascii_digit).collect();
+        out.push(n.parse().unwrap());
+    }
+    out
+}
+
+const DAY: u64 = 86_400;
+
+/// What the stores hold of the grants: (created, expires) of every grant, the expiry of every
+/// refresh token and of every device, all in seconds.
+fn lifetimes(w: &World) -> (Vec<(u64, u64)>, Vec<u64>, Vec<u64>) {
+    let b = w.app.store.backend();
+    let grants = b
+        .list("oauth_grant")
+        .unwrap()
+        .into_iter()
+        .map(|(_, f)| {
+            (
+                f["created_at"].as_u64().unwrap(),
+                f["expires_at"].as_u64().unwrap(),
+            )
+        })
+        .collect();
+    let refresh = b
+        .list("oauth_refresh")
+        .unwrap()
+        .into_iter()
+        .map(|(_, f)| f["expires_at"].as_u64().unwrap())
+        .collect();
+    let devices = b
+        .list("device")
+        .unwrap()
+        .into_iter()
+        .map(|(_, f)| {
+            obop_values::Instant::parse(f["expires_at"].as_str().unwrap())
+                .unwrap()
+                .micros() as u64
+                / 1_000_000
+        })
+        .collect();
+    (grants, refresh, devices)
+}
+
+#[tokio::test]
+async fn phone_a_microsoft_only_person_is_offered_no_more_than_30_days_and_a_posted_90_is_refused()
+{
+    let w = world(true).await;
+    ada_sso_only(&w).await;
+    let mut phone = Phone::new(&w).await;
+    let page = phone.open().await;
+    let r = phone.microsoft(&page.flow, ADA_OID).await;
+    assert!(consent(&r), "{}", r.body);
+    assert_eq!(days_offered(&r), [1, 7, 30], "{}", r.body);
+    assert!(
+        r.body
+            .contains("access can last <strong>30</strong> days at most"),
+        "{}",
+        r.body
+    );
+    let page = page_of(&page.flow, &r);
+    // A form posted by hand for 90 days gets no code; the page is shown again with the reason,
+    // and the flow is still there.
+    let d = phone.decide(&page, "90").await;
+    assert_eq!(d.status, 200, "{}", d.body);
+    assert!(d.body.contains("Choose a shorter one"), "{}", d.body);
+    assert_eq!(days_offered(&d), [1, 7, 30]);
+    assert!(w.oauth_flow(&page.flow).is_some());
+    assert_eq!(w.devices(), 0);
+    // 30 is allowed. Every end date is created + 30 days.
+    let code = phone.code_of(&page, "30").await;
+    let t = phone.token(&code).await;
+    assert_eq!(t.status, 200, "{}", t.body);
+    let (grants, refresh, devices) = lifetimes(&w);
+    assert_eq!((grants.len(), refresh.len(), devices.len()), (1, 1, 1));
+    let (created, expires) = grants[0];
+    assert_eq!(expires, created + 30 * DAY);
+    assert_eq!(refresh[0], created + 30 * DAY);
+    assert_eq!(devices[0], created + 30 * DAY);
+}
+
+#[tokio::test]
+async fn phone_an_account_with_a_password_is_offered_90_days_and_keeps_them() {
+    let w = world(true).await;
+    ada_sso_only(&w).await;
+    let mut phone = Phone::new(&w).await;
+    let page = phone.open().await;
+    // Bob signs in with a password and is not Microsoft-only.
+    let r = phone.password(&page, "bob", PW).await;
+    assert!(consent(&r), "{}", r.body);
+    assert_eq!(days_offered(&r), [1, 7, 30, 90]);
+    assert!(!r.body.contains("access can last"), "{}", r.body);
+    let code = phone.code_of(&page_of(&page.flow, &r), "90").await;
+    let t = phone.token(&code).await;
+    assert_eq!(t.status, 200, "{}", t.body);
+    let (grants, refresh, devices) = lifetimes(&w);
+    let (created, expires) = grants[0];
+    assert_eq!(expires, created + 90 * DAY);
+    assert_eq!((refresh[0], devices[0]), (expires, expires));
+    // A person who is bound to Microsoft but does not sign in with it only keeps 90 as well.
+    let w = world(true).await;
+    let mut phone = Phone::new(&w).await;
+    let page = phone.open().await;
+    let r = phone.microsoft(&page.flow, ADA_OID).await;
+    assert_eq!(days_offered(&r), [1, 7, 30, 90], "{}", r.body);
+}
+
+#[tokio::test]
+async fn phone_a_code_made_for_90_days_is_clamped_when_the_account_is_microsoft_only() {
+    let w = world(true).await;
+    ada_sso_only(&w).await;
+    let mut phone = Phone::new(&w).await;
+    let page = phone.open().await;
+    let r = phone.microsoft(&page.flow, ADA_OID).await;
+    let code = phone.code_of(&page_of(&page.flow, &r), "30").await;
+    // The record of the code is the flow's word about the account; here somebody wrote 90 into
+    // it (a code made while the account was another kind, or a record written by hand).
+    let key = format!("oauth:code:{}", obop_oauth::util::sha_hex(&code));
+    let b = w.app.store.backend();
+    let mut entry: J = serde_json::from_str(&b.kv_get(&key).unwrap().unwrap()).unwrap();
+    assert_eq!(entry["days"], 30);
+    entry["days"] = json!(90);
+    b.kv_put(&key, &entry.to_string(), Some(120_000)).unwrap();
+    let t = phone.token(&code).await;
+    assert_eq!(t.status, 200, "{}", t.body);
+    let (grants, refresh, devices) = lifetimes(&w);
+    let (created, expires) = grants[0];
+    assert_eq!(expires, created + 30 * DAY);
+    assert_eq!((refresh[0], devices[0]), (expires, expires));
+}
+
+#[tokio::test]
+async fn phone_a_code_made_for_90_days_fails_when_the_account_becomes_microsoft_only_before_the_exchange()
+ {
+    let w = world(true).await;
+    let mut phone = Phone::new(&w).await;
+    let page = phone.open().await;
+    let r = phone.microsoft(&page.flow, ADA_OID).await;
+    assert_eq!(days_offered(&r), [1, 7, 30, 90]);
+    let code = phone.code_of(&page_of(&page.flow, &r), "90").await;
+    // Making the account Microsoft-only changes its credentials (the epoch), which the exchange
+    // expects: the code gives nothing and writes nothing.
+    ada_sso_only(&w).await;
+    let t = phone.token(&code).await;
+    assert_eq!(t.status, 400, "{}", t.body);
+    assert_eq!(w.devices(), 0);
+    assert!(
+        w.app
+            .store
+            .backend()
+            .list("oauth_grant")
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn phone_a_store_refusal_anywhere_in_the_exchange_never_gives_a_longer_grant_than_the_cap() {
+    use obop_storage::testing::Flaky;
+    // Not behind the request guard: a refused read must not be what stops a longer grant from
+    // being written afterwards.
+    let flaky = Flaky::new(obop_storage::open("memory:").unwrap());
+    let app = App::with_store(obop_commands::Store::over(flaky.clone()));
+    let w = world_on(app, true, AuthConfig::insecure_dev(), None).await;
+    w.keep_throttle();
+    ada_sso_only(&w).await;
+    let mut phone = Phone::new(&w).await;
+    let (mut refused_503, mut served, mut clean) = (0, 0, 0);
+    for skip in 0..200 {
+        phone.ip = Some(format!("10.6.{}.{}", skip / 200, skip % 200 + 1));
+        let page = phone.open().await;
+        let r = phone.microsoft(&page.flow, ADA_OID).await;
+        let code = phone.code_of(&page_of(&page.flow, &r), "30").await;
+        // A code that was made for more than the account may have (written by hand).
+        let key = format!("oauth:code:{}", obop_oauth::util::sha_hex(&code));
+        let b = w.app.store.backend();
+        let mut entry: J = serde_json::from_str(&b.kv_get(&key).unwrap().unwrap()).unwrap();
+        entry["days"] = json!(90);
+        b.kv_put(&key, &entry.to_string(), Some(120_000)).unwrap();
+        let before = flaky.refused();
+        flaky.refuse_call_after(skip);
+        let t = phone.token(&code).await;
+        let refused = flaky.refused() - before;
+        flaky.allow_models();
+        if refused == 0 {
+            assert_eq!(t.status, 200, "{}", t.body);
+            clean += 1;
+            if clean == 2 {
+                break;
+            }
+            continue;
+        }
+        match t.status {
+            200 => served += 1,
+            503 => {
+                refused_503 += 1;
+                // The code was given back: asking again gives the grant.
+                let again = phone.token(&code).await;
+                assert!(
+                    again.status == 200 || again.status == 400,
+                    "{skip}: {}",
+                    again.body
+                );
+            }
+            400 => {}
+            other => panic!("{skip}: {other}: {}", t.body),
+        }
+        // Whatever was written, nothing lasts longer than 30 days.
+        let (grants, refresh, devices) = lifetimes(&w);
+        for (created, expires) in grants {
+            assert!(expires <= created + 30 * DAY, "{skip}: a grant of 90 days");
+        }
+        let latest = now_ms() / 1000 + 30 * DAY + 5;
+        for e in refresh.iter().chain(devices.iter()) {
+            assert!(*e <= latest, "{skip}: a longer end date");
+        }
+        if w.devices() >= 18 {
+            break;
+        }
+    }
+    assert!(
+        clean >= 1 && refused_503 > 0,
+        "{clean} {refused_503} {served}"
+    );
+}
+
+#[tokio::test]
+async fn phone_the_pages_of_a_flow_speak_the_language_of_the_flow() {
+    // The failure of the Microsoft step is told in the language the sign-in pages were opened
+    // in (`lang` of the authorization request, else the browser's). The six translations are
+    // machine-drafted.
+    let w = world(true).await;
+    let mut phone = Phone::new(&w).await;
+    let page = phone.open_with("&lang=sv").await;
+    assert!(
+        page.html.contains("Logga in med Microsoft"),
+        "{}",
+        page.html
+    );
+    let cb = phone.round_trip(&page.flow, STRANGER_OID).await;
+    assert!(cb.status == 303);
+    let r = phone.back(&page.flow).await;
+    assert!(
+        r.body.contains("Inloggningen med Microsoft fungerade inte"),
+        "{}",
+        r.body
+    );
+    // And the cap sentence of the consent page.
+    ada_sso_only(&w).await;
+    let r = phone.microsoft(&page.flow, ADA_OID).await;
+    assert!(
+        r.body.contains("i högst <strong>30</strong> dagar"),
+        "{}",
+        r.body
+    );
+}
+
+#[tokio::test]
+async fn phone_a_store_refusal_anywhere_in_the_decision_never_leaves_a_code_for_more_than_the_cap()
+{
+    use obop_storage::testing::Flaky;
+    // Not behind the request guard, and the answer is not looked at (the layer of D74 turns the
+    // answer of a request that met a refusal into a 503): what is looked at is what the store
+    // holds, the codes that were made.
+    let flaky = Flaky::new(obop_storage::open("memory:").unwrap());
+    let app = App::with_store(obop_commands::Store::over(flaky.clone()));
+    let w = world_on(app, true, AuthConfig::insecure_dev(), None).await;
+    w.keep_throttle();
+    ada_sso_only(&w).await;
+    let mut phone = Phone::new(&w).await;
+    let (mut refused_somewhere, mut clean) = (0, 0);
+    for skip in 0..200 {
+        phone.ip = Some(format!("10.5.{}.{}", skip / 200, skip % 200 + 1));
+        let page = phone.open().await;
+        let r = phone.microsoft(&page.flow, ADA_OID).await;
+        let p = page_of(&page.flow, &r);
+        let before = flaky.refused();
+        flaky.refuse_call_after(skip);
+        let d = phone.decide(&p, "90").await;
+        let refused = flaky.refused() - before;
+        flaky.allow_models();
+        for (k, v) in w.app.store.backend().kv_scan("oauth:code:").unwrap() {
+            let entry: J = serde_json::from_str(&v).unwrap();
+            assert!(
+                entry["days"].as_u64().unwrap() <= 30,
+                "{skip}: a code for {} days ({k})",
+                entry["days"]
+            );
+        }
+        assert!(
+            !d.all("location").iter().any(|l| l.starts_with(APP)),
+            "{skip}: a code was handed to the app for 90 days"
+        );
+        if refused == 0 {
+            clean += 1;
+            if clean == 2 {
+                break;
+            }
+        } else {
+            refused_somewhere += 1;
+        }
+    }
+    assert!(
+        clean >= 1 && refused_somewhere > 3,
+        "{clean} {refused_somewhere}"
+    );
 }

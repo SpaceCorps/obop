@@ -8,7 +8,7 @@
 //! parameter, then the `Accept-Language` header, then English. Everything that came from outside
 //! (the application's name and address, group names) is escaped.
 
-use crate::flow::{DEFAULT_DAYS, EXPIRY_DAYS, FlowCtx, is_admin_like};
+use crate::flow::{DEFAULT_DAYS, EXPIRY_DAYS, FlowCtx, MAX_DAYS, is_admin_like};
 use crate::redirect::RedirectForm;
 use crate::util::b64std;
 use sha2::{Digest, Sha256};
@@ -346,7 +346,8 @@ pub fn consent_page(ctx: &FlowCtx, error: Option<&str>) -> Rendered {
         groups.push_str(&format!("<p class=\"muted\">{}</p>", esc(t(l, none))));
     }
     let mut days = String::new();
-    for d in EXPIRY_DAYS {
+    // Up to what this account may hand over (a Microsoft-only account on a phone: 30 days).
+    for d in EXPIRY_DAYS.into_iter().filter(|d| *d <= ctx.max_days) {
         let key = format!("consent.d{d}");
         let sel = if d == DEFAULT_DAYS { " selected" } else { "" };
         days.push_str(&format!(
@@ -354,6 +355,15 @@ pub fn consent_page(ctx: &FlowCtx, error: Option<&str>) -> Rendered {
             esc(t(l, &key))
         ));
     }
+    // A Microsoft-only account on a phone is told why the longest period is shorter.
+    let cap = if ctx.max_days < MAX_DAYS {
+        format!(
+            "<p class=\"muted\">{}</p>",
+            tf(l, "consent.cap", &[("days", &ctx.max_days.to_string())])
+        )
+    } else {
+        String::new()
+    };
     let body = format!(
         "<h1>{h1}</h1>\
 <p class=\"muted\">{signed}</p>\
@@ -362,7 +372,7 @@ pub fn consent_page(ctx: &FlowCtx, error: Option<&str>) -> Rendered {
 <div class=\"notice\"><strong>{who}</strong><p>{who_body}</p></div>\
 <form method=\"post\" action=\"/oauth/authorize/decision\">{hidden}\
 <fieldset><legend>{glegend}</legend><p class=\"muted\">{ghelp}</p>{groups}</fieldset>\
-<label for=\"days\">{expiry}</label><select id=\"days\" name=\"days\">{days}</select>\
+<label for=\"days\">{expiry}</label><select id=\"days\" name=\"days\">{days}</select>{cap}\
 <h2>{facts}</h2><ul><li>{f1}</li><li>{f2}</li><li>{f3}</li></ul>\
 <div class=\"row\"><button type=\"submit\" name=\"decision\" value=\"deny\" formnovalidate>{deny}</button>\
 <button class=\"primary\" type=\"submit\" name=\"decision\" value=\"allow\">{allow}</button></div></form>",
@@ -382,6 +392,7 @@ pub fn consent_page(ctx: &FlowCtx, error: Option<&str>) -> Rendered {
         groups = groups,
         expiry = esc(t(l, "consent.expiry")),
         days = days,
+        cap = cap,
         facts = esc(t(l, "consent.facts")),
         f1 = esc(t(l, f1)),
         f2 = esc(t(l, f2)),
@@ -430,6 +441,8 @@ pub const CATALOGUE: &[(&str, [&str; 7])] = &[
     ("err.mobile_scope", ["A mobile app can only be given the groups it declared and that you hold.", "Einer mobilen App können nur die Gruppen gegeben werden, die sie angegeben hat und die Sie haben.", "On ne peut donner à une application mobile que les groupes qu'elle a déclarés et que vous détenez.", "Aplikacji mobilnej można przekazać tylko grupy, które zadeklarowała i które masz.", "Mobiilisovellukselle voi antaa vain ryhmiä, jotka se on ilmoittanut ja jotka sinulla on.", "En mobilapp kan bara få de grupper den har angett och som du har.", "A una aplicación móvil solo se le pueden dar los grupos que declaró y que usted tiene."]),
     ("err.devices_full", ["You already have the most devices signed in that this instance allows. End one under Customize, Security, Devices, then try again.", "Sie haben bereits die höchste Zahl angemeldeter Geräte, die diese Instanz erlaubt. Beenden Sie eines unter Anpassen, Sicherheit, Geräte und versuchen Sie es erneut.", "Vous avez déjà le nombre maximal d'appareils connectés que cette instance autorise. Mettez fin à l'un d'eux sous Personnaliser, Sécurité, Appareils, puis réessayez.", "Masz już największą liczbę zalogowanych urządzeń, jaką dopuszcza ta instancja. Zakończ jedno w Dostosuj, Bezpieczeństwo, Urządzenia i spróbuj ponownie.", "Sinulla on jo suurin tämän instanssin sallima määrä kirjautuneita laitteita. Päätä yksi kohdassa Mukauta, Tietoturva, Laitteet ja yritä uudelleen.", "Du har redan det högsta antal inloggade enheter som den här instansen tillåter. Avsluta en under Anpassa, Säkerhet, Enheter och försök igen.", "Ya tiene el máximo de dispositivos con sesión iniciada que permite esta instancia. Termine uno en Personalizar, Seguridad, Dispositivos y vuelva a intentarlo."]),
     ("err.expiry", ["Choose how long the access lasts.", "Wählen Sie, wie lange der Zugriff gilt.", "Choisissez la durée de l'accès.", "Wybierz, jak długo ma trwać dostęp.", "Valitse, kuinka kauan pääsy kestää.", "Välj hur länge åtkomsten gäller.", "Elija cuánto dura el acceso."]),
+    ("consent.cap", ["This account signs in with Microsoft only, so access can last {days} days at most.", "Dieses Konto meldet sich nur mit Microsoft an, deshalb kann der Zugriff höchstens {days} Tage dauern.", "Ce compte se connecte uniquement avec Microsoft ; l'accès peut donc durer {days} jours au maximum.", "To konto loguje się wyłącznie przez Microsoft, dlatego dostęp może trwać najwyżej {days} dni.", "Tämä tili kirjautuu vain Microsoftilla, joten pääsy voi kestää enintään {days} päivää.", "Det här kontot loggar bara in med Microsoft, så åtkomsten kan gälla i högst {days} dagar.", "Esta cuenta inicia sesión solo con Microsoft, por lo que el acceso puede durar {days} días como máximo."]),
+    ("err.expiry_cap", ["That period is longer than this account may give. Choose a shorter one.", "Dieser Zeitraum ist länger, als dieses Konto erlauben darf. Wählen Sie einen kürzeren.", "Cette durée dépasse ce que ce compte peut accorder. Choisissez-en une plus courte.", "Ten okres jest dłuższy, niż to konto może udzielić. Wybierz krótszy.", "Tämä jakso on pidempi kuin tämä tili voi antaa. Valitse lyhyempi.", "Den perioden är längre än det här kontot får ge. Välj en kortare.", "Ese período es más largo de lo que esta cuenta puede conceder. Elija uno más corto."]),
     ("ms.button", ["Sign in with Microsoft", "Mit Microsoft anmelden", "Se connecter avec Microsoft", "Zaloguj się przez Microsoft", "Kirjaudu Microsoftilla", "Logga in med Microsoft", "Iniciar sesión con Microsoft"]),
     ("ms.note", ["You are taken to Microsoft to sign in and then come back to this page.", "Sie werden zur Anmeldung zu Microsoft weitergeleitet und kehren danach auf diese Seite zurück.", "Vous êtes redirigé vers Microsoft pour vous connecter, puis vous revenez sur cette page.", "Zostaniesz przekierowany do Microsoft, aby się zalogować, a następnie wrócisz na tę stronę.", "Sinut ohjataan Microsoftille kirjautumaan, ja sen jälkeen palaat tälle sivulle.", "Du skickas till Microsoft för att logga in och kommer sedan tillbaka till den här sidan.", "Se le lleva a Microsoft para iniciar sesión y después vuelve a esta página."]),
     ("err.ms_cancelled", ["The sign-in with Microsoft was cancelled. Try again.", "Die Anmeldung bei Microsoft wurde abgebrochen. Versuchen Sie es erneut.", "La connexion avec Microsoft a été annulée. Réessayez.", "Logowanie przez Microsoft zostało anulowane. Spróbuj ponownie.", "Kirjautuminen Microsoftilla peruttiin. Yritä uudelleen.", "Inloggningen med Microsoft avbröts. Försök igen.", "Se canceló el inicio de sesión con Microsoft. Inténtelo de nuevo."]),
@@ -523,6 +536,7 @@ mod tests {
             groups: vec!["base.user".into(), "x\"><b>".into()],
             preselected: vec![],
             microsoft: false,
+            max_days: 90,
         };
         let r = consent_page(&ctx, None);
         assert!(!r.html.contains("<script>") && !r.html.contains("<b>"));
@@ -550,6 +564,7 @@ mod tests {
             groups: vec![],
             preselected: vec![],
             microsoft: false,
+            max_days: 90,
         };
         for r in [
             login_page(&ctx, None),

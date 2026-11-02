@@ -1092,6 +1092,10 @@ fn a_mobile_code_exchange_refused_at_any_call_is_retryable_and_leaves_no_device_
         "ada",
         OAuthConfig {
             max_devices_per_user: 1000,
+            // The sweep signs in once for every position of the exchange; the exchange makes one
+            // more call than it did (the kind of the account is read for the cap of a
+            // Microsoft-only phone), which would take the sweep over the default of 30.
+            login_per_ip: 1000,
             ..OAuthConfig::default()
         },
     );

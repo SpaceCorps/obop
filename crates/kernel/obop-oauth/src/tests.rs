@@ -160,6 +160,7 @@ fn query(location: &str, key: &str) -> String {
         .to_string()
 }
 
+mod microsoft;
 mod mobile;
 mod mobile_review;
 

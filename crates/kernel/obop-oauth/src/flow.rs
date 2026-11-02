@@ -109,6 +109,9 @@ pub struct FlowCtx {
     /// `view`: the connectors runtime exists, the provider is configured and enabled, and the
     /// client is a mobile app. Never set for an MCP client.
     pub microsoft: bool,
+    /// The longest the person may hand over for, in days: the cap of a Microsoft-only account on
+    /// a mobile app's flow once somebody is signed in on it, else the general maximum.
+    pub max_days: u32,
 }
 
 /// Why a step of the flow was not accepted.
@@ -218,6 +221,23 @@ struct Signed {
 
 pub const EXPIRY_DAYS: [u32; 4] = [1, 7, 30, 90];
 pub const DEFAULT_DAYS: u32 = 30;
+/// The longest any grant lasts, in days.
+pub const MAX_DAYS: u32 = 90;
+/// The longest a phone grant of an account that signs in with Microsoft only lasts (a relayed
+/// choice of the owner, ratified with D91 by OR-38, item 7).
+pub const MICROSOFT_ONLY_MAX_DAYS: u32 = 30;
+
+/// How long a phone grant may last for an account that does, or does not, sign in with Microsoft
+/// only. The one place the number is decided: the consent page lists up to it, the decision refuses
+/// above it and the exchange of the code clamps to it (a code record is the flow's word about the
+/// account, and the account may have changed since).
+pub fn max_days(microsoft_only: bool) -> u32 {
+    if microsoft_only {
+        MICROSOFT_ONLY_MAX_DAYS
+    } else {
+        MAX_DAYS
+    }
+}
 const MAX_LOGIN_ATTEMPTS: u64 = 8;
 
 fn flow_key(id: &str) -> String {
@@ -466,13 +486,29 @@ impl OAuth {
             groups,
             preselected,
             microsoft: false,
+            max_days: MAX_DAYS,
         }
     }
 
     /// The flow as the page shows it (no CSRF check: this is a read).
     pub fn view(&self, id: &str, binder: &str) -> Result<FlowCtx, FlowError> {
         let rec = self.load(id, binder, None)?;
-        Ok(self.ctx(id, &rec))
+        let mut ctx = self.ctx(id, &rec);
+        if ctx.class.is_mobile()
+            && let Some(user) = ctx.user.as_deref()
+        {
+            ctx.max_days = self.phone_cap(user)?;
+        }
+        Ok(ctx)
+    }
+
+    /// The longest a phone grant of `user` may last. A refused read is not "no cap": the page is
+    /// not shown, and the decision is not taken, on a guess about the kind of account.
+    fn phone_cap(&self, user: &str) -> Result<u32, FlowError> {
+        self.tokens()
+            .is_microsoft_only(user)
+            .map(max_days)
+            .map_err(|_| FlowError::Gone)
     }
 
     fn count_attempt(&self, id: &str, rec: &mut J) -> Result<(), FlowError> {
@@ -965,6 +1001,11 @@ impl OAuth {
         }
         if !EXPIRY_DAYS.contains(&days) {
             return Ok(DecideOut::Retry("err.expiry"));
+        }
+        // The cap of a Microsoft-only account, again on the server: a form that was posted by
+        // hand gets nothing the page did not list.
+        if class.is_mobile() && days > self.phone_cap(&user)? {
+            return Ok(DecideOut::Retry("err.expiry_cap"));
         }
         // Whoever deletes the flow first is the one answer.
         if !self.backend.kv_delete(&flow_key(id)).unwrap_or(false) {
