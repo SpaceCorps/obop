@@ -2471,9 +2471,10 @@ fn a_reloaded_second_step_gets_a_fresh_token_only_while_the_first_factor_still_s
         sso(&r).second_step_for_flow("ada", epoch.as_deref()),
         Err(MfaError::Expired)
     ));
-    // Disabled, unknown, and an epoch that is none while the account has one.
-    let now = epoch_in_store(&r, "ada");
+    // Disabled (the epoch is read after the change, so the refusal is the disabled flag's and not
+    // a changed epoch), unknown, and an epoch that is none while the account has one.
     r.a.operator_set_disabled("ada", true).unwrap();
+    let now = epoch_in_store(&r, "ada");
     assert!(matches!(
         sso(&r).second_step_for_flow("ada", now.as_deref()),
         Err(MfaError::Expired)
@@ -2497,4 +2498,88 @@ fn a_reloaded_second_step_gets_a_fresh_token_only_while_the_first_factor_still_s
     assert_eq!(r.b.list("auth_token").unwrap().len(), sessions_before);
     // The refusals above minted no token.
     assert_eq!(r.b.list("auth_mfa_token").unwrap().len(), tokens_before);
+}
+
+/// The second factor goes between the two looks of the reloaded second step, with no change of the
+/// credential epoch: the call hands out nothing, and the session that the password step would
+/// have made is not left behind as a live row.
+#[test]
+fn a_second_factor_that_goes_between_the_two_looks_leaves_no_session_behind() {
+    let (mut refused, mut minted) = (0, 0);
+    for skip in 0..10 {
+        let (r, flaky) = crate::admin_tests::flaky_rig();
+        for n in ["root1", "root2", "root3"] {
+            user_with(&r.a, n, &[ADMIN_GROUP]);
+            enrol(&r.a, n);
+        }
+        user_with(&r.a, "ada", &["base.user"]);
+        enrol(&r.a, "ada");
+        let epoch = epoch_in_store(&r, "ada");
+        // The rows of sessions that are not revoked (a revoked row is kept, and is worth nothing).
+        let live = |r: &Rig| {
+            r.b.list("auth_token")
+                .unwrap()
+                .into_iter()
+                .filter(|(_, f)| f.get("revoked").and_then(J::as_bool) != Some(true))
+                .count()
+        };
+        let sessions = live(&r);
+        // After the (skip+1)th read of the account, the second factor is switched off without any
+        // change of the epoch (a writer that does not bump it).
+        flaky.after_the_get_of(
+            "auth_user",
+            skip,
+            Box::new(|inner| {
+                let mut patch = Fields::new();
+                patch.insert("mfa_enabled".into(), J::Bool(false));
+                inner.update("auth_user", "ada", &patch).unwrap();
+            }),
+        );
+        let got = sso(&r).second_step_for_flow("ada", epoch.as_deref());
+        flaky.allow_models();
+        match got {
+            Ok(_) => minted += 1,
+            Err(MfaError::Expired) => {
+                refused += 1;
+                assert_eq!(
+                    live(&r),
+                    sessions,
+                    "position {skip}: a session was left behind"
+                );
+            }
+            Err(other) => panic!("position {skip}: {other:?}"),
+        }
+    }
+    assert!(
+        refused >= 1 && minted >= 1,
+        "{refused} refused, {minted} minted"
+    );
+}
+
+/// A store that is not well is not a verdict: the phone sign-in answers "unavailable" (a 503 that
+/// the app can try again), not "expired" (a sign-in that is over), whichever of the first reads the
+/// store refuses.
+#[test]
+fn a_store_that_refuses_the_reads_of_the_flow_sign_in_is_unavailable_and_not_expired() {
+    for model in ["auth_sso_provider", "auth_sso_link", "auth_user"] {
+        let (r, flaky) = crate::admin_tests::flaky_rig();
+        for n in ["root1", "root2", "root3"] {
+            user_with(&r.a, n, &[ADMIN_GROUP]);
+            enrol(&r.a, n);
+        }
+        user_with(&r.a, "ada", &["base.user"]);
+        r.a.operator_sso_configure(TENANT, CLIENT, Some(SECRET), Some(true))
+            .unwrap();
+        r.a.operator_sso_bind("ada", ADA_OID).unwrap();
+        let id = identity(&r, ADA_OID);
+        flaky.refuse_model(model, obop_storage::testing::Mode::Reads);
+        let got = flow_sign_in(&r, &id);
+        flaky.allow_models();
+        assert!(
+            matches!(got, Err(MfaError::Unavailable(_))),
+            "{model}: {got:?}"
+        );
+        // And nothing was left: the same call works once the store is well.
+        assert!(flow_sign_in(&r, &id).is_ok(), "{model}");
+    }
 }
