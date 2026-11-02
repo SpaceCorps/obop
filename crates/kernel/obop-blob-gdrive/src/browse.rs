@@ -114,31 +114,83 @@ impl DriveBrowser {
             let esc = search.replace('\\', "\\\\").replace('\'', "\\'");
             format!("name contains '{esc}' and trashed = false")
         };
+        let root = parent == "root" && search.is_empty() && page.is_none();
         let r = self.drive.call(&|agent, token| {
             let mut req = agent
                 .get(format!("{}/drive/v3/files", self.drive.cfg.api_base))
                 .header("Authorization", format!("Bearer {token}"))
                 .query("q", &q)
+                .query("supportsAllDrives", "true")
+                .query("includeItemsFromAllDrives", "true")
                 .query(
                     "fields",
                     "nextPageToken,files(id,name,mimeType,modifiedTime,size,webViewLink)",
                 )
                 .query("orderBy", "folder,name")
                 .query("pageSize", "50");
+            // Inside a folder of a shared drive, and in a search, Drive must look at every drive the
+            // person can see; the plain "my files" corpus would not find them.
+            if parent != "root" || !search.is_empty() {
+                req = req.query("corpora", "allDrives");
+            }
             if let Some(p) = page {
                 req = req.query("pageToken", p);
             }
             req.call()
         })?;
         let v = DriveBytes::json(DriveBytes::ok(r)?)?;
-        let entries = v["files"]
-            .as_array()
-            .map(|a| a.iter().filter_map(entry).collect())
-            .unwrap_or_default();
+        let mut entries: Vec<Entry> = if root {
+            self.shared_drives()
+        } else {
+            Vec::new()
+        };
+        entries.extend(
+            v["files"]
+                .as_array()
+                .map(|a| a.iter().filter_map(entry).collect::<Vec<_>>())
+                .unwrap_or_default(),
+        );
         Ok(Page {
             entries,
             next: v["nextPageToken"].as_str().map(str::to_string),
         })
+    }
+
+    /// The shared drives the person belongs to, shown as folders at the top of the root listing. A
+    /// failure only hides them: My Drive still lists.
+    fn shared_drives(&self) -> Vec<Entry> {
+        let r = self.drive.call(&|agent, token| {
+            agent
+                .get(format!("{}/drive/v3/drives", self.drive.cfg.api_base))
+                .header("Authorization", format!("Bearer {token}"))
+                .query("fields", "drives(id,name)")
+                .query("pageSize", "100")
+                .call()
+        });
+        let Ok(r) = r else { return Vec::new() };
+        let Ok(v) = DriveBytes::ok(r).and_then(DriveBytes::json) else {
+            return Vec::new();
+        };
+        v["drives"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|d| {
+                        let id = d["id"].as_str().filter(|i| valid_drive_id(i))?;
+                        Some(Entry {
+                            id: id.into(),
+                            name: clean(d["name"].as_str()?, 200),
+                            mime: FOLDER_MIME.into(),
+                            folder: true,
+                            modified: String::new(),
+                            size: None,
+                            web_link: format!("https://drive.google.com/drive/folders/{id}"),
+                            importable: false,
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     /// Bring one file in, at most `max` bytes. A Google Doc, Sheet, Slides or Drawing comes as PDF.
@@ -154,6 +206,7 @@ impl DriveBrowser {
                     "fields",
                     "id,name,mimeType,modifiedTime,size,webViewLink,trashed",
                 )
+                .query("supportsAllDrives", "true")
                 .call()
         })?;
         let meta = DriveBytes::json(DriveBytes::ok(r)?)?;
@@ -188,6 +241,7 @@ impl DriveBrowser {
                 agent
                     .get(format!("{}/drive/v3/files/{id}", self.drive.cfg.api_base))
                     .query("alt", "media")
+                    .query("supportsAllDrives", "true")
             };
             req.header("Authorization", format!("Bearer {token}"))
                 .call()
