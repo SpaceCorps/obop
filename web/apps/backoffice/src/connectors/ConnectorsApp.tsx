@@ -8,12 +8,13 @@ import { href, type Go, type Route } from "../route.ts";
 import { Button, Icon } from "../ui.tsx";
 import { Catalog } from "./Catalog.tsx";
 import { ConnectionDetail } from "./ConnectionDetail.tsx";
+import { GoogleDrive } from "./GoogleDrive.tsx";
 import type { Provider } from "./model.ts";
 import { Compliance, Overview, PreviewPage, Register } from "./Sections.tsx";
 import { Wizard } from "./Wizard.tsx";
 
 /** Pages of the app that are not a model's own list. */
-const OWN = ["overview", "catalog", "preview", "register", "compliance"] as const;
+const OWN = ["overview", "catalog", "preview", "register", "compliance", "google_drive"] as const;
 type Own = (typeof OWN)[number];
 
 const title = (s: Own) =>
@@ -25,7 +26,9 @@ const title = (s: Own) =>
         ? t("Privacy preview")
         : s === "register"
           ? t("Processing register")
-          : t("Compliance");
+          : s === "google_drive"
+            ? t("Google Drive")
+            : t("Compliance");
 
 /** The app's menu: its own pages first, then the generated lists of its records. */
 export function ConnectorsNav({ app, route }: { app: App; route: Route }) {
@@ -64,6 +67,7 @@ export function ConnectorsNav({ app, route }: { app: App; route: Route }) {
           </span>
           {link("register", title("register"))}
           {link("compliance", title("compliance"))}
+          {link("google_drive", title("google_drive"))}
           {record("provider_policy")}
           {record("egress_policy")}
         </>
@@ -99,7 +103,7 @@ export function ConnectorsApp({ app, route, go }: { app: App; route: Route; go: 
   const isAdmin = d.models.has("processing_register");
   const model = app.module.models.find((m) => m.name === route.model);
   // An address that names neither a page nor a model of the app opens the overview.
-  const adminOnly = ["register", "compliance"];
+  const adminOnly = ["register", "compliance", "google_drive"];
   const section =
     ((OWN as readonly string[]).includes(route.model) || model) &&
     !(adminOnly.includes(route.model) && !isAdmin)
@@ -143,7 +147,15 @@ export function ConnectorsApp({ app, route, go }: { app: App; route: Route; go: 
               goCompliance={() => go({ app: app.id, model: "compliance" })}
             />
           )}
-          {s === "catalog" && <Catalog app={app} isAdmin={isAdmin} onConnect={openWizard} />}
+          {s === "catalog" && (
+            <Catalog
+              app={app}
+              isAdmin={isAdmin}
+              onConnect={openWizard}
+              onSetup={() => go({ app: app.id, model: "google_drive" })}
+            />
+          )}
+          {s === "google_drive" && isAdmin && <GoogleDrive />}
           {s === "preview" && <PreviewPage />}
           {s === "register" && isAdmin && <Register />}
           {s === "compliance" && isAdmin && <Compliance />}

@@ -729,7 +729,7 @@ impl Runtime {
         let (c, p) = self.connection(connection)?;
         match p.engine {
             Engine::RestPull => return self.pull(connection),
-            Engine::WebhookIn | Engine::None => {
+            Engine::WebhookIn | Engine::Browse | Engine::None => {
                 return Err(format!("{} has nothing to send", p.name));
             }
             _ => {}
@@ -1130,14 +1130,39 @@ impl Runtime {
                 "OBOP_PUBLIC_URL is not set, so there is no address for the OAuth redirect",
             )?;
         let _ = c;
+        let (mut auth_url, mut token_url) = (def.auth_url.to_string(), def.token_url.to_string());
+        if p.id == crate::drive::PROVIDER {
+            // Google's own addresses, or a fake on a loopback address for tests.
+            let e = crate::drive::endpoints();
+            (auth_url, token_url) = (e.auth_url, e.token_url);
+        }
         Ok(OAuthConfig {
-            auth_url: def.auth_url.into(),
-            token_url: def.token_url.into(),
+            auth_url,
+            token_url,
             client_id: pp.oauth_client_id,
             client_secret: secret,
             scopes: def.scopes.into(),
             redirect_uri: format!("{base}/oauth/callback"),
+            extra: def
+                .extra
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
         })
+    }
+
+    /// The hosts the token endpoint may be: the provider's, and the loopback fake of a test.
+    fn oauth_hosts(&self, p: &Provider, cfg: &OAuthConfig) -> Vec<String> {
+        let mut hosts: Vec<String> = p.allowed_hosts.iter().map(|s| s.to_string()).collect();
+        if let Some(h) = url::Url::parse(&cfg.token_url)
+            .ok()
+            .and_then(|u| u.host_str().map(String::from))
+            && !hosts.contains(&h)
+            && self.client.allows_loopback()
+        {
+            hosts.push(h);
+        }
+        hosts
     }
 
     pub fn oauth_begin(&self, connection: &str, actor: &str) -> Result<String, String> {
@@ -1151,9 +1176,34 @@ impl Runtime {
         let (pending, verifier) = oauth::take_state(&*self.backend, &self.secrets, state)?;
         let (c, p) = self.connection(&pending.connection)?;
         let cfg = self.oauth_config(&c, &p)?;
-        let hosts: Vec<String> = p.allowed_hosts.iter().map(|s| s.to_string()).collect();
+        let hosts = self.oauth_hosts(&p, &cfg);
         let tokens = oauth::exchange_code(&self.client, &cfg, code, &verifier, &hosts)?;
         self.store_tokens(&c, &tokens)?;
+        if p.id == crate::drive::PROVIDER {
+            let at = now();
+            let who = pending.actor.as_str();
+            match self.drive_authorized(&c, &tokens) {
+                Ok(()) => obop_commands::audit::record_event(
+                    &*self.backend,
+                    at,
+                    who,
+                    "drive_connected",
+                    who,
+                    &format!("connection {}", c.id),
+                ),
+                Err(why) => {
+                    obop_commands::audit::record_event(
+                        &*self.backend,
+                        at,
+                        who,
+                        "drive_connect_failed",
+                        who,
+                        &why,
+                    );
+                    return Err(why);
+                }
+            }
+        }
         Ok(c.id)
     }
 
@@ -1196,7 +1246,7 @@ impl Runtime {
             .refresh_token
             .as_deref()
             .ok_or("the access token expired and there is no refresh token; authorise again")?;
-        let hosts: Vec<String> = p.allowed_hosts.iter().map(|s| s.to_string()).collect();
+        let hosts = self.oauth_hosts(&p, &cfg);
         let fresh = oauth::refresh(&self.client, &cfg, rt, &hosts)?;
         self.store_tokens(c, &fresh)?;
         Ok(fresh.access_token)
@@ -1273,6 +1323,12 @@ impl Runtime {
                 notes.push("the signing secret is set".into());
             }
             Engine::CsvExport => notes.push("nothing to reach: the file is produced here".into()),
+            Engine::Browse => {
+                if c.oauth_tokens.is_empty() {
+                    return Err("the connection is not authorised yet".into());
+                }
+                notes.push("the account is authorised".into());
+            }
             Engine::None => return Err("this provider is a definition only; nothing runs".into()),
         }
         Ok(json!({"ok": true, "checks": notes}))

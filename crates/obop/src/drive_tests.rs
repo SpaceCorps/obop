@@ -143,16 +143,25 @@ async fn status_says_whether_a_drive_is_connected_and_whether_you_may_browse() {
     let (s, v) = get(&f.router, Some(&f.admin), "/api/drive/status").await;
     assert_eq!(
         (s, &v),
-        (200, &json!({"connected": true, "may_browse": true}))
+        (
+            200,
+            &json!({"connected": true, "may_browse": true, "may_configure": true})
+        )
     );
     let (_, v) = get(&f.router, Some(&f.other), "/api/drive/status").await;
-    assert_eq!(v, json!({"connected": true, "may_browse": false}));
+    assert_eq!(
+        v,
+        json!({"connected": true, "may_browse": false, "may_configure": false})
+    );
     let (_, v) = get(&f.router, Some(&f.agent), "/api/drive/status").await;
     assert_eq!(v["may_browse"], false, "an agent never browses");
     assert_eq!(get(&f.router, None, "/api/drive/status").await.0, 401);
     let off = fixture(false).await;
     let (_, v) = get(&off.router, Some(&off.admin), "/api/drive/status").await;
-    assert_eq!(v, json!({"connected": false, "may_browse": false}));
+    assert_eq!(
+        v,
+        json!({"connected": false, "may_browse": false, "may_configure": true})
+    );
 }
 
 #[tokio::test]

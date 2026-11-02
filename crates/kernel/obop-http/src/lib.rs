@@ -53,6 +53,9 @@ pub struct HttpState {
     /// The Google Drive the back office may browse, set by the composition root when one is
     /// connected (`OBOP_GDRIVE_BROWSE_REFRESH_TOKEN`).
     drive: std::sync::OnceLock<Arc<dyn drive::DriveSource>>,
+    /// Where the back office is served (`/` or the admin prefix), for the page the sign-in with an
+    /// outside provider ends on.
+    back_office: std::sync::OnceLock<String>,
     /// Counters, caches and access rule of `/healthz`, `/readyz` and `/metrics` (D67).
     ops: ops::Ops,
     /// Browser origins allowed to call `/api` from another origin (D68); empty means none.
@@ -96,6 +99,7 @@ impl HttpState {
             connectors: std::sync::OnceLock::new(),
             payments: std::sync::OnceLock::new(),
             drive: std::sync::OnceLock::new(),
+            back_office: std::sync::OnceLock::new(),
             ops: ops::Ops::new(),
             default_language: std::sync::OnceLock::new(),
             sso: sso::Cache::default(),
@@ -167,6 +171,11 @@ impl HttpState {
     /// Let the back office browse a Google Drive and import files from it.
     pub fn set_drive(&self, source: Arc<dyn drive::DriveSource>) {
         let _ = self.drive.set(source);
+    }
+
+    /// Where the back office is served: `/` or the admin prefix such as `/admin`.
+    pub fn set_back_office_path(&self, path: &str) {
+        let _ = self.back_office.set(path.to_string());
     }
 
     /// Serve the connectors' public doors (`/hooks/in/{id}`, `/oauth/callback`).

@@ -8,10 +8,12 @@
   "Details",
   "Dimension",
   "Filter",
+  "Google Drive",
   "Indigo",
   "Kanban",
   "Marketing",
   "Name",
+  "Passkeys",
   "Pivot",
   "Problem",
   "Repository",
@@ -47,6 +49,5 @@
   "option\u0004Spam",
   "option\u0004Transit",
   "{field} ≤ {to}",
-  "{field} ≥ {from}",
-  "Passkeys"
+  "{field} ≥ {from}"
 ]

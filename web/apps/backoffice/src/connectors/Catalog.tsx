@@ -176,10 +176,13 @@ export function Catalog({
   app,
   isAdmin,
   onConnect,
+  onSetup,
 }: {
   app: App;
   isAdmin: boolean;
   onConnect: (id: string) => void;
+  /** Open the page of a service that has its own (Google Drive). */
+  onSetup: (id: string) => void;
 }) {
   const d = useData();
   const providers = useRows("connector_provider");
@@ -270,12 +273,20 @@ export function Catalog({
                 </dl>
                 <p className="hint">{p.verify_note}</p>
                 <footer className="actionrow">
-                  {usable && p.enabled && (
+                  {p.engine === "browse" && isAdmin && (
+                    <Button variant="primary" onClick={() => onSetup(p.id)}>
+                      {t("Set up")}
+                    </Button>
+                  )}
+                  {p.engine === "browse" && !isAdmin && (
+                    <span className="hint">{t("An administrator sets this up.")}</span>
+                  )}
+                  {p.engine !== "browse" && usable && p.enabled && (
                     <Button variant="primary" onClick={() => onConnect(p.id)}>
                       {t("Connect")}
                     </Button>
                   )}
-                  {usable && !p.enabled && !isAdmin && (
+                  {p.engine !== "browse" && usable && !p.enabled && !isAdmin && (
                     <span className="hint">{t("Not enabled: ask an administrator.")}</span>
                   )}
                   {!usable && (
@@ -283,7 +294,7 @@ export function Catalog({
                       {t("Nothing runs yet: this entry is a definition.")}
                     </span>
                   )}
-                  {isAdmin && usable && (
+                  {p.engine !== "browse" && isAdmin && usable && (
                     <Button onClick={() => setEditing(p)}>
                       {p.enabled ? t("Policy") : t("Enable")}
                     </Button>

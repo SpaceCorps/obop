@@ -3295,7 +3295,7 @@ export interface components {
              * @description The generic engine that runs it
              * @enum {string}
              */
-            engine?: "webhook_out" | "webhook_in" | "rest_pull" | "csv_export" | "none";
+            engine?: "webhook_out" | "webhook_in" | "rest_pull" | "csv_export" | "browse" | "none";
             /**
              * @description Whether transfers rest on EU or adequate-country processing: yes, no or verify with the provider
              * @enum {string}

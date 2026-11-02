@@ -20,6 +20,8 @@ mod bulk_tests;
 mod connectors_tests;
 #[cfg(test)]
 mod cors_tests;
+#[cfg(test)]
+mod drive_admin_tests;
 mod drive_source;
 #[cfg(test)]
 mod drive_tests;
@@ -1087,14 +1089,20 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
     state.set_connectors(app.connectors.clone());
     state.set_payments(app.payments.clone());
     match obop_blob_gdrive::DriveBrowser::from_env() {
-        Ok(Some(b)) => {
-            state.set_drive(std::sync::Arc::new(drive_source::Source(b)));
-            eprintln!("Google Drive browser: on (OBOP_GDRIVE_BROWSE_REFRESH_TOKEN is set)");
+        Ok(env) => {
+            let from_env = env.is_some();
+            state.set_drive(std::sync::Arc::new(drive_source::Source::new(
+                app.connectors.clone(),
+                env,
+            )));
+            if from_env {
+                eprintln!("Google Drive browser: on (OBOP_GDRIVE_BROWSE_REFRESH_TOKEN is set)");
+            }
         }
-        Ok(None) => {}
         Err(e) => return Err(fail(&format!("error: {e}"))),
     }
     state.set_trust_proxy(o.trust_proxy);
+    state.set_back_office_path(if o.public_site { &o.admin_prefix } else { "/" });
     state.set_default_language(default_language);
     if let Some(l) = default_language {
         eprintln!(
