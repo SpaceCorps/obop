@@ -438,7 +438,7 @@ The **From Google Drive** button of the Documents app opens a browser over a Dri
 
 #### Set it up in the back office (no environment variables)
 
-An administrator (`connectors.admin`, which `platform.admin` holds) opens **Connectors, Google Drive**:
+A step-by-step guide, with the Workspace-versus-Gmail choice, the no-billing rule and a ready prompt for an agent, is [GOOGLE-DRIVE-SETUP.md](GOOGLE-DRIVE-SETUP.md). An administrator (`connectors.admin`, which `platform.admin` holds) opens **Connectors, Google Drive**:
 
 1. **Register obop with Google.** In the [Google Cloud Console](https://console.cloud.google.com/) create or pick a project, enable the **Google Drive API**, configure the OAuth consent screen and **publish** it (a project left in *testing* makes Google end the sign-in after seven days), and create an OAuth client of type **Web application**. Add the **redirect address the page shows** as an authorised redirect URI. It is `OBOP_PUBLIC_URL` followed by `/oauth/callback`, so set `OBOP_PUBLIC_URL` first (the page says so when it is missing).
 2. **Enter the client.** The client id and secret are kept under the provider policy of the `google_drive` provider: the secret is sealed with `OBOP_SECRET_KEY` and never shown again. The same form chooses the **group that may browse** (default `platform.admin`; the provider policy's `allowed_group`).
