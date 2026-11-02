@@ -58,7 +58,7 @@ fn every_existing_model_has_the_default_extensions() {
 #[test]
 fn the_core_version_is_the_workspace_version() {
     assert_eq!(obop_types::CORE_VERSION, env!("CARGO_PKG_VERSION"));
-    assert_eq!(obop_types::CORE_VERSION, "0.2.0");
+    assert_eq!(obop_types::CORE_VERSION, "0.2.1");
     let v = Version::parse(obop_types::CORE_VERSION).unwrap();
     // The compatibility policy: while below 1.0 a minor bump is breaking, so ^0.2 is 0.2.x.
     assert!(Req::parse("^0.2").unwrap().matches(&v));
@@ -243,7 +243,7 @@ fn all_23_packages_install_with_their_dependencies_and_the_module_list_shows_eve
         by("projects")["dependents"],
         Value::List(vec![Value::text("timesheets")])
     );
-    assert_eq!(by("base")["version"], Value::text("0.2.0"));
+    assert_eq!(by("base")["version"], Value::text("0.2.1"));
     assert_eq!(by("base")["license"], Value::text("Apache-2.0"));
     let Value::List(base_dependents) = &by("base")["dependents"] else {
         panic!()
@@ -408,7 +408,7 @@ fn the_tree_list_and_plan_commands_run() {
         "{t}"
     );
     let t = app.installer.tree(Some("field_service")).unwrap();
-    assert!(t.contains("base ^0.2  [built in, core 0.2.0]"), "{t}");
+    assert!(t.contains("base ^0.2  [built in, core 0.2.1]"), "{t}");
     assert!(
         t.contains("hr >=0.2, <1  [not installed, marketplace offers 0.3.0]"),
         "{t}"
@@ -466,9 +466,9 @@ async fn the_core_version_is_served_and_an_agent_proposes_a_plan_that_one_approv
     let human = login.1["token"].as_str().unwrap().to_string();
     // The one core version, everywhere it is reported.
     let meta = get(&r, &human, "/api/meta").await;
-    assert_eq!(meta["core_version"], "0.2.0");
+    assert_eq!(meta["core_version"], "0.2.1");
     let api = get(&r, &human, "/api/openapi.json").await;
-    assert_eq!(api["info"]["version"], "0.2.0");
+    assert_eq!(api["info"]["version"], "0.2.1");
     // The plan over HTTP, read-only.
     let (s, plan) = post(
         &r,
@@ -480,7 +480,7 @@ async fn the_core_version_is_served_and_an_agent_proposes_a_plan_that_one_approv
     assert_eq!(s, 200, "{plan}");
     let v = &plan["value"];
     assert_eq!(v["ok"], true);
-    assert_eq!(v["core_version"], "0.2.0");
+    assert_eq!(v["core_version"], "0.2.1");
     assert_eq!(v["steps"][0]["id"], "projects");
     assert_eq!(v["steps"][0]["license"], "Apache-2.0");
     assert_eq!(v["steps"][1]["id"], "timesheets");

@@ -20,6 +20,9 @@ mod bulk_tests;
 mod connectors_tests;
 #[cfg(test)]
 mod cors_tests;
+mod drive_source;
+#[cfg(test)]
+mod drive_tests;
 #[cfg(test)]
 mod error_seam_tests;
 #[cfg(test)]
@@ -27,6 +30,8 @@ mod health_tests;
 mod import_cmd;
 #[cfg(test)]
 mod kinds_tests;
+#[cfg(test)]
+mod limits_tests;
 #[cfg(test)]
 mod mcp_tests;
 #[cfg(test)]
@@ -65,7 +70,7 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 const USAGE: &str = "usage: obop <command>
-  --version                                     the name, the core version and the commit the build was made from: obop 0.2.0 (abcdef012345)
+  --version                                     the name, the core version and the commit the build was made from: obop 0.2.1 (abcdef012345)
   modules labels TARGET LANG                    a label template (every translatable text, English values) for a module, bundled package or FILE
   modules check [--complete] [--catalog] [FILE...]
                                                 the install gate over linked modules, or over package files (no database):
@@ -189,6 +194,12 @@ const USAGE: &str = "usage: obop <command>
   storage check [--db URL] [--plane NAME] [--strict]
                                                 WAL archiving, TLS and durability settings of the PostgreSQL host; age of the last
                                                 verified backup, its off-host copy and its drill; the storage-encryption attestation
+  storage drive-authorize [--scope drive.file|drive.readonly|drive]
+                                                get the refresh token for uploaded files on Google Drive (OBOP_GDRIVE_CLIENT_ID and
+                                                OBOP_GDRIVE_CLIENT_SECRET set): prints a link, waits for the browser on a loopback
+                                                port, prints the token once (OBOP_BLOB_STORE=gdrive://FOLDER_ID, docs/DEPLOY.md)
+  storage drive-folder NAME [--parent ID]       create the Drive folder for uploaded files (as this app, which the drive.file scope
+                                                can use) and print its id
   storage attest --host H --provider P --mechanism M --custody C --readers R --evidence E [--plane NAME] [--by WHO]
   storage show                                  record that the storage of a plane is encrypted at rest (AES-256 or stronger, keys
                                                 held outside the reach of database operators): an attestation by a person (--by, default
@@ -1036,6 +1047,14 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
     let state = obop_http::HttpState::new(app.dispatcher.clone(), auth);
     state.set_connectors(app.connectors.clone());
     state.set_payments(app.payments.clone());
+    match obop_blob_gdrive::DriveBrowser::from_env() {
+        Ok(Some(b)) => {
+            state.set_drive(std::sync::Arc::new(drive_source::Source(b)));
+            eprintln!("Google Drive browser: on (OBOP_GDRIVE_BROWSE_REFRESH_TOKEN is set)");
+        }
+        Ok(None) => {}
+        Err(e) => return Err(fail(&format!("error: {e}"))),
+    }
     state.set_trust_proxy(o.trust_proxy);
     state.set_default_language(default_language);
     if let Some(l) = default_language {

@@ -196,7 +196,40 @@ pub fn storage_cmd(args: &mut Vec<String>) -> Exit {
             })
             .map_err(|e| fail(&format!("error: {e}")))?;
             print!("{}", report.render());
-            let worst = report.worst();
+            let mut worst = report.worst();
+            // Uploaded files on Google Drive, when `OBOP_BLOB_STORE` names a folder.
+            let drive = obop_blob_gdrive::configured_drive().and_then(|d| match d {
+                Some(d) => d.probe().map(Some),
+                None => Ok(None),
+            });
+            match drive {
+                Ok(None) => {}
+                Ok(Some(name)) => println!(
+                    "{:>5}  {:<22} Google Drive folder \"{name}\" is reachable",
+                    Level::Pass.as_str(),
+                    "uploaded files"
+                ),
+                Err(e) => {
+                    println!("{:>5}  {:<22} {e}", Level::Fail.as_str(), "uploaded files");
+                    worst = Level::Fail;
+                }
+            }
+            // The Drive browser, when `OBOP_GDRIVE_BROWSE_REFRESH_TOKEN` is set.
+            match obop_blob_gdrive::DriveBrowser::from_env().and_then(|b| match b {
+                Some(b) => b.probe().map(Some),
+                None => Ok(None),
+            }) {
+                Ok(None) => {}
+                Ok(Some(who)) => println!(
+                    "{:>5}  {:<22} Google Drive browser signs in as {who}",
+                    Level::Pass.as_str(),
+                    "drive browser"
+                ),
+                Err(e) => {
+                    println!("{:>5}  {:<22} {e}", Level::Fail.as_str(), "drive browser");
+                    worst = Level::Fail;
+                }
+            }
             println!(
                 "{}",
                 match worst {
@@ -211,6 +244,56 @@ pub fn storage_cmd(args: &mut Vec<String>) -> Exit {
             } else {
                 Ok(())
             }
+        }
+        Some("drive-authorize") => {
+            let scope = take(args, "--scope").unwrap_or_else(|| "drive.file".into());
+            if !args.is_empty() {
+                return Err(usage());
+            }
+            let var = |name: &str| {
+                std::env::var(name)
+                    .ok()
+                    .filter(|v| !v.trim().is_empty())
+                    .ok_or_else(|| fail(&format!("error: {name} is not set")))
+            };
+            let opts = obop_blob_gdrive::AuthorizeOptions::new(
+                var("OBOP_GDRIVE_CLIENT_ID")?,
+                var("OBOP_GDRIVE_CLIENT_SECRET")?,
+                &scope,
+            );
+            let token = obop_blob_gdrive::authorize(&opts, &mut |link| {
+                eprintln!(
+                    "Open this link in a browser on this machine and allow access:
+
+{link}
+
+Waiting for the browser (5 minutes)..."
+                );
+            })
+            .map_err(|e| fail(&format!("error: {e}")))?;
+            let var_name = if scope == "drive.readonly" {
+                "OBOP_GDRIVE_BROWSE_REFRESH_TOKEN"
+            } else {
+                "OBOP_GDRIVE_REFRESH_TOKEN"
+            };
+            eprintln!("Set this as the secret {var_name} (it is shown once):");
+            println!("{token}");
+            Ok(())
+        }
+        Some("drive-folder") => {
+            let parent = take(args, "--parent");
+            let [name] = args.as_slice() else {
+                return Err(usage());
+            };
+            let store = obop_blob_gdrive::Config::from_env("root")
+                .and_then(obop_blob_gdrive::DriveBytes::new)
+                .map_err(|e| fail(&format!("error: {e}")))?;
+            let id = store
+                .create_folder(name, parent.as_deref())
+                .map_err(|e| fail(&format!("error: {e}")))?;
+            println!("{id}");
+            eprintln!("Set OBOP_BLOB_STORE=gdrive://{id}");
+            Ok(())
         }
         Some("attest") => {
             fn need(args: &mut Vec<String>, flag: &str) -> Result<String, ExitCode> {

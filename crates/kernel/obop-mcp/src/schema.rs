@@ -2,7 +2,9 @@
 //! command, named `<model>__<command>`, with a JSON Schema input, an output schema and
 //! annotations. Both transports list tools through this module, so they cannot diverge.
 
-use obop_commands::{CommandInfo, Dispatcher, FieldInfo, ModelInfo, Principal, Surface, names};
+use obop_commands::{
+    Bound, CommandInfo, Dispatcher, FieldInfo, ModelInfo, Principal, Surface, names,
+};
 use serde_json::{Value as J, json};
 use std::collections::HashMap;
 
@@ -25,6 +27,7 @@ pub fn field_schema(f: &FieldInfo) -> J {
         "select" => json!({"type": "string", "enum": f.options}),
         _ => json!({"type": "string"}),
     };
+    limit_keywords(&mut s, f);
     let mut desc = f.description.to_string();
     match f.kind {
         "money" => desc.push_str(" (integer, minor currency units such as cents; never a float)"),
@@ -47,6 +50,7 @@ pub fn field_schema(f: &FieldInfo) -> J {
         ),
         _ => {}
     }
+    desc.push_str(&f.limits_note);
     if let Some(of) = &f.shows_option_of {
         desc.push_str(&format!(
             " (may hold an option key of {of}; the back office shows that option's label, the stored text is the key)"
@@ -73,6 +77,42 @@ pub fn field_schema(f: &FieldInfo) -> J {
     }
     s["description"] = J::from(desc);
     s
+}
+
+/// A bound as JSON: a number for `number` and `money`, the canonical text for `decimal`.
+pub fn bound_json(b: Bound) -> J {
+    match b {
+        Bound::Int(n) => json!(n),
+        Bound::Dec(d) => json!(d.to_string()),
+    }
+}
+
+/// The length and range limits of a field (D90) as JSON Schema keywords: `maxLength` and
+/// `minLength` on a string, `minimum` and `maximum` on an integer. A decimal is a string, which
+/// JSON Schema cannot bound by value, so its bounds are the extensions `x-obop-minimum` and
+/// `x-obop-maximum` (the canonical text). Fields of personal data get none: an agent sees them as
+/// mask tokens (`PERSON_1`), which are not the length or the size of the value.
+fn limit_keywords(s: &mut J, f: &FieldInfo) {
+    if f.personal_data {
+        return;
+    }
+    if let Some(n) = f.max_length {
+        s["maxLength"] = json!(n);
+    }
+    if let Some(n) = f.min_length {
+        s["minLength"] = json!(n);
+    }
+    let (lo, hi) = if f.kind == "decimal" {
+        ("x-obop-minimum", "x-obop-maximum")
+    } else {
+        ("minimum", "maximum")
+    };
+    if let Some(b) = f.min {
+        s[lo] = bound_json(b);
+    }
+    if let Some(b) = f.max {
+        s[hi] = bound_json(b);
+    }
 }
 
 fn id_property(model: &str) -> J {
@@ -378,6 +418,11 @@ mod tests {
             sequence: false,
             shows_option_of: None,
             shows_option_when: None,
+            max_length: None,
+            min_length: None,
+            min: None,
+            max: None,
+            limits_note: String::new(),
         }
     }
 
@@ -466,6 +511,11 @@ mod tests {
             sequence: false,
             shows_option_of: None,
             shows_option_when: None,
+            max_length: None,
+            min_length: None,
+            min: None,
+            max: None,
+            limits_note: String::new(),
         };
         ModelInfo {
             name: "doc".into(),
@@ -549,5 +599,81 @@ mod tests {
             "array"
         );
         assert!(output_schema("search")["properties"]["value"]["properties"]["total"].is_object());
+    }
+
+    fn limited(kind: &'static str, edit: impl FnOnce(&mut FieldInfo)) -> J {
+        let mut f = field(kind);
+        edit(&mut f);
+        field_schema(&f)
+    }
+
+    #[test]
+    fn a_text_field_says_its_length_limits() {
+        let s = limited("text", |f| {
+            f.max_length = Some(2000);
+            f.min_length = Some(1);
+            f.limits_note = " (from 1 character to 2000 characters)".into();
+        });
+        assert_eq!(
+            (s["maxLength"].clone(), s["minLength"].clone()),
+            (json!(2000), json!(1))
+        );
+        assert!(
+            s["description"]
+                .as_str()
+                .unwrap()
+                .starts_with("a field (from 1 character to 2000 characters)")
+        );
+        // The default is a keyword too (the tool schema is where an agent looks), but it adds
+        // no words to the description.
+        let s = limited("longtext", |f| f.max_length = Some(100_000));
+        assert_eq!(s["maxLength"], 100_000);
+        assert!(s.get("minLength").is_none());
+        assert_eq!(s["description"], "a field");
+    }
+
+    #[test]
+    fn a_number_says_its_range_and_a_decimal_does_it_as_exact_strings() {
+        for kind in ["number", "money"] {
+            let s = limited(kind, |f| {
+                f.min = Some(Bound::Int(-5));
+                f.max = Some(Bound::Int(100));
+            });
+            assert_eq!(
+                (s["minimum"].clone(), s["maximum"].clone()),
+                (json!(-5), json!(100)),
+                "{kind}"
+            );
+            assert!(s.get("x-obop-minimum").is_none());
+        }
+        let d = |s: &str| Bound::Dec(obop_values::Decimal::parse_for(s, 12, 2, None).unwrap());
+        let s = limited("decimal", |f| {
+            f.precision = Some(12);
+            f.scale = Some(2);
+            f.min = Some(d("0.10"));
+            f.max = Some(d("99.90"));
+        });
+        assert_eq!(
+            (s["x-obop-minimum"].clone(), s["x-obop-maximum"].clone()),
+            (json!("0.10"), json!("99.90"))
+        );
+        assert!(
+            s.get("minimum").is_none() && s.get("maximum").is_none(),
+            "{s}"
+        );
+    }
+
+    #[test]
+    fn personal_data_gets_no_keyword_because_an_agent_sees_a_token() {
+        let s = limited("text", |f| {
+            f.personal_data = true;
+            f.class = "internal";
+            f.max_length = Some(5);
+            f.min_length = Some(3);
+        });
+        assert!(
+            s.get("maxLength").is_none() && s.get("minLength").is_none(),
+            "{s}"
+        );
     }
 }

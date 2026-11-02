@@ -1,7 +1,7 @@
 # Snapshot of crates/modules/crm/src/lib.rs (built-in).
 [module]
 id = "crm"
-version = "0.2.0"
+version = "0.2.1"
 name = "CRM"
 description = "Leads and the sales pipeline."
 summary = "Leads and opportunities through a pipeline from first contact to won or lost."

@@ -8,6 +8,7 @@ use crate::marketplace::{Listing, Marketplace};
 use obop_commands::{
     ADMIN_GROUP, CallError, Dispatcher, Principal, Response, Store, Surface, Value, Vault,
 };
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 /// A marketplace backed by a list of manifest texts.
@@ -643,4 +644,63 @@ fn a_remote_index_serves_listings_and_leaves_out_malformed_ones() {
         "a listing without a core range is left out"
     );
     assert_eq!(l[0].license, "MIT");
+}
+
+#[test]
+fn a_float_set_default_is_refused_on_install_and_upgrade_but_not_in_an_installed_package() {
+    // Closure check of PR 33 (D90, F19): the previous core let a float through `set_default` for a
+    // number or money field, so a package that is installed already may carry one, and it has to
+    // keep loading, upgrading and rolling back. Only what comes in now is refused.
+    let with_step = |version: &str, value: &str| {
+        format!(
+            "{}[[model.field]]\nname = \"qty\"\ndescription = \"Qty\"\nclass = \"none\"\nkind = \"number\"\n[[migration]]\nfrom = \"<0.2.0\"\nop = \"set_default\"\nmodel = \"fl_item\"\nfield = \"qty\"\nvalue = {value}\n",
+            pkg("fl", version, "^0.2", &[])
+        )
+    };
+    let store = Store::new();
+    let (d, inst) = setup(vec![], &store);
+    // A fresh install with a float is refused, and so is the same through the admin command.
+    let e = inst
+        .install(&with_step("0.2.0", "0.0"), "upload", "root")
+        .unwrap_err();
+    assert!(e.contains("does not fit the number field qty"), "{e}");
+    assert!(!d.has_model("fl_item"));
+    inst.install(&with_step("0.2.0", "0"), "upload", "root")
+        .unwrap();
+    // The stored copy as the previous core wrote it: with a float.
+    store
+        .update(
+            "obop_package",
+            "fl",
+            BTreeMap::from([(
+                "manifest".to_string(),
+                Value::text(&with_step("0.2.0", "0.0")),
+            )]),
+        )
+        .unwrap();
+    // A restart still loads it.
+    let (d2, inst2) = setup(vec![], &store);
+    assert!(inst2.load_installed().is_empty(), "the module must load");
+    assert!(d2.has_model("fl_item"));
+    // An upgrade that brings a float is refused, nothing changes ...
+    let e = handler_error(call(
+        &d2,
+        &admin(),
+        "module.install",
+        Value::map([("manifest", Value::text(&with_step("0.3.0", "2.5")))]),
+    ));
+    assert!(e.contains("does not fit the number field qty"), "{e}");
+    assert_eq!(
+        text(get(row(&inst2.module_rows(), "fl"), "version")),
+        "0.2.0"
+    );
+    // ... and one that does not goes through, although the installed copy carries a float.
+    let r = call(
+        &d2,
+        &admin(),
+        "module.install",
+        Value::map([("manifest", Value::text(&with_step("0.3.0", "1")))]),
+    )
+    .unwrap();
+    assert_eq!(step_ids(&r.value), ["fl:upgrade"]);
 }

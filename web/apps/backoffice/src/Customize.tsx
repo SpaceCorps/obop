@@ -409,6 +409,9 @@ function ThemeTab(props: Props) {
 }
 
 function AppsTab({ apps, settings, isAdmin, token, onSettings, notify }: Props) {
+  // What is typed in a name field and not yet saved, by app. The field shows the app's name
+  // otherwise, so it follows the language, a reset of the launcher and a rename saved elsewhere.
+  const [typed, setTyped] = useState<Record<string, string>>({});
   const real = apps.filter((a) => a.id !== "customize");
   const layout = settings.apps ?? {};
   const hidden = new Set(layout.hidden ?? []);
@@ -441,12 +444,18 @@ function AppsTab({ apps, settings, isAdmin, token, onSettings, notify }: Props) 
           <li key={a.id} className="row">
             <AppIcon app={a} size={36} />
             <input
-              defaultValue={a.name}
+              value={typed[a.id] ?? a.name}
               aria-label={t("Name of {name}", { name: a.name })}
-              onBlur={(e) =>
-                e.target.value !== a.name &&
-                void save({ ...layout, names: { ...layout.names, [a.id]: e.target.value } })
-              }
+              onChange={(e) => setTyped((m) => ({ ...m, [a.id]: e.target.value }))}
+              onBlur={async (e) => {
+                const name = e.target.value;
+                if (name !== a.name)
+                  await save({ ...layout, names: { ...layout.names, [a.id]: name } });
+                // Kept until the save is answered, so the field does not flash the old name.
+                setTyped((m) =>
+                  Object.fromEntries(Object.entries(m).filter(([id]) => id !== a.id)),
+                );
+              }}
             />
             <input
               type="color"

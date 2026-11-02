@@ -148,7 +148,7 @@ async fn health_endpoints_are_open_and_reveal_nothing_but_status_and_a_fixed_rea
     for path in ["/healthz", "/readyz"] {
         let r = send(&f.router, get(path)).await;
         for secret in [
-            "ada", "sqlite", "memory", "postgres", "obop_", "0.2.0", "token",
+            "ada", "sqlite", "memory", "postgres", "obop_", "0.2.1", "token",
         ] {
             assert!(
                 !r.body.contains(secret),

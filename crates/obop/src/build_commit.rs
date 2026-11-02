@@ -27,7 +27,7 @@ pub fn short(raw: &str) -> Option<String> {
     digits.then(|| raw[..SHORT].to_ascii_lowercase())
 }
 
-/// The line `obop --version` prints: `obop 0.2.0 (abcdef012345)`. The prefix `obop 0.2.0` is the
+/// The line `obop --version` prints: `obop 0.2.1 (abcdef012345)`. The prefix `obop 0.2.1` is the
 /// one earlier builds printed alone.
 pub fn version_line(name: &str, version: &str, commit: &str) -> String {
     format!("{name} {version} ({commit})")

@@ -406,6 +406,20 @@ pub fn meta_json(d: &Dispatcher, surface: Surface, p: &Principal) -> J {
                             if let Some(n) = f.max_bytes {
                                 o["max_bytes"] = json!(n);
                             }
+                            // Length and range limits (D90). `max_length` is always there for
+                            // a text field: the field's own, else the default of the kind.
+                            if let Some(n) = f.max_length {
+                                o["max_length"] = json!(n);
+                            }
+                            if let Some(n) = f.min_length {
+                                o["min_length"] = json!(n);
+                            }
+                            if let Some(b) = f.min {
+                                o["min"] = schema::bound_json(b);
+                            }
+                            if let Some(b) = f.max {
+                                o["max"] = schema::bound_json(b);
+                            }
                             if f.kind == "decimal" {
                                 o["precision"] = json!(f.precision);
                                 o["scale"] = json!(f.scale);

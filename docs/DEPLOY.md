@@ -81,6 +81,8 @@ Command line flags win over variables. Secrets are set as secret environment var
 | `OBOP_MCP_RATE_PER_MINUTE` | Requests per token per minute on `/mcp`, counted across all processes (default 600; `0` is off). |
 | `OBOP_TRUST_PROXY`, `OBOP_PUBLIC_SITE`, `OBOP_ADMIN_PREFIX` | Public site settings (`--trust-proxy`, `--public-site`, `--admin-prefix`). Behind a proxy set `OBOP_TRUST_PROXY=1`, or every visitor shares the proxy's address in the rate limits. |
 | `OBOP_MARKETPLACE_URL` | An extra module catalogue. |
+| `OBOP_BLOB_STORE`, `OBOP_BLOB_DIR` | Where uploaded pictures and files keep their bytes (D60): `gdrive://<FOLDER_ID>` for a Google Drive folder, or a directory. Set one of them, not both (the server refuses to start); with neither the bytes sit beside a SQLite file or in the database. See "File storage". |
+| `OBOP_GDRIVE_CLIENT_ID`, `OBOP_GDRIVE_CLIENT_SECRET`, `OBOP_GDRIVE_REFRESH_TOKEN` | The Google OAuth client and the refresh token that `OBOP_BLOB_STORE=gdrive://...` acts with. Secrets: on Sliplane `--secret-env`. |
 | `OBOP_CONNECTORS_ALLOW_LOOPBACK` | `1` lets connections reach loopback addresses. Tests only. |
 | `OBOP_TOKEN` | The bearer token for `obop mcp`, `obop call`, `obop commands`. |
 
@@ -379,6 +381,76 @@ A native mobile app signs in through the same authorization server as an MCP cli
 - **What registering a mobile client can and cannot do.** Registration is open (as MCP clients expect) and the class is a label the client picks, so anyone can register a client that calls itself a mobile app. What that gets them is a client id and nothing else: no code is issued unless a person signs in on the instance's own page and ticks groups. A web address is not a possible redirect, so the page can never stand in front of a web site of the attacker's; the redirect is a scheme on the phone or a program on the computer. The groups it can ask for are the ones it declared, never one a phone may not have, and none is ticked unless the app named it; the person sees the name, the sentence about where the result goes and the groups, and can end the device afterwards. If a person is tricked into approving, the app that owns the scheme gets a token narrowed to the groups they ticked, for `/api` only, ended by revoking the device. It cannot get a code for another client or another redirect (the code is bound to both and to the PKCE verifier), widen beyond what the person holds and ticked, reach `/mcp`, the account routes, approvals or blobs, see, rename or end the person's other devices, hide from the Devices table, or outlive a revocation, a password change, a second factor turned off or an offboarding. What it does get is what a person's own session gets within the ticked groups: **no approval gate stops it and no field is masked** (the protections of D18, D42 and D40 are for AI agents), which is why the groups are the whole boundary and why the page offers so few. Another app on the phone that claims the genuine app's scheme receives the genuine app's code but cannot exchange it without the verifier that only the genuine app holds (RFC 8252 section 8.1); a scheme that is hijacked after the verifier is stolen by an app that can read the first app's process is not something the server can see. What remains is phishing by name: a convincing client name on a consent page that a careless person approves for a group that does matter. The defences are the ones of D64: the limits, the plain-text name beside the scheme, the declared groups, the person's consent, the device list and the log.
 - **Not verified.** The sign-in has been run with a software client in Rust (memory, SQLite and PostgreSQL) and over HTTP against the real router, and the browser pages in Chrome with a loopback redirect. Since 2026-10-28 the real Mileage app's sign-in has been run on an Android emulator, in a Chrome Custom Tab, with the private-use redirect `org.obop.mileage:/oauth` and plain `http` on a local address (docs/spec/mobile.md 8.7). It has not been run on a real phone, with `ASWebAuthenticationSession`, with a browser other than Chrome or over `https` with a real certificate, and the consent texts in the six other languages are machine-drafted. There is no push, and the limit of 20 devices has not been tried with real people.
 
+## File storage
+
+Uploaded pictures and files (D60) are stored as content-addressed blobs: the records about them stay in the database, the bytes go where `OBOP_BLOB_STORE` or `OBOP_BLOB_DIR` say.
+
+| Setting | Bytes go to |
+|---|---|
+| neither | the directory `<file>.blobs` beside a SQLite file; the database itself on PostgreSQL; memory for `memory:` |
+| `OBOP_BLOB_DIR=/path` | that directory (mount a volume) |
+| `OBOP_BLOB_STORE=gdrive://<FOLDER_ID>` | one file per blob in that Google Drive folder, named by the blob key |
+| both | **refused at start**: neither could be said to win |
+
+Backups carry the blobs as `blob` lines whichever store holds them (see "Backups"); `obop backup` and `obop restore` read and write through the configured store, so set the same variables for both. The restore drill always uses a scratch store of its own and never touches Drive.
+
+### Google Drive
+
+**Status:** implemented and tested against a fake Drive on a loopback port (`crates/kernel/obop-blob-gdrive`). It has **not** been run against the real Google service; try it with a test folder first.
+
+1. In the [Google Cloud Console](https://console.cloud.google.com/) create or pick a project, enable the **Google Drive API**, configure the OAuth consent screen (an internal or test-mode app for your own account is enough for one business), and create an **OAuth client ID** of type *Desktop app*. Note the client id and secret.
+2. Authorise once, on a machine with a browser:
+
+```bash
+OBOP_GDRIVE_CLIENT_ID=... OBOP_GDRIVE_CLIENT_SECRET=... obop storage drive-authorize
+```
+
+It prints a link, waits for the browser on a loopback port (`http://127.0.0.1:<port>`, PKCE S256), and prints the **refresh token** once on standard output. If Google sends none, remove the app at https://myaccount.google.com/permissions and run it again.
+3. Create the folder:
+
+```bash
+OBOP_GDRIVE_CLIENT_ID=... OBOP_GDRIVE_CLIENT_SECRET=... OBOP_GDRIVE_REFRESH_TOKEN=... obop storage drive-folder "SpaceCorps files"
+```
+
+It prints the folder id. The default scope is `drive.file`, which lets the app see **only files and folders it created itself**: a folder you made by hand in Drive is not visible to it (Drive answers 404). That is why obop creates the folder. To use an existing folder, authorise with `--scope drive` (every file in the account is then within reach of the token; use a dedicated Google account).
+4. Set the three credentials as secrets and the folder as a plain variable on the service, then redeploy. On Sliplane:
+
+```bash
+sliplane services set-env --project-id <project> --service-id <service> -a <account> --key OBOP_GDRIVE_CLIENT_SECRET --value <secret> --secret
+sliplane services set-env ... --key OBOP_GDRIVE_CLIENT_ID --value <id> --secret
+sliplane services set-env ... --key OBOP_GDRIVE_REFRESH_TOKEN --value <token> --secret
+sliplane services set-env ... --key OBOP_BLOB_STORE --value gdrive://<FOLDER_ID>
+```
+
+5. `obop storage check` reports `uploaded files` as reachable or failed (the folder must be visible with these credentials and not in the trash).
+
+How it behaves: the store mints short-lived access tokens from the refresh token itself and reuses them; a 401 refreshes once; 429, 5xx and Drive's rate-limit 403 are retried up to five times with a doubling pause, then the request fails with the last status; any other refusal fails at once with Drive's message. Credentials never appear in a URL, a log line or an error. Files are named by key (64 hex characters, thumbnails with `.w<width>`), so the folder is readable in Drive but meant to be left alone: deleting or renaming a file there loses that picture.
+
+Limits: whole files go up and down in memory (the upload size limits of D60 apply first), one request per blob, Drive's own quotas and per-user rate limits apply, a Drive folder has no per-business prefix (use one folder per instance), and the token of a Google Cloud project in *testing* status expires after seven days: publish the consent screen (internal) or the store starts failing with `invalid_grant`. A shared drive and Google Workspace data-region questions are not looked at. Per-app routing (different apps to different stores) and other providers (S3-compatible, OneDrive) are not built; they would be more implementations of the same `BlobBytes` trait.
+
+### Browsing a Google Drive from Documents
+
+The **From Google Drive** button of the Documents app opens a browser over a Drive: folders, a search by name, and **Add** on a file. The server fetches the file (a Google Doc, Sheet, Slides file or Drawing is exported **as PDF**; any other file comes as it is, up to the size the field allows), stores it as an upload for `documents_document.attachment` and the new document opens in the back office prefilled (title from the file name, `location` set to the Drive link, the file attached, kind *contract*, confidentiality *internal*); the person reviews and saves it like any record. Nothing is ever written to Drive. It is one Drive for the whole instance, and it is independent of the file store above: Drive can be browsed while files are kept in the database, and the other way round.
+
+**Status:** implemented and tested against a fake Drive on a loopback port and in a real browser against such a fake (`crates/kernel/obop-blob-gdrive/src/browse.rs`, `obop-http/src/drive.rs`, `web/apps/backoffice/src/DriveBrowser.tsx`). It has **not** been run against the real Google service.
+
+It needs its own refresh token, because browsing needs the read-only scope `drive.readonly` (see every file of the account) and the file store needs only `drive.file`:
+
+```bash
+OBOP_GDRIVE_CLIENT_ID=... OBOP_GDRIVE_CLIENT_SECRET=... obop storage drive-authorize --scope drive.readonly
+```
+
+Set the printed token as the secret `OBOP_GDRIVE_BROWSE_REFRESH_TOKEN` (the client id and secret are the ones of the file store; one OAuth client serves both) and redeploy. The browser is **off** while that variable is unset. `obop storage check` then adds a `drive browser` line that names the Google account the token belongs to.
+
+| Setting | Meaning |
+|---|---|
+| `OBOP_GDRIVE_CLIENT_ID`, `OBOP_GDRIVE_CLIENT_SECRET` | The OAuth client (secrets), as for the file store. |
+| `OBOP_GDRIVE_BROWSE_REFRESH_TOKEN` | The `drive.readonly` token (secret). Turns the browser on. |
+| `OBOP_DRIVE_BROWSE_GROUP` | The permission group that may browse and import. Default `platform.admin`, because the connection is one Drive for everybody and the token sees all of it. Set `documents.manager` (or another group) to let more people. An agent can never browse. |
+| `OBOP_GDRIVE_API_BASE`, `OBOP_GDRIVE_TOKEN_URL` | End-to-end tests only: point the browser at a fake Drive. Honoured only for `http://127.0.0.1:` and `http://localhost:` addresses, so no setting can send the credentials elsewhere. |
+
+Routes (bearer token of a person): `GET /api/drive/status` (`connected`, `may_browse`), `GET /api/drive/files?parent=&q=&page=`, `POST /api/drive/import` with `{"id", "field": "model.field"}`. An import goes through the same upload service as `POST /api/blobs`, so the field's write rights, size limit, type check and upload rate limit apply; the result is a blob id that a record stores, and each import (or failed import) is written to the security log (`drive_import`, `drive_import_failed`). Limits: My Drive and what is shared with the account, not shared drives; listings are 50 a page; the Drive account is a processor the operator must record themselves (it does not pass the connectors' egress gate); a token in a Google Cloud project in *testing* status expires after seven days.
+
 ## The server key
 
 `OBOP_SECRET_KEY` seals four kinds of secret: two-factor seeds, connection credentials and OAuth tokens (and the keys behind pseudonyms), and the transient sessions, vaults and plans above. Every sealed value names the key that sealed it (an id: the first eight hex digits of a SHA-256, which says nothing usable about the key), so opening picks the right key at once and a missing key is reported by id, never by content.
@@ -641,7 +713,7 @@ See "The published image": build, then `obop platform upgrade-instances --image 
 
 The build attaches SLSA provenance (`mode=max`) and an SBOM as attestations, and the workflow runs `obop --version` from the pushed image and fails unless it reports the commit that was built. It authenticates with the repository's `GITHUB_TOKEN` (`packages: write`); no other credential exists. Actions are pinned by commit SHA. arm64 is not built: under emulation the Rust build takes hours; add a matrix job on a native arm64 runner and merge the manifests when it is needed. The workflow has never been run from this repository's history (it needs GitHub); the first run is the test, so watch it.
 
-**Which build is running.** `obop --version` prints `obop 0.2.0 (abcdef012345)`: the core version, then the first 12 digits of the commit the binary was built from, so a check that pins a build can tell two builds of one version apart. The commit is read by `crates/obop/build.rs`: the environment variable `OBOP_BUILD_COMMIT` (12 to 64 hexadecimal digits; any other value is ignored, with a warning in the build output) if it is set, else `git rev-parse HEAD` when git is installed and the sources are the top of their own checkout (a plain clone or a linked worktree, on a loose or a packed branch), else `unknown`, printed as `obop 0.2.0 (unknown)`. In a checkout the build runs again when a commit, a checkout, a reset, a pull or `git pack-refs` changes what `HEAD` names; a tree whose git was missing at the first build keeps `unknown` until `crates/obop/build.rs` is touched. The image has no `.git`, so the Dockerfile takes the build argument of the same name and `image.yml` passes `${{ github.sha }}`; build it yourself with `docker build --build-arg OBOP_BUILD_COMMIT=$(git rev-parse HEAD) -t obop:local .`. The argument is declared after the Rust dependencies are cooked, so a new commit does not rebuild them. There is no `-dirty` mark: Cargo runs a build script again only when a file it names changes, so a mark for uncommitted edits would go stale at the first one. A commit hash is not secret; the line is printed by the program and the log of the pushed image check only.
+**Which build is running.** `obop --version` prints `obop 0.2.1 (abcdef012345)`: the core version, then the first 12 digits of the commit the binary was built from, so a check that pins a build can tell two builds of one version apart. The commit is read by `crates/obop/build.rs`: the environment variable `OBOP_BUILD_COMMIT` (12 to 64 hexadecimal digits; any other value is ignored, with a warning in the build output) if it is set, else `git rev-parse HEAD` when git is installed and the sources are the top of their own checkout (a plain clone or a linked worktree, on a loose or a packed branch), else `unknown`, printed as `obop 0.2.1 (unknown)`. In a checkout the build runs again when a commit, a checkout, a reset, a pull or `git pack-refs` changes what `HEAD` names; a tree whose git was missing at the first build keeps `unknown` until `crates/obop/build.rs` is touched. The image has no `.git`, so the Dockerfile takes the build argument of the same name and `image.yml` passes `${{ github.sha }}`; build it yourself with `docker build --build-arg OBOP_BUILD_COMMIT=$(git rev-parse HEAD) -t obop:local .`. The argument is declared after the Rust dependencies are cooked, so a new commit does not rebuild them. There is no `-dirty` mark: Cargo runs a build script again only when a file it names changes, so a mark for uncommitted edits would go stale at the first one. A commit hash is not secret; the line is printed by the program and the log of the pushed image check only.
 
 Build the image locally with `docker build -t obop:local .`. `docker build --target web .` builds only the website and back office (it needs `Cargo.toml` in the build context for the core version, which the Dockerfile copies).
 

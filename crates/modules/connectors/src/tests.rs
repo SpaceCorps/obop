@@ -1137,6 +1137,111 @@ fn a_signed_webhook_creates_records_through_the_governed_commands() {
 }
 
 #[test]
+fn an_inbound_item_over_a_limit_is_rejected_by_itself_and_the_rest_are_kept() {
+    // D90 (review of PR 33, F9): a record a sender pushes is written through `lead.create`, so the
+    // limits of the field (here the default of a text field) apply to it like to any write. The
+    // item that breaks one is rejected; the others in the same delivery are stored.
+    let e = env();
+    enable(&e, "webhook_in", true);
+    let c = ok(
+        &e,
+        &sam(),
+        "connection.create",
+        json!({
+        "name": "Leads in bulk", "provider": "webhook_in",
+        "config": json!({"target_model": "lead", "mapping": json!({"title": "title"}).to_string(), "records_path": "items", "external_id_key": "id"}).to_string(),
+        "credentials": json!({"signing_secret": SECRET}).to_string(),
+        "field_allowlist": json!({"lead": ["title"]}).to_string()}),
+    );
+    let id = c["id"].as_str().unwrap().to_string();
+    ok(
+        &e,
+        &sam(),
+        "consent.create",
+        json!({"connection": id, "purpose": "Create leads from the website form", "legal_basis": "legitimate_interest", "note": "Balancing test: the visitor asked us to get in touch."}),
+    );
+    ok(&e, &sam(), "connection.connect", json!({"id": id}));
+    let send = |body: &J, evt: &str| {
+        let b = body.to_string();
+        let ts = obop_connectors::util::now();
+        let sig = webhook::sign_standard(SECRET, evt, ts, b.as_bytes());
+        let evt = evt.to_string();
+        let hdr = move |k: &str| match k {
+            "webhook-id" => Some(evt.clone()),
+            "webhook-timestamp" => Some(ts.to_string()),
+            "webhook-signature" => Some(sig.clone()),
+            _ => None,
+        };
+        e.rt.receive_webhook(&id, &hdr, b.as_bytes())
+    };
+    let max = obop_registry::DEFAULT_TEXT_MAX as usize;
+    let at_the_limit = "ä".repeat(max);
+    let over = "ä".repeat(max + 1);
+
+    // One delivery: fits, over by one, fits at the limit exactly.
+    let o = send(
+        &json!({"items": [
+            {"id": 1, "title": "fits"},
+            {"id": 2, "title": over},
+            {"id": 3, "title": at_the_limit},
+        ]}),
+        "evt_1",
+    )
+    .expect("a delivery with at least one accepted item is answered, with counts");
+    assert_eq!((o.created, o.updated), (2, 0));
+    assert_eq!(o.rejected.len(), 1, "{:?}", o.rejected);
+    assert_eq!(o.rejected[0].0, 1, "the second item is the one rejected");
+    assert!(
+        o.rejected[0]
+            .1
+            .contains(&format!("lead.title must be at most {max} characters")),
+        "{}",
+        o.rejected[0].1
+    );
+    assert_eq!(e.s.backend().list("lead").unwrap().len(), 2);
+
+    // The run records it: a partial run, and the first message.
+    let runs = ok(&e, &sam(), "sync_run.list", json!({}));
+    assert!(
+        runs.as_array()
+            .unwrap()
+            .iter()
+            .any(|r| r["kind"] == "webhook" && r["status"] == "partial"),
+        "{runs}"
+    );
+
+    // Every item over a limit: the whole delivery is refused (422 on the wire), nothing stored.
+    let m = send(&json!({"items": [{"id": 4, "title": over}]}), "evt_2").unwrap_err();
+    assert!(
+        matches!(m, obop_connectors::runtime::HookError::Rejected(ref s)
+            if s.contains(&format!("lead.title must be at most {max} characters"))),
+        "{m:?}"
+    );
+    assert_eq!(e.s.backend().list("lead").unwrap().len(), 2);
+    let runs = ok(&e, &sam(), "sync_run.list", json!({}));
+    assert!(
+        runs.as_array()
+            .unwrap()
+            .iter()
+            .any(|r| r["kind"] == "webhook" && r["status"] == "failed"),
+        "{runs}"
+    );
+
+    // The event id was taken, so the sender's retry of it is a replay; a new delivery is fine.
+    assert_eq!(
+        send(&json!({"items": [{"id": 4, "title": over}]}), "evt_2").unwrap_err(),
+        obop_connectors::runtime::HookError::Unauthorised
+    );
+    let o = send(
+        &json!({"items": [{"id": 4, "title": "short now"}]}),
+        "evt_3",
+    )
+    .unwrap();
+    assert_eq!((o.created, o.updated), (1, 0));
+    assert_eq!(e.s.backend().list("lead").unwrap().len(), 3);
+}
+
+#[test]
 fn a_connector_can_never_do_more_than_its_owner_and_approval_actions_stay_proposals() {
     let e = env();
     enable(&e, "webhook_in", true);

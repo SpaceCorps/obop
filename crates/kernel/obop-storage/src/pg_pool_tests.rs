@@ -81,6 +81,44 @@ fn sleep_query(c: &mut postgres::Client, secs: u32) -> crate::pgpool::PR<()> {
     Ok(())
 }
 
+/// The acquire window of the tests that kill connections. The pool replaces the dead connection
+/// with a new one, and opening one (TCP, authentication) can take longer than the default 2 s on a
+/// machine that is busy with other work; how long it takes is not what these tests are about, and
+/// a window this long cannot make a lost replacement pass.
+const SLOW_CONNECT: Duration = Duration::from_secs(30);
+
+/// Ends every session of the application `app` on the server and returns when the server has none
+/// left, so that the next use of a pooled connection finds it dead whatever the speed of the
+/// machine. (`pg_terminate_backend` only asks: a backend that is not scheduled for a while on a
+/// loaded machine is still there, and a fixed pause after the call is a guess about that while.)
+fn kill_sessions(url: &str, app: &str) {
+    let mut admin = PgConnector::new(url).unwrap().connect().unwrap();
+    admin
+        .execute(
+            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity              WHERE application_name = $1 AND pid <> pg_backend_pid()",
+            &[&app],
+        )
+        .unwrap();
+    let deadline = Instant::now() + crate::testing::time_budget(30);
+    loop {
+        let left: i64 = admin
+            .query_one(
+                "SELECT count(*) FROM pg_stat_activity                  WHERE application_name = $1 AND pid <> pg_backend_pid()",
+                &[&app],
+            )
+            .unwrap()
+            .get(0);
+        if left == 0 {
+            return;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "{left} sessions of {app} are still on the server after they were ended"
+        );
+        std::thread::sleep(Duration::from_millis(5));
+    }
+}
+
 // ---- configuration -------------------------------------------------------------------------
 
 fn lookup(pairs: &'static [(&'static str, &'static str)]) -> impl Fn(&str) -> Option<String> {
@@ -589,11 +627,11 @@ fn the_lock_pool_does_not_take_interactive_capacity_and_the_other_way_round() {
     }
     assert_eq!(pg.lock_pool.report().in_use, 8, "eight lock connections");
     // Interactive traffic is not affected: both main connections are free.
-    let t = Instant::now();
+    // (A get that had to wait for a connection would be refused after the acquire timeout, so
+    // the gets succeeding is the proof; how fast they are depends on the machine.)
     for _ in 0..50 {
         assert_eq!(pg.get(&model, "a").unwrap().unwrap()["n"], 1);
     }
-    assert!(t.elapsed() < Duration::from_secs(2), "{:?}", t.elapsed());
     assert_eq!(pg.main.stats().timeouts, 0);
     // ... and a ninth lock holder is refused (busy), not queued without bound.
     let t = Instant::now();
@@ -602,35 +640,53 @@ fn the_lock_pool_does_not_take_interactive_capacity_and_the_other_way_round() {
         panic!("a ninth lock connection does not exist");
     };
     assert_eq!(Fault::of_message(&err), Some(Fault::Busy), "{err}");
-    assert!(t.elapsed() < Duration::from_secs(4), "{:?}", t.elapsed());
+    // The refusal comes after the acquire timeout (1.5 s); the bound only catches a queue that
+    // never ends.
+    assert!(
+        t.elapsed() < crate::testing::time_budget(30),
+        "{:?}",
+        t.elapsed()
+    );
     release.wait();
     for h in holders {
         h.join().unwrap();
     }
-    // The other way round: with every interactive connection busy a lock is still granted.
-    let sleepers: Vec<_> = (0..2)
+    // The other way round: with every interactive connection busy a lock is still granted. The
+    // two connections are held until the test lets go (also when it unwinds: the gates close),
+    // not for a guessed time: on a loaded machine the steps below can take longer than any guess,
+    // and the interactive pool would no longer be full when it is asked.
+    let (busy_tx, busy_rx) = std::sync::mpsc::channel();
+    let mut gates = Vec::new();
+    let holders: Vec<_> = (0..2)
         .map(|_| {
-            let pg = pg.clone();
-            std::thread::spawn(move || pg.main.run(Class::Point, |c| sleep_query(c, 2)))
+            let (pg, busy_tx) = (pg.clone(), busy_tx.clone());
+            let (gate, opens) = std::sync::mpsc::channel::<()>();
+            gates.push(gate);
+            std::thread::spawn(move || {
+                pg.main.run(Class::Point, |_c| {
+                    busy_tx.send(()).unwrap();
+                    let _ = opens.recv_timeout(Duration::from_secs(60));
+                    Ok(())
+                })
+            })
         })
         .collect();
-    while pg.main.stats().in_use < 2 {
-        std::thread::sleep(Duration::from_millis(5));
+    for _ in 0..2 {
+        busy_rx
+            .recv_timeout(crate::testing::time_budget(30))
+            .expect("the interactive connections were never both taken");
     }
-    let t = Instant::now();
+    // (A lock that had to wait for the interactive pool would be refused after the acquire
+    // timeout, so being granted is the proof.)
     let g = pg.lock(&unique("free")).unwrap();
-    assert!(
-        t.elapsed() < Duration::from_millis(1000),
-        "{:?}",
-        t.elapsed()
-    );
     assert!(
         pg.get(&model, "a").is_err(),
         "the interactive pool is the one that is full"
     );
     drop(g);
-    for s in sleepers {
-        s.join().unwrap().unwrap();
+    drop(gates);
+    for h in holders {
+        h.join().unwrap().unwrap();
     }
 }
 
@@ -1322,22 +1378,13 @@ fn a_slow_consumer_is_not_cut_off_by_the_statement_limit_but_a_stalled_one_is_en
 fn a_connection_killed_by_the_server_is_noticed_and_replaced() {
     let (url, _db) = pg_db!();
     let sep = if url.contains('?') { '&' } else { '?' };
-    let kill = |app: &str| {
-        let mut admin = PgConnector::new(&url).unwrap().connect().unwrap();
-        admin
-            .execute(
-                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity \
-                 WHERE application_name = $1 AND pid <> pg_backend_pid()",
-                &[&app],
-            )
-            .unwrap();
-        std::thread::sleep(Duration::from_millis(200));
-    };
+    let kill = |app: &str| kill_sessions(&url, app);
     let model = unique("killed");
     // 1. With a health check on every checkout the dead connection is never handed out.
     let app = unique("kill-health");
     let cfg = PgPoolConfig {
         health_check_idle: Duration::ZERO,
+        acquire_timeout: SLOW_CONNECT,
         ..PgPoolConfig::default()
     };
     let pg = connect(&format!("{url}{sep}application_name={app}"), cfg);
@@ -1350,6 +1397,7 @@ fn a_connection_killed_by_the_server_is_noticed_and_replaced() {
     let app = unique("kill-read");
     let cfg = PgPoolConfig {
         health_check_idle: Duration::from_secs(3600),
+        acquire_timeout: SLOW_CONNECT,
         ..PgPoolConfig::default()
     };
     let pg = connect(&format!("{url}{sep}application_name={app}"), cfg);
@@ -1369,6 +1417,7 @@ fn a_connection_killed_by_the_server_is_noticed_and_replaced() {
         &format!("{url}{sep}application_name={app}"),
         PgPoolConfig {
             health_check_idle: Duration::from_secs(3600),
+            acquire_timeout: SLOW_CONNECT,
             ..PgPoolConfig::default()
         },
     );
@@ -1389,19 +1438,11 @@ fn only_a_statement_on_a_connection_that_broke_is_in_flight() {
     // caller was sent (the limit of the session, BEGIN), where nothing is in doubt.
     let (url, _db) = pg_db!();
     let sep = if url.contains('?') { '&' } else { '?' };
-    let kill = |app: &str| {
-        let mut admin = PgConnector::new(&url).unwrap().connect().unwrap();
-        admin
-            .execute(
-                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity                  WHERE application_name = $1 AND pid <> pg_backend_pid()",
-                &[&app],
-            )
-            .unwrap();
-        std::thread::sleep(Duration::from_millis(200));
-    };
+    let kill = |app: &str| kill_sessions(&url, app);
     let model = unique("inflight");
     let cfg = || PgPoolConfig {
         health_check_idle: Duration::from_secs(3600),
+        acquire_timeout: SLOW_CONNECT,
         ..PgPoolConfig::default()
     };
     // A write on a pooled connection that was killed: the statement itself meets the dead
