@@ -64,22 +64,52 @@ export function tOn(os: string, key: MessageKey, params: Params = {}): string {
   return fill(lookup(key), params);
 }
 
-/** A number in the way the language writes it (decimal separator, grouping). */
-export function formatNumber(value: number, maximumFractionDigits = 0): string {
-  try {
-    return new Intl.NumberFormat(active.tag, { maximumFractionDigits }).format(value);
-  } catch {
-    // No Intl.NumberFormat, or none for this language: the language's own symbols by hand.
-    return plainNumber(value, maximumFractionDigits, active);
-  }
+/**
+ * Whether a formatter that `Intl` made speaks the language. A valid tag the engine has no data for
+ * does not throw: the constructor resolves to its default locale (`en-US`) and formats in that, so
+ * a `catch` alone only sees an `Intl` that is absent. Only the language part is compared (`sv`
+ * against `sv-SE`). A formatter that does not say what it resolved to is trusted.
+ */
+function speaks(resolved: unknown, tag: string): boolean {
+  if (typeof resolved !== "string" || resolved === "") return true;
+  return resolved.toLowerCase().split(/[-_]/)[0] === tag.toLowerCase().split(/[-_]/)[0];
 }
 
-/** `formatNumber` without `Intl`: rounds, drops trailing zeros, groups the thousands with the language's symbols. */
-function plainNumber(value: number, maximumFractionDigits: number, language: Language): string {
-  const fixed = Number(value.toFixed(maximumFractionDigits));
-  const [whole = "0", fraction] = String(Math.abs(fixed)).split(".");
+/**
+ * A number in the way the language writes it (decimal separator, grouping). Through
+ * `Intl.NumberFormat` when the engine has it AND has data for the language; otherwise by hand with
+ * the symbols of the language (`plainNumber`), so a Swedish app does not show an English number.
+ */
+export function formatNumber(value: number, maximumFractionDigits = 0): string {
+  try {
+    const format = new Intl.NumberFormat(active.tag, { maximumFractionDigits });
+    if (speaks(format.resolvedOptions().locale, active.tag)) return format.format(value);
+  } catch {
+    // No Intl.NumberFormat at all.
+  }
+  return plainNumber(value, maximumFractionDigits, active);
+}
+
+/**
+ * `formatNumber` without `Intl`: rounds half away from zero on the decimal text of the value (as
+ * `Intl` does: 8.35 with one digit is 8.4, where `toFixed` gives 8.3), drops trailing zeros,
+ * groups the thousands and writes the minus sign with the symbols of the language. A number the
+ * app never shows (not finite, or too large to scale) is written as JavaScript writes it.
+ */
+export function plainNumber(
+  value: number,
+  maximumFractionDigits: number,
+  language: Language,
+): string {
+  if (!Number.isFinite(value)) return String(value);
+  const digits = Math.min(20, Math.max(0, Math.trunc(maximumFractionDigits)));
+  const shifted = Number(`${Math.abs(value)}e${digits}`);
+  if (!Number.isFinite(shifted) || shifted >= 1e21) return String(value);
+  const scaled = String(Math.round(shifted)).padStart(digits + 1, "0");
+  const whole = scaled.slice(0, scaled.length - digits);
+  const fraction = scaled.slice(scaled.length - digits).replace(/0+$/, "");
   const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, language.symbols.group);
-  const sign = fixed < 0 ? "-" : "";
+  const sign = value < 0 && /[1-9]/.test(scaled) ? language.symbols.minus : "";
   return sign + grouped + (fraction ? language.symbols.decimal + fraction : "");
 }
 
@@ -94,18 +124,26 @@ export function tp(key: PluralKey, count: number, params: Params = {}): string {
   return fill(text, { ...params, count: formatNumber(count) });
 }
 
-/** A date and time for a driver, in the language and time zone of the phone. */
+/**
+ * A date and time for a driver, in the language and time zone of the phone: `Intl.DateTimeFormat`
+ * when the engine has it and has data for the language (Swedish: "15 okt. 2026 11:00" on Node).
+ * Without that, `2026-10-15 11:00` in the time zone of the phone, written by hand: the same on
+ * every engine, and the order Swedish writes dates in. What Hermes does with `sv` is not known
+ * (docs/spec/mobile.md 8.9). A value that is not a date is returned as it was given.
+ */
 export function formatDateTime(iso: string): string {
   const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
   try {
-    return new Intl.DateTimeFormat(active.tag, { dateStyle: "medium", timeStyle: "short" }).format(
-      date,
-    );
+    const format = new Intl.DateTimeFormat(active.tag, { dateStyle: "medium", timeStyle: "short" });
+    if (speaks(format.resolvedOptions().locale, active.tag)) return format.format(date);
   } catch {
-    try {
-      return date.toLocaleString(active.tag);
-    } catch {
-      return iso;
-    }
+    // No Intl.DateTimeFormat at all.
   }
+  return plainDateTime(date);
+}
+
+function plainDateTime(date: Date): string {
+  const two = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())} ${two(date.getHours())}:${two(date.getMinutes())}`;
 }

@@ -5,10 +5,17 @@ import { sv } from "./sv.ts";
 export const LANGUAGE_CODES = ["en", "sv"] as const;
 export type LanguageCode = (typeof LANGUAGE_CODES)[number];
 
-/** How a language writes numbers; used only where the runtime has no `Intl.NumberFormat`. */
+/**
+ * How a language writes numbers; used only where the runtime has no `Intl.NumberFormat` (or none
+ * with data for the language). The tests compare them with `Intl.NumberFormat` on Node. Not here:
+ * `minimumGroupingDigits` (Spanish and Polish write 1234 without a separator, CLDR), which a
+ * language that needs it has to add.
+ */
 export interface NumberSymbols {
   decimal: string;
   group: string;
+  /** The minus sign: the hyphen in English, U+2212 in Swedish (CLDR). */
+  minus: string;
 }
 
 export interface Language {
@@ -24,9 +31,9 @@ export interface Language {
    */
   categories: readonly PluralCategory[];
   /**
-   * The plural category of a count. A table, not `Intl.PluralRules`: Hermes on Android has no
-   * `Intl.PluralRules` (the app crashed at start, docs/spec/mobile.md 8.7), and the tests compare
-   * this function with `Intl.PluralRules` on Node for every count from 0 to 1000.
+   * The plural category of a count. The rule written out in code, not `Intl.PluralRules`: Hermes
+   * on Android has no `Intl.PluralRules` (the app crashed at start, docs/spec/mobile.md 8.7), and
+   * the tests compare this function with `Intl.PluralRules` on Node for every count from 0 to 1000.
    */
   plural(count: number): PluralCategory;
   symbols: NumberSymbols;
@@ -45,7 +52,7 @@ export const LANGUAGES: Readonly<Record<LanguageCode, Language>> = {
     name: "English",
     categories: ["one", "other"],
     plural: oneOther,
-    symbols: { decimal: ".", group: "," },
+    symbols: { decimal: ".", group: ",", minus: "-" },
     messages: en,
     identical: [],
   },
@@ -56,7 +63,7 @@ export const LANGUAGES: Readonly<Record<LanguageCode, Language>> = {
     categories: ["one", "other"],
     plural: oneOther,
     // CLDR: a comma for the decimal mark, a no-break space between thousands.
-    symbols: { decimal: ",", group: " " },
+    symbols: { decimal: ",", group: "\u00a0", minus: "\u2212" },
     messages: sv,
     // "Start", "Server" and "Problem" are written alike in both languages; "Mileage" is the name of the app in every language.
     identical: ["account.server", "home.start", "home.title", "words.danger"],

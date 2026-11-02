@@ -11,6 +11,7 @@ import {
   formatNumber,
   getLanguage,
   onLanguageChange,
+  plainNumber,
   setLanguage,
   t,
   tOn,
@@ -40,8 +41,19 @@ describe("the plural tables and number symbols are the rules of CLDR", () => {
       const part = (type: string) => parts.find((p) => p.type === type)?.value;
       expect(part("decimal")).toBe(language.symbols.decimal);
       expect(part("group")).toBe(language.symbols.group);
+      const negative = new Intl.NumberFormat(language.tag).formatToParts(-1);
+      expect(negative.find((p) => p.type === "minusSign")?.value).toBe(language.symbols.minus);
     });
   }
+
+  test("the names of the languages, as the language choice shows them, are their own", () => {
+    // Nothing else in the app says these: a driver on an English phone looks for "Svenska".
+    expect(LANGUAGES.sv.name).toBe("Svenska");
+    expect(LANGUAGES.en.name).toBe("English");
+    for (const language of Object.values(LANGUAGES)) {
+      expect(language.name, language.code).not.toBe(language.messages["language.system"]);
+    }
+  });
 });
 
 describe("the active language", () => {
@@ -185,19 +197,109 @@ describe("Swedish numbers, distances and dates through Intl", () => {
     );
   });
 
-  test("without Intl the number still has the Swedish symbols, and the date is still text", () => {
+  test("without Intl the number still has the Swedish symbols, and the date is by hand", () => {
     vi.stubGlobal("Intl", {});
     setLanguage("sv");
     expect(formatNumber(12.34, 1)).toBe("12,3");
     expect(formatNumber(12345.67, 1)).toBe("12 345,7");
-    expect(formatNumber(-1234.5, 1)).toBe("-1 234,5");
+    expect(formatNumber(-1234.5, 1)).toBe("−1 234,5");
     expect(formatNumber(1000)).toBe("1 000");
     expect(formatNumber(5)).toBe("5");
     expect(tp("unit.points", 3)).toBe("3 punkter");
     expect(tp("unit.points", 1)).toBe("1 punkt");
-    expect(formatDateTime("2026-10-15T09:00:00Z")).toMatch(/2026/);
+    // Written by hand, in the time zone of the machine: only the day is stable across zones.
+    expect(formatDateTime("2026-10-15T09:00:00Z")).toMatch(/^2026-10-15 \d{2}:\d{2}$/);
     setLanguage("en");
     expect(formatNumber(12345.67, 1)).toBe("12,345.7");
+    expect(formatNumber(-0.5, 1)).toBe("-0.5");
+  });
+
+  test("an Intl without data for the language does not leak English into a Swedish app", () => {
+    // What a valid tag with no data does in an engine: no error, the default locale (en-US).
+    const resolved = { locale: "en-US" };
+    vi.stubGlobal("Intl", {
+      NumberFormat: class {
+        resolvedOptions = () => resolved;
+        format = (value: number) => `english ${value}`;
+      },
+      DateTimeFormat: class {
+        resolvedOptions = () => resolved;
+        format = () => "Oct 15, 2026, 9:00 AM";
+      },
+    });
+    setLanguage("sv");
+    expect(formatNumber(12345.67, 1)).toBe("12 345,7");
+    expect(tp("unit.points", 2500)).toBe("2 500 punkter");
+    expect(formatDateTime("2026-10-15T09:00:00Z")).toMatch(/^2026-10-15 \d{2}:\d{2}$/);
+    // English has its data, so the same Intl is used as it is.
+    setLanguage("en");
+    expect(formatNumber(12345.67, 1)).toBe("english 12345.67");
+    expect(formatDateTime("2026-10-15T09:00:00Z")).toBe("Oct 15, 2026, 9:00 AM");
+  });
+
+  test("an Intl that resolves to a region of the language is used (sv-SE for sv)", () => {
+    vi.stubGlobal("Intl", {
+      NumberFormat: class {
+        resolvedOptions = () => ({ locale: "sv-SE" });
+        format = () => "from Intl";
+      },
+      DateTimeFormat: class {
+        resolvedOptions = () => ({ locale: "sv-SE" });
+        format = () => "date from Intl";
+      },
+    });
+    setLanguage("sv");
+    expect(formatNumber(1)).toBe("from Intl");
+    expect(formatDateTime("2026-10-15T09:00:00Z")).toBe("date from Intl");
+  });
+
+  test("an Intl that does not say what it resolved to is trusted", () => {
+    vi.stubGlobal("Intl", {
+      NumberFormat: class {
+        resolvedOptions = () => ({});
+        format = () => "from Intl";
+      },
+    });
+    setLanguage("sv");
+    expect(formatNumber(1)).toBe("from Intl");
+  });
+
+  test("a value that is not a date is returned as it was given, never as 'Invalid Date'", () => {
+    setLanguage("sv");
+    expect(formatDateTime("not a date")).toBe("not a date");
+    expect(formatDateTime("")).toBe("");
+    vi.stubGlobal("Intl", {});
+    expect(formatDateTime("not a date")).toBe("not a date");
+    expect(formatDateTime("")).toBe("");
+  });
+
+  test("the number by hand writes what Intl writes, for the numbers the app shows", () => {
+    // Compared with the Intl of Node (ICU), where its data is available: rounding half away from
+    // zero on the decimal value, grouping, the language's own symbols and minus sign.
+    const values = [
+      0, 5, 0.5, 0.15, 1.45, 8.35, 12.34, 12.35, 12.99, 2.675, 1.005, 999.4, 999.5, 1000, 1234.56,
+      12345.67, 123456.789, 1234567.5, 20000, 99999.95, -0.5, -8.35, -1234.5, -1000,
+    ];
+    for (const code of ["en", "sv"] as const) {
+      for (const digits of [0, 1, 2]) {
+        for (const value of values) {
+          const expected = new Intl.NumberFormat(LANGUAGES[code].tag, {
+            maximumFractionDigits: digits,
+          }).format(value);
+          expect(plainNumber(value, digits, LANGUAGES[code]), `${code} ${value} ${digits}`).toBe(
+            expected,
+          );
+        }
+      }
+    }
+  });
+
+  test("the number by hand for numbers the app never shows", () => {
+    expect(plainNumber(Number.NaN, 1, LANGUAGES.sv)).toBe("NaN");
+    expect(plainNumber(Number.POSITIVE_INFINITY, 1, LANGUAGES.sv)).toBe("Infinity");
+    expect(plainNumber(1e21, 0, LANGUAGES.sv)).toBe("1e+21");
+    // A negative that rounds to nothing has no sign (Intl writes "-0", which no screen wants).
+    expect(plainNumber(-0.04, 1, LANGUAGES.sv)).toBe("0");
   });
 
   test("without Intl.PluralRules Swedish still has its two forms", () => {
