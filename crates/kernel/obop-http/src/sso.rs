@@ -1,4 +1,4 @@
-//! Sign-in with Microsoft Entra over HTTP (D91, Proposed): the browser round trip of the
+//! Sign-in with Microsoft Entra over HTTP (D91, ratified by OR-38): the browser round trip of the
 //! authorization code flow and the two calls this server makes to the provider (its token
 //! endpoint, and the discovery document and key set it reads). Everything that decides who the
 //! person is lives behind `SsoApi` in `obop-auth`; this module carries requests, keeps the state

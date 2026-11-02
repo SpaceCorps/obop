@@ -1,4 +1,4 @@
-//! The `sso_provider` model of the Customize module (D91, Proposed): the one Microsoft Entra
+//! The `sso_provider` model of the Customize module (D91, ratified by OR-38): the one Microsoft Entra
 //! tenant people sign in with, and the commands that set it up. It has no records of its own; the
 //! handlers call the identity provider (`Authenticator::sso`), which holds the rules and seals
 //! the client secret.

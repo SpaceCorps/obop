@@ -1,4 +1,4 @@
-//! Sign-in with Microsoft Entra (D91, Proposed): the provider's configuration, the checks of the
+//! Sign-in with Microsoft Entra (D91, ratified by OR-38): the provider's configuration, the checks of the
 //! id token, the binding of a Microsoft identity to an account, the one-time code and the
 //! session. The browser round trip and the two calls to the provider are in `obop-http`; this
 //! crate never touches the network and is the only one that mints a session.

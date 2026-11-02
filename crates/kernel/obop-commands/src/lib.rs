@@ -1376,7 +1376,7 @@ pub trait Authenticator: Send + Sync {
     fn passkeys(&self) -> Option<&dyn PasskeyApi> {
         None
     }
-    /// Sign-in with an external identity provider (Microsoft Entra, D91, Proposed), for
+    /// Sign-in with an external identity provider (Microsoft Entra, D91, ratified by OR-38), for
     /// authenticators that support it.
     fn sso(&self) -> Option<&dyn SsoApi> {
         None

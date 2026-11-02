@@ -1,4 +1,4 @@
-//! Sign-in with an external identity provider (D91, Proposed): the port between the HTTP leg
+//! Sign-in with an external identity provider (D91, ratified by OR-38): the port between the HTTP leg
 //! (`obop-http`: the browser round trip and the two calls to the provider) and the identity
 //! provider of the instance (`obop-auth`: the checks of the id token, the binding of a Microsoft
 //! identity to an account, the one-time code and the session). Nothing here touches the network

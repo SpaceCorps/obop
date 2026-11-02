@@ -1,4 +1,4 @@
-//! The checks of an OpenID Connect id token from Microsoft Entra (D91, Proposed), with no storage
+//! The checks of an OpenID Connect id token from Microsoft Entra (D91, ratified by OR-38), with no storage
 //! and no network: a compact JWS, RS256 only, signature by `ring`, then the claims. Every function
 //! takes untrusted input and answers a plain reason; none of them panics on bad input.
 //!
