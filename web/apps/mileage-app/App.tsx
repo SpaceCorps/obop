@@ -14,7 +14,13 @@ import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-cont
 import { t } from "./src/i18n/index.ts";
 import { stopRecording } from "./src/native/recorder.ts";
 import type { Runtime } from "./src/native/runtime.ts";
-import { useBinding, useOutbox, useRuntime, useSessionStatus } from "./src/ui/hooks.ts";
+import {
+  useBinding,
+  useLanguage,
+  useOutbox,
+  useRuntime,
+  useSessionStatus,
+} from "./src/ui/hooks.ts";
 import { tOs } from "./src/ui/os-text.ts";
 import { gate, keepSigningIn, reduce, type Nav, type Route } from "./src/ui/router.ts";
 import { Account } from "./src/ui/screens/Account.tsx";
@@ -26,14 +32,15 @@ import { SignIn } from "./src/ui/screens/SignIn.tsx";
 import { TripDetail } from "./src/ui/screens/TripDetail.tsx";
 import { Trips } from "./src/ui/screens/Trips.tsx";
 
-const WORDS: Words = {
+/** The few words the components of `@obop/ui-native` say themselves, in the language of the render. */
+const wordsNow = (): Words => ({
   back: t("common.back"),
   error: t("words.error"),
   info: t("words.info"),
   success: t("words.success"),
   warning: t("words.warning"),
   danger: t("words.danger"),
-};
+});
 
 function Insets({ children }: { children: ReactNode }) {
   const insets = useSafeAreaInsets();
@@ -180,10 +187,14 @@ function Root() {
 }
 
 export default function App() {
+  // Rendering again when the language changes is what shows it everywhere: the screens read the
+  // catalogue while they render (see `useLanguage`). The words depend on the language.
+  const language = useLanguage();
+  const words = useMemo(wordsNow, [language]);
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <WordsProvider words={WORDS}>
+        <WordsProvider words={words}>
           <Insets>
             <Root />
             <StatusBar style="auto" />

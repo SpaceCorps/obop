@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import type { Binding } from "../core/identity.ts";
 import { dismissStaleFileNote, staleFileRecoveredAt } from "../core/open-outbox.ts";
+import type { LanguageCode } from "../i18n/index.ts";
+import type { Choice } from "../i18n/language.ts";
 import type { SessionStatus } from "../core/session.ts";
 import type { SyncStatus } from "../core/sync.ts";
 import type { LocalTrip } from "../core/types.ts";
 import { onChange } from "../native/bus.ts";
+import { languageStore } from "../native/language.ts";
 import { getRuntime, type Runtime } from "../native/runtime.ts";
 
 export type Loaded =
@@ -138,4 +141,18 @@ export function useNow(intervalMs = 1000): number {
     return () => clearInterval(id);
   }, [intervalMs]);
   return now;
+}
+
+/**
+ * The language the sentences are in. A screen that reads `t()` while it renders shows the language
+ * of the render, so `App` calls this hook: when the language changes the whole tree renders again
+ * and keeps its state (the route, a typed address), unlike a new `key` on the tree.
+ */
+export function useLanguage(): LanguageCode {
+  return useSyncExternalStore(languageStore.subscribe, languageStore.language);
+}
+
+/** What the driver chose in the Account screen: `system` (follow the phone), `en` or `sv`. */
+export function useLanguageChoice(): Choice {
+  return useSyncExternalStore(languageStore.subscribe, languageStore.choice);
 }
