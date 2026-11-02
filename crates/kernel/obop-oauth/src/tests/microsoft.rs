@@ -318,6 +318,50 @@ fn a_refused_read_of_the_account_gives_no_page_and_is_not_read_as_no_cap() {
     assert_eq!(r.o.view(&id, &binder).unwrap().max_days, 90);
 }
 
+/// The same property without a clock. What keeps the lifetime of the row is that the callback
+/// writes with a compare-and-set (`kv_swap`), which the stores implement as "the value changes,
+/// the expiry stays". Any write that sets an expiry, to renew it or to shorten it, is a `kv_put`
+/// (or a `kv_put_new`): with those refused, the callback must still do all of its work, and must
+/// not have tried to make one. (`the_callback_keeps_the_lifetime_of_the_flow_and_does_not_renew_it`
+/// below is the same property with real time, on the memory backend.)
+#[test]
+fn the_callback_writes_with_a_compare_and_set_and_never_with_a_put() {
+    let (flaky, backend) = Flaky::memory();
+    let r = rig_on(backend, "ada", OAuthConfig::default());
+    let (id, binder) = begun(&r, true);
+    // The control: a write of the pages (this one is "Not you?") is a put, and is refused.
+    flaky.refuse_kv_put(1);
+    flaky.refuse_kv_new(1);
+    let csrf = record(&r, &id).unwrap()["csrf"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(r.o.switch_user(&id, &binder, &csrf).is_err());
+    assert_eq!(flaky.refused(), 1, "the control did not meet the refusal");
+    flaky.refuse_kv_put(0);
+    flaky.refuse_kv_new(0);
+    // Now every put is refused for the callback: all three of its outcomes still get written.
+    let signed = signed_in(&r, "ada");
+    flaky.refuse_kv_put(1_000);
+    flaky.refuse_kv_new(1_000);
+    let before = flaky.refused();
+    r.o.microsoft_done(&id, MicrosoftOutcome::Failed("cancelled".into()))
+        .unwrap();
+    assert_eq!(record(&r, &id).unwrap()["ms_error"], "cancelled");
+    r.o.microsoft_done(&id, MicrosoftOutcome::SignedIn(signed))
+        .unwrap();
+    assert_eq!(record(&r, &id).unwrap()["user"], "ada");
+    r.o.microsoft_done(&id, MicrosoftOutcome::Failed("failed".into()))
+        .unwrap();
+    assert_eq!(
+        flaky.refused(),
+        before,
+        "the callback tried to write the flow with a put (which sets a lifetime)"
+    );
+    flaky.refuse_kv_put(0);
+    flaky.refuse_kv_new(0);
+}
+
 #[test]
 fn the_callback_keeps_the_lifetime_of_the_flow_and_does_not_renew_it() {
     // A flow lives for its lifetime from the last write by the sign-in pages; the callback's
@@ -349,4 +393,33 @@ fn the_callback_keeps_the_lifetime_of_the_flow_and_does_not_renew_it() {
             .is_err()
     );
     assert!(record(&r, &id).is_none());
+}
+
+/// A store that cannot answer when the return address asks for the second step again is a failure
+/// the person can try again ("unavailable"), not the general failure of a sign-in that is over.
+#[test]
+fn a_store_that_cannot_answer_at_the_reload_of_a_pending_second_step_is_unavailable() {
+    let (flaky, backend) = Flaky::memory();
+    let r = rig_on(backend, "ada", OAuthConfig::default());
+    let (id, binder) = begun(&r, true);
+    // The callback left a second step pending for ada (written by hand: the account has no
+    // binding in this rig, so the real callback would not have).
+    let key = format!("oauth:flow:{id}");
+    let mut rec = record(&r, &id).unwrap();
+    rec["mfa_pending"] = json!({"user": "ada", "epoch": null});
+    r.backend
+        .kv_put(&key, &rec.to_string(), Some(600_000))
+        .unwrap();
+    flaky.refuse_model("auth_user", obop_storage::testing::Mode::Reads);
+    assert_eq!(
+        r.o.microsoft_return(&id, &binder, "10.0.0.2").unwrap(),
+        LoginOut::Failed("err.ms_unavailable")
+    );
+    flaky.allow_models();
+    // With the store well, the same record is a refusal (the account has no binding): the general
+    // failure, so the two words are not the same answer.
+    assert_eq!(
+        r.o.microsoft_return(&id, &binder, "10.0.0.2").unwrap(),
+        LoginOut::Failed("err.ms_failed")
+    );
 }

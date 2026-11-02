@@ -378,21 +378,19 @@ impl<'a> Phone<'a> {
             .await
     }
 
+    /// A password try on the sign-in page, from the phone's address.
     async fn password(&mut self, p: &Page, user: &str, password: &str) -> Raw {
-        self.w
-            .browse(
-                &mut self.b,
-                "POST",
-                "/oauth/authorize/login",
-                Some(&[
-                    ("flow", &p.flow),
-                    ("csrf", &p.csrf),
-                    ("username", user),
-                    ("password", password),
-                ]),
-                &[],
-            )
-            .await
+        self.go(
+            "POST",
+            "/oauth/authorize/login",
+            Some(&[
+                ("flow", &p.flow),
+                ("csrf", &p.csrf),
+                ("username", user),
+                ("password", password),
+            ]),
+        )
+        .await
     }
 
     /// The app's token request for a code.
@@ -1906,12 +1904,14 @@ async fn phone_a_store_refusal_anywhere_in_the_decision_never_leaves_a_code_for_
 }
 
 #[tokio::test]
-async fn phone_a_store_refusal_anywhere_in_the_consent_page_is_a_503_and_never_a_90_day_page() {
+async fn phone_a_store_refusal_anywhere_in_the_consent_page_is_a_503() {
     use obop_storage::testing::Flaky;
-    // Whichever read the store refuses, the answer is a 503 and never a page that offers 90 days.
-    // (The layer of D74 answers 503 for any refused read of a request, so what tells a guessed cap
-    // from a refused page is the unit test `a_refused_read_of_the_account_gives_no_page...` in
-    // `obop-oauth`.)
+    // Whichever read the store refuses, the answer is a 503 (the layer of D74 answers 503 for any
+    // refused read of a request, whatever page the handler built), and where nothing was refused
+    // the page offers 1, 7 and 30 days. That the cap is not guessed when the account cannot be
+    // read is not shown here: the layer would hide it. The unit test
+    // `a_refused_read_of_the_account_gives_no_page_and_is_not_read_as_no_cap` in `obop-oauth`
+    // is the guard of that (a fail-open cap passes this test).
     let flaky = Flaky::new(obop_storage::open("memory:").unwrap());
     let app = App::with_store(obop_commands::Store::over(flaky.clone()));
     let w = world_on(app, true, AuthConfig::insecure_dev(), None).await;
@@ -1928,15 +1928,13 @@ async fn phone_a_store_refusal_anywhere_in_the_consent_page_is_a_503_and_never_a
         let r = phone.back(&page.flow).await;
         let refused = flaky.refused() - before;
         flaky.allow_models();
-        if consent(&r) {
+        if refused > 0 {
+            assert_eq!(r.status, 503, "{skip}: {}", r.body);
+            assert!(!r.body.contains("<option value=\"90\""), "{skip}");
+        } else {
+            assert!(consent(&r), "{skip}: {}", r.body);
             shown += 1;
             assert_eq!(days_offered(&r), [1, 7, 30], "{skip}: {}", r.body);
-        } else {
-            assert!(
-                !r.body.contains("<option value=\"90\""),
-                "{skip}: {}",
-                r.body
-            );
         }
         if refused == 0 {
             clean += 1;
@@ -1952,8 +1950,13 @@ async fn phone_a_store_refusal_anywhere_in_the_consent_page_is_a_503_and_never_a
 
 // ---- fix round 1 of the pull request: what the independent check found unpinned -----------------
 //
-// Each test below passed on the code as it stood (the check wrote most of them as probes) and
-// fails under the mutation named in docs/ISSUES.md ("Mutations of the independent check").
+// Most of the tests below passed on the code of `7d4f56c` (the check wrote many of them as probes)
+// and fail under the mutation that docs/ISSUES.md names for them in "Mutations of the independent
+// check". Two did not pass there, because they test the two behaviours that fix round 1 added:
+// `phone_a_later_failed_step_ends_a_second_step_that_an_earlier_one_left_pending` and
+// `phone_a_provider_switched_off_between_the_hop_and_the_reload_ends_the_second_step` (their
+// rows are F1 and F2, in "Mutations of the writer in fix round 1"). The rows of the others are in
+// the same two sections.
 
 fn rig_of(w: &World) -> Rig {
     Rig {
@@ -2132,6 +2135,50 @@ async fn phone_a_reload_of_a_pending_second_step_is_limited_per_address() {
         statuses.iter().filter(|s| **s == 200).count() <= 30,
         "{statuses:?}"
     );
+}
+
+/// The window of the reload is the one of the sign-in pages, and it is the address's: another
+/// flow from the same address spends it, a password try spends it, another address has its own.
+#[tokio::test]
+async fn phone_the_reload_of_a_pending_second_step_spends_the_sign_in_window_of_its_address() {
+    let w = world(true).await;
+    let (_secret, _) = enrol(&rig_of(&w), "ada").await;
+    let mut one = Phone::new(&w).await;
+    let mut two = Phone::new(&w).await;
+    let mut elsewhere = Phone::new(&w).await;
+    one.ip = Some("10.20.0.1".into());
+    two.ip = Some("10.20.0.1".into());
+    elsewhere.ip = Some("10.20.0.2".into());
+    // Phone one: the first factor, and the return page that asks for the second (hit 1 of 30).
+    let p1 = one.open().await;
+    let r = one.microsoft(&p1.flow, ADA_OID).await;
+    assert!(asks_for_the_second_step(&r), "{}", r.body);
+    // Phone two, the same address, another flow: five wrong passwords on the sign-in page (hits
+    // 2 to 6; a flow ends at eight wrong tries).
+    let p2 = two.open().await;
+    for n in 0..5 {
+        let r = two.password(&p2, "bob", "not the password").await;
+        assert!(login_page(&r) && r.status == 200, "{n}: {}", r.body);
+    }
+    // So the reloads of phone one have 24 hits left, and the 25th is refused.
+    let mut served = 0;
+    loop {
+        let r = one.back(&p1.flow).await;
+        if r.status == 429 {
+            break;
+        }
+        assert!(asks_for_the_second_step(&r), "{served}: {}", r.body);
+        served += 1;
+        assert!(served <= 24, "the password tries did not spend the window");
+    }
+    assert_eq!(served, 24, "the window is shared by both kinds of step");
+    // The same address, the other flow: the password step is refused as well.
+    let r = two.password(&p2, "bob", "not the password").await;
+    assert_eq!(r.status, 429, "{}", r.body);
+    // Another address has a window of its own.
+    let p3 = elsewhere.open().await;
+    let r = elsewhere.microsoft(&p3.flow, ADA_OID).await;
+    assert!(asks_for_the_second_step(&r), "{}", r.body);
 }
 
 #[tokio::test]
@@ -2423,4 +2470,77 @@ async fn phone_the_cookies_of_the_round_trip_and_of_the_flow_last_ten_minutes_an
     );
     assert!(w.oauth_flow(&page.flow).unwrap()["user"].is_null());
     assert_eq!(w.devices(), 0);
+}
+
+// ---- fix round 2 of the pull request: what the delta check found unpinned ---------------------
+//
+// Each test below passed on the code of `7d141a9` and fails under the mutation that docs/ISSUES.md
+// names for it in "Mutations of the delta check of 7d141a9".
+
+/// The second step is asked for the account and the credential epoch that the first factor was
+/// accepted with (`mfa_pending`), not for what a password try on the same flow wrote later
+/// (`pre_user` and `pre_epoch`, which that try overwrites).
+#[tokio::test]
+async fn phone_a_first_factor_taken_before_a_change_of_credentials_is_not_honoured_after_it() {
+    let w = world(true).await;
+    let (_secret, _) = enrol(&rig_of(&w), "ada").await;
+    let mut phone = Phone::new(&w).await;
+    let page = phone.open().await;
+    let r = phone.microsoft(&page.flow, ADA_OID).await;
+    assert!(asks_for_the_second_step(&r), "{}", r.body);
+    let pending = w.oauth_flow(&page.flow).unwrap()["mfa_pending"].clone();
+    // Her credentials change after the first factor (disabled and enabled again: a new epoch).
+    w.auth.operator_set_disabled("ada", true).unwrap();
+    w.auth.operator_set_disabled("ada", false).unwrap();
+    let now = w.auth.oauth().unwrap().credential_epoch("ada").unwrap();
+    assert!(
+        now.is_some() && now.as_deref() != pending["epoch"].as_str(),
+        "{now:?} {pending}"
+    );
+    // One wrong password try for her on the same flow writes the epoch she has now into
+    // `pre_epoch`; the pending step keeps its own.
+    let wrong = phone.password(&page, "ada", "not the password").await;
+    assert!(login_page(&wrong), "{}", wrong.body);
+    let rec = w.oauth_flow(&page.flow).unwrap();
+    assert_eq!(rec["pre_epoch"], json!(now), "{rec}");
+    assert_eq!(rec["mfa_pending"], pending, "{rec}");
+    // The reload is refused: the first factor was taken at an epoch that is over.
+    let tokens = w.app.store.backend().list("auth_mfa_token").unwrap().len();
+    let r = phone.back(&page.flow).await;
+    assert!(!asks_for_the_second_step(&r), "{}", r.body);
+    assert!(login_page(&r) && r.body.contains(FAILED), "{}", r.body);
+    assert_eq!(
+        w.app.store.backend().list("auth_mfa_token").unwrap().len(),
+        tokens,
+        "a second-step token was minted for a first factor that was over"
+    );
+}
+
+/// A store that cannot answer at the reload of a pending second step is a 503 that can be asked
+/// again, not a verdict; the flow keeps the pending step and the next reload works. (The layer of
+/// D74 turns the refused read into the 503; the words of the page for it are tested in `obop-oauth`:
+/// `a_store_that_cannot_answer_at_the_reload_of_a_pending_second_step_is_unavailable`.)
+#[tokio::test]
+async fn phone_a_store_that_refuses_the_reload_of_a_pending_second_step_is_a_503_and_not_a_verdict()
+{
+    use obop_storage::testing::{Flaky, Mode};
+    let flaky = Flaky::new(obop_storage::open("memory:").unwrap());
+    let app = App::with_store(obop_commands::Store::over(flaky.clone()));
+    let w = world_on(app, true, AuthConfig::insecure_dev(), None).await;
+    let (_secret, _) = enrol(&rig_of(&w), "ada").await;
+    let mut phone = Phone::new(&w).await;
+    let page = phone.open().await;
+    let r = phone.microsoft(&page.flow, ADA_OID).await;
+    assert!(asks_for_the_second_step(&r), "{}", r.body);
+    flaky.refuse_model("auth_user", Mode::Reads);
+    let r = phone.back(&page.flow).await;
+    flaky.allow_models();
+    assert_eq!(r.status, 503, "{}", r.body);
+    assert!(!r.body.contains(FAILED), "{}", r.body);
+    assert!(
+        w.oauth_flow(&page.flow).unwrap()["mfa_pending"].is_object(),
+        "the flow still holds the pending step"
+    );
+    let r = phone.back(&page.flow).await;
+    assert!(asks_for_the_second_step(&r), "{}", r.body);
 }

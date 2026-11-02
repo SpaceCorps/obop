@@ -2645,3 +2645,34 @@ fn a_reloaded_second_step_is_refused_for_an_account_unbound_or_a_provider_gone_s
         events(&r, "oidc_refused")
     );
 }
+
+/// The provider is cleared (the record is gone, the bindings stay) after the first factor: the
+/// reload of the second step is refused, as for a provider that was switched off.
+#[test]
+fn a_reloaded_second_step_is_refused_once_the_provider_is_cleared() {
+    let r = world();
+    let (_secret, _) = enrol(&r.a, "ada");
+    change_credentials(&r, "ada");
+    let got = flow_sign_in(&r, &identity(&r, ADA_OID)).unwrap();
+    assert!(matches!(got.outcome, LoginOutcome::MfaRequired { .. }));
+    let epoch = got.epoch.clone();
+    let tokens = r.b.list("auth_mfa_token").unwrap().len();
+    // Cleared: the bindings are kept, the provider is not there.
+    r.a.operator_sso_clear().unwrap();
+    assert!(matches!(
+        sso(&r).second_step_for_flow("ada", epoch.as_deref()),
+        Err(MfaError::Expired)
+    ));
+    assert!(
+        events(&r, "oidc_refused")
+            .iter()
+            .any(|l| l.contains("the provider was removed")),
+        "{:?}",
+        events(&r, "oidc_refused")
+    );
+    assert_eq!(
+        r.b.list("auth_mfa_token").unwrap().len(),
+        tokens,
+        "no token for a provider that is gone"
+    );
+}
