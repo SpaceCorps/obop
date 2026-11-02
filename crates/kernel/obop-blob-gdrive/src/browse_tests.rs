@@ -66,6 +66,9 @@ struct State {
     seen: Vec<String>,
     queries: Vec<String>,
     auth_ok: bool,
+    shared_drive: bool,
+    /// supportsAllDrives, includeItemsFromAllDrives and corpora of each files.list call.
+    flags: Vec<(Option<String>, Option<String>, Option<String>)>,
 }
 
 struct Fake {
@@ -196,8 +199,18 @@ fn serve(mut conn: std::net::TcpStream, st: &Arc<Mutex<State>>) {
             200,
             json!({"user": {"emailAddress": "boss@example.com"}}),
         ),
+        "/drive/v3/drives" if s.shared_drive => json(
+            &mut conn,
+            200,
+            json!({"drives": [{"id": "sd1", "name": "SpaceCorps shared"}]}),
+        ),
         "/drive/v3/files" => {
             let query = q("q").unwrap_or_default();
+            s.flags.push((
+                q("supportsAllDrives"),
+                q("includeItemsFromAllDrives"),
+                q("corpora"),
+            ));
             s.queries.push(query.clone());
             let parent = query
                 .strip_suffix("' in parents and trashed = false")
@@ -356,4 +369,43 @@ fn probe_names_the_account_and_a_bad_token_is_reported_without_it() {
 fn off_unless_the_browse_token_is_set() {
     // The variable is not set in the test environment.
     assert!(DriveBrowser::from_env().unwrap().is_none());
+}
+
+#[test]
+fn shared_drives_head_the_root_and_their_folders_are_read_across_all_drives() {
+    let f = fake();
+    f.st.lock().unwrap().shared_drive = true;
+    let b = browser(&f);
+    let p = b.list("", "", None).unwrap();
+    let first = &p.entries[0];
+    assert_eq!(
+        (first.name.as_str(), first.id.as_str()),
+        ("SpaceCorps shared", "sd1")
+    );
+    assert!(first.folder && !first.importable);
+    // My Drive still follows, and a later page of the root does not repeat the shared drives.
+    assert_eq!(p.entries[1].name, "Contracts");
+    let p2 = b.list("", "", p.next.as_deref()).unwrap();
+    assert!(p2.entries.iter().all(|e| e.id != "sd1"));
+    // A shared drive opens like a folder, over every drive; so does a search.
+    let _ = b.list("sd1", "", None).unwrap();
+    let _ = b.list("", "nda", None).unwrap();
+    let st = f.st.lock().unwrap();
+    for (all, items, corpora) in &st.flags {
+        assert_eq!(all.as_deref(), Some("true"));
+        assert_eq!(items.as_deref(), Some("true"));
+        let _ = corpora;
+    }
+    let n = st.flags.len();
+    assert_eq!(st.flags[n - 2].2.as_deref(), Some("allDrives"));
+    assert_eq!(st.flags[n - 1].2.as_deref(), Some("allDrives"));
+    assert_eq!(st.flags[0].2, None);
+}
+
+#[test]
+fn a_failing_shared_drives_call_leaves_my_drive_listing() {
+    let f = fake();
+    let b = browser(&f);
+    let p = b.list("", "", None).unwrap();
+    assert_eq!(p.entries[0].name, "Contracts");
 }
