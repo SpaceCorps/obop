@@ -83,8 +83,39 @@ Each has a specimen in the Brand book (Components).
   there when it closes. Wider than that the panel sits beside the list and is not modal.
 - Changing the language does not remount the app (D6): `I18nProvider` clones the root element so the
   whole tree renders again with the new text, and every component keeps its state: the route, an open
-  record panel, a dialog, a draft. Do not wrap components in `memo` and do not cache translated text
-  in `useMemo` without `useI18n().lang` in its dependencies.
+  record panel, a dialog, a draft. Two things keep old text through a change, and the rules follow
+  from them. A `useMemo` that translates, sorts or formats keeps its value unless `lang` (text) or
+  `locale` (collation, number parsing; from `useI18n()`, or `d.lang` of the data context) is among its
+  dependencies, and a `memo` component that does so renders again only if it calls `useI18n()` in its
+  body. And state must not hold a finished translated sentence: keep the
+  raw message or a code and word it when drawing (`RecordPanel` keeps the server's own words and calls
+  `serverMessage` at render). `web/apps/backoffice/src/i18nDeps.test.ts` guards the first. It reads
+  every source file of the apps and of `packages/ui`, works out from the call graph which functions
+  translate, sort or format (those that use a reader of the i18n store, directly or through other
+  functions: called, handed on as in `.sort(byPosition)`, used as a JSX tag, or a member such as
+  `d.recordLabel`), and fails a `useMemo` that uses one of them while its dependencies name neither
+  `lang` nor `locale`, and a `memo` component that uses one without calling `useI18n()` (a deliberate
+  exception carries `// i18n-memo-ok: <why>` in a comment above its statement or inside it). It does not
+  read `useCallback`, `useEffect`, a `useState` initialiser, a ref, or state that holds translated text;
+  docs/ISSUES.md D8 to D10 and D14 list what is known to slip through. A query that the server answers
+  in the collation of the locale (a sorted `useServerRows`, the sorted Kanban columns) asks again when
+  the locale changes. Every command the back office sends (`call` in `api.ts`; not `/api/meta`, sign-in,
+  uploads or the account endpoints) carries `?lang=` and `Accept-Language`, which the server words its
+  refusals by. In the body, `search()` adds the `lang` that picks the collation only with an `order`, so
+  an unsorted query does not ask again. `aggregate()` always adds it, and the server orders the keys of
+  a text group by it. That does not matter for the groups a person picks, because only select, ref, bool
+  and date fields can be chosen for grouping (`GROUPABLE` in `query.ts`), and the views put those keys
+  in order on the client (`orderKeys`, through `domainOf`, in memos that carry `d.lang`), so a switch
+  does not ask the aggregates again. `GROUPABLE` limits only what is picked: the Kanban column totals
+  and `useCurrencyOf` also group by the `currency` field (both accept a text or a select field of
+  that name; it is text in the bundled sales and invoicing models). `useCurrencyOf` collects the codes
+  in a set, so their order does not matter. The per-currency sums of a Kanban column (`columnTotals`)
+  are shown in the order the server sent them, which for a text field is the collation of the language
+  at the time of the aggregate, and a switch neither re-sorts them nor asks again. For ISO 4217 codes
+  that order is the same in all seven languages (162 codes sorted with `Intl.Collator` in Node, with
+  the options the back office uses; the server's collator was not run), so nothing differs on screen
+  today. A text field that becomes groupable, or a currency field that holds other text, needs the
+  locale in the key of `useAggregate` or a sort on the client.
 - A dropped connection never escapes as an unhandled rejection. Every command answers an error reply
   ("Could not reach the server"); reads (get, list, search, meta) retry twice with a short backoff, writes
   never; a page-wide banner says the app is offline or the server cannot be reached and clears itself

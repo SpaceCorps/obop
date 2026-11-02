@@ -1329,7 +1329,7 @@ impl Import {
         if self.needs_install {
             // The backup carries history and the database has none yet: make the part, as the
             // start of a process would, under the schema lock and in this transaction.
-            c.batch_execute(schema::LOCK_SQL)?;
+            schema::take_lock(c)?;
             schema::ensure_parts(c, &[PART], Ddl::IfMissing)?;
             self.exists = true;
             self.needs_install = false;

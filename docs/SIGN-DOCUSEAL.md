@@ -61,4 +61,5 @@ A refused read of the pseudonym map is not taken for "not one of ours" (D74): th
 - A run against a live DocuSeal server. Until one is done the provider stays `generic_adapter`.
 - A button on the request that opens the DocuSeal signing link or the signed document.
 - Pulling the signed PDF into the Documents app.
+- Sending a document that is already in the Documents app (for example an NDA imported from Google Drive, docs/DEPLOY.md "Browsing a Google Drive from Documents"): a `sign_request` has no link to a `documents_document`, and obop does not upload its PDF to DocuSeal. Today the PDF is downloaded from the document and uploaded to DocuSeal by hand as a template. The next step is a `document` reference on the template or request in `sign_docuseal` (which already depends on `sign` and the connectors; `sign` itself must not depend on `documents`) and a send that posts the stored PDF to DocuSeal.
 - Sliplane provisioning of DocuSeal from the control plane.

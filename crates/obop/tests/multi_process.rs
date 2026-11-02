@@ -71,12 +71,25 @@ impl Drop for Server {
     }
 }
 
+/// A port nobody listens on, and one this test binary has not handed out before. The tests of a
+/// binary run side by side and each starts servers: a port that is free when it is chosen is not
+/// bound until the server has opened its database, and in that time another test could be given
+/// the same port. Two servers then ask for one port, the later one exits, and the test talks to
+/// the other test's server (a token of one database refused as unknown by the "other process").
 fn free_port() -> u16 {
-    TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap()
-        .port()
+    static GIVEN: std::sync::Mutex<Vec<u16>> = std::sync::Mutex::new(Vec::new());
+    loop {
+        let port = TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        let mut given = GIVEN.lock().unwrap_or_else(|e| e.into_inner());
+        if !given.contains(&port) {
+            given.push(port);
+            return port;
+        }
+    }
 }
 
 fn obop() -> Command {
@@ -108,9 +121,15 @@ fn start_cmd(kind: &str, db: &str, env: &[(&str, &str)]) -> Server {
         .stdout(Stdio::null())
         .stderr(std::fs::File::create(&log).unwrap());
     let child = cmd.spawn().expect("spawn obop serve");
-    let s = Server { child, port, log };
+    let mut s = Server { child, port, log };
     let deadline = Instant::now() + Duration::from_secs(60);
     loop {
+        if let Some(status) = s.child.try_wait().expect("wait for obop serve") {
+            panic!(
+                "obop serve exited ({status}) before it came up: {}",
+                std::fs::read_to_string(&s.log).unwrap_or_default()
+            );
+        }
         if TcpStream::connect(("127.0.0.1", port)).is_ok() {
             return s;
         }

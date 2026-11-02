@@ -135,6 +135,7 @@
   white-space: nowrap;
 }
 .side-label {
+  margin-block-start: 1rem;
   padding: 0 0.6rem 0.35rem;
 }
 .sidebar a {
@@ -155,9 +156,8 @@
   position: relative;
 }
 .sidebar a[aria-current="page"] {
-  background: var(--surface);
+  background: var(--accent-soft);
   color: var(--text);
-  box-shadow: var(--shadow-1);
 }
 .sidebar a[aria-current="page"]::before {
   content: "";
@@ -335,7 +335,7 @@
   border-radius: var(--radius-md);
   cursor: pointer;
 }
-.palette li > span:not(.pal-ico) {
+.palette li > .pal-title {
   flex: 1;
 }
 .palette li[aria-selected="true"] {
@@ -734,4 +734,29 @@
 }
 .kmore {
   align-self: center;
+}
+
+/* ---------- Drive browser ---------- */
+.drive-search {
+  display: flex;
+  align-items: end;
+  gap: 0.5rem;
+}
+.drive-search > :first-child {
+  flex: 1;
+}
+.drive-trail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.15rem;
+  color: var(--text-muted);
+}
+.drive-trail > span {
+  display: inline-flex;
+  align-items: center;
+}
+.drive-actions {
+  text-align: end;
+  white-space: nowrap;
 }

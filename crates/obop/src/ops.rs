@@ -375,13 +375,12 @@ pub(crate) fn server_info(url: &str, kind: &str) -> Option<Arc<dyn obop_ops::pga
 }
 
 /// The store of uploaded pictures and files for the database at `url`: its records are in the
-/// database, its bytes where `OBOP_BLOB_DIR` and the URL say (D60).
+/// database, its bytes where `OBOP_BLOB_STORE`, `OBOP_BLOB_DIR` and the URL say (D60).
 pub(crate) fn blob_catalog(
     backend: &std::sync::Arc<dyn obop_storage::Backend>,
     url: &str,
 ) -> Result<obop_storage::blob::Catalog, ExitCode> {
-    let dir = std::env::var("OBOP_BLOB_DIR").ok();
-    let bytes = obop_storage::blob::open_bytes(url, dir.as_deref())
+    let bytes = obop_blob_gdrive::open_configured(url)
         .map_err(|e| fail(&format!("cannot open the uploaded files: {e}")))?;
     Ok(obop_storage::blob::Catalog::new(backend.clone(), bytes))
 }

@@ -1,0 +1,21 @@
+[package]
+name = "obop-blob-gdrive"
+version.workspace = true
+description = "Uploaded files on Google Drive: a BlobBytes store over the Drive v3 REST API with an OAuth2 refresh token, and the loopback authorisation helper"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+obop-storage.workspace = true
+serde_json = "1"
+ureq = "3"
+base64 = "0.22"
+sha2 = "0.11.1"
+getrandom = "0.4"
+url = "2.5.8"
+
+[lints]
+workspace = true

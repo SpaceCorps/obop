@@ -1567,7 +1567,7 @@
   "info": {
     "description": "Every model has the same generated commands: list, search, get, create, update, delete and its own actions, all POST with a JSON body. Personal and financial fields are masked for agent tokens; irreversible steps answer 202 with a plan for a human to approve. Errors are JSON with error, code and hint. Every operation can answer 503 (storage_busy, storage_unavailable or storage_timeout) with a Retry-After header; its applied field says what became of the request's own changes: none (repeat it), unknown (after storage_unavailable: read before you repeat a write) or partial (a step was refused after a change committed: do not repeat it blindly). Sign in (or present a token) to see the commands your token may use; this document lists only those.",
     "title": "obop instance API",
-    "version": "0.2.0"
+    "version": "0.2.1"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -2553,38 +2553,47 @@
                       "properties": {
                         "config": {
                           "description": "Non-secret settings as a JSON object",
+                          "maxLength": 100000,
                           "type": "string"
                         },
                         "credentials": {
                           "description": "Credentials as a JSON object; write-only, stored encrypted, never returned",
+                          "maxLength": 100000,
                           "type": "string"
                         },
                         "credentials_hint": {
                           "description": "Whether credentials are set, with at most the last four characters",
+                          "maxLength": 2048,
                           "type": "string"
                         },
                         "field_allowlist": {
                           "description": "Fields that may leave or be accepted, as a JSON object of model to field names; empty means nothing",
+                          "maxLength": 100000,
                           "type": "string"
                         },
                         "last_error": {
                           "description": "Summary of the last failure, without payloads",
+                          "maxLength": 2048,
                           "type": "string"
                         },
                         "last_sync_at": {
                           "description": "When the connection last ran",
+                          "maxLength": 2048,
                           "type": "string"
                         },
                         "name": {
                           "description": "A name that tells you what the connection is for",
+                          "maxLength": 2048,
                           "type": "string"
                         },
                         "oauth_tokens": {
                           "description": "OAuth tokens; write-only, stored encrypted, never returned",
+                          "maxLength": 100000,
                           "type": "string"
                         },
                         "owner_groups": {
                           "description": "Permission groups the owner held when the connection was last changed",
+                          "maxLength": 2048,
                           "type": "string"
                         },
                         "owner_scope": {
@@ -2597,14 +2606,17 @@
                         },
                         "owner_user": {
                           "description": "The person who owns the connection (personal data: agents see it masked)",
+                          "maxLength": 2048,
                           "type": "string"
                         },
                         "policy": {
                           "description": "Treatment overrides by class or field and impact-assessment acknowledgements, as JSON",
+                          "maxLength": 100000,
                           "type": "string"
                         },
                         "provider": {
                           "description": "Id of the provider from the catalogue",
+                          "maxLength": 2048,
                           "type": "string"
                         },
                         "rate_limit_per_hour": {
@@ -2613,6 +2625,7 @@
                         },
                         "result": {
                           "description": "Output of the last command (test, sync, authorisation link); never stored",
+                          "maxLength": 100000,
                           "type": "string"
                         },
                         "retention_days": {
@@ -2937,38 +2950,47 @@
                 "properties": {
                   "config": {
                     "description": "Non-secret settings as a JSON object",
+                    "maxLength": 100000,
                     "type": "string"
                   },
                   "credentials": {
                     "description": "Credentials as a JSON object; write-only, stored encrypted, never returned",
+                    "maxLength": 100000,
                     "type": "string"
                   },
                   "credentials_hint": {
                     "description": "Whether credentials are set, with at most the last four characters",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "field_allowlist": {
                     "description": "Fields that may leave or be accepted, as a JSON object of model to field names; empty means nothing",
+                    "maxLength": 100000,
                     "type": "string"
                   },
                   "last_error": {
                     "description": "Summary of the last failure, without payloads",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "last_sync_at": {
                     "description": "When the connection last ran",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "name": {
                     "description": "A name that tells you what the connection is for",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "oauth_tokens": {
                     "description": "OAuth tokens; write-only, stored encrypted, never returned",
+                    "maxLength": 100000,
                     "type": "string"
                   },
                   "owner_groups": {
                     "description": "Permission groups the owner held when the connection was last changed",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "owner_scope": {
@@ -2981,14 +3003,17 @@
                   },
                   "owner_user": {
                     "description": "The person who owns the connection (personal data: agents see it masked)",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "policy": {
                     "description": "Treatment overrides by class or field and impact-assessment acknowledgements, as JSON",
+                    "maxLength": 100000,
                     "type": "string"
                   },
                   "provider": {
                     "description": "Id of the provider from the catalogue",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "rate_limit_per_hour": {
@@ -2997,6 +3022,7 @@
                   },
                   "result": {
                     "description": "Output of the last command (test, sync, authorisation link); never stored",
+                    "maxLength": 100000,
                     "type": "string"
                   },
                   "retention_days": {
@@ -4660,18 +4686,22 @@
                 "properties": {
                   "config": {
                     "description": "Non-secret settings as a JSON object",
+                    "maxLength": 100000,
                     "type": "string"
                   },
                   "credentials": {
                     "description": "Credentials as a JSON object; write-only, stored encrypted, never returned",
+                    "maxLength": 100000,
                     "type": "string"
                   },
                   "credentials_hint": {
                     "description": "Whether credentials are set, with at most the last four characters",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "field_allowlist": {
                     "description": "Fields that may leave or be accepted, as a JSON object of model to field names; empty means nothing",
+                    "maxLength": 100000,
                     "type": "string"
                   },
                   "id": {
@@ -4679,22 +4709,27 @@
                   },
                   "last_error": {
                     "description": "Summary of the last failure, without payloads",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "last_sync_at": {
                     "description": "When the connection last ran",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "name": {
                     "description": "A name that tells you what the connection is for",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "oauth_tokens": {
                     "description": "OAuth tokens; write-only, stored encrypted, never returned",
+                    "maxLength": 100000,
                     "type": "string"
                   },
                   "owner_groups": {
                     "description": "Permission groups the owner held when the connection was last changed",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "owner_scope": {
@@ -4707,14 +4742,17 @@
                   },
                   "owner_user": {
                     "description": "The person who owns the connection (personal data: agents see it masked)",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "policy": {
                     "description": "Treatment overrides by class or field and impact-assessment acknowledgements, as JSON",
+                    "maxLength": 100000,
                     "type": "string"
                   },
                   "provider": {
                     "description": "Id of the provider from the catalogue",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "rate_limit_per_hour": {
@@ -4723,6 +4761,7 @@
                   },
                   "result": {
                     "description": "Output of the last command (test, sync, authorisation link); never stored",
+                    "maxLength": 100000,
                     "type": "string"
                   },
                   "retention_days": {
@@ -5419,6 +5458,7 @@
                       "properties": {
                         "classes": {
                           "description": "Data classes that may flow under this record, computed from the connection",
+                          "maxLength": 2048,
                           "type": "string"
                         },
                         "connection": {
@@ -5427,10 +5467,12 @@
                         },
                         "fields_summary": {
                           "description": "Models and fields that may flow, computed from the connection",
+                          "maxLength": 100000,
                           "type": "string"
                         },
                         "given_by": {
                           "description": "Who recorded it (personal data: agents see it masked)",
+                          "maxLength": 2048,
                           "type": "string"
                         },
                         "legal_basis": {
@@ -5445,18 +5487,22 @@
                         },
                         "note": {
                           "description": "Explanation; for legitimate interest the balancing test",
+                          "maxLength": 100000,
                           "type": "string"
                         },
                         "owner_user": {
                           "description": "Owner of the connection (personal data: agents see it masked)",
+                          "maxLength": 2048,
                           "type": "string"
                         },
                         "purpose": {
                           "description": "The purpose the data is processed for",
+                          "maxLength": 100000,
                           "type": "string"
                         },
                         "recorded_at": {
                           "description": "When it was recorded",
+                          "maxLength": 2048,
                           "type": "string"
                         },
                         "state": {
@@ -5470,6 +5516,7 @@
                         },
                         "subject": {
                           "description": "Id of the party when the subject is a party (personal data: agents see it masked)",
+                          "maxLength": 2048,
                           "type": "string"
                         },
                         "subject_kind": {
@@ -5483,10 +5530,12 @@
                         },
                         "withdrawn_at": {
                           "description": "When it was withdrawn, if it was",
+                          "maxLength": 2048,
                           "type": "string"
                         },
                         "withdrawn_by": {
                           "description": "Who withdrew it (personal data: agents see it masked)",
+                          "maxLength": 2048,
                           "type": "string"
                         }
                       },
@@ -5667,6 +5716,7 @@
                 "properties": {
                   "classes": {
                     "description": "Data classes that may flow under this record, computed from the connection",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "connection": {
@@ -5675,10 +5725,12 @@
                   },
                   "fields_summary": {
                     "description": "Models and fields that may flow, computed from the connection",
+                    "maxLength": 100000,
                     "type": "string"
                   },
                   "given_by": {
                     "description": "Who recorded it (personal data: agents see it masked)",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "legal_basis": {
@@ -5693,18 +5745,22 @@
                   },
                   "note": {
                     "description": "Explanation; for legitimate interest the balancing test",
+                    "maxLength": 100000,
                     "type": "string"
                   },
                   "owner_user": {
                     "description": "Owner of the connection (personal data: agents see it masked)",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "purpose": {
                     "description": "The purpose the data is processed for",
+                    "maxLength": 100000,
                     "type": "string"
                   },
                   "recorded_at": {
                     "description": "When it was recorded",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "state": {
@@ -5718,6 +5774,7 @@
                   },
                   "subject": {
                     "description": "Id of the party when the subject is a party (personal data: agents see it masked)",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "subject_kind": {
@@ -5731,10 +5788,12 @@
                   },
                   "withdrawn_at": {
                     "description": "When it was withdrawn, if it was",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "withdrawn_by": {
                     "description": "Who withdrew it (personal data: agents see it masked)",
+                    "maxLength": 2048,
                     "type": "string"
                   }
                 },
@@ -6506,6 +6565,7 @@
                 "properties": {
                   "classes": {
                     "description": "Data classes that may flow under this record, computed from the connection",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "connection": {
@@ -6514,10 +6574,12 @@
                   },
                   "fields_summary": {
                     "description": "Models and fields that may flow, computed from the connection",
+                    "maxLength": 100000,
                     "type": "string"
                   },
                   "given_by": {
                     "description": "Who recorded it (personal data: agents see it masked)",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "id": {
@@ -6535,18 +6597,22 @@
                   },
                   "note": {
                     "description": "Explanation; for legitimate interest the balancing test",
+                    "maxLength": 100000,
                     "type": "string"
                   },
                   "owner_user": {
                     "description": "Owner of the connection (personal data: agents see it masked)",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "purpose": {
                     "description": "The purpose the data is processed for",
+                    "maxLength": 100000,
                     "type": "string"
                   },
                   "recorded_at": {
                     "description": "When it was recorded",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "state": {
@@ -6560,6 +6626,7 @@
                   },
                   "subject": {
                     "description": "Id of the party when the subject is a party (personal data: agents see it masked)",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "subject_kind": {
@@ -6573,10 +6640,12 @@
                   },
                   "withdrawn_at": {
                     "description": "When it was withdrawn, if it was",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "withdrawn_by": {
                     "description": "Who withdrew it (personal data: agents see it masked)",
+                    "maxLength": 2048,
                     "type": "string"
                   }
                 },
@@ -8014,10 +8083,12 @@
                 "properties": {
                   "app_version": {
                     "description": "The version of the app, as it reported it at sign-in and at each refresh",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "client_name": {
                     "description": "The mobile app that signed in, as it called itself",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "expires_at": {
@@ -8028,6 +8099,7 @@
                   },
                   "grant": {
                     "description": "The refresh-token family the device is bound to (an identifier, not a token)",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "id": {
@@ -8041,14 +8113,17 @@
                   },
                   "name": {
                     "description": "What the device is called; the person can rename it (personal data: agents see it masked)",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "platform": {
                     "description": "The platform the app reported, such as android or ios",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "push_token": {
                     "description": "The address of the push service for this device. Never shown to anyone and not written in this version: push is not part of the first mobile slice",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "registered_at": {
@@ -8073,6 +8148,7 @@
                   },
                   "user": {
                     "description": "The account the device belongs to (personal data: agents see it masked)",
+                    "maxLength": 2048,
                     "type": "string"
                   }
                 },
@@ -8990,6 +9066,7 @@
                   },
                   "host_allowlist": {
                     "description": "Hosts connections may reach, comma separated; empty means no extra restriction",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "id": {
@@ -9001,6 +9078,7 @@
                   },
                   "result": {
                     "description": "Output of the last command (checklist, purge); never stored",
+                    "maxLength": 100000,
                     "type": "string"
                   }
                 },
@@ -9147,6 +9225,7 @@
                       "properties": {
                         "currency": {
                           "description": "ISO 4217 currency code",
+                          "maxLength": 2048,
                           "type": "string"
                         },
                         "party_id": {
@@ -9463,6 +9542,7 @@
                 "properties": {
                   "currency": {
                     "description": "ISO 4217 currency code",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "party_id": {
@@ -10371,6 +10451,7 @@
                 "properties": {
                   "currency": {
                     "description": "ISO 4217 currency code",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "id": {
@@ -10537,6 +10618,7 @@
                       "properties": {
                         "description": {
                           "description": "What is invoiced",
+                          "maxLength": 2048,
                           "type": "string"
                         },
                         "invoice_id": {
@@ -10733,6 +10815,7 @@
                 "properties": {
                   "description": {
                     "description": "What is invoiced",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "invoice_id": {
@@ -11520,6 +11603,7 @@
                 "properties": {
                   "description": {
                     "description": "What is invoiced",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "id": {
@@ -11685,10 +11769,12 @@
                       "properties": {
                         "contact_email": {
                           "description": "Email of the contact person (personal data: agents see it masked)",
+                          "maxLength": 2048,
                           "type": "string"
                         },
                         "contact_name": {
                           "description": "Name of the contact person (personal data: agents see it masked)",
+                          "maxLength": 2048,
                           "type": "string"
                         },
                         "expected_revenue_minor": {
@@ -11707,6 +11793,7 @@
                         },
                         "title": {
                           "description": "Short description of the opportunity",
+                          "maxLength": 2048,
                           "type": "string"
                         }
                       },
@@ -11885,10 +11972,12 @@
                 "properties": {
                   "contact_email": {
                     "description": "Email of the contact person (personal data: agents see it masked)",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "contact_name": {
                     "description": "Name of the contact person (personal data: agents see it masked)",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "expected_revenue_minor": {
@@ -11907,6 +11996,7 @@
                   },
                   "title": {
                     "description": "Short description of the opportunity",
+                    "maxLength": 2048,
                     "type": "string"
                   }
                 },
@@ -13172,10 +13262,12 @@
                 "properties": {
                   "contact_email": {
                     "description": "Email of the contact person (personal data: agents see it masked)",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "contact_name": {
                     "description": "Name of the contact person (personal data: agents see it masked)",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "expected_revenue_minor": {
@@ -13197,6 +13289,7 @@
                   },
                   "title": {
                     "description": "Short description of the opportunity",
+                    "maxLength": 2048,
                     "type": "string"
                   }
                 },
@@ -14060,6 +14153,7 @@
                         },
                         "driver": {
                           "description": "Login of the driver of the trip; set by the server from the trip (personal data: agents see it masked)",
+                          "maxLength": 2048,
                           "type": "string"
                         },
                         "lat": {
@@ -14280,6 +14374,7 @@
                   },
                   "driver": {
                     "description": "Login of the driver of the trip; set by the server from the trip (personal data: agents see it masked)",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "lat": {
@@ -15091,6 +15186,7 @@
                   },
                   "driver": {
                     "description": "Login of the driver of the trip; set by the server from the trip (personal data: agents see it masked)",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "id": {
@@ -15272,6 +15368,7 @@
                       "properties": {
                         "client_trip_id": {
                           "description": "Identifier the app made when the driver pressed Start (a random UUID, version 4: not a version 7, which carries the time); unique per driver, and how the app finds its trip again (unique)",
+                          "maxLength": 2048,
                           "type": "string"
                         },
                         "confirmed_at": {
@@ -15282,6 +15379,7 @@
                         },
                         "discard_reason": {
                           "description": "Why the driver discards the trip; written before discard (personal data: agents see it masked)",
+                          "maxLength": 100000,
                           "type": "string"
                         },
                         "distance_m": {
@@ -15292,6 +15390,7 @@
                         },
                         "driver": {
                           "description": "Login of the person who recorded the trip; set by the server to the caller (personal data: agents see it masked)",
+                          "maxLength": 2048,
                           "type": "string"
                         },
                         "end_lat": {
@@ -15318,6 +15417,7 @@
                         },
                         "integrity": {
                           "description": "Flags the validator set when the trip ended: seq_gap, speed_jump and low_accuracy with their counts; empty when the track was clean",
+                          "maxLength": 2048,
                           "type": "string"
                         },
                         "last_seq": {
@@ -15335,10 +15435,12 @@
                         },
                         "reject_reason": {
                           "description": "Why the reviewer rejects the trip; written while the trip is in review, before reject; cleared when the driver submits again (personal data: agents see it masked)",
+                          "maxLength": 100000,
                           "type": "string"
                         },
                         "reviewed_by": {
                           "description": "Login of the reviewer who confirmed or rejected the trip, or of the person who approved an agent's proposal to do so (personal data: agents see it masked)",
+                          "maxLength": 2048,
                           "type": "string"
                         },
                         "start_lat": {
@@ -15373,6 +15475,7 @@
                         },
                         "vehicle": {
                           "description": "The vehicle the trip was made with, as the driver names it (a plate or a name) (personal data: agents see it masked)",
+                          "maxLength": 2048,
                           "type": "string"
                         }
                       },
@@ -15678,6 +15781,7 @@
                 "properties": {
                   "client_trip_id": {
                     "description": "Identifier the app made when the driver pressed Start (a random UUID, version 4: not a version 7, which carries the time); unique per driver, and how the app finds its trip again (unique)",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "confirmed_at": {
@@ -15688,6 +15792,7 @@
                   },
                   "discard_reason": {
                     "description": "Why the driver discards the trip; written before discard (personal data: agents see it masked)",
+                    "maxLength": 100000,
                     "type": "string"
                   },
                   "distance_m": {
@@ -15698,6 +15803,7 @@
                   },
                   "driver": {
                     "description": "Login of the person who recorded the trip; set by the server to the caller (personal data: agents see it masked)",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "end_lat": {
@@ -15724,6 +15830,7 @@
                   },
                   "integrity": {
                     "description": "Flags the validator set when the trip ended: seq_gap, speed_jump and low_accuracy with their counts; empty when the track was clean",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "last_seq": {
@@ -15741,10 +15848,12 @@
                   },
                   "reject_reason": {
                     "description": "Why the reviewer rejects the trip; written while the trip is in review, before reject; cleared when the driver submits again (personal data: agents see it masked)",
+                    "maxLength": 100000,
                     "type": "string"
                   },
                   "reviewed_by": {
                     "description": "Login of the reviewer who confirmed or rejected the trip, or of the person who approved an agent's proposal to do so (personal data: agents see it masked)",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "start_lat": {
@@ -15779,6 +15888,7 @@
                   },
                   "vehicle": {
                     "description": "The vehicle the trip was made with, as the driver names it (a plate or a name) (personal data: agents see it masked)",
+                    "maxLength": 2048,
                     "type": "string"
                   }
                 },
@@ -17297,6 +17407,7 @@
                 "properties": {
                   "client_trip_id": {
                     "description": "Identifier the app made when the driver pressed Start (a random UUID, version 4: not a version 7, which carries the time); unique per driver, and how the app finds its trip again (unique)",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "confirmed_at": {
@@ -17307,6 +17418,7 @@
                   },
                   "discard_reason": {
                     "description": "Why the driver discards the trip; written before discard (personal data: agents see it masked)",
+                    "maxLength": 100000,
                     "type": "string"
                   },
                   "distance_m": {
@@ -17317,6 +17429,7 @@
                   },
                   "driver": {
                     "description": "Login of the person who recorded the trip; set by the server to the caller (personal data: agents see it masked)",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "end_lat": {
@@ -17346,6 +17459,7 @@
                   },
                   "integrity": {
                     "description": "Flags the validator set when the trip ended: seq_gap, speed_jump and low_accuracy with their counts; empty when the track was clean",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "last_seq": {
@@ -17363,10 +17477,12 @@
                   },
                   "reject_reason": {
                     "description": "Why the reviewer rejects the trip; written while the trip is in review, before reject; cleared when the driver submits again (personal data: agents see it masked)",
+                    "maxLength": 100000,
                     "type": "string"
                   },
                   "reviewed_by": {
                     "description": "Login of the reviewer who confirmed or rejected the trip, or of the person who approved an agent's proposal to do so (personal data: agents see it masked)",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "start_lat": {
@@ -17401,6 +17517,7 @@
                   },
                   "vehicle": {
                     "description": "The vehicle the trip was made with, as the driver names it (a plate or a name) (personal data: agents see it masked)",
+                    "maxLength": 2048,
                     "type": "string"
                   }
                 },
@@ -18703,18 +18820,22 @@
                       "properties": {
                         "email": {
                           "description": "Work email address (personal data: agents see it masked)",
+                          "maxLength": 2048,
                           "type": "string"
                         },
                         "name": {
                           "description": "Display name (personal data: agents see it masked)",
+                          "maxLength": 2048,
                           "type": "string"
                         },
                         "notes": {
                           "description": "Free-text internal notes (personal data: agents see it masked)",
+                          "maxLength": 100000,
                           "type": "string"
                         },
                         "tax_id": {
                           "description": "Tax identifier of a natural person (personal data of a sensitive class: not given to agents at all)",
+                          "maxLength": 2048,
                           "type": "string"
                         }
                       },
@@ -18893,14 +19014,17 @@
                 "properties": {
                   "email": {
                     "description": "Work email address (personal data: agents see it masked)",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "name": {
                     "description": "Display name (personal data: agents see it masked)",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "notes": {
                     "description": "Free-text internal notes (personal data: agents see it masked)",
+                    "maxLength": 100000,
                     "type": "string"
                   },
                   "photo": {
@@ -18910,6 +19034,7 @@
                   },
                   "tax_id": {
                     "description": "Tax identifier of a natural person (personal data of a sensitive class: not given to agents at all)",
+                    "maxLength": 2048,
                     "type": "string"
                   }
                 },
@@ -19804,6 +19929,7 @@
                 "properties": {
                   "email": {
                     "description": "Work email address (personal data: agents see it masked)",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "id": {
@@ -19811,10 +19937,12 @@
                   },
                   "name": {
                     "description": "Display name (personal data: agents see it masked)",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "notes": {
                     "description": "Free-text internal notes (personal data: agents see it masked)",
+                    "maxLength": 100000,
                     "type": "string"
                   },
                   "photo": {
@@ -19824,6 +19952,7 @@
                   },
                   "tax_id": {
                     "description": "Tax identifier of a natural person (personal data of a sensitive class: not given to agents at all)",
+                    "maxLength": 2048,
                     "type": "string"
                   }
                 },
@@ -21288,10 +21417,12 @@
                         },
                         "name": {
                           "description": "Product name",
+                          "maxLength": 2048,
                           "type": "string"
                         },
                         "sku": {
                           "description": "Stock keeping unit; no two products share one (unique)",
+                          "maxLength": 2048,
                           "type": "string"
                         }
                       },
@@ -21483,10 +21614,12 @@
                   },
                   "name": {
                     "description": "Product name",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "sku": {
                     "description": "Stock keeping unit; no two products share one (unique)",
+                    "maxLength": 2048,
                     "type": "string"
                   }
                 },
@@ -22272,10 +22405,12 @@
                   },
                   "name": {
                     "description": "Product name",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "sku": {
                     "description": "Stock keeping unit; no two products share one (unique)",
+                    "maxLength": 2048,
                     "type": "string"
                   }
                 },
@@ -22422,10 +22557,12 @@
                       "properties": {
                         "allowed_group": {
                           "description": "Permission group that may use it; empty means connectors.user",
+                          "maxLength": 2048,
                           "type": "string"
                         },
                         "default_policy": {
                           "description": "Policy JSON that new connections of this provider start with",
+                          "maxLength": 100000,
                           "type": "string"
                         },
                         "dpa_recorded": {
@@ -22434,6 +22571,7 @@
                         },
                         "dpa_reference": {
                           "description": "Where the agreement is kept or its reference",
+                          "maxLength": 2048,
                           "type": "string"
                         },
                         "enabled": {
@@ -22452,18 +22590,22 @@
                         },
                         "legal_basis_text": {
                           "description": "Text shown to people when they are asked for consent",
+                          "maxLength": 100000,
                           "type": "string"
                         },
                         "oauth_client_id": {
                           "description": "OAuth client id you registered with the provider",
+                          "maxLength": 2048,
                           "type": "string"
                         },
                         "oauth_client_secret": {
                           "description": "OAuth client secret; write-only, stored encrypted",
+                          "maxLength": 100000,
                           "type": "string"
                         },
                         "provider": {
                           "description": "Id of the provider this policy is for",
+                          "maxLength": 2048,
                           "type": "string"
                         },
                         "users_may_use": {
@@ -22646,10 +22788,12 @@
                 "properties": {
                   "allowed_group": {
                     "description": "Permission group that may use it; empty means connectors.user",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "default_policy": {
                     "description": "Policy JSON that new connections of this provider start with",
+                    "maxLength": 100000,
                     "type": "string"
                   },
                   "dpa_recorded": {
@@ -22658,6 +22802,7 @@
                   },
                   "dpa_reference": {
                     "description": "Where the agreement is kept or its reference",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "enabled": {
@@ -22676,18 +22821,22 @@
                   },
                   "legal_basis_text": {
                     "description": "Text shown to people when they are asked for consent",
+                    "maxLength": 100000,
                     "type": "string"
                   },
                   "oauth_client_id": {
                     "description": "OAuth client id you registered with the provider",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "oauth_client_secret": {
                     "description": "OAuth client secret; write-only, stored encrypted",
+                    "maxLength": 100000,
                     "type": "string"
                   },
                   "provider": {
                     "description": "Id of the provider this policy is for",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "users_may_use": {
@@ -23461,10 +23610,12 @@
                 "properties": {
                   "allowed_group": {
                     "description": "Permission group that may use it; empty means connectors.user",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "default_policy": {
                     "description": "Policy JSON that new connections of this provider start with",
+                    "maxLength": 100000,
                     "type": "string"
                   },
                   "dpa_recorded": {
@@ -23473,6 +23624,7 @@
                   },
                   "dpa_reference": {
                     "description": "Where the agreement is kept or its reference",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "enabled": {
@@ -23494,18 +23646,22 @@
                   },
                   "legal_basis_text": {
                     "description": "Text shown to people when they are asked for consent",
+                    "maxLength": 100000,
                     "type": "string"
                   },
                   "oauth_client_id": {
                     "description": "OAuth client id you registered with the provider",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "oauth_client_secret": {
                     "description": "OAuth client secret; write-only, stored encrypted",
+                    "maxLength": 100000,
                     "type": "string"
                   },
                   "provider": {
                     "description": "Id of the provider this policy is for",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "users_may_use": {
@@ -23656,6 +23812,7 @@
                       "properties": {
                         "currency": {
                           "description": "ISO 4217 currency code",
+                          "maxLength": 2048,
                           "type": "string"
                         },
                         "party_id": {
@@ -24092,6 +24249,7 @@
                 "properties": {
                   "currency": {
                     "description": "ISO 4217 currency code",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "party_id": {
@@ -24995,6 +25153,7 @@
                 "properties": {
                   "currency": {
                     "description": "ISO 4217 currency code",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "id": {
@@ -25157,6 +25316,7 @@
                       "properties": {
                         "description": {
                           "description": "What is sold, as it appears on the invoice",
+                          "maxLength": 2048,
                           "type": "string"
                         },
                         "order_id": {
@@ -25353,6 +25513,7 @@
                 "properties": {
                   "description": {
                     "description": "What is sold, as it appears on the invoice",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "order_id": {
@@ -26140,6 +26301,7 @@
                 "properties": {
                   "description": {
                     "description": "What is sold, as it appears on the invoice",
+                    "maxLength": 2048,
                     "type": "string"
                   },
                   "id": {

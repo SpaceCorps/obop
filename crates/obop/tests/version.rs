@@ -26,7 +26,7 @@ fn version(args: &[&str]) -> String {
     String::from_utf8(out.stdout).unwrap()
 }
 
-/// `obop 0.2.0 (abcdef012345)`: the commit between the parentheses, or `unknown`.
+/// `obop 0.2.1 (abcdef012345)`: the commit between the parentheses, or `unknown`.
 fn commit_of(line: &str) -> &str {
     let rest = line
         .strip_prefix(&format!("obop {} (", env!("CARGO_PKG_VERSION")))
@@ -38,7 +38,7 @@ fn commit_of(line: &str) -> &str {
 #[test]
 fn the_version_line_keeps_its_prefix_and_ends_in_the_commit() {
     let line = version(&["--version"]);
-    assert!(line.starts_with("obop 0.2.0 ("), "{line:?}");
+    assert!(line.starts_with("obop 0.2.1 ("), "{line:?}");
     assert_eq!(line.lines().count(), 1, "{line:?}");
     let commit = commit_of(&line);
     assert!(

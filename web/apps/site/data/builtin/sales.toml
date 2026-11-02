@@ -1,7 +1,7 @@
 # Snapshot of crates/modules/sales/src/lib.rs (built-in).
 [module]
 id = "sales"
-version = "0.2.0"
+version = "0.2.1"
 name = "Sales"
 description = "Quotations and confirmed orders for customers."
 summary = "Quotations and sales orders for your customers."

@@ -95,7 +95,7 @@ export const actionLabel = (a: Command) => actionTitle(a);
 export type MoveOutcome =
   | { kind: "ok"; row: unknown }
   | { kind: "approval"; planId: string; message: string }
-  | { kind: "error"; message: string };
+  | { kind: "error"; message: string; raw: string };
 
 /** Text for the toast of a 202: names the plan and what it would do. */
 export function moveApproval(
@@ -142,5 +142,6 @@ export async function moveRecord(
       message: moveApproval(noun, to, r.planId, m.action, field),
     };
   }
-  return { kind: "error", message: serverMessage(r.message) };
+  // `raw` is the server's own sentence, for a caller that keeps it and words it when it is shown.
+  return { kind: "error", message: serverMessage(r.message), raw: r.message };
 }

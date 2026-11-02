@@ -11,6 +11,7 @@ use shared::{Pending, Plans};
 
 use obop_masking::mode_for;
 pub use obop_masking::{PrincipalKind, RestoreError, Vault};
+pub use obop_registry::Bound;
 use obop_registry::labels::Texts;
 use obop_registry::{FieldDef, Module, Transition, Translations};
 use obop_types::MaskMode;
@@ -365,6 +366,19 @@ pub struct FieldInfo {
     pub shows_option_of: Option<String>,
     /// The condition on the same record under which the label shows; the browser evaluates it.
     pub shows_option_when: Option<String>,
+    /// `text` and `longtext` (D90): the most characters a written value has, the default of the
+    /// kind when the field declares none (`None` for a computed or numbered field and every other
+    /// kind), and the fewest, when the field declares a minimum.
+    pub max_length: Option<u32>,
+    pub min_length: Option<u32>,
+    /// `number`, `money` and `decimal` (D90): the declared bounds, inclusive. A `decimal` bound is
+    /// an exact decimal at the scale of the field.
+    pub min: Option<Bound>,
+    pub max: Option<Bound>,
+    /// The limits the field declares as a parenthesised sentence for a description (OpenAPI, MCP),
+    /// `(at most 2000 characters)` or `(from 0 to 100)`; empty when it declares none (the default
+    /// of its kind is in `max_length`, not in the description).
+    pub limits_note: String,
 }
 
 impl FieldInfo {
@@ -593,6 +607,11 @@ impl Dispatcher {
                                     .as_ref()
                                     .and_then(|s| s.when.as_ref())
                                     .map(|w| w.source.clone()),
+                                max_length: f.effective_max_length(),
+                                min_length: f.effective_min_length(),
+                                min: f.lower_bound(),
+                                max: f.upper_bound(),
+                                limits_note: f.limits_note(),
                             }
                         })
                         .collect(),
@@ -1732,6 +1751,8 @@ mod engine_tests;
 mod keyexpr_parity;
 #[cfg(test)]
 mod kinds_tests;
+#[cfg(test)]
+mod limits_tests;
 #[cfg(test)]
 mod shows_option_tests;
 #[cfg(test)]

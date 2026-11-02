@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { fmt, inSentence, msg, t } from "@obop/ui";
+import { Button, fmt, inSentence, msg, t } from "@obop/ui";
 import { search, type ModelMeta, type Row } from "./api.ts";
 import { collect } from "./bulk.ts";
 import type { App } from "./Chrome.tsx";
@@ -7,6 +7,7 @@ import { ControlPanel, type ViewDef } from "./ControlPanel.tsx";
 import { useData, useRows } from "./data.tsx";
 import { loadFavorites, readPref, writePref, type Favorite } from "./favorites.ts";
 import { isState, visibleFields } from "./format.ts";
+import { DriveBrowser, useDriveStatus } from "./DriveBrowser.tsx";
 import { ImportDialog } from "./ImportDialog.tsx";
 import { fieldTitle, fieldTitleByName, modelTitle } from "./labels.ts";
 import { serverMessage } from "./serverMessage.ts";
@@ -70,6 +71,7 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
   // import into an empty model turns the empty state into the list, and that mount must not close it.
   const [extraDialog, setExtraDialog] = useState<ReactNode>(null);
   const [importing, setImporting] = useState(false);
+  const [drive, setDrive] = useState(false);
   const [newDefaults, setNewDefaults] = useState<Record<string, unknown>>({});
   const [pageSize, setPageSizeState] = useState(() => {
     const n = readPref<number>("obop-pagesize", 100);
@@ -109,6 +111,9 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
   // the filter is expressible. Anything else (an any-field search, a "contains" on a select, grouping
   // the list, a sort by a ref) loads the records, up to 5,000, and works in the browser. See
   // serverQuery.ts.
+  // i18n-memo-ok: a range bound is read the same in every language and region (a dot or a comma is
+  // taken as the decimal mark); the only reader of the i18n store is fmt.exponent(), the digits of
+  // the instance currency, which a change of language or region does not change
   const plan = useMemo(() => toServer(state, fields), [state, fields]);
   const grouped = state.group.length > 0;
   const serverMode = view === "list" && onServer(plan, state);
@@ -210,6 +215,12 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
     pageSize,
     put,
   ]);
+
+  // Documents can be brought in from the connected Google Drive.
+  const driveField = model.fields.some((f) => f.name === "attachment" && f.kind === "file")
+    ? `${model.name}.attachment`
+    : "";
+  const mayDrive = useDriveStatus(d.token, model.name === "documents_document" && !!driveField);
 
   const open = (id: string) => put({ id });
   const close = useCallback(() => put({ id: "" }), [put]);
@@ -382,6 +393,11 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
                   </select>
                 </label>
               )}
+              {mayDrive && driveField && (
+                <Button icon="documents" onClick={() => setDrive(true)}>
+                  {t("From Google Drive")}
+                </Button>
+              )}
               {appExtra}
             </>
           }
@@ -458,6 +474,17 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
         </div>
       </section>
       {extraDialog}
+      {drive && (
+        <DriveBrowser
+          token={d.token}
+          field={driveField}
+          onClose={() => setDrive(false)}
+          onPicked={(v) => {
+            setDrive(false);
+            openNew({ ...v, kind: "contract", confidentiality: "internal" });
+          }}
+        />
+      )}
       {importing && (
         <ImportDialog model={model} title={title} onClose={() => setImporting(false)} />
       )}

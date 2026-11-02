@@ -10,7 +10,7 @@ use crate::pgpool::{Class, PgPoolConfig};
 use crate::refusal::{self, RefusalCode};
 use crate::testing::TestDb;
 use std::sync::mpsc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 fn fields(n: i64) -> Fields {
     let mut m = Fields::new();
@@ -263,8 +263,22 @@ fn read_tx_takes_a_normal_connection_and_not_a_place_in_the_long_read_lane() {
     )
     .unwrap();
     // Open the connections before anything is measured: opening one (TCP, authentication) can
-    // take longer than the window on a loaded machine and is not what is tested.
-    let warm: Vec<_> = (0..3).map(|_| pg.main.lease(false).unwrap()).collect();
+    // take longer than the window on a loaded machine and is not what is tested. A lease that
+    // gives up leaves its connection to finish opening and land idle in the pool, so asking again
+    // gets it; the wait is for the three connections to exist, bounded, and says what it saw.
+    let deadline = Instant::now() + crate::testing::time_budget(60);
+    let warm = loop {
+        match (0..3)
+            .map(|_| pg.main.lease(false))
+            .collect::<Result<Vec<_>>>()
+        {
+            Ok(leases) => break leases,
+            Err(e) => assert!(
+                Instant::now() < deadline,
+                "three connections did not open within the time budget: {e}"
+            ),
+        }
+    };
     drop(warm);
     std::thread::scope(|s| {
         // The ends of the channels are locals of this closure, so that they are dropped when an

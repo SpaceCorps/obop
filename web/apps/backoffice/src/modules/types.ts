@@ -32,6 +32,7 @@ export type Change = {
     | "field_removed"
     | "field_retyped"
     | "field_required"
+    | "field_limits"
     | "option_added"
     | "option_removed"
     | "action_added"

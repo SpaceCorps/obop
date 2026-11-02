@@ -47,6 +47,24 @@ use sha2::{Digest, Sha256};
 pub(crate) const LOCK_SQL: &str =
     "SELECT pg_advisory_xact_lock(hashtextextended('obop-schema', 0))";
 
+/// Makes the session read the catalogue as it is now. A session keeps what it has looked up (does
+/// this name exist?), and what it is told about changes other sessions committed in the meantime
+/// is taken in when it opens a relation or begins a transaction, not when it gets a lock that is
+/// no relation (this one). A process that waited for [`LOCK_SQL`] while another made the schema
+/// therefore saw the part as it was before the wait, took it for missing and ran all its SQL
+/// again over the objects of the other (see `pg_hist_tests`, `a_process_that_waited_for_...`);
+/// reading a catalogue table first, as this does, takes the message in. A catalogue table cannot
+/// be missing or refused, and no privilege beyond connecting is needed.
+const FRESH_SQL: &str = "SELECT 1 FROM pg_catalog.pg_class LIMIT 0";
+
+/// Take the schema lock for the rest of the transaction and see what the one who held it before
+/// committed (see [`FRESH_SQL`]). Every question "is it there?" that decides on DDL is asked after
+/// this, in the transaction that holds the lock.
+pub(crate) fn take_lock(c: &mut Client) -> std::result::Result<(), postgres::Error> {
+    c.batch_execute(LOCK_SQL)?;
+    c.batch_execute(FRESH_SQL)
+}
+
 /// What a part says about its data: findings for [`inspect`].
 pub type Audit = fn(&mut Client) -> Result<Vec<Finding>>;
 
@@ -285,10 +303,7 @@ pub fn install_all(c: &mut Client) -> Result<()> {
 /// Run `f` in a transaction that holds the schema lock, committing when it returns `Ok`.
 pub(crate) fn with_lock<T>(c: &mut Client, f: impl FnOnce(&mut Client) -> Result<T>) -> Result<T> {
     c.batch_execute("BEGIN").map_err(|e| describe(&e))?;
-    let done = c
-        .batch_execute(LOCK_SQL)
-        .map_err(|e| describe(&e))
-        .and_then(|()| f(c));
+    let done = take_lock(c).map_err(|e| describe(&e)).and_then(|()| f(c));
     match done {
         Ok(v) => {
             c.batch_execute("COMMIT").map_err(|e| describe(&e))?;

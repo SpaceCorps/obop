@@ -32,8 +32,13 @@ import { Menu, Select } from "../primitives.tsx";
  * which React cannot see, so the root element is cloned: its props are a new object, the root
  * renders again, and every component below it renders again because the elements it returns are
  * new. Put the provider directly around the root component (a wrapper between them that returns its
- * `children` unchanged would stop the new render). Do not wrap components in `memo` and do not cache translated text in `useMemo` without the
- * language in its dependencies (use `useI18n().lang`), or they keep showing the old language.
+ * `children` unchanged would stop the new render).
+ *
+ * What stops the new render is a cache. A `memo` component renders again only when its props change,
+ * so one that shows translated text calls `useI18n()` in its body (which subscribes it). A `useMemo`
+ * that holds translated, sorted or formatted text keeps the old language unless `lang` (text) or
+ * `locale` (collation and formats) from `useI18n()` is in its dependencies. The back office checks
+ * this in `i18nDeps.test.ts`.
  */
 export function I18nProvider({ children }: { children: ReactNode }) {
   useSyncExternalStore(subscribe, getVersion);

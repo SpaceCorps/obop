@@ -58,11 +58,31 @@ fn text(o: &Output) -> String {
     )
 }
 
-/// A database with one account.
+/// A text that is in no file by chance: `canary-` and 16 random bytes in hex, new for every call.
+/// It is also the name of the account of [`seeded_as`], so that it is in the records of the
+/// backup, and in the file of a plain one. A short canary is no proof: a three-letter word such as
+/// `ada` is made of hex digits, and the header of a sealed file is hex (the backup id, the key id,
+/// the nonce, the wrapped key), so it was found in a sealed file 3 times in 120 backups. Sixteen
+/// random bytes are found by chance never (2^-128 per position), and the `canary-` in front is
+/// no hex digit at all.
+fn canary() -> String {
+    let hex: String = obop_keys::random::<16>()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    format!("canary-{hex}")
+}
+
+/// A database with one account, `ada`.
 fn seeded(dir: &Dir, name: &str) -> String {
+    seeded_as(dir, name, "ada")
+}
+
+/// A database with one account, `user`.
+fn seeded_as(dir: &Dir, name: &str, user: &str) -> String {
     let url = dir.url(name);
     let mut child = obop(&[])
-        .args(["admin", "create", "ada", "--all-groups", "--db", &url])
+        .args(["admin", "create", user, "--all-groups", "--db", &url])
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -91,7 +111,9 @@ fn only_file(dir: &Path, ext: &str) -> PathBuf {
 #[test]
 fn a_key_in_the_environment_makes_the_backup_sealed_and_restore_needs_it() {
     let dir = Dir::new("sealed");
-    let url = seeded(&dir, "src.db");
+    // The name of the account is the canary the scan below looks for.
+    let canary = canary();
+    let url = seeded_as(&dir, "src.db", &canary);
     let out = dir.p("backups");
     let o = run(
         &[("OBOP_BACKUP_KEY", KEY_A)],
@@ -116,7 +138,7 @@ fn a_key_in_the_environment_makes_the_backup_sealed_and_restore_needs_it() {
             "verify",
             file.to_str().unwrap(),
             "--canary",
-            "ada",
+            &canary,
         ],
     );
     assert!(v.status.success(), "{}", text(&v));
@@ -168,7 +190,7 @@ fn a_key_in_the_environment_makes_the_backup_sealed_and_restore_needs_it() {
     );
     assert!(r.status.success(), "{}", text(&r));
     let u = run(&[], &["admin", "users", "--db", &dst]);
-    assert!(text(&u).contains("ada"), "{}", text(&u));
+    assert!(text(&u).contains(&canary), "{}", text(&u));
 }
 
 #[test]
@@ -276,7 +298,8 @@ fn the_server_key_seals_when_there_is_no_backup_key_and_no_key_at_all_means_a_pl
 #[test]
 fn a_canary_scan_of_a_plain_backup_fails_and_a_sealed_one_cannot_be_given_a_gz_name() {
     let dir = Dir::new("canary");
-    let url = seeded(&dir, "src.db");
+    let canary = canary();
+    let url = seeded_as(&dir, "src.db", &canary);
     let out = dir.p("plain");
     let o = run(
         &[],
@@ -293,7 +316,7 @@ fn a_canary_scan_of_a_plain_backup_fails_and_a_sealed_one_cannot_be_given_a_gz_n
             "verify",
             plain.to_str().unwrap(),
             "--canary",
-            "ada",
+            &canary,
         ],
     );
     assert!(!v.status.success(), "{}", text(&v));
