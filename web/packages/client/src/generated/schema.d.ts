@@ -3904,6 +3904,12 @@ export interface components {
             provider?: string;
             /** @description People with connectors.user may connect their own accounts */
             users_may_use?: boolean;
+            /** @description Google Drive: the drive the instance works in (root is My Drive, empty is none) */
+            workspace_id?: string;
+            /** @description Google Drive: the name of that drive, for display */
+            workspace_name?: string;
+            /** @description Google Drive: permission group that may create folders, Docs and uploads there; empty means platform.admin */
+            write_group?: string;
         };
         /** @description A quotation or confirmed order for a customer */
         sale_order: {
@@ -15996,6 +16002,12 @@ export interface operations {
                         provider: string;
                         /** @description People with connectors.user may connect their own accounts */
                         users_may_use?: boolean;
+                        /** @description Google Drive: the drive the instance works in (root is My Drive, empty is none) */
+                        workspace_id?: string;
+                        /** @description Google Drive: the name of that drive, for display */
+                        workspace_name?: string;
+                        /** @description Google Drive: permission group that may create folders, Docs and uploads there; empty means platform.admin */
+                        write_group?: string;
                     }[];
                 };
             };
@@ -16114,6 +16126,12 @@ export interface operations {
                     provider: string;
                     /** @description People with connectors.user may connect their own accounts */
                     users_may_use?: boolean;
+                    /** @description Google Drive: the drive the instance works in (root is My Drive, empty is none) */
+                    workspace_id?: string;
+                    /** @description Google Drive: the name of that drive, for display */
+                    workspace_name?: string;
+                    /** @description Google Drive: permission group that may create folders, Docs and uploads there; empty means platform.admin */
+                    write_group?: string;
                 };
             };
         };
@@ -16570,6 +16588,12 @@ export interface operations {
                     provider?: string;
                     /** @description People with connectors.user may connect their own accounts */
                     users_may_use?: boolean;
+                    /** @description Google Drive: the drive the instance works in (root is My Drive, empty is none) */
+                    workspace_id?: string;
+                    /** @description Google Drive: the name of that drive, for display */
+                    workspace_name?: string;
+                    /** @description Google Drive: permission group that may create folders, Docs and uploads there; empty means platform.admin */
+                    write_group?: string;
                 };
             };
         };
