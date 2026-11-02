@@ -71,7 +71,7 @@
   "That code is not valid. Check the time on your device and try again.": "Koodi ei kelpaa. Tarkista laitteen kellonaika ja yritä uudelleen.",
   "That password is not right.": "Salasana ei ole oikea.",
   "They are shown only now": "Ne näytetään vain nyt",
-  "This sign-in has expired. Enter your password again.": "Kirjautuminen on vanhentunut. Syötä salasana uudelleen.",
+  "This sign-in has expired. Start again.": "Kirjautuminen on vanhentunut. Aloita alusta.",
   "Time-based, 6 digits, account {account}.": "Aikapohjainen, 6 numeroa, tili {account}.",
   "Too many attempts. Wait a minute and try again.": "Liian monta yritystä. Odota minuutti ja yritä uudelleen.",
   "Turn off": "Poista käytöstä",

@@ -653,3 +653,75 @@ description = "Die Familie der Refresh-Tokens, an die das Gerät gebunden ist (e
 [labels.de.model.device.action.revoke]
 label = "Widerrufen"
 description = "Ein Gerät endgültig beenden: seine Refresh-Tokens funktionieren nicht mehr, sein Zugriffstoken stoppt bei der nächsten Anfrage, und die App muss sich neu anmelden. Eine Person widerruft ihre eigenen Geräte; ein Agent kann es nur vorschlagen. Angabe: id"
+
+[labels.de.model.user_account.field.oid]
+label = "Objekt-ID"
+description = "Eingabe von bind_sso: die Objekt-ID der Person im Microsoft-Verzeichnis, eine GUID (keine E-Mail-Adresse und kein Benutzerprinzipalname)"
+
+[labels.de.model.user_account.field.sso_oid]
+label = "Microsoft-Objekt-ID"
+description = "Die Objekt-ID, an die das Konto für die Anmeldung mit Microsoft gebunden ist; leer, wenn es nicht gebunden ist"
+
+[labels.de.model.user_account.field.sso_only]
+label = "Nur Microsoft"
+description = "Ob sich das Konto nur mit Microsoft anmeldet: Es hat keine eigene Anmeldung mit Passwort oder Passkey. Eingabe von set_sso_only (true oder false)"
+
+[labels.de.model.user_account.action.bind_sso]
+label = "Mit Microsoft verbinden"
+description = "Ein bestehendes Konto an die Microsoft-Identität einer Person binden, damit sie sich mit Microsoft anmelden kann. Angeben: id und oid (die Objekt-ID der Person im Verzeichnis, eine GUID). Legt kein Konto an und vergibt keine Berechtigung"
+
+[labels.de.model.user_account.action.unbind_sso]
+label = "Von Microsoft lösen"
+description = "Die Bindung eines Kontos an eine Microsoft-Identität entfernen. Abgelehnt, solange sich das Konto nur mit Microsoft anmeldet. Angeben: id"
+
+[labels.de.model.user_account.action.set_sso_only]
+label = "Nur Microsoft setzen"
+description = "Ein Konto nur mit Microsoft anmelden lassen (es lehnt dann Passwort und Passkey allein ab) oder das wieder ausschalten. Angeben: id und sso_only (true oder false). Das Konto muss gebunden sein, und mindestens zwei andere Administratoren müssen sich weiter lokal mit einem zweiten Faktor anmelden. Beendet die Sitzungen des Kontos"
+
+[labels.de.model.sso_provider]
+name = "Microsoft-Anmeldung"
+description = "Der Microsoft-Entra-Mandant, mit dem sich Personen anmelden: ein Mandant, festgelegt durch seine ID. Nur Administratoren ändern ihn, nie ein Agent"
+
+[labels.de.model.sso_provider.field.tenant]
+label = "Mandant"
+description = "Die Mandanten-ID (eine GUID), gegen die jede Microsoft-Anmeldung geprüft wird"
+
+[labels.de.model.sso_provider.field.client_id]
+label = "Client-ID"
+description = "Die Anwendungs-ID (Client-ID) der App-Registrierung in diesem Mandanten"
+
+[labels.de.model.sso_provider.field.client_secret]
+label = "Client-Geheimnis"
+description = "Eingabe von configure: das Client-Geheimnis der App-Registrierung, versiegelt unter dem Server-Geheimnis gespeichert. Wird nie angezeigt"
+
+[labels.de.model.sso_provider.field.enabled]
+label = "Aktiv"
+description = "Ob die Anmeldeseite „Mit Microsoft anmelden“ anbietet"
+
+[labels.de.model.sso_provider.field.secret_set]
+label = "Geheimnis gespeichert"
+description = "Ob ein Client-Geheimnis gespeichert ist"
+
+[labels.de.model.sso_provider.field.modified_at]
+label = "Geändert am"
+description = "Wann die Konfiguration zuletzt geändert wurde"
+
+[labels.de.model.sso_provider.field.last_editor]
+label = "Zuletzt geändert von"
+description = "Wer sie zuletzt geändert hat"
+
+[labels.de.model.sso_provider.field.break_glass]
+label = "Notfall-Administratoren"
+description = "Die Administratoren, die sich lokal mit Passwort und zweitem Faktor anmelden (der Weg hinein, wenn Microsoft nicht erreichbar ist), durch Kommas getrennt"
+
+[labels.de.model.sso_provider.field.break_glass_enough]
+label = "Genug Notfall-Administratoren"
+description = "Ob es genug davon gibt (mindestens zwei), um ein Konto nur mit Microsoft anmelden zu lassen"
+
+[labels.de.model.sso_provider.action.configure]
+label = "Einrichten"
+description = "Den Microsoft-Entra-Mandanten festlegen, mit dem sich Personen anmelden. Angeben: tenant (die Mandanten-ID, eine GUID; common, organizations und consumers werden abgelehnt), client_id (die Anwendungs-ID der App-Registrierung) und beim ersten Mal client_secret; enabled ist standardmäßig true. Konten werden mit user_account.bind_sso gebunden. Für Agenten abgelehnt"
+
+[labels.de.model.sso_provider.action.clear]
+label = "Entfernen"
+description = "Die Konfiguration der Microsoft-Anmeldung entfernen. Bindungen bleiben. Konten, die sich nur mit Microsoft anmelden, kommen dann nur noch über die Administratoren hinein, die Passwort und zweiten Faktor behalten. Für Agenten abgelehnt"

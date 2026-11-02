@@ -1376,6 +1376,11 @@ pub trait Authenticator: Send + Sync {
     fn passkeys(&self) -> Option<&dyn PasskeyApi> {
         None
     }
+    /// Sign-in with an external identity provider (Microsoft Entra, D91, ratified by OR-38), for
+    /// authenticators that support it.
+    fn sso(&self) -> Option<&dyn SsoApi> {
+        None
+    }
     /// Resolve a bearer token and say which audience (resource) it was issued for. Tokens from
     /// the OAuth flow (D64) carry one and work only there; every other token has none.
     fn resolve_with_audience(&self, token: &str) -> Option<(Principal, Option<String>)> {
@@ -1707,6 +1712,7 @@ mod kinds;
 pub mod pay;
 pub mod public;
 pub mod query;
+pub mod sso;
 pub mod store;
 
 pub use accounts::{AccountsApi, NewUser};
@@ -1717,6 +1723,9 @@ pub use pay::{FakeView, HookReply, PaymentHooks, PaymentPort, PaymentView, Start
 pub use public::{
     Adjust, Lookup, PublicApi, PublicFilter, PublicRead, PublicReceipt, PublicRecord, PublicSpec,
     PublicSubmit, Receipt, Submission, SubmitError,
+};
+pub use sso::{
+    AnonGroup, AnonLine, SsoApi, SsoEndpoints, SsoError, SsoIdentity, SsoLeg, SsoProvider,
 };
 pub use store::Store;
 
@@ -1755,6 +1764,8 @@ mod kinds_tests;
 mod limits_tests;
 #[cfg(test)]
 mod shows_option_tests;
+#[cfg(test)]
+mod sso_anon_tests;
 #[cfg(test)]
 mod sysfields_tests;
 #[cfg(test)]

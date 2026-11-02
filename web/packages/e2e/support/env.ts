@@ -111,6 +111,36 @@ export type UserName = keyof typeof users;
  */
 export const shopOwner = { name: "owner", password: "e2e shop owner 1", groups: "platform.admin" };
 
+/**
+ * The Microsoft sign-in instance (tests/sso.spec.ts, D91): a server of its own, reached together
+ * with a stand-in for Microsoft Entra on loopback (support/idp.ts). The stand-in is not Entra; it
+ * speaks the protocol as D91 reads it. Test values only.
+ */
+export const sso = {
+  tenant: "11111111-2222-3333-4444-555555555555",
+  clientId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+  clientSecret: "e2e-sso-client-secret-3f9a",
+  // The people at "Microsoft": object ids, and whether the stand-in reports a second factor (amr).
+  identities: {
+    bea: { oid: "0b0b0b0b-0001-4000-8000-000000000001", mfa: true },
+    ada: { oid: "0a0a0a0a-0002-4000-8000-000000000002", mfa: true },
+    bob: { oid: "0c0c0c0c-0003-4000-8000-000000000003", mfa: true },
+    stranger: { oid: "0d0d0d0d-0004-4000-8000-000000000004", mfa: true },
+  },
+  // Accounts of the instance. root1..3 are the break-glass administrators (they enrol an
+  // authenticator app in the spec); bea, ada and bob are bound to the identities above.
+  users: {
+    root1: { name: "root1", password: "e2e sso root1 password", groups: "platform.admin" },
+    root2: { name: "root2", password: "e2e sso root2 password", groups: "platform.admin" },
+    root3: { name: "root3", password: "e2e sso root3 password", groups: "platform.admin" },
+    bea: { name: "bea", password: "e2e sso bea password 1", groups: "base.user" },
+    ada: { name: "ada", password: "e2e sso ada password 1", groups: "base.user" },
+    bob: { name: "bob", password: "e2e sso bob password 1", groups: "base.user" },
+  },
+} as const;
+export const ssoUrl = () => `http://127.0.0.1:${process.env.OBOP_E2E_SSO_PORT}`;
+export const idpUrl = () => `http://127.0.0.1:${process.env.OBOP_E2E_IDP_PORT}`;
+
 export const appUrl = () => `http://127.0.0.1:${process.env.OBOP_E2E_APP_PORT}`;
 export const shopUrl = () => `http://127.0.0.1:${process.env.OBOP_E2E_SHOP_PORT}`;
 /** The instance with `OBOP_DEFAULT_LANGUAGE=sv` (tests/default-language.spec.ts). */

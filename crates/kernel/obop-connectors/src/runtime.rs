@@ -36,14 +36,19 @@ pub struct Config {
 
 impl Config {
     pub fn from_env() -> Self {
+        Self::from_vars(|name| std::env::var(name).ok())
+    }
+
+    /// [`Config::from_env`] with the environment passed in, so that a test can try the read
+    /// without the environment of its process. The spelling of the loopback setting is read by
+    /// `obop_types::loopback_allowed`, which the Microsoft sign-in uses too.
+    pub fn from_vars(get: impl Fn(&str) -> Option<String>) -> Self {
         Self {
-            public_url: std::env::var("OBOP_PUBLIC_URL")
-                .ok()
+            public_url: get("OBOP_PUBLIC_URL")
                 .map(|s| s.trim_end_matches('/').to_string())
                 .filter(|s| !s.is_empty()),
-            allow_loopback: matches!(
-                std::env::var("OBOP_CONNECTORS_ALLOW_LOOPBACK").as_deref(),
-                Ok("1" | "true")
+            allow_loopback: obop_types::loopback_allowed(
+                get(obop_types::ALLOW_LOOPBACK_ENV).as_deref(),
             ),
         }
     }
@@ -1671,5 +1676,40 @@ pub fn rows_to_csv(rows: &[Map<String, J>], fields: &[String]) -> String {
 impl From<Refusal> for String {
     fn from(r: Refusal) -> String {
         r.to_string()
+    }
+}
+
+#[cfg(test)]
+mod config_tests {
+    use super::Config;
+
+    fn with(pairs: &[(&str, &str)]) -> Config {
+        Config::from_vars(|name| {
+            pairs
+                .iter()
+                .find(|(k, _)| *k == name)
+                .map(|(_, v)| v.to_string())
+        })
+    }
+
+    /// The Microsoft sign-in reads the same setting through the same function
+    /// (`obop_types::loopback_allowed`): what turns loopback on here is what turns its test
+    /// authority on there.
+    #[test]
+    fn loopback_is_allowed_by_the_setting_named_for_it_and_by_one_and_true_only() {
+        assert!(!with(&[]).allow_loopback);
+        assert!(with(&[("OBOP_CONNECTORS_ALLOW_LOOPBACK", "1")]).allow_loopback);
+        assert!(with(&[("OBOP_CONNECTORS_ALLOW_LOOPBACK", "true")]).allow_loopback);
+        for v in ["", "0", "yes", "on", "TRUE", " 1"] {
+            assert!(
+                !with(&[("OBOP_CONNECTORS_ALLOW_LOOPBACK", v)]).allow_loopback,
+                "{v:?}"
+            );
+        }
+        // Another setting does not turn it on.
+        assert!(!with(&[("OBOP_OIDC_TEST_AUTHORITY", "1")]).allow_loopback);
+        let c = with(&[("OBOP_PUBLIC_URL", "https://obop.example/"), ("X", "1")]);
+        assert_eq!(c.public_url.as_deref(), Some("https://obop.example"));
+        assert_eq!(with(&[("OBOP_PUBLIC_URL", "")]).public_url, None);
     }
 }
