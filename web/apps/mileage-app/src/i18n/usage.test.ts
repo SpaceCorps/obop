@@ -15,6 +15,20 @@ describe("the screens say nothing that is not in the catalogue", () => {
     for (const source of sources) expect(bypassesOf(source.text), source.path).toEqual([]);
   });
 
+  test("the screens use the neutral words where nothing says the server wrote them, and tell when the language was not saved", () => {
+    const detail = appSources().find((s) => s.path === "src/ui/screens/TripDetail.tsx")!;
+    const flat = detail.text.replace(/\s+/g, " ");
+    expect(flat).toContain(
+      'isServerProblem(trip.problem.code) ? "trip.problem.title" : "trip.problem.title.app"',
+    );
+    expect(flat).toMatch(
+      /isServerProblem\(trip\.problem\.code\) \? "trip\.problem\.details" : "trip\.problem\.details\.app"/,
+    );
+    const account = appSources().find((s) => s.path === "src/ui/screens/Account.tsx")!;
+    expect(account.text).toContain("setLanguageUnsaved(!stored)");
+    expect(account.text).toContain('t("language.unsaved")');
+  });
+
   test("the text of the notification of the recording comes from the catalogue", () => {
     const recorder = appSources().find((s) => s.path === "src/native/recorder.ts")!;
     expect(bypassesOf(recorder.text)).toEqual([]);
