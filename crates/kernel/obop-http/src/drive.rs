@@ -5,8 +5,9 @@
 //! speaks HTTP and applies the rules:
 //!
 //! - a bearer token of a person (not an agent) is needed, as for the blob routes;
-//! - only people in the group `OBOP_DRIVE_BROWSE_GROUP` (default `platform.admin`) may look,
-//!   because the connection is one Drive for the whole instance;
+//! - only people in the browse group may look, because the connection is one Drive for the whole
+//!   instance: `OBOP_DRIVE_BROWSE_GROUP` when set, else the group an administrator chose on the
+//!   Google Drive page of the back office, else `platform.admin`;
 //! - an import goes through [`obop_commands::BlobService::upload`], so the target field's own
 //!   write rights, size limit, type check and upload rate limit apply, and the bytes are stored
 //!   like any other upload; the caller then creates or updates the record with the returned id;
@@ -60,14 +61,28 @@ pub struct DriveFile {
 pub trait DriveSource: Send + Sync {
     fn list(&self, parent: &str, search: &str, page: Option<&str>) -> Result<DrivePage, String>;
     fn fetch(&self, id: &str, max: usize) -> Result<DriveFile, String>;
+    /// Whether a Drive is signed in right now (configured and authorised).
+    fn connected(&self) -> bool {
+        true
+    }
+    /// The group an administrator chose for browsing, when the source knows one.
+    fn browse_group(&self) -> Option<String> {
+        None
+    }
+    /// What the Google Drive page of the back office shows to an administrator (never a secret).
+    fn settings(&self) -> Option<J> {
+        None
+    }
 }
 
-/// The group that may browse; `OBOP_DRIVE_BROWSE_GROUP`, else `platform.admin`.
-fn browse_group() -> String {
+/// The group that may browse: `OBOP_DRIVE_BROWSE_GROUP`, else the administrator's choice, else
+/// `platform.admin`.
+fn browse_group(src: &dyn DriveSource) -> String {
     std::env::var("OBOP_DRIVE_BROWSE_GROUP")
         .ok()
         .map(|g| g.trim().to_string())
         .filter(|g| !g.is_empty())
+        .or_else(|| src.browse_group())
         .unwrap_or_else(|| "platform.admin".into())
 }
 
@@ -87,10 +102,10 @@ fn gate(s: &Arc<HttpState>, h: &HeaderMap) -> Gate {
         Ok(x) => x,
         Err(r) => return Gate::Refused(r.into_response()),
     };
-    let Some(src) = s.drive.get().cloned() else {
+    let Some(src) = s.drive.get().cloned().filter(|d| d.connected()) else {
         return Gate::Off;
     };
-    if p.kind == PrincipalKind::Agent || !p.allows(&browse_group()) {
+    if p.kind == PrincipalKind::Agent || !p.allows(&browse_group(&*src)) {
         return Gate::Refused(error(
             StatusCode::FORBIDDEN,
             "you may not browse the connected Google Drive",
@@ -100,16 +115,27 @@ fn gate(s: &Arc<HttpState>, h: &HeaderMap) -> Gate {
 }
 
 /// `GET /api/drive/status`: `{"connected": bool, "may_browse": bool}`; the back office shows its
-/// button from it.
+/// button from it. An administrator of connectors also gets `may_configure` and `settings` (the
+/// state of the Google Drive page: client id, whether a secret is stored, the signed-in account,
+/// the redirect address to register with Google, the last error and the browse group).
 pub async fn status(State(s): State<Arc<HttpState>>, h: HeaderMap) -> Response {
     blocking(move || {
         let (p, _) = match s.auth(&h) {
             Ok(x) => x,
             Err(r) => return r.into_response(),
         };
-        let connected = s.drive.get().is_some();
-        let may = connected && p.kind != PrincipalKind::Agent && p.allows(&browse_group());
-        axum::Json(json!({"connected": connected, "may_browse": may})).into_response()
+        let person = p.kind != PrincipalKind::Agent;
+        let src = s.drive.get().cloned();
+        let connected = src.as_ref().is_some_and(|d| d.connected());
+        let may =
+            connected && person && src.as_ref().is_some_and(|d| p.allows(&browse_group(&**d)));
+        let may_configure = person && p.allows("connectors.admin");
+        let mut out =
+            json!({"connected": connected, "may_browse": may, "may_configure": may_configure});
+        if may_configure && let Some(settings) = src.as_ref().and_then(|d| d.settings()) {
+            out["settings"] = settings;
+        }
+        axum::Json(out).into_response()
     })
     .await
 }

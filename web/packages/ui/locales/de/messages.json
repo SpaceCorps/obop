@@ -71,7 +71,7 @@
   "That code is not valid. Check the time on your device and try again.": "Dieser Code ist ungültig. Die Uhrzeit des Geräts prüfen und erneut versuchen.",
   "That password is not right.": "Das Passwort ist nicht korrekt.",
   "They are shown only now": "Sie werden nur jetzt angezeigt",
-  "This sign-in has expired. Enter your password again.": "Diese Anmeldung ist abgelaufen. Das Passwort erneut eingeben.",
+  "This sign-in has expired. Start again.": "Diese Anmeldung ist abgelaufen. Bitte neu beginnen.",
   "Time-based, 6 digits, account {account}.": "Zeitbasiert, 6 Stellen, Konto {account}.",
   "Too many attempts. Wait a minute and try again.": "Zu viele Versuche. Eine Minute warten und erneut versuchen.",
   "Turn off": "Ausschalten",

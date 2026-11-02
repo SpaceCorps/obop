@@ -48,7 +48,7 @@ name = "engine"
 description = "The generic engine that runs it"
 class = "none"
 kind = "select"
-options = ["webhook_out", "webhook_in", "rest_pull", "csv_export", "none"]
+options = ["webhook_out", "webhook_in", "rest_pull", "csv_export", "browse", "none"]
 
 [[model.field]]
 name = "auth_kind"

@@ -653,3 +653,75 @@ description = "La famille de jetons d'actualisation à laquelle l'appareil est l
 [labels.fr.model.device.action.revoke]
 label = "Révoquer"
 description = "Mettre fin à un appareil pour de bon : ses jetons d'actualisation ne fonctionnent plus, son jeton d'accès s'arrête à la prochaine requête et l'application doit se reconnecter. Une personne révoque ses propres appareils ; un agent ne peut que le proposer. Donner id"
+
+[labels.fr.model.user_account.field.oid]
+label = "ID d’objet"
+description = "Entrée de bind_sso : l’ID d’objet de la personne dans l’annuaire Microsoft, un GUID (ni adresse e-mail ni nom d’utilisateur principal)"
+
+[labels.fr.model.user_account.field.sso_oid]
+label = "ID d’objet Microsoft"
+description = "L’ID d’objet auquel le compte est lié pour se connecter avec Microsoft ; vide s’il n’est pas lié"
+
+[labels.fr.model.user_account.field.sso_only]
+label = "Microsoft uniquement"
+description = "Si le compte se connecte uniquement avec Microsoft : il n’a ni mot de passe ni clé d’accès pour se connecter seul. Entrée de set_sso_only (true ou false)"
+
+[labels.fr.model.user_account.action.bind_sso]
+label = "Lier à Microsoft"
+description = "Lier un compte existant à l’identité Microsoft d’une personne pour qu’elle puisse se connecter avec Microsoft. Donner id et oid (l’ID d’objet de la personne dans l’annuaire, un GUID). Ne crée aucun compte et n’accorde aucune permission"
+
+[labels.fr.model.user_account.action.unbind_sso]
+label = "Délier de Microsoft"
+description = "Supprimer le lien d’un compte avec une identité Microsoft. Refusé tant que le compte se connecte uniquement avec Microsoft. Donner id"
+
+[labels.fr.model.user_account.action.set_sso_only]
+label = "Définir Microsoft uniquement"
+description = "Faire se connecter un compte uniquement avec Microsoft (il refuse alors son mot de passe et sa clé d’accès seuls), ou l’annuler. Donner id et sso_only (true ou false). Le compte doit être lié, et au moins deux autres administrateurs doivent continuer à se connecter localement avec un second facteur. Met fin aux sessions du compte"
+
+[labels.fr.model.sso_provider]
+name = "Connexion Microsoft"
+description = "Le locataire Microsoft Entra avec lequel les personnes se connectent : un seul locataire, fixé par son ID. Modifié uniquement par les administrateurs, jamais par un agent"
+
+[labels.fr.model.sso_provider.field.tenant]
+label = "Locataire"
+description = "L’ID du locataire (un GUID) auquel toute connexion Microsoft est comparée"
+
+[labels.fr.model.sso_provider.field.client_id]
+label = "ID client"
+description = "L’ID d’application (client) de l’inscription d’application dans ce locataire"
+
+[labels.fr.model.sso_provider.field.client_secret]
+label = "Secret client"
+description = "Entrée de configure : le secret client de l’inscription d’application, conservé scellé sous le secret du serveur. Jamais affiché"
+
+[labels.fr.model.sso_provider.field.enabled]
+label = "Activé"
+description = "Si la page de connexion propose « Se connecter avec Microsoft »"
+
+[labels.fr.model.sso_provider.field.secret_set]
+label = "Secret enregistré"
+description = "Si un secret client est enregistré"
+
+[labels.fr.model.sso_provider.field.modified_at]
+label = "Modifié le"
+description = "Quand la configuration a été modifiée pour la dernière fois"
+
+[labels.fr.model.sso_provider.field.last_editor]
+label = "Dernier auteur"
+description = "Qui l’a modifiée en dernier"
+
+[labels.fr.model.sso_provider.field.break_glass]
+label = "Administrateurs de secours"
+description = "Les administrateurs qui se connectent localement avec un mot de passe et un second facteur (la voie d’accès quand Microsoft est inaccessible), séparés par des virgules"
+
+[labels.fr.model.sso_provider.field.break_glass_enough]
+label = "Assez d’administrateurs de secours"
+description = "Si leur nombre suffit (au moins deux) pour qu’un compte se connecte uniquement avec Microsoft"
+
+[labels.fr.model.sso_provider.action.configure]
+label = "Configurer"
+description = "Définir le locataire Microsoft Entra avec lequel les personnes se connectent. Donner tenant (l’ID du locataire, un GUID ; common, organizations et consumers sont refusés), client_id (l’ID d’application de l’inscription d’application) et, la première fois, client_secret ; enabled vaut true par défaut. Les comptes sont liés avec user_account.bind_sso. Refusé pour les agents"
+
+[labels.fr.model.sso_provider.action.clear]
+label = "Supprimer"
+description = "Supprimer la configuration de la connexion Microsoft. Les liens restent. Les comptes qui se connectent uniquement avec Microsoft ne peuvent alors entrer que par les administrateurs qui gardent un mot de passe et un second facteur. Refusé pour les agents"

@@ -64,6 +64,18 @@ impl fmt::Display for DataClass {
     }
 }
 
+/// The name of the setting that lets the outbound client reach a literal loopback address over
+/// plain http (tests and local development), and that the test authority of the Microsoft sign-in
+/// (D91) needs as well.
+pub const ALLOW_LOOPBACK_ENV: &str = "OBOP_CONNECTORS_ALLOW_LOOPBACK";
+
+/// Whether the value of [`ALLOW_LOOPBACK_ENV`] turns loopback on: exactly `1` or `true`, nothing
+/// else (not `TRUE`, `yes`, `on`, `0`, an empty value or one with a space). The one place that
+/// reads the spelling, so that the outbound client and the sign-in cannot disagree about it.
+pub fn loopback_allowed(value: Option<&str>) -> bool {
+    matches!(value, Some("1" | "true"))
+}
+
 /// How a read surface presents a value to a principal (D40).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MaskMode {
@@ -93,6 +105,19 @@ mod tests {
             assert_eq!(DataClass::parse(c.as_str()), Some(c));
         }
         assert_eq!(DataClass::parse("nope"), None);
+    }
+
+    #[test]
+    fn loopback_is_on_for_one_and_true_only() {
+        assert!(loopback_allowed(Some("1")));
+        assert!(loopback_allowed(Some("true")));
+        assert!(!loopback_allowed(None));
+        for v in [
+            "", "0", "yes", "on", "TRUE", "True", " 1", "1 ", "false", "2",
+        ] {
+            assert!(!loopback_allowed(Some(v)), "{v:?}");
+        }
+        assert_eq!(ALLOW_LOOPBACK_ENV, "OBOP_CONNECTORS_ALLOW_LOOPBACK");
     }
 
     #[test]

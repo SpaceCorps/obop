@@ -41,6 +41,7 @@ webhook_out = "Lähtevä webhook"
 webhook_in = "Saapuva webhook"
 rest_pull = "REST-haku"
 csv_export = "CSV-vienti"
+browse = "Luku tarvittaessa"
 none = "Ei mitään"
 
 [labels.fi.model.connector_provider.field.auth_kind]

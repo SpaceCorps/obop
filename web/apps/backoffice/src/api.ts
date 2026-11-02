@@ -393,7 +393,7 @@ async function send(token: string, path: string, body: object): Promise<Reply> {
 /** What a sign-in step produced (D53). */
 export type LoginResult =
   | { kind: "session"; token: string; enrolment: boolean; user?: string }
-  | { kind: "mfa"; mfaToken: string; methods: string[] }
+  | { kind: "mfa"; mfaToken: string; methods: string[]; user?: string }
   | { kind: "error"; status: number; code: string };
 
 async function loginStep(path: string, body: object): Promise<LoginResult> {
@@ -413,7 +413,12 @@ async function loginStep(path: string, body: object): Promise<LoginResult> {
       code?: string;
     };
     if (res.ok && json.mfa_required && json.mfa_token)
-      return { kind: "mfa", mfaToken: json.mfa_token, methods: json.methods ?? ["totp"] };
+      return {
+        kind: "mfa",
+        mfaToken: json.mfa_token,
+        methods: json.methods ?? ["totp"],
+        ...(json.user ? { user: json.user } : {}),
+      };
     if (res.ok && json.token)
       return {
         kind: "session",
@@ -429,6 +434,110 @@ async function loginStep(path: string, body: object): Promise<LoginResult> {
 
 export function login(username: string, password: string): Promise<LoginResult> {
   return loginStep("/api/auth/login", { username, password });
+}
+
+/**
+ * What the address says after the browser came back from Microsoft (D91): `#oidc=<one-time code>`
+ * or `#oidc_error=<word>`. The server sends the browser to these two fragments and nothing else;
+ * a fragment is not sent to any server, and it is cleared from the address as soon as it is read.
+ */
+export type SsoReturn = { code: string } | { error: SsoErrorWord };
+export type SsoErrorWord = "cancelled" | "unavailable" | "busy" | "failed";
+
+export function parseSsoReturn(hash: string): SsoReturn | null {
+  const code = /^#oidc=(obopsso_[0-9a-f]{20,128})$/.exec(hash);
+  if (code?.[1]) return { code: code[1] };
+  const err = /^#oidc_error=([a-z]{1,16})$/.exec(hash);
+  if (!err) return null;
+  const word = err[1];
+  // Any word this page does not know is the general failure.
+  return {
+    error: word === "cancelled" || word === "unavailable" || word === "busy" ? word : "failed",
+  };
+}
+
+// Read when this module loads, which is before anything is rendered, so that the router of the
+// app never sees the fragment as a place to go to; the address is cleaned at once.
+let ssoReturn: SsoReturn | null = (() => {
+  try {
+    const r = parseSsoReturn(location.hash);
+    if (r || /^#oidc(_error)?=/.test(location.hash))
+      history.replaceState(null, "", location.pathname + location.search);
+    return r;
+  } catch {
+    return null;
+  }
+})();
+
+/** The return from Microsoft that is waiting to be handled, once. */
+export function takeSsoReturn(): SsoReturn | null {
+  const r = ssoReturn;
+  ssoReturn = null;
+  return r;
+}
+
+/**
+ * A return that nobody will handle: the tab already holds a session, so the sign-in page never
+ * mounts. Dropped, so that it cannot surface after a later sign-out as a notice nobody caused.
+ */
+export function discardSsoReturn(): void {
+  ssoReturn = null;
+}
+
+const SSO_PLACE = "obop-sso-place";
+
+/**
+ * The router address of a deep link, kept in this tab across the round trip to Microsoft (the
+ * server returns to the root, and the fragment is cleaned). A password sign-in keeps the address
+ * by itself; this gives the Microsoft sign-in the same.
+ */
+export function rememberPlace(): void {
+  try {
+    if (/^#\/[\w\-./?=&%:~]{1,512}$/.test(location.hash))
+      sessionStorage.setItem(SSO_PLACE, location.hash);
+    else sessionStorage.removeItem(SSO_PLACE);
+  } catch {
+    /* a private window: the person lands on the launcher */
+  }
+}
+
+export function forgetPlace(): void {
+  try {
+    sessionStorage.removeItem(SSO_PLACE);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Go back to the remembered place, once; nothing remembered, nothing happens. */
+export function restorePlace(): void {
+  try {
+    const h = sessionStorage.getItem(SSO_PLACE);
+    sessionStorage.removeItem(SSO_PLACE);
+    if (h && /^#\/[\w\-./?=&%:~]{1,512}$/.test(h)) location.hash = h;
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Whether the sign-in page offers Sign in with Microsoft. Nothing is offered on any doubt. */
+export async function ssoEnabled(): Promise<boolean> {
+  try {
+    const res = await fetch("/api/auth/sso");
+    if (!res.ok) return false;
+    const json = (await res.json().catch(() => ({}))) as { enabled?: boolean };
+    return json.enabled === true;
+  } catch {
+    return false;
+  }
+}
+
+/** Where the button sends the browser: the server starts the flow and redirects to Microsoft. */
+export const SSO_START = "/api/auth/oidc/start";
+
+/** Spend the one-time code: the same answer as the password step gives. */
+export function ssoExchange(code: string): Promise<LoginResult> {
+  return loginStep("/api/auth/oidc/exchange", { code });
 }
 
 /** The second step: the `mfa_token` of the first, and a code or a recovery code. */

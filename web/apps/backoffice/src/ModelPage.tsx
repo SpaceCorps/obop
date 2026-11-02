@@ -220,7 +220,10 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
   const driveField = model.fields.some((f) => f.name === "attachment" && f.kind === "file")
     ? `${model.name}.attachment`
     : "";
-  const mayDrive = useDriveStatus(d.token, model.name === "documents_document" && !!driveField);
+  const { may: mayDrive, canSetUp: canSetUpDrive } = useDriveStatus(
+    d.token,
+    model.name === "documents_document" && !!driveField,
+  );
 
   const open = (id: string) => put({ id });
   const close = useCallback(() => put({ id: "" }), [put]);
@@ -396,6 +399,14 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
               {mayDrive && driveField && (
                 <Button icon="documents" onClick={() => setDrive(true)}>
                   {t("From Google Drive")}
+                </Button>
+              )}
+              {canSetUpDrive && driveField && (
+                <Button
+                  icon="documents"
+                  onClick={() => go({ app: "connectors", model: "google_drive" })}
+                >
+                  {t("Connect Google Drive")}
                 </Button>
               )}
               {appExtra}

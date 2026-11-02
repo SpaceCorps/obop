@@ -80,7 +80,7 @@ export function twoFactorMessage(f: { status: number; code: string }): string {
     case "invalid_password":
       return t("That password is not right.");
     case "mfa_expired":
-      return t("This sign-in has expired. Enter your password again.");
+      return t("This sign-in has expired. Start again.");
     case "rate_limited":
       return t("Too many attempts. Wait a minute and try again.");
     case "mfa_unavailable":

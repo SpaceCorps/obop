@@ -264,7 +264,9 @@ export function Wizard(props: Props) {
     connection && provider?.engine === "webhook_in"
       ? `${location.origin}/hooks/in/${connection}`
       : "";
-  const choices = props.providers.filter((p) => p.maturity !== "definition_only");
+  const choices = props.providers.filter(
+    (p) => p.maturity !== "definition_only" && p.engine !== "browse",
+  );
 
   return (
     <Dialog

@@ -530,6 +530,16 @@ impl Auth {
         credential: &J,
     ) -> Result<LoginOutcome, MfaError> {
         let (name, _, epoch) = self.verify_assertion(ctx, "login", credential, true)?;
+        // An account that signs in with Microsoft only (D91) has no passkey sign-in of its own.
+        if self.is_sso_only(&name) {
+            self.event(
+                &name,
+                "login_refused",
+                &name,
+                "the account signs in with Microsoft only; a passkey alone was not accepted",
+            );
+            return Err(denied("that passkey could not be used to sign in"));
+        }
         self.purge_tokens();
         self.event(
             &name,
@@ -816,6 +826,11 @@ impl PasskeyApi for Auth {
             return Err(MfaError::Invalid(
                 "your administrator requires a second factor, and this is your last one: add another passkey or an authenticator app first".into(),
             ));
+        }
+        // The last passkey of an administrator who has no authenticator app that works: while
+        // accounts depend on Microsoft, two administrators keep a sign-in of their own (D91).
+        if left == 0 && !self.working_totp(name, &self.user_record(name)?) {
+            self.guard_break_glass(name, false)?;
         }
         let keep = token_hash(session);
         let mut patch = Fields::new();

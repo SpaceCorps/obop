@@ -98,14 +98,26 @@ fn hook_blocking(s: &HttpState, id: &str, headers: &HeaderMap, body: &[u8]) -> R
     }
 }
 
-fn page(title: &str, text: &str) -> Response {
+fn page(title: &str, text: &str, back: Option<&str>) -> Response {
     let esc = |s: &str| {
         s.replace('&', "&amp;")
             .replace('<', "&lt;")
             .replace('>', "&gt;")
+            .replace('"', "&quot;")
+    };
+    // `back` is a path of this instance (built by the server, never taken from the request).
+    let (link, refresh) = match back {
+        Some(b) => (
+            format!("<p><a href=\"{b}\">Back to obop</a></p>", b = esc(b)),
+            format!(
+                "<meta http-equiv=\"refresh\" content=\"3;url={b}\">",
+                b = esc(b)
+            ),
+        ),
+        None => (String::new(), String::new()),
     };
     let html = format!(
-        "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>{t}</title><style>body{{font:16px system-ui,sans-serif;max-width:32rem;margin:15vh auto;padding:0 1rem;line-height:1.5}}</style></head><body><h1>{t}</h1><p>{p}</p></body></html>",
+        "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">{refresh}<title>{t}</title><style>body{{font:16px system-ui,sans-serif;max-width:32rem;margin:15vh auto;padding:0 1rem;line-height:1.5}}</style></head><body><h1>{t}</h1><p>{p}</p>{link}</body></html>",
         t = esc(title),
         p = esc(text)
     );
@@ -130,16 +142,28 @@ pub async fn oauth_callback(
         let Some(rt) = s.connectors.get() else {
             return json_response(StatusCode::NOT_FOUND, json!({"error": "not found"}));
         };
+        let base = s.back_office.get().map_or("/", String::as_str).trim_end_matches('/');
+        let back_page = |app: &str| format!("{base}/#/connectors/{app}");
         if q.contains_key("error") {
             // The person said no, or the provider failed. Say so without echoing its text.
-            return page("Not connected", "The provider did not authorise the connection. You can close this window and try again.");
+            return page("Not connected", "The provider did not authorise the connection. You can close this window and try again.", Some(&back_page("catalog")));
         }
         match (q.get("state"), q.get("code")) {
             (Some(state), Some(code)) => match rt.oauth_callback(state, code) {
-                Ok(_) => page("Connected", "The account is authorised. You can close this window and return to obop."),
-                Err(_) => page("Not connected", "The authorization could not be completed: the link is invalid or has expired. Start again from the connection."),
+                Ok(id) => {
+                    let to = if rt
+                        .connection(&id)
+                        .is_ok_and(|(_, p)| p.id == obop_connectors::drive::PROVIDER)
+                    {
+                        back_page("google_drive")
+                    } else {
+                        back_page("connection")
+                    };
+                    page("Connected", "The account is authorised. Taking you back to obop.", Some(&to))
+                }
+                Err(_) => page("Not connected", "The authorization could not be completed: the link is invalid or has expired, or the provider refused. Start again from the connection; its page shows the last error.", Some(&back_page("catalog"))),
             },
-            _ => page("Not connected", "This address is the return point of an authorization and needs the answer of the provider."),
+            _ => page("Not connected", "This address is the return point of an authorization and needs the answer of the provider.", None),
         }
     })
     .await
