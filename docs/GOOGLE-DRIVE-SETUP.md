@@ -19,10 +19,11 @@ obop ships no Google credentials. Every operator registers their own OAuth clien
    - App name and support email: yours.
    - **Audience:** choose **Internal** if your organisation uses Google Workspace. Internal needs no Google verification, no publishing, and its sign-ins do not expire after seven days; only accounts of your organisation can connect. Choose **External** for a personal Gmail account, then **publish** the app (an app left in *Testing* ends the sign-in after seven days, and Google shows an "unverified app" warning that you accept with Advanced).
    - Contact email: yours. Tick Google's API Services User Data Policy agreement (this accepts terms for your organisation, so it is a person's decision).
-   - Data Access, Add or remove scopes, "Manually add scopes": `https://www.googleapis.com/auth/drive.readonly` and `https://www.googleapis.com/auth/userinfo.email`, Add to table, Update, Save.
+   - Data Access, Add or remove scopes, "Manually add scopes": `https://www.googleapis.com/auth/drive.readonly`, `https://www.googleapis.com/auth/drive.file` and `https://www.googleapis.com/auth/userinfo.email`, Add to table, Update, Save.
 4. **Create the OAuth client.** Clients, Create client, type **Web application**, any name, and under Authorised redirect URIs add `<OBOP_PUBLIC_URL>/oauth/callback`. Create. Google shows the **client id and client secret once**: copy both now. If you lose the secret, add a new one on the client's page.
 5. **Connect in obop.** Sign in as an administrator, open **Connectors, Google Drive**, paste the client id and secret (the secret is sealed with `OBOP_SECRET_KEY` and never shown again), click **Connect**, choose your Google account and allow. The page then says "Connected as <account>". A change on Google's side can take a few minutes to apply, so retry once before assuming something is wrong.
-6. **Use it.** Documents, **From Google Drive**: browse, search, Add. Google Docs, Sheets and Slides come in as PDF.
+6. **Choose the workspace drive.** On the same page, section 4: pick the shared drive obop works in (or My Drive) and Save workspace. The list holds the shared drives your Google account belongs to. To make a new one, create it in Google Drive (New, Shared drive; obop cannot, because that needs Google's full `drive` scope) and press Reload the list. Browsing, search and imports then stay inside that drive, and the people in "Who may create files" (default `platform.admin`) get New folder, New Google Doc and Upload a file in the Drive browser. If you connected before this step existed, press Sign in again so Google asks for the create permission.
+7. **Use it.** Documents, **From Google Drive**: browse, search, Add. Google Docs, Sheets and Slides come in as PDF.
 
 Disconnecting in obop forgets the tokens in obop only. Remove obop at https://myaccount.google.com/permissions to end the grant on Google's side.
 
@@ -38,7 +39,7 @@ Follow docs/GOOGLE-DRIVE-SETUP.md of the obop repository (https://github.com/Spa
 Rules:
 - Never link a billing account, never click "Start free" or any trial or upgrade button. Confirm at the end that Billing says the project has no billing account.
 - If my Google organisation is a Workspace, choose Internal for the audience; otherwise choose External and tell me I must publish it.
-- Use exactly these scopes: drive.readonly and userinfo.email. The redirect URI is [https://obop.example.com]/oauth/callback.
+- Use exactly these scopes: drive.readonly, drive.file and userinfo.email. The redirect URI is [https://obop.example.com]/oauth/callback.
 - Stop and ask me before ticking Google's User Data Policy agreement, and before anything that publishes the app.
 - Do not type the client secret anywhere and do not print it in chat. Leave Google's "OAuth client created" dialog open and tell me to copy the client id and secret into obop, Connectors, Google Drive, and to click Connect myself.
 - When I say I connected, check that the page shows "Connected as" and that Documents has a "From Google Drive" button, and report what you saw. If Google or obop shows an error, quote it and stop.
@@ -47,5 +48,7 @@ Rules:
 ## Limits
 
 - Browsing needs the broad read-only Drive scope, because the NDA you want is a file obop did not create. Only the groups named on the page may browse (default `platform.admin`); agents never can.
+- Creating files uses the narrow `drive.file` scope: obop can make folders, Google Docs and uploads, but never changes or deletes what already exists. With that scope Google may refuse to create inside a folder obop did not make itself; creating at the top of the workspace drive is the safe case (not tried against real Google).
+- obop cannot create the shared drive itself: that needs the full `drive` scope, which this page does not ask for.
 - The file store (`OBOP_BLOB_STORE=gdrive://`) is a separate setting that stays in the environment; see DEPLOY.md, "File storage".
 - Disconnecting does not revoke the grant at Google (see above).

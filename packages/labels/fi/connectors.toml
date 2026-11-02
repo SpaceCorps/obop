@@ -174,6 +174,18 @@ description = "Henkilöt, joilla on connectors.user, saavat yhdistää omia tile
 label = "Sallittu ryhmä"
 description = "Käyttöoikeusryhmä, joka saa käyttää sitä; tyhjä tarkoittaa connectors.user"
 
+[labels.fi.model.provider_policy.field.workspace_id]
+label = "Työskentelyasema"
+description = "Google Drive: asema, jossa instanssi työskentelee (root on Oma asema, tyhjä tarkoittaa ei mitään)"
+
+[labels.fi.model.provider_policy.field.workspace_name]
+label = "Työskentelyaseman nimi"
+description = "Google Drive: tämän aseman nimi näyttöä varten"
+
+[labels.fi.model.provider_policy.field.write_group]
+label = "Kirjoitusryhmä"
+description = "Google Drive: käyttöoikeusryhmä, joka saa luoda siellä kansioita, Docs-tiedostoja ja latauksia; tyhjä tarkoittaa platform.admin"
+
 [labels.fi.model.provider_policy.field.legal_basis]
 label = "Oikeusperuste"
 description = "Tämän tarjoajan yhteyksille kirjattu oikeusperuste"

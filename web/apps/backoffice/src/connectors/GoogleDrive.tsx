@@ -4,7 +4,7 @@ import type { Reply } from "../api.ts";
 import { useData, useRows } from "../data.tsx";
 import { request } from "../net.ts";
 import { serverMessage } from "../serverMessage.ts";
-import { Button, Input, Notice, Skeleton } from "../ui.tsx";
+import { Button, Input, Notice, Select, Skeleton } from "../ui.tsx";
 import { parseJson } from "./model.ts";
 
 /* The Google Drive page: an administrator enters the OAuth client of their own Google Cloud
@@ -23,8 +23,14 @@ type DriveSettings = {
   connection: string | null;
   last_error: string;
   browse_group: string;
+  workspace_id: string;
+  workspace_name: string;
+  write_group: string;
+  write_granted: boolean;
   source: "admin" | "env";
 };
+
+type SharedDrive = { id: string; name: string };
 
 type PolicyRow = { id: string; provider: string };
 
@@ -73,17 +79,45 @@ export function GoogleDrive() {
   const [clientId, setClientId] = useState<string | null>(null);
   const [secret, setSecret] = useState("");
   const [group, setGroup] = useState<string | null>(null);
+  const [writeGroup, setWriteGroup] = useState<string | null>(null);
+  const [workspace, setWorkspace] = useState<string | null>(null);
+  const [drives, setDrives] = useState<SharedDrive[] | null>(null);
+  const [drivesError, setDrivesError] = useState("");
+  const [drivesAgain, setDrivesAgain] = useState(0);
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState<{
     tone: "success" | "danger" | "info";
     text: string;
   } | null>(null);
 
+  const connected = settings?.state === "connected";
+  useEffect(() => {
+    if (!connected) return;
+    let live = true;
+    setDrivesError("");
+    request(
+      "/api/drive/drives",
+      { headers: { authorization: `Bearer ${d.token}` } },
+      { retry: true },
+    )
+      .then(async (r) => {
+        if (!r.ok) throw new Error(String(r.status));
+        return (await r.json()) as { drives?: SharedDrive[] };
+      })
+      .then((v) => live && setDrives(v.drives ?? []))
+      .catch(() => live && setDrivesError(t("Could not read your shared drives.")));
+    return () => {
+      live = false;
+    };
+  }, [connected, d.token, drivesAgain]);
+
   if (error) return <Notice tone="danger">{error}</Notice>;
   if (!settings) return <Skeleton rows={6} cols={2} />;
 
   const id = clientId ?? settings.client_id;
   const browseGroup = group ?? settings.browse_group;
+  const writeGroupValue = writeGroup ?? settings.write_group;
+  const workspaceId = workspace ?? settings.workspace_id;
   const policy = (policies.rows as unknown as PolicyRow[]).find((p) => p.provider === PROVIDER);
   const configured = settings.state !== "not_configured";
   const redirect = settings.redirect_uri;
@@ -115,6 +149,7 @@ export function GoogleDrive() {
       enabled: true,
       oauth_client_id: id.trim(),
       allowed_group: browseGroup.trim() === "platform.admin" ? "" : browseGroup.trim(),
+      write_group: writeGroupValue.trim() === "platform.admin" ? "" : writeGroupValue.trim(),
     };
     if (secret) body.oauth_client_secret = secret;
     const r = policy
@@ -125,9 +160,33 @@ export function GoogleDrive() {
     setSecret("");
     setClientId(null);
     setGroup(null);
+    setWriteGroup(null);
     await d.store.load("provider_policy");
     reload();
     setMessage({ tone: "success", text: t("Saved.") });
+  }
+
+  async function saveWorkspace() {
+    if (!policy) return;
+    setBusy("workspace");
+    setMessage(null);
+    const name =
+      workspaceId === ""
+        ? ""
+        : workspaceId === "root"
+          ? t("My Drive")
+          : ((drives ?? []).find((x) => x.id === workspaceId)?.name ?? "");
+    const r = await d.run("provider_policy.update", {
+      id: policy.id,
+      workspace_id: workspaceId,
+      workspace_name: name,
+    });
+    setBusy("");
+    if (fail(r)) return;
+    setWorkspace(null);
+    await d.store.load("provider_policy");
+    reload();
+    setMessage({ tone: "success", text: t("Workspace saved.") });
   }
 
   async function connect() {
@@ -183,7 +242,7 @@ export function GoogleDrive() {
       </div>
       <p className="hint">
         {t(
-          "Browse your Google Drive from the Documents app and add a file, such as a contract written as a Google Doc, as a document. obop only reads: nothing is changed in Drive.",
+          "Browse your Google Drive from the Documents app, add a file, such as a contract written as a Google Doc, as a document, and make folders, Google Docs and uploads in your workspace drive. obop never changes or deletes what is already in Drive.",
         )}
       </p>
       {settings.source === "env" && (
@@ -202,6 +261,24 @@ export function GoogleDrive() {
           {t("People in the group {group} can open “From Google Drive” in Documents.", {
             group: settings.browse_group,
           })}
+        </Notice>
+      )}
+      {settings.state === "connected" && !settings.write_granted && (
+        <Notice tone="warning" title={t("Creating files is not allowed yet")}>
+          {t(
+            "The last sign-in only let obop read. Press “Sign in again” and allow creating files.",
+          )}
+        </Notice>
+      )}
+      {settings.state === "connected" && settings.workspace_id && settings.write_granted && (
+        <Notice tone="success">
+          {t(
+            "Working in {drive}. People in the group {group} can create folders, Google Docs and uploads there.",
+            {
+              drive: settings.workspace_name || settings.workspace_id,
+              group: settings.write_group,
+            },
+          )}
         </Notice>
       )}
       {settings.state === "error" && (
@@ -274,6 +351,15 @@ export function GoogleDrive() {
             )}
             onChange={(e) => setGroup(e.target.value)}
           />
+          <Input
+            label={t("Who may create files")}
+            value={writeGroupValue}
+            autoComplete="off"
+            hint={t(
+              "A permission group. Creating folders, Google Docs and uploads needs this group and a sign-in that allowed it.",
+            )}
+            onChange={(e) => setWriteGroup(e.target.value)}
+          />
           <div className="actionrow">
             <Button
               variant="primary"
@@ -313,6 +399,64 @@ export function GoogleDrive() {
         </div>
         {!configured && <p className="hint">{t("Save the client first.")}</p>}
       </section>
+
+      {settings.state === "connected" && settings.source === "admin" && (
+        <section aria-label={t("Workspace drive")}>
+          <h3>{t("4. Choose the workspace drive")}</h3>
+          <p className="hint">
+            {t(
+              "obop works in this one drive. Browsing, search and imports stay inside it, and new folders, documents and uploads are made there.",
+            )}
+          </p>
+          {drivesError && <Notice tone="danger">{drivesError}</Notice>}
+          <div className="wform">
+            <Select
+              label={t("Workspace drive")}
+              value={workspaceId}
+              disabled={!drives && !drivesError}
+              onChange={(e) => setWorkspace(e.target.value)}
+            >
+              <option value="">
+                {t("None chosen (the whole Drive can be browsed, nothing can be created)")}
+              </option>
+              <option value="root">{t("My Drive")}</option>
+              {(drives ?? []).map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.name}
+                </option>
+              ))}
+              {workspaceId &&
+                workspaceId !== "root" &&
+                !(drives ?? []).some((x) => x.id === workspaceId) && (
+                  <option value={workspaceId}>{settings.workspace_name || workspaceId}</option>
+                )}
+            </Select>
+            <p className="hint">
+              {t(
+                "To make a new shared drive, create it in Google Drive (New, Shared drive) and reload this list.",
+              )}{" "}
+              <a
+                href="https://drive.google.com/drive/shared-drives"
+                target="_blank"
+                rel="noreferrer noopener"
+              >
+                {t("Open Google Drive")}
+              </a>
+            </p>
+            <div className="actionrow">
+              <Button
+                variant="primary"
+                loading={busy === "workspace"}
+                disabled={workspaceId === settings.workspace_id || !policy}
+                onClick={() => void saveWorkspace()}
+              >
+                {t("Save workspace")}
+              </Button>
+              <Button onClick={() => setDrivesAgain((n) => n + 1)}>{t("Reload the list")}</Button>
+            </div>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

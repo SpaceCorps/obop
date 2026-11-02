@@ -574,6 +574,35 @@ fn provider_policy_input(rt: Arc<Runtime>, create: bool) -> Guard {
                 );
             }
         }
+        if has(&m, "write_group") {
+            let g = txt(&m, "write_group");
+            if !g.is_empty()
+                && !g
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c == '.' || c == '_')
+            {
+                return Err("write_group must be a permission group such as platform.admin".into());
+            }
+        }
+        if has(&m, "workspace_id") {
+            let w = txt(&m, "workspace_id");
+            if !w.is_empty()
+                && (w.len() > 128
+                    || !w
+                        .chars()
+                        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-'))
+            {
+                return Err(
+                    "workspace_id must be root (My Drive), a shared drive id, or empty".into(),
+                );
+            }
+        }
+        if has(&m, "workspace_name") {
+            let n = txt(&m, "workspace_name");
+            if n.chars().count() > 200 || n.chars().any(char::is_control) {
+                return Err("workspace_name must be one line of at most 200 characters".into());
+            }
+        }
         if has(&m, "default_policy") {
             let pol = Policy::parse(txt(&m, "default_policy"))?;
             if !pol.acks.is_empty() {

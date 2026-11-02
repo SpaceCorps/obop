@@ -20,6 +20,10 @@ type Entry = {
   importable: boolean;
 };
 
+type Workspace = { id: string; name: string } | null;
+
+type Created = { id: string; name: string; folder: boolean; web_link: string };
+
 type Imported = {
   id: string;
   filename: string;
@@ -85,6 +89,27 @@ export function DriveBrowser({
   const [error, setError] = useState("");
   const seq = useRef(0);
   const parent = trail.length > 0 ? trail[trail.length - 1]!.id : "";
+  const [workspace, setWorkspace] = useState<Workspace>(null);
+  const [mayWrite, setMayWrite] = useState(false);
+  const [make, setMake] = useState<"folder" | "doc" | null>(null);
+  const [name, setName] = useState("");
+  const [made, setMade] = useState<Created | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let live = true;
+    request("/api/drive/status", { headers: auth(token) }, { retry: true })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((v: { workspace?: Workspace; may_write?: boolean } | null) => {
+        if (!live || !v) return;
+        setWorkspace(v.workspace ?? null);
+        setMayWrite(v.may_write === true);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [token]);
 
   async function load(more: string | null) {
     const mine = ++seq.current;
@@ -151,11 +176,64 @@ export function DriveBrowser({
     }
   }
 
+  const rootName = workspace?.name || t("My Drive");
   const here = searching
     ? t("Search results")
     : trail.length > 0
       ? trail[trail.length - 1]!.name
-      : t("My Drive");
+      : rootName;
+
+  async function created(res: Response) {
+    const body = (await res.json().catch(() => ({}))) as Created & { error?: string };
+    if (!res.ok) {
+      setError(serverMessage(body.error ?? `status ${res.status}`));
+      return;
+    }
+    setMade(body);
+    setMake(null);
+    setName("");
+    void load(null);
+  }
+
+  async function createNew() {
+    if (!make || !name.trim()) return;
+    setBusy("create");
+    setError("");
+    setMade(null);
+    try {
+      const res = await request(`/api/drive/${make === "folder" ? "folders" : "docs"}`, {
+        method: "POST",
+        headers: { ...auth(token), "content-type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), parent }),
+      });
+      await created(res);
+    } catch {
+      setError(serverMessage("Could not reach the server"));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function uploadFile(file: File) {
+    setBusy("create");
+    setError("");
+    setMade(null);
+    try {
+      const q = new URLSearchParams({ name: file.name });
+      if (parent) q.set("parent", parent);
+      const res = await request(`/api/drive/upload?${q}`, {
+        method: "POST",
+        headers: { ...auth(token), "content-type": file.type || "application/octet-stream" },
+        body: file,
+      });
+      await created(res);
+    } catch {
+      setError(serverMessage("Could not reach the server"));
+    } finally {
+      setBusy("");
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
 
   return (
     <Dialog
@@ -198,7 +276,7 @@ export function DriveBrowser({
         {!searching && (
           <nav className="drive-trail" aria-label={t("Folders")}>
             <Button size="sm" variant="ghost" onClick={() => setTrail([])}>
-              {t("My Drive")}
+              {rootName}
             </Button>
             {trail.map((c, i) => (
               <span key={c.id}>
@@ -209,6 +287,65 @@ export function DriveBrowser({
               </span>
             ))}
           </nav>
+        )}
+        {mayWrite && (
+          <div className="drive-create">
+            <Button size="sm" disabled={!!busy} onClick={() => setMake("folder")}>
+              {t("New folder")}
+            </Button>
+            <Button size="sm" disabled={!!busy} onClick={() => setMake("doc")}>
+              {t("New Google Doc")}
+            </Button>
+            <Button size="sm" disabled={!!busy} onClick={() => fileRef.current?.click()}>
+              {t("Upload a file")}
+            </Button>
+            <input
+              ref={fileRef}
+              type="file"
+              hidden
+              onChange={(ev) => {
+                const f = ev.target.files?.[0];
+                if (f) void uploadFile(f);
+              }}
+            />
+          </div>
+        )}
+        {make && (
+          <form
+            className="drive-search"
+            onSubmit={(ev) => {
+              ev.preventDefault();
+              void createNew();
+            }}
+          >
+            <Input
+              label={t("Name")}
+              value={name}
+              autoFocus
+              onChange={(ev) => setName(ev.target.value)}
+            />
+            <Button
+              type="submit"
+              variant="primary"
+              loading={busy === "create"}
+              disabled={!name.trim()}
+            >
+              {t("Create")}
+            </Button>
+            <Button type="button" onClick={() => setMake(null)}>
+              {t("Cancel")}
+            </Button>
+          </form>
+        )}
+        {made && (
+          <Notice tone="success">
+            {t("Created {name}.", { name: made.name })}{" "}
+            {made.web_link && (
+              <a href={made.web_link} target="_blank" rel="noreferrer noopener">
+                {t("Open in Google Drive")}
+              </a>
+            )}
+          </Notice>
         )}
         {error && <Notice tone="danger">{error}</Notice>}
         <Table caption={here} dense>

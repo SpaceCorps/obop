@@ -326,6 +326,13 @@ pub(crate) fn api_routes(state: Arc<HttpState>) -> Router {
         .route("/api/drive/status", get(drive::status))
         .route("/api/drive/files", get(drive::files))
         .route("/api/drive/import", post(drive::import))
+        .route("/api/drive/drives", get(drive::drives))
+        .route("/api/drive/folders", post(drive::create_folder))
+        .route("/api/drive/docs", post(drive::create_doc))
+        .route(
+            "/api/drive/upload",
+            post(drive::upload).layer(axum::extract::DefaultBodyLimit::disable()),
+        )
         .route("/api/{model}/{command}", post(call))
         .route("/mcp", any(mcp::endpoint))
         .route("/mcp/server-card", get(mcp::server_card_canonical))

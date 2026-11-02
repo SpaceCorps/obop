@@ -174,6 +174,18 @@ description = "Les personnes ayant connectors.user peuvent connecter leurs propr
 label = "Groupe autorisé"
 description = "Groupe d’autorisation qui peut l’utiliser ; vide signifie connectors.user"
 
+[labels.fr.model.provider_policy.field.workspace_id]
+label = "Lecteur de travail"
+description = "Google Drive : le lecteur dans lequel l’instance travaille (root est Mon Drive, vide signifie aucun)"
+
+[labels.fr.model.provider_policy.field.workspace_name]
+label = "Nom du lecteur de travail"
+description = "Google Drive : le nom de ce lecteur, pour l’affichage"
+
+[labels.fr.model.provider_policy.field.write_group]
+label = "Groupe d’écriture"
+description = "Google Drive : groupe d’autorisation qui peut y créer des dossiers, des Docs et des envois ; vide signifie platform.admin"
+
 [labels.fr.model.provider_policy.field.legal_basis]
 label = "Base juridique"
 description = "Base juridique enregistrée pour les connexions de ce fournisseur"
