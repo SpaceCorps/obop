@@ -2047,5 +2047,7 @@
   "Who may create files": "Vem får skapa filer",
   "Working in {drive}. People in the group {group} can create folders, Google Docs and uploads there.": "Arbetar i {drive}. Personer i gruppen {group} kan skapa mappar, Google Docs och uppladdningar där.",
   "Workspace drive": "Arbetsenhet",
-  "Workspace saved.": "Arbetsenheten sparades."
+  "Workspace saved.": "Arbetsenheten sparades.",
+  "Import into Documents": "Importera till Dokument",
+  "The files and folders of the Drive connected to this instance.": "Filerna och mapparna i den Drive som är ansluten till den här instansen."
 }
