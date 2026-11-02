@@ -264,6 +264,14 @@ export function Palette({ apps, onClose }: { apps: App[]; onClose: () => void })
           });
       }
     }
+    const docs = apps.find((a) => a.id === "documents");
+    if (docs)
+      all.push({
+        key: "drive",
+        title: `${docs.name} › ${t("Google Drive")}`,
+        hint: t("List"),
+        to: href({ app: "documents", model: "drive" }),
+      });
     if (apps.some((a) => a.id === "customize")) {
       all.push(
         {

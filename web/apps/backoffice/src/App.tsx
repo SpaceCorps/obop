@@ -9,6 +9,7 @@ import {
   type Settings,
 } from "./api.ts";
 import { AppIcon, Launcher, Palette, TopBar, appBlurb, appHref, buildApps } from "./Chrome.tsx";
+import { DriveLibrary, setPendingDriveDefaults, useDriveStatus } from "./DriveBrowser.tsx";
 import { ConnectorsApp, ConnectorsNav } from "./connectors/ConnectorsApp.tsx";
 import { BOARD, boardHref } from "./dashboards/route.ts";
 import { DataProvider, type Tone } from "./data.tsx";
@@ -33,6 +34,8 @@ import { applyTheme, resolveTheme } from "./theme.ts";
 
 // The big screens load on demand, so the first paint is small and a route shows a skeleton while its
 // code arrives.
+/** The route name of the Google Drive page inside the Documents app. */
+const DRIVE = "drive";
 const Customize = lazy(() => import("./Customize.tsx").then((m) => ({ default: m.Customize })));
 const DashboardsApp = lazy(() =>
   import("./dashboards/DashboardsApp.tsx").then((m) => ({ default: m.DashboardsApp })),
@@ -198,6 +201,17 @@ export function App() {
   const hasBoards = !!app?.module.models.some((m) => m.name === "dashboards_dashboard");
   const onBoard =
     app?.id === "dashboards" && hasBoards && (route.model === "" || route.model === BOARD);
+  const driveField =
+    app?.id === "documents" &&
+    app.module.models.some(
+      (m) =>
+        m.name === "documents_document" &&
+        m.fields.some((f) => f.name === "attachment" && f.kind === "file"),
+    )
+      ? "documents_document.attachment"
+      : "";
+  const { may: mayDrive } = useDriveStatus(token, !!driveField && ready);
+  const onDrive = !!driveField && mayDrive && route.model === DRIVE;
   const model = app?.module.models.find((m) => m.name === route.model) ?? app?.module.models[0];
 
   const linkFor = useCallback(
@@ -352,12 +366,23 @@ export function App() {
                     <a
                       key={m.name}
                       href={href({ app: app.id, model: m.name })}
-                      aria-current={!onBoard && model?.name === m.name ? "page" : undefined}
+                      aria-current={
+                        !onBoard && !onDrive && model?.name === m.name ? "page" : undefined
+                      }
                       title={describeFor(m)}
                     >
                       {modelTitle(m, app.module.id)}
                     </a>
                   ))}
+                  {driveField && mayDrive && (
+                    <a
+                      href={href({ app: app.id, model: DRIVE })}
+                      aria-current={onDrive ? "page" : undefined}
+                      title={t("The files and folders of the Drive connected to this instance.")}
+                    >
+                      {t("Google Drive")}
+                    </a>
+                  )}
                 </>
               )}
             </nav>
@@ -405,6 +430,15 @@ export function App() {
                 />
               ) : app?.id === "connectors" ? (
                 <ConnectorsApp app={app} route={route} go={go} />
+              ) : onDrive ? (
+                <DriveLibrary
+                  token={token}
+                  field={driveField}
+                  onPicked={(v) => {
+                    setPendingDriveDefaults(v);
+                    go({ app: "documents", model: "documents_document", id: "new" });
+                  }}
+                />
               ) : onBoard && app ? (
                 <DashboardsApp app={app} route={route} go={go} owner={email} />
               ) : app && model ? (
