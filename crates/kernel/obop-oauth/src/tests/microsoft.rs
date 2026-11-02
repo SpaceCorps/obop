@@ -296,3 +296,24 @@ fn the_cap_of_a_microsoft_only_phone_is_30_days_and_every_other_grant_keeps_90()
     assert_eq!(r.o.view(&id, &binder).unwrap().max_days, 90);
     let _ = api();
 }
+
+#[test]
+fn a_refused_read_of_the_account_gives_no_page_and_is_not_read_as_no_cap() {
+    // The page of a signed-in person lists up to the cap of the account. When the store refuses
+    // the read of the account, no page comes out: the cap is not guessed, and "unknown" is not
+    // "not capped". (The HTTP layer turns a refused read into a 503 as well, so only this level
+    // tells the difference.)
+    let (flaky, backend) = Flaky::memory();
+    let r = rig_on(backend, "ada", OAuthConfig::default());
+    let (id, binder) = begun(&r, true);
+    r.o.microsoft_done(&id, MicrosoftOutcome::SignedIn(signed_in(&r, "ada")))
+        .unwrap();
+    assert_eq!(r.o.view(&id, &binder).unwrap().max_days, 90);
+    flaky.refuse_model("auth_user", obop_storage::testing::Mode::Reads);
+    assert!(
+        r.o.view(&id, &binder).is_err(),
+        "a page after a refused read of the account"
+    );
+    flaky.allow_models();
+    assert_eq!(r.o.view(&id, &binder).unwrap().max_days, 90);
+}

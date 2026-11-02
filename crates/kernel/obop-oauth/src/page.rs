@@ -500,7 +500,7 @@ mod tests {
         for (key, cols) in CATALOGUE {
             for (i, c) in cols.iter().enumerate() {
                 assert!(!c.is_empty(), "{key} is empty in {}", LANGS[i]);
-                for ph in ["{app}", "{user}", "{host}"] {
+                for ph in ["{app}", "{user}", "{host}", "{days}"] {
                     assert_eq!(
                         cols[0].contains(ph),
                         c.contains(ph),
@@ -588,5 +588,108 @@ mod tests {
         // Without a passkey for the pending sign-in the second-step page has no script at all.
         let r = mfa_page(&ctx, "t", None, false);
         assert!(!r.html.contains("<script") && !r.csp.contains("script-src"));
+    }
+
+    fn phone_ctx(
+        lang: &str,
+        class: crate::client::Class,
+        user: Option<&str>,
+        max_days: u32,
+    ) -> FlowCtx {
+        FlowCtx {
+            id: "f1".into(),
+            csrf: "c".into(),
+            lang: lang.into(),
+            client_name: "App".into(),
+            redirect_origin: "org.obop.app:".into(),
+            redirect_host: "org.obop.app".into(),
+            redirect_form: RedirectForm::Web,
+            user: user.map(Into::into),
+            class,
+            groups: vec!["base.user".into()],
+            preselected: vec![],
+            microsoft: class.is_mobile(),
+            max_days,
+        }
+    }
+
+    #[test]
+    fn the_microsoft_step_and_the_cap_are_worded_in_every_language() {
+        // The six texts of the Microsoft step and of the cap are machine-drafted. This does not
+        // judge them; it holds every page and every language to the same shape: the link where it
+        // belongs, the text of each word, the cap sentence with its number and the periods listed.
+        let words = [
+            "err.ms_cancelled",
+            "err.ms_unavailable",
+            "err.ms_busy",
+            "err.ms_failed",
+            "err.expiry_cap",
+            "ms.button",
+            "ms.note",
+            "consent.cap",
+        ];
+        for (i, l) in LANGS.iter().enumerate() {
+            let mobile = crate::client::Class::Mobile;
+            // The sign-in page of a mobile app: the link, and the note beside it.
+            let login = login_page(&phone_ctx(l, mobile, None, 90), None).html;
+            assert!(
+                login.contains("href=\"/oauth/authorize/microsoft?flow=f1\""),
+                "{l}"
+            );
+            assert!(login.contains(&esc(t(l, "ms.button"))), "{l}");
+            assert!(login.contains(&esc(t(l, "ms.note"))), "{l}");
+            // An MCP client's page has neither.
+            let mut mcp = phone_ctx(l, crate::client::Class::Mcp, None, 90);
+            mcp.microsoft = false;
+            let login = login_page(&mcp, None).html;
+            assert!(!login.contains("/oauth/authorize/microsoft"), "{l}");
+            assert!(!login.contains(&esc(t(l, "ms.button"))), "{l}");
+            // Each word of the step shows its own text, and the texts differ from one another.
+            let mut seen = Vec::new();
+            for key in [
+                "err.ms_cancelled",
+                "err.ms_unavailable",
+                "err.ms_busy",
+                "err.ms_failed",
+            ] {
+                let page = login_page(&phone_ctx(l, mobile, None, 90), Some(key)).html;
+                assert!(page.contains(&esc(t(l, key))), "{l} {key}");
+                assert!(!seen.contains(&key), "{l} {key}");
+                seen.push(key);
+            }
+            // A language other than English has a text of its own for every new key.
+            if i > 0 {
+                for key in words {
+                    let cols = CATALOGUE.iter().find(|(k, _)| *k == key).unwrap().1;
+                    assert_ne!(cols[i], cols[0], "{l} {key} is still the English text");
+                }
+            }
+            // The consent page of a capped account lists up to the cap and says so; the page of
+            // any other account lists 90 and says nothing.
+            let capped = consent_page(&phone_ctx(l, mobile, Some("ada"), 30), None).html;
+            let periods: Vec<String> = capped
+                .split("<option value=\"")
+                .skip(1)
+                .map(|r| r.chars().take_while(char::is_ascii_digit).collect())
+                .collect();
+            assert_eq!(periods, ["1", "7", "30"], "{l}");
+            assert!(
+                capped.contains(&tf(l, "consent.cap", &[("days", "30")])),
+                "{l}"
+            );
+            let free = consent_page(&phone_ctx(l, mobile, Some("bob"), 90), None).html;
+            assert_eq!(free.matches("<option value=\"").count(), 4, "{l}");
+            assert!(
+                !free.contains(&tf(l, "consent.cap", &[("days", "30")])),
+                "{l}"
+            );
+            // The refusal of a longer period is worded too.
+            let again = consent_page(
+                &phone_ctx(l, mobile, Some("ada"), 30),
+                Some("err.expiry_cap"),
+            )
+            .html;
+            assert!(again.contains(&esc(t(l, "err.expiry_cap"))), "{l}");
+        }
     }
 }

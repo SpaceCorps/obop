@@ -1895,3 +1895,48 @@ async fn phone_a_store_refusal_anywhere_in_the_decision_never_leaves_a_code_for_
         "{clean} {refused_somewhere}"
     );
 }
+
+#[tokio::test]
+async fn phone_a_store_refusal_anywhere_in_the_consent_page_never_offers_more_than_the_cap() {
+    use obop_storage::testing::Flaky;
+    // Whichever read the store refuses, the answer is a 503 and never a page that offers 90 days.
+    // (The layer of D74 answers 503 for any refused read of a request, so what tells a guessed cap
+    // from a refused page is the unit test `a_refused_read_of_the_account_gives_no_page...` in
+    // `obop-oauth`.)
+    let flaky = Flaky::new(obop_storage::open("memory:").unwrap());
+    let app = App::with_store(obop_commands::Store::over(flaky.clone()));
+    let w = world_on(app, true, AuthConfig::insecure_dev(), None).await;
+    w.keep_throttle();
+    ada_sso_only(&w).await;
+    let mut phone = Phone::new(&w).await;
+    let page = phone.open().await;
+    let cb = phone.round_trip(&page.flow, ADA_OID).await;
+    assert_eq!(cb.status, 303, "{}", cb.body);
+    let (mut refused_somewhere, mut shown, mut clean) = (0, 0, 0);
+    for skip in 0..60 {
+        let before = flaky.refused();
+        flaky.refuse_call_after(skip);
+        let r = phone.back(&page.flow).await;
+        let refused = flaky.refused() - before;
+        flaky.allow_models();
+        if consent(&r) {
+            shown += 1;
+            assert_eq!(days_offered(&r), [1, 7, 30], "{skip}: {}", r.body);
+        } else {
+            assert!(
+                !r.body.contains("<option value=\"90\""),
+                "{skip}: {}",
+                r.body
+            );
+        }
+        if refused == 0 {
+            clean += 1;
+            break;
+        }
+        refused_somewhere += 1;
+    }
+    assert!(
+        clean == 1 && refused_somewhere > 0 && shown >= 1,
+        "{clean} {refused_somewhere} {shown}"
+    );
+}
