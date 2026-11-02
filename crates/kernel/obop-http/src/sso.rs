@@ -1339,6 +1339,15 @@ mod tests {
         ) -> Result<(String, obop_commands::LoginOutcome), MfaError> {
             unimplemented!()
         }
+        fn sign_in_for_flow(
+            &self,
+            _: &SsoIdentity,
+        ) -> Result<obop_commands::SsoFlowSignIn, MfaError> {
+            unimplemented!()
+        }
+        fn second_step_for_flow(&self, _: &str, _: Option<&str>) -> Result<String, MfaError> {
+            unimplemented!()
+        }
         fn audit(&self, _: &str, _: &str, _: &str) {
             unimplemented!()
         }

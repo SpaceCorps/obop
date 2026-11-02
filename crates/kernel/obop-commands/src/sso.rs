@@ -194,6 +194,27 @@ impl SsoIdentity {
     }
 }
 
+/// A Microsoft sign-in that finished for an OAuth flow (the phone sign-in, D91 and the D64
+/// amendment): what the OAuth pages need to go on, and nothing the provider sent. It is made and
+/// used inside one request; no one-time code stands between the two halves.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SsoFlowSignIn {
+    /// The account the identity is bound to.
+    pub user: String,
+    /// What the sign-in step gives, as the password step does: a session (the pages read who it
+    /// is and end it at once), a session limited to enrolment or a password change, or the demand
+    /// for an obop second factor.
+    pub outcome: LoginOutcome,
+    /// The credential epoch of the account that the sign-in compared: the flow is bound to this
+    /// value and not to one read later.
+    pub epoch: Option<String>,
+    /// Whether the provider reported a second factor.
+    pub mfa: bool,
+    /// The `auth_time` of the id token when it carried a usable one. Kept for the step-up (D91
+    /// Decision 3); nothing reads it yet.
+    pub auth_time: Option<u64>,
+}
+
 /// Why a step of the Microsoft sign-in did not go through. The person is told one thing for
 /// `Refused` and `UnknownKey`; the security log gets the reason.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -249,6 +270,19 @@ pub trait SsoApi: Send + Sync {
     /// comes with the outcome, so the page can show who is signed in (also while a second factor
     /// is still asked for).
     fn exchange(&self, code: &str, binder: &str) -> Result<(String, LoginOutcome), MfaError>;
+
+    /// The phone sign-in: a verified identity signs in to an OAuth flow. `begin` and `exchange` in
+    /// one call, with the same checks and the same effects (the account, its binding and the
+    /// provider as they are now, the credential epoch compared, `last_login_at` stamped, one
+    /// `oidc_login` line that says it was the OAuth sign-in pages), and no one-time code written
+    /// anywhere. Returns the epoch that was compared.
+    fn sign_in_for_flow(&self, identity: &SsoIdentity) -> Result<SsoFlowSignIn, MfaError>;
+
+    /// The demand for an obop second factor again, for a flow whose first factor (a Microsoft
+    /// sign-in) was accepted earlier at `epoch` and whose page was reloaded: a fresh `mfa_token`.
+    /// Refused (`Expired`) when the account is disabled, its credentials changed since `epoch`, or
+    /// it has no second factor any more. Never returns a session.
+    fn second_step_for_flow(&self, user: &str, epoch: Option<&str>) -> Result<String, MfaError>;
 
     /// Write a line to the security log (`oidc_*`); never a token, a code or a secret.
     fn audit(&self, user: &str, kind: &str, detail: &str);

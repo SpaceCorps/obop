@@ -2161,3 +2161,340 @@ fn a_store_that_cannot_be_read_is_never_a_yes_for_the_password_of_a_microsoft_on
         "both reads of the account are checked: {unavailable}"
     );
 }
+
+// ---- the phone sign-in (WP2): a verified identity signs in to an OAuth flow in one call -----------
+
+fn flow_sign_in(r: &Rig, id: &SsoIdentity) -> Result<obop_commands::SsoFlowSignIn, MfaError> {
+    sso(r).sign_in_for_flow(id)
+}
+
+fn epoch_in_store(r: &Rig, user: &str) -> Option<String> {
+    r.b.get("auth_user", user)
+        .unwrap()
+        .unwrap()
+        .get("epoch")
+        .and_then(J::as_str)
+        .map(String::from)
+}
+
+/// Give `user` a credential epoch, as any change of credentials does.
+fn change_credentials(r: &Rig, user: &str) {
+    let mut patch = Fields::new();
+    bump_epoch(&mut patch);
+    r.b.update("auth_user", user, &patch).unwrap();
+}
+
+#[test]
+fn the_flow_sign_in_gives_the_person_the_compared_epoch_the_claim_and_leaves_no_code_behind() {
+    let r = world();
+    change_credentials(&r, "ada");
+    let epoch = epoch_in_store(&r, "ada");
+    assert!(epoch.is_some());
+    let id = identity(&r, ADA_OID);
+    assert_eq!(id.auth_time, Some(T0));
+    let got = flow_sign_in(&r, &id).unwrap();
+    assert_eq!(got.user, "ada");
+    assert_eq!(got.epoch, epoch, "the epoch that was compared");
+    assert!(got.mfa, "the stand-in reports a second factor");
+    assert_eq!(got.auth_time, Some(T0));
+    // A bound account that is not Microsoft-only and has no second factor gets what a password
+    // gives: a session (which the pages read and end at once).
+    let (token, limited) = session_of(got.outcome);
+    assert!(!limited);
+    assert_eq!(r.a.resolve(&token).unwrap().id, "ada");
+    // No one-time code, no binder, no flow: nothing was stored for the second half.
+    assert!(
+        r.b.kv_scan("auth.sso").unwrap().is_empty(),
+        "{:?}",
+        r.b.kv_scan("auth.sso").unwrap()
+    );
+    // It is a real Microsoft sign-in: the binding records it, and the log says where it came in
+    // and what the provider reported, and nothing of the token.
+    let binding = r.b.list(LINK_TABLE).unwrap();
+    assert!(binding[0].1["last_login_at"].is_string());
+    let lines = events(&r, "oidc_login");
+    assert_eq!(lines.len(), 1);
+    assert!(
+        lines[0].contains("on the OAuth sign-in pages of an app")
+            && lines[0].contains("reports a second factor"),
+        "{lines:?}"
+    );
+    // The same identity again: another session, still no code.
+    assert!(flow_sign_in(&r, &id).is_ok());
+    assert!(r.b.kv_scan("auth.sso").unwrap().is_empty());
+}
+
+#[test]
+fn the_flow_sign_in_without_the_optional_claims_is_accepted_and_says_so() {
+    let r = world();
+    let id = identity_with(&r, ADA_OID, |c| {
+        let o = c.as_object_mut().unwrap();
+        o.remove("amr");
+        o.remove("auth_time");
+    });
+    let got = flow_sign_in(&r, &id).unwrap();
+    assert!(!got.mfa);
+    assert_eq!(got.auth_time, None, "absent and malformed look the same");
+    // A malformed `auth_time` is no time either.
+    let id = identity_with(&r, ADA_OID, |c| c["auth_time"] = json!("yesterday"));
+    assert_eq!(flow_sign_in(&r, &id).unwrap().auth_time, None);
+    assert!(
+        events(&r, "oidc_login")
+            .iter()
+            .any(|l| l.contains("does not report")),
+        "{:?}",
+        events(&r, "oidc_login")
+    );
+}
+
+#[test]
+fn the_flow_sign_in_refuses_what_the_one_time_code_refuses() {
+    let r = world();
+    let id = identity(&r, ADA_OID);
+    let refused = |r: &Rig, id: &SsoIdentity| {
+        assert!(
+            matches!(flow_sign_in(r, id), Err(MfaError::Expired)),
+            "expected a refusal"
+        );
+    };
+    // An identity nobody is bound to.
+    refused(&r, &identity(&r, ROOT2_OID));
+    // Another tenant than the provider's.
+    refused(
+        &r,
+        &SsoIdentity {
+            tenant: OTHER_TENANT.into(),
+            ..id.clone()
+        },
+    );
+    // A disabled account.
+    r.a.operator_set_disabled("ada", true).unwrap();
+    refused(&r, &id);
+    r.a.operator_set_disabled("ada", false).unwrap();
+    // An account that is not there any more (the binding stays).
+    let mut gone = id.clone();
+    gone.oid = BOB_OID.into();
+    r.a.operator_sso_bind("bob", BOB_OID).unwrap();
+    r.b.delete("auth_user", "bob").unwrap();
+    refused(&r, &gone);
+    // Unbound.
+    sso(&r).unbind(&admin("root1"), "ada").unwrap();
+    refused(&r, &id);
+    r.a.operator_sso_bind("ada", ADA_OID).unwrap();
+    assert!(flow_sign_in(&r, &id).is_ok(), "bound again");
+    // The provider switched off.
+    r.a.operator_sso_configure(TENANT, CLIENT, None, Some(false))
+        .unwrap();
+    refused(&r, &id);
+    // Every refusal wrote a line that names the reason, none the claims.
+    let lines = events(&r, "oidc_refused").join("\n");
+    for why in [
+        "no account is bound to object id",
+        "the provider was changed or switched off during the sign-in",
+        "the account is disabled",
+        "the account of the binding does not exist",
+    ] {
+        assert!(lines.contains(why), "{why} missing in {lines}");
+    }
+    assert!(!lines.contains("Ada Example") && !lines.contains("ada@example.test"));
+    assert!(r.b.kv_scan("auth.sso").unwrap().is_empty());
+}
+
+/// B.4 of the lead's addendum: a bound account that is not Microsoft-only gets the obop second
+/// factor only if one is enrolled, or the enrolment-only session where the policy demands one.
+#[test]
+fn the_flow_sign_in_of_a_bound_account_follows_the_second_factor_rules_of_the_password_step() {
+    // Enrolled: the demand for the obop second factor, whatever Microsoft reports.
+    let r = world();
+    let (secret, _) = enrol(&r.a, "ada");
+    let got = flow_sign_in(&r, &identity(&r, ADA_OID)).unwrap();
+    let LoginOutcome::MfaRequired { mfa_token: t } = got.outcome else {
+        panic!("an obop second factor was expected")
+    };
+    assert!(got.mfa, "Microsoft's report does not replace it");
+    assert!(r.a.resolve(&t).is_none(), "an mfa token is not a session");
+    r.a.set_clock_for_test(T0 + 60);
+    let (token, limited) = session_of(
+        r.a.login_mfa(&t, Some(&code_at(&secret, T0 + 60)), None)
+            .unwrap(),
+    );
+    assert!(!limited && r.a.resolve(&token).unwrap().id == "ada");
+
+    // Not enrolled, with the policy (an administrator): a session limited to enrolment.
+    let r = world_with(enforcing());
+    user_with(&r.a, "boss", &[ADMIN_GROUP]);
+    r.a.operator_sso_bind("boss", BOB_OID).unwrap();
+    let (_, limited) = session_of(flow_sign_in(&r, &identity(&r, BOB_OID)).unwrap().outcome);
+    assert!(
+        limited,
+        "the policy limits a Microsoft sign-in of an admin too"
+    );
+
+    // Not enrolled, without the policy: a plain session.
+    let r = world();
+    let (_, limited) = session_of(flow_sign_in(&r, &identity(&r, ADA_OID)).unwrap().outcome);
+    assert!(!limited);
+
+    // Microsoft-only with `mfa` is a whole session; without it, what a password would give.
+    let r = world_with(enforcing());
+    user_with(&r.a, "boss", &[ADMIN_GROUP]);
+    r.a.operator_sso_bind("boss", BOB_OID).unwrap();
+    signed_in_once(&r, BOB_OID);
+    sso_only(&r, "boss", true).unwrap();
+    let (_, limited) = session_of(flow_sign_in(&r, &identity(&r, BOB_OID)).unwrap().outcome);
+    assert!(!limited);
+    let (_, limited) = session_of(
+        flow_sign_in(&r, &identity_with(&r, BOB_OID, without_mfa))
+            .unwrap()
+            .outcome,
+    );
+    assert!(limited, "nothing stands for the second factor");
+}
+
+/// The epoch the flow gets is the one the sign-in compared, whenever the credentials change: there
+/// is no position of the call at which a change lands and the flow is bound to the new epoch.
+#[test]
+fn a_change_of_credentials_at_any_point_of_the_flow_sign_in_refuses_it_or_leaves_the_old_epoch() {
+    let mut refused = 0;
+    let mut finished = 0;
+    for skip in 0..14 {
+        let (r, flaky) = crate::admin_tests::flaky_rig();
+        for n in ["root1", "root2", "root3"] {
+            user_with(&r.a, n, &[ADMIN_GROUP]);
+            enrol(&r.a, n);
+        }
+        user_with(&r.a, "ada", &["base.user"]);
+        r.a.operator_sso_configure(TENANT, CLIENT, Some(SECRET), Some(true))
+            .unwrap();
+        r.a.operator_sso_bind("ada", ADA_OID).unwrap();
+        change_credentials(&r, "ada");
+        let before = epoch_in_store(&r, "ada");
+        let id = identity(&r, ADA_OID);
+        // After the (skip+1)th read of the account, another request changes the credentials.
+        flaky.after_the_get_of(
+            "auth_user",
+            skip,
+            Box::new(|inner| {
+                let mut patch = Fields::new();
+                bump_epoch(&mut patch);
+                inner.update("auth_user", "ada", &patch).unwrap();
+            }),
+        );
+        let got = flow_sign_in(&r, &id);
+        let after = epoch_in_store(&r, "ada");
+        match got {
+            Err(MfaError::Expired) => refused += 1,
+            Ok(g) => {
+                finished += 1;
+                assert_eq!(
+                    g.epoch, before,
+                    "position {skip}: the flow is bound to the epoch that was compared"
+                );
+                if after != before {
+                    assert_ne!(
+                        g.epoch, after,
+                        "position {skip}: a baseline read after the change would hide it"
+                    );
+                }
+            }
+            Err(other) => panic!("position {skip}: {other:?}"),
+        }
+    }
+    assert!(
+        refused >= 1,
+        "a change before the compare refuses the sign-in"
+    );
+    assert!(
+        finished >= 1,
+        "a change after the last check lets it finish with the old epoch"
+    );
+}
+
+#[test]
+fn whether_an_account_is_microsoft_only_is_an_answer_or_an_error_never_a_guess() {
+    use obop_commands::OAuthTokens;
+    let (r, flaky) = crate::admin_tests::flaky_rig();
+    for n in ["root1", "root2", "root3"] {
+        user_with(&r.a, n, &[ADMIN_GROUP]);
+        enrol(&r.a, n);
+    }
+    user_with(&r.a, "ada", &["base.user"]);
+    r.a.operator_sso_configure(TENANT, CLIENT, Some(SECRET), Some(true))
+        .unwrap();
+    r.a.operator_sso_bind("ada", ADA_OID).unwrap();
+    assert_eq!(OAuthTokens::is_microsoft_only(&r.a, "ada"), Ok(false));
+    assert_eq!(
+        OAuthTokens::is_microsoft_only(&r.a, " ADA "),
+        Ok(false),
+        "the name is read as the sign-in reads it"
+    );
+    signed_in_once(&r, ADA_OID);
+    sso_only(&r, "ada", true).unwrap();
+    assert_eq!(OAuthTokens::is_microsoft_only(&r.a, "ada"), Ok(true));
+    // An account that is not there is not "no".
+    assert!(OAuthTokens::is_microsoft_only(&r.a, "nobody").is_err());
+    // A store that refuses the read is not "no" either, at the one position where it is read.
+    flaky.refuse_call_after(0);
+    let e = OAuthTokens::is_microsoft_only(&r.a, "ada").unwrap_err();
+    assert!(!e.is_empty());
+    flaky.refuse_call_after(1_000);
+    assert_eq!(OAuthTokens::is_microsoft_only(&r.a, "ada"), Ok(true));
+}
+
+#[test]
+fn a_reloaded_second_step_gets_a_fresh_token_only_while_the_first_factor_still_stands() {
+    let r = world();
+    let (secret, _) = enrol(&r.a, "ada");
+    change_credentials(&r, "ada");
+    let got = flow_sign_in(&r, &identity(&r, ADA_OID)).unwrap();
+    let LoginOutcome::MfaRequired { mfa_token: first } = got.outcome else {
+        panic!("an obop second factor was expected")
+    };
+    let epoch = got.epoch.clone();
+    // The page was reloaded: a fresh token, which is not the first one and completes the sign-in.
+    let again = sso(&r)
+        .second_step_for_flow("ada", epoch.as_deref())
+        .unwrap();
+    assert_ne!(again, first);
+    assert!(r.a.resolve(&again).is_none());
+    r.a.set_clock_for_test(T0 + 60);
+    let (token, _) = session_of(
+        r.a.login_mfa(&again, Some(&code_at(&secret, T0 + 60)), None)
+            .unwrap(),
+    );
+    assert_eq!(r.a.resolve(&token).unwrap().id, "ada");
+    r.a.set_clock_for_test(T0);
+    // The credentials changed since: nothing is minted.
+    let tokens_before = r.b.list("auth_mfa_token").unwrap().len();
+    change_credentials(&r, "ada");
+    assert!(matches!(
+        sso(&r).second_step_for_flow("ada", epoch.as_deref()),
+        Err(MfaError::Expired)
+    ));
+    // Disabled, unknown, and an epoch that is none while the account has one.
+    let now = epoch_in_store(&r, "ada");
+    r.a.operator_set_disabled("ada", true).unwrap();
+    assert!(matches!(
+        sso(&r).second_step_for_flow("ada", now.as_deref()),
+        Err(MfaError::Expired)
+    ));
+    r.a.operator_set_disabled("ada", false).unwrap();
+    assert!(matches!(
+        sso(&r).second_step_for_flow("nobody", None),
+        Err(MfaError::Expired)
+    ));
+    assert!(matches!(
+        sso(&r).second_step_for_flow("ada", None),
+        Err(MfaError::Expired)
+    ));
+    // An account without a second factor never gets a token, and never a session, from this call.
+    assert!(matches!(
+        sso(&r).second_step_for_flow("bob", epoch_in_store(&r, "bob").as_deref()),
+        Err(MfaError::Expired)
+    ));
+    let sessions_before = r.b.list("auth_token").unwrap().len();
+    let _ = sso(&r).second_step_for_flow("bob", epoch_in_store(&r, "bob").as_deref());
+    assert_eq!(r.b.list("auth_token").unwrap().len(), sessions_before);
+    // The refusals above minted no token.
+    assert_eq!(r.b.list("auth_mfa_token").unwrap().len(), tokens_before);
+}
