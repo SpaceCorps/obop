@@ -955,7 +955,9 @@ impl Ending<'_> {
             None => back(self.s, word, cookies),
             Some(flow) => {
                 if let Some(o) = self.s.oauth.as_ref() {
-                    // A flow that is gone or busy is found out at the return address.
+                    // A flow that is gone is found out at the return address. A write that lost
+                    // its three tries leaves the record as it was, and the return address shows
+                    // that.
                     let _ = o.microsoft_done(flow, MicrosoftOutcome::Failed(word.to_string()));
                 }
                 with_cookies(see_other(&return_address(flow)), cookies)

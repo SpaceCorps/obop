@@ -382,7 +382,9 @@ impl Auth {
     /// one-time code of the back office is spent (the person has up to 60 seconds), when a phone
     /// sign-in on the OAuth pages finishes (no code stands between its halves), and when the
     /// second step of such a sign-in is asked for again: unbinding, switching the provider off or
-    /// clearing it ends a sign-in that is in the air.
+    /// clearing it stops a sign-in that is in the air from going on. (A `mfa_token` that was
+    /// minted before lives its five minutes: unbinding ends it through the credential epoch, a
+    /// switch-off or a clear does not, as on the web.)
     fn binding_holds(&self, user: &str, link_id: &str) -> Result<Option<&'static str>, MfaError> {
         let link = self
             .backend
@@ -1219,7 +1221,8 @@ impl SsoApi for Auth {
         }
         // The binding and the provider as they are now, as the web exchange asks before it mints
         // the same token: an account unbound, a provider switched off, cleared or changed since
-        // the first step ends the second.
+        // the first step gets no fresh token. (A token minted before this call is not withdrawn:
+        // unbinding ends it through the epoch, the others do not, as on the web.)
         let Some((link_id, _)) = self
             .link_of(&name)
             .map_err(|e| MfaError::Unavailable(describe_sso(e)))?

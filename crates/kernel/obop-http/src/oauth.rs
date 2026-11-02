@@ -746,8 +746,8 @@ fn microsoft_blocking(s: &HttpState, parts: &Parts) -> Response {
 /// `GET /oauth/authorize/return?flow=<id>`: where the callback sends the browser back to. It reads
 /// what the callback left in the flow and writes nothing into it, so reloading it, or going Back
 /// to it, shows the same page and spends no flow state. The one outcome that writes elsewhere is a
-/// pending second factor: each call mints a fresh `mfa_token` and counts one hit of the
-/// per-address sign-in window.
+/// pending second factor: each call counts one hit of the per-address sign-in window and either
+/// mints a fresh `mfa_token` or, when the second step is refused, writes one `oidc_refused` line.
 pub(crate) async fn microsoft_return(State(s): Shared, parts: Parts) -> Response {
     blocking(move || {
         let lang = lang_of(&parts.headers, None);

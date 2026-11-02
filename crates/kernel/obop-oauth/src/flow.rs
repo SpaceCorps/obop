@@ -151,7 +151,8 @@ pub enum MicrosoftOutcome {
     /// A verified identity signed in (`SsoApi::sign_in_for_flow`).
     SignedIn(SsoFlowSignIn),
     /// The round trip ended without one, for one of the fixed words of the redirect
-    /// (`cancelled`, `unavailable`, `busy`, `failed`). Anything else is read as `failed`.
+    /// (`cancelled`, `unavailable`, `busy`, `failed`, and also `enrol` and `pwchange`, the two
+    /// that the callback derives from the session). Anything else is read as `failed`.
     Failed(String),
 }
 
@@ -783,8 +784,10 @@ impl OAuth {
     /// another request changed meanwhile is read again (three tries) and never overwritten from a
     /// stale copy. A failed step leaves a person who is signed in as it is, and ends a second
     /// step that an earlier step left pending. After three lost swaps nothing is written and
-    /// `Busy` is returned; the callback drops it, so the person then sees the general failure
-    /// text (or the older word) at the return address and taps the link again.
+    /// `Busy` is returned; the callback drops it, so the return address shows whatever the record
+    /// already held (the consent step if a person is seated, an earlier pending second step, an
+    /// older word, and only if there is none of those the general failure text) and the person
+    /// taps the link again.
     pub fn microsoft_done(&self, id: &str, outcome: MicrosoftOutcome) -> Result<(), FlowError> {
         if id.len() != 32 || !id.bytes().all(|b| b.is_ascii_hexdigit()) {
             return Err(FlowError::Gone);
@@ -866,10 +869,11 @@ impl OAuth {
     /// record the callback wrote and writes nothing into it, so a reload (or Back) shows the same
     /// thing and spends no flow state: the consent step when the person is signed in; the
     /// second-factor step when the provider's sign-in was only the first factor (this outcome is
-    /// the one that does write elsewhere: each call mints a fresh `mfa_token` for the pending
-    /// account and counts one hit of the per-address sign-in window); the sign-in page with the
-    /// fixed text of the word the callback left; the sign-in page with a general text when it
-    /// left nothing.
+    /// the one that does write elsewhere: each call counts one hit of the per-address sign-in
+    /// window, and either mints a fresh `mfa_token` for the pending account or, when the second
+    /// step is refused, writes one `oidc_refused` line); the sign-in page with the fixed text of
+    /// the word the callback left; the sign-in page with a general text when it left nothing.
+    /// (The page that follows reads the provider and the account's setting as well.)
     pub fn microsoft_return(
         &self,
         id: &str,
