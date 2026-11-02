@@ -220,6 +220,7 @@ export const en = {
   "trip.incomplete.message":
     "The server has not received every point of this trip yet. The phone keeps trying. If it does not finish, discard the trip and record it again.",
   "trip.problem.title": "The server refused a step",
+  "trip.problem.title.app": "A step could not be done",
   "trip.problem.hint": "Nothing is lost. You can try again, or discard the trip.",
   "trip.problem.hint.unknown": "Nothing is lost. You can try again.",
   "trip.problem.generic": "The server refused this step.",
@@ -233,6 +234,7 @@ export const en = {
     'The server answered "not found" and the phone cannot tell what that means for this trip. The points are still on this phone and nothing is deleted. Try again later, or ask your administrator.',
   "trip.problem.invalid_response": "The server answered in a way the app does not understand.",
   "trip.problem.details": "Details from the server: {message}",
+  "trip.problem.details.app": "Details: {message}",
   "trip.action.failed": "That did not work. Try again.",
   "trip.notfound": "This trip is not on this phone any more.",
   "discard.title": "Discard this trip?",

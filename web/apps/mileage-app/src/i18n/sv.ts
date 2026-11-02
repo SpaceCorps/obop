@@ -227,6 +227,7 @@ export const sv: Translation<"one"> = {
   "trip.incomplete.message":
     "Servern har inte tagit emot alla punkter för den här resan än. Telefonen fortsätter att försöka. Om det inte blir klart, kassera resan och registrera den igen.",
   "trip.problem.title": "Servern godtog inte ett steg",
+  "trip.problem.title.app": "Ett steg kunde inte genomföras",
   "trip.problem.hint": "Inget har gått förlorat. Du kan försöka igen eller kassera resan.",
   "trip.problem.hint.unknown": "Inget har gått förlorat. Du kan försöka igen.",
   "trip.problem.generic": "Servern godtog inte det här steget.",
@@ -239,6 +240,7 @@ export const sv: Translation<"one"> = {
     "Servern svarade ”hittades inte” och telefonen kan inte avgöra vad det betyder för den här resan. Punkterna finns kvar på telefonen och inget raderas. Försök igen senare eller fråga din administratör.",
   "trip.problem.invalid_response": "Servern svarade på ett sätt som appen inte förstår.",
   "trip.problem.details": "Detaljer från servern: {message}",
+  "trip.problem.details.app": "Detaljer: {message}",
   "trip.action.failed": "Det fungerade inte. Försök igen.",
   "trip.notfound": "Resan finns inte kvar på den här telefonen.",
   "discard.title": "Kassera den här resan?",

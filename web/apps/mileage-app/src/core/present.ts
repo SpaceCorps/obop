@@ -22,6 +22,24 @@ export function tripStatus(trip: LocalTrip): TripStatus {
 
 export const statusText = (status: TripStatus): string => t(`state.${status}` as MessageKey);
 
+/**
+ * The codes of a problem that the app also raises itself, so that the stored words may be the app's
+ * and not the server's: it read the trip on the server and found that the step cannot be done
+ * (`state_conflict`, which the server also answers with, and `discarded`, `engine.ts`), or the
+ * answer made no sense (`unexpected_answer`, `api.ts`). Nothing stored says which side wrote the
+ * words, so for these codes the screen of the trip says neither "the server refused" nor "from the
+ * server": a neutral title and a neutral label for the line. The words themselves are English text
+ * (docs/ISSUES.md L50, L51), and the sentence above the line says what happened.
+ */
+export const APP_PROBLEM_CODES: readonly string[] = [
+  "state_conflict",
+  "discarded",
+  "unexpected_answer",
+];
+
+/** Whether the words stored with a problem of this code can only be the server's own. */
+export const isServerProblem = (code: string): boolean => !APP_PROBLEM_CODES.includes(code);
+
 /** The state of this phone on the instance (`active`, `revoked`) as a word; a state the app does not know is shown as it is. */
 export function deviceStateText(state: string): string {
   return state === "active" || state === "revoked" ? t(`account.device.state.${state}`) : state;
