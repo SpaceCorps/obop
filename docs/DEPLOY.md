@@ -432,24 +432,42 @@ Limits: whole files go up and down in memory (the upload size limits of D60 appl
 
 The **From Google Drive** button of the Documents app opens a browser over a Drive: folders, a search by name, and **Add** on a file. The server fetches the file (a Google Doc, Sheet, Slides file or Drawing is exported **as PDF**; any other file comes as it is, up to the size the field allows), stores it as an upload for `documents_document.attachment` and the new document opens in the back office prefilled (title from the file name, `location` set to the Drive link, the file attached, kind *contract*, confidentiality *internal*); the person reviews and saves it like any record. Nothing is ever written to Drive. It is one Drive for the whole instance, and it is independent of the file store above: Drive can be browsed while files are kept in the database, and the other way round.
 
-**Status:** implemented and tested against a fake Drive on a loopback port and in a real browser against such a fake (`crates/kernel/obop-blob-gdrive/src/browse.rs`, `obop-http/src/drive.rs`, `web/apps/backoffice/src/DriveBrowser.tsx`). It has **not** been run against the real Google service.
+**Status:** implemented and tested against a fake Google (authorize, token and Drive endpoints) on a loopback port, and in a real browser against such a fake: client entered, sign-in, browse, add, disconnect. It has **not** been run against the real Google service.
 
-It needs its own refresh token, because browsing needs the read-only scope `drive.readonly` (see every file of the account) and the file store needs only `drive.file`:
+#### Set it up in the back office (no environment variables)
+
+An administrator (`connectors.admin`, which `platform.admin` holds) opens **Connectors, Google Drive**:
+
+1. **Register obop with Google.** In the [Google Cloud Console](https://console.cloud.google.com/) create or pick a project, enable the **Google Drive API**, configure the OAuth consent screen and **publish** it (a project left in *testing* makes Google end the sign-in after seven days), and create an OAuth client of type **Web application**. Add the **redirect address the page shows** as an authorised redirect URI. It is `OBOP_PUBLIC_URL` followed by `/oauth/callback`, so set `OBOP_PUBLIC_URL` first (the page says so when it is missing).
+2. **Enter the client.** The client id and secret are kept under the provider policy of the `google_drive` provider: the secret is sealed with `OBOP_SECRET_KEY` and never shown again. The same form chooses the **group that may browse** (default `platform.admin`; the provider policy's `allowed_group`).
+3. **Connect Google Drive.** The page starts the authorisation (`connection.oauth_start`: authorization code with PKCE S256, `access_type=offline`, scope `drive.readonly`), Google asks for consent, and the callback keeps the sealed tokens on an instance-scoped `connection`. obop asks Drive who signed in and shows **Connected as <account>**; if Drive refuses (for example the Drive API is not enabled in the project) or Google sends no refresh token, the page shows **Problem** with the reason.
+4. **Disconnect** (`connection.revoke`) removes the tokens from obop at once; the client stays, so connecting again needs no new entry. It does not revoke Google's side: remove obop at https://myaccount.google.com/permissions for that.
+
+Everything the page does is an ordinary command (`provider_policy.create|update`, `connection.create`, `connection.oauth_start`, `connection.revoke`), so it works from the CLI, REST and MCP too; an agent can only propose the ones that need approval. The browser reads its credentials from the database **at request time**, so connecting, disconnecting or changing the client takes effect without a restart. Connecting, a failed connection and disconnecting are written to the security log (`drive_connected`, `drive_connect_failed`, `drive_disconnected`), and so is each import (`drive_import`, `drive_import_failed`).
+
+#### Or configure it in the environment
+
+An operator who prefers to keep the Drive outside the database sets the variables below; **they take precedence** over the page (the page then says "Set in the server's environment"). The browser is off while neither is set.
 
 ```bash
 OBOP_GDRIVE_CLIENT_ID=... OBOP_GDRIVE_CLIENT_SECRET=... obop storage drive-authorize --scope drive.readonly
 ```
 
-Set the printed token as the secret `OBOP_GDRIVE_BROWSE_REFRESH_TOKEN` (the client id and secret are the ones of the file store; one OAuth client serves both) and redeploy. The browser is **off** while that variable is unset. `obop storage check` then adds a `drive browser` line that names the Google account the token belongs to.
+Set the printed token as the secret `OBOP_GDRIVE_BROWSE_REFRESH_TOKEN` (the client id and secret are the ones of the file store; one OAuth client serves both) and redeploy. `obop storage check` then adds a `drive browser` line that names the Google account the token belongs to.
 
 | Setting | Meaning |
 |---|---|
 | `OBOP_GDRIVE_CLIENT_ID`, `OBOP_GDRIVE_CLIENT_SECRET` | The OAuth client (secrets), as for the file store. |
-| `OBOP_GDRIVE_BROWSE_REFRESH_TOKEN` | The `drive.readonly` token (secret). Turns the browser on. |
-| `OBOP_DRIVE_BROWSE_GROUP` | The permission group that may browse and import. Default `platform.admin`, because the connection is one Drive for everybody and the token sees all of it. Set `documents.manager` (or another group) to let more people. An agent can never browse. |
-| `OBOP_GDRIVE_API_BASE`, `OBOP_GDRIVE_TOKEN_URL` | End-to-end tests only: point the browser at a fake Drive. Honoured only for `http://127.0.0.1:` and `http://localhost:` addresses, so no setting can send the credentials elsewhere. |
+| `OBOP_GDRIVE_BROWSE_REFRESH_TOKEN` | The `drive.readonly` token (secret). When set, the environment is used instead of the page. |
+| `OBOP_DRIVE_BROWSE_GROUP` | The permission group that may browse and import; overrides the group chosen on the page. Default `platform.admin`, because the connection is one Drive for everybody and the token sees all of it. Set `documents.manager` (or another group) to let more people. An agent can never browse. |
+| `OBOP_GDRIVE_API_BASE`, `OBOP_GDRIVE_TOKEN_URL` | End-to-end tests only: point the environment-configured browser at a fake Drive. |
+| `OBOP_GOOGLE_AUTH_URL`, `OBOP_GOOGLE_TOKEN_URL`, `OBOP_GOOGLE_API_BASE` | End-to-end tests only: point the back office sign-in and the browser at a fake Google (with `OBOP_CONNECTORS_ALLOW_LOOPBACK=1`). All of these are honoured only for plain `http` to a literal loopback address, so no setting can send the credentials elsewhere. |
 
-Routes (bearer token of a person): `GET /api/drive/status` (`connected`, `may_browse`), `GET /api/drive/files?parent=&q=&page=`, `POST /api/drive/import` with `{"id", "field": "model.field"}`. An import goes through the same upload service as `POST /api/blobs`, so the field's write rights, size limit, type check and upload rate limit apply; the result is a blob id that a record stores, and each import (or failed import) is written to the security log (`drive_import`, `drive_import_failed`). Limits: My Drive and what is shared with the account, not shared drives; listings are 50 a page; the Drive account is a processor the operator must record themselves (it does not pass the connectors' egress gate); a token in a Google Cloud project in *testing* status expires after seven days.
+Routes (bearer token of a person): `GET /api/drive/status` (`connected`, `may_browse`, `may_configure`, and for an administrator `settings`: state, client id, whether a secret is stored, the account, the redirect address, the last error, the browse group and where the credentials come from; never a secret), `GET /api/drive/files?parent=&q=&page=`, `POST /api/drive/import` with `{"id", "field": "model.field"}`. An import goes through the same upload service as `POST /api/blobs`, so the field's write rights, size limit, type check and upload rate limit apply; the result is a blob id that a record stores. Limits: My Drive and what is shared with the account, not shared drives; listings are 50 a page; one Drive per instance (the newest connection that is not revoked); the Drive account is a processor the operator must record themselves (reading Drive does not pass the connectors' egress gate, because no record of obop leaves).
+
+#### Why the file store is still configured in the environment
+
+`OBOP_BLOB_STORE=gdrive://...` (above) is read when the process starts, before a single record can be read, because every upload and every backup goes through it; credentials kept in the database would be a chicken-and-egg problem on a fresh start and on `obop restore`. It also needs its own `drive.file` token and a folder obop created, which the Google Drive page does not make. So the file store stays on environment variables; moving it behind the page would need a lazily opened store and a restart-safe fallback, and is not built.
 
 ## The server key
 

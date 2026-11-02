@@ -41,6 +41,7 @@ webhook_out = "Webhook sortant"
 webhook_in = "Webhook entrant"
 rest_pull = "Récupération REST"
 csv_export = "Export CSV"
+browse = "Lecture à la demande"
 none = "Aucun"
 
 [labels.fr.model.connector_provider.field.auth_kind]

@@ -41,6 +41,7 @@ webhook_out = "Utgående webhook"
 webhook_in = "Inkommande webhook"
 rest_pull = "REST-hämtning"
 csv_export = "CSV-export"
+browse = "Läsning vid behov"
 none = "Ingen"
 
 [labels.sv.model.connector_provider.field.auth_kind]
