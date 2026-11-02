@@ -174,6 +174,18 @@ description = "Personer med connectors.user får ansluta sina egna konton"
 label = "Tillåten grupp"
 description = "Behörighetsgrupp som får använda den; tomt betyder connectors.user"
 
+[labels.sv.model.provider_policy.field.workspace_id]
+label = "Arbetsenhet"
+description = "Google Drive: den enhet instansen arbetar i (root är Min enhet, tomt betyder ingen)"
+
+[labels.sv.model.provider_policy.field.workspace_name]
+label = "Arbetsenhetens namn"
+description = "Google Drive: namnet på den enheten, för visning"
+
+[labels.sv.model.provider_policy.field.write_group]
+label = "Skrivgrupp"
+description = "Google Drive: behörighetsgrupp som får skapa mappar, Docs och uppladdningar där; tomt betyder platform.admin"
+
 [labels.sv.model.provider_policy.field.legal_basis]
 label = "Rättslig grund"
 description = "Registrerad rättslig grund för anslutningar till den här leverantören"
