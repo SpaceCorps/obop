@@ -44,10 +44,12 @@ fn rig_on(app: App) -> Rig {
         let groups: Vec<String> = groups.into_iter().map(String::from).collect();
         auth.create_user(name, PW, &groups).unwrap();
     }
-    let r = obop_http::router(
-        obop_http::HttpState::new(app.dispatcher.clone(), auth.clone()),
-        None,
-    );
+    // The address of a request is the one its `X-Forwarded-For` names (`fresh_address`): the walks
+    // below make a number of sign-ins that depends on how many store calls a command makes, and
+    // must not have to fit the per-address budget of the sign-in pages.
+    let state = obop_http::HttpState::new(app.dispatcher.clone(), auth.clone());
+    state.set_trust_proxy(true);
+    let r = obop_http::router(state, None);
     Rig { r, auth, app }
 }
 
