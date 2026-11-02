@@ -67,6 +67,18 @@ export function useDriveStatus(
 
 type Crumb = { id: string; name: string };
 
+/** Defaults the Drive page leaves for the new document form it opens (taken once). */
+let pendingDefaults: DriveDefaults | null = null;
+export function takePendingDriveDefaults(): DriveDefaults | null {
+  const v = pendingDefaults;
+  pendingDefaults = null;
+  return v;
+}
+export function setPendingDriveDefaults(v: DriveDefaults) {
+  pendingDefaults = v;
+}
+
+/** The dialog of the Documents list: pick one file, and the new record form opens with it. */
 export function DriveBrowser({
   token,
   field,
@@ -79,13 +91,75 @@ export function DriveBrowser({
   onClose: () => void;
   onPicked: (defaults: DriveDefaults) => void;
 }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <Dialog
+      title={t("Add a document from Google Drive")}
+      size="lg"
+      onClose={busy ? () => {} : onClose}
+      footer={
+        <Button onClick={onClose} disabled={busy}>
+          {t("Cancel")}
+        </Button>
+      }
+    >
+      <DriveView token={token} field={field} onPicked={onPicked} onBusy={setBusy} />
+    </Dialog>
+  );
+}
+
+/** The Google Drive page of the Documents app: the same browsing, inline, with no dialog. */
+export function DriveLibrary({
+  token,
+  field,
+  onPicked,
+}: {
+  token: string;
+  field: string;
+  onPicked: (defaults: DriveDefaults) => void;
+}) {
+  return (
+    <section className="main panel drive-page">
+      <header className="home-head">
+        <div>
+          <h1>{t("Google Drive")}</h1>
+          <p className="hint">
+            {t("The files and folders of the Drive connected to this instance.")}
+          </p>
+        </div>
+      </header>
+      <div className="drive-page-body">
+        <DriveView token={token} field={field} onPicked={onPicked} inline />
+      </div>
+    </section>
+  );
+}
+
+/** The browsing itself, shared by the dialog and the page: folders, search, create, and bring in. */
+function DriveView({
+  token,
+  field,
+  onPicked,
+  onBusy,
+  inline,
+}: {
+  token: string;
+  field: string;
+  onPicked: (defaults: DriveDefaults) => void;
+  onBusy?: (busy: boolean) => void;
+  inline?: boolean;
+}) {
   const [trail, setTrail] = useState<Crumb[]>([]);
   const [q, setQ] = useState("");
   const [searching, setSearching] = useState("");
   const [files, setFiles] = useState<Entry[]>([]);
   const [next, setNext] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState("");
+  const [busy, setBusyId] = useState("");
+  const setBusy = (v: string) => {
+    setBusyId(v);
+    onBusy?.(v !== "");
+  };
   const [error, setError] = useState("");
   const seq = useRef(0);
   const parent = trail.length > 0 ? trail[trail.length - 1]!.id : "";
@@ -236,181 +310,173 @@ export function DriveBrowser({
   }
 
   return (
-    <Dialog
-      title={t("Add a document from Google Drive")}
-      size="lg"
-      onClose={busy ? () => {} : onClose}
-      footer={
-        <Button onClick={onClose} disabled={!!busy}>
-          {t("Cancel")}
-        </Button>
-      }
-    >
-      <div className="stack drive-browser">
+    <div className={`stack drive-browser${inline ? " inline" : ""}`}>
+      <form
+        className="drive-search"
+        onSubmit={(ev) => {
+          ev.preventDefault();
+          setSearching(q.trim());
+        }}
+      >
+        <Input
+          label={t("Search by name")}
+          value={q}
+          onChange={(ev) => setQ(ev.target.value)}
+          placeholder={t("Search by name")}
+        />
+        <Button type="submit">{t("Search")}</Button>
+        {searching && (
+          <Button
+            type="button"
+            onClick={() => {
+              setQ("");
+              setSearching("");
+            }}
+          >
+            {t("Clear")}
+          </Button>
+        )}
+      </form>
+      {!searching && (
+        <nav className="drive-trail" aria-label={t("Folders")}>
+          <Button size="sm" variant="ghost" onClick={() => setTrail([])}>
+            {rootName}
+          </Button>
+          {trail.map((c, i) => (
+            <span key={c.id}>
+              <Icon name="chevron-right" size={14} />
+              <Button size="sm" variant="ghost" onClick={() => setTrail(trail.slice(0, i + 1))}>
+                {c.name}
+              </Button>
+            </span>
+          ))}
+        </nav>
+      )}
+      {mayWrite && (
+        <div className="drive-create">
+          <Button size="sm" disabled={!!busy} onClick={() => setMake("folder")}>
+            {t("New folder")}
+          </Button>
+          <Button size="sm" disabled={!!busy} onClick={() => setMake("doc")}>
+            {t("New Google Doc")}
+          </Button>
+          <Button size="sm" disabled={!!busy} onClick={() => fileRef.current?.click()}>
+            {t("Upload a file")}
+          </Button>
+          <input
+            ref={fileRef}
+            type="file"
+            hidden
+            onChange={(ev) => {
+              const f = ev.target.files?.[0];
+              if (f) void uploadFile(f);
+            }}
+          />
+        </div>
+      )}
+      {make && (
         <form
           className="drive-search"
           onSubmit={(ev) => {
             ev.preventDefault();
-            setSearching(q.trim());
+            void createNew();
           }}
         >
           <Input
-            label={t("Search by name")}
-            value={q}
-            onChange={(ev) => setQ(ev.target.value)}
-            placeholder={t("Search by name")}
+            label={t("Name")}
+            value={name}
+            autoFocus
+            onChange={(ev) => setName(ev.target.value)}
           />
-          <Button type="submit">{t("Search")}</Button>
-          {searching && (
-            <Button
-              type="button"
-              onClick={() => {
-                setQ("");
-                setSearching("");
-              }}
-            >
-              {t("Clear")}
-            </Button>
-          )}
-        </form>
-        {!searching && (
-          <nav className="drive-trail" aria-label={t("Folders")}>
-            <Button size="sm" variant="ghost" onClick={() => setTrail([])}>
-              {rootName}
-            </Button>
-            {trail.map((c, i) => (
-              <span key={c.id}>
-                <Icon name="chevron-right" size={14} />
-                <Button size="sm" variant="ghost" onClick={() => setTrail(trail.slice(0, i + 1))}>
-                  {c.name}
-                </Button>
-              </span>
-            ))}
-          </nav>
-        )}
-        {mayWrite && (
-          <div className="drive-create">
-            <Button size="sm" disabled={!!busy} onClick={() => setMake("folder")}>
-              {t("New folder")}
-            </Button>
-            <Button size="sm" disabled={!!busy} onClick={() => setMake("doc")}>
-              {t("New Google Doc")}
-            </Button>
-            <Button size="sm" disabled={!!busy} onClick={() => fileRef.current?.click()}>
-              {t("Upload a file")}
-            </Button>
-            <input
-              ref={fileRef}
-              type="file"
-              hidden
-              onChange={(ev) => {
-                const f = ev.target.files?.[0];
-                if (f) void uploadFile(f);
-              }}
-            />
-          </div>
-        )}
-        {make && (
-          <form
-            className="drive-search"
-            onSubmit={(ev) => {
-              ev.preventDefault();
-              void createNew();
-            }}
+          <Button
+            type="submit"
+            variant="primary"
+            loading={busy === "create"}
+            disabled={!name.trim()}
           >
-            <Input
-              label={t("Name")}
-              value={name}
-              autoFocus
-              onChange={(ev) => setName(ev.target.value)}
-            />
-            <Button
-              type="submit"
-              variant="primary"
-              loading={busy === "create"}
-              disabled={!name.trim()}
-            >
-              {t("Create")}
-            </Button>
-            <Button type="button" onClick={() => setMake(null)}>
-              {t("Cancel")}
-            </Button>
-          </form>
-        )}
-        {made && (
-          <Notice tone="success">
-            {t("Created {name}.", { name: made.name })}{" "}
-            {made.web_link && (
-              <a href={made.web_link} target="_blank" rel="noreferrer noopener">
-                {t("Open in Google Drive")}
-              </a>
-            )}
-          </Notice>
-        )}
-        {error && <Notice tone="danger">{error}</Notice>}
-        <Table caption={here} dense>
-          <thead>
-            <tr>
-              <th scope="col">{t("Name")}</th>
-              <th scope="col">{t("Modified")}</th>
-              <th scope="col">{t("Size")}</th>
-              <th scope="col">
-                <span className="sr-only">{t("Actions")}</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {files.map((f) => (
-              <tr key={f.id}>
-                <td>
-                  {f.folder ? (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      iconEnd="chevron-right"
-                      onClick={() => {
-                        setQ("");
-                        setSearching("");
-                        const crumb = { id: f.id, name: f.name };
-                        setTrail(searching ? [crumb] : [...trail, crumb]);
-                      }}
-                    >
-                      {f.name}
-                    </Button>
-                  ) : (
-                    <span className={f.importable ? "" : "hint"}>{f.name}</span>
-                  )}
-                </td>
-                <td>
-                  {f.modified ? fmt.dateOf(new Date(f.modified), { dateStyle: "medium" }) : ""}
-                </td>
-                <td>{f.size != null ? formatBytes(f.size) : ""}</td>
-                <td className="drive-actions">
-                  {f.importable && (
-                    <Button
-                      size="sm"
-                      variant="primary"
-                      loading={busy === f.id}
-                      disabled={!!busy}
-                      onClick={() => void pick(f)}
-                    >
-                      {t("Add")}
-                    </Button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
-        {loading && <Spinner label={t("Loading")} />}
-        {!loading && !error && files.length === 0 && <p className="hint">{t("Nothing here.")}</p>}
-        {next && !loading && <Button onClick={() => void load(next)}>{t("Show more")}</Button>}
-        <p className="hint">
-          {t(
-            "Google Docs, Sheets and Slides come in as PDF. Files up to the size the document field allows; nothing is changed in Drive.",
+            {t("Create")}
+          </Button>
+          <Button type="button" onClick={() => setMake(null)}>
+            {t("Cancel")}
+          </Button>
+        </form>
+      )}
+      {made && (
+        <Notice tone="success">
+          {t("Created {name}.", { name: made.name })}{" "}
+          {made.web_link && (
+            <a href={made.web_link} target="_blank" rel="noreferrer noopener">
+              {t("Open in Google Drive")}
+            </a>
           )}
-        </p>
-      </div>
-    </Dialog>
+        </Notice>
+      )}
+      {error && <Notice tone="danger">{error}</Notice>}
+      <Table caption={here} dense>
+        <thead>
+          <tr>
+            <th scope="col">{t("Name")}</th>
+            <th scope="col">{t("Modified")}</th>
+            <th scope="col">{t("Size")}</th>
+            <th scope="col">
+              <span className="sr-only">{t("Actions")}</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {files.map((f) => (
+            <tr key={f.id}>
+              <td>
+                {f.folder ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    iconEnd="chevron-right"
+                    onClick={() => {
+                      setQ("");
+                      setSearching("");
+                      const crumb = { id: f.id, name: f.name };
+                      setTrail(searching ? [crumb] : [...trail, crumb]);
+                    }}
+                  >
+                    {f.name}
+                  </Button>
+                ) : (
+                  <span className={f.importable ? "" : "hint"}>{f.name}</span>
+                )}
+              </td>
+              <td>{f.modified ? fmt.dateOf(new Date(f.modified), { dateStyle: "medium" }) : ""}</td>
+              <td>{f.size != null ? formatBytes(f.size) : ""}</td>
+              <td className="drive-actions">
+                {inline && f.web_link && (
+                  <a href={f.web_link} target="_blank" rel="noreferrer noopener">
+                    {t("Open in Google Drive")}
+                  </a>
+                )}{" "}
+                {f.importable && (
+                  <Button
+                    size="sm"
+                    variant={inline ? "secondary" : "primary"}
+                    loading={busy === f.id}
+                    disabled={!!busy}
+                    onClick={() => void pick(f)}
+                  >
+                    {inline ? t("Import into Documents") : t("Add")}
+                  </Button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+      {loading && <Spinner label={t("Loading")} />}
+      {!loading && !error && files.length === 0 && <p className="hint">{t("Nothing here.")}</p>}
+      {next && !loading && <Button onClick={() => void load(next)}>{t("Show more")}</Button>}
+      <p className="hint">
+        {t(
+          "Google Docs, Sheets and Slides come in as PDF. Files up to the size the document field allows; nothing is changed in Drive.",
+        )}
+      </p>
+    </div>
   );
 }

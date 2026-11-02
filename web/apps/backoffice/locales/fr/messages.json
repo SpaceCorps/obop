@@ -2047,5 +2047,7 @@
   "Who may create files": "Qui peut créer des fichiers",
   "Working in {drive}. People in the group {group} can create folders, Google Docs and uploads there.": "Travail dans {drive}. Les membres du groupe {group} peuvent y créer des dossiers, des Google Docs et des envois.",
   "Workspace drive": "Lecteur de travail",
-  "Workspace saved.": "Lecteur de travail enregistré."
+  "Workspace saved.": "Lecteur de travail enregistré.",
+  "Import into Documents": "Importer dans Documents",
+  "The files and folders of the Drive connected to this instance.": "Les fichiers et dossiers du Drive connecté à cette instance."
 }

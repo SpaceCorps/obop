@@ -2047,5 +2047,7 @@
   "Who may create files": "machine-drafted",
   "Working in {drive}. People in the group {group} can create folders, Google Docs and uploads there.": "machine-drafted",
   "Workspace drive": "machine-drafted",
-  "Workspace saved.": "machine-drafted"
+  "Workspace saved.": "machine-drafted",
+  "Import into Documents": "machine-drafted",
+  "The files and folders of the Drive connected to this instance.": "machine-drafted"
 }

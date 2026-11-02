@@ -760,3 +760,7 @@
   text-align: end;
   white-space: nowrap;
 }
+
+.drive-page-body {
+  padding: 0 1.25rem 1.25rem;
+}

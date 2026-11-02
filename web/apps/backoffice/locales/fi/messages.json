@@ -2047,5 +2047,7 @@
   "Who may create files": "Ketkä saavat luoda tiedostoja",
   "Working in {drive}. People in the group {group} can create folders, Google Docs and uploads there.": "Työskennellään asemassa {drive}. Ryhmän {group} jäsenet voivat luoda siellä kansioita, Google Docs -tiedostoja ja latauksia.",
   "Workspace drive": "Työskentelyasema",
-  "Workspace saved.": "Työskentelyasema tallennettu."
+  "Workspace saved.": "Työskentelyasema tallennettu.",
+  "Import into Documents": "Tuo Asiakirjoihin",
+  "The files and folders of the Drive connected to this instance.": "Tähän instanssiin yhdistetyn Driven tiedostot ja kansiot."
 }
