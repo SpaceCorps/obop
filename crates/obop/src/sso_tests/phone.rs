@@ -658,6 +658,9 @@ async fn shows(phone: &mut Phone<'_>, flow: &str, cb: &Raw, text: &str) {
     assert!(login_page(&r), "{}", r.body);
     assert!(r.body.contains(text), "{text:?} is not in {}", r.body);
     assert!(!consent(&r));
+    // Looking at it again shows the same and spends nothing.
+    let again = phone.back(flow).await;
+    assert_eq!(again.body, r.body, "a reload shows another page");
     let rec = phone.w.oauth_flow(flow).unwrap();
     assert!(rec["user"].is_null(), "{rec}");
     // The word the callback left is one of the closed set.
@@ -1486,4 +1489,91 @@ async fn phone_a_storage_fault_in_the_callback_is_never_a_500_and_leaves_the_flo
     // Nothing of the provider is stored or shown whatever failed.
     w.assert_nowhere(CLIENT_SECRET);
     w.assert_nowhere(ACCESS_TOKEN);
+}
+
+#[tokio::test]
+async fn phone_a_flow_that_another_request_changed_meanwhile_is_read_again_and_not_overwritten() {
+    use obop_storage::testing::Flaky;
+    let (flaky, backend) = Flaky::memory();
+    let app = App::with_store(obop_commands::Store::over(backend));
+    let w = world_on(app, true, AuthConfig::insecure_dev(), None).await;
+    let mut phone = Phone::new(&w).await;
+    let page = phone.open().await;
+    let tap = phone.tap(&page.flow).await;
+    let uri = phone.at_the_provider(&tap, ADA_OID);
+    // Another request changed the record of the flow just before the callback writes.
+    let key = format!("oauth:flow:{}", page.flow);
+    flaky.before_the_next_kv_swap(Box::new(move |b| {
+        let raw = b.kv_get(&key).unwrap().unwrap();
+        let mut rec: J = serde_json::from_str(&raw).unwrap();
+        rec["marker"] = json!("another request");
+        b.kv_put(&key, &rec.to_string(), Some(600_000)).unwrap();
+    }));
+    let cb = phone.callback(&uri).await;
+    assert_eq!(
+        cb.location(),
+        format!("/oauth/authorize/return?flow={}", page.flow)
+    );
+    let rec = w.oauth_flow(&page.flow).unwrap();
+    assert_eq!(rec["user"], "ada", "the sign-in was written");
+    assert_eq!(
+        rec["marker"], "another request",
+        "and the other request's change was kept"
+    );
+    let r = phone.back(&page.flow).await;
+    assert!(consent(&r), "{}", r.body);
+}
+
+#[tokio::test]
+async fn phone_the_callbacks_of_an_app_have_windows_of_their_own() {
+    let w = world(true).await;
+    w.keep_throttle();
+    let mut phone = Phone::new(&w).await;
+    let page = phone.open().await;
+    // Callbacks that spent a flow: 60 a minute from one address, and the 61st is told so. (The
+    // taps come from other addresses, so that the limit of the taps does not come first.)
+    let mut words = Vec::new();
+    for i in 0..62 {
+        phone.ip = Some(format!("10.8.0.{}", i + 1));
+        let tap = phone.tap(&page.flow).await;
+        let uri = format!(
+            "/api/auth/oidc/callback?error=access_denied&state={}",
+            state_of(&tap)
+        );
+        phone.ip = Some("203.0.113.7".into());
+        let cb = phone.callback(&uri).await;
+        assert_eq!(
+            cb.location(),
+            format!("/oauth/authorize/return?flow={}", page.flow)
+        );
+        words.push(
+            w.oauth_flow(&page.flow).unwrap()["ms_error"]
+                .as_str()
+                .unwrap()
+                .to_string(),
+        );
+    }
+    assert_eq!(words.iter().filter(|x| *x == "cancelled").count(), 60);
+    assert_eq!(&words[60..], ["busy", "busy"]);
+    // The back office's callbacks from the same address are not held back by them.
+    let h = [("x-forwarded-for", "10.8.9.9")];
+    let mut jar = Jar::default();
+    let s = w
+        .send_h("GET", "/api/auth/oidc/start", &jar, None, &h)
+        .await;
+    jar.absorb(&s);
+    let uri = format!(
+        "/api/auth/oidc/callback?error=access_denied&state={}",
+        state_of(&s)
+    );
+    let r = w
+        .send_h(
+            "GET",
+            &uri,
+            &jar,
+            None,
+            &[("x-forwarded-for", "203.0.113.7")],
+        )
+        .await;
+    assert_eq!(r.location(), "/#oidc_error=cancelled");
 }
