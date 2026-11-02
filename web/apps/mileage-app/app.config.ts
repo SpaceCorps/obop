@@ -11,6 +11,7 @@ import {
   withoutDevClientEntries,
   withoutFetchMode,
 } from "./config/ios.ts";
+import { NATIVE_TEXTS, expoLocales } from "./config/native-texts.ts";
 
 // PLACEHOLDER: "org.obop.mileage" is a stand-in application id and bundle id. It is not registered
 // anywhere and no store account, signing key or publication exists (Q37 of docs/DECISIONS.md).
@@ -88,7 +89,10 @@ const withIosPlistCleanup: ConfigPlugin = (config) =>
   });
 
 const config: ExpoConfig = {
-  name: "obop Mileage",
+  name: NATIVE_TEXTS.en.appName,
+  // The name under the icon and the two usage texts of iOS in the other languages of the app
+  // (config/native-texts.ts). They follow the language of the phone, not the choice in the app.
+  locales: expoLocales(),
   slug: "obop-mileage",
   // The redirect of the sign-in is `<scheme>:/oauth`, a private-use scheme in reverse domain form
   // (RFC 8252 section 7.1): the instance refuses any other form for a mobile client.
@@ -128,8 +132,7 @@ const config: ExpoConfig = {
       // iOS 14 and later ask the person for local network access the first time the app reaches an
       // address on the local network (a test instance), and show this text. No Bonjour keys: the
       // app does no discovery (the ones of the development client are removed, see DEV_CLIENT).
-      NSLocalNetworkUsageDescription:
-        "obop Mileage connects to the obop server whose address you enter. If that server is on your local network, iOS asks you to allow this.",
+      NSLocalNetworkUsageDescription: NATIVE_TEXTS.en.localNetwork,
     },
   },
   extra: { cleartextAllowed: CLEARTEXT, defaultServer: DEFAULT_SERVER, thinningOff: THINNING_OFF },
@@ -157,8 +160,7 @@ const config: ExpoConfig = {
         locationAlwaysPermission: false,
         motionUsagePermission: false,
         locationFullAccuracyPermission: false,
-        locationWhenInUsePermission:
-          "obop Mileage records the route of a trip that you start, to measure its distance. It keeps recording while the screen is off, until you stop the trip.",
+        locationWhenInUsePermission: NATIVE_TEXTS.en.locationWhenInUse,
       },
     ],
     // The app stores its keys without a fingerprint or Face ID (`requireAuthentication` is never
