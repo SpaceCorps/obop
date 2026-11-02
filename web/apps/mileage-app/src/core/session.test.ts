@@ -18,7 +18,11 @@ const tokens = (n: number, expiresAt: number) => ({
 
 function rig(
   initial = tokens(1, 100_000),
-  options: { refreshTimeoutMs?: number; onEndUntold?: () => void } = {},
+  options: {
+    refreshTimeoutMs?: number;
+    onEndUntold?: () => void;
+    acceptAddress?: (baseUrl: string) => boolean;
+  } = {},
 ) {
   const saved: (ReturnType<typeof tokens> | null)[] = [];
   const configs: unknown[] = [];
@@ -115,6 +119,48 @@ function rig(
     },
   };
 }
+
+describe("the stored session meets the address rule again", () => {
+  test("a session at an address the build may not use is dropped, and no token is sent to it", async () => {
+    // A release build finds the `http` address that a test build stored (the iOS Keychain
+    // survives an uninstall; the Android Keystore survives an update).
+    const seen: string[] = [];
+    const r = rig(tokens(1, 100), {
+      acceptAddress: (baseUrl) => {
+        seen.push(baseUrl);
+        return baseUrl.startsWith("https://");
+      },
+    });
+    await r.session.restore();
+    expect(seen).toEqual(["http://h"]);
+    expect(r.session.status()).toBe("signed_out");
+    expect(r.session.config()).toBeNull();
+    expect(r.session.deviceId()).toBeNull();
+    expect(r.saved).toEqual([null]);
+    expect(r.configs).toEqual([null]);
+    // The token is old enough to be refreshed; with no session nothing is asked of the instance.
+    expect(await r.session.accessToken()).toBeNull();
+    expect(r.bodies).toHaveLength(0);
+  });
+
+  test("a session at an address the build may use is restored as it was", async () => {
+    const r = rig(tokens(1, 100_000), { acceptAddress: (baseUrl) => baseUrl === "http://h" });
+    await r.session.restore();
+    expect(r.session.status()).toBe("signed_in");
+    expect(r.session.config()).toEqual({ baseUrl: "http://h", clientId: "cid" });
+    expect(await r.session.accessToken()).toBe("AT-1");
+    expect(r.saved).toEqual([]);
+    expect(r.configs).toEqual([]);
+  });
+
+  test("a keystore that refuses the cleaning does not stop the start", async () => {
+    const r = rig(tokens(1, 100_000), { acceptAddress: () => false });
+    r.failSaves(1);
+    await r.session.restore();
+    expect(r.session.status()).toBe("signed_out");
+    expect(await r.session.accessToken()).toBeNull();
+  });
+});
 
 describe("the session", () => {
   test("a token with time left is used as it is", async () => {

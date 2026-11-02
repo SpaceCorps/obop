@@ -15,6 +15,7 @@ import { t } from "./src/i18n/index.ts";
 import { stopRecording } from "./src/native/recorder.ts";
 import type { Runtime } from "./src/native/runtime.ts";
 import { useBinding, useOutbox, useRuntime, useSessionStatus } from "./src/ui/hooks.ts";
+import { tOs } from "./src/ui/os-text.ts";
 import { gate, keepSigningIn, reduce, type Nav, type Route } from "./src/ui/router.ts";
 import { Account } from "./src/ui/screens/Account.tsx";
 import { Foreign } from "./src/ui/screens/Foreign.tsx";
@@ -163,7 +164,7 @@ function Failed({ message, retry }: { message: string; retry: () => void }) {
       <Text tone="danger" testID="database-error">
         {t("error.database")}
       </Text>
-      <Text>{t("error.database.hint")}</Text>
+      <Text>{tOs("error.database.hint")}</Text>
       {stopped ? <Text tone="muted">{t("error.database.stopped")}</Text> : null}
       <Button label={t("common.details")} variant="ghost" onPress={() => setDetails((d) => !d)} />
       {details ? <Text tone="muted">{message}</Text> : null}

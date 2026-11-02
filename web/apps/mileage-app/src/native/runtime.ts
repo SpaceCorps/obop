@@ -5,6 +5,7 @@ import { bindOwner, bindingOf, takeOver, type Binding, type Owner } from "../cor
 import { createSession, type Session } from "../core/session.ts";
 import type { OutboxStore } from "../core/store.ts";
 import { createSyncController, type SyncController } from "../core/sync.ts";
+import { addressAllowed } from "./auth.ts";
 import { emitChange } from "./bus.ts";
 import { oauthDeps } from "./platform-deps.ts";
 import { secureStorage } from "./secure-storage.ts";
@@ -59,6 +60,9 @@ async function build(): Promise<Runtime> {
     // A sign-in the phone ended on its own and could not tell the instance about: the sign-in
     // screen says so, as after a sign-out that could not reach the instance.
     onEndUntold: () => setUntold(true),
+    // The stored address meets the rule of the sign-in again (a release build must not use the
+    // `http` address that a test build stored).
+    acceptAddress: addressAllowed,
   });
   await session.restore();
   let binding: Binding =

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Binding } from "../core/identity.ts";
+import { dismissStaleFileNote, staleFileRecoveredAt } from "../core/open-outbox.ts";
 import type { SessionStatus } from "../core/session.ts";
 import type { SyncStatus } from "../core/sync.ts";
 import type { LocalTrip } from "../core/types.ts";
@@ -72,6 +73,29 @@ export function useOutbox(rt: Runtime): Outbox {
     };
   }, [load]);
   return state;
+}
+
+/**
+ * Whether the app replaced the database file of a restored backup at this start (iOS only; the
+ * note stays until the driver has read it), and the way to dismiss it.
+ */
+export function useStaleFileNote(rt: Runtime): { recoveredAt: string | null; dismiss: () => void } {
+  const [recoveredAt, setRecoveredAt] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    staleFileRecoveredAt(rt.store).then(
+      (value) => alive && setRecoveredAt(value),
+      () => undefined,
+    );
+    return () => {
+      alive = false;
+    };
+  }, [rt]);
+  const dismiss = useCallback(() => {
+    setRecoveredAt(null);
+    void dismissStaleFileNote(rt.store).catch(() => undefined);
+  }, [rt]);
+  return { recoveredAt, dismiss };
 }
 
 export function useSessionStatus(rt: Runtime): SessionStatus {

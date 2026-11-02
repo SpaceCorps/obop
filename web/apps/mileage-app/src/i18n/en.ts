@@ -25,6 +25,8 @@ export const en = {
   "error.database": "The trips on this phone could not be opened.",
   "error.database.hint":
     "Nothing was deleted. Try again. While the trips cannot be opened, new positions are not saved. If the location service is still running, stop it here. If Try again keeps failing, the key of the trips may be lost and they cannot be read: the way out is Settings, Apps, obop Mileage, Storage, Clear storage, which deletes the trips that were not sent.",
+  "error.database.hint.ios":
+    "Nothing was deleted. Try again. If the phone has only just started, unlock it once and try again. While the trips cannot be opened, new positions are not saved. If the location service is still running, stop it here. If Try again keeps failing, the key of the trips may be lost and they cannot be read: the way out is to delete the app from the Home Screen and install it again, which deletes the trips that were not sent.",
   "error.database.stop": "Stop the location service",
   "error.database.stopped": "The location service was stopped.",
 
@@ -72,6 +74,10 @@ export const en = {
   "home.open.title": "A trip is still open",
   "home.open.message": "Started {when}. Stop it or discard it.",
   "home.open.action": "Open trip",
+  "home.restored.title": "A backup brought back an unreadable trip database",
+  "home.restored.message":
+    "The key of the old database stays on the phone it was made on, so it could not be opened here and was replaced by an empty one. Trips that were not uploaded before the backup was made are lost. Trips that were uploaded are on the server.",
+  "home.restored.action": "Got it",
   "home.waiting.title": "Waiting to upload",
   "home.waiting.message.one":
     "{count} trip is on this phone and not on the server yet. It is safe.",
@@ -90,6 +96,8 @@ export const en = {
   "disclosure.title": "How this app uses your location",
   "disclosure.body":
     "Mileage collects your location to work out how far you drove. It does this only between Start and Stop, and it keeps collecting when the screen is off or the app is in the background, so that the whole trip is recorded. A notification shows while it records. Your route is saved on this phone, encrypted, until your instance has it, and it is not shared with anyone else.",
+  "disclosure.body.ios":
+    "Mileage collects your location to work out how far you drove. It does this only between Start and Stop, and it keeps collecting when the screen is off or the app is in the background, so that the whole trip is recorded. The system shows a location indicator while it records. Your route is saved on this phone, encrypted, until your instance has it, and it is not shared with anyone else.",
   "disclosure.continue": "Continue",
   "disclosure.decline": "Not now",
   "permission.denied.title": "Location is needed to record a trip",
@@ -104,6 +112,8 @@ export const en = {
   "permission.services.title": "Location is switched off on this phone",
   "permission.services.message":
     "Switch location on in the quick settings of the phone, then try again.",
+  "permission.services.message.ios":
+    "Switch on Location Services in the Settings app, under Privacy & Security, then try again.",
   "permission.settings": "Open settings",
   "permission.notifications.title": "Notifications are off",
   "permission.notifications.message":
@@ -111,6 +121,8 @@ export const en = {
   "guide.title": "Keep the app running",
   "guide.body":
     "Some phones stop apps to save battery. Do not force-stop the app while you drive. If a trip stops recording, set the battery use of this app to Unrestricted in the Android settings.",
+  "guide.body.ios":
+    "Do not close the app from the app switcher while you drive: iPhone stops recording when you do. If a trip stops recording, open the app and tap Restart recording.",
   "guide.start": "Start the trip",
 
   "recording.title": "Recording",
@@ -130,6 +142,8 @@ export const en = {
   "recording.nofix.title": "No position arrived yet",
   "recording.nofix.message":
     "Nothing was received in the first minute. Check that location is switched on for the phone and that the phone has Google Play services, then restart recording.",
+  "recording.nofix.message.ios":
+    "Nothing was received in the first minute. Check that Location Services is switched on for the phone and that the app may use your location, then restart recording.",
   "recording.quiet.title": "No new position for a while",
   "recording.quiet.message.one":
     "The last position is {count} minute old. If you are standing still that is normal. If you are driving, restart recording.",
@@ -138,6 +152,8 @@ export const en = {
   "recording.services.title": "Location is switched off on this phone",
   "recording.services.message":
     "Switch location on in the quick settings of the phone, then restart recording.",
+  "recording.services.message.ios":
+    "Switch on Location Services in the Settings app, under Privacy & Security, then restart recording.",
   "recording.precise.title": "Only approximate location is allowed",
   "recording.precise.message":
     "A trip needs precise location. Allow Precise location in the settings of the app, then restart recording.",
@@ -152,6 +168,7 @@ export const en = {
   "recording.full.message": "A trip holds at most 20,000 points. Stop it and start a new one.",
   "recording.keep.title": "Keep this app running",
   "recording.keep.message": "Do not force-stop it while you drive.",
+  "recording.keep.message.ios": "Do not close it from the app switcher while you drive.",
   "recording.notification.title": "Recording your trip",
   "recording.notification.body": "Mileage is saving your route. Open the app to stop.",
   "recording.error.start": "The trip could not be started. Try again.",

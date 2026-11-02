@@ -1,25 +1,37 @@
 import * as Crypto from "expo-crypto";
-import * as SecureStore from "expo-secure-store";
 import * as SQLite from "expo-sqlite";
-import { createSqlDb, type RawDb, type SqlDb, type SqlValue } from "../core/sql.ts";
-import { migrate } from "../core/sql-store.ts";
-import { DATABASE_KEY_NAME, DATABASE_NAME } from "./config.ts";
+import { Platform } from "react-native";
+import { openOutbox, policyFor, type FileHandle, type OpenPorts } from "../core/open-outbox.ts";
+import type { SqlDb, SqlValue } from "../core/sql.ts";
+import { DATABASE_KEY_NAME, DATABASE_NAME, SERVER_KEY_NAME, TOKENS_KEY_NAME } from "./config.ts";
+import { keychain } from "./keychain.ts";
 
 const hex = (bytes: Uint8Array): string =>
   Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 
 /**
- * The key of the database: 32 random bytes made on the first start and kept in the Android
- * Keystore (expo-secure-store encrypts the value with a Keystore key that never leaves the
- * hardware-backed store). The key is never logged.
+ * The parts of the phone that `openOutbox` (`core/open-outbox.ts`, where the procedure and its
+ * tests are) needs. The key of the database is 32 random bytes made on the first start and kept in
+ * the Android Keystore or the iOS Keychain (after first unlock, this device only: `keychain.ts`).
+ * The key is never logged.
  */
-async function databaseKey(): Promise<string> {
-  const known = await SecureStore.getItemAsync(DATABASE_KEY_NAME);
-  if (known && /^[0-9a-f]{64}$/.test(known)) return known;
-  const key = hex(await Crypto.getRandomBytesAsync(32));
-  await SecureStore.setItemAsync(DATABASE_KEY_NAME, key);
-  return key;
-}
+const ports: OpenPorts = {
+  secrets: keychain,
+  randomKey: async () => hex(await Crypto.getRandomBytesAsync(32)),
+  openFile: async (): Promise<FileHandle> => {
+    const sqlite = await SQLite.openDatabaseAsync(DATABASE_NAME);
+    return {
+      exec: (sql) => sqlite.execAsync(sql),
+      run: async (sql, params) => {
+        await sqlite.runAsync(sql, params as SqlValue[]);
+      },
+      all: (sql, params) => sqlite.getAllAsync<Record<string, SqlValue>>(sql, params as SqlValue[]),
+      close: () => sqlite.closeAsync(),
+    };
+  },
+  deleteFile: () => SQLite.deleteDatabaseAsync(DATABASE_NAME),
+  now: Date.now,
+};
 
 /** What the encrypted database says about itself (shown in Account). */
 export interface DatabaseInfo {
@@ -30,30 +42,12 @@ export interface DatabaseInfo {
 let opened: Promise<{ db: SqlDb; info: DatabaseInfo }> | null = null;
 
 async function open(): Promise<{ db: SqlDb; info: DatabaseInfo }> {
-  const key = await databaseKey();
-  const sqlite = await SQLite.openDatabaseAsync(DATABASE_NAME);
-  // The key goes first; nothing else may read the file before it.
-  await sqlite.execAsync(`PRAGMA key = "x'${key}'"`);
-  const version = await sqlite.getAllAsync<{ cipher_version: string }>("PRAGMA cipher_version");
-  const cipherVersion = version[0]?.cipher_version;
-  if (!cipherVersion) {
-    // Plain SQLite would store the route in the clear. Fail closed.
-    await sqlite.closeAsync();
-    throw new Error("The database is not encrypted: this build has no SQLCipher");
-  }
-  await sqlite.execAsync("PRAGMA busy_timeout = 5000");
-  await sqlite.execAsync("PRAGMA journal_mode = WAL");
-  const raw: RawDb = {
-    exec: (sql) => sqlite.execAsync(sql),
-    run: async (sql, params) => {
-      await sqlite.runAsync(sql, params as SqlValue[]);
-    },
-    all: (sql, params) => sqlite.getAllAsync<Record<string, SqlValue>>(sql, params as SqlValue[]),
-  };
-  const db = createSqlDb(raw);
-  // A wrong key shows here as "file is not a database": the file is left as it is.
-  await migrate(db);
-  return { db, info: { cipherVersion } };
+  const result = await openOutbox(
+    ports,
+    { databaseKey: DATABASE_KEY_NAME, session: [SERVER_KEY_NAME, TOKENS_KEY_NAME] },
+    policyFor(Platform.OS),
+  );
+  return { db: result.db, info: { cipherVersion: result.cipherVersion } };
 }
 
 /** The one connection of this process, opened on first use. The location task and the screens share it. */
