@@ -126,10 +126,10 @@ describe("Swedish sentences with a count", () => {
       "1 resa, med en rutt på 6 punkter, finns inte helt på servern. Om du behåller den laddas den upp nästa gång du loggar in på den här servern med samma konto. Ingen som loggar in med ett annat konto kan se eller ladda upp den.",
     );
     expect(unsentSentence("foreign.message", { trips: 2, points: 96 })).toContain(
-      "2 resor, med rutter på sammanlagt 96 punkter, som registrerades",
+      "2 resor (rutter på sammanlagt 96 punkter) från en annan inloggning",
     );
     expect(unsentSentence("foreign.message", { trips: 1, points: 1 })).toContain(
-      "1 resa, med en rutt på 1 punkt, som registrerades",
+      "1 resa (en rutt på 1 punkt) från en annan inloggning",
     );
   });
 
