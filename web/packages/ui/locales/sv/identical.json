@@ -4,9 +4,11 @@
   "Beta",
   "Dimension",
   "Filter",
+  "Google Drive",
   "Guide",
   "Indigo",
   "Kanban",
+  "Passkeys",
   "Policy",
   "Problem",
   "Status",
@@ -34,6 +36,5 @@
   "option\u0004Problem",
   "text",
   "{field} ≤ {to}",
-  "{field} ≥ {from}",
-  "Passkeys"
+  "{field} ≥ {from}"
 ]
