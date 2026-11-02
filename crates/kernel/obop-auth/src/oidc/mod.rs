@@ -377,10 +377,12 @@ impl Auth {
         crate::admin::admin_of(p).map_err(|_| SsoError::NotFound)
     }
 
-    /// The binding a one-time code was issued for, if it is still the account's and the provider
-    /// that vouched for it is still on and still the tenant of that binding. Read again when the
-    /// code is spent: unbinding, switching the provider off or clearing it ends a code that is
-    /// in the air (the person has up to 60 seconds).
+    /// The binding a sign-in was made for, if it is still the account's and the provider that
+    /// vouched for it is still on and still the tenant of that binding. Read again when the
+    /// one-time code of the back office is spent (the person has up to 60 seconds), when a phone
+    /// sign-in on the OAuth pages finishes (no code stands between its halves), and when the
+    /// second step of such a sign-in is asked for again: unbinding, switching the provider off or
+    /// clearing it ends a sign-in that is in the air.
     fn binding_holds(&self, user: &str, link_id: &str) -> Result<Option<&'static str>, MfaError> {
         let link = self
             .backend
@@ -1213,6 +1215,25 @@ impl SsoApi for Auth {
                 "-",
                 "the credentials of the account changed before the second step of the sign-in",
             );
+            return Err(MfaError::Expired);
+        }
+        // The binding and the provider as they are now, as the web exchange asks before it mints
+        // the same token: an account unbound, a provider switched off, cleared or changed since
+        // the first step ends the second.
+        let Some((link_id, _)) = self
+            .link_of(&name)
+            .map_err(|e| MfaError::Unavailable(describe_sso(e)))?
+        else {
+            self.event(
+                &name,
+                "oidc_refused",
+                "-",
+                "the account was unbound before the second step of the sign-in",
+            );
+            return Err(MfaError::Expired);
+        };
+        if let Some(why) = self.binding_holds(&name, &link_id)? {
+            self.event(&name, "oidc_refused", "-", why);
             return Err(MfaError::Expired);
         }
         if !self.has_second_factor(&name) {

@@ -317,3 +317,36 @@ fn a_refused_read_of_the_account_gives_no_page_and_is_not_read_as_no_cap() {
     flaky.allow_models();
     assert_eq!(r.o.view(&id, &binder).unwrap().max_days, 90);
 }
+
+#[test]
+fn the_callback_keeps_the_lifetime_of_the_flow_and_does_not_renew_it() {
+    // A flow lives for its lifetime from the last write by the sign-in pages; the callback's
+    // write is a compare-and-set, which keeps the expiry of the row. The lifetime here is three
+    // seconds: the callback writes after one and a half, and at three and a half the flow is
+    // gone, as it would be if nothing had written (a write that renewed the row would leave it
+    // alive until four and a half).
+    let r = rig_with(OAuthConfig {
+        flow_ttl_secs: 3,
+        ..OAuthConfig::default()
+    });
+    let (id, binder) = begun(&r, true);
+    std::thread::sleep(std::time::Duration::from_millis(1500));
+    r.o.microsoft_done(&id, MicrosoftOutcome::SignedIn(signed_in(&r, "ada")))
+        .unwrap();
+    assert!(
+        r.o.view(&id, &binder).is_ok(),
+        "the flow is there after the write"
+    );
+    std::thread::sleep(std::time::Duration::from_millis(2000));
+    assert!(
+        r.o.view(&id, &binder).is_err(),
+        "the callback renewed the lifetime of the flow"
+    );
+    assert!(record(&r, &id).is_none());
+    // And a callback that comes after the flow has gone does not make it again.
+    assert!(
+        r.o.microsoft_done(&id, MicrosoftOutcome::Failed("failed".into()))
+            .is_err()
+    );
+    assert!(record(&r, &id).is_none());
+}

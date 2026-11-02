@@ -2506,7 +2506,7 @@ fn a_reloaded_second_step_gets_a_fresh_token_only_while_the_first_factor_still_s
 #[test]
 fn a_second_factor_that_goes_between_the_two_looks_leaves_no_session_behind() {
     let (mut refused, mut minted) = (0, 0);
-    for skip in 0..10 {
+    for skip in 0..40 {
         let (r, flaky) = crate::admin_tests::flaky_rig();
         for n in ["root1", "root2", "root3"] {
             user_with(&r.a, n, &[ADMIN_GROUP]);
@@ -2514,6 +2514,9 @@ fn a_second_factor_that_goes_between_the_two_looks_leaves_no_session_behind() {
         }
         user_with(&r.a, "ada", &["base.user"]);
         enrol(&r.a, "ada");
+        r.a.operator_sso_configure(TENANT, CLIENT, Some(SECRET), Some(true))
+            .unwrap();
+        r.a.operator_sso_bind("ada", ADA_OID).unwrap();
         let epoch = epoch_in_store(&r, "ada");
         // The rows of sessions that are not revoked (a revoked row is kept, and is worth nothing).
         let live = |r: &Rig| {
@@ -2538,7 +2541,11 @@ fn a_second_factor_that_goes_between_the_two_looks_leaves_no_session_behind() {
         let got = sso(&r).second_step_for_flow("ada", epoch.as_deref());
         flaky.allow_models();
         match got {
-            Ok(_) => minted += 1,
+            Ok(_) => {
+                minted += 1;
+                // The hook never fired: the call has passed every position.
+                break;
+            }
             Err(MfaError::Expired) => {
                 refused += 1;
                 assert_eq!(
@@ -2582,4 +2589,59 @@ fn a_store_that_refuses_the_reads_of_the_flow_sign_in_is_unavailable_and_not_exp
         // And nothing was left: the same call works once the store is well.
         assert!(flow_sign_in(&r, &id).is_ok(), "{model}");
     }
+}
+
+/// The reload of the second step asks what the web exchange asks before it mints the same token:
+/// the binding and the provider as they are now.
+#[test]
+fn a_reloaded_second_step_is_refused_for_an_account_unbound_or_a_provider_gone_since() {
+    let r = world();
+    let (_secret, _) = enrol(&r.a, "ada");
+    change_credentials(&r, "ada");
+    let got = flow_sign_in(&r, &identity(&r, ADA_OID)).unwrap();
+    assert!(matches!(got.outcome, LoginOutcome::MfaRequired { .. }));
+    let epoch = got.epoch.clone();
+    let tokens = r.b.list("auth_mfa_token").unwrap().len();
+    // The provider is switched off: no token.
+    r.a.operator_sso_configure(TENANT, CLIENT, None, Some(false))
+        .unwrap();
+    assert!(matches!(
+        sso(&r).second_step_for_flow("ada", epoch.as_deref()),
+        Err(MfaError::Expired)
+    ));
+    assert!(
+        events(&r, "oidc_refused")
+            .iter()
+            .any(|l| l.contains("switched off before the sign-in finished")),
+        "{:?}",
+        events(&r, "oidc_refused")
+    );
+    // Switched on again, it works; unbound (which also changes the credential epoch), it does not.
+    r.a.operator_sso_configure(TENANT, CLIENT, None, Some(true))
+        .unwrap();
+    let epoch = epoch_in_store(&r, "ada");
+    assert!(
+        sso(&r)
+            .second_step_for_flow("ada", epoch.as_deref())
+            .is_ok()
+    );
+    r.a.operator_sso_unbind("ada").unwrap();
+    let epoch = epoch_in_store(&r, "ada");
+    assert!(matches!(
+        sso(&r).second_step_for_flow("ada", epoch.as_deref()),
+        Err(MfaError::Expired)
+    ));
+    assert_eq!(
+        r.b.list("auth_mfa_token").unwrap().len(),
+        tokens + 1,
+        "only the one reload that was allowed minted a token"
+    );
+    // The refusal of the unbound account is on the record, as the other one above is.
+    assert!(
+        events(&r, "oidc_refused")
+            .iter()
+            .any(|l| l.contains("the account was unbound before the second step")),
+        "{:?}",
+        events(&r, "oidc_refused")
+    );
 }

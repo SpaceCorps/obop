@@ -781,7 +781,10 @@ impl OAuth {
     /// compare-and-set of the record as it was read, which keeps its lifetime: a flow that is gone
     /// (finished, expired, ended by too many wrong tries) is not made again, and a record that
     /// another request changed meanwhile is read again (three tries) and never overwritten from a
-    /// stale copy. A failed step leaves a person who is signed in as it is.
+    /// stale copy. A failed step leaves a person who is signed in as it is, and ends a second
+    /// step that an earlier step left pending. After three lost swaps nothing is written and
+    /// `Busy` is returned; the callback drops it, so the person then sees the general failure
+    /// text (or the older word) at the return address and taps the link again.
     pub fn microsoft_done(&self, id: &str, outcome: MicrosoftOutcome) -> Result<(), FlowError> {
         if id.len() != 32 || !id.bytes().all(|b| b.is_ascii_hexdigit()) {
             return Err(FlowError::Gone);
@@ -838,7 +841,14 @@ impl OAuth {
                         m.remove("ms_error");
                     }
                 }
-                (Placed::Word(w), _) => rec["ms_error"] = J::from(*w),
+                (Placed::Word(w), _) => {
+                    rec["ms_error"] = J::from(*w);
+                    // A later failed step ends a second step that an earlier one left pending:
+                    // the page shows the latest outcome, not the earlier first factor.
+                    if let Some(m) = rec.as_object_mut() {
+                        m.remove("mfa_pending");
+                    }
+                }
                 // A person or a pending step without a sign-in cannot be made.
                 _ => rec["ms_error"] = J::from("failed"),
             }
@@ -853,10 +863,12 @@ impl OAuth {
     }
 
     /// The page the browser lands on when it comes back from the Microsoft round trip. Reads the
-    /// record the callback wrote and writes nothing, so a reload (or Back) shows the same thing and
-    /// spends nothing: the consent step when the person is signed in; the second-factor step, with
-    /// a fresh token, when the provider's sign-in was only the first factor; the sign-in page with
-    /// the fixed text of the word the callback left; the sign-in page with a general text when it
+    /// record the callback wrote and writes nothing into it, so a reload (or Back) shows the same
+    /// thing and spends no flow state: the consent step when the person is signed in; the
+    /// second-factor step when the provider's sign-in was only the first factor (this outcome is
+    /// the one that does write elsewhere: each call mints a fresh `mfa_token` for the pending
+    /// account and counts one hit of the per-address sign-in window); the sign-in page with the
+    /// fixed text of the word the callback left; the sign-in page with a general text when it
     /// left nothing.
     pub fn microsoft_return(
         &self,
