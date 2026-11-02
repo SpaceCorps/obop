@@ -1450,8 +1450,9 @@ pub trait OAuthTokens: Send + Sync {
     }
     /// Whether the account `user` signs in with Microsoft only (D91). A policy that restricts
     /// reads this, so a lookup the store refused, an account that does not exist and an identity
-    /// provider that cannot say are errors and never "no": a caller that gets an error applies the
-    /// restriction (the 30-day limit of a Microsoft-only phone) or ends the step.
+    /// provider that cannot say are errors and never "no": a caller that gets an error ends the step
+    /// (the consent page is not shown, the decision is not taken, the exchange of the code answers
+    /// 503 and gives the code back) and never goes on as for an account that is not Microsoft-only.
     fn is_microsoft_only(&self, _user: &str) -> Result<bool, String> {
         Err(
             "this identity provider cannot say whether an account signs in with Microsoft only"

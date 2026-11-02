@@ -14,9 +14,10 @@
 //! - `GET /oidc/callback`: the provider's redirect. The flow is spent first (one try per flow),
 //!   the cookie must be the one of the flow, the code is exchanged at the token endpoint, the id
 //!   token is verified and dropped (nothing the provider sends is stored), and the browser is
-//!   sent to the fixed address `/#oidc=<one-time code>`. Every failure is a redirect to
-//!   `/#oidc_error=<cancelled|unavailable|busy|failed>` and nothing else: the reason is in the
-//!   security log, not in the address bar.
+//!   sent to the fixed address `/#oidc=<one-time code>`. For the back office, every failure is a
+//!   redirect to `/#oidc_error=<cancelled|unavailable|busy|failed>` and nothing else: the reason
+//!   is in the security log, not in the address bar. (An app's round trip ends at its return
+//!   address instead, see below.)
 //! - `POST /oidc/exchange`: `{"code"}` for the answer of the password step (a bearer token, or the
 //!   demand for an obop second factor). The code is single use, lives 60 seconds and is worth
 //!   something only to the browser that holds the `obop_sso_done` cookie the callback set.
@@ -30,8 +31,9 @@
 //! cookies are not used for it.
 //!
 //! There is no cookie session: the bearer token goes to the page and stays in `sessionStorage`
-//! as after a password. There is no `next` or return address; the target of the redirect is the
-//! root of this origin and cannot be chosen by a request.
+//! as after a password. There is no `next` or return address; for the back office the target of
+//! the redirect is the root of this origin and cannot be chosen by a request, and for an app it is
+//! the return address of the flow that the stored row names, never a parameter of the request.
 
 use super::oauth::{client_ip, cookie_value, harden, pair, parse_pairs, see_other, with_cookies};
 use super::{HttpState, api_error, blocking, mfa};
@@ -1000,7 +1002,8 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
         return back(s, "failed", &[clear_flow]);
     };
     // What the row says the round trip is for. The row is the server's own record, written by one
-    // of the two start routes, and carries one of two values; anything else is the back office's.
+    // of the two start routes. It has no `purpose` (the back office's) or `purpose: "oauth"` (an
+    // app's, which also names the flow); any other row is treated as the back office's.
     let oauth_flow = (flow["purpose"].as_str() == Some("oauth"))
         .then(|| flow["oauth_flow"].as_str())
         .flatten()

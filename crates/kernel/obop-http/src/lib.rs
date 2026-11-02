@@ -149,15 +149,6 @@ impl HttpState {
         }
     }
 
-    /// Move the clock of the OAuth authorization server forward (codes, grants and devices expire
-    /// by it). For tests of expiry through the real router only.
-    #[doc(hidden)]
-    pub fn advance_oauth_clock_for_test(&self, secs: u64) {
-        if let Some(o) = self.oauth.as_ref() {
-            o.advance_clock_for_test(secs);
-        }
-    }
-
     pub(crate) fn sso_return(&self) -> &str {
         self.sso_return.get().map_or("/", String::as_str)
     }

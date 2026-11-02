@@ -175,7 +175,9 @@ pub struct SsoEndpoints {
 }
 
 /// A verified identity: what an id token that passed every check says. Handed back to
-/// `SsoApi::begin` and nowhere else; it carries no token and no name or address of the person.
+/// `SsoApi::begin` (the back office's one-time code) and to `SsoApi::sign_in_for_flow` (a mobile
+/// app's sign-in on the OAuth pages) and nowhere else; it carries no token and no name or address
+/// of the person.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SsoIdentity {
     pub issuer: String,

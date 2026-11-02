@@ -654,8 +654,12 @@ mod tests {
             ] {
                 let page = login_page(&phone_ctx(l, mobile, None, 90), Some(key)).html;
                 assert!(page.contains(&esc(t(l, key))), "{l} {key}");
-                assert!(!seen.contains(&key), "{l} {key}");
-                seen.push(key);
+                let text = t(l, key);
+                assert!(
+                    !seen.contains(&text),
+                    "{l}: {key} has the text of another word"
+                );
+                seen.push(text);
             }
             // A language other than English has a text of its own for every new key.
             if i > 0 {
