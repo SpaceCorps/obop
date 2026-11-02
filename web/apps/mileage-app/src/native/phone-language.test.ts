@@ -27,7 +27,7 @@ describe("the languages of an iPhone (NSUserDefaults, through Settings)", () => 
     expect(resolveLanguage("system", phoneLanguageTags())).toBe("sv");
     ios({ AppleLanguages: ["en-US", "sv-SE"] });
     expect(resolveLanguage("system", phoneLanguageTags())).toBe("en");
-    // German first, then Swedish: iOS itself picks sv.lproj (the permission dialogs) for this
+    // German first, then Swedish: iOS is expected to pick sv.lproj (the permission dialogs) for this
     // phone, and so does the app (the first language of the list that it has). The sign-in pages
     // of the instance are not asked for Swedish: the first language is German, which the
     // browser's Accept-Language lists first.

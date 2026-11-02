@@ -42,7 +42,7 @@ describe("the choice", () => {
     expect(resolveLanguage("system", ["en-US"])).toBe("en");
     expect(resolveLanguage("system", ["de-DE"])).toBe("en");
     expect(resolveLanguage("system", [])).toBe("en");
-    // The first language of the list that the app has decides (iOS picks its own localisations the
+    // The first language of the list that the app has decides (iOS is expected to pick its own localisations the
     // same way, so the system dialogs and the app agree); a blank entry is skipped.
     expect(resolveLanguage("system", ["de-DE", "sv-SE"])).toBe("sv");
     expect(resolveLanguage("system", ["nb-NO", "fi-FI", "sv-SE", "en-GB"])).toBe("sv");
@@ -249,6 +249,35 @@ describe("the store of the choice", () => {
     await store.start();
     expect(await store.choose("sv")).toBe(false);
     expect(store.language()).toBe("sv");
+  });
+
+  test("after a failed save the next start reads the choice that was saved before, else the phone's", async () => {
+    // The note `language.unsaved` must not promise the phone's language: an earlier choice wins.
+    const state = { stored: "sv" as string | null };
+    const ports: LanguagePorts = {
+      phone: () => ["en-US"],
+      load: async () => state.stored,
+      save: () => Promise.reject(new Error("keystore")),
+      apply: () => undefined,
+    };
+    const first = createLanguageStore(ports);
+    await first.start();
+    expect(first.language()).toBe("sv");
+    expect(await first.choose("en")).toBe(false);
+    expect(first.language()).toBe("en");
+    const restarted = createLanguageStore(ports);
+    await restarted.start();
+    expect(restarted.choice()).toBe("sv"); // the earlier saved choice, not the phone's English
+    expect(restarted.language()).toBe("sv");
+    // With nothing saved before, the phone's language is what the next start shows.
+    state.stored = null;
+    const fresh = createLanguageStore(ports);
+    await fresh.start();
+    expect(await fresh.choose("sv")).toBe(false);
+    const again = createLanguageStore(ports);
+    await again.start();
+    expect(again.choice()).toBe("system");
+    expect(again.language()).toBe("en");
   });
 
   test("a choice made while the stored one is still being read wins over it", async () => {

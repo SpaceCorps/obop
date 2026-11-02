@@ -2,16 +2,17 @@ import { I18nManager, Platform, Settings } from "react-native";
 
 /**
  * The languages of the phone, the preferred one first, from React Native itself (no extra native
- * module, so nothing changes in the Android and iOS projects; `expo-localization` would give the
- * whole list on Android too and the per-app language setting of Android 13, ISSUES L49).
+ * module, so nothing changes in the Android and iOS projects; `expo-localization` is expected to
+ * give the whole list on Android too, ISSUES L49).
  *
  * - iOS: `NSUserDefaults` key `AppleLanguages`, read through `Settings` (`["sv-SE", "en-SE"]`, the
- *   whole list; the app's own language setting of iOS 13 and later is written there too).
- *   `AppleLocale` when the list is empty. `I18nManager` has no `localeIdentifier` on iOS
+ *   whole list; that the app's own language setting of iOS 13 and later is written there too is
+ *   general knowledge, not seen on a phone). `AppleLocale` when the list is empty. `I18nManager` has no `localeIdentifier` on iOS
  *   (`RCTI18nManager.mm`). `Settings` starts from the native constants and is kept current by
  *   the events of `NSUserDefaults`, so a value read after a change can be the new one.
  * - Android: `I18nManager.getConstants().localeIdentifier`, the first locale of the configuration
- *   (`sv_SE`); the app sees one entry. The constants are cached when the module loads, so a
+ *   (`sv_SE`): React Native 0.88 reads `getLocales(...)[0]` (`I18nManagerModule.kt`) and reports
+ *   nothing more, so the app sees one entry although Android keeps a list. The constants are cached when the module loads, so a
  *   change of the phone's language is seen at the next start of the process.
  *
  * The app reads the language at start and again at every choice in the Account screen (the

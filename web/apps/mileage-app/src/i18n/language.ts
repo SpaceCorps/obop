@@ -29,11 +29,14 @@ export function languageOfTag(tag: unknown): LanguageCode | null {
 }
 
 /**
- * The first language of the phone's list that the app has a catalogue for, or `null`. This is the
- * rule iOS applies itself when it picks the `.lproj` of an app (the first preferred language the
- * app is localised in), so on an iPhone set to German and then Swedish the app and the system's
- * permission dialogs are both Swedish. Android gives the app one language, so its list has one
- * entry and the rule has nothing to choose between (ISSUES L49).
+ * The first language of the phone's list that the app has a catalogue for, or `null`. This is, from
+ * Apple's documentation and general knowledge and not seen on a phone, the rule iOS applies itself
+ * when it picks the `.lproj` of an app (the first preferred language the app is localised in), so
+ * on an iPhone set to German and then Swedish the app and the system's permission dialogs are
+ * expected to be Swedish both. On Android the list has one entry, because React Native 0.88
+ * reports only the first locale of the configuration (`I18nManagerModule.kt` reads
+ * `getLocales(...)[0]`), not because Android has only one: the rule has nothing to choose between
+ * there until the list is read in full (ISSUES L49).
  */
 export function supportedPhoneLanguage(phone: readonly string[]): LanguageCode | null {
   for (const tag of phone) {
@@ -81,7 +84,12 @@ export interface LanguageStore {
   // Properties, not methods: the hooks hand them to `useSyncExternalStore` unbound.
   choice: () => Choice;
   language: () => LanguageCode;
-  /** `knownLanguage` of the current choice and the phone: `null` when the app only shows English because it has nothing else. */
+  /**
+   * `knownLanguage` of the current choice and the phone. `null` when the phone's FIRST language is
+   * not one the app has: the app may still show Swedish or English because a later language of the
+   * list matches (`language()` says which), or English because nothing does. The browser then
+   * decides the language of the instance's sign-in pages.
+   */
   known: () => LanguageCode | null;
   /** Applies the phone's language at once, then the stored choice when it has been read. */
   start: () => Promise<void>;

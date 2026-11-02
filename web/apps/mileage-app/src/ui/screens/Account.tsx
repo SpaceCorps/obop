@@ -19,6 +19,7 @@ import { appVersion } from "../../native/platform-deps.ts";
 import type { Runtime } from "../../native/runtime.ts";
 import { announce } from "../announce.ts";
 import { useLanguageChoice, useOutbox, useSyncStatus } from "../hooks.ts";
+import { languageNoteKey } from "../language-note.ts";
 import type { Nav } from "../router.ts";
 
 /** The name of a choice: the languages by their own names (never translated), the third by a sentence. */
@@ -33,8 +34,9 @@ export function Account({ rt, nav }: { rt: Runtime; nav: Nav }) {
   const [deviceError, setDeviceError] = useState(false);
   const [leaveError, setLeaveError] = useState(false);
   const [leaving, setLeaving] = useState(false);
-  // The choice of language is applied at once; this is set when it could not be stored.
-  const [languageUnsaved, setLanguageUnsaved] = useState(false);
+  // The choice of language is applied at once; whether it was stored decides the note under it.
+  const [languageStored, setLanguageStored] = useState<boolean | null>(null);
+  const languageNote = languageNoteKey(languageStored);
   const [name, setName] = useState("");
   const [saved, setSaved] = useState(false);
   const [cipher, setCipher] = useState<string | null>(null);
@@ -206,15 +208,15 @@ export function Account({ rt, nav }: { rt: Runtime; nav: Nav }) {
             variant={choice === languageChoice ? "primary" : "secondary"}
             selected={choice === languageChoice}
             onPress={() => {
-              void languageStore.choose(choice).then((stored) => setLanguageUnsaved(!stored));
+              void languageStore.choose(choice).then(setLanguageStored);
             }}
             testID={`language-${choice}`}
           />
         ))}
       </View>
       <Text tone="muted">{t("language.note")}</Text>
-      {languageUnsaved ? (
-        <Banner tone="warning" title={t("language.unsaved")} testID="language-unsaved" />
+      {languageNote ? (
+        <Banner tone="warning" title={t(languageNote)} testID="language-unsaved" />
       ) : null}
 
       {leaveError ? (
