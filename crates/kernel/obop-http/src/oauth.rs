@@ -139,6 +139,17 @@ pub(crate) fn see_other(location: &str) -> Response {
     r
 }
 
+/// Add cookies to a response, one `Set-Cookie` header each (the redirects of the Microsoft round
+/// trip set or clear more than one; `html` sets at most one by replacing).
+pub(crate) fn with_cookies(mut r: Response, cookies: &[String]) -> Response {
+    for c in cookies {
+        if let Ok(v) = HeaderValue::from_str(c) {
+            r.headers_mut().append(header::SET_COOKIE, v);
+        }
+    }
+    r
+}
+
 fn oauth_json(status: StatusCode, body: &J) -> Response {
     let mut r = (status, body.to_string()).into_response();
     r.headers_mut().insert(
