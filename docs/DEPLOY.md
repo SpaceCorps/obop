@@ -102,7 +102,7 @@ Command line flags win over variables. Secrets are set as secret environment var
 
 ### Tests
 
-`OBOP_TEST_POSTGRES_URL` adds PostgreSQL to the Rust tests (`cargo nextest run`; `deploy/test-with-postgres.sh` starts a container for it), including the multi-process tests and the connection pool tests (`cargo nextest run -p obop-storage pg_pool`, `cargo nextest run -p obop --test pool`); `OBOP_BIN` points the end-to-end suite at a binary. The tests that restart a server or put PgBouncer in front of it (`edoburu/pgbouncer`) start containers of their own and are skipped, with a message, when Docker is not available. The TLS tests (`tls_tests` in `obop-storage`) start a `postgres:17` container too, and run only when `OBOP_TEST_DOCKER_TLS=1` asks for them (they skip, with a message, and never call `docker` without it; once asked for they fail when Docker or the image is missing; CI sets it).
+`OBOP_TEST_POSTGRES_URL` adds PostgreSQL to `cargo test`, including the multi-process tests and the connection pool tests (`cargo test -p obop-storage pg_pool`, `cargo test -p obop --test pool`); `OBOP_BIN` points the end-to-end suite at a binary. The tests that restart a server or put PgBouncer in front of it (`edoburu/pgbouncer`) start containers of their own and are skipped, with a message, when Docker is not available. The TLS tests (`tls_tests` in `obop-storage`) start a `postgres:17` container too, and run only when `OBOP_TEST_DOCKER_TLS=1` asks for them (they skip, with a message, and never call `docker` without it; once asked for they fail when Docker or the image is missing; CI sets it).
 
 ## Database connections and TLS (D66)
 
@@ -126,7 +126,7 @@ postgres://obop:PASSWORD@db.example.com/obop?sslmode=verify-full&sslrootcert=sys
 - Refused with a clear message at start-up: `sslmode=allow`, a misspelt mode, `sslrootcert` without a mode that uses it, `sslcert`, `sslkey` and `sslcrl` (client certificates are not built), and any address that is not a `postgres://` or `postgresql://` URL. A failed verification (untrusted chain, expired certificate, wrong name, a server without TLS) is an error, never a fall back to a plain connection. The password is not in any of these messages.
 - Turn TLS on at the server (`ssl = on`, `ssl_cert_file`, `ssl_key_file`), and to forbid plain connections use `hostssl` lines in `pg_hba.conf`. obop's TLS is rustls (TLS 1.2 and 1.3, no system OpenSSL); the server's certificate key must be RSA, ECDSA or Ed25519.
 - Put the same parameters in `OBOP_CELL_ADMIN_URL`, and in `--db` for `obop backup`, `restore`, `migrate` and `secrets`. The database URLs the control plane gives to **new** hosted instances do not carry `sslmode` yet; keep the cell on a private network until they do.
-- **Not tried** against a managed PostgreSQL service, a connection pooler in TLS mode, a certificate chain with intermediates, or a public CA: only against the stock `postgres:17` image with a self-signed certificate (`OBOP_TEST_DOCKER_TLS=1 cargo nextest run -p obop-storage tls` starts one; it needs Docker).
+- **Not tried** against a managed PostgreSQL service, a connection pooler in TLS mode, a certificate chain with intermediates, or a public CA: only against the stock `postgres:17` image with a self-signed certificate (`OBOP_TEST_DOCKER_TLS=1 cargo test -p obop-storage tls` starts one; it needs Docker).
 
 ## Connection pool and poolers (D74)
 
@@ -170,7 +170,7 @@ A value that is not a number in range, an unknown pooler, or a pooler in transac
 
 | Topology | Setting | Status |
 |---|---|---|
-| obop processes straight to PostgreSQL (one or several) | nothing | Tested (`cargo nextest run -p obop-storage`, `-p obop --test multi_process`, `--test pool`). |
+| obop processes straight to PostgreSQL (one or several) | nothing | Tested (`cargo test -p obop-storage`, `-p obop --test multi_process`, `--test pool`). |
 | PgBouncer in **session** mode | nothing | The same as direct for the application; **not tried**. |
 | PgBouncer in **transaction** mode | `OBOP_DB_POOLER=transaction` and `OBOP_LOCK_DATABASE_URL=<direct address>` (both required) | Tested against PgBouncer 1.26.1 (the image `edoburu/pgbouncer@sha256:8638aa56...`, pinned by digest in the test, which asks it `SHOW VERSION`; `pool_mode = transaction`, two server connections shared by eight client connections, protocol-level prepared statements on or off). |
 | PgBouncer in statement mode, other poolers (Supavisor, RDS Proxy, Odyssey, pgcat), managed poolers | | Not supported / not tried. |
@@ -339,7 +339,7 @@ What is *not* shared: small per-process caches (site settings for a few seconds,
 
 The locks are PostgreSQL session advisory locks (released by the server when a process dies) or, for SQLite, operating-system file locks named `<database file>.lock-<key>` (harmless to leave behind).
 
-Test it: `OBOP_TEST_POSTGRES_URL=postgres://... cargo nextest run -p obop --test multi_process` starts two real servers on a scratch database and checks that a login on one works on the other, an MCP session continues across them, a plan proposed on one is approved on the other, parallel writes all land once, and rate limits and the lockout are counted across both.
+Test it: `OBOP_TEST_POSTGRES_URL=postgres://... cargo test -p obop --test multi_process` starts two real servers on a scratch database and checks that a login on one works on the other, an MCP session continues across them, a plan proposed on one is approved on the other, parallel writes all land once, and rate limits and the lockout are counted across both.
 
 ## Connecting Claude Desktop, claude.ai and Claude Code (D64)
 

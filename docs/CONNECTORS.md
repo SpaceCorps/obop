@@ -142,7 +142,7 @@ Everything above is a command of the one dispatcher, so MCP tools exist without 
 
 1. Add a `Provider` to `crates/kernel/obop-connectors/src/catalog.rs`: id, name, category, `maturity` (be honest), `engine`, `auth_kind`, `direction`, `max_classes` (the most it may ever receive; never `secret`), `purpose`, `description`, sub-processor facts (or "verify with the provider"), `allowed_hosts`, the `config` fields (mark credentials `secret`), `setup`, `webhook_scheme` for inbound, `body_format` for outbound.
 2. If it needs an encoding or a signature scheme the engines do not have, add it to `runtime.rs` (`encode`) or `webhook.rs` with a test vector.
-3. Add the entry to `maturity_is_stated_honestly` in the catalogue tests, and run `OBOP_UPDATE_SNAPSHOT=1 cargo nextest run -p connectors the_website_snapshot` only if you changed the module's metadata (the catalogue itself is not part of the snapshot).
+3. Add the entry to `maturity_is_stated_honestly` in the catalogue tests, and run `OBOP_UPDATE_SNAPSHOT=1 cargo test -p connectors the_website_snapshot` only if you changed the module's metadata (the catalogue itself is not part of the snapshot).
 4. A provider with its own protocol is a new `Engine`; it takes a handler in `Runtime` and goes through `Egress::prepare` or `Ingress::accept` like the others. There is no other way to move data.
 
 ## 9. Compliance mapping
