@@ -532,7 +532,7 @@ async fn a_name_and_a_user_agent_are_cleaned_before_they_are_kept() {
             &path,
             &ip(65),
             &[
-                ("name", "Jane\u{202e}\r\n Test\u{0}"),
+                ("name", "Jane\r\n Test\u{0}"),
                 ("agree", "1"),
                 ("doc", &f.file),
             ],
@@ -565,7 +565,8 @@ async fn a_name_and_a_user_agent_are_cleaned_before_they_are_kept() {
 #[tokio::test]
 async fn the_address_is_the_one_the_proxy_reports_and_is_kept_in_one_form() {
     let (f, _, path, _) = sent().await;
-    // Several entries: the nearest one counts; an IPv6 address is written in its short form.
+    // One entry here, an IPv6 address written in full: it is kept in its short form. Which of
+    // several entries counts is in `the_address_is_the_last_entry_of_the_last_header_line`.
     let r = f
         .post_with(
             &path,
@@ -606,6 +607,9 @@ async fn a_post_from_another_site_is_refused_and_a_browser_without_origin_is_let
     for extra in [
         vec![("origin", "http://evil.test")],
         vec![("origin", "https://inst.test")],
+        // The origin is compared whole, not by prefix.
+        vec![("origin", "http://inst.test.evil.test")],
+        vec![("origin", "http://inst.testing")],
         vec![],
         vec![("origin", "null")],
         vec![("origin", "null"), ("sec-fetch-site", "cross-site")],
@@ -874,13 +878,42 @@ async fn eight_signers_at_once_sign_the_request_once() {
 /// stores and their records are handled out here and the runtime is entered for the requests only.
 #[test]
 fn the_race_is_won_once_on_sqlite_and_on_postgres_too() {
+    // A directory of this run alone, under one parent for all runs. It is removed when the test
+    // ends, however it ends (declared before the runtime, so it goes last). On Windows an `App`
+    // that was dropped still holds its SQLite file open (the cleanup then fails quietly), so a run
+    // also removes what earlier runs left there more than an hour ago.
+    struct Scratch(std::path::PathBuf);
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+    let parent = std::env::temp_dir().join("obop-sign-race");
+    std::fs::create_dir_all(&parent).unwrap();
+    for old in std::fs::read_dir(&parent).unwrap().flatten() {
+        let stale = old
+            .metadata()
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.elapsed().ok())
+            .is_some_and(|age| age > std::time::Duration::from_secs(3600));
+        if stale {
+            let _ = std::fs::remove_dir_all(old.path());
+        }
+    }
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let scratch = Scratch(parent.join(format!("{}-{nanos}", std::process::id())));
+    let dir = scratch.0.clone();
+    // `create_dir`, not `create_dir_all`: a directory that already exists is not ours.
+    std::fs::create_dir(&dir).expect("a fresh scratch directory");
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(4)
         .enable_all()
         .build()
         .unwrap();
-    let dir = std::env::temp_dir().join(format!("obop-sign-race-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
     let mut stores: Vec<(Store, Option<obop_storage::testing::TestDb>)> = vec![(
         Store::open(&format!("sqlite://{}", dir.join("sign.db").display())).unwrap(),
         None,
@@ -930,7 +963,13 @@ fn the_race_is_won_once_on_sqlite_and_on_postgres_too() {
         assert_eq!(signed_count(&f), 1);
         drop(f);
     }
-    let _ = std::fs::remove_dir_all(&dir);
+    drop(rt);
+    drop(scratch);
+    // Where an open file does not stop a delete, nothing is left behind.
+    assert!(
+        cfg!(windows) || !dir.exists(),
+        "the scratch directory was not removed"
+    );
 }
 
 #[tokio::test]

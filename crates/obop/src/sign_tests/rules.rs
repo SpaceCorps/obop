@@ -3,6 +3,18 @@
 
 use super::*;
 
+/// The keys of `sign_request` that only the signer door writes.
+pub(super) const DOOR_KEYS: [&str; 8] = [
+    "document_hash",
+    "document_file",
+    "signed_at",
+    "signed_name",
+    "consent_version",
+    "signer_ip",
+    "signer_user_agent",
+    "signature_reference",
+];
+
 const AGENT_SCOPES: [&str; 4] = [
     "sign.user",
     "sign.manager",
@@ -26,28 +38,6 @@ async fn agent_for(f: &mut Fx, owner: &str) -> String {
 
 fn err(v: &J) -> String {
     v["error"].as_str().unwrap_or("").to_string()
-}
-
-/// Every record of the models that could hold a secret, and the key-value rows, as text.
-fn everything_stored(f: &Fx) -> String {
-    let b = f.app.store.backend();
-    let mut out = String::new();
-    for m in [
-        "sign_link",
-        "sign_request",
-        "sign_template",
-        "documents_document",
-        "documents_folder",
-        "security_event",
-    ] {
-        for (id, rec) in b.list(m).unwrap() {
-            out.push_str(&format!("{m} {id} {}\n", J::Object(rec)));
-        }
-    }
-    for (k, v) in b.kv_scan("").unwrap() {
-        out.push_str(&format!("kv {k} {v}\n"));
-    }
-    out
 }
 
 #[tokio::test]
@@ -211,40 +201,7 @@ async fn the_old_send_keeps_its_contract_for_templates() {
 #[tokio::test]
 async fn a_document_that_the_sender_cannot_see_cannot_be_sent() {
     let f = fixture().await;
-    let before = f
-        .app
-        .store
-        .blobs()
-        .info(&f.file)
-        .unwrap()
-        .unwrap()
-        .owners
-        .len();
-    for who in ["bob", "sam"] {
-        let (s, v) = f
-            .api(
-                who,
-                "/api/sign_request/create",
-                json!({"title": "Not mine", "signer_name": "Jane Test", "document_id": f.doc}),
-            )
-            .await;
-        // A person may or may not be allowed to point at it, but never to send it.
-        let id = match (s, v["value"]["id"].as_str()) {
-            (200, Some(id)) => id.to_string(),
-            _ => continue,
-        };
-        let (s, v) = f
-            .api(who, "/api/sign_request/send_document", json!({"id": id}))
-            .await;
-        assert_ne!(s, 200, "{who}: {v}");
-        assert_eq!(f.record("sign_request", &id)["state"], "draft");
-        assert!(
-            f.record("sign_request", &id)
-                .get("document_file")
-                .is_none_or(J::is_null)
-        );
-    }
-    assert_eq!(
+    let holders = |f: &Fx| {
         f.app
             .store
             .blobs()
@@ -252,10 +209,36 @@ async fn a_document_that_the_sender_cannot_see_cannot_be_sent() {
             .unwrap()
             .unwrap()
             .owners
-            .len(),
-        before,
-        "nothing was attached"
-    );
+            .len()
+    };
+    let before = holders(&f);
+    // The draft is mia's, who can see the restricted Document of ann. A person who cannot see it
+    // sends it through `send_document` and is refused: bob is a manager without a role that
+    // lets him see a restricted Document, sam has no role in Documents at all, noc is a manager
+    // without one too.
+    for who in ["bob", "sam", "noc"] {
+        let (s, v) = f
+            .api(who, "/api/sign_request/send_document", json!({"id": f.req}))
+            .await;
+        assert_eq!(s, 400, "{who}: {v}");
+        assert!(
+            err(&v).contains("was not found, or you may not see it"),
+            "{who}: {v}"
+        );
+        let rec = f.record("sign_request", &f.req);
+        assert_eq!(rec["state"], "draft", "{who}");
+        assert!(rec.get("document_file").is_none_or(J::is_null), "{who}");
+        assert_eq!(holders(&f), before, "{who}: nothing was attached");
+    }
+    // The person who can see it sends it.
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_request/send_document",
+            json!({"id": f.req}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
 }
 
 #[tokio::test]
@@ -444,7 +427,7 @@ async fn a_link_is_made_by_a_person_with_the_manager_group_for_a_sent_request() 
     let id = v["value"]["id"].as_str().unwrap().to_string();
     assert_ne!(id, tok);
     assert_eq!(id.len(), 64);
-    let stored = everything_stored(&f);
+    let stored = f.everything_stored();
     assert!(!stored.contains(tok), "the secret is stored somewhere");
     assert!(!stored.contains(&link));
     // Reading it back never returns the link.
@@ -633,49 +616,60 @@ async fn a_link_is_changed_only_by_revoking_it() {
 #[tokio::test]
 async fn the_evidence_belongs_to_the_door() {
     let f = fixture().await;
-    let door_keys = [
-        "document_hash",
-        "document_file",
-        "signed_at",
-        "signed_name",
-        "consent_version",
-        "signer_ip",
-        "signer_user_agent",
-        "signature_reference",
-    ];
-    for k in door_keys {
-        let (s, v) = f
+    // A value that is valid for the kind of each key, so that only the guard stands in the way
+    // (a value the field type refuses would be refused whether the guard is there or not).
+    let value = |k: &str| -> String {
+        match k {
+            "signed_at" => "2026-11-03T10:00:00.000000Z".to_string(),
+            "document_hash" | "document_file" => f.file.clone(),
+            "signer_ip" => "198.51.100.7".to_string(),
+            other => format!("forged {other}"),
+        }
+    };
+    for k in DOOR_KEYS {
+        let v = value(k);
+        let (s, r) = f
             .api(
                 "mia",
                 "/api/sign_request/create",
-                json!({"title": "Forged", "signer_name": "Jane Test", "document_id": f.doc, k: "x"}),
+                json!({"title": "Forged", "signer_name": "Jane Test", "document_id": f.doc, k: v}),
             )
             .await;
-        assert_ne!(s, 200, "create with {k}: {v}");
-        let (s, v) = f
+        assert_eq!(s, 400, "create with {k}: {r}");
+        assert!(err(&r).contains("signing process"), "create with {k}: {r}");
+        let (s, r) = f
             .api(
                 "mia",
                 "/api/sign_request/update",
-                json!({"id": f.req, k: "x"}),
+                json!({"id": f.req, k: v}),
             )
             .await;
-        assert_ne!(s, 200, "update with {k}: {v}");
-        let (s, v) = f
+        assert_eq!(s, 400, "update with {k}: {r}");
+        assert!(err(&r).contains("signing process"), "update with {k}: {r}");
+        let (s, r) = f
             .api(
                 "mia",
                 "/api/sign_request/bulk_create",
-                json!({"rows": [{"title": "Forged", "signer_name": "Jane Test", k: "x"}]}),
+                json!({"rows": [{"title": "Forged", "signer_name": "Jane Test", k: v}]}),
             )
             .await;
-        assert_ne!(s, 200, "bulk rows with {k}: {v}");
-        let (s, v) = f
+        assert_eq!(s, 400, "bulk rows with {k}: {r}");
+        assert!(
+            err(&r).contains("signing process"),
+            "bulk rows with {k}: {r}"
+        );
+        let (s, r) = f
             .api(
                 "mia",
                 "/api/sign_request/bulk_create",
-                json!({"csv": format!("title,signer_name,{k}\nForged,Jane Test,x\n")}),
+                json!({"csv": format!("title,signer_name,{k}\nForged,Jane Test,{v}\n")}),
             )
             .await;
-        assert_ne!(s, 200, "bulk csv with {k}: {v}");
+        assert_eq!(s, 400, "bulk csv with {k}: {r}");
+        assert!(
+            err(&r).contains("signing process"),
+            "bulk csv with {k}: {r}"
+        );
     }
     assert_eq!(f.app.store.backend().count("sign_request").unwrap(), 1);
     // Saving the form back as it is stored changes nothing and is allowed.
@@ -809,4 +803,28 @@ fn the_wrappers_rely_on_names_the_package_still_declares() {
     );
     // The door-owned fields are not editable by anyone with only the user group.
     assert_eq!(field("document_file").group.as_deref(), Some("sign.system"));
+    // A link is made, revoked and read for the secret by managers only: a plain user changes
+    // nothing about one, and the `link` answer of the create call is the manager's alone.
+    assert_eq!(link.write_group, "sign.manager");
+    assert_eq!(
+        link.field
+            .iter()
+            .find(|f| f.name == "link")
+            .unwrap()
+            .group
+            .as_deref(),
+        Some("sign.manager")
+    );
+    // The evidence is read by managers; the plain user's group is not on any of the keys.
+    for k in [
+        "signed_at",
+        "signed_name",
+        "consent_version",
+        "signer_ip",
+        "signer_user_agent",
+        "signature_reference",
+        "document_hash",
+    ] {
+        assert_eq!(field(k).group.as_deref(), Some("sign.manager"), "{k}");
+    }
 }

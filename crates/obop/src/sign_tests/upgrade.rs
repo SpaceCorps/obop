@@ -39,11 +39,12 @@ async fn old_instance() -> Old {
         let g: Vec<String> = groups.iter().map(|g| g.to_string()).collect();
         auth.create_user(name, PW, &g).unwrap();
     }
-    let state = obop_http::HttpState::new(app.dispatcher.clone(), auth);
+    let state = obop_http::HttpState::new(app.dispatcher.clone(), auth.clone());
     state.set_trust_proxy(true);
     let router = obop_http::router(state.clone(), None);
     let mut f = Fx {
         router,
+        auth,
         app,
         tokens: Default::default(),
         doc: String::new(),

@@ -8,6 +8,37 @@ fn a_token_is_64_lowercase_hex_and_two_are_never_alike() {
 }
 
 #[test]
+fn a_token_carries_256_bits_of_randomness() {
+    // 1,000 tokens: all of the shape, all different.
+    let tokens: Vec<String> = (0..1000).map(|_| mint().unwrap()).collect();
+    assert!(tokens.iter().all(|t| token_shape(t)));
+    let distinct: std::collections::HashSet<&String> = tokens.iter().collect();
+    assert_eq!(distinct.len(), 1000);
+    // Every one of the 32 bytes varies: a token that is 16 random bytes padded to 32, or that
+    // repeats a byte, would hold some position still across sixteen samples (the chance that a
+    // random byte does is 256 to the power of minus fifteen).
+    for pos in 0..32 {
+        let seen: std::collections::HashSet<&str> = tokens[..16]
+            .iter()
+            .map(|t| &t[pos * 2..pos * 2 + 2])
+            .collect();
+        assert!(seen.len() > 1, "byte {pos} never varies");
+    }
+    // Both nibbles of a byte take both halves of their range over the thousand: no character is
+    // stuck in a smaller alphabet.
+    for pos in 0..64 {
+        let seen: std::collections::HashSet<u8> =
+            tokens.iter().map(|t| t.as_bytes()[pos]).collect();
+        assert_eq!(
+            seen.len(),
+            16,
+            "position {pos} uses {} of 16 digits",
+            seen.len()
+        );
+    }
+}
+
+#[test]
 fn the_link_id_is_a_hash_of_the_domain_the_request_and_the_token() {
     use sha2::{Digest, Sha256};
     let tok = "ab".repeat(32);

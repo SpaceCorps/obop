@@ -15,6 +15,7 @@ use std::sync::Arc;
 use tower::ServiceExt;
 
 mod door;
+mod hardening;
 mod rules;
 mod upgrade;
 
@@ -50,6 +51,7 @@ impl Resp {
 
 pub(crate) struct Fx {
     pub router: axum::Router,
+    pub auth: Arc<Auth>,
     pub app: App,
     pub tokens: std::collections::HashMap<&'static str, String>,
     /// The restricted Document, its request, and the file that was attached.
@@ -191,6 +193,35 @@ impl Fx {
         (v["value"]["id"].as_str().unwrap().to_string(), link)
     }
 
+    /// A second router over the same instance that does not trust a proxy (the default of a
+    /// server started without `--trust-proxy`).
+    pub fn router_without_proxy(&self) -> axum::Router {
+        let state = obop_http::HttpState::new(self.app.dispatcher.clone(), self.auth.clone());
+        obop_http::router(state, None)
+    }
+
+    /// Every record of the models that could hold a secret, and every key-value row, as text.
+    pub fn everything_stored(&self) -> String {
+        let b = self.app.store.backend();
+        let mut out = String::new();
+        for m in [
+            "sign_link",
+            "sign_request",
+            "sign_template",
+            "documents_document",
+            "documents_folder",
+            "security_event",
+        ] {
+            for (id, rec) in b.list(m).unwrap() {
+                out.push_str(&format!("{m} {id} {}\n", J::Object(rec)));
+            }
+        }
+        for (k, v) in b.kv_scan("").unwrap() {
+            out.push_str(&format!("kv {k} {v}\n"));
+        }
+        out
+    }
+
     /// The security log entries of one kind, oldest first.
     pub fn events_of(&self, kind: &str) -> Vec<serde_json::Map<String, J>> {
         self.events()
@@ -250,7 +281,7 @@ pub(crate) async fn fixture_on(
 }
 
 /// The people every fixture has.
-const PEOPLE: [(&str, &[&str]); 5] = [
+const PEOPLE: [(&str, &[&str]); 8] = [
     ("admin", &["platform.admin"]),
     (
         "mia",
@@ -264,6 +295,15 @@ const PEOPLE: [(&str, &[&str]); 5] = [
     ("ann", &["sign.user", "sign.manager", "documents.user"]),
     ("bob", &["sign.user", "sign.manager", "documents.user"]),
     ("sam", &["sign.user"]),
+    // Sends nothing and mints nothing: no sign.manager.
+    ("dan", &["sign.user", "documents.user", "documents.manager"]),
+    // A manager with no role in Documents.
+    ("noc", &["sign.user", "sign.manager"]),
+    // A manager who is not a sign.user: makes links, cannot read requests as a plain user.
+    (
+        "lee",
+        &["sign.manager", "documents.user", "documents.manager"],
+    ),
 ];
 
 /// The instance: packages installed and people created, with no request made yet. Not async, so
@@ -285,11 +325,12 @@ pub(crate) fn fixture_sync(
         let g: Vec<String> = groups.iter().map(|g| g.to_string()).collect();
         auth.create_user(name, PW, &g).unwrap();
     }
-    let state = obop_http::HttpState::new(app.dispatcher.clone(), auth);
+    let state = obop_http::HttpState::new(app.dispatcher.clone(), auth.clone());
     state.set_trust_proxy(true);
     let router = obop_http::router(state.clone(), None);
     Fx {
         router,
+        auth,
         app,
         tokens: Default::default(),
         doc: String::new(),
@@ -328,7 +369,7 @@ pub(crate) async fn seed(f: &mut Fx) {
         .api(
             "ann",
             "/api/documents_document/create",
-            json!({"title": "Mutual NDA (test)", "kind": "contract", "confidentiality": "restricted",
+            json!({"title": "Mutual NDA (test) <i>x</i>", "kind": "contract", "confidentiality": "restricted",
                    "state": "draft", "owner": "ann", "attachment": f.file}),
         )
         .await;
