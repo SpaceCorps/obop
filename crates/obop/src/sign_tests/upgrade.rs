@@ -327,6 +327,57 @@ async fn going_back_to_0_2_0_keeps_what_was_signed_and_a_second_upgrade_finds_it
 }
 
 #[tokio::test]
+async fn a_request_from_a_template_that_carries_a_typed_hash_is_still_signed_by_hand_after_the_upgrade()
+ {
+    // On 0.2.0 staff could type `document_hash` on any request, and the old instance has such
+    // requests (the fixture gives every one of them a hash). They are not requests about a
+    // Document: they have a template, no Document and no held copy. The back office offers the
+    // manual action for them (`isDocumentRequest` in workflow.ts: a Document, or a hash and no
+    // template), so the server must not refuse it. If the two rules ever differ, the server's
+    // wins: it is the one that refuses, and the page greys the button only to save a failed call.
+    let Old { f, requests, .. } = old_instance().await;
+    f.app
+        .installer
+        .install(&Bundled.fetch("sign").unwrap(), "marketplace", "test")
+        .unwrap();
+    let sent = requests
+        .iter()
+        .find(|(_, s)| *s == "sent")
+        .map(|(id, _)| id.clone())
+        .unwrap();
+    assert!(
+        f.record("sign_request", &sent)["document_hash"]
+            .as_str()
+            .is_some_and(|h| h.len() == 64),
+        "the old request holds a typed hash"
+    );
+    let (s, v) = f
+        .api("mia", "/api/sign_request/sign", json!({"id": sent}))
+        .await;
+    assert_eq!(s, 200, "{v}");
+    assert_eq!(f.record("sign_request", &sent)["state"], "signed");
+    // The same through an update of the state, for a second request.
+    let draft = requests
+        .iter()
+        .find(|(_, s)| *s == "draft")
+        .map(|(id, _)| id.clone())
+        .unwrap();
+    let (s, v) = f
+        .api("mia", "/api/sign_request/send", json!({"id": draft}))
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_request/update",
+            json!({"id": draft, "state": "signed"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    assert_eq!(f.record("sign_request", &draft)["state"], "signed");
+}
+
+#[tokio::test]
 async fn a_sent_document_request_after_a_rollback_is_closed_by_setting_a_template_and_an_email() {
     // The runbook's remedy for a request that was sent on 0.2.1 and is stuck after `rollback`:
     // 0.2.0 requires a template and an email address of every request, and a request about a

@@ -138,6 +138,35 @@ async fn clearing_the_document_does_not_unlock_the_manual_signature() {
     // Nobody signs by hand, by the action or by moving the state.
     every_manual_signature_is_refused(&f, &["mia", "admin"], "document in place").await;
 
+    // Giving the request a template (any `sign.user` may) does not turn it into a legacy request
+    // that is signed by hand: it still names a Document and holds the copy.
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_template/create",
+            json!({"name": "Anything (test)", "body": "text"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let tpl = v["value"]["id"].as_str().unwrap().to_string();
+    let (s, v) = f
+        .api(
+            "sam",
+            "/api/sign_request/update",
+            json!({"id": f.req, "template_id": tpl}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    every_manual_signature_is_refused(&f, &["mia", "admin"], "a template was added").await;
+    let (s, v) = f
+        .api(
+            "sam",
+            "/api/sign_request/update",
+            json!({"id": f.req, "template_id": null}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+
     // An administrator may take the Document off (she can edit anything); the request still holds
     // the hash and the copy it was sent with, and that is what keeps it for the door.
     let (s, v) = f
@@ -154,6 +183,30 @@ async fn clearing_the_document_does_not_unlock_the_manual_signature() {
             .is_none_or(J::is_null)
     );
     every_manual_signature_is_refused(&f, &["mia", "admin"], "document cleared by an admin").await;
+    // Each of the three is enough alone: an administrator who also clears the copy, or instead the
+    // hash (both are door-owned, so only she can), still meets the one that is left.
+    for (clear, left) in [
+        ("document_file", "the hash and no template"),
+        ("document_hash", "the copy"),
+    ] {
+        let (s, v) = f
+            .api(
+                "admin",
+                "/api/sign_request/update",
+                json!({"id": f.req, clear: null}),
+            )
+            .await;
+        assert_eq!(s, 200, "{clear}: {v}");
+        every_manual_signature_is_refused(&f, &["mia", "admin"], left).await;
+        let (s, v) = f
+            .api(
+                "admin",
+                "/api/sign_request/update",
+                json!({"id": f.req, clear: f.file}),
+            )
+            .await;
+        assert_eq!(s, 200, "{clear} put back: {v}");
+    }
 
     // An agent: the update is refused outright, and the sign action is only a proposal that is
     // refused when the person approves it.
