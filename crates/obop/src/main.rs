@@ -31,6 +31,8 @@ mod error_seam_tests;
 mod health_tests;
 mod import_cmd;
 #[cfg(test)]
+mod import_map_tests;
+#[cfg(test)]
 mod kinds_tests;
 #[cfg(test)]
 mod limits_tests;
@@ -250,6 +252,12 @@ const USAGE: &str = "usage: obop <command>
                                                 numbers, decimals and date-times as text, UTF-8, at most 1000 rows and 1 MiB) through bulk_create, with every
                                                 check of create. By default one bad row creates nothing; --mode partial keeps the good
                                                 rows; --dry-run only checks; --key makes a retry return the first answer
+                                                with --source-system S --source-table T --source-ids FILE (one source id per data row,
+                                                one per line) the records are also entered in the import map, so a re-run reports
+                                                `already imported` and creates nothing; --on-existing error refuses such rows instead
+  import-map search --source-system S --source-table T --source-id ID [--model M] [--token TOKEN]
+                                                the record a source key became (JSON; check `total`); needs api.import_map_read
+  import-map get MODEL ID [--token TOKEN]       the source keys of a record (JSON list; empty when none or not readable)
   commands [--token TOKEN]                      list the commands visible to a token
   openapi [--out FILE]                          the OpenAPI 3.1 document of an instance (the linked modules: every command of every
                                                 model that has a list command; a placeholder address), the same bytes on every run;
@@ -324,6 +332,12 @@ fn main() -> ExitCode {
     let (note, args) = take_opt(&args, "--note");
     let (mode, args) = take_opt(&args, "--mode");
     let (idem_key, args) = take_opt(&args, "--key");
+    let (src_system, args) = take_opt(&args, "--source-system");
+    let (src_table, args) = take_opt(&args, "--source-table");
+    let (src_ids, args) = take_opt(&args, "--source-ids");
+    let (on_existing, args) = take_opt(&args, "--on-existing");
+    let (map_model, args) = take_opt(&args, "--model");
+    let (map_id, args) = take_opt(&args, "--source-id");
     let (sso_tenant, args) = take_opt(&args, "--tenant");
     let (sso_client, args) = take_opt(&args, "--client-id");
     let (flags, args): (Vec<&str>, Vec<&str>) = args.into_iter().partition(|a| {
@@ -469,7 +483,30 @@ fn main() -> ExitCode {
                 mode,
                 dry_run: has("--dry-run"),
                 key: idem_key,
+                source: match (src_system, src_table, src_ids) {
+                    (None, None, None) => None,
+                    (Some(system), Some(table), Some(ids_file)) => Some(import_cmd::Source {
+                        system,
+                        table,
+                        ids_file,
+                    }),
+                    _ => {
+                        return fail(
+                            "give --source-system, --source-table and --source-ids together",
+                        );
+                    }
+                },
+                on_existing,
             },
+        ),
+        ["import-map", "search"] => {
+            import_map_search(&opts, (src_system, src_table, map_id), map_model)
+        }
+        ["import-map", "get", model, id] => call(
+            &opts,
+            "import_map",
+            "get",
+            &[&format!("model={model}"), &format!("id={id}")],
         ),
         ["mcp"] => mcp(&opts),
         ["commands"] => commands(&opts),
@@ -947,6 +984,30 @@ fn agent_token(o: &Opts, user: &str, scopes: Option<&str>, label: Option<&str>) 
     println!("{t}");
     eprintln!("shown once; store it like a password");
     Ok(())
+}
+
+/// `obop import-map search --source-system S --source-table T --source-id ID [--model M]`: the
+/// record(s) a source key became, as the JSON of `import_map.search`.
+fn import_map_search(
+    o: &Opts,
+    (system, table, id): (Option<&str>, Option<&str>, Option<&str>),
+    model: Option<&str>,
+) -> Exit {
+    let (Some(system), Some(table), Some(id)) = (system, table, id) else {
+        return Err(fail(
+            "usage: obop import-map search --source-system S --source-table T --source-id ID [--model M]",
+        ));
+    };
+    let mut kv = vec![
+        format!("source_system={system}"),
+        format!("source_table={table}"),
+        format!("source_id={id}"),
+    ];
+    if let Some(m) = model {
+        kv.push(format!("model={m}"));
+    }
+    let kv: Vec<&str> = kv.iter().map(String::as_str).collect();
+    call(o, "import_map", "search", &kv)
 }
 
 fn commands(o: &Opts) -> Exit {

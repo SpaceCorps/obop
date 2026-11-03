@@ -725,3 +725,35 @@ description = "Ställ in den Microsoft Entra-klientorganisation som personer log
 [labels.sv.model.sso_provider.action.clear]
 label = "Ta bort"
 description = "Ta bort konfigurationen för Microsoft-inloggning. Kopplingarna finns kvar. Konton som bara loggar in med Microsoft kommer då bara in via de administratörer som behåller lösenord och en andra faktor. Nekas för agenter"
+
+[labels.sv.model.import_map]
+name = "Importkarta"
+description = "Varifrån en importerad post kommer: nyckeln (källsystem, källtabell, käll-id) för raden den skapades av. Slå upp en nyckel med search, en post med get."
+
+[labels.sv.model.import_map.field.model]
+label = "Modell"
+description = "Modellen för den importerade posten"
+
+[labels.sv.model.import_map.field.record]
+label = "Post"
+description = "Id för den importerade posten"
+
+[labels.sv.model.import_map.field.source_system]
+label = "Källsystem"
+description = "Det externa system som raden kom från, så som importen namngav det"
+
+[labels.sv.model.import_map.field.source_table]
+label = "Källtabell"
+description = "Tabellen, bladet eller filen i det systemet som raden kom från"
+
+[labels.sv.model.import_map.field.source_id]
+label = "Käll-id"
+description = "Radens id i den tabellen"
+
+[labels.sv.model.import_map.field.imported_at]
+label = "Importerad"
+description = "När posten importerades"
+
+[labels.sv.model.import_map.field.imported_by]
+label = "Importerad av"
+description = "Vem som importerade den"

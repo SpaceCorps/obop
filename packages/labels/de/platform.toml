@@ -725,3 +725,35 @@ description = "Den Microsoft-Entra-Mandanten festlegen, mit dem sich Personen an
 [labels.de.model.sso_provider.action.clear]
 label = "Entfernen"
 description = "Die Konfiguration der Microsoft-Anmeldung entfernen. Bindungen bleiben. Konten, die sich nur mit Microsoft anmelden, kommen dann nur noch über die Administratoren hinein, die Passwort und zweiten Faktor behalten. Für Agenten abgelehnt"
+
+[labels.de.model.import_map]
+name = "Importzuordnung"
+description = "Woher ein importierter Datensatz stammt: der Schlüssel (Quellsystem, Quelltabelle, Quell-ID) der Zeile, aus der er entstand. Mit search einen Schlüssel nachschlagen, mit get einen Datensatz."
+
+[labels.de.model.import_map.field.model]
+label = "Modell"
+description = "Das Modell des importierten Datensatzes"
+
+[labels.de.model.import_map.field.record]
+label = "Datensatz"
+description = "Die ID des importierten Datensatzes"
+
+[labels.de.model.import_map.field.source_system]
+label = "Quellsystem"
+description = "Das Fremdsystem, aus dem die Zeile kam, so wie der Import es benannte"
+
+[labels.de.model.import_map.field.source_table]
+label = "Quelltabelle"
+description = "Die Tabelle, das Blatt oder die Datei dieses Systems, aus der die Zeile kam"
+
+[labels.de.model.import_map.field.source_id]
+label = "Quell-ID"
+description = "Die ID der Zeile in dieser Tabelle"
+
+[labels.de.model.import_map.field.imported_at]
+label = "Importiert am"
+description = "Wann der Datensatz importiert wurde"
+
+[labels.de.model.import_map.field.imported_by]
+label = "Importiert von"
+description = "Wer ihn importiert hat"

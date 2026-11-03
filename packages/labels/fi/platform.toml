@@ -725,3 +725,35 @@ description = "Aseta Microsoft Entra -vuokraaja, jolla henkilöt kirjautuvat. An
 [labels.fi.model.sso_provider.action.clear]
 label = "Poista"
 description = "Poista Microsoft-kirjautumisen asetukset. Sidokset säilyvät. Vain Microsoftilla kirjautuvat tilit pääsevät silloin sisään vain ylläpitäjien kautta, joilla on salasana ja toinen tekijä. Hylätään agenteilta"
+
+[labels.fi.model.import_map]
+name = "Tuontikartta"
+description = "Mistä tuotu tietue on peräisin: sen luoneen rivin avain (lähdejärjestelmä, lähdetaulu, lähdetunniste). Avaimen hakee komento search, tietueen komento get."
+
+[labels.fi.model.import_map.field.model]
+label = "Malli"
+description = "Tuodun tietueen malli"
+
+[labels.fi.model.import_map.field.record]
+label = "Tietue"
+description = "Tuodun tietueen tunniste"
+
+[labels.fi.model.import_map.field.source_system]
+label = "Lähdejärjestelmä"
+description = "Ulkoinen järjestelmä, josta rivi tuli, sellaisena kuin tuonti sen nimesi"
+
+[labels.fi.model.import_map.field.source_table]
+label = "Lähdetaulu"
+description = "Kyseisen järjestelmän taulu, taulukko tai tiedosto, josta rivi tuli"
+
+[labels.fi.model.import_map.field.source_id]
+label = "Lähdetunniste"
+description = "Rivin tunniste kyseisessä taulussa"
+
+[labels.fi.model.import_map.field.imported_at]
+label = "Tuotu"
+description = "Milloin tietue tuotiin"
+
+[labels.fi.model.import_map.field.imported_by]
+label = "Tuoja"
+description = "Kuka tuonnin teki"

@@ -148,6 +148,7 @@ pub fn dev_principal(token: &str) -> Option<Principal> {
         "mileage.driver",
         "mileage.reviewer",
         "mileage.admin",
+        "api.import_map_read",
     ];
     match token {
         "dev-admin" => Some(Principal::user("dev-admin", ALL)),

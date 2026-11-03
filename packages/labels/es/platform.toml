@@ -725,3 +725,35 @@ description = "Establecer el inquilino de Microsoft Entra con el que inician ses
 [labels.es.model.sso_provider.action.clear]
 label = "Eliminar"
 description = "Eliminar la configuración del inicio de sesión con Microsoft. Los vínculos se conservan. Las cuentas que inician sesión solo con Microsoft solo podrán entrar entonces por los administradores que conservan contraseña y segundo factor. Se rechaza para agentes"
+
+[labels.es.model.import_map]
+name = "Mapa de importación"
+description = "De dónde viene un registro importado: la clave (sistema de origen, tabla de origen, id de origen) de la fila de la que se creó. Busque una clave con search y un registro con get."
+
+[labels.es.model.import_map.field.model]
+label = "Modelo"
+description = "El modelo del registro importado"
+
+[labels.es.model.import_map.field.record]
+label = "Registro"
+description = "El id del registro importado"
+
+[labels.es.model.import_map.field.source_system]
+label = "Sistema de origen"
+description = "El sistema externo del que vino la fila, tal como lo nombró la importación"
+
+[labels.es.model.import_map.field.source_table]
+label = "Tabla de origen"
+description = "La tabla, hoja o archivo de ese sistema del que vino la fila"
+
+[labels.es.model.import_map.field.source_id]
+label = "Id de origen"
+description = "El id de la fila en esa tabla"
+
+[labels.es.model.import_map.field.imported_at]
+label = "Importado el"
+description = "Cuándo se importó el registro"
+
+[labels.es.model.import_map.field.imported_by]
+label = "Importado por"
+description = "Quién lo importó"
