@@ -3362,9 +3362,11 @@ mod bundled_packages {
                 unreachable!()
             };
             // The action `sign` is for a request that is not about a Document (a request about
-            // one is signed at the door), and the actions are walked on these records.
+            // one is signed at the door), and the actions are walked on these records: no
+            // Document and no held copy (the sample's hash is allowed: it has a template).
             if model == "sign_request" {
                 fields.remove("document_id");
+                fields.remove("document_file");
             }
             self.app.store.insert(model, fields).unwrap()
         }
