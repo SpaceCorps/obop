@@ -20,3 +20,5 @@ workspace = true
 
 [dev-dependencies]
 postgres = "0.19"
+# `testing::TempPath`: a database file of a test's own, removed again.
+obop-storage = { workspace = true, features = ["test-support"] }

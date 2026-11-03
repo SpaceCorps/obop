@@ -248,15 +248,9 @@ async fn mcp_and_openapi_describe_bulk_create_for_every_model_that_can_create() 
 
 #[test]
 fn cli_import_goes_through_bulk_create_with_every_mode() {
-    let dir = std::env::temp_dir().join(format!(
-        "obop-import-cli-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&dir).unwrap();
+    // A directory of this run's own, removed when the test ends (after the stores are closed).
+    let _guard = obop_storage::testing::TempPath::dir("obop-import-cli");
+    let dir = _guard.path().to_path_buf();
     let path = |n: &str| dir.join(n).to_str().unwrap().to_string();
     let db = format!("sqlite://{}", path("cli.db"));
     let o = crate::Opts {
@@ -302,5 +296,4 @@ fn cli_import_goes_through_bulk_create_with_every_mode() {
     assert!(run(&bad, Some("partial"), false, None).is_err());
     assert_eq!(parties(), start + 3);
     assert!(run(&path("missing.csv"), None, false, None).is_err());
-    let _ = std::fs::remove_dir_all(&dir);
 }

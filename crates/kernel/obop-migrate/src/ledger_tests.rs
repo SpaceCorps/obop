@@ -428,8 +428,8 @@ fn a_rollback_is_recorded_with_its_reason_and_what_it_discarded() {
 
 #[test]
 fn the_ledger_works_on_a_sqlite_file_shared_by_two_handles() {
-    let path = std::env::temp_dir().join(format!("obop-ledger-{}.db", std::process::id()));
-    let url = format!("sqlite://{}", path.display());
+    let path = obop_storage::testing::TempPath::new("obop-ledger");
+    let url = path.url();
     let (a, b) = (
         obop_storage::open(&url).unwrap(),
         obop_storage::open(&url).unwrap(),
@@ -450,11 +450,6 @@ fn the_ledger_works_on_a_sqlite_file_shared_by_two_handles() {
             .unwrap()
             .ok()
     );
-    drop((a, b));
-    for ext in ["", "-wal", "-shm"] {
-        let _ = std::fs::remove_file(format!("{}{ext}", path.display()));
-    }
-    let _ = std::fs::remove_file(format!("{}.lock-obop.migrate", path.display()));
 }
 
 /// A scratch database on the server of `OBOP_TEST_POSTGRES_URL`, dropped afterwards.

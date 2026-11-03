@@ -792,12 +792,8 @@ async fn agents_get_the_generated_tools_and_the_connect_family_needs_approval() 
 
 #[tokio::test]
 async fn the_purge_command_applies_retention_to_a_real_database() {
-    let path = std::env::temp_dir().join(format!(
-        "obop-connectors-purge-{}.sqlite",
-        std::process::id()
-    ));
-    let _ = std::fs::remove_file(&path);
-    let url = format!("sqlite://{}", path.display());
+    let path = obop_storage::testing::TempPath::new("obop-connectors-purge");
+    let url = path.url();
     {
         let store = Store::open(&url).unwrap();
         let b = store.backend();
@@ -840,5 +836,4 @@ async fn the_purge_command_applies_retention_to_a_real_database() {
     assert!(
         b.get("sync_run", "old").unwrap().is_none() && b.get("sync_run", "new").unwrap().is_some()
     );
-    let _ = std::fs::remove_file(&path);
 }
