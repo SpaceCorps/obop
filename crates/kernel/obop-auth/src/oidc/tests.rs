@@ -2492,9 +2492,10 @@ fn a_reloaded_second_step_gets_a_fresh_token_only_while_the_first_factor_still_s
     ));
     assert_eq!((refusals(CHANGED), refusals(DISABLED)), (1, 1));
     r.a.operator_set_disabled("ada", false).unwrap();
-    // An account that does not exist writes no line: the lines of `oidc_refused` are counted, all
-    // of them, not only the two texts above (the doc of `SsoApi::second_step_for_flow` says so).
-    let all = || events(&r, "oidc_refused").len();
+    // An account that does not exist writes no line: the events of every kind are counted, not
+    // only the lines of `oidc_refused` and not only the two texts above (the doc of
+    // `SsoApi::second_step_for_flow` says "none").
+    let all = || r.b.list(EVENT_TABLE).unwrap().len();
     let lines = all();
     assert!(matches!(
         sso(&r).second_step_for_flow("nobody", None),

@@ -2505,6 +2505,14 @@ async fn phone_the_cookies_of_the_round_trip_and_of_the_flow_last_ten_minutes_an
 /// the authorization request, and ends at 600 s whatever the row is given. (A step that does
 /// renew it would make `Max-Age` of the flow a lie in DEPLOY.md and in N21 g.) A successful step
 /// then leaves the row without a cookie to go with it: the decision at 601 s is a 403.
+///
+/// What each write left in the row is read after every step but the last password step (the
+/// password step that asks for the second factor: `pre_user` and `pre_epoch`; a wrong code:
+/// `attempts` 1; the right code: the person, `attempts` 0; "Not you?": nobody). The write of the
+/// last password step and of the second right code, and of a passkey step, are not read, and the
+/// 403 at 601 s says nothing about any of them: the row made by `begin` is still live in real
+/// time, so the same 403 would follow a row that no step wrote again. The answer of the passkey
+/// step is not run here at all (docs/ISSUES.md, "Not pinned").
 #[tokio::test]
 async fn phone_every_step_of_the_sign_in_pages_writes_the_flow_and_sets_no_cookie() {
     let w = world(true).await;
@@ -2532,6 +2540,13 @@ async fn phone_every_step_of_the_sign_in_pages_writes_the_flow_and_sets_no_cooki
     let r = phone.password(&page, "ada", PW).await;
     assert!(asks_for_the_second_step(&r), "{}", r.body);
     quiet(&r, "the password step");
+    let rec = w.oauth_flow(&page.flow).unwrap();
+    let epoch = w.auth.oauth().unwrap().credential_epoch("ada").unwrap();
+    assert_eq!(
+        rec["pre_user"], "ada",
+        "the step did not write the flow: {rec}"
+    );
+    assert_eq!(rec["pre_epoch"], json!(epoch), "{rec}");
     let p = page_of(&page.flow, &r);
     let token = hidden_of(&r.body, "mfa_token");
     // The second step, wrong and then right (the code of the minute after, as the other tests do).
@@ -2542,12 +2557,26 @@ async fn phone_every_step_of_the_sign_in_pages_writes_the_flow_and_sets_no_cooki
         wrong.body
     );
     quiet(&wrong, "a wrong code");
+    assert_eq!(
+        w.oauth_flow(&page.flow).unwrap()["attempts"],
+        1,
+        "a wrong code is counted and written"
+    );
     w.auth.set_clock_for_test(T0 + 60);
     let code = obop_auth::totp::code_for_step(&secret, obop_auth::totp::step_at(T0 + 60));
     let ok = phone.mfa(&p, &token, &code).await;
     assert!(consent(&ok), "{}", ok.body);
     quiet(&ok, "the right code");
-    assert_eq!(w.oauth_flow(&page.flow).unwrap()["user"], "ada");
+    let rec = w.oauth_flow(&page.flow).unwrap();
+    assert_eq!(rec["user"], "ada", "{rec}");
+    assert_eq!(
+        rec["attempts"], 0,
+        "a success sets the count to zero: {rec}"
+    );
+    // The return address with a live cookie shows the consent step and sets no cookie.
+    let again = phone.back(&page.flow).await;
+    assert!(consent(&again), "{}", again.body);
+    quiet(&again, "the return address");
     // "Not you?" forgets the person, and sets no cookie either.
     let sw = w
         .browse(
@@ -2579,9 +2608,10 @@ async fn phone_every_step_of_the_sign_in_pages_writes_the_flow_and_sets_no_cooki
         .unwrap();
     assert_eq!((kept.value, kept.until), (original.value, Some(600)));
     // At 601 s the browser no longer sends it. The row is there (written by a successful step, and
-    // in any case because real time has not moved, so this 403 does not by itself show the
-    // rewrite; the state the steps left in the row above does): the decision is refused, 403, and
-    // no code is made.
+    // in any case because the row from `begin` is still live in real time, so this 403 is
+    // unspecific: it does not by itself show any rewrite; the state the steps left in the row
+    // above does, for the steps named in the comment of the test): the decision is refused, 403,
+    // and no code is made.
     phone.b.now = 601;
     assert!(!phone.b.has("obop_oauth_"));
     let late = phone.decide(&page_of(&page.flow, &ok), "7").await;
