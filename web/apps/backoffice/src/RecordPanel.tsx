@@ -8,7 +8,7 @@ import { isMasked, isState, optionLabel, rowCurrency, shownLabel } from "./forma
 import { actionTitle, appTitle, fieldTitle, fieldTitleByName, modelTitle } from "./labels.ts";
 import { serverMessage } from "./serverMessage.ts";
 import { DeleteDialog } from "./DeleteDialog.tsx";
-import { SignLinkAction } from "./SignLinks.tsx";
+import { SignLinkAction, SignLinks } from "./SignLinks.tsx";
 import { REQUEST_MODEL } from "./signLinks.ts";
 import { encodeState } from "./query.ts";
 import { PHONE_QUERY, SHEET_QUERY, useMedia, useScrollLock } from "./media.ts";
@@ -478,6 +478,7 @@ export function RecordPanel({
             )}
           </div>
         )}
+        {!creating && model.name === REQUEST_MODEL && <SignLinks requestId={row.id} />}
         <form
           className="fields"
           noValidate

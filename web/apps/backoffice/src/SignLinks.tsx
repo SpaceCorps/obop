@@ -1,16 +1,20 @@
-import { useRef, useState, type RefObject } from "react";
-import { Button, Dialog, Input, Notice, Tooltip, t } from "@obop/ui";
-import type { FieldMeta, Row } from "./api.ts";
+import { useEffect, useRef, useState, type RefObject } from "react";
+import { Badge, Button, Dialog, Input, Notice, Table, Tooltip, t } from "@obop/ui";
+import { search, type FieldMeta, type Row } from "./api.ts";
 import { useData } from "./data.tsx";
 import { instantText } from "./format.ts";
 import { serverMessage } from "./serverMessage.ts";
 import {
   LINK_CREATE,
   LINK_MODEL,
+  LINK_UPDATE,
   copyText,
   linkGate,
+  linkStatus,
   madeLink,
+  revokeBody,
   selectAll,
+  type LinkStatus,
   type MadeLink,
 } from "./signLinks.ts";
 
@@ -172,5 +176,132 @@ export function SignLinkBody({
         </Button>
       </div>
     </div>
+  );
+}
+
+const TONE = { active: "success", used: "info", revoked: "neutral", expired: "warning" } as const;
+
+/** The words of a status. Written where it is drawn, so they follow a change of language. */
+function statusText(s: LinkStatus): string {
+  return s === "active"
+    ? t("Active")
+    : s === "used"
+      ? t("Used")
+      : s === "revoked"
+        ? t("Revoked")
+        : t("Expired");
+}
+
+/**
+ * The links made for one request, with their status and a Revoke button for an active one. A link
+ * is never shown again (the server keeps a hash); the first characters of its id are only a way to
+ * tell two links apart and to find the line in the security log.
+ */
+export function SignLinkTable({
+  rows,
+  nowMs,
+  canRevoke,
+  busy,
+  onRevoke,
+}: {
+  rows: Row[];
+  nowMs: number;
+  canRevoke: boolean;
+  busy: string | null;
+  onRevoke: (row: Row) => void;
+}) {
+  return (
+    <section className="sign-links" aria-label={t("Signing links")}>
+      <h3 className="overline">{t("Signing links")}</h3>
+      <Table caption={t("Signing links")} dense>
+        <thead>
+          <tr>
+            <th scope="col">{t("Status")}</th>
+            <th scope="col">{t("Expires")}</th>
+            <th scope="col">{t("Used or revoked")}</th>
+            <th scope="col" className="sr-only">
+              {t("Actions")}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => {
+            const st = linkStatus(r, nowMs);
+            const done = String(r.used_at || r.revoked_at || "");
+            return (
+              <tr key={r.id}>
+                <td>
+                  <Badge tone={TONE[st]}>{statusText(st)}</Badge>{" "}
+                  <code className="hint">{r.id.slice(0, 8)}</code>
+                </td>
+                <td>{r.expires_at ? instantText(r.expires_at) : ""}</td>
+                <td>{done ? instantText(done) : ""}</td>
+                <td>
+                  {st === "active" && canRevoke && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="danger-text"
+                      disabled={busy !== null}
+                      loading={busy === r.id}
+                      aria-label={t("Revoke signing link {id}", { id: r.id.slice(0, 8) })}
+                      onClick={() => onRevoke(r)}
+                    >
+                      {t("Revoke")}
+                    </Button>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </Table>
+    </section>
+  );
+}
+
+/** Loads the links of one request and refreshes after every change the back office makes. */
+export function SignLinks({ requestId }: { requestId: string }) {
+  const d = useData();
+  const link = d.models.get(LINK_MODEL)?.model;
+  const [rows, setRows] = useState<Row[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  useEffect(() => {
+    if (!link) return;
+    let live = true;
+    void search(d.token, LINK_MODEL, {
+      filter: [{ field: "request_id", op: "eq", value: requestId }],
+      order: [{ field: "expires_at", dir: "desc" }],
+      limit: 50,
+    }).then((r) => {
+      if (live) setRows("error" in r ? [] : r.rows);
+    });
+    return () => {
+      live = false;
+    };
+  }, [d.token, requestId, d.mutations, !!link]);
+  if (!link || !rows || rows.length === 0) return null;
+
+  async function revoke(row: Row) {
+    const ok = await d.confirm(
+      t("Revoke this signing link? Whoever holds it can no longer sign with it."),
+      t("Revoke"),
+    );
+    if (!ok) return;
+    setBusy(row.id);
+    const r = await d.run(LINK_UPDATE, revokeBody(row.id, new Date()));
+    setBusy(null);
+    if (r.kind === "ok") d.notify(t("The signing link was revoked"));
+    else if (r.kind === "error") d.notify(serverMessage(r.message), "error");
+  }
+
+  return (
+    <SignLinkTable
+      rows={rows}
+      nowMs={Date.now()}
+      canRevoke={!!link.can_update}
+      busy={busy}
+      onRevoke={(row) => void revoke(row)}
+    />
   );
 }

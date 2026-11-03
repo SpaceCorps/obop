@@ -3,8 +3,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { provideCatalogue, setLanguage, type Lang } from "@obop/ui";
 import type { FieldMeta, Row } from "./api.ts";
-import { SignLinkBody } from "./SignLinks.tsx";
-import { copyText, linkGate, madeLink } from "./signLinks.ts";
+import { SignLinkBody, SignLinkTable } from "./SignLinks.tsx";
+import { copyText, linkGate, linkStatus, madeLink, revokeBody } from "./signLinks.ts";
 
 async function use(lang: Lang, messages: Record<string, string> = {}) {
   provideCatalogue(lang, messages);
@@ -177,5 +177,94 @@ describe("what happens to the link", () => {
   it("is copied with the clipboard API and falls back to selecting the field", async () => {
     // No clipboard and no DOM here: the function answers false instead of throwing.
     expect(await copyText("x", null)).toBe(false);
+  });
+});
+
+describe("the status of a link, worked out from its fields", () => {
+  const NOW = Date.parse("2026-11-10T12:00:00Z");
+  const link = (extra: Record<string, unknown>): Row => ({
+    id: "f".repeat(64),
+    request_id: "r1",
+    expires_at: "2026-11-17T12:00:00.000000Z",
+    ...extra,
+  });
+
+  it("is active until it is used, revoked or past its expiry", () => {
+    expect(linkStatus(link({}), NOW)).toBe("active");
+    expect(linkStatus(link({ used_at: "2026-11-09T10:00:00.000000Z" }), NOW)).toBe("used");
+    expect(linkStatus(link({ revoked_at: "2026-11-09T10:00:00.000000Z" }), NOW)).toBe("revoked");
+    expect(linkStatus(link({ expires_at: "2026-11-09T12:00:00.000000Z" }), NOW)).toBe("expired");
+  });
+
+  it("is used before it is revoked or expired, as the door decides", () => {
+    const both = link({
+      used_at: "2026-11-09T10:00:00.000000Z",
+      revoked_at: "2026-11-09T11:00:00.000000Z",
+      expires_at: "2026-11-01T00:00:00.000000Z",
+    });
+    expect(linkStatus(both, NOW)).toBe("used");
+    const gone = link({
+      revoked_at: "2026-11-09T11:00:00.000000Z",
+      expires_at: "2026-11-01T00:00:00.000000Z",
+    });
+    expect(linkStatus(gone, NOW)).toBe("revoked");
+  });
+
+  it("treats empty and missing stamps as unset, and an unreadable expiry as no expiry", () => {
+    expect(linkStatus(link({ used_at: "", revoked_at: null, expires_at: "" }), NOW)).toBe("active");
+    expect(linkStatus(link({ expires_at: "soon" }), NOW)).toBe("active");
+    expect(linkStatus({ id: "x" }, NOW)).toBe("active");
+  });
+
+  it("is revoked by an update of revoked_at alone", () => {
+    expect(revokeBody("abc", new Date("2026-11-10T12:00:00.123Z"))).toEqual({
+      id: "abc",
+      revoked_at: "2026-11-10T12:00:00.123Z",
+    });
+  });
+});
+
+describe("the table of the links of a request", () => {
+  const NOW = Date.parse("2026-11-10T12:00:00Z");
+  const rows: Row[] = [
+    { id: "a".repeat(64), request_id: "r1", expires_at: "2026-11-17T12:00:00.000000Z" },
+    {
+      id: "b".repeat(64),
+      request_id: "r1",
+      expires_at: "2026-11-17T12:00:00.000000Z",
+      used_at: "2026-11-09T10:00:00.000000Z",
+    },
+    {
+      id: "c".repeat(64),
+      request_id: "r1",
+      expires_at: "2026-11-17T12:00:00.000000Z",
+      revoked_at: "2026-11-09T10:00:00.000000Z",
+    },
+  ];
+  const html = (canRevoke: boolean, busy: string | null = null) =>
+    renderToStaticMarkup(
+      <SignLinkTable
+        rows={rows}
+        nowMs={NOW}
+        canRevoke={canRevoke}
+        busy={busy}
+        onRevoke={() => {}}
+      />,
+    );
+
+  it("shows each link's status, its first eight characters and never a link", () => {
+    const h = html(true);
+    expect(h).toContain("Active");
+    expect(h).toContain("Used");
+    expect(h).toContain("Revoked");
+    expect(h).toContain("aaaaaaaa");
+    expect(h).not.toContain("a".repeat(9));
+    expect(h).not.toContain("/sign/");
+  });
+
+  it("offers Revoke only for an active link, and only to a person who may", () => {
+    expect(html(true).match(/>Revoke</g)).toHaveLength(1);
+    expect(html(true)).toContain('aria-label="Revoke signing link aaaaaaaa"');
+    expect(html(false)).not.toContain(">Revoke<");
   });
 });

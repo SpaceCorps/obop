@@ -13,6 +13,7 @@ import { fieldTitle } from "./labels.ts";
 /** The model of the links and the command that makes one. */
 export const LINK_MODEL = "sign_link";
 export const LINK_CREATE = "sign_link.create";
+export const LINK_UPDATE = "sign_link.update";
 
 /** The request is the record of this model. */
 export const REQUEST_MODEL = "sign_request";
@@ -38,6 +39,31 @@ export function linkGate(row: Row, fields: FieldMeta[]): LinkGate {
   if (!String(row.document_id ?? "").trim())
     return { ok: false, reason: t("The request has no document to sign") };
   return { ok: true };
+}
+
+/** The state of a link, worked out from its fields (the model has no state field, D92). */
+export type LinkStatus = "active" | "used" | "revoked" | "expired";
+
+const set = (v: unknown): boolean => typeof v === "string" && v.trim() !== "";
+
+/**
+ * Used when `used_at` is set, else revoked when `revoked_at` is set, else expired when `expires_at`
+ * is in the past, else active. The server decides the same way at the door and caps the life
+ * again there; this is only the picture of it in the list.
+ */
+export function linkStatus(row: Row, nowMs: number): LinkStatus {
+  if (set(row.used_at)) return "used";
+  if (set(row.revoked_at)) return "revoked";
+  if (set(row.expires_at)) {
+    const at = Date.parse(String(row.expires_at));
+    if (Number.isFinite(at) && at < nowMs) return "expired";
+  }
+  return "active";
+}
+
+/** The body of the update that revokes a link: the server stamps its own clock and refuses the rest. */
+export function revokeBody(id: string, now: Date): { id: string; revoked_at: string } {
+  return { id, revoked_at: now.toISOString() };
 }
 
 /** What the answer of `sign_link.create` gives the dialog. */
