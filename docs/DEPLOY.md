@@ -481,6 +481,10 @@ Routes (bearer token of a person): `GET /api/drive/status` (`connected`, `may_br
 
 `OBOP_BLOB_STORE=gdrive://...` (above) is read when the process starts, before a single record can be read, because every upload and every backup goes through it; credentials kept in the database would be a chicken-and-egg problem on a fresh start and on `obop restore`. It also needs its own `drive.file` token and a folder obop created, which the Google Drive page does not make. So the file store stays on environment variables; moving it behind the page would need a lazily opened store and a restart-safe fallback, and is not built.
 
+### Who may read a file
+
+A file or picture is served to a signed-in person who may read a record that holds it: the read group of the model, the group of the field and, when the model has row rules (`[model.access]`, D58), the record itself. A record the person cannot see answers like a missing file (404), also when they know the file's id (its SHA-256). The instance administrator sees every record. Agents never get bytes. This is a change: before it, the row rules were not applied to the bytes, so a restricted Document's file was readable by anyone with `documents.user` who knew its id (D60 amendment of 2026-11-03).
+
 ## The server key
 
 `OBOP_SECRET_KEY` seals four kinds of secret: two-factor seeds, connection credentials and OAuth tokens (and the keys behind pseudonyms), and the transient sessions, vaults and plans above. Every sealed value names the key that sealed it (an id: the first eight hex digits of a SHA-256, which says nothing usable about the key), so opening picks the right key at once and a missing key is reported by id, never by content.
