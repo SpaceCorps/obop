@@ -3,11 +3,14 @@
 //! `obop_commands::sign`; this module carries requests, sets the headers, and checks where a
 //! browser post came from.
 //!
-//! No cookie is set or read, there is no script, and a `GET` never changes anything (a mail
-//! scanner or a link preview that opens the link is harmless). Every answer that is not the PDF
-//! has the headers of the other pages of the server (`harden`) plus `noindex`; the PDF has its
-//! own set (`inline_pdf_response`), because `X-Frame-Options: DENY` would stop the page from
-//! showing it. The address comes from `client_ip`, which trusts `X-Forwarded-For` only with
+//! No cookie is set or read, there is no script, and a `GET` changes no request, link or
+//! evidence (a mail scanner or a link preview that opens the link is harmless; it counts toward
+//! the rate limits and, when the integrity check fails, writes one `sign_refused` entry). Every
+//! answer of these handlers that is not the PDF has the headers of the other pages of the server
+//! (`harden`) plus `noindex`, and so has the PDF's, which otherwise has its own set
+//! (`inline_pdf_response`), because `X-Frame-Options: DENY` would stop the page from showing it.
+//! The rejections of the framework before a handler runs (405, 413, a bad encoding in the
+//! address) are plain text with neither set. The address comes from `client_ip`, which trusts `X-Forwarded-For` only with
 //! `--trust-proxy`; the log entry of a signature also holds the peer and the raw header.
 
 use super::oauth::{client_ip, harden, pair, parse_pairs, same_origin, see_other};
@@ -44,6 +47,15 @@ fn page_response(status: StatusCode, p: Page) -> Response {
         HeaderValue::from_static("noindex, nofollow"),
     );
     harden(&mut r);
+    r
+}
+
+/// The headers that keep an answer out of a search index, for the answers that are not pages.
+fn noindex(mut r: Response) -> Response {
+    r.headers_mut().insert(
+        HeaderName::from_static("x-robots-tag"),
+        HeaderValue::from_static("noindex, nofollow"),
+    );
     r
 }
 
@@ -239,7 +251,7 @@ pub(crate) async fn submit(
         let c = client(&s, &parts);
         match svc.submit(&rid, &tok, &form, &c) {
             // A relative address, so that the redirect does not depend on the derived base.
-            Ok(Done { .. }) => see_other(&format!("/sign/{rid}/{tok}")),
+            Ok(Done { .. }) => noindex(see_other(&format!("/sign/{rid}/{tok}"))),
             Err(DoorError::Invalid(why)) => {
                 // The form again, with what was typed and what is wrong.
                 match svc.view(&rid, &tok, &c) {
@@ -280,9 +292,11 @@ pub(crate) async fn document(
             return refusal(&DoorError::NotFound, lang);
         };
         match svc.pdf(&rid, &tok, &client(&s, &parts)) {
-            Ok(served) => {
-                super::blobs::inline_pdf_response(served, &parts.headers, "private, no-store")
-            }
+            Ok(served) => noindex(super::blobs::inline_pdf_response(
+                served,
+                &parts.headers,
+                "private, no-store",
+            )),
             Err(e) => refusal(&e, lang),
         }
     })

@@ -202,7 +202,9 @@ impl SignService {
             .apply_checked(&[op])
             .map_err(|e| format!("could not hold the document for sign_request {id}: {e}"))?;
         // A crash or a refusal from here on leaves a draft that carries a hash and a held copy:
-        // harmless, and a retry replaces both. A sent request never lacks them.
+        // harmless, and a retry replaces both. (A request sent with the old `send` while it has a
+        // template and a Document holds neither; link creation and the door refuse such a
+        // request, so nobody gets a link for it.)
         inner(input)
     }
 }

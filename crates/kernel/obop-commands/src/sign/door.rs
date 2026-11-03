@@ -162,6 +162,12 @@ fn unavailable(e: String) -> DoorError {
 
 /// A text from outside made safe for a log line or a record: hidden characters and line breaks
 /// gone, cut to `max` characters.
+/// Text from the client for a line of the security log: cleaned, and with the semicolons that
+/// separate the fields of the line replaced, so that a forged header cannot start a field.
+fn logged(raw: &str, max: usize) -> String {
+    clean(raw, max).replace(';', ",")
+}
+
 fn clean(raw: &str, max: usize) -> String {
     strip_hidden(&raw.chars().take(max * 2).collect::<String>())
         .chars()
@@ -301,8 +307,8 @@ impl SignService {
                 &format!(
                     "link {id12}; reason {reason}; address {}; peer {}; forwarded {}",
                     client.ip(),
-                    clean(&client.peer, 64),
-                    clean(&client.forwarded, 200)
+                    logged(&client.peer, 64),
+                    logged(&client.forwarded, 200)
                 ),
             );
         }
@@ -523,8 +529,8 @@ impl SignService {
                 &format!(
                     "request {}; link {id12}; document {hash}; consent {consent}; digest {digest}; address {ip}; peer {}; forwarded {}",
                     f.rid,
-                    clean(&client.peer, 64),
-                    clean(&client.forwarded, 200)
+                    logged(&client.peer, 64),
+                    logged(&client.forwarded, 200)
                 ),
             ),
         ];

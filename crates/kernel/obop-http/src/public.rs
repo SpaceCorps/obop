@@ -189,7 +189,7 @@ mod tests {
         assert!(admin_prefix_ok("/back-office_2"));
         for bad in [
             "admin", "/", "", "/a/b", "/Admin", "/api", "/shop", "/a b", "/..", "//x", "/healthz",
-            "/readyz", "/metrics",
+            "/readyz", "/metrics", "/sign",
         ] {
             assert!(!admin_prefix_ok(bad), "{bad}");
         }

@@ -301,29 +301,119 @@ async fn going_back_to_0_2_0_keeps_what_was_signed_and_a_second_upgrade_finds_it
     let signed = f.record("sign_request", &new);
     let link = f.record("sign_link", &link_id);
 
-    // Rolling back either goes through and keeps the records, or is refused with a reason; it
-    // never loses the signature.
-    let back = f.app.installer.rollback("sign", "test");
-    match &back {
-        Ok(p) => assert_eq!(p.version, "0.2.0"),
-        Err(e) => assert!(!e.is_empty()),
-    }
+    // Rolling back goes through and keeps the records; it never loses the signature.
+    let back = f
+        .app
+        .installer
+        .rollback("sign", "test")
+        .expect("the rollback goes through");
+    assert_eq!(back.version, "0.2.0");
     assert_eq!(f.record("sign_request", &new), signed);
     assert_eq!(f.record("sign_link", &link_id), link);
     for (id, state) in &requests {
         assert_eq!(f.record("sign_request", id)["state"], *state);
     }
-    if back.is_ok() {
-        // On 0.2.0 there is no door.
-        let r = f.get(&path, &ip(153)).await;
-        assert_eq!(r.status, 404);
-        f.app
-            .installer
-            .install(&new_text, "marketplace", "test")
-            .unwrap();
-        assert_eq!(f.record("sign_request", &new), signed);
-        assert_eq!(f.record("sign_link", &link_id), link);
+    // On 0.2.0 there is no door: a link of a real request answers 404, and the same link works
+    // again when the package is back.
+    let r = f.get(&path, &ip(153)).await;
+    assert_eq!(r.status, 404);
+    f.app
+        .installer
+        .install(&new_text, "marketplace", "test")
+        .unwrap();
+    assert_eq!(f.record("sign_request", &new), signed);
+    assert_eq!(f.record("sign_link", &link_id), link);
+    assert_eq!(f.get(&path, &ip(154)).await.status, 200);
+}
+
+#[tokio::test]
+async fn the_new_binary_refuses_hand_typed_evidence_while_the_package_is_still_0_2_0() {
+    // The wrappers act from the first start of the binary, before `module.upgrade`: the runbook
+    // and D92 say so, and this pins it.
+    let Old {
+        f,
+        requests,
+        template,
+    } = old_instance().await;
+    let of = |state: &str| {
+        requests
+            .iter()
+            .find(|(_, s)| *s == state)
+            .map(|(id, _)| id.clone())
+            .unwrap()
+    };
+    let (draft, signed) = (of("draft"), of("signed"));
+    for (k, v) in [
+        ("document_hash", "f".repeat(64)),
+        ("signer_ip", "198.51.100.7".to_string()),
+        ("signer_user_agent", "typed".to_string()),
+        ("signature_reference", "typed:Jane".to_string()),
+    ] {
+        let (s, r) = f
+            .api(
+                "mia",
+                "/api/sign_request/update",
+                json!({"id": draft, k: v}),
+            )
+            .await;
+        assert_eq!(s, 400, "{k}: {r}");
+        assert!(
+            r["error"]
+                .as_str()
+                .unwrap_or("")
+                .contains("signing process"),
+            "{k}: {r}"
+        );
     }
+    // A signed request is changed or deleted by an administrator only.
+    for call in [
+        (
+            "/api/sign_request/update",
+            json!({"id": signed, "title": "Edited"}),
+        ),
+        ("/api/sign_request/delete", json!({"id": signed})),
+    ] {
+        let (s, r) = f.api("mia", call.0, call.1.clone()).await;
+        assert_eq!(s, 400, "{}: {r}", call.0);
+        assert!(
+            r["error"]
+                .as_str()
+                .unwrap_or("")
+                .contains("cannot be changed or deleted"),
+            "{}: {r}",
+            call.0
+        );
+    }
+    let (s, r) = f
+        .api(
+            "admin",
+            "/api/sign_request/update",
+            json!({"id": signed, "title": "Edited"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{r}");
+    // The by-hand flow for a request with a template is as it was.
+    let (s, r) = f
+        .api(
+            "mia",
+            "/api/sign_request/create",
+            json!({"title": "By hand", "template_id": template, "signer_name": "Jane Test",
+                   "signer_email": "jane@example.test"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{r}");
+    let id = r["value"]["id"].as_str().unwrap().to_string();
+    for step in ["send", "sign"] {
+        let (s, r) = f
+            .api(
+                "mia",
+                &format!("/api/sign_request/{step}"),
+                json!({"id": id}),
+            )
+            .await;
+        assert_eq!(s, 200, "{step}: {r}");
+    }
+    assert_eq!(f.record("sign_request", &id)["state"], "signed");
 }
 
 #[tokio::test]

@@ -1228,3 +1228,224 @@ async fn a_document_whose_file_is_replaced_after_the_door_read_it_is_not_signed(
     );
     assert_eq!(signed_count(&f), 0);
 }
+
+// ---- headers, methods, encodings and the log line ------------------------------------------
+
+/// What every answer of the door has, whatever its status: nothing that a browser or a proxy may
+/// keep, no cookie, no cross-origin permission, and a request to stay out of a search index.
+fn assert_door_headers(r: &Resp, what: &str) {
+    assert_eq!(r.h("x-content-type-options"), "nosniff", "{what}");
+    assert!(r.h("cache-control").contains("no-store"), "{what}");
+    assert!(r.headers.get("set-cookie").is_none(), "{what}: a cookie");
+    assert!(
+        r.headers.get("access-control-allow-origin").is_none(),
+        "{what}: a cross-origin permission"
+    );
+    assert!(r.h("x-robots-tag").contains("noindex"), "{what}");
+}
+
+#[tokio::test]
+async fn every_answer_of_the_door_carries_the_same_protective_headers() {
+    let (f, link_id, path, _) = sent().await;
+    let from = ip(70);
+    let pdf = format!("{path}/document.pdf");
+    // The pages: the form, a refusal of the form, a post from another origin, a wrong link and
+    // the page of a signed request.
+    let page = f.get(&path, &from).await;
+    assert_eq!(page.status, 200);
+    let bad_name = f
+        .post(
+            &path,
+            &from,
+            &[("name", "x"), ("agree", "1"), ("doc", &f.file)],
+        )
+        .await;
+    assert_eq!(bad_name.status, 400);
+    let foreign = f
+        .post_with(
+            &path,
+            &from,
+            &good_form(&f, "Jane Test"),
+            &[("origin", "http://evil.test")],
+        )
+        .await;
+    assert_eq!(foreign.status, 403);
+    let wrong = f.get(&format!("{path}0"), &from).await;
+    assert_eq!(wrong.status, 404);
+    for (what, r) in [
+        ("form", &page),
+        ("refused form", &bad_name),
+        ("foreign origin", &foreign),
+        ("wrong link", &wrong),
+    ] {
+        assert_door_headers(r, what);
+        assert_eq!(r.h("x-frame-options"), "DENY", "{what}");
+        assert!(!r.h("content-security-policy").is_empty(), "{what}");
+    }
+    // The PDF has its own framing rules and the same rest.
+    let held = f.get(&pdf, &from).await;
+    assert_eq!(held.status, 200);
+    assert_door_headers(&held, "pdf");
+    // The redirect after signing, and the page of a signed request.
+    let done = f.post(&path, &from, &good_form(&f, "Jane Test")).await;
+    assert_eq!(done.status, 303, "{}", done.text());
+    assert_door_headers(&done, "redirect");
+    let signed = f.get(&path, &from).await;
+    assert_eq!(signed.status, 200);
+    assert_door_headers(&signed, "signed page");
+    // A link that was revoked, and a source that asked too often.
+    let (f2, link2, path2, _) = sent().await;
+    let (s, v) = f2
+        .api(
+            "mia",
+            "/api/sign_link/update",
+            json!({"id": link2, "revoked_at": "2026-11-03T10:00:00Z"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let gone = f2.get(&path2, &ip(71)).await;
+    assert_eq!(gone.status, 410);
+    assert_door_headers(&gone, "revoked");
+    let wrong2 = format!("{path2}0");
+    let mut last = f2.get(&wrong2, &ip(72)).await;
+    for _ in 0..21 {
+        last = f2.get(&wrong2, &ip(72)).await;
+    }
+    assert_eq!(last.status, 429);
+    assert_door_headers(&last, "too many");
+    assert!(!last.h("retry-after").is_empty());
+    let _ = link_id;
+}
+
+#[tokio::test]
+async fn the_door_answers_no_other_method() {
+    let (f, _, path, _) = sent().await;
+    for m in ["PUT", "DELETE", "PATCH", "OPTIONS", "TRACE"] {
+        for p in [path.clone(), format!("{path}/document.pdf")] {
+            let r = send(
+                &f.router,
+                Request::builder()
+                    .method(m)
+                    .uri(&p)
+                    .header("host", HOST)
+                    .header("origin", ORIGIN)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await;
+            assert!(r.status >= 400, "{m} {p}: {}", r.status);
+            assert!(
+                r.headers.get("access-control-allow-origin").is_none(),
+                "{m} {p}: a cross-origin permission"
+            );
+        }
+    }
+    assert_eq!(f.record("sign_request", &f.req)["state"], "sent");
+    assert_eq!(signed_count(&f), 0);
+}
+
+#[tokio::test]
+async fn a_body_that_is_not_a_form_of_text_signs_nothing() {
+    let (f, _, path, _) = sent().await;
+    let events = f.events().len();
+    let big = vec![b'a'; 20_000];
+    let cases: Vec<(&str, &str, Vec<u8>)> = vec![
+        (
+            "percent-encoded bytes that are not UTF-8",
+            "application/x-www-form-urlencoded",
+            b"name=%ff%fe&agree=1".to_vec(),
+        ),
+        (
+            "raw bytes that are not UTF-8",
+            "application/x-www-form-urlencoded",
+            b"name=Jane+Test&agree=1&x=\xff\xfe".to_vec(),
+        ),
+        (
+            "a broken percent escape",
+            "application/x-www-form-urlencoded",
+            b"name=%zz&agree=1".to_vec(),
+        ),
+        (
+            "JSON",
+            "application/json",
+            br#"{"name":"Jane Test","agree":"1"}"#.to_vec(),
+        ),
+        ("an empty body", "application/x-www-form-urlencoded", vec![]),
+        (
+            "a body over the limit",
+            "application/x-www-form-urlencoded",
+            big,
+        ),
+    ];
+    for (what, ct, body) in cases {
+        let r = send(
+            &f.router,
+            Request::post(&path)
+                .header("host", HOST)
+                .header("origin", ORIGIN)
+                .header("content-type", ct)
+                .header("x-forwarded-for", ip(73))
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await;
+        assert!(
+            r.status == 400 || r.status == 413,
+            "{what}: {} {}",
+            r.status,
+            r.text()
+        );
+    }
+    assert_eq!(f.record("sign_request", &f.req)["state"], "sent");
+    assert_eq!(f.events().len(), events);
+}
+
+#[tokio::test]
+async fn a_forged_header_cannot_start_a_field_of_the_log_line() {
+    let (f, _, path, _) = sent().await;
+    let forged = format!("x; digest {}", "0".repeat(64));
+    let r = f.post(&path, &forged, &good_form(&f, "Jane Test")).await;
+    assert_eq!(r.status, 303, "{}", r.text());
+    let detail = f.events_of("sign_signed")[0]["detail"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let keys: Vec<&str> = detail
+        .split("; ")
+        .map(|field| field.split(' ').next().unwrap())
+        .collect();
+    assert_eq!(
+        keys,
+        [
+            "request",
+            "link",
+            "document",
+            "consent",
+            "digest",
+            "address",
+            "peer",
+            "forwarded"
+        ],
+        "{detail}"
+    );
+}
+
+#[tokio::test]
+async fn no_link_is_made_for_a_request_whose_last_day_has_passed() {
+    let (f, _, _, _) = sent().await;
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_request/update",
+            json!({"id": f.req, "expires_on": "2020-01-01"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let before = count(&f, "sign_link");
+    let (s, v) = f
+        .api("mia", "/api/sign_link/create", json!({"request_id": f.req}))
+        .await;
+    assert_eq!(s, 400, "{v}");
+    assert!(err(&v).contains("has expired"), "{v}");
+    assert_eq!(count(&f, "sign_link"), before);
+}
