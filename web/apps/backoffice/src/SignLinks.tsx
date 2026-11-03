@@ -19,6 +19,7 @@ import {
   type LinkStatus,
   type MadeLink,
 } from "./signLinks.ts";
+import { isDocumentRequest } from "./workflow.ts";
 
 /* D92 (docs/SIGN.md): on a sign request that has been sent, a person with the right to make links
    (the write group of the link model, `sign.manager`) presses "Create signing link". The server
@@ -27,6 +28,23 @@ import {
    the dialog is hard to close by accident: Escape, a click outside, the X and Done ask first until
    the link has been copied (with the button or by hand from the field), and focus starts on Copy.
    Nothing of the link is stored in the browser, written to a toast or kept in a list. */
+
+/**
+ * Said in the panel of a request about a document that is not signed yet: the signer signs it through
+ * the link, so there is no step to mark it signed by hand (the server refuses it, and the panel has
+ * no button for it).
+ */
+export function SignByLinkNote({ row }: { row: Row }) {
+  const state = String(row.state ?? "");
+  if (!isDocumentRequest(row) || (state !== "draft" && state !== "sent")) return null;
+  return (
+    <p className="hint sign-by-link">
+      {t(
+        "This request is about a document. The signer signs it through a signing link that you create here after sending it. It cannot be marked signed by hand.",
+      )}
+    </p>
+  );
+}
 
 /** The button of the record panel. Renders nothing where the person may not make links. */
 export function SignLinkAction({

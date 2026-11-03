@@ -3,6 +3,7 @@ import type { Command, FieldMeta, ModelMeta } from "./api.ts";
 import {
   canMove,
   governedNames,
+  hiddenForRecord,
   initialOption,
   isGoverned,
   notForRecord,
@@ -188,11 +189,113 @@ describe("two actions that send a sign request (D92)", () => {
     expect(notForRecord(both, sendDoc, tpl)).toBe(
       "Send document needs a document. Choose one first.",
     );
-    expect(notForRecord(both, sign, doc)).toBe("");
+    // Marking it signed by hand is for a request that is not about a document (next tests).
+    expect(notForRecord(both, sign, tpl)).toBe("");
     // A template request that also has a document may still use send (the server decides).
     const bothSet = { id: "r3", state: "draft", document_id: "d1", template_id: "t1" };
     expect(notForRecord(both, send, bothSet)).toBe("");
     // Another model is never touched.
     expect(notForRecord({ ...both, name: "lead" }, send, doc)).toBe("");
+  });
+});
+
+describe("marking a sign request signed by hand (D92)", () => {
+  const state = field("state", "select", ["draft", "sent", "signed", "declined", "expired"]);
+  const sign: Command = {
+    id: "sign_request.sign",
+    description: "Record by hand that the signer signed",
+    needs_approval: true,
+    field: "state",
+    from: "sent",
+    to: "signed",
+  };
+  const decline: Command = { ...sign, id: "sign_request.decline", to: "declined" };
+  const model: ModelMeta = {
+    name: "sign_request",
+    description: "",
+    can_create: true,
+    can_update: true,
+    can_delete: true,
+    fields: [state],
+    actions: [sign, decline],
+  };
+  const why =
+    "A request about a document is signed by the signer through the signing link. It cannot be marked signed by hand.";
+  const doc = { id: "r1", state: "sent", document_id: "d1", template_id: "" };
+  // The document was cleared after sending: only the hash the server took is left.
+  const cleared = {
+    id: "r2",
+    state: "sent",
+    document_id: null,
+    document_hash: "ab12",
+    template_id: "",
+  };
+  // A request from a template, with a hash typed by hand under sign 0.2.0: staff still close it by hand.
+  const legacy = {
+    id: "r3",
+    state: "sent",
+    document_id: "",
+    document_hash: "ab12",
+    template_id: "t1",
+  };
+  const template = { id: "r4", state: "sent", document_id: "", template_id: "t1" };
+  const blank = { id: "r5", state: "sent" };
+
+  it("has no manual action for a request about a document, or one that holds a document's hash", () => {
+    expect(hiddenForRecord(model, sign, doc)).toBe(true);
+    expect(hiddenForRecord(model, sign, cleared)).toBe(true);
+    // A request with a document and a template is about the document.
+    expect(hiddenForRecord(model, sign, { ...doc, template_id: "t1" })).toBe(true);
+  });
+
+  it("keeps it for a request from a template, with or without a hash typed by hand, and for a blank one", () => {
+    expect(hiddenForRecord(model, sign, legacy)).toBe(false);
+    expect(hiddenForRecord(model, sign, template)).toBe(false);
+    expect(hiddenForRecord(model, sign, blank)).toBe(false);
+  });
+
+  it("hides only that action, only on that model", () => {
+    expect(hiddenForRecord(model, decline, doc)).toBe(false);
+    expect(hiddenForRecord({ ...model, name: "lead" }, sign, doc)).toBe(false);
+  });
+
+  it("says in plain words why the step is not there, where it is still drawn", () => {
+    expect(notForRecord(model, sign, doc)).toBe(why);
+    expect(notForRecord(model, sign, cleared)).toBe(why);
+    expect(notForRecord(model, sign, legacy)).toBe("");
+    expect(notForRecord(model, sign, template)).toBe("");
+    expect(notForRecord(model, decline, doc)).toBe("");
+  });
+
+  it("is not a move the status bar or the kanban can make for such a request", () => {
+    const mv = canMove(model, state, "sent", "signed", "Request", doc);
+    expect(mv.allowed).toBe(false);
+    expect(mv.reason).toBe(why);
+    expect(canMove(model, state, "sent", "signed", "Request", cleared).allowed).toBe(false);
+    // The other steps of the same request are unaffected.
+    expect(canMove(model, state, "sent", "declined", "Request", doc).allowed).toBe(true);
+    // And without the record nothing changes.
+    expect(canMove(model, state, "sent", "signed", "Request").allowed).toBe(true);
+  });
+
+  it("is still a move for a request from a template", () => {
+    for (const r of [legacy, template, blank]) {
+      const mv = canMove(model, state, "sent", "signed", "Request", r);
+      expect(mv.allowed).toBe(true);
+      expect(mv.action?.id).toBe("sign_request.sign");
+    }
+  });
+
+  it("sends nothing when it is run anyway, and says why", async () => {
+    const ran: string[] = [];
+    const run = async (id: string) => {
+      ran.push(id);
+      return { kind: "ok" as const, value: { id: "r1" }, denied: [] };
+    };
+    const out = await moveRecord(run, model, state, doc, "signed", "Request");
+    expect(ran).toEqual([]);
+    expect(out).toEqual({ kind: "error", message: why, raw: why });
+    await moveRecord(run, model, state, template, "signed", "Request");
+    expect(ran).toEqual(["sign_request.sign"]);
   });
 });
