@@ -8,6 +8,8 @@ import { isMasked, isState, optionLabel, rowCurrency, shownLabel } from "./forma
 import { actionTitle, appTitle, fieldTitle, fieldTitleByName, modelTitle } from "./labels.ts";
 import { serverMessage } from "./serverMessage.ts";
 import { DeleteDialog } from "./DeleteDialog.tsx";
+import { SignLinkAction } from "./SignLinks.tsx";
+import { REQUEST_MODEL } from "./signLinks.ts";
 import { encodeState } from "./query.ts";
 import { PHONE_QUERY, SHEET_QUERY, useMedia, useScrollLock } from "./media.ts";
 import { nav } from "./route.ts";
@@ -460,6 +462,9 @@ export function RecordPanel({
                 btn
               );
             })}
+            {model.name === REQUEST_MODEL && (
+              <SignLinkAction row={row} fields={fields} disabled={busy} />
+            )}
             {model.can_delete && (
               <Button
                 variant="ghost"

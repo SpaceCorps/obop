@@ -1,0 +1,7 @@
+/* The dialog that shows a signing link once (D92, SignLinks.tsx). */
+.sign-link-field input {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  width: 100%;
+  text-overflow: ellipsis;
+}
