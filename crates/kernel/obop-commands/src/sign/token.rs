@@ -15,16 +15,19 @@ const DOMAIN: &[u8] = b"obop-sign-link-v1\0";
 /// There is no fallback: if the system's randomness fails, no link is made.
 pub(crate) fn mint() -> Result<String, String> {
     let mut b = [0u8; 32];
-    getrandom::fill(&mut b).map_err(|_| "the system's random source is not available".to_string())?;
+    getrandom::fill(&mut b)
+        .map_err(|_| "the system's random source is not available".to_string())?;
     Ok(hex(&b))
 }
 
 pub(crate) fn hex(bytes: &[u8]) -> String {
     use std::fmt::Write;
-    bytes.iter().fold(String::with_capacity(bytes.len() * 2), |mut s, b| {
-        let _ = write!(s, "{b:02x}");
-        s
-    })
+    bytes
+        .iter()
+        .fold(String::with_capacity(bytes.len() * 2), |mut s, b| {
+            let _ = write!(s, "{b:02x}");
+            s
+        })
 }
 
 /// The record id of the link made from `token` for request `rid`.

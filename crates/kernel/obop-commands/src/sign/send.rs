@@ -5,10 +5,10 @@
 //! DocuSeal connection) do not fire for it: a document request has nothing to hand to them.
 
 use super::*;
+use crate::Value;
 use crate::engine::Actor;
 use crate::engine::access::Gate;
 use crate::engine::unit::Plain;
-use crate::Value;
 use obop_storage::Op;
 use obop_storage::blob::Owner;
 
@@ -155,7 +155,9 @@ impl SignService {
         }
         let doc_id = text(&req, "document_id").to_string();
         if doc_id.is_empty() {
-            return Err("sign_request: set document_id (the PDF in Documents) before sending".into());
+            return Err(
+                "sign_request: set document_id (the PDF in Documents) before sending".into(),
+            );
         }
         let doc = self.visible_document(p, input, &doc_id)?;
         let file = text(&doc, "attachment").to_string();

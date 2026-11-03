@@ -100,7 +100,9 @@ pub struct ViewData {
 pub enum View {
     Form(ViewData),
     /// The link was used: the request is signed at this time.
-    Signed { at: String },
+    Signed {
+        at: String,
+    },
 }
 
 /// What the signer sent.
@@ -152,6 +154,8 @@ fn clean_name(raw: &str) -> Option<String> {
     let n = strip_hidden(&raw.chars().take(400).collect::<String>());
     let len = n.chars().count();
     (2..=120).contains(&len).then_some(())?;
+    // No markup in a name: it is shown in pages and in the evidence, and no real name has one.
+    (!n.contains(['<', '>'])).then_some(())?;
     (n.chars().filter(|c| c.is_alphabetic()).count() >= 2).then_some(n)
 }
 
@@ -162,7 +166,11 @@ impl SignService {
 
     /// A failed lookup: counted per source, and past the limit the answer is 429.
     fn fail(&self, client: &Client) -> DoorError {
-        match self.limit(&format!("rl:sign:fail:{}", client.source()), 20, WINDOW_10_MIN) {
+        match self.limit(
+            &format!("rl:sign:fail:{}", client.source()),
+            20,
+            WINDOW_10_MIN,
+        ) {
             Ok(()) => DoorError::NotFound,
             Err(e) => e,
         }
@@ -228,7 +236,11 @@ impl SignService {
     fn refused(&self, f: &Found, reason: &str, client: &Client) {
         let id12: String = f.id.chars().take(12).collect();
         let key = format!("sign:refused:{id12}:{reason}");
-        if let Ok(true) = self.store.backend.kv_put_new(&key, "1", Some(WINDOW_10_MIN)) {
+        if let Ok(true) = self
+            .store
+            .backend
+            .kv_put_new(&key, "1", Some(WINDOW_10_MIN))
+        {
             audit::record_event(
                 &*self.store.backend,
                 u64::try_from(self.now_micros() / MICROS_PER_SECOND).unwrap_or(0),
@@ -278,7 +290,11 @@ impl SignService {
     /// The page of a link.
     pub fn view(&self, rid: &str, tok: &str, client: &Client) -> Result<View, DoorError> {
         let f = self.find(rid, tok, client)?;
-        self.limit(&format!("rl:sign:view:{}", client.source()), 120, WINDOW_10_MIN)?;
+        self.limit(
+            &format!("rl:sign:view:{}", client.source()),
+            120,
+            WINDOW_10_MIN,
+        )?;
         match self.status(&f) {
             Status::Signed(at) => Ok(View::Signed { at }),
             Status::Gone(g) => Err(DoorError::Gone(g)),
@@ -301,7 +317,11 @@ impl SignService {
     /// after signing the answer is 410.
     pub fn pdf(&self, rid: &str, tok: &str, client: &Client) -> Result<Served, DoorError> {
         let f = self.find(rid, tok, client)?;
-        self.limit(&format!("rl:sign:view:{}", client.source()), 120, WINDOW_10_MIN)?;
+        self.limit(
+            &format!("rl:sign:view:{}", client.source()),
+            120,
+            WINDOW_10_MIN,
+        )?;
         match self.status(&f) {
             Status::Signed(_) => return Err(DoorError::Gone(Gone::Closed)),
             Status::Gone(g) => return Err(DoorError::Gone(g)),
@@ -339,12 +359,12 @@ impl SignService {
         client: &Client,
     ) -> Result<Done, DoorError> {
         let f = self.find(rid, tok, client)?;
-        self.limit(&format!("rl:sign:post:{}", client.source()), 10, WINDOW_10_MIN)?;
         self.limit(
-            &format!("rl:sign:postlink:{}", &f.id[..24]),
+            &format!("rl:sign:post:{}", client.source()),
             10,
-            3_600_000,
+            WINDOW_10_MIN,
         )?;
+        self.limit(&format!("rl:sign:postlink:{}", &f.id[..24]), 10, 3_600_000)?;
         match self.status(&f) {
             // A second submit changes nothing, whatever name it carries.
             Status::Signed(_) => return Ok(Done { already: true }),

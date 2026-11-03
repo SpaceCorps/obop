@@ -57,7 +57,13 @@ mod tests {
         let ok = inline_pdf(served("application/pdf", b"%PDF-1.4 made up")).unwrap();
         assert!(!ok.attachment);
         assert_eq!(ok.filename, "document.pdf");
-        for ct in ["text/html", "image/png", "application/pdf; charset=x", "", "APPLICATION/PDF"] {
+        for ct in [
+            "text/html",
+            "image/png",
+            "application/pdf; charset=x",
+            "",
+            "APPLICATION/PDF",
+        ] {
             assert!(
                 matches!(
                     inline_pdf(served(ct, b"%PDF-1.4 made up")),

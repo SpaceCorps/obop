@@ -1,0 +1,346 @@
+//! Signing a Document through a link (D92) against the real router, the real authenticator and the
+//! bundled `documents` and `sign` packages. Every test has an instance of its own (an in-memory
+//! store), so rate-limit counters are never shared between tests. Everything signed here is a
+//! made-up PDF (`%PDF-1.4` and invented text) and a made-up person.
+
+use crate::app::App;
+use axum::{body::Body, http::Request};
+use http_body_util::BodyExt;
+use obop_auth::Auth;
+use obop_commands::Store;
+use obop_pkg::{Bundled, Marketplace};
+use obop_storage::blob::{Catalog, MemoryBytes};
+use serde_json::{Value as J, json};
+use std::sync::Arc;
+use tower::ServiceExt;
+
+mod door;
+mod rules;
+mod upgrade;
+
+const PW: &str = "a long enough password";
+const HOST: &str = "inst.test";
+const ORIGIN: &str = "http://inst.test";
+
+/// A synthetic PDF; `n` makes the files differ.
+pub(crate) fn pdf(n: u32) -> Vec<u8> {
+    format!("%PDF-1.4\n% made-up test document {n}\n%%EOF\n").into_bytes()
+}
+
+pub(crate) struct Resp {
+    pub status: u16,
+    pub headers: axum::http::HeaderMap,
+    pub body: Vec<u8>,
+}
+
+impl Resp {
+    pub fn text(&self) -> String {
+        String::from_utf8_lossy(&self.body).into_owned()
+    }
+    pub fn h(&self, name: &str) -> &str {
+        self.headers
+            .get(name)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("")
+    }
+    pub fn json(&self) -> J {
+        serde_json::from_slice(&self.body).unwrap_or(J::Null)
+    }
+}
+
+pub(crate) struct Fx {
+    pub router: axum::Router,
+    pub app: App,
+    pub tokens: std::collections::HashMap<&'static str, String>,
+    /// The restricted Document, its request, and the file that was attached.
+    pub doc: String,
+    pub req: String,
+    pub file: String,
+    /// The bytes of the blob store when it is the in-memory one, so that a test can tamper.
+    pub bytes: Option<Arc<MemoryBytes>>,
+    _scratch: Option<obop_storage::testing::TestDb>,
+}
+
+pub(crate) async fn send(r: &axum::Router, req: Request<Body>) -> Resp {
+    let resp = r.clone().oneshot(req).await.unwrap();
+    let status = resp.status().as_u16();
+    let headers = resp.headers().clone();
+    let body = resp
+        .into_body()
+        .collect()
+        .await
+        .unwrap()
+        .to_bytes()
+        .to_vec();
+    Resp {
+        status,
+        headers,
+        body,
+    }
+}
+
+impl Fx {
+    pub fn tok(&self, who: &str) -> &str {
+        &self.tokens[who]
+    }
+
+    /// A JSON command call as `who` (`""` for nobody); returns the status and the body.
+    pub async fn api(&self, who: &str, path: &str, body: J) -> (u16, J) {
+        let mut b = Request::post(path)
+            .header("content-type", "application/json")
+            .header("host", HOST);
+        if !who.is_empty() {
+            b = b.header("authorization", format!("Bearer {}", self.tok(who)));
+        }
+        let r = send(&self.router, b.body(Body::from(body.to_string())).unwrap()).await;
+        (r.status, r.json())
+    }
+
+    pub async fn upload(&self, who: &str, field: &str, ct: &str, bytes: Vec<u8>) -> (u16, J) {
+        let r = send(
+            &self.router,
+            Request::post(format!("/api/blobs?field={field}&filename=nda.pdf"))
+                .header("content-type", ct)
+                .header("host", HOST)
+                .header("authorization", format!("Bearer {}", self.tok(who)))
+                .body(Body::from(bytes))
+                .unwrap(),
+        )
+        .await;
+        (r.status, r.json())
+    }
+
+    pub async fn blob(&self, who: &str, id: &str) -> Resp {
+        send(
+            &self.router,
+            Request::get(format!("/api/blobs/{id}"))
+                .header("host", HOST)
+                .header("authorization", format!("Bearer {}", self.tok(who)))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+    }
+
+    /// The door: a GET. `from` is the client address the proxy reports.
+    pub async fn get(&self, path: &str, from: &str) -> Resp {
+        self.get_with(path, from, &[]).await
+    }
+
+    pub async fn get_with(&self, path: &str, from: &str, extra: &[(&str, &str)]) -> Resp {
+        let mut b = Request::get(path)
+            .header("host", HOST)
+            .header("x-forwarded-for", from)
+            .header("user-agent", "TestBrowser/1.0");
+        for (k, v) in extra {
+            b = b.header(*k, *v);
+        }
+        send(&self.router, b.body(Body::empty()).unwrap()).await
+    }
+
+    /// The door: the signer's post.
+    pub async fn post(&self, path: &str, from: &str, pairs: &[(&str, &str)]) -> Resp {
+        self.post_with(path, from, pairs, &[("origin", ORIGIN)])
+            .await
+    }
+
+    pub async fn post_with(
+        &self,
+        path: &str,
+        from: &str,
+        pairs: &[(&str, &str)],
+        extra: &[(&str, &str)],
+    ) -> Resp {
+        let body = pairs
+            .iter()
+            .map(|(k, v)| format!("{}={}", enc(k), enc(v)))
+            .collect::<Vec<_>>()
+            .join("&");
+        let mut b = Request::post(path)
+            .header("host", HOST)
+            .header("content-type", "application/x-www-form-urlencoded")
+            .header("x-forwarded-for", from)
+            .header("user-agent", "TestBrowser/1.0");
+        for (k, v) in extra {
+            b = b.header(*k, *v);
+        }
+        send(&self.router, b.body(Body::from(body)).unwrap()).await
+    }
+
+    pub fn service(&self) -> Arc<obop_commands::SignService> {
+        self.app.dispatcher.sign_service().expect("sign service")
+    }
+
+    pub fn record(&self, model: &str, id: &str) -> serde_json::Map<String, J> {
+        self.app
+            .store
+            .backend()
+            .get(model, id)
+            .unwrap()
+            .unwrap_or_else(|| panic!("no {model} {id}"))
+    }
+
+    /// Mint a link for the request as `who` and return (link record id, path).
+    pub async fn mint(&self, who: &str, req: &str) -> (String, String) {
+        let (s, v) = self
+            .api(who, "/api/sign_link/create", json!({"request_id": req}))
+            .await;
+        assert_eq!(s, 200, "{v}");
+        let link = v["value"]["link"].as_str().unwrap().to_string();
+        assert!(link.starts_with(&format!("/sign/{req}/")), "{link}");
+        (v["value"]["id"].as_str().unwrap().to_string(), link)
+    }
+
+    /// The security log entries of one kind, oldest first.
+    pub fn events_of(&self, kind: &str) -> Vec<serde_json::Map<String, J>> {
+        self.events()
+            .into_iter()
+            .filter(|e| e.get("kind").and_then(J::as_str) == Some(kind))
+            .collect()
+    }
+
+    /// Everything the security log says, oldest first.
+    pub fn events(&self) -> Vec<serde_json::Map<String, J>> {
+        self.app
+            .store
+            .backend()
+            .list("security_event")
+            .unwrap()
+            .into_iter()
+            .map(|(_, f)| f)
+            .collect()
+    }
+}
+
+pub(crate) fn enc(s: &str) -> String {
+    s.bytes()
+        .map(|b| {
+            if b.is_ascii_alphanumeric() || b"-._~".contains(&b) {
+                (b as char).to_string()
+            } else {
+                format!("%{b:02X}")
+            }
+        })
+        .collect()
+}
+
+/// The address a test reports: every test passes its own so no two share a source.
+pub(crate) fn ip(n: u8) -> String {
+    format!("198.51.100.{n}")
+}
+
+/// `documents` and `sign` installed on a fresh instance with five people and one restricted
+/// Document that `ann` owns, with a draft request about it that `mia` made.
+pub(crate) async fn fixture() -> Fx {
+    let backend = obop_storage::open("memory:").unwrap();
+    let bytes = Arc::new(MemoryBytes::default());
+    let store =
+        Store::over(backend.clone()).with_blobs(Arc::new(Catalog::new(backend, bytes.clone())));
+    fixture_on(store, Some(bytes), None).await
+}
+
+pub(crate) async fn fixture_on(
+    store: Store,
+    bytes: Option<Arc<MemoryBytes>>,
+    scratch: Option<obop_storage::testing::TestDb>,
+) -> Fx {
+    let app = App::with_store(store);
+    let auth = Arc::new(Auth::with_test_params(app.store.backend()));
+    for id in ["documents", "sign"] {
+        app.installer
+            .install(&Bundled.fetch(id).unwrap(), "marketplace", "test")
+            .unwrap_or_else(|e| panic!("{id}: {e}"));
+    }
+    let people: [(&'static str, &[&str]); 5] = [
+        ("admin", &["platform.admin"]),
+        (
+            "mia",
+            &[
+                "sign.user",
+                "sign.manager",
+                "documents.user",
+                "documents.manager",
+            ],
+        ),
+        ("ann", &["sign.user", "sign.manager", "documents.user"]),
+        ("bob", &["sign.user", "sign.manager", "documents.user"]),
+        ("sam", &["sign.user"]),
+    ];
+    for (name, groups) in people {
+        let g: Vec<String> = groups.iter().map(|g| g.to_string()).collect();
+        auth.create_user(name, PW, &g).unwrap();
+    }
+    let state = obop_http::HttpState::new(app.dispatcher.clone(), auth);
+    state.set_trust_proxy(true);
+    let router = obop_http::router(state.clone(), None);
+    let mut f = Fx {
+        router,
+        app,
+        tokens: Default::default(),
+        doc: String::new(),
+        req: String::new(),
+        file: String::new(),
+        bytes,
+        _scratch: scratch,
+    };
+    for (name, _) in people {
+        let (s, v) = f
+            .api(
+                "",
+                "/api/auth/login",
+                json!({"username": name, "password": PW}),
+            )
+            .await;
+        assert_eq!(s, 200, "{v}");
+        f.tokens
+            .insert(name, v["token"].as_str().unwrap().to_string());
+    }
+    let (s, v) = f
+        .upload(
+            "ann",
+            "documents_document.attachment",
+            "application/pdf",
+            pdf(1),
+        )
+        .await;
+    assert_eq!(s, 201, "{v}");
+    f.file = v["id"].as_str().unwrap().to_string();
+    let (s, v) = f
+        .api(
+            "ann",
+            "/api/documents_document/create",
+            json!({"title": "Mutual NDA (test)", "kind": "contract", "confidentiality": "restricted",
+                   "state": "draft", "owner": "ann", "attachment": f.file}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    f.doc = v["value"]["id"].as_str().unwrap().to_string();
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_request/create",
+            json!({"title": "Please sign the test NDA", "message": "Made-up message <b>x</b>",
+                   "signer_name": "Jane Test", "document_id": f.doc, "state": "draft"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    f.req = v["value"]["id"].as_str().unwrap().to_string();
+    f
+}
+
+/// A fixture whose request has been sent: returns it with a link made by `mia`, as
+/// (link id, path, token).
+pub(crate) async fn sent() -> (Fx, String, String, String) {
+    let f = fixture().await;
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_request/send_document",
+            json!({"id": f.req}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let (id, path) = f.mint("mia", &f.req.clone()).await;
+    let token = path.rsplit('/').next().unwrap().to_string();
+    (f, id, path, token)
+}

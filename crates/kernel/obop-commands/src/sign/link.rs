@@ -60,8 +60,12 @@ impl SignService {
         let Value::Map(m) = input else {
             return Err("sign_link: expected an object".into());
         };
-        for k in m.keys() {
-            if !matches!(k.as_str(), "id" | "request_id" | "expires_at")
+        for (k, v) in m {
+            // An empty `id` is what a form sends for a new record; a link's id is a hash of its
+            // secret and is never chosen by the caller.
+            let blank = matches!(v, Value::Null) || *v == Value::Text(String::new());
+            if !matches!(k.as_str(), "request_id" | "expires_at")
+                && !(k == "id" && blank)
                 && !k.starts_with(crate::query::ACTOR_PREFIX)
                 && k != "_caller"
             {
@@ -76,7 +80,10 @@ impl SignService {
         };
         if let Err(wait) = obop_storage::limit::hit(
             &*self.store.backend,
-            &format!("rl:sign:mint:{}", token::short_hash("obop-sign-mint:", &p.id)),
+            &format!(
+                "rl:sign:mint:{}",
+                token::short_hash("obop-sign-mint:", &p.id)
+            ),
             MINT_PER_HOUR,
             3_600_000,
         ) {

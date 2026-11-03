@@ -82,7 +82,11 @@ pub(crate) fn plain_message(lang: &str, english: &str) -> Page {
     shell(
         lang,
         text(lang, "title"),
-        &format!("<h1>{}</h1><p>{}</p>", esc(text(lang, "title")), esc(english)),
+        &format!(
+            "<h1>{}</h1><p>{}</p>",
+            esc(text(lang, "title")),
+            esc(english)
+        ),
     )
 }
 
@@ -159,5 +163,9 @@ pub(crate) fn form(lang: &str, f: &Form<'_>) -> Page {
         records = txt::html(lang, "records", &[]),
         submit = txt::html(lang, "submit", &[]),
     );
-    shell(lang, &txt::fill(lang, "request", &[("title", f.title)]), &body)
+    shell(
+        lang,
+        &txt::fill(lang, "request", &[("title", f.title)]),
+        &body,
+    )
 }

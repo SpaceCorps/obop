@@ -29,7 +29,9 @@ mod link;
 mod send;
 mod token;
 
-pub use door::{Client, DoorError, Done, Gone, Invalid, SignForm, View, ViewData, digest_of_request};
+pub use door::{
+    Client, Done, DoorError, Gone, Invalid, SignForm, View, ViewData, digest_of_request,
+};
 
 use crate::engine::Models as ModelsMap;
 use crate::store::Store;
@@ -38,6 +40,11 @@ use obop_storage::Fields;
 use obop_values::datetime::Instant;
 use serde_json::Value as J;
 use std::sync::{Arc, RwLock};
+
+/// SHA-256 of `bytes` as lower-case hex: the form of a blob id and of a document hash.
+pub fn sha256_hex(bytes: &[u8]) -> String {
+    token::sha256_hex(bytes)
+}
 
 /// The largest PDF that is held and shown: the cap of a file field.
 pub(crate) const MAX_PDF: u64 = crate::inline_pdf::MAX_INLINE_PDF as u64;
@@ -101,8 +108,9 @@ impl SignService {
     /// Set the public origin the returned link starts with (tests; the server reads
     /// `OBOP_PUBLIC_URL` itself).
     pub fn set_public_url(&self, url: Option<&str>) {
-        *self.public_url.write().unwrap() =
-            url.map(|u| u.trim_end_matches('/').to_string()).filter(|u| !u.is_empty());
+        *self.public_url.write().unwrap() = url
+            .map(|u| u.trim_end_matches('/').to_string())
+            .filter(|u| !u.is_empty());
     }
 
     pub(crate) fn now_micros(&self) -> i64 {

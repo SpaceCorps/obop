@@ -60,6 +60,8 @@ mod public_site_tests;
 #[cfg(test)]
 mod settings_cmd_tests;
 #[cfg(test)]
+mod sign_tests;
+#[cfg(test)]
 mod sso_tests;
 mod storage_cli;
 mod update_cmd;
@@ -3329,7 +3331,11 @@ mod bundled_packages {
                     unreachable!()
                 };
                 // The store takes canonical text only (D72); `create` would have made it so.
-                for f in self.meta[model].fields.iter().filter(|f| f.kind == "datetime") {
+                for f in self.meta[model]
+                    .fields
+                    .iter()
+                    .filter(|f| f.kind == "datetime")
+                {
                     if let Some(Value::Text(t)) = fields.get_mut(f.name) {
                         *t = obop_values::datetime::canonical(t).unwrap();
                     }

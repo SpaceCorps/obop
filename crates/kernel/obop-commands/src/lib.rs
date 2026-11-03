@@ -1736,12 +1736,12 @@ pub use blobs::{BlobError, BlobService, Served, clean_filename, disposition};
 pub use engine::bulk::has_stored_answer;
 pub use engine::{Actor, ClockFn};
 pub use inline_pdf::{INLINE_PDF_NAME, MAX_INLINE_PDF, inline_pdf};
-pub use sign::{Client as SignClient, DoorError, SignForm, SignService};
 pub use pay::{FakeView, HookReply, PaymentHooks, PaymentPort, PaymentView, StartPayment, Started};
 pub use public::{
     Adjust, Lookup, PublicApi, PublicFilter, PublicRead, PublicReceipt, PublicRecord, PublicSpec,
     PublicSubmit, Receipt, Submission, SubmitError,
 };
+pub use sign::{Client as SignClient, DoorError, SignForm, SignService};
 pub use sso::{
     AnonGroup, AnonLine, SsoApi, SsoEndpoints, SsoError, SsoFlowSignIn, SsoIdentity, SsoLeg,
     SsoProvider,
