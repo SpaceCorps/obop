@@ -2492,22 +2492,36 @@ fn a_reloaded_second_step_gets_a_fresh_token_only_while_the_first_factor_still_s
     ));
     assert_eq!((refusals(CHANGED), refusals(DISABLED)), (1, 1));
     r.a.operator_set_disabled("ada", false).unwrap();
+    // An account that does not exist writes no line: the lines of `oidc_refused` are counted, all
+    // of them, not only the two texts above (the doc of `SsoApi::second_step_for_flow` says so).
+    let all = || events(&r, "oidc_refused").len();
+    let lines = all();
     assert!(matches!(
         sso(&r).second_step_for_flow("nobody", None),
         Err(MfaError::Expired)
     ));
+    assert_eq!(all(), lines, "a missing account wrote a line");
+    // An epoch that is none while the account has one is a change of credentials: one line.
     assert!(matches!(
         sso(&r).second_step_for_flow("ada", None),
         Err(MfaError::Expired)
     ));
+    assert_eq!(all(), lines + 1);
+    assert_eq!(refusals(CHANGED), 2);
     // An account without a second factor never gets a token, and never a session, from this call.
+    // It is bound (an unbound one is refused earlier, with a line of its own), with its own epoch,
+    // so the check of the second factor is the one that refuses: no line.
+    r.a.operator_sso_bind("bob", BOB_OID).unwrap();
+    let lines = all();
     assert!(matches!(
         sso(&r).second_step_for_flow("bob", epoch_in_store(&r, "bob").as_deref()),
         Err(MfaError::Expired)
     ));
+    assert_eq!(all(), lines, "a missing second factor wrote a line");
     let sessions_before = r.b.list("auth_token").unwrap().len();
     let _ = sso(&r).second_step_for_flow("bob", epoch_in_store(&r, "bob").as_deref());
     assert_eq!(r.b.list("auth_token").unwrap().len(), sessions_before);
+    assert_eq!(all(), lines, "a missing second factor wrote a line");
     // The refusals above minted no token.
     assert_eq!(r.b.list("auth_mfa_token").unwrap().len(), tokens_before);
 }

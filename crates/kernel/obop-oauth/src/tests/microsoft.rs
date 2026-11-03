@@ -380,6 +380,67 @@ fn the_callback_writes_with_a_compare_and_set_and_never_with_a_put() {
     flaky.refuse_kv_new(0);
 }
 
+/// The tap and the return address read the flow and write it with nothing that sets a lifetime
+/// (a put would renew the row, or shorten it, and the Microsoft path would no longer end with the
+/// cookie). Like the test above it needs no clock: every put is refused, and none must be tried
+/// in any state the callback leaves the flow in.
+#[test]
+fn the_tap_and_the_return_address_never_write_the_flow_with_a_put() {
+    let (flaky, backend) = Flaky::memory();
+    let r = rig_on(backend, "ada", OAuthConfig::default());
+    let (id, binder) = begun(&r, true);
+    // The control: a write of the pages (this one is "Not you?") is a put, and is refused.
+    flaky.refuse_kv_put(1);
+    flaky.refuse_kv_new(1);
+    let csrf = record(&r, &id).unwrap()["csrf"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(r.o.switch_user(&id, &binder, &csrf).is_err());
+    assert_eq!(flaky.refused(), 1, "the control did not meet the refusal");
+    flaky.refuse_kv_put(0);
+    flaky.refuse_kv_new(0);
+    let signed = signed_in(&r, "ada");
+    let pending = SsoFlowSignIn {
+        user: "ada".into(),
+        outcome: LoginOutcome::MfaRequired {
+            mfa_token: "a-token-the-flow-does-not-keep".into(),
+        },
+        epoch: signed.epoch.clone(),
+        mfa: false,
+        auth_time: None,
+    };
+    flaky.refuse_kv_put(1_000);
+    flaky.refuse_kv_new(1_000);
+    let before = flaky.refused();
+    // Nothing written yet, then a word, then a pending second step, then a person: in each state
+    // the tap and the return address are asked (the tap is refused once a person is seated).
+    r.o.microsoft_start(&id, &binder).unwrap();
+    r.o.microsoft_return(&id, &binder, "10.0.0.2").unwrap();
+    r.o.microsoft_done(&id, MicrosoftOutcome::Failed("cancelled".into()))
+        .unwrap();
+    r.o.microsoft_start(&id, &binder).unwrap();
+    r.o.microsoft_return(&id, &binder, "10.0.0.2").unwrap();
+    r.o.microsoft_done(&id, MicrosoftOutcome::SignedIn(pending))
+        .unwrap();
+    r.o.microsoft_start(&id, &binder).unwrap();
+    r.o.microsoft_return(&id, &binder, "10.0.0.2").unwrap();
+    r.o.microsoft_done(&id, MicrosoftOutcome::SignedIn(signed))
+        .unwrap();
+    assert!(r.o.microsoft_start(&id, &binder).is_err());
+    assert_eq!(
+        r.o.microsoft_return(&id, &binder, "10.0.0.2").unwrap(),
+        LoginOut::Consent
+    );
+    assert_eq!(
+        flaky.refused(),
+        before,
+        "the tap or the return address tried to write the flow with a put (which sets a lifetime)"
+    );
+    flaky.refuse_kv_put(0);
+    flaky.refuse_kv_new(0);
+}
+
 #[test]
 fn the_callback_keeps_the_lifetime_of_the_flow_and_does_not_renew_it() {
     // A flow lives for its lifetime from the last write by the sign-in pages; the callback's

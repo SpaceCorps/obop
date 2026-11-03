@@ -2384,8 +2384,9 @@ async fn phone_a_bound_account_that_must_choose_a_new_password_is_told_so_after_
 
 /// The cookie of the sign-in pages and the verifier of the round trip end at ten minutes and are
 /// not renewed. The answer after that is 410 on the Microsoft path (the stored flow ends with the
-/// cookie) and 403 after a failed step that wrote the flow again (fix round 3 made the test say
-/// which; before, it accepted either).
+/// cookie) and 403 after a step of the sign-in pages wrote the flow again (fix round 3 made the
+/// test say which; before, it accepted either; the steps that write it again and set no cookie
+/// are in `phone_every_step_of_the_sign_in_pages_writes_the_flow_and_sets_no_cookie`).
 #[tokio::test]
 async fn phone_the_cookies_of_the_round_trip_and_of_the_flow_last_ten_minutes_and_no_longer() {
     let w = world(true).await;
@@ -2425,11 +2426,13 @@ async fn phone_the_cookies_of_the_round_trip_and_of_the_flow_last_ten_minutes_an
     );
     assert_eq!(w.idp.hits("/token"), 0, "the code was not redeemed");
     // The earlier of the cookie and the stored row ends the flow, and `load` reads the row first.
-    // On this path (authorization, tap, callback, return) nothing writes the row again after the
-    // authorization request, so it ends with the cookie: ten minutes, to within the latency of
-    // the requests. A test cannot wait ten real minutes, so the row is still there at this point,
-    // as it would be if a failed password try had written it again (see below): the cookie is
-    // gone, the binder does not match, and the answer is 403.
+    // On this path (authorization, tap, callback, return) nothing writes the row with a fresh
+    // lifetime after the authorization request (the callback's compare-and-set keeps the expiry,
+    // and the tap and the return address write nothing: `obop-oauth` pins both), so it ends with
+    // the cookie: ten minutes, to within the latency of the requests. A test cannot wait ten real
+    // minutes, so the row is still there at this point, as it would be if a step of the pages had
+    // written it again (see below): the cookie is gone, the binder does not match, and the answer
+    // is 403.
     let r = phone.back(&page.flow).await;
     assert!(
         r.status == 403 && r.body.contains("did not come from the page that started"),
@@ -2441,7 +2444,7 @@ async fn phone_the_cookies_of_the_round_trip_and_of_the_flow_last_ten_minutes_an
     assert!(w.oauth_flow(&page.flow).unwrap()["user"].is_null());
     // Now the row ends as well (its own end is stood in for by deleting it; the lifetime itself
     // is run for real by `the_callback_keeps_the_lifetime_of_the_flow_and_does_not_renew_it` in
-    // `obop-oauth`): the answer on this path is 410, "expired or already used".
+    // `obop-oauth`): the answer on this path is 410, "This sign-in expired or was already used."
     w.app
         .store
         .backend()
@@ -2459,7 +2462,11 @@ async fn phone_the_cookies_of_the_round_trip_and_of_the_flow_last_ten_minutes_an
 
     // The other path: a failed password try at 300 s writes the flow again, so the row gets a
     // fresh ten minutes (it would now end at 900 s), but it sets no cookie: the cookie is set
-    // once, in the answer to the authorization request, and still ends at 600 s.
+    // once, in the answer to the authorization request, and still ends at 600 s. (What pins the
+    // rewrite here is `attempts == 1`: the row is also there at 601 s of the virtual clock
+    // because real time has not moved, so the 403 below would be the same for a row that was never
+    // written again, and the new lifetime of a failed step is not observed. The successful steps,
+    // the second step and "Not you?" are in the next test.)
     let mut phone = Phone::new(&w).await;
     let page = phone.open().await;
     let binder = cookie_of(&phone, "obop_oauth_");
@@ -2479,7 +2486,7 @@ async fn phone_the_cookies_of_the_round_trip_and_of_the_flow_last_ten_minutes_an
     );
     let kept = cookie_of(&phone, "obop_oauth_");
     assert_eq!((kept.value, kept.until), (binder.value, Some(600)));
-    // At 601 s the cookie is gone and the row, written again, is still there: 403, not 410.
+    // At 601 s the cookie is gone and the row is still there: 403, not 410.
     phone.b.now = 601;
     assert!(!phone.b.has("obop_oauth_"));
     let r = phone.back(&page.flow).await;
@@ -2493,13 +2500,111 @@ async fn phone_the_cookies_of_the_round_trip_and_of_the_flow_last_ten_minutes_an
     assert_eq!(w.devices(), 0);
 }
 
+/// A step of the sign-in pages that writes the flow again, failed or successful, the second step
+/// and "Not you?" among them, sets no cookie: the cookie of the flow is set once, in the answer to
+/// the authorization request, and ends at 600 s whatever the row is given. (A step that does
+/// renew it would make `Max-Age` of the flow a lie in DEPLOY.md and in N21 g.) A successful step
+/// then leaves the row without a cookie to go with it: the decision at 601 s is a 403.
+#[tokio::test]
+async fn phone_every_step_of_the_sign_in_pages_writes_the_flow_and_sets_no_cookie() {
+    let w = world(true).await;
+    let (secret, _) = enrol(&rig_of(&w), "ada").await;
+    let mut phone = Phone::new(&w).await;
+    let page = phone.open().await;
+    let original = phone
+        .b
+        .cookies
+        .iter()
+        .find(|c| c.name.starts_with("obop_oauth_"))
+        .cloned()
+        .expect("the cookie of the flow");
+    assert_eq!(original.until, Some(600));
+    let quiet = |r: &Raw, what: &str| {
+        assert!(
+            r.all("set-cookie").is_empty(),
+            "{what} set a cookie: {:?}",
+            r.all("set-cookie")
+        );
+    };
+    phone.b.now = 300;
+    // The password step with the right password for an account with an authenticator app: the
+    // second-factor page (the row is written with the pending account).
+    let r = phone.password(&page, "ada", PW).await;
+    assert!(asks_for_the_second_step(&r), "{}", r.body);
+    quiet(&r, "the password step");
+    let p = page_of(&page.flow, &r);
+    let token = hidden_of(&r.body, "mfa_token");
+    // The second step, wrong and then right (the code of the minute after, as the other tests do).
+    let wrong = phone.mfa(&p, &token, "000000").await;
+    assert!(
+        asks_for_the_second_step(&wrong) && wrong.body.contains("That code is not right."),
+        "{}",
+        wrong.body
+    );
+    quiet(&wrong, "a wrong code");
+    w.auth.set_clock_for_test(T0 + 60);
+    let code = obop_auth::totp::code_for_step(&secret, obop_auth::totp::step_at(T0 + 60));
+    let ok = phone.mfa(&p, &token, &code).await;
+    assert!(consent(&ok), "{}", ok.body);
+    quiet(&ok, "the right code");
+    assert_eq!(w.oauth_flow(&page.flow).unwrap()["user"], "ada");
+    // "Not you?" forgets the person, and sets no cookie either.
+    let sw = w
+        .browse(
+            &mut phone.b,
+            "POST",
+            "/oauth/authorize/decision",
+            Some(&[("flow", &p.flow), ("csrf", &p.csrf), ("decision", "switch")]),
+            &[],
+        )
+        .await;
+    assert!(login_page(&sw), "{}", sw.body);
+    quiet(&sw, "\"Not you?\"");
+    assert!(w.oauth_flow(&page.flow).unwrap()["user"].is_null());
+    // Signed in again (a later code: the first is spent), and the cookie is still the first one.
+    let r = phone.password(&p, "ada", PW).await;
+    assert!(asks_for_the_second_step(&r), "{}", r.body);
+    let token = hidden_of(&r.body, "mfa_token");
+    w.auth.set_clock_for_test(T0 + 120);
+    let code = obop_auth::totp::code_for_step(&secret, obop_auth::totp::step_at(T0 + 120));
+    let ok = phone.mfa(&p, &token, &code).await;
+    assert!(consent(&ok), "{}", ok.body);
+    quiet(&ok, "the second right code");
+    let kept = phone
+        .b
+        .cookies
+        .iter()
+        .find(|c| c.name.starts_with("obop_oauth_"))
+        .cloned()
+        .unwrap();
+    assert_eq!((kept.value, kept.until), (original.value, Some(600)));
+    // At 601 s the browser no longer sends it. The row is there (written by a successful step, and
+    // in any case because real time has not moved, so this 403 does not by itself show the
+    // rewrite; the state the steps left in the row above does): the decision is refused, 403, and
+    // no code is made.
+    phone.b.now = 601;
+    assert!(!phone.b.has("obop_oauth_"));
+    let late = phone.decide(&page_of(&page.flow, &ok), "7").await;
+    assert!(
+        late.status == 403
+            && late
+                .body
+                .contains("did not come from the page that started"),
+        "{} {}",
+        late.status,
+        late.body
+    );
+    assert!(!late.all("location").iter().any(|l| l.contains("code=")));
+    assert_eq!(w.devices(), 0);
+}
+
 // ---- fix round 2 of the pull request: what the delta check found unpinned ---------------------
 //
 // Each test below passed on the code of `7d141a9` and fails under a mutation that docs/ISSUES.md
 // names for it in "Mutations of the delta check of 7d141a9", except the 503 reload test, which
 // pins the 503, the kept flow and the recovery and kills none of the mutations listed there (the
 // unit test in `obop-oauth` that its comment names is the one that kills a24; this one dies under
-// c12 of "Mutations of the check of ab76f8a", a change of the layer of D74).
+// r3-c12 of "Mutations of the check of ab76f8a" in docs/ISSUES.md, a change of the layer of D74).
 
 /// The second step is asked for the account and the credential epoch that the first factor was
 /// accepted with (`mfa_pending`), not for what a password try on the same flow wrote later
