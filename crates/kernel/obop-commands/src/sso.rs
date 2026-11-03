@@ -282,12 +282,16 @@ pub trait SsoApi: Send + Sync {
 
     /// The demand for an obop second factor again, for a flow whose first factor (a Microsoft
     /// sign-in) was accepted earlier at `epoch` and whose page was reloaded: a fresh `mfa_token`.
-    /// Refused (`Expired`) when the account is disabled, its credentials changed since `epoch`,
-    /// the account is not bound any more, the provider is switched off, cleared or of another
-    /// tenant than the binding, or the account has no second factor any more (each of the first
-    /// four writes an `oidc_refused` line). A store that cannot answer is `Unavailable`, not a
-    /// refusal. This stops a fresh token from being minted; a token minted earlier lives its own
-    /// five minutes (`MFA_TOKEN_SECS`), as on the web. Never returns a session.
+    /// Refused (`Expired`) when the account no longer exists, is disabled, its credentials changed
+    /// since `epoch`, it is not bound any more, the provider is switched off, cleared or of
+    /// another tenant than the binding, or the account has no second factor any more. The four
+    /// refusals about the account's state and binding (disabled, credentials changed, not bound,
+    /// provider) each write an `oidc_refused` line; a missing account and a missing second factor
+    /// write none. A store that cannot answer is `Unavailable`, not a refusal, with one
+    /// exception: the read of whether the account has a second factor swallows a refused read and
+    /// answers `Expired` (docs/ISSUES.md N22, which is not fixed here). This stops a fresh token
+    /// from being minted; a token minted earlier lives its own five minutes (`MFA_TOKEN_SECS`),
+    /// as on the web. Never returns a session.
     fn second_step_for_flow(&self, user: &str, epoch: Option<&str>) -> Result<String, MfaError>;
 
     /// Write a line to the security log (`oidc_*`); never a token, a code or a secret.
