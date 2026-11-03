@@ -1326,6 +1326,7 @@ dependencies = [
 name = "obop-commands"
 version = "0.2.1"
 dependencies = [
+ "getrandom 0.4.3",
  "icu_collator",
  "icu_locale",
  "obop-blob-gdrive",

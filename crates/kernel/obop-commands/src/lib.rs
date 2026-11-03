@@ -283,6 +283,9 @@ pub struct Dispatcher {
     /// Uploads and downloads of images and files, created with the first module registered
     /// against a store (D60).
     blob_service: std::sync::OnceLock<Arc<BlobService>>,
+    /// The wrappers of the `sign` package and the signer's door (D92), created with the first
+    /// module registered against a store.
+    sign_service: std::sync::OnceLock<Arc<sign::SignService>>,
     /// Wrappers around a command's handler, by command id (see `around`).
     around: std::sync::RwLock<HashMap<String, Arc<Around>>>,
     /// Models whose writes run under the transaction lock because a rule needs it: a unique
@@ -1718,11 +1721,13 @@ pub mod devices;
 mod engine;
 pub mod errors;
 mod guards;
+pub mod inline_pdf;
 pub mod json;
 mod kinds;
 pub mod pay;
 pub mod public;
 pub mod query;
+pub mod sign;
 pub mod sso;
 pub mod store;
 
@@ -1730,6 +1735,8 @@ pub use accounts::{AccountsApi, NewUser};
 pub use blobs::{BlobError, BlobService, Served, clean_filename, disposition};
 pub use engine::bulk::has_stored_answer;
 pub use engine::{Actor, ClockFn};
+pub use inline_pdf::{INLINE_PDF_NAME, MAX_INLINE_PDF, inline_pdf};
+pub use sign::{Client as SignClient, DoorError, SignForm, SignService};
 pub use pay::{FakeView, HookReply, PaymentHooks, PaymentPort, PaymentView, StartPayment, Started};
 pub use public::{
     Adjust, Lookup, PublicApi, PublicFilter, PublicRead, PublicReceipt, PublicRecord, PublicSpec,

@@ -64,6 +64,7 @@ pub fn admin_prefix_ok(p: &str) -> bool {
                 | "shop"
                 | "blog"
                 | "cart"
+                | "sign"
                 | "contact"
                 | "healthz"
                 | "readyz"

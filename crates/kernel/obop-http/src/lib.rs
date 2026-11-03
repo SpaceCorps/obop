@@ -30,6 +30,8 @@ pub mod payments;
 pub mod public;
 pub(crate) mod shared;
 pub mod shell;
+mod sign;
+mod sign_page;
 pub mod sign_text;
 pub(crate) mod sso;
 pub mod website;
@@ -372,6 +374,13 @@ pub(crate) fn api_routes(state: Arc<HttpState>) -> Router {
                 .options(oauth::preflight)
                 .layer(body_limit()),
         )
+        .route(
+            "/sign/{rid}/{token}",
+            get(sign::page)
+                .post(sign::submit)
+                .layer(axum::extract::DefaultBodyLimit::max(sign::MAX_BODY)),
+        )
+        .route("/sign/{rid}/{token}/document.pdf", get(sign::document))
         .route("/oauth/authorize", get(oauth::authorize))
         .route("/oauth/authorize/microsoft", get(oauth::microsoft))
         .route("/oauth/authorize/return", get(oauth::microsoft_return))

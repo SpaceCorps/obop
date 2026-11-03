@@ -39,6 +39,7 @@ pub fn robots(ctx: &Ctx) -> Resp {
             "/shop/pay/",
             "/shop/fake-pay/",
             "/hooks/",
+            "/sign/",
             "/shop/discount/",
         ] {
             t.push_str(&format!("Disallow: {p}\n"));

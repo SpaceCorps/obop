@@ -163,6 +163,51 @@ pub fn blob_response(served: Served, req_headers: &HeaderMap, cache: &str) -> Re
     r.body(Body::from(served.bytes)).expect("valid response")
 }
 
+/// The policy of the PDF that a page shows in an `<object>`: nothing that would stop the viewer.
+/// It must never contain `sandbox` (Chromium refuses its viewer under it). It starts as narrow as
+/// the viewers are known to accept; tightening it to `default-src 'none'` needs the browser matrix
+/// of docs/SIGN.md.
+pub const INLINE_PDF_CSP: &str = "frame-ancestors 'self'";
+
+/// A PDF made by `obop_commands::inline_pdf`, ready to be framed by a page of this origin only.
+/// Not for `/api/blobs`: that route keeps `sandbox`, an attachment and the `same-site` policy.
+pub fn inline_pdf_response(served: Served, req_headers: &HeaderMap, cache: &str) -> Response {
+    let not_modified = req_headers
+        .get(header::IF_NONE_MATCH)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v.split(',').any(|t| t.trim() == served.etag));
+    let mut r = Response::builder().status(if not_modified {
+        StatusCode::NOT_MODIFIED
+    } else {
+        StatusCode::OK
+    });
+    let mut set = |k: HeaderName, v: &str| {
+        if let Ok(v) = HeaderValue::from_str(v) {
+            r = std::mem::take(&mut r).header(k, v);
+        }
+    };
+    set(header::ETAG, &served.etag);
+    set(header::CACHE_CONTROL, cache);
+    set(header::X_CONTENT_TYPE_OPTIONS, "nosniff");
+    set(header::CONTENT_SECURITY_POLICY, INLINE_PDF_CSP);
+    set(header::X_FRAME_OPTIONS, "SAMEORIGIN");
+    set(
+        HeaderName::from_static("cross-origin-resource-policy"),
+        "same-origin",
+    );
+    set(header::REFERRER_POLICY, "no-referrer");
+    if not_modified {
+        return r.body(Body::empty()).expect("static response");
+    }
+    set(header::CONTENT_TYPE, "application/pdf");
+    set(
+        header::CONTENT_DISPOSITION,
+        &disposition(false, &served.filename),
+    );
+    set(header::CONTENT_LENGTH, &served.bytes.len().to_string());
+    r.body(Body::from(served.bytes)).expect("valid response")
+}
+
 /// `GET /api/blobs/{id}`.
 pub async fn download(
     State(s): State<Arc<HttpState>>,

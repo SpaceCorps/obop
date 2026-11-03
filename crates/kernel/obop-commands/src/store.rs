@@ -347,6 +347,8 @@ impl Dispatcher {
         self.register_guards(module, store);
         self.blob_service
             .get_or_init(|| crate::BlobService::new(self, store.clone()));
+        self.sign_service
+            .get_or_init(|| crate::sign::SignService::install(self, store));
         self.refresh_lock_models();
     }
 

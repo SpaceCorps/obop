@@ -578,6 +578,7 @@ fn robots_allows_crawlers_and_blocks_private_paths() {
         "/cart",
         "/shop/checkout",
         "/shop/order/",
+        "/sign/",
     ] {
         assert!(t.contains(&format!("Disallow: {p}\n")), "{p}");
     }

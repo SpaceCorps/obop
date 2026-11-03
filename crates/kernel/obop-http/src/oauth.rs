@@ -206,7 +206,7 @@ pub(crate) fn cookie_value(h: &HeaderMap, name: &str) -> Option<String> {
 /// A browser form post must come from this origin: `Origin` when it names one, else
 /// `Sec-Fetch-Site`. (A browser sends `Origin: null` for sandboxed or opaque origins and when the
 /// page's referrer policy is `no-referrer`; fetch metadata tells those cases apart.)
-fn same_origin(h: &HeaderMap, base: &str) -> bool {
+pub(crate) fn same_origin(h: &HeaderMap, base: &str) -> bool {
     match h.get(header::ORIGIN).and_then(|v| v.to_str().ok()) {
         Some(o) if o != "null" => o.trim_end_matches('/').eq_ignore_ascii_case(base),
         _ => h.get("sec-fetch-site").and_then(|v| v.to_str().ok()) == Some("same-origin"),
