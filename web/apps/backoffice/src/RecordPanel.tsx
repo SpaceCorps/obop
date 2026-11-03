@@ -14,7 +14,7 @@ import { encodeState } from "./query.ts";
 import { PHONE_QUERY, SHEET_QUERY, useMedia, useScrollLock } from "./media.ts";
 import { nav } from "./route.ts";
 import { Badge, Button, Icon, IconButton, Kbd, Menu, Tooltip } from "./ui.tsx";
-import { canMove, initialOption, isGoverned, moveRecord } from "./workflow.ts";
+import { canMove, initialOption, isGoverned, moveRecord, notForRecord } from "./workflow.ts";
 
 type Props = {
   model: ModelMeta;
@@ -372,7 +372,7 @@ export function RecordPanel({
                       state: optionLabel(initialOption(statusField), statusField),
                     }),
                   }
-                : canMove(model, statusField, row[statusField.name] as string, s, title);
+                : canMove(model, statusField, row[statusField.name] as string, s, title, row);
               const blocked = !mv.allowed;
               const text = `${optionLabel(s, statusField)}${mv.allowed && mv.needsApproval ? " *" : ""}`;
               const btn = (
@@ -431,7 +431,7 @@ export function RecordPanel({
                         field: fieldTitle(f),
                         state: optionLabel(a.from, f),
                       })
-                    : "";
+                    : notForRecord(model, a, row);
               const btn = (
                 <Button
                   key={a.id}
@@ -478,7 +478,7 @@ export function RecordPanel({
             )}
           </div>
         )}
-        {!creating && model.name === REQUEST_MODEL && <SignLinks requestId={row.id} />}
+        {!creating && model.name === REQUEST_MODEL && <SignLinks request={row} />}
         <form
           className="fields"
           noValidate
@@ -705,7 +705,7 @@ function GovernedValue(p: {
           items={(f.options ?? [])
             .filter((o) => o !== current)
             .map((o) => {
-              const mv = canMove(model, f, current, o, p.title);
+              const mv = canMove(model, f, current, o, p.title, row ?? undefined);
               return {
                 label: `${optionLabel(o, f)}${mv.needsApproval ? " *" : ""}`,
                 disabled: p.busy || !mv.allowed,

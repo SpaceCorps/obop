@@ -48,15 +48,63 @@ export type Move = {
   current: boolean;
 };
 
-/** Pick the action for a move: an exact `from` wins over an open one (D48). */
+/**
+ * Two actions of one model may lead along the same move and be told apart only by the record. A
+ * sign request is sent by `send` when it is made from a template and by `send_document` when it is
+ * about a Document in Documents (D92): the server refuses `send` for a request with a document and
+ * no template, so the status bar and the kanban must run `send_document` for it. No registry flag
+ * says which action is for which record, so the back office names the pair.
+ */
+const SEND_FOR_DOCUMENT = "sign_request.send_document";
+const SEND_FOR_TEMPLATE = "sign_request.send";
+
+const hasDocument = (row: Record<string, unknown>) => !isEmpty(row.document_id);
+
+/** The action to run among those that lead along the same move, for this record. */
+function forRecord(model: ModelMeta, candidates: Command[], row: Record<string, unknown>) {
+  if (model.name !== "sign_request") return undefined;
+  const want = hasDocument(row) ? SEND_FOR_DOCUMENT : SEND_FOR_TEMPLATE;
+  return candidates.find((a) => a.id === want);
+}
+
+/**
+ * Pick the action for a move: an exact `from` wins over an open one (D48). When several actions
+ * match exactly, the record may decide which one (`forRecord`); without a record the first one
+ * wins, as before.
+ */
 export function pickAction(
   model: ModelMeta,
   field: string,
   from: string | null,
   to: string,
+  row?: Record<string, unknown>,
 ): Command | undefined {
   const leading = actionsOn(model, field).filter((a) => a.to === to);
-  return leading.find((a) => a.from === from) ?? leading.find((a) => isEmpty(a.from));
+  const exact = leading.filter((a) => a.from === from);
+  if (exact.length > 1 && row) {
+    const chosen = forRecord(model, exact, row);
+    if (chosen) return chosen;
+  }
+  return exact[0] ?? leading.find((a) => isEmpty(a.from));
+}
+
+/**
+ * Why an action that is listed must not be run on this record although its state fits, or an empty
+ * string. `send` is for a request made from a template and `send_document` for a request about a
+ * document; the other one is greyed out with the reason instead of failing when it is pressed.
+ */
+export function notForRecord(
+  model: ModelMeta,
+  action: Command,
+  row: Record<string, unknown>,
+): string {
+  if (model.name !== "sign_request") return "";
+  const doc = hasDocument(row);
+  if (action.id === SEND_FOR_TEMPLATE && doc && isEmpty(row.template_id))
+    return t("This request is about a document. Use Send document.");
+  if (action.id === SEND_FOR_DOCUMENT && !doc)
+    return t("Send document needs a document. Choose one first.");
+  return "";
 }
 
 export function canMove(
@@ -65,10 +113,12 @@ export function canMove(
   from: string | null | undefined,
   to: string,
   noun: string,
+  /** The record, when there is one: it may decide between two actions that lead the same way. */
+  row?: Record<string, unknown>,
 ): Move {
   const cur = isEmpty(from) ? null : String(from);
   if (cur === to) return { allowed: false, reason: "", needsApproval: false, current: true };
-  const action = pickAction(model, field.name, cur, to);
+  const action = pickAction(model, field.name, cur, to, row);
   if (action)
     return {
       allowed: true,
@@ -129,7 +179,7 @@ export async function moveRecord(
   to: string,
   noun: string,
 ): Promise<MoveOutcome> {
-  const m = canMove(model, field, row[field.name] as string | undefined, to, noun);
+  const m = canMove(model, field, row[field.name] as string | undefined, to, noun, row);
   if (m.current) return { kind: "ok", row };
   const r = m.action
     ? await run(m.action.id, { id: row.id })
