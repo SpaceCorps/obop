@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { provideCatalogue, setLanguage, type Lang } from "@obop/ui";
@@ -207,41 +206,11 @@ describe("closing the dialog that shows the link", () => {
     expect(closeAttempt(true, false)).toEqual({ close: true, leaving: false });
     expect(closeAttempt(true, true)).toEqual({ close: true, leaving: false });
   });
-
-  it("sends Escape, a click outside, the X and Done through that one question", () => {
-    const code = readFileSync(new URL("./SignLinks.tsx", import.meta.url), "utf8");
-    // The Dialog's own onClose is the guarded `ask`, and so is Done; only the button of the
-    // question calls the real close.
-    expect(code).toMatch(/<Dialog[^>]*onClose=\{ask\}/);
-    expect(code).toContain("onDone={ask}");
-    expect(code).toContain("onCloseAnyway={onClose}");
-  });
 });
 
-describe("what happens to the link", () => {
-  // The link is a secret that the server keeps only as a hash. Nothing of the dialog may keep it
-  // in the browser (a store that outlives the dialog), print it, or put it in a toast.
-  const source = (name: string) => readFileSync(new URL(name, import.meta.url), "utf8");
-
-  it("is never stored, logged or put in a notification", () => {
-    for (const file of ["./SignLinks.tsx", "./signLinks.ts"]) {
-      const code = source(file)
-        .replace(/\/\*[\s\S]*?\*\//g, "")
-        .replace(/^\s*\/\/.*$/gm, "");
-      for (const word of [
-        "localStorage",
-        "sessionStorage",
-        "indexedDB",
-        "console.",
-        "document.cookie",
-      ])
-        expect(code, `${file} uses ${word}`).not.toContain(word);
-      expect(code, `${file} puts a link in a toast`).not.toMatch(
-        /notify\([^)]*(made|href|r\.value|\.link)/,
-      );
-    }
-  });
-
+// What the dialog does with the link, and that it is kept nowhere, is tested on the mounted dialog in
+// signLinks.dialog.test.tsx; this file holds the pure helpers.
+describe("copying the link", () => {
   it("is copied with the clipboard API and falls back to selecting the field", async () => {
     // No clipboard and no DOM here: the function answers false instead of throwing.
     expect(await copyText("x", null)).toBe(false);
