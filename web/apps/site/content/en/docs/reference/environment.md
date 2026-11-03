@@ -91,4 +91,4 @@ Used by `obop platform serve`.
 
 ## Tests
 
-`OBOP_TEST_POSTGRES_URL` adds PostgreSQL to `cargo test`. `OBOP_TEST_DOCKER_TLS=1` adds the TLS tests that start a throwaway `postgres:17` container (they need Docker; without the variable they skip). `OBOP_BIN` points the end-to-end suite at a built binary.
+`OBOP_TEST_POSTGRES_URL` adds PostgreSQL to the Rust tests (`cargo nextest run`). `OBOP_TEST_DOCKER_TLS=1` adds the TLS tests that start a throwaway `postgres:17` container (they need Docker; without the variable they skip). `OBOP_BIN` points the end-to-end suite at a built binary.
