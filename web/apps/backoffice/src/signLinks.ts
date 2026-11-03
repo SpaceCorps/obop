@@ -41,25 +41,65 @@ export function linkGate(row: Row, fields: FieldMeta[]): LinkGate {
   return { ok: true };
 }
 
-/** The state of a link, worked out from its fields (the model has no state field, D92). */
-export type LinkStatus = "active" | "used" | "revoked" | "expired";
+/** The state of a link as the list shows it (the model has no state field, D92). */
+export type LinkStatus = "active" | "used" | "revoked" | "expired" | "closed";
 
 const set = (v: unknown): boolean => typeof v === "string" && v.trim() !== "";
 
+/** The end of the day `YYYY-MM-DD` in UTC, as the door takes it (23:59:59.999999); NaN if unreadable. */
+function endOfDay(date: unknown): number {
+  const m = typeof date === "string" ? /^(\d{4}-\d{2}-\d{2})/.exec(date.trim()) : null;
+  return m ? Date.parse(`${m[1]}T23:59:59.999Z`) : Number.NaN;
+}
+
 /**
- * Used when `used_at` is set, else revoked when `revoked_at` is set, else expired when `expires_at`
- * is in the past, else active. The server decides the same way at the door and caps the life
- * again there; this is only the picture of it in the list.
+ * The status of a link, worked out the way the signer's door works it out (`status` in
+ * `obop-commands/src/sign/door.rs`), in the same order:
+ *
+ * 1. `used_at` set: used. 2. `revoked_at` set: revoked.
+ * 3. The request is signed (by another link): closed.
+ * 4. Past the link's own end, or past the end of the request's `expires_on` day, whichever comes
+ *    first: expired. A link with no readable end does not work, so it reads as expired.
+ * 5. The request is anything but `sent` (declined, expired, still a draft): closed.
+ * 6. Otherwise active.
+ *
+ * `request` is the sign request the link belongs to; without it the checks that need it are
+ * skipped. The server makes the same decision at the door on its own clock. This list uses the
+ * browser's clock for the two ends, so it can be a little off near an end and wrong by as much as
+ * the browser's clock is wrong: it is a picture of the door, and the door decides. That is why
+ * Revoke is offered for every link that is neither used nor revoked (`canRevoke`), not only for
+ * one that reads "active".
  */
-export function linkStatus(row: Row, nowMs: number): LinkStatus {
+export function linkStatus(row: Row, nowMs: number, request?: Row): LinkStatus {
   if (set(row.used_at)) return "used";
   if (set(row.revoked_at)) return "revoked";
-  if (set(row.expires_at)) {
-    const at = Date.parse(String(row.expires_at));
-    if (Number.isFinite(at) && at < nowMs) return "expired";
-  }
+  const state = request ? String(request.state ?? "") : "";
+  if (request && state === "signed") return "closed";
+  let end = set(row.expires_at) ? Date.parse(String(row.expires_at)) : Number.NaN;
+  if (!Number.isFinite(end)) end = Number.NEGATIVE_INFINITY;
+  const day = request ? endOfDay(request.expires_on) : Number.NaN;
+  if (Number.isFinite(day)) end = Math.min(end, day);
+  if (nowMs > end) return "expired";
+  if (request && state !== "sent") return "closed";
   return "active";
 }
+
+/**
+ * What a try to close the dialog that shows the link does. Escape, a click outside, the X and Done
+ * all ask this. Once the link was copied (by the button or from the field) it closes. Before that
+ * the first try only asks "close without copying?", and a second try goes back to the link: only
+ * the button of the question closes it, so a double keypress or a stray click cannot lose it.
+ */
+export function closeAttempt(
+  kept: boolean,
+  leaving: boolean,
+): { close: boolean; leaving: boolean } {
+  if (kept) return { close: true, leaving: false };
+  return { close: false, leaving: !leaving };
+}
+
+/** A link that was not used and not revoked may be revoked, whatever this page thinks of its end. */
+export const canRevokeStatus = (s: LinkStatus): boolean => s !== "used" && s !== "revoked";
 
 /** The body of the update that revokes a link: the server stamps its own clock and refuses the rest. */
 export function revokeBody(id: string, now: Date): { id: string; revoked_at: string } {
