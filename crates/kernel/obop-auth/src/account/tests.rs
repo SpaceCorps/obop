@@ -1,8 +1,9 @@
 use super::*;
 use crate::EVENT_TABLE;
 use crate::mfa_tests::{
-    PW, T0, code_at, enforcing, enrol, mfa_token, rig, rig_with, session, user_with,
+    PW, T0, code_at, enforcing, enrol, mfa_token, rig, rig_with, session, user_with, wrong_code,
 };
+use crate::totp;
 use obop_commands::{ADMIN_GROUP, Authenticator, LoginOutcome, MfaApi};
 
 fn events(r: &crate::mfa_tests::Rig) -> Vec<(String, String, String)> {
@@ -161,18 +162,90 @@ fn with_two_factor_on_a_password_change_also_needs_a_code() {
     r.a.set_clock_for_test(T0 + 120);
     let p = r.a.resolve(&t).unwrap();
     let new = "a brand new passphrase";
-    assert!(matches!(
-        r.a.change_password(&p, &t, PW, new, None, None),
-        Err(MfaError::Invalid(_))
-    ));
-    assert!(matches!(
-        r.a.change_password(&p, &t, PW, new, Some("000000"), None),
-        Err(MfaError::Denied(_))
-    ));
+    // The results are named in the message: a refusal of another kind (or no refusal) must say
+    // which one it was, not only that it was not the expected one.
+    let none = r.a.change_password(&p, &t, PW, new, None, None);
+    assert!(matches!(none, Err(MfaError::Invalid(_))), "{none:?}");
+    // A code that is wrong for this secret: a fixed "000000" is right for one random secret in
+    // about 333,000 (`a_fixed_wrong_looking_code_is_right_for_some_secrets...`).
+    let wrong = wrong_code(&secret, T0 + 120);
+    let denied = r.a.change_password(&p, &t, PW, new, Some(&wrong), None);
+    assert!(matches!(denied, Err(MfaError::Denied(_))), "{denied:?}");
     r.a.set_clock_for_test(T0 + 180);
     r.a.change_password(&p, &t, PW, new, Some(&code_at(&secret, T0 + 180)), None)
         .unwrap();
     assert!(r.a.mfa_enabled("ada"));
+}
+
+/// The secret and the step of the pin test below: `code_for_step` gives `000000` for them.
+const COLLIDING_SECRET: &[u8; 20] = b"obop-wrong-code-0000";
+const COLLIDING_STEP: u64 = 57_953_515;
+
+#[test]
+fn a_fixed_wrong_looking_code_is_right_for_some_secrets_and_the_wrong_code_helper_never_is() {
+    // The mechanism behind a flake that was seen once: for this secret the code of this step is
+    // 000000, so the verifier accepts it in the three steps around it.
+    let at = COLLIDING_STEP * totp::PERIOD + 5;
+    assert_eq!(
+        totp::code_for_step(COLLIDING_SECRET, COLLIDING_STEP),
+        "000000"
+    );
+    for secs in [at - totp::PERIOD, at, at + totp::PERIOD] {
+        assert_eq!(
+            totp::verify(COLLIDING_SECRET, "000000", secs, None),
+            Some(COLLIDING_STEP)
+        );
+    }
+    // ... and a password change with two-factor on takes it as the code (the test above, with a
+    // fixed "000000" instead of `wrong_code`, would fail for such a secret).
+    let r = rig();
+    user_with(&r.a, "ada", &["base.user"]);
+    r.a.set_clock_for_test(at);
+    let (token, p) = session(&r.a, "ada");
+    enrol_on(&r, &token, &p, at);
+    let new = "a brand new passphrase";
+    let accepted =
+        r.a.change_password(&p, &token, PW, new, Some("000000"), None);
+    assert_eq!(
+        accepted,
+        Ok(()),
+        "the fixed code is the right one for this secret"
+    );
+
+    // The helper gives a code that is wrong for it, at every time around the colliding step, and
+    // for many other secrets: none is accepted.
+    for secs in [
+        at - 2 * totp::PERIOD,
+        at - totp::PERIOD,
+        at,
+        at + totp::PERIOD,
+        at + 2 * totp::PERIOD,
+    ] {
+        let wrong = wrong_code(COLLIDING_SECRET, secs);
+        assert_eq!(wrong.len(), 6);
+        assert_ne!(wrong, "000000");
+        assert_eq!(totp::verify(COLLIDING_SECRET, &wrong, secs, None), None);
+    }
+    for i in 0u32..300 {
+        let secret = [i.to_be_bytes().as_slice(), b"-a-secret-of-20b"].concat();
+        let secs = T0 + u64::from(i) * 7;
+        let wrong = wrong_code(&secret, secs);
+        assert_eq!(totp::verify(&secret, &wrong, secs, None), None, "{i}");
+    }
+}
+
+/// Enrol the signed-in `ada` of `r` with the random secret, then swap the stored secret for
+/// [`COLLIDING_SECRET`] (sealed as the server does) so that the code of `COLLIDING_STEP` is 000000.
+fn enrol_on(r: &crate::mfa_tests::Rig, token: &str, p: &Principal, at: u64) {
+    let begun = r.a.begin(p).unwrap();
+    let secret = totp::base32_decode(begun["secret"].as_str().unwrap()).unwrap();
+    r.a.confirm(p, token, &totp::code_for_step(&secret, totp::step_at(at)))
+        .unwrap();
+    let sealed = crate::seal::seal_new(&r.a.config.keys, "ada", COLLIDING_SECRET).unwrap();
+    let mut f = Fields::new();
+    f.insert("totp_secret".into(), J::from(sealed));
+    f.insert("totp_last_step".into(), J::Null);
+    r.a.put("ada", &f).unwrap();
 }
 
 #[test]

@@ -68,6 +68,21 @@ pub(crate) fn code_at(secret: &[u8], secs: u64) -> String {
     totp::code_for_step(secret, totp::step_at(secs))
 }
 
+/// A well-formed code that is wrong for `secret` at `secs`: it is the code of none of the steps the
+/// verifier accepts around that time (the window and one step more). A fixed `"000000"` is not
+/// wrong for every secret: the secret of a test is random, and one in about 333,000 has that code
+/// in a window of three steps, so a test that expects a refusal fails for it.
+pub(crate) fn wrong_code(secret: &[u8], secs: u64) -> String {
+    let cur = totp::step_at(secs);
+    let valid: Vec<String> = (cur.saturating_sub(totp::WINDOW + 1)..=cur + totp::WINDOW + 1)
+        .map(|s| totp::code_for_step(secret, s))
+        .collect();
+    (0u32..)
+        .map(|n| format!("{n:06}"))
+        .find(|c| !valid.contains(c))
+        .expect("a million codes and a handful of valid ones")
+}
+
 pub(crate) fn user_with(a: &Auth, name: &str, g: &[&str]) {
     a.create_user(name, PW, &groups(g)).unwrap();
 }
