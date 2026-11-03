@@ -55,8 +55,11 @@ pub(crate) const LINK_DAYS: i64 = 14;
 const MICROS_PER_SECOND: i64 = 1_000_000;
 const MICROS_PER_DAY: i64 = 86_400 * MICROS_PER_SECOND;
 
-/// The keys of `sign_request` that the signer door (and `send_document`) write. Nobody else sets
-/// them: a field group restricts reading only, so the refusal is made by a wrapper.
+/// The keys of `sign_request` that are the evidence: the signer door (and, for the hash and the
+/// copy, `send_document`) write them and nobody else sets them. A field group restricts reading
+/// only, so the refusal is made by a wrapper. The two dates `sent_on` and `signed_on` are written
+/// by the same code but are not evidence (the evidence is the time and the digest) and are not
+/// guarded: a person with `sign.user` can set them (docs/ISSUES.md O34).
 pub(crate) const DOOR_OWNED: [&str; 8] = [
     "document_hash",
     "document_file",
@@ -175,9 +178,11 @@ pub(crate) fn id_of(input: &crate::Value) -> Result<String, String> {
     crate::store::id_of(input)
 }
 
-/// Whether `p` is an instance administrator (holds every group).
+/// Whether `p` is an instance administrator (holds every group): a person. An agent token whose
+/// scopes happen to include `platform.admin` is not one here, so that no agent is the exception to
+/// the rules about the evidence and about a signed request.
 pub(crate) fn is_admin(p: &Principal) -> bool {
-    p.allows(crate::ADMIN_GROUP)
+    p.is_person() && p.allows(crate::ADMIN_GROUP)
 }
 
 /// The micros since the epoch of the end of the day `YYYY-MM-DD` (23:59:59.999999 UTC).

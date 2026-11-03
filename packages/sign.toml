@@ -2,7 +2,7 @@
 id = "sign"
 version = "0.2.1"
 name = "Sign"
-description = "Document templates and signature requests with a draft, sent, signed, declined, expired flow. A request names the signer (personal data) and keeps the signature evidence. A request can point at a PDF in Documents: sending it takes the SHA-256 of the file and keeps an exact copy, and a person with the manager role creates a one-time signing link that the signer opens without an account to read that copy, type their full name and agree. This is a simple electronic signature only: a typed name does not prove who typed it, the time is the server clock, and the address is the one the proxy chain reports. At signing the evidence is stored on the request and an append-only entry is written to the security log. A signed request can be changed or deleted only by an administrator, who can still change any record. Sending and recording a signature need a human approval for agents, and agents cannot create signing links."
+description = "Document templates and signature requests with a draft, sent, signed, declined, expired flow. A request names the signer (personal data) and keeps the signature evidence. A request can point at a PDF in Documents: sending it takes the SHA-256 of the file and keeps an exact copy, and a person with the manager role creates a one-time signing link that the signer opens without an account to read that copy, type their full name and agree. This is a simple electronic signature only: a typed name does not prove who typed it, the time is the server clock, and the address is the one the proxy chain reports. At signing the evidence is stored on the request and an entry is written to the security log (no command writes or changes that log; the database does not stop someone who can write it). A signed request can be changed or deleted only by an administrator, who can still change any record. Sending and recording a signature need a human approval for agents, and agents cannot create signing links."
 author = "SpaceCorps"
 summary = "Document templates and signature requests; a PDF from Documents can be signed through a one-time link. Simple electronic signature."
 license = "Apache-2.0"
@@ -130,8 +130,9 @@ write_group = "sign.user"
 
   [[model.field]]
   name = "signature_reference"
-  description = "Where the signature is kept; typed:NAME for a typed name given through a link"
-  class = "none"
+  description = "Where the signature is kept; typed:NAME for a typed name given through a link, so it is personal data like the name itself"
+  class = "internal"
+  personal_data = true
   group = "sign.manager"
 
   [[model.field]]
@@ -191,7 +192,7 @@ write_group = "sign.user"
   to = "signed"
   group = "sign.manager"
   approval = true
-  assert = [{ expr = "!is_set(document_id)", message = "A request about a Document is signed by the signer through the signing link; it cannot be marked signed by hand", key = "document_request" }]
+  assert = [{ expr = "!is_set(document_id) && !is_set(document_hash) && !is_set(document_file)", message = "A request about a Document is signed by the signer through the signing link; it cannot be marked signed by hand", key = "document_request" }]
 
   [[model.action]]
   name = "decline"
