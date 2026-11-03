@@ -30,7 +30,7 @@ pub(crate) const MAX_BODY: usize = 16 * 1024;
 /// The address rate limits are keyed on: the peer, or behind a trusted proxy the nearest
 /// `X-Forwarded-For` entry, which is the last element of the last header line (a proxy that adds
 /// its own line, or extends the one it got, puts its entry at the end; the entries before it are
-/// whatever the client sent). The same rule as the public site.
+/// whatever the client sent). The same rule as the public site (`public.rs`) and the signer door.
 pub(crate) fn client_ip(s: &HttpState, parts: &Parts) -> String {
     if s.trust_proxy.load(std::sync::atomic::Ordering::Relaxed)
         && let Some(v) = parts

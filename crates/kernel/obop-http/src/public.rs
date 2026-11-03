@@ -194,4 +194,28 @@ mod tests {
             assert!(!admin_prefix_ok(bad), "{bad}");
         }
     }
+
+    #[test]
+    fn the_client_is_the_last_entry_of_the_last_forwarded_line_behind_a_trusted_proxy() {
+        let parts = |lines: &[&str]| {
+            let mut b = axum::http::Request::builder().uri("/");
+            for l in lines {
+                b = b.header("x-forwarded-for", *l);
+            }
+            b.body(()).unwrap().into_parts().0
+        };
+        // One line: the proxy's entry is the last.
+        assert_eq!(
+            client_address(&parts(&["203.0.113.9, 198.51.100.7"]), true),
+            "198.51.100.7"
+        );
+        // Two lines: what the client sent first is not believed over the proxy's own line.
+        assert_eq!(
+            client_address(&parts(&["192.0.2.1", "203.0.113.9, 198.51.100.8"]), true),
+            "198.51.100.8"
+        );
+        // Not behind a proxy that is trusted: the header says nothing (and with no socket in this
+        // test there is no peer either).
+        assert_eq!(client_address(&parts(&["203.0.113.9"]), false), "");
+    }
 }
