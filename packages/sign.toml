@@ -192,7 +192,7 @@ write_group = "sign.user"
   to = "signed"
   group = "sign.manager"
   approval = true
-  assert = [{ expr = "!is_set(document_id) && !is_set(document_hash) && !is_set(document_file)", message = "A request about a Document is signed by the signer through the signing link; it cannot be marked signed by hand", key = "document_request" }]
+  assert = [{ expr = "!is_set(document_id) && !is_set(document_file) && (!is_set(document_hash) || is_set(template_id))", message = "A request about a Document is signed by the signer through the signing link; it cannot be marked signed by hand", key = "document_request" }]
 
   [[model.action]]
   name = "decline"

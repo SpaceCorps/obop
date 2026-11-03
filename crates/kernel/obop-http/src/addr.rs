@@ -39,10 +39,8 @@ fn forwarded_entry(headers: &HeaderMap) -> Option<String> {
         .next_back()?
         .to_str()
         .ok()?;
+    // An empty entry, a name and anything longer than an address do not parse.
     let last = line.rsplit(',').next()?.trim();
-    if last.is_empty() || last.len() > 64 {
-        return None;
-    }
     IpAddr::from_str(last)
         .or_else(|_| SocketAddr::from_str(last).map(|s| s.ip()))
         .ok()
