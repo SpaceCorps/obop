@@ -3,6 +3,7 @@ import { Badge, Button, Dialog, Input, Notice, Table, Tooltip, t } from "@obop/u
 import { search, type FieldMeta, type Row } from "./api.ts";
 import { useData } from "./data.tsx";
 import { instantText } from "./format.ts";
+import { useLeaveHold } from "./leaveGuard.ts";
 import { serverMessage } from "./serverMessage.ts";
 import {
   LINK_CREATE,
@@ -10,6 +11,7 @@ import {
   LINK_UPDATE,
   canRevokeStatus,
   closeAttempt,
+  copiedWholeLink,
   copyText,
   linkGate,
   linkStatus,
@@ -26,8 +28,10 @@ import { isDocumentRequest } from "./workflow.ts";
    makes a one-time link and keeps only a hash of it, so the link is shown here once, in a dialog,
    with a Copy button. Closing the dialog drops it; a lost link is replaced by making another. So
    the dialog is hard to close by accident: Escape, a click outside, the X and Done ask first until
-   the link has been copied (with the button or by hand from the field), and focus starts on Copy.
-   Nothing of the link is stored in the browser, written to a toast or kept in a list. */
+   the link has been copied (with the button, or by hand with the whole link selected), and focus
+   starts on Copy. Leaving the page by other ways asks too (Back, a reload, the palette, closing the
+   panel: `leaveGuard.ts`), also while the link is still being made. Nothing of the link is stored in
+   the browser, written to a toast or kept in a list. */
 
 /**
  * Said in the panel of a request about a document that is not signed yet: the signer signs it through
@@ -60,6 +64,25 @@ export function SignLinkAction({
   const link = d.models.get(LINK_MODEL)?.model;
   const [busy, setBusy] = useState(false);
   const [made, setMade] = useState<MadeLink | null>(null);
+  // The server makes the link when it is asked, so leaving before the answer would lose it.
+  useLeaveHold(
+    busy
+      ? {
+          message: t(
+            "The signing link is still being made. If you leave now, you will not see it and will have to make another one. Leave anyway?",
+          ),
+          leave: t("Leave anyway"),
+          stay: t("Stay"),
+        }
+      : null,
+  );
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
   // Not installed (an older package) or not allowed for this person: no button at all. The generic
   // New of the model is switched off (`via_action`, api.ts), so the right is read from there.
   if (!link?.via_action) return null;
@@ -71,6 +94,17 @@ export function SignLinkAction({
     if (blocked) return;
     setBusy(true);
     const r = await d.run(LINK_CREATE, { request_id: row.id });
+    if (!alive.current) {
+      // The person left (and said so) before the answer: the link exists and nobody has it.
+      if (r.kind === "ok")
+        d.notify(
+          t(
+            "A signing link was made for this request, but you left before it was shown. It cannot be shown again. Open the request, revoke that link and make another one.",
+          ),
+          "error",
+        );
+      return;
+    }
     setBusy(false);
     if (r.kind === "ok") {
       const m = madeLink(r.value, location.origin);
@@ -133,6 +167,18 @@ export function SignLinkDialog({
   // does not close on Escape, a click outside, the X or Done: it asks first.
   const [kept, setKept] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  // Leaving the page by another way (Back, a reload, the palette, closing the panel) asks until then.
+  useLeaveHold(
+    kept
+      ? null
+      : {
+          message: t(
+            "The signing link has not been copied. If you leave now, it is lost and you will have to make another one. Leave anyway?",
+          ),
+          leave: t("Leave without the link"),
+          stay: t("Stay and copy it"),
+        },
+  );
   const ask = () => {
     const step = closeAttempt(kept, leaving);
     if (step.close) onClose();
@@ -159,7 +205,9 @@ export function SignLinkDialog({
               }
             });
           }}
-          onFieldCopied={() => setKept(true)}
+          onFieldCopied={(input) => {
+            if (copiedWholeLink(input, made.href)) setKept(true);
+          }}
           onDone={ask}
           onCloseAnyway={onClose}
         />
@@ -188,7 +236,8 @@ export function SignLinkBody({
   /** The id the dialog points `aria-describedby` at, so the warning is read with its title. */
   noteId?: string;
   onCopy: () => void;
-  onFieldCopied?: () => void;
+  /** A copy event in the field; the dialog decides whether it was the whole link. */
+  onFieldCopied?: (input: HTMLInputElement) => void;
   onDone: () => void;
   onCloseAnyway?: () => void;
 }) {
@@ -211,7 +260,7 @@ export function SignLinkBody({
         autoComplete="off"
         data-testid="sign-link"
         onFocus={(e) => selectAll(e.currentTarget)}
-        onCopy={onFieldCopied}
+        onCopy={(e) => onFieldCopied?.(e.currentTarget)}
         hint={
           made.expiresAt
             ? t("The link works once and stops working on {date}.", {

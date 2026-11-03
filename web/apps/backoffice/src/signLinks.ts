@@ -131,6 +131,17 @@ export function madeLink(value: unknown, origin: string): MadeLink | null {
   return { href: url.href, expiresAt: typeof v.expires_at === "string" ? v.expires_at : "" };
 }
 
+/**
+ * Whether a copy event in the link's field copied the whole link. A copy with part of it selected, or
+ * with only a caret in the field, puts a fragment or nothing on the clipboard and must not count as
+ * the link being kept.
+ */
+export function copiedWholeLink(input: HTMLInputElement, href: string): boolean {
+  return (
+    input.value === href && input.selectionStart === 0 && input.selectionEnd === input.value.length
+  );
+}
+
 /** The text of a link that cannot be copied by the clipboard API: select it for the person. */
 export function selectAll(input: HTMLInputElement | null): void {
   if (!input) return;

@@ -10,6 +10,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 import { provideCatalogue, setLanguage } from "@obop/ui";
 import { markActionOnly, type FieldMeta, type ModuleMeta, type Row } from "./api.ts";
 import { DataProvider } from "./data.tsx";
+import { heldLeaveQuestion } from "./leaveGuard.ts";
+import { nav, useRoute, type Go } from "./route.ts";
 import { SignLinkAction } from "./SignLinks.tsx";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -56,6 +58,8 @@ let container: HTMLDivElement;
 let root: Root;
 let notify: ReturnType<typeof vi.fn>;
 let fetched: { url: string; body: string }[];
+/** Lets a held `sign_link.create` answer (see `fakeServer({ hold: true })`). */
+let answerCreate: (() => void) | null;
 let clipboard: { writeText: ReturnType<typeof vi.fn> };
 
 const json = (value: unknown, status = 200) =>
@@ -65,13 +69,15 @@ const json = (value: unknown, status = 200) =>
   });
 
 /** A fake server: `sign_link.create` answers with the link, every other call with an empty list. */
-function fakeServer() {
+function fakeServer(opts: { hold?: boolean } = {}) {
   fetched = [];
+  answerCreate = null;
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init?: RequestInit) => {
       fetched.push({ url: String(url), body: String(init?.body ?? "") });
       if (String(url).includes("/api/sign_link/create")) {
+        if (opts.hold) await new Promise<void>((done) => (answerCreate = done));
         return json({ id: "link-1", link: PATH, expires_at: "2030-01-01T00:00:00.000000Z" });
       }
       return json({ rows: [], total: 0 });
@@ -130,8 +136,8 @@ const field_ = () => document.body.querySelector<HTMLInputElement>(".sign-link-f
 const asked = () => text().includes("Close without copying?");
 
 /** Press "Create signing link" and wait for the dialog. */
-async function openDialog() {
-  await mount();
+async function openDialog(node?: ReactNode) {
+  await mount(node);
   await click(button("Create signing link"));
   for (let i = 0; i < 40 && !dialog(); i++) await settle();
   expect(dialog(), "the dialog did not open").not.toBeNull();
@@ -149,6 +155,8 @@ beforeEach(async () => {
   notify = vi.fn();
   clipboard = { writeText: vi.fn(async () => {}) };
   Object.defineProperty(navigator, "clipboard", { value: clipboard, configurable: true });
+  nav.ask = null;
+  nav.dirty = null;
   fakeServer();
   container = document.createElement("div");
   document.body.append(container);
@@ -336,5 +344,173 @@ describe("what happens to the link (state, not words)", () => {
     expect(notify).not.toHaveBeenCalled();
     expect(document.title).not.toContain(TOKEN);
     expect(location.href).not.toContain(TOKEN);
+  });
+});
+
+describe("leaving the page while the link is shown (Back, a reload, the palette, the panel)", () => {
+  // The dialog lives inside the record panel, which lives under the route: anything that changes
+  // the route takes the dialog, and the link, away with it.
+  let go: Go;
+  function Page() {
+    const [route, g] = useRoute();
+    go = g;
+    return route.model === "" || route.model === "sign_request" ? <Action /> : <p>elsewhere</p>;
+  }
+  const leavePrompt = () => {
+    const e = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(e);
+    return e.defaultPrevented;
+  };
+  const answerWith = (leave: boolean) => {
+    const ask = vi.fn(async (_message: string, _leave: string, _stay: string) => leave);
+    nav.ask = ask;
+    return ask;
+  };
+  const untilAsked = async (ask: ReturnType<typeof vi.fn>) => {
+    for (let i = 0; i < 30 && !ask.mock.calls.length; i++) await settle();
+  };
+
+  it("asks the browser before a reload or a closed tab until the link was copied", async () => {
+    await openDialog();
+    expect(leavePrompt(), "no prompt while the link is shown and not copied").toBe(true);
+    await click(button("Copy"));
+    await settle();
+    expect(leavePrompt(), "a prompt although the link was copied").toBe(false);
+  });
+
+  it("gives the prompt up when the dialog is closed without copying", async () => {
+    await openDialog();
+    await press("Escape");
+    await click(button("Close without copying"));
+    expect(dialog()).toBeNull();
+    expect(leavePrompt()).toBe(false);
+    expect(heldLeaveQuestion()).toBeNull();
+  });
+
+  it("holds a question for the route while the link is shown and not copied, and drops it after the copy", async () => {
+    await openDialog();
+    const q = heldLeaveQuestion();
+    expect(q?.message).toContain("has not been copied");
+    expect(q?.leave).toBe("Leave without the link");
+    expect(q?.stay).toBe("Stay and copy it");
+    await click(button("Copy"));
+    await settle();
+    expect(heldLeaveQuestion()).toBeNull();
+  });
+
+  it("asks before the browser's Back or a swipe changes the address, and puts the address back", async () => {
+    const ask = answerWith(false);
+    await openDialog(<Page />);
+    const here = location.hash;
+    await act(async () => {
+      location.hash = "#/crm/lead";
+    });
+    await untilAsked(ask);
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(ask.mock.calls[0]![1]).toBe("Leave without the link");
+    await settle();
+    expect(location.hash, "the address was not put back").toBe(here || "#/");
+    expect(dialog(), "the dialog went away although they stayed").not.toBeNull();
+    expect(text()).not.toContain("elsewhere");
+  });
+
+  it("lets go of the dialog, and only then, when the person says leave", async () => {
+    const ask = answerWith(true);
+    await openDialog(<Page />);
+    await act(async () => {
+      location.hash = "#/crm/lead";
+    });
+    await untilAsked(ask);
+    for (let i = 0; i < 30 && dialog(); i++) await settle();
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(dialog()).toBeNull();
+    expect(text()).toContain("elsewhere");
+  });
+
+  it("asks before the palette or the panel's close button navigates in code", async () => {
+    const ask = answerWith(false);
+    await openDialog(<Page />);
+    await act(async () => go({ app: "crm", model: "lead" }));
+    await settle();
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(dialog()).not.toBeNull();
+    expect(text()).not.toContain("elsewhere");
+  });
+
+  it("does not ask once the link was copied", async () => {
+    const ask = answerWith(false);
+    await openDialog(<Page />);
+    await click(button("Copy"));
+    await settle();
+    await act(async () => go({ app: "crm", model: "lead" }));
+    await settle();
+    expect(ask).not.toHaveBeenCalled();
+    expect(text()).toContain("elsewhere");
+  });
+
+  it("asks before leaving while the server is still making the link, then holds the link's own question", async () => {
+    fakeServer({ hold: true });
+    const ask = answerWith(false);
+    await mount(<Page />);
+    await click(button("Create signing link"));
+    await settle();
+    expect(answerCreate, "the request was not sent").not.toBeNull();
+    expect(heldLeaveQuestion()?.message).toContain("still being made");
+    expect(leavePrompt()).toBe(true);
+    await act(async () => go({ app: "crm", model: "lead" }));
+    await settle();
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(ask.mock.calls[0]![0]).toContain("still being made");
+    // The answer arrives: the dialog opens and the question is now the link's.
+    await act(async () => answerCreate!());
+    for (let i = 0; i < 40 && !dialog(); i++) await settle();
+    expect(dialog()).not.toBeNull();
+    expect(heldLeaveQuestion()?.message).toContain("has not been copied");
+  });
+
+  it("tells the person, when they left anyway, that the link was made and nobody has it", async () => {
+    fakeServer({ hold: true });
+    await mount();
+    await click(button("Create signing link"));
+    await settle();
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await act(async () => answerCreate!());
+    await settle();
+    expect(dialog(), "a dialog opened in a panel that is gone").toBeNull();
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(notify.mock.calls[0]![0]).toContain("you left before it was shown");
+    expect(notify.mock.calls[0]![0]).not.toContain(TOKEN);
+    expect(heldLeaveQuestion()).toBeNull();
+  });
+
+  it("counts a copy by hand only when the whole link was selected", async () => {
+    const copyByHand = async (select: (input: HTMLInputElement) => void) => {
+      await act(async () => {
+        select(field_());
+        field_().dispatchEvent(new Event("copy", { bubbles: true }));
+      });
+    };
+    await openDialog();
+    const parts: [string, (i: HTMLInputElement) => void][] = [
+      ["a fragment in the middle", (i) => i.setSelectionRange(3, 12)],
+      ["the start of it", (i) => i.setSelectionRange(0, 12)],
+      ["the end of it", (i) => i.setSelectionRange(3, i.value.length)],
+      ["only a caret at the start", (i) => i.setSelectionRange(0, 0)],
+      ["only a caret at the end", (i) => i.setSelectionRange(i.value.length, i.value.length)],
+    ];
+    for (const [what, select] of parts) {
+      await copyByHand(select);
+      expect(heldLeaveQuestion(), `${what} released the leave question`).not.toBeNull();
+      await press("Escape");
+      expect(dialog(), `${what} released the dialog`).not.toBeNull();
+      expect(asked(), `${what}: no question`).toBe(true);
+      await press("Escape"); // back to the link
+    }
+    // The whole link.
+    await copyByHand((i) => i.select());
+    expect(heldLeaveQuestion()).toBeNull();
+    await press("Escape");
+    expect(dialog()).toBeNull();
   });
 });

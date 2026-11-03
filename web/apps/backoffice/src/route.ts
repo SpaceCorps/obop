@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "@obop/ui";
+import { heldLeaveQuestion, type LeaveQuestion } from "./leaveGuard.ts";
 
 /**
  * The URL holds where you are, so links and the back button work:
@@ -46,11 +47,25 @@ export function href(r: Partial<Route>): string {
   return `#/${[r.app, r.model].filter(Boolean).join("/")}${qs ? `?${qs}` : ""}`;
 }
 
-/** Unsaved work registers here; leaving the page asks first. */
+/**
+ * Unsaved work registers here; leaving the page asks first. So does anything that is lost for good
+ * when the person leaves (`leaveGuard.ts`, a signing link that was not copied).
+ */
 export const nav: {
   dirty: (() => boolean) | null;
-  ask: ((message: string) => Promise<boolean>) | null;
+  ask: ((message: string, leave: string, stay: string) => Promise<boolean>) | null;
 } = { dirty: null, ask: null };
+
+/** What to ask before the address changes, or `null` to go ahead. */
+function leaveQuestion(): LeaveQuestion | null {
+  if (nav.dirty?.())
+    return {
+      message: t("You have unsaved changes. Leave and discard them?"),
+      leave: t("Leave and discard"),
+      stay: t("Keep editing"),
+    };
+  return heldLeaveQuestion();
+}
 
 export type Go = (r: Partial<Route>, opts?: { replace?: boolean }) => void;
 
@@ -67,11 +82,12 @@ export function useRoute(): [Route, Go] {
         setRoute(parse(location.hash));
         return;
       }
-      if (nav.dirty?.() && nav.ask) {
+      const question = nav.ask ? leaveQuestion() : null;
+      if (question && nav.ask) {
         const target = location.hash;
         // Put the old address back until the person decides.
         history.replaceState(null, "", last.current || "#/");
-        void nav.ask(t("You have unsaved changes. Leave and discard them?")).then((leave) => {
+        void nav.ask(question.message, question.leave, question.stay).then((leave) => {
           if (!leave) return;
           skip = true;
           location.hash = target;
@@ -94,8 +110,9 @@ export function useRoute(): [Route, Go] {
       last.current = h;
       setRoute(parse(h));
     };
-    if (nav.dirty?.() && nav.ask) {
-      void nav.ask(t("You have unsaved changes. Leave and discard them?")).then((leave) => {
+    const question = nav.ask ? leaveQuestion() : null;
+    if (question && nav.ask) {
+      void nav.ask(question.message, question.leave, question.stay).then((leave) => {
         if (!leave) return;
         apply();
       });
