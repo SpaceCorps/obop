@@ -1,10 +1,10 @@
 [module]
 id = "sign"
-version = "0.2.0"
+version = "0.2.1"
 name = "Sign"
-description = "Document templates and signature requests with a draft, sent, signed, declined, expired flow. A request names the signer (personal data) and keeps the signature evidence as references. A signed request is immutable by convention only: the platform cannot yet lock a record, so nobody should edit a request once it is signed, and the document_hash records what was signed. Sending and recording a signature need a human approval; agents may only propose them."
+description = "Document templates and signature requests with a draft, sent, signed, declined, expired flow. A request names the signer (personal data) and keeps the signature evidence. A request can point at a PDF in Documents: sending it takes the SHA-256 of the file and keeps an exact copy, and a person with the manager role creates a one-time signing link that the signer opens without an account to read that copy, type their full name and agree. This is a simple electronic signature only: a typed name does not prove who typed it, the time is the server clock, and the address is the one the proxy chain reports. At signing the evidence is stored on the request and an append-only entry is written to the security log. A signed request can be changed or deleted only by an administrator, who can still change any record. Sending and recording a signature need a human approval for agents, and agents cannot create signing links."
 author = "SpaceCorps"
-summary = "Document templates and signature requests. Sending and recording a signature need a human approval."
+summary = "Document templates and signature requests; a PDF from Documents can be signed through a one-time link. Simple electronic signature."
 license = "Apache-2.0"
 homepage = "https://github.com/SpaceCorps/obop"
 repository = "https://github.com/SpaceCorps/obop"
@@ -12,6 +12,9 @@ keywords = ["signature", "e-sign", "contracts"]
 categories = ["productivity"]
 maturity = "experimental"
 requires_core = "^0.2"
+
+[module.dependencies]
+documents = ">=0.3, <1"
 
 [[model]]
 name = "sign_template"
@@ -56,11 +59,17 @@ write_group = "sign.user"
 
   [[model.field]]
   name = "template_id"
-  description = "The document to sign"
+  description = "The document template to send; empty for a request about a document in Documents"
   class = "none"
   kind = "ref"
   to = "sign_template"
-  required = true
+
+  [[model.field]]
+  name = "document_id"
+  description = "The PDF in Documents that the signer reads and signs; sending the request takes its SHA-256 and keeps an exact copy"
+  class = "none"
+  kind = "ref"
+  to = "documents_document"
 
   [[model.field]]
   name = "title"
@@ -83,10 +92,9 @@ write_group = "sign.user"
 
   [[model.field]]
   name = "signer_email"
-  description = "Email address the request is sent to"
+  description = "Email address of the signer; optional, obop sends no email for a request about a document"
   class = "internal"
   personal_data = true
-  required = true
 
   [[model.field]]
   name = "sent_on"
@@ -108,7 +116,7 @@ write_group = "sign.user"
 
   [[model.field]]
   name = "signer_ip"
-  description = "IP address the signature came from (evidence)"
+  description = "Address the signature came from as reported by the proxy chain (evidence)"
   class = "internal"
   personal_data = true
   group = "sign.manager"
@@ -122,13 +130,40 @@ write_group = "sign.user"
 
   [[model.field]]
   name = "signature_reference"
-  description = "Where the signature image or certificate is stored"
+  description = "Where the signature is kept; typed:NAME for a typed name given through a link"
   class = "none"
   group = "sign.manager"
 
   [[model.field]]
   name = "document_hash"
-  description = "SHA-256 hash (hex) of the signed document, to prove it was not changed afterwards"
+  description = "SHA-256 hash (hex) of the signed document, to prove it was not changed afterwards; set when a request about a document is sent"
+  class = "none"
+  group = "sign.manager"
+
+  [[model.field]]
+  name = "document_file"
+  description = "The exact copy of the PDF that was sent for signature, kept so that replacing the file in Documents cannot change what was signed; nobody holds the group, so only an administrator reads it"
+  class = "internal"
+  kind = "file"
+  group = "sign.system"
+
+  [[model.field]]
+  name = "signed_at"
+  description = "When the signer signed through the link (UTC, server clock)"
+  class = "none"
+  kind = "datetime"
+  group = "sign.manager"
+
+  [[model.field]]
+  name = "signed_name"
+  description = "The full name the signer typed (evidence); signer_name stays the name that was asked for"
+  class = "internal"
+  personal_data = true
+  group = "sign.manager"
+
+  [[model.field]]
+  name = "consent_version"
+  description = "Version and language of the consent wording the signer saw, for example v1-draft/en"
   class = "none"
   group = "sign.manager"
 
@@ -170,3 +205,48 @@ write_group = "sign.user"
   field = "state"
   from = "sent"
   to = "expired"
+
+  [[model.action]]
+  name = "send_document"
+  description = "Send a request about a document in Documents: takes the SHA-256 of the PDF, keeps an exact copy and moves the request to sent; create the signing link afterwards"
+  field = "state"
+  from = "draft"
+  to = "sent"
+  approval = true
+
+[[model]]
+name = "sign_link"
+description = "A one-time link that lets one person sign one request; only a hash of the secret is kept, so the link is shown once when it is created"
+read_group = "sign.user"
+write_group = "sign.manager"
+
+  [[model.field]]
+  name = "request_id"
+  description = "The signing request this link opens"
+  class = "none"
+  kind = "ref"
+  to = "sign_request"
+  required = true
+
+  [[model.field]]
+  name = "expires_at"
+  description = "When the link stops working (UTC); at most 14 days after it was created, and never after the last day of the request"
+  class = "none"
+  kind = "datetime"
+
+  [[model.field]]
+  name = "used_at"
+  description = "When the link was used to sign (UTC); a link works once"
+  class = "none"
+  kind = "datetime"
+
+  [[model.field]]
+  name = "revoked_at"
+  description = "When the link was revoked (UTC); set it to revoke the link"
+  class = "none"
+  kind = "datetime"
+
+  [[model.field]]
+  name = "link"
+  description = "The link itself: in the answer to create only, shown once, never stored and never returned by get, list or search"
+  class = "internal"

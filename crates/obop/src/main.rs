@@ -3322,7 +3322,23 @@ mod bundled_packages {
         }
 
         fn create(&self, model: &str, input: Value) -> String {
-            let p = if self.pkg_models.contains(model) {
+            // A signing link is made by `sign_link.create`, which mints the secret and takes only
+            // the request: the sample (every field filled in) is written to the store instead.
+            if model == "sign_link" {
+                let Value::Map(mut fields) = input else {
+                    unreachable!()
+                };
+                // The store takes canonical text only (D72); `create` would have made it so.
+                for f in self.meta[model].fields.iter().filter(|f| f.kind == "datetime") {
+                    if let Some(Value::Text(t)) = fields.get_mut(f.name) {
+                        *t = obop_values::datetime::canonical(t).unwrap();
+                    }
+                }
+                return self.app.store.insert(model, fields).unwrap();
+            }
+            // The evidence fields of a signature request belong to the signer door; only an
+            // administrator writes them by hand.
+            let p = if self.pkg_models.contains(model) && model != "sign_request" {
                 &self.pkg_user
             } else {
                 &self.admin
