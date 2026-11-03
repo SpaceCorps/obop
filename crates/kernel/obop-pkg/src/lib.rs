@@ -3,6 +3,7 @@
 
 pub mod accounts;
 pub mod check;
+pub mod describe;
 pub mod devices;
 pub mod files;
 pub mod installer;
