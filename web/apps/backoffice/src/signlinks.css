@@ -5,3 +5,12 @@
   width: 100%;
   text-overflow: ellipsis;
 }
+
+/* The links of a request sit in the record panel between its actions and its fields, with the same
+   side padding as both (record.css `.actionrow` and `.fields`). */
+.sign-links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem 1.25rem 0;
+}
