@@ -20,6 +20,7 @@ import {
   updateToken,
   users,
 } from "./env.ts";
+import { register } from "./shutdown.ts";
 
 const [kind] = process.argv.slice(2);
 const dir = process.env.OBOP_E2E_DIR;
@@ -50,16 +51,32 @@ if (kind === "market") {
     res.end(readFileSync(file));
   });
   server.listen(Number(process.env.OBOP_E2E_MARKET_PORT), "127.0.0.1");
-  for (const sig of ["SIGTERM", "SIGINT"] as const)
-    process.on(sig, () => server.close(() => process.exit(0)));
+  const stop = () => {
+    server.close();
+    server.closeAllConnections();
+  };
+  const stopped = register(dir, kind, stop);
+  server.on("close", () => {
+    stopped();
+    process.exit(0);
+  });
+  for (const sig of ["SIGTERM", "SIGINT"] as const) process.on(sig, stop);
   await new Promise(() => {});
 }
 
 // A stand-in for Microsoft Entra on loopback for the Microsoft sign-in specs (D91).
 if (kind === "idp") {
   const server = startIdp(Number(process.env.OBOP_E2E_IDP_PORT));
-  for (const sig of ["SIGTERM", "SIGINT"] as const)
-    process.on(sig, () => server.close(() => process.exit(0)));
+  const stop = () => {
+    server.close();
+    server.closeAllConnections();
+  };
+  const stopped = register(dir, kind, stop);
+  server.on("close", () => {
+    stopped();
+    process.exit(0);
+  });
+  for (const sig of ["SIGTERM", "SIGINT"] as const) process.on(sig, stop);
   await new Promise(() => {});
 }
 
@@ -249,5 +266,10 @@ const child = spawn(bin, args, {
     ...extraEnv,
   },
 });
+// Stops when Playwright signals it, or when the global teardown asks (see support/shutdown.ts).
+const stopped = register(dir, kind, () => child.kill("SIGTERM"));
 for (const sig of ["SIGTERM", "SIGINT"] as const) process.on(sig, () => child.kill(sig));
-child.on("exit", (code) => process.exit(code ?? 0));
+child.on("exit", (code) => {
+  stopped();
+  process.exit(code ?? 0);
+});

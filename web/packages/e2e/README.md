@@ -33,6 +33,12 @@ HTML report goes to `playwright-report/`. `OBOP_E2E_KEEP=1` keeps the temp direc
   creates the accounts with the CLI (`obop admin create`, password on stdin) and then starts the server:
   `obop serve --static web/apps/backoffice/dist` with admin `root` (group `platform.admin`) and restricted
   user `sam` (`base.user,crm.user,sales.user,product.user`), and `obop platform serve --provisioner fake --static web/site` for the control plane.
+- Ports and shutdown: `support/ports.ts` picks the eight ports of a run together (every probe socket stays open
+  until all are chosen, so no two servers can be given the same port; `tests/ports.spec.ts` checks it). Playwright
+  stops its web servers only after `globalTeardown`, so the teardown (`support/shutdown.ts`) first asks each
+  launcher (`serve.ts`) to stop its server, waits until all have exited, and only then removes the temp directory.
+  It fails the run if a server does not stop or the directory cannot be removed; `retries` stays 0, so a test that
+  passes only on a retry stays visible.
 - One instance backs the whole run, so specs run one at a time. Tests that assert counts or totals install a
   throwaway module (`scratchModule`) and so own all of its data; every other test uses uniquely named
   records (`uid`) and restores anything instance-wide it changes (theme, installed modules).
