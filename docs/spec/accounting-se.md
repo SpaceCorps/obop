@@ -1,0 +1,132 @@
+# Accounting Sweden: moving open-accounting-sweden into obop
+
+- **Status:** Draft 0.1. PROPOSED. No owner ruling covers this area yet.
+- **Date:** 2026-11-03
+- **Scope:** How the domain model of open-accounting-sweden (OAS, our own project, MIT) maps onto obop, in stages: the `accounting_se` package, SIE 4 files, an importer for OAS data, and the later pieces (invoices, payroll, receipts, time).
+- **Not verified:** Nothing in this document or in the package has been checked against Skatteverket (form SKV 4700, the AGI specification, any rate or deadline) or against the official SIE specification. Every box, code, rate and file layout named here comes from OAS, which itself marked them UNVERIFIED, or from general knowledge. An owner must check each one before any of it is relied on for a real return.
+
+**Reading notes.** Decisions are cited by ID ([DECISIONS.md](../DECISIONS.md)). The package format is described in [MODULES.md](../MODULES.md). The ledger package this builds on is `packages/accounting.toml`. OAS is the repository `SpaceCorps/open-accounting-sweden`; "OAS" in this document means its server crates, `oas-server` (`vat.rs`, `ledger.rs`, `invoices.rs`, `payroll.rs`, `inbox.rs`) and its SQLite schema.
+
+## 1. Purpose and scope
+
+OAS is a small, self-hosted bookkeeping server for Swedish aktiebolag. obop has a general ledger package (`accounting`) and no Swedish rules. The plan is to carry the Swedish parts over as data models and importers on top of obop, not to port OAS code: obop's own commands, permissions, approvals and surfaces replace the OAS server, and OAS stays what it is.
+
+Two rules shape every stage.
+
+1. **No BAS chart in the public tree.** The BAS chart of accounts (kontoplan) and its account names are proprietary. Decision D34 and the provenance check in CI reject restricted data in the public tree. The package therefore contains no account number or account name list. Where a VAT code needs an account, the field is a reference the user fills from their own chart. A later step takes a BAS file that the licensee supplies (section 8).
+2. **Everything starts unverified.** OAS marks every VAT box mapping UNVERIFIED until the owner checks it. The package keeps that: each box and each code has a `review` state that starts at `unverified`, and only the stricter `accounting.approver` group can move it.
+
+## 2. Status of each stage
+
+| Stage | What it is | Status |
+|---|---|---|
+| 1. Ledger | Accounts, journals, entries, periods, fiscal years, gapless numbering, approval to post | Built (`packages/accounting.toml`), plus the Swedish company and voucher series models of this PR |
+| 2. VAT | VAT boxes, VAT codes, the VAT report per period with propose and approve | This PR (`packages/contrib/accounting_se/accounting_se.toml`, installable by upload, not bundled); computing the boxes from the ledger is not built |
+| 3. SIE 4 | Import and export of SIE 4 files | Being built in parallel (crate `obop-sie`); not part of this PR's package |
+| 4. OAS importer | `obop import oas` reads the OAS SQLite file and documents directory | Not built |
+| 5. Invoices | Customer invoices with the ledger voucher | Not built for Sweden (the `invoicing` module exists; the link to the ledger and the Swedish rules do not) |
+| 6. Payroll and AGI | Employees, pay runs, employer contributions, AGI file | Not built (a new later package; every rate UNVERIFIED) |
+| 7. Receipts and bank | Receipt archive, bank lines, matching | Parts exist (`documents`, `accounting_bank_statement_line`); matching and booking not built |
+| 8. Time tracking | Projects, time entries, billing | Parts exist (`timesheets` package); the link to invoices is not built |
+| 9. Immutability and hash chain | Vouchers that cannot change, with a verifiable chain | Not built; waits on K5 (see 9) |
+
+## 3. Stage 1 and 2: the `accounting_se` package
+
+The package `accounting_se` depends on `accounting` (`^0.3`) and needs core 0.2.1 (it uses field limits, D90). It is declarative (X1) and ships no rows.
+
+| Model | Holds | OAS source |
+|---|---|---|
+| `accounting_se_company` | Name, organisation number, VAT number, F-tax, fiscal year start month, VAT period (monthly, quarterly, yearly), currency, address, contact | table `company` |
+| `accounting_se_voucher_series` | Series code (one to three letters, `A` in OAS), name, journal, default flag | column `voucher.series` |
+| `accounting_se_vat_box` | Box number, title, kind (base, output, input, result), not-used flag, review state | table `vat_box` |
+| `accounting_se_vat_code` | Code, treatment, rate in basis points, base box and side, VAT box, VAT account, VAT side, tax, review state | tables `vat_code` and `vat_account` |
+| `accounting_se_vat_report` | One period: dates, due date, computed output VAT, input VAT and VAT to pay, the confirmation flag, state | the report built in `vat.rs` |
+| `accounting_se_vat_report_line` | One box of a report with its amount and the voucher references behind it | the `boxes` array of the OAS report |
+
+**Review state.** `review` is a select (`unverified`, `verified`) that the actions `verify` and `unverify` move; both need `accounting.approver` and a human approval, so an agent can only propose them. `verified` is a computed bool on the same record. Nothing in the package is created as verified.
+
+**Report states.** `draft`, `proposed`, `approved`, `filed`. `propose` can be run by anyone with `accounting.user`, agents included. `approve` and `record_filed` need `accounting.approver` and an approval. `approve` is refused unless `boxes_confirmed` is true, the approver's statement that every box was compared with SKV 4700 and the mappings used are verified. `record_filed` only records that the return was filed somewhere else; nothing is sent to Skatteverket from obop.
+
+**Amounts.** Money fields in minor units (öre). Rates in basis points (2500 is 25.00 percent). No floats. Output VAT, input VAT and VAT to pay on the report are computed from the lines (`sum(lines.amount where kind == "output")`), and VAT to pay is output minus input.
+
+**Starter data (UNVERIFIED).** The package has no seed mechanism, so the rows below are a list to enter or import, taken from OAS and not checked against SKV 4700:
+
+- Boxes: 05 (base), 10, 11, 12 (output VAT at 25, 12 and 6 percent), 21 and 22 (base, reverse-charge purchases of services from the EU and from outside it), 30, 31, 32 (output VAT on reverse charge at 25, 12 and 6 percent), 39 (base, sale of services to another EU country), 48 (input VAT), 49 (result).
+- Codes: S25, S12, S6 (sale in Sweden), RCEU and RCNONEU (reverse-charge purchase), SEUSVC (sale of services to the EU), I25 (domestic purchase with input VAT), NONE. The treatment list also names export and exempt; OAS has no code for them yet.
+- Which account feeds which box is not listed here on purpose (rule 1 of section 1).
+
+**What X1 cannot express.** These are stated limits, not gaps in effort.
+
+- **No derivation from the ledger.** A report cannot sum the ledger lines that carry a VAT code, because X1 has no joins, no aggregate over another model and no function that fills a record from several others. The preparer (a person, an agent or a later importer or X2 command) writes the report lines. OAS computes the boxes in SQL; that part is not ported.
+- **No seeding.** A package cannot ship rows, so boxes and codes are entered or imported after install.
+- **No VAT code on a ledger line.** A package cannot add a field to `accounting_move_line`, so a line cannot carry a `vat_code` the way an OAS entry does. The existing `tax_id` on the line stays the link; the mapping from code to tax is the optional `tax_id` of the code. Changing this needs a field in `accounting` itself (not done here).
+- **Voucher series do not number.** The number of an entry is the gapless `JE/{year}/{seq}` series of `accounting`. A series record names a letter and a journal but cannot change the number format or keep its own counter. OAS numbers `A1`, `A2`, and so on; an import keeps the old number as a reference (section 5), not as the entry number.
+- **Rows are not locked.** A report line or a box can be edited by anyone with the write group after a report is approved, because X1 does not lock records (MODULES.md section 10). The approve action stamps the state only.
+- **Due date.** The date is entered. OAS computes it from the quarter and moves it off weekends; the rule has not been checked, so it is not copied.
+- **Readiness checks.** OAS reports checks (unverified boxes, an amount in a box marked not used, reverse-charge consistency, vouchers without a code or receipt). `approve` has one assertion only (`boxes_confirmed`). The rest would need a command, not a model.
+
+## 4. Stage 3: SIE 4 (crate `obop-sie`)
+
+Being built in parallel by another agent; this document only fixes the boundary. The crate reads and writes SIE 4 files (the Swedish accounting exchange format) for the `accounting` models. OAS already exports SIE 4 from `ledger.rs`.
+
+- The export is a function of posted entries, accounts, fiscal years and the company record. It needs the account names, which come from the user's own chart.
+- The import is the other half of the BAS problem: a SIE file carries account names that come from the sender's chart. Importing creates the accounts of that file in the user's database. Whether the public repository may hold a fixture file with BAS names is a D34 question, so fixtures use invented numbers and names.
+- Status of correctness: the file layout used by OAS and by the crate has not been compared with the official SIE specification here. Interoperability with Fortnox, Visma or a real auditor's tool is untested.
+
+## 5. Stage 4: the OAS importer (`obop import oas`)
+
+Planned as an operator command: `obop import oas --db FILE.sqlite --documents DIR`. It reads the OAS SQLite file and the documents directory and writes obop records through the commands. It is CLI-only until the owner approves otherwise (the exemption list in the project instructions).
+
+### 5.1 Table mapping
+
+| OAS table | obop model | Notes |
+|---|---|---|
+| `company` | `accounting_se_company` | One row. `f_skatt` maps directly. `payment_info` and `contact_*` fold into the address and contact fields or are dropped (list them in the dry run). |
+| `account` | `accounting_account` | `number` becomes `code`. OAS `kind` T, S, K, I (tillgång, skuld, kostnad, intäkt; the letters as OAS stores them) maps to `account_type`, and the mapping is lossy, because `accounting` has twelve types and OAS has four. The importer needs a mapping table the user confirms. The names are the user's own and are copied as they are. |
+| `voucher` and `entry` | `accounting_move` and `accounting_move_line` | See 5.2. `entry.debit` and `credit` are öre, which equals minor units, so no scaling. `vat_code` has no field on a line (section 3), so it goes into the line label as `[S25]` or into a side table kept by the importer. `corrects_voucher_id` becomes a reversal pair. |
+| `customer` | `party` (base) | `org_number`, `vat_number`, `country`, `email`, `address`. The `party` model decides which fields exist; the importer reads its metadata. |
+| `invoice` and `invoice_line` | `invoicing` models | Depends on stage 5. Until then the importer skips invoices and says so. `vat_rate` (25, 12, 6) becomes basis points (2500, 1200, 600). `quantity` and `unit_price` are whole numbers in OAS; check the target field kinds before copying. |
+| `employee` | `hr_employee` | `identity` is a personal identity number: class `confidential_hr`, never written to a log. `birth_year` is kept. |
+| `pay_run` and `pay_line` | payroll package | Depends on stage 6. Skipped until it exists. |
+| `document` and `document_meta` | `documents_document` with a file | `sha256` is checked against the file in the documents directory before upload. `vendor`, `amount`, `doc_date` become metadata fields if the target has them. |
+| `bank_transaction` | `accounting_bank_statement_line` | `booking_date` to `date`, `amount` to `amount` (öre, positive in), `counterparty` to `counterparty_name`, `reference` to `label`. `status` booked maps to a matched line only if the booking voucher was imported. |
+| `time_entry` | `timesheets_entry` | `start_utc` and `end_utc` are instants; the `tz` column is kept in a note. |
+| `project` | `projects_project` | `rate_type` and `rate` map to the project's rate fields if present; `aliases` is dropped. |
+
+### 5.2 Stated problems
+
+1. **Posted history cannot go through `bulk_create`.** `bulk_create` creates records through the checks of `create`, and a governed state field such as `accounting_move.state` starts at its first option, `draft`. A historic posted entry would need `post`, which is an `accounting.approver` action that needs a human approval, one entry at a time, and is refused unless the entry balances (that part is fine). Importing thousands of vouchers through approvals is not workable. Options, in order of preference: a dedicated operator command that writes a batch of posted entries in one approved operation (core work, not X1); or import as drafts and post in bulk after one approval of the whole import. The first is the target; it needs a design and an owner decision.
+2. **Historic numbers.** `accounting_move.number` is assigned at post by a gapless yearly series. An import cannot set it. The OAS number (series letter and number, for example `A17`) is kept in the `reference` field of the entry. Existing records are numbered only by `obop sequences backfill`, which numbers in creation order, so the import must create entries in OAS order.
+3. **The hash chain is not portable.** OAS chains `prev_hash` and `hash` over vouchers. The hash covers OAS's own serialisation and ids. obop's records have different ids and no chain (section 9). The importer verifies the OAS chain before reading (and refuses a broken one unless told to continue), then drops the hashes and stores the final hash in the import record, so the origin can be shown later. The old chain does not continue in obop.
+4. **Amounts.** OAS stores öre as integers. obop money is minor units. Equal, no conversion; the importer still refuses a value that does not fit.
+5. **Dates and ids.** Dates are text `YYYY-MM-DD` in OAS and the same in obop. `bulk_create` takes ids of records, not names, and cannot point at another row of the same file, so the importer creates in dependency order and keeps a map from OAS id to obop id.
+6. **Closed periods.** Entries inside a closed fiscal year need the year open at import time, then closed again by the approver. The importer opens nothing itself.
+7. **Idempotency.** The import record holds the OAS database fingerprint and a row count per table, so a second run is refused or resumed, not repeated.
+
+## 6. Stage 5: invoices
+
+OAS issues invoices with a gapless series `F`, a snapshot of the customer, a locked issued state and a draft ledger voucher. obop has the `invoicing` module for posting and numbering. Not built: the link from an issued invoice to an `accounting_move`, Swedish VAT on the invoice (the OAS limit is domestic customers at 25, 12 or 6 percent only), credit notes, EU and export invoices, and payment matching. Work order: the link to the ledger first, then credit notes, then EU and export cases once the codes are verified.
+
+## 7. Stage 6 to 8: payroll, receipts and bank, time
+
+- **Payroll and AGI.** OAS computes gross, preliminary tax (entered per person), employer contributions by age class, a locked pay run that proposes a voucher, and an AGI XML file it says validates against Skatteverket's published schema. Planned as a new later package. Every rate, age class and the XML layout are UNVERIFIED and must be checked by the owner. Taxable benefits, absence and holiday pay, and the tax tables are not built in OAS either.
+- **Receipts and bank.** OAS keeps receipts by content hash, imports a bank CSV, and proposes scored matches between bank lines and receipts. obop has `documents` and `accounting_bank_statement_line` with `match`, `reconcile` and `unmatch` actions. Not built: the scoring, the bank CSV import for Swedish formats and the booking of a bank line as a draft entry. A suggestion engine needs a command (X2), not a model.
+- **Time tracking.** OAS has projects, activities, a timer and time entries billed once. The `timesheets` package covers time entries. Not built: the rule that an entry is billed at most once, and the invoice built from tracked hours.
+
+## 8. BAS: what the package takes later
+
+A BAS file supplied by the licensee is read by a command (not part of this PR) that creates `accounting_account` records and, with the user's confirmation, fills the `vat_account_id` of the VAT codes. The file stays on the licensee's machine; it is never committed or bundled. Until then the user types accounts in.
+
+## 9. Immutability and the hash chain
+
+OAS makes vouchers append-only with database triggers and a hash chain. In obop "immutable once posted" is not enforced by X1: the state is governed, but other fields of a posted entry can still be edited by anyone with the write group (MODULES.md section 10). The record history of D75 and the key in K5 are what this stage waits on; the first slice of D75 tracks nothing yet. Until that exists, the package is not suitable as the only copy of statutory books for a company that must show unchangeable vouchers. Note: the issue number K5 is as given in the task brief; `docs/ISSUES.md` K5 currently names a backup finding, so confirm the number before this is cited elsewhere.
+
+## 10. Order of work
+
+1. This PR: the package and this document. Check: `obop modules check packages/contrib/accounting_se/accounting_se.toml` and `--complete` with the Swedish labels.
+2. Bundle the package in the catalogue (needs the labels in the other six languages, the catalogue tests updated, and a decision whether `requires_core` may be `^0.2.1` for a bundled package; see the PR notes).
+3. `obop-sie` export, then import.
+4. The operator command for posted history (5.2, item 1), then `obop import oas`.
+5. A report builder (X2 or a command) that fills VAT report lines from ledger entries.
+6. Invoices to the ledger, then payroll, receipts and bank matching.
+7. An owner check of every box, code and rate against Skatteverket and the SIE specification, recorded as `verified` in the data.
