@@ -85,19 +85,26 @@ fn client(s: &HttpState, parts: &Parts) -> Client {
     }
 }
 
-/// The answer for everything the door refuses.
-fn refusal(e: &DoorError, lang: &str) -> Response {
-    let (status, key) = match e {
+/// The status and the catalogue key (`sign_text.rs`) of the page for a refusal of the door.
+fn refusal_parts(e: &DoorError) -> (StatusCode, &'static str) {
+    match e {
         DoorError::NotFound => (StatusCode::NOT_FOUND, "unknown"),
         DoorError::Gone(Gone::Expired) => (StatusCode::GONE, "gone_expired"),
-        DoorError::Gone(Gone::Revoked | Gone::Closed) => (StatusCode::GONE, "gone_revoked"),
+        DoorError::Gone(Gone::Revoked) => (StatusCode::GONE, "gone_revoked"),
+        // The link is fine but the request is over: declined, expired, or signed another way.
+        DoorError::Gone(Gone::Closed) => (StatusCode::GONE, "closed"),
         DoorError::Changed => (StatusCode::CONFLICT, "changed"),
         DoorError::Busy(_) => (StatusCode::TOO_MANY_REQUESTS, "busy"),
         DoorError::Unavailable => (StatusCode::SERVICE_UNAVAILABLE, "unavailable"),
         // The form is shown again by the caller; this is only the fallback.
         DoorError::Invalid(_) => (StatusCode::BAD_REQUEST, "err_name"),
         DoorError::Refused => (StatusCode::CONFLICT, "gone_revoked"),
-    };
+    }
+}
+
+/// The answer for everything the door refuses.
+fn refusal(e: &DoorError, lang: &str) -> Response {
+    let (status, key) = refusal_parts(e);
     let mut r = page_response(status, sign_page::message(lang, key));
     let wait = match e {
         DoorError::Busy(n) => Some(*n),
@@ -187,13 +194,7 @@ pub(crate) async fn submit(
             // Where a post came from is the browser's word; a proxy that hides the scheme makes
             // every post look foreign (docs/SIGN.md: set OBOP_PUBLIC_URL). The log says so.
             eprintln!("sign: a post was refused because its origin is not {base}");
-            return page_response(
-                StatusCode::FORBIDDEN,
-                sign_page::plain_message(
-                    lang,
-                    "This request could not be checked. Open the link again and sign from that page.",
-                ),
-            );
+            return page_response(StatusCode::FORBIDDEN, sign_page::message(lang, "forbidden"));
         }
         let ct = parts
             .headers
@@ -271,4 +272,54 @@ pub(crate) async fn document(
         }
     })
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use obop_oauth::page::LANGS;
+
+    #[test]
+    fn a_closed_request_has_its_own_page_apart_from_a_dead_or_an_expired_link() {
+        assert_eq!(
+            refusal_parts(&DoorError::Gone(Gone::Closed)),
+            (StatusCode::GONE, "closed")
+        );
+        assert_eq!(
+            refusal_parts(&DoorError::Gone(Gone::Revoked)),
+            (StatusCode::GONE, "gone_revoked")
+        );
+        assert_eq!(
+            refusal_parts(&DoorError::Gone(Gone::Expired)),
+            (StatusCode::GONE, "gone_expired")
+        );
+        assert_eq!(
+            refusal_parts(&DoorError::Refused),
+            (StatusCode::CONFLICT, "gone_revoked")
+        );
+    }
+
+    #[test]
+    fn every_refusal_asks_for_a_key_the_catalogue_has_in_every_language() {
+        for e in [
+            DoorError::NotFound,
+            DoorError::Gone(Gone::Expired),
+            DoorError::Gone(Gone::Revoked),
+            DoorError::Gone(Gone::Closed),
+            DoorError::Changed,
+            DoorError::Busy(5),
+            DoorError::Unavailable,
+            DoorError::Invalid(Invalid::Name),
+            DoorError::Invalid(Invalid::Agree),
+            DoorError::Refused,
+        ] {
+            let (_, key) = refusal_parts(&e);
+            for lang in LANGS {
+                assert!(
+                    !txt::text(lang, key).is_empty(),
+                    "{e:?} asks for {key}, which {lang} does not have"
+                );
+            }
+        }
+    }
 }

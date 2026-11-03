@@ -38,6 +38,7 @@ label{display:block;font-weight:600;margin:12px 0 4px}
 input[type=text]{width:100%;font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;min-height:44px}
 .opt{display:flex;gap:10px;align-items:flex-start;font-weight:400;margin:16px 0 8px;min-height:32px}
 .opt input{margin-top:5px;width:20px;height:20px;flex:none}
+.opt label{font-weight:400;margin:0}
 button{font:inherit;font-weight:600;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--fg);padding:10px 18px;min-height:44px;cursor:pointer}
 button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
 a.btn{display:block;box-sizing:border-box;text-align:center;text-decoration:none;font-weight:600;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--fg);padding:10px 18px;min-height:44px}
@@ -64,7 +65,8 @@ fn shell(lang: &str, title: &str, body: &str) -> Page {
     Page { html, csp: csp() }
 }
 
-/// A page with one message: the link is over, unknown, busy.
+/// A page with one message: the link is over, unknown, busy, or a post that did not come
+/// from the page.
 pub(crate) fn message(lang: &str, key: &str) -> Page {
     shell(
         lang,
@@ -73,19 +75,6 @@ pub(crate) fn message(lang: &str, key: &str) -> Page {
             "<h1>{}</h1><p>{}</p>",
             esc(text(lang, "title")),
             txt::html(lang, key, &[])
-        ),
-    )
-}
-
-/// The message of an answer that has no catalogue key (the refusal of a cross-site post).
-pub(crate) fn plain_message(lang: &str, english: &str) -> Page {
-    shell(
-        lang,
-        text(lang, "title"),
-        &format!(
-            "<h1>{}</h1><p>{}</p>",
-            esc(text(lang, "title")),
-            esc(english)
         ),
     )
 }
@@ -144,7 +133,8 @@ pub(crate) fn form(lang: &str, f: &Form<'_>) -> Page {
 <label for=\"name\">{name_label}</label>\
 <input id=\"name\" name=\"name\" type=\"text\" maxlength=\"120\" autocomplete=\"name\" required value=\"{typed}\">\
 <p class=\"muted\">{name_hint}</p>\
-<label class=\"opt\"><input type=\"checkbox\" name=\"agree\" value=\"1\" required><span>{consent}</span></label>\
+<div class=\"opt\"><input id=\"agree\" type=\"checkbox\" name=\"agree\" value=\"1\" required>\
+<label for=\"agree\">{consent}</label></div>\
 <p class=\"notice\">{records}</p>\
 <button class=\"primary\" type=\"submit\">{submit}</button></form>",
         request = txt::html(lang, "request", &[("title", f.title)]),
@@ -168,4 +158,178 @@ pub(crate) fn form(lang: &str, f: &Form<'_>) -> Page {
         &txt::fill(lang, "request", &[("title", f.title)]),
         &body,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use obop_oauth::page::LANGS;
+
+    fn form_html(lang: &str) -> String {
+        form(
+            lang,
+            &Form {
+                rid: "rid1",
+                token: "tok1",
+                title: "Test NDA",
+                message: "",
+                signer_name: "Jane Test",
+                document_title: "Test NDA",
+                document_hash: &"ab".repeat(32),
+                typed: "",
+                error: None,
+            },
+        )
+        .html
+    }
+
+    /// The first element of `html` that starts with `<{tag}` and has `needle` in its opening tag.
+    fn tag_with<'a>(html: &'a str, tag: &str, needle: &str) -> &'a str {
+        let open = format!("<{tag}");
+        let mut from = 0;
+        while let Some(i) = html[from..].find(&open) {
+            let start = from + i;
+            let end = start + html[start..].find('>').expect("an unclosed tag");
+            if html[start..=end].contains(needle) {
+                return &html[start..=end];
+            }
+            from = end;
+        }
+        panic!("no <{tag}> with {needle} in the page");
+    }
+
+    #[test]
+    fn the_consent_checkbox_is_named_by_the_consent_sentence() {
+        for lang in LANGS {
+            let html = form_html(lang);
+            let input = tag_with(&html, "input", "type=\"checkbox\"");
+            // The box has an id and a label next to it that says `for` that id and holds the
+            // sentence, the plain pattern every browser, screen reader and test tool reads. (A
+            // label that wraps the box is named correctly by a browser, but a tool that only
+            // follows `for` shows the box's value, "1", as its name.)
+            assert!(input.contains("id=\"agree\""), "{lang}: {input}");
+            let label = tag_with(&html, "label", "for=\"agree\"");
+            let at = html.find(label).unwrap() + label.len();
+            let sentence = txt::html(lang, "consent", &[("name", "Jane Test")]);
+            assert!(
+                html[at..].starts_with(&format!("{sentence}</label>")),
+                "{lang}: the label of the box does not hold the consent sentence"
+            );
+            // It is the box's own label: next to it in the row, not around something else.
+            let row = tag_with(&html, "div", "class=\"opt\"");
+            let row_at = html.find(row).unwrap() + row.len();
+            assert!(
+                html[row_at..].starts_with(input),
+                "{lang}: the box is not the first thing in its row"
+            );
+            // The value stays what the door reads, and the box is still required.
+            assert!(
+                input.contains("name=\"agree\"") && input.contains("value=\"1\""),
+                "{lang}: {input}"
+            );
+            assert!(input.contains(" required"), "{lang}: {input}");
+            // Every id on the page is used once, so a name cannot point at two things.
+            for id in ["agree", "name"] {
+                assert_eq!(
+                    html.matches(&format!("id=\"{id}\"")).count(),
+                    1,
+                    "{lang}: id {id}"
+                );
+            }
+            assert_eq!(html.matches("for=\"agree\"").count(), 1, "{lang}");
+        }
+    }
+
+    #[test]
+    fn the_page_stays_free_of_script_and_style_attributes() {
+        let html = form_html("en");
+        assert!(!html.contains("<script") && !html.contains(" style="));
+        for handler in [
+            "onclick", "onload", "onerror", "onsubmit", "onchange", "oninput",
+        ] {
+            assert!(
+                !html.contains(&format!(" {handler}=")),
+                "{handler} on the page"
+            );
+        }
+    }
+
+    #[test]
+    fn a_foreign_post_and_a_closed_request_show_their_own_texts_in_every_language() {
+        for lang in LANGS {
+            for key in ["forbidden", "closed"] {
+                let page = message(lang, key);
+                assert!(
+                    page.html.contains(&txt::html(lang, key, &[])),
+                    "{lang}/{key}: the page does not hold the catalogue text"
+                );
+                assert!(
+                    page.html.contains(&format!("<html lang=\"{lang}\"")),
+                    "{lang}/{key}: wrong page language"
+                );
+            }
+        }
+    }
+
+    /// The part of a source file before its tests.
+    fn code(src: &str) -> &str {
+        src.split("#[cfg(test)]").next().unwrap()
+    }
+
+    /// The `"key"` literals that follow `prefix` in `src`.
+    fn after<'a>(src: &'a str, prefix: &str) -> Vec<&'a str> {
+        src.match_indices(prefix)
+            .filter_map(|(i, _)| {
+                let rest = src[i + prefix.len()..].strip_prefix('"')?;
+                Some(&rest[..rest.find('"')?])
+            })
+            .collect()
+    }
+
+    #[test]
+    fn every_key_the_door_and_its_pages_ask_for_is_in_the_catalogue() {
+        // A key that is only in the code reads as an empty paragraph, in every language. This
+        // reads the two files that ask for words and checks each literal key against the catalogue.
+        let sources = [
+            code(include_str!("sign.rs")),
+            code(include_str!("sign_page.rs")),
+        ];
+        let prefixes = [
+            "txt::html(lang, ",
+            "txt::fill(lang, ",
+            "text(lang, ",
+            "message(lang, ",
+            "StatusCode::NOT_FOUND, ",
+            "StatusCode::GONE, ",
+            "StatusCode::CONFLICT, ",
+            "StatusCode::TOO_MANY_REQUESTS, ",
+            "StatusCode::SERVICE_UNAVAILABLE, ",
+            "StatusCode::BAD_REQUEST, ",
+            "=> ",
+        ];
+        let mut seen = std::collections::BTreeSet::new();
+        for src in sources {
+            for p in prefixes {
+                for key in after(src, p) {
+                    // `=> "x"` is any match arm; only the error keys of this catalogue are looked up.
+                    if p == "=> " && !key.starts_with("err_") {
+                        continue;
+                    }
+                    seen.insert(key);
+                }
+            }
+        }
+        assert!(
+            ["closed", "forbidden", "gone_revoked", "err_agree"]
+                .iter()
+                .all(|k| seen.contains(k)),
+            "the scan missed a key it should find: {seen:?}"
+        );
+        for key in seen {
+            assert!(
+                crate::sign_text::CATALOGUE.iter().any(|(k, _)| *k == key),
+                "the code asks for the key {key}, which the catalogue does not have"
+            );
+        }
+    }
 }

@@ -21,7 +21,9 @@
 //! **The keys are fixed** (the design of D92, section 4.1): `title`, `document`, `open_full`,
 //! `no_viewer`, `fingerprint{hash}`, `name_label`, `name_hint`, `consent{name}`, `submit`,
 //! `records`, `err_name`, `err_agree`, `done_title`, `done_body{time}`, `gone_expired`,
-//! `gone_revoked`, `changed`, `unknown`, `busy`, `unavailable`, `request{title}`, `for{name}`.
+//! `gone_revoked`, `changed`, `unknown`, `busy`, `unavailable`, `request{title}`, `for{name}`, and,
+//! added when the door's page needed them, `forbidden` (a post that did not come from the page) and
+//! `closed` (a request that was declined, has expired or no longer needs a signature).
 //! `consent` takes `{name}` (the requested person), because the sentence names the person who is
 //! asked to sign (lead decision 9; attacker finding S7).
 
@@ -148,6 +150,8 @@ pub const CATALOGUE: &[(&str, [&str; 7])] = &[
     ("unknown", ["This page was not found. Check that you copied the whole link.", "Diese Seite wurde nicht gefunden. Prüfen Sie, ob Sie den ganzen Link kopiert haben.", "Cette page est introuvable. Vérifiez que vous avez copié le lien en entier.", "Nie znaleziono tej strony. Sprawdź, czy skopiowano cały link.", "Sivua ei löytynyt. Tarkista, että kopioit koko linkin.", "Sidan hittades inte. Kontrollera att du kopierade hela länken.", "No se encontró esta página. Compruebe que copió el enlace completo."]),
     ("busy", ["Too many attempts. Wait a minute and try again.", "Zu viele Versuche. Warten Sie eine Minute und versuchen Sie es erneut.", "Trop de tentatives. Attendez une minute et réessayez.", "Zbyt wiele prób. Poczekaj minutę i spróbuj ponownie.", "Liian monta yritystä. Odota minuutti ja yritä uudelleen.", "För många försök. Vänta en minut och försök igen.", "Demasiados intentos. Espere un minuto e inténtelo de nuevo."]),
     ("unavailable", ["This page is temporarily unavailable. Try again in a few minutes.", "Diese Seite ist vorübergehend nicht verfügbar. Versuchen Sie es in einigen Minuten erneut.", "Cette page est temporairement indisponible. Réessayez dans quelques minutes.", "Ta strona jest tymczasowo niedostępna. Spróbuj ponownie za kilka minut.", "Sivu ei ole tilapäisesti käytettävissä. Yritä uudelleen muutaman minuutin kuluttua.", "Sidan är tillfälligt otillgänglig. Försök igen om några minuter.", "Esta página no está disponible temporalmente. Inténtelo de nuevo en unos minutos."]),
+    ("forbidden", ["This request could not be checked. Open the link again and sign from that page.", "Diese Anfrage konnte nicht überprüft werden. Öffnen Sie den Link erneut und unterschreiben Sie auf dieser Seite.", "Cette demande n'a pas pu être vérifiée. Rouvrez le lien et signez depuis cette page.", "Nie udało się zweryfikować tego żądania. Otwórz link ponownie i podpisz z tej strony.", "Tätä pyyntöä ei voitu tarkistaa. Avaa linkki uudelleen ja allekirjoita siltä sivulta.", "Den här begäran kunde inte kontrolleras. Öppna länken igen och signera från den sidan.", "No se pudo comprobar esta solicitud. Abra el enlace de nuevo y firme desde esa página."]),
+    ("closed", ["This request is closed. It was declined or has expired, or it no longer needs your signature. Ask the sender if you think this is a mistake.", "Diese Anfrage ist geschlossen. Sie wurde abgelehnt oder ist abgelaufen oder braucht Ihre Unterschrift nicht mehr. Fragen Sie den Absender, wenn Sie glauben, dass es sich um einen Fehler handelt.", "Cette demande est clôturée. Elle a été refusée ou a expiré, ou elle n'a plus besoin de votre signature. Demandez à l'expéditeur si vous pensez qu'il s'agit d'une erreur.", "Ta prośba jest zamknięta. Została odrzucona lub wygasła albo nie wymaga już Twojego podpisu. Zapytaj nadawcę, jeśli uważasz, że to pomyłka.", "Tämä pyyntö on suljettu. Se on hylätty tai vanhentunut, tai se ei enää tarvitse allekirjoitustasi. Kysy lähettäjältä, jos luulet, että tämä on virhe.", "Den här begäran är stängd. Den har avslagits eller gått ut, eller behöver inte längre din signatur. Fråga avsändaren om du tror att det är ett misstag.", "Esta solicitud está cerrada. Fue rechazada o ha caducado, o ya no necesita su firma. Pregunte al remitente si cree que es un error."]),
 ];
 
 #[cfg(test)]
@@ -156,7 +160,7 @@ mod tests {
 
     /// The keys the signer door and its page may ask for (D92, section 4.1), in the design's
     /// order. A key outside the list, or one missing from it, fails here.
-    const KEYS: [&str; 22] = [
+    const KEYS: [&str; 24] = [
         "title",
         "document",
         "open_full",
@@ -179,6 +183,8 @@ mod tests {
         "unavailable",
         "request",
         "for",
+        "forbidden",
+        "closed",
     ];
 
     /// The `{placeholders}` of a text, in order of appearance.
@@ -384,5 +390,60 @@ mod tests {
         want.sort_unstable();
         have.sort_unstable();
         assert_eq!(have, want);
+    }
+
+    #[test]
+    fn the_refusal_of_a_foreign_post_says_what_the_door_tests_look_for_and_what_to_do() {
+        let en = text("en", "forbidden");
+        assert_eq!(
+            en,
+            "This request could not be checked. Open the link again and sign from that page."
+        );
+        for (i, lang) in LANGS.iter().enumerate() {
+            let t = text(lang, "forbidden");
+            assert!(!t.contains('{'), "forbidden in {lang} takes no value");
+            // Two sentences: what happened, then what to do (the link, the page).
+            assert!(
+                t.matches('.').count() >= 2,
+                "forbidden in {lang} is not two sentences: {t}"
+            );
+            assert_ne!(
+                t,
+                text(lang, "gone_revoked"),
+                "forbidden in {lang} reuses another message"
+            );
+            if i > 0 {
+                assert_ne!(t, en, "forbidden in {lang} is the English text");
+            }
+        }
+    }
+
+    #[test]
+    fn the_closed_request_has_its_own_text_and_does_not_borrow_the_dead_link_message() {
+        let en = text("en", "closed");
+        assert!(en.starts_with("This request is closed."));
+        assert!(en.contains("Ask the sender"));
+        for (i, lang) in LANGS.iter().enumerate() {
+            let t = text(lang, "closed");
+            assert!(!t.contains('{'), "closed in {lang} takes no value");
+            assert_ne!(
+                t,
+                text(lang, "gone_revoked"),
+                "closed in {lang} reuses the message of a dead link"
+            );
+            assert_ne!(
+                t,
+                text(lang, "gone_expired"),
+                "closed in {lang} reuses the message of an expired link"
+            );
+            // It names a reason and sends the person to the sender: more than one sentence.
+            assert!(
+                t.matches('.').count() >= 3,
+                "closed in {lang} is too short to say what happened and what to do: {t}"
+            );
+            if i > 0 {
+                assert_ne!(t, en, "closed in {lang} is the English text");
+            }
+        }
     }
 }
