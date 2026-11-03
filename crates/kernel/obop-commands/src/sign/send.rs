@@ -67,7 +67,13 @@ impl SignService {
         input: &Value,
         doc_id: &str,
     ) -> Result<Fields, String> {
-        let miss = || format!("there is no documents_document {doc_id}");
+        // The same words whether the Document does not exist or may not be seen, so that the
+        // answer does not tell a stranger which ids exist.
+        let miss = || {
+            format!(
+                "documents_document {doc_id} was not found, or you may not see it: a confidential or restricted document is visible to its owner and to documents.manager only"
+            )
+        };
         let models = self.models.read().unwrap();
         let def = models
             .get("documents_document")

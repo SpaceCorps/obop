@@ -379,9 +379,15 @@ async fn a_link_is_made_by_a_person_with_the_manager_group_for_a_sent_request() 
     // Not a person with the manager group.
     let (s, v) = f.api("sam", "/api/sign_link/create", body.clone()).await;
     assert_ne!(s, 200, "{v}");
-    // A person who cannot see the Document.
+    // A person who cannot see the Document is told so, in the words used for an id that does not
+    // exist (the answer does not say which it is).
     let (s, v) = f.api("bob", "/api/sign_link/create", body.clone()).await;
     assert_ne!(s, 200, "{v}");
+    assert!(
+        err(&v).contains("was not found, or you may not see it"),
+        "{v}"
+    );
+
     // An agent never gets a link, not even through a plan that a person approves.
     agent_for(&mut f, "mia").await;
     let (s, v) = f.api("agent", "/api/sign_link/create", body.clone()).await;

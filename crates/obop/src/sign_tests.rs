@@ -244,6 +244,36 @@ pub(crate) async fn fixture_on(
     bytes: Option<Arc<MemoryBytes>>,
     scratch: Option<obop_storage::testing::TestDb>,
 ) -> Fx {
+    let mut f = fixture_sync(store, bytes, scratch);
+    seed(&mut f).await;
+    f
+}
+
+/// The people every fixture has.
+const PEOPLE: [(&str, &[&str]); 5] = [
+    ("admin", &["platform.admin"]),
+    (
+        "mia",
+        &[
+            "sign.user",
+            "sign.manager",
+            "documents.user",
+            "documents.manager",
+        ],
+    ),
+    ("ann", &["sign.user", "sign.manager", "documents.user"]),
+    ("bob", &["sign.user", "sign.manager", "documents.user"]),
+    ("sam", &["sign.user"]),
+];
+
+/// The instance: packages installed and people created, with no request made yet. Not async, so
+/// that a test on PostgreSQL (whose synchronous client cannot run inside a tokio runtime) can
+/// call it before it starts one; `seed` then makes the sign-ins and the records.
+pub(crate) fn fixture_sync(
+    store: Store,
+    bytes: Option<Arc<MemoryBytes>>,
+    scratch: Option<obop_storage::testing::TestDb>,
+) -> Fx {
     let app = App::with_store(store);
     let auth = Arc::new(Auth::with_test_params(app.store.backend()));
     for id in ["documents", "sign"] {
@@ -251,29 +281,14 @@ pub(crate) async fn fixture_on(
             .install(&Bundled.fetch(id).unwrap(), "marketplace", "test")
             .unwrap_or_else(|e| panic!("{id}: {e}"));
     }
-    let people: [(&'static str, &[&str]); 5] = [
-        ("admin", &["platform.admin"]),
-        (
-            "mia",
-            &[
-                "sign.user",
-                "sign.manager",
-                "documents.user",
-                "documents.manager",
-            ],
-        ),
-        ("ann", &["sign.user", "sign.manager", "documents.user"]),
-        ("bob", &["sign.user", "sign.manager", "documents.user"]),
-        ("sam", &["sign.user"]),
-    ];
-    for (name, groups) in people {
+    for (name, groups) in PEOPLE {
         let g: Vec<String> = groups.iter().map(|g| g.to_string()).collect();
         auth.create_user(name, PW, &g).unwrap();
     }
     let state = obop_http::HttpState::new(app.dispatcher.clone(), auth);
     state.set_trust_proxy(true);
     let router = obop_http::router(state.clone(), None);
-    let mut f = Fx {
+    Fx {
         router,
         app,
         tokens: Default::default(),
@@ -282,8 +297,12 @@ pub(crate) async fn fixture_on(
         file: String::new(),
         bytes,
         _scratch: scratch,
-    };
-    for (name, _) in people {
+    }
+}
+
+/// Sign everybody in and make the restricted Document and a draft request about it.
+pub(crate) async fn seed(f: &mut Fx) {
+    for (name, _) in PEOPLE {
         let (s, v) = f
             .api(
                 "",
@@ -325,7 +344,6 @@ pub(crate) async fn fixture_on(
         .await;
     assert_eq!(s, 200, "{v}");
     f.req = v["value"]["id"].as_str().unwrap().to_string();
-    f
 }
 
 /// A fixture whose request has been sent: returns it with a link made by `mia`, as

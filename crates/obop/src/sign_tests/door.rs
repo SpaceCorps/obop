@@ -870,8 +870,15 @@ async fn eight_signers_at_once_sign_the_request_once() {
     );
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn the_race_is_won_once_on_sqlite_and_on_postgres_too() {
+/// Not async: the synchronous PostgreSQL client cannot be used from inside a tokio runtime, so the
+/// stores and their records are handled out here and the runtime is entered for the requests only.
+#[test]
+fn the_race_is_won_once_on_sqlite_and_on_postgres_too() {
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(4)
+        .enable_all()
+        .build()
+        .unwrap();
     let dir = std::env::temp_dir().join(format!("obop-sign-race-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let mut stores: Vec<(Store, Option<obop_storage::testing::TestDb>)> = vec![(
@@ -882,40 +889,46 @@ async fn the_race_is_won_once_on_sqlite_and_on_postgres_too() {
         stores.push((Store::open(db.url()).unwrap(), Some(db)));
     }
     for (store, scratch) in stores {
-        let f = fixture_on(store, None, scratch).await;
-        let (s, v) = f
-            .api(
-                "mia",
-                "/api/sign_request/send_document",
-                json!({"id": f.req}),
-            )
-            .await;
-        assert_eq!(s, 200, "{v}");
-        let (_, path) = f.mint("mia", &f.req.clone()).await;
-        let mut set = tokio::task::JoinSet::new();
-        for i in 0..8u8 {
-            let (router, path, file) = (f.router.clone(), path.clone(), f.file.clone());
-            set.spawn(async move {
-                let body = format!("name=Jane+Test&agree=1&doc={file}");
-                send(
-                    &router,
-                    Request::post(&path)
-                        .header("host", HOST)
-                        .header("origin", ORIGIN)
-                        .header("content-type", "application/x-www-form-urlencoded")
-                        .header("x-forwarded-for", ip(120 + i))
-                        .body(Body::from(body))
-                        .unwrap(),
+        let mut f = fixture_sync(store, None, scratch);
+        rt.block_on(seed(&mut f));
+        let path = rt.block_on(async {
+            let (s, v) = f
+                .api(
+                    "mia",
+                    "/api/sign_request/send_document",
+                    json!({"id": f.req}),
                 )
-                .await
-                .status
-            });
-        }
-        while let Some(r) = set.join_next().await {
-            assert_eq!(r.unwrap(), 303);
-        }
+                .await;
+            assert_eq!(s, 200, "{v}");
+            f.mint("mia", &f.req.clone()).await.1
+        });
+        rt.block_on(async {
+            let mut set = tokio::task::JoinSet::new();
+            for i in 0..8u8 {
+                let (router, path, file) = (f.router.clone(), path.clone(), f.file.clone());
+                set.spawn(async move {
+                    let body = format!("name=Jane+Test&agree=1&doc={file}");
+                    send(
+                        &router,
+                        Request::post(&path)
+                            .header("host", HOST)
+                            .header("origin", ORIGIN)
+                            .header("content-type", "application/x-www-form-urlencoded")
+                            .header("x-forwarded-for", ip(120 + i))
+                            .body(Body::from(body))
+                            .unwrap(),
+                    )
+                    .await
+                    .status
+                });
+            }
+            while let Some(r) = set.join_next().await {
+                assert_eq!(r.unwrap(), 303);
+            }
+        });
         assert_eq!(f.record("sign_request", &f.req)["state"], "signed");
         assert_eq!(signed_count(&f), 1);
+        drop(f);
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
