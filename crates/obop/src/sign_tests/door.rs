@@ -273,6 +273,40 @@ async fn a_revoked_link_stops_working_and_a_new_one_works() {
 }
 
 #[tokio::test]
+async fn another_link_of_a_signed_request_shows_the_end_and_signs_nothing_more() {
+    let (f, _, path, _) = sent().await;
+    let (second_id, second) = f.mint("mia", &f.req.clone()).await;
+    assert_eq!(
+        f.post(&path, &ip(56), &good_form(&f, "Jane Test"))
+            .await
+            .status,
+        303
+    );
+    let signed = f.record("sign_request", &f.req);
+    let page = f.get(&second, &ip(57)).await;
+    assert_eq!(page.status, 200);
+    assert!(!page.text().contains("<form"));
+    assert!(page.text().contains(signed["signed_at"].as_str().unwrap()));
+    assert_eq!(
+        f.get(&format!("{second}/document.pdf"), &ip(57))
+            .await
+            .status,
+        410
+    );
+    let r = f
+        .post(&second, &ip(57), &good_form(&f, "Somebody Else"))
+        .await;
+    assert_eq!(r.status, 303);
+    assert_eq!(f.record("sign_request", &f.req), signed);
+    assert!(
+        f.record("sign_link", &second_id)
+            .get("used_at")
+            .is_none_or(J::is_null)
+    );
+    assert_eq!(signed_count(&f), 1);
+}
+
+#[tokio::test]
 async fn a_document_whose_file_was_replaced_is_not_signed() {
     let (f, link_id, path, _) = sent().await;
     let from = ip(53);

@@ -215,6 +215,12 @@ impl SignService {
         if !text(&f.link, "revoked_at").is_empty() {
             return Status::Gone(Gone::Revoked);
         }
+        // The request is signed and this link was not the one that signed it: either another
+        // link won a race (the link and the request are read one after the other, and the batch
+        // that signs commits between the two reads) or a second link was made. Both see the end.
+        if text(&f.req, "state") == "signed" {
+            return Status::Signed(text(&f.req, "signed_at").to_string());
+        }
         // The link's own end, and the end of the request, whichever is first. A link without a
         // readable end does not work.
         let now = self.now_micros();

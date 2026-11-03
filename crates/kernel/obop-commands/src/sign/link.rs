@@ -60,6 +60,10 @@ impl SignService {
         let Value::Map(m) = input else {
             return Err("sign_link: expected an object".into());
         };
+        let rid = match m.get("request_id") {
+            Some(Value::Text(t)) if !t.is_empty() => t.clone(),
+            _ => return Err("sign_link.request_id is required".into()),
+        };
         for (k, v) in m {
             // An empty `id` is what a form sends for a new record; a link's id is a hash of its
             // secret and is never chosen by the caller.
@@ -74,10 +78,6 @@ impl SignService {
                 ));
             }
         }
-        let rid = match m.get("request_id") {
-            Some(Value::Text(t)) if !t.is_empty() => t.clone(),
-            _ => return Err("sign_link.request_id is required".into()),
-        };
         if let Err(wait) = obop_storage::limit::hit(
             &*self.store.backend,
             &format!(

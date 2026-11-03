@@ -3488,8 +3488,15 @@ mod bundled_packages {
                         unreachable!()
                     };
                     input.remove(&req.name);
-                    let e = call(&app, &user, &format!("{name}.create"), Value::Map(input))
-                        .unwrap_err();
+                    // The sample of a signature request carries the evidence fields, which only
+                    // an administrator may write by hand (D92): the check is of the other rules.
+                    let who = if name == "sign_request" {
+                        &admin
+                    } else {
+                        &user
+                    };
+                    let e =
+                        call(&app, who, &format!("{name}.create"), Value::Map(input)).unwrap_err();
                     assert!(
                         matches!(e, CallError::Handler(ref s) if s.contains("required")),
                         "{name}: {e:?}"
@@ -3580,8 +3587,13 @@ mod bundled_packages {
                         unreachable!()
                     };
                     input.insert("state".into(), Value::text(&late));
-                    let e = call(&app, &user, &format!("{name}.create"), Value::Map(input))
-                        .unwrap_err();
+                    let who = if name == "sign_request" {
+                        &admin
+                    } else {
+                        &user
+                    };
+                    let e =
+                        call(&app, who, &format!("{name}.create"), Value::Map(input)).unwrap_err();
                     assert!(
                         matches!(e, CallError::Handler(ref s) if s.contains("starts as")),
                         "{name}: {e:?}"
