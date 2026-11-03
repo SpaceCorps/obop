@@ -1,7 +1,7 @@
 [labels.es.module]
 name = "Firma"
-description = "Plantillas de documentos y solicitudes de firma con flujo de borrador, enviada, firmada, rechazada y caducada. Una solicitud indica quién firma (dato personal) y guarda las pruebas como referencias. Una solicitud firmada es inmutable solo por convención y el hash del documento registra lo firmado. Enviar y registrar una firma requieren aprobación humana; los agentes solo pueden proponerlos."
-summary = "Plantillas de documentos y solicitudes de firma. Enviar y registrar una firma requieren aprobación humana."
+description = "Plantillas de documentos y solicitudes de firma. Una solicitud puede apuntar a un PDF de Documentos: al enviarla se guarda una copia exacta, y un responsable crea un enlace de un solo uso que quien firma abre sin cuenta para leer, escribir su nombre y aceptar. Solo una firma electrónica simple: el enlace es la única comprobación. Los agentes no crean enlaces."
+summary = "Plantillas de documentos y solicitudes de firma; un PDF de Documentos puede firmarse con un enlace de un solo uso. Firma electrónica simple."
 
 [labels.es.model.sign_template]
 name = "Plantilla"
@@ -33,7 +33,11 @@ description = "Una solicitud para que una persona firme un documento"
 
 [labels.es.model.sign_request.field.template_id]
 label = "Plantilla"
-description = "El documento que se debe firmar"
+description = "La plantilla de documento que se envía; vacía en una solicitud sobre un documento de Documentos"
+
+[labels.es.model.sign_request.field.document_id]
+label = "Documento"
+description = "El PDF de Documentos que quien firma lee y firma; al enviar la solicitud se toma su SHA-256 y se guarda una copia exacta"
 
 [labels.es.model.sign_request.field.title]
 label = "Título"
@@ -49,7 +53,7 @@ description = "Nombre de la persona que debe firmar"
 
 [labels.es.model.sign_request.field.signer_email]
 label = "Correo electrónico del firmante"
-description = "Dirección de correo a la que se envía la solicitud"
+description = "Correo electrónico de quien firma; opcional, obop no envía correo en una solicitud sobre un documento"
 
 [labels.es.model.sign_request.field.sent_on]
 label = "Fecha de envío"
@@ -65,7 +69,7 @@ description = "Día en que se firmó el documento (YYYY-MM-DD)"
 
 [labels.es.model.sign_request.field.signer_ip]
 label = "IP del firmante"
-description = "Dirección IP desde la que se hizo la firma (prueba)"
+description = "Dirección desde la que llegó la firma, según la informa la cadena de proxies (prueba)"
 
 [labels.es.model.sign_request.field.signer_user_agent]
 label = "Agente de usuario del firmante"
@@ -73,11 +77,27 @@ description = "Navegador con el que se hizo la firma (prueba)"
 
 [labels.es.model.sign_request.field.signature_reference]
 label = "Referencia de la firma"
-description = "Dónde se guarda la imagen o el certificado de la firma"
+description = "Dónde se guarda la firma; typed:NOMBRE para un nombre escrito mediante un enlace"
 
 [labels.es.model.sign_request.field.document_hash]
 label = "Hash del documento"
-description = "Hash SHA-256 (hexadecimal) del documento firmado, para demostrar que no se modificó después"
+description = "Hash SHA-256 (hex) del documento firmado, para probar que no se cambió después; se establece al enviar una solicitud sobre un documento"
+
+[labels.es.model.sign_request.field.document_file]
+label = "Copia guardada"
+description = "La copia exacta del PDF enviado a firma, guardada para que reemplazar el archivo en Documentos no pueda cambiar lo que se firmó; nadie tiene el grupo, solo un administrador la lee"
+
+[labels.es.model.sign_request.field.signed_at]
+label = "Firmada a las"
+description = "Cuándo firmó quien firma mediante el enlace (UTC, reloj del servidor)"
+
+[labels.es.model.sign_request.field.signed_name]
+label = "Nombre escrito"
+description = "El nombre completo que escribió quien firma (prueba); signer_name sigue siendo el nombre que se pidió"
+
+[labels.es.model.sign_request.field.consent_version]
+label = "Versión del consentimiento"
+description = "Versión e idioma del texto de consentimiento que vio quien firma, por ejemplo v1-draft/es"
 
 [labels.es.model.sign_request.field.state]
 label = "Estado"
@@ -105,3 +125,31 @@ description = "Registrar que el firmante rechazó"
 [labels.es.model.sign_request.action.expire]
 label = "Marcar como caducado"
 description = "Registrar que la solicitud caducó sin firma"
+
+[labels.es.model.sign_request.action.send_document]
+label = "Enviar documento"
+description = "Enviar una solicitud sobre un documento de Documentos: toma el SHA-256 del PDF, guarda una copia exacta y pasa la solicitud a enviada; después cree el enlace de firma"
+
+[labels.es.model.sign_link]
+name = "Enlace de firma"
+description = "Un enlace de un solo uso que permite a una persona firmar una solicitud; solo se guarda un hash del secreto, así que el enlace se muestra una vez al crearlo"
+
+[labels.es.model.sign_link.field.request_id]
+label = "Solicitud"
+description = "La solicitud de firma que abre este enlace"
+
+[labels.es.model.sign_link.field.expires_at]
+label = "Válido hasta"
+description = "Cuándo deja de funcionar el enlace (UTC); como máximo 14 días después de crearlo y nunca después del último día de la solicitud"
+
+[labels.es.model.sign_link.field.used_at]
+label = "Usado"
+description = "Cuándo se usó el enlace para firmar (UTC); un enlace funciona una sola vez"
+
+[labels.es.model.sign_link.field.revoked_at]
+label = "Revocado"
+description = "Cuándo se revocó el enlace (UTC); establézcalo para revocar el enlace"
+
+[labels.es.model.sign_link.field.link]
+label = "Dirección del enlace"
+description = "El enlace en sí: solo en la respuesta de create, se muestra una vez, nunca se guarda y nunca lo devuelven get, list ni search"

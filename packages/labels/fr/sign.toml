@@ -1,7 +1,7 @@
 [labels.fr.module]
 name = "Signature"
-description = "Modèles de documents et demandes de signature (brouillon, envoyée, signée, déclinée, expirée). Une demande désigne le signataire (donnée personnelle) et conserve les preuves sous forme de références. Une demande signée n’est immuable que par convention ; document_hash enregistre ce qui a été signé. L’envoi et la signature exigent une approbation humaine ; les agents peuvent seulement les proposer."
-summary = "Modèles de documents et demandes de signature. L’envoi et l’enregistrement d’une signature exigent une approbation humaine."
+description = "Modèles de documents et demandes de signature. Une demande peut pointer vers un PDF de Documents : l'envoi en garde une copie exacte, et un responsable crée un lien à usage unique que le signataire ouvre sans compte pour lire, saisir son nom complet et approuver. Simple signature électronique : le lien est la seule vérification. Les agents ne créent pas de liens."
+summary = "Modèles de documents et demandes de signature ; un PDF de Documents se signe via un lien à usage unique. Signature électronique simple."
 
 [labels.fr.model.sign_template]
 name = "Modèle"
@@ -33,7 +33,11 @@ description = "Une demande faite à une personne de signer un document"
 
 [labels.fr.model.sign_request.field.template_id]
 label = "Modèle"
-description = "Le document à signer"
+description = "Le modèle de document à envoyer ; vide pour une demande portant sur un document de Documents"
+
+[labels.fr.model.sign_request.field.document_id]
+label = "Document à signer"
+description = "Le PDF de Documents que le signataire lit et signe ; l'envoi de la demande en prend l'empreinte SHA-256 et en garde une copie exacte"
 
 [labels.fr.model.sign_request.field.title]
 label = "Titre"
@@ -49,7 +53,7 @@ description = "Nom de la personne qui doit signer"
 
 [labels.fr.model.sign_request.field.signer_email]
 label = "E-mail du signataire"
-description = "Adresse e-mail à laquelle la demande est envoyée"
+description = "Adresse e-mail du signataire ; facultative, obop n'envoie pas d'e-mail pour une demande portant sur un document"
 
 [labels.fr.model.sign_request.field.sent_on]
 label = "Envoyé le"
@@ -65,7 +69,7 @@ description = "Jour où le document a été signé (YYYY-MM-DD)"
 
 [labels.fr.model.sign_request.field.signer_ip]
 label = "IP du signataire"
-description = "Adresse IP d’où provient la signature (preuve)"
+description = "Adresse d'où venait la signature, telle que la chaîne de proxys la rapporte (preuve)"
 
 [labels.fr.model.sign_request.field.signer_user_agent]
 label = "Agent utilisateur du signataire"
@@ -73,11 +77,27 @@ description = "Navigateur avec lequel la signature a été faite (preuve)"
 
 [labels.fr.model.sign_request.field.signature_reference]
 label = "Référence de signature"
-description = "Où l’image ou le certificat de signature est conservé"
+description = "Où la signature est conservée ; typed:NOM pour un nom saisi via un lien"
 
 [labels.fr.model.sign_request.field.document_hash]
 label = "Empreinte du document"
-description = "Empreinte SHA-256 (hexadécimal) du document signé, pour prouver qu’il n’a pas été modifié ensuite"
+description = "Empreinte SHA-256 (hex) du document signé, pour prouver qu'il n'a pas été modifié ensuite ; définie à l'envoi d'une demande portant sur un document"
+
+[labels.fr.model.sign_request.field.document_file]
+label = "Copie conservée"
+description = "La copie exacte du PDF envoyé pour signature, conservée pour que le remplacement du fichier dans Documents ne puisse pas changer ce qui a été signé ; personne ne détient le groupe, seul un administrateur la lit"
+
+[labels.fr.model.sign_request.field.signed_at]
+label = "Date et heure de signature"
+description = "Quand le signataire a signé via le lien (UTC, horloge du serveur)"
+
+[labels.fr.model.sign_request.field.signed_name]
+label = "Nom saisi"
+description = "Le nom complet saisi par le signataire (preuve) ; signer_name reste le nom demandé"
+
+[labels.fr.model.sign_request.field.consent_version]
+label = "Version du consentement"
+description = "Version et langue du texte de consentement vu par le signataire, par exemple v1-draft/fr"
 
 [labels.fr.model.sign_request.field.state]
 label = "Statut"
@@ -105,3 +125,31 @@ description = "Enregistre que le signataire a décliné"
 [labels.fr.model.sign_request.action.expire]
 label = "Marquer expiré"
 description = "Enregistre que la demande est arrivée à échéance sans signature"
+
+[labels.fr.model.sign_request.action.send_document]
+label = "Envoyer le document"
+description = "Envoyer une demande portant sur un document de Documents : prend l'empreinte SHA-256 du PDF, en garde une copie exacte et passe la demande à envoyée ; créez ensuite le lien de signature"
+
+[labels.fr.model.sign_link]
+name = "Lien de signature"
+description = "Un lien à usage unique qui permet à une personne de signer une demande ; seule une empreinte du secret est conservée, le lien n'est donc affiché qu'une fois à sa création"
+
+[labels.fr.model.sign_link.field.request_id]
+label = "Demande"
+description = "La demande de signature que ce lien ouvre"
+
+[labels.fr.model.sign_link.field.expires_at]
+label = "Valable jusqu'au"
+description = "Quand le lien cesse de fonctionner (UTC) ; au plus 14 jours après sa création et jamais après le dernier jour de la demande"
+
+[labels.fr.model.sign_link.field.used_at]
+label = "Utilisé le"
+description = "Quand le lien a servi à signer (UTC) ; un lien ne fonctionne qu'une fois"
+
+[labels.fr.model.sign_link.field.revoked_at]
+label = "Révoqué le"
+description = "Quand le lien a été révoqué (UTC) ; renseignez-le pour révoquer le lien"
+
+[labels.fr.model.sign_link.field.link]
+label = "Lien"
+description = "Le lien lui-même : uniquement dans la réponse de create, affiché une fois, jamais conservé et jamais renvoyé par get, list ou search"
