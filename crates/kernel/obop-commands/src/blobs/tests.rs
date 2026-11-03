@@ -1,7 +1,7 @@
 use super::*;
 use crate::{PublicApi, PublicRead, PublicSpec, Surface, Vault};
 use obop_media::fixtures as fx;
-use obop_registry::{CommandDef, FieldDef, Module};
+use obop_registry::{Access, CommandDef, FieldDef, Module};
 use obop_types::DataClass;
 
 fn f(name: &'static str) -> FieldDef {
@@ -34,10 +34,31 @@ fn module() -> Module {
         )],
         ext: Default::default(),
     };
+    // A model with row rules (D58) and a file: the bytes follow the rules of the record.
+    let doc = ModelDef {
+        name: "doc",
+        description: "d",
+        read_group: "t.user",
+        write_group: "t.user",
+        access: Some(Access {
+            own: Some("owner"),
+            public_field: Some("open"),
+            see_all: vec!["t.manager"],
+            ..Access::default()
+        }),
+        fields: vec![
+            f("title"),
+            f("owner"),
+            f("open").kind(FieldKind::Bool),
+            f("attachment").kind(FieldKind::File(0)),
+        ],
+        commands: vec![],
+        ext: Default::default(),
+    };
     Module {
         id: "t".into(),
         name: "T".into(),
-        models: vec![item],
+        models: vec![item, doc],
         network_destinations: vec![],
         description: String::new(),
         translations: Default::default(),
@@ -648,4 +669,195 @@ fn a_blob_hold_refused_for_a_moment_is_tried_again_and_a_lasting_refusal_is_a_pa
         e.s.blobs().info(&b2).unwrap().unwrap().owners.is_empty(),
         "and nobody holds it: that is what `partial` says"
     );
+}
+
+// ---- the row rules of the owning record apply to its bytes (D58, D60 amendment) ---------------
+
+/// A synthetic file; the text is made up and differs per `n`.
+fn pdf(n: u32) -> Vec<u8> {
+    format!("%PDF-1.4\nsynthetic test document {n}\n%%EOF\n").into_bytes()
+}
+
+fn admin() -> Principal {
+    Principal::user("root", &[crate::ADMIN_GROUP])
+}
+
+/// Ann's `doc` (`open` is false unless asked) holding a made-up PDF; returns (record, blob).
+fn ann_doc(e: &Env, open: bool, n: u32) -> (String, String) {
+    let ann = user("ann");
+    let b = up(e, &ann, "doc.attachment", &pdf(n), "application/pdf");
+    let mut m = match map(&[("title", "NDA"), ("owner", "ann"), ("attachment", &b)]) {
+        Value::Map(m) => m,
+        _ => unreachable!(),
+    };
+    m.insert("open".into(), Value::Bool(open));
+    let r = call(e, &ann, "doc.create", Value::Map(m)).unwrap();
+    (id_of_row(&r), b)
+}
+
+#[test]
+fn the_bytes_of_a_restricted_record_are_read_by_its_owner_managers_and_admins_only() {
+    let e = env();
+    let (ann, bob, mia) = (user("ann"), user("bob"), manager("mia"));
+    let (_rec, b) = ann_doc(&e, false, 1);
+    // The 64 hex characters are all that bob needs to ask; the record is not his to see.
+    assert_eq!(e.svc.get(&bob, &b, None).unwrap_err(), BlobError::NotFound);
+    // The same answer for somebody who is neither owner nor manager and holds a bigger group.
+    let other = Principal::user("zed", &["t.user", "other.group"]);
+    assert_eq!(
+        e.svc.get(&other, &b, None).unwrap_err(),
+        BlobError::NotFound
+    );
+    // Owner, see-all group and the instance administrator read it.
+    for who in [&ann, &mia, &admin()] {
+        let s = e.svc.get(who, &b, None).unwrap();
+        assert_eq!(s.content_type, "application/pdf");
+        assert_eq!(s.bytes, pdf(1));
+    }
+    // An agent never gets bytes, restricted or not.
+    let agent = Principal::agent("bot", &["t.user", "t.manager"], &["t.user", "t.manager"]);
+    assert_eq!(
+        e.svc.get(&agent, &b, None).unwrap_err(),
+        BlobError::NotFound
+    );
+    // The record itself is invisible to bob in the same way (the two answers agree).
+    let rows = call(&e, &bob, "doc.list", Value::Map(Default::default())).unwrap();
+    assert!(!format!("{:?}", rows.value).contains(&b));
+}
+
+#[test]
+fn a_record_that_is_open_to_everyone_shows_its_bytes_to_everyone_who_may_read_the_model() {
+    let e = env();
+    let bob = user("bob");
+    let (_rec, b) = ann_doc(&e, true, 2);
+    assert_eq!(e.svc.get(&bob, &b, None).unwrap().bytes, pdf(2));
+    // Group checks are unchanged: a stranger to the model still gets nothing.
+    let outsider = Principal::user("zed", &["other.group"]);
+    assert_eq!(
+        e.svc.get(&outsider, &b, None).unwrap_err(),
+        BlobError::NotFound
+    );
+}
+
+#[test]
+fn a_restricted_blob_id_cannot_be_saved_into_a_record_of_somebody_who_cannot_see_it() {
+    let e = env();
+    let (ann, bob) = (user("ann"), user("bob"));
+    let (_rec, b) = ann_doc(&e, false, 3);
+    // Bob knows the id. The guard answers like a missing blob.
+    let r = call(
+        &e,
+        &bob,
+        "doc.create",
+        map(&[("title", "mine"), ("owner", "bob"), ("attachment", &b)]),
+    );
+    assert!(
+        matches!(&r, Err(crate::CallError::Handler(m)) if m.contains("doc.attachment must be")),
+        "{r:?}"
+    );
+    // And not into a later update of a record of his own either.
+    let mine = call(
+        &e,
+        &bob,
+        "doc.create",
+        map(&[("title", "mine"), ("owner", "bob")]),
+    )
+    .unwrap();
+    let r = call(
+        &e,
+        &bob,
+        "doc.update",
+        map(&[("id", &id_of_row(&mine)), ("attachment", &b)]),
+    );
+    assert!(r.is_err(), "{r:?}");
+    // The owner can keep and re-save it; once the record is open, bob may reuse the file.
+    let (rec, _) = (_rec, ());
+    call(
+        &e,
+        &ann,
+        "doc.update",
+        map(&[("id", &rec), ("attachment", &b), ("title", "NDA v2")]),
+    )
+    .unwrap();
+    let mut open = match map(&[("id", &rec)]) {
+        Value::Map(m) => m,
+        _ => unreachable!(),
+    };
+    open.insert("open".into(), Value::Bool(true));
+    call(&e, &ann, "doc.update", Value::Map(open)).unwrap();
+    assert!(
+        call(
+            &e,
+            &bob,
+            "doc.create",
+            map(&[("title", "mine"), ("owner", "bob"), ("attachment", &b)]),
+        )
+        .is_ok()
+    );
+}
+
+#[test]
+fn an_uploader_still_reads_an_upload_that_no_record_holds_yet() {
+    let e = env();
+    let (ann, bob) = (user("ann"), user("bob"));
+    let (_rec, b) = ann_doc(&e, false, 4);
+    // Bob uploads the very same bytes: that is his own pending upload, which he may read, and it
+    // tells him nothing about Ann's record beyond what he already uploaded.
+    let b2 = up(&e, &bob, "doc.attachment", &pdf(4), "application/pdf");
+    assert_eq!(b2, b, "content addressed: the same id");
+    assert_eq!(e.svc.get(&bob, &b, None).unwrap().bytes, pdf(4));
+    // A different upload of Ann's, not attached anywhere, is hers alone.
+    let loose = up(&e, &ann, "doc.attachment", &pdf(5), "application/pdf");
+    assert!(e.svc.get(&ann, &loose, None).is_ok());
+    assert_eq!(
+        e.svc.get(&bob, &loose, None).unwrap_err(),
+        BlobError::NotFound
+    );
+}
+
+#[test]
+fn an_owner_entry_whose_record_is_gone_is_not_readable_on_a_restricted_model() {
+    let e = env();
+    let (bob, mia) = (user("bob"), manager("mia"));
+    // Bytes held by a record id that does not exist (a leftover; nothing creates this).
+    let b =
+        e.s.blobs()
+            .put(
+                &pdf(6),
+                obop_storage::blob::NewBlob {
+                    content_type: "application/pdf".into(),
+                    width: None,
+                    height: None,
+                    uploader: "ann".into(),
+                    filename: "x.pdf".into(),
+                },
+            )
+            .unwrap()
+            .id;
+    e.s.blobs()
+        .attach(&b, &Owner::new("doc", "ghost", "attachment"))
+        .unwrap();
+    for who in [&bob, &mia] {
+        assert_eq!(e.svc.get(who, &b, None).unwrap_err(), BlobError::NotFound);
+    }
+    // A model without row rules reads as it always did.
+    e.s.blobs()
+        .attach(&b, &Owner::new("item", "ghost", "manual"))
+        .unwrap();
+    assert!(e.svc.get(&bob, &b, None).is_ok());
+}
+
+#[test]
+fn a_model_without_row_rules_is_read_by_everyone_who_may_read_the_model() {
+    let e = env();
+    let (ann, bob) = (user("ann"), user("bob"));
+    let b = up(&e, &ann, "item.manual", &pdf(7), "application/pdf");
+    call(
+        &e,
+        &ann,
+        "item.create",
+        map(&[("title", "A"), ("manual", &b)]),
+    )
+    .unwrap();
+    assert_eq!(e.svc.get(&bob, &b, None).unwrap().bytes, pdf(7));
 }

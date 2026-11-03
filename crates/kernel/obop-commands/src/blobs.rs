@@ -6,19 +6,24 @@
 //!   is public and nothing is attached yet: the blob waits as an upload of that principal.
 //! - **Reference** (a guard on `create` and `update` of models with such fields): a blob id may be
 //!   saved into a field only by the principal who uploaded it, or when it is already held by this
-//!   very field, or when the principal can already read a record that holds it. Knowing a hash is
-//!   not enough, and a guessed id answers like a missing one.
+//!   very field, or when the principal can already read a record that holds it (with the same
+//!   row rules as a read). Knowing a hash is not enough, and a guessed id answers like a missing
+//!   one.
 //! - **Hold** (after `create`, `update`, `delete` and erasure): saving a record attaches its
 //!   blobs, replacing a value detaches the old one, deleting a record detaches all of them; a
 //!   blob nobody holds is deleted (see `obop_storage::blob`).
-//! - **Read** (`BlobService::get`): a signed-in user who may read a record that holds the blob.
-//!   Agents are refused: they get ids and metadata through the generated commands and never the
+//! - **Read** (`BlobService::get`): a signed-in user who may read a record that holds the blob:
+//!   the model's read group, the field's group and, when the model has row rules (D58), the
+//!   record itself (a record the caller cannot see answers like a missing blob). Agents are refused: they get ids and metadata through the generated commands and never the
 //!   bytes (a dedicated `blob.read` command is not part of obop and would have to be added and
 //!   granted on purpose).
 //! - **Public read** (`PublicApi::public_blob`): only blobs held by a *published* record through
 //!   a field the package declared public, see `public.rs`.
 
+use crate::engine::Actor;
 use crate::engine::Models as ModelsMap;
+use crate::engine::access::Gate;
+use crate::engine::unit::{Plain, Reads};
 use crate::store::{Store, id_of};
 use crate::{Dispatcher, Guard, Principal, PrincipalKind, Value, Verdict};
 use obop_media::{Limits, MediaError};
@@ -246,7 +251,11 @@ impl BlobService {
             return true;
         }
         let models = self.models.read().unwrap();
-        info.owners.iter().any(|o| can_read_owner(p, &models, o))
+        let reads = Plain(&*self.store.backend);
+        let actor = Actor::of(p);
+        info.owners
+            .iter()
+            .any(|o| can_read_owner(p, &actor, &models, &reads, o))
     }
 
     /// The blob for a signed-in caller; `width` asks for a thumbnail.
@@ -264,7 +273,21 @@ impl BlobService {
     }
 }
 
-fn can_read_owner(p: &Principal, models: &HashMap<String, crate::ModelMeta>, o: &Owner) -> bool {
+/// Whether `p` may read the bytes a record holds through one field: the group of the model, the
+/// group of the field and, for a model with row rules (D58), the record itself. The rules are the
+/// ones of `get` on the record: invisible is the same as missing, and so is an owner entry whose
+/// record is gone. A model without rules (and the instance administrator, who sees every record)
+/// is decided by the groups alone, as it always was.
+///
+/// `models` is the guard the caller already holds; the lookup of the row rules is built from it,
+/// because taking the lock again while a writer waits for it could stop the instance.
+fn can_read_owner(
+    p: &Principal,
+    actor: &Actor,
+    models: &HashMap<String, crate::ModelMeta>,
+    reads: &dyn Reads,
+    o: &Owner,
+) -> bool {
     models.get(&o.model).is_some_and(|m| {
         p.allows(m.def.read_group)
             && m.def
@@ -272,6 +295,16 @@ fn can_read_owner(p: &Principal, models: &HashMap<String, crate::ModelMeta>, o: 
                 .iter()
                 .find(|f| f.name == o.field)
                 .is_some_and(|f| p.allows(f.permission_group))
+            && {
+                let lookup = |n: &str| models.get(n).map(|m| m.def.clone());
+                let gate = Gate::new(reads, &lookup, actor);
+                !gate.restricts(&m.def)
+                    || reads
+                        .get(&o.model, &o.record)
+                        .ok()
+                        .flatten()
+                        .is_some_and(|rec| gate.visible(&m.def, &rec))
+            }
     })
 }
 
@@ -377,6 +410,7 @@ pub(crate) fn reference_guard(def: &ModelDef, store: &Store, models: ModelsMap) 
     }
     let (def, store) = (def.clone(), store.clone());
     Some(Box::new(move |p, input| {
+        let actor = Actor::of(p);
         let Value::Map(m) = input else {
             return Ok(Verdict::default());
         };
@@ -399,7 +433,10 @@ pub(crate) fn reference_guard(def: &ModelDef, store: &Store, models: ModelsMap) 
             });
             let readable = || {
                 let models = models.read().unwrap();
-                info.owners.iter().any(|o| can_read_owner(p, &models, o))
+                let reads = Plain(&*store.backend);
+                info.owners
+                    .iter()
+                    .any(|o| can_read_owner(p, &actor, &models, &reads, o))
             };
             if !(by_me || held_here || readable()) {
                 return Err(none());
