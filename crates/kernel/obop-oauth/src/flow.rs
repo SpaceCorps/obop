@@ -407,9 +407,10 @@ impl OAuth {
     /// row is read first: a row that is gone (expired, finished, ended by too many tries) is
     /// `Gone` (410) whatever the browser holds, and only a row that is there is compared with the
     /// binder, so a browser whose cookie has ended (ten minutes after the authorization request,
-    /// never renewed) gets `Forbidden` (403) while a later write of the pages keeps the row alive,
-    /// and `Gone` once the row has ended too. The Microsoft step never writes the row again after
-    /// `begin` (a compare-and-set keeps the expiry), so on that path the row ends with the cookie.
+    /// never renewed) gets `Forbidden` (403) while a later write of the pages, failed or
+    /// successful, keeps the row alive, and `Gone` once the row has ended too. The Microsoft step
+    /// never renews the row after `begin` (the callback's compare-and-set keeps the expiry; the
+    /// tap and the return address write nothing), so on that path the row ends with the cookie.
     fn load(&self, id: &str, binder: &str, csrf: Option<&str>) -> Result<J, FlowError> {
         if id.len() != 32 || !id.bytes().all(|b| b.is_ascii_hexdigit()) {
             return Err(FlowError::Gone);
