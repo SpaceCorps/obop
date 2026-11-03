@@ -30,6 +30,7 @@ pub mod payments;
 pub mod public;
 pub(crate) mod shared;
 pub mod shell;
+pub mod sign_text;
 pub(crate) mod sso;
 pub mod website;
 
