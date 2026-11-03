@@ -116,7 +116,10 @@ description = "Skicka begäran till undertecknaren"
 
 [labels.sv.model.sign_request.action.sign]
 label = "Signera"
-description = "Registrera att undertecknaren har signerat; posten är därefter oföränderlig enligt konvention"
+description = "Registrera för hand att undertecknaren har signerat; bara för en begäran utan dokument, eftersom en begäran om ett dokument signeras av undertecknaren via länken"
+
+[labels.sv.model.sign_request.action.sign.assert.document_request]
+message = "En begäran om ett dokument signeras av undertecknaren via länken; den kan inte markeras som signerad för hand"
 
 [labels.sv.model.sign_request.action.decline]
 label = "Avböj"

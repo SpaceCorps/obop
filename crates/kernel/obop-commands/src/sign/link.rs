@@ -132,9 +132,14 @@ impl SignService {
                 None => {}
             }
         }
-        if let Some(Value::Text(asked)) = m.get("expires_at").filter(|v| **v != Value::Null) {
-            let asked = instant_micros(asked)
-                .ok_or("sign_link.expires_at must be a date and time (UTC)".to_string())?;
+        if let Some(asked) = m.get("expires_at").filter(|v| **v != Value::Null) {
+            // Anything but text is refused too: a number would otherwise ask for a short life and
+            // get the longest one.
+            let asked = match asked {
+                Value::Text(t) => instant_micros(t),
+                _ => None,
+            }
+            .ok_or("sign_link.expires_at must be a date and time (UTC)".to_string())?;
             if asked <= now {
                 return Err("sign_link.expires_at must be in the future".into());
             }

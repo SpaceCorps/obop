@@ -116,7 +116,10 @@ description = "Enviar la solicitud al firmante"
 
 [labels.es.model.sign_request.action.sign]
 label = "Firmar"
-description = "Registrar que el firmante firmó; después el registro es inmutable por convención"
+description = "Registra a mano que el firmante firmó; solo para una solicitud sin documento, porque una solicitud sobre un documento la firma el firmante mediante el enlace"
+
+[labels.es.model.sign_request.action.sign.assert.document_request]
+message = "Una solicitud sobre un documento la firma el firmante mediante el enlace; no se puede marcar como firmada a mano"
 
 [labels.es.model.sign_request.action.decline]
 label = "Rechazar"

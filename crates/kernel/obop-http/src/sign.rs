@@ -65,6 +65,20 @@ fn lang_for(s: &HttpState, parts: &Parts, form_lang: Option<&str>) -> &'static s
     )
 }
 
+/// Every `X-Forwarded-For` line, joined with ` | ` and cut to `n` characters, for the log.
+fn forwarded_lines(parts: &Parts, n: usize) -> String {
+    parts
+        .headers
+        .get_all("x-forwarded-for")
+        .iter()
+        .filter_map(|v| v.to_str().ok())
+        .collect::<Vec<_>>()
+        .join(" | ")
+        .chars()
+        .take(n)
+        .collect()
+}
+
 fn client(s: &HttpState, parts: &Parts) -> Client {
     let cut = |v: Option<&HeaderValue>, n: usize| {
         v.and_then(|v| v.to_str().ok())
@@ -80,7 +94,7 @@ fn client(s: &HttpState, parts: &Parts) -> Client {
             .get::<ConnectInfo<SocketAddr>>()
             .map(|c| c.0.ip().to_string())
             .unwrap_or_default(),
-        forwarded: cut(parts.headers.get("x-forwarded-for"), 200),
+        forwarded: forwarded_lines(parts, 200),
         user_agent: cut(parts.headers.get(header::USER_AGENT), 400),
     }
 }
@@ -217,7 +231,8 @@ pub(crate) async fn submit(
         let name = pair(&pairs, "name").unwrap_or("").to_string();
         let form = SignForm {
             name: name.clone(),
-            agree: pair(&pairs, "agree").is_some_and(|v| !v.is_empty()),
+            // The box sends exactly 1; 0, false, no and the empty text are not consent.
+            agree: pair(&pairs, "agree") == Some("1"),
             doc: pair(&pairs, "doc").unwrap_or("").to_string(),
             consent_version: txt::consent_version_for(lang),
         };

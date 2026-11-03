@@ -116,7 +116,10 @@ description = "Wysyła wniosek do podpisującego"
 
 [labels.pl.model.sign_request.action.sign]
 label = "Podpisz"
-description = "Rejestruje, że podpisujący złożył podpis; od tej chwili rekord jest niezmienny umownie"
+description = "Ręcznie rejestruje, że podpisujący złożył podpis; tylko dla wniosku bez dokumentu, ponieważ wniosek dotyczący dokumentu podpisuje sam podpisujący przez link"
+
+[labels.pl.model.sign_request.action.sign.assert.document_request]
+message = "Wniosek dotyczący dokumentu podpisuje sam podpisujący przez link; nie można go ręcznie oznaczyć jako podpisanego"
 
 [labels.pl.model.sign_request.action.decline]
 label = "Odrzuć"

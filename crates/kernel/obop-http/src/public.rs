@@ -143,12 +143,14 @@ async fn handle(State(shared): State<Shared>, req: Request) -> Response {
 }
 
 /// The address used to key rate limits: the socket peer, or behind a trusted proxy the last
-/// (nearest) entry of `X-Forwarded-For`.
+/// entry of the last `X-Forwarded-For` line (the one the proxy wrote).
 fn client_address(parts: &axum::http::request::Parts, trust_proxy: bool) -> String {
     if trust_proxy
         && let Some(v) = parts
             .headers
-            .get("x-forwarded-for")
+            .get_all("x-forwarded-for")
+            .iter()
+            .next_back()
             .and_then(|v| v.to_str().ok())
         && let Some(last) = v.rsplit(',').next()
     {

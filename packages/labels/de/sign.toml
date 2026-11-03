@@ -116,7 +116,10 @@ description = "Die Anfrage an den Unterzeichner senden"
 
 [labels.de.model.sign_request.action.sign]
 label = "Unterzeichnen"
-description = "Festhalten, dass der Unterzeichner unterzeichnet hat; der Datensatz ist danach per Konvention unveränderlich"
+description = "Von Hand festhalten, dass der Unterzeichner unterzeichnet hat; nur für eine Anfrage ohne Dokument, denn eine Anfrage zu einem Dokument unterzeichnet der Unterzeichner über den Link"
+
+[labels.de.model.sign_request.action.sign.assert.document_request]
+message = "Eine Anfrage zu einem Dokument unterzeichnet der Unterzeichner über den Link; sie kann nicht von Hand als unterzeichnet markiert werden"
 
 [labels.de.model.sign_request.action.decline]
 label = "Ablehnen"

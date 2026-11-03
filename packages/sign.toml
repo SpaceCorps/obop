@@ -185,12 +185,13 @@ write_group = "sign.user"
 
   [[model.action]]
   name = "sign"
-  description = "Record that the signer signed; the record is immutable by convention afterwards"
+  description = "Record by hand that the signer signed; only for a request that is not about a Document, because a request about a Document is signed by the signer through the link"
   field = "state"
   from = "sent"
   to = "signed"
   group = "sign.manager"
   approval = true
+  assert = [{ expr = "!is_set(document_id)", message = "A request about a Document is signed by the signer through the signing link; it cannot be marked signed by hand", key = "document_request" }]
 
   [[model.action]]
   name = "decline"
@@ -250,3 +251,4 @@ write_group = "sign.manager"
   name = "link"
   description = "The link itself: in the answer to create only, shown once, never stored and never returned by get, list or search"
   class = "internal"
+  group = "sign.manager"

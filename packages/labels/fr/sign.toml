@@ -116,7 +116,10 @@ description = "Envoie la demande au signataire"
 
 [labels.fr.model.sign_request.action.sign]
 label = "Signer"
-description = "Enregistre que le signataire a signé ; l’enregistrement est ensuite immuable par convention"
+description = "Enregistre à la main que le signataire a signé ; seulement pour une demande sans document, car une demande portant sur un document est signée par le signataire au moyen du lien"
+
+[labels.fr.model.sign_request.action.sign.assert.document_request]
+message = "Une demande portant sur un document est signée par le signataire au moyen du lien ; elle ne peut pas être marquée signée à la main"
 
 [labels.fr.model.sign_request.action.decline]
 label = "Décliner"

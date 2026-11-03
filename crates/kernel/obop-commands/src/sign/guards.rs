@@ -117,8 +117,8 @@ impl SignService {
     }
 }
 
-/// `bulk_create` takes `rows` (a list of objects) or `csv` (text with a header line). A row that
-/// names a door-owned column is refused.
+/// `bulk_create` takes `rows` (a list of objects) or `csv` (the text of a CSV file). A row or a
+/// column that names a door-owned field is refused.
 fn refuse_in_rows(input: &Value) -> Result<(), String> {
     let Value::Map(m) = input else {
         return Ok(());
@@ -135,10 +135,12 @@ fn refuse_in_rows(input: &Value) -> Result<(), String> {
         }
     }
     if let Some(Value::Text(csv)) = m.get("csv") {
-        let header = csv.lines().next().unwrap_or("");
-        for col in header.split([',', ';', '\t']) {
-            let col = col.trim().trim_matches('"').trim_start_matches('\u{feff}');
-            if let Some(k) = DOOR_OWNED.iter().find(|k| **k == col) {
+        // The header as the importer reads it, not as a line of text: the importer skips blank
+        // records, ends a record at a lone CR, and trims a cell after unquoting it. A file that
+        // cannot be parsed is refused here with the importer's own words.
+        let table = crate::csv::parse(csv.as_bytes(), crate::csv::MAX_ROWS)?;
+        for col in &table.headers {
+            if let Some(k) = DOOR_OWNED.iter().find(|k| **k == col.as_str()) {
                 return Err(door_message(k));
             }
         }

@@ -26,28 +26,39 @@ const WINDOW_10_MIN: u64 = 600_000;
 /// Who is asking, as the HTTP layer knows it.
 #[derive(Debug, Clone, Default)]
 pub struct Client {
-    /// The address limits and evidence use: the peer, or behind a trusted proxy the nearest
-    /// `X-Forwarded-For` entry. Empty for a call that did not come over a socket.
+    /// The address limits and evidence use: the peer, or behind a trusted proxy the last entry of
+    /// the last `X-Forwarded-For` line (the one the proxy wrote; the entries before it are what
+    /// the client sent). Empty for a call that did not come over a socket.
     pub addr: String,
     /// The peer of the socket, for the log.
     pub peer: String,
-    /// The raw `X-Forwarded-For` header, for the log.
+    /// Every `X-Forwarded-For` line, joined with ` | `, for the log.
     pub forwarded: String,
     pub user_agent: String,
 }
 
 impl Client {
-    /// The canonical form of `addr` when it is an IP address, else `unknown`. Nothing else is
-    /// ever stored as an address.
+    /// The canonical form of `addr` when it is an IP address (or an `ip:port` pair, which some
+    /// proxies write), else `unknown`. Nothing else is ever stored as an address.
     pub(crate) fn ip(&self) -> String {
-        IpAddr::from_str(self.addr.trim())
+        let a = self.addr.trim();
+        IpAddr::from_str(a)
+            .or_else(|_| std::net::SocketAddr::from_str(a).map(|s| s.ip()))
             .map(|a| a.to_string())
             .unwrap_or_else(|_| "unknown".to_string())
     }
 
-    /// A stand-in for the address in a counter key.
+    /// A stand-in for the address in a counter key. An address that is not an IP address (a proxy
+    /// that appends `ip:port`, junk in the header) is counted under the peer's address instead,
+    /// so that all such clients do not share one bucket.
     fn source(&self) -> String {
-        token::short_hash("obop-sign-src:", &self.ip())
+        let ip = match self.ip().as_str() {
+            "unknown" => IpAddr::from_str(self.peer.trim())
+                .map(|a| a.to_string())
+                .unwrap_or_else(|_| "unknown".to_string()),
+            known => known.to_string(),
+        };
+        token::short_hash("obop-sign-src:", &ip)
     }
 }
 
@@ -129,6 +140,15 @@ struct Found {
     req: Fields,
 }
 
+/// A signed request shows the time it was signed. One that carries no time was not signed at the
+/// door (an administrator moved it): the link is over and says nothing about a signature.
+fn signed(f: &Found) -> Status {
+    match text(&f.req, "signed_at") {
+        "" => Status::Gone(Gone::Closed),
+        at => Status::Signed(at.to_string()),
+    }
+}
+
 enum Status {
     Usable,
     Signed(String),
@@ -149,9 +169,34 @@ fn clean(raw: &str, max: usize) -> String {
         .collect()
 }
 
-/// The name as typed, cleaned: at least two letters, 2 to 120 characters.
+/// A text of staff with the characters that reorder or hide text taken out (bidirectional
+/// controls and marks, zero-width space, word joiner, byte order mark). Line breaks stay, and so
+/// do the two joiners that scripts need (zero-width joiner and non-joiner).
+pub(crate) fn without_bidi(raw: &str) -> String {
+    raw.chars().filter(|c| !is_bidi_or_hidden(*c)).collect()
+}
+
+fn is_bidi_or_hidden(c: char) -> bool {
+    matches!(
+        c,
+        '\u{061c}'
+            | '\u{200b}'
+            | '\u{200e}'
+            | '\u{200f}'
+            | '\u{202a}'..='\u{202e}'
+            | '\u{2060}'..='\u{2064}'
+            | '\u{2066}'..='\u{2069}'
+            | '\u{feff}'
+    )
+}
+
+/// The name as typed, cleaned: at least two letters, 2 to 120 characters, no markup and no
+/// character that reorders or hides text. A name over 400 characters is refused, not cut.
 fn clean_name(raw: &str) -> Option<String> {
-    let n = strip_hidden(&raw.chars().take(400).collect::<String>());
+    if raw.chars().count() > 400 || raw.chars().any(is_bidi_or_hidden) {
+        return None;
+    }
+    let n = strip_hidden(raw);
     let len = n.chars().count();
     (2..=120).contains(&len).then_some(())?;
     // No markup in a name: it is shown in pages and in the evidence, and no real name has one.
@@ -207,7 +252,7 @@ impl SignService {
     fn status(&self, f: &Found) -> Status {
         if !text(&f.link, "used_at").is_empty() {
             return if text(&f.req, "state") == "signed" {
-                Status::Signed(text(&f.req, "signed_at").to_string())
+                signed(f)
             } else {
                 Status::Gone(Gone::Closed)
             };
@@ -219,7 +264,7 @@ impl SignService {
         // link won a race (the link and the request are read one after the other, and the batch
         // that signs commits between the two reads) or a second link was made. Both see the end.
         if text(&f.req, "state") == "signed" {
-            return Status::Signed(text(&f.req, "signed_at").to_string());
+            return signed(f);
         }
         // The link's own end, and the end of the request, whichever is first. A link without a
         // readable end does not work.
@@ -306,7 +351,9 @@ impl SignService {
             Status::Gone(g) => Err(DoorError::Gone(g)),
             Status::Usable => {
                 let doc = self.cheap_integrity(&f, client)?;
-                let cut = |s: &str, n: usize| s.chars().take(n).collect::<String>();
+                // What staff typed, as shown to the signer: cut, and without characters that
+                // reorder or hide text (the consent sentence holds the requested name).
+                let cut = |s: &str, n: usize| without_bidi(&s.chars().take(n).collect::<String>());
                 Ok(View::Form(ViewData {
                     title: cut(text(&f.req, "title"), 200),
                     message: cut(text(&f.req, "message"), 2000),

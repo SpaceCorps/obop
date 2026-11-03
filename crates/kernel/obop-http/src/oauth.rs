@@ -28,12 +28,16 @@ pub(crate) const MAX_BODY: usize = 16 * 1024;
 // ---- plumbing ------------------------------------------------------------------------------
 
 /// The address rate limits are keyed on: the peer, or behind a trusted proxy the nearest
-/// `X-Forwarded-For` entry (the same rule as the public site).
+/// `X-Forwarded-For` entry, which is the last element of the last header line (a proxy that adds
+/// its own line, or extends the one it got, puts its entry at the end; the entries before it are
+/// whatever the client sent). The same rule as the public site.
 pub(crate) fn client_ip(s: &HttpState, parts: &Parts) -> String {
     if s.trust_proxy.load(std::sync::atomic::Ordering::Relaxed)
         && let Some(v) = parts
             .headers
-            .get("x-forwarded-for")
+            .get_all("x-forwarded-for")
+            .iter()
+            .next_back()
             .and_then(|v| v.to_str().ok())
         && let Some(last) = v.rsplit(',').next()
     {

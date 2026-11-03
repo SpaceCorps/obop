@@ -116,7 +116,10 @@ description = "Lähetä pyyntö allekirjoittajalle"
 
 [labels.fi.model.sign_request.action.sign]
 label = "Allekirjoita"
-description = "Kirjaa, että allekirjoittaja allekirjoitti; tietuetta ei saa sen jälkeen muokata"
+description = "Kirjaa käsin, että allekirjoittaja allekirjoitti; vain pyynnölle, joka ei koske asiakirjaa, sillä asiakirjaa koskevan pyynnön allekirjoittaja allekirjoittaa linkin kautta"
+
+[labels.fi.model.sign_request.action.sign.assert.document_request]
+message = "Asiakirjaa koskevan pyynnön allekirjoittaja allekirjoittaa linkin kautta; sitä ei voi merkitä käsin allekirjoitetuksi"
 
 [labels.fi.model.sign_request.action.decline]
 label = "Kieltäydy"
