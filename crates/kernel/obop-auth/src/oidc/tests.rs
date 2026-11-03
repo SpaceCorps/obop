@@ -2464,13 +2464,24 @@ fn a_reloaded_second_step_gets_a_fresh_token_only_while_the_first_factor_still_s
     );
     assert_eq!(r.a.resolve(&token).unwrap().id, "ada");
     r.a.set_clock_for_test(T0);
-    // The credentials changed since: nothing is minted.
+    // The credentials changed since: nothing is minted, and the refusal is on the record (the line
+    // that DEPLOY.md "Mobile apps" promises; counted, so that an earlier line cannot stand in).
+    let refusals = |needle: &str| {
+        events(&r, "oidc_refused")
+            .iter()
+            .filter(|l| l.contains(needle))
+            .count()
+    };
+    const CHANGED: &str = "the credentials of the account changed before the second step";
+    const DISABLED: &str = "the account was disabled before the second step";
     let tokens_before = r.b.list("auth_mfa_token").unwrap().len();
     change_credentials(&r, "ada");
+    assert_eq!((refusals(CHANGED), refusals(DISABLED)), (0, 0));
     assert!(matches!(
         sso(&r).second_step_for_flow("ada", epoch.as_deref()),
         Err(MfaError::Expired)
     ));
+    assert_eq!((refusals(CHANGED), refusals(DISABLED)), (1, 0));
     // Disabled (the epoch is read after the change, so the refusal is the disabled flag's and not
     // a changed epoch), unknown, and an epoch that is none while the account has one.
     r.a.operator_set_disabled("ada", true).unwrap();
@@ -2479,6 +2490,7 @@ fn a_reloaded_second_step_gets_a_fresh_token_only_while_the_first_factor_still_s
         sso(&r).second_step_for_flow("ada", now.as_deref()),
         Err(MfaError::Expired)
     ));
+    assert_eq!((refusals(CHANGED), refusals(DISABLED)), (1, 1));
     r.a.operator_set_disabled("ada", false).unwrap();
     assert!(matches!(
         sso(&r).second_step_for_flow("nobody", None),

@@ -340,14 +340,32 @@ fn the_callback_writes_with_a_compare_and_set_and_never_with_a_put() {
     assert_eq!(flaky.refused(), 1, "the control did not meet the refusal");
     flaky.refuse_kv_put(0);
     flaky.refuse_kv_new(0);
-    // Now every put is refused for the callback: all three of its outcomes still get written.
+    // Now every put is refused for the callback, and all four kinds of what it writes still get
+    // written, each by the swap: a word, a second step pending (the arm that `Placed::Pending`
+    // takes), a person seated, and a word after a person (which leaves the person as is). The
+    // second-step outcome is made by hand, as the identity is (the flow reads only that the
+    // sign-in came to a token for a second step; it keeps no token).
     let signed = signed_in(&r, "ada");
+    let pending = SsoFlowSignIn {
+        user: "ada".into(),
+        outcome: LoginOutcome::MfaRequired {
+            mfa_token: "a-token-the-flow-does-not-keep".into(),
+        },
+        epoch: signed.epoch.clone(),
+        mfa: false,
+        auth_time: None,
+    };
     flaky.refuse_kv_put(1_000);
     flaky.refuse_kv_new(1_000);
     let before = flaky.refused();
     r.o.microsoft_done(&id, MicrosoftOutcome::Failed("cancelled".into()))
         .unwrap();
     assert_eq!(record(&r, &id).unwrap()["ms_error"], "cancelled");
+    r.o.microsoft_done(&id, MicrosoftOutcome::SignedIn(pending))
+        .unwrap();
+    let rec = record(&r, &id).unwrap();
+    assert_eq!(rec["mfa_pending"]["user"], "ada", "{rec}");
+    assert!(rec["ms_error"].is_null(), "{rec}");
     r.o.microsoft_done(&id, MicrosoftOutcome::SignedIn(signed))
         .unwrap();
     assert_eq!(record(&r, &id).unwrap()["user"], "ada");

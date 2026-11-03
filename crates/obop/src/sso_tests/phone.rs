@@ -1921,7 +1921,7 @@ async fn phone_a_store_refusal_anywhere_in_the_consent_page_is_a_503() {
     let page = phone.open().await;
     let cb = phone.round_trip(&page.flow, ADA_OID).await;
     assert_eq!(cb.status, 303, "{}", cb.body);
-    let (mut refused_somewhere, mut shown, mut clean) = (0, 0, 0);
+    let (mut refused_somewhere, mut clean) = (0, 0);
     for skip in 0..60 {
         let before = flaky.refused();
         flaky.refuse_call_after(skip);
@@ -1930,10 +1930,10 @@ async fn phone_a_store_refusal_anywhere_in_the_consent_page_is_a_503() {
         flaky.allow_models();
         if refused > 0 {
             assert_eq!(r.status, 503, "{skip}: {}", r.body);
+            // True behind the layer of D74 whatever the handler built; it guards nothing here.
             assert!(!r.body.contains("<option value=\"90\""), "{skip}");
         } else {
             assert!(consent(&r), "{skip}: {}", r.body);
-            shown += 1;
             assert_eq!(days_offered(&r), [1, 7, 30], "{skip}: {}", r.body);
         }
         if refused == 0 {
@@ -1942,9 +1942,10 @@ async fn phone_a_store_refusal_anywhere_in_the_consent_page_is_a_503() {
         }
         refused_somewhere += 1;
     }
+    // The loop ends at the first call count that nothing refused (and that page was checked above).
     assert!(
-        clean == 1 && refused_somewhere > 0 && shown >= 1,
-        "{clean} {refused_somewhere} {shown}"
+        clean == 1 && refused_somewhere > 0,
+        "{clean} {refused_somewhere}"
     );
 }
 
@@ -2135,50 +2136,6 @@ async fn phone_a_reload_of_a_pending_second_step_is_limited_per_address() {
         statuses.iter().filter(|s| **s == 200).count() <= 30,
         "{statuses:?}"
     );
-}
-
-/// The window of the reload is the one of the sign-in pages, and it is the address's: another
-/// flow from the same address spends it, a password try spends it, another address has its own.
-#[tokio::test]
-async fn phone_the_reload_of_a_pending_second_step_spends_the_sign_in_window_of_its_address() {
-    let w = world(true).await;
-    let (_secret, _) = enrol(&rig_of(&w), "ada").await;
-    let mut one = Phone::new(&w).await;
-    let mut two = Phone::new(&w).await;
-    let mut elsewhere = Phone::new(&w).await;
-    one.ip = Some("10.20.0.1".into());
-    two.ip = Some("10.20.0.1".into());
-    elsewhere.ip = Some("10.20.0.2".into());
-    // Phone one: the first factor, and the return page that asks for the second (hit 1 of 30).
-    let p1 = one.open().await;
-    let r = one.microsoft(&p1.flow, ADA_OID).await;
-    assert!(asks_for_the_second_step(&r), "{}", r.body);
-    // Phone two, the same address, another flow: five wrong passwords on the sign-in page (hits
-    // 2 to 6; a flow ends at eight wrong tries).
-    let p2 = two.open().await;
-    for n in 0..5 {
-        let r = two.password(&p2, "bob", "not the password").await;
-        assert!(login_page(&r) && r.status == 200, "{n}: {}", r.body);
-    }
-    // So the reloads of phone one have 24 hits left, and the 25th is refused.
-    let mut served = 0;
-    loop {
-        let r = one.back(&p1.flow).await;
-        if r.status == 429 {
-            break;
-        }
-        assert!(asks_for_the_second_step(&r), "{served}: {}", r.body);
-        served += 1;
-        assert!(served <= 24, "the password tries did not spend the window");
-    }
-    assert_eq!(served, 24, "the window is shared by both kinds of step");
-    // The same address, the other flow: the password step is refused as well.
-    let r = two.password(&p2, "bob", "not the password").await;
-    assert_eq!(r.status, 429, "{}", r.body);
-    // Another address has a window of its own.
-    let p3 = elsewhere.open().await;
-    let r = elsewhere.microsoft(&p3.flow, ADA_OID).await;
-    assert!(asks_for_the_second_step(&r), "{}", r.body);
 }
 
 #[tokio::test]
@@ -2425,6 +2382,10 @@ async fn phone_a_bound_account_that_must_choose_a_new_password_is_told_so_after_
     assert_eq!(w.devices(), 0);
 }
 
+/// The cookie of the sign-in pages and the verifier of the round trip end at ten minutes and are
+/// not renewed. The answer after that is 410 on the Microsoft path (the stored flow ends with the
+/// cookie) and 403 after a failed step that wrote the flow again (fix round 3 made the test say
+/// which; before, it accepted either).
 #[tokio::test]
 async fn phone_the_cookies_of_the_round_trip_and_of_the_flow_last_ten_minutes_and_no_longer() {
     let w = world(true).await;
@@ -2443,6 +2404,8 @@ async fn phone_the_cookies_of_the_round_trip_and_of_the_flow_last_ten_minutes_an
     };
     let binder = cookie_of(&phone, "obop_oauth_");
     assert_eq!((binder.path.as_str(), binder.until), ("/oauth", Some(600)));
+    // The name is `obop_oauth_` and the first twelve characters of the flow's id.
+    assert_eq!(binder.name, format!("obop_oauth_{}", &page.flow[..12]));
     let tap = phone.tap(&page.flow).await;
     let verifier = cookie_of(&phone, "obop_sso_");
     assert_eq!(
@@ -2461,23 +2424,82 @@ async fn phone_the_cookies_of_the_round_trip_and_of_the_flow_last_ten_minutes_an
         cb.body
     );
     assert_eq!(w.idp.hits("/token"), 0, "the code was not redeemed");
-    // The return address is shown to nobody without the cookie of the flow; nothing was seated
-    // and nothing was made again.
+    // The earlier of the cookie and the stored row ends the flow, and `load` reads the row first.
+    // On this path (authorization, tap, callback, return) nothing writes the row again after the
+    // authorization request, so it ends with the cookie: ten minutes, to within the latency of
+    // the requests. A test cannot wait ten real minutes, so the row is still there at this point,
+    // as it would be if a failed password try had written it again (see below): the cookie is
+    // gone, the binder does not match, and the answer is 403.
     let r = phone.back(&page.flow).await;
     assert!(
-        [403, 410].contains(&r.status) && !consent(&r) && !login_page(&r),
+        r.status == 403 && r.body.contains("did not come from the page that started"),
         "{} {}",
         r.status,
         r.body
     );
+    assert!(!consent(&r) && !login_page(&r));
     assert!(w.oauth_flow(&page.flow).unwrap()["user"].is_null());
+    // Now the row ends as well (its own end is stood in for by deleting it; the lifetime itself
+    // is run for real by `the_callback_keeps_the_lifetime_of_the_flow_and_does_not_renew_it` in
+    // `obop-oauth`): the answer on this path is 410, "expired or already used".
+    w.app
+        .store
+        .backend()
+        .kv_delete(&format!("oauth:flow:{}", page.flow))
+        .unwrap();
+    let r = phone.back(&page.flow).await;
+    assert!(
+        r.status == 410 && r.body.contains("expired or was already used"),
+        "{} {}",
+        r.status,
+        r.body
+    );
+    assert!(w.oauth_flow(&page.flow).is_none(), "nothing made it again");
+    assert_eq!(w.devices(), 0);
+
+    // The other path: a failed password try at 300 s writes the flow again, so the row gets a
+    // fresh ten minutes (it would now end at 900 s), but it sets no cookie: the cookie is set
+    // once, in the answer to the authorization request, and still ends at 600 s.
+    let mut phone = Phone::new(&w).await;
+    let page = phone.open().await;
+    let binder = cookie_of(&phone, "obop_oauth_");
+    assert_eq!(binder.until, Some(600));
+    phone.b.now = 300;
+    let wrong = phone.password(&page, "ada", "not the password").await;
+    assert!(login_page(&wrong), "{}", wrong.body);
+    assert_eq!(
+        w.oauth_flow(&page.flow).unwrap()["attempts"],
+        1,
+        "the failed try wrote the flow"
+    );
+    assert!(
+        wrong.all("set-cookie").is_empty(),
+        "the step set a cookie: {:?}",
+        wrong.all("set-cookie")
+    );
+    let kept = cookie_of(&phone, "obop_oauth_");
+    assert_eq!((kept.value, kept.until), (binder.value, Some(600)));
+    // At 601 s the cookie is gone and the row, written again, is still there: 403, not 410.
+    phone.b.now = 601;
+    assert!(!phone.b.has("obop_oauth_"));
+    let r = phone.back(&page.flow).await;
+    assert!(
+        r.status == 403 && r.body.contains("did not come from the page that started"),
+        "{} {}",
+        r.status,
+        r.body
+    );
+    assert!(w.oauth_flow(&page.flow).is_some());
     assert_eq!(w.devices(), 0);
 }
 
 // ---- fix round 2 of the pull request: what the delta check found unpinned ---------------------
 //
-// Each test below passed on the code of `7d141a9` and fails under the mutation that docs/ISSUES.md
-// names for it in "Mutations of the delta check of 7d141a9".
+// Each test below passed on the code of `7d141a9` and fails under a mutation that docs/ISSUES.md
+// names for it in "Mutations of the delta check of 7d141a9", except the 503 reload test, which
+// pins the 503, the kept flow and the recovery and kills none of the mutations listed there (the
+// unit test in `obop-oauth` that its comment names is the one that kills a24; this one dies under
+// c12 of "Mutations of the check of ab76f8a", a change of the layer of D74).
 
 /// The second step is asked for the account and the credential epoch that the first factor was
 /// accepted with (`mfa_pending`), not for what a password try on the same flow wrote later
@@ -2516,6 +2538,21 @@ async fn phone_a_first_factor_taken_before_a_change_of_credentials_is_not_honour
         tokens,
         "a second-step token was minted for a first factor that was over"
     );
+    // The refusal is on the record, with the words DEPLOY.md "Mobile apps" gives (it is the
+    // epoch arm: she is enabled again, so the disabled arm did not fire).
+    let lines = w.events("oidc_refused");
+    assert_eq!(
+        lines
+            .iter()
+            .filter(|l| l.contains("the credentials of the account changed before the second step"))
+            .count(),
+        1,
+        "{lines:?}"
+    );
+    assert!(
+        !lines.iter().any(|l| l.contains("was disabled before")),
+        "{lines:?}"
+    );
 }
 
 /// A store that cannot answer at the reload of a pending second step is a 503 that can be asked
@@ -2538,11 +2575,56 @@ async fn phone_a_store_that_refuses_the_reload_of_a_pending_second_step_is_a_503
     let r = phone.back(&page.flow).await;
     flaky.allow_models();
     assert_eq!(r.status, 503, "{}", r.body);
+    // True behind the layer of D74 whatever the handler built; it guards nothing here.
     assert!(!r.body.contains(FAILED), "{}", r.body);
     assert!(
         w.oauth_flow(&page.flow).unwrap()["mfa_pending"].is_object(),
         "the flow still holds the pending step"
     );
     let r = phone.back(&page.flow).await;
+    assert!(asks_for_the_second_step(&r), "{}", r.body);
+}
+
+/// The window of the reload is the one of the sign-in pages, and it is the address's: another
+/// flow from the same address spends it, a password try spends it, another address has its own.
+#[tokio::test]
+async fn phone_the_reload_of_a_pending_second_step_spends_the_sign_in_window_of_its_address() {
+    let w = world(true).await;
+    let (_secret, _) = enrol(&rig_of(&w), "ada").await;
+    let mut one = Phone::new(&w).await;
+    let mut two = Phone::new(&w).await;
+    let mut elsewhere = Phone::new(&w).await;
+    one.ip = Some("10.20.0.1".into());
+    two.ip = Some("10.20.0.1".into());
+    elsewhere.ip = Some("10.20.0.2".into());
+    // Phone one: the first factor, and the return page that asks for the second (hit 1 of 30).
+    let p1 = one.open().await;
+    let r = one.microsoft(&p1.flow, ADA_OID).await;
+    assert!(asks_for_the_second_step(&r), "{}", r.body);
+    // Phone two, the same address, another flow: five wrong passwords on the sign-in page (hits
+    // 2 to 6; a flow ends at eight wrong tries).
+    let p2 = two.open().await;
+    for n in 0..5 {
+        let r = two.password(&p2, "bob", "not the password").await;
+        assert!(login_page(&r) && r.status == 200, "{n}: {}", r.body);
+    }
+    // So the reloads of phone one have 24 hits left, and the 25th is refused.
+    let mut served = 0;
+    loop {
+        let r = one.back(&p1.flow).await;
+        if r.status == 429 {
+            break;
+        }
+        assert!(asks_for_the_second_step(&r), "{served}: {}", r.body);
+        served += 1;
+        assert!(served <= 24, "the password tries did not spend the window");
+    }
+    assert_eq!(served, 24, "the window is shared by both kinds of step");
+    // The same address, the other flow: the password step is refused as well.
+    let r = two.password(&p2, "bob", "not the password").await;
+    assert_eq!(r.status, 429, "{}", r.body);
+    // Another address has a window of its own.
+    let p3 = elsewhere.open().await;
+    let r = elsewhere.microsoft(&p3.flow, ADA_OID).await;
     assert!(asks_for_the_second_step(&r), "{}", r.body);
 }
