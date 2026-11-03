@@ -1,6 +1,12 @@
-//! TLS to PostgreSQL (D66). The URL tests and the refusal tests run everywhere; the tests that
+//! TLS to PostgreSQL (D66). The URL tests and the refusal tests run everywhere. The tests that
 //! need a TLS-enabled PostgreSQL start a throwaway `postgres:17` container with a certificate
-//! made on the spot, and skip (with a message) when Docker is not available.
+//! made on the spot, and run only when `OBOP_TEST_DOCKER_TLS=1` asks for them (the way
+//! `OBOP_TEST_POSTGRES_URL` asks for the tests against a PostgreSQL server); without it they skip,
+//! with a message, and never call `docker`. They used to start whenever a `docker` binary was on
+//! the path, and failed ("the TLS test database did not start") on a machine where Docker was
+//! installed but not ready. Once asked for, they fail when Docker or the image is missing, so a
+//! CI job that asks for them cannot lose the coverage unseen. The CI job `rust` sets the variable
+//! (`.github/workflows/ci.yml`).
 
 use super::*;
 use crate::tls::{PgConnector, RootCert, SslMode, parse_url};
@@ -101,7 +107,7 @@ fn a_missing_or_empty_root_certificate_file_is_refused_when_the_url_is_read() {
             .unwrap();
     assert!(e.contains("cannot read sslrootcert"), "{e}");
     let dir = scratch("emptyroot");
-    let f = dir.join("empty.pem");
+    let f = dir.path().join("empty.pem");
     std::fs::write(&f, "not a certificate\n").unwrap();
     let e = PgConnector::new(&format!(
         "postgres://u@h/db?sslmode=require&sslrootcert={}",
@@ -153,13 +159,30 @@ fn require_and_verify_modes_refuse_a_server_that_has_no_tls() {
 
 // ---- against a real PostgreSQL with TLS -----------------------------------------------------
 
-fn scratch(tag: &str) -> std::path::PathBuf {
-    let d = std::env::temp_dir().join(format!("obop-tls-{tag}-{}", std::process::id()));
-    std::fs::create_dir_all(&d).unwrap();
-    d
+/// A directory of this test's own, removed again when the guard is dropped.
+fn scratch(tag: &str) -> crate::testing::TempPath {
+    crate::testing::TempPath::dir(&format!("obop-tls-{tag}"))
+}
+
+/// The variable that asks for the tests that start a container.
+const DOCKER_TLS: &str = "OBOP_TEST_DOCKER_TLS";
+
+/// Does the value of [`DOCKER_TLS`] ask for the container tests? `1` or `true`; anything else,
+/// and no value, is "no".
+fn docker_tls_requested(value: Option<&str>) -> bool {
+    matches!(
+        value.map(|v| v.trim().to_ascii_lowercase()).as_deref(),
+        Some("1" | "true")
+    )
+}
+
+thread_local! {
+    /// How often this thread ran `docker`: the tests of the gate read it.
+    static DOCKER_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 fn docker(args: &[&str]) -> Option<String> {
+    DOCKER_CALLS.with(|n| n.set(n.get() + 1));
     let o = Command::new("docker").args(args).output().ok()?;
     o.status
         .success()
@@ -172,6 +195,8 @@ struct TlsPg {
     /// The server certificate (it names `localhost` only), and an unrelated certificate.
     cert: std::path::PathBuf,
     other: std::path::PathBuf,
+    /// The directory of the two certificates; last, so that it goes after the container.
+    _certs: crate::testing::TempPath,
 }
 
 impl Drop for TlsPg {
@@ -191,12 +216,27 @@ const SETUP: &str = "set -e; mkdir -p /certs; cd /certs; \
       -c ssl_cert_file=/certs/server.crt -c ssl_key_file=/certs/server.key";
 
 impl TlsPg {
-    /// None (after saying why) when Docker or the image is not available.
+    /// None (after saying why) unless `OBOP_TEST_DOCKER_TLS=1` asks for the container tests;
+    /// once asked for, a missing Docker or image is a failure.
     fn start() -> Option<Self> {
-        if docker(&["info", "--format", "{{.ServerVersion}}"]).is_none() {
-            eprintln!("skipping: docker is not available");
+        Self::start_if(docker_tls_requested(
+            std::env::var(DOCKER_TLS).ok().as_deref(),
+        ))
+    }
+
+    /// [`TlsPg::start`] with the answer of the gate given. `false` returns before anything calls
+    /// `docker`.
+    fn start_if(requested: bool) -> Option<Self> {
+        if !requested {
+            eprintln!(
+                "skipped: set {DOCKER_TLS}=1 to run against a throwaway postgres:17 container (needs Docker)"
+            );
             return None;
         }
+        assert!(
+            docker(&["info", "--format", "{{.ServerVersion}}"]).is_some(),
+            "{DOCKER_TLS} is set but Docker is not available"
+        );
         static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         let name = format!(
             "obop-tls-test-{}-{}",
@@ -219,19 +259,26 @@ impl TlsPg {
             "-c",
             SETUP,
         ]);
-        if started.is_none() {
-            eprintln!("skipping: could not start postgres:17");
-            return None;
-        }
+        assert!(
+            started.is_some(),
+            "{DOCKER_TLS} is set but postgres:17 could not be started"
+        );
         let mut me = TlsPg {
             name: name.clone(),
             port: 0,
             cert: std::path::PathBuf::new(),
             other: std::path::PathBuf::new(),
+            _certs: scratch("certs"),
         };
-        let mapped = docker(&["port", &name, "5432/tcp"])?;
-        me.port = mapped.lines().next()?.rsplit(':').next()?.parse().ok()?;
-        let dir = scratch(&name);
+        let mapped =
+            docker(&["port", &name, "5432/tcp"]).expect("the mapped port of the container");
+        me.port = mapped
+            .lines()
+            .next()
+            .and_then(|l| l.rsplit(':').next())
+            .and_then(|p| p.parse().ok())
+            .expect("a port number");
+        let dir = me._certs.path().to_path_buf();
         for (f, slot) in [("server.crt", 0), ("other.crt", 1)] {
             let mut pem = None;
             for _ in 0..60 {
@@ -429,4 +476,29 @@ fn the_storage_backend_uses_tls_for_its_main_and_lock_connections() {
 fn only_postgres_urls_are_accepted_so_no_ssl_key_can_be_ignored() {
     assert!(PgConnector::new("host=h sslmode=verify-full").is_err());
     assert!(PgConnector::new("mysql://u@h/db").is_err());
+}
+
+// ---- the gate of the container tests ----------------------------------------------------------
+
+#[test]
+fn only_one_or_true_asks_for_the_container_tests() {
+    assert!(!docker_tls_requested(None));
+    for no in ["", " ", "0", "false", "no", "off", "2", "yes"] {
+        assert!(!docker_tls_requested(Some(no)), "{no:?}");
+    }
+    for yes in ["1", "true", "TRUE", " 1 "] {
+        assert!(docker_tls_requested(Some(yes)), "{yes:?}");
+    }
+}
+
+#[test]
+fn without_the_variable_the_container_tests_skip_and_never_call_docker() {
+    let before = DOCKER_CALLS.with(|n| n.get());
+    assert!(TlsPg::start_if(docker_tls_requested(None)).is_none());
+    assert!(TlsPg::start_if(false).is_none());
+    assert_eq!(
+        DOCKER_CALLS.with(|n| n.get()),
+        before,
+        "a skipped test must not run docker"
+    );
 }

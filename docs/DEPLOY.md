@@ -102,7 +102,7 @@ Command line flags win over variables. Secrets are set as secret environment var
 
 ### Tests
 
-`OBOP_TEST_POSTGRES_URL` adds PostgreSQL to `cargo test`, including the multi-process tests and the connection pool tests (`cargo test -p obop-storage pg_pool`, `cargo test -p obop --test pool`); `OBOP_BIN` points the end-to-end suite at a binary. The tests that restart a server, put PgBouncer in front of it (`edoburu/pgbouncer`) or enable TLS start containers of their own and are skipped, with a message, when Docker is not available.
+`OBOP_TEST_POSTGRES_URL` adds PostgreSQL to `cargo test`, including the multi-process tests and the connection pool tests (`cargo test -p obop-storage pg_pool`, `cargo test -p obop --test pool`); `OBOP_BIN` points the end-to-end suite at a binary. The tests that restart a server or put PgBouncer in front of it (`edoburu/pgbouncer`) start containers of their own and are skipped, with a message, when Docker is not available. The TLS tests (`tls_tests` in `obop-storage`) start a `postgres:17` container too, and run only when `OBOP_TEST_DOCKER_TLS=1` asks for them (they skip, with a message, and never call `docker` without it; once asked for they fail when Docker or the image is missing; CI sets it).
 
 ## Database connections and TLS (D66)
 
@@ -126,7 +126,7 @@ postgres://obop:PASSWORD@db.example.com/obop?sslmode=verify-full&sslrootcert=sys
 - Refused with a clear message at start-up: `sslmode=allow`, a misspelt mode, `sslrootcert` without a mode that uses it, `sslcert`, `sslkey` and `sslcrl` (client certificates are not built), and any address that is not a `postgres://` or `postgresql://` URL. A failed verification (untrusted chain, expired certificate, wrong name, a server without TLS) is an error, never a fall back to a plain connection. The password is not in any of these messages.
 - Turn TLS on at the server (`ssl = on`, `ssl_cert_file`, `ssl_key_file`), and to forbid plain connections use `hostssl` lines in `pg_hba.conf`. obop's TLS is rustls (TLS 1.2 and 1.3, no system OpenSSL); the server's certificate key must be RSA, ECDSA or Ed25519.
 - Put the same parameters in `OBOP_CELL_ADMIN_URL`, and in `--db` for `obop backup`, `restore`, `migrate` and `secrets`. The database URLs the control plane gives to **new** hosted instances do not carry `sslmode` yet; keep the cell on a private network until they do.
-- **Not tried** against a managed PostgreSQL service, a connection pooler in TLS mode, a certificate chain with intermediates, or a public CA: only against the stock `postgres:17` image with a self-signed certificate (`cargo test -p obop-storage tls` starts one when Docker is available).
+- **Not tried** against a managed PostgreSQL service, a connection pooler in TLS mode, a certificate chain with intermediates, or a public CA: only against the stock `postgres:17` image with a self-signed certificate (`OBOP_TEST_DOCKER_TLS=1 cargo test -p obop-storage tls` starts one; it needs Docker).
 
 ## Connection pool and poolers (D74)
 
