@@ -15,6 +15,7 @@ use serde_json::{Value as J, json};
 use std::sync::Arc;
 
 mod accounts;
+mod addr;
 pub mod blobs;
 pub mod community;
 pub mod connectors;

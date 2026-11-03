@@ -7,7 +7,7 @@
 use super::{HttpState, blocking};
 use axum::{
     body::Bytes,
-    extract::{ConnectInfo, Path, State},
+    extract::{Path, State},
     http::{HeaderMap, HeaderValue, StatusCode, header, request::Parts},
     response::{IntoResponse, Response},
 };
@@ -17,7 +17,6 @@ use obop_oauth::{
     AuthzError, DecideOut, FlowCtx, FlowError, Form, LoginOut, OAuth, OAuthError, microsoft_key,
 };
 use serde_json::{Value as J, json};
-use std::net::SocketAddr;
 use std::sync::Arc;
 
 type Shared = State<Arc<HttpState>>;
@@ -32,22 +31,11 @@ pub(crate) const MAX_BODY: usize = 16 * 1024;
 /// its own line, or extends the one it got, puts its entry at the end; the entries before it are
 /// whatever the client sent). The same rule as the public site (`public.rs`) and the signer door.
 pub(crate) fn client_ip(s: &HttpState, parts: &Parts) -> String {
-    if s.trust_proxy.load(std::sync::atomic::Ordering::Relaxed)
-        && let Some(v) = parts
-            .headers
-            .get_all("x-forwarded-for")
-            .iter()
-            .next_back()
-            .and_then(|v| v.to_str().ok())
-        && let Some(last) = v.rsplit(',').next()
-    {
-        return last.trim().chars().take(64).collect();
-    }
-    parts
-        .extensions
-        .get::<ConnectInfo<SocketAddr>>()
-        .map(|c| c.0.ip().to_string())
-        .unwrap_or_default()
+    super::addr::client_address(
+        s.trust_proxy.load(std::sync::atomic::Ordering::Relaxed),
+        &parts.headers,
+        &parts.extensions,
+    )
 }
 
 fn pct_decode(s: &str) -> Option<String> {

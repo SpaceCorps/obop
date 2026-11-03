@@ -26,9 +26,11 @@ const WINDOW_10_MIN: u64 = 600_000;
 /// Who is asking, as the HTTP layer knows it.
 #[derive(Debug, Clone, Default)]
 pub struct Client {
-    /// The address limits and evidence use: the peer, or behind a trusted proxy the last entry of
-    /// the last `X-Forwarded-For` line (the one the proxy wrote; the entries before it are what
-    /// the client sent). Empty for a call that did not come over a socket.
+    /// The address limits and evidence use, from the one rule every limiter of the server shares
+    /// (`obop-http` `addr.rs`): the peer, or behind a trusted proxy the last entry of the last
+    /// `X-Forwarded-For` line (the one the proxy wrote; the entries before it are what the client
+    /// sent) when that entry is an address, and the peer when it is not. Empty for a call that
+    /// did not come over a socket.
     pub addr: String,
     /// The peer of the socket, for the log.
     pub peer: String,
@@ -160,14 +162,14 @@ fn unavailable(e: String) -> DoorError {
     DoorError::Unavailable
 }
 
-/// A text from outside made safe for a log line or a record: hidden characters and line breaks
-/// gone, cut to `max` characters.
 /// Text from the client for a line of the security log: cleaned, and with the semicolons that
 /// separate the fields of the line replaced, so that a forged header cannot start a field.
 fn logged(raw: &str, max: usize) -> String {
     clean(raw, max).replace(';', ",")
 }
 
+/// A text from outside made safe for a log line or a record: hidden characters and line breaks
+/// gone, cut to `max` characters.
 fn clean(raw: &str, max: usize) -> String {
     strip_hidden(&raw.chars().take(max * 2).collect::<String>())
         .chars()

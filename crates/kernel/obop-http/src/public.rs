@@ -10,12 +10,11 @@ use super::{HttpState, api_routes, blocking};
 use axum::{
     Router,
     body::{Body, to_bytes},
-    extract::{ConnectInfo, Request, State},
+    extract::{Request, State},
     http::{HeaderName, HeaderValue, StatusCode, header},
     response::Response,
 };
 use obop_site::{MAX_BODY, Site, http::Req};
-use std::net::SocketAddr;
 use std::sync::Arc;
 
 /// Request headers handed to the site (everything else is dropped).
@@ -145,22 +144,7 @@ async fn handle(State(shared): State<Shared>, req: Request) -> Response {
 /// The address used to key rate limits: the socket peer, or behind a trusted proxy the last
 /// entry of the last `X-Forwarded-For` line (the one the proxy wrote).
 fn client_address(parts: &axum::http::request::Parts, trust_proxy: bool) -> String {
-    if trust_proxy
-        && let Some(v) = parts
-            .headers
-            .get_all("x-forwarded-for")
-            .iter()
-            .next_back()
-            .and_then(|v| v.to_str().ok())
-        && let Some(last) = v.rsplit(',').next()
-    {
-        return last.trim().chars().take(64).collect();
-    }
-    parts
-        .extensions
-        .get::<ConnectInfo<SocketAddr>>()
-        .map(|c| c.0.ip().to_string())
-        .unwrap_or_default()
+    super::addr::client_address(trust_proxy, &parts.headers, &parts.extensions)
 }
 
 fn json_404() -> Response {

@@ -26,6 +26,7 @@ use axum::{
 use obop_commands::sign::{Client, Done, DoorError, Gone, Invalid, SignForm, View, ViewData};
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 type Shared = State<Arc<HttpState>>;
 
@@ -77,18 +78,33 @@ fn lang_for(s: &HttpState, parts: &Parts, form_lang: Option<&str>) -> &'static s
     )
 }
 
-/// Every `X-Forwarded-For` line, joined with ` | ` and cut to `n` characters, for the log.
+/// When the line about a refused origin was last written (seconds since the epoch; 0 for never).
+static LAST_FOREIGN_ORIGIN_LOG: AtomicU64 = AtomicU64::new(0);
+
+/// Whether a line of the log is due: at most one in every `every` seconds, whoever asks and
+/// however many ask at once.
+fn log_due(last: &AtomicU64, now: u64, every: u64) -> bool {
+    let before = last.load(Ordering::Relaxed);
+    (before == 0 || now >= before.saturating_add(every))
+        && last
+            .compare_exchange(before, now, Ordering::Relaxed, Ordering::Relaxed)
+            .is_ok()
+}
+
+/// Every `X-Forwarded-For` line for the log, joined with ` | `. A line that is not text is read
+/// lossily, not dropped, so that the log shows it was there; a `|` the client wrote is replaced,
+/// so it cannot imitate the border between two lines; and when the text is longer than `n`
+/// characters the head is cut, because the proxy's own entry is at the end.
 fn forwarded_lines(parts: &Parts, n: usize) -> String {
-    parts
+    let all = parts
         .headers
         .get_all("x-forwarded-for")
         .iter()
-        .filter_map(|v| v.to_str().ok())
+        .map(|v| String::from_utf8_lossy(v.as_bytes()).replace('|', "/"))
         .collect::<Vec<_>>()
-        .join(" | ")
-        .chars()
-        .take(n)
-        .collect()
+        .join(" | ");
+    let skip = all.chars().count().saturating_sub(n);
+    all.chars().skip(skip).collect()
 }
 
 fn client(s: &HttpState, parts: &Parts) -> Client {
@@ -218,8 +234,15 @@ pub(crate) async fn submit(
         let base = s.mcp.base_url(&parts.headers);
         if !same_origin(&parts.headers, &base) {
             // Where a post came from is the browser's word; a proxy that hides the scheme makes
-            // every post look foreign (docs/SIGN.md: set OBOP_PUBLIC_URL). The log says so.
-            eprintln!("sign: a post was refused because its origin is not {base}");
+            // every post look foreign (docs/SIGN.md: set OBOP_PUBLIC_URL). The log says so, once
+            // a minute: anybody can cause this without a link, and the refusal is made before
+            // any limit of the door.
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_secs());
+            if log_due(&LAST_FOREIGN_ORIGIN_LOG, now, 60) {
+                eprintln!("sign: a post was refused because its origin is not {base}");
+            }
             return page_response(StatusCode::FORBIDDEN, sign_page::message(lang, "forbidden"));
         }
         let ct = parts
@@ -326,6 +349,18 @@ mod tests {
             refusal_parts(&DoorError::Refused),
             (StatusCode::CONFLICT, "gone_revoked")
         );
+    }
+
+    #[test]
+    fn a_line_of_the_log_about_a_refused_origin_is_due_once_a_minute() {
+        let last = AtomicU64::new(0);
+        assert!(log_due(&last, 1_000, 60), "the first is due");
+        assert!(!log_due(&last, 1_000, 60), "not twice in one second");
+        assert!(!log_due(&last, 1_059, 60), "nor before the minute is over");
+        assert!(log_due(&last, 1_060, 60), "then again");
+        assert!(!log_due(&last, 1_061, 60));
+        // A clock that goes back does not open the gate.
+        assert!(!log_due(&last, 500, 60));
     }
 
     #[test]
