@@ -275,7 +275,8 @@ export function KanbanView(p: ViewProps) {
     if (!governed || !id) return { ok: true, reason: "" };
     const row = rows.find((r) => r.id === id);
     if (!row) return { ok: true, reason: "" };
-    const m = canMove(model, gf, row[gf.name] as string, key, noun);
+    // The card itself decides between two actions that lead the same way, or refuses one (D92).
+    const m = canMove(model, gf, row[gf.name] as string, key, noun, row);
     return { ok: m.allowed || m.current, reason: m.reason };
   };
 
@@ -535,7 +536,7 @@ export function KanbanView(p: ViewProps) {
                       {keys
                         .filter((k) => k !== key && (k !== "" || !gf.required))
                         .map((k) => {
-                          const m = governed ? canMove(model, gf, key, k, noun) : null;
+                          const m = governed ? canMove(model, gf, key, k, noun, r) : null;
                           return (
                             <option
                               key={k}
