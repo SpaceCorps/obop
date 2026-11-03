@@ -9,8 +9,8 @@ use crate::client::{Class, Client};
 use crate::redirect::RedirectForm;
 use crate::util::{clean_text, ct_eq, rand_hex, sha_hex};
 use crate::{OAuth, OAuthError, api_resource, mcp_resource, redirect};
-use obop_commands::LoginOutcome;
 use obop_commands::devices::never_for_mobile;
+use obop_commands::{LoginOutcome, MfaError, SsoFlowSignIn};
 use serde_json::{Value as J, json};
 
 /// The parameters of `GET /oauth/authorize`.
@@ -104,6 +104,14 @@ pub struct FlowCtx {
     pub groups: Vec<String>,
     /// The ones to tick at first.
     pub preselected: Vec<String>,
+    /// Whether the sign-in page offers "Sign in with Microsoft". The OAuth crate cannot see the
+    /// provider (it has no HTTP client and no connectors runtime), so `obop-http` sets this after
+    /// `view`: the connectors runtime exists, the provider is configured and enabled, and the
+    /// client is a mobile app. Never set for an MCP client.
+    pub microsoft: bool,
+    /// The longest the person may hand over for, in days: the cap of a Microsoft-only account on
+    /// a mobile app's flow once somebody is signed in on it, else the general maximum.
+    pub max_days: u32,
 }
 
 /// Why a step of the flow was not accepted.
@@ -137,8 +145,100 @@ pub enum DecideOut {
     Retry(&'static str),
 }
 
+/// What the Microsoft round trip hands to the flow of a mobile app (the phone sign-in).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MicrosoftOutcome {
+    /// A verified identity signed in (`SsoApi::sign_in_for_flow`).
+    SignedIn(SsoFlowSignIn),
+    /// The round trip ended without one, for one of the fixed words of the redirect
+    /// (`cancelled`, `unavailable`, `busy`, `failed`, and also `enrol` and `pwchange`, the two
+    /// that the callback derives from the session). Anything else is read as `failed`.
+    Failed(String),
+}
+
+/// The words a failed Microsoft step may leave in the flow, and the page text for each. A closed
+/// set: a word that is not here is `failed`, so nothing the provider or a caller sent is ever
+/// shown, stored or looked up.
+pub const MICROSOFT_WORDS: [(&str, &str); 6] = [
+    ("cancelled", "err.ms_cancelled"),
+    ("unavailable", "err.ms_unavailable"),
+    ("busy", "err.ms_busy"),
+    ("failed", "err.ms_failed"),
+    // The sign-in itself worked and the instance still limits the session; the same two texts the
+    // password step gives.
+    ("enrol", "err.enrol"),
+    ("pwchange", "err.pwchange"),
+];
+
+fn microsoft_word(word: &str) -> &'static str {
+    MICROSOFT_WORDS
+        .iter()
+        .find(|(w, _)| *w == word)
+        .map_or("failed", |(w, _)| w)
+}
+
+/// The page-catalogue key of the text for a word of the Microsoft step (`err.ms_failed` for a
+/// word that is not in the closed set).
+pub fn microsoft_key(word: &str) -> &'static str {
+    MICROSOFT_WORDS
+        .iter()
+        .find(|(w, _)| *w == word)
+        .map_or("err.ms_failed", |(_, k)| k)
+}
+
+/// The word for a page key that `resolve_outcome` gave (`err.enrol`, `err.pwchange`; anything
+/// else is `failed`).
+fn word_of_key(key: &str) -> &'static str {
+    match key {
+        "err.enrol" => "enrol",
+        "err.pwchange" => "pwchange",
+        _ => "failed",
+    }
+}
+
+/// What a sign-in outcome comes to once the session it carried is read and ended.
+enum Resolved {
+    /// The second step is asked; the token is for the page (or dropped).
+    Mfa(String),
+    /// The person (the account's id) is signed in.
+    Person(String),
+    /// Refused, for this reason (a key of the page catalogue).
+    Failed(&'static str),
+}
+
+/// What a Microsoft outcome is written as.
+enum Placed {
+    Person(String),
+    Pending,
+    Word(&'static str),
+}
+
+/// What the callback has of a sign-in that reached the account side: who it is for and the
+/// credential epoch that sign-in compared.
+struct Signed {
+    user: String,
+    epoch: Option<String>,
+}
+
 pub const EXPIRY_DAYS: [u32; 4] = [1, 7, 30, 90];
 pub const DEFAULT_DAYS: u32 = 30;
+/// The longest any grant lasts, in days.
+pub const MAX_DAYS: u32 = 90;
+/// The longest a phone grant of an account that signs in with Microsoft only lasts (a relayed
+/// choice of the owner, ratified with D91 by OR-38, item 7).
+pub const MICROSOFT_ONLY_MAX_DAYS: u32 = 30;
+
+/// How long a phone grant may last for an account that does, or does not, sign in with Microsoft
+/// only. The one place the number is decided: the consent page lists up to it, the decision refuses
+/// above it and the exchange of the code clamps to it (a code record is the flow's word about the
+/// account, and the account may have changed since).
+pub fn max_days(microsoft_only: bool) -> u32 {
+    if microsoft_only {
+        MICROSOFT_ONLY_MAX_DAYS
+    } else {
+        MAX_DAYS
+    }
+}
 const MAX_LOGIN_ATTEMPTS: u64 = 8;
 
 fn flow_key(id: &str) -> String {
@@ -303,7 +403,14 @@ impl OAuth {
         )
     }
 
-    /// The flow `id` for the browser holding `binder`; with `csrf`, also that token.
+    /// The flow `id` for the browser holding `binder`; with `csrf`, also that token. The stored
+    /// row is read first: a row that is gone (expired, finished, ended by too many tries) is
+    /// `Gone` (410) whatever the browser holds, and only a row that is there is compared with the
+    /// binder, so a browser whose cookie has ended (ten minutes after the authorization request,
+    /// never renewed) gets `Forbidden` (403) while a later write of the pages, failed or
+    /// successful, keeps the row alive, and `Gone` once the row has ended too. The Microsoft step
+    /// never renews the row after `begin` (the callback's compare-and-set keeps the expiry; the
+    /// tap and the return address write nothing), so on that path the row ends with the cookie.
     fn load(&self, id: &str, binder: &str, csrf: Option<&str>) -> Result<J, FlowError> {
         if id.len() != 32 || !id.bytes().all(|b| b.is_ascii_hexdigit()) {
             return Err(FlowError::Gone);
@@ -386,13 +493,30 @@ impl OAuth {
             class,
             groups,
             preselected,
+            microsoft: false,
+            max_days: MAX_DAYS,
         }
     }
 
     /// The flow as the page shows it (no CSRF check: this is a read).
     pub fn view(&self, id: &str, binder: &str) -> Result<FlowCtx, FlowError> {
         let rec = self.load(id, binder, None)?;
-        Ok(self.ctx(id, &rec))
+        let mut ctx = self.ctx(id, &rec);
+        if ctx.class.is_mobile()
+            && let Some(user) = ctx.user.as_deref()
+        {
+            ctx.max_days = self.phone_cap(user)?;
+        }
+        Ok(ctx)
+    }
+
+    /// The longest a phone grant of `user` may last. A refused read is not "no cap": the page is
+    /// not shown, and the decision is not taken, on a guess about the kind of account.
+    fn phone_cap(&self, user: &str) -> Result<u32, FlowError> {
+        self.tokens()
+            .is_microsoft_only(user)
+            .map(max_days)
+            .map_err(|_| FlowError::Gone)
     }
 
     fn count_attempt(&self, id: &str, rec: &mut J) -> Result<(), FlowError> {
@@ -563,13 +687,27 @@ impl OAuth {
     }
 
     fn after_login(&self, id: &str, rec: &mut J, out: LoginOutcome) -> Result<LoginOut, FlowError> {
-        match out {
-            LoginOutcome::MfaRequired { mfa_token } => {
+        match self.resolve_outcome(out) {
+            Resolved::Mfa(mfa_token) => {
                 // The epoch read before the password was looked at goes with the flow to the
                 // second step.
                 let _ = self.flow_put(id, rec);
                 Ok(LoginOut::Mfa(mfa_token))
             }
+            Resolved::Failed(key) => Ok(LoginOut::Failed(key)),
+            Resolved::Person(who) => {
+                self.seat(rec, &who)?;
+                self.flow_put(id, rec).map_err(|_| FlowError::Gone)?;
+                Ok(LoginOut::Consent)
+            }
+        }
+    }
+
+    /// Read who a sign-in outcome is for, and end the session it carried: all a flow needs is to
+    /// know who the person is.
+    fn resolve_outcome(&self, out: LoginOutcome) -> Resolved {
+        match out {
+            LoginOutcome::MfaRequired { mfa_token } => Resolved::Mfa(mfa_token),
             LoginOutcome::Session {
                 token,
                 mfa_enrolment_required,
@@ -578,41 +716,208 @@ impl OAuth {
                 let who = self.auth.resolve(&token);
                 self.tokens().revoke_session(&token);
                 if mfa_enrolment_required {
-                    return Ok(LoginOut::Failed("err.enrol"));
+                    return Resolved::Failed("err.enrol");
                 }
                 if password_change_required {
-                    return Ok(LoginOut::Failed("err.pwchange"));
+                    return Resolved::Failed("err.pwchange");
                 }
-                let Some(p) = who.filter(|p| p.kind == obop_commands::PrincipalKind::User) else {
-                    return Ok(LoginOut::Failed("err.login"));
-                };
-                if Class::of_record(rec).is_mobile() {
-                    // The epoch read before the credential was looked at, when it is for the
-                    // same person: a sign-in by password, with or without a second factor. A
-                    // sign-in by passkey alone has no earlier read, because the person is known
-                    // only once the assertion has been checked, so the epoch is read here, after
-                    // it. A credential change (a passkey removed, a reset, a new password) that
-                    // commits between the check of the assertion and this read, the few
-                    // milliseconds of resolving and revoking one session, is therefore not seen
-                    // by the later compares, which hold this baseline: that sign-in can finish
-                    // for a credential that had just been removed, and ends with the next change
-                    // of credentials or by revoking the device (docs/ISSUES.md L19). The exchange
-                    // of the code closes every other window, atomically.
-                    let epoch = if rec["pre_user"].as_str() == Some(p.id.as_str()) {
-                        rec["pre_epoch"].as_str().map(String::from)
-                    } else {
-                        self.tokens()
-                            .credential_epoch(&p.id)
-                            .map_err(|_| FlowError::Gone)?
-                    };
-                    rec["epoch"] = epoch.map_or(J::Null, J::from);
+                match who.filter(|p| p.kind == obop_commands::PrincipalKind::User) {
+                    Some(p) => Resolved::Person(p.id),
+                    None => Resolved::Failed("err.login"),
                 }
-                rec["user"] = J::from(p.id);
-                rec["attempts"] = J::from(0);
-                self.flow_put(id, rec).map_err(|_| FlowError::Gone)?;
-                Ok(LoginOut::Consent)
             }
         }
+    }
+
+    /// Put the signed-in person into the flow record (nothing is written to the store here).
+    fn seat(&self, rec: &mut J, who: &str) -> Result<(), FlowError> {
+        if Class::of_record(rec).is_mobile() {
+            // The epoch read before the credential was looked at, when it is for the same person:
+            // a sign-in by password, with or without a second factor, or by Microsoft (the epoch
+            // its sign-in compared). A sign-in by passkey alone has no earlier read, because the
+            // person is known only once the assertion has been checked, so the epoch is read
+            // here, after it. A credential change (a passkey removed, a reset, a new password)
+            // that commits between the check of the assertion and this read, the few
+            // milliseconds of resolving and revoking one session, is therefore not seen by the
+            // later compares, which hold this baseline: that sign-in can finish for a credential
+            // that had just been removed, and ends with the next change of credentials or by
+            // revoking the device (docs/ISSUES.md L19). The exchange of the code closes every
+            // other window, atomically.
+            let epoch = if rec["pre_user"].as_str() == Some(who) {
+                rec["pre_epoch"].as_str().map(String::from)
+            } else {
+                self.tokens()
+                    .credential_epoch(who)
+                    .map_err(|_| FlowError::Gone)?
+            };
+            rec["epoch"] = epoch.map_or(J::Null, J::from);
+        }
+        rec["user"] = J::from(who);
+        rec["attempts"] = J::from(0);
+        // A person who is seated has no Microsoft step pending or failed.
+        if let Some(m) = rec.as_object_mut() {
+            for k in ["ms_error", "mfa_pending"] {
+                m.remove(k);
+            }
+        }
+        Ok(())
+    }
+
+    // ---- the Microsoft step of a mobile app's sign-in (the phone leg of D91) -----------------------
+
+    /// The start of the Microsoft step for flow `id`, for the browser holding `binder`: the flow
+    /// must be a mobile app's, and nobody signed in yet. (No CSRF token: this is a link, and the
+    /// binder cookie is the proof; what it starts is only a round trip to the provider.) Returns
+    /// the language of the flow's pages.
+    pub fn microsoft_start(&self, id: &str, binder: &str) -> Result<String, FlowError> {
+        let rec = self.load(id, binder, None)?;
+        if !Class::of_record(&rec).is_mobile() || rec["user"].as_str().is_some() {
+            return Err(FlowError::Forbidden);
+        }
+        Ok(rec["lang"].as_str().unwrap_or("en").to_string())
+    }
+
+    /// The end of the Microsoft round trip for flow `id`, written by the callback. It runs in the
+    /// browser that began the round trip, which holds no cookie of the flow (that one is for
+    /// `/oauth`): the flow is found by its id, which only the start of the round trip, behind the
+    /// flow's cookie, could put into the round trip.
+    ///
+    /// It writes into the record only: the person and the credential epoch the sign-in compared
+    /// (over `pre_user` and `pre_epoch`, whatever an earlier failed password try left there), or
+    /// that a second step is pending (and for whom), or one of the fixed words. No token, claim,
+    /// code or secret is stored. The write is a
+    /// compare-and-set of the record as it was read, which keeps its lifetime: a flow that is gone
+    /// (finished, expired, ended by too many wrong tries) is not made again, and a record that
+    /// another request changed meanwhile is read again (three tries) and never overwritten from a
+    /// stale copy. A failed step leaves a person who is signed in as it is, and ends a second
+    /// step that an earlier step left pending. After three lost swaps nothing is written and
+    /// `Busy` is returned; the callback drops it, so the return address shows whatever the record
+    /// already held (the consent step if a person is seated, an earlier pending second step, an
+    /// older word, and only if there is none of those the general failure text) and the person
+    /// taps the link again.
+    pub fn microsoft_done(&self, id: &str, outcome: MicrosoftOutcome) -> Result<(), FlowError> {
+        if id.len() != 32 || !id.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return Err(FlowError::Gone);
+        }
+        // What the outcome comes to. The side effects (reading who the session is for and ending
+        // it) happen once; the writes below may be tried again.
+        let (placed, signed) = match outcome {
+            MicrosoftOutcome::Failed(word) => (Placed::Word(microsoft_word(&word)), None),
+            MicrosoftOutcome::SignedIn(s) => {
+                // `mfa` and `auth_time` are what the sign-in decided with; the flow keeps neither (no
+                // claim value is stored, and nothing after the consent reads them).
+                let SsoFlowSignIn {
+                    user,
+                    outcome,
+                    epoch,
+                    ..
+                } = s;
+                let placed = match self.resolve_outcome(outcome) {
+                    // The account the session is for must be the one the sign-in compared.
+                    Resolved::Person(p) if p == user => Placed::Person(p),
+                    Resolved::Person(_) => Placed::Word("failed"),
+                    Resolved::Mfa(_) => Placed::Pending,
+                    Resolved::Failed(key) => Placed::Word(word_of_key(key)),
+                };
+                (placed, Some(Signed { user, epoch }))
+            }
+        };
+        for _ in 0..3 {
+            let key = flow_key(id);
+            let raw = self
+                .backend
+                .kv_get(&key)
+                .map_err(|_| FlowError::Gone)?
+                .ok_or(FlowError::Gone)?;
+            let mut rec: J = serde_json::from_str(&raw).map_err(|_| FlowError::Gone)?;
+            if !Class::of_record(&rec).is_mobile() {
+                return Err(FlowError::Forbidden);
+            }
+            match (&placed, &signed) {
+                (Placed::Person(who), Some(s)) => {
+                    rec["pre_user"] = J::from(s.user.as_str());
+                    rec["pre_epoch"] = s.epoch.as_deref().map_or(J::Null, J::from);
+                    self.seat(&mut rec, who)?;
+                }
+                (Placed::Pending, Some(s)) => {
+                    // The second step is asked on the page that follows; the token minted for it
+                    // is not kept (the page asks for a new one, so a reload can show it again).
+                    // Who it is for is kept apart from `pre_user`, which a password try on the
+                    // same flow overwrites.
+                    rec["pre_user"] = J::from(s.user.as_str());
+                    rec["pre_epoch"] = s.epoch.as_deref().map_or(J::Null, J::from);
+                    rec["mfa_pending"] = json!({"user": s.user, "epoch": s.epoch});
+                    if let Some(m) = rec.as_object_mut() {
+                        m.remove("ms_error");
+                    }
+                }
+                (Placed::Word(w), _) => {
+                    rec["ms_error"] = J::from(*w);
+                    // A later failed step ends a second step that an earlier one left pending:
+                    // the page shows the latest outcome, not the earlier first factor.
+                    if let Some(m) = rec.as_object_mut() {
+                        m.remove("mfa_pending");
+                    }
+                }
+                // A person or a pending step without a sign-in cannot be made.
+                _ => rec["ms_error"] = J::from("failed"),
+            }
+            match self.backend.kv_swap(&key, &raw, &rec.to_string()) {
+                Ok(true) => return Ok(()),
+                // Changed or gone meanwhile: look again (a gone flow ends the loop as `Gone`).
+                Ok(false) => {}
+                Err(_) => return Err(FlowError::Gone),
+            }
+        }
+        Err(FlowError::Busy(1))
+    }
+
+    /// The page the browser lands on when it comes back from the Microsoft round trip. Reads the
+    /// record the callback wrote and writes nothing into it, so a reload (or Back) shows the same
+    /// thing and spends no flow state: the consent step when the person is signed in; the
+    /// second-factor step when the provider's sign-in was only the first factor (this outcome is
+    /// the one that does write elsewhere: each call counts one hit of the per-address sign-in
+    /// window, and either mints a fresh `mfa_token` for the pending account or, when the second
+    /// step is refused, writes one `oidc_refused` line); the sign-in page with the fixed text of
+    /// the word the callback left; the sign-in page with a general text when it left nothing.
+    /// (The page that follows reads the provider and the account's setting as well.)
+    pub fn microsoft_return(
+        &self,
+        id: &str,
+        binder: &str,
+        ip: &str,
+    ) -> Result<LoginOut, FlowError> {
+        let rec = self.load(id, binder, None)?;
+        if !Class::of_record(&rec).is_mobile() {
+            return Err(FlowError::Forbidden);
+        }
+        if rec["user"].as_str().is_some() {
+            return Ok(LoginOut::Consent);
+        }
+        let pending = &rec["mfa_pending"];
+        if let Some(user) = pending["user"].as_str() {
+            self.limit(
+                &format!("oauth:rl:login:{}", &sha_hex(ip)[..24]),
+                self.cfg.login_per_ip,
+                600_000,
+            )
+            .map_err(|e| FlowError::Busy(e.retry_after.unwrap_or(60)))?;
+            let Some(api) = self.auth.sso() else {
+                return Ok(LoginOut::Failed("err.ms_failed"));
+            };
+            return Ok(
+                match api.second_step_for_flow(user, pending["epoch"].as_str()) {
+                    Ok(token) => LoginOut::Mfa(token),
+                    Err(MfaError::Unavailable(_)) => LoginOut::Failed("err.ms_unavailable"),
+                    Err(_) => LoginOut::Failed("err.ms_failed"),
+                },
+            );
+        }
+        Ok(LoginOut::Failed(
+            rec["ms_error"]
+                .as_str()
+                .map_or("err.ms_failed", microsoft_key),
+        ))
     }
 
     /// "Not you?": forget who signed in.
@@ -719,6 +1024,11 @@ impl OAuth {
         }
         if !EXPIRY_DAYS.contains(&days) {
             return Ok(DecideOut::Retry("err.expiry"));
+        }
+        // The cap of a Microsoft-only account, again on the server: a form that was posted by
+        // hand gets nothing the page did not list.
+        if class.is_mobile() && days > self.phone_cap(&user)? {
+            return Ok(DecideOut::Retry("err.expiry_cap"));
         }
         // Whoever deletes the flow first is the one answer.
         if !self.backend.kv_delete(&flow_key(id)).unwrap_or(false) {

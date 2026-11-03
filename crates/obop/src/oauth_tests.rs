@@ -160,16 +160,38 @@ fn hidden(html: &str, name: &str) -> String {
     rest[..rest.find('"').unwrap()].to_string()
 }
 
-/// A browser in the middle of a flow: the flow id, the CSRF token and the flow cookie.
+/// A client address that no other request of the process has used. The OAuth pages count their
+/// limits per client address (`login_per_ip` 30 and `authorize_per_ip` 60 in ten minutes,
+/// `token_per_ip_minute` 120), and the in-process router has no peer, so unless a rig says
+/// otherwise every request of a test comes from the same address and the whole test shares one
+/// budget. A rig that calls `HttpState::set_trust_proxy(true)` (the rig of `mobile.rs` does) makes
+/// the `X-Forwarded-For` header name the address; for any other rig the header is ignored. Used
+/// where a test makes a number of sign-ins that depends on how many store calls a command makes:
+/// the walks over the call positions of the store (a count that the one-second check of
+/// `sync_modules` can move by one call, and so by two sign-ins) must not have to fit the budget.
+fn fresh_address() -> String {
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static NEXT: AtomicU32 = AtomicU32::new(1);
+    let n = NEXT.fetch_add(1, Ordering::Relaxed);
+    format!("10.{}.{}.{}", (n >> 16) & 255, (n >> 8) & 255, n & 255)
+}
+
+/// A browser in the middle of a flow: the flow id, the CSRF token, the flow cookie and the
+/// address it comes from.
 struct Browser {
     flow: String,
     csrf: String,
     cookie: String,
+    ip: String,
 }
 
 impl Browser {
     fn headers(&self) -> Vec<(&str, &str)> {
-        vec![("origin", BASE), ("cookie", &self.cookie)]
+        vec![
+            ("origin", BASE),
+            ("cookie", &self.cookie),
+            ("x-forwarded-for", &self.ip),
+        ]
     }
 
     async fn post(&self, r: &axum::Router, path: &str, extra: &[(&str, &str)]) -> Resp {
@@ -180,7 +202,8 @@ impl Browser {
 }
 
 async fn start(r: &axum::Router, url: &str) -> (Resp, Browser) {
-    let resp = call(r, "GET", url, &[], None).await;
+    let ip = fresh_address();
+    let resp = call(r, "GET", url, &[("x-forwarded-for", &ip)], None).await;
     assert_eq!(resp.status, 200, "{}", resp.text());
     let html = resp.text();
     let cookie = resp
@@ -193,6 +216,7 @@ async fn start(r: &axum::Router, url: &str) -> (Resp, Browser) {
         flow: hidden(&html, "flow"),
         csrf: hidden(&html, "csrf"),
         cookie,
+        ip,
     };
     (resp, b)
 }
@@ -252,7 +276,15 @@ async fn sign_in_and_allow(
 }
 
 async fn token(r: &axum::Router, pairs: &[(&str, &str)]) -> Resp {
-    call(r, "POST", "/oauth/token", &[], Some(form(pairs))).await
+    let ip = fresh_address();
+    call(
+        r,
+        "POST",
+        "/oauth/token",
+        &[("x-forwarded-for", &ip)],
+        Some(form(pairs)),
+    )
+    .await
 }
 
 async fn exchange(r: &axum::Router, client: &str, code: &str) -> Resp {
@@ -1249,6 +1281,7 @@ async fn the_consent_page_is_localised_and_escapes_what_the_client_sent() {
             .next()
             .unwrap()
             .to_string(),
+        ip: fresh_address(),
     };
     let consent = b
         .post(
@@ -1484,4 +1517,44 @@ async fn offboarding_ends_connected_apps_for_good_and_enabling_does_not_revive_t
             .await
             .is_empty()
     );
+}
+
+/// The clamp of the exchange is the only bound of an MCP client's grant on the days a code says
+/// (the 30-day cap of a Microsoft-only account is the mobile class's, and takes the smaller of the
+/// two there): a code record that says 900 days (written by hand) gives a grant of 90.
+#[tokio::test]
+async fn a_code_that_says_900_days_gives_an_mcp_grant_of_90_days() {
+    let app = App::new();
+    app.seed_demo();
+    let auth = Arc::new(obop_auth::Auth::with_test_params(app.store.backend()));
+    auth.create_user("eve", PW, &["sales.user".into()]).unwrap();
+    let r = obop_http::router(
+        obop_http::HttpState::new(app.dispatcher.clone(), auth),
+        None,
+    );
+    let c = client(&r).await;
+    let resp = sign_in_and_allow(
+        &r,
+        "eve",
+        &authorize_url(&c, REDIRECT, &[]),
+        &["sales.user"],
+        "7",
+    )
+    .await;
+    let code = param(&location(&resp), "code");
+    let key = format!("oauth:code:{}", obop_oauth::util::sha_hex(&code));
+    let b = app.store.backend();
+    let mut entry: J = serde_json::from_str(&b.kv_get(&key).unwrap().unwrap()).unwrap();
+    assert_eq!(entry["days"], 7);
+    entry["days"] = json!(900);
+    b.kv_put(&key, &entry.to_string(), Some(120_000)).unwrap();
+    let t = exchange(&r, &c, &code).await;
+    assert_eq!(t.status, 200, "{}", t.text());
+    let grants = b.list("oauth_grant").unwrap();
+    assert_eq!(grants.len(), 1);
+    let (created, expires) = (
+        grants[0].1["created_at"].as_u64().unwrap(),
+        grants[0].1["expires_at"].as_u64().unwrap(),
+    );
+    assert_eq!(expires - created, 90 * 86_400);
 }

@@ -372,6 +372,8 @@ pub(crate) fn api_routes(state: Arc<HttpState>) -> Router {
                 .layer(body_limit()),
         )
         .route("/oauth/authorize", get(oauth::authorize))
+        .route("/oauth/authorize/microsoft", get(oauth::microsoft))
+        .route("/oauth/authorize/return", get(oauth::microsoft_return))
         .route(
             "/oauth/authorize/login",
             post(oauth::login).layer(body_limit()),

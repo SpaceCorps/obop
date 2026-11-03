@@ -13,7 +13,9 @@ use axum::{
 };
 use obop_oauth::flow::AuthorizeParams;
 use obop_oauth::page::{self, Rendered};
-use obop_oauth::{AuthzError, DecideOut, FlowCtx, FlowError, Form, LoginOut, OAuthError};
+use obop_oauth::{
+    AuthzError, DecideOut, FlowCtx, FlowError, Form, LoginOut, OAuth, OAuthError, microsoft_key,
+};
 use serde_json::{Value as J, json};
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -136,6 +138,17 @@ pub(crate) fn see_other(location: &str) -> Response {
         r.headers_mut().insert(header::LOCATION, v);
     }
     harden(&mut r);
+    r
+}
+
+/// Add cookies to a response, one `Set-Cookie` header each (the redirects of the Microsoft round
+/// trip set or clear more than one; `html` sets at most one by replacing).
+pub(crate) fn with_cookies(mut r: Response, cookies: &[String]) -> Response {
+    for c in cookies {
+        if let Ok(v) = HeaderValue::from_str(c) {
+            r.headers_mut().append(header::SET_COOKIE, v);
+        }
+    }
     r
 }
 
@@ -425,10 +438,24 @@ fn authorize_blocking(s: &HttpState, parts: &Parts) -> Response {
         cookie_name(&id),
         o.config().flow_ttl_secs
     );
-    match o.view(&id, &binder) {
+    match flow_view(s, &o, &id, &binder) {
         Ok(ctx) => html(StatusCode::OK, page::login_page(&ctx, None), Some(cookie)),
         Err(e) => flow_failure(e, lang),
     }
+}
+
+/// Whether this instance can send a person to Microsoft: the connectors runtime exists and the
+/// provider is configured and enabled (the same test as `GET /api/auth/sso`).
+pub(crate) fn microsoft_offered(s: &HttpState) -> bool {
+    s.connectors.get().is_some() && s.auth.sso().is_some_and(|a| a.offered())
+}
+
+/// The page context of a flow, with the Microsoft step offered when the flow is a mobile app's and
+/// the instance has it. (`obop-oauth` cannot see the provider; an MCP client is never offered it.)
+fn flow_view(s: &HttpState, o: &OAuth, id: &str, binder: &str) -> Result<FlowCtx, FlowError> {
+    let mut ctx = o.view(id, binder)?;
+    ctx.microsoft = ctx.class.is_mobile() && microsoft_offered(s);
+    Ok(ctx)
 }
 
 /// What every POST step shares: the origin check, the form, the flow id and its browser secret.
@@ -496,32 +523,44 @@ fn consent_or_gone(st: &Step, error: Option<&str>) -> Response {
     }
 }
 
-fn login_again(st: &Step, ctx: &FlowCtx, error: Option<&str>) -> Response {
-    let _ = st;
+fn login_again(ctx: &FlowCtx, error: Option<&str>) -> Response {
     html(StatusCode::OK, page::login_page(ctx, error), None)
 }
 
-fn after_login(st: &Step, out: Result<LoginOut, FlowError>) -> Response {
-    let ctx = match st.o.view(&st.flow, &st.binder) {
+fn after_login(s: &HttpState, st: &Step, out: Result<LoginOut, FlowError>) -> Response {
+    finish_login(s, &st.o, &st.flow, &st.binder, st.lang, out)
+}
+
+/// The page that follows a sign-in step, for the flow and the browser it was made for. Shared by
+/// the password, second-step and passkey posts and by the return from Microsoft.
+fn finish_login(
+    s: &HttpState,
+    o: &OAuth,
+    flow: &str,
+    binder: &str,
+    fallback_lang: &str,
+    out: Result<LoginOut, FlowError>,
+) -> Response {
+    let ctx = match flow_view(s, o, flow, binder) {
         Ok(c) => c,
-        Err(e) => return flow_failure(e, st.lang),
+        Err(e) => return flow_failure(e, fallback_lang),
     };
     let lang = ctx.lang.clone();
     match out {
         Ok(LoginOut::Consent) => html(StatusCode::OK, page::consent_page(&ctx, None), None),
         Ok(LoginOut::Mfa(t)) => {
-            let pk = st.o.mfa_methods(&t).contains(&"passkey");
+            let pk = o.mfa_methods(&t).contains(&"passkey");
             html(StatusCode::OK, page::mfa_page(&ctx, &t, None, pk), None)
         }
         Ok(LoginOut::MfaRetry(t)) => {
-            let pk = st.o.mfa_methods(&t).contains(&"passkey");
+            let pk = o.mfa_methods(&t).contains(&"passkey");
             html(
                 StatusCode::OK,
                 page::mfa_page(&ctx, &t, Some("err.code"), pk),
                 None,
             )
         }
-        Ok(LoginOut::Failed(key)) => login_again(st, &ctx, Some(key)),
+        Ok(LoginOut::Failed(key)) => login_again(&ctx, Some(key)),
         Err(e) => flow_failure(e, &lang),
     }
 }
@@ -540,7 +579,7 @@ pub(crate) async fn login(State(s): Shared, parts: Parts, body: Bytes) -> Respon
             pair(&st.pairs, "username").unwrap_or(""),
             pair(&st.pairs, "password").unwrap_or(""),
         );
-        after_login(&st, out)
+        after_login(&s, &st, out)
     })
     .await
 }
@@ -559,7 +598,7 @@ pub(crate) async fn mfa(State(s): Shared, parts: Parts, body: Bytes) -> Response
             pair(&st.pairs, "mfa_token").unwrap_or(""),
             pair(&st.pairs, "code").unwrap_or(""),
         );
-        after_login(&st, out)
+        after_login(&s, &st, out)
     })
     .await
 }
@@ -572,7 +611,7 @@ pub(crate) async fn decision(State(s): Shared, parts: Parts, body: Bytes) -> Res
         };
         match pair(&st.pairs, "decision").unwrap_or("") {
             "switch" => match st.o.switch_user(&st.flow, &st.binder, &st.csrf) {
-                Ok(()) => match st.o.view(&st.flow, &st.binder) {
+                Ok(()) => match flow_view(&s, &st.o, &st.flow, &st.binder) {
                     Ok(ctx) => html(StatusCode::OK, page::login_page(&ctx, None), None),
                     Err(e) => flow_failure(e, st.lang),
                 },
@@ -608,6 +647,121 @@ pub(crate) async fn decision(State(s): Shared, parts: Parts, body: Bytes) -> Res
                 None,
             ),
         }
+    })
+    .await
+}
+
+// ---- the Microsoft step of a mobile app's sign-in -----------------------------------------------
+
+/// The sign-in page again, with the text of a word of the Microsoft step. Nothing is stored: the
+/// start has not begun anything yet.
+fn login_with_word(
+    s: &HttpState,
+    o: &OAuth,
+    flow: &str,
+    binder: &str,
+    lang: &str,
+    word: &str,
+) -> Response {
+    match flow_view(s, o, flow, binder) {
+        Ok(ctx) => login_again(&ctx, Some(microsoft_key(word))),
+        Err(e) => flow_failure(e, lang),
+    }
+}
+
+/// `GET /oauth/authorize/microsoft?flow=<id>`: the link on the sign-in page of a mobile app. It
+/// begins the round trip to the provider and redirects the browser there. The flow must be a
+/// mobile app's, nobody may be signed in on it yet, and the browser must hold its cookie (a link
+/// is no form, so there is no token to check; what it starts is only a round trip). The registered
+/// redirect address is the one of the back office (`/api/auth/oidc/callback`); the OAuth flow's id
+/// goes into the stored row of the round trip, and nothing else of it.
+pub(crate) async fn microsoft(State(s): Shared, parts: Parts) -> Response {
+    blocking(move || microsoft_blocking(&s, &parts)).await
+}
+
+fn microsoft_blocking(s: &HttpState, parts: &Parts) -> Response {
+    let lang = lang_of(&parts.headers, None);
+    let Some(o) = s.oauth.clone() else {
+        return disabled();
+    };
+    if !super::sso::is_navigation(parts) {
+        return super::sso::not_a_navigation();
+    }
+    let pairs = parts.uri.query().and_then(parse_pairs).unwrap_or_default();
+    let flow = pair(&pairs, "flow").unwrap_or("");
+    let binder = cookie_value(&parts.headers, &cookie_name(flow)).unwrap_or_default();
+    let lang = match o.microsoft_start(flow, &binder) {
+        Ok(l) => page::pick_lang(Some(&l), None),
+        Err(e) => return flow_failure(e, lang),
+    };
+    let ip = super::sso::source_of(s, parts);
+    s.shared.maybe_purge();
+    // Its own windows, so that phones signing in from one address do not use up the allowance of
+    // the back office's link.
+    if super::sso::limited(s, "oauth_start", &ip, 30) {
+        return login_with_word(s, &o, flow, &binder, lang, "busy");
+    }
+    let (Some(api), Some(rt)) = (s.auth.sso(), s.connectors.get()) else {
+        return login_with_word(s, &o, flow, &binder, lang, "unavailable");
+    };
+    let leg = match api.leg() {
+        Ok(Some(l)) => l,
+        Ok(None) => return login_with_word(s, &o, flow, &binder, lang, "unavailable"),
+        Err(e) => {
+            api.audit_throttled(
+                &ip,
+                "oidc_error",
+                obop_commands::AnonLine::Settings,
+                &format!("start (app): {}", super::sso::describe(&e)),
+            );
+            return login_with_word(s, &o, flow, &binder, lang, "unavailable");
+        }
+    };
+    let ep = match super::sso::discover(s, api, rt, &leg, "start (app)") {
+        Ok(ep) => ep,
+        Err(r) => {
+            let word = r.log(api, &ip);
+            return login_with_word(s, &o, flow, &binder, lang, word);
+        }
+    };
+    let redirect_uri = format!("{}/api/auth/oidc/callback", s.mcp.base_url(&parts.headers));
+    let Some(begun) = super::sso::begin_flow(
+        s,
+        &leg,
+        &ep,
+        &redirect_uri,
+        Some(json!({"purpose": "oauth", "oauth_flow": flow})),
+    ) else {
+        return login_with_word(s, &o, flow, &binder, lang, "unavailable");
+    };
+    api.audit_throttled(
+        &ip,
+        "oidc_start",
+        obop_commands::AnonLine::Start,
+        "a sign-in with Microsoft was begun from an app",
+    );
+    with_cookies(see_other(&begun.url), &[begun.cookie])
+}
+
+/// `GET /oauth/authorize/return?flow=<id>`: where the callback sends the browser back to. It reads
+/// what the callback left in the flow and writes nothing into it, so reloading it, or going Back
+/// to it, shows the same page and spends no flow state. The one outcome that writes elsewhere is a
+/// pending second factor: each call counts one hit of the per-address sign-in window and either
+/// mints a fresh `mfa_token` or, when the second step is refused, writes one `oidc_refused` line.
+pub(crate) async fn microsoft_return(State(s): Shared, parts: Parts) -> Response {
+    blocking(move || {
+        let lang = lang_of(&parts.headers, None);
+        let Some(o) = s.oauth.clone() else {
+            return disabled();
+        };
+        if !super::sso::is_navigation(&parts) {
+            return super::sso::not_a_navigation();
+        }
+        let pairs = parts.uri.query().and_then(parse_pairs).unwrap_or_default();
+        let flow = pair(&pairs, "flow").unwrap_or("");
+        let binder = cookie_value(&parts.headers, &cookie_name(flow)).unwrap_or_default();
+        let out = o.microsoft_return(flow, &binder, &client_ip(&s, &parts));
+        finish_login(&s, &o, flow, &binder, lang, out)
     })
     .await
 }
@@ -725,7 +879,7 @@ pub(crate) async fn passkey(State(s): Shared, parts: Parts, body: Bytes) -> Resp
             .unwrap_or(J::Null);
         let out =
             st.o.login_passkey(&c, &st.flow, &st.binder, &st.csrf, mfa, &credential);
-        after_login(&st, out)
+        after_login(&s, &st, out)
     })
     .await
 }

@@ -1448,6 +1448,17 @@ pub trait OAuthTokens: Send + Sync {
     fn credential_epoch(&self, _user: &str) -> Result<Option<String>, String> {
         Ok(None)
     }
+    /// Whether the account `user` signs in with Microsoft only (D91). A policy that restricts
+    /// reads this, so a lookup the store refused, an account that does not exist and an identity
+    /// provider that cannot say are errors and never "no": a caller that gets an error ends the step
+    /// (the consent page is not shown, the decision is not taken, the exchange of the code answers
+    /// 503 and gives the code back) and never goes on as for an account that is not Microsoft-only.
+    fn is_microsoft_only(&self, _user: &str) -> Result<bool, String> {
+        Err(
+            "this identity provider cannot say whether an account signs in with Microsoft only"
+                .into(),
+        )
+    }
     /// Revoke a token by the id `issue_oauth_access` returned.
     fn revoke_token_id(&self, id: &str) -> bool;
     /// As `revoke_token_id`, but a call the store refused is an error ("try again"), not `false`
@@ -1725,7 +1736,8 @@ pub use public::{
     PublicSubmit, Receipt, Submission, SubmitError,
 };
 pub use sso::{
-    AnonGroup, AnonLine, SsoApi, SsoEndpoints, SsoError, SsoIdentity, SsoLeg, SsoProvider,
+    AnonGroup, AnonLine, SsoApi, SsoEndpoints, SsoError, SsoFlowSignIn, SsoIdentity, SsoLeg,
+    SsoProvider,
 };
 pub use store::Store;
 

@@ -8,7 +8,7 @@
 //! parameter, then the `Accept-Language` header, then English. Everything that came from outside
 //! (the application's name and address, group names) is escaped.
 
-use crate::flow::{DEFAULT_DAYS, EXPIRY_DAYS, FlowCtx, is_admin_like};
+use crate::flow::{DEFAULT_DAYS, EXPIRY_DAYS, FlowCtx, MAX_DAYS, is_admin_like};
 use crate::redirect::RedirectForm;
 use crate::util::b64std;
 use sha2::{Digest, Sha256};
@@ -120,8 +120,9 @@ li{margin:4px 0}
 button{font:inherit;font-weight:600;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--fg);padding:10px 18px;min-height:44px;cursor:pointer}
 button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
 button.link{border:0;background:none;color:var(--accent);padding:4px 0;min-height:32px;text-decoration:underline;font-weight:400}
-button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
-.row button{flex:1 1 8rem}
+a.btn{display:block;box-sizing:border-box;text-align:center;text-decoration:none;font-weight:600;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--fg);padding:10px 18px;min-height:44px}
+button:focus-visible,input:focus-visible,select:focus-visible,a.btn:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.row button,.row a.btn{flex:1 1 8rem}
 code{overflow-wrap:anywhere}
 "#;
 
@@ -241,8 +242,24 @@ pub fn error_page(lang: &str, key: &str) -> Rendered {
 
 pub fn login_page(ctx: &FlowCtx, error: Option<&str>) -> Rendered {
     let l = ctx.lang.as_str();
+    // The Microsoft step (a mobile app's sign-in, when the instance has a provider): a plain
+    // link, because the policy of the page sends forms to this origin only and a link needs no
+    // script. It goes first: for a person whose account signs in with Microsoft only it is the
+    // only way in, and a person who has a password finds the form below it.
+    let microsoft = if ctx.microsoft {
+        format!(
+            "<div class=\"row\"><a class=\"btn\" href=\"/oauth/authorize/microsoft?flow={id}\">{button}</a></div>\
+<p class=\"muted\">{note}</p><p class=\"muted\">{or}</p>",
+            id = esc(&ctx.id),
+            button = esc(t(l, "ms.button")),
+            note = esc(t(l, "ms.note")),
+            or = esc(t(l, "pk.or")),
+        )
+    } else {
+        String::new()
+    };
     let body = format!(
-        "<h1>{h1}</h1><p>{lead}</p>{err}\
+        "<h1>{h1}</h1><p>{lead}</p>{err}{microsoft}\
 <form method=\"post\" action=\"/oauth/authorize/login\">{hidden}\
 <label for=\"u\">{user}</label><input id=\"u\" name=\"username\" type=\"text\" autocomplete=\"username\" autocapitalize=\"none\" spellcheck=\"false\" required autofocus>\
 <label for=\"p\">{pw}</label><input id=\"p\" name=\"password\" type=\"password\" autocomplete=\"current-password\" required>\
@@ -329,7 +346,8 @@ pub fn consent_page(ctx: &FlowCtx, error: Option<&str>) -> Rendered {
         groups.push_str(&format!("<p class=\"muted\">{}</p>", esc(t(l, none))));
     }
     let mut days = String::new();
-    for d in EXPIRY_DAYS {
+    // Up to what this account may hand over (a Microsoft-only account on a phone: 30 days).
+    for d in EXPIRY_DAYS.into_iter().filter(|d| *d <= ctx.max_days) {
         let key = format!("consent.d{d}");
         let sel = if d == DEFAULT_DAYS { " selected" } else { "" };
         days.push_str(&format!(
@@ -337,6 +355,15 @@ pub fn consent_page(ctx: &FlowCtx, error: Option<&str>) -> Rendered {
             esc(t(l, &key))
         ));
     }
+    // A Microsoft-only account on a phone is told why the longest period is shorter.
+    let cap = if ctx.max_days < MAX_DAYS {
+        format!(
+            "<p class=\"muted\">{}</p>",
+            tf(l, "consent.cap", &[("days", &ctx.max_days.to_string())])
+        )
+    } else {
+        String::new()
+    };
     let body = format!(
         "<h1>{h1}</h1>\
 <p class=\"muted\">{signed}</p>\
@@ -345,7 +372,7 @@ pub fn consent_page(ctx: &FlowCtx, error: Option<&str>) -> Rendered {
 <div class=\"notice\"><strong>{who}</strong><p>{who_body}</p></div>\
 <form method=\"post\" action=\"/oauth/authorize/decision\">{hidden}\
 <fieldset><legend>{glegend}</legend><p class=\"muted\">{ghelp}</p>{groups}</fieldset>\
-<label for=\"days\">{expiry}</label><select id=\"days\" name=\"days\">{days}</select>\
+<label for=\"days\">{expiry}</label><select id=\"days\" name=\"days\">{days}</select>{cap}\
 <h2>{facts}</h2><ul><li>{f1}</li><li>{f2}</li><li>{f3}</li></ul>\
 <div class=\"row\"><button type=\"submit\" name=\"decision\" value=\"deny\" formnovalidate>{deny}</button>\
 <button class=\"primary\" type=\"submit\" name=\"decision\" value=\"allow\">{allow}</button></div></form>",
@@ -365,6 +392,7 @@ pub fn consent_page(ctx: &FlowCtx, error: Option<&str>) -> Rendered {
         groups = groups,
         expiry = esc(t(l, "consent.expiry")),
         days = days,
+        cap = cap,
         facts = esc(t(l, "consent.facts")),
         f1 = esc(t(l, f1)),
         f2 = esc(t(l, f2)),
@@ -413,6 +441,14 @@ pub const CATALOGUE: &[(&str, [&str; 7])] = &[
     ("err.mobile_scope", ["A mobile app can only be given the groups it declared and that you hold.", "Einer mobilen App können nur die Gruppen gegeben werden, die sie angegeben hat und die Sie haben.", "On ne peut donner à une application mobile que les groupes qu'elle a déclarés et que vous détenez.", "Aplikacji mobilnej można przekazać tylko grupy, które zadeklarowała i które masz.", "Mobiilisovellukselle voi antaa vain ryhmiä, jotka se on ilmoittanut ja jotka sinulla on.", "En mobilapp kan bara få de grupper den har angett och som du har.", "A una aplicación móvil solo se le pueden dar los grupos que declaró y que usted tiene."]),
     ("err.devices_full", ["You already have the most devices signed in that this instance allows. End one under Customize, Security, Devices, then try again.", "Sie haben bereits die höchste Zahl angemeldeter Geräte, die diese Instanz erlaubt. Beenden Sie eines unter Anpassen, Sicherheit, Geräte und versuchen Sie es erneut.", "Vous avez déjà le nombre maximal d'appareils connectés que cette instance autorise. Mettez fin à l'un d'eux sous Personnaliser, Sécurité, Appareils, puis réessayez.", "Masz już największą liczbę zalogowanych urządzeń, jaką dopuszcza ta instancja. Zakończ jedno w Dostosuj, Bezpieczeństwo, Urządzenia i spróbuj ponownie.", "Sinulla on jo suurin tämän instanssin sallima määrä kirjautuneita laitteita. Päätä yksi kohdassa Mukauta, Tietoturva, Laitteet ja yritä uudelleen.", "Du har redan det högsta antal inloggade enheter som den här instansen tillåter. Avsluta en under Anpassa, Säkerhet, Enheter och försök igen.", "Ya tiene el máximo de dispositivos con sesión iniciada que permite esta instancia. Termine uno en Personalizar, Seguridad, Dispositivos y vuelva a intentarlo."]),
     ("err.expiry", ["Choose how long the access lasts.", "Wählen Sie, wie lange der Zugriff gilt.", "Choisissez la durée de l'accès.", "Wybierz, jak długo ma trwać dostęp.", "Valitse, kuinka kauan pääsy kestää.", "Välj hur länge åtkomsten gäller.", "Elija cuánto dura el acceso."]),
+    ("consent.cap", ["This account signs in with Microsoft only, so access can last {days} days at most.", "Dieses Konto meldet sich nur mit Microsoft an, deshalb kann der Zugriff höchstens {days} Tage dauern.", "Ce compte se connecte uniquement avec Microsoft ; l'accès peut donc durer {days} jours au maximum.", "To konto loguje się wyłącznie przez Microsoft, dlatego dostęp może trwać najwyżej {days} dni.", "Tämä tili kirjautuu vain Microsoftilla, joten pääsy voi kestää enintään {days} päivää.", "Det här kontot loggar bara in med Microsoft, så åtkomsten kan gälla i högst {days} dagar.", "Esta cuenta inicia sesión solo con Microsoft, por lo que el acceso puede durar {days} días como máximo."]),
+    ("err.expiry_cap", ["That period is longer than this account may give. Choose a shorter one.", "Dieser Zeitraum ist länger, als dieses Konto erlauben darf. Wählen Sie einen kürzeren.", "Cette durée dépasse ce que ce compte peut accorder. Choisissez-en une plus courte.", "Ten okres jest dłuższy, niż to konto może udzielić. Wybierz krótszy.", "Tämä jakso on pidempi kuin tämä tili voi antaa. Valitse lyhyempi.", "Den perioden är längre än det här kontot får ge. Välj en kortare.", "Ese período es más largo de lo que esta cuenta puede conceder. Elija uno más corto."]),
+    ("ms.button", ["Sign in with Microsoft", "Mit Microsoft anmelden", "Se connecter avec Microsoft", "Zaloguj się przez Microsoft", "Kirjaudu Microsoftilla", "Logga in med Microsoft", "Iniciar sesión con Microsoft"]),
+    ("ms.note", ["You are taken to Microsoft to sign in and then come back to this page.", "Sie werden zur Anmeldung zu Microsoft weitergeleitet und kehren danach auf diese Seite zurück.", "Vous êtes redirigé vers Microsoft pour vous connecter, puis vous revenez sur cette page.", "Zostaniesz przekierowany do Microsoft, aby się zalogować, a następnie wrócisz na tę stronę.", "Sinut ohjataan Microsoftille kirjautumaan, ja sen jälkeen palaat tälle sivulle.", "Du skickas till Microsoft för att logga in och kommer sedan tillbaka till den här sidan.", "Se le lleva a Microsoft para iniciar sesión y después vuelve a esta página."]),
+    ("err.ms_cancelled", ["The sign-in with Microsoft was cancelled. Try again.", "Die Anmeldung bei Microsoft wurde abgebrochen. Versuchen Sie es erneut.", "La connexion avec Microsoft a été annulée. Réessayez.", "Logowanie przez Microsoft zostało anulowane. Spróbuj ponownie.", "Kirjautuminen Microsoftilla peruttiin. Yritä uudelleen.", "Inloggningen med Microsoft avbröts. Försök igen.", "Se canceló el inicio de sesión con Microsoft. Inténtelo de nuevo."]),
+    ("err.ms_unavailable", ["The sign-in with Microsoft is not available right now. Try again in a few minutes.", "Die Anmeldung bei Microsoft ist gerade nicht möglich. Versuchen Sie es in einigen Minuten erneut.", "La connexion avec Microsoft n'est pas disponible pour le moment. Réessayez dans quelques minutes.", "Logowanie przez Microsoft jest teraz niedostępne. Spróbuj ponownie za kilka minut.", "Kirjautuminen Microsoftilla ei ole juuri nyt käytettävissä. Yritä uudelleen muutaman minuutin kuluttua.", "Inloggningen med Microsoft är inte tillgänglig just nu. Försök igen om några minuter.", "El inicio de sesión con Microsoft no está disponible en este momento. Inténtelo de nuevo en unos minutos."]),
+    ("err.ms_busy", ["Too many sign-ins with Microsoft at once. Wait a minute and try again.", "Zu viele Anmeldungen bei Microsoft gleichzeitig. Warten Sie eine Minute und versuchen Sie es erneut.", "Trop de connexions avec Microsoft en même temps. Attendez une minute et réessayez.", "Zbyt wiele jednoczesnych logowań przez Microsoft. Poczekaj minutę i spróbuj ponownie.", "Liian monta kirjautumista Microsoftilla yhtä aikaa. Odota minuutti ja yritä uudelleen.", "För många inloggningar med Microsoft samtidigt. Vänta en minut och försök igen.", "Demasiados inicios de sesión con Microsoft a la vez. Espere un minuto e inténtelo de nuevo."]),
+    ("err.ms_failed", ["The sign-in with Microsoft did not work. Try again. If it keeps failing, ask your administrator.", "Die Anmeldung bei Microsoft hat nicht funktioniert. Versuchen Sie es erneut. Wenn es weiter fehlschlägt, fragen Sie Ihren Administrator.", "La connexion avec Microsoft n'a pas fonctionné. Réessayez. Si cela continue, demandez à votre administrateur.", "Logowanie przez Microsoft nie powiodło się. Spróbuj ponownie. Jeśli problem się powtarza, zapytaj administratora.", "Kirjautuminen Microsoftilla ei onnistunut. Yritä uudelleen. Jos se ei onnistu, kysy ylläpitäjältä.", "Inloggningen med Microsoft fungerade inte. Försök igen. Om det fortsätter att misslyckas, fråga din administratör.", "El inicio de sesión con Microsoft no funcionó. Inténtelo de nuevo. Si sigue fallando, consulte a su administrador."]),
     ("login.title", ["Sign in to continue", "Zum Fortfahren anmelden", "Connectez-vous pour continuer", "Zaloguj się, aby kontynuować", "Kirjaudu jatkaaksesi", "Logga in för att fortsätta", "Inicie sesión para continuar"]),
     ("login.lead", ["{app} wants to connect to this obop instance. Sign in with your obop account to decide what it may do.", "{app} möchte sich mit dieser obop-Instanz verbinden. Melden Sie sich mit Ihrem obop-Konto an, um zu entscheiden, was die Anwendung darf.", "{app} souhaite se connecter à cette instance obop. Connectez-vous avec votre compte obop pour décider de ce qu'elle peut faire.", "{app} chce połączyć się z tą instancją obop. Zaloguj się kontem obop, aby zdecydować, na co aplikacja może sobie pozwolić.", "{app} haluaa yhdistää tähän obop-instanssiin. Kirjaudu obop-tililläsi päättääksesi, mitä se saa tehdä.", "{app} vill ansluta till den här obop-instansen. Logga in med ditt obop-konto för att bestämma vad den får göra.", "{app} quiere conectarse a esta instancia de obop. Inicie sesión con su cuenta de obop para decidir qué puede hacer."]),
     ("login.user", ["Username", "Benutzername", "Nom d'utilisateur", "Nazwa użytkownika", "Käyttäjätunnus", "Användarnamn", "Usuario"]),
@@ -464,7 +500,7 @@ mod tests {
         for (key, cols) in CATALOGUE {
             for (i, c) in cols.iter().enumerate() {
                 assert!(!c.is_empty(), "{key} is empty in {}", LANGS[i]);
-                for ph in ["{app}", "{user}", "{host}"] {
+                for ph in ["{app}", "{user}", "{host}", "{days}"] {
                     assert_eq!(
                         cols[0].contains(ph),
                         c.contains(ph),
@@ -499,6 +535,8 @@ mod tests {
             class: crate::client::Class::Mcp,
             groups: vec!["base.user".into(), "x\"><b>".into()],
             preselected: vec![],
+            microsoft: false,
+            max_days: 90,
         };
         let r = consent_page(&ctx, None);
         assert!(!r.html.contains("<script>") && !r.html.contains("<b>"));
@@ -525,6 +563,8 @@ mod tests {
             class: crate::client::Class::Mcp,
             groups: vec![],
             preselected: vec![],
+            microsoft: false,
+            max_days: 90,
         };
         for r in [
             login_page(&ctx, None),
@@ -548,5 +588,112 @@ mod tests {
         // Without a passkey for the pending sign-in the second-step page has no script at all.
         let r = mfa_page(&ctx, "t", None, false);
         assert!(!r.html.contains("<script") && !r.csp.contains("script-src"));
+    }
+
+    fn phone_ctx(
+        lang: &str,
+        class: crate::client::Class,
+        user: Option<&str>,
+        max_days: u32,
+    ) -> FlowCtx {
+        FlowCtx {
+            id: "f1".into(),
+            csrf: "c".into(),
+            lang: lang.into(),
+            client_name: "App".into(),
+            redirect_origin: "org.obop.app:".into(),
+            redirect_host: "org.obop.app".into(),
+            redirect_form: RedirectForm::Web,
+            user: user.map(Into::into),
+            class,
+            groups: vec!["base.user".into()],
+            preselected: vec![],
+            microsoft: class.is_mobile(),
+            max_days,
+        }
+    }
+
+    #[test]
+    fn the_microsoft_step_and_the_cap_are_worded_in_every_language() {
+        // The six texts of the Microsoft step and of the cap are machine-drafted. This does not
+        // judge them; it holds every page and every language to the same shape: the link where it
+        // belongs, the text of each word, the cap sentence with its number and the periods listed.
+        let words = [
+            "err.ms_cancelled",
+            "err.ms_unavailable",
+            "err.ms_busy",
+            "err.ms_failed",
+            "err.expiry_cap",
+            "ms.button",
+            "ms.note",
+            "consent.cap",
+        ];
+        for (i, l) in LANGS.iter().enumerate() {
+            let mobile = crate::client::Class::Mobile;
+            // The sign-in page of a mobile app: the link, and the note beside it.
+            let login = login_page(&phone_ctx(l, mobile, None, 90), None).html;
+            assert!(
+                login.contains("href=\"/oauth/authorize/microsoft?flow=f1\""),
+                "{l}"
+            );
+            assert!(login.contains(&esc(t(l, "ms.button"))), "{l}");
+            assert!(login.contains(&esc(t(l, "ms.note"))), "{l}");
+            // An MCP client's page has neither.
+            let mut mcp = phone_ctx(l, crate::client::Class::Mcp, None, 90);
+            mcp.microsoft = false;
+            let login = login_page(&mcp, None).html;
+            assert!(!login.contains("/oauth/authorize/microsoft"), "{l}");
+            assert!(!login.contains(&esc(t(l, "ms.button"))), "{l}");
+            // Each word of the step shows its own text, and the texts differ from one another.
+            let mut seen = Vec::new();
+            for key in [
+                "err.ms_cancelled",
+                "err.ms_unavailable",
+                "err.ms_busy",
+                "err.ms_failed",
+            ] {
+                let page = login_page(&phone_ctx(l, mobile, None, 90), Some(key)).html;
+                assert!(page.contains(&esc(t(l, key))), "{l} {key}");
+                let text = t(l, key);
+                assert!(
+                    !seen.contains(&text),
+                    "{l}: {key} has the text of another word"
+                );
+                seen.push(text);
+            }
+            // A language other than English has a text of its own for every new key.
+            if i > 0 {
+                for key in words {
+                    let cols = CATALOGUE.iter().find(|(k, _)| *k == key).unwrap().1;
+                    assert_ne!(cols[i], cols[0], "{l} {key} is still the English text");
+                }
+            }
+            // The consent page of a capped account lists up to the cap and says so; the page of
+            // any other account lists 90 and says nothing.
+            let capped = consent_page(&phone_ctx(l, mobile, Some("ada"), 30), None).html;
+            let periods: Vec<String> = capped
+                .split("<option value=\"")
+                .skip(1)
+                .map(|r| r.chars().take_while(char::is_ascii_digit).collect())
+                .collect();
+            assert_eq!(periods, ["1", "7", "30"], "{l}");
+            assert!(
+                capped.contains(&tf(l, "consent.cap", &[("days", "30")])),
+                "{l}"
+            );
+            let free = consent_page(&phone_ctx(l, mobile, Some("bob"), 90), None).html;
+            assert_eq!(free.matches("<option value=\"").count(), 4, "{l}");
+            assert!(
+                !free.contains(&tf(l, "consent.cap", &[("days", "30")])),
+                "{l}"
+            );
+            // The refusal of a longer period is worded too.
+            let again = consent_page(
+                &phone_ctx(l, mobile, Some("ada"), 30),
+                Some("err.expiry_cap"),
+            )
+            .html;
+            assert!(again.contains(&esc(t(l, "err.expiry_cap"))), "{l}");
+        }
     }
 }
