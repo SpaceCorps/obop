@@ -66,10 +66,7 @@ macro_rules! pg_db {
 }
 
 /// The tests that measure time or fill the pool take turns, so they do not disturb each other
-/// (the others run in parallel as usual). This lock is shared by the tests of one process, which
-/// is what `cargo test` runs; `cargo nextest run` gives each test a process of its own, and there
-/// the turn is the test group `pg-pool-turns` of `.config/nextest.toml`: a test that calls
-/// `serial()` must be named there too.
+/// (the others run in parallel as usual).
 fn serial() -> std::sync::MutexGuard<'static, ()> {
     static TURN: Mutex<()> = Mutex::new(());
     TURN.lock().unwrap_or_else(|e| e.into_inner())

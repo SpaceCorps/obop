@@ -30,19 +30,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - run: cargo fmt --all -- --check
       - run: cargo clippy --locked --all-targets -- -D warnings
-      # cargo-nextest, pinned like the actions (docs/ENGINEERING.md 2.3 and the pin policy, OR-8): the
-      # newest release past the cooldown whose checksum the pinned install-action carries.
-      - uses: taiki-e/install-action@5488ac5a951645ce95062214902ac4b6bc1a1037 # v2.87.32
-        with:
-          tool: cargo-nextest@0.9.149
-      # Profile ci (.config/nextest.toml): one retry, and a test that passes only on its retry is
-      # FLAKY and fails the run. The workspace default members are all members (Cargo.toml has no
-      # default-members), as for the `cargo test --locked` this replaces.
-      - name: Tests (cargo nextest, profile ci)
-        run: cargo nextest run --locked --profile ci
-      # nextest does not run doc-tests.
-      - name: Doc-tests
-        run: cargo test --locked --doc
+      - run: cargo test --locked
       - name: Install gate over every linked module
         run: cargo run --locked -q -- modules check
       - name: "Restore drill (B4, D73): back up a PostgreSQL database sealed and plain, restore each into a scratch one, check the copy, serve it"
