@@ -7,8 +7,11 @@ fn a_token_is_64_lowercase_hex_and_two_are_never_alike() {
     assert_ne!(a, b);
 }
 
+/// What a test can see of a random token: the shape, no repeat, no position stuck at one value.
+/// It cannot tell a good generator from a predictable one; that the bytes come from the
+/// operating system's generator (`getrandom`, in `mint`) is a thing to read in the code.
 #[test]
-fn a_token_carries_256_bits_of_randomness() {
+fn a_thousand_tokens_have_the_shape_are_all_different_and_use_every_digit_everywhere() {
     // 1,000 tokens: all of the shape, all different.
     let tokens: Vec<String> = (0..1000).map(|_| mint().unwrap()).collect();
     assert!(tokens.iter().all(|t| token_shape(t)));

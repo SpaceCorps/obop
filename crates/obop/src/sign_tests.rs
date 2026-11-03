@@ -16,6 +16,7 @@ use tower::ServiceExt;
 
 mod door;
 mod hardening;
+mod recheck;
 mod rules;
 mod upgrade;
 
@@ -161,8 +162,15 @@ impl Fx {
         let mut b = Request::post(path)
             .header("host", HOST)
             .header("content-type", "application/x-www-form-urlencoded")
-            .header("x-forwarded-for", from)
-            .header("user-agent", "TestBrowser/1.0");
+            .header("x-forwarded-for", from);
+        // The helper's browser is the default; a test that names one gets only its own (two
+        // headers would be read as the first).
+        if !extra
+            .iter()
+            .any(|(k, _)| k.eq_ignore_ascii_case("user-agent"))
+        {
+            b = b.header("user-agent", "TestBrowser/1.0");
+        }
         for (k, v) in extra {
             b = b.header(*k, *v);
         }
@@ -196,7 +204,7 @@ impl Fx {
     /// A second router over the same instance that does not trust a proxy (the default of a
     /// server started without `--trust-proxy`).
     pub fn router_without_proxy(&self) -> axum::Router {
-        let state = obop_http::HttpState::new(self.app.dispatcher.clone(), self.auth.clone());
+        let state = http_state(&self.app, self.auth.clone());
         obop_http::router(state, None)
     }
 
@@ -243,6 +251,20 @@ impl Fx {
     }
 }
 
+/// The HTTP state of a fixture. It does not read the environment: `OBOP_PUBLIC_URL` and
+/// `OBOP_ALLOWED_ORIGINS` of whoever runs the tests (a developer with an instance's settings in the
+/// shell) would otherwise change the origin the door accepts and the links it makes.
+pub(crate) fn http_state(app: &App, auth: Arc<Auth>) -> Arc<obop_http::HttpState> {
+    if let Some(svc) = app.dispatcher.sign_service() {
+        svc.set_public_url(None);
+    }
+    obop_http::HttpState::with_mcp(
+        app.dispatcher.clone(),
+        auth,
+        obop_http::mcp::McpConfig::default(),
+    )
+}
+
 pub(crate) fn enc(s: &str) -> String {
     s.bytes()
         .map(|b| {
@@ -281,7 +303,7 @@ pub(crate) async fn fixture_on(
 }
 
 /// The people every fixture has.
-const PEOPLE: [(&str, &[&str]); 8] = [
+const PEOPLE: [(&str, &[&str]); 9] = [
     ("admin", &["platform.admin"]),
     (
         "mia",
@@ -304,6 +326,18 @@ const PEOPLE: [(&str, &[&str]); 8] = [
         "lee",
         &["sign.manager", "documents.user", "documents.manager"],
     ),
+    // An administrator who holds the other groups literally, so that she can give an agent a
+    // token with `platform.admin` among its scopes.
+    (
+        "root",
+        &[
+            "platform.admin",
+            "sign.user",
+            "sign.manager",
+            "documents.user",
+            "documents.manager",
+        ],
+    ),
 ];
 
 /// The instance: packages installed and people created, with no request made yet. Not async, so
@@ -325,7 +359,7 @@ pub(crate) fn fixture_sync(
         let g: Vec<String> = groups.iter().map(|g| g.to_string()).collect();
         auth.create_user(name, PW, &g).unwrap();
     }
-    let state = obop_http::HttpState::new(app.dispatcher.clone(), auth.clone());
+    let state = http_state(&app, auth.clone());
     state.set_trust_proxy(true);
     let router = obop_http::router(state.clone(), None);
     Fx {

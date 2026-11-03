@@ -8,11 +8,11 @@ use super::*;
 use obop_commands::sign::{digest_of_request, sha256_hex};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-fn err(v: &J) -> String {
+pub(super) fn err(v: &J) -> String {
     v["error"].as_str().unwrap_or("").to_string()
 }
 
-fn good_form<'a>(f: &'a Fx, name: &'a str) -> Vec<(&'a str, &'a str)> {
+pub(super) fn good_form<'a>(f: &'a Fx, name: &'a str) -> Vec<(&'a str, &'a str)> {
     vec![
         ("name", name),
         ("agree", "1"),
@@ -21,11 +21,11 @@ fn good_form<'a>(f: &'a Fx, name: &'a str) -> Vec<(&'a str, &'a str)> {
     ]
 }
 
-fn signed_count(f: &Fx) -> usize {
+pub(super) fn signed_count(f: &Fx) -> usize {
     f.events_of("sign_signed").len()
 }
 
-fn count(f: &Fx, model: &str) -> usize {
+pub(super) fn count(f: &Fx, model: &str) -> usize {
     f.app.store.backend().count(model).unwrap()
 }
 
@@ -36,12 +36,12 @@ fn now_micros() -> i64 {
         .as_micros() as i64
 }
 
-fn fields(v: J) -> serde_json::Map<String, J> {
+pub(super) fn fields(v: J) -> serde_json::Map<String, J> {
     v.as_object().cloned().unwrap()
 }
 
 /// An agent token of `owner` with the groups of the signing work.
-async fn agent_for(f: &mut Fx, owner: &str) {
+pub(super) async fn agent_for(f: &mut Fx, owner: &str) {
     let (s, v) = f
         .api(
             owner,
@@ -128,11 +128,17 @@ async fn a_csv_import_cannot_carry_evidence_columns_in_any_spelling() {
 #[tokio::test]
 async fn a_csv_import_cannot_start_a_request_that_signs_without_the_door() {
     let f = fixture().await;
-    // The chain of the review: import a draft that carries all the evidence, send it, mark it
-    // signed. The first step is refused, so there is nothing to send, and no link or log entry
-    // exists for anything.
-    let all: Vec<String> = DOOR_KEYS.iter().map(|k| k.to_string()).collect();
-    let cells: Vec<String> = DOOR_KEYS
+    // The chain: import a draft that carries evidence, send it, mark it signed. The first step is
+    // refused (by the signing guard: `document_file` is left out of the file because the importer
+    // refuses a file column on its own account, which would hide whether the guard is there), so
+    // there is nothing to send. What the same import may carry (the Document) is imported, sent,
+    // and cannot be signed by hand either.
+    let keys: Vec<&str> = DOOR_KEYS
+        .iter()
+        .copied()
+        .filter(|k| *k != "document_file")
+        .collect();
+    let cells: Vec<String> = keys
         .iter()
         .map(|k| match *k {
             "signed_at" => "2026-11-03T10:00:00.000000Z".to_string(),
@@ -142,8 +148,9 @@ async fn a_csv_import_cannot_start_a_request_that_signs_without_the_door() {
         })
         .collect();
     let csv = format!(
-        "\ntitle,signer_name,{}\nForged,Jane Test,{}\n",
-        all.join(","),
+        "\ntitle,signer_name,document_id,{}\nForged,Jane Test,{},{}\n",
+        keys.join(","),
+        f.doc,
         cells.join(",")
     );
     let before = count(&f, "sign_request");
@@ -151,7 +158,51 @@ async fn a_csv_import_cannot_start_a_request_that_signs_without_the_door() {
         .api("sam", "/api/sign_request/bulk_create", json!({"csv": csv}))
         .await;
     assert_eq!(s, 400, "{v}");
+    assert!(err(&v).contains("signing process"), "{v}");
     assert_eq!(count(&f, "sign_request"), before);
+
+    // The part of it that is allowed: a request about the Document. It is sent, and by hand it
+    // cannot be signed; only the signer, at the door, signs it.
+    let csv = format!(
+        "title,signer_name,document_id\nImported,Jane Test,{}\n",
+        f.doc
+    );
+    let (s, v) = f
+        .api("mia", "/api/sign_request/bulk_create", json!({"csv": csv}))
+        .await;
+    assert_eq!(s, 200, "{v}");
+    assert_eq!(count(&f, "sign_request"), before + 1);
+    let imported = f
+        .app
+        .store
+        .backend()
+        .list("sign_request")
+        .unwrap()
+        .into_iter()
+        .find(|(_, r)| r.get("title").and_then(J::as_str) == Some("Imported"))
+        .map(|(id, _)| id)
+        .expect("the imported request");
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_request/send_document",
+            json!({"id": imported}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    for body in [
+        json!({"id": imported}),
+        json!({"id": imported, "state": "signed"}),
+    ] {
+        let path = if body.get("state").is_some() {
+            "/api/sign_request/update"
+        } else {
+            "/api/sign_request/sign"
+        };
+        let (s, v) = f.api("mia", path, body.clone()).await;
+        assert_eq!(s, 400, "{path} {body}: {v}");
+        assert_eq!(f.record("sign_request", &imported)["state"], "sent");
+    }
     assert_eq!(count(&f, "sign_link"), 0);
     assert_eq!(signed_count(&f), 0);
 }
@@ -243,6 +294,22 @@ async fn a_request_that_is_not_about_a_document_is_still_signed_by_hand() {
             .await;
         assert_eq!(s, 200, "{v}");
         ids.push(id);
+    }
+    // A plain sign.user records no signature by hand, by the action or by moving the state.
+    for (path, body) in [
+        ("/api/sign_request/sign", json!({"id": ids[0]})),
+        (
+            "/api/sign_request/update",
+            json!({"id": ids[0], "state": "signed"}),
+        ),
+    ] {
+        let (s, v) = f.api("sam", path, body.clone()).await;
+        assert_ne!(s, 200, "{path} {body}: {v}");
+        assert_eq!(
+            f.record("sign_request", &ids[0])["state"],
+            "sent",
+            "{path} {body}"
+        );
     }
     let (s, v) = f
         .api("mia", "/api/sign_request/sign", json!({"id": ids[0]}))
@@ -766,8 +833,13 @@ async fn a_sender_needs_documents_rights_for_the_document_too() {
 #[tokio::test]
 async fn evidence_is_read_by_managers_only_and_masked_for_agents() {
     let (f, _, path, _) = sent().await;
-    let r = f.post(&path, &ip(43), &good_form(&f, "Jane Test")).await;
+    // The signer types a name that is not the one the request asked for, so that the copy of it
+    // inside `signature_reference` cannot be mistaken for the requested name.
+    let typed = "Jane Q. Example";
+    let r = f.post(&path, &ip(43), &good_form(&f, typed)).await;
     assert_eq!(r.status, 303);
+    // The seven evidence fields a manager reads; the eighth, `document_file`, is read by an
+    // administrator only (checked below).
     let keys = [
         "signed_at",
         "signed_name",
@@ -788,7 +860,25 @@ async fn evidence_is_read_by_managers_only_and_masked_for_agents() {
             "{k}: {v}"
         );
     }
-    assert_eq!(v["value"]["signed_name"], "Jane Test");
+    assert_eq!(v["value"]["signed_name"], typed);
+    assert_eq!(v["value"]["signature_reference"], format!("typed:{typed}"));
+    assert_eq!(v["value"]["signer_name"], "Jane Test");
+    let seen_by_manager = v["value"].clone();
+    // The copy of the Document is read by nobody but an administrator, not even a manager.
+    assert!(
+        v["value"].get("document_file").is_none_or(J::is_null),
+        "{v}"
+    );
+    let (s, v) = f
+        .api("admin", "/api/sign_request/get", json!({"id": f.req}))
+        .await;
+    assert_eq!(s, 200, "{v}");
+    assert!(
+        v["value"]["document_file"]
+            .as_str()
+            .is_some_and(|t| !t.is_empty()),
+        "{v}"
+    );
     // A plain user reads none, on get, list and search, and cannot filter on them.
     let (s, v) = f
         .api("sam", "/api/sign_request/get", json!({"id": f.req}))
@@ -819,30 +909,87 @@ async fn evidence_is_read_by_managers_only_and_masked_for_agents() {
         // The request itself is there, and so is what the signer typed as the expected name.
         assert_eq!(rows[0]["signer_name"], "Jane Test", "{cmd}");
     }
-    let (s, v) = f
-        .api(
-            "sam",
-            "/api/sign_request/list",
-            json!({"filter": {"signed_name": "Jane Test"}}),
-        )
-        .await;
-    assert!(
-        s != 200 || v["value"].as_array().is_none_or(Vec::is_empty),
-        "a filter on a hidden field matched: {v}"
-    );
-    // An agent with the manager's groups gets the personal fields masked, not the values.
+    // Nor can a plain user probe them by filtering, ordering or grouping: each is answered as if
+    // the field did not exist. (Well-formed requests: a malformed one is refused for its shape
+    // before any field is looked at, and would prove nothing.) The manager's same request works.
+    for key in keys {
+        let (value, group) = if key == "signed_at" {
+            (
+                json!("2026-11-03T10:00:00Z"),
+                json!({"field": key, "bucket": "day"}),
+            )
+        } else {
+            (json!("Jane Test"), json!({"field": key}))
+        };
+        let probes = [
+            (
+                "list",
+                json!({"filter": [{"field": key, "op": "eq", "value": value}]}),
+            ),
+            ("list", json!({"order": [{"field": key, "dir": "asc"}]})),
+            (
+                "search",
+                json!({"aggregate": {"group_by": [group], "measures": [{"op": "count"}]}}),
+            ),
+        ];
+        for (cmd, probe) in probes {
+            let path = format!("/api/sign_request/{cmd}");
+            let (s, v) = f.api("sam", &path, probe.clone()).await;
+            assert_eq!(s, 400, "{key} {probe}: {v}");
+            assert!(err(&v).contains("unknown field"), "{key} {probe}: {v}");
+            let (s, v) = f.api("mia", &path, probe.clone()).await;
+            assert_eq!(s, 200, "{key} {probe}: {v}");
+        }
+    }
+    // An agent with the manager's groups gets the personal fields masked, not the values: all of
+    // them, whichever field holds a copy of what the signer typed. What is not personal (the
+    // time, the consent version, the hash) it reads as it is.
     let mut f = f;
     agent_for(&mut f, "mia").await;
-    let (s, v) = f
+    let (s, got) = f
         .api("agent", "/api/sign_request/get", json!({"id": f.req}))
         .await;
-    assert_eq!(s, 200, "{v}");
-    for k in ["signed_name", "signer_ip", "signer_user_agent"] {
-        let got = v["value"][k].as_str().unwrap_or("");
+    assert_eq!(s, 200, "{got}");
+    let (s, listed) = f.api("agent", "/api/sign_request/list", json!({})).await;
+    assert_eq!(s, 200, "{listed}");
+    let rows = listed["value"]
+        .as_array()
+        .or_else(|| listed["value"]["rows"].as_array())
+        .unwrap_or_else(|| panic!("{listed}"));
+    assert_eq!(rows.len(), 1, "{listed}");
+    for (what, row) in [("get", &got["value"]), ("list", &rows[0])] {
+        for k in [
+            "signed_name",
+            "signer_name",
+            "signer_ip",
+            "signer_user_agent",
+            "signature_reference",
+        ] {
+            let masked = row[k].as_str().unwrap_or("");
+            assert!(
+                !masked.is_empty() && masked != seen_by_manager[k].as_str().unwrap(),
+                "{what} {k}: {row}"
+            );
+        }
+        for k in ["signed_at", "consent_version", "document_hash"] {
+            assert_eq!(row[k], seen_by_manager[k], "{what} {k}");
+        }
         assert!(
-            !got.is_empty() && got != "Jane Test" && got != "198.51.100.43",
-            "{k}: {v}"
+            row.get("document_file").is_none_or(J::is_null),
+            "{what}: {row}"
         );
+    }
+    // And nowhere in either answer is a piece of what was typed, the address or the browser.
+    for (what, text) in [("get", got.to_string()), ("list", listed.to_string())] {
+        for secret in [
+            "Q. Example",
+            "typed:Jane",
+            "198.51.100.43",
+            "TestBrowser",
+            "Jane Test",
+        ] {
+            assert!(!text.contains(secret), "{what} shows {secret}: {text}");
+        }
     }
 }
 
@@ -1227,6 +1374,41 @@ async fn a_document_whose_file_is_replaced_after_the_door_read_it_is_not_signed(
             .is_none_or(J::is_null)
     );
     assert_eq!(signed_count(&f), 0);
+}
+
+#[tokio::test]
+async fn a_signer_whose_twin_click_won_is_sent_to_the_signed_page_and_nothing_is_written() {
+    // Two clicks on Sign: between this submit's reads and its write the other one commits (the
+    // link is used, the request is signed, with the other submit's evidence). This one is not an
+    // error: the signer sees the answer for a signed request, and nothing of this submit is
+    // written (not a second log entry, not a second set of evidence).
+    let (f, link_id, path, _) = sent().await;
+    let (b, req) = (f.app.store.backend(), f.req.clone());
+    interleave(&f, move || {
+        b.update(
+            "sign_link",
+            &link_id,
+            &fields(json!({"used_at": "2026-11-03T10:00:00.000000Z"})),
+        )
+        .unwrap();
+        b.update(
+            "sign_request",
+            &req,
+            &fields(json!({"state": "signed", "signed_name": "Winner Typed",
+                           "signed_at": "2026-11-03T10:00:00.000000Z"})),
+        )
+        .unwrap();
+    });
+    let r = f.post(&path, &ip(63), &good_form(&f, "Jane Test")).await;
+    assert_eq!(r.status, 303, "{}", r.text());
+    let kept = f.record("sign_request", &f.req);
+    assert_eq!(kept["state"], "signed");
+    assert_eq!(
+        kept["signed_name"], "Winner Typed",
+        "the loser wrote nothing"
+    );
+    assert_eq!(signed_count(&f), 0, "and logged no second signature");
+    assert!(f.events_of("sign_refused").is_empty());
 }
 
 // ---- headers, methods, encodings and the log line ------------------------------------------

@@ -57,6 +57,51 @@ fn rig() -> Rig {
     rig_on(App::new())
 }
 
+#[tokio::test]
+async fn an_entry_of_the_proxy_that_is_not_an_address_does_not_choose_the_limit_bucket() {
+    // The limit is per address. A made-up entry (here a different one in every call) is not an
+    // address, so the peer is used and the made-up entries share one bucket; an address of its own
+    // has its own. Without the shared rule every spelling would be a bucket of its own.
+    let rig = rig();
+    let post = |xff: String| {
+        let r = rig.r.clone();
+        async move {
+            call(
+                &r,
+                "POST",
+                "/oauth/register",
+                &[("x-forwarded-for", &xff)],
+                Some((
+                    "application/json",
+                    json!({"client_name": "Claude", "redirect_uris": [REDIRECT],
+                           "token_endpoint_auth_method": "none"})
+                    .to_string(),
+                )),
+            )
+            .await
+            .status
+        }
+    };
+    let mut last = 0;
+    for n in 0..40 {
+        last = post(format!("203.0.113.9, client-{n}")).await;
+        if last == 429 {
+            break;
+        }
+    }
+    assert_eq!(last, 429, "made-up entries ran into one limit");
+    assert_ne!(
+        post("198.51.100.200".to_string()).await,
+        429,
+        "an address of its own has a count of its own"
+    );
+    assert_ne!(
+        post("198.51.100.201:5000".to_string()).await,
+        429,
+        "a port is not part of the address"
+    );
+}
+
 /// A mobile client that declares the groups it will ask for (the three of the demo that a person
 /// of the tests holds).
 async fn mobile_client(r: &axum::Router) -> String {

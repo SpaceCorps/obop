@@ -526,6 +526,9 @@ async fn a_form_that_is_not_acceptable_writes_nothing_and_comes_back_escaped() {
 
 #[tokio::test]
 async fn a_name_and_a_user_agent_are_cleaned_before_they_are_kept() {
+    // The browser string is the one the request really carried (the helper replaces its own).
+    // A tab is a control character; the string is cut to 300 characters.
+    let hostile = format!("Agent\tOne (made up) {}", "a".repeat(500));
     let (f, _, path, _) = sent().await;
     let r = f
         .post_with(
@@ -536,21 +539,19 @@ async fn a_name_and_a_user_agent_are_cleaned_before_they_are_kept() {
                 ("agree", "1"),
                 ("doc", &f.file),
             ],
-            &[
-                ("origin", ORIGIN),
-                ("user-agent", "Agent\tOne\u{202e} (made up)"),
-            ],
+            &[("origin", ORIGIN), ("user-agent", hostile.as_str())],
         )
         .await;
     assert_eq!(r.status, 303, "{}", r.text());
     let req = f.record("sign_request", &f.req);
     for k in ["signed_name", "signer_user_agent", "signature_reference"] {
         let v = req[k].as_str().unwrap();
-        assert!(
-            !v.chars().any(|c| c.is_control() || c == '\u{202e}'),
-            "{k}: {v:?}"
-        );
+        assert!(!v.chars().any(char::is_control), "{k}: {v:?}");
     }
+    let agent = req["signer_user_agent"].as_str().unwrap();
+    assert!(agent.starts_with("Agent"), "the string arrived: {agent:?}");
+    assert!(agent.contains("One (made up)"), "{agent:?}");
+    assert_eq!(agent.chars().count(), 300, "cut to 300: {agent:?}");
     assert!(req["signed_name"].as_str().unwrap().contains("Jane"));
     let detail = f.events_of("sign_signed")[0]["detail"]
         .as_str()
@@ -560,6 +561,27 @@ async fn a_name_and_a_user_agent_are_cleaned_before_they_are_kept() {
         !detail.contains('\n') && !detail.contains('\r'),
         "{detail:?}"
     );
+
+    // A browser string with a byte that is not ASCII (here a character that reorders text) cannot
+    // be read as text by the HTTP layer: the evidence then holds no browser, and not the character.
+    let (f, _, path, _) = sent().await;
+    let r = f
+        .post_with(
+            &path,
+            &ip(65),
+            &good_form(&f, "Jane Test"),
+            &[
+                ("origin", ORIGIN),
+                ("user-agent", "Agent\u{202e}One (made up)"),
+            ],
+        )
+        .await;
+    assert_eq!(r.status, 303, "{}", r.text());
+    let agent = f.record("sign_request", &f.req)["signer_user_agent"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(!agent.contains('\u{202e}'), "{agent:?}");
 }
 
 #[tokio::test]
@@ -600,7 +622,8 @@ async fn an_address_that_is_not_one_is_kept_as_unknown() {
 }
 
 #[tokio::test]
-async fn a_post_from_another_site_is_refused_and_a_browser_without_origin_is_let_in() {
+async fn a_post_from_another_site_or_with_no_origin_is_refused_unless_the_browser_says_same_origin()
+{
     let (f, _, path, _) = sent().await;
     let from = ip(66);
     let form = good_form(&f, "Jane Test");
@@ -707,6 +730,15 @@ async fn the_pages_carry_a_narrow_policy_and_no_cookie() {
         page.h("cache-control")
     );
     assert!(page.h("x-robots-tag").contains("noindex"));
+    // The token is in the path: nothing of the address is sent along to another site, by the
+    // header or by the page.
+    assert_eq!(page.h("referrer-policy"), "same-origin");
+    assert!(
+        page.text()
+            .contains("<meta name=\"referrer\" content=\"same-origin\">"),
+        "{}",
+        page.text()
+    );
     assert!(page.h("content-type").starts_with("text/html"));
     assert!(page.headers.get("set-cookie").is_none());
     // The one style the CSP allows is the one the page carries.
@@ -981,7 +1013,7 @@ async fn without_the_package_the_door_exposes_nothing() {
         .install(&Bundled.fetch("documents").unwrap(), "marketplace", "test")
         .unwrap();
     let auth = Arc::new(Auth::with_test_params(app.store.backend()));
-    let state = obop_http::HttpState::new(app.dispatcher.clone(), auth);
+    let state = http_state(&app, auth);
     let router = obop_http::router(state, None);
     let tok = "a".repeat(64);
     for p in [

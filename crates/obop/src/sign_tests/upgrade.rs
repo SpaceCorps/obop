@@ -39,7 +39,7 @@ async fn old_instance() -> Old {
         let g: Vec<String> = groups.iter().map(|g| g.to_string()).collect();
         auth.create_user(name, PW, &g).unwrap();
     }
-    let state = obop_http::HttpState::new(app.dispatcher.clone(), auth.clone());
+    let state = http_state(&app, auth.clone());
     state.set_trust_proxy(true);
     let router = obop_http::router(state.clone(), None);
     let mut f = Fx {
@@ -324,6 +324,101 @@ async fn going_back_to_0_2_0_keeps_what_was_signed_and_a_second_upgrade_finds_it
     assert_eq!(f.record("sign_request", &new), signed);
     assert_eq!(f.record("sign_link", &link_id), link);
     assert_eq!(f.get(&path, &ip(154)).await.status, 200);
+}
+
+#[tokio::test]
+async fn a_sent_document_request_after_a_rollback_is_closed_by_setting_a_template_and_an_email() {
+    // The runbook's remedy for a request that was sent on 0.2.1 and is stuck after `rollback`:
+    // 0.2.0 requires a template and an email address of every request, and a request about a
+    // Document has neither. Each of sign, decline and expire refuses until both are set.
+    let Old { f, template, .. } = old_instance().await;
+    let new_text = Bundled.fetch("sign").unwrap();
+    f.app
+        .installer
+        .install(&new_text, "marketplace", "test")
+        .unwrap();
+    let mut stuck = Vec::new();
+    for n in 0..3u32 {
+        let (s, v) = f
+            .upload(
+                "mia",
+                "documents_document.attachment",
+                "application/pdf",
+                pdf(10 + n),
+            )
+            .await;
+        assert_eq!(s, 201, "{v}");
+        let file = v["id"].as_str().unwrap().to_string();
+        let (_, v) = f
+            .api(
+                "mia",
+                "/api/documents_document/create",
+                json!({"title": "NDA (test)", "kind": "contract", "confidentiality": "internal",
+                       "owner": "mia", "attachment": file}),
+            )
+            .await;
+        let doc = v["value"]["id"].as_str().unwrap().to_string();
+        let (_, v) = f
+            .api(
+                "mia",
+                "/api/sign_request/create",
+                json!({"title": "Stuck", "signer_name": "Jane Test", "document_id": doc}),
+            )
+            .await;
+        let id = v["value"]["id"].as_str().unwrap().to_string();
+        let (s, v) = f
+            .api("mia", "/api/sign_request/send_document", json!({"id": id}))
+            .await;
+        assert_eq!(s, 200, "{v}");
+        stuck.push(id);
+    }
+    f.app.installer.rollback("sign", "test").unwrap();
+
+    for (id, step) in stuck.iter().zip(["sign", "decline", "expire"]) {
+        let path = format!("/api/sign_request/{step}");
+        // Neither field is set: the first missing one is named.
+        let (s, v) = f.api("mia", &path, json!({"id": id})).await;
+        assert_eq!(s, 400, "{step}: {v}");
+        assert!(
+            v["error"].as_str().unwrap().contains("template_id"),
+            "{step}: {v}"
+        );
+        assert_eq!(f.record("sign_request", id)["state"], "sent");
+        // The template alone is not enough: the address is named next.
+        let (s, v) = f
+            .api(
+                "admin",
+                "/api/sign_request/update",
+                json!({"id": id, "template_id": template}),
+            )
+            .await;
+        assert_eq!(s, 200, "{v}");
+        let (s, v) = f.api("mia", &path, json!({"id": id})).await;
+        assert_eq!(s, 400, "{step}: {v}");
+        assert!(
+            v["error"].as_str().unwrap().contains("signer_email"),
+            "{step}: {v}"
+        );
+        assert_eq!(f.record("sign_request", id)["state"], "sent");
+        // Both set: the step goes through. (On 0.2.0 `sign` does not know the Document; the hand
+        // path of the old version is the one that is left.)
+        let (s, v) = f
+            .api(
+                "admin",
+                "/api/sign_request/update",
+                json!({"id": id, "signer_email": "nobody@example.test"}),
+            )
+            .await;
+        assert_eq!(s, 200, "{v}");
+        let (s, v) = f.api("mia", &path, json!({"id": id})).await;
+        assert_eq!(s, 200, "{step}: {v}");
+        let want = match step {
+            "sign" => "signed",
+            "decline" => "declined",
+            _ => "expired",
+        };
+        assert_eq!(f.record("sign_request", id)["state"], want, "{step}");
+    }
 }
 
 #[tokio::test]
