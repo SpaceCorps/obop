@@ -1,6 +1,6 @@
 # The phone host app and the Mileage module: what a host needs from Mileage (PROPOSED)
 
-> Status: PROPOSED. This is obop's side of a boundary that has to be agreed before anyone builds a phone host app: what the host needs from the Mileage app and from obop's server. Nothing here is decided, built or run on a phone as a host. Terms: the host is the one phone app that holds obop's apps as modules; an implementation is an organisation that builds a host on obop for its own use; Mileage is the first module.
+> Status: PROPOSED. This is the contract a phone host app needs from obop's server and from the Mileage app, and it has to be agreed before anyone builds a host. Nothing here is decided, built or run on a phone as a host. Terms: the host is the one phone app that holds obop's apps as modules; an implementation is an organisation that builds a host on obop for its own use; Mileage is the first module.
 >
 > Written against: `main` = origin/main at fe1b93a; `ios` = origin/feat/mileage-ios at 89c4e50 (PR 34, which contains PR 27); `sv` = origin/feat/mileage-sv at 5bdd17d (PR 45), read only for the Swedish items.
 >
@@ -10,7 +10,7 @@
 
 ## 0. Status and scope
 
-Owner direction of 2026-11-03, reported to the project and not yet entered in the decision register: one platform, one phone app, one web. This document reads that as one phone app that is the host of obop's apps, with the Mileage app as one app inside it, not a second mobile product. The reading is PROPOSED. The host design is not ruled. The direction is not recorded on main: `main:docs/DECISIONS.md:1269` says that the design of the host app is a separate proposal and is not described there, and `main:docs/DECISIONS.md:233` and `:1646` say that Q63 is reserved for the host questions.
+Owner direction of 2026-11-03, reported to the project and not yet entered in the decision register: the phone client is to be one app that holds obop's apps as modules, Mileage the first. This document reads that as a host app with the Mileage app inside it. The reading is PROPOSED. The host design is not ruled. The direction is not recorded on main: `main:docs/DECISIONS.md:1269` says that the design of the host app is a separate proposal and is not described there, and `main:docs/DECISIONS.md:233` and `:1646` say that Q63 is reserved for the host questions.
 
 Not ruled. All of this stays PROPOSED or open:
 
@@ -27,7 +27,7 @@ Records. The direction will be entered as OR-39 and the host design as D93 (PROP
 
 What this document is not: it is not an implementation, nothing was run on a phone as a host, and there is no store submission. It adds one file and edits no existing line. PR 27, 34 and 45 are open drafts of the standalone Mileage app (Android, iOS, Swedish). They are stacked: 27 is an ancestor of 34, and 34 is an ancestor of 45 (checked with `git merge-base --is-ancestor`). PR 51 is an open draft of another feature (signing a document) that edits some of the same documents. This document does not collide with any of them. Section 10 lists the lines that go stale and why they are edited later.
 
-## 1. The boundary in one picture
+## 1. The split in one picture
 
 Today everything is one app. The split in the third column is PROPOSED. "Today" cites `ios:app/`. The seam is partly there. No non-test file in `app/src/core` imports react, react-native, expo or a Node built-in module; it imports only relative files and the workspace packages `@obop/client` and `@obop/trip-core` (git grep). Every Expo or React Native import is in `src/native`, `src/ui`, `App.tsx`, `index.ts` or `app.config.ts`.
 
@@ -272,7 +272,7 @@ Each item is PROPOSED. Size classes are a reading of the files touched. They are
 **6.6 Registration limits for a first rollout. Size S for settings, M with docs and tests.**
 
 - Today (compiled in, `obop-oauth/src/lib.rs:66-82`): 20 registrations per address per hour, 300 per hour in all, 2000 clients, an unused client forgotten after one day, an idle one after 180 days, 20 devices per person. The two non-test constructions both use `OAuthConfig::default()` (`obop-http/src/lib.rs:86-90` and `crates/obop/src/app.rs:202-206`). `git grep OBOP_OAUTH` finds no override.
-- Each phone registers its own client, and registers again when its client is older than 30 days unused (`session.ts:20,33`). A rollout where many phones sign in within one hour from one office address meets the per-address limit.
+- Each phone registers its own client, and registers again when its client is older than 30 days unused (`session.ts:20,33`). A rollout where many phones sign in within one hour from one address meets the per-address limit.
 - Change: environment settings for these numbers, read once at start, and a paragraph in `docs/DEPLOY.md`.
 
 **6.7 A naming constraint, not a code change.** Groups that start with `platform.`, end in `.admin`, `_admin`, `.manager`, `.approver`, `_approver`, `.officer`, `.designer`, `.reviewer`, `.publisher`, `.preparer`, `.owner` or `_owner`, or are on the named list can never be declared by a mobile client (`obop-commands/src/devices.rs:316-404`). Two rules follow for a module that declares groups:
@@ -327,11 +327,11 @@ Which groups go on a phone is each implementation's to name (section 9.1 item 2)
 
 The sources are the notes in the repository (`main:docs/ISSUES.md:266,275`; `ios:docs/ISSUES.md:263,304`; `ios:docs/spec/mobile.md:642,644,724`). The test is the existing Mileage app, built from the `ios` branch without a change to its files (the Release build on Xcode 27.2 needed a local patch in `node_modules`, section 7), with obop's own id and redirect and English text, on a real iPhone. Its steps are `ios:docs/spec/mobile.md` 9.2 (line 724). The test build has the bundle id `org.obop.mileage.test` through `OBOP_IOS_BUNDLE_ID`, while the sign-in scheme and redirect stay `org.obop.mileage:/oauth` (`ios:app/app.config.ts:19-25`; 9.2 fixes the bundle id of the test build to `org.obop.mileage.test`). No result of the test is recorded in the repository.
 
-The repository's steps describe a test instance on a PC on the local network, reached over plain http (`OBOP_ALLOW_CLEARTEXT=1`, `OBOP_DEFAULT_SERVER=http://<LAN>:18080`; `ios:docs/spec/mobile.md:724-760`). A hosted https instance changes the steps:
+The repository's steps describe a test instance on a PC on the local network, reached over plain http (`OBOP_ALLOW_CLEARTEXT=1`, `OBOP_DEFAULT_SERVER=http://<LAN>:18080`; `ios:docs/spec/mobile.md:724-760`). If the test instance is reached over https instead of plain http on the local network, the steps change as follows:
 
-- The build is made with `OBOP_ALLOW_CLEARTEXT=1`, `OBOP_IOS_BUNDLE_ID=org.obop.mileage.test` and `OBOP_RECORD_THINNING=off`, without `OBOP_DEFAULT_SERVER`, and the address is typed in the app. `OBOP_RECORD_THINNING=off` is honoured only where plain http is allowed (`ios:app/app.config.ts:42-46`). A build made with `OBOP_ALLOW_CLEARTEXT=1` accepts any http address, so it is a test build that is given to nobody else (`ios:docs/ISSUES.md:286`, L24).
+- The build is made with `OBOP_ALLOW_CLEARTEXT=1`, `OBOP_IOS_BUNDLE_ID=org.obop.mileage.test` and `OBOP_RECORD_THINNING=off`, without `OBOP_DEFAULT_SERVER`. `OBOP_RECORD_THINNING=off` is honoured only where plain http is allowed (`ios:app/app.config.ts:42-46`). A build made with `OBOP_ALLOW_CLEARTEXT=1` accepts any http address, so it is a test build that is given to nobody else (`ios:docs/ISSUES.md:286`, L24).
 - The gate is run without `--drive`, because `--drive` fails unless the default server is an `http://` address (`ios:app/scripts/ios/gate-lib.mjs:123-126`) and `--expect-bundle-id` belongs to `--drive` (`ios:app/scripts/ios/gate.mjs:53`).
-- The local-network step cannot run against a hosted https address. iOS asks for local network access only when the app reaches an address on the local network (`ios:app/app.config.ts:128-132`).
+- The local-network step cannot run when the instance is not on the local network. iOS asks for local network access only when the app reaches an address on the local network (`ios:app/app.config.ts:128-132`).
 
 If the test passes, it proves for the host:
 
@@ -352,18 +352,18 @@ It does not prove:
 
 ### 9.1 For an implementation that builds the host
 
-1. Where do your data files live (the registry data of your modules, the native screens, the build)? Section 0 lists the home as not ruled. obop publishes nothing to the npm registry until the owner rules at W2 (OR-19, Q32; the default is no publication, `CLAUDE.md`; the default channels are GitHub releases and crates.io, `main:docs/DECISIONS.md:1616`), so the working assumption (PROPOSED) is a private repository of yours that pins an obop checkout.
+1. Where the data files of an implementation live (the registry data of its modules, the native screens, the build) is not ruled (section 0). obop publishes nothing to the npm registry until the owner rules at W2 (OR-19, Q32; the default is no publication, `CLAUDE.md`; the default channels are GitHub releases and crates.io, `main:docs/DECISIONS.md:1616`), so the working assumption (PROPOSED) is a repository of the implementation's own that pins an obop checkout.
 2. Which groups will your modules declare on a phone, and does any of them approve, review or publish? Name each one that does and ends in none of the blocked endings (6.7).
 3. Do you need the version handshake (6.1) before the first internal build?
 4. Do you have a requirement on the host's database layout (one file or one file per module) or on the sign-out dialog (section 1)?
-5. Do you plan a native screen of your own that records location in the first release? This decides whether two location tasks must be tested (section 5).
+5. Whether an implementation plans a native screen of its own that records location in the first release decides whether two location tasks must be tested (section 5).
 6. Will more than 20 phones sign in for the first time within one hour from one address (6.6)?
 7. Which Xcode version will the Mac that builds your iOS binary run (a version)? Section 7 shows why it matters.
 
 ### 9.2 For the owner (only the owner can answer these)
 
 1. Does the standalone Mileage app stay buildable as its own binary after the host exists?
-2. May D87's first-party limit be reworded around what the project publishes under its own name and store accounts (change code W of section 10)?
+2. May D87's first-party limit be reworded around what the project publishes under its own name (change code W of section 10)?
 3. Is the phone host outside the UI-parity rule (OR-16, D80), with a written reason for the exemption list? `CLAUDE.md` says nothing is exempt until the owner approves it.
 4. Does obop register any store id of its own before Q37 is answered? Q37 itself stays the owner's.
 
@@ -381,7 +381,7 @@ Merge order that avoids conflicts, each merge on the owner's word:
 
 Codes for the change column:
 
-- W: reword the limit so that it concerns what SpaceCorps publishes under the obop name and its own store accounts (proposed in section 9.2 item 2; no ruling).
+- W: reword the limit so that it concerns what SpaceCorps publishes under the obop name (proposed in section 9.2 item 2; no ruling).
 - H: add one sentence that the phone client is one host app that holds modules, Mileage the first.
 - M: say "a module of the host" where the text says "the app".
 - P: drop "planned at `web/apps/mileage-app` with `packages/mileage.toml`". The same bullet already says there is no `packages/mileage.toml`.
@@ -397,7 +397,7 @@ Codes for the change column:
 | `docs/DECISIONS.md` | 241 | Proposed and awaiting the owner: the scope limits of D87 (first-party apps only, only where a PWA cannot do the job, the PWA stays the default | W |
 | `docs/DECISIONS.md` | 1199 | The scope limits that came with the proposal (first-party apps only, only where a PWA cannot do the job, the PWA stays the default, Tauri mobile | W |
 | `docs/DECISIONS.md` | 1201 | The proposal limits them to first-party apps and to cases where a PWA cannot do the job, that is where a background capability is needed | W, H |
-| `docs/DECISIONS.md` | 1221 | A mileage report needs the route while the phone is in a pocket, which a PWA cannot promise (general knowledge), and a native client is the smallest th | H (the reason now includes one platform, one app) |
+| `docs/DECISIONS.md` | 1221 | A mileage report needs the route while the phone is in a pocket, which a PWA cannot promise (general knowledge), and a native client is the smallest th | H (the reason now includes the host app) |
 | `docs/DECISIONS.md` | 334 | A native app (D87) keeps its queued writes in a SQLite database on the device | M (the outbox contract is per module) |
 | `docs/DECISIONS.md` | 1541 | the limits to first-party apps and to cases a PWA cannot serve are Proposed (D87). Tauri mobile is still not pursued (Proposed), and the PWA stays | W |
 | `docs/GLOSSARY.md` | 194 | the proposal limits them to first-party apps and to cases a PWA cannot serve (D87, Proposed). The first is Mileage | W, H |
@@ -416,7 +416,7 @@ Not stale by this direction, and so not in the table: `docs/spec/mobile.md:439` 
 
 ## 11. Not verified
 
-- Nothing was built, run or tested. Every "verified" mark means the line was opened on its ref. No phone, emulator, WebView, Microsoft tenant, hosted instance or server was used.
+- Nothing was built, run or tested. Every "verified" mark means the line was opened on its ref. No phone, emulator, WebView, Microsoft tenant, instance or server was used.
 - The merged Android manifest and the final iOS Info.plist. No `ios/` or `android/` project exists. Plugin behaviour (`withLocation.js`, `withTaskManager.js`, the `expo-location` manifest) was read from the installed `expo-location` 58.0.18 and `expo-task-manager` 58.0.12 sources, outside the repository, and those lines were not re-opened for this document. Whether the app wrapper leaves exactly `location` in `UIBackgroundModes` is a claim of a code comment and a test that were not run.
 - How many of the 32 declared-group slots the groups of the built-in modules and the bundled packages already take. No count was made for this document, so section 3 gives none.
 - Whether two expo-location tasks can record at once on Android and iOS. Nothing in the repository tries it.
