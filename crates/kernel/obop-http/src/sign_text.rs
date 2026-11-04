@@ -481,7 +481,25 @@ mod tests {
     }
 
     #[test]
-    fn every_text_that_the_id_covers_exists_and_none_is_left_out_by_accident() {
+    fn the_texts_the_id_covers_are_these_eight_and_each_exists() {
+        // The list is written out here on purpose: adding a text to the id, or taking one out,
+        // fails this until the line below is changed, which shows in the diff. A test cannot
+        // know which texts a signer relies on; a new text of that kind is added to
+        // `WORDING_KEYS` by whoever writes it (and this list, and the pinned ids, change in the
+        // same commit).
+        assert_eq!(
+            WORDING_KEYS,
+            [
+                "consent",
+                "records",
+                "name_hint",
+                "submit",
+                "no_viewer",
+                "err_agree",
+                "for",
+                "fingerprint",
+            ]
+        );
         for key in WORDING_KEYS {
             assert!(
                 CATALOGUE.iter().any(|(k, _)| *k == key),

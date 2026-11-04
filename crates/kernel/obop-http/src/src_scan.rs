@@ -480,6 +480,24 @@ pub(crate) fn line_of(src: &[u8], at: usize) -> usize {
     1 + src[..at].iter().filter(|c| **c == b'\n').count()
 }
 
+/// One source file as text with the items and constructs that only a test build compiles
+/// (`#[cfg(test)]`, see [`strip_test_items`]) replaced by spaces, line breaks kept. Comments and
+/// string literals are left as written, for a test that reads the keys a file asks for; it ends
+/// where the attribute's thing ends, not at the first `#[cfg(test)]` of the file.
+pub(crate) fn without_test_items(src: &str) -> String {
+    let mut l = lex(src);
+    let _ = strip_test_items(&mut l);
+    let mut out = src.as_bytes().to_vec();
+    for s in &l.stripped {
+        for b in &mut out[s.start..s.end] {
+            if *b != b'\n' {
+                *b = b' ';
+            }
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
 /// The non-test code of every file of `files` (paths from `crates/`, with `/`): comments and
 /// literals blanked, test items taken out, the files of test modules left out altogether.
 pub(crate) fn non_test(files: &BTreeMap<String, String>) -> BTreeMap<String, Lexed> {

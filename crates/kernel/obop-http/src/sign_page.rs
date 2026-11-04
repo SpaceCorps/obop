@@ -271,11 +271,6 @@ mod tests {
         }
     }
 
-    /// The part of a source file before its tests.
-    fn code(src: &str) -> &str {
-        src.split("#[cfg(test)]").next().unwrap()
-    }
-
     /// The `"key"` literals that follow `prefix` in `src`.
     fn after<'a>(src: &'a str, prefix: &str) -> Vec<&'a str> {
         src.match_indices(prefix)
@@ -287,12 +282,28 @@ mod tests {
     }
 
     #[test]
+    fn a_key_asked_for_below_a_test_module_is_seen_and_one_in_it_is_not() {
+        // The file is cut at the end of the test items, not at the first `#[cfg(test)]` (which
+        // in `sign.rs` is far above most of the handlers).
+        let src = "#[cfg(test)]
+use crate::x;
+fn early() { txt::html(lang, \"early_key\"); }
+#[cfg(test)]
+mod tests { fn t() { txt::html(lang, \"only_in_tests\"); } }
+fn late() { txt::html(lang, \"late_key\"); }
+";
+        let code = crate::src_scan::without_test_items(src);
+        let keys = after(&code, "txt::html(lang, ");
+        assert_eq!(keys, ["early_key", "late_key"], "{code}");
+    }
+
+    #[test]
     fn every_key_the_door_and_its_pages_ask_for_is_in_the_catalogue() {
         // A key that is only in the code reads as an empty paragraph, in every language. This
         // reads the two files that ask for words and checks each literal key against the catalogue.
         let sources = [
-            code(include_str!("sign.rs")),
-            code(include_str!("sign_page.rs")),
+            crate::src_scan::without_test_items(include_str!("sign.rs")),
+            crate::src_scan::without_test_items(include_str!("sign_page.rs")),
         ];
         let prefixes = [
             "txt::html(lang, ",
@@ -308,7 +319,7 @@ mod tests {
             "=> ",
         ];
         let mut seen = std::collections::BTreeSet::new();
-        for src in sources {
+        for src in &sources {
             for p in prefixes {
                 for key in after(src, p) {
                     // `=> "x"` is any match arm; only the error keys of this catalogue are looked up.

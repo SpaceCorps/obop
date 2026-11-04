@@ -108,15 +108,20 @@ pub(crate) struct OriginLog {
 
 impl Default for OriginLog {
     fn default() -> Self {
-        Self {
-            started: std::time::Instant::now(),
-            last: AtomicU64::new(NEVER),
-            hooks: std::sync::OnceLock::new(),
-        }
+        Self::since(std::time::Instant::now())
     }
 }
 
 impl OriginLog {
+    /// A log whose default clock counts from `started`.
+    fn since(started: std::time::Instant) -> Self {
+        Self {
+            started,
+            last: AtomicU64::new(NEVER),
+            hooks: std::sync::OnceLock::new(),
+        }
+    }
+
     /// Replace the clock (seconds, ought to be monotonic) and the sink of the lines; false when
     /// the log was already set. For tests: the handler is then run for real and the lines it
     /// wrote and the second each was written at are read back.
@@ -483,24 +488,74 @@ mod tests {
     }
 
     #[test]
-    fn the_first_line_is_due_whatever_the_clock_reads_and_two_at_once_are_one() {
+    fn the_first_line_is_due_whatever_the_clock_reads() {
         let last = AtomicU64::new(NEVER);
         assert!(log_due(&last, u64::MAX - 1, 60));
         let last = AtomicU64::new(NEVER);
         assert!(log_due(&last, 0, 60));
         assert!(!log_due(&last, 0, 60));
-        // Two threads that ask at the same second: one line.
-        let last = Arc::new(AtomicU64::new(NEVER));
-        let due: usize = (0..8)
+    }
+
+    #[test]
+    fn two_that_ask_at_the_same_second_are_one_line_whatever_the_interleaving() {
+        // Eight threads ask together, round after round (a barrier lines them up at each round),
+        // each round on a log of its own and all at the same second: exactly one is due. A check
+        // that reads the last line and then writes the new one as two steps lets several through
+        // in some of the rounds; the compare-and-set lets one.
+        use std::sync::Barrier;
+        const THREADS: usize = 8;
+        const ROUNDS: usize = 4000;
+        let slots: Arc<Vec<AtomicU64>> =
+            Arc::new((0..ROUNDS).map(|_| AtomicU64::new(NEVER)).collect());
+        let gate = Arc::new(Barrier::new(THREADS));
+        let threads: Vec<_> = (0..THREADS)
             .map(|_| {
-                let l = last.clone();
-                std::thread::spawn(move || usize::from(log_due(&l, 5, 60)))
+                let (slots, gate) = (slots.clone(), gate.clone());
+                std::thread::spawn(move || {
+                    (0..ROUNDS)
+                        .map(|r| {
+                            gate.wait();
+                            usize::from(log_due(&slots[r], 100, 60))
+                        })
+                        .collect::<Vec<_>>()
+                })
             })
-            .collect::<Vec<_>>()
-            .into_iter()
-            .map(|h| h.join().unwrap())
-            .sum();
-        assert_eq!(due, 1);
+            .collect();
+        let mut due = vec![0usize; ROUNDS];
+        for t in threads {
+            for (r, won) in t.join().unwrap().into_iter().enumerate() {
+                due[r] += won;
+            }
+        }
+        let wrong: Vec<(usize, usize)> = due
+            .iter()
+            .copied()
+            .enumerate()
+            .filter(|(_, n)| *n != 1)
+            .take(5)
+            .collect();
+        assert!(
+            wrong.is_empty(),
+            "rounds with other than one line: {wrong:?}"
+        );
+    }
+
+    #[test]
+    fn the_default_clock_counts_the_seconds_since_the_server_started() {
+        // The default sink is standard error (`eprintln!`), which a test cannot capture; what
+        // the default clock read is kept as the time of the last line, and that is read back. A
+        // clock that read milliseconds, or nothing, would be a different number.
+        let started = std::time::Instant::now()
+            .checked_sub(std::time::Duration::from_secs(130))
+            .expect("the machine has been up for two minutes");
+        let log = OriginLog::since(started);
+        assert_eq!(log.last.load(Ordering::Relaxed), NEVER);
+        log.note("https://obop.test");
+        let at = log.last.load(Ordering::Relaxed);
+        assert!((130..140).contains(&at), "the clock read {at}");
+        // A second ask in the same minute writes nothing, so the time stays.
+        log.note("https://obop.test");
+        assert_eq!(log.last.load(Ordering::Relaxed), at);
     }
 
     #[test]
