@@ -920,3 +920,38 @@ async fn the_dates_of_a_request_are_free_for_a_plain_user_to_set_today() {
     assert!(r.get("signed_at").is_none_or(J::is_null), "no evidence");
     assert_eq!(r["state"], "sent");
 }
+
+#[tokio::test]
+async fn a_closed_request_keeps_its_document_too() {
+    // Declined and expired are not draft: the Document of the request is as fixed as it is while
+    // the request is sent (a closed request is evidence of what was asked, and nobody gets a
+    // Document back by closing it first).
+    for close in ["decline", "expire"] {
+        let (f, _, _, _) = sent().await;
+        let (s, v) = f
+            .api(
+                "sam",
+                &format!("/api/sign_request/{close}"),
+                json!({"id": f.req}),
+            )
+            .await;
+        assert_eq!(s, 200, "{close}: {v}");
+        let before = f.record("sign_request", &f.req);
+        assert_ne!(before["state"], "sent", "{close}");
+        for who in ["sam", "mia"] {
+            let (s, v) = f
+                .api(
+                    who,
+                    "/api/sign_request/update",
+                    json!({"id": f.req, "document_id": null}),
+                )
+                .await;
+            assert_eq!(s, 400, "{close} {who}: {v}");
+            assert!(
+                err(&v).contains("cannot be changed after the request was sent"),
+                "{close} {who}: {v}"
+            );
+            assert_eq!(f.record("sign_request", &f.req), before, "{close} {who}");
+        }
+    }
+}
