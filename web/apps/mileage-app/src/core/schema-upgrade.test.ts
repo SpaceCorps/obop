@@ -308,6 +308,110 @@ describe("a file that this build made, opened by the first build", () => {
     });
   });
 
+  describe("after additions to the points and batches, which have a key over two columns and no rowid", () => {
+    const additions = [
+      "CREATE INDEX mileage_trip_started ON trip (started_at)",
+      "CREATE INDEX mileage_point_t ON point (client_trip_id, t DESC)",
+      "ALTER TABLE point ADD COLUMN source TEXT",
+      "ALTER TABLE point ADD COLUMN quality INTEGER NOT NULL DEFAULT 0",
+      "ALTER TABLE batch ADD COLUMN note TEXT",
+    ];
+
+    test("the first build opens the file and its statements work: a point and a batch inserted with the old columns get the defaults", async () => {
+      const db = await legacyFile();
+      await ensureModules(db, [HOST_SCHEMA, mileageAt2(additions)]);
+      expect(await recorded(db)).toEqual({ host: 1, mileage: 2 });
+      const { spy, log } = watched(db);
+      await legacyMigrate(spy);
+      expect(log).toEqual([]);
+
+      await db.run("INSERT INTO point (client_trip_id, seq, t, lat, lon) VALUES (?, ?, ?, ?, ?)", [
+        "c2",
+        1,
+        T0 + 4000,
+        "60.2",
+        "24.9",
+      ]);
+      await db.run(
+        "INSERT INTO batch (client_trip_id, first_seq, last_seq, sent) VALUES (?, ?, ?, ?)",
+        ["c2", 1, 1, 0],
+      );
+      expect(
+        await db.one("SELECT source, quality FROM point WHERE client_trip_id = 'c2' AND seq = 1"),
+      ).toEqual({ source: null, quality: 0 });
+      expect(await db.one("SELECT note FROM batch WHERE client_trip_id = 'c2'")).toEqual({
+        note: null,
+      });
+      // What the store does with them.
+      const store = createSqlStore(db);
+      expect(await store.pointCount("c1")).toBe(3);
+      expect((await store.points("c1")).map((p) => p.seq)).toEqual([1, 2, 3]);
+      await store.clearAll();
+    });
+  });
+
+  describe("a change that the first build would trip over is refused when it is made", () => {
+    // A file of the first build with no rows, so that every statement below can be made on it. Each
+    // statement is also made on a file by itself (the control) to show that it does stop the first
+    // build from recording two trips, which is what it is refused for.
+    async function empty(): Promise<SqlDb> {
+      const db = memoryDb();
+      await legacyMigrate(db);
+      return db;
+    }
+    const twoTrips = async (db: SqlDb) => {
+      for (const id of ["n1", "n2"]) {
+        await db.run(
+          "INSERT INTO trip (client_trip_id, purpose, started_at, created_ms) VALUES (?, 'business', '2026-10-15T09:00:00.000Z', 1)",
+          [id],
+        );
+      }
+    };
+
+    test.each([
+      [
+        "a unique index on the trips",
+        "CREATE UNIQUE INDEX mileage_trip_purpose ON trip (purpose)",
+        /made the unique index mileage_trip_purpose/,
+      ],
+      [
+        "a unique index on the trips that only covers some rows",
+        "CREATE UNIQUE INDEX mileage_trip_open ON trip (purpose) WHERE ended_at IS NULL",
+        /made the unique index mileage_trip_open/,
+      ],
+      [
+        "a trigger on the trips",
+        "CREATE TRIGGER mileage_trip_guard BEFORE INSERT ON trip BEGIN SELECT RAISE(ABORT, 'no'); END",
+        /made the trigger mileage_trip_guard/,
+      ],
+      [
+        "a column with a CHECK that the old statements do not satisfy",
+        "ALTER TABLE trip ADD COLUMN chk INTEGER NOT NULL DEFAULT 0 CHECK (chk > 0)",
+        /added the column trip\.chk with a CHECK constraint/,
+      ],
+    ])("%s", async (_, statement, message) => {
+      // The control: made by hand, the statement does break the first build's second insert.
+      const broken = await empty();
+      await broken.exec(statement);
+      await expect(twoTrips(broken)).rejects.toThrow();
+
+      const db = await empty();
+      const before = await objects(db);
+      await expect(ensureModules(db, [HOST_SCHEMA, mileageAt2([statement])])).rejects.toThrow(
+        message,
+      );
+      expect(await objects(db)).toEqual(before);
+      expect(await layout(db)).toBe(1);
+      // The file is as it was, and the first build records.
+      await legacyMigrate(db);
+      await twoTrips(db);
+      expect(await db.all("SELECT client_trip_id FROM trip ORDER BY 1")).toEqual([
+        { client_trip_id: "n1" },
+        { client_trip_id: "n2" },
+      ]);
+    });
+  });
+
   test("a change that the first build could not read is refused when it is made, and the file stays as it was", async () => {
     const db = await legacyFile();
     const before = { objects: await objects(db), rows: await rows(db) };

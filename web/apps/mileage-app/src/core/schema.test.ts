@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "vite-plus/test";
+import { HOST_SCHEMA } from "./host-state.ts";
 import {
   LAYOUT_VERSION,
   SchemaError,
@@ -8,6 +9,7 @@ import {
   type SchemaModule,
 } from "./schema.ts";
 import type { SqlDb } from "./sql.ts";
+import { MILEAGE_SCHEMA } from "./sql-store.ts";
 import { memoryDb } from "../test-support/memory-db.ts";
 import { tempDatabase } from "../test-support/temp-db.ts";
 import { watched } from "../test-support/watched-db.ts";
@@ -243,6 +245,60 @@ describe("a file of layout 1 that no module-aware build has touched", () => {
   });
 });
 
+describe("the versions of the first layout are recorded only for a file of layout 1 that has no version table", () => {
+  /** A module that was in the first layout, at version 1 there, and has moved on since. */
+  const legacy = (steps: Record<number, string[]>, legacyVersion = 1) =>
+    module("a", { legacyVersion, steps });
+  const columns = async (db: SqlDb) =>
+    (await db.all<{ name: string }>("PRAGMA table_info(a_items)")).map((c) => c.name);
+
+  test("a new file (layout 0) is not read as one of the first layout: the module starts from nothing", async () => {
+    const db = memoryDb();
+    const a = legacy({ 1: ["CREATE TABLE a_items (id TEXT)"] });
+    await ensureModules(db, [a]);
+    expect(a.ran).toEqual([0]);
+    expect(await tables(db)).toEqual(["a_items", "module_schema"]);
+    expect(await versions(db)).toEqual({ a: 1 });
+  });
+
+  test("a file that has the version table is not read as one of the first layout, whatever it says about a module", async () => {
+    const db = memoryDb();
+    await ensureModules(db, [module("a", { steps: { 1: ["CREATE TABLE a_items (id TEXT)"] } })]);
+    // The module is now one that was in the first layout at version 2, and has a version 3. The
+    // file says 1. Its steps 2 and 3 have to run; its legacy version is for files without the table.
+    const a3 = legacy(
+      {
+        1: ["CREATE TABLE a_items (id TEXT)"],
+        2: ["ALTER TABLE a_items ADD COLUMN two TEXT"],
+        3: ["ALTER TABLE a_items ADD COLUMN three TEXT"],
+      },
+      2,
+    );
+    await ensureModules(db, [a3]);
+    expect(a3.ran).toEqual([1]);
+    expect(await columns(db)).toEqual(["id", "two", "three"]);
+    expect(await versions(db)).toEqual({ a: 3 });
+  });
+
+  test("a module that is new to a file that has the version table starts from nothing, although it names a legacy version", async () => {
+    const db = memoryDb();
+    await ensureModules(db, [module("b")]);
+    const a = legacy({ 1: ["CREATE TABLE a_items (id TEXT)"] });
+    await ensureModules(db, [module("b"), a]);
+    expect(a.ran).toEqual([0]);
+    expect(await tables(db)).toEqual(["a_items", "b_items", "module_schema"]);
+    expect(await versions(db)).toEqual({ a: 1, b: 1 });
+  });
+
+  test("the same with the modules of the app: a file made by the host alone gets the outbox's tables when it is added", async () => {
+    const db = memoryDb();
+    await ensureModules(db, [HOST_SCHEMA]);
+    await ensureModules(db, [HOST_SCHEMA, MILEAGE_SCHEMA]);
+    expect(await tables(db)).toEqual(["batch", "meta", "module_schema", "point", "trip"]);
+    expect(await versions(db)).toEqual({ host: 1, mileage: 1 });
+  });
+});
+
 describe("what a module may do to the file", () => {
   const refused = async (steps: Record<number, string[]>, ...more: SchemaModule[]) => {
     const db = memoryDb();
@@ -251,7 +307,9 @@ describe("what a module may do to the file", () => {
     return { db, error: await ensureModules(db, [...more, rogue]).catch((e: unknown) => e) };
   };
 
-  test("makes tables named after itself, and indexes and views on them", async () => {
+  // The view that this test used to make is refused now (see "what a module may add" below): a view
+  // is not among the things an older build can live with.
+  test("makes tables named after itself, and an index on them", async () => {
     const db = memoryDb();
     await ensureModules(db, [
       module("a", {
@@ -259,7 +317,6 @@ describe("what a module may do to the file", () => {
           1: [
             "CREATE TABLE a_items (id TEXT PRIMARY KEY, n INTEGER)",
             "CREATE INDEX a_items_n ON a_items (n)",
-            "CREATE VIEW a_view AS SELECT id FROM a_items",
             "CREATE TABLE a_log (id INTEGER PRIMARY KEY AUTOINCREMENT, text TEXT)",
           ],
         },
@@ -363,6 +420,381 @@ describe("what a module may do to the file", () => {
     test("may not add a column that is NOT NULL without a default (SQLite refuses it too)", async () => {
       const { error } = await later("ALTER TABLE a_items ADD COLUMN must TEXT NOT NULL");
       expect(error).toBeInstanceOf(Error);
+    });
+
+    // The key of a table is part of what an older build relies on (it inserts with `ON CONFLICT`
+    // on the key and reads by it). Both rebuilds keep every column's name, type and NOT NULL, so
+    // that it is the comparison of the key, and nothing else, that has to notice. The message is
+    // asserted because the check of the table's text refuses these too, with another message.
+    test.each([
+      [
+        "make the key two columns",
+        "CREATE TABLE a_new (id TEXT NOT NULL, note TEXT, n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (note, id)); DROP TABLE a_items; ALTER TABLE a_new RENAME TO a_items",
+      ],
+      [
+        "drop the key",
+        "CREATE TABLE a_new (id TEXT NOT NULL, note TEXT, n INTEGER NOT NULL DEFAULT 0); DROP TABLE a_items; ALTER TABLE a_new RENAME TO a_items",
+      ],
+      [
+        "move the key to another column",
+        "CREATE TABLE a_new (id TEXT NOT NULL, note TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (note)); DROP TABLE a_items; ALTER TABLE a_new RENAME TO a_items",
+      ],
+    ])("may not %s", async (_, statement) => {
+      const { db, error } = await later(statement);
+      expect(error, String(error)).toBeInstanceOf(SchemaError);
+      expect((error as Error).message).toMatch(/module a changed the column a_items\.(id|note);/);
+      expect((await versions(db)).a).toBe(1);
+      const keys = await db.all<{ name: string; pk: number }>("PRAGMA table_info(a_items)");
+      expect(keys.map((c) => [c.name, c.pk])).toEqual([
+        ["id", 1],
+        ["note", 0],
+        ["n", 0],
+      ]);
+    });
+  });
+});
+
+describe("which tables a module owns", () => {
+  // A module owns the tables named `<id>_*` and the ones it lists as legacy tables, by the whole
+  // name. A table that only starts with its id (`ab_items` for `a`, `hostage` for `host`) is
+  // somebody else's, or nobody's.
+  const makes = (m: SchemaModule, table: string): SchemaModule => ({
+    ...m,
+    async migrate(tx, from) {
+      await m.migrate(tx, from);
+      await tx.exec(`CREATE TABLE ${table} (id TEXT)`);
+    },
+  });
+
+  /** The module, with the host listed before it where it needs it. */
+  const listed = (m: SchemaModule): SchemaModule[] =>
+    m.requires?.includes("host") ? [HOST_SCHEMA, m] : [m];
+
+  test.each([
+    ["a", "ab_items", () => module("a", { steps: { 1: [] } })],
+    ["host", "hostage", () => HOST_SCHEMA],
+    ["mileage", "mileagefoo", () => MILEAGE_SCHEMA],
+    ["mileag", "mileage_stop", () => module("mileag", { steps: { 1: [] } })],
+    [
+      "m, with the legacy table trip,",
+      "trip_log",
+      () => module("m", { legacyTables: ["trip"], steps: { 1: ["CREATE TABLE trip (id TEXT)"] } }),
+    ],
+    [
+      "m, with the legacy table trip,",
+      "trips",
+      () => module("m", { legacyTables: ["trip"], steps: { 1: ["CREATE TABLE trip (id TEXT)"] } }),
+    ],
+  ])("%s does not make the table %s", async (_, table, build) => {
+    const db = memoryDb();
+    const error = await ensureModules(db, listed(makes(build(), table))).catch((e: unknown) => e);
+    expect(error, String(error)).toBeInstanceOf(SchemaError);
+    expect((error as Error).message).toMatch(new RegExp(`made the table ${table} .*does not own`));
+    expect(await tables(db)).toEqual([]);
+  });
+
+  test.each([
+    ["a", "a_items", () => module("a", { steps: { 1: [] } })],
+    ["host", "host_note", () => HOST_SCHEMA],
+    ["mileage", "mileage_stop", () => MILEAGE_SCHEMA],
+  ])("%s makes the table %s", async (_, table, build) => {
+    const db = memoryDb();
+    await ensureModules(db, listed(makes(build(), table)));
+    expect(await tables(db)).toContain(table);
+  });
+
+  test("a module does not change a table whose name only starts with its id", async () => {
+    // `ab` has the table `ab_items`. It starts with `a` but not with `a_`, so it is not module a's.
+    const db = memoryDb();
+    await ensureModules(db, [module("ab")]);
+    const rogue = module("a", { steps: { 1: ["ALTER TABLE ab_items ADD COLUMN extra TEXT"] } });
+    const error = await ensureModules(db, [module("ab"), rogue]).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(SchemaError);
+    expect((error as Error).message).toMatch(/changed the table ab_items.*another module/);
+  });
+});
+
+describe("what a module may add to a file that an older build uses", () => {
+  // An older build (from before `module_schema`) cannot know that a table has moved on, so it must
+  // be able to go on inserting, updating, deleting and reading as it did. The module's migration is
+  // checked for what could stop it: a unique index, a trigger, a column with a CHECK. Every case
+  // here is a version 2 of module `a` on top of a version 1 that has the table `a_items`.
+  const BASE = [
+    "CREATE TABLE a_items (id TEXT PRIMARY KEY NOT NULL, note TEXT, n INTEGER NOT NULL DEFAULT 0)",
+  ];
+  const objectNames = async (db: SqlDb) =>
+    (
+      await db.all<{ name: string }>(
+        "SELECT name FROM sqlite_master WHERE name NOT LIKE 'sqlite\\_%' ESCAPE '\\' ORDER BY name",
+      )
+    ).map((r) => r.name);
+
+  async function moveOn(
+    statements: string[],
+    more: { first?: string[]; options?: Partial<SchemaModule> } = {},
+  ) {
+    const first = more.first ?? BASE;
+    const db = memoryDb();
+    await ensureModules(db, [module("a", { ...more.options, steps: { 1: first } })]);
+    const objects = await objectNames(db);
+    const a2 = module("a", { ...more.options, steps: { 1: first, 2: statements } });
+    const error = await ensureModules(db, [a2]).catch((e: unknown) => e);
+    return { db, error, objects };
+  }
+
+  test.each<[string, string[], { first?: string[] }?]>([
+    ["an index on one column", ["CREATE INDEX a_items_note ON a_items (note)"]],
+    [
+      "an index on two columns, one of them descending and one with a collation",
+      ["CREATE INDEX a_items_two ON a_items (note COLLATE NOCASE, n DESC)"],
+    ],
+    [
+      "a table of its own with a key, a UNIQUE and a CHECK",
+      [
+        "CREATE TABLE a_tags (id TEXT PRIMARY KEY NOT NULL, name TEXT UNIQUE, n INTEGER CHECK (n >= 0))",
+      ],
+    ],
+    [
+      "tables that refer to each other and to themselves",
+      [
+        "CREATE TABLE a_p (id TEXT PRIMARY KEY, up TEXT REFERENCES a_p(id))",
+        "CREATE TABLE a_c (id TEXT, p TEXT REFERENCES a_p(id))",
+      ],
+    ],
+    [
+      "columns that may be empty, one with a sized type and one with two words",
+      [
+        "ALTER TABLE a_items ADD COLUMN s VARCHAR(10)",
+        "ALTER TABLE a_items ADD COLUMN m DECIMAL(10, 2) DEFAULT -1.5",
+        "ALTER TABLE a_items ADD COLUMN dp DOUBLE PRECISION",
+        "ALTER TABLE a_items ADD COLUMN bare",
+      ],
+    ],
+    [
+      "columns with a quoted name and a default text that holds a comma and a bracket",
+      [
+        `ALTER TABLE a_items ADD COLUMN "two words" TEXT DEFAULT 'a, (b)'`,
+        "ALTER TABLE a_items ADD COLUMN [bracketed] TEXT",
+      ],
+    ],
+    [
+      "columns that are NOT NULL with a default, and defaults that are NULL, TRUE, a blob or a number",
+      [
+        "ALTER TABLE a_items ADD COLUMN f INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE a_items ADD COLUMN g TEXT DEFAULT NULL",
+        "ALTER TABLE a_items ADD COLUMN t INTEGER DEFAULT TRUE",
+        "ALTER TABLE a_items ADD COLUMN bl BLOB DEFAULT x'00ff'",
+        "ALTER TABLE a_items ADD COLUMN neg INTEGER NOT NULL DEFAULT -5",
+        "ALTER TABLE a_items ADD COLUMN h INTEGER DEFAULT 0x10",
+        "ALTER TABLE a_items ADD COLUMN r REAL DEFAULT 1e3",
+        "ALTER TABLE a_items ADD COLUMN z TEXT NULL",
+      ],
+    ],
+    [
+      "columns on a table with a key over two columns and WITHOUT ROWID",
+      [
+        "ALTER TABLE a_pairs ADD COLUMN z TEXT",
+        "ALTER TABLE a_pairs ADD COLUMN w INTEGER NOT NULL DEFAULT 0",
+      ],
+      {
+        first: [
+          ...BASE,
+          "CREATE TABLE a_pairs (x TEXT NOT NULL, y TEXT NOT NULL, PRIMARY KEY (x, y)) WITHOUT ROWID",
+        ],
+      },
+    ],
+  ])("may add %s", async (_, statements, more) => {
+    const { db, error } = await moveOn(statements, more);
+    expect(error, String(error)).toBeUndefined();
+    expect((await versions(db)).a).toBe(2);
+  });
+
+  test.each<[string, string[], RegExp, { first?: string[]; options?: Partial<SchemaModule> }?]>([
+    [
+      "a unique index",
+      ["CREATE UNIQUE INDEX a_items_note ON a_items (note)"],
+      /made the unique index a_items_note/,
+    ],
+    [
+      "a unique index on a table it makes in the same migration",
+      ["CREATE TABLE a_tags (name TEXT)", "CREATE UNIQUE INDEX a_tags_name ON a_tags (name)"],
+      /made the unique index a_tags_name/,
+    ],
+    [
+      "a unique index that only covers some rows",
+      ["CREATE UNIQUE INDEX a_items_open ON a_items (note) WHERE n = 0"],
+      /made the unique index a_items_open/,
+    ],
+    [
+      "an index that covers only some rows",
+      ["CREATE INDEX a_items_open ON a_items (note) WHERE n = 0"],
+      /made the index a_items_open with a WHERE clause/,
+    ],
+    [
+      "an index on an expression",
+      ["CREATE INDEX a_items_lower ON a_items (lower(note))"],
+      /made the index a_items_lower on an expression/,
+    ],
+    [
+      "an index that replaces one of the same name with a unique one",
+      ["DROP INDEX a_items_note", "CREATE UNIQUE INDEX a_items_note ON a_items (note)"],
+      /changed the unique index a_items_note/,
+      { first: [...BASE, "CREATE INDEX a_items_note ON a_items (note)"] },
+    ],
+    [
+      "a trigger",
+      [
+        "CREATE TRIGGER a_items_guard BEFORE INSERT ON a_items BEGIN SELECT RAISE(ABORT, 'no'); END",
+      ],
+      /made the trigger a_items_guard/,
+    ],
+    [
+      "a trigger on a table it makes in the same migration",
+      [
+        "CREATE TABLE a_log (id TEXT)",
+        "CREATE TRIGGER a_log_t AFTER INSERT ON a_log BEGIN SELECT 1; END",
+      ],
+      /made the trigger a_log_t/,
+    ],
+    ["a view", ["CREATE VIEW a_view AS SELECT id FROM a_items"], /made the view a_view/],
+    [
+      "a view with the name of a table of the first layout that is not in the file",
+      ["CREATE VIEW old AS SELECT id FROM a_items"],
+      /made the view old/,
+      { options: { legacyTables: ["old"] } },
+    ],
+    [
+      "a virtual table",
+      ["CREATE VIRTUAL TABLE a_search USING fts5(text)"],
+      /made the virtual table a_search/,
+    ],
+    [
+      "a table with a foreign key to a table that was in the file",
+      ["CREATE TABLE a_notes (id TEXT PRIMARY KEY, item TEXT REFERENCES a_items(id))"],
+      /made the table a_notes with a foreign key to a_items/,
+    ],
+    [
+      "a table with a foreign key to a table that was in the file, spelled in capitals",
+      ["CREATE TABLE a_notes (id TEXT PRIMARY KEY, item TEXT REFERENCES A_ITEMS(id))"],
+      /made the table a_notes with a foreign key to A_ITEMS/,
+    ],
+    [
+      "a column with a CHECK",
+      ["ALTER TABLE a_items ADD COLUMN chk INTEGER NOT NULL DEFAULT 1 CHECK (chk > 0)"],
+      /added the column a_items\.chk with a CHECK constraint/,
+    ],
+    [
+      "a column that refers to a table",
+      ["ALTER TABLE a_items ADD COLUMN ref TEXT REFERENCES a_items(id)"],
+      /added the column a_items\.ref with a foreign key/,
+    ],
+    [
+      "a column with a collation",
+      ["ALTER TABLE a_items ADD COLUMN tag TEXT COLLATE NOCASE"],
+      /added the column a_items\.tag with a collation/,
+    ],
+    [
+      "a generated column",
+      ["ALTER TABLE a_items ADD COLUMN g TEXT GENERATED ALWAYS AS (note || 'x') VIRTUAL"],
+      /added the column a_items\.g with a generated value/,
+    ],
+    [
+      "a generated column without the words GENERATED ALWAYS",
+      ["ALTER TABLE a_items ADD COLUMN g TEXT AS (note)"],
+      /added the column a_items\.g with a generated value/,
+    ],
+    [
+      "a column whose default is an expression",
+      ["ALTER TABLE a_items ADD COLUMN d INTEGER DEFAULT (1 + 1)"],
+      /added the column a_items\.d with a default that is not a plain value/,
+    ],
+    [
+      "a column with a named constraint",
+      ["ALTER TABLE a_items ADD COLUMN k TEXT CONSTRAINT k_nn NOT NULL DEFAULT 'x'"],
+      /added the column a_items\.k with a named constraint/,
+    ],
+    [
+      "a column with an ON CONFLICT clause",
+      ["ALTER TABLE a_items ADD COLUMN k TEXT NOT NULL ON CONFLICT IGNORE DEFAULT 'x'"],
+      /added the column a_items\.k with an ON CONFLICT clause/,
+    ],
+    [
+      "a second column that is not plain, after one that is",
+      [
+        "ALTER TABLE a_items ADD COLUMN okay TEXT",
+        "ALTER TABLE a_items ADD COLUMN bad INTEGER CHECK (bad > 0)",
+      ],
+      /added the column a_items\.bad with a CHECK constraint/,
+    ],
+    [
+      "the table made again with the same columns and a CHECK",
+      [
+        "CREATE TABLE a_new (id TEXT PRIMARY KEY NOT NULL, note TEXT, n INTEGER NOT NULL DEFAULT 0, CHECK (n >= 0))",
+        "DROP TABLE a_items",
+        "ALTER TABLE a_new RENAME TO a_items",
+      ],
+      /rebuilt the table a_items/,
+    ],
+    [
+      "the table made again with the same columns and a UNIQUE",
+      [
+        "CREATE TABLE a_new (id TEXT PRIMARY KEY NOT NULL, note TEXT, n INTEGER NOT NULL DEFAULT 0, UNIQUE (note))",
+        "DROP TABLE a_items",
+        "ALTER TABLE a_new RENAME TO a_items",
+      ],
+      /rebuilt the table a_items/,
+    ],
+    [
+      "the table made again exactly as it was",
+      [
+        "CREATE TABLE a_new (id TEXT PRIMARY KEY NOT NULL, note TEXT, n INTEGER NOT NULL DEFAULT 0)",
+        "DROP TABLE a_items",
+        "ALTER TABLE a_new RENAME TO a_items",
+      ],
+      /rebuilt the table a_items/,
+    ],
+    ["the layout version", ["PRAGMA user_version = 7"], /changed PRAGMA user_version/],
+  ])("may not add %s", async (_, statements, message, more) => {
+    const { db, error, objects } = await moveOn(statements, more);
+    expect(error, String(error)).toBeInstanceOf(SchemaError);
+    expect((error as Error).message).toMatch(message);
+    // Taken back: the version is the old one and nothing is left of what the migration made.
+    expect((await versions(db)).a).toBe(1);
+    expect(await objectNames(db)).toEqual(objects);
+    expect(await layout(db)).toBe(1);
+  });
+
+  describe("in a new file, where the tables are made for the first time", () => {
+    // A file that this build makes is opened by the older build too, and that build runs
+    // `CREATE TABLE IF NOT EXISTS` for the tables it knows and inserts into them.
+    test.each([
+      [
+        "a unique index on a legacy table",
+        ["CREATE UNIQUE INDEX trip_x ON trip (x)"],
+        /unique index trip_x/,
+      ],
+      [
+        "a trigger on a legacy table",
+        ["CREATE TRIGGER trip_t BEFORE INSERT ON trip BEGIN SELECT 1; END"],
+        /trigger trip_t/,
+      ],
+      [
+        "a view with the name of a legacy table",
+        ["CREATE VIEW point AS SELECT x FROM trip"],
+        /view point/,
+      ],
+      ["the layout version", ["PRAGMA user_version = 7"], /changed PRAGMA user_version/],
+    ])("may not make %s", async (_, statements, message) => {
+      const db = memoryDb();
+      const m = module("m", {
+        legacyTables: ["trip", "point"],
+        steps: { 1: ["CREATE TABLE trip (id TEXT, x TEXT)", ...statements] },
+      });
+      const error = await ensureModules(db, [m]).catch((e: unknown) => e);
+      expect(error, String(error)).toBeInstanceOf(SchemaError);
+      expect((error as Error).message).toMatch(message);
+      expect(await tables(db)).toEqual([]);
+      expect(await layout(db)).toBe(0);
     });
   });
 });

@@ -170,40 +170,96 @@ interface SchemaObject {
   sql: string | null;
 }
 
+/** What an index is, as far as an older build could trip over it. */
+interface IndexInfo {
+  unique: boolean;
+  partial: boolean;
+  /** The column number of each key column, in order; negative for an expression. */
+  keys: number[];
+}
+
 interface Snapshot {
+  /** `PRAGMA user_version`. */
+  layout: number;
   objects: Map<string, SchemaObject>;
   columns: Map<string, Column[]>;
+  /** The tables that the foreign keys of each table refer to. */
+  parents: Map<string, string[]>;
+  indexes: Map<string, IndexInfo>;
 }
 
 const objectKey = (o: { type: string; name: string }) => `${o.type} ${o.name}`;
+const quoted = (name: string) => `"${name.replaceAll('"', '""')}"`;
 
 async function snapshot(tx: SqlTx): Promise<Snapshot> {
+  const layout = Number(
+    (await tx.one<{ user_version: number }>("PRAGMA user_version"))?.user_version ?? 0,
+  );
   const rows = await tx.all<SchemaObject>(
     "SELECT type, name, tbl_name, sql FROM sqlite_master WHERE name NOT LIKE 'sqlite\\_%' ESCAPE '\\'",
   );
   const objects = new Map(rows.map((o) => [objectKey(o), o]));
   const columns = new Map<string, Column[]>();
+  const parents = new Map<string, string[]>();
+  const indexes = new Map<string, IndexInfo>();
   for (const o of rows) {
     if (o.type !== "table") continue;
-    const quoted = `"${o.name.replaceAll('"', '""')}"`;
-    columns.set(o.name, await tx.all<Column>(`PRAGMA table_info(${quoted})`));
+    columns.set(o.name, await tx.all<Column>(`PRAGMA table_info(${quoted(o.name)})`));
+    const keys = await tx.all<{ table: string }>(`PRAGMA foreign_key_list(${quoted(o.name)})`);
+    parents.set(
+      o.name,
+      keys.map((k) => k.table),
+    );
+    const listed = await tx.all<{ name: string; unique: number; partial: number }>(
+      `PRAGMA index_list(${quoted(o.name)})`,
+    );
+    for (const index of listed) {
+      // The indexes that SQLite makes for a key of the table itself are part of the table's text.
+      if (!objects.has(objectKey({ type: "index", name: index.name }))) continue;
+      const parts = await tx.all<{ cid: number; key: number }>(
+        `PRAGMA index_xinfo(${quoted(index.name)})`,
+      );
+      indexes.set(index.name, {
+        unique: Number(index.unique) === 1,
+        partial: Number(index.partial) === 1,
+        keys: parts.filter((p) => Number(p.key) === 1).map((p) => Number(p.cid)),
+      });
+    }
   }
-  return { objects, columns };
+  return { layout, objects, columns, parents, indexes };
 }
 
 /**
- * What a module may have done to the file, by comparing the file before and after its migration:
+ * What a module may have done to the file, by comparing the file before and after its migration.
+ * The point is that a build from before `module_schema` (which cannot know that a table has moved
+ * on) still works on the file: it creates its tables with `CREATE TABLE IF NOT EXISTS`, inserts,
+ * updates, deletes and reads. So the module:
  *
- * - it created objects only on tables it owns (tables named `<id>_*` and its legacy tables), and
+ * - created objects only on tables it owns (tables named `<id>_*` and its legacy tables), and
  *   changed or removed no object that belongs to another module;
- * - it left the tables it owns so that code of an older version still works: every column that
- *   was there is still there with the same type and key, and a column that is new is nullable or
- *   has a default. An older build of the app does not read `module_schema`, so it cannot know that
- *   a table has moved on; this is what keeps it working. A change that cannot be made this way
- *   needs `LAYOUT_VERSION` raised, which makes every older build refuse the file.
+ * - made nothing but tables of its own, indexes, and columns on tables that were there:
+ *   - a table of its own may be as it likes, except that it is not a virtual table and has no
+ *     foreign key to a table that was in the file before (an older build deletes from that table,
+ *     and with foreign keys on the new table would refuse the delete);
+ *   - an index is not unique (an older build's insert would fail on a duplicate), has no `WHERE`
+ *     and no expression in its key (a function can raise an error on a row that the older build
+ *     writes);
+ *   - a trigger is refused (it runs on the older build's statements) and so is a view (a view with
+ *     the name of a table of the first layout makes the older build's `CREATE TABLE IF NOT EXISTS`
+ *     do nothing); so is every other kind of object;
+ *   - a table that was there is changed by `ADD COLUMN` only: its text is what it was with column
+ *     definitions added, every column that was there is as it was (type, key, NOT NULL), and each
+ *     new column is a name, an optional type, and `NOT NULL` and `DEFAULT <plain value>` as wanted,
+ *     with no `CHECK`, `REFERENCES`, `COLLATE`, generated value, `UNIQUE`, `PRIMARY KEY`, named
+ *     constraint or `DEFAULT (expression)`; a new column that is NOT NULL has a default. Such a
+ *     table is never dropped, renamed or rebuilt;
+ * - left `PRAGMA user_version` as it was: the layout is `LAYOUT_VERSION`, set by the manager.
+ *
+ * A change that cannot be made this way needs `LAYOUT_VERSION` raised, which makes every older
+ * build refuse the file. What a migration writes into rows is not checked here.
  */
 function checkChange(module: SchemaModule, before: Snapshot, after: Snapshot): void {
-  const fail = (what: string): never => {
+  const fail: (what: string) => never = (what) => {
     throw new SchemaError(`module ${module.id} ${what}`);
   };
   for (const [key, o] of after.objects) {
@@ -222,6 +278,53 @@ function checkChange(module: SchemaModule, before: Snapshot, after: Snapshot): v
     }
     if (now === undefined || now.sql !== was.sql) {
       fail(`changed the ${was.type} ${was.name}, which belongs to another module`);
+    }
+  }
+  const tablesBefore = new Set(
+    [...before.objects.values()].filter((o) => o.type === "table").map((o) => o.name.toLowerCase()),
+  );
+  for (const [key, o] of after.objects) {
+    const was = before.objects.get(key);
+    // A table that was there is looked at column by column below. Any other object that was there
+    // and is as it was is not the module's doing.
+    if (was !== undefined && (o.type === "table" || was.sql === o.sql)) continue;
+    const verb = was === undefined ? "made" : "changed";
+    if (o.type === "table") {
+      if (/^\s*CREATE\s+VIRTUAL\b/i.test(o.sql ?? "")) {
+        fail(`made the virtual table ${o.name}; an older build may lack what it needs to open it`);
+      }
+      for (const parent of after.parents.get(o.name) ?? []) {
+        if (tablesBefore.has(parent.toLowerCase())) {
+          fail(
+            `made the table ${o.name} with a foreign key to ${parent}, which was in the file before; an older build that deletes from ${parent} would be refused`,
+          );
+        }
+      }
+    } else if (o.type === "index") {
+      const index = after.indexes.get(o.name);
+      if (index === undefined) {
+        fail(`${verb} the index ${o.name}, which cannot be read`);
+      } else if (index.unique) {
+        fail(
+          `${verb} the unique index ${o.name}; an older build inserts rows that it would refuse`,
+        );
+      } else if (index.partial) {
+        fail(
+          `${verb} the index ${o.name} with a WHERE clause, which is evaluated on an older build's rows`,
+        );
+      } else if (index.keys.some((cid) => cid < 0)) {
+        fail(
+          `${verb} the index ${o.name} on an expression, which is evaluated on an older build's rows`,
+        );
+      }
+    } else if (o.type === "trigger") {
+      fail(`${verb} the trigger ${o.name}; it would run on the statements of an older build`);
+    } else if (o.type === "view") {
+      fail(
+        `${verb} the view ${o.name}; a view takes the place of a table of that name for an older build`,
+      );
+    } else {
+      fail(`${verb} the ${o.type} ${o.name}, a kind of object that is not allowed`);
     }
   }
   for (const [table, was] of before.columns) {
@@ -249,7 +352,246 @@ function checkChange(module: SchemaModule, before: Snapshot, after: Snapshot): v
         fail(`added the column ${table}.${column.name} as NOT NULL without a default`);
       }
     }
+    // The columns say what the table has. Its text says what else it is made of: a key over two
+    // columns, a CHECK, a UNIQUE, WITHOUT ROWID, STRICT, and what the new columns carry.
+    const textBefore = before.objects.get(`table ${table}`)?.sql;
+    const textAfter = after.objects.get(`table ${table}`)?.sql;
+    if (
+      typeof textBefore === "string" &&
+      typeof textAfter === "string" &&
+      textBefore !== textAfter
+    ) {
+      const added = insertion(textBefore, textAfter);
+      if (added === null) {
+        fail(
+          `rebuilt the table ${table}; an older build only works with it if columns are all that was added`,
+        );
+      }
+      const problem = columnsProblem(added);
+      if (problem !== null) {
+        fail(
+          `added the column ${table}.${problem.column} with ${problem.why}; a new column is a plain one that may be empty or has a default`,
+        );
+      }
+    }
   }
+  if (after.layout !== before.layout) {
+    fail("changed PRAGMA user_version; the layout version is LAYOUT_VERSION, set by the manager");
+  }
+}
+
+/**
+ * The text that `now` has and `was` has not, when `now` is `was` with one piece added; else null.
+ * `ALTER TABLE ... ADD COLUMN` puts `, <column definition>` after the last column and before the
+ * constraints of the table (a key over two columns, WITHOUT ROWID), so the piece starts with a comma.
+ */
+function insertion(was: string, now: string): string | null {
+  if (now.length <= was.length) return null;
+  let common = 0;
+  while (common < was.length && was[common] === now[common]) common++;
+  for (let at = common; at >= 0; at--) {
+    if (!now.endsWith(was.slice(at))) continue;
+    const piece = now.slice(at, now.length - (was.length - at));
+    if (piece.startsWith(",")) return piece;
+  }
+  return null;
+}
+
+interface Token {
+  kind: "word" | "name" | "string" | "blob" | "number" | "mark";
+  text: string;
+}
+
+const NUMBER = /(?:0[xX][0-9a-fA-F]+|(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)/y;
+const WORD = /[A-Za-z_\u0080-￿][A-Za-z0-9_$\u0080-￿]*/y;
+const SPACE = /\s+/y;
+
+/** Reads the words, names, literals and marks of a piece of a `CREATE TABLE`; null where it cannot. */
+function tokenise(sql: string): Token[] | null {
+  const out: Token[] = [];
+  const at = (re: RegExp, from: number): string | null => {
+    re.lastIndex = from;
+    return re.exec(sql)?.[0] ?? null;
+  };
+  let i = 0;
+  while (i < sql.length) {
+    const space = at(SPACE, i);
+    if (space !== null) {
+      i += space.length;
+      continue;
+    }
+    if (sql.startsWith("--", i)) {
+      const end = sql.indexOf("\n", i);
+      i = end < 0 ? sql.length : end + 1;
+      continue;
+    }
+    if (sql.startsWith("/*", i)) {
+      const end = sql.indexOf("*/", i + 2);
+      if (end < 0) return null;
+      i = end + 2;
+      continue;
+    }
+    const c = sql[i] as string;
+    if (c === "'" || c === '"' || c === "`" || c === "[") {
+      const close = c === "[" ? "]" : c;
+      let j = i + 1;
+      for (;;) {
+        const end = sql.indexOf(close, j);
+        if (end < 0) return null;
+        if (close !== "]" && sql[end + 1] === close) {
+          j = end + 2;
+          continue;
+        }
+        j = end;
+        break;
+      }
+      out.push({ kind: c === "'" ? "string" : "name", text: sql.slice(i + 1, j) });
+      i = j + 1;
+      continue;
+    }
+    const word = at(WORD, i);
+    if (word !== null) {
+      if (/^[xX]$/.test(word) && sql[i + 1] === "'") {
+        const end = sql.indexOf("'", i + 2);
+        if (end < 0) return null;
+        out.push({ kind: "blob", text: sql.slice(i + 2, end) });
+        i = end + 1;
+        continue;
+      }
+      out.push({ kind: "word", text: word });
+      i += word.length;
+      continue;
+    }
+    const number = at(NUMBER, i);
+    if (number !== null) {
+      out.push({ kind: "number", text: number });
+      i += number.length;
+      continue;
+    }
+    out.push({ kind: "mark", text: c });
+    i++;
+  }
+  return out;
+}
+
+const isWord = (t: Token | undefined, word: string): boolean =>
+  t !== undefined && t.kind === "word" && t.text.toUpperCase() === word;
+const isMark = (t: Token | undefined, mark: string): boolean =>
+  t !== undefined && t.kind === "mark" && t.text === mark;
+
+/** The words that start a constraint of a column. A type name does not contain them. */
+const CONSTRAINT_WORDS = new Map<string, string>([
+  ["CONSTRAINT", "a named constraint"],
+  ["PRIMARY", "a primary key"],
+  ["UNIQUE", "a UNIQUE constraint"],
+  ["CHECK", "a CHECK constraint"],
+  ["COLLATE", "a collation"],
+  ["REFERENCES", "a foreign key"],
+  ["GENERATED", "a generated value"],
+  ["AS", "a generated value"],
+  ["ON", "an ON CONFLICT clause"],
+]);
+const PLAIN_DEFAULT_WORDS = new Set([
+  "TRUE",
+  "FALSE",
+  "CURRENT_TIME",
+  "CURRENT_DATE",
+  "CURRENT_TIMESTAMP",
+]);
+
+/** Why the column definitions in `, a TEXT, b INTEGER NOT NULL DEFAULT 0` are not all plain; null if they are. */
+function columnsProblem(added: string): { column: string; why: string } | null {
+  const tokens = tokenise(added);
+  const unreadable = { column: "?", why: "text that cannot be read" };
+  if (tokens === null) return unreadable;
+  const defs: Token[][] = [];
+  let depth = 0;
+  for (const t of tokens) {
+    if (isMark(t, "(")) depth++;
+    if (isMark(t, ")")) depth--;
+    if (depth < 0) return unreadable;
+    if (depth === 0 && isMark(t, ",")) {
+      defs.push([]);
+      continue;
+    }
+    const current = defs[defs.length - 1];
+    if (current === undefined) return unreadable;
+    current.push(t);
+  }
+  if (depth !== 0 || defs.length === 0) return unreadable;
+  for (const def of defs) {
+    const why = plainColumn(def);
+    if (why !== null) return { column: def[0]?.text ?? "?", why };
+  }
+  return null;
+}
+
+/** Null when the definition is a name, an optional type, and NOT NULL and DEFAULT of a plain value only. */
+function plainColumn(def: Token[]): string | null {
+  const first = def[0];
+  if (first === undefined || (first.kind !== "word" && first.kind !== "name")) return "no name";
+  let i = 1;
+  // The type: words that do not start a constraint, then a size.
+  for (;;) {
+    const t = def[i];
+    if (t === undefined || t.kind !== "word") break;
+    const upper = t.text.toUpperCase();
+    if (CONSTRAINT_WORDS.has(upper) || upper === "NOT" || upper === "NULL" || upper === "DEFAULT") {
+      break;
+    }
+    i++;
+  }
+  const sign = (): void => {
+    if (isMark(def[i], "+") || isMark(def[i], "-")) i++;
+  };
+  if (isMark(def[i], "(")) {
+    const badSize = "a type size that is not a number";
+    i++;
+    sign();
+    if (def[i]?.kind !== "number") return badSize;
+    i++;
+    if (isMark(def[i], ",")) {
+      i++;
+      sign();
+      if (def[i]?.kind !== "number") return badSize;
+      i++;
+    }
+    if (!isMark(def[i], ")")) return badSize;
+    i++;
+  }
+  let notNull = false;
+  let value = false;
+  while (i < def.length) {
+    const t = def[i] as Token;
+    if (isWord(t, "NOT") && isWord(def[i + 1], "NULL")) {
+      notNull = true;
+      i += 2;
+    } else if (isWord(t, "NULL")) {
+      i++;
+    } else if (isWord(t, "DEFAULT")) {
+      i++;
+      const v = def[i];
+      if (isMark(v, "+") || isMark(v, "-")) {
+        if (def[i + 1]?.kind !== "number") return "a default that is not a plain value";
+        i += 2;
+        value = true;
+      } else if (v?.kind === "number" || v?.kind === "string" || v?.kind === "blob") {
+        i++;
+        value = true;
+      } else if (isWord(v, "NULL")) {
+        i++;
+      } else if (v?.kind === "word" && PLAIN_DEFAULT_WORDS.has(v.text.toUpperCase())) {
+        i++;
+        value = true;
+      } else {
+        return "a default that is not a plain value";
+      }
+    } else {
+      const named = t.kind === "word" ? CONSTRAINT_WORDS.get(t.text.toUpperCase()) : undefined;
+      return named ?? `the text ${t.text}`;
+    }
+  }
+  return notNull && !value ? "NOT NULL and no default" : null;
 }
 
 export interface EnsureOptions {
