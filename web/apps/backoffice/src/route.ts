@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "@obop/ui";
-import { heldLeaveQuestion, type LeaveQuestion } from "./leaveGuard.ts";
+import { heldLeaveQuestions, type LeaveQuestion } from "./leaveGuard.ts";
 
 /**
  * The URL holds where you are, so links and the back button work:
@@ -64,20 +64,31 @@ export const nav: {
 } = { dirty: null, ask: null };
 
 /**
- * What to ask before the address changes, or `null` to go ahead. Unsaved changes and something that
- * is lost for good (`leaveGuard.ts`) can both be true; then one question names both.
+ * What to ask before the address changes, in order; nothing to ask means go ahead. Unsaved changes
+ * and things that are lost for good (`leaveGuard.ts`, one question for each) can all be true. When
+ * the first hold has words for a person who also has unsaved changes, one question names both;
+ * otherwise the unsaved changes are asked about first and every hold after them, so none is dropped.
  */
-function leaveQuestion(): LeaveQuestion | null {
-  const held = heldLeaveQuestion();
-  if (nav.dirty?.())
-    return held?.whenUnsaved
-      ? { message: held.whenUnsaved, leave: t("Leave anyway"), stay: t("Stay") }
-      : {
-          message: t("You have unsaved changes. Leave and discard them?"),
-          leave: t("Leave and discard"),
-          stay: t("Keep editing"),
-        };
-  return held;
+function leaveQuestions(): LeaveQuestion[] {
+  const held = heldLeaveQuestions();
+  if (!nav.dirty?.()) return held;
+  const [first, ...rest] = held;
+  if (first?.whenUnsaved)
+    return [{ message: first.whenUnsaved, leave: t("Leave anyway"), stay: t("Stay") }, ...rest];
+  return [
+    {
+      message: t("You have unsaved changes. Leave and discard them?"),
+      leave: t("Leave and discard"),
+      stay: t("Keep editing"),
+    },
+    ...held,
+  ];
+}
+
+/** Ask each question in turn. The page is left only when the person says leave to every one. */
+async function askAll(questions: LeaveQuestion[]): Promise<boolean> {
+  for (const q of questions) if (!(await nav.ask?.(q.message, q.leave, q.stay))) return false;
+  return true;
 }
 
 export type Go = (r: Partial<Route>, opts?: { replace?: boolean }) => void;
@@ -95,12 +106,12 @@ export function useRoute(): [Route, Go] {
         setRoute(parse(location.hash));
         return;
       }
-      const question = nav.ask ? leaveQuestion() : null;
-      if (question && nav.ask) {
+      const questions = nav.ask ? leaveQuestions() : [];
+      if (questions.length) {
         const target = location.hash;
         // Put the old address back until the person decides.
         history.replaceState(null, "", last.current || "#/");
-        void nav.ask(question.message, question.leave, question.stay).then((leave) => {
+        void askAll(questions).then((leave) => {
           if (!leave) return;
           skip = true;
           location.hash = target;
@@ -125,11 +136,10 @@ export function useRoute(): [Route, Go] {
     };
     // Going to the address that is already shown (saving a record goes to its own address) leaves
     // nothing behind, so nothing is asked.
-    const question = nav.ask && !sameRoute(h, location.hash) ? leaveQuestion() : null;
-    if (question && nav.ask) {
-      void nav.ask(question.message, question.leave, question.stay).then((leave) => {
-        if (!leave) return;
-        apply();
+    const questions = nav.ask && !sameRoute(h, location.hash) ? leaveQuestions() : [];
+    if (questions.length) {
+      void askAll(questions).then((leave) => {
+        if (leave) apply();
       });
     } else apply();
   }, []);

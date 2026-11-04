@@ -18,10 +18,18 @@ let container: HTMLDivElement;
 let root: Root;
 let go: Go;
 let setHold: (q: LeaveQuestion | null) => void;
+let setHold2: (q: LeaveQuestion | null) => void;
 
 function Held() {
   const [q, set] = useState<LeaveQuestion | null>(null);
   setHold = set;
+  useLeaveHold(q);
+  return null;
+}
+/** A second thing that can be lost, held at the same time. */
+function HeldToo() {
+  const [q, set] = useState<LeaveQuestion | null>(null);
+  setHold2 = set;
   useLeaveHold(q);
   return null;
 }
@@ -31,6 +39,7 @@ function Page() {
   return (
     <>
       <Held />
+      <HeldToo />
       <p>{route.model === "lead" ? "elsewhere" : "here"}</p>
     </>
   );
@@ -43,6 +52,11 @@ const hold: LeaveQuestion = {
   stay: "Stay with it",
 };
 const both = "You have unsaved changes, and the thing is lost. Leave anyway?";
+const second: LeaveQuestion = {
+  message: "The other thing is lost as well. Leave anyway?",
+  leave: "Leave without the other",
+  stay: "Stay with the other",
+};
 
 const settle = () =>
   act(async () => {
@@ -51,6 +65,13 @@ const settle = () =>
 const text = () => container.textContent ?? "";
 const answerWith = (leave: boolean) => {
   const ask = vi.fn(async (_message: string, _leave: string, _stay: string) => leave);
+  nav.ask = ask;
+  return ask;
+};
+/** Answer the questions one after the other: the first call gets the first answer, and so on. */
+const answerInTurn = (...leave: boolean[]) => {
+  let n = 0;
+  const ask = vi.fn(async (_message: string, _leave: string, _stay: string) => leave[n++] ?? false);
   nav.ask = ask;
   return ask;
 };
@@ -123,12 +144,86 @@ describe("go(): the palette, the panel's close button", () => {
     expect(text()).toBe("here");
   });
 
-  it("asks the unsaved-changes question when the hold has no wording for both", async () => {
-    const ask = answerWith(false);
+  it("asks the held question after the unsaved-changes question when the hold has no wording for both", async () => {
+    const ask = answerInTurn(true, false);
     nav.dirty = () => true;
     await act(async () => setHold(hold));
     await leaveTo();
-    expect(ask).toHaveBeenCalledWith(UNSAVED, "Leave and discard", "Keep editing");
+    expect(ask.mock.calls).toEqual([
+      [UNSAVED, "Leave and discard", "Keep editing"],
+      [hold.message, hold.leave, hold.stay],
+    ]);
+    expect(text(), "went although the second question was answered with stay").toBe("here");
+  });
+
+  it("goes only when every question is answered with leave", async () => {
+    const ask = answerInTurn(true, true);
+    nav.dirty = () => true;
+    await act(async () => setHold(hold));
+    await leaveTo();
+    expect(ask).toHaveBeenCalledTimes(2);
+    expect(text()).toBe("elsewhere");
+  });
+
+  it("asks no further question once one is answered with stay", async () => {
+    const ask = answerInTurn(false, true);
+    nav.dirty = () => true;
+    await act(async () => setHold(hold));
+    await leaveTo();
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(ask.mock.calls[0]![0]).toBe(UNSAVED);
+    expect(text()).toBe("here");
+  });
+
+  it("asks about every thing that is held, in the order they were taken", async () => {
+    const ask = answerInTurn(true, true);
+    await act(async () => setHold(hold));
+    await act(async () => setHold2(second));
+    await leaveTo();
+    expect(ask.mock.calls).toEqual([
+      [hold.message, hold.leave, hold.stay],
+      [second.message, second.leave, second.stay],
+    ]);
+    expect(text()).toBe("elsewhere");
+  });
+
+  it("stays when the second of two held things is answered with stay", async () => {
+    const ask = answerInTurn(true, false);
+    await act(async () => setHold(hold));
+    await act(async () => setHold2(second));
+    await leaveTo();
+    expect(ask).toHaveBeenCalledTimes(2);
+    expect(text()).toBe("here");
+  });
+
+  it("joins the unsaved changes to the first hold and asks the other hold on its own", async () => {
+    const ask = answerInTurn(true, true);
+    nav.dirty = () => true;
+    await act(async () => setHold({ ...hold, whenUnsaved: both }));
+    await act(async () => setHold2(second));
+    await leaveTo();
+    expect(ask.mock.calls).toEqual([
+      [both, "Leave anyway", "Stay"],
+      [second.message, second.leave, second.stay],
+    ]);
+  });
+
+  it("asks about a hold that has no wording for the unsaved changes even when it is the second", async () => {
+    const ask = answerInTurn(true, true, true);
+    nav.dirty = () => true;
+    await act(async () => setHold(hold));
+    await act(async () => setHold2(second));
+    await leaveTo();
+    expect(ask.mock.calls.map((c) => c[0])).toEqual([UNSAVED, hold.message, second.message]);
+  });
+
+  it("asks no more about a hold that was given up", async () => {
+    const ask = answerInTurn(true, true);
+    await act(async () => setHold(hold));
+    await act(async () => setHold2(second));
+    await act(async () => setHold(null));
+    await leaveTo();
+    expect(ask.mock.calls.map((c) => c[0])).toEqual([second.message]);
   });
 
   it("stops asking about the held thing once it is given up, and still asks about the form", async () => {
@@ -233,6 +328,29 @@ describe("the browser's own address change: Back, a swipe", () => {
     await act(async () => setHold({ ...hold, whenUnsaved: both }));
     await change();
     expect(ask).toHaveBeenCalledWith(both, "Leave anyway", "Stay");
+  });
+
+  it("asks about every thing that is held, and goes only when each is answered with leave", async () => {
+    const ask = answerInTurn(true, true);
+    await act(async () => setHold(hold));
+    await act(async () => setHold2(second));
+    await change();
+    await settle();
+    expect(ask.mock.calls.map((c) => c[0])).toEqual([hold.message, second.message]);
+    expect(location.hash).toBe("#/crm/lead");
+    expect(text()).toBe("elsewhere");
+  });
+
+  it("puts the address back and stays when the second question is answered with stay", async () => {
+    const ask = answerInTurn(true, false);
+    await act(async () => setHold(hold));
+    await act(async () => setHold2(second));
+    const here = location.hash;
+    await change();
+    await settle();
+    expect(ask).toHaveBeenCalledTimes(2);
+    expect(location.hash).toBe(here || "#/");
+    expect(text()).toBe("here");
   });
 
   it("asks nothing when nothing is unsaved and nothing is held", async () => {

@@ -17,20 +17,26 @@ export type LeaveQuestion = {
   /**
    * The question to ask instead when the person also has unsaved changes (`route.ts`), so that the
    * one question names both things they are about to lose. It is answered with "Leave anyway" and
-   * "Stay".
+   * "Stay". A hold without it is asked after the unsaved-changes question, as a question of its own.
    */
   whenUnsaved?: string;
 };
 
 const holds = new Set<() => LeaveQuestion | null>();
 
-/** The question to ask before leaving, or `null` when nothing is held. */
-export function heldLeaveQuestion(): LeaveQuestion | null {
+/** The questions to ask before leaving, one for every hold that is active, or none. */
+export function heldLeaveQuestions(): LeaveQuestion[] {
+  const out: LeaveQuestion[] = [];
   for (const ask of holds) {
     const q = ask();
-    if (q) return q;
+    if (q) out.push(q);
   }
-  return null;
+  return out;
+}
+
+/** The first question to ask before leaving, or `null` when nothing is held. */
+export function heldLeaveQuestion(): LeaveQuestion | null {
+  return heldLeaveQuestions()[0] ?? null;
 }
 
 /**
