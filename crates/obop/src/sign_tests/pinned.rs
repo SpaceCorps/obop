@@ -367,19 +367,27 @@ async fn the_limit_on_the_pdf_is_counted_before_the_copy_is_hashed() {
 async fn wrong_links_do_not_use_up_the_views_of_the_right_one() {
     // The count of views is made after the lookup: a source that asks for links that do not
     // exist is throttled by the count of failed lookups (20), and its 120 views are for links
-    // that do. Were the count made first, 120 wrong tries would leave the right link at 429.
+    // that do. Were the count made first, 120 wrong tries would leave the right link at 429. The
+    // page and the viewer's copy each have their own place for the count, so each has a source
+    // of its own here (they share one count, and 130 tries of one kind pass the 120).
     let (f, _, path, _) = sent().await;
     let wrong = wrong_link(&path);
     let wrong_pdf = format!("{wrong}/document.pdf");
-    let noisy = ip(43);
-    for n in 0..150 {
-        let url = if n % 2 == 0 { &wrong } else { &wrong_pdf };
-        let s = f.get(url, &noisy).await.status;
-        assert_eq!(s, if n < 20 { 404 } else { 429 }, "try {n}");
+    let (by_page, by_copy) = (ip(43), ip(44));
+    for n in 0..130 {
+        let want = if n < 20 { 404 } else { 429 };
+        assert_eq!(f.get(&wrong, &by_page).await.status, want, "page, try {n}");
+        assert_eq!(
+            f.get(&wrong_pdf, &by_copy).await.status,
+            want,
+            "copy, try {n}"
+        );
     }
-    assert_eq!(f.get(&path, &noisy).await.status, 200, "the page");
+    assert_eq!(f.get(&path, &by_page).await.status, 200, "the page");
     assert_eq!(
-        f.get(&format!("{path}/document.pdf"), &noisy).await.status,
+        f.get(&format!("{path}/document.pdf"), &by_copy)
+            .await
+            .status,
         200,
         "the viewer's copy"
     );

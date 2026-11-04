@@ -684,6 +684,18 @@ async fn a_link_whose_end_cannot_be_read_does_not_work() {
 
 /// A post whose `X-Forwarded-For` lines are given as bytes and whose socket peer is `peer`.
 async fn post_from_peer(f: &Fx, path: &str, lines: &[&[u8]], peer: &str, name: &str) -> Resp {
+    post_from_peer_with(f, path, lines, peer, name, &[]).await
+}
+
+/// As `post_from_peer`, with more headers.
+async fn post_from_peer_with(
+    f: &Fx,
+    path: &str,
+    lines: &[&[u8]],
+    peer: &str,
+    name: &str,
+    more: &[(&str, &str)],
+) -> Resp {
     let body = [
         ("name", name),
         ("agree", "1"),
@@ -704,6 +716,9 @@ async fn post_from_peer(f: &Fx, path: &str, lines: &[&[u8]], peer: &str, name: &
             "x-forwarded-for",
             axum::http::HeaderValue::from_bytes(l).unwrap(),
         );
+    }
+    for (k, v) in more {
+        b = b.header(*k, *v);
     }
     let mut req = b.body(Body::from(body)).unwrap();
     req.extensions_mut().insert(axum::extract::ConnectInfo(
@@ -952,6 +967,39 @@ async fn the_language_of_the_consent_id_is_the_one_the_post_names_not_a_proof_of
             format!("{path}?lang={}", k.want),
             "{what:?}"
         );
+    }
+}
+
+#[tokio::test]
+async fn a_proxy_entry_that_is_not_an_address_is_not_replaced_by_another_header() {
+    // When the proxy's entry cannot be used the peer is the address (docs/SIGN.md). The headers
+    // other proxies and platforms use for the client's address are not a second place to look:
+    // a client that sends one cannot take the place of the peer, with a good line or a bad one.
+    let others = [
+        ("x-real-ip", "203.0.113.50"),
+        ("cf-connecting-ip", "203.0.113.51"),
+        ("forwarded", "for=203.0.113.52"),
+        ("true-client-ip", "203.0.113.53"),
+        ("x-client-ip", "203.0.113.54"),
+    ];
+    for (what, line, want) in [
+        ("a name", &b"198.51.100.7, client-a"[..], "10.0.0.5"),
+        ("no entry", &b""[..], "10.0.0.5"),
+        ("a good entry", &b"198.51.100.7"[..], "198.51.100.7"),
+    ] {
+        let (f, _, path, _) = sent().await;
+        let r = post_from_peer_with(&f, &path, &[line], "10.0.0.5", "Jane Test", &others).await;
+        assert_eq!(r.status, 303, "{what}: {}", r.text());
+        assert_eq!(
+            f.record("sign_request", &f.req)["signer_ip"],
+            want,
+            "{what}"
+        );
+        let detail = f.events_of("sign_signed")[0]["detail"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        assert!(!detail.contains("203.0.113.5"), "{what}: {detail}");
     }
 }
 
