@@ -39,13 +39,20 @@ import { isDocumentRequest } from "./workflow.ts";
  * no button for it).
  */
 export function SignByLinkNote({ row }: { row: Row }) {
+  const d = useData();
+  // The same right as the button's: a person without it is told who makes the link instead.
+  const mayMake = !!d.models.get(LINK_MODEL)?.model.via_action;
   const state = String(row.state ?? "");
   if (!isDocumentRequest(row) || (state !== "draft" && state !== "sent")) return null;
   return (
     <p className="hint sign-by-link">
-      {t(
-        "This request is about a document. The signer signs it through a signing link that you create here after sending it. It cannot be marked signed by hand.",
-      )}
+      {mayMake
+        ? t(
+            "This request is about a document. The signer signs it through a signing link that you create here after sending it. It cannot be marked signed by hand.",
+          )
+        : t(
+            "This request is about a document. The signer signs it through a signing link that a person with the right to make signing links creates after the request is sent. It cannot be marked signed by hand.",
+          )}
     </p>
   );
 }
@@ -109,7 +116,14 @@ export function SignLinkAction({
     if (r.kind === "ok") {
       const m = madeLink(r.value, location.origin);
       if (m) setMade(m);
-      else d.notify(t("The server did not return a link."), "error");
+      // The server made the link when it answered; only this page cannot show it. Nobody has it.
+      else
+        d.notify(
+          t(
+            "A signing link was made for this request, but the server's answer was not a link this page can show, so nobody has it. Revoke it in the Signing links table and make another one.",
+          ),
+          "error",
+        );
     } else if (r.kind === "error") d.notify(serverMessage(r.message), "error");
   }
 
@@ -428,6 +442,7 @@ export function SignLinks({ request }: { request: Row }) {
     const ok = await d.confirm(
       t("Revoke this signing link? Whoever holds it can no longer sign with it."),
       t("Revoke"),
+      t("Keep it"),
     );
     if (!ok) return;
     setBusy(row.id);
