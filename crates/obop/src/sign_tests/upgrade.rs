@@ -582,3 +582,127 @@ async fn the_package_does_not_install_without_a_documents_that_can_hold_the_file
     let ids: Vec<String> = plan.work().map(|s| s.id.clone()).collect();
     assert_eq!(ids, vec!["documents".to_string(), "sign".to_string()]);
 }
+
+/// A second process on the same database: its own `App` (dispatcher and installer) over the same
+/// store, as `obop modules rollback sign` is when the server runs.
+fn other_process(f: &Fx) -> App {
+    App::with_store(f.app.store.clone())
+}
+
+#[tokio::test]
+async fn the_door_follows_a_rollback_and_an_update_made_by_another_process() {
+    // SIGN.md: after a rollback every /sign route answers 404, and the door is back when the
+    // package is. `obop modules rollback sign` and `obop modules update sign` run in a second
+    // process; the server has no authenticated call in between, so it is the three handlers of
+    // the door that must look at the installed packages (at most once a second).
+    let Old { f, .. } = old_instance().await;
+    f.app
+        .installer
+        .install(&Bundled.fetch("sign").unwrap(), "marketplace", "test")
+        .unwrap();
+    // A request with a link, made through the server.
+    let (s, v) = f
+        .upload(
+            "mia",
+            "documents_document.attachment",
+            "application/pdf",
+            pdf(40),
+        )
+        .await;
+    assert_eq!(s, 201, "{v}");
+    let file = v["id"].as_str().unwrap().to_string();
+    let (_, v) = f
+        .api(
+            "mia",
+            "/api/documents_document/create",
+            json!({"title": "NDA (test)", "kind": "contract", "confidentiality": "internal",
+                   "owner": "mia", "attachment": file}),
+        )
+        .await;
+    let doc = v["value"]["id"].as_str().unwrap().to_string();
+    let (_, v) = f
+        .api(
+            "mia",
+            "/api/sign_request/create",
+            json!({"title": "Other process", "signer_name": "Jane Test", "document_id": doc}),
+        )
+        .await;
+    let req = v["value"]["id"].as_str().unwrap().to_string();
+    let (s, v) = f
+        .api("mia", "/api/sign_request/send_document", json!({"id": req}))
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let (_, path) = f.mint("mia", &req).await;
+    let pdf_path = format!("{path}/document.pdf");
+    assert_eq!(f.get(&path, &ip(160)).await.status, 200);
+
+    // The second process starts on the same database (it registers what is stored) and rolls
+    // back. The server is not told.
+    let other = other_process(&f);
+    let back = other.installer.rollback("sign", "test").unwrap();
+    assert_eq!(back.version, "0.2.0");
+    tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
+    // The three routes, each as the first thing the server hears since: 404, no call before it.
+    // (Each is tried on a server that has not looked yet: the look is at most once a second, so
+    // the first route to arrive does it and the others see the result.)
+    assert_eq!(f.get(&path, &ip(161)).await.status, 404, "the page");
+    assert_eq!(f.get(&pdf_path, &ip(161)).await.status, 404, "the copy");
+    let r = f
+        .post(
+            &path,
+            &ip(161),
+            &[("name", "Jane Test"), ("agree", "1"), ("doc", &file)],
+        )
+        .await;
+    assert_eq!(r.status, 404, "the post: {}", r.text());
+    assert_eq!(f.record("sign_request", &req)["state"], "sent");
+
+    // The same for the post as the route that has to look first, on a second rollback cycle:
+    // update, then roll back again, and only a post arrives.
+    other
+        .installer
+        .install(&Bundled.fetch("sign").unwrap(), "marketplace", "test")
+        .unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
+    assert_eq!(
+        f.get(&pdf_path, &ip(162)).await.status,
+        200,
+        "the copy is back"
+    );
+    assert_eq!(f.get(&path, &ip(162)).await.status, 200, "the page is back");
+    other.installer.rollback("sign", "test").unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
+    let r = f
+        .post(
+            &path,
+            &ip(163),
+            &[("name", "Jane Test"), ("agree", "1"), ("doc", &file)],
+        )
+        .await;
+    assert_eq!(
+        r.status,
+        404,
+        "the post sees the rollback first: {}",
+        r.text()
+    );
+    assert_eq!(f.record("sign_request", &req)["state"], "sent");
+    other
+        .installer
+        .install(&Bundled.fetch("sign").unwrap(), "marketplace", "test")
+        .unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
+    let r = f
+        .post(
+            &path,
+            &ip(164),
+            &[("name", "Jane Test"), ("agree", "1"), ("doc", &file)],
+        )
+        .await;
+    assert_eq!(
+        r.status,
+        303,
+        "the post sees the update first: {}",
+        r.text()
+    );
+    assert_eq!(f.record("sign_request", &req)["state"], "signed");
+}

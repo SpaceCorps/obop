@@ -475,6 +475,15 @@ impl Dispatcher {
         }
     }
 
+    /// Bring this process's modules in line with the installed packages if another process
+    /// changed them (the same look as `call`, `catalog` and `meta` make first): one counter read,
+    /// at most once a second. For the public door of `sign` (D92), which is not reached through
+    /// `call` and would otherwise follow a rollback or an update made by `obop modules ...` only
+    /// when an authenticated call arrived.
+    pub fn sync_installed_modules(&self) {
+        self.sync();
+    }
+
     pub fn shared_backend(&self) -> Option<Arc<dyn obop_storage::Backend>> {
         self.shared.get().map(|s| s.backend.clone())
     }

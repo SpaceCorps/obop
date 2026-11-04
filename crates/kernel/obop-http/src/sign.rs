@@ -279,6 +279,9 @@ pub(crate) async fn page(
 ) -> Response {
     blocking(move || {
         let lang = lang_for(&s, &parts, None);
+        // The door follows the installed package: a rollback or an update made by another
+        // process (`obop modules rollback sign`) is seen here without an authenticated call.
+        s.dispatcher.sync_installed_modules();
         let Some(svc) = s.dispatcher.sign_service() else {
             return refusal(&DoorError::NotFound, lang);
         };
@@ -308,6 +311,9 @@ pub(crate) async fn submit(
 ) -> Response {
     blocking(move || {
         let mut lang = lang_for(&s, &parts, None);
+        // The door follows the installed package: a rollback or an update made by another
+        // process (`obop modules rollback sign`) is seen here without an authenticated call.
+        s.dispatcher.sync_installed_modules();
         let Some(svc) = s.dispatcher.sign_service() else {
             return refusal(&DoorError::NotFound, lang);
         };
@@ -390,6 +396,9 @@ pub(crate) async fn document(
 ) -> Response {
     blocking(move || {
         let lang = lang_for(&s, &parts, None);
+        // The door follows the installed package: a rollback or an update made by another
+        // process (`obop modules rollback sign`) is seen here without an authenticated call.
+        s.dispatcher.sync_installed_modules();
         let Some(svc) = s.dispatcher.sign_service() else {
             return refusal(&DoorError::NotFound, lang);
         };
