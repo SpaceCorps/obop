@@ -9,9 +9,9 @@
 //!   spent;
 //! - not trusted: the header is ignored, so every spelling shares the one bucket of the peer.
 //!
-//! The first 429 must come at the endpoint's own per-address limit (`OAuthConfig`: register 20 an
-//! hour, authorize 60 and login 30 in ten minutes, token and revoke 120 a minute), not at some
-//! other cap: registration has a global cap of 300 an hour that would end a test that gave every
+//! The first 429 must come at the endpoint's own per-address limit (register 20 an hour,
+//! authorize 60 and login 30 in ten minutes, token and revoke 120 a minute; `OAuthConfig`), not at
+//! some other cap: registration has a global cap of 300 an hour that would end a test that gave every
 //! request a bucket of its own, and a count that only had to run out somewhere would pass.
 //!
 //! A caller that read the first entry, ignored the header, trusted it without being told to, or
@@ -63,17 +63,16 @@ fn rig(trust_proxy: bool) -> Rig {
 
 const ENDPOINTS: [&str; 5] = ["register", "token", "revoke", "authorize", "login"];
 
-/// The number of requests of one address that an endpoint answers before it says 429.
+/// The number of requests of one address that an endpoint answers before it says 429. Written
+/// out, not read from `OAuthConfig`, so that a change of a limit is a change of this test too.
 fn per_address(endpoint: &str) -> u32 {
-    let c = obop_oauth::OAuthConfig::default();
-    u32::try_from(match endpoint {
-        "register" => c.register_per_ip_hour,
-        "token" | "revoke" => c.token_per_ip_minute,
-        "authorize" => c.authorize_per_ip,
-        "login" => c.login_per_ip,
+    match endpoint {
+        "register" => 20,
+        "token" | "revoke" => 120,
+        "authorize" => 60,
+        "login" => 30,
         other => unreachable!("{other}"),
-    })
-    .unwrap()
+    }
 }
 
 /// One request to `endpoint` as the client the line names, and the status it got.

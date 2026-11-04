@@ -510,7 +510,7 @@ fn the_closed_lists_are_the_lists_written_here() {
     // The test below walks the lists itself, so it cannot notice a name leave them; this one is
     // the lists written out again (ISSUES O6 names several of the headers).
     assert_eq!(
-        HEADER_NAMES,
+        HEADER_NAMES.as_slice(),
         [
             "x-forwarded-for",
             "forwarded",
@@ -533,9 +533,10 @@ fn the_closed_lists_are_the_lists_written_here() {
             "x-forwarded-client-cert",
             "x-original-for",
         ]
+        .as_slice()
     );
     assert_eq!(
-        IDENTIFIERS,
+        IDENTIFIERS.as_slice(),
         [
             "ConnectInfo",
             "peer_addr",
@@ -548,6 +549,7 @@ fn the_closed_lists_are_the_lists_written_here() {
             "X_CLUSTER_CLIENT_IP",
             "FASTLY_CLIENT_IP",
         ]
+        .as_slice()
     );
 }
 

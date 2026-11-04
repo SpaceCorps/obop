@@ -283,8 +283,11 @@ mod tests {
 
     #[test]
     fn a_key_asked_for_below_a_test_module_is_seen_and_one_in_it_is_not() {
-        // The file is cut at the end of the test items, not at the first `#[cfg(test)]` (which
-        // in `sign.rs` is far above most of the handlers).
+        // The file is cut at the end of the test items, not at the first `#[cfg(test)]`: here a
+        // test-only `use` comes first and a key is asked for below it. (In `sign.rs` the first
+        // `#[cfg(test)]` is the test module, below every handler, so the real file would not
+        // show the difference; the files where it matters are those like this crate's `lib.rs`,
+        // with a test-only module declared near the top.)
         let src = "#[cfg(test)]
 use crate::x;
 fn early() { txt::html(lang, \"early_key\"); }
