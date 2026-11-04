@@ -43,6 +43,7 @@ mod migrate_cli;
 mod mileage_tests;
 #[cfg(test)]
 mod model_tests;
+mod modules_describe;
 #[cfg(test)]
 mod modules_tests;
 #[cfg(test)]
@@ -82,6 +83,9 @@ const USAGE: &str = "usage: obop <command>
                                                 catalogue, core requirement. --catalog also demands what the bundled catalogue and
                                                 the marketplace require (a licence, requires_core); --complete demands every text
                                                 translated in each language present
+  modules describe [--json] [FILE...]           what package files (or every bundled package) declare: models, groups, fields (kind,
+                                                options, ref target, data class, limits, computed, numbered) and governed states (no
+                                                database; --json is versioned, schema_version 1)
   modules list                                  every module with version, licence, core requirement and source
   modules tree [ID]                             the dependency tree of a module (or of every installed package)
   modules plan FILE|ID                          what installing a file or marketplace package would do, without doing it
@@ -336,6 +340,7 @@ fn main() -> ExitCode {
                 | "--trust-proxy"
                 | "--complete"
                 | "--catalog"
+                | "--json"
                 | "--dry-run"
                 | "--secret-stdin"
                 | "--disabled"
@@ -382,6 +387,18 @@ fn main() -> ExitCode {
         ["modules", "check"] => modules_check(),
         ["modules", "check", files @ ..] => {
             modules_check_files_with(files, has("--complete"), has("--catalog"))
+        }
+        ["modules", "describe", files @ ..] => {
+            match modules_describe::render(files, has("--json")) {
+                Ok(text) => {
+                    print!("{text}");
+                    Ok(())
+                }
+                Err(e) => {
+                    eprintln!("{e}");
+                    Err(ExitCode::FAILURE)
+                }
+            }
         }
         ["modules", "labels", target, lang] => {
             obop_pkg::files::template_for(target, lang, &App::new().modules)
