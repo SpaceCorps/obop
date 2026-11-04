@@ -796,6 +796,180 @@ fn a_restricted_blob_id_cannot_be_saved_into_a_record_of_somebody_who_cannot_see
     );
 }
 
+// ---- the id in the input is the caller's claim, not a reference to a record -----------------------
+
+/// The records that hold `blob`, as `model.record.field`.
+fn holders(e: &Env, blob: &str) -> Vec<String> {
+    let mut v: Vec<String> =
+        e.s.blobs
+            .info(blob)
+            .unwrap()
+            .map(|i| {
+                i.owners
+                    .iter()
+                    .map(|o| format!("{}.{}.{}", o.model, o.record, o.field))
+                    .collect()
+            })
+            .unwrap_or_default();
+    v.sort();
+    v
+}
+
+#[test]
+fn a_create_that_names_a_record_the_caller_cannot_see_gets_no_file_from_it() {
+    let e = env();
+    let bob = user("bob");
+    let (rec, b) = ann_doc(&e, false, 11);
+    let before = holders(&e, &b);
+    assert_eq!(before, [format!("doc.{rec}.attachment")]);
+    let wrong = "0".repeat(64);
+    // The `id` in the input is the caller's claim: with the right file id and with an unknown one
+    // the answer is the same refusal, and nothing is created.
+    let try_with = |blob: &str| {
+        call(
+            &e,
+            &bob,
+            "doc.create",
+            map(&[
+                ("id", &rec),
+                ("title", "mine"),
+                ("owner", "bob"),
+                ("attachment", blob),
+            ]),
+        )
+    };
+    let (right, other) = (try_with(&b), try_with(&wrong));
+    assert!(
+        matches!(&right, Err(crate::CallError::Handler(m)) if m.contains("doc.attachment must be")),
+        "{right:?}"
+    );
+    assert_eq!(format!("{right:?}"), format!("{other:?}"));
+    // Afterwards Bob reads nothing, owns no record that holds the file, and the file is held by
+    // the original record only.
+    assert_eq!(e.svc.get(&bob, &b, None).unwrap_err(), BlobError::NotFound);
+    let rows = call(&e, &bob, "doc.list", Value::Map(Default::default())).unwrap();
+    assert!(!format!("{:?}", rows.value).contains(&b), "{rows:?}");
+    assert_eq!(holders(&e, &b), before);
+}
+
+#[test]
+fn an_update_of_a_record_the_caller_cannot_see_answers_alike_for_a_held_file_id_and_any_other() {
+    let e = env();
+    let bob = user("bob");
+    let (rec, b) = ann_doc(&e, false, 12);
+    let wrong = "0".repeat(64);
+    let try_with = |blob: &str| {
+        call(
+            &e,
+            &bob,
+            "doc.update",
+            map(&[("id", &rec), ("attachment", blob)]),
+        )
+    };
+    let (right, other) = (try_with(&b), try_with(&wrong));
+    assert!(right.is_err(), "{right:?}");
+    assert_eq!(
+        format!("{right:?}"),
+        format!("{other:?}"),
+        "the held id and an unknown one answer alike"
+    );
+    // The same for a record that does not exist at all.
+    let none = call(
+        &e,
+        &bob,
+        "doc.update",
+        map(&[("id", "no-such-record"), ("attachment", &b)]),
+    );
+    assert!(none.is_err(), "{none:?}");
+    assert_eq!(format!("{right:?}"), format!("{none:?}"));
+    assert_eq!(holders(&e, &b), [format!("doc.{rec}.attachment")]);
+}
+
+#[test]
+fn whoever_can_read_a_record_can_save_the_file_it_holds_again() {
+    let e = env();
+    let (ann, mia) = (user("ann"), manager("mia"));
+    let (rec, b) = ann_doc(&e, false, 13);
+    // The agent acts for Ann: the rows are Ann's, the groups are narrowed to its scopes.
+    let agent = Principal::agent("ann/agent", &["t.user"], &["t.user"]);
+    for (n, who) in [
+        ("the owner", &ann),
+        ("a manager who sees every record", &mia),
+        ("an administrator", &admin()),
+        ("the owner's agent", &agent),
+    ] {
+        let r = call(
+            &e,
+            who,
+            "doc.update",
+            map(&[("id", &rec), ("attachment", &b), ("title", n)]),
+        );
+        assert!(r.is_ok(), "{n}: {r:?}");
+    }
+    assert_eq!(holders(&e, &b), [format!("doc.{rec}.attachment")]);
+    assert_eq!(e.svc.get(&ann, &b, None).unwrap().bytes, pdf(13));
+}
+
+#[test]
+fn the_id_a_field_holds_is_sent_back_only_by_a_caller_who_may_read_that_field() {
+    // `item.private_photo` is read and written by managers; every `t.user` reads the model. The id
+    // the field holds may be saved again by whoever can read it, and for anybody else the answer
+    // must not tell "this is the one held here" from "this is not an uploaded file".
+    let e = env();
+    let (ann, mia) = (user("ann"), manager("mia"));
+    let b = up(
+        &e,
+        &mia,
+        "item.private_photo",
+        &fx::png(32, 32, 7),
+        "image/png",
+    );
+    let r = call(
+        &e,
+        &mia,
+        "item.create",
+        map(&[("title", "P"), ("private_photo", &b)]),
+    )
+    .unwrap();
+    let rec = id_of_row(&r);
+    let wrong = "0".repeat(64);
+    let agent = Principal::agent(
+        "mia/agent",
+        &["t.user", "t.manager"],
+        &["t.user", "t.manager"],
+    );
+    for (n, who) in [
+        ("a manager", &mia),
+        ("an administrator", &admin()),
+        ("a manager's agent", &agent),
+    ] {
+        let r = call(
+            &e,
+            who,
+            "item.update",
+            map(&[("id", &rec), ("private_photo", &b), ("title", n)]),
+        );
+        assert!(r.is_ok(), "{n}: {r:?}");
+    }
+    // Ann cannot read the field: the held id and an unknown one are refused alike, in an update
+    // and in a create that names the record.
+    for op in ["item.update", "item.create"] {
+        let try_with = |blob: &str| {
+            call(
+                &e,
+                &ann,
+                op,
+                map(&[("id", &rec), ("title", "X"), ("private_photo", blob)]),
+            )
+        };
+        let (right, other) = (try_with(&b), try_with(&wrong));
+        assert!(right.is_err(), "{op}: {right:?}");
+        assert_eq!(format!("{right:?}"), format!("{other:?}"), "{op}");
+    }
+    assert_eq!(e.svc.get(&ann, &b, None).unwrap_err(), BlobError::NotFound);
+    assert_eq!(holders(&e, &b), [format!("item.{rec}.private_photo")]);
+}
+
 #[test]
 fn an_uploader_still_reads_an_upload_that_no_record_holds_yet() {
     let e = env();

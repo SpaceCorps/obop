@@ -5,10 +5,12 @@
 //!   are decoded and re-encoded (`obop-media`), files are checked against a short list. Nothing
 //!   is public and nothing is attached yet: the blob waits as an upload of that principal.
 //! - **Reference** (a guard on `create` and `update` of models with such fields): a blob id may be
-//!   saved into a field only by the principal who uploaded it, or when it is already held by this
-//!   very field, or when the principal can already read a record that holds it (with the same
-//!   row rules as a read). Knowing a hash is not enough, and a guessed id answers like a missing
-//!   one.
+//!   saved into a field only by the principal who uploaded it, or when the principal can already
+//!   read a record that holds it (the model's group, the field's group and the row rules, as in a
+//!   read). The `id` in the input is the caller's claim: `create` ignores it and an `update`'s
+//!   says nothing about the caller's right to the record, so "this field already holds it" is no
+//!   reason to accept an id. Knowing a hash is not enough, and a guessed id answers like a
+//!   missing one.
 //! - **Hold** (after `create`, `update`, `delete` and erasure): saving a record attaches its
 //!   blobs, replacing a value detaches the old one, deleting a record detaches all of them; a
 //!   blob nobody holds is deleted (see `obop_storage::blob`).
@@ -24,7 +26,7 @@ use crate::engine::Actor;
 use crate::engine::Models as ModelsMap;
 use crate::engine::access::Gate;
 use crate::engine::unit::{Plain, Reads};
-use crate::store::{Store, id_of};
+use crate::store::Store;
 use crate::{Dispatcher, Guard, Principal, PrincipalKind, Value, Verdict};
 use obop_media::{Limits, MediaError};
 use obop_registry::{FieldKind, ModelDef};
@@ -414,7 +416,6 @@ pub(crate) fn reference_guard(def: &ModelDef, store: &Store, models: ModelsMap) 
         let Value::Map(m) = input else {
             return Ok(Verdict::default());
         };
-        let record = id_of(input).ok();
         for f in blob_fields(&def) {
             let Some(Value::Text(id)) = m.get(f.name) else {
                 continue;
@@ -426,11 +427,9 @@ pub(crate) fn reference_guard(def: &ModelDef, store: &Store, models: ModelsMap) 
                 .flatten()
                 .ok_or_else(none)?;
             let by_me = info.pending.iter().any(|(by, ..)| by == &p.id);
-            let held_here = record.as_deref().is_some_and(|r| {
-                info.owners
-                    .iter()
-                    .any(|o| o.model == def.name && o.record == r && o.field == f.name)
-            });
+            // Not "the record named in the input already holds it": that id is the caller's
+            // claim, and telling a held id from any other would confirm a guess at a file by its
+            // hash. A record the caller can read holds it, or the caller uploaded it.
             let readable = || {
                 let models = models.read().unwrap();
                 let reads = Plain(&*store.backend);
@@ -438,7 +437,7 @@ pub(crate) fn reference_guard(def: &ModelDef, store: &Store, models: ModelsMap) 
                     .iter()
                     .any(|o| can_read_owner(p, &actor, &models, &reads, o))
             };
-            if !(by_me || held_here || readable()) {
+            if !(by_me || readable()) {
                 return Err(none());
             }
         }
