@@ -10,8 +10,10 @@
 //! (`harden`) plus `noindex`, and so has the PDF's, which otherwise has its own set
 //! (`inline_pdf_response`), because `X-Frame-Options: DENY` would stop the page from showing it.
 //! The rejections of the framework before a handler runs (405, 413, a bad encoding in the
-//! address) are plain text with neither set. The address comes from `client_ip`, which trusts `X-Forwarded-For` only with
-//! `--trust-proxy`; the log entry of a signature also holds the peer and the raw header.
+//! address) are plain text with neither set. The address comes from `client_ip`, which trusts
+//! `X-Forwarded-For` only with `--trust-proxy`; the log entry of a signature also holds the peer
+//! and the `X-Forwarded-For` lines the request carried, read lossily, cleaned and cut to their
+//! last 200 characters (`forwarded_lines`), which are not the raw header.
 
 use super::oauth::{client_ip, harden, pair, parse_pairs, same_origin, see_other};
 use super::sign_page::{self, Page};
@@ -78,8 +80,31 @@ fn lang_for(s: &HttpState, parts: &Parts, form_lang: Option<&str>) -> &'static s
     )
 }
 
-/// When the line about a refused origin was last written (seconds since the epoch; 0 for never).
-static LAST_FOREIGN_ORIGIN_LOG: AtomicU64 = AtomicU64::new(0);
+/// The line of the log about a refused origin, written at most once a minute for the whole
+/// process: anybody can cause it without a link, so it must not grow with the number of posts.
+/// One per server (`HttpState`), not a global, so that a test can count the lines it caused.
+#[derive(Default)]
+pub(crate) struct OriginLog {
+    /// When the line was last written (seconds since the epoch; 0 for never).
+    last: AtomicU64,
+    /// How many lines this server has written.
+    written: AtomicU64,
+}
+
+impl OriginLog {
+    /// Write the line when one is due.
+    fn note(&self, now: u64, base: &str) {
+        if log_due(&self.last, now, 60) {
+            self.written.fetch_add(1, Ordering::Relaxed);
+            eprintln!("sign: a post was refused because its origin is not {base}");
+        }
+    }
+
+    /// How many lines were written.
+    pub(crate) fn written(&self) -> u64 {
+        self.written.load(Ordering::Relaxed)
+    }
+}
 
 /// Whether a line of the log is due: at most one in every `every` seconds, whoever asks and
 /// however many ask at once.
@@ -240,9 +265,7 @@ pub(crate) async fn submit(
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map_or(0, |d| d.as_secs());
-            if log_due(&LAST_FOREIGN_ORIGIN_LOG, now, 60) {
-                eprintln!("sign: a post was refused because its origin is not {base}");
-            }
+            s.sign_origin_log.note(now, &base);
             return page_response(StatusCode::FORBIDDEN, sign_page::message(lang, "forbidden"));
         }
         let ct = parts

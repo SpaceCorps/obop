@@ -44,6 +44,7 @@ async fn old_instance() -> Old {
     let router = obop_http::router(state.clone(), None);
     let mut f = Fx {
         router,
+        state,
         auth,
         app,
         tokens: Default::default(),

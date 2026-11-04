@@ -52,6 +52,8 @@ impl Resp {
 
 pub(crate) struct Fx {
     pub router: axum::Router,
+    /// The state behind `router`, for what a test counts (the log lines about a refused origin).
+    pub state: Arc<obop_http::HttpState>,
     pub auth: Arc<Auth>,
     pub app: App,
     pub tokens: std::collections::HashMap<&'static str, String>,
@@ -364,6 +366,7 @@ pub(crate) fn fixture_sync(
     let router = obop_http::router(state.clone(), None);
     Fx {
         router,
+        state,
         auth,
         app,
         tokens: Default::default(),

@@ -183,6 +183,37 @@ async fn a_link_that_ran_out_is_gone_and_signs_nothing() {
 }
 
 #[tokio::test]
+async fn a_link_lives_fourteen_days_to_the_second() {
+    // The default life is the number the documents give. The clock of the service is fixed, the
+    // link is made, and its end is read from the record and tried at the door on both sides of it.
+    let f = fixture().await;
+    let start = now_micros();
+    f.service().set_clock(Arc::new(move || start));
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_request/send_document",
+            json!({"id": f.req}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let (link_id, path) = f.mint("mia", &f.req.clone()).await;
+    let end = start + 14 * DAY;
+    assert_eq!(
+        f.record("sign_link", &link_id)["expires_at"],
+        obop_values::datetime::Instant::from_micros(end)
+            .unwrap()
+            .canonical()
+            .as_str()
+    );
+    let from = ip(51);
+    f.service().set_clock(Arc::new(move || end - 60_000_000));
+    assert_eq!(f.get(&path, &from).await.status, 200, "a minute before");
+    f.service().set_clock(Arc::new(move || end + 60_000_000));
+    assert_eq!(f.get(&path, &from).await.status, 410, "a minute after");
+}
+
+#[tokio::test]
 async fn a_link_cannot_outlive_the_last_day_of_its_request() {
     let f = fixture().await;
     let tomorrow = {
@@ -374,6 +405,55 @@ async fn a_held_copy_that_no_longer_matches_its_hash_is_not_signed() {
     );
     assert_eq!(signed_count(&f), 0);
     assert_eq!(f.events_of("sign_refused").len(), 1);
+}
+
+#[tokio::test]
+async fn a_held_copy_that_is_another_file_than_the_hashed_one_is_not_shown_or_signed() {
+    // Only an administrator (or a write to the store) can set the copy of a request; if it is
+    // ever not the file that was hashed, the page and the PDF must not show it and a signature
+    // must not name the hash of another file than the one that was read.
+    let (f, link_id, path, _) = sent().await;
+    let from = ip(56);
+    let (s, v) = f
+        .upload(
+            "admin",
+            "sign_request.document_file",
+            "application/pdf",
+            pdf(3),
+        )
+        .await;
+    assert_eq!(s, 201, "{v}");
+    let other = v["id"].as_str().unwrap().to_string();
+    let (s, v) = f
+        .api(
+            "admin",
+            "/api/sign_request/update",
+            json!({"id": f.req, "document_file": other}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let held = f.record("sign_request", &f.req);
+    assert_eq!(held["document_file"], other.as_str());
+    assert_eq!(held["document_hash"], f.file.as_str());
+    assert_eq!(f.get(&path, &from).await.status, 409);
+    assert_eq!(
+        f.get(&format!("{path}/document.pdf"), &from).await.status,
+        409
+    );
+    let r = f.post(&path, &from, &good_form(&f, "Jane Test")).await;
+    assert_eq!(r.status, 409, "{}", r.text());
+    assert_eq!(f.record("sign_request", &f.req)["state"], "sent");
+    assert!(
+        f.record("sign_link", &link_id)
+            .get("used_at")
+            .is_none_or(J::is_null)
+    );
+    assert_eq!(signed_count(&f), 0);
+    // And no new link is made for it.
+    let (s, v) = f
+        .api("mia", "/api/sign_link/create", json!({"request_id": f.req}))
+        .await;
+    assert_eq!(s, 400, "{v}");
 }
 
 #[tokio::test]
@@ -660,6 +740,32 @@ async fn a_post_from_another_site_or_with_no_origin_is_refused_unless_the_browse
         .await;
     assert_eq!(r.status, 303, "{}", r.text());
     assert_eq!(f.record("sign_request", &f.req)["state"], "signed");
+}
+
+#[tokio::test]
+async fn posts_from_another_site_cost_the_signer_nothing_and_the_log_one_line_a_minute() {
+    // Anybody can send a post with a foreign origin without a link. It is refused before any
+    // limit of the door is touched (so a flood of them cannot use up the budget of a signer
+    // behind the same address), and it writes one line of the log a minute, not one a post.
+    let (f, _, path, _) = sent().await;
+    let from = ip(69);
+    let form = good_form(&f, "Jane Test");
+    for i in 0..30 {
+        let r = f
+            .post_with(&path, &from, &form, &[("origin", "http://evil.test")])
+            .await;
+        assert_eq!(r.status, 403, "post {i}");
+    }
+    assert_eq!(
+        f.state.sign_origin_lines(),
+        1,
+        "thirty refused posts in a moment are one line of the log"
+    );
+    // Thirty posts is three times the ten a source may make: none of them was counted.
+    let r = f.post(&path, &from, &form).await;
+    assert_eq!(r.status, 303, "{}", r.text());
+    assert_eq!(f.record("sign_request", &f.req)["state"], "signed");
+    assert_eq!(f.state.sign_origin_lines(), 1);
 }
 
 #[tokio::test]

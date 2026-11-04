@@ -73,6 +73,8 @@ pub struct HttpState {
     /// back office's own address under a public site. Set by the composition root, never by a
     /// request.
     sso_return: std::sync::OnceLock<String>,
+    /// The log line about a post to the signer door that was refused for its origin (D92).
+    sign_origin_log: sign::OriginLog,
 }
 
 impl HttpState {
@@ -108,7 +110,14 @@ impl HttpState {
             default_language: std::sync::OnceLock::new(),
             sso: sso::Cache::default(),
             sso_return: std::sync::OnceLock::new(),
+            sign_origin_log: sign::OriginLog::default(),
         })
+    }
+
+    /// How many lines this server has written about a post to the signer door that was refused
+    /// for its origin: at most one a minute, however many were refused (for tests and metrics).
+    pub fn sign_origin_lines(&self) -> u64 {
+        self.sign_origin_log.written()
     }
 
     /// Why a limited session is refused: it owes a new password (an administrator reset it) or

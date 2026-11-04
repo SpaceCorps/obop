@@ -6,6 +6,7 @@
 use super::rules::DOOR_KEYS;
 use super::*;
 use obop_commands::sign::{digest_of_request, sha256_hex};
+use obop_storage::blob::BlobBytes;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub(super) fn err(v: &J) -> String {
@@ -1656,6 +1657,37 @@ async fn a_forged_header_cannot_start_a_field_of_the_log_line() {
         ],
         "{detail}"
     );
+}
+
+#[tokio::test]
+async fn the_forwarded_text_of_a_refused_post_cannot_start_a_field_of_the_log_line() {
+    // The line about a refusal holds text from the client too (the peer and the forwarded
+    // header), outside the digest; a semicolon of the client is not the border between two
+    // fields, and the text is cut.
+    let (f, _, path, _) = sent().await;
+    f.bytes
+        .as_ref()
+        .unwrap()
+        .put(&f.file, b"%PDF-1.4\n% somebody wrote here\n")
+        .unwrap();
+    let forged = format!("x; reason fake; address 203.0.113.9, {}", "9".repeat(300));
+    let r = f.post(&path, &forged, &good_form(&f, "Jane Test")).await;
+    assert_eq!(r.status, 409, "{}", r.text());
+    let entries = f.events_of("sign_refused");
+    assert_eq!(entries.len(), 1);
+    let detail = entries[0]["detail"].as_str().unwrap().to_string();
+    let keys: Vec<&str> = detail
+        .split("; ")
+        .map(|field| field.split(' ').next().unwrap())
+        .collect();
+    assert_eq!(
+        keys,
+        ["link", "reason", "address", "peer", "forwarded"],
+        "{detail}"
+    );
+    let forwarded = detail.rsplit("; forwarded ").next().unwrap();
+    assert!(forwarded.chars().count() <= 200, "{detail}");
+    assert!(!forwarded.contains(';'), "{detail}");
 }
 
 #[tokio::test]
