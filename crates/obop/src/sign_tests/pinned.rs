@@ -22,6 +22,52 @@ fn reasons(f: &Fx) -> Vec<String> {
         .collect()
 }
 
+/// The in-memory bytes of the blob store, counting how many times a file was opened for reading.
+struct Counted {
+    inner: Arc<MemoryBytes>,
+    opens: std::sync::atomic::AtomicUsize,
+}
+
+impl BlobBytes for Counted {
+    fn put(&self, key: &str, bytes: &[u8]) -> obop_storage::Result<()> {
+        self.inner.put(key, bytes)
+    }
+    fn open(&self, key: &str) -> obop_storage::Result<Option<Box<dyn std::io::Read + Send>>> {
+        self.opens.fetch_add(1, Ordering::SeqCst);
+        self.inner.open(key)
+    }
+    fn delete(&self, key: &str) -> obop_storage::Result<bool> {
+        self.inner.delete(key)
+    }
+    fn keys(&self) -> obop_storage::Result<Vec<String>> {
+        self.inner.keys()
+    }
+}
+
+/// `sent()` over a blob store that counts its reads: the fixture, the path of the link, and the
+/// counter.
+async fn sent_counting() -> (Fx, String, Arc<Counted>) {
+    let backend = obop_storage::open("memory:").unwrap();
+    let bytes = Arc::new(MemoryBytes::default());
+    let counted = Arc::new(Counted {
+        inner: bytes.clone(),
+        opens: std::sync::atomic::AtomicUsize::new(0),
+    });
+    let store =
+        Store::over(backend.clone()).with_blobs(Arc::new(Catalog::new(backend, counted.clone())));
+    let f = fixture_on(store, Some(bytes), None).await;
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_request/send_document",
+            json!({"id": f.req}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let (_, path) = f.mint("mia", &f.req.clone()).await;
+    (f, path, counted)
+}
+
 #[tokio::test]
 async fn the_other_headers_that_carry_an_address_are_neither_the_address_nor_a_bucket() {
     // A trusted proxy means the last entry of the last `X-Forwarded-For` line and nothing else:
@@ -313,7 +359,10 @@ async fn a_name_needs_two_letters_and_at_most_a_hundred_and_twenty_characters() 
     // (name, signs). Each case has an instance of its own: a signature is made once.
     let long = "A".repeat(120);
     let too_long = "A".repeat(121);
-    let cases: [(&str, bool); 9] = [
+    // The length is counted in characters, not bytes: 120 letters of two bytes each are 240 bytes.
+    let long_accented = "\u{e9}".repeat(120);
+    let too_long_accented = "\u{e9}".repeat(121);
+    let cases: [(&str, bool); 11] = [
         ("J.", false),
         ("J", false),
         (".-", false),
@@ -322,6 +371,8 @@ async fn a_name_needs_two_letters_and_at_most_a_hundred_and_twenty_characters() 
         ("Ng", true),
         (&long, true),
         (&too_long, false),
+        (&long_accented, true),
+        (&too_long_accented, false),
         ("", false),
     ];
     for (name, signs) in cases {
@@ -339,10 +390,12 @@ async fn a_name_needs_two_letters_and_at_most_a_hundred_and_twenty_characters() 
 }
 
 #[tokio::test]
-async fn the_limit_on_the_pdf_is_counted_before_the_copy_is_hashed() {
-    // A tampered copy is refused with 409 and costs a hash of up to 25 MiB; the limiter must
-    // count each try before that, or a source could ask for the hash without end.
-    let (f, _, path, _) = sent().await;
+async fn the_limit_on_the_pdf_is_counted_before_the_copy_is_read_and_hashed() {
+    // A tampered copy is refused with 409 and costs a read and a hash of up to 25 MiB; the
+    // limiter must count each try before that, or a source could ask for the hash without end.
+    // The answers alone cannot tell (409, then 429, either way), so the reads are counted: a try
+    // that is refused for its number reads nothing.
+    let (f, path, counted) = sent_counting().await;
     f.bytes
         .as_ref()
         .unwrap()
@@ -350,12 +403,21 @@ async fn the_limit_on_the_pdf_is_counted_before_the_copy_is_hashed() {
         .unwrap();
     let pdf_path = format!("{path}/document.pdf");
     let from = ip(41);
+    let before = counted.opens.load(Ordering::SeqCst);
     for n in 0..120 {
         assert_eq!(f.get(&pdf_path, &from).await.status, 409, "try {n}");
     }
+    let spent = counted.opens.load(Ordering::SeqCst);
+    assert!(spent >= before + 120, "each tampered try read the copy");
     let r = f.get(&pdf_path, &from).await;
     assert_eq!(r.status, 429, "the 121st try");
     assert!(r.h("retry-after").parse::<u64>().unwrap() > 0);
+    assert_eq!(f.get(&pdf_path, &from).await.status, 429, "and the 122nd");
+    assert_eq!(
+        counted.opens.load(Ordering::SeqCst),
+        spent,
+        "a try refused for its number read the copy"
+    );
     assert_eq!(
         f.get(&pdf_path, &ip(42)).await.status,
         409,
@@ -391,6 +453,55 @@ async fn wrong_links_do_not_use_up_the_views_of_the_right_one() {
         200,
         "the viewer's copy"
     );
+}
+
+#[tokio::test]
+async fn wrong_links_do_not_use_up_the_posts_of_the_right_one() {
+    // The count of posts (10 in ten minutes for a source) is made after the lookup, as the count
+    // of views is: a source that posts to links that do not exist is throttled by the count of
+    // failed lookups (20), and its 10 posts are for links that do. Were the count made first,
+    // the 11th wrong post would answer 429, and a signer who shares an address with somebody who
+    // guesses (an office, a mobile gateway) could not sign for ten minutes.
+    let (f, _, path, _) = sent().await;
+    let wrong = wrong_link(&path);
+    let from = ip(45);
+    for n in 0..12 {
+        let r = f.post(&wrong, &from, &good_form(&f, "Jane Test")).await;
+        assert_eq!(r.status, 404, "wrong post {n}");
+    }
+    let r = f.post(&path, &from, &good_form(&f, "Jane Test")).await;
+    assert_eq!(r.status, 303, "the right link: {}", r.text());
+    assert_eq!(f.record("sign_request", &f.req)["state"], "signed");
+}
+
+#[tokio::test]
+async fn a_request_whose_hash_changed_after_the_door_read_it_is_not_signed() {
+    // The batch's own check of the request, apart from the checks the door makes before it:
+    // between the reads and the write the hash of the request (the evidence the signer was
+    // shown) is changed, and the write must be refused although the door had found the request
+    // as it should be. (Only an administrator can do it through the commands; the batch does not
+    // rely on that.)
+    let (f, _, path, _) = sent().await;
+    let b = f.app.store.backend();
+    let rid = f.req.clone();
+    let fired = interleave(&f, move || {
+        b.update(
+            "sign_request",
+            &rid,
+            &fields(json!({"document_hash": "0".repeat(64)})),
+        )
+        .unwrap();
+    });
+    let r = f.post(&path, &ip(55), &good_form(&f, "Jane Test")).await;
+    assert!(
+        fired.load(Ordering::SeqCst),
+        "the change landed between the reads and the write"
+    );
+    assert_eq!(r.status, 409, "{}", r.text());
+    let req = f.record("sign_request", &f.req);
+    assert_eq!(req["state"], "sent");
+    assert!(req.get("signed_name").is_none_or(J::is_null));
+    assert_eq!(signed_count(&f), 0);
 }
 
 #[tokio::test]
