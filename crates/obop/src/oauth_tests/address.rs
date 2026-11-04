@@ -21,10 +21,24 @@
 //! elsewhere: the ceremony options of the passkeys (`passkey_tests.rs`; the verify step builds
 //! its context in the same function), the start, the callback and the exchange of Microsoft
 //! sign-in (`sso_tests.rs`), the phone's start and return (`sso_tests/phone.rs`), the signer's
-//! door (`sign_tests/`) and the public site (`public_site_tests.rs`). The first 429 is pinned to
-//! the endpoint's own limit in this file, at the passkey options and at the start and the
-//! exchange of Microsoft sign-in; the others show that the count runs out and which spellings
-//! share it (docs/ISSUES.md O31 says which is which).
+//! door (`sign_tests/`) and the public site (`public_site_tests.rs`). What each of them pins:
+//!
+//! - the first 429 at the endpoint's own limit, trusted and not, with several entries on the
+//!   line: the five endpoints above in this file (`per_address`), the passkey options in
+//!   `passkey_tests.rs`, and the start and the exchange of Microsoft sign-in in `sso_tests.rs`;
+//! - trusted and not, with several entries, without the number: the phone's return
+//!   (`sso_tests/phone.rs`), which shows that the count runs out;
+//! - the number, with single-entry lines or none behind a trusted proxy only: the callback of
+//!   Microsoft sign-in (60 a minute, `sso_tests.rs`), the callbacks of the phone leg (60) and its
+//!   start, the tap (30), both in `sso_tests/phone.rs`. Nothing tries these three callers with a
+//!   forged first entry or without a trusted proxy: a change that made one of them read the
+//!   first entry, or trust the header without being told to, would pass their tests (the rule
+//!   itself is held by the unit tests of `addr.rs`, and the scan only keeps callers from reading
+//!   the header themselves).
+//!
+//! The tests of the endpoints send one `X-Forwarded-For` line (with one or several entries). The
+//! rule for several lines is held by the unit tests of `addr.rs`, the signer's door and the
+//! public site (docs/ISSUES.md O31 says which is which).
 
 use super::*;
 use obop_auth::{Auth, AuthConfig};
