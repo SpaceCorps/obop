@@ -6,7 +6,7 @@ import type { Translation } from "./en.ts";
  * when the compiler runs.
  *
  * MACHINE-DRAFTED. A language model wrote these texts against the glossary of docs/spec/mobile.md
- * 8.9; no native speaker has read them. The review by a native speaker (MOHV) is the gate before
+ * 8.9; no native speaker has read them. The review by a native speaker is the gate before
  * the Swedish build is shipped to anyone, and `vp run i18n:review` prints the texts next to the
  * English ones, by screen, for that reader.
  *

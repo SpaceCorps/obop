@@ -622,7 +622,7 @@ Marking as in 8.3: **verified** means the session ran the command or saw the scr
 
 ### 8.9 Swedish and the language choice (step 6 of the slice; written on 2026-11-02)
 
-**What was asked.** The Mileage app launches in Swedish and English. The catalogue and the choice of language of ISSUES L33 are wanted. A native Swedish speaker (MOHV, defined below) reviews the app texts and `packages/labels/sv/mileage.toml`; the Swedish build gets its own real-phone pass later. Every native app works on Android and iOS (OR-36). (Relayed by the lead session on 2026-10-31 and 2026-11-02, not quoted; no OR or D number.) This is a draft pull request stacked on the Android app and the iOS port (PR 27, PR 34), and it merges after them and only on the owner's word.
+**What was asked.** The Mileage app launches in Swedish and English. The catalogue and the choice of language of ISSUES L33 are wanted. A native Swedish speaker reviews the app texts and `packages/labels/sv/mileage.toml`; the Swedish build gets its own real-phone pass later. Every native app works on Android and iOS (OR-36). (Relayed by the lead session on 2026-10-31 and 2026-11-02, not quoted; no OR or D number.) This is a draft pull request stacked on the Android app and the iOS port (PR 27, PR 34), and it merges after them and only on the owner's word.
 
 **Delivered (unit-tested, `vp check` clean; nothing run on a phone or an emulator).**
 
@@ -682,7 +682,7 @@ Marking as in 8.3: **verified** means the session ran the command or saw the scr
 | back office | back office | as in `mileage.toml` |
 | Customize, Security, Devices | Anpassa, Säkerhet, Enheter | backoffice catalogue |
 
-**The Swedish is machine-drafted and not native-reviewed.** A model wrote it against the server's table and the glossary; a second model read it and an independent check (2026-11-02) read it again; their clear corrections were applied. Nobody who speaks Swedish as a first language has read it. The review by MOHV is the gate before the Swedish build goes to anyone, and no text here claims native quality. The reviewer works through `vp run i18n:review` (the key is the line in `src/i18n/sv.ts`) and the table below, and reads the label table too. (MOHV is the downstream project that uses the platform; the lead session relayed that it supplies the native Swedish reviewer, not quoted.)
+**The Swedish is machine-drafted and not native-reviewed.** A model wrote it against the server's table and the glossary; a second model read it and an independent check (2026-11-02) read it again; their clear corrections were applied. Nobody who speaks Swedish as a first language has read it. The review by a native Swedish speaker is the gate before the Swedish build goes to anyone, and no text here claims native quality. The reviewer works through `vp run i18n:review` (the key is the line in `src/i18n/sv.ts`) and the table below, and reads the label table too.
 
 | String group (key prefix) | Texts | Where it lives (what the driver sees) |
 |---|---|---|
