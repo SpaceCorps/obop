@@ -1,4 +1,5 @@
 import { formatNumber, t, tp, type MessageKey, type PluralKey } from "../i18n/index.ts";
+import type { SignalNote } from "./signal.ts";
 import { hasWork } from "./store.ts";
 import type { LocalTrip, ServerState } from "./types.ts";
 
@@ -44,6 +45,30 @@ export function unsentSentence(key: PluralKey, unsent: { trips: number; points: 
 /** The distance the phone counts itself, in metres, as the same kind of text. */
 export function formatMetres(m: number): string {
   return formatDistance(m.toFixed(2)) ?? t("unit.m", { value: formatNumber(0) });
+}
+
+/**
+ * The words of the note of the Recording screen (`signal.ts`): why the phone's distance stays at
+ * 0 m. The sentence follows the number of dropped positions (`1 of 3 positions was`) and says only
+ * what the counters say.
+ */
+export function signalBanner(note: SignalNote): { title: string; message: string } {
+  const total = formatNumber(note.stored);
+  if (note.kind === "jumpy") {
+    return {
+      title: t("recording.jumpy.title"),
+      message: tp("recording.jumpy.message", note.dropped, { total }),
+    };
+  }
+  const title = t("recording.weak.title");
+  if (note.accuracyM === null) {
+    return { title, message: tp("recording.weak.message", note.dropped, { total }) };
+  }
+  const accuracy = t("unit.m", { value: formatNumber(note.accuracyM) });
+  return {
+    title,
+    message: tp("recording.weak.message.last", note.dropped, { total, accuracy }),
+  };
 }
 
 /**

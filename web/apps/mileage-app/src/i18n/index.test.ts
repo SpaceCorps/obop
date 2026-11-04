@@ -17,6 +17,18 @@ describe("sentences with a count", () => {
     expect(tp("unit.trips", 2)).toBe("2 trips");
     expect(tp("unit.points", 1)).toBe("1 point");
     expect(tp("recording.quiet.message", 1)).toContain("1 minute old");
+    expect(tp("recording.weak.message", 1, { total: 3 })).toBe(
+      "1 of 3 positions was too imprecise to count. Move to a window or go outside.",
+    );
+    expect(tp("recording.weak.message", 2, { total: 3 })).toContain("2 of 3 positions were too");
+    expect(tp("recording.weak.message.last", 1, { total: 3, accuracy: "150 m" })).toContain(
+      "1 of 3 positions was too imprecise to count (the last one was 150 m off)",
+    );
+    expect(tp("recording.weak.message.last", 5, { total: 9, accuracy: "150 m" })).toContain(
+      "5 of 9 positions were too imprecise to count (the last one was 150 m off)",
+    );
+    expect(tp("recording.jumpy.message", 1, { total: 3 })).toContain("it jumped too far");
+    expect(tp("recording.jumpy.message", 4, { total: 9 })).toContain("they jumped too far");
   });
 
   test("the count is written the way the language writes numbers", () => {
