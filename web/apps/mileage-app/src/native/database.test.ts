@@ -60,9 +60,14 @@ vi.mock("expo-sqlite", () => ({
 
 const KEY = "ab".repeat(32);
 
-async function load() {
+async function load(started = true) {
   // The module keeps the one connection of the process: every test starts a new process.
   vi.resetModules();
+  if (started) {
+    const { startHost } = await import("./host.ts");
+    const { startup } = await import("../../config/startup.ts");
+    startHost(startup);
+  }
   return import("./database.ts");
 }
 
@@ -173,6 +178,50 @@ describe("the file of a restored backup", () => {
     const { openDatabase } = await load();
     await expect(openDatabase()).rejects.toThrow(/file is not a database/);
     expect(sqlite.deleted).toEqual([]);
+  });
+});
+
+describe("the names of the app that started the host", () => {
+  test("are the ones used: the file, the key item and the session items of another app", async () => {
+    vi.resetModules();
+    const { startHost } = await import("./host.ts");
+    const { defineIdentity } = await import("../core/host-config.ts");
+    const { defineStartup } = await import("../core/startup-config.ts");
+    startHost(
+      defineStartup({
+        identity: defineIdentity({
+          applicationId: "se.example.app",
+          clientName: "Example",
+          version: "1.0.0",
+          locales: ["sv"],
+          storage: {
+            databaseFile: "example.db",
+            databaseKey: "example.database-key",
+            server: "example.server",
+            tokens: "example.tokens",
+          },
+        }),
+        groups: ["example.user"],
+      }),
+    );
+    keychain.items.set("example.server", "{}");
+    keychain.items.set("example.tokens", "{}");
+    keychain.items.set("obop.mileage.server", "{}");
+    const { openDatabase } = await import("./database.ts");
+    await openDatabase();
+    expect(sqlite.opened).toEqual(["example.db"]);
+    expect(keychain.sets.map((s) => s.key)).toEqual([
+      "example.database-key",
+      "example.database-key",
+    ]);
+    expect(keychain.deletes.sort()).toEqual(["example.server", "example.tokens"]);
+    expect(keychain.items.has("obop.mileage.server")).toBe(true);
+  });
+
+  test("have to be given: an open before the host is started fails and says so", async () => {
+    const { openDatabase } = await load(false);
+    await expect(openDatabase()).rejects.toThrow(/startHost/);
+    expect(sqlite.opened).toEqual([]);
   });
 });
 

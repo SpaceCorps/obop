@@ -37,7 +37,12 @@ const fake = vi.hoisted(() => {
 vi.mock("expo-secure-store", () => fake);
 
 const { keychain } = await import("./keychain.ts");
-const { secureStorage } = await import("./secure-storage.ts");
+const { createSecureStorage } = await import("./secure-storage.ts");
+const { identity } = await import("../../config/identity.ts");
+
+// Made from the identity of the app, as the runtime makes it. The names that come out are pinned
+// below as literals.
+const secureStorage = createSecureStorage(identity.storage);
 
 beforeEach(() => {
   fake.items.clear();

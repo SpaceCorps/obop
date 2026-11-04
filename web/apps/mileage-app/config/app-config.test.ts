@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vite-plus/test";
+import { identity } from "./identity.ts";
 
 // These tests run the real Expo CLI on the real `app.config.ts` (`expo config --type introspect`,
 // about a second each), so what they check is what `expo prebuild` is given: the plugins and mods
@@ -13,6 +14,7 @@ const expoCli = createRequire(import.meta.url).resolve("expo/bin/cli");
 
 type Plist = Record<string, unknown>;
 interface Introspected {
+  version: string;
   scheme: string;
   android: { package: string };
   ios: { bundleIdentifier: string; infoPlist: Plist };
@@ -52,6 +54,14 @@ describe("the configuration that expo prebuild gets", { timeout: 30_000 }, () =>
     expect(c.ios.bundleIdentifier).toBe("org.obop.mileage");
     expect(c.android.package).toBe("org.obop.mileage");
     expect(c.extra).toEqual({ cleartextAllowed: false, defaultServer: "", thinningOff: false });
+  });
+
+  test("the scheme, the package, the bundle id and the version are the ones of the identity of the app", () => {
+    const c = introspect();
+    expect(c.scheme).toBe(identity.scheme);
+    expect(c.android.package).toBe(identity.applicationId);
+    expect(c.ios.bundleIdentifier).toBe(identity.applicationId);
+    expect(c.version).toBe(identity.version);
   });
 
   test("a test build has its own bundle id and keeps the sign-in scheme and the Android package", () => {

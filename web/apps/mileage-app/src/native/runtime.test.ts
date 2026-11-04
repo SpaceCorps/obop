@@ -29,6 +29,7 @@ async function newProcess() {
   vi.resetModules();
   rig = await import("../test-support/runtime-rig.ts");
   rig.reset();
+  rig.boot();
   vi.stubGlobal("fetch", rig.network);
   await rig.database();
   const bus = await import("./bus.ts");

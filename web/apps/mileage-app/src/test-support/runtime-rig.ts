@@ -1,5 +1,7 @@
+import { startup } from "../../config/startup.ts";
 import type { SqlDb } from "../core/sql.ts";
 import { createSqlStore, migrate } from "../core/sql-store.ts";
+import { startHost } from "../native/host.ts";
 import { memoryDb } from "./memory-db.ts";
 
 /**
@@ -66,6 +68,11 @@ export function reset(): void {
   world.releaseRevoke = null;
   world.deviceRevokeStatus = 200;
   world.keychainDeleteFails = false;
+}
+
+/** What the entry of the app does before anything else: gives the host its configuration. */
+export function boot(): void {
+  startHost(startup);
 }
 
 export async function newDb(): Promise<SqlDb> {

@@ -75,6 +75,7 @@ vi.mock("./platform-deps.ts", async () => {
 });
 
 const { signIn, SignInError } = await import("./auth.ts");
+const { startup } = await import("../../config/startup.ts");
 const { oauthDeps } = await import("./platform-deps.ts");
 
 const BASE = "https://phone.example";
@@ -100,6 +101,7 @@ async function rig(config: ServerConfig | null = null) {
   await session.restore();
   const bound: Owner[] = [];
   const host = {
+    startup,
     session,
     bindIdentity: async (owner: Owner): Promise<Binding> => {
       bound.push(owner);
