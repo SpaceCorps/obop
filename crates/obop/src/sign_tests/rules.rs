@@ -3,7 +3,9 @@
 
 use super::*;
 
-/// The keys of `sign_request` that only the signer door writes.
+/// The keys of `sign_request` that only the signer door writes. Written out here
+/// on purpose, not read from the code: `the_keys_of_the_tests_are_the_keys_the_code_guards` holds the
+/// two lists equal, so a key added to one and not the other fails.
 pub(super) const DOOR_KEYS: [&str; 8] = [
     "document_hash",
     "document_file",
@@ -14,6 +16,13 @@ pub(super) const DOOR_KEYS: [&str; 8] = [
     "signer_user_agent",
     "signature_reference",
 ];
+
+#[test]
+fn the_keys_of_the_tests_are_the_keys_the_code_guards() {
+    // The tests walk `DOOR_KEYS`; the guards walk `DOOR_OWNED`. Were a key in one and not the
+    // other, the tests would either skip a guarded key or probe one nobody guards.
+    assert_eq!(DOOR_KEYS, obop_commands::sign::DOOR_OWNED);
+}
 
 const AGENT_SCOPES: [&str; 4] = [
     "sign.user",
@@ -803,6 +812,18 @@ fn the_wrappers_rely_on_names_the_package_still_declares() {
     );
     // The door-owned fields are not editable by anyone with only the user group.
     assert_eq!(field("document_file").group.as_deref(), Some("sign.system"));
+    // And they are the fields of the request that carry a group of their own: a field added with
+    // a group is a field the guards should have been told about (and the other way round).
+    let mut grouped: Vec<&str> = req
+        .field
+        .iter()
+        .filter(|f| f.group.is_some())
+        .map(|f| f.name.as_str())
+        .collect();
+    grouped.sort_unstable();
+    let mut owned = obop_commands::sign::DOOR_OWNED.to_vec();
+    owned.sort_unstable();
+    assert_eq!(grouped, owned);
     // A link is made, revoked and read for the secret by managers only: a plain user changes
     // nothing about one, and the `link` answer of the create call is the manager's alone.
     assert_eq!(link.write_group, "sign.manager");

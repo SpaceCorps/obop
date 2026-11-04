@@ -60,7 +60,11 @@ const MICROS_PER_DAY: i64 = 86_400 * MICROS_PER_SECOND;
 /// only, so the refusal is made by a wrapper. The two dates `sent_on` and `signed_on` are written
 /// by the same code but are not evidence (the evidence is the time and the digest) and are not
 /// guarded: a person with `sign.user` can set them (docs/ISSUES.md O34).
-pub(crate) const DOOR_OWNED: [&str; 8] = [
+///
+/// `pub` only so that the tests of the `obop` binary can compare their own list of the keys with
+/// this one (`sign_tests/rules.rs`); nothing else reads it from outside.
+#[doc(hidden)]
+pub const DOOR_OWNED: [&str; 8] = [
     "document_hash",
     "document_file",
     "signed_at",
