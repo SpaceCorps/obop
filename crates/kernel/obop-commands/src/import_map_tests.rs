@@ -110,6 +110,15 @@ fn module(p: &str) -> Module {
     }
 }
 
+/// A person id that no other test shares: the bulk rate limit counts per person id, and on a shared
+/// PostgreSQL database every test would otherwise draw on the same twelve calls a minute.
+fn uid(base: &str) -> String {
+    thread_local! {
+        static TAG: String = uuid::Uuid::now_v7().simple().to_string()[20..].to_string();
+    }
+    TAG.with(|t| format!("{base}{t}"))
+}
+
 fn each_backend(f: impl Fn(&Rig)) {
     let mut urls = vec!["memory:".to_string(), "sqlite::memory:".to_string()];
     if let Ok(u) = std::env::var("OBOP_TEST_POSTGRES_URL") {
@@ -134,6 +143,20 @@ fn each_backend(f: impl Fn(&Rig)) {
 }
 
 impl Rig {
+    /// How many import map entries this rig's models have; other tests share a PostgreSQL database.
+    fn entries(&self) -> usize {
+        self.store
+            .backend()
+            .list(import_map::MODEL)
+            .unwrap()
+            .into_iter()
+            .filter(|(_, f)| {
+                f.get("model")
+                    .is_some_and(|v| v.as_str().is_some_and(|s| s.starts_with(&self.p)))
+            })
+            .count()
+    }
+
     fn model(&self, name: &str) -> String {
         format!("{}_{name}", self.p)
     }
@@ -190,11 +213,11 @@ impl Rig {
 }
 
 fn importer() -> Principal {
-    Principal::user("imp", &[U])
+    Principal::user(&uid("imp"), &[U])
 }
 
 fn reader() -> Principal {
-    Principal::user("rdr", &[U, READ_GROUP])
+    Principal::user(&uid("rdr"), &[U, READ_GROUP])
 }
 
 #[test]
@@ -217,14 +240,14 @@ fn a_source_key_is_recorded_found_both_ways_and_survives_an_update() {
         let ids = texts(get(&a, "ids"));
 
         // A source key to its record, with and without the model; the table is part of the key.
-        for who in [reader(), Principal::user("root", &["platform.admin"])] {
+        for who in [reader(), Principal::user(&uid("root"), &["platform.admin"])] {
             let found = r.search(&who, Some("party"), "customers", "B-2");
             assert_eq!(int(get(&found, "total")), 1);
             let row = &list(get(&found, "rows"))[0];
             assert_eq!(Some(text(get(row, "record"))), ids[1]);
             assert_eq!(text(get(row, "model")), r.model("party"));
             assert_eq!(text(get(row, "source_system")), "legacy");
-            assert_eq!(text(get(row, "imported_by")), "imp");
+            assert_eq!(text(get(row, "imported_by")), uid("imp"));
             assert!(text(get(row, "imported_at")).ends_with('Z'));
             let found = r.search(&who, None, "customers", "B-2");
             assert_eq!(int(get(&found, "total")), 1);
@@ -407,7 +430,7 @@ fn a_deleted_record_no_longer_holds_its_key() {
 fn a_caller_never_learns_of_a_record_they_cannot_read() {
     each_backend(|r| {
         let imp = importer();
-        let other = Principal::user("other", &[U]);
+        let other = Principal::user(&uid("other"), &[U]);
         let a = r.import(
             &imp,
             "note",
@@ -420,7 +443,7 @@ fn a_caller_never_learns_of_a_record_they_cannot_read() {
 
         // Another person with the group, and a reader whose group does not cover the model.
         let rdr = reader();
-        let no_model_group = Principal::user("nm", &[READ_GROUP]);
+        let no_model_group = Principal::user(&uid("nm"), &[READ_GROUP]);
         for who in [&rdr, &no_model_group] {
             assert_eq!(
                 int(get(&r.search(who, Some("note"), "notes", "N-1"), "total")),
@@ -431,9 +454,9 @@ fn a_caller_never_learns_of_a_record_they_cannot_read() {
         }
         // The owner's own record, a see-all holder and the administrator may.
         for who in [
-            Principal::user("imp", &[U, READ_GROUP]),
-            Principal::user("boss", &[U, ALL, READ_GROUP]),
-            Principal::user("root", &["platform.admin"]),
+            Principal::user(&uid("imp"), &[U, READ_GROUP]),
+            Principal::user(&uid("boss"), &[U, ALL, READ_GROUP]),
+            Principal::user(&uid("root"), &["platform.admin"]),
         ] {
             assert_eq!(
                 int(get(&r.search(&who, None, "notes", "N-1"), "total")),
@@ -477,13 +500,7 @@ fn a_call_without_a_source_answers_as_it_always_did() {
         assert!(!x.contains_key("already_imported") && !x.contains_key("already_imported_rows"));
         assert_eq!(int(get(&a, "created")), 1);
         // No entry was written.
-        assert!(
-            r.store
-                .backend()
-                .list(import_map::MODEL)
-                .unwrap()
-                .is_empty()
-        );
+        assert_eq!(r.entries(), 0);
     });
 }
 
@@ -589,6 +606,6 @@ fn rows_may_come_from_several_tables_and_keys_are_numbers_or_text() {
             int(get(&r.search(&reader(), None, "suppliers", "7"), "total")),
             1
         );
-        assert_eq!(r.store.backend().list(import_map::MODEL).unwrap().len(), 2);
+        assert_eq!(r.entries(), 2);
     });
 }
