@@ -1138,6 +1138,8 @@
   "You can withdraw this at any time. Withdrawing disconnects the service and removes the stored credentials.": "Du kan dra tillbaka detta när som helst. Tillbakadragandet kopplar från tjänsten och tar bort de sparade uppgifterna.",
   "You cannot see the data this tile reads.": "Du kan inte se de data som den här rutan läser.",
   "You have not copied the link. If you close this window now, the link is lost and you will have to make another one.": "Du har inte kopierat länken. Om du stänger det här fönstret nu går länken förlorad och du måste skapa en ny.",
+  "You have unsaved changes, and the signing link has not been copied. If you leave now, the changes are discarded and the link is lost. Leave anyway?": "Du har osparade ändringar och signeringslänken har inte kopierats. Om du lämnar sidan nu kasseras ändringarna och länken går förlorad. Lämna ändå?",
+  "You have unsaved changes, and the signing link is still being made. If you leave now, the changes are discarded and you will not see the link. Leave anyway?": "Du har osparade ändringar och signeringslänken skapas fortfarande. Om du lämnar sidan nu kasseras ändringarna och du ser inte länken. Lämna ändå?",
   "You have unsaved changes. Leave and discard them?": "Du har osparade ändringar. Vill du lämna och förkasta dem?",
   "You see only the records that are yours or shared with you.": "Du ser bara de poster som är dina eller delade med dig.",
   "Your administrator requires a second step when you sign in. Until you have set it up, you cannot use anything else.": "Din administratör kräver ett andra steg vid inloggningen. Tills det är på plats kan du inte använda något annat.",

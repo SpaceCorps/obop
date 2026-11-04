@@ -448,6 +448,55 @@ describe("leaving the page while the link is shown (Back, a reload, the palette,
     expect(text()).toContain("elsewhere");
   });
 
+  // The form under the dialog can hold unsaved edits as well (a sent request is editable, and the
+  // button stays enabled while the form is dirty). One question has to name both things.
+  it("names the unsaved changes and the uncopied link in one question", async () => {
+    const ask = answerWith(false);
+    nav.dirty = () => true;
+    await openDialog(<Page />);
+    await act(async () => go({ app: "crm", model: "lead" }));
+    await settle();
+    expect(ask).toHaveBeenCalledTimes(1);
+    const [message, leave, stay] = ask.mock.calls[0]!;
+    expect(message).toContain("unsaved changes");
+    expect(message).toContain("signing link has not been copied");
+    expect(leave).toBe("Leave anyway");
+    expect(stay).toBe("Stay");
+    expect(dialog()).not.toBeNull();
+    expect(text()).not.toContain("elsewhere");
+  });
+
+  it("asks only about the changes once the link was copied", async () => {
+    const ask = answerWith(false);
+    nav.dirty = () => true;
+    await openDialog(<Page />);
+    await click(button("Copy"));
+    await settle();
+    await act(async () => go({ app: "crm", model: "lead" }));
+    await settle();
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(ask.mock.calls[0]![0]).toBe("You have unsaved changes. Leave and discard them?");
+    expect(ask.mock.calls[0]![1]).toBe("Leave and discard");
+  });
+
+  it("names the unsaved changes and the link that is still being made", async () => {
+    fakeServer({ hold: true });
+    const ask = answerWith(false);
+    nav.dirty = () => true;
+    await mount(<Page />);
+    await click(button("Create signing link"));
+    await settle();
+    await act(async () => go({ app: "crm", model: "lead" }));
+    await settle();
+    expect(ask).toHaveBeenCalledTimes(1);
+    const [message, leave, stay] = ask.mock.calls[0]!;
+    expect(message).toContain("unsaved changes");
+    expect(message).toContain("still being made");
+    expect([leave, stay]).toEqual(["Leave anyway", "Stay"]);
+    await act(async () => answerCreate!());
+    for (let i = 0; i < 40 && !dialog(); i++) await settle();
+  });
+
   it("asks before leaving while the server is still making the link, then holds the link's own question", async () => {
     fakeServer({ hold: true });
     const ask = answerWith(false);

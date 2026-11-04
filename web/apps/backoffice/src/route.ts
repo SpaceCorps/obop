@@ -56,15 +56,21 @@ export const nav: {
   ask: ((message: string, leave: string, stay: string) => Promise<boolean>) | null;
 } = { dirty: null, ask: null };
 
-/** What to ask before the address changes, or `null` to go ahead. */
+/**
+ * What to ask before the address changes, or `null` to go ahead. Unsaved changes and something that
+ * is lost for good (`leaveGuard.ts`) can both be true; then one question names both.
+ */
 function leaveQuestion(): LeaveQuestion | null {
+  const held = heldLeaveQuestion();
   if (nav.dirty?.())
-    return {
-      message: t("You have unsaved changes. Leave and discard them?"),
-      leave: t("Leave and discard"),
-      stay: t("Keep editing"),
-    };
-  return heldLeaveQuestion();
+    return held?.whenUnsaved
+      ? { message: held.whenUnsaved, leave: t("Leave anyway"), stay: t("Stay") }
+      : {
+          message: t("You have unsaved changes. Leave and discard them?"),
+          leave: t("Leave and discard"),
+          stay: t("Keep editing"),
+        };
+  return held;
 }
 
 export type Go = (r: Partial<Route>, opts?: { replace?: boolean }) => void;

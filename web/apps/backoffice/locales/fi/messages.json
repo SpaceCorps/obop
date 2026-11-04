@@ -1138,6 +1138,8 @@
   "You can withdraw this at any time. Withdrawing disconnects the service and removes the stored credentials.": "Voit perua tämän milloin tahansa. Peruuttaminen katkaisee palvelun yhteyden ja poistaa tallennetut tunnistetiedot.",
   "You cannot see the data this tile reads.": "Et voi nähdä tietoja, joita tämä ruutu lukee.",
   "You have not copied the link. If you close this window now, the link is lost and you will have to make another one.": "Et ole kopioinut linkkiä. Jos suljet tämän ikkunan nyt, linkki katoaa ja joudut luomaan uuden.",
+  "You have unsaved changes, and the signing link has not been copied. If you leave now, the changes are discarded and the link is lost. Leave anyway?": "Sinulla on tallentamattomia muutoksia, eikä allekirjoituslinkkiä ole kopioitu. Jos poistut nyt, muutokset hylätään ja linkki katoaa. Poistutaanko silti?",
+  "You have unsaved changes, and the signing link is still being made. If you leave now, the changes are discarded and you will not see the link. Leave anyway?": "Sinulla on tallentamattomia muutoksia, ja allekirjoituslinkkiä luodaan vielä. Jos poistut nyt, muutokset hylätään etkä näe linkkiä. Poistutaanko silti?",
   "You have unsaved changes. Leave and discard them?": "Sinulla on tallentamattomia muutoksia. Poistutaanko ja hylätäänkö ne?",
   "You see only the records that are yours or shared with you.": "Näet vain ne tietueet, jotka ovat sinun tai jaettu sinulle.",
   "Your administrator requires a second step when you sign in. Until you have set it up, you cannot use anything else.": "Ylläpitäjä vaatii kirjautumisessa toisen vaiheen. Kunnes se on otettu käyttöön, mitään muuta ei voi käyttää.",

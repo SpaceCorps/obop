@@ -2066,6 +2066,8 @@
   "You can withdraw this at any time. Withdrawing disconnects the service and removes the stored credentials.": "You can withdraw this at any time. Withdrawing disconnects the service and removes the stored credentials.",
   "You cannot see the data this tile reads.": "You cannot see the data this tile reads.",
   "You have not copied the link. If you close this window now, the link is lost and you will have to make another one.": "You have not copied the link. If you close this window now, the link is lost and you will have to make another one.",
+  "You have unsaved changes, and the signing link has not been copied. If you leave now, the changes are discarded and the link is lost. Leave anyway?": "You have unsaved changes, and the signing link has not been copied. If you leave now, the changes are discarded and the link is lost. Leave anyway?",
+  "You have unsaved changes, and the signing link is still being made. If you leave now, the changes are discarded and you will not see the link. Leave anyway?": "You have unsaved changes, and the signing link is still being made. If you leave now, the changes are discarded and you will not see the link. Leave anyway?",
   "You have unsaved changes. Leave and discard them?": "You have unsaved changes. Leave and discard them?",
   "you run {version}": "you run {version}",
   "You run {version}.": "You run {version}.",

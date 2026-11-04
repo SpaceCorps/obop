@@ -1138,6 +1138,8 @@
   "You can withdraw this at any time. Withdrawing disconnects the service and removes the stored credentials.": "machine-drafted",
   "You cannot see the data this tile reads.": "machine-drafted",
   "You have not copied the link. If you close this window now, the link is lost and you will have to make another one.": "machine-drafted",
+  "You have unsaved changes, and the signing link has not been copied. If you leave now, the changes are discarded and the link is lost. Leave anyway?": "machine-drafted",
+  "You have unsaved changes, and the signing link is still being made. If you leave now, the changes are discarded and you will not see the link. Leave anyway?": "machine-drafted",
   "You have unsaved changes. Leave and discard them?": "machine-drafted",
   "You see only the records that are yours or shared with you.": "machine-drafted",
   "Your administrator requires a second step when you sign in. Until you have set it up, you cannot use anything else.": "machine-drafted",

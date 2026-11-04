@@ -1138,6 +1138,8 @@
   "You can withdraw this at any time. Withdrawing disconnects the service and removes the stored credentials.": "Puede retirarlo en cualquier momento. Retirarlo desconecta el servicio y elimina las credenciales guardadas.",
   "You cannot see the data this tile reads.": "No puedes ver los datos que lee esta tarjeta.",
   "You have not copied the link. If you close this window now, the link is lost and you will have to make another one.": "No ha copiado el enlace. Si cierra esta ventana ahora, el enlace se pierde y tendrá que crear otro.",
+  "You have unsaved changes, and the signing link has not been copied. If you leave now, the changes are discarded and the link is lost. Leave anyway?": "Tiene cambios sin guardar y el enlace de firma no se ha copiado. Si sale ahora, los cambios se descartan y el enlace se pierde. ¿Salir de todos modos?",
+  "You have unsaved changes, and the signing link is still being made. If you leave now, the changes are discarded and you will not see the link. Leave anyway?": "Tiene cambios sin guardar y el enlace de firma aún se está creando. Si sale ahora, los cambios se descartan y no verá el enlace. ¿Salir de todos modos?",
   "You have unsaved changes. Leave and discard them?": "Tienes cambios sin guardar. ¿Salir y descartarlos?",
   "You see only the records that are yours or shared with you.": "Solo ves los registros que son tuyos o que se han compartido contigo.",
   "Your administrator requires a second step when you sign in. Until you have set it up, you cannot use anything else.": "Tu administrador exige un segundo paso al iniciar sesión. Hasta que lo configures, no puedes usar nada más.",

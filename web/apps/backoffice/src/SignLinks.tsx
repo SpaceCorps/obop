@@ -80,6 +80,9 @@ export function SignLinkAction({
           ),
           leave: t("Leave anyway"),
           stay: t("Stay"),
+          whenUnsaved: t(
+            "You have unsaved changes, and the signing link is still being made. If you leave now, the changes are discarded and you will not see the link. Leave anyway?",
+          ),
         }
       : null,
   );
@@ -191,6 +194,9 @@ export function SignLinkDialog({
           ),
           leave: t("Leave without the link"),
           stay: t("Stay and copy it"),
+          whenUnsaved: t(
+            "You have unsaved changes, and the signing link has not been copied. If you leave now, the changes are discarded and the link is lost. Leave anyway?",
+          ),
         },
   );
   const ask = () => {

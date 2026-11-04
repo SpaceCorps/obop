@@ -14,6 +14,12 @@ export type LeaveQuestion = {
   leave: string;
   /** The button that stays. */
   stay: string;
+  /**
+   * The question to ask instead when the person also has unsaved changes (`route.ts`), so that the
+   * one question names both things they are about to lose. It is answered with "Leave anyway" and
+   * "Stay".
+   */
+  whenUnsaved?: string;
 };
 
 const holds = new Set<() => LeaveQuestion | null>();

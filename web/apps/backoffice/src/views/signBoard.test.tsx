@@ -171,6 +171,62 @@ describe("the 'Move to' menu of a card on the sign board", () => {
   });
 });
 
+describe("a card dragged over the columns", () => {
+  beforeEach(() => mount(KanbanView));
+
+  const transfer = () => ({
+    dropEffect: "move",
+    effectAllowed: "all",
+    setData: () => {},
+    getData: () => "",
+  });
+  const fire = (el: Element, type: string, dt = transfer()) => {
+    const e = new Event(type, { bubbles: true, cancelable: true });
+    Object.assign(e, { dataTransfer: dt });
+    el.dispatchEvent(e);
+    return { e, dt };
+  };
+  const column = (name: string) =>
+    [...container.querySelectorAll<HTMLElement>("section.kcol")].find((c) =>
+      (c.getAttribute("aria-label") ?? "").startsWith(`${name},`),
+    )!;
+  const pickUp = (id: string) =>
+    act(async () => void fire(container.querySelector(`[data-card="${id}"]`)!, "dragstart"));
+  const dragOver = async (name: string) => {
+    let out!: ReturnType<typeof fire>;
+    await act(async () => void (out = fire(column(name), "dragover")));
+    return out;
+  };
+
+  it("is not accepted over Signed for a request about a document, and says why", async () => {
+    await pickUp("doc");
+    const { e, dt } = await dragOver("Signed");
+    expect(e.defaultPrevented, "the column took the card").toBe(false);
+    expect(dt.dropEffect).toBe("none");
+    expect(column("Signed").className).toContain("blocked");
+    expect(column("Signed").title).toBe(REASON);
+  });
+
+  it("is not accepted for a request that was left holding only a document's hash", async () => {
+    await pickUp("cleared");
+    expect((await dragOver("Signed")).e.defaultPrevented).toBe(false);
+    expect(column("Signed").className).toContain("blocked");
+  });
+
+  it("is accepted over Declined, which the request may still be moved to", async () => {
+    await pickUp("doc");
+    const { e } = await dragOver("Declined");
+    expect(e.defaultPrevented).toBe(true);
+    expect(column("Declined").className).not.toContain("blocked");
+  });
+
+  it("is accepted over Signed for a request from a template", async () => {
+    await pickUp("tpl");
+    expect((await dragOver("Signed")).e.defaultPrevented).toBe(true);
+    expect(column("Signed").className).not.toContain("blocked");
+  });
+});
+
 describe("a move that is tried anyway", () => {
   beforeEach(() => mount(KanbanView));
 
