@@ -95,9 +95,34 @@ async fn an_entry_of_the_proxy_that_is_not_an_address_does_not_choose_the_limit_
         429,
         "an address of its own has a count of its own"
     );
-    // A port is not part of the address: once an address has used up its count, the same address
-    // with a port is that address (a port that changed with every connection would otherwise
-    // give a client a bucket of its own for each).
+}
+
+#[tokio::test]
+async fn a_port_is_not_part_of_the_address_in_the_limit_bucket() {
+    // Once an address has used up its count, the same address with a port is that address (a
+    // port that changed with every connection would otherwise give a client a bucket of its own
+    // for each). A fresh rig: the entries that are not addresses share the peer's bucket and
+    // must not have used it up already.
+    let rig = rig();
+    let post = |xff: String| {
+        let r = rig.r.clone();
+        async move {
+            call(
+                &r,
+                "POST",
+                "/oauth/register",
+                &[("x-forwarded-for", &xff)],
+                Some((
+                    "application/json",
+                    json!({"client_name": "Claude", "redirect_uris": [REDIRECT],
+                           "token_endpoint_auth_method": "none"})
+                    .to_string(),
+                )),
+            )
+            .await
+            .status
+        }
+    };
     let mut spent = 0;
     for _ in 0..40 {
         spent = post("198.51.100.201".to_string()).await;
@@ -115,6 +140,11 @@ async fn an_entry_of_the_proxy_that_is_not_an_address_does_not_choose_the_limit_
         post("198.51.100.201:5001".to_string()).await,
         429,
         "nor is another port"
+    );
+    assert_ne!(
+        post("198.51.100.202:5000".to_string()).await,
+        429,
+        "another address is not held up"
     );
 }
 
@@ -184,19 +214,9 @@ async fn the_token_revoke_and_authorize_limits_read_the_address_by_the_same_rule
                 }
             }
         };
-        let mut last = 0;
-        for n in 0..200 {
-            last = hit(format!("203.0.113.9, client-{n}")).await;
-            if last == 429 {
-                break;
-            }
-        }
-        assert_eq!(last, 429, "{endpoint}: made-up entries ran into one limit");
-        assert_ne!(
-            hit("198.51.100.210".to_string()).await,
-            429,
-            "{endpoint}: an address of its own has a count of its own"
-        );
+        // A port is not part of the address: an address that used up its count is still spent
+        // when it comes with a port. (First, while the peer's bucket is untouched: were the port
+        // taken for part of the address, the entry would fall to that bucket and not be spent.)
         let mut spent = 0;
         for _ in 0..200 {
             spent = hit("198.51.100.211".to_string()).await;
@@ -209,6 +229,20 @@ async fn the_token_revoke_and_authorize_limits_read_the_address_by_the_same_rule
             hit("198.51.100.211:5000".to_string()).await,
             429,
             "{endpoint}: a port is not part of the address"
+        );
+        // Entries that are not addresses all fall to the peer's bucket, and share it.
+        let mut last = 0;
+        for n in 0..200 {
+            last = hit(format!("203.0.113.9, client-{n}")).await;
+            if last == 429 {
+                break;
+            }
+        }
+        assert_eq!(last, 429, "{endpoint}: made-up entries ran into one limit");
+        assert_ne!(
+            hit("198.51.100.210".to_string()).await,
+            429,
+            "{endpoint}: an address of its own has a count of its own"
         );
     }
 }

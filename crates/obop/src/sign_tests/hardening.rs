@@ -1707,7 +1707,8 @@ async fn the_forwarded_text_of_a_refused_post_cannot_start_a_field_of_the_log_li
         .unwrap()
         .put(&f.file, b"%PDF-1.4\n% somebody wrote here\n")
         .unwrap();
-    let forged = format!("x; reason fake; address 203.0.113.9, {}", "9".repeat(300));
+    // The semicolons are in the last 200 characters, which is what the line keeps.
+    let forged = format!("{}, x; reason fake; address 203.0.113.9", "9".repeat(300));
     let r = f.post(&path, &forged, &good_form(&f, "Jane Test")).await;
     assert_eq!(r.status, 409, "{}", r.text());
     let entries = f.events_of("sign_refused");
@@ -1725,6 +1726,10 @@ async fn the_forwarded_text_of_a_refused_post_cannot_start_a_field_of_the_log_li
     let forwarded = detail.rsplit("; forwarded ").next().unwrap();
     assert!(forwarded.chars().count() <= 200, "{detail}");
     assert!(!forwarded.contains(';'), "{detail}");
+    assert!(
+        forwarded.contains("reason fake"),
+        "the text is there, only defused: {detail}"
+    );
 }
 
 #[tokio::test]
