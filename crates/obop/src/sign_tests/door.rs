@@ -397,6 +397,24 @@ async fn a_held_copy_that_no_longer_matches_its_hash_is_not_signed() {
         .unwrap()
         .put(&f.file, b"%PDF-1.4\n% somebody wrote here\n")
         .unwrap();
+    // The viewer is not served the altered copy either (it is hashed again before it is sent);
+    // the page itself reads no bytes and still opens.
+    assert_eq!(f.get(&path, &from).await.status, 200);
+    let r = f.get(&format!("{path}/document.pdf"), &from).await;
+    assert_eq!(r.status, 409, "{}", r.text());
+    assert!(
+        !r.body.starts_with(b"%PDF"),
+        "the altered bytes were served"
+    );
+    let refused = f.events_of("sign_refused");
+    assert_eq!(refused.len(), 1);
+    assert!(
+        refused[0]["detail"]
+            .as_str()
+            .unwrap()
+            .contains("reason tampered"),
+        "{refused:?}"
+    );
     let r = f.post(&path, &from, &good_form(&f, "Jane Test")).await;
     assert_eq!(r.status, 409, "{}", r.text());
     assert_eq!(f.record("sign_request", &f.req)["state"], "sent");
@@ -406,6 +424,8 @@ async fn a_held_copy_that_no_longer_matches_its_hash_is_not_signed() {
             .is_none_or(J::is_null)
     );
     assert_eq!(signed_count(&f), 0);
+    // One entry per link and reason in ten minutes: the post's is the same reason, so not a
+    // second line.
     assert_eq!(f.events_of("sign_refused").len(), 1);
 }
 

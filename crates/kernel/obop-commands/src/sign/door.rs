@@ -375,7 +375,10 @@ impl SignService {
     }
 
     /// The held copy of the request of a link, for the page's viewer. Only while the link works:
-    /// after signing the answer is 410.
+    /// after signing the answer is 410. The bytes are hashed again before they are served (up to
+    /// 25 MiB, a fraction of a second, at most 120 views in ten minutes from one source), so that
+    /// a copy that was changed in the store is never shown as the document; the page itself does
+    /// not read the bytes.
     pub fn pdf(&self, rid: &str, tok: &str, client: &Client) -> Result<Served, DoorError> {
         let f = self.find(rid, tok, client)?;
         self.limit(
@@ -399,6 +402,10 @@ impl SignService {
                 self.refused(&f, "copy_missing", client);
                 DoorError::Changed
             })?;
+        if token::sha256_hex(&bytes) != file {
+            self.refused(&f, "tampered", client);
+            return Err(DoorError::Changed);
+        }
         inline_pdf(Served {
             content_type: "application/pdf".to_string(),
             bytes,
@@ -446,7 +453,7 @@ impl SignService {
         }
         let doc_id = text(&f.req, "document_id").to_string();
         self.cheap_integrity(&f, client)?;
-        // The held copy is read and hashed here and at no page view.
+        // The held copy is read and hashed here and when the PDF is served, at no page view.
         let held = self
             .store
             .blobs
