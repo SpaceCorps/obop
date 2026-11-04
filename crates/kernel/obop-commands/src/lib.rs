@@ -733,7 +733,7 @@ impl Dispatcher {
             Arc::new(Registered {
                 id: format!("{model}.{command}"),
                 module: module.id.clone(),
-                description: c.description,
+                description: crate::import_map::describe(m.name, command).unwrap_or(c.description),
                 needs_approval: c.needs_approval,
                 model: m.name,
                 permission_group: c.permission_group,
@@ -1718,6 +1718,7 @@ pub mod devices;
 mod engine;
 pub mod errors;
 mod guards;
+pub mod import_map;
 pub mod json;
 mod kinds;
 pub mod pay;
@@ -1768,6 +1769,8 @@ pub mod names {
 mod assert_lang_tests;
 #[cfg(test)]
 mod engine_tests;
+#[cfg(test)]
+mod import_map_tests;
 #[cfg(test)]
 mod keyexpr_parity;
 #[cfg(test)]

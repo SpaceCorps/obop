@@ -725,3 +725,35 @@ description = "Ustaw dzierżawę Microsoft Entra, przez którą logują się oso
 [labels.pl.model.sso_provider.action.clear]
 label = "Usuń"
 description = "Usuń konfigurację logowania przez Microsoft. Powiązania pozostają. Konta logujące się wyłącznie przez Microsoft mogą wtedy wejść tylko przez administratorów, którzy zachowują hasło i drugi składnik. Odmowa dla agentów"
+
+[labels.pl.model.import_map]
+name = "Mapa importu"
+description = "Skąd pochodzi zaimportowany rekord: klucz (system źródłowy, tabela źródłowa, identyfikator źródłowy) wiersza, z którego powstał. Klucz wyszukasz poleceniem search, rekord poleceniem get."
+
+[labels.pl.model.import_map.field.model]
+label = "Model"
+description = "Model zaimportowanego rekordu"
+
+[labels.pl.model.import_map.field.record]
+label = "Rekord"
+description = "Identyfikator zaimportowanego rekordu"
+
+[labels.pl.model.import_map.field.source_system]
+label = "System źródłowy"
+description = "Obcy system, z którego pochodzi wiersz, tak jak nazwał go import"
+
+[labels.pl.model.import_map.field.source_table]
+label = "Tabela źródłowa"
+description = "Tabela, arkusz lub plik tego systemu, z którego pochodzi wiersz"
+
+[labels.pl.model.import_map.field.source_id]
+label = "Identyfikator źródłowy"
+description = "Identyfikator wiersza w tej tabeli"
+
+[labels.pl.model.import_map.field.imported_at]
+label = "Zaimportowano"
+description = "Kiedy rekord został zaimportowany"
+
+[labels.pl.model.import_map.field.imported_by]
+label = "Zaimportował"
+description = "Kto go zaimportował"

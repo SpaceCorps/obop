@@ -15,6 +15,13 @@
 //!   instead of creating the rows again. The answer is stored in the same transaction as the
 //!   rows (a record in `bulk_idempotency`, valid 24 hours), so it exists exactly when the rows
 //!   do. A key used for a different request is refused.
+//! - *Source key (import map).* With `source` {system, table, ids} (`ids`: one source id per row)
+//!   each created record gets an entry in the import map (`crate::import_map`), written in the
+//!   same transaction. A row whose key is already mapped to a record that still exists is not
+//!   created again: with `on_existing` = `skip` (the default) it is reported in
+//!   `already_imported` and its id in `ids` is the existing record's; with `error` it is a bad
+//!   row with the code `already_imported`. A key carried by two rows of the call is a bad row
+//!   with the code `duplicate_source_key`.
 //! - *Rate limit.* A person may start `OBOP_BULK_PER_MINUTE` calls a minute (default 12, `0`
 //!   for no limit), dry runs included; the counter is shared by all server processes. Over the
 //!   limit the call is refused with the code `rate_limited` (429, `Retry-After`). A repeat of a
@@ -28,6 +35,7 @@ use super::unit::{Mark, R, Unit};
 use super::{Actor, Engine};
 use crate::csv;
 use crate::guards::create_guard;
+use crate::import_map::{self, Mapped};
 use crate::kinds::{self, Path};
 use crate::store::declared_fields;
 use crate::{Principal, Value};
@@ -35,7 +43,7 @@ use obop_registry::{FieldKind, MAX_BULK_ROWS, ModelDef};
 use obop_storage::{Backend, Fields, Op};
 use serde_json::Value as J;
 use sha2::{Digest, Sha256};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 /// Table of the stored answers of calls that carried an idempotency key.
@@ -57,6 +65,94 @@ impl Mode {
         match self {
             Mode::AllOrNothing => "all_or_nothing",
             Mode::Partial => "partial",
+        }
+    }
+}
+
+/// The lookup of a model by name.
+type Lookup<'a> = &'a dyn Fn(&str) -> Option<Arc<ModelDef>>;
+
+/// A refusal of a row, with the code the answer lists for it (`already_imported` and the like).
+type Coded = (Option<&'static str>, String);
+/// A row of the answer's list of problems: row, CSV line, text and code.
+type ListedError = (usize, Option<usize>, String, Option<&'static str>);
+
+enum Outcome {
+    Created(String),
+    /// The source key was mapped to this record already; nothing was created.
+    Existing(String),
+}
+
+/// The source key of one row.
+struct ImportKey<'a> {
+    system: &'a str,
+    table: &'a str,
+    id: &'a str,
+    row: usize,
+    by: &'a str,
+    on_existing_error: bool,
+}
+
+/// A row that carries a source key: refused or reported when the key is mapped already, otherwise
+/// created together with its entry of the import map.
+fn import_row(
+    (eng, def, look, actor, unit): (&Engine, &Arc<ModelDef>, Lookup<'_>, &Actor, &mut Unit<'_>),
+    row: &BTreeMap<String, Value>,
+    k: &ImportKey<'_>,
+    used: &mut HashMap<(String, String), usize>,
+) -> Result<Outcome, Coded> {
+    let said = format!("source id {:?} of table {:?}", k.id, k.table);
+    let key = (k.table.to_string(), k.id.to_string());
+    if let Some(first) = used.get(&key) {
+        return Err((
+            Some(import_map::DUPLICATE_SOURCE_KEY),
+            format!("{said} is also on row {first}; a source key may appear once in a call"),
+        ));
+    }
+    match import_map::lookup(eng, actor, def.name, (k.system, k.table, k.id))
+        .map_err(|e| (None, e))?
+    {
+        Mapped::Record { id, readable } => {
+            used.insert(key, k.row);
+            if !readable {
+                return Err((
+                    Some(import_map::ALREADY_IMPORTED),
+                    format!(
+                        "{said} was already imported, as a {} you may not read",
+                        def.name
+                    ),
+                ));
+            }
+            if k.on_existing_error {
+                return Err((
+                    Some(import_map::ALREADY_IMPORTED),
+                    format!("{said} was already imported as {} {id}", def.name),
+                ));
+            }
+            Ok(Outcome::Existing(id))
+        }
+        Mapped::No { stale } => {
+            let id = create_row(eng, def, look, actor, unit, row).map_err(|e| (None, e))?;
+            let entry = import_map::entry_id(def.name, k.system, k.table, k.id);
+            if stale {
+                // The record of the old entry was deleted: the entry is replaced.
+                unit.push_op(Op::Delete {
+                    model: import_map::MODEL.into(),
+                    id: entry.clone(),
+                });
+            }
+            unit.push_op(Op::Insert {
+                model: import_map::MODEL.into(),
+                id: entry,
+                fields: import_map::entry_fields(
+                    (def.name, &id),
+                    (k.system, k.table, k.id),
+                    now_secs(eng),
+                    k.by,
+                ),
+            });
+            used.insert(key, k.row);
+            Ok(Outcome::Created(id))
         }
     }
 }
@@ -235,8 +331,18 @@ fn fingerprint(model: &str, mode: Mode, m: &BTreeMap<String, Value>) -> String {
         (_, Some(Value::Text(t))) => format!("csv\n{t}"),
         _ => String::new(),
     };
+    // The source key and the policy are part of the request; a call without them keeps the
+    // fingerprint it always had.
+    let extra = match (m.get("source"), m.get("on_existing")) {
+        (None | Some(Value::Null), None | Some(Value::Null)) => String::new(),
+        (s, e) => format!(
+            "\nsource\n{}\n{}",
+            s.map(|v| v.to_json().to_string()).unwrap_or_default(),
+            e.map(|v| v.to_json().to_string()).unwrap_or_default()
+        ),
+    };
     let mut h = Sha256::new();
-    h.update(format!("{model}\n{}\n{payload}", mode.name()).as_bytes());
+    h.update(format!("{model}\n{}\n{payload}{extra}", mode.name()).as_bytes());
     hex(&h.finalize())
 }
 
@@ -345,11 +451,11 @@ pub(crate) fn bulk_create(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R
     for k in m.keys() {
         let known = matches!(
             k.as_str(),
-            "rows" | "csv" | "mode" | "dry_run" | "idempotency_key"
+            "rows" | "csv" | "mode" | "dry_run" | "idempotency_key" | "source" | "on_existing"
         );
         if !known && !k.starts_with('_') {
             return Err(format!(
-                "unknown input {k:?}: bulk_create takes rows or csv, mode, dry_run and idempotency_key"
+                "unknown input {k:?}: bulk_create takes rows or csv, mode, dry_run, idempotency_key, source and on_existing"
             ));
         }
     }
@@ -383,6 +489,14 @@ pub(crate) fn bulk_create(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R
         }
     };
     let (rows, from_csv) = incoming(def, m)?;
+    let source = import_map::parse_source(m.get("source"), rows.len())?;
+    let on_existing_error = match (m.get("on_existing"), &source) {
+        (None | Some(Value::Null), _) => false,
+        (Some(_), None) => return Err("on_existing needs a source".into()),
+        (Some(Value::Text(t)), _) if t == "skip" => false,
+        (Some(Value::Text(t)), _) if t == "error" => true,
+        (Some(_), _) => return Err("on_existing must be skip or error".into()),
+    };
 
     // A repeat of a call that was answered is answered from storage and costs nothing, so it is
     // looked up before the minute's counter: a retry never uses up the budget and is never
@@ -430,38 +544,71 @@ pub(crate) fn bulk_create(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R
     let look = lookup_fn(eng);
     let mut unit = eng.unit_with_cap(MAX_BULK_ROWS * 4);
     let mut ids: Vec<Option<String>> = Vec::with_capacity(rows.len());
-    let mut errors: Vec<(usize, Option<usize>, String)> = Vec::new();
+    let mut errors: Vec<ListedError> = Vec::new();
     let mut failed = 0usize;
+    // Rows whose source key was mapped already: (row, record id, source id).
+    let mut existing: Vec<(usize, String, String)> = Vec::new();
+    // The source keys this call has used, to refuse a key that two rows carry.
+    let mut used: HashMap<(String, String), usize> = HashMap::new();
+    let by = actor.caller.clone();
     for r in &rows {
         let mark: Mark = unit.mark();
-        let done = match &r.fields {
-            Ok(f) => create_row(eng, def, &look, &actor, &mut unit, f),
-            Err(e) => Err(e.clone()),
+        let key = source.as_ref().and_then(|s| s.key_of(r.row - 1));
+        let done: Result<Outcome, Coded> = match (&r.fields, &source, key) {
+            (Err(e), ..) => Err((None, e.clone())),
+            (Ok(f), Some(src), Some((table, sid))) => import_row(
+                (eng, def, &look, &actor, &mut unit),
+                f,
+                &ImportKey {
+                    system: &src.system,
+                    table,
+                    id: sid,
+                    row: r.row,
+                    by: &by,
+                    on_existing_error,
+                },
+                &mut used,
+            ),
+            (Ok(f), ..) => create_row(eng, def, &look, &actor, &mut unit, f)
+                .map(Outcome::Created)
+                .map_err(|e| (None, e)),
         };
         match done {
-            Ok(id) => ids.push(Some(id)),
-            Err(e) => {
+            Ok(Outcome::Created(id)) => ids.push(Some(id)),
+            // The key was mapped already: nothing is created, and the id is the record's.
+            Ok(Outcome::Existing(id)) => {
+                existing.push((
+                    r.row,
+                    id.clone(),
+                    key.map(|k| k.1.to_string()).unwrap_or_default(),
+                ));
+                ids.push(Some(id));
+            }
+            Err((code, e)) => {
                 unit.rewind(mark);
                 ids.push(None);
                 failed += 1;
                 if errors.len() < MAX_LISTED_ERRORS {
                     // The list names the row; a refusal with a code (D90) is listed by its text.
-                    errors.push((r.row, r.line, crate::errors::plain(&e).to_string()));
+                    errors.push((r.row, r.line, crate::errors::plain(&e).to_string(), code));
                 }
             }
         }
     }
     let total = rows.len();
-    let created = total - failed;
+    let created = total - failed - existing.len();
     let ok = failed == 0;
 
     if !ok && mode == Mode::AllOrNothing && !dry_run {
         let first: Vec<String> = errors
             .iter()
             .take(5)
-            .map(|(row, line, e)| match line {
-                Some(l) => format!("row {row} (line {l}): {e}"),
-                None => format!("row {row}: {e}"),
+            .map(|(row, line, e, code)| {
+                let e = code.map_or(e.clone(), |c| format!("{c}: {e}"));
+                match line {
+                    Some(l) => format!("row {row} (line {l}): {e}"),
+                    None => format!("row {row}: {e}"),
+                }
             })
             .collect();
         return Err(format!(
@@ -482,13 +629,16 @@ pub(crate) fn bulk_create(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R
     let to_value = |replayed: bool| {
         let errs = errors
             .iter()
-            .map(|(row, line, e)| {
+            .map(|(row, line, e, code)| {
                 let mut o = BTreeMap::new();
                 o.insert("row".to_string(), Value::Int(*row as i64));
                 if let Some(l) = line {
                     o.insert("line".to_string(), Value::Int(*l as i64));
                 }
                 o.insert("error".to_string(), Value::text(e));
+                if let Some(c) = code {
+                    o.insert("code".to_string(), Value::text(c));
+                }
                 Value::Map(o)
             })
             .collect();
@@ -517,6 +667,29 @@ pub(crate) fn bulk_create(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R
                 Value::List(
                     ids.iter()
                         .map(|i| i.as_deref().map_or(Value::Null, Value::text))
+                        .collect(),
+                ),
+            );
+        }
+        if source.is_some() {
+            // Rows whose source key was imported before: not created again; their id in `ids`
+            // is the record's.
+            o.insert(
+                "already_imported".to_string(),
+                Value::Int(existing.len() as i64),
+            );
+            o.insert(
+                "already_imported_rows".to_string(),
+                Value::List(
+                    existing
+                        .iter()
+                        .map(|(row, id, sid)| {
+                            Value::map([
+                                ("row", Value::Int(*row as i64)),
+                                ("id", Value::text(id)),
+                                ("source_id", Value::text(sid)),
+                            ])
+                        })
                         .collect(),
                 ),
             );

@@ -523,6 +523,8 @@ Treat it as the loss of confidentiality of every secret sealed under it: rotate 
 
 `obop backup` writes a consistent logical copy of every record: JSON Lines (gzip-compressed, and sealed when a key is configured: see "Two formats") plus a manifest with checksums, the schema version, the core version and the id of the database it came from. It reads from one snapshot (a repeatable-read transaction on PostgreSQL, a read transaction on SQLite), a batch at a time, so a large database never sits in memory and a running server is not stopped. Uploaded pictures and files (D60) follow the records as `blob` lines, one at a time, wherever their bytes live (`OBOP_BLOB_DIR`, a `<file>.blobs` directory beside a SQLite file, or the database); `obop restore` puts them back and checks that each hashes to its id, so a restore onto a new host brings the pictures too. Set the same `OBOP_BLOB_DIR` for backup and restore.
 
+The backup includes every table, so the import map (below, "Import map") is part of it.
+
 ```bash
 obop backup --db postgres://... --out /backups/            # a timestamped file in the directory
 obop backup --db postgres://... --out /backups/nightly.obbk
@@ -894,6 +896,10 @@ or `POST /api/user_account/bind_sso` with `{"id","oid"}` (a proposal when an age
 - Only the public cloud (`login.microsoftonline.com`) is supported; Azure Government and the 21Vianet cloud are not.
 - The flow cookies are not `__Host-` prefixed, so a sibling sub-domain that can set cookies for the host could toss one (ISSUES N11).
 - Not tried against a real tenant, a real directory, Safari, Firefox or a phone. The six translations of the button and its messages are machine-drafted.
+
+## Import map (source keys of imported records)
+
+`bulk_create` (and `obop import`) can record where each created record came from: the source system, the source table and the source id of the row, kept in the table `import_map` (docs/spec/cli.md 3.4a). Nothing is configured: the table appears with the first import that gives a `source`, and an import without one does not touch it. Re-running an import with the same `source` ids reports `already_imported` and creates nothing, so an interrupted or repeated migration can be started again. The entries are ordinary records: a backup contains them and a restore brings them back, so after a restore the keys still find their records. Read them with `obop import-map search|get`, `POST /api/import_map/search|get` or the MCP tools `import_map__search|get` (group `api.import_map_read`; an entry is shown only for a record the caller may read). `obop import party FILE.csv --source-system legacy --source-table customers --source-ids ids.txt` gives one source id per data row, one per line. Deleting a record leaves its entry; the entry is ignored and replaced by the next import of that key. A very large table of entries (millions) makes `import-map get` and `search` without `--model` slower, because they scan it; there is no purge command yet.
 
 ## Known limits
 
