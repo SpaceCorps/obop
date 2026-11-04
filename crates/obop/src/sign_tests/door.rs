@@ -1137,12 +1137,19 @@ async fn the_link_with_lang_en_opens_the_english_page_whatever_the_browser_asks_
     // outranks the instance default, so the link is handed over with `?lang=en`. The page's hidden
     // field carries it into the post, and the stored id says `en`.
     let (f, _, path, _) = sent().await;
-    f.state.set_default_language(Some("de"));
+    // The instance default is not the browser's language (French against German), so that a
+    // page in German can only come from the header and one in French only from the default.
+    f.state.set_default_language(Some("fr"));
     let german = [("accept-language", "de-DE,de;q=0.9")];
     let by_header = f.get_with(&path, &ip(81), &german).await;
     assert!(
         by_header.text().contains("lang=\"de\""),
-        "the browser's language wins"
+        "the browser's language wins over the instance default"
+    );
+    let by_default = f.get_with(&path, &ip(81), &[]).await;
+    assert!(
+        by_default.text().contains("lang=\"fr\""),
+        "the instance default, when the browser names no language"
     );
     let forced = f
         .get_with(&format!("{path}?lang=en"), &ip(81), &german)

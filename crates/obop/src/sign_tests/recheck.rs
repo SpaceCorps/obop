@@ -869,50 +869,88 @@ async fn the_language_of_the_consent_id_is_the_one_the_post_names_not_a_proof_of
     // another of the seven than the page it was shown); a name that is not one of the seven, or
     // none, is resolved as a page request is: the browser's `Accept-Language`, then the instance's
     // default language, then English. The id is not evidence of which page was shown.
-    // (lang in the POST, Accept-Language, default language of the instance, language recorded)
-    let cases: [(&str, Option<&str>, Option<&'static str>, &str); 13] = [
-        ("en", None, None, "en"),
-        ("de", None, None, "de"),
-        ("sv", None, None, "sv"),
-        ("<script>", None, None, "en"),
-        ("", None, None, "en"),
-        ("klingon", None, None, "en"),
+    // The order, as the table below pins it: the `lang` field of the form when the form has one
+    // (an empty one or one that is not of the seven does NOT fall back to the address's: it goes
+    // on to the browser), else the `lang` of the post's address (`?lang=`), else the browser's
+    // `Accept-Language`, else the instance default, else English.
+    struct Case {
+        field: Option<&'static str>,
+        address: Option<&'static str>,
+        accept: Option<&'static str>,
+        default: Option<&'static str>,
+        want: &'static str,
+    }
+    let c = |field, address, accept, default, want| Case {
+        field,
+        address,
+        accept,
+        default,
+        want,
+    };
+    let cases = [
+        c(Some("en"), None, None, None, "en"),
+        c(Some("de"), None, None, None, "de"),
+        c(Some("sv"), None, None, None, "sv"),
+        c(Some("<script>"), None, None, None, "en"),
+        c(Some(""), None, None, None, "en"),
+        c(Some("klingon"), None, None, None, "en"),
+        c(None, None, None, None, "en"),
         // The browser's language, when the POST names none that exists.
-        ("klingon", Some("de-DE,de;q=0.9"), None, "de"),
-        ("", Some("fr"), None, "fr"),
-        ("<script>", Some("sv"), None, "sv"),
+        c(Some("klingon"), None, Some("de-DE,de;q=0.9"), None, "de"),
+        c(Some(""), None, Some("fr"), None, "fr"),
+        c(Some("<script>"), None, Some("sv"), None, "sv"),
         // The POST's own language beats the browser's.
-        ("de", Some("fr"), None, "de"),
+        c(Some("de"), None, Some("fr"), None, "de"),
         // The instance default, when neither names one; the browser outranks it.
-        ("klingon", None, Some("pl"), "pl"),
-        ("", Some("fr"), Some("pl"), "fr"),
-        ("", Some("ja, zh;q=0.9"), Some("pl"), "pl"),
+        c(Some("klingon"), None, None, Some("pl"), "pl"),
+        c(Some(""), None, Some("fr"), Some("pl"), "fr"),
+        c(Some(""), None, Some("ja, zh;q=0.9"), Some("pl"), "pl"),
+        c(None, None, None, Some("pl"), "pl"),
+        // The address's `?lang=`, for a form with no `lang` field at all: it beats the browser
+        // and the default.
+        c(None, Some("de"), Some("fr"), Some("pl"), "de"),
+        c(None, Some("de"), None, None, "de"),
+        c(None, Some("klingon"), Some("sv"), Some("pl"), "sv"),
+        c(None, Some("klingon"), None, Some("pl"), "pl"),
+        // A form field that is present wins over the address, and one that is present but empty
+        // or unknown does not hand over to it.
+        c(Some("pl"), Some("de"), None, None, "pl"),
+        c(Some("klingon"), Some("de"), Some("fr"), None, "fr"),
+        c(Some(""), Some("de"), Some("fr"), Some("pl"), "fr"),
+        c(Some(""), Some("de"), None, Some("pl"), "pl"),
     ];
-    for (lang, accept, default, want) in cases {
+    for k in cases {
         let (f, _, path, _) = sent().await;
-        f.state.set_default_language(default);
+        f.state.set_default_language(k.default);
         let mut extra = vec![("origin", ORIGIN)];
-        if let Some(a) = accept {
+        if let Some(a) = k.accept {
             extra.push(("accept-language", a));
         }
-        let r = f
-            .post_with(
-                &path,
-                &ip(90),
-                &[
-                    ("name", "Jane Test"),
-                    ("agree", "1"),
-                    ("doc", f.file.as_str()),
-                    ("lang", lang),
-                ],
-                &extra,
-            )
-            .await;
-        assert_eq!(r.status, 303, "{lang} {accept:?} {default:?}: {}", r.text());
+        let mut form = vec![
+            ("name", "Jane Test"),
+            ("agree", "1"),
+            ("doc", f.file.as_str()),
+        ];
+        if let Some(l) = k.field {
+            form.push(("lang", l));
+        }
+        let to = match k.address {
+            Some(a) => format!("{path}?lang={a}"),
+            None => path.clone(),
+        };
+        let r = f.post_with(&to, &ip(90), &form, &extra).await;
+        let what = (k.field, k.address, k.accept, k.default);
+        assert_eq!(r.status, 303, "{what:?}: {}", r.text());
         assert_eq!(
             f.record("sign_request", &f.req)["consent_version"],
-            obop_http::sign_text::consent_version_for(want),
-            "{lang} {accept:?} {default:?}"
+            obop_http::sign_text::consent_version_for(k.want),
+            "{what:?}"
+        );
+        // The page after the signature is in the language that was recorded.
+        assert_eq!(
+            r.h("location"),
+            format!("{path}?lang={}", k.want),
+            "{what:?}"
         );
     }
 }
@@ -973,4 +1011,132 @@ async fn a_closed_request_keeps_its_document_too() {
             assert_eq!(f.record("sign_request", &f.req), before, "{close} {who}");
         }
     }
+}
+
+#[tokio::test]
+async fn a_guess_at_the_evidence_is_refused_the_same_whether_it_is_right_or_wrong() {
+    // A caller who cannot read a field of the evidence must not learn it by sending a guess:
+    // a value equal to the stored one used to be passed through (200) and a wrong one refused
+    // (400), an equality oracle on the signer's address, name and hash. The refusal is now for
+    // the key, whatever the value. A reader of the field keeps the pass-through (a form saves the
+    // whole record).
+    let (f, _, path, _) = sent().await;
+    let r = f.post(&path, &ip(82), &good_form(&f, "Jane Test")).await;
+    assert_eq!(r.status, 303, "{}", r.text());
+    let signed = f.record("sign_request", &f.req);
+    // `document_file` is a file: a guess that is not a file the caller may use is refused by the
+    // kind of the field before the guard runs, whoever asks and whatever is stored, so only the
+    // held copy's own id is a guess the guard sees.
+    let wrong = |k: &str| -> J {
+        match k {
+            "signed_at" => json!("2001-01-01T00:00:00.000000Z"),
+            "signer_ip" => json!("203.0.113.77"),
+            _ => json!("not it"),
+        }
+    };
+    for key in DOOR_KEYS {
+        let right = signed[key].clone();
+        // `sam` holds `sign.user` only: he cannot read any of the eight.
+        let mut answers = Vec::new();
+        let guesses: Vec<(&str, J)> = if key == "document_file" {
+            vec![("right", right.clone())]
+        } else {
+            vec![("right", right.clone()), ("wrong", wrong(key))]
+        };
+        for (what, value) in guesses {
+            let (s, v) = f
+                .api(
+                    "sam",
+                    "/api/sign_request/update",
+                    json!({"id": f.req, key: value}),
+                )
+                .await;
+            assert_eq!(s, 400, "sam update {key} ({what}): {v}");
+            assert!(err(&v).contains("signing process"), "{key} ({what}): {v}");
+            answers.push((s, v));
+        }
+        if answers.len() == 2 {
+            assert_eq!(answers[0], answers[1], "{key}: the answers differ");
+        }
+        assert_eq!(f.record("sign_request", &f.req), signed, "{key}");
+        // The same for a create and a bulk row, and for an empty value.
+        let mut values = vec![right.clone(), json!(""), J::Null];
+        if key != "document_file" {
+            values.push(wrong(key));
+        }
+        for value in values {
+            let (s, v) = f
+                .api(
+                    "sam",
+                    "/api/sign_request/create",
+                    json!({"title": "Probe", "signer_name": "Jane Test", key: value}),
+                )
+                .await;
+            assert_eq!(s, 400, "sam create {key}={value}: {v}");
+            // A file the caller may not use, and an empty one, are refused earlier, by the kind of
+            // the field (a new request has no held copy to compare with).
+            let by_kind = key == "document_file";
+            assert!(by_kind || err(&v).contains("signing process"), "{key}: {v}");
+            let (s, v) = f
+                .api(
+                    "sam",
+                    "/api/sign_request/bulk_create",
+                    json!({"rows": [{"title": "Probe", "signer_name": "Jane Test", key: value}]}),
+                )
+                .await;
+            assert_eq!(s, 400, "sam bulk {key}={value}: {v}");
+            assert!(by_kind || err(&v).contains("signing process"), "{key}: {v}");
+        }
+    }
+    assert_eq!(count(&f, "sign_request"), 1, "nothing was made");
+
+    // `mia` holds `sign.manager` and reads seven of the eight (the held copy is for nobody): the
+    // value she was shown may go back unchanged, a different one is refused, and the copy is
+    // refused for her as for everyone.
+    for key in DOOR_KEYS {
+        let right = signed[key].clone();
+        let (s, v) = f
+            .api(
+                "mia",
+                "/api/sign_request/update",
+                json!({"id": f.req, key: right}),
+            )
+            .await;
+        if key == "document_file" {
+            assert_eq!(s, 400, "mia sends back {key}: {v}");
+            assert!(err(&v).contains("signing process"), "{key}: {v}");
+        } else {
+            assert_eq!(s, 200, "mia sends back {key}: {v}");
+        }
+        if key != "document_file" {
+            let (s, v) = f
+                .api(
+                    "mia",
+                    "/api/sign_request/update",
+                    json!({"id": f.req, key: wrong(key)}),
+                )
+                .await;
+            assert_eq!(s, 400, "mia sends another {key}: {v}");
+            assert!(err(&v).contains("signing process"), "{key}: {v}");
+        }
+    }
+    assert_eq!(f.record("sign_request", &f.req), signed);
+    // An empty value in a new row is let through for a reader and not for `sam` (the empty
+    // pass-through is a reader's).
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_request/create",
+            json!({"title": "Blank", "signer_name": "Jane Test", "signer_ip": ""}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_request/bulk_create",
+            json!({"rows": [{"title": "Blank", "signer_name": "Jane Test", "signer_ip": ""}]}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
 }

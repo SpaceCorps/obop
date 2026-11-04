@@ -13,7 +13,7 @@ pub(super) fn install(d: &Dispatcher, svc: &Arc<SignService>) {
         "sign_request.create",
         Box::new(move |p, input, inner| {
             if !is_admin(p) {
-                s.refuse_door_fields(input, None)?;
+                s.refuse_door_fields(p, input, None)?;
             }
             inner(input)
         }),
@@ -23,7 +23,7 @@ pub(super) fn install(d: &Dispatcher, svc: &Arc<SignService>) {
         "sign_request.update",
         Box::new(move |p, input, inner| {
             if !is_admin(p) {
-                s.check_update(input)?;
+                s.check_update(p, input)?;
             }
             inner(input)
         }),
@@ -42,11 +42,12 @@ pub(super) fn install(d: &Dispatcher, svc: &Arc<SignService>) {
             inner(input)
         }),
     );
+    let s = svc.clone();
     d.around(
         "sign_request.bulk_create",
-        Box::new(|p, input, inner| {
+        Box::new(move |p, input, inner| {
             if !is_admin(p) {
-                refuse_in_rows(input)?;
+                s.refuse_in_rows(p, input)?;
             }
             inner(input)
         }),
@@ -80,10 +81,27 @@ fn is_meta(k: &str) -> bool {
 }
 
 impl SignService {
+    /// Whether `p` may read the door-owned field `key` of a request: the group the package gives
+    /// the field. A field the registry does not list is not readable (the check fails closed).
+    fn reads(&self, p: &Principal, key: &str) -> bool {
+        self.models
+            .read()
+            .unwrap()
+            .get("sign_request")
+            .and_then(|m| m.def.fields.iter().find(|f| f.name == key))
+            .is_some_and(|f| p.allows(f.permission_group))
+    }
+
     /// Refuse a value in a door-owned key. `current` is the stored record of an update, whose
-    /// unchanged values may be sent back (a form saves the whole record).
+    /// unchanged values a reader of the field may send back (a form saves the whole record).
+    ///
+    /// A caller who cannot read a field is refused for the key **whatever the value**: with the
+    /// pass-through, a guess that equals the stored evidence would be answered 200 and a wrong one
+    /// 400, which tells a person who may not read it whether it is that value (an equality oracle
+    /// on the signer's address, name or hash).
     pub(super) fn refuse_door_fields(
         &self,
+        p: &Principal,
         input: &Value,
         current: Option<&Fields>,
     ) -> Result<(), String> {
@@ -92,7 +110,7 @@ impl SignService {
         };
         for k in DOOR_OWNED {
             if let Some(v) = m.get(k)
-                && !same(current.and_then(|c| c.get(k)), v)
+                && (!self.reads(p, k) || !same(current.and_then(|c| c.get(k)), v))
             {
                 return Err(door_message(k));
             }
@@ -100,7 +118,7 @@ impl SignService {
         Ok(())
     }
 
-    fn check_update(&self, input: &Value) -> Result<(), String> {
+    fn check_update(&self, p: &Principal, input: &Value) -> Result<(), String> {
         let Value::Map(m) = input else {
             return Ok(());
         };
@@ -110,7 +128,7 @@ impl SignService {
         let Some(cur) = self.get("sign_request", &id)? else {
             return Ok(());
         };
-        self.refuse_door_fields(input, Some(&cur))?;
+        self.refuse_door_fields(p, input, Some(&cur))?;
         if text(&cur, "state") == "signed"
             && m.iter().any(|(k, v)| !is_meta(k) && !same(cur.get(k), v))
         {
@@ -131,23 +149,32 @@ impl SignService {
     }
 }
 
-/// `bulk_create` takes `rows` (a list of objects) or `csv` (the text of a CSV file). A row or a
-/// column that names a door-owned field is refused.
-fn refuse_in_rows(input: &Value) -> Result<(), String> {
-    let Value::Map(m) = input else {
-        return Ok(());
-    };
-    if let Some(Value::List(rows)) = m.get("rows") {
-        for r in rows {
-            if let Value::Map(r) = r {
-                for k in DOOR_OWNED {
-                    if r.get(k).is_some_and(|v| !same(None, v)) {
-                        return Err(door_message(k));
+impl SignService {
+    /// `bulk_create` takes `rows` (a list of objects) or `csv` (the text of a CSV file). A row or
+    /// a column that names a door-owned field is refused; in a row, an empty value is let through
+    /// only for a reader of the field (as in `create`).
+    fn refuse_in_rows(&self, p: &Principal, input: &Value) -> Result<(), String> {
+        let Value::Map(m) = input else {
+            return Ok(());
+        };
+        if let Some(Value::List(rows)) = m.get("rows") {
+            for r in rows {
+                if let Value::Map(r) = r {
+                    for k in DOOR_OWNED {
+                        if r.get(k)
+                            .is_some_and(|v| !self.reads(p, k) || !same(None, v))
+                        {
+                            return Err(door_message(k));
+                        }
                     }
                 }
             }
         }
+        refuse_csv_columns(m)
     }
+}
+
+fn refuse_csv_columns(m: &std::collections::BTreeMap<String, Value>) -> Result<(), String> {
     if let Some(Value::Text(csv)) = m.get("csv") {
         // The header as the importer reads it, not as a line of text: the importer skips blank
         // records, ends a record at a lone CR, and trims a cell after unquoting it. A file that
