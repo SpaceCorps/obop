@@ -214,8 +214,6 @@ async function snapshot(tx: SqlTx): Promise<Snapshot> {
       `PRAGMA index_list(${quoted(o.name)})`,
     );
     for (const index of listed) {
-      // The indexes that SQLite makes for a key of the table itself are part of the table's text.
-      if (!objects.has(objectKey({ type: "index", name: index.name }))) continue;
       const parts = await tx.all<{ cid: number; key: number }>(
         `PRAGMA index_xinfo(${quoted(index.name)})`,
       );
@@ -482,7 +480,10 @@ const isWord = (t: Token | undefined, word: string): boolean =>
 const isMark = (t: Token | undefined, mark: string): boolean =>
   t !== undefined && t.kind === "mark" && t.text === mark;
 
-/** The words that start a constraint of a column. A type name does not contain them. */
+/**
+ * The words that start a constraint of a column. A type name does not contain them. (`GENERATED
+ * ALWAYS AS (...)` is not listed on its own: it contains `AS`, which is.)
+ */
 const CONSTRAINT_WORDS = new Map<string, string>([
   ["CONSTRAINT", "a named constraint"],
   ["PRIMARY", "a primary key"],
@@ -490,7 +491,6 @@ const CONSTRAINT_WORDS = new Map<string, string>([
   ["CHECK", "a CHECK constraint"],
   ["COLLATE", "a collation"],
   ["REFERENCES", "a foreign key"],
-  ["GENERATED", "a generated value"],
   ["AS", "a generated value"],
   ["ON", "an ON CONFLICT clause"],
 ]);
