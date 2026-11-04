@@ -6,6 +6,8 @@
 
 use super::*;
 use crate::Value;
+use obop_masking::mode_for;
+use obop_types::{DataClass, MaskMode};
 
 pub(super) fn install(d: &Dispatcher, svc: &Arc<SignService>) {
     let s = svc.clone();
@@ -81,15 +83,25 @@ fn is_meta(k: &str) -> bool {
 }
 
 impl SignService {
-    /// Whether `p` may read the door-owned field `key` of a request: the group the package gives
-    /// the field. A field the registry does not list is not readable (the check fails closed).
+    /// Whether `p` may read the door-owned field `key` of a request **in clear**: the group the
+    /// package gives the field (narrowed by the token's scopes) and a mask mode of `Allow`, the
+    /// rule `query_guard` applies to a filter. An agent that is shown a mask token or nothing is
+    /// not a reader, or a right guess would be told from a wrong one. A field the registry does
+    /// not list is not readable (the check fails closed).
     fn reads(&self, p: &Principal, key: &str) -> bool {
         self.models
             .read()
             .unwrap()
             .get("sign_request")
             .and_then(|m| m.def.fields.iter().find(|f| f.name == key))
-            .is_some_and(|f| p.allows(f.permission_group))
+            .is_some_and(|f| {
+                p.allows(f.permission_group)
+                    && mode_for(
+                        p.kind,
+                        f.class.unwrap_or(DataClass::Secret),
+                        f.personal_data,
+                    ) == MaskMode::Allow
+            })
     }
 
     /// Refuse a value in a door-owned key. `current` is the stored record of an update, whose

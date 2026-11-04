@@ -1061,114 +1061,158 @@ async fn a_closed_request_keeps_its_document_too() {
     }
 }
 
+/// An agent token of `owner` with these scopes, kept under `name`.
+async fn agent_with(f: &mut Fx, owner: &str, scopes: &[&str], name: &'static str) {
+    let (s, v) = f
+        .api(
+            owner,
+            "/api/auth/agent-token",
+            json!({"scopes": scopes, "label": name}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    f.tokens
+        .insert(name, v["token"].as_str().unwrap().to_string());
+}
+
+/// One write of a door-owned key: `op` is `update` (of `req`), `create` or `bulk` (one row).
+async fn probe(f: &Fx, who: &str, op: &str, req: &str, key: &str, value: &J) -> (u16, String) {
+    let (path, body) = match op {
+        "update" => ("/api/sign_request/update", json!({"id": req, key: value})),
+        "create" => (
+            "/api/sign_request/create",
+            json!({"title": "Probe", "signer_name": "Jane Test", key: value}),
+        ),
+        _ => (
+            "/api/sign_request/bulk_create",
+            json!({"rows": [{"title": "Probe", "signer_name": "Jane Test", key: value}]}),
+        ),
+    };
+    let (s, v) = f.api(who, path, body).await;
+    (s, err(&v))
+}
+
 #[tokio::test]
 async fn a_guess_at_the_evidence_is_refused_the_same_whether_it_is_right_or_wrong() {
-    // A caller who cannot read a field of the evidence must not learn it by sending a guess:
-    // a value equal to the stored one used to be passed through (200) and a wrong one refused
-    // (400), an equality oracle on the signer's address, name and hash. The refusal is now for
-    // the key, whatever the value. A reader of the field keeps the pass-through (a form saves the
-    // whole record).
-    let (f, _, path, _) = sent().await;
+    // A caller who cannot read a field of the evidence **in clear** must not learn it by sending
+    // a guess: a value equal to the stored one used to be passed through (200) and a wrong one
+    // refused (400), an equality oracle on the signer's address, name and hash. The refusal is
+    // now for the key, whatever the value. A reader of the field keeps the pass-through (a form
+    // saves the whole record). A reader is a person (or a token) that holds the field's group
+    // and is not masked: an agent that is shown mask tokens is not one.
+    let (mut f, _, path, _) = sent().await;
     let r = f.post(&path, &ip(82), &good_form(&f, "Jane Test")).await;
     assert_eq!(r.status, 303, "{}", r.text());
     let signed = f.record("sign_request", &f.req);
-    // `document_file` is a file: a guess that is not a file the caller may use is refused by the
-    // kind of the field before the guard runs, whoever asks and whatever is stored, so only the
-    // held copy's own id is a guess the guard sees.
+    // The Document gets another file, so that the signed copy is held by the request alone: its
+    // id is not one that anybody can read through the Document.
+    let (s, v) = f
+        .upload(
+            "ann",
+            "documents_document.attachment",
+            "application/pdf",
+            pdf(7),
+        )
+        .await;
+    assert_eq!(s, 201, "{v}");
+    let newer = v["id"].as_str().unwrap().to_string();
+    let (s, v) = f
+        .api(
+            "ann",
+            "/api/documents_document/update",
+            json!({"id": f.doc, "attachment": newer}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    // The agents: a manager's, a manager's narrowed to `sign.user`, and one that holds the
+    // administrator's group (an agent is never an administrator, but it holds every group).
+    agent_with(&mut f, "mia", &["sign.user", "sign.manager"], "manager_bot").await;
+    agent_with(&mut f, "mia", &["sign.user"], "narrowed_bot").await;
+    agent_with(
+        &mut f,
+        "root",
+        &[
+            "platform.admin",
+            "sign.user",
+            "sign.manager",
+            "documents.user",
+        ],
+        "admin_bot",
+    )
+    .await;
+
+    let personal = [
+        "signed_name",
+        "signer_ip",
+        "signer_user_agent",
+        "signature_reference",
+    ];
+    let all: Vec<&str> = DOOR_KEYS.to_vec();
+    // (who, the keys of the eight that they cannot read in clear)
+    let cannot: [(&str, Vec<&str>); 5] = [
+        ("sam", all.clone()),
+        ("narrowed_bot", all.clone()),
+        // Holds the group of seven, but is shown the four personal ones as tokens; nobody has
+        // the group of the held copy.
+        ("manager_bot", [&personal[..], &["document_file"]].concat()),
+        // Holds the administrator's group, but an agent gets only the groups its scopes list
+        // (`Principal::allows`): not the held copy's, and the four personal ones as tokens.
+        ("admin_bot", [&personal[..], &["document_file"]].concat()),
+        // A person who holds `sign.manager` reads seven; the held copy's group is nobody's.
+        ("mia", vec!["document_file"]),
+    ];
     let wrong = |k: &str| -> J {
         match k {
             "signed_at" => json!("2001-01-01T00:00:00.000000Z"),
             "signer_ip" => json!("203.0.113.77"),
+            // A well-formed id that no file has.
+            "document_hash" | "document_file" => json!("0".repeat(64)),
             _ => json!("not it"),
         }
     };
-    for key in DOOR_KEYS {
-        let right = signed[key].clone();
-        // `sam` holds `sign.user` only: he cannot read any of the eight.
-        let mut answers = Vec::new();
-        let guesses: Vec<(&str, J)> = if key == "document_file" {
-            vec![("right", right.clone())]
-        } else {
-            vec![("right", right.clone()), ("wrong", wrong(key))]
-        };
-        for (what, value) in guesses {
-            let (s, v) = f
-                .api(
-                    "sam",
-                    "/api/sign_request/update",
-                    json!({"id": f.req, key: value}),
-                )
-                .await;
-            assert_eq!(s, 400, "sam update {key} ({what}): {v}");
-            assert!(err(&v).contains("signing process"), "{key} ({what}): {v}");
-            answers.push((s, v));
-        }
-        if answers.len() == 2 {
-            assert_eq!(answers[0], answers[1], "{key}: the answers differ");
-        }
-        assert_eq!(f.record("sign_request", &f.req), signed, "{key}");
-        // The same for a create and a bulk row, and for an empty value.
-        let mut values = vec![right.clone(), json!(""), J::Null];
-        if key != "document_file" {
-            values.push(wrong(key));
-        }
-        for value in values {
-            let (s, v) = f
-                .api(
-                    "sam",
-                    "/api/sign_request/create",
-                    json!({"title": "Probe", "signer_name": "Jane Test", key: value}),
-                )
-                .await;
-            assert_eq!(s, 400, "sam create {key}={value}: {v}");
-            // A file the caller may not use, and an empty one, are refused earlier, by the kind of
-            // the field (a new request has no held copy to compare with).
-            let by_kind = key == "document_file";
-            assert!(by_kind || err(&v).contains("signing process"), "{key}: {v}");
-            let (s, v) = f
-                .api(
-                    "sam",
-                    "/api/sign_request/bulk_create",
-                    json!({"rows": [{"title": "Probe", "signer_name": "Jane Test", key: value}]}),
-                )
-                .await;
-            assert_eq!(s, 400, "sam bulk {key}={value}: {v}");
-            assert!(by_kind || err(&v).contains("signing process"), "{key}: {v}");
+    for (who, hidden) in &cannot {
+        for key in DOOR_KEYS {
+            let right = signed[key].clone();
+            let hidden = hidden.contains(&key);
+            // Update: the stored value and a wrong one.
+            let got = [
+                probe(&f, who, "update", &f.req, key, &right).await,
+                probe(&f, who, "update", &f.req, key, &wrong(key)).await,
+            ];
+            if hidden {
+                assert_eq!(got[0].0, 400, "{who} update {key} right: {got:?}");
+                assert_eq!(got[0], got[1], "{who} {key}: the answers differ");
+                // The door's own words; the held copy is stopped earlier, by the guard on files,
+                // which answers a file the caller may not read as it answers one that is not.
+                let want = if key == "document_file" {
+                    "must be the id of an uploaded file"
+                } else {
+                    "signing process"
+                };
+                assert!(got[0].1.contains(want), "{who} {key}: {got:?}");
+            } else {
+                // A reader may send back what she was shown; another value is refused.
+                assert_eq!(got[0].0, 200, "{who} sends back {key}: {got:?}");
+                assert_eq!(got[1].0, 400, "{who} sends another {key}: {got:?}");
+            }
+            assert_eq!(f.record("sign_request", &f.req), signed, "{who} {key}");
+            // Create and a bulk row, for the stored value, a wrong one and the two kinds of
+            // empty: refused for a caller who cannot read the field.
+            if hidden {
+                for op in ["create", "bulk"] {
+                    let a = probe(&f, who, op, &f.req, key, &right).await;
+                    let b = probe(&f, who, op, &f.req, key, &wrong(key)).await;
+                    assert_eq!(a.0, 400, "{who} {op} {key} right: {a:?}");
+                    assert_eq!(a, b, "{who} {op} {key}: the answers differ");
+                    for blank in [json!(""), J::Null] {
+                        let c = probe(&f, who, op, &f.req, key, &blank).await;
+                        assert_eq!(c.0, 400, "{who} {op} {key}={blank}: {c:?}");
+                    }
+                }
+            }
         }
     }
     assert_eq!(count(&f, "sign_request"), 1, "nothing was made");
-
-    // `mia` holds `sign.manager` and reads seven of the eight (the held copy is for nobody): the
-    // value she was shown may go back unchanged, a different one is refused, and the copy is
-    // refused for her as for everyone.
-    for key in DOOR_KEYS {
-        let right = signed[key].clone();
-        let (s, v) = f
-            .api(
-                "mia",
-                "/api/sign_request/update",
-                json!({"id": f.req, key: right}),
-            )
-            .await;
-        if key == "document_file" {
-            assert_eq!(s, 400, "mia sends back {key}: {v}");
-            assert!(err(&v).contains("signing process"), "{key}: {v}");
-        } else {
-            assert_eq!(s, 200, "mia sends back {key}: {v}");
-        }
-        if key != "document_file" {
-            let (s, v) = f
-                .api(
-                    "mia",
-                    "/api/sign_request/update",
-                    json!({"id": f.req, key: wrong(key)}),
-                )
-                .await;
-            assert_eq!(s, 400, "mia sends another {key}: {v}");
-            assert!(err(&v).contains("signing process"), "{key}: {v}");
-        }
-    }
-    assert_eq!(f.record("sign_request", &f.req), signed);
     // An empty value in a new row is let through for a reader and not for `sam` (the empty
     // pass-through is a reader's).
     let (s, v) = f

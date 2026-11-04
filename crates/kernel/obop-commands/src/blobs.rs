@@ -6,7 +6,8 @@
 //!   is public and nothing is attached yet: the blob waits as an upload of that principal.
 //! - **Reference** (a guard on `create` and `update` of models with such fields): a blob id may be
 //!   saved into a field only by the principal who uploaded it, or when it is already held by this
-//!   very field, or when the principal can already read a record that holds it (with the same
+//!   very field and the principal may read that field, or when the principal can already read a
+//!   record that holds it (with the same
 //!   row rules as a read). Knowing a hash is not enough, and a guessed id answers like a missing
 //!   one.
 //! - **Hold** (after `create`, `update`, `delete` and erasure): saving a record attaches its
@@ -426,11 +427,16 @@ pub(crate) fn reference_guard(def: &ModelDef, store: &Store, models: ModelsMap) 
                 .flatten()
                 .ok_or_else(none)?;
             let by_me = info.pending.iter().any(|(by, ..)| by == &p.id);
-            let held_here = record.as_deref().is_some_and(|r| {
-                info.owners
-                    .iter()
-                    .any(|o| o.model == def.name && o.record == r && o.field == f.name)
-            });
+            // The id the field already holds may be sent back, but only by a caller who may read
+            // the field: for anyone else "it is the one held here" would be told apart from "it
+            // is not", which confirms a guess at a file by its hash (an equality oracle on the
+            // signed copy of `sign`, D92).
+            let held_here = p.allows(f.permission_group)
+                && record.as_deref().is_some_and(|r| {
+                    info.owners
+                        .iter()
+                        .any(|o| o.model == def.name && o.record == r && o.field == f.name)
+                });
             let readable = || {
                 let models = models.read().unwrap();
                 let reads = Plain(&*store.backend);
