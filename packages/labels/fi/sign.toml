@@ -63,6 +63,10 @@ description = "Päivä, jona pyyntö lähetettiin (YYYY-MM-DD)"
 label = "Vanhenee"
 description = "Viimeinen päivä, jona pyynnön voi allekirjoittaa (YYYY-MM-DD)"
 
+[labels.fi.model.sign_request.field.show_history]
+label = "Näytä allekirjoittajalle tähänastiset allekirjoitukset"
+description = "Näyttää allekirjoittajalle, ketkä ovat jo allekirjoittaneet saman tiedoston (sama asiakirja, sama SHA-256): kirjoitetut nimet ja ajat pyynnöistä, joissa tämä ruutu on myös valittu. Siitä kerrotaan ennen allekirjoitusta. Vain tiedostolle, jonka useat nimetyt henkilöt allekirjoittavat yhdessä, ei koskaan toisilleen vieraille henkilöille. Vain esimiehet ja ylläpitäjät. Tyhjä tarkoittaa pois päältä"
+
 [labels.fi.model.sign_request.field.signed_on]
 label = "Allekirjoitettu"
 description = "Päivä, jona asiakirja allekirjoitettiin (YYYY-MM-DD)"

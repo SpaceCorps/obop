@@ -63,6 +63,10 @@ description = "Día en que se envió la solicitud (YYYY-MM-DD)"
 label = "Fecha de caducidad"
 description = "Último día en que se puede firmar la solicitud (YYYY-MM-DD)"
 
+[labels.es.model.sign_request.field.show_history]
+label = "Mostrar al firmante las firmas anteriores"
+description = "Muestra al firmante quién ha firmado ya este mismo archivo (mismo documento, mismo SHA-256): nombres escritos y horas de las solicitudes que también tienen la casilla marcada. Se le avisa antes de firmar. Solo para un archivo que varias personas nombradas firman juntas, nunca para uno enviado a personas sin relación entre sí. Solo responsables y administradores. Vacía significa desactivada"
+
 [labels.es.model.sign_request.field.signed_on]
 label = "Fecha de firma"
 description = "Día en que se firmó el documento (YYYY-MM-DD)"
