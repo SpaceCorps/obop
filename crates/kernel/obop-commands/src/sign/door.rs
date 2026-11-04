@@ -95,6 +95,10 @@ pub enum Gone {
 pub enum Invalid {
     Name,
     Agree,
+    /// The request shows the signatures so far (`show_history`) and the form was made from a page
+    /// that did not say so: the staff switch was turned on after the signer opened the page. Nothing
+    /// was written; the page is shown again with the notice.
+    History,
 }
 
 /// What the page shows for a link that works.
@@ -107,6 +111,9 @@ pub struct ViewData {
     /// The SHA-256 of the document (hex); the form sends it back as `doc`.
     pub document_hash: String,
     pub expires_at: String,
+    /// The signatures so far on this file, when the request asks for them (`show_history`); `None`
+    /// for every other request, which is shown the page it has always been shown.
+    pub history: Option<History>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -115,6 +122,8 @@ pub enum View {
     /// The link was used: the request is signed at this time.
     Signed {
         at: String,
+        /// As [`ViewData::history`], with the signer's own entry marked.
+        history: Option<History>,
     },
 }
 
@@ -129,6 +138,13 @@ pub struct SignForm {
     /// `v1-draft/de/9ebff173` (derived by the HTTP layer from the page texts, `sign_text.rs`); an
     /// empty id is stored as `v1-draft`.
     pub consent_version: String,
+    /// The same for a request that shows the signatures so far (`sign_text.rs`,
+    /// `consent_version_with_history_for`): it also covers the sentence that tells the signer their
+    /// name and time are shown to the others. The door stores this one, and not `consent_version`,
+    /// for such a request. Empty is stored as `v1-draft`, as above.
+    pub consent_version_history: String,
+    /// The form came from a page that carried that sentence (the hidden field `hist`).
+    pub saw_history: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -137,11 +153,11 @@ pub struct Done {
     pub already: bool,
 }
 
-struct Found {
-    id: String,
-    rid: String,
-    link: Fields,
-    req: Fields,
+pub(super) struct Found {
+    pub(super) id: String,
+    pub(super) rid: String,
+    pub(super) link: Fields,
+    pub(super) req: Fields,
 }
 
 /// A signed request shows the time it was signed. One that carries no time was not signed at the
@@ -159,7 +175,7 @@ enum Status {
     Gone(Gone),
 }
 
-fn unavailable(e: String) -> DoorError {
+pub(super) fn unavailable(e: String) -> DoorError {
     eprintln!("sign: the store refused: {e}");
     DoorError::Unavailable
 }
@@ -172,7 +188,7 @@ fn logged(raw: &str, max: usize) -> String {
 
 /// A text from outside made safe for a log line or a record: hidden characters and line breaks
 /// gone, cut to `max` characters.
-fn clean(raw: &str, max: usize) -> String {
+pub(super) fn clean(raw: &str, max: usize) -> String {
     strip_hidden(&raw.chars().take(max * 2).collect::<String>())
         .chars()
         .take(max)
@@ -357,7 +373,10 @@ impl SignService {
             WINDOW_10_MIN,
         )?;
         match self.status(&f) {
-            Status::Signed(at) => Ok(View::Signed { at }),
+            Status::Signed(at) => Ok(View::Signed {
+                history: self.history_for(&f)?,
+                at,
+            }),
             Status::Gone(g) => Err(DoorError::Gone(g)),
             Status::Usable => {
                 let doc = self.cheap_integrity(&f, client)?;
@@ -371,6 +390,7 @@ impl SignService {
                     document_title: cut(text(&doc, "title"), 200),
                     document_hash: text(&f.req, "document_hash").to_string(),
                     expires_at: text(&f.link, "expires_at").to_string(),
+                    history: self.history_for(&f)?,
                 }))
             }
         }
@@ -444,6 +464,13 @@ impl SignService {
             }
             Status::Usable => {}
         }
+        // A request that shows the signatures so far tells the signer so on its page. A form made
+        // from a page that did not (the switch was turned on in between) is not signed: the
+        // consent id stored with a signature must be that of the words the signer read.
+        let history = self.history_on(&f.req);
+        if history && !form.saw_history {
+            return Err(DoorError::Invalid(Invalid::History));
+        }
         let name = clean_name(&form.name).ok_or(DoorError::Invalid(Invalid::Name))?;
         if !form.agree {
             return Err(DoorError::Invalid(Invalid::Agree));
@@ -475,7 +502,12 @@ impl SignService {
         let ip = client.ip();
         let agent = clean(&client.user_agent, 300);
         let reference = format!("typed:{name}");
-        let consent = match clean(&form.consent_version, 40) {
+        let wording = if history {
+            &form.consent_version_history
+        } else {
+            &form.consent_version
+        };
+        let consent = match clean(wording, 40) {
             c if c.is_empty() => "v1-draft".to_string(),
             c => c,
         };
@@ -522,6 +554,12 @@ impl SignService {
                 expect: vec![
                     ("state".into(), J::from("sent")),
                     ("document_hash".into(), J::from(hash.clone())),
+                    // The switch is what the door read: one turned on or off after the read would
+                    // leave a signature under the wording of the other (the id stored above).
+                    (
+                        HISTORY_FLAG.into(),
+                        f.req.get(HISTORY_FLAG).cloned().unwrap_or(J::Null),
+                    ),
                 ],
             },
             // An empty patch that only checks, in the same transaction, that the Document still

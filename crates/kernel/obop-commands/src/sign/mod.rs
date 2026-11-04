@@ -25,6 +25,7 @@
 
 mod door;
 mod guards;
+mod history;
 mod link;
 mod send;
 mod token;
@@ -32,6 +33,7 @@ mod token;
 pub use door::{
     Client, Done, DoorError, Gone, Invalid, SignForm, View, ViewData, digest_of_request,
 };
+pub use history::{HISTORY_FLAG, HISTORY_MAX, History, HistoryEntry};
 
 use crate::engine::Models as ModelsMap;
 use crate::store::Store;

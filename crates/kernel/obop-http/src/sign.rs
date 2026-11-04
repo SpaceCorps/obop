@@ -273,6 +273,7 @@ fn form_page(v: &FormView<'_>) -> Response {
                 document_hash: &v.data.document_hash,
                 typed: v.typed,
                 error: v.error,
+                history: v.data.history.as_ref(),
             },
         ),
     )
@@ -302,7 +303,9 @@ pub(crate) async fn page(
                 error: None,
                 status: StatusCode::OK,
             }),
-            Ok(View::Signed { at }) => page_response(StatusCode::OK, sign_page::done(lang, &at)),
+            Ok(View::Signed { at, history }) => {
+                page_response(StatusCode::OK, sign_page::done(lang, &at, history.as_ref()))
+            }
             Err(e) => refusal(&e, lang),
         }
     })
@@ -358,6 +361,10 @@ pub(crate) async fn submit(
             agree: pair(&pairs, "agree") == Some("1"),
             doc: pair(&pairs, "doc").unwrap_or("").to_string(),
             consent_version: txt::consent_version_for(lang),
+            // For a request that shows the signatures so far; the door picks between the two.
+            consent_version_history: txt::consent_version_with_history_for(lang),
+            // The hidden field of the page that carried the sentence about it.
+            saw_history: pair(&pairs, "hist") == Some("1"),
         };
         let c = client(&s, &parts);
         match svc.submit(&rid, &tok, &form, &c) {
@@ -379,11 +386,12 @@ pub(crate) async fn submit(
                         error: Some(match why {
                             Invalid::Name => "err_name",
                             Invalid::Agree => "err_agree",
+                            Invalid::History => "err_history",
                         }),
                         status: StatusCode::BAD_REQUEST,
                     }),
-                    Ok(View::Signed { at }) => {
-                        page_response(StatusCode::OK, sign_page::done(lang, &at))
+                    Ok(View::Signed { at, history }) => {
+                        page_response(StatusCode::OK, sign_page::done(lang, &at, history.as_ref()))
                     }
                     Err(e) => refusal(&e, lang),
                 }
@@ -589,6 +597,7 @@ mod tests {
             DoorError::Unavailable,
             DoorError::Invalid(Invalid::Name),
             DoorError::Invalid(Invalid::Agree),
+            DoorError::Invalid(Invalid::History),
             DoorError::Refused,
         ] {
             let (_, key) = refusal_parts(&e);
