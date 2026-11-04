@@ -43,7 +43,8 @@ const WRITERS: [(&str, usize, usize); 12] = [
 
 /// Where the list is.
 const DESCRIPTION_FILE: &str = "kernel/obop-pkg/src/installer.rs";
-const LEAD: &str = "What happened. The kinds this version writes to this log: ";
+/// The text before the list; the back office reads the list after it (`securityEvents.test.ts`).
+const LEAD: &str = "What happened: ";
 
 /// The control plane writes to the same table in its own database.
 const OTHER_LOG: &str = "kernel/obop-platform/";
@@ -290,7 +291,7 @@ fn late(db: &dyn Backend) { record_event(db, 1, "u", "late_one", "root", "d"); }
 fn the_list_is_read_from_the_text_of_the_description() {
     let src = r#"
 fn f() -> &'static str {
-    "What happened. The kinds this version writes to this log: one, two_two, three"
+    "What happened: one, two_two, three"
 }
 "#;
     let files = tree(&[(DESCRIPTION_FILE, src)]);
