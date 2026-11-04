@@ -18,6 +18,7 @@ const HOST_SIDE = [
   "src/core/address.ts",
   "src/core/deadline.ts",
   "src/core/device.ts",
+  "src/core/host-config.ts",
   "src/core/open-outbox.ts",
   "src/core/session.ts",
   "src/core/sql.ts",
