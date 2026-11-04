@@ -81,7 +81,7 @@ description = "Missä allekirjoitus säilytetään; typed:NIMI linkin kautta kir
 
 [labels.fi.model.sign_request.field.document_hash]
 label = "Asiakirjan tiiviste"
-description = "Allekirjoitetun asiakirjan SHA-256-tiiviste (hex), todisteeksi siitä, ettei sitä muutettu jälkeenpäin; asetetaan, kun asiakirjaa koskeva pyyntö lähetetään"
+description = "Allekirjoitettavaksi lähetetyn tiedoston SHA-256-tiiviste (hex); asetetaan, kun asiakirjaa koskeva pyyntö lähetetään. Tallennetta ei ole suojattu muutoksilta: ylläpitäjä tai kuka tahansa, joka voi kirjoittaa tietokantaan, voi muuttaa sen"
 
 [labels.fi.model.sign_request.field.document_file]
 label = "Säilytetty kopio"

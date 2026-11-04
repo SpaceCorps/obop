@@ -2,7 +2,7 @@
 id = "sign"
 version = "0.2.1"
 name = "Sign"
-description = "Document templates and signature requests with a draft, sent, signed, declined, expired flow. A request names the signer (personal data) and keeps the signature evidence. A request can point at a PDF in Documents: sending it takes the SHA-256 of the file and keeps an exact copy, and a person with the manager role creates a one-time signing link that the signer opens without an account to read that copy, type their full name and agree. This is a simple electronic signature only: a typed name does not prove who typed it, the time is the server clock, and the address is the one the proxy chain reports. At signing the evidence is stored on the request and an entry is written to the security log (no command writes or changes that log; the database does not stop someone who can write it). A signed request can be changed or deleted only by an administrator, who can still change any record. Sending and recording a signature need a human approval for agents, and agents cannot create signing links."
+description = "Document templates and signature requests with a draft, sent, signed, declined, expired flow. A request names the signer (personal data) and keeps the signature evidence. A request can point at a PDF in Documents: sending it takes the SHA-256 of the file and keeps an exact copy, and a person with the manager role creates a one-time signing link that the signer opens without an account to read that copy, type their full name and agree. This is a simple electronic signature only: a typed name does not prove who typed it, the time is the server clock, and the address is the one the proxy chain reports. At signing the evidence is stored on the request and an entry is written to the security log (the log has only read commands, so no caller can write or change an entry through a command; the server writes the entries, and the database does not stop someone who can write it). A signed request can be changed or deleted only by an administrator, who can still change any record. Sending and recording a signature need a human approval for agents, and agents cannot create signing links."
 author = "SpaceCorps"
 summary = "Document templates and signature requests; a PDF from Documents can be signed through a one-time link. Simple electronic signature."
 license = "Apache-2.0"
@@ -137,7 +137,7 @@ write_group = "sign.user"
 
   [[model.field]]
   name = "document_hash"
-  description = "SHA-256 hash (hex) of the signed document, to prove it was not changed afterwards; set when a request about a document is sent"
+  description = "SHA-256 hash (hex) of the file that was sent for signature; set when a request about a document is sent. The record is not tamper-proof: an administrator or whoever can write the database can change it"
   class = "none"
   group = "sign.manager"
 

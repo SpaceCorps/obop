@@ -81,7 +81,7 @@ description = "Wo die Unterschrift gespeichert ist; typed:NAME bei einem über e
 
 [labels.de.model.sign_request.field.document_hash]
 label = "Dokument-Hash"
-description = "SHA-256-Hash (hex) des unterzeichneten Dokuments, als Nachweis, dass es danach nicht verändert wurde; wird beim Senden einer Anfrage zu einem Dokument gesetzt"
+description = "SHA-256-Hash (hex) der Datei, die zur Unterzeichnung gesendet wurde; wird beim Senden einer Anfrage zu einem Dokument gesetzt. Der Eintrag ist nicht manipulationssicher: Eine Administratorin oder wer die Datenbank beschreiben kann, kann ihn ändern"
 
 [labels.de.model.sign_request.field.document_file]
 label = "Festgehaltene Kopie"

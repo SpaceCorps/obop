@@ -81,7 +81,7 @@ description = "Var signaturen finns; typed:NAMN för ett namn som skrivits via e
 
 [labels.sv.model.sign_request.field.document_hash]
 label = "Dokumentets hashvärde"
-description = "SHA-256-hash (hex) av det signerade dokumentet, som bevis för att det inte ändrats efteråt; sätts när en begäran om ett dokument skickas"
+description = "SHA-256-hash (hex) av filen som skickades för signering; sätts när en begäran om ett dokument skickas. Posten är inte manipulationssäker: en administratör eller den som kan skriva i databasen kan ändra den"
 
 [labels.sv.model.sign_request.field.document_file]
 label = "Sparad kopia"

@@ -81,7 +81,7 @@ description = "Où la signature est conservée ; typed:NOM pour un nom saisi via
 
 [labels.fr.model.sign_request.field.document_hash]
 label = "Empreinte du document"
-description = "Empreinte SHA-256 (hex) du document signé, pour prouver qu'il n'a pas été modifié ensuite ; définie à l'envoi d'une demande portant sur un document"
+description = "Empreinte SHA-256 (hex) du fichier envoyé pour signature ; définie à l'envoi d'une demande portant sur un document. L'enregistrement n'est pas inviolable : un administrateur ou quiconque peut écrire dans la base peut la modifier"
 
 [labels.fr.model.sign_request.field.document_file]
 label = "Copie conservée"

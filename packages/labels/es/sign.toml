@@ -81,7 +81,7 @@ description = "Dónde se guarda la firma; typed:NOMBRE para un nombre escrito me
 
 [labels.es.model.sign_request.field.document_hash]
 label = "Hash del documento"
-description = "Hash SHA-256 (hex) del documento firmado, para probar que no se cambió después; se establece al enviar una solicitud sobre un documento"
+description = "Hash SHA-256 (hex) del archivo enviado a firma; se establece al enviar una solicitud sobre un documento. El registro no es a prueba de manipulación: un administrador o quien pueda escribir en la base de datos puede cambiarlo"
 
 [labels.es.model.sign_request.field.document_file]
 label = "Copia guardada"

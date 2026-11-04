@@ -81,7 +81,7 @@ description = "Gdzie przechowywany jest podpis; typed:NAZWA dla imienia i nazwis
 
 [labels.pl.model.sign_request.field.document_hash]
 label = "Skrót dokumentu"
-description = "Skrót SHA-256 (hex) podpisanego dokumentu, jako dowód, że nie zmieniono go później; ustawiany przy wysłaniu prośby o dokument"
+description = "Skrót SHA-256 (hex) pliku wysłanego do podpisu; ustawiany przy wysłaniu prośby o dokument. Zapis nie jest zabezpieczony przed zmianą: może go zmienić administrator lub każdy, kto może zapisywać w bazie danych"
 
 [labels.pl.model.sign_request.field.document_file]
 label = "Zachowana kopia"
