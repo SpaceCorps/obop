@@ -127,7 +127,7 @@ description = "Festhalten, dass der Unterzeichner abgelehnt hat"
 
 [labels.de.model.sign_request.action.expire]
 label = "Ablaufen lassen"
-description = "Festhalten, dass die Anfrage unterzeichnet abgelaufen ist"
+description = "Festhalten, dass die Anfrage ohne Unterschrift abgelaufen ist"
 
 [labels.de.model.sign_request.action.send_document]
 label = "Dokument senden"
