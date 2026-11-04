@@ -35,6 +35,8 @@ async fn old_instance() -> Old {
                 "documents.manager",
             ],
         ),
+        // Holds only `sign.user`: what a plain user may do to a request after a rollback.
+        ("sam", vec!["sign.user"]),
     ] {
         let g: Vec<String> = groups.iter().map(|g| g.to_string()).collect();
         auth.create_user(name, PW, &g).unwrap();
@@ -54,7 +56,7 @@ async fn old_instance() -> Old {
         bytes: None,
         _scratch: None,
     };
-    for name in ["admin", "mia"] {
+    for name in ["admin", "mia", "sam"] {
         let (s, v) = f
             .api(
                 "",
@@ -64,7 +66,11 @@ async fn old_instance() -> Old {
             .await;
         assert_eq!(s, 200, "{v}");
         f.tokens.insert(
-            if name == "admin" { "admin" } else { "mia" },
+            match name {
+                "admin" => "admin",
+                "mia" => "mia",
+                _ => "sam",
+            },
             v["token"].as_str().unwrap().to_string(),
         );
     }
@@ -436,10 +442,11 @@ async fn a_sent_document_request_after_a_rollback_is_closed_by_setting_a_templat
             "{step}: {v}"
         );
         assert_eq!(f.record("sign_request", id)["state"], "sent");
-        // The template alone is not enough: the address is named next.
+        // The template alone is not enough: the address is named next. (Anybody who holds
+        // `sign.user` may set both, `sam` here; no administrator is needed, docs/SIGN.md.)
         let (s, v) = f
             .api(
-                "admin",
+                "sam",
                 "/api/sign_request/update",
                 json!({"id": id, "template_id": template}),
             )
@@ -456,7 +463,7 @@ async fn a_sent_document_request_after_a_rollback_is_closed_by_setting_a_templat
         // path of the old version is the one that is left.)
         let (s, v) = f
             .api(
-                "admin",
+                "sam",
                 "/api/sign_request/update",
                 json!({"id": id, "signer_email": "nobody@example.test"}),
             )
