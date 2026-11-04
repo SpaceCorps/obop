@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/tes
 import { progressFrom, type Progress } from "../../core/progress.ts";
 import { READ_EVERY_MS } from "../../core/progress-reader.ts";
 import { MAX_POINTS_PER_TRIP, type StoredPoint } from "../../core/types.ts";
-import { t } from "../../i18n/index.ts";
+import { t, tp } from "../../i18n/index.ts";
 import type { Runtime } from "../../native/runtime.ts";
 import type { Nav } from "../router.ts";
 
@@ -17,8 +17,16 @@ const hooks = vi.hoisted(() => ({
   states: [] as Array<{ initial: unknown; set: (value: unknown) => void }>,
   /** Every `useEffect` of the last call, in order: the first one reads the stored positions. */
   effects: [] as Array<{ run: () => unknown; deps: readonly unknown[] | undefined }>,
+  /**
+   * What a setter was handed, by the position of its `useState`: React's memory, as far as the
+   * next call of the screen needs it. A position that is in here (even with `null`) wins over
+   * `initial` and over `measured` below.
+   */
+  slots: new Map<number, unknown>(),
   /** What `useState` hands out as the value of the first state (`measured`), when not `null`. */
   measured: null as unknown,
+  /** The time `useNow` gives. */
+  now: 0,
   outbox: { active: null, loaded: true } as {
     active: { clientTripId: string; startedAt: string } | null;
     loaded: boolean;
@@ -32,10 +40,17 @@ vi.mock("react", async (importOriginal) => {
   return {
     ...actual,
     useState: (initial: unknown) => {
-      const set = vi.fn();
-      const first = hooks.states.length === 0;
+      const at = hooks.states.length;
+      const set = vi.fn((value: unknown) => {
+        hooks.slots.set(at, value);
+      });
       hooks.states.push({ initial, set });
-      return [first && hooks.measured !== null ? hooks.measured : initial, set];
+      const value = hooks.slots.has(at)
+        ? hooks.slots.get(at)
+        : at === 0 && hooks.measured !== null
+          ? hooks.measured
+          : initial;
+      return [value, set];
     },
     useEffect: (run: () => unknown, deps?: readonly unknown[]) => {
       hooks.effects.push({ run, deps });
@@ -67,7 +82,7 @@ vi.mock("react-native", () => ({
 }));
 vi.mock("../hooks.ts", () => ({
   useOutbox: () => hooks.outbox,
-  useNow: () => NOW,
+  useNow: () => hooks.now,
 }));
 vi.mock("../announce.ts", () => ({ announce: vi.fn() }));
 vi.mock("../../native/actions.ts", () => ({
@@ -113,24 +128,33 @@ let clockNow = 0;
 beforeEach(() => {
   hooks.states.length = 0;
   hooks.effects.length = 0;
+  hooks.slots.clear();
   hooks.listeners.length = 0;
   hooks.unsubscribed = 0;
   hooks.measured = null;
+  hooks.now = NOW;
   hooks.outbox = {
     active: { clientTripId: TRIP, startedAt: new Date(T0).toISOString() },
     loaded: true,
   };
   clockNow = 5_000_000;
   vi.spyOn(Date, "now").mockImplementation(() => clockNow);
+  // The timers of the screen's reader are the only ones faked; `flush` below uses the real
+  // `setImmediate`, and the clock is the spy on `Date.now`.
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
   vi.mocked(onChange).mockClear();
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
 /** The screen, called once; `points` is what the store holds. */
 function render(points: StoredPoint[] = weakPoints) {
+  // What the last call registered is replaced, as React replaces it on each draw.
+  hooks.states.length = 0;
+  hooks.effects.length = 0;
   const stored = vi.fn(async (_id: string) => points);
   const rt = { store: { points: stored } } as unknown as Runtime;
   const nav = { home: vi.fn(), replace: vi.fn() } as unknown as Nav;
@@ -205,6 +229,76 @@ describe("the Recording screen reads the stored positions of the open trip", () 
     expect(hooks.states[0]!.set).toHaveBeenCalledTimes(2);
   });
 
+  test("a store with no position yet: `measured` is handed the count of zero, not nothing", async () => {
+    // The start of every trip. `null` would mean "not read yet" and hide the "waiting" text and the
+    // "no position" banner.
+    const { stored } = render([]);
+    const [measured] = hooks.states;
+    hooks.effects[0]!.run();
+    await flush();
+    expect(stored).toHaveBeenCalledWith(TRIP);
+    expect(measured!.set).toHaveBeenCalledTimes(1);
+    expect(measured!.set).toHaveBeenCalledWith({
+      points: 0,
+      metres: 0,
+      lastFixMs: null,
+      signal: null,
+    });
+    expect(vi.mocked(measured!.set).mock.calls[0]![0]).not.toBeNull();
+    expect(hooks.slots.get(0)).toEqual({ points: 0, metres: 0, lastFixMs: null, signal: null });
+  });
+
+  test("a change inside the 4 seconds is read when they are up, by the screen's own timer", async () => {
+    const { stored } = render();
+    const [measured] = hooks.states;
+    hooks.effects[0]!.run();
+    await flush();
+    expect(stored).toHaveBeenCalledTimes(1);
+    clockNow += 1000;
+    hooks.listeners[0]!();
+    hooks.listeners[0]!();
+    expect(stored).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(1);
+    vi.advanceTimersByTime(READ_EVERY_MS - 1000 - 1);
+    expect(stored).toHaveBeenCalledTimes(1);
+    clockNow += READ_EVERY_MS - 1000;
+    vi.advanceTimersByTime(1);
+    expect(stored).toHaveBeenCalledTimes(2);
+    await flush();
+    expect(measured!.set).toHaveBeenCalledTimes(2);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  test("a read that is due when a change comes in cancels the one that waits, with the screen's own `clearTimeout`", async () => {
+    const { stored } = render();
+    hooks.effects[0]!.run();
+    await flush();
+    clockNow += 1000;
+    hooks.listeners[0]!();
+    expect(vi.getTimerCount()).toBe(1);
+    clockNow += READ_EVERY_MS;
+    hooks.listeners[0]!();
+    expect(stored).toHaveBeenCalledTimes(2);
+    expect(vi.getTimerCount()).toBe(0);
+    vi.advanceTimersByTime(10 * READ_EVERY_MS);
+    await flush();
+    expect(stored).toHaveBeenCalledTimes(2);
+  });
+
+  test("when the screen goes away the read that waits is cancelled too", async () => {
+    const { stored } = render();
+    const stop = hooks.effects[0]!.run() as () => void;
+    await flush();
+    clockNow += 1000;
+    hooks.listeners[0]!();
+    expect(vi.getTimerCount()).toBe(1);
+    stop();
+    expect(vi.getTimerCount()).toBe(0);
+    vi.advanceTimersByTime(10 * READ_EVERY_MS);
+    await flush();
+    expect(stored).toHaveBeenCalledTimes(1);
+  });
+
   test("when the screen goes away it stops listening, and nothing more reaches `measured`", async () => {
     const { stored } = render();
     let release: (points: StoredPoint[]) => void = () => undefined;
@@ -261,5 +355,58 @@ describe("what the Recording screen draws of the note", () => {
     const after = drawn[at + 1]!;
     expect(after.type).toBe(Text);
     expect(after.props.testID).toBe("elapsed");
+  });
+});
+
+describe("what the Recording screen says of a trip before and after the first read of the stored positions", () => {
+  /** The banner for "no position arrived", if the screen draws it. */
+  const noFixBanner = (root: ReactElement<{ children?: ReactNode }>) =>
+    elements(root.props.children).find((child) => child.props.testID === "no-fix");
+  /** The line "Waiting for the first location fix", if the screen draws it. */
+  const waitingText = (root: ReactElement<{ children?: ReactNode }>) =>
+    elements(root.props.children).find(
+      (child) => child.type === Text && child.props.children === t("recording.nofix"),
+    );
+
+  /** The screen drawn before the first read, then the read (the effect), then drawn again. */
+  async function drawnBeforeAndAfterTheRead(points: StoredPoint[]) {
+    const before = render(points).root;
+    hooks.effects[0]!.run();
+    await flush();
+    const after = render(points).root;
+    return { before, after };
+  }
+
+  test("a minute and no position stored: the error banner appears with the first read, not before", async () => {
+    hooks.now = T0 + 60_000;
+    const { before, after } = await drawnBeforeAndAfterTheRead([]);
+    expect(noFixBanner(before)).toBeUndefined();
+    expect(waitingText(before)).toBeUndefined();
+    const banner = noFixBanner(after);
+    expect(banner).toBeDefined();
+    expect(banner!.type).toBe(Banner);
+    expect(banner!.props.tone).toBe("danger");
+    expect(banner!.props.title).toBe(t("recording.nofix.title"));
+    expect(waitingText(after)).toBeUndefined();
+  });
+
+  test("a few seconds and no position stored: 'Waiting for the first location fix' appears with the first read, not before", async () => {
+    hooks.now = T0 + 10_000;
+    const { before, after } = await drawnBeforeAndAfterTheRead([]);
+    expect(noFixBanner(before)).toBeUndefined();
+    expect(waitingText(before)).toBeUndefined();
+    expect(noFixBanner(after)).toBeUndefined();
+    expect(waitingText(after)).toBeDefined();
+  });
+
+  test("with positions stored neither of the two is drawn", async () => {
+    hooks.now = T0 + 90_000;
+    const { before, after } = await drawnBeforeAndAfterTheRead(weakPoints);
+    for (const root of [before, after]) {
+      expect(noFixBanner(root)).toBeUndefined();
+      expect(waitingText(root)).toBeUndefined();
+    }
+    const points = elements(after.props.children).find((child) => child.props.testID === "points");
+    expect(points!.props.children).toBe(tp("recording.points", 7));
   });
 });

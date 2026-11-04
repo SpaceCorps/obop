@@ -55,7 +55,8 @@ export function Recording({
   const startedAt = active?.startedAt ?? null;
 
   // The phone's own count of the trip: the same rules as the server (`trip-core`), for the preview
-  // only. It is read when a point arrives, and at most every few seconds (`progress-reader.ts`).
+  // only. It is read when a point arrives, at most every few seconds, and a point that arrives
+  // sooner is read when those seconds are up (`progress-reader.ts`).
   useEffect(
     () =>
       startProgressReader({
@@ -64,6 +65,8 @@ export function Recording({
         subscribe: onChange,
         clock: () => Date.now(),
         set: setMeasured,
+        setTimeout: (run, ms) => setTimeout(run, ms),
+        clearTimeout: (timer) => clearTimeout(timer as ReturnType<typeof setTimeout>),
       }),
     [rt, id],
   );
