@@ -57,6 +57,7 @@ export function createDatabaseOpener(config: StartupConfig): () => Promise<Opene
       portsFor(storage.databaseFile),
       { databaseKey: storage.databaseKey, session: [storage.server, storage.tokens] },
       policyFor(Platform.OS),
+      config.modules,
     );
     return { db: result.db, info: { cipherVersion: result.cipherVersion } };
   };

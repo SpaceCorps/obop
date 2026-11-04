@@ -53,9 +53,11 @@ export class SchemaError extends Error {
 
 const MODULE_ID = /^[a-z][a-z0-9]*$/;
 
-function checkModules(modules: readonly SchemaModule[]): void {
+/** Throws for a list of modules that cannot work together; `defineStartup` calls it when the app starts. */
+export function checkModules(modules: readonly SchemaModule[]): void {
   const seen = new Set<string>();
   const legacy = new Map<string, string>();
+  const legacyKeys = new Map<string, string>();
   for (const m of modules) {
     if (!MODULE_ID.test(m.id)) {
       throw new SchemaError(
@@ -85,6 +87,13 @@ function checkModules(modules: readonly SchemaModule[]): void {
       }
       if (table.startsWith("sqlite_")) throw new SchemaError(`${table} is a table of SQLite`);
       legacy.set(table, m.id);
+    }
+    for (const key of m.legacyMetaKeys ?? []) {
+      const owner = legacyKeys.get(key);
+      if (owner !== undefined) {
+        throw new SchemaError(`the meta key ${key} is claimed by ${owner} and by ${m.id}`);
+      }
+      legacyKeys.set(key, m.id);
     }
     seen.add(m.id);
   }

@@ -19,7 +19,9 @@ const HOST_SIDE = [
   "src/core/deadline.ts",
   "src/core/device.ts",
   "src/core/host-config.ts",
+  "src/core/host-state.ts",
   "src/core/open-outbox.ts",
+  "src/core/schema.ts",
   "src/core/session.ts",
   "src/core/sql.ts",
   "src/core/startup-config.ts",
@@ -59,10 +61,6 @@ const MILEAGE_PACKAGES = ["@obop/trip-core", "@obop/ui-native"];
 
 /** `from -> to`: known, with the reason. */
 const KNOWN: Record<string, string> = {
-  "src/core/open-outbox.ts -> src/core/sql-store.ts":
-    "migrates and writes the stale-file note through the Mileage store",
-  "src/core/open-outbox.ts -> src/core/store.ts": "the note helpers are typed on the Mileage store",
-  "src/core/open-outbox.ts -> src/core/values.ts": "formats the time of the note",
   "src/native/auth.ts -> src/core/identity.ts": "Binding and Owner (types) of the outbox owner",
 };
 

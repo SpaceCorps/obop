@@ -1,3 +1,4 @@
+import { MILEAGE_SCHEMA } from "../src/core/sql-store.ts";
 import { defineStartup } from "../src/core/startup-config.ts";
 import { SCOPE } from "../src/native/config.ts";
 import { identity } from "./identity.ts";
@@ -15,4 +16,5 @@ export const startup = defineStartup({
   identity,
   groups: SCOPE,
   legacyGroups: ["mileage.driver"],
+  modules: [MILEAGE_SCHEMA],
 });

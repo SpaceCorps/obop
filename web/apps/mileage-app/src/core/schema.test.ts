@@ -10,6 +10,7 @@ import {
 import type { SqlDb } from "./sql.ts";
 import { memoryDb } from "../test-support/memory-db.ts";
 import { tempDatabase } from "../test-support/temp-db.ts";
+import { watched } from "../test-support/watched-db.ts";
 
 // The manager of the versions of the parts of the app that keep tables in the file, tested with
 // small made-up modules. The modules of the app are in `schema-upgrade.test.ts`.
@@ -52,27 +53,6 @@ const versions = async (db: SqlDb) =>
   );
 const layout = async (db: SqlDb) =>
   Number((await db.one<{ user_version: number }>("PRAGMA user_version"))?.user_version);
-
-/** The statements that change something, and the transactions, that a database was given. */
-function watched(db: SqlDb) {
-  const log: string[] = [];
-  const spy: SqlDb = {
-    ...db,
-    exec: (sql) => {
-      log.push(`exec ${sql.slice(0, 40)}`);
-      return db.exec(sql);
-    },
-    run: (sql, params) => {
-      log.push(`run ${sql.slice(0, 40)}`);
-      return db.run(sql, params);
-    },
-    transaction: (fn) => {
-      log.push("transaction");
-      return db.transaction(fn);
-    },
-  };
-  return { spy, log };
-}
 
 describe("a new file", () => {
   test("gets every module in list order, its version recorded, and layout 1", async () => {
@@ -402,6 +382,11 @@ describe("a list of modules that cannot work", () => {
       "a legacy table claimed twice",
       [module("a", { legacyTables: ["t"] }), module("b", { legacyTables: ["t"] })],
       /claimed by a and by b/,
+    ],
+    [
+      "a legacy meta key claimed twice",
+      [module("a", { legacyMetaKeys: ["k"] }), module("b", { legacyMetaKeys: ["k"] })],
+      /meta key k is claimed by a and by b/,
     ],
     [
       "a table of SQLite as a legacy table",
