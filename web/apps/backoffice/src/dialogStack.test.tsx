@@ -334,3 +334,168 @@ describe("the Dialog primitive, stacked", () => {
     expect(closed).toEqual([1, 0]);
   });
 });
+
+describe("a dialog that takes Escape stops it there (WEB3-1)", () => {
+  // The record panel closes on an Escape that reaches the window while no overlay is on the page
+  // (RecordPanel.tsx). A question above the panel is an overlay: Escape answers it, the overlay goes,
+  // and only the dialog's stopPropagation keeps that same press from closing the panel as well.
+  const render = (node: React.ReactNode) =>
+    act(async () => {
+      root.render(node);
+    });
+  const key = () =>
+    (document.activeElement ?? document.body).dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
+    );
+
+  it("reaches no listener further along: not the target, the document, nor the window's own", async () => {
+    const heard: string[] = [];
+    const target = () => heard.push("target");
+    const doc = () => heard.push("document");
+    const win = () => heard.push("window");
+    const closed: string[] = [];
+    await render(
+      <Dialog title="one" onClose={() => closed.push("one")}>
+        <button>inside</button>
+      </Dialog>,
+    );
+    const inside = document.body.querySelector("button")!;
+    inside.addEventListener("keydown", target);
+    document.addEventListener("keydown", doc);
+    window.addEventListener("keydown", win); // a bubble listener on the window, like RecordPanel's
+    try {
+      await act(async () => void key());
+    } finally {
+      inside.removeEventListener("keydown", target);
+      document.removeEventListener("keydown", doc);
+      window.removeEventListener("keydown", win);
+    }
+    expect(closed).toEqual(["one"]);
+    expect(heard, "the Escape went on after the dialog took it").toEqual([]);
+  });
+
+  it("does not stop a key that is not Escape", async () => {
+    const heard: string[] = [];
+    const win = () => heard.push("window");
+    await render(<Dialog title="one" onClose={() => {}} />);
+    window.addEventListener("keydown", win);
+    try {
+      await act(async () =>
+        document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "a", bubbles: true })),
+      );
+    } finally {
+      window.removeEventListener("keydown", win);
+    }
+    expect(heard).toEqual(["window"]);
+  });
+
+  it("is what keeps the record panel open when the question above it is answered with Escape", async () => {
+    // A browser runs the update between two listeners of one event; jsdom does not. flushSync puts
+    // the question away inside the first listener, as that would, so the panel's listener finds no
+    // overlay left on the page unless the event was stopped.
+    const panelClosed = vi.fn();
+    function Panel() {
+      const [open, setOpen] = useState(true);
+      useEffect(() => {
+        const on = (e: KeyboardEvent) => {
+          if (e.key === "Escape" && !e.defaultPrevented && !document.querySelector(".overlay"))
+            panelClosed();
+        };
+        window.addEventListener("keydown", on);
+        return () => window.removeEventListener("keydown", on);
+      }, []);
+      return (
+        <>
+          <p>the panel</p>
+          {open && (
+            <Dialog
+              title="Confirm"
+              role="alertdialog"
+              onClose={() => flushSync(() => setOpen(false))}
+            >
+              <button>Keep it</button>
+            </Dialog>
+          )}
+        </>
+      );
+    }
+    await render(<Panel />);
+    expect(document.body.querySelector(".overlay")).not.toBeNull();
+    const act_ = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };
+    act_.IS_REACT_ACT_ENVIRONMENT = false; // the update is made outside act on purpose
+    try {
+      key();
+    } finally {
+      act_.IS_REACT_ACT_ENVIRONMENT = true;
+    }
+    expect(document.body.querySelector(".overlay"), "the question is still open").toBeNull();
+    expect(panelClosed, "the same Escape closed the panel too").not.toHaveBeenCalled();
+    // The next Escape, with no question above it, is the panel's.
+    await act(async () => void key());
+    expect(panelClosed).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("the stack follows the order the dialogs are drawn in (WEB3-2)", () => {
+  // Several dialogs can be committed together. A dialog that is written inside another dialog's
+  // children is committed before its parent, in the page as in the stack, so the one drawn last (on
+  // top) is the one that answers Escape in every arrangement.
+  const render = (node: React.ReactNode) =>
+    act(async () => {
+      root.render(node);
+    });
+  const order = () =>
+    [...document.body.querySelectorAll<HTMLElement>(".overlay h2")].map((h) => h.textContent);
+  const closed: string[] = [];
+  beforeEach(() => {
+    closed.length = 0;
+  });
+  const D = ({ name, children }: { name: string; children?: React.ReactNode }) => (
+    <Dialog bare title={name} onClose={() => closed.push(name)}>
+      {children}
+    </Dialog>
+  );
+
+  it("a dialog inside another one's children, both open at once: the one drawn last answers", async () => {
+    await render(
+      <D name="outer">
+        <D name="inner" />
+      </D>,
+    );
+    // React commits the inner one first, in the page and in the stack: the outer one is on top.
+    expect(order()).toEqual(["inner", "outer"]);
+    await act(async () => void escapeKey());
+    expect(closed).toEqual(["outer"]);
+  });
+
+  it("siblings opened together: the one drawn last answers", async () => {
+    await render(
+      <>
+        <D name="first" />
+        <D name="second" />
+      </>,
+    );
+    const drawn = order();
+    await act(async () => void escapeKey());
+    expect(closed).toEqual([drawn[1]]);
+  });
+
+  it("a dialog inside another one's children that opens later: it is drawn last and answers", async () => {
+    let show: (v: boolean) => void;
+    function Outer() {
+      const [on, setOn] = useState(false);
+      show = setOn;
+      return <D name="outer">{on && <D name="inner" />}</D>;
+    }
+    await render(<Outer />);
+    await act(async () => show(true));
+    expect(order()).toEqual(["outer", "inner"]);
+    await act(async () => void escapeKey());
+    expect(closed).toEqual(["inner"]);
+  });
+});
+
+const escapeKey = () =>
+  (document.activeElement ?? document.body).dispatchEvent(
+    new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
+  );

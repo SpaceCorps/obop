@@ -435,3 +435,51 @@ describe("an answer to Create signing link that the page cannot show (W5)", () =
     expect(notify).not.toHaveBeenCalled();
   });
 });
+
+describe("who may revoke a signing link (WEB3-5)", () => {
+  // The right is the link model's own: a person who can read a request's links but not update them
+  // sees the table and no Revoke button (the server would refuse the update).
+  const active: Row = {
+    id: "aaaaaaaa-0000-0000-0000-000000000001",
+    request_id: "r1",
+    expires_at: "2030-01-01T00:00:00.000000Z",
+  };
+  const used: Row = {
+    id: "bbbbbbbb-0000-0000-0000-000000000002",
+    request_id: "r1",
+    expires_at: "2030-01-01T00:00:00.000000Z",
+    used_at: "2026-11-01T10:00:00.000000Z",
+  };
+  const revoke = () =>
+    [...container.querySelectorAll<HTMLElement>(".sign-links button")].filter(
+      (b) => flat(b) === "Revoke",
+    );
+
+  it("shows Revoke on an active link to a person who may update links", async () => {
+    linkRows = [active];
+    await mount(rows.document, { make: true, revoke: true });
+    expect(container.querySelector(".sign-links")).not.toBeNull();
+    expect(revoke()).toHaveLength(1);
+  });
+
+  it("shows the links and no Revoke to a person who may not update links, although they may make them", async () => {
+    linkRows = [active];
+    await mount(rows.document, { make: true, revoke: false });
+    expect(container.querySelector(".sign-links"), "the table is gone").not.toBeNull();
+    expect(flat(container.querySelector(".sign-links"))).toContain("Active");
+    expect(revoke()).toHaveLength(0);
+  });
+
+  it("shows Revoke to a person who may update links although they may not make them", async () => {
+    linkRows = [active];
+    await mount(rows.document, { make: false, revoke: true });
+    expect(revoke()).toHaveLength(1);
+  });
+
+  it("shows no Revoke on a link that was used, whatever the right", async () => {
+    linkRows = [used, active];
+    await mount(rows.document, { make: true, revoke: true });
+    expect(container.querySelectorAll(".sign-links tbody tr")).toHaveLength(2);
+    expect(revoke()).toHaveLength(1);
+  });
+});

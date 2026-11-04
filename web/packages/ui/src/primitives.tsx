@@ -781,10 +781,14 @@ export type DialogProps = {
 };
 
 /**
- * The dialogs that are open, oldest first. Several can be open at once: the shell asks a question
- * above whatever is open (leaving with unsaved work), and the command palette and the app launcher
- * open above anything. Escape belongs to the last one only; every dialog listens on the window, so
- * without this one keypress would answer the question and also reach the dialog underneath.
+ * The dialogs that are open, in the order they are drawn on the page: the last one is on top. Several
+ * can be open at once: the shell asks a question above whatever is open (leaving with unsaved work),
+ * and the command palette and the app launcher open above anything. Escape belongs to the last one
+ * only; every dialog listens on the window, so without this one keypress would answer the question
+ * and also reach the dialog underneath. A dialog is added when it opens, in the same commit order
+ * that puts its element on the page, so the two orders agree: also for a dialog written inside
+ * another dialog's children and open with it, which React commits first, before its parent (it is
+ * then underneath its parent on the page and in the stack; dialogStack.test.tsx pins this).
  */
 const openDialogs: object[] = [];
 /** The Escape presses a dialog has taken, so a second dialog's listener cannot take the same one. */
