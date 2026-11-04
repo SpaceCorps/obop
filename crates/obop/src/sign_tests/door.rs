@@ -3,7 +3,7 @@
 
 use super::*;
 use obop_commands::sign::digest_of_request;
-use obop_storage::blob::{BlobBytes, Blobs, NewBlob};
+use obop_storage::blob::{BlobBytes, NewBlob};
 
 const HOUR: i64 = 3_600_000_000;
 const DAY: i64 = 24 * HOUR;
