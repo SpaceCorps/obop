@@ -1,11 +1,37 @@
-import { en, type MessageKey, type Messages } from "./en.ts";
+import type { MessageKey, PluralKey } from "./en.ts";
+import { LANGUAGES, type Language, type LanguageCode } from "./languages.ts";
 
-export type { MessageKey, Messages };
+export type { MessageKey, PluralKey };
+export type { LanguageCode };
 
-const catalogue: Messages = en;
+/**
+ * The active language: what `t`, `tp`, `tOn`, `formatNumber` and `formatDateTime` read. It is
+ * English until `setLanguage` is called (`language.ts` decides which language and calls it; the
+ * tests rely on the default). The screens read these functions while they render, so a change is
+ * shown by rendering again: `App.tsx` renders the whole tree again when the language changes.
+ */
+let active: Language = LANGUAGES.en;
+const listeners = new Set<() => void>();
 
-/** The language of the catalogue and of the numbers and dates the app formats (BCP 47). */
-export const LOCALE = "en";
+export function getLanguage(): LanguageCode {
+  return active.code;
+}
+
+/** Makes `code` the language of the sentences, numbers and dates, and tells the listeners if it changed. */
+export function setLanguage(code: LanguageCode): void {
+  const next = LANGUAGES[code];
+  if (next === active) return;
+  active = next;
+  for (const listener of listeners) listener();
+}
+
+/** `listener` is called after the language changed. Returns the function that stops it. */
+export function onLanguageChange(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
 
 type Params = Record<string, string | number>;
 
@@ -16,9 +42,14 @@ function fill(text: string, params: Params): string {
   });
 }
 
+/** The text of a key in the active language; the English one if the active catalogue lacks it (the tests say it never does). */
+function lookup(key: string): string {
+  return active.messages[key] ?? LANGUAGES.en.messages[key] ?? key;
+}
+
 /** A sentence of the catalogue with its `{placeholders}` filled. */
 export function t(key: MessageKey, params: Params = {}): string {
-  return fill(catalogue[key], params);
+  return fill(lookup(key), params);
 }
 
 /**
@@ -29,66 +60,94 @@ export function t(key: MessageKey, params: Params = {}): string {
  */
 export function tOn(os: string, key: MessageKey, params: Params = {}): string {
   const iosKey = `${key}.ios`;
-  if (os === "ios" && iosKey in catalogue)
-    return fill((catalogue as Record<string, string>)[iosKey]!, params);
-  return fill(catalogue[key], params);
+  if (os === "ios" && iosKey in active.messages) return fill(lookup(iosKey), params);
+  return fill(lookup(key), params);
 }
 
-/** The keys that have plural forms: `name` where the catalogue holds `name.one`, `name.other`, and so on. */
-export type PluralKey = MessageKey extends infer K
-  ? K extends `${infer Base}.other`
-    ? Base
-    : never
-  : never;
-
-/** The plural rules of English, for a runtime that has no `Intl.PluralRules` (Hermes on Android has none; iOS was not checked, and the fallback is used wherever it is missing). */
-export const englishPlural = (count: number): "one" | "other" => (count === 1 ? "one" : "other");
-
-let rules: Intl.PluralRules | null = null;
-
-/** The plural category of a count in the language of the catalogue. */
-function pluralCategory(count: number): string {
-  if (typeof Intl !== "undefined" && typeof Intl.PluralRules === "function") {
-    try {
-      rules ??= new Intl.PluralRules(LOCALE);
-      return rules.select(count);
-    } catch {
-      // Fall through to the table.
-    }
-  }
-  return englishPlural(count);
+/**
+ * Whether a formatter that `Intl` made speaks the language. A valid tag the engine has no data for
+ * does not throw: the constructor resolves to its default locale (`en-US`) and formats in that, so
+ * a `catch` alone only sees an `Intl` that is absent. Only the language part is compared (`sv`
+ * against `sv-SE`). A formatter that does not say what it resolved to is trusted.
+ */
+function speaks(resolved: unknown, tag: string): boolean {
+  if (typeof resolved !== "string" || resolved === "") return true;
+  return resolved.toLowerCase().split(/[-_]/)[0] === tag.toLowerCase().split(/[-_]/)[0];
 }
 
-/** A number in the way the language writes it (decimal separator, grouping). */
+/**
+ * A number in the way the language writes it (decimal separator, grouping). Through
+ * `Intl.NumberFormat` when the engine has it AND has data for the language; otherwise by hand with
+ * the symbols of the language (`plainNumber`), so a Swedish app does not show an English number.
+ */
 export function formatNumber(value: number, maximumFractionDigits = 0): string {
   try {
-    return new Intl.NumberFormat(LOCALE, { maximumFractionDigits }).format(value);
+    const format = new Intl.NumberFormat(active.tag, { maximumFractionDigits });
+    if (speaks(format.resolvedOptions().locale, active.tag)) return format.format(value);
   } catch {
-    return String(Number(value.toFixed(maximumFractionDigits)));
+    // No Intl.NumberFormat at all.
   }
+  return plainNumber(value, maximumFractionDigits, active);
+}
+
+/**
+ * `formatNumber` without `Intl`: rounds half away from zero on the decimal text of the value (as
+ * `Intl` does: 8.35 with one digit is 8.4, where `toFixed` gives 8.3), drops trailing zeros,
+ * groups the thousands and writes the minus sign with the symbols of the language. A number the
+ * app never shows is not formatted: one that is not finite, or too large to scale (1e21 and
+ * more), is written as JavaScript writes it; one smaller than 1e-6 is "0" (JavaScript writes such
+ * a number with an exponent, and `Intl` writes "0"; a negative that rounds to nothing is "0" too,
+ * where `Intl` writes "-0").
+ */
+export function plainNumber(
+  value: number,
+  maximumFractionDigits: number,
+  language: Language,
+): string {
+  if (!Number.isFinite(value)) return String(value);
+  if (Math.abs(value) < 1e-6) return "0";
+  const digits = Math.min(20, Math.max(0, Math.trunc(maximumFractionDigits)));
+  const shifted = Number(`${Math.abs(value)}e${digits}`);
+  if (!Number.isFinite(shifted) || shifted >= 1e21) return String(value);
+  const scaled = String(Math.round(shifted)).padStart(digits + 1, "0");
+  const whole = scaled.slice(0, scaled.length - digits);
+  const fraction = scaled.slice(scaled.length - digits).replace(/0+$/, "");
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, language.symbols.group);
+  const sign = value < 0 && /[1-9]/.test(scaled) ? language.symbols.minus : "";
+  return sign + grouped + (fraction ? language.symbols.decimal + fraction : "");
 }
 
 /**
  * A sentence that depends on a count: the form is chosen by the plural rules of the language
- * (`Intl.PluralRules`, or the table of English where the runtime has none; English has `one` and
- * `other`, Polish has more) and `{count}` is the number written the way the language writes it. A
- * language lists only the forms it needs, and `other` is the one every language has.
+ * (`plural` of `languages.ts`: English and Swedish have `one` and `other`, Polish would have more)
+ * and `{count}` is the number written the way the language writes it. A language lists only the
+ * forms it needs, and `other` is the one every language has.
  */
 export function tp(key: PluralKey, count: number, params: Params = {}): string {
-  const exact = `${key}.${pluralCategory(count)}`;
-  const text =
-    (catalogue as Record<string, string>)[exact] ?? catalogue[`${key}.other` as MessageKey];
+  const text = active.messages[`${key}.${active.plural(count)}`] ?? lookup(`${key}.other`);
   return fill(text, { ...params, count: formatNumber(count) });
 }
 
-/** A date and time for a driver, in the language and time zone of the phone. */
+/**
+ * A date and time for a driver, in the language and time zone of the phone: `Intl.DateTimeFormat`
+ * when the engine has it and has data for the language (Swedish: "15 okt. 2026 11:00" on Node).
+ * Without that, `2026-10-15 11:00` in the time zone of the phone, written by hand: the same on
+ * every engine, and the order Swedish writes dates in. What Hermes does with `sv` is not known
+ * (docs/spec/mobile.md 8.9). A value that is not a date is returned as it was given.
+ */
 export function formatDateTime(iso: string): string {
   const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
   try {
-    return new Intl.DateTimeFormat(LOCALE, { dateStyle: "medium", timeStyle: "short" }).format(
-      date,
-    );
+    const format = new Intl.DateTimeFormat(active.tag, { dateStyle: "medium", timeStyle: "short" });
+    if (speaks(format.resolvedOptions().locale, active.tag)) return format.format(date);
   } catch {
-    return date.toLocaleString(LOCALE);
+    // No Intl.DateTimeFormat at all.
   }
+  return plainDateTime(date);
+}
+
+function plainDateTime(date: Date): string {
+  const two = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())} ${two(date.getHours())}:${two(date.getMinutes())}`;
 }

@@ -16,6 +16,7 @@ import * as WebBrowser from "expo-web-browser";
 import { checkAddress as checkAddressText } from "../core/address.ts";
 import type { Binding, Owner } from "../core/identity.ts";
 import { withDeadline } from "../core/deadline.ts";
+import { getLanguage } from "../i18n/index.ts";
 import {
   clientUnknown,
   needsRegistration,
@@ -23,6 +24,7 @@ import {
   type Session,
 } from "../core/session.ts";
 import { CLIENT_NAME, REDIRECT_URI, SCOPE } from "./config.ts";
+import { languageStore } from "./language.ts";
 import { deviceInfo, oauthDeps } from "./platform-deps.ts";
 
 /** Why a sign-in failed, as a word; the catalogue holds the sentence for each. */
@@ -90,7 +92,7 @@ async function ownerOf(baseUrl: string, tokens: TokenSet): Promise<Owner> {
   const client = createObopClient({
     baseUrl,
     getToken: async () => tokens.accessToken,
-    getLanguage: () => "en",
+    getLanguage,
   });
   // Bounded: React Native's network stack has no timeout of its own (docs/ISSUES.md L29).
   const { value } = await withDeadline(OWNER_CALL_MS, (signal) =>
@@ -156,6 +158,12 @@ export async function signIn(host: SignInHost, input: string): Promise<void> {
         challenge: pkce.challenge,
         state,
         scope: SCOPE,
+        // The sign-in and consent pages of the instance (it has them in en, de, fr, pl, fi, sv and
+        // es) are asked for the language the app positively knows: the chosen one, or the phone's
+        // first language when the app has a catalogue for it. A phone set to German is NOT sent as
+        // "en" (the app only shows English because it has nothing else): no `lang`, so the browser's
+        // own language decides, as it did before the app had a language choice (`knownLanguage`).
+        lang: languageStore.known() ?? undefined,
       });
     let url = authorizeUrl(config.clientId);
     // A client that is used again may have been forgotten by the instance for a reason other than

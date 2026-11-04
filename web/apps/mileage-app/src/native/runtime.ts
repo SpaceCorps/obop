@@ -5,6 +5,7 @@ import { bindOwner, bindingOf, takeOver, type Binding, type Owner } from "../cor
 import { createSession, type Session } from "../core/session.ts";
 import type { OutboxStore } from "../core/store.ts";
 import { createSyncController, type SyncController } from "../core/sync.ts";
+import { getLanguage } from "../i18n/index.ts";
 import { addressAllowed } from "./auth.ts";
 import { emitChange } from "./bus.ts";
 import { oauthDeps } from "./platform-deps.ts";
@@ -80,7 +81,9 @@ async function build(): Promise<Runtime> {
         client: createObopClient({
           baseUrl: config.baseUrl,
           getToken: () => session.accessToken(),
-          getLanguage: () => "en",
+          // The language of the app, asked for at every call: a change in the Account screen
+          // reaches the next call. The instance words the refusals it has translated in it.
+          getLanguage,
         }),
       };
     }

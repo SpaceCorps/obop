@@ -17,3 +17,5 @@ export const DATABASE_NAME = "mileage.db";
 export const DATABASE_KEY_NAME = "obop.mileage.database-key";
 export const SERVER_KEY_NAME = "obop.mileage.server";
 export const TOKENS_KEY_NAME = "obop.mileage.tokens";
+/** The choice of the language of the app (`system`, `en`, `sv`): a setting, not a secret, kept where it can be read before the database opens. */
+export const LANGUAGE_KEY_NAME = "obop.mileage.language";

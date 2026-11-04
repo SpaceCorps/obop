@@ -10,6 +10,7 @@
     "export:android": "expo export --platform android",
     "export:ios": "expo export --platform ios",
     "check:sdk": "node scripts/check-sdk.mjs",
+    "i18n:review": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/i18n-review.mjs",
     "android:prebuild": "expo prebuild --platform android --no-install",
     "android:build": "node scripts/gradle.mjs assembleDebug",
     "android:build:release": "node scripts/gradle.mjs assembleRelease",
