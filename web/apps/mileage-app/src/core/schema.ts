@@ -229,6 +229,12 @@ async function snapshot(tx: SqlTx): Promise<Snapshot> {
   return { layout, objects, columns, parents, indexes };
 }
 
+/** Why a kind of object is refused. */
+const REFUSED_KINDS: Record<string, string> = {
+  trigger: "it would run on the statements of an older build",
+  view: "a view takes the place of a table of that name for an older build",
+};
+
 /**
  * What a module may have done to the file, by comparing the file before and after its migration.
  * The point is that a build from before `module_schema` (which cannot know that a table has moved
@@ -317,14 +323,11 @@ function checkChange(module: SchemaModule, before: Snapshot, after: Snapshot): v
           `${verb} the index ${o.name} on an expression, which is evaluated on an older build's rows`,
         );
       }
-    } else if (o.type === "trigger") {
-      fail(`${verb} the trigger ${o.name}; it would run on the statements of an older build`);
-    } else if (o.type === "view") {
-      fail(
-        `${verb} the view ${o.name}; a view takes the place of a table of that name for an older build`,
-      );
     } else {
-      fail(`${verb} the ${o.type} ${o.name}, a kind of object that is not allowed`);
+      // The catalogue of SQLite holds tables, indexes, views and triggers, and nothing else.
+      fail(
+        `${verb} the ${o.type} ${o.name}; ${REFUSED_KINDS[o.type] ?? "that kind of object is not allowed"}`,
+      );
     }
   }
   for (const [table, was] of before.columns) {
@@ -499,8 +502,12 @@ const PLAIN_DEFAULT_WORDS = new Set([
   "CURRENT_TIMESTAMP",
 ]);
 
-/** Why the column definitions in `, a TEXT, b INTEGER NOT NULL DEFAULT 0` are not all plain; null if they are. */
-function columnsProblem(added: string): { column: string; why: string } | null {
+/**
+ * Why the column definitions in `, a TEXT, b INTEGER NOT NULL DEFAULT 0` are not all plain; null if
+ * they are. The text is what `ALTER TABLE ADD COLUMN` adds to a table's definition. Exported for
+ * its tests.
+ */
+export function columnsProblem(added: string): { column: string; why: string } | null {
   const tokens = tokenise(added);
   const unreadable = { column: "?", why: "text that cannot be read" };
   if (tokens === null) return unreadable;

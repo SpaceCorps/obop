@@ -3,6 +3,7 @@ import { HOST_SCHEMA } from "./host-state.ts";
 import {
   LAYOUT_VERSION,
   SchemaError,
+  columnsProblem,
   ensureModules,
   moduleMetaKeyAllowed,
   scopedMeta,
@@ -727,6 +728,20 @@ describe("what a module may add to a file that an older build uses", () => {
       /added the column a_items\.bad with a CHECK constraint/,
     ],
     [
+      "the table dropped and made again with a UNIQUE column added to its text",
+      [
+        "DROP TABLE a_items",
+        "CREATE TABLE a_items (id TEXT PRIMARY KEY NOT NULL, note TEXT, n INTEGER NOT NULL DEFAULT 0, u TEXT UNIQUE)",
+      ],
+      /added the column a_items\.u with a UNIQUE constraint/,
+    ],
+    [
+      "the table dropped and made again with a key column added to its text",
+      ["DROP TABLE a_plain", "CREATE TABLE a_plain (note TEXT, k TEXT PRIMARY KEY)"],
+      /added the column a_plain\.k with a primary key/,
+      { first: [...BASE, "CREATE TABLE a_plain (note TEXT)"] },
+    ],
+    [
       "the table made again with the same columns and a CHECK",
       [
         "CREATE TABLE a_new (id TEXT PRIMARY KEY NOT NULL, note TEXT, n INTEGER NOT NULL DEFAULT 0, CHECK (n >= 0))",
@@ -796,6 +811,82 @@ describe("what a module may add to a file that an older build uses", () => {
       expect(await tables(db)).toEqual([]);
       expect(await layout(db)).toBe(0);
     });
+  });
+});
+
+describe("the reader of the columns that a migration added", () => {
+  // `columnsProblem` reads the text that `ALTER TABLE ADD COLUMN` adds to a table's definition. A
+  // few of the texts here are ones that SQLite would not accept in an `ALTER` (a key, a UNIQUE) or
+  // not produce (an unbalanced bracket); the reader has to answer for any text, and refuse what it
+  // does not understand.
+  test.each([
+    [", a"],
+    [", a TEXT"],
+    [", a TEXT, b INTEGER"],
+    [", a VARCHAR(10)"],
+    [", a DECIMAL(10, 2)"],
+    [", a DECIMAL(+10,-2)"],
+    [", a DOUBLE PRECISION"],
+    [", a NOT NULL DEFAULT 0"],
+    [", a TEXT DEFAULT 'it''s, (ok)'"],
+    [`, "x y" TEXT, \`z\` TEXT, [w] TEXT`],
+    [", a INT DEFAULT -1"],
+    [", a REAL DEFAULT .5"],
+    [", a REAL DEFAULT 1."],
+    [", a REAL DEFAULT 1.5e-3"],
+    [", a INT DEFAULT 0xFF"],
+    [", a BLOB DEFAULT X'AB'"],
+    [", a TEXT DEFAULT NULL"],
+    [", a INT DEFAULT TRUE"],
+    [", a INT DEFAULT false"],
+    [", a TEXT DEFAULT CURRENT_TIMESTAMP"],
+    [", a TEXT NULL"],
+    [", a text not null default 0"],
+    [", a TEXT /* CHECK (a > 0) */ NOT NULL DEFAULT 0 -- UNIQUE\n, b TEXT"],
+    [", a TEXT, b INTEGER NOT NULL DEFAULT 0"],
+  ])("%s is plain", (added) => {
+    expect(columnsProblem(added)).toBeNull();
+  });
+
+  test.each<[string, string, RegExp]>([
+    ["", "?", /cannot be read/],
+    ["a TEXT", "?", /cannot be read/],
+    [", a TEXT )", "?", /cannot be read/],
+    [", a VARCHAR(10", "?", /cannot be read/],
+    [", a DEFAULT 'x", "?", /cannot be read/],
+    [", a DEFAULT x'ab", "?", /cannot be read/],
+    [", a /* open", "?", /cannot be read/],
+    [', a TEXT DEFAULT "x', "?", /cannot be read/],
+    [", a TEXT,", "?", /no name/],
+    [", 5 TEXT", "5", /no name/],
+    [", a VARCHAR(x)", "a", /type size/],
+    [", a DECIMAL(1,)", "a", /type size/],
+    [", a DECIMAL(1 2)", "a", /type size/],
+    [", a NOT NULL", "a", /NOT NULL and no default/],
+    [", a NOT NULL DEFAULT NULL", "a", /NOT NULL and no default/],
+    [", a TEXT DEFAULT", "a", /default that is not a plain value/],
+    [", a TEXT DEFAULT -", "a", /default that is not a plain value/],
+    [", a TEXT DEFAULT -x", "a", /default that is not a plain value/],
+    [", a TEXT DEFAULT (1)", "a", /default that is not a plain value/],
+    [", a TEXT DEFAULT abc", "a", /default that is not a plain value/],
+    [", a TEXT UNIQUE", "a", /a UNIQUE constraint/],
+    [", a TEXT PRIMARY KEY", "a", /a primary key/],
+    [", a TEXT CHECK (a > 0)", "a", /a CHECK constraint/],
+    [", a TEXT REFERENCES t(id)", "a", /a foreign key/],
+    [", a TEXT COLLATE NOCASE", "a", /a collation/],
+    [", a TEXT GENERATED ALWAYS AS (1)", "a", /a generated value/],
+    [", a TEXT AS (1)", "a", /a generated value/],
+    [", a TEXT CONSTRAINT c NOT NULL DEFAULT 1", "a", /a named constraint/],
+    [", a TEXT NOT NULL ON CONFLICT FAIL DEFAULT 1", "a", /an ON CONFLICT clause/],
+    [", a FOO(1) BAR", "a", /the text BAR/],
+    [', a TEXT "x"', "a", /the text x/],
+    [", a TEXT, b TEXT CHECK (1)", "b", /a CHECK constraint/],
+    [", a TEXT -- CHECK (x)\n, b TEXT UNIQUE", "b", /a UNIQUE constraint/],
+  ])("%s is not: column %s, %s", (added, column, why) => {
+    const problem = columnsProblem(added);
+    expect(problem).not.toBeNull();
+    expect(problem?.column).toBe(column);
+    expect(problem?.why).toMatch(why);
   });
 });
 
