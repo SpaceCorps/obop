@@ -17,6 +17,8 @@ pub(crate) struct Lexed {
     pub code: Vec<u8>,
     /// Start and end of each string literal in the source, and its content.
     pub strings: Vec<(usize, usize, String)>,
+    /// What [`strip_test_items`] took out as test code.
+    pub stripped: Vec<Stripped>,
 }
 
 pub(crate) fn blank(code: &mut [u8], from: usize, to: usize) {
@@ -107,7 +109,11 @@ pub(crate) fn lex(src: &str) -> Lexed {
             _ => i += 1,
         }
     }
-    Lexed { code, strings }
+    Lexed {
+        code,
+        strings,
+        stripped: Vec::new(),
+    }
 }
 
 /// A raw string starting at the `r` at `i`: the offsets of its content and of the closing quote,
@@ -186,20 +192,170 @@ pub(crate) fn word_at(code: &[u8], j: usize) -> &str {
     std::str::from_utf8(&code[j..end]).unwrap_or("")
 }
 
-/// Whether the attribute text `#[cfg(...)]` is one that holds in a test build only.
-fn is_test_cfg(attr: &str) -> bool {
-    let inner = attr.replace(' ', "");
-    inner.starts_with("#[cfg(")
-        && !inner.contains("not(")
-        && inner
-            .trim_start_matches("#[cfg(")
-            .split(|c: char| !c.is_ascii_alphanumeric() && c != '_')
-            .any(|w| w == "test")
+/// What a `#[cfg(...)]` attribute that holds in a test build only took out of the code.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Taken {
+    /// `mod name { ... }` or `mod name;` (the files of a module declared out of line are test code
+    /// too, see [`non_test`]).
+    Module,
+    /// Any other item: `fn`, `impl`, `use`, `struct`, `enum`, `const`, `static`, `type`, `trait`,
+    /// `extern`, `macro_rules!`. It ends where the item does: at its matching `}` or its `;`.
+    Item,
+    /// What is not an item: a struct field, an enum variant, a match arm, a statement, an argument.
+    /// It ends at the next `,` or `;` at its own depth (or after its block), never later.
+    Construct,
 }
 
-/// Blank every item that is compiled in a test build only (`#[cfg(test)]` and the like, with
-/// the other attributes that follow it): inline modules and functions by their braces,
-/// declarations by their `;`. Returns the names of the modules that are declared out of line
+/// One place where test-only code was taken out: byte offsets in the source and what it was.
+#[derive(Debug, Clone)]
+pub(crate) struct Stripped {
+    pub start: usize,
+    pub end: usize,
+    pub what: Taken,
+}
+
+/// Split `s` at the commas that are not inside parentheses.
+fn split_top(s: &str) -> Vec<&str> {
+    let mut out = Vec::new();
+    let (mut depth, mut from) = (0i32, 0);
+    for (i, c) in s.char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => depth -= 1,
+            ',' if depth == 0 => {
+                out.push(&s[from..i]);
+                from = i + 1;
+            }
+            _ => {}
+        }
+    }
+    out.push(&s[from..]);
+    out
+}
+
+/// Whether the predicate of a `cfg` holds in a test build only: `test`; `all(...)` when any of its
+/// parts does (the item needs them all); `any(...)` only when every part does (any other part
+/// puts the item in a production build too); never `not(...)`, a feature or a platform.
+fn test_only(pred: &str) -> bool {
+    let p = pred.trim();
+    if p == "test" {
+        return true;
+    }
+    for (name, needs_all) in [("all", false), ("any", true)] {
+        if let Some(inner) = p
+            .strip_prefix(name)
+            .map(str::trim_start)
+            .and_then(|r| r.strip_prefix('('))
+            .and_then(|r| r.strip_suffix(')'))
+        {
+            let parts: Vec<bool> = split_top(inner)
+                .into_iter()
+                .filter(|x| !x.trim().is_empty())
+                .map(test_only)
+                .collect();
+            return if needs_all {
+                !parts.is_empty() && parts.iter().all(|b| *b)
+            } else {
+                parts.iter().any(|b| *b)
+            };
+        }
+    }
+    false
+}
+
+/// Whether the attribute text `#[cfg(...)]` is one that holds in a test build only.
+pub(crate) fn is_test_cfg(attr: &str) -> bool {
+    let a = attr.trim();
+    a.strip_prefix("#[")
+        .map(str::trim_start)
+        .and_then(|r| r.strip_prefix("cfg"))
+        .map(str::trim_start)
+        .and_then(|r| r.strip_prefix('('))
+        .and_then(|r| r.strip_suffix(']'))
+        .map(str::trim_end)
+        .and_then(|r| r.strip_suffix(')'))
+        .is_some_and(test_only)
+}
+
+/// The keywords that start an item.
+const ITEM_HEADS: [&str; 13] = [
+    "mod",
+    "fn",
+    "impl",
+    "use",
+    "struct",
+    "enum",
+    "union",
+    "trait",
+    "type",
+    "const",
+    "static",
+    "extern",
+    "macro_rules",
+];
+
+/// The end of an item that starts at `from`: after the `;` that ends it, or after its `{}` body
+/// (and the `;` that follows a body in a `use a::{b, c};` or a `const X: S = S { .. };`).
+fn item_end(code: &[u8], from: usize) -> usize {
+    let mut depth = 0i32;
+    for (k, c) in code.iter().enumerate().skip(from) {
+        match c {
+            b'(' | b'[' => depth += 1,
+            b')' | b']' => depth -= 1,
+            b';' if depth <= 0 => return k + 1,
+            b'{' if depth <= 0 => {
+                let after = after_brace(code, k);
+                let next = skip_ws(code, after);
+                return if code.get(next) == Some(&b';') {
+                    next + 1
+                } else {
+                    after
+                };
+            }
+            _ => {}
+        }
+    }
+    code.len()
+}
+
+/// The end of a construct that is not an item and starts at `from`: after the `,` or `;` at its
+/// own depth, before the delimiter that closes what it is in, or after its block when that is
+/// followed by the start of something else (`else`, a method call and `?` continue it).
+fn construct_end(code: &[u8], from: usize) -> usize {
+    let mut depth = 0i32;
+    let mut k = from;
+    while k < code.len() {
+        match code[k] {
+            b'(' | b'[' => depth += 1,
+            b')' | b']' if depth == 0 => return k,
+            b')' | b']' => depth -= 1,
+            b'}' if depth == 0 => return k,
+            b',' | b';' if depth == 0 => return k + 1,
+            b'{' => {
+                let after = after_brace(code, k);
+                if depth == 0 {
+                    let next = skip_ws(code, after);
+                    match code.get(next) {
+                        Some(b',' | b';') => return next + 1,
+                        Some(b'.' | b'?') => {}
+                        _ if word_at(code, next) == "else" => {}
+                        _ => return after,
+                    }
+                }
+                k = after;
+                continue;
+            }
+            _ => {}
+        }
+        k += 1;
+    }
+    code.len()
+}
+
+/// Blank every item or construct that is compiled in a test build only (`#[cfg(test)]`,
+/// `#[cfg(all(test, ..))]`, `#[cfg(any(test, ..))]` when every branch is a test), and record what
+/// was taken. Only the thing the attribute is on goes: an item by its end, a field, variant, arm or
+/// statement by its `,` or `;`. Returns the names of the modules declared out of line
 /// (`#[cfg(test)] mod name;`): their files are test code, and so is whatever they declare.
 pub(crate) fn strip_test_items(lexed: &mut Lexed) -> Vec<String> {
     let mut out_of_line = Vec::new();
@@ -212,47 +368,54 @@ pub(crate) fn strip_test_items(lexed: &mut Lexed) -> Vec<String> {
             from = start + 2;
             continue;
         }
-        // The other attributes of the same item, then the item.
+        // The other attributes of the same thing, then the thing.
         let mut j = skip_ws(&lexed.code, attr_end);
         while lexed.code[j..].starts_with(b"#[") {
             j = skip_ws(&lexed.code, after_bracket(&lexed.code, j + 1));
         }
+        // Visibility and qualifiers do not make an item head of a field (`pub examined: ..`).
         let mut k = j;
-        if word_at(&lexed.code, k) == "pub" {
-            k += 3;
-            k = skip_ws(&lexed.code, k);
-            if lexed.code.get(k) == Some(&b'(') {
-                k = lexed.code[k..]
-                    .iter()
-                    .position(|c| *c == b')')
-                    .map_or(k, |p| k + p + 1);
-                k = skip_ws(&lexed.code, k);
+        loop {
+            match word_at(&lexed.code, k) {
+                "pub" => {
+                    k = skip_ws(&lexed.code, k + 3);
+                    if lexed.code.get(k) == Some(&b'(') {
+                        k = lexed.code[k..]
+                            .iter()
+                            .position(|c| *c == b')')
+                            .map_or(k, |p| k + p + 1);
+                        k = skip_ws(&lexed.code, k);
+                    }
+                }
+                w @ ("async" | "unsafe" | "default") => k = skip_ws(&lexed.code, k + w.len()),
+                _ => break,
             }
         }
-        let end;
-        if word_at(&lexed.code, k) == "mod" {
+        let head = word_at(&lexed.code, k).to_string();
+        let (end, what);
+        if head == "mod" {
             let name_at = skip_ws(&lexed.code, k + 3);
             let name = word_at(&lexed.code, name_at).to_string();
             let after = skip_ws(&lexed.code, name_at + name.len());
+            what = Taken::Module;
             if lexed.code.get(after) == Some(&b';') {
                 out_of_line.push(name);
                 end = after + 1;
             } else {
                 end = after_brace(&lexed.code, after);
             }
+        } else if ITEM_HEADS.contains(&head.as_str())
+            && lexed.code.get(k + head.len()) != Some(&b':')
+        {
+            what = Taken::Item;
+            end = item_end(&lexed.code, k);
         } else {
-            let stop = lexed.code[j..]
-                .iter()
-                .position(|c| *c == b';' || *c == b'{')
-                .map_or(lexed.code.len(), |p| j + p);
-            end = if lexed.code.get(stop) == Some(&b'{') {
-                after_brace(&lexed.code, stop)
-            } else {
-                (stop + 1).min(lexed.code.len())
-            };
+            what = Taken::Construct;
+            end = construct_end(&lexed.code, j);
         }
         blank(&mut lexed.code, start, end);
         lexed.strings.retain(|(at, _, _)| *at < start || *at >= end);
+        lexed.stripped.push(Stripped { start, end, what });
         from = end;
     }
     out_of_line
