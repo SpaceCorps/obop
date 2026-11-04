@@ -30,11 +30,11 @@ mod error_seam_tests;
 #[cfg(test)]
 mod health_tests;
 mod import_cmd;
+#[cfg(test)]
+mod import_map_tests;
 mod import_oas;
 #[cfg(test)]
 mod import_oas_tests;
-#[cfg(test)]
-mod import_map_tests;
 #[cfg(test)]
 mod kinds_tests;
 #[cfg(test)]
