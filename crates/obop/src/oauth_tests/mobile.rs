@@ -153,12 +153,13 @@ async fn the_token_revoke_and_authorize_limits_read_the_address_by_the_same_rule
     // The same two properties as for the registration, at the other endpoints that limit by
     // address: made-up last entries share the peer's bucket (they do not each get their own), an
     // address with a port is its address, and another address is not held up by either.
-    // (Every other caller of the same function is tried in `address.rs` next to this file, in
-    // `passkey_tests.rs`, `sso_tests.rs` and `sso_tests/phone.rs`. The scan in `obop-http`
-    // `addr_scan_tests.rs` fails for any other Rust code under `crates/`, outside test items,
-    // that names a header on its list of client-address headers or a name starting
-    // `x-forwarded`, or reads the peer of a socket; it cannot see a header name built at run
-    // time or a platform header that is not on its list.)
+    // (The callers of the same function are tried in `address.rs` next to this file, which also
+    // pins the number of tries each endpoint allows an address, in `passkey_tests.rs`,
+    // `sso_tests.rs` and `sso_tests/phone.rs`; docs/ISSUES.md O31 lists which are tried and
+    // which are held by the scan alone. The scan in `obop-http` `addr_scan_tests.rs` fails for
+    // any other Rust code under `crates/`, outside test items, that names a header on its list of
+    // client-address headers or a name starting `x-forwarded`, or reads the peer of a socket; it
+    // cannot see a header name built at run time or a platform header that is not on its list.)
     for endpoint in ["token", "revoke", "authorize"] {
         let rig = rig();
         let client = {

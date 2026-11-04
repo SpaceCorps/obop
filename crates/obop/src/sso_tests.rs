@@ -3029,8 +3029,9 @@ async fn failures_exchanges_are_limited_per_address_and_the_limit_is_a_429() {
 
 #[tokio::test]
 async fn the_limit_of_the_starts_counts_the_address_by_the_one_rule() {
-    // The starts are limited per address and minute (30). The address is the rule's: behind a
-    // trusted proxy the last entry of the line, and without one the header is ignored.
+    // The starts are limited per address and minute (30), and the 31st is the first refused. The
+    // address is the rule's: behind a trusted proxy the last entry of the line, and without one
+    // the header is ignored.
     let w = world(true).await;
     let busy = |line: String| {
         let w = &w;
@@ -3042,14 +3043,18 @@ async fn the_limit_of_the_starts_counts_the_address_by_the_one_rule() {
                 .contains("oidc_error=busy")
         }
     };
-    let mut spent = false;
-    for n in 0..100 {
+    let mut spent = None;
+    for n in 0..100u32 {
         if busy(format!("203.0.113.{n}, 198.51.100.77")).await {
-            spent = true;
+            spent = Some(n);
             break;
         }
     }
-    assert!(spent, "the entries before the last chose the bucket");
+    assert_eq!(
+        spent,
+        Some(30),
+        "the entries before the last chose the bucket"
+    );
     assert!(busy("198.51.100.77".into()).await, "alone");
     assert!(busy("198.51.100.77:5000".into()).await, "with a port");
     assert!(
@@ -3058,12 +3063,76 @@ async fn the_limit_of_the_starts_counts_the_address_by_the_one_rule() {
     );
     // Without a trusted proxy the header is ignored: every address shares the peer's bucket.
     w.state.set_trust_proxy(false);
-    let mut spent = false;
-    for n in 0..100 {
+    let mut spent = None;
+    for n in 0..100u32 {
         if busy(format!("198.51.100.{}", n + 100)).await {
-            spent = true;
+            spent = Some(n);
             break;
         }
     }
-    assert!(spent, "an address in the header got a bucket of its own");
+    assert_eq!(
+        spent,
+        Some(30),
+        "an address in the header got a bucket of its own"
+    );
+}
+
+#[tokio::test]
+async fn the_limit_of_the_exchange_counts_the_address_by_the_one_rule() {
+    // The exchange of the one-time code is limited per address and minute (30), a bucket of its
+    // own (`ex`): behind a trusted proxy the address is the last entry of the line, so a client's
+    // own entries before it do not choose the bucket, the same address alone or with a port is the
+    // same bucket and a fresh last entry has a count of its own; without a trusted proxy the
+    // header is ignored. The code is none that was issued: the answer is 401 until the count runs
+    // out, then 429.
+    let w = world(true).await;
+    let post = |line: String| {
+        let w = &w;
+        async move {
+            let h = [("x-forwarded-for", line.as_str())];
+            w.send_h(
+                "POST",
+                "/api/auth/oidc/exchange",
+                &Jar::default(),
+                Some(r#"{"code":"obopsso_nothing"}"#),
+                &h,
+            )
+            .await
+            .status
+        }
+    };
+    let mut spent = None;
+    for n in 0..100u32 {
+        if post(format!("203.0.113.{n}, 198.51.100.77")).await == 429 {
+            spent = Some(n);
+            break;
+        }
+    }
+    assert_eq!(
+        spent,
+        Some(30),
+        "the entries before the last chose the bucket"
+    );
+    assert_eq!(post("198.51.100.77".into()).await, 429, "alone");
+    assert_eq!(post("198.51.100.77:5000".into()).await, 429, "with a port");
+    assert_eq!(
+        post("198.51.100.77, 198.51.100.78".into()).await,
+        401,
+        "a fresh last entry has a count of its own"
+    );
+    // Without a trusted proxy the header is ignored: every address shares the peer's bucket
+    // (which the first loop did not touch: it was counted for the addresses of the lines).
+    w.state.set_trust_proxy(false);
+    let mut spent = None;
+    for n in 0..100u32 {
+        if post(format!("198.51.100.{}", n + 100)).await == 429 {
+            spent = Some(n);
+            break;
+        }
+    }
+    assert_eq!(
+        spent,
+        Some(30),
+        "an address in the header got a bucket of its own"
+    );
 }

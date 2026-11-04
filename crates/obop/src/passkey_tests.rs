@@ -873,7 +873,12 @@ async fn the_passkey_limits_count_the_address_by_the_one_rule() {
             app.store.backend(),
             AuthConfig::insecure_dev(),
         ));
-        let state = obop_http::HttpState::new(app.dispatcher.clone(), auth.clone());
+        // The defaults of the tests, not the settings of whoever runs them (`OBOP_PUBLIC_URL`).
+        let state = obop_http::HttpState::with_mcp(
+            app.dispatcher.clone(),
+            auth.clone(),
+            McpConfig::default(),
+        );
         state.set_trust_proxy(trust);
         let r = obop_http::router(state, None);
         let mut spent = None;
@@ -888,9 +893,12 @@ async fn the_passkey_limits_count_the_address_by_the_one_rule() {
                 break;
             }
         }
-        assert!(
-            spent.is_some(),
-            "trust_proxy={trust}: the count did not run out (the line chose the bucket)"
+        // The count of the ceremony options (`OPTIONS_PER_IP`, 60) is what ran out: the first 429
+        // is the 61st try, not some other cap.
+        assert_eq!(
+            spent,
+            Some(60),
+            "trust_proxy={trust}: the count did not run out at the address's limit (the line chose the bucket)"
         );
         if trust {
             assert_eq!(options(&r, "198.51.100.77").await, 429, "alone");
