@@ -1482,7 +1482,7 @@ async fn a_signer_whose_twin_click_won_is_sent_to_the_signed_page_and_nothing_is
     assert_eq!(r.status, 303, "{}", r.text());
     assert_eq!(
         r.h("location"),
-        path,
+        format!("{path}?lang=en"),
         "to the page of the link, which now says signed"
     );
     let kept = f.record("sign_request", &f.req);

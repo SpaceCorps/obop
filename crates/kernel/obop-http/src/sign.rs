@@ -343,8 +343,12 @@ pub(crate) async fn submit(
         };
         let c = client(&s, &parts);
         match svc.submit(&rid, &tok, &form, &c) {
-            // A relative address, so that the redirect does not depend on the derived base.
-            Ok(Done { .. }) => noindex(see_other(&format!("/sign/{rid}/{tok}"))),
+            // A relative address, so that the redirect does not depend on the derived base. It
+            // carries the language this post was resolved to (one of the seven, so nothing to
+            // escape), so that a signer who read the English page by `?lang=en` is told so in
+            // English whatever their browser asks for; the bare link, visited later, is in the
+            // browser's language again.
+            Ok(Done { .. }) => noindex(see_other(&format!("/sign/{rid}/{tok}?lang={lang}"))),
             Err(DoorError::Invalid(why)) => {
                 // The form again, with what was typed and what is wrong.
                 match svc.view(&rid, &tok, &c) {

@@ -61,7 +61,7 @@ async fn a_signer_reads_the_document_and_signs_once() {
 
     let done = f.post(&path, &from, &good_form(&f, "Jane Test")).await;
     assert_eq!(done.status, 303, "{}", done.text());
-    assert_eq!(done.h("location"), path);
+    assert_eq!(done.h("location"), format!("{path}?lang=en"));
 
     let req = f.record("sign_request", &f.req);
     let text = |k: &str| req.get(k).and_then(J::as_str).unwrap_or("").to_string();
@@ -1173,6 +1173,39 @@ async fn the_link_with_lang_en_opens_the_english_page_whatever_the_browser_asks_
         f.record("sign_request", &f.req)["consent_version"],
         obop_http::sign_text::consent_version_for("en")
     );
+    // The redirect after the signature names the language of the post, so that following it with
+    // the German browser shows the English "Signed" page, not a German one.
+    let to = r.h("location").to_string();
+    assert_eq!(to, format!("{path}?lang=en"));
+    let end = f.get_with(&to, &ip(81), &german).await;
+    assert_eq!(end.status, 200);
+    assert!(end.text().contains("lang=\"en\""), "{}", end.text());
+    assert!(
+        end.text().contains("<h1>Signed</h1>"),
+        "the English end page"
+    );
+    assert!(!end.text().contains("Unterschrieben"));
+    // The bare link, visited later, is in the browser's language again (docs/SIGN.md).
+    let later = f.get_with(&path, &ip(81), &german).await;
+    assert!(later.text().contains("lang=\"de\""));
+    assert!(later.text().contains("Unterschrieben"));
+    // A post that named no language is redirected to the one it was resolved to, here the
+    // browser's, so that its signer too reads the end page in the language they signed in.
+    let (f, _, path, _) = sent().await;
+    let r = f
+        .post_with(
+            &path,
+            &ip(82),
+            &[("name", "Jane Test"), ("agree", "1"), ("doc", &f.file)],
+            &[("origin", ORIGIN), ("accept-language", "fr-FR,fr;q=0.9")],
+        )
+        .await;
+    assert_eq!(r.status, 303, "{}", r.text());
+    assert_eq!(r.h("location"), format!("{path}?lang=fr"));
+    let end = f
+        .get_with(r.h("location"), &ip(82), &[("accept-language", "de")])
+        .await;
+    assert!(end.text().contains("lang=\"fr\""));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -1201,7 +1234,10 @@ async fn eight_signers_at_once_sign_the_request_once() {
     while let Some(r) = set.join_next().await {
         let (status, loc) = r.unwrap();
         // The winner and every loser that arrived after it are sent to the end page.
-        assert_eq!((status, loc.as_str()), (303, path.as_str()));
+        assert_eq!(
+            (status, loc.as_str()),
+            (303, format!("{path}?lang=en").as_str())
+        );
     }
     let req = f.record("sign_request", &f.req);
     assert_eq!(req["state"], "signed");
