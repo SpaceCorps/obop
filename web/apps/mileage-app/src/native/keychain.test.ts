@@ -103,3 +103,69 @@ describe("what the app keeps in the Keychain", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+// The names below are what an installed app already has in its Keychain or Keystore. They are
+// written as literals on purpose: a name that is derived from something else changes when that
+// something changes, and the stored sign-in is then lost (an installed app cannot find its items).
+describe("the names of the items an installed app has", () => {
+  const TOKENS = {
+    accessToken: "a",
+    refreshToken: "r",
+    expiresAt: 1,
+    deviceId: "dev-1",
+  } as never;
+
+  test("the session is stored under the names that earlier builds used, and under no others", async () => {
+    await secureStorage.saveConfig({ baseUrl: "https://phone.example", clientId: "c1" });
+    await secureStorage.saveTokens(TOKENS);
+    expect([...fake.items.keys()].sort()).toEqual(["obop.mileage.server", "obop.mileage.tokens"]);
+    expect(JSON.parse(fake.items.get("obop.mileage.server")!.value)).toEqual({
+      baseUrl: "https://phone.example",
+      clientId: "c1",
+    });
+    expect(JSON.parse(fake.items.get("obop.mileage.tokens")!.value)).toMatchObject({
+      refreshToken: "r",
+      deviceId: "dev-1",
+    });
+  });
+
+  test("items that an earlier build wrote under those names are read", async () => {
+    const kind = fake.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY;
+    fake.items.set("obop.mileage.server", {
+      value: JSON.stringify({
+        baseUrl: "https://phone.example",
+        clientId: "c1",
+        user: "dave",
+        usedAt: 5,
+      }),
+      kind,
+    });
+    fake.items.set("obop.mileage.tokens", {
+      value: JSON.stringify({ accessToken: "a", refreshToken: "r", expiresAt: 9, deviceId: "d" }),
+      kind,
+    });
+    await expect(secureStorage.loadConfig()).resolves.toEqual({
+      baseUrl: "https://phone.example",
+      clientId: "c1",
+      user: "dave",
+      usedAt: 5,
+    });
+    await expect(secureStorage.loadTokens()).resolves.toMatchObject({ refreshToken: "r" });
+  });
+
+  test("a null removes the item under the same name", async () => {
+    await secureStorage.saveConfig({ baseUrl: "https://phone.example", clientId: "c1" });
+    await secureStorage.saveTokens(TOKENS);
+    await secureStorage.saveConfig(null);
+    await secureStorage.saveTokens(null);
+    expect([...fake.items.keys()]).toEqual([]);
+  });
+
+  test("an item that is not the shape of the session reads as nothing", async () => {
+    const kind = fake.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY;
+    fake.items.set("obop.mileage.server", { value: "{not json", kind });
+    fake.items.set("obop.mileage.tokens", { value: JSON.stringify({ accessToken: 1 }), kind });
+    await expect(secureStorage.loadConfig()).resolves.toBeNull();
+    await expect(secureStorage.loadTokens()).resolves.toBeNull();
+  });
+});
