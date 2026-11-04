@@ -47,27 +47,58 @@ export function formatMetres(m: number): string {
   return formatDistance(m.toFixed(2)) ?? t("unit.m", { value: formatNumber(0) });
 }
 
+/** What the Recording screen draws for the note about a distance of 0 m (`signal.ts`). */
+export interface SignalBannerProps {
+  /** Always a warning. */
+  tone: "warning";
+  /** Fixed per kind. */
+  title: string;
+  /** Fixed per kind: no count and no radius, so the text does not change while the kind stays. */
+  message: string;
+  /** One per kind, so a UI driver can tell them apart. */
+  testID: "weak-signal" | "jumpy-signal";
+  /** The counts, for a muted line under the banner (not in the banner itself). */
+  detail: string;
+}
+
 /**
- * The words of the note of the Recording screen (`signal.ts`): why the phone's distance stays at
- * 0 m. The sentence follows the number of dropped positions (`1 of 3 positions was`) and says only
- * what the counters say.
+ * What the Recording screen shows about a distance that stays at 0 m, or `null` when there is
+ * nothing to show: the stored positions have not been read yet (`measured` is `null`), or the
+ * rule of `signal.ts` has nothing to say. The banner is read aloud by a screen reader whenever its
+ * text changes (a warning is an assertive live region, and iOS announces it on a change of text),
+ * and the counts change with nearly every stored position; so the banner words are fixed per kind
+ * and the counts, and the radius of the newest position where it is over the limit, are the
+ * separate `detail` line. The sentences say only what the counters say, and nothing about what
+ * caused it.
  */
-export function signalBanner(note: SignalNote): { title: string; message: string } {
+export function signalBannerProps(
+  measured: { signal: SignalNote | null } | null,
+): SignalBannerProps | null {
+  if (measured === null || measured.signal === null) return null;
+  const note = measured.signal;
   const total = formatNumber(note.stored);
   if (note.kind === "jumpy") {
     return {
+      tone: "warning",
       title: t("recording.jumpy.title"),
-      message: tp("recording.jumpy.message", note.dropped, { total }),
+      message: t("recording.jumpy.message"),
+      testID: "jumpy-signal",
+      detail: tp("recording.signal.detail", note.dropped, { total }),
     };
   }
-  const title = t("recording.weak.title");
-  if (note.accuracyM === null) {
-    return { title, message: tp("recording.weak.message", note.dropped, { total }) };
-  }
-  const accuracy = t("unit.m", { value: formatNumber(note.accuracyM) });
+  const detail =
+    note.accuracyM === null
+      ? tp("recording.signal.detail", note.dropped, { total })
+      : tp("recording.signal.detail.last", note.dropped, {
+          total,
+          accuracy: t("unit.m", { value: formatNumber(note.accuracyM) }),
+        });
   return {
-    title,
-    message: tp("recording.weak.message.last", note.dropped, { total, accuracy }),
+    tone: "warning",
+    title: t("recording.weak.title"),
+    message: t("recording.weak.message"),
+    testID: "weak-signal",
+    detail,
   };
 }
 

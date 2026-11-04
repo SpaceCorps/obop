@@ -132,19 +132,19 @@ export const en = {
   "recording.points.other": "{count} points saved on this phone",
   "recording.nofix": "Waiting for the first location fix. Go outside or wait a moment.",
   "recording.weak.title": "The location signal is too weak to measure a distance",
-  "recording.weak.message.one":
-    "{count} of {total} positions was too imprecise to count. Move to a window or go outside.",
-  "recording.weak.message.other":
-    "{count} of {total} positions were too imprecise to count. Move to a window or go outside.",
-  "recording.weak.message.last.one":
-    "{count} of {total} positions was too imprecise to count (the last one was {accuracy} off). Move to a window or go outside.",
-  "recording.weak.message.last.other":
-    "{count} of {total} positions were too imprecise to count (the last one was {accuracy} off). Move to a window or go outside.",
-  "recording.jumpy.title": "The positions keep jumping",
-  "recording.jumpy.message.one":
-    "{count} of {total} positions was dropped because it jumped too far, too fast. Keep recording; if the distance stays at 0 m the trip cannot be counted.",
-  "recording.jumpy.message.other":
-    "{count} of {total} positions were dropped because they jumped too far, too fast. Keep recording; if the distance stays at 0 m the trip cannot be counted.",
+  // The words of the banner are fixed per kind: the banner is read aloud whenever its text changes,
+  // so the counts are in the muted line below it (`recording.signal.detail`).
+  "recording.weak.message":
+    "Positions that are too imprecise are left out of the distance. If you are indoors, move to a window or go outside.",
+  "recording.jumpy.title": "The positions do not fit together",
+  "recording.jumpy.message":
+    "Positions that do not fit the first position that was counted are left out of the distance. If the distance stays at 0 m, stop this trip, discard it and start a new one.",
+  "recording.signal.detail.one": "{count} of {total} positions was left out",
+  "recording.signal.detail.other": "{count} of {total} positions were left out",
+  "recording.signal.detail.last.one":
+    "{count} of {total} positions was left out (the last one was only known to within {accuracy})",
+  "recording.signal.detail.last.other":
+    "{count} of {total} positions were left out (the last one was only known to within {accuracy})",
   "recording.stop": "Stop",
   "recording.stop.title": "Stop the trip?",
   "recording.stop.message": "The trip ends here and is uploaded.",

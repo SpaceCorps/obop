@@ -2,7 +2,7 @@ import { Banner, Button, Screen, Text } from "@obop/ui-native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, AppState } from "react-native";
 import { recordingHealth, type Readiness } from "../../core/liveness.ts";
-import { formatMetres, signalBanner } from "../../core/present.ts";
+import { formatMetres } from "../../core/present.ts";
 import { progressFrom, type Progress } from "../../core/progress.ts";
 import { MAX_POINTS_PER_TRIP } from "../../core/types.ts";
 import { clock } from "../../core/values.ts";
@@ -16,6 +16,7 @@ import { announce } from "../announce.ts";
 import { useNow, useOutbox } from "../hooks.ts";
 import { tOs } from "../os-text.ts";
 import type { Nav } from "../router.ts";
+import { SignalNote } from "../SignalNote.tsx";
 
 /** The phone's own count of the trip so far: the same rules as the server (`trip-core`), for the preview only. */
 async function progressOf(rt: Runtime, clientTripId: string): Promise<Progress> {
@@ -152,10 +153,6 @@ export function Recording({
     nowMs: now,
   });
 
-  // Why the distance stays at 0 m, once the stored positions have been read.
-  const signal = measured === null ? null : measured.signal;
-  const signalWords = signal === null ? null : signalBanner(signal);
-
   const confirmStop = () => {
     Alert.alert(t("recording.stop.title"), t("recording.stop.message"), [
       { text: t("common.cancel"), style: "cancel" },
@@ -274,14 +271,8 @@ export function Recording({
           message={t("recording.full.message")}
         />
       ) : null}
-      {signal !== null && signalWords !== null ? (
-        <Banner
-          tone="warning"
-          title={signalWords.title}
-          message={signalWords.message}
-          testID={`${signal.kind}-signal`}
-        />
-      ) : null}
+      {/* Why the distance stays at 0 m; `measured` is `null` until the points have been read once. */}
+      <SignalNote measured={measured} />
 
       <Text variant="display" accessibilityRole="timer" testID="elapsed">
         {clock(now - Date.parse(active.startedAt))}
