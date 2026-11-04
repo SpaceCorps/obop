@@ -164,7 +164,7 @@ write_group = "sign.user"
 
   [[model.field]]
   name = "consent_version"
-  description = "Version and language of the consent wording the signer saw, for example v1-draft/en"
+  description = "Id of the consent wording: its version, the language the signer's form named (not proof of the page that was shown) and the first 8 hex characters of a hash of the texts of that language, for example v1-draft/en/a05c68c3"
   class = "none"
   group = "sign.manager"
 

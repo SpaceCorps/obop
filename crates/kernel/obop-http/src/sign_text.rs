@@ -8,15 +8,18 @@
 //! **Status of the words.** The English text is the original. The six other languages are
 //! **MACHINE-DRAFTED**: nobody who speaks those languages has reviewed them (docs/ISSUES.md, the
 //! signer-page row). The consent sentence (`consent`) is a **draft for counsel**, not legal advice,
-//! and its id is [`CONSENT_VERSION`] (`v1-draft`): it is recorded with every signature (together
-//! with the language, see [`consent_version_for`]). The id does not identify the words by
-//! itself; the test `the_wording_the_signer_agrees_to_is_pinned_to_its_id` does: it holds a hash
-//! of the three texts a signer relies on (`consent`, `records`, `name_hint`) in each language,
-//! beside the id, so that an edit of them fails until the hashes and the id are changed in the
-//! same commit. **An id that a real signature carries must never be reused for other words**:
-//! change the words, then change the id. When counsel confirms the English text the id becomes
-//! `v1`. The first live use must be the English page (the only original); any other language,
-//! German included, is machine-drafted and must be read by a native speaker first.
+//! and its id is [`consent_version_for`]: [`CONSENT_VERSION`] (`v1-draft`), the language and the
+//! first 8 hex characters of a SHA-256 over the eight texts a signer relies on when they agree
+//! ([`WORDING_KEYS`]: the consent sentence, the notice of what is recorded, the hint, the button,
+//! the viewer fallback, the missing-tick message, the "request is for" line and the fingerprint
+//! line), computed from the catalogue at run time. The id is recorded with every signature, so
+//! editing any of those texts changes the stored id **by construction**: an id that a real
+//! signature carries cannot be reused for other words. The test
+//! `the_wording_the_signer_agrees_to_is_pinned_to_its_id` is a second net: it holds the ids of
+//! today, so that an edit shows up as a failing test that names the language. When counsel
+//! confirms the English text the constant becomes `v1`. The first live use must be the English
+//! page (the only original); any other language, German included, is machine-drafted and must be
+//! read by a native speaker first.
 //!
 //! **Placeholders.** `{title}`, `{name}`, `{hash}` and `{time}` are the only ones. Every column of
 //! a key carries the same set (a test). The caller passes plain values; [`html`] escapes both the
@@ -34,17 +37,65 @@
 
 use obop_oauth::page::{LANGS, esc};
 
-/// The id of the consent wording, recorded with the evidence of a signature. A draft until counsel
-/// has seen it (lead decision 9, attacker finding F18): do not pin the wording by a hash before then.
+/// The version of the consent wording, the first part of the id recorded with the evidence of a
+/// signature. A draft until counsel has seen it (lead decision 9, attacker finding F18); the rest
+/// of the id is derived from the texts themselves ([`consent_version_for`]), so this constant is
+/// the label of a review, not what makes the id differ.
 pub const CONSENT_VERSION: &str = "v1-draft";
 
 /// The languages whose columns are machine-drafted and not reviewed by a native speaker.
 pub const MACHINE_DRAFTED: [&str; 6] = ["de", "fr", "pl", "fi", "sv", "es"];
 
-/// `consent_version` as stored on the request: the id of the wording and the language the
-/// signer saw, for example `v1-draft/de`. An unknown language is recorded as `en`.
+/// The texts a signer relies on when they tick the box and press the button, in the order they
+/// are hashed into the id: the consent sentence (which names the button), the notice of what is
+/// recorded, the hint under the name, the button, the fallback when the browser cannot show the
+/// PDF (which tells the signer to read all of it), the message about the missing tick, the
+/// "this request is for" line and the line about the file's fingerprint.
+pub const WORDING_KEYS: [&str; 8] = [
+    "consent",
+    "records",
+    "name_hint",
+    "submit",
+    "no_viewer",
+    "err_agree",
+    "for",
+    "fingerprint",
+];
+
+/// `consent_version` as stored on the request: `<CONSENT_VERSION>/<language>/<wording>`, for
+/// example `v1-draft/de/823c236d`, where `<wording>` is the first 8 hex characters of the SHA-256
+/// of the texts of [`WORDING_KEYS`] in that language (`key`, a line feed, the text and a line
+/// feed, for each key in turn). The texts are the exact catalogue texts the page renders, with
+/// their `{placeholders}`. An unknown language is recorded as `en`. The language is the one the
+/// caller names (the POST's), not a record of the page that was shown.
 pub fn consent_version_for(lang: &str) -> String {
-    format!("{CONSENT_VERSION}/{}", LANGS[lang_idx(lang)])
+    let i = lang_idx(lang);
+    format!(
+        "{CONSENT_VERSION}/{}/{}",
+        LANGS[i],
+        wording_id(CATALOGUE, i)
+    )
+}
+
+/// The first 8 hex characters of the SHA-256 over the [`WORDING_KEYS`] texts in column `i` of
+/// `catalogue`. A text that is empty in a language is read from English, as [`text`] does.
+fn wording_id(catalogue: &[(&str, [&str; 7])], i: usize) -> String {
+    use sha2::{Digest, Sha256};
+    let mut h = Sha256::new();
+    for key in WORDING_KEYS {
+        let cols = catalogue
+            .iter()
+            .find(|(k, _)| *k == key)
+            .map(|(_, c)| c)
+            .unwrap_or(&["", "", "", "", "", "", ""]);
+        let text = if cols[i].is_empty() { cols[0] } else { cols[i] };
+        h.update(format!("{key}\n{text}\n").as_bytes());
+    }
+    h.finalize()
+        .iter()
+        .take(4)
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 fn lang_idx(lang: &str) -> usize {
@@ -379,64 +430,110 @@ mod tests {
     }
 
     #[test]
-    fn the_consent_version_names_the_draft_and_the_language() {
+    fn the_consent_version_names_the_draft_the_language_and_the_wording() {
         assert_eq!(CONSENT_VERSION, "v1-draft");
-        assert_eq!(consent_version_for("de"), "v1-draft/de");
-        assert_eq!(consent_version_for("zz"), "v1-draft/en");
         for l in LANGS {
-            assert!(consent_version_for(l).starts_with("v1-draft/"));
-        }
-    }
-
-    /// The id of the wording and the SHA-256 (hex) of the three texts a signer relies on, per
-    /// language in the order of [`LANGS`]: `consent`, `records` and `name_hint`, each as
-    /// `key`, a line feed, the text and a line feed. **Changing a word of them means a new
-    /// [`CONSENT_VERSION`]**: an id that a real signature carries is never reused for other
-    /// words (docs/SIGN.md, "The consent wording and its id"). Edit this table and the id in the
-    /// same commit, and say so in the commit message.
-    const PINNED: (&str, [&str; 7]) = (
-        "v1-draft",
-        [
-            "a6b0ef81523cc02b419c227b2807c8a225defc6b551f2f772e8f5b20006cb417", // en
-            "823c236d75fb3c9abf5755b5ab334d66817de86fe40a65d70c9bade38e82e5f1", // de
-            "55f4e896c96b2c6292ac5e74c60bc83cdf9815cd2e7dd8bfddb3690ea09287e6", // fr
-            "6bba3992294c3c687534f5bc0bd1c9d8e508f47af1924c685963788ac62bf5b1", // pl
-            "f20c791b801a0e4405ebc2168025c8301deb40da356373cf76632d9f2dae5b55", // fi
-            "2b2578bbb740db9159860a5310a73dbb1fd12c8928aeddd1d2a98cd142860cb5", // sv
-            "5e6bd0c378756d10956848f6e98219303de09db4f08233a59a1b0e9b2beb40f8", // es
-        ],
-    );
-
-    fn wording_hash(lang_idx: usize) -> String {
-        use sha2::{Digest, Sha256};
-        let mut h = Sha256::new();
-        for key in ["consent", "records", "name_hint"] {
-            let (_, cols) = CATALOGUE.iter().find(|(k, _)| *k == key).unwrap();
-            h.update(format!("{key}\n{}\n", cols[lang_idx]).as_bytes());
-        }
-        h.finalize().iter().map(|b| format!("{b:02x}")).collect()
-    }
-
-    #[test]
-    fn the_wording_the_signer_agrees_to_is_pinned_to_its_id() {
-        let have: Vec<String> = (0..LANGS.len()).map(wording_hash).collect();
-        assert_eq!(
-            PINNED.0, CONSENT_VERSION,
-            "the table of hashes belongs to another id than CONSENT_VERSION"
-        );
-        for (i, lang) in LANGS.iter().enumerate() {
-            assert_eq!(
-                have[i], PINNED.1[i],
-                "the consent, records or name_hint text in `{lang}` changed while CONSENT_VERSION is \
-                 still {CONSENT_VERSION:?}: change CONSENT_VERSION (an id that a real signature \
-                 carries is never reused), then put these hashes in PINNED:\n{have:#?}"
+            let id = consent_version_for(l);
+            let parts: Vec<&str> = id.split('/').collect();
+            assert_eq!(parts.len(), 3, "{id}");
+            assert_eq!(parts[0], "v1-draft", "{id}");
+            assert_eq!(parts[1], l, "{id}");
+            assert!(
+                parts[2].len() == 8 && parts[2].bytes().all(|b| b.is_ascii_hexdigit()),
+                "{id}"
             );
         }
-        // The hash is of the words, not of an empty or a shared text: every language differs.
-        let mut all = have.clone();
+        // An unknown language is recorded as English, words included.
+        assert_eq!(consent_version_for("zz"), consent_version_for("en"));
+        assert!(consent_version_for("zz").starts_with("v1-draft/en/"));
+        // Seven languages, seven different ids.
+        let mut all: Vec<String> = LANGS.iter().map(|l| consent_version_for(l)).collect();
         all.sort();
         all.dedup();
         assert_eq!(all.len(), LANGS.len());
+    }
+
+    /// The ids of today's words, per language in the order of [`LANGS`]. The id is derived from
+    /// the texts, so an edit of any text of [`WORDING_KEYS`] changes it by itself; this table is
+    /// the second net: the edit also fails this test, which names the language, so that no one
+    /// changes the words a signer agrees to without seeing it in the diff. Put the new ids
+    /// here when the change is meant. (Nothing real has been signed under these ids yet.)
+    const PINNED: [&str; 7] = [
+        "v1-draft/en/a05c68c3",
+        "v1-draft/de/9ebff173",
+        "v1-draft/fr/31aa87b0",
+        "v1-draft/pl/c3127377",
+        "v1-draft/fi/a670b631",
+        "v1-draft/sv/9e91bef0",
+        "v1-draft/es/08f87264",
+    ];
+
+    #[test]
+    fn the_wording_the_signer_agrees_to_is_pinned_to_its_id() {
+        let have: Vec<String> = LANGS.iter().map(|l| consent_version_for(l)).collect();
+        for (i, lang) in LANGS.iter().enumerate() {
+            assert_eq!(
+                have[i], PINNED[i],
+                "a text of WORDING_KEYS changed in `{lang}`: the id is now different (that is what                  it is for). If the change is meant, put the new ids in PINNED:
+{have:#?}"
+            );
+        }
+    }
+
+    #[test]
+    fn every_text_that_the_id_covers_exists_and_none_is_left_out_by_accident() {
+        for key in WORDING_KEYS {
+            assert!(
+                CATALOGUE.iter().any(|(k, _)| *k == key),
+                "{key} is not a key"
+            );
+        }
+        let mut seen = WORDING_KEYS.to_vec();
+        seen.sort_unstable();
+        seen.dedup();
+        assert_eq!(seen.len(), WORDING_KEYS.len(), "a key twice");
+        // The consent sentence names the button: the two must be one word in every language.
+        let col = |key: &str, i: usize| CATALOGUE.iter().find(|(k, _)| *k == key).unwrap().1[i];
+        for (i, lang) in LANGS.iter().enumerate() {
+            assert!(
+                col("consent", i).contains(col("submit", i)),
+                "the consent sentence in `{lang}` does not name the button {:?}",
+                col("submit", i)
+            );
+        }
+    }
+
+    #[test]
+    fn the_id_changes_with_every_text_it_covers_and_with_nothing_else() {
+        let base: Vec<String> = (0..LANGS.len()).map(|i| wording_id(CATALOGUE, i)).collect();
+        let edit = |key: &str, i: usize| -> Vec<(&'static str, [&'static str; 7])> {
+            let mut cat: Vec<(&'static str, [&'static str; 7])> = CATALOGUE.to_vec();
+            let row = cat.iter_mut().find(|(k, _)| *k == key).unwrap();
+            row.1[i] = Box::leak(format!("{} (edited)", row.1[i]).into_boxed_str());
+            cat
+        };
+        for key in WORDING_KEYS {
+            for i in 0..LANGS.len() {
+                let cat = edit(key, i);
+                for j in 0..LANGS.len() {
+                    let id = wording_id(&cat, j);
+                    if j == i {
+                        assert_ne!(id, base[j], "editing {key} in {} left the id", LANGS[i]);
+                    } else {
+                        assert_eq!(
+                            id, base[j],
+                            "editing {key} in {} moved {}",
+                            LANGS[i], LANGS[j]
+                        );
+                    }
+                }
+            }
+        }
+        // A text the id does not cover (the title, a refusal) does not move it.
+        for key in ["title", "done_body", "gone_expired", "busy"] {
+            let cat = edit(key, 0);
+            assert_eq!(wording_id(&cat, 0), base[0], "{key} moved the id");
+        }
     }
 
     #[test]

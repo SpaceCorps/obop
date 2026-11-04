@@ -1038,11 +1038,59 @@ async fn the_page_is_in_the_language_asked_for() {
         )
         .await;
     assert_eq!(r.status, 303);
+    assert_eq!(
+        f.record("sign_request", &f.req)["consent_version"],
+        obop_http::sign_text::consent_version_for("de")
+    );
     assert!(
         f.record("sign_request", &f.req)["consent_version"]
             .as_str()
             .unwrap()
-            .ends_with("/de")
+            .starts_with("v1-draft/de/")
+    );
+}
+
+#[tokio::test]
+async fn the_link_with_lang_en_opens_the_english_page_whatever_the_browser_asks_for() {
+    // How staff make the real NDA open on the English page (docs/SIGN.md): the browser's language
+    // outranks the instance default, so the link is handed over with `?lang=en`. The page's hidden
+    // field carries it into the post, and the stored id says `en`.
+    let (f, _, path, _) = sent().await;
+    f.state.set_default_language(Some("de"));
+    let german = [("accept-language", "de-DE,de;q=0.9")];
+    let by_header = f.get_with(&path, &ip(81), &german).await;
+    assert!(
+        by_header.text().contains("lang=\"de\""),
+        "the browser's language wins"
+    );
+    let forced = f
+        .get_with(&format!("{path}?lang=en"), &ip(81), &german)
+        .await;
+    assert_eq!(forced.status, 200);
+    assert!(forced.text().contains("lang=\"en\""));
+    assert!(
+        forced.text().contains("name=\"lang\" value=\"en\""),
+        "the form carries the language into the post"
+    );
+    // The form as the browser posts it, from the page that was shown (the post carries the
+    // header of the German browser too).
+    let r = f
+        .post_with(
+            &path,
+            &ip(81),
+            &[
+                ("name", "Jane Test"),
+                ("agree", "1"),
+                ("doc", &f.file),
+                ("lang", "en"),
+            ],
+            &[("origin", ORIGIN), ("accept-language", "de-DE,de;q=0.9")],
+        )
+        .await;
+    assert_eq!(r.status, 303, "{}", r.text());
+    assert_eq!(
+        f.record("sign_request", &f.req)["consent_version"],
+        obop_http::sign_text::consent_version_for("en")
     );
 }
 

@@ -864,21 +864,39 @@ async fn a_refused_update_that_moves_the_state_has_already_moved_it() {
 
 #[tokio::test]
 async fn the_language_of_the_consent_id_is_the_one_the_post_names_not_a_proof_of_the_page() {
-    // Known and documented (docs/SIGN.md "The consent wording and its id", ISSUES O37): the id
-    // `v1-draft/<lang>` is the wording id plus the language the POST names; a client can name
-    // another of the seven, and a name that is not one is recorded as English. The id is not
-    // evidence of which page was shown.
-    for (lang, want) in [
-        ("en", "v1-draft/en"),
-        ("de", "v1-draft/de"),
-        ("sv", "v1-draft/sv"),
-        ("<script>", "v1-draft/en"),
-        ("", "v1-draft/en"),
-        ("klingon", "v1-draft/en"),
-    ] {
+    // Known and documented (docs/SIGN.md "The consent wording and its id", docs/ISSUES.md O2):
+    // the id `v1-draft/<lang>/<wording>` has the language the POST names (a client can name
+    // another of the seven than the page it was shown); a name that is not one of the seven, or
+    // none, is resolved as a page request is: the browser's `Accept-Language`, then the instance's
+    // default language, then English. The id is not evidence of which page was shown.
+    // (lang in the POST, Accept-Language, default language of the instance, language recorded)
+    let cases: [(&str, Option<&str>, Option<&'static str>, &str); 13] = [
+        ("en", None, None, "en"),
+        ("de", None, None, "de"),
+        ("sv", None, None, "sv"),
+        ("<script>", None, None, "en"),
+        ("", None, None, "en"),
+        ("klingon", None, None, "en"),
+        // The browser's language, when the POST names none that exists.
+        ("klingon", Some("de-DE,de;q=0.9"), None, "de"),
+        ("", Some("fr"), None, "fr"),
+        ("<script>", Some("sv"), None, "sv"),
+        // The POST's own language beats the browser's.
+        ("de", Some("fr"), None, "de"),
+        // The instance default, when neither names one; the browser outranks it.
+        ("klingon", None, Some("pl"), "pl"),
+        ("", Some("fr"), Some("pl"), "fr"),
+        ("", Some("ja, zh;q=0.9"), Some("pl"), "pl"),
+    ];
+    for (lang, accept, default, want) in cases {
         let (f, _, path, _) = sent().await;
+        f.state.set_default_language(default);
+        let mut extra = vec![("origin", ORIGIN)];
+        if let Some(a) = accept {
+            extra.push(("accept-language", a));
+        }
         let r = f
-            .post(
+            .post_with(
                 &path,
                 &ip(90),
                 &[
@@ -887,13 +905,14 @@ async fn the_language_of_the_consent_id_is_the_one_the_post_names_not_a_proof_of
                     ("doc", f.file.as_str()),
                     ("lang", lang),
                 ],
+                &extra,
             )
             .await;
-        assert_eq!(r.status, 303, "{lang}: {}", r.text());
+        assert_eq!(r.status, 303, "{lang} {accept:?} {default:?}: {}", r.text());
         assert_eq!(
             f.record("sign_request", &f.req)["consent_version"],
-            want,
-            "{lang}"
+            obop_http::sign_text::consent_version_for(want),
+            "{lang} {accept:?} {default:?}"
         );
     }
 }
