@@ -97,7 +97,7 @@ description = "Det fullständiga namn som signeraren skrev (bevis); signer_name 
 
 [labels.sv.model.sign_request.field.consent_version]
 label = "Version av samtycket"
-description = "Samtyckestextens id: dess version, språket som signerarens formulär angav (inget bevis för sidan som visades) och de 8 första hextecknen i en hash av texterna på det språket, till exempel v1-draft/sv/9e91bef0"
+description = "Samtyckestextens id: dess version, språket för inskickningen (det formuläret angav, annars adressens, annars webbläsarens, annars instansens; inget bevis för sidan som visades) och de 8 första hextecknen i en hash av texterna på det språket, till exempel v1-draft/sv/9e91bef0"
 
 [labels.sv.model.sign_request.field.state]
 label = "Status"
