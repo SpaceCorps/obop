@@ -9,9 +9,14 @@
 //! **MACHINE-DRAFTED**: nobody who speaks those languages has reviewed them (docs/ISSUES.md, the
 //! signer-page row). The consent sentence (`consent`) is a **draft for counsel**, not legal advice,
 //! and its id is [`CONSENT_VERSION`] (`v1-draft`): it is recorded with every signature (together
-//! with the language, see [`consent_version_for`]) and it is **not** pinned by a hash test, so the
-//! wording may still change; when counsel confirms it, the id becomes `v1` and a test pins it. The
-//! first live use must be the English or the German page.
+//! with the language, see [`consent_version_for`]). The id does not identify the words by
+//! itself; the test `the_wording_the_signer_agrees_to_is_pinned_to_its_id` does: it holds a hash
+//! of the three texts a signer relies on (`consent`, `records`, `name_hint`) in each language,
+//! beside the id, so that an edit of them fails until the hashes and the id are changed in the
+//! same commit. **An id that a real signature carries must never be reused for other words**:
+//! change the words, then change the id. When counsel confirms the English text the id becomes
+//! `v1`. The first live use must be the English page (the only original); any other language,
+//! German included, is machine-drafted and must be read by a native speaker first.
 //!
 //! **Placeholders.** `{title}`, `{name}`, `{hash}` and `{time}` are the only ones. Every column of
 //! a key carries the same set (a test). The caller passes plain values; [`html`] escapes both the
@@ -381,6 +386,57 @@ mod tests {
         for l in LANGS {
             assert!(consent_version_for(l).starts_with("v1-draft/"));
         }
+    }
+
+    /// The id of the wording and the SHA-256 (hex) of the three texts a signer relies on, per
+    /// language in the order of [`LANGS`]: `consent`, `records` and `name_hint`, each as
+    /// `key`, a line feed, the text and a line feed. **Changing a word of them means a new
+    /// [`CONSENT_VERSION`]**: an id that a real signature carries is never reused for other
+    /// words (docs/SIGN.md, "The consent wording and its id"). Edit this table and the id in the
+    /// same commit, and say so in the commit message.
+    const PINNED: (&str, [&str; 7]) = (
+        "v1-draft",
+        [
+            "a6b0ef81523cc02b419c227b2807c8a225defc6b551f2f772e8f5b20006cb417", // en
+            "823c236d75fb3c9abf5755b5ab334d66817de86fe40a65d70c9bade38e82e5f1", // de
+            "55f4e896c96b2c6292ac5e74c60bc83cdf9815cd2e7dd8bfddb3690ea09287e6", // fr
+            "6bba3992294c3c687534f5bc0bd1c9d8e508f47af1924c685963788ac62bf5b1", // pl
+            "f20c791b801a0e4405ebc2168025c8301deb40da356373cf76632d9f2dae5b55", // fi
+            "2b2578bbb740db9159860a5310a73dbb1fd12c8928aeddd1d2a98cd142860cb5", // sv
+            "5e6bd0c378756d10956848f6e98219303de09db4f08233a59a1b0e9b2beb40f8", // es
+        ],
+    );
+
+    fn wording_hash(lang_idx: usize) -> String {
+        use sha2::{Digest, Sha256};
+        let mut h = Sha256::new();
+        for key in ["consent", "records", "name_hint"] {
+            let (_, cols) = CATALOGUE.iter().find(|(k, _)| *k == key).unwrap();
+            h.update(format!("{key}\n{}\n", cols[lang_idx]).as_bytes());
+        }
+        h.finalize().iter().map(|b| format!("{b:02x}")).collect()
+    }
+
+    #[test]
+    fn the_wording_the_signer_agrees_to_is_pinned_to_its_id() {
+        let have: Vec<String> = (0..LANGS.len()).map(wording_hash).collect();
+        assert_eq!(
+            PINNED.0, CONSENT_VERSION,
+            "the table of hashes belongs to another id than CONSENT_VERSION"
+        );
+        for (i, lang) in LANGS.iter().enumerate() {
+            assert_eq!(
+                have[i], PINNED.1[i],
+                "the consent, records or name_hint text in `{lang}` changed while CONSENT_VERSION is \
+                 still {CONSENT_VERSION:?}: change CONSENT_VERSION (an id that a real signature \
+                 carries is never reused), then put these hashes in PINNED:\n{have:#?}"
+            );
+        }
+        // The hash is of the words, not of an empty or a shared text: every language differs.
+        let mut all = have.clone();
+        all.sort();
+        all.dedup();
+        assert_eq!(all.len(), LANGS.len());
     }
 
     #[test]
