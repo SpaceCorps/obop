@@ -725,3 +725,35 @@ description = "Définir le locataire Microsoft Entra avec lequel les personnes s
 [labels.fr.model.sso_provider.action.clear]
 label = "Supprimer"
 description = "Supprimer la configuration de la connexion Microsoft. Les liens restent. Les comptes qui se connectent uniquement avec Microsoft ne peuvent alors entrer que par les administrateurs qui gardent un mot de passe et un second facteur. Refusé pour les agents"
+
+[labels.fr.model.import_map]
+name = "Table d'import"
+description = "D'où vient un enregistrement importé : la clé (système source, table source, identifiant source) de la ligne dont il est issu. Retrouver une clé avec search, un enregistrement avec get."
+
+[labels.fr.model.import_map.field.model]
+label = "Modèle"
+description = "Le modèle de l'enregistrement importé"
+
+[labels.fr.model.import_map.field.record]
+label = "Enregistrement"
+description = "L'identifiant de l'enregistrement importé"
+
+[labels.fr.model.import_map.field.source_system]
+label = "Système source"
+description = "Le système externe d'où vient la ligne, tel que l'import l'a nommé"
+
+[labels.fr.model.import_map.field.source_table]
+label = "Table source"
+description = "La table, la feuille ou le fichier de ce système d'où vient la ligne"
+
+[labels.fr.model.import_map.field.source_id]
+label = "Identifiant source"
+description = "L'identifiant de la ligne dans cette table"
+
+[labels.fr.model.import_map.field.imported_at]
+label = "Importé le"
+description = "Quand l'enregistrement a été importé"
+
+[labels.fr.model.import_map.field.imported_by]
+label = "Importé par"
+description = "Qui l'a importé"

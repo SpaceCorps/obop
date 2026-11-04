@@ -445,7 +445,7 @@ impl ModelDef {
         // Creating many at once needs exactly the approval that creating one needs (D70).
         let mut bulk = crud(
             "bulk_create",
-            "Create many records in one call (at most 1000): rows as a list of objects, or csv text with field names as headers. Every row gets the checks of create. All or nothing by default; mode partial keeps the good rows and reports the bad ones; dry_run checks without writing; idempotency_key makes a retried call return the first answer",
+            "Create many records in one call (at most 1000): rows as a list of objects, or csv text with field names as headers. Every row gets the checks of create. All or nothing by default; mode partial keeps the good rows and reports the bad ones; dry_run checks without writing; idempotency_key makes a retried call return the first answer; source {system, table, ids} (one source id per row) records where each row came from, so a row that was imported before is reported as already_imported with its record id and not created again (on_existing error refuses it instead)",
             self.write_group,
         );
         bulk.needs_approval = create.needs_approval;

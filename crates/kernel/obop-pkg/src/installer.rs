@@ -2456,6 +2456,9 @@ pub fn admin_module() -> Module {
             // Written by the OAuth server when a mobile app signs in (the D64 amendment); its
             // commands are bound by `register_devices`.
             crate::devices::device_model(),
+            // Written by bulk_create when a call gives a source key; get and search are bound by
+            // `register_admin`.
+            obop_commands::import_map::model_def(),
         ],
         network_destinations: vec![],
         description: String::new(),
@@ -2622,6 +2625,7 @@ pub fn register_admin(d: &Dispatcher, inst: &Arc<Installer>) {
         }),
     );
     d.register_read_only(&m, "security_event", &inst.store);
+    d.register_import_map(&m, &inst.store);
     let i = inst.clone();
     d.register(
         &m,

@@ -1,0 +1,14 @@
+[package]
+name = "obop-sie"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "SIE 4 (Swedish accounting interchange) export and import: plain data model, CP437, no dependencies"
+
+[dependencies]
+
+[lints]
+workspace = true

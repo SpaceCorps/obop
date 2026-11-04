@@ -16,6 +16,8 @@ use tower::ServiceExt;
 
 /// Commands of models that have no `list` command: registered on REST, absent from the document.
 const KNOWN_OMITTED: &[&str] = &[
+    "import_map.get",
+    "import_map.search",
     "instance_update.check",
     "instance_update.rollback",
     "instance_update.start",
@@ -142,7 +144,7 @@ fn it_lists_every_command_of_an_account_with_every_group() {
     }
     missing.sort();
     // The document is made from `Dispatcher::meta`, which skips a model that has no `list`
-    // command, so these seven commands (REST ones included) have no operation, in the document
+    // command, so these nine commands (REST ones included) have no operation, in the document
     // an instance serves as well (docs/ISSUES.md K26). A new omission fails here; when one of
     // these gains an operation, remove its id from the list.
     assert_eq!(
