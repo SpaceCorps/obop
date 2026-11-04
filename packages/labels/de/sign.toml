@@ -97,7 +97,7 @@ description = "Der vollständige Name, den die unterzeichnende Person eingegeben
 
 [labels.de.model.sign_request.field.consent_version]
 label = "Version der Einwilligung"
-description = "Kennung des Einwilligungstexts: Version, die Sprache der Absendung (die, die das Formular nannte, sonst die der Adresse, sonst die des Browsers, sonst die der Instanz; kein Beweis für die gezeigte Seite), und die ersten 8 Hex-Zeichen eines Hashs der Texte dieser Sprache, zum Beispiel v1-draft/de/9ebff173"
+description = "Kennung des Einwilligungstexts: Version, die Sprache der Absendung (die lang des Formulars, wenn sie eine der sieben nennt; fehlt im Formular das Feld lang ganz, die der Adresse; sonst die des Browsers, die der Instanz, dann Englisch; kein Beweis für die gezeigte Seite), und die ersten 8 Hex-Zeichen eines Hashs der Texte dieser Sprache, zum Beispiel v1-draft/de/9ebff173"
 
 [labels.de.model.sign_request.field.state]
 label = "Status"
