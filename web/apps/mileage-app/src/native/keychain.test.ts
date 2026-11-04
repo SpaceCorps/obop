@@ -158,6 +158,27 @@ describe("the names of the items an installed app has", () => {
     await expect(secureStorage.loadTokens()).resolves.toMatchObject({ refreshToken: "r" });
   });
 
+  test("the groups that the client was registered with are kept with the address, and a config without them is read as it was", async () => {
+    await secureStorage.saveConfig({
+      baseUrl: "https://phone.example",
+      clientId: "c1",
+      groups: ["mileage.driver"],
+    });
+    await expect(secureStorage.loadConfig()).resolves.toEqual({
+      baseUrl: "https://phone.example",
+      clientId: "c1",
+      groups: ["mileage.driver"],
+    });
+    fake.items.set("obop.mileage.server", {
+      value: JSON.stringify({ baseUrl: "https://phone.example", clientId: "c1" }),
+      kind: fake.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
+    });
+    await expect(secureStorage.loadConfig()).resolves.toEqual({
+      baseUrl: "https://phone.example",
+      clientId: "c1",
+    });
+  });
+
   test("a null removes the item under the same name", async () => {
     await secureStorage.saveConfig({ baseUrl: "https://phone.example", clientId: "c1" });
     await secureStorage.saveTokens(TOKENS);

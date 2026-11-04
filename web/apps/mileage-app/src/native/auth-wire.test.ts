@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
 import type { TokenSet } from "@obop/client";
 import type { Binding, Owner } from "../core/identity.ts";
 import { createSession, type ServerConfig, type SessionStorage } from "../core/session.ts";
+import { defineStartup, type StartupConfig } from "../core/startup-config.ts";
 
 // What the app says to the instance when it signs in. The instance binds the client it registered
 // to the redirect and the name it was given, so an installed app must keep saying exactly these
@@ -76,6 +77,7 @@ vi.mock("./platform-deps.ts", async () => {
 
 const { signIn, SignInError } = await import("./auth.ts");
 const { startup } = await import("../../config/startup.ts");
+const { identity } = await import("../../config/identity.ts");
 const { oauthDeps } = await import("./platform-deps.ts");
 
 const BASE = "https://phone.example";
@@ -95,13 +97,13 @@ function memoryStorage(config: ServerConfig | null = null) {
   return { saved, storage };
 }
 
-async function rig(config: ServerConfig | null = null) {
+async function rig(config: ServerConfig | null = null, configuration: StartupConfig = startup) {
   const { saved, storage } = memoryStorage(config);
   const session = createSession({ storage, oauth: oauthDeps });
   await session.restore();
   const bound: Owner[] = [];
   const host = {
-    startup,
+    startup: configuration,
     session,
     bindIdentity: async (owner: Owner): Promise<Binding> => {
       bound.push(owner);
@@ -226,6 +228,82 @@ describe("a sign-in that is completed", () => {
     expect(callsTo("/oauth/register")).toHaveLength(1);
     expect(new URL(browser.opened[0]!.url).searchParams.get("client_id")).toBe("client-1");
     expect(saved.config?.clientId).toBe("client-1");
+  });
+});
+
+describe("the groups the client is registered with", () => {
+  const MILEAGE = "mileage.driver";
+
+  test("are stored with the address when the client is registered, and kept by the sign-in", async () => {
+    const { host, saved } = await rig();
+    await signIn(host, BASE);
+    expect(saved.config).toMatchObject({ clientId: "client-1", groups: [MILEAGE], user: "dave" });
+  });
+
+  test("a client of an earlier build, stored with no list, is not registered again", async () => {
+    const stored: ServerConfig = {
+      baseUrl: BASE,
+      clientId: "old-client",
+      user: "dave",
+      usedAt: Date.now() - 1000,
+    };
+    const { host, saved } = await rig(stored);
+    await signIn(host, BASE);
+    expect(callsTo("/oauth/register")).toEqual([]);
+    // Nothing is added to what the earlier build stored but the use.
+    expect(saved.config).toEqual({ ...stored, usedAt: saved.config?.usedAt });
+  });
+
+  test("a build that asks for one more group registers a new client at the next sign-in", async () => {
+    const stored: ServerConfig = {
+      baseUrl: BASE,
+      clientId: "old-client",
+      user: "dave",
+      usedAt: Date.now() - 1000,
+    };
+    const grown = defineStartup({
+      identity,
+      groups: [MILEAGE, "fleet.driver"],
+      legacyGroups: startup.legacyGroups,
+    });
+    const { host, saved } = await rig(stored, grown);
+    await signIn(host, BASE);
+    const [register] = callsTo("/oauth/register");
+    expect(JSON.parse(register!.body).scope).toBe("mileage.driver fleet.driver");
+    const address = new URL(browser.opened[0]!.url);
+    expect(address.searchParams.get("client_id")).toBe("client-1");
+    expect(address.searchParams.get("scope")).toBe("mileage.driver fleet.driver");
+    expect(saved.config).toMatchObject({
+      clientId: "client-1",
+      groups: [MILEAGE, "fleet.driver"],
+    });
+  });
+
+  test("a client registered with the list the app asks for is used again", async () => {
+    const stored: ServerConfig = {
+      baseUrl: BASE,
+      clientId: "known-client",
+      user: "dave",
+      usedAt: Date.now() - 1000,
+      groups: [MILEAGE, "fleet.driver"],
+    };
+    const grown = defineStartup({ identity, groups: ["fleet.driver", MILEAGE] });
+    const { host } = await rig(stored, grown);
+    await signIn(host, BASE);
+    expect(callsTo("/oauth/register")).toEqual([]);
+    expect(new URL(browser.opened[0]!.url).searchParams.get("client_id")).toBe("known-client");
+  });
+
+  test("an app with no history of its own registers when it finds a config it cannot account for", async () => {
+    const stored: ServerConfig = {
+      baseUrl: BASE,
+      clientId: "old-client",
+      usedAt: Date.now() - 1000,
+    };
+    const fresh = defineStartup({ identity, groups: [MILEAGE] });
+    const { host } = await rig(stored, fresh);
+    await signIn(host, BASE);
+    expect(callsTo("/oauth/register")).toHaveLength(1);
   });
 });
 

@@ -138,13 +138,14 @@ export async function signIn(host: SignInHost, input: string): Promise<void> {
         name: identity.clientName,
         scope: groups,
       });
-      const fresh = { baseUrl, clientId };
+      const fresh = { baseUrl, clientId, groups: [...groups] };
       await session.setConfig(fresh);
       return fresh;
     };
     let config = session.config();
     let registeredNow = false;
-    if (needsRegistration(config, baseUrl, Date.now())) {
+    const declared = { current: groups, legacy: host.startup.legacyGroups };
+    if (needsRegistration(config, baseUrl, Date.now(), declared)) {
       config = await register();
       registeredNow = true;
     }
