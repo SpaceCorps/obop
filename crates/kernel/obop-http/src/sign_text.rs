@@ -63,7 +63,7 @@ pub const WORDING_KEYS: [&str; 8] = [
 ];
 
 /// `consent_version` as stored on the request: `<CONSENT_VERSION>/<language>/<wording>`, for
-/// example `v1-draft/de/823c236d`, where `<wording>` is the first 8 hex characters of the SHA-256
+/// example `v1-draft/de/9ebff173`, where `<wording>` is the first 8 hex characters of the SHA-256
 /// of the texts of [`WORDING_KEYS`] in that language (`key`, a line feed, the text and a line
 /// feed, for each key in turn). The texts are the exact catalogue texts the page renders, with
 /// their `{placeholders}`. An unknown language is recorded as `en`. The language is the one the

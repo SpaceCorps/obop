@@ -125,7 +125,9 @@ pub struct SignForm {
     pub agree: bool,
     /// The hash of the document the form was made for (the hidden field `doc`).
     pub doc: String,
-    /// The id of the consent wording and the page language, for example `v1-draft/de`.
+    /// The id of the consent wording, the language and a hash of the words, for example
+    /// `v1-draft/de/9ebff173` (derived by the HTTP layer from the page texts, `sign_text.rs`); an
+    /// empty id is stored as `v1-draft`.
     pub consent_version: String,
 }
 
