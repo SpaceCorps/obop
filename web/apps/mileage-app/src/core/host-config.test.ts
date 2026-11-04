@@ -59,8 +59,8 @@ describe("the application id", () => {
 });
 
 describe("the rule of the instance for a redirect, as written here", () => {
-  // The same cases as the table of redirects in `obop-oauth/src/tests/mobile.rs` that concern the
-  // private-use form.
+  // The same cases as the server's table of redirects for mobile clients (the test module
+  // `mobile.rs` of its OAuth crate) that concern the private-use form.
   test.each([
     "org.obop.mileage:/oauth",
     "org.obop.mileage:/",
