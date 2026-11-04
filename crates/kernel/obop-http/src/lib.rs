@@ -15,6 +15,7 @@ use serde_json::{Value as J, json};
 use std::sync::Arc;
 
 mod accounts;
+mod addr;
 pub mod blobs;
 pub mod community;
 pub mod connectors;
@@ -30,11 +31,20 @@ pub mod payments;
 pub mod public;
 pub(crate) mod shared;
 pub mod shell;
+mod sign;
+mod sign_page;
+pub mod sign_text;
 pub(crate) mod sso;
 pub mod website;
 
 #[cfg(test)]
+mod addr_scan_tests;
+#[cfg(test)]
+mod audit_kind_tests;
+#[cfg(test)]
 mod error_tests;
+#[cfg(test)]
+mod src_scan;
 
 pub struct HttpState {
     dispatcher: Arc<Dispatcher>,
@@ -69,6 +79,8 @@ pub struct HttpState {
     /// back office's own address under a public site. Set by the composition root, never by a
     /// request.
     sso_return: std::sync::OnceLock<String>,
+    /// The log line about a post to the signer door that was refused for its origin (D92).
+    sign_origin_log: sign::OriginLog,
 }
 
 impl HttpState {
@@ -104,7 +116,20 @@ impl HttpState {
             default_language: std::sync::OnceLock::new(),
             sso: sso::Cache::default(),
             sso_return: std::sync::OnceLock::new(),
+            sign_origin_log: sign::OriginLog::default(),
         })
+    }
+
+    /// For tests: replace the clock (seconds) and the sink of the line this server writes about a
+    /// post to the signer door that was refused for its origin (at most one every sixty seconds
+    /// of that clock, D92). False when it was set before. The default is the time since the server
+    /// started on a monotonic clock, and standard error.
+    pub fn set_sign_origin_log(
+        &self,
+        clock: impl Fn() -> u64 + Send + Sync + 'static,
+        sink: impl Fn(&str) + Send + Sync + 'static,
+    ) -> bool {
+        self.sign_origin_log.set_hooks(clock, sink)
     }
 
     /// Why a limited session is refused: it owes a new password (an administrator reset it) or
@@ -371,6 +396,13 @@ pub(crate) fn api_routes(state: Arc<HttpState>) -> Router {
                 .options(oauth::preflight)
                 .layer(body_limit()),
         )
+        .route(
+            "/sign/{rid}/{token}",
+            get(sign::page)
+                .post(sign::submit)
+                .layer(axum::extract::DefaultBodyLimit::max(sign::MAX_BODY)),
+        )
+        .route("/sign/{rid}/{token}/document.pdf", get(sign::document))
         .route("/oauth/authorize", get(oauth::authorize))
         .route("/oauth/authorize/microsoft", get(oauth::microsoft))
         .route("/oauth/authorize/return", get(oauth::microsoft_return))

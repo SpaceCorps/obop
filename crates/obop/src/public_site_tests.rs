@@ -19,6 +19,10 @@ struct Fixture {
 }
 
 async fn fixture(public: bool) -> Fixture {
+    fixture_with(public, obop_http::public::PublicConfig::default()).await
+}
+
+async fn fixture_with(public: bool, cfg: obop_http::public::PublicConfig) -> Fixture {
     let app = App::new();
     for id in ["website", "ecommerce"] {
         app.installer
@@ -34,9 +38,10 @@ async fn fixture(public: bool) -> Fixture {
     )
     .unwrap();
     let dir = std::env::temp_dir().join(format!(
-        "obop-admin-{}-{}",
+        "obop-admin-{}-{}{}",
         std::process::id(),
-        if public { "p" } else { "o" }
+        if public { "p" } else { "o" },
+        if cfg.trust_proxy { "t" } else { "" }
     ));
     std::fs::create_dir_all(dir.join("assets")).unwrap();
     std::fs::write(dir.join("index.html"), "<html>BACKOFFICE-SHELL</html>").unwrap();
@@ -50,12 +55,7 @@ async fn fixture(public: bool) -> Fixture {
                 ..obop_site::Config::default()
             },
         ));
-        obop_http::public::router(
-            state,
-            dir.to_str(),
-            site,
-            obop_http::public::PublicConfig::default(),
-        )
+        obop_http::public::router(state, dir.to_str(), site, cfg)
     } else {
         obop_http::router(state, dir.to_str())
     };
@@ -370,4 +370,103 @@ async fn the_back_office_carries_the_default_language_where_it_is_mounted_and_no
         assert_eq!(s, 404);
         assert!(!body.contains("obop-default-language"));
     }
+}
+
+/// How many times `GET /shop/pay/x` is answered before the site's per-address limit (60 in ten
+/// minutes) answers 429, for requests that carry the given `X-Forwarded-For` lines. A path with a
+/// token that cannot exist is counted under the address before it is looked up (a 404), so this
+/// reads which address the router handed to the site without any order.
+async fn hits_until_limited(f: &Fixture, lines: &[&str]) -> usize {
+    for n in 0..70 {
+        let mut b = Request::get("/shop/pay/x").header("host", "shop.test");
+        for l in lines {
+            b = b.header("x-forwarded-for", *l);
+        }
+        let (s, _, _) = send(&f.router, b.body(Body::empty()).unwrap()).await;
+        match s {
+            404 => {}
+            429 => return n,
+            other => panic!("unexpected {other}"),
+        }
+    }
+    panic!("no limit within 70 requests");
+}
+
+#[tokio::test]
+async fn the_public_router_hands_the_site_the_last_forwarded_address_only_behind_a_trusted_proxy() {
+    // Behind a trusted proxy the limit is per the proxy's entry, the last: a client that varies
+    // what it wrote before it (the first entry, or a first line) stays in one bucket, and one that
+    // is behind another address has its own.
+    let trusted = fixture_with(
+        true,
+        obop_http::public::PublicConfig {
+            trust_proxy: true,
+            ..Default::default()
+        },
+    )
+    .await;
+    assert_eq!(
+        hits_until_limited(&trusted, &["1.1.1.1, 9.9.9.9"]).await,
+        60,
+        "the first bucket takes its 60"
+    );
+    for lines in [
+        &["2.2.2.2, 9.9.9.9"][..],
+        &["3.3.3.3", "4.4.4.4, 9.9.9.9"][..],
+        &["9.9.9.9:51000"][..],
+    ] {
+        let (s, _, _) = send(
+            &trusted.router,
+            lines
+                .iter()
+                .fold(
+                    Request::get("/shop/pay/x").header("host", "shop.test"),
+                    |b, l| b.header("x-forwarded-for", *l),
+                )
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(
+            s, 429,
+            "{lines:?} is the same address as the proxy's entry 9.9.9.9"
+        );
+    }
+    assert_eq!(
+        hits_until_limited(&trusted, &["1.1.1.1, 8.8.8.8"]).await,
+        60,
+        "another proxy entry is another bucket, whatever the client wrote first"
+    );
+
+    // An entry that is not an address is the peer, as if there were no header: varying it does not
+    // give the client a bucket of its own (in the test rig there is no socket, so the peer is
+    // nothing; the point is that both spellings meet in one bucket).
+    let first = fixture_with(
+        true,
+        obop_http::public::PublicConfig {
+            trust_proxy: true,
+            ..Default::default()
+        },
+    )
+    .await;
+    assert_eq!(hits_until_limited(&first, &["not-an-address-a"]).await, 60);
+    assert_eq!(
+        hits_until_limited(&first, &["not-an-address-b"]).await,
+        0,
+        "a made-up entry does not choose the bucket"
+    );
+    assert_eq!(
+        hits_until_limited(&first, &["1.1.1.1,"]).await,
+        0,
+        "an empty last entry does not choose the bucket"
+    );
+
+    // Without a trusted proxy nothing the client wrote counts: one bucket for every spelling.
+    let plain = fixture(true).await;
+    assert_eq!(hits_until_limited(&plain, &["5.5.5.5"]).await, 60);
+    assert_eq!(
+        hits_until_limited(&plain, &["6.6.6.6"]).await,
+        0,
+        "the header is ignored unless the operator said the proxy is theirs"
+    );
 }

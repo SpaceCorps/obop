@@ -2763,3 +2763,56 @@ async fn phone_the_reload_of_a_pending_second_step_spends_the_sign_in_window_of_
     let r = elsewhere.microsoft(&p3.flow, ADA_OID).await;
     assert!(asks_for_the_second_step(&r), "{}", r.body);
 }
+
+#[tokio::test]
+async fn phone_the_return_address_counts_the_sign_in_window_by_the_one_rule() {
+    // Each return to the sign-in pages of a flow that waits for a second factor counts one hit of
+    // the per-address window (30 in ten minutes). The address is the rule's: behind a trusted
+    // proxy the last entry of the line; without one the header is ignored.
+    let w = world(true).await;
+    let rig = Rig {
+        r: w.router.clone(),
+        auth: w.auth.clone(),
+    };
+    enrol(&rig, "ada").await;
+    let mut phone = Phone::new(&w).await;
+    let page = phone.open().await;
+    let r = phone.microsoft(&page.flow, ADA_OID).await;
+    assert!(asks_for_the_second_step(&r), "{}", r.body);
+
+    let mut spent = false;
+    for n in 0..100 {
+        phone.ip = Some(format!("203.0.113.{n}, 198.51.100.77"));
+        if phone.back(&page.flow).await.status == 429 {
+            spent = true;
+            break;
+        }
+    }
+    assert!(spent, "the entries before the last chose the bucket");
+    for (line, why) in [
+        ("198.51.100.77", "alone"),
+        ("198.51.100.77:5000", "with a port"),
+    ] {
+        phone.ip = Some(line.to_string());
+        assert_eq!(phone.back(&page.flow).await.status, 429, "{why}");
+    }
+    phone.ip = Some("198.51.100.77, 198.51.100.78".to_string());
+    let r = phone.back(&page.flow).await;
+    assert!(
+        asks_for_the_second_step(&r),
+        "a fresh last entry has a count of its own: {}",
+        r.body
+    );
+
+    // Without a trusted proxy the header is ignored: every address is the peer's bucket.
+    w.state.set_trust_proxy(false);
+    let mut spent = false;
+    for n in 0..100 {
+        phone.ip = Some(format!("198.51.100.{}", n + 100));
+        if phone.back(&page.flow).await.status == 429 {
+            spent = true;
+            break;
+        }
+    }
+    assert!(spent, "an address in the header got a bucket of its own");
+}

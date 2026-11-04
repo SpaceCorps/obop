@@ -780,6 +780,20 @@ export type DialogProps = {
   describedBy?: string;
 };
 
+/**
+ * The dialogs that are open, in the order they are drawn on the page: the last one is on top. Several
+ * can be open at once: the shell asks a question above whatever is open (leaving with unsaved work),
+ * and the command palette and the app launcher open above anything. Escape belongs to the last one
+ * only; every dialog listens on the window, so without this one keypress would answer the question
+ * and also reach the dialog underneath. A dialog is added when it opens, in the same commit order
+ * that puts its element on the page, so the two orders agree: also for a dialog written inside
+ * another dialog's children and open with it, which React commits first, before its parent (it is
+ * then underneath its parent on the page and in the stack; dialogStack.test.tsx pins this).
+ */
+const openDialogs: object[] = [];
+/** The Escape presses a dialog has taken, so a second dialog's listener cannot take the same one. */
+const takenEscapes = new WeakSet<Event>();
+
 /** A modal: focus trap, Escape and backdrop close, focus returns to the opener. */
 export function Dialog({
   open = true,
@@ -799,13 +813,26 @@ export function Dialog({
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
   useFocusTrap(ref, open);
+  // Its place in the stack is the moment it opened. This effect does not depend on `onClose`, which
+  // is usually a fresh function on every render: the place must not move when the dialog re-renders.
+  const place = useRef<object>({});
+  useEffect(() => {
+    if (!open) return;
+    const mine = place.current;
+    openDialogs.push(mine);
+    return () => {
+      const at = openDialogs.indexOf(mine);
+      if (at >= 0) openDialogs.splice(at, 1);
+    };
+  }, [open]);
   useEffect(() => {
     if (!open) return;
     const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        onClose();
-      }
+      if (e.key !== "Escape" || takenEscapes.has(e)) return;
+      if (openDialogs[openDialogs.length - 1] !== place.current) return;
+      takenEscapes.add(e);
+      e.stopPropagation();
+      onClose();
     };
     addEventListener("keydown", key, true);
     return () => removeEventListener("keydown", key, true);

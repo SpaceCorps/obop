@@ -30,7 +30,7 @@ Built-in modules (Rust crates, not removable): `base` (model `party`), `product`
 | `ecommerce` | base, product | Categories, listings and translations, shipping methods, discount codes, web orders and lines; public shop and checkout when the site is enabled; refunds need approval |
 | `website` | none | Pages, menu items, blog posts, form submissions and translations; served publicly when the site is enabled (docs/STOREFRONT.md) |
 | `email_marketing` | none | Lists, contacts with consent, campaigns with statistics; sending needs approval |
-| `sign` | none | Templates and signature requests |
+| `sign` | documents (from 0.2.1, D92) | Templates and signature requests; a request about a Document is signed through a link (docs/SIGN.md) |
 | `sign_docuseal` | sign | DocuSeal signing events next to the requests; needs the DocuSeal connector (docs/SIGN-DOCUSEAL.md) |
 | `dashboards` | none | Dashboards and widgets as data (schema in section 9) |
 | `knowledge` | none | Article tree |

@@ -283,6 +283,9 @@ pub struct Dispatcher {
     /// Uploads and downloads of images and files, created with the first module registered
     /// against a store (D60).
     blob_service: std::sync::OnceLock<Arc<BlobService>>,
+    /// The wrappers of the `sign` package and the signer's door (D92), created with the first
+    /// module registered against a store.
+    sign_service: std::sync::OnceLock<Arc<sign::SignService>>,
     /// Wrappers around a command's handler, by command id (see `around`).
     around: std::sync::RwLock<HashMap<String, Arc<Around>>>,
     /// Models whose writes run under the transaction lock because a rule needs it: a unique
@@ -470,6 +473,15 @@ impl Dispatcher {
         if let Some(h) = self.sync_hook.get() {
             h();
         }
+    }
+
+    /// Bring this process's modules in line with the installed packages if another process
+    /// changed them (the same look as `call`, `catalog` and `meta` make first): one counter read,
+    /// at most once a second. For the public door of `sign` (D92), which is not reached through
+    /// `call` and would otherwise follow a rollback or an update made by `obop modules ...` only
+    /// when an authenticated call arrived.
+    pub fn sync_installed_modules(&self) {
+        self.sync();
     }
 
     pub fn shared_backend(&self) -> Option<Arc<dyn obop_storage::Backend>> {
@@ -1719,11 +1731,13 @@ mod engine;
 pub mod errors;
 mod guards;
 pub mod import_map;
+pub mod inline_pdf;
 pub mod json;
 mod kinds;
 pub mod pay;
 pub mod public;
 pub mod query;
+pub mod sign;
 pub mod sso;
 pub mod store;
 
@@ -1731,11 +1745,13 @@ pub use accounts::{AccountsApi, NewUser};
 pub use blobs::{BlobError, BlobService, Served, clean_filename, disposition};
 pub use engine::bulk::has_stored_answer;
 pub use engine::{Actor, ClockFn};
+pub use inline_pdf::{INLINE_PDF_NAME, MAX_INLINE_PDF, inline_pdf};
 pub use pay::{FakeView, HookReply, PaymentHooks, PaymentPort, PaymentView, StartPayment, Started};
 pub use public::{
     Adjust, Lookup, PublicApi, PublicFilter, PublicRead, PublicReceipt, PublicRecord, PublicSpec,
     PublicSubmit, Receipt, Submission, SubmitError,
 };
+pub use sign::{Client as SignClient, DoorError, SignForm, SignService};
 pub use sso::{
     AnonGroup, AnonLine, SsoApi, SsoEndpoints, SsoError, SsoFlowSignIn, SsoIdentity, SsoLeg,
     SsoProvider,

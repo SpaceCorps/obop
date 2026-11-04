@@ -63,6 +63,8 @@ mod public_site_tests;
 #[cfg(test)]
 mod settings_cmd_tests;
 #[cfg(test)]
+mod sign_tests;
+#[cfg(test)]
 mod sso_tests;
 mod storage_cli;
 mod update_cmd;
@@ -3400,7 +3402,27 @@ mod bundled_packages {
         }
 
         fn create(&self, model: &str, input: Value) -> String {
-            let p = if self.pkg_models.contains(model) {
+            // A signing link is made by `sign_link.create`, which mints the secret and takes only
+            // the request: the sample (every field filled in) is written to the store instead.
+            if model == "sign_link" {
+                let Value::Map(mut fields) = input else {
+                    unreachable!()
+                };
+                // The store takes canonical text only (D72); `create` would have made it so.
+                for f in self.meta[model]
+                    .fields
+                    .iter()
+                    .filter(|f| f.kind == "datetime")
+                {
+                    if let Some(Value::Text(t)) = fields.get_mut(f.name) {
+                        *t = obop_values::datetime::canonical(t).unwrap();
+                    }
+                }
+                return self.app.store.insert(model, fields).unwrap();
+            }
+            // The evidence fields of a signature request belong to the signer door; only an
+            // administrator writes them by hand.
+            let p = if self.pkg_models.contains(model) && model != "sign_request" {
                 &self.pkg_user
             } else {
                 &self.admin
@@ -3414,9 +3436,16 @@ mod bundled_packages {
         /// directly: `create` only accepts the first state (D48).
         fn fresh(&mut self, model: &str, state: &str) -> String {
             let mut open = vec![model.to_string()];
-            let Value::Map(fields) = self.input(model, Some(state), &mut open) else {
+            let Value::Map(mut fields) = self.input(model, Some(state), &mut open) else {
                 unreachable!()
             };
+            // The action `sign` is for a request that is not about a Document (a request about
+            // one is signed at the door), and the actions are walked on these records: no
+            // Document and no held copy (the sample's hash is allowed: it has a template).
+            if model == "sign_request" {
+                fields.remove("document_id");
+                fields.remove("document_file");
+            }
             self.app.store.insert(model, fields).unwrap()
         }
     }
@@ -3544,8 +3573,15 @@ mod bundled_packages {
                         unreachable!()
                     };
                     input.remove(&req.name);
-                    let e = call(&app, &user, &format!("{name}.create"), Value::Map(input))
-                        .unwrap_err();
+                    // The sample of a signature request carries the evidence fields, which only
+                    // an administrator may write by hand (D92): the check is of the other rules.
+                    let who = if name == "sign_request" {
+                        &admin
+                    } else {
+                        &user
+                    };
+                    let e =
+                        call(&app, who, &format!("{name}.create"), Value::Map(input)).unwrap_err();
                     assert!(
                         matches!(e, CallError::Handler(ref s) if s.contains("required")),
                         "{name}: {e:?}"
@@ -3558,8 +3594,13 @@ mod bundled_packages {
                 // Each action works from its `from` state and is refused out of order.
                 for a in &model.action {
                     let from = a.from.as_deref().unwrap();
-                    let rec = mk.fresh(name, from);
                     let cmd = format!("{name}.{}", a.name);
+                    // Needs a Document with a PDF behind `document_id`, which a sample record
+                    // here does not have; `sign_tests` runs it against real ones.
+                    if cmd == "sign_request.send_document" {
+                        continue;
+                    }
+                    let rec = mk.fresh(name, from);
                     call(&app, &user, &cmd, by_id(&rec)).unwrap();
                     assert_eq!(state_of(&app, name, &rec), a.to, "{cmd}");
                     assert!(call(&app, &user, &cmd, by_id(&rec)).is_err(), "{cmd} twice");
@@ -3636,8 +3677,13 @@ mod bundled_packages {
                         unreachable!()
                     };
                     input.insert("state".into(), Value::text(&late));
-                    let e = call(&app, &user, &format!("{name}.create"), Value::Map(input))
-                        .unwrap_err();
+                    let who = if name == "sign_request" {
+                        &admin
+                    } else {
+                        &user
+                    };
+                    let e =
+                        call(&app, who, &format!("{name}.create"), Value::Map(input)).unwrap_err();
                     assert!(
                         matches!(e, CallError::Handler(ref s) if s.contains("starts as")),
                         "{name}: {e:?}"

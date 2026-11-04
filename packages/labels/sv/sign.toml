@@ -1,7 +1,7 @@
 [labels.sv.module]
 name = "Signering"
-description = "Dokumentmallar och signeringsbegäranden med flödet utkast, skickad, signerad, avböjd, utgången. En begäran anger undertecknaren (personuppgift) och sparar signaturbevisen som referenser. En signerad begäran får inte ändras; dokumentets hashvärde visar vad som signerades. Att skicka och registrera en signatur kräver mänskligt godkännande; agenter får bara föreslå."
-summary = "Dokumentmallar och signeringsbegäranden. Att skicka och registrera en signatur kräver mänskligt godkännande."
+description = "Dokumentmallar och signeringsbegäranden. En begäran kan peka på en PDF i Dokument: vid skickandet sparas en exakt kopia, och en chef skapar en engångslänk som den som ska signera öppnar utan konto för att läsa, skriva sitt namn och godkänna. Bara en enkel elektronisk signatur: länken är den enda kontrollen. Agenter skapar inga länkar."
+summary = "Dokumentmallar och signeringsbegäranden; en PDF i Dokument kan signeras via en engångslänk. Enkel elektronisk signatur."
 
 [labels.sv.model.sign_template]
 name = "Mall"
@@ -33,7 +33,11 @@ description = "En begäran om att en person ska signera ett dokument"
 
 [labels.sv.model.sign_request.field.template_id]
 label = "Mall"
-description = "Dokumentet som ska signeras"
+description = "Dokumentmallen som skickas; tom för en begäran om ett dokument i Dokument"
+
+[labels.sv.model.sign_request.field.document_id]
+label = "Dokument"
+description = "PDF:en i Dokument som signeraren läser och signerar; när begäran skickas tas dess SHA-256 och en exakt kopia sparas"
 
 [labels.sv.model.sign_request.field.title]
 label = "Titel"
@@ -49,7 +53,7 @@ description = "Namn på personen som ska signera"
 
 [labels.sv.model.sign_request.field.signer_email]
 label = "Undertecknarens e-post"
-description = "E-postadress som begäran skickas till"
+description = "Signerarens e-postadress; valfri, obop skickar inget e-postmeddelande för en begäran om ett dokument"
 
 [labels.sv.model.sign_request.field.sent_on]
 label = "Skickad den"
@@ -65,7 +69,7 @@ description = "Dagen då dokumentet signerades (ÅÅÅÅ-MM-DD)"
 
 [labels.sv.model.sign_request.field.signer_ip]
 label = "Undertecknarens IP-adress"
-description = "IP-adress som signaturen kom från (bevis)"
+description = "Adressen som signaturen kom från, så som proxykedjan rapporterar den (bevis)"
 
 [labels.sv.model.sign_request.field.signer_user_agent]
 label = "Undertecknarens webbläsare"
@@ -73,11 +77,27 @@ description = "Webbläsare som signaturen gjordes med (bevis)"
 
 [labels.sv.model.sign_request.field.signature_reference]
 label = "Signaturreferens"
-description = "Var signaturbilden eller certifikatet lagras"
+description = "Var signaturen finns; typed:NAMN för ett namn som skrivits via en länk"
 
 [labels.sv.model.sign_request.field.document_hash]
 label = "Dokumentets hashvärde"
-description = "SHA-256-hashvärde (hex) för det signerade dokumentet, som bevis för att det inte ändrats efteråt"
+description = "SHA-256-hash (hex) av filen som skickades för signering; sätts när en begäran om ett dokument skickas. Posten är inte manipulationssäker: en administratör eller den som kan skriva i databasen kan ändra den"
+
+[labels.sv.model.sign_request.field.document_file]
+label = "Sparad kopia"
+description = "Den exakta kopian av PDF:en som skickades för signering, sparad så att ett utbyte av filen i Dokument inte kan ändra vad som signerades; ingen har gruppen, bara en administratör läser den"
+
+[labels.sv.model.sign_request.field.signed_at]
+label = "Signeringstid"
+description = "När signeraren signerade via länken (UTC, serverns klocka)"
+
+[labels.sv.model.sign_request.field.signed_name]
+label = "Skrivet namn"
+description = "Det fullständiga namn som signeraren skrev (bevis); signer_name förblir namnet som begärdes"
+
+[labels.sv.model.sign_request.field.consent_version]
+label = "Version av samtycket"
+description = "Samtyckestextens id: dess version, språket för inskickningen (formulärets lang om det anger ett av de sju; om formuläret saknar fältet lang helt, adressens; annars webbläsarens, instansens och till sist engelska; inget bevis för sidan som visades) och de 8 första hextecknen i en hash av texterna på det språket, till exempel v1-draft/sv/9e91bef0"
 
 [labels.sv.model.sign_request.field.state]
 label = "Status"
@@ -96,7 +116,10 @@ description = "Skicka begäran till undertecknaren"
 
 [labels.sv.model.sign_request.action.sign]
 label = "Signera"
-description = "Registrera att undertecknaren har signerat; posten är därefter oföränderlig enligt konvention"
+description = "Registrera för hand att undertecknaren har signerat; bara för en begäran utan dokument, eftersom en begäran om ett dokument signeras av undertecknaren via länken"
+
+[labels.sv.model.sign_request.action.sign.assert.document_request]
+message = "En begäran om ett dokument signeras av undertecknaren via länken; den kan inte markeras som signerad för hand"
 
 [labels.sv.model.sign_request.action.decline]
 label = "Avböj"
@@ -105,3 +128,31 @@ description = "Registrera att undertecknaren avböjde"
 [labels.sv.model.sign_request.action.expire]
 label = "Markera som utgången"
 description = "Registrera att begäran gick ut utan signatur"
+
+[labels.sv.model.sign_request.action.send_document]
+label = "Skicka dokument"
+description = "Skicka en begäran om ett dokument i Dokument: tar PDF:ens SHA-256, sparar en exakt kopia och flyttar begäran till skickad; skapa därefter signeringslänken"
+
+[labels.sv.model.sign_link]
+name = "Signeringslänk"
+description = "En engångslänk som låter en person signera en begäran; bara en hash av hemligheten sparas, så länken visas en gång när den skapas"
+
+[labels.sv.model.sign_link.field.request_id]
+label = "Begäran"
+description = "Signeringsbegäran som den här länken öppnar"
+
+[labels.sv.model.sign_link.field.expires_at]
+label = "Giltig till"
+description = "När länken slutar fungera (UTC); högst 14 dagar efter att den skapades och aldrig efter begärans sista dag"
+
+[labels.sv.model.sign_link.field.used_at]
+label = "Använd"
+description = "När länken användes för att signera (UTC); en länk fungerar bara en gång"
+
+[labels.sv.model.sign_link.field.revoked_at]
+label = "Återkallad"
+description = "När länken återkallades (UTC); sätt värdet för att återkalla länken"
+
+[labels.sv.model.sign_link.field.link]
+label = "Länkadress"
+description = "Själva länken: bara i svaret på create, visas en gång, sparas aldrig och returneras aldrig av get, list eller search"

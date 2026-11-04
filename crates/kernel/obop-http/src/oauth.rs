@@ -7,7 +7,7 @@
 use super::{HttpState, blocking};
 use axum::{
     body::Bytes,
-    extract::{ConnectInfo, Path, State},
+    extract::{Path, State},
     http::{HeaderMap, HeaderValue, StatusCode, header, request::Parts},
     response::{IntoResponse, Response},
 };
@@ -17,7 +17,6 @@ use obop_oauth::{
     AuthzError, DecideOut, FlowCtx, FlowError, Form, LoginOut, OAuth, OAuthError, microsoft_key,
 };
 use serde_json::{Value as J, json};
-use std::net::SocketAddr;
 use std::sync::Arc;
 
 type Shared = State<Arc<HttpState>>;
@@ -28,22 +27,15 @@ pub(crate) const MAX_BODY: usize = 16 * 1024;
 // ---- plumbing ------------------------------------------------------------------------------
 
 /// The address rate limits are keyed on: the peer, or behind a trusted proxy the nearest
-/// `X-Forwarded-For` entry (the same rule as the public site).
+/// `X-Forwarded-For` entry, which is the last element of the last header line (a proxy that adds
+/// its own line, or extends the one it got, puts its entry at the end; the entries before it are
+/// whatever the client sent). The same rule as the public site (`public.rs`) and the signer door.
 pub(crate) fn client_ip(s: &HttpState, parts: &Parts) -> String {
-    if s.trust_proxy.load(std::sync::atomic::Ordering::Relaxed)
-        && let Some(v) = parts
-            .headers
-            .get("x-forwarded-for")
-            .and_then(|v| v.to_str().ok())
-        && let Some(last) = v.rsplit(',').next()
-    {
-        return last.trim().chars().take(64).collect();
-    }
-    parts
-        .extensions
-        .get::<ConnectInfo<SocketAddr>>()
-        .map(|c| c.0.ip().to_string())
-        .unwrap_or_default()
+    super::addr::client_address(
+        s.trust_proxy.load(std::sync::atomic::Ordering::Relaxed),
+        &parts.headers,
+        &parts.extensions,
+    )
 }
 
 fn pct_decode(s: &str) -> Option<String> {
@@ -206,7 +198,7 @@ pub(crate) fn cookie_value(h: &HeaderMap, name: &str) -> Option<String> {
 /// A browser form post must come from this origin: `Origin` when it names one, else
 /// `Sec-Fetch-Site`. (A browser sends `Origin: null` for sandboxed or opaque origins and when the
 /// page's referrer policy is `no-referrer`; fetch metadata tells those cases apart.)
-fn same_origin(h: &HeaderMap, base: &str) -> bool {
+pub(crate) fn same_origin(h: &HeaderMap, base: &str) -> bool {
     match h.get(header::ORIGIN).and_then(|v| v.to_str().ok()) {
         Some(o) if o != "null" => o.trim_end_matches('/').eq_ignore_ascii_case(base),
         _ => h.get("sec-fetch-site").and_then(|v| v.to_str().ok()) == Some("same-origin"),

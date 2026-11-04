@@ -170,7 +170,7 @@ export function App() {
     [],
   );
   useEffect(() => {
-    nav.ask = (m) => confirm(m, t("Leave and discard"), t("Keep editing"));
+    nav.ask = (message, leave, stay) => confirm(message, leave, stay);
     return () => {
       nav.ask = null;
     };
