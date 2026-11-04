@@ -836,6 +836,16 @@ async fn evidence_is_read_by_managers_only_and_masked_for_agents() {
     // The signer types a name that is not the one the request asked for, so that the copy of it
     // inside `signature_reference` cannot be mistaken for the requested name.
     let typed = "Jane Q. Example";
+    // The address the request will be sent to is personal data too (it is not evidence, but an
+    // agent must not read it either): the fixture's request has none, so give it one.
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_request/update",
+            json!({"id": f.req, "signer_email": "jane.q@example.test"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
     let r = f.post(&path, &ip(43), &good_form(&f, typed)).await;
     assert_eq!(r.status, 303);
     // The seven evidence fields a manager reads; the eighth, `document_file`, is read by an
@@ -863,6 +873,7 @@ async fn evidence_is_read_by_managers_only_and_masked_for_agents() {
     assert_eq!(v["value"]["signed_name"], typed);
     assert_eq!(v["value"]["signature_reference"], format!("typed:{typed}"));
     assert_eq!(v["value"]["signer_name"], "Jane Test");
+    assert_eq!(v["value"]["signer_email"], "jane.q@example.test");
     let seen_by_manager = v["value"].clone();
     // The copy of the Document is read by nobody but an administrator, not even a manager.
     assert!(
@@ -964,6 +975,7 @@ async fn evidence_is_read_by_managers_only_and_masked_for_agents() {
             "signer_ip",
             "signer_user_agent",
             "signature_reference",
+            "signer_email",
         ] {
             let masked = row[k].as_str().unwrap_or("");
             assert!(
@@ -987,8 +999,42 @@ async fn evidence_is_read_by_managers_only_and_masked_for_agents() {
             "198.51.100.43",
             "TestBrowser",
             "Jane Test",
+            "jane.q@example.test",
         ] {
             assert!(!text.contains(secret), "{what} shows {secret}: {text}");
+        }
+    }
+    // Nor can the agent probe the masked fields by filtering, ordering or grouping: a mask token
+    // compared with a guess would be an oracle for the value. Each is answered as if the field
+    // did not exist (the platform's own test of this uses no sign model).
+    for key in [
+        "signed_name",
+        "signer_name",
+        "signer_ip",
+        "signer_user_agent",
+        "signature_reference",
+        "signer_email",
+    ] {
+        let probes = [
+            (
+                "list",
+                json!({"filter": [{"field": key, "op": "eq", "value": "Jane Test"}]}),
+            ),
+            ("list", json!({"order": [{"field": key, "dir": "asc"}]})),
+            (
+                "search",
+                json!({"aggregate": {"group_by": [{"field": key}], "measures": [{"op": "count"}]}}),
+            ),
+        ];
+        for (cmd, probe) in probes {
+            let (s, v) = f
+                .api("agent", &format!("/api/sign_request/{cmd}"), probe.clone())
+                .await;
+            assert_eq!(s, 400, "agent {key} {probe}: {v}");
+            assert!(
+                err(&v).contains("unknown field"),
+                "agent {key} {probe}: {v}"
+            );
         }
     }
 }

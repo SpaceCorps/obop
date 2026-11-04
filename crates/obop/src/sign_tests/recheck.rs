@@ -80,6 +80,13 @@ async fn clearing_the_document_does_not_unlock_the_manual_signature() {
         for who in ["sam", "mia"] {
             let (s, v) = f.api(who, "/api/sign_request/update", body.clone()).await;
             assert_eq!(s, 400, "{who} {what}: {v}");
+            // The guard of the module refuses it, in each spelling, and says so: it comes before
+            // the checks of the engine (that '' is no reference, that sam may not use the other
+            // Document), which would also have refused three of the six calls.
+            assert!(
+                err(&v).contains("cannot be changed after the request was sent"),
+                "{who} {what}: {v}"
+            );
             assert_eq!(
                 f.record("sign_request", &f.req),
                 before,
@@ -87,32 +94,6 @@ async fn clearing_the_document_does_not_unlock_the_manual_signature() {
             );
         }
     }
-    let (s, v) = f
-        .api(
-            "sam",
-            "/api/sign_request/update",
-            json!({"id": f.req, "document_id": null}),
-        )
-        .await;
-    assert_eq!(s, 400, "{v}");
-    assert!(
-        err(&v).contains("cannot be changed after the request was sent"),
-        "{v}"
-    );
-    // Pointing it at another Document is refused for the same reason (sam, who has no rights in
-    // Documents, is stopped earlier by the check that the Document is one he can use).
-    let (s, v) = f
-        .api(
-            "mia",
-            "/api/sign_request/update",
-            json!({"id": f.req, "document_id": doc2}),
-        )
-        .await;
-    assert_eq!(s, 400, "{v}");
-    assert!(
-        err(&v).contains("cannot be changed after the request was sent"),
-        "{v}"
-    );
     // The same document and other fields are still fine to write.
     let (s, v) = f
         .api(
@@ -183,8 +164,11 @@ async fn clearing_the_document_does_not_unlock_the_manual_signature() {
             .is_none_or(J::is_null)
     );
     every_manual_signature_is_refused(&f, &["mia", "admin"], "document cleared by an admin").await;
-    // Each of the three is enough alone: an administrator who also clears the copy, or instead the
-    // hash (both are door-owned, so only she can), still meets the one that is left.
+    // Each of the three terms of the assertion is enough alone. The Document alone is the state of
+    // the request in `the_document_of_a_template_request_sent_with_send_...` (no hash, no copy).
+    // Here the Document is already cleared, and an administrator who also clears the copy, or
+    // instead the hash (both are door-owned, so only she can), still meets the one that is left:
+    // the hash with no template, and the copy.
     for (clear, left) in [
         ("document_file", "the hash and no template"),
         ("document_hash", "the copy"),
@@ -458,8 +442,10 @@ async fn staff_cannot_blank_the_evidence_with_null_or_empty_text() {
         }
     }
 
-    // After the signature every one of the eight keys is protected the same way, against both
-    // layers (the door's keys, and the rule that a signed request takes no edit).
+    // After the signature every one of the eight keys is refused the same way, by the door's keys
+    // (the message is theirs). The other layer, the rule that a signed request takes no edit, is
+    // pinned by `a_signed_request_is_neither_changed_nor_deleted_by_staff` (hardening.rs) and by the
+    // signed-request cases of `an_agent_token_that_holds_the_admin_group_...`.
     let r = f.post(&path, &ip(81), &good_form(&f, "Jane Test")).await;
     assert_eq!(r.status, 303, "{}", r.text());
     let signed = f.record("sign_request", &f.req);
@@ -495,7 +481,7 @@ async fn staff_cannot_blank_the_evidence_with_null_or_empty_text() {
 #[tokio::test]
 async fn an_agent_token_that_holds_the_admin_group_is_not_an_administrator_for_the_signing_guards()
 {
-    let (mut f, _, path, _) = sent().await;
+    let (mut f, link_id, path, _) = sent().await;
     // `root` holds platform.admin and the signing groups literally, so she can hand all of them
     // to an agent. The agent has the groups; it is still not a person.
     let (s, v) = f
@@ -546,11 +532,50 @@ async fn an_agent_token_that_holds_the_admin_group_is_not_an_administrator_for_t
         assert_eq!(s, 400, "{body}: {v}");
         assert_eq!(f.record("sign_request", &f.req), signed, "{body}");
     }
+    // A request that was signed through a link is still referenced by that link, which refuses a
+    // delete before the wrapper of the module is asked: the reason is the reference.
     let (s, v) = f
         .api("adminbot", "/api/sign_request/delete", json!({"id": f.req}))
         .await;
-    assert_ne!(s, 200, "{v}");
+    assert_eq!(s, 400, "{v}");
+    assert!(err(&v).contains("still referenced by sign_link"), "{v}");
     assert_eq!(f.record("sign_request", &f.req), signed);
+
+    // The delete wrapper of the module is reached with a request that was signed by hand (no
+    // link refers to it): the agent's call is a proposal, and when the person approves it the
+    // wrapper still asks who the caller is. The agent is no administrator, so the signed request
+    // stays. (Pinned: a wrapper that asked only for the group would let this delete go through.)
+    let by_hand = hand_signed_request(&f).await;
+    let (s, v, proposed) =
+        agent_call_then_approved_by_root(&f, "/api/sign_request/delete", json!({"id": by_hand}))
+            .await;
+    assert!(proposed, "the wrapper must be reached by an approval: {v}");
+    assert_eq!(s, 400, "{v}");
+    assert!(err(&v).contains("cannot be changed or deleted"), "{v}");
+    assert_eq!(f.record("sign_request", &by_hand)["state"], "signed");
+
+    // The links: the agent cannot un-revoke, re-point, lengthen or delete one either, although it
+    // holds the group. The wrapper answers an agent's call at once (or, were it let through, the
+    // call would be a proposal that the person approves: the helper follows both).
+    let link = f.record("sign_link", &link_id);
+    for body in [
+        json!({"id": link_id, "expires_at": "2099-01-01T00:00:00.000000Z"}),
+        json!({"id": link_id, "used_at": null}),
+    ] {
+        let (s, v, _) =
+            agent_call_then_approved_by_root(&f, "/api/sign_link/update", body.clone()).await;
+        assert_eq!(s, 400, "{body}: {v}");
+        assert!(err(&v).contains("sign_link"), "{body}: {v}");
+        assert_eq!(f.record("sign_link", &link_id), link, "{body}");
+    }
+    let (s, v, _) =
+        agent_call_then_approved_by_root(&f, "/api/sign_link/delete", json!({"id": link_id})).await;
+    assert_eq!(s, 400, "{v}");
+    assert!(
+        err(&v).contains("kept as a record of what was issued"),
+        "{v}"
+    );
+    assert_eq!(f.record("sign_link", &link_id), link);
 
     // The person who holds the group is an administrator, as the documents say.
     let (s, v) = f
@@ -561,6 +586,67 @@ async fn an_agent_token_that_holds_the_admin_group_is_not_an_administrator_for_t
         )
         .await;
     assert_eq!(s, 200, "{v}");
+    let (s, v) = f
+        .api(
+            "root",
+            "/api/sign_link/update",
+            json!({"id": link_id, "expires_at": "2099-01-01T00:00:00.000000Z"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+}
+
+/// The call of the admin-scoped agent. When the platform refuses it outright that is the answer;
+/// else the call is a proposal (202) that `root`, who holds the group herself, approves, and the
+/// answer is that of the approval: the module's own wrapper decides then, with the agent as the
+/// caller. (`proposed` says which of the two happened.)
+async fn agent_call_then_approved_by_root(f: &Fx, path: &str, body: J) -> (u16, J, bool) {
+    let (s, v) = f.api("adminbot", path, body).await;
+    if s != 202 {
+        return (s, v, false);
+    }
+    assert_eq!(v["approval_required"], json!(true), "{v}");
+    let plan = v["plan_id"].as_str().unwrap().to_string();
+    let (s, v) = f
+        .api("root", &format!("/api/approve/{plan}"), json!({}))
+        .await;
+    (s, v, true)
+}
+
+/// A request without a Document, made from a template and signed by hand (the way a request has
+/// always been signed there): no link refers to it.
+async fn hand_signed_request(f: &Fx) -> String {
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_template/create",
+            json!({"name": "By hand (test)", "body": "text"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let tpl = v["value"]["id"].as_str().unwrap().to_string();
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_request/create",
+            json!({"title": "By hand", "template_id": tpl, "signer_name": "Jane Test",
+                   "signer_email": "jane@example.test"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let id = v["value"]["id"].as_str().unwrap().to_string();
+    for call in ["send", "sign"] {
+        let (s, v) = f
+            .api(
+                "mia",
+                &format!("/api/sign_request/{call}"),
+                json!({"id": id}),
+            )
+            .await;
+        assert_eq!(s, 200, "{call}: {v}");
+    }
+    assert_eq!(f.record("sign_request", &id)["state"], "signed");
+    id
 }
 
 #[tokio::test]
@@ -774,4 +860,40 @@ async fn a_refused_update_that_moves_the_state_has_already_moved_it() {
     assert_eq!(after["state"], "signed");
     assert!(after.get("signed_name").is_none_or(J::is_null));
     assert_eq!(signed_count(&f), 0, "and nothing was logged as a signature");
+}
+
+#[tokio::test]
+async fn the_language_of_the_consent_id_is_the_one_the_post_names_not_a_proof_of_the_page() {
+    // Known and documented (docs/SIGN.md "The consent wording and its id", ISSUES O37): the id
+    // `v1-draft/<lang>` is the wording id plus the language the POST names; a client can name
+    // another of the seven, and a name that is not one is recorded as English. The id is not
+    // evidence of which page was shown.
+    for (lang, want) in [
+        ("en", "v1-draft/en"),
+        ("de", "v1-draft/de"),
+        ("sv", "v1-draft/sv"),
+        ("<script>", "v1-draft/en"),
+        ("", "v1-draft/en"),
+        ("klingon", "v1-draft/en"),
+    ] {
+        let (f, _, path, _) = sent().await;
+        let r = f
+            .post(
+                &path,
+                &ip(90),
+                &[
+                    ("name", "Jane Test"),
+                    ("agree", "1"),
+                    ("doc", f.file.as_str()),
+                    ("lang", lang),
+                ],
+            )
+            .await;
+        assert_eq!(r.status, 303, "{lang}: {}", r.text());
+        assert_eq!(
+            f.record("sign_request", &f.req)["consent_version"],
+            want,
+            "{lang}"
+        );
+    }
 }

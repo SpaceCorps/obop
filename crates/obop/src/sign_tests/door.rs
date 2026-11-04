@@ -563,7 +563,9 @@ async fn a_name_and_a_user_agent_are_cleaned_before_they_are_kept() {
     );
 
     // A browser string with a byte that is not ASCII (here a character that reorders text) cannot
-    // be read as text by the HTTP layer: the evidence then holds no browser, and not the character.
+    // be read as text by the HTTP layer (`HeaderValue::to_str`): the evidence then holds no
+    // browser at all, and not the part before the character. (The cleaning of a string that did
+    // get through is the first half of this test.)
     let (f, _, path, _) = sent().await;
     let r = f
         .post_with(
@@ -581,7 +583,7 @@ async fn a_name_and_a_user_agent_are_cleaned_before_they_are_kept() {
         .as_str()
         .unwrap()
         .to_string();
-    assert!(!agent.contains('\u{202e}'), "{agent:?}");
+    assert!(agent.is_empty(), "{agent:?}");
 }
 
 #[tokio::test]
