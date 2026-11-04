@@ -1075,6 +1075,53 @@ async fn agent_with(f: &mut Fx, owner: &str, scopes: &[&str], name: &'static str
         .insert(name, v["token"].as_str().unwrap().to_string());
 }
 
+#[tokio::test]
+async fn an_agent_token_that_holds_sign_manager_revokes_a_link_and_one_with_sign_user_ends_a_request()
+ {
+    // docs/SIGN.md "Known limits" and O19: no approval is asked and no entry is written when an
+    // agent token revokes a link (it needs `sign.manager`) or declines or expires a sent request
+    // (it needs `sign.user`), so a prompt-injected agent can stop a signature that was handed
+    // over. The tests state what is documented; if the owner wants a person to decide, the
+    // actions get `approval = true` and these change with them.
+    let (mut f, link_id, path, _) = sent().await;
+    agent_with(&mut f, "mia", &["sign.user", "sign.manager"], "manager_bot").await;
+    agent_with(&mut f, "mia", &["sign.user"], "user_bot").await;
+    let events = f.events().len();
+    let revoke = json!({"id": link_id, "revoked_at": "2001-01-01T00:00:00Z"});
+    // With `sign.user` alone it cannot even see the link.
+    let (s, _) = f
+        .api("user_bot", "/api/sign_link/update", revoke.clone())
+        .await;
+    assert_ne!(s, 200);
+    assert_eq!(f.get(&path, &ip(83)).await.status, 200, "still open");
+    // With `sign.manager` it revokes, at once, with the server's time.
+    let (s, v) = f.api("manager_bot", "/api/sign_link/update", revoke).await;
+    assert_eq!(s, 200, "{v}");
+    let stamped = f.record("sign_link", &link_id)["revoked_at"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(!stamped.starts_with("2001"), "{stamped}");
+    assert_eq!(f.get(&path, &ip(83)).await.status, 410, "the link is dead");
+    assert_eq!(f.events().len(), events, "and nothing was logged");
+    // Declining a sent request needs `sign.user` only, and no approval either.
+    let (f, _, path, _) = sent().await;
+    let mut f = f;
+    agent_with(&mut f, "mia", &["sign.user"], "user_bot").await;
+    let events = f.events().len();
+    let (s, v) = f
+        .api(
+            "user_bot",
+            "/api/sign_request/decline",
+            json!({"id": f.req}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    assert_eq!(f.record("sign_request", &f.req)["state"], "declined");
+    assert_eq!(f.get(&path, &ip(84)).await.status, 410, "its link is dead");
+    assert_eq!(f.events().len(), events, "and nothing was logged");
+}
+
 /// One write of a door-owned key: `op` is `update` (of `req`), `create` or `bulk` (one row).
 async fn probe(f: &Fx, who: &str, op: &str, req: &str, key: &str, value: &J) -> (u16, String) {
     let (path, body) = match op {
@@ -1092,6 +1139,22 @@ async fn probe(f: &Fx, who: &str, op: &str, req: &str, key: &str, value: &J) -> 
     (s, err(&v))
 }
 
+/// As `probe`, with the whole answer.
+async fn probe_raw(f: &Fx, who: &str, op: &str, req: &str, key: &str, value: &J) -> (u16, J) {
+    let (path, body) = match op {
+        "update" => ("/api/sign_request/update", json!({"id": req, key: value})),
+        "create" => (
+            "/api/sign_request/create",
+            json!({"title": "Probe", "signer_name": "Jane Test", key: value}),
+        ),
+        _ => (
+            "/api/sign_request/bulk_create",
+            json!({"rows": [{"title": "Probe", "signer_name": "Jane Test", key: value}]}),
+        ),
+    };
+    f.api(who, path, body).await
+}
+
 #[tokio::test]
 async fn a_guess_at_the_evidence_is_refused_the_same_whether_it_is_right_or_wrong() {
     // A caller who cannot read a field of the evidence **in clear** must not learn it by sending
@@ -1104,6 +1167,39 @@ async fn a_guess_at_the_evidence_is_refused_the_same_whether_it_is_right_or_wron
     let r = f.post(&path, &ip(82), &good_form(&f, "Jane Test")).await;
     assert_eq!(r.status, 303, "{}", r.text());
     let signed = f.record("sign_request", &f.req);
+    // The state of the real NDA first: the Document (restricted, ann's) still holds the file that
+    // the request holds, and bob, sam and noc cannot see the Document. The only thing that makes
+    // a right guess at `document_file` answer like a wrong one is then the row rule of the
+    // Document, which the guard on files applies to the owner entry of the Document. The whole
+    // answer is compared, for update, create and a bulk row.
+    let wrong_id = json!("0".repeat(64));
+    for who in ["bob", "sam", "noc"] {
+        for op in ["update", "create", "bulk"] {
+            let right = probe_raw(
+                &f,
+                who,
+                op,
+                &f.req,
+                "document_file",
+                &signed["document_file"],
+            )
+            .await;
+            let wrong = probe_raw(&f, who, op, &f.req, "document_file", &wrong_id).await;
+            assert_eq!(
+                right, wrong,
+                "{who} {op}: the Document still holds the file"
+            );
+            assert_eq!(right.0, 400, "{who} {op}: {:?}", right.1);
+            // A bulk row meets the door's refusal of the key before the check of the file.
+            let said = if op == "bulk" {
+                "cannot be set by hand"
+            } else {
+                "must be the id of an uploaded file"
+            };
+            assert!(err(&right.1).contains(said), "{who} {op}: {:?}", right.1);
+        }
+    }
+    assert_eq!(f.record("sign_request", &f.req), signed, "nothing changed");
     // The Document gets another file, so that the signed copy is held by the request alone: its
     // id is not one that anybody can read through the Document.
     let (s, v) = f

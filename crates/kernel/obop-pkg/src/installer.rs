@@ -4166,6 +4166,55 @@ write_group = "fleetlog.manager"
         assert!(visible(&db), "meta() syncs first");
     }
 
+    /// B1, the throttle: a process looks at the shared counter at most once a second (docs/SIGN.md
+    /// "Upgrade runbook": a change made by another process is followed within about a second). A
+    /// look inside the second reads nothing and registers nothing; the first one after it does.
+    #[test]
+    fn a_process_looks_for_changed_modules_at_most_once_a_second() {
+        use std::sync::atomic::Ordering;
+        let store = Store::new();
+        let ((_da, a), (db, b)) = (setup(&store), setup(&store));
+        let manager = Principal::user("m", &["fleet.user", "fleet.manager"]);
+        let visible = || {
+            db.meta(Surface::Rest, &manager)
+                .iter()
+                .any(|m| m.id == "fleet")
+        };
+        let now = || {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64
+        };
+        a.install(&fleet_with_labels("0.3.0", FLEET_LABELS), "upload", "root")
+            .unwrap();
+        // B looked half a second ago: three looks now change nothing, and the time of the last
+        // look stays where it was (a look that did read would have stored the new time).
+        let looked = now() - 500;
+        b.last_check_ms.store(looked, Ordering::Release);
+        for _ in 0..3 {
+            b.sync_modules();
+        }
+        assert!(!visible(), "inside the second B reads nothing");
+        assert_eq!(b.last_check_ms.load(Ordering::Acquire), looked);
+        // B looked a little over a second ago: this one reads, registers and notes the time.
+        b.last_check_ms.store(now() - 1100, Ordering::Release);
+        b.sync_modules();
+        assert!(visible(), "after the second B follows");
+        let noted = b.last_check_ms.load(Ordering::Acquire);
+        assert!(
+            noted > looked,
+            "the time of the look is noted: {noted} after {looked}"
+        );
+        // And the counter is current now, so the next look after a second reads and finds nothing.
+        a.uninstall("fleet").unwrap();
+        b.sync_modules();
+        assert!(visible(), "inside the second again: still as it was");
+        b.last_check_ms.store(now() - 1100, Ordering::Release);
+        b.sync_modules();
+        assert!(!visible(), "a second later the removal is followed");
+    }
+
     #[test]
     fn uninstall_removes_the_labels_and_reinstall_restores_them() {
         let (d, inst) = setup(&Store::new());

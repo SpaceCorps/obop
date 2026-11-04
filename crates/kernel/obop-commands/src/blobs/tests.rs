@@ -797,6 +797,74 @@ fn a_restricted_blob_id_cannot_be_saved_into_a_record_of_somebody_who_cannot_see
 }
 
 #[test]
+fn the_id_a_field_holds_is_sent_back_only_by_a_caller_who_may_read_that_field() {
+    // `item.private_photo` is read and written by managers; every `t.user` may read the model.
+    // The id the field holds may be saved again (an update that leaves it as it is), and that
+    // must not tell a caller who cannot read the field "this is the one held here" from "this is
+    // not an uploaded file", or a guess at a file's hash would be confirmed (docs/ISSUES.md K53).
+    let e = env();
+    let (ann, mia) = (user("ann"), manager("mia"));
+    let b = up(
+        &e,
+        &mia,
+        "item.private_photo",
+        &fx::png(32, 32, 7),
+        "image/png",
+    );
+    let r = call(
+        &e,
+        &mia,
+        "item.create",
+        map(&[("title", "P"), ("private_photo", &b)]),
+    )
+    .unwrap();
+    let rec = id_of_row(&r);
+    let wrong = "0".repeat(64);
+    // The manager sends it back and it is accepted.
+    call(
+        &e,
+        &mia,
+        "item.update",
+        map(&[("id", &rec), ("private_photo", &b), ("title", "P2")]),
+    )
+    .unwrap();
+    // Ann cannot read the field. The right id and a wrong one are told apart by nothing.
+    let right = call(
+        &e,
+        &ann,
+        "item.update",
+        map(&[("id", &rec), ("private_photo", &b)]),
+    );
+    let other = call(
+        &e,
+        &ann,
+        "item.update",
+        map(&[("id", &rec), ("private_photo", &wrong)]),
+    );
+    assert!(right.is_err(), "{right:?}");
+    assert_eq!(
+        format!("{right:?}"),
+        format!("{other:?}"),
+        "the right id and a wrong one answer alike"
+    );
+    // And the same in a new record, where the record id is the one that holds the file.
+    let right = call(
+        &e,
+        &ann,
+        "item.create",
+        map(&[("id", &rec), ("title", "X"), ("private_photo", &b)]),
+    );
+    let other = call(
+        &e,
+        &ann,
+        "item.create",
+        map(&[("id", &rec), ("title", "X"), ("private_photo", &wrong)]),
+    );
+    assert!(right.is_err(), "{right:?}");
+    assert_eq!(format!("{right:?}"), format!("{other:?}"));
+}
+
+#[test]
 fn an_uploader_still_reads_an_upload_that_no_record_holds_yet() {
     let e = env();
     let (ann, bob) = (user("ann"), user("bob"));
