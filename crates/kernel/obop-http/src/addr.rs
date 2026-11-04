@@ -3,12 +3,14 @@
 //!
 //! Without `--trust-proxy` it is the peer of the socket. Behind a trusted proxy it is the last
 //! entry of the last `X-Forwarded-For` line: a proxy that extends the client's line or adds a line
-//! of its own writes its entry last, and what comes before it is whatever the client sent. When
-//! that entry cannot be used (there is no line, the line is not text, the entry is empty, longer
-//! than 64 characters or not an address) the peer is used, as if there had been no header: a
-//! client cannot blank its address or choose its limiter bucket by writing something odd. An
-//! `ip:port` or `[ipv6]:port` entry is read as its address, because the port changes with every
-//! connection.
+//! of its own writes its entry last, and what comes before it is whatever the client sent, bytes
+//! that are not text included, so the line is read lossily and only its last entry is looked at.
+//! When that entry cannot be used (there is no line, the entry is empty or not an address) the
+//! peer is used, as if there had been no header. Then a client cannot blank its address or choose
+//! its limiter bucket by what it writes before the proxy's entry; if the proxy itself writes
+//! nothing usable, the address is the proxy's, and a log line whose `address` equals its `peer`
+//! shows it. An `ip:port` or `[ipv6]:port` entry is read as its address, because the port changes
+//! with every connection.
 
 use axum::extract::ConnectInfo;
 use axum::http::{Extensions, HeaderMap};
@@ -33,13 +35,11 @@ pub(crate) fn client_address(
 
 /// The entry the proxy wrote, when it is an address.
 fn forwarded_entry(headers: &HeaderMap) -> Option<String> {
-    let line = headers
-        .get_all("x-forwarded-for")
-        .iter()
-        .next_back()?
-        .to_str()
-        .ok()?;
-    // An empty entry, a name and anything longer than an address do not parse.
+    // The proxy's entry is the last and is ASCII; what precedes it may be any bytes the client
+    // sent and must not hide the entry (`HeaderValue::to_str` refuses the whole line).
+    let raw = headers.get_all("x-forwarded-for").iter().next_back()?;
+    let line = String::from_utf8_lossy(raw.as_bytes());
+    // An empty entry and a name do not parse.
     let last = line.rsplit(',').next()?.trim();
     IpAddr::from_str(last)
         .or_else(|_| SocketAddr::from_str(last).map(|s| s.ip()))
@@ -81,6 +81,10 @@ mod tests {
             (vec![&b"[2001:db8::7]:51000"[..]], "2001:db8::7"),
             (vec![&b"2001:0db8:0:0:0:0:0:7"[..]], "2001:db8::7"),
             (vec![&b"  198.51.100.7  "[..]], "198.51.100.7"),
+            // Bytes that are not text in the client's part do not hide the proxy's entry.
+            (vec![&b"\xe9, 198.51.100.7"[..]], "198.51.100.7"),
+            (vec![&b"\xff\xfe,\x80 ,198.51.100.8"[..]], "198.51.100.8"),
+            (vec![&b"\xe9"[..], &b"\x80, 2001:db8::7"[..]], "2001:db8::7"),
         ] {
             assert_eq!(
                 client_address(true, &headers(&lines), &peer),
@@ -100,9 +104,13 @@ mod tests {
             ("a blank line", vec![&b""[..]]),
             ("a name", vec![&b"203.0.113.9, client-a"[..]]),
             ("a zone id", vec![&b"fe80::1%eth0"[..]]),
-            ("an entry that is too long", vec![long.as_bytes()]),
-            // The proxy appended after a byte that is not text: the line cannot be read at all.
-            ("a line that is not text", vec![&b"\xe9, 198.51.100.7"[..]]),
+            ("a long run of digits", vec![long.as_bytes()]),
+            // The last entry is the proxy's; one that is not text is not an address.
+            (
+                "a last entry that is not text",
+                vec![&b"198.51.100.7, \xe9"[..]],
+            ),
+            ("a last line that is only bytes", vec![&b"\xe9\xff"[..]]),
             ("a port without an address", vec![&b":51000"[..]]),
         ] {
             assert_eq!(

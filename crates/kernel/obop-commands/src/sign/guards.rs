@@ -53,7 +53,8 @@ pub(super) fn install(d: &Dispatcher, svc: &Arc<SignService>) {
     );
 }
 
-const DOCUMENT_FIXED: &str = "sign_request.document_id cannot be changed after the request was sent for that document; make a new request";
+const DOCUMENT_FIXED: &str =
+    "sign_request.document_id cannot be changed after the request was sent; make a new request";
 
 const SIGNED: &str =
     "sign_request: a signed request cannot be changed or deleted; ask an administrator";
@@ -110,20 +111,21 @@ impl SignService {
             return Ok(());
         };
         self.refuse_door_fields(input, Some(&cur))?;
-        // Once a request has been sent for a Document, staff cannot swap or clear that Document:
-        // the signer's page and the held copy are bound to it, and a request that no longer names
-        // a Document would look like one that never had one.
-        if !text(&cur, "document_hash").is_empty()
-            && !matches!(text(&cur, "state"), "" | "draft")
-            && let Some(v) = m.get("document_id")
-            && !same(cur.get("document_id"), v)
-        {
-            return Err(DOCUMENT_FIXED.into());
-        }
         if text(&cur, "state") == "signed"
             && m.iter().any(|(k, v)| !is_meta(k) && !same(cur.get(k), v))
         {
             return Err(SIGNED.into());
+        }
+        // Once a request has left draft, staff cannot swap, clear or add its Document: the
+        // signer's page and the held copy are bound to it, and a request that no longer names a
+        // Document would look like one that never had one (and could be signed by hand). This
+        // holds whether the request was sent with `send_document` or, with a template, with `send`
+        // (which holds no hash and no copy): the stored Document decides, not the hash.
+        if !matches!(text(&cur, "state"), "" | "draft")
+            && let Some(v) = m.get("document_id")
+            && !same(cur.get("document_id"), v)
+        {
+            return Err(DOCUMENT_FIXED.into());
         }
         Ok(())
     }

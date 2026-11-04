@@ -250,6 +250,172 @@ async fn clearing_the_document_does_not_unlock_the_manual_signature() {
     assert_eq!(signed_count(&f), 1);
 }
 
+/// A request that names a template and a Document, sent with the generic `send` (which O32 lets
+/// through): it holds no hash and no copy, so the door cannot serve it, and nothing about it may
+/// be undone by a plain user afterwards.
+async fn template_and_document_request_sent_with_send() -> (Fx, String) {
+    let f = fixture().await;
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_template/create",
+            json!({"name": "Anything (test)", "body": "text"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let tpl = v["value"]["id"].as_str().unwrap().to_string();
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_request/update",
+            json!({"id": f.req, "template_id": tpl, "signer_email": "jane@example.test"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let (s, v) = f
+        .api("mia", "/api/sign_request/send", json!({"id": f.req}))
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let r = f.record("sign_request", &f.req);
+    assert_eq!(r["state"], "sent");
+    assert_eq!(r["document_id"], f.doc.as_str());
+    assert!(
+        r.get("document_hash").is_none_or(J::is_null)
+            && r.get("document_file").is_none_or(J::is_null),
+        "the generic send holds neither a hash nor a copy: {r:?}"
+    );
+    (f, tpl)
+}
+
+#[tokio::test]
+async fn the_document_of_a_template_request_sent_with_send_cannot_be_taken_off_by_a_plain_user() {
+    // The request holds no hash, so the lock cannot hang on one: it hangs on the request having
+    // left draft (D92 decision 6, O32).
+    let (f, _) = template_and_document_request_sent_with_send().await;
+    let before = f.record("sign_request", &f.req);
+    let doc2 = second_document(&f).await;
+
+    // Taking the Document off, in both spellings of nothing, by a plain user and by the manager.
+    for who in ["sam", "mia"] {
+        for (what, body) in [
+            ("null", json!({"id": f.req, "document_id": null})),
+            ("empty text", json!({"id": f.req, "document_id": ""})),
+        ] {
+            let (s, v) = f.api(who, "/api/sign_request/update", body).await;
+            assert_eq!(s, 400, "{who} {what}: {v}");
+            assert!(
+                err(&v).contains("cannot be changed after the request was sent"),
+                "{who} {what}: the guard refuses it, not another check: {v}"
+            );
+            assert_eq!(f.record("sign_request", &f.req), before, "{who} {what}");
+        }
+    }
+    // Another Document is refused for the same reason.
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_request/update",
+            json!({"id": f.req, "document_id": doc2}),
+        )
+        .await;
+    assert_eq!(s, 400, "{v}");
+    assert!(
+        err(&v).contains("cannot be changed after the request was sent"),
+        "{v}"
+    );
+    // The same Document and other fields are still fine to write.
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_request/update",
+            json!({"id": f.req, "document_id": f.doc, "title": "Renamed (test)"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+
+    // Nobody signs it by hand, by the action or by moving the state: it names a Document.
+    every_manual_signature_is_refused(&f, &["mia", "admin"], "template and Document, sent").await;
+    // No link can be made for it (it holds no copy), so the door is not an alternative either.
+    let (s, v) = f
+        .api("mia", "/api/sign_link/create", json!({"request_id": f.req}))
+        .await;
+    assert_eq!(s, 400, "{v}");
+    assert_eq!(signed_count(&f), 0);
+}
+
+#[tokio::test]
+async fn an_administrator_may_take_the_document_off_a_template_request_and_it_is_then_a_plain_template_request()
+ {
+    // Documented in O32: the exception of the administrator is deliberate, and what is left is
+    // the hand-signed template request that has always existed.
+    let (f, _) = template_and_document_request_sent_with_send().await;
+    let (s, v) = f
+        .api(
+            "admin",
+            "/api/sign_request/update",
+            json!({"id": f.req, "document_id": null}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    assert!(
+        f.record("sign_request", &f.req)
+            .get("document_id")
+            .is_none_or(J::is_null)
+    );
+    let (s, v) = f
+        .api("mia", "/api/sign_request/sign", json!({"id": f.req}))
+        .await;
+    assert_eq!(s, 200, "{v}");
+    assert_eq!(f.record("sign_request", &f.req)["state"], "signed");
+}
+
+#[tokio::test]
+async fn a_sent_request_without_a_document_cannot_be_given_one_by_a_plain_user() {
+    // A sent request is not given a Document afterwards, so that no sent request changes what it
+    // is about: the lock holds in both directions.
+    let f = fixture().await;
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_template/create",
+            json!({"name": "Anything (test)", "body": "text"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let tpl = v["value"]["id"].as_str().unwrap().to_string();
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_request/create",
+            json!({"title": "By template", "template_id": tpl, "signer_name": "Jane Test",
+                   "signer_email": "jane@example.test"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let id = v["value"]["id"].as_str().unwrap().to_string();
+    let (s, v) = f
+        .api("mia", "/api/sign_request/send", json!({"id": id}))
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let (s, v) = f
+        .api(
+            "sam",
+            "/api/sign_request/update",
+            json!({"id": id, "document_id": f.doc}),
+        )
+        .await;
+    assert_eq!(s, 400, "{v}");
+    assert!(
+        err(&v).contains("cannot be changed after the request was sent"),
+        "{v}"
+    );
+    // It is still the hand-signed template request it was.
+    let (s, v) = f
+        .api("mia", "/api/sign_request/sign", json!({"id": id}))
+        .await;
+    assert_eq!(s, 200, "{v}");
+}
+
 #[tokio::test]
 async fn a_draft_may_still_change_its_document_freely() {
     // Before it is sent a request holds no copy and no hash, so the Document is an ordinary
@@ -484,8 +650,8 @@ async fn an_entry_of_the_proxy_that_is_not_an_address_leaves_the_peer_as_the_add
     let long = format!("198.51.100.7, {}", "1".repeat(80));
     for (what, lines, want) in [
         (
-            "a line with a byte that is not text",
-            vec![&b"\xe9, 198.51.100.7"[..]],
+            "a last entry with a byte that is not text",
+            vec![&b"198.51.100.7, \xe9"[..]],
             "10.0.0.5",
         ),
         (
@@ -494,15 +660,24 @@ async fn an_entry_of_the_proxy_that_is_not_an_address_leaves_the_peer_as_the_add
             "10.0.0.5",
         ),
         ("a name", vec![&b"198.51.100.7, client-a"[..]], "10.0.0.5"),
-        (
-            "an entry that is too long",
-            vec![long.as_bytes()],
-            "10.0.0.5",
-        ),
+        ("a long run of digits", vec![long.as_bytes()], "10.0.0.5"),
         (
             "a good entry",
             vec![&b"203.0.113.9, 198.51.100.7"[..]],
             "198.51.100.7",
+        ),
+        // A byte that is not text in the client's part does not hide the proxy's entry (a client
+        // that wrote it would otherwise move to the peer's bucket and address, here and at the
+        // limiters of every door): the proxy's entry is the address.
+        (
+            "a byte that is not text before the proxy's entry",
+            vec![&b"\xe9, 198.51.100.7"[..]],
+            "198.51.100.7",
+        ),
+        (
+            "bytes that are not text on an earlier line",
+            vec![&b"\xff\xfe, 203.0.113.9"[..], &b"198.51.100.8"[..]],
+            "198.51.100.8",
         ),
     ] {
         let (kept, detail) = signed_with(&lines).await;
@@ -513,7 +688,7 @@ async fn an_entry_of_the_proxy_that_is_not_an_address_leaves_the_peer_as_the_add
         );
     }
     // The log shows the line that could not be read, not nothing.
-    let (kept, detail) = signed_with(&[b"\xe9, 198.51.100.7"]).await;
+    let (kept, detail) = signed_with(&[b"198.51.100.7, \xe9"]).await;
     assert_eq!(kept, "10.0.0.5");
     assert!(detail.contains("198.51.100.7"), "{detail}");
 }
