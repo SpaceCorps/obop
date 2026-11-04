@@ -142,7 +142,7 @@ impl OriginLog {
     pub(crate) fn note(&self, base: &str) {
         let now = match self.hooks.get() {
             Some(h) => (h.clock)(),
-            None => self.started.elapsed().as_secs(),
+            None => seconds_between(self.started, std::time::Instant::now()),
         };
         if log_due(&self.last, now, ORIGIN_LOG_EVERY) {
             let line = format!("sign: a post was refused because its origin is not {base}");
@@ -154,11 +154,17 @@ impl OriginLog {
     }
 }
 
+/// The default clock: whole seconds from `started` to `now`.
+fn seconds_between(started: std::time::Instant, now: std::time::Instant) -> u64 {
+    now.saturating_duration_since(started).as_secs()
+}
+
 /// Whether a line of the log is due: at most one in every `every` seconds, whoever asks and
-/// however many ask at once. The first is always due, whatever the clock reads (`NEVER` is above
-/// every reading). A clock that reads less than at the last line (a test clock; the default one
-/// cannot) starts the minute again, so that a diagnostic is never held back for as long as the
-/// clock was ahead.
+/// however many ask at once, except that a reading below the one at the last line starts the
+/// minute again, so that a diagnostic is never held back for as long as the clock was ahead. A
+/// stale reading at a boundary (read, passed by another caller, then used) is such a reading and
+/// can give one more diagnostic line than the minute allows. The first line is always due,
+/// whatever the clock reads (`NEVER` is above every reading).
 fn log_due(last: &AtomicU64, now: u64, every: u64) -> bool {
     let before = last.load(Ordering::Relaxed);
     (now < before || now >= before.saturating_add(every))
@@ -551,17 +557,21 @@ mod tests {
 
     #[test]
     fn the_default_clock_counts_the_seconds_since_the_server_started() {
-        // The default sink is standard error (`eprintln!`), which a test cannot capture; what
-        // the default clock read is kept as the time of the last line, and that is read back. A
-        // clock that read milliseconds, or nothing, would be a different number.
-        let started = std::time::Instant::now()
-            .checked_sub(std::time::Duration::from_secs(130))
-            .expect("the machine has been up for two minutes");
-        let log = OriginLog::since(started);
+        // The arithmetic, with an offset added to a start (no subtraction from now, which fails
+        // on a machine that has been up for less): whole seconds, not milliseconds or minutes.
+        let start = std::time::Instant::now();
+        let later = start + std::time::Duration::from_millis(130_900);
+        assert_eq!(seconds_between(start, later), 130);
+        assert_eq!(seconds_between(later, start), 0, "never below zero");
+        // The wiring: the default sink is standard error (`eprintln!`), which a test cannot
+        // capture; what the default clock read is kept as the time of the last line, and that is
+        // read back after a little more than a second.
+        let log = OriginLog::since(std::time::Instant::now());
         assert_eq!(log.last.load(Ordering::Relaxed), NEVER);
+        std::thread::sleep(std::time::Duration::from_millis(1100));
         log.note("https://obop.test");
         let at = log.last.load(Ordering::Relaxed);
-        assert!((130..140).contains(&at), "the clock read {at}");
+        assert!((1..30).contains(&at), "the clock read {at}");
         // A second ask in the same minute writes nothing, so the time stays.
         log.note("https://obop.test");
         assert_eq!(log.last.load(Ordering::Relaxed), at);
