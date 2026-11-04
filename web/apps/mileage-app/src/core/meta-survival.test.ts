@@ -105,3 +105,14 @@ describe("the note about a replaced file that the hook of the screens keeps", ()
     expect(source).not.toMatch(/dismissStaleFileNote\(rt\.store\)/);
   });
 });
+
+describe("the owner of the outbox that the runtime reads when it starts", () => {
+  // The start is built from a session and a file; the read goes to the same row whichever way in it
+  // uses, so a behaviour test cannot tell the two apart. The way in is read from the source.
+  test("is read through the host's state", () => {
+    const source = readFileSync(new URL("../native/runtime.ts", import.meta.url), "utf8");
+    expect(source).toMatch(/bindingOf\(store, session\.config\(\), hostState\)/);
+    expect(source).toMatch(/bindOwner\(store, owner, hostState\)/);
+    expect(source).toMatch(/\}, hostState\);/);
+  });
+});
