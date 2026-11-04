@@ -912,9 +912,10 @@ fn whoever_can_read_a_record_can_save_the_file_it_holds_again() {
 
 #[test]
 fn the_id_a_field_holds_is_sent_back_only_by_a_caller_who_may_read_that_field() {
-    // `item.private_photo` is read and written by managers; every `t.user` reads the model. The id
-    // the field holds may be saved again by whoever can read it, and for anybody else the answer
-    // must not tell "this is the one held here" from "this is not an uploaded file".
+    // `item.private_photo` is in the group of the managers, so only they read it (the group of a
+    // field gates reading); every `t.user` reads the model. The id the field holds may be saved
+    // again by whoever can read the record and the field, and for anybody else the answer must
+    // not tell "this is the one held here" from "this is not an uploaded file".
     let e = env();
     let (ann, mia) = (user("ann"), manager("mia"));
     let b = up(
