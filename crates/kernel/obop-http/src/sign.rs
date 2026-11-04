@@ -421,13 +421,11 @@ mod tests {
         );
     }
 
-    /// A log whose clock is set by hand and whose sink keeps what it was given with the second it
-    /// was written at.
-    fn hand_log() -> (
-        OriginLog,
-        Arc<AtomicU64>,
-        Arc<std::sync::Mutex<Vec<(u64, String)>>>,
-    ) {
+    /// What a sink kept: each line with the second of the clock it was written at.
+    type Lines = Arc<std::sync::Mutex<Vec<(u64, String)>>>;
+
+    /// A log whose clock is set by hand and whose sink keeps what it was given.
+    fn hand_log() -> (OriginLog, Arc<AtomicU64>, Lines) {
         let now = Arc::new(AtomicU64::new(0));
         let lines = Arc::new(std::sync::Mutex::new(Vec::new()));
         let log = OriginLog::default();

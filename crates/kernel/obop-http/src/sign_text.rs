@@ -513,18 +513,14 @@ mod tests {
             cat
         };
         for key in WORDING_KEYS {
-            for i in 0..LANGS.len() {
+            for (i, edited) in LANGS.iter().enumerate() {
                 let cat = edit(key, i);
-                for j in 0..LANGS.len() {
+                for (j, other) in LANGS.iter().enumerate() {
                     let id = wording_id(&cat, j);
                     if j == i {
-                        assert_ne!(id, base[j], "editing {key} in {} left the id", LANGS[i]);
+                        assert_ne!(id, base[j], "editing {key} in {edited} left the id");
                     } else {
-                        assert_eq!(
-                            id, base[j],
-                            "editing {key} in {} moved {}",
-                            LANGS[i], LANGS[j]
-                        );
+                        assert_eq!(id, base[j], "editing {key} in {edited} moved {other}");
                     }
                 }
             }
