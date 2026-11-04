@@ -91,9 +91,11 @@ describe("the note about a distance of 0 m, as the Recording screen draws it", (
 });
 
 /**
- * Text, not rendering: what `Recording.tsx` does with the note is only read from the source of the
- * file, because there is no renderer in this app to draw the screen. The note is drawn once, with
- * what the screen measured, outside any condition, after the banners and before the clock.
+ * Text, not rendering: the place of the note in `Recording.tsx` is also read from the source of the
+ * file. The same is checked on the elements the screen makes, and what the screen measures from the
+ * stored positions is run with fake ports, in `screens/Recording.test.tsx`; this is the second look
+ * at the file itself: the note is drawn once, with what the screen measured, outside any condition,
+ * after the banners and before the clock.
  */
 describe("the place of the note in the Recording screen (the text of the file)", () => {
   const source = readFileSync(
@@ -107,10 +109,6 @@ describe("the place of the note in the Recording screen (the text of the file)",
   test("it is drawn once, with `measured`", () => {
     expect(lines.filter((line) => line.includes("<SignalNote"))).toEqual([element]);
     expect(source).toContain("const [measured, setMeasured] = useState<Progress | null>(null);");
-  });
-
-  test("what it measured is `progressFrom` over the stored points of the open trip", () => {
-    expect(lines).toContain("return progressFrom(await rt.store.points(clientTripId));");
   });
 
   test("it follows the last banner and comes before the clock, outside any condition", () => {

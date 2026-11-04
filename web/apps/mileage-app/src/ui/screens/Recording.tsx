@@ -3,7 +3,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, AppState } from "react-native";
 import { recordingHealth, type Readiness } from "../../core/liveness.ts";
 import { formatMetres } from "../../core/present.ts";
-import { progressFrom, type Progress } from "../../core/progress.ts";
+import type { Progress } from "../../core/progress.ts";
+import { startProgressReader } from "../../core/progress-reader.ts";
 import { MAX_POINTS_PER_TRIP } from "../../core/types.ts";
 import { clock } from "../../core/values.ts";
 import { t, tp } from "../../i18n/index.ts";
@@ -17,11 +18,6 @@ import { useNow, useOutbox } from "../hooks.ts";
 import { tOs } from "../os-text.ts";
 import type { Nav } from "../router.ts";
 import { SignalNote } from "../SignalNote.tsx";
-
-/** The phone's own count of the trip so far: the same rules as the server (`trip-core`), for the preview only. */
-async function progressOf(rt: Runtime, clientTripId: string): Promise<Progress> {
-  return progressFrom(await rt.store.points(clientTripId));
-}
 
 /** A trip that was started this recently has just had its service started: no need to start it again. */
 const JUST_STARTED_MS = 10_000;
@@ -58,28 +54,19 @@ export function Recording({
   const id = active?.clientTripId ?? null;
   const startedAt = active?.startedAt ?? null;
 
-  // The count is read when a point arrives, and at most every few seconds.
-  useEffect(() => {
-    if (id === null) return;
-    let alive = true;
-    let last = 0;
-    const read = () => {
-      const at = Date.now();
-      if (at - last < 4000) return;
-      last = at;
-      progressOf(rt, id).then(
-        (p) => alive && setMeasured(p),
-        () => undefined,
-      );
-    };
-    last = 0;
-    read();
-    const off = onChange(read);
-    return () => {
-      alive = false;
-      off();
-    };
-  }, [rt, id]);
+  // The phone's own count of the trip: the same rules as the server (`trip-core`), for the preview
+  // only. It is read when a point arrives, and at most every few seconds (`progress-reader.ts`).
+  useEffect(
+    () =>
+      startProgressReader({
+        id,
+        read: (tripId) => rt.store.points(tripId),
+        subscribe: onChange,
+        clock: () => Date.now(),
+        set: setMeasured,
+      }),
+    [rt, id],
+  );
 
   // Starts the service again when it is not running, and says what stands in the way when the
   // phone cannot record. The system does not restart the service after the process was restarted,
