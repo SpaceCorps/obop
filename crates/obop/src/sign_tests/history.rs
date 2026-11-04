@@ -1714,19 +1714,7 @@ async fn the_list_is_served_only_while_the_link_is_within_its_end_and_not_revoke
     // The plain request signs at the same instant as Alpha: its page that follows signing is the
     // page Alpha's must be once Alpha's link is over.
     let plain = made(&f, &f.doc, "Plain", None).await;
-    // A request that ends on a day of its own (3 days on), before its link does (14).
-    let ends_on = obop_values::datetime::Instant::from_micros(base + 3 * DAY)
-        .unwrap()
-        .canonical()[..10]
-        .to_string();
-    let d = made_with(
-        &f,
-        &f.doc,
-        "Delta",
-        Some(true),
-        json!({"expires_on": ends_on}),
-    )
-    .await;
+    let d = made(&f, &f.doc, "Delta", Some(true)).await;
     let e = made(&f, &f.doc, "Echo", Some(true)).await;
     // Second links, never used: Gamma's, and Echo's, whose end will be unreadable.
     let (second_id, second) = f.mint("mia", &c.id).await;
@@ -1742,6 +1730,28 @@ async fn the_list_is_served_only_while_the_link_is_within_its_end_and_not_revoke
         clock_at(&f, base, secs);
         assert_eq!(sign(&f, m, &f.file, name, hist, n).await.status, 303);
     }
+    // The last day of Delta's request is shortened to 3 days on after it signed (an administrator
+    // may change a signed request): its link was made for 14 days and keeps them, and it is the
+    // request's day that ends the list. (A link made after the day was set is made to end with it.)
+    let ends_on = obop_values::datetime::Instant::from_micros(base + 3 * DAY)
+        .unwrap()
+        .canonical()[..10]
+        .to_string();
+    let (s, v) = f
+        .api(
+            "admin",
+            "/api/sign_request/update",
+            json!({"id": d.id, "expires_on": ends_on}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let day_end = obop_values::datetime::Instant::parse(&format!("{ends_on}T23:59:59.999999Z"))
+        .unwrap()
+        .micros();
+    assert!(
+        link_end(&f, &d.link_id) > day_end + DAY,
+        "only the day of the request ends this list"
+    );
     let all = [
         "Alpha Example",
         "Beta Example",
@@ -1774,9 +1784,6 @@ async fn the_list_is_served_only_while_the_link_is_within_its_end_and_not_revoke
     );
 
     // The end of the request's day: the list is there at the last microsecond and gone at the next.
-    let day_end = obop_values::datetime::Instant::parse(&format!("{ends_on}T23:59:59.999999Z"))
-        .unwrap()
-        .micros();
     at_micros(&f, day_end);
     assert_eq!(
         names(&view(&f, &d.path).await.text()),
