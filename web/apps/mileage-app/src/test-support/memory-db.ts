@@ -1,12 +1,8 @@
 import { DatabaseSync } from "node:sqlite";
 import { createSqlDb, type RawDb, type SqlDb, type SqlValue } from "../core/sql.ts";
 
-/**
- * A real SQLite database in memory for the tests, behind the same `SqlDb` the phone uses over
- * expo-sqlite. (SQLCipher is not in it: encryption is the phone's, see `native/database.ts`.)
- */
-export function memoryDb(): SqlDb {
-  const sqlite = new DatabaseSync(":memory:");
+/** The `SqlDb` the phone uses, over an open `node:sqlite` connection (in memory or a file). */
+export function sqlDbOver(sqlite: DatabaseSync): SqlDb {
   const raw: RawDb = {
     exec: async (sql) => {
       sqlite.exec(sql);
@@ -21,4 +17,12 @@ export function memoryDb(): SqlDb {
         .map((row) => ({ ...row }) as Record<string, SqlValue>),
   };
   return createSqlDb(raw);
+}
+
+/**
+ * A real SQLite database in memory for the tests, behind the same `SqlDb` the phone uses over
+ * expo-sqlite. (SQLCipher is not in it: encryption is the phone's, see `native/database.ts`.)
+ */
+export function memoryDb(): SqlDb {
+  return sqlDbOver(new DatabaseSync(":memory:"));
 }
