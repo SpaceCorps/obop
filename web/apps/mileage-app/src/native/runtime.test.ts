@@ -139,10 +139,15 @@ describe("a start with the session of another person than the owner of the outbo
     const rt = await start();
     await settle();
     const before = emits;
+    const write = vi.spyOn(rt.hostState, "setMeta");
     await rt.takeOverOutbox();
+    expect(write).toHaveBeenCalledWith("owner", JSON.stringify({ origin: rig.BASE, user: "rita" }));
     expect(rt.binding()).toEqual({ kind: "own" });
     expect(await rt.store.listTrips()).toEqual([]);
     expect(await rt.store.getMeta("owner")).toBe(
+      JSON.stringify({ origin: rig.BASE, user: "rita" }),
+    );
+    expect(await rt.hostState.getMeta("owner")).toBe(
       JSON.stringify({ origin: rig.BASE, user: "rita" }),
     );
     expect(() => rt.client()).not.toThrow();
@@ -164,6 +169,27 @@ describe("a new sign-in finishes as someone with an empty outbox", () => {
     expect(await rt.store.getMeta("owner")).toBe(
       JSON.stringify({ origin: rig.BASE, user: "dave" }),
     );
+  });
+});
+
+describe("the owner of the outbox is a row of the host's own state", () => {
+  const dave = () => JSON.stringify({ origin: rig.BASE, user: "dave" });
+
+  test("a sign-in that finishes writes it through the host's way in, and the outbox's store reaches the same row", async () => {
+    const rt = await start();
+    const write = vi.spyOn(rt.hostState, "setMeta");
+    await rt.bindIdentity({ origin: rig.BASE, user: "dave" });
+    expect(write).toHaveBeenCalledWith("owner", dave());
+    expect(await rt.hostState.getMeta("owner")).toBe(dave());
+    expect(await rt.store.getMeta("owner")).toBe(dave());
+  });
+
+  test("the host's state and the outbox's store keep the rows of each other's side apart", async () => {
+    const rt = await start();
+    await rt.store.setMeta("active_trip", "x");
+    expect(() => rt.hostState.getMeta("active_trip")).toThrow(/host may use the meta keys/);
+    await rt.hostState.setMeta("location_disclosure_accepted", "2026-10-01T08:00:00.000Z");
+    expect(await rt.store.getMeta("location_disclosure_accepted")).toBe("2026-10-01T08:00:00.000Z");
   });
 });
 

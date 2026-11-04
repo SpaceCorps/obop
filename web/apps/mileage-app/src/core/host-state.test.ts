@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
+import { bindOwner, bindingOf, parseOwner, takeOver } from "./identity.ts";
 import {
   DISCLOSURE_META,
   HOST_SCHEMA,
@@ -116,5 +117,55 @@ describe("the host's table", () => {
     });
     await expect(failing.setMeta(META_OWNER, "lost")).rejects.toThrow("The disk is full");
     expect(await host.getMeta(META_OWNER)).toBe("kept");
+  });
+});
+
+describe("the owner of the outbox decided through the host's state", () => {
+  const DAVE = { origin: "https://phone.example", user: "dave" };
+  const RITA = { origin: "https://phone.example", user: "rita" };
+  const T0 = Date.parse("2026-10-15T09:00:00Z");
+
+  async function rig() {
+    const db = memoryDb();
+    await migrate(db);
+    return { store: createSqlStore(db), host: createHostState(db), db };
+  }
+
+  async function unsentTrip(store: ReturnType<typeof createSqlStore>) {
+    await store.startTrip({
+      clientTripId: "c1",
+      purpose: "business",
+      startedAt: new Date(T0).toISOString(),
+      nowMs: T0,
+    });
+    await store.stopTrip("c1", new Date(T0 + 1000).toISOString());
+  }
+
+  test("a person adopts an outbox that has no owner, and the row is the one the store reads", async () => {
+    const { store, host } = await rig();
+    await expect(bindOwner(store, DAVE, host)).resolves.toEqual({ kind: "own" });
+    expect(parseOwner(await host.getMeta(META_OWNER))).toEqual(DAVE);
+    expect(parseOwner(await store.getMeta(META_OWNER))).toEqual(DAVE);
+  });
+
+  test("another person finds trips that are unsent as foreign, from a row that the store wrote", async () => {
+    const { store, host } = await rig();
+    await unsentTrip(store);
+    await store.setMeta(META_OWNER, JSON.stringify(DAVE));
+    const config = { baseUrl: RITA.origin, clientId: "c", user: RITA.user };
+    await expect(bindingOf(store, config, host)).resolves.toMatchObject({ kind: "foreign" });
+    await expect(bindOwner(store, RITA, host)).resolves.toMatchObject({ kind: "foreign" });
+    expect(parseOwner(await host.getMeta(META_OWNER))).toEqual(DAVE);
+  });
+
+  test("taking over clears the outbox's trips and replaces the owner, and keeps the other host rows", async () => {
+    const { store, host } = await rig();
+    await unsentTrip(store);
+    await host.setMeta(META_OWNER, JSON.stringify(DAVE));
+    await host.setMeta(DISCLOSURE_META, "2026-10-01T08:00:00.000Z");
+    await takeOver(store, RITA, host);
+    expect(await store.listTrips()).toEqual([]);
+    expect(parseOwner(await host.getMeta(META_OWNER))).toEqual(RITA);
+    expect(await host.getMeta(DISCLOSURE_META)).toBe("2026-10-01T08:00:00.000Z");
   });
 });

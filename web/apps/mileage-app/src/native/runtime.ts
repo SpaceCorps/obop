@@ -1,6 +1,7 @@
 import { ObopApiError, createObopClient, revokeToken, type ObopClient } from "@obop/client";
 import { createTripApi, type TripApi } from "../core/api.ts";
 import { createEngine, type Engine } from "../core/engine.ts";
+import type { HostState } from "../core/host-state.ts";
 import { bindOwner, bindingOf, takeOver, type Binding, type Owner } from "../core/identity.ts";
 import { createSession, type Session } from "../core/session.ts";
 import type { StartupConfig } from "../core/startup-config.ts";
@@ -11,13 +12,15 @@ import { emitChange } from "./bus.ts";
 import { hostConfig } from "./host.ts";
 import { oauthDeps } from "./platform-deps.ts";
 import { createSecureStorage } from "./secure-storage.ts";
-import { getStore } from "./store.ts";
+import { getHostState, getStore } from "./store.ts";
 
 /** Everything the screens use, built once. */
 export interface Runtime {
   /** What the app started the host with: its identity and the groups it asks for. */
   startup: StartupConfig;
   store: OutboxStore;
+  /** The host's own rows of the database: the owner of the outbox, the disclosure flag, the stale-file note. */
+  hostState: HostState;
   session: Session;
   engine: Engine;
   sync: SyncController;
@@ -53,6 +56,7 @@ const notSignedIn = () =>
 async function build(): Promise<Runtime> {
   const startup = hostConfig();
   const store = await getStore();
+  const hostState = await getHostState();
   let untold = false;
   const setUntold = (value: boolean) => {
     if (untold === value) return;
@@ -71,7 +75,9 @@ async function build(): Promise<Runtime> {
   });
   await session.restore();
   let binding: Binding =
-    session.status() === "signed_in" ? await bindingOf(store, session.config()) : { kind: "own" };
+    session.status() === "signed_in"
+      ? await bindingOf(store, session.config(), hostState)
+      : { kind: "own" };
 
   let cached: { baseUrl: string; client: ObopClient } | null = null;
   const client = (): ObopClient => {
@@ -123,6 +129,7 @@ async function build(): Promise<Runtime> {
   return {
     startup,
     store,
+    hostState,
     session,
     engine,
     sync,
@@ -145,14 +152,14 @@ async function build(): Promise<Runtime> {
     },
     binding: () => binding,
     async bindIdentity(owner) {
-      binding = await bindOwner(store, owner);
+      binding = await bindOwner(store, owner, hostState);
       emitChange();
       return binding;
     },
     async takeOverOutbox() {
       const config = session.config();
       if (!config || config.user === undefined) return;
-      await takeOver(store, { origin: config.baseUrl, user: config.user });
+      await takeOver(store, { origin: config.baseUrl, user: config.user }, hostState);
       binding = { kind: "own" };
       emitChange();
       sync.kick();
