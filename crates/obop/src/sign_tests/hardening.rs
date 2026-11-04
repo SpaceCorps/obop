@@ -1358,22 +1358,32 @@ async fn wrong_links_write_nothing_to_the_log() {
 
 /// Make `action` run when the door asks the clock for the second time: the first time is the
 /// check of the link, the second is the moment of signing, after every read and before the write.
-fn interleave(f: &Fx, action: impl Fn() + Send + Sync + 'static) {
+///
+/// Returns a flag that says the change did land; a test asserts it, so that a second clock read
+/// added before the write cannot quietly move the hook and leave the test with nothing to show.
+fn interleave(
+    f: &Fx,
+    action: impl Fn() + Send + Sync + 'static,
+) -> Arc<std::sync::atomic::AtomicBool> {
     let calls = Arc::new(AtomicUsize::new(0));
+    let fired = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let flag = fired.clone();
     let base = now_micros();
     f.service().set_clock(Arc::new(move || {
         if calls.fetch_add(1, Ordering::SeqCst) + 1 == 2 {
             action();
+            flag.store(true, Ordering::SeqCst);
         }
         base
     }));
+    fired
 }
 
 #[tokio::test]
 async fn a_link_revoked_after_the_door_read_it_is_not_signed() {
     let (f, link_id, path, _) = sent().await;
     let b = f.app.store.backend();
-    interleave(&f, move || {
+    let fired = interleave(&f, move || {
         b.update(
             "sign_link",
             &link_id,
@@ -1382,6 +1392,10 @@ async fn a_link_revoked_after_the_door_read_it_is_not_signed() {
         .unwrap();
     });
     let r = f.post(&path, &ip(60), &good_form(&f, "Jane Test")).await;
+    assert!(
+        fired.load(Ordering::SeqCst),
+        "the change landed between the reads and the write"
+    );
     assert_eq!(r.status, 409, "{}", r.text());
     assert_eq!(f.record("sign_request", &f.req)["state"], "sent");
     assert_eq!(signed_count(&f), 0);
@@ -1391,11 +1405,15 @@ async fn a_link_revoked_after_the_door_read_it_is_not_signed() {
 async fn a_request_declined_after_the_door_read_it_is_not_signed() {
     let (f, link_id, path, _) = sent().await;
     let (b, req) = (f.app.store.backend(), f.req.clone());
-    interleave(&f, move || {
+    let fired = interleave(&f, move || {
         b.update("sign_request", &req, &fields(json!({"state": "declined"})))
             .unwrap();
     });
     let r = f.post(&path, &ip(61), &good_form(&f, "Jane Test")).await;
+    assert!(
+        fired.load(Ordering::SeqCst),
+        "the change landed between the reads and the write"
+    );
     assert_eq!(r.status, 409, "{}", r.text());
     assert_eq!(f.record("sign_request", &f.req)["state"], "declined");
     assert!(
@@ -1410,7 +1428,7 @@ async fn a_request_declined_after_the_door_read_it_is_not_signed() {
 async fn a_document_whose_file_is_replaced_after_the_door_read_it_is_not_signed() {
     let (f, link_id, path, _) = sent().await;
     let (b, doc) = (f.app.store.backend(), f.doc.clone());
-    interleave(&f, move || {
+    let fired = interleave(&f, move || {
         b.update(
             "documents_document",
             &doc,
@@ -1419,6 +1437,10 @@ async fn a_document_whose_file_is_replaced_after_the_door_read_it_is_not_signed(
         .unwrap();
     });
     let r = f.post(&path, &ip(62), &good_form(&f, "Jane Test")).await;
+    assert!(
+        fired.load(Ordering::SeqCst),
+        "the change landed between the reads and the write"
+    );
     assert_eq!(r.status, 409, "{}", r.text());
     assert_eq!(f.record("sign_request", &f.req)["state"], "sent");
     assert!(
@@ -1437,7 +1459,7 @@ async fn a_signer_whose_twin_click_won_is_sent_to_the_signed_page_and_nothing_is
     // written (not a second log entry, not a second set of evidence).
     let (f, link_id, path, _) = sent().await;
     let (b, req) = (f.app.store.backend(), f.req.clone());
-    interleave(&f, move || {
+    let fired = interleave(&f, move || {
         b.update(
             "sign_link",
             &link_id,
@@ -1453,6 +1475,10 @@ async fn a_signer_whose_twin_click_won_is_sent_to_the_signed_page_and_nothing_is
         .unwrap();
     });
     let r = f.post(&path, &ip(63), &good_form(&f, "Jane Test")).await;
+    assert!(
+        fired.load(Ordering::SeqCst),
+        "the change landed between the reads and the write"
+    );
     assert_eq!(r.status, 303, "{}", r.text());
     assert_eq!(
         r.h("location"),
