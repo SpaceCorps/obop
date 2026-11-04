@@ -16,6 +16,7 @@ use serde_json::{Value as J, json};
 use std::sync::Arc;
 use tower::ServiceExt;
 
+mod address;
 mod mobile;
 
 const HOST: &str = "inst.test";

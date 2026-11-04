@@ -3026,3 +3026,44 @@ async fn failures_exchanges_are_limited_per_address_and_the_limit_is_a_429() {
         "an exchange of nothing writes no line"
     );
 }
+
+#[tokio::test]
+async fn the_limit_of_the_starts_counts_the_address_by_the_one_rule() {
+    // The starts are limited per address and minute (30). The address is the rule's: behind a
+    // trusted proxy the last entry of the line, and without one the header is ignored.
+    let w = world(true).await;
+    let busy = |line: String| {
+        let w = &w;
+        async move {
+            let h = [("x-forwarded-for", line.as_str())];
+            w.send_h("GET", "/api/auth/oidc/start", &Jar::default(), None, &h)
+                .await
+                .location()
+                .contains("oidc_error=busy")
+        }
+    };
+    let mut spent = false;
+    for n in 0..100 {
+        if busy(format!("203.0.113.{n}, 198.51.100.77")).await {
+            spent = true;
+            break;
+        }
+    }
+    assert!(spent, "the entries before the last chose the bucket");
+    assert!(busy("198.51.100.77".into()).await, "alone");
+    assert!(busy("198.51.100.77:5000".into()).await, "with a port");
+    assert!(
+        !busy("198.51.100.77, 198.51.100.78".into()).await,
+        "a fresh last entry has a count of its own"
+    );
+    // Without a trusted proxy the header is ignored: every address shares the peer's bucket.
+    w.state.set_trust_proxy(false);
+    let mut spent = false;
+    for n in 0..100 {
+        if busy(format!("198.51.100.{}", n + 100)).await {
+            spent = true;
+            break;
+        }
+    }
+    assert!(spent, "an address in the header got a bucket of its own");
+}

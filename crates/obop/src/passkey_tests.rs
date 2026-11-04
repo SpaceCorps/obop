@@ -846,3 +846,60 @@ async fn the_page_endpoints_refuse_a_foreign_post_a_bad_csrf_and_garbage() {
     assert_eq!(resp.status, 200);
     assert!(resp.text().contains("class=\"error\""));
 }
+
+#[tokio::test]
+async fn the_passkey_limits_count_the_address_by_the_one_rule() {
+    // The ceremony options are limited per client address (60 in ten minutes). The address is
+    // the rule's: behind a trusted proxy the last entry of the line, the same address alone or
+    // with a port is the same bucket, and a fresh last entry has a count of its own; without a
+    // trusted proxy the header is ignored and every spelling shares the peer's bucket.
+    async fn options(r: &axum::Router, xff: &str) -> u16 {
+        call(
+            r,
+            "POST",
+            "/api/auth/login/passkey/options",
+            None,
+            &[("x-forwarded-for", xff)],
+            "application/json",
+            "{}".to_string(),
+        )
+        .await
+        .status
+    }
+    for trust in [true, false] {
+        let app = App::new();
+        app.seed_demo();
+        let auth = Arc::new(Auth::with_test_config(
+            app.store.backend(),
+            AuthConfig::insecure_dev(),
+        ));
+        let state = obop_http::HttpState::new(app.dispatcher.clone(), auth.clone());
+        state.set_trust_proxy(trust);
+        let r = obop_http::router(state, None);
+        let mut spent = None;
+        for n in 0..200u32 {
+            let line = if trust {
+                format!("203.0.113.{}, 198.51.100.77", n % 200)
+            } else {
+                format!("198.51.100.{}", n % 200 + 1)
+            };
+            if options(&r, &line).await == 429 {
+                spent = Some(n);
+                break;
+            }
+        }
+        assert!(
+            spent.is_some(),
+            "trust_proxy={trust}: the count did not run out (the line chose the bucket)"
+        );
+        if trust {
+            assert_eq!(options(&r, "198.51.100.77").await, 429, "alone");
+            assert_eq!(options(&r, "198.51.100.77:5000").await, 429, "with a port");
+            assert_eq!(
+                options(&r, "198.51.100.77, 198.51.100.78").await,
+                200,
+                "a fresh last entry has a count of its own"
+            );
+        }
+    }
+}
