@@ -16,6 +16,7 @@ use tower::ServiceExt;
 
 mod door;
 mod hardening;
+mod pinned;
 mod recheck;
 mod rules;
 mod upgrade;

@@ -1361,7 +1361,7 @@ async fn wrong_links_write_nothing_to_the_log() {
 ///
 /// Returns a flag that says the change did land; a test asserts it, so that a second clock read
 /// added before the write cannot quietly move the hook and leave the test with nothing to show.
-fn interleave(
+pub(super) fn interleave(
     f: &Fx,
     action: impl Fn() + Send + Sync + 'static,
 ) -> Arc<std::sync::atomic::AtomicBool> {
