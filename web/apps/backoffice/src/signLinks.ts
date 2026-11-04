@@ -98,10 +98,21 @@ export function closeAttempt(
   return { close: false, leaving: !leaving };
 }
 
-/** A link that was not used and not revoked may be revoked, whatever this page thinks of its end. */
+/**
+ * The page offers Revoke for a link that was not used and not revoked, whatever this page thinks of
+ * its end. The server lets a platform administrator who is a person do more (revoke again, mark a
+ * used link revoked: docs/SIGN.md); the button does not.
+ */
 export const canRevokeStatus = (s: LinkStatus): boolean => s !== "used" && s !== "revoked";
 
-/** The body of the update that revokes a link: the server stamps its own clock and refuses the rest. */
+/**
+ * The body of the update that revokes a link: this browser's clock, and nothing else. What the server
+ * does with the time depends on who sends it (`link.rs`, docs/SIGN.md). From anyone but a platform
+ * administrator who is a person it replaces the time with its own clock, refuses a second revoke, the
+ * revoke of a link that was used, and any change to another field. From a platform administrator who is a person
+ * it stores the value as sent, so the revoke time of a link that such a person revokes from this
+ * page is this browser's clock.
+ */
 export function revokeBody(id: string, now: Date): { id: string; revoked_at: string } {
   return { id, revoked_at: now.toISOString() };
 }
