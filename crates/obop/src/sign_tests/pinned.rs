@@ -384,3 +384,45 @@ async fn wrong_links_do_not_use_up_the_views_of_the_right_one() {
         "the viewer's copy"
     );
 }
+
+#[tokio::test]
+async fn an_administrator_brings_a_revoked_link_back_with_null_and_not_with_an_empty_text() {
+    // docs/SIGN.md, "What staff do": the value of `revoked_at` is stored as typed for an
+    // administrator who is a person, and emptying it brings the link back. The REST call sends
+    // `null`; the command line can only send text, and an empty text is not a time.
+    let (f, link_id, path, _) = sent().await;
+    let (s, v) = f
+        .api(
+            "admin",
+            "/api/sign_link/update",
+            json!({"id": link_id, "revoked_at": "2026-11-03T10:00:00Z"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    assert!(
+        f.record("sign_link", &link_id)["revoked_at"]
+            .as_str()
+            .unwrap()
+            .starts_with("2026-11-03T10:00:00"),
+        "stored as typed"
+    );
+    assert_eq!(f.get(&path, &ip(44)).await.status, 410);
+    let (s, v) = f
+        .api(
+            "admin",
+            "/api/sign_link/update",
+            json!({"id": link_id, "revoked_at": ""}),
+        )
+        .await;
+    assert_eq!(s, 400, "an empty text is not a time: {v}");
+    assert_eq!(f.get(&path, &ip(44)).await.status, 410);
+    let (s, v) = f
+        .api(
+            "admin",
+            "/api/sign_link/update",
+            json!({"id": link_id, "revoked_at": null}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    assert_eq!(f.get(&path, &ip(44)).await.status, 200, "the link is back");
+}
