@@ -121,58 +121,6 @@ mod tests {
         }
     }
 
-    /// Where the code of this crate may name the forwarded header or read the peer of the socket.
-    /// Every other place that needs the address of the client goes through `client_address` (the
-    /// signer door, the OAuth pages and endpoints, passkeys, Microsoft sign-in, the public site),
-    /// so that one rule covers them all; a place that reads either again can choose its own, and
-    /// the tests of one door would not notice.
-    const MAY_READ: [&str; 3] = [
-        // The rule itself.
-        "addr.rs",
-        // The log entry of the signer door: the lines as they came (lossily, cleaned and cut) and
-        // the peer, beside the address the rule gave.
-        "sign.rs",
-        // The access rule of /metrics refuses a request that crossed a proxy at all.
-        "ops.rs",
-    ];
-
-    #[test]
-    fn no_place_reads_the_forwarded_header_or_the_peer_but_the_rule_and_the_log_of_the_door() {
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-        let mut checked = 0;
-        for entry in std::fs::read_dir(&dir).unwrap() {
-            let path = entry.unwrap().path();
-            if path.extension().is_none_or(|e| e != "rs") {
-                continue;
-            }
-            let name = path.file_name().unwrap().to_str().unwrap().to_string();
-            checked += 1;
-            if MAY_READ.contains(&name.as_str()) {
-                continue;
-            }
-            let text = std::fs::read_to_string(&path).unwrap();
-            // Code only: comments say "X-Forwarded-For" in prose, and the tests of a file come last.
-            let code = text.split("#[cfg(test)]").next().unwrap();
-            for (n, line) in code.lines().enumerate() {
-                let line = line.trim_start();
-                if line.starts_with("//") {
-                    continue;
-                }
-                let lower = line.to_ascii_lowercase();
-                assert!(
-                    !lower.contains("x-forwarded-for") && !lower.contains("connectinfo<"),
-                    "{name}:{} reads the forwarded header or the peer itself; go through addr::client_address: {line}",
-                    n + 1
-                );
-            }
-        }
-        assert!(checked > 20, "the scan found only {checked} files");
-        // The allowed list names files that exist (a rename must not leave a hole behind).
-        for name in MAY_READ {
-            assert!(dir.join(name).exists(), "{name} is on the list and gone");
-        }
-    }
-
     #[test]
     fn without_a_trusted_proxy_or_a_header_it_is_the_peer() {
         let peer = with_peer("10.0.0.5:4000");

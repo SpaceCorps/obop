@@ -38,6 +38,8 @@ pub(crate) mod sso;
 pub mod website;
 
 #[cfg(test)]
+mod addr_scan_tests;
+#[cfg(test)]
 mod error_tests;
 
 pub struct HttpState {

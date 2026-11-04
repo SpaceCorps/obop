@@ -154,7 +154,9 @@ async fn the_token_revoke_and_authorize_limits_read_the_address_by_the_same_rule
     // address: made-up last entries share the peer's bucket (they do not each get their own), an
     // address with a port is its address, and another address is not held up by either.
     // (Passkeys, the step-up pages and the Microsoft return call the same function; the scan in
-    // `obop-http` `addr.rs` keeps every other place from reading the header on its own.)
+    // `obop-http` `addr_scan_tests.rs` fails for any other non-test Rust code under `crates/`
+    // that names a client-address header or the peer of a socket; it cannot see a header name
+    // built at run time.)
     for endpoint in ["token", "revoke", "authorize"] {
         let rig = rig();
         let client = {
