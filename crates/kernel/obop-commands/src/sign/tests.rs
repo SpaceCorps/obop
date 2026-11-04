@@ -79,3 +79,42 @@ fn ct_eq_compares_whole_texts() {
     assert!(ct_eq("abc", "abc"));
     assert!(!ct_eq("abc", "abd") && !ct_eq("abc", "ab") && !ct_eq("", "a"));
 }
+
+/// What the door reads to list a signature to the others: the mark in the fourth part of the id
+/// stored with it, and nothing worked out from the other parts.
+#[test]
+fn only_an_id_with_four_parts_and_the_mark_last_names_the_history() {
+    use super::{HISTORY_CONSENT_MARK, consent_names_the_history};
+    assert_eq!(HISTORY_CONSENT_MARK, "history");
+    // The ids a signature that read the sentence carries, whatever the hash of its words was.
+    for yes in [
+        "v1-draft/en/e2880db0/history",
+        "v1-draft/de/00000000/history",
+        "v1/pl/abcdef012345/history",
+    ] {
+        assert!(consent_names_the_history(yes), "{yes}");
+    }
+    // The ids of the wording without the sentence, the empty id and a text that only looks like
+    // the mark.
+    for no in [
+        "",
+        "v1-draft",
+        "v1-draft/en/a05c68c3",
+        "v1-draft/en/e2880db0",
+        "v1-draft/en/history",
+        "history",
+        "v1-draft/en/e2880db0/",
+        "v1-draft/en/e2880db0/History",
+        "v1-draft/en/e2880db0/history ",
+        "v1-draft/en/e2880db0/historyX",
+        "v1-draft/history/e2880db0",
+        "v1-draft/en/e2880db0/history/x",
+        "v1-draft/en/e2880db0/x/history",
+        "/en/e2880db0/history",
+        "v1-draft//e2880db0/history",
+        "v1-draft/en//history",
+        "//history/history",
+    ] {
+        assert!(!consent_names_the_history(no), "{no:?}");
+    }
+}

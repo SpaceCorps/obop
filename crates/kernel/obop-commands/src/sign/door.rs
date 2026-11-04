@@ -140,10 +140,14 @@ pub struct SignForm {
     pub consent_version: String,
     /// The same for a request that shows the signatures so far (`sign_text.rs`,
     /// `consent_version_with_history_for`): it also covers the sentence that tells the signer their
-    /// name and time are shown to the others. The door stores this one, and not `consent_version`,
-    /// for such a request. Empty is stored as `v1-draft`, as above.
+    /// name and time are shown to the others, and ends in [`HISTORY_CONSENT_MARK`], for example
+    /// `v1-draft/de/d08d0039/history`. The door stores this one, and not `consent_version`, for
+    /// such a request. Empty is stored as `v1-draft`, as above; a signature stored without the
+    /// mark is never listed to the others.
     pub consent_version_history: String,
-    /// The form came from a page that carried that sentence (the hidden field `hist`).
+    /// The form says it came from a page that carried that sentence (the hidden field `hist`).
+    /// This is the client's word: the door cannot tell what the browser was shown, only that a
+    /// form for a request that asks must say so (see `submit`).
     pub saw_history: bool,
 }
 
@@ -275,6 +279,17 @@ impl SignService {
         })
     }
 
+    /// The link's own end and the end of the request's `expires_on` day, whichever is first, have
+    /// passed (the clock of the service). A link without a readable end has ended: it does not
+    /// work. The one rule of the page, of the PDF and of the history of the file.
+    pub(super) fn ended(&self, f: &Found) -> bool {
+        let mut end = instant_micros(text(&f.link, "expires_at")).unwrap_or(i64::MIN);
+        if let Some(day_end) = end_of_day_micros(text(&f.req, "expires_on")) {
+            end = end.min(day_end);
+        }
+        self.now_micros() > end
+    }
+
     fn status(&self, f: &Found) -> Status {
         if !text(&f.link, "used_at").is_empty() {
             return if text(&f.req, "state") == "signed" {
@@ -292,14 +307,7 @@ impl SignService {
         if text(&f.req, "state") == "signed" {
             return signed(f);
         }
-        // The link's own end, and the end of the request, whichever is first. A link without a
-        // readable end does not work.
-        let now = self.now_micros();
-        let mut end = instant_micros(text(&f.link, "expires_at")).unwrap_or(i64::MIN);
-        if let Some(day_end) = end_of_day_micros(text(&f.req, "expires_on")) {
-            end = end.min(day_end);
-        }
-        if now > end {
+        if self.ended(f) {
             return Status::Gone(Gone::Expired);
         }
         if text(&f.req, "state") != "sent" {
@@ -374,7 +382,9 @@ impl SignService {
         )?;
         match self.status(&f) {
             Status::Signed(at) => Ok(View::Signed {
-                history: self.history_for(&f)?,
+                // The end page of a link that is over, or was revoked, is the page it always was:
+                // no list (`history_for_end_page`).
+                history: self.history_for_end_page(&f)?,
                 at,
             }),
             Status::Gone(g) => Err(DoorError::Gone(g)),
@@ -464,9 +474,13 @@ impl SignService {
             }
             Status::Usable => {}
         }
-        // A request that shows the signatures so far tells the signer so on its page. A form made
-        // from a page that did not (the switch was turned on in between) is not signed: the
-        // consent id stored with a signature must be that of the words the signer read.
+        // A request that shows the signatures so far tells the signer so on its page. A form that
+        // does not say it came from such a page (the switch was turned on after the page was made)
+        // is not signed. What this keeps true is narrow: a request that asks is never signed under
+        // the id of the wording without the sentence, and one that does not ask is never signed
+        // under the id with it (the batch below compares the switch with what is read here). The
+        // field `hist` is the client's word, so it does not prove that the browser showed the
+        // sentence: a script that posts it without opening the page is stored under that id too.
         let history = self.history_on(&f.req);
         if history && !form.saw_history {
             return Err(DoorError::Invalid(Invalid::History));

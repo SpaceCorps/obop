@@ -2,10 +2,13 @@
 //!
 //! A request can ask (`sign_request.show_history`, set by a manager) that the page of its link
 //! lists who has already signed **the same file**: the requests that name the same Document, hold
-//! the same SHA-256, are `signed` and ask for the history themselves. Each entry is the name the
-//! signer typed and the time, in UTC to the second, and nothing else; the signer's own entry is
-//! marked on the page that follows signing. A request that does not ask is shown the page it has
-//! always been shown, and no query is made for it.
+//! the same SHA-256, are `signed`, ask for the history themselves, and were signed on a page that
+//! told the signer so (the consent id stored with the signature carries [`HISTORY_CONSENT_MARK`]).
+//! Each entry is the name the signer typed and the time, in UTC to the second, and nothing else;
+//! the signer's own entry is marked on the page that follows signing. A request that does not ask
+//! is shown the page it has always been shown, and no query is made for it. The page that follows
+//! signing lists them only while its link is within its end and not revoked
+//! ([`SignService::history_for_end_page`]).
 //!
 //! The switch only counts while the installed package declares the field (`sign` 0.2.2): on an
 //! instance that still has 0.2.1, or after `obop modules rollback sign`, the flag a stored record
@@ -28,6 +31,25 @@ pub const HISTORY_MAX: usize = 50;
 
 /// The longest name shown: the door refuses a longer one when it is typed.
 const NAME_MAX: usize = 120;
+
+/// The fourth and last part of the consent id of a signature that was made on a page that told the
+/// signer that their name and the time they sign are shown to the others who sign the file, for
+/// example `v1-draft/en/e2880db0/history`. The first three parts are as in every consent id (the
+/// id of the wording, the language, the hash of the words). The mark is **stored with the
+/// signature**: whether a signature is listed is decided by it and by nothing that is worked out
+/// again, so an edit of the sentence moves the hash of the signatures that follow and leaves the
+/// ones already made listed. An id without the mark never is, whatever its other parts say. The
+/// mark is put only by the page texts of `obop-http` (`consent_version_with_history_for`) and must
+/// never be put on words that do not say that.
+pub const HISTORY_CONSENT_MARK: &str = "history";
+
+/// The consent id says that the signer was told that their name and the time are shown to the
+/// others: four parts, the last one [`HISTORY_CONSENT_MARK`], the first three not empty. Nothing
+/// else counts, so an id of the wording without the sentence is not one however it was written.
+pub fn consent_names_the_history(consent_version: &str) -> bool {
+    let parts: Vec<&str> = consent_version.split('/').collect();
+    parts.len() == 4 && parts[3] == HISTORY_CONSENT_MARK && parts[..3].iter().all(|p| !p.is_empty())
+}
 
 /// One signature on the file: what the signer typed, and when.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -66,6 +88,24 @@ impl SignService {
         matches!(req.get(HISTORY_FLAG), Some(J::Bool(true))) && self.history_declared()
     }
 
+    /// The history for the page that follows signing (`View::Signed`), or `None`. That page is
+    /// shown to a link that signed and to any other link of a signed request, and `status()` hands
+    /// it out before the revoke and the expiry are looked at; the list is not: it is served only
+    /// while the link is within its end, the end of the link and of the request's `expires_on`
+    /// day, by the rule of the page and of the PDF (`ended`), and only while the link is not
+    /// revoked (an administrator can revoke a link that was used; the page it shows stays). A link
+    /// that is over, or revoked, is shown the page it was always shown, with nobody's name on it,
+    /// not even its own signer's: and no query is made for it.
+    pub(super) fn history_for_end_page(&self, f: &Found) -> Result<Option<History>, DoorError> {
+        if !self.history_on(&f.req) {
+            return Ok(None);
+        }
+        if !text(&f.link, "revoked_at").is_empty() || self.ended(f) {
+            return Ok(None);
+        }
+        self.history_for(f)
+    }
+
     /// The history for the page of `f`, or `None` when its request does not ask for one.
     pub(super) fn history_for(&self, f: &Found) -> Result<Option<History>, DoorError> {
         if !self.history_on(&f.req) {
@@ -88,6 +128,10 @@ impl SignService {
                 || text(&rec, "document_hash") != hash
                 || text(&rec, "state") != "signed"
                 || !matches!(rec.get(HISTORY_FLAG), Some(J::Bool(true)))
+                // The signer read the sentence: the id stored with the signature says so. A
+                // request signed before the box was ticked, while the package was rolled back, or
+                // marked by hand is not listed to the others, whatever its box says now.
+                || !consent_names_the_history(text(&rec, "consent_version"))
             {
                 continue;
             }

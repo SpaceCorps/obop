@@ -65,7 +65,7 @@ description = "Viimeinen päivä, jona pyynnön voi allekirjoittaa (YYYY-MM-DD)"
 
 [labels.fi.model.sign_request.field.show_history]
 label = "Näytä allekirjoittajalle tähänastiset allekirjoitukset"
-description = "Näyttää allekirjoittajalle, ketkä ovat jo allekirjoittaneet saman tiedoston (sama asiakirja, sama SHA-256): kirjoitetut nimet ja ajat pyynnöistä, joissa tämä ruutu on myös valittu. Siitä kerrotaan ennen allekirjoitusta. Vain tiedostolle, jonka useat nimetyt henkilöt allekirjoittavat yhdessä, ei koskaan toisilleen vieraille henkilöille. Vain esimiehet ja ylläpitäjät. Tyhjä tarkoittaa pois päältä"
+description = "Näyttää allekirjoittajalle, ketkä ovat allekirjoittaneet saman tiedoston (sama asiakirja, SHA-256) pyynnöllä, jossa ruutu on valittu: nimi ja aika. Hänelle kerrotaan ennen allekirjoitusta, että hänen tietonsa näytetään myös. Vain tiedostolle, jonka useat nimetyt allekirjoittavat yhdessä, ei toisilleen vieraille. Ennen ruudun valintaa allekirjoitettua pyyntöä ei näytetä. Tyhjä tarkoittaa pois"
 
 [labels.fi.model.sign_request.field.signed_on]
 label = "Allekirjoitettu"

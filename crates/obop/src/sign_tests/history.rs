@@ -9,7 +9,7 @@ use super::*;
 use obop_commands::sign::digest_of_request;
 use obop_pkg::installer::Request as PkgRequest;
 use obop_pkg::resolve::StepAction;
-use obop_storage::testing::Flaky;
+use obop_storage::testing::{Flaky, Mode, Reads};
 use std::sync::atomic::Ordering;
 
 const SIGN_0_2_1: &str = include_str!("../fixtures/sign-0.2.1.toml");
@@ -19,8 +19,8 @@ const SIGN_0_2_1: &str = include_str!("../fixtures/sign-0.2.1.toml");
 /// shows the signatures so far carries.
 const PLAIN_EN: &str = "v1-draft/en/a05c68c3";
 const PLAIN_DE: &str = "v1-draft/de/9ebff173";
-const WITH_HISTORY_EN: &str = "v1-draft/en/e2880db0";
-const WITH_HISTORY_DE: &str = "v1-draft/de/d08d0039";
+const WITH_HISTORY_EN: &str = "v1-draft/en/e2880db0/history";
+const WITH_HISTORY_DE: &str = "v1-draft/de/d08d0039/history";
 
 /// The time the clock of the golden pages stands at.
 const GOLDEN_CLOCK: i64 = 1_793_000_000_000_000;
@@ -101,10 +101,18 @@ impl Made {
 
 /// A request by `mia` about `doc`: `flag` is the value of `show_history` she sends, if any.
 async fn made(f: &Fx, doc: &str, title: &str, flag: Option<bool>) -> Made {
+    made_with(f, doc, title, flag, json!({})).await
+}
+
+/// As `made`, with the keys of `extra` added to the request (an `expires_on`, say).
+async fn made_with(f: &Fx, doc: &str, title: &str, flag: Option<bool>, extra: J) -> Made {
     let mut body = json!({"title": title, "signer_name": format!("Requested {title}"),
                           "document_id": doc});
     if let Some(v) = flag {
         body["show_history"] = json!(v);
+    }
+    for (k, v) in extra.as_object().unwrap() {
+        body[k] = v.clone();
     }
     let (s, v) = f.api("mia", "/api/sign_request/create", body).await;
     assert_eq!(s, 200, "{v}");
@@ -216,8 +224,24 @@ fn marked(html: &str) -> Vec<(String, bool)> {
 }
 
 /// A signed request written straight to the store, as an import or a record left by an older
-/// version could be: the door must read it as it finds it.
+/// version could be: the door must read it as it finds it. It carries the consent id of a
+/// signature that was made on a page with the sentence (`WITH_HISTORY_EN`), so that a test is
+/// about the one thing it names; `stored_signed_as` gives the id.
 fn stored_signed(f: &Fx, id: &str, doc: &str, hash: &str, name: &str, at_micros: i64, flag: bool) {
+    stored_signed_as(f, id, doc, hash, name, at_micros, flag, WITH_HISTORY_EN);
+}
+
+#[allow(clippy::too_many_arguments)]
+fn stored_signed_as(
+    f: &Fx,
+    id: &str,
+    doc: &str,
+    hash: &str,
+    name: &str,
+    at_micros: i64,
+    flag: bool,
+    consent: &str,
+) {
     let at = obop_values::datetime::Instant::from_micros(at_micros)
         .unwrap()
         .canonical();
@@ -231,6 +255,7 @@ fn stored_signed(f: &Fx, id: &str, doc: &str, hash: &str, name: &str, at_micros:
                 "title": format!("Stored {id}"), "signer_name": format!("Requested {id}"),
                 "document_id": doc, "document_hash": hash, "state": "signed",
                 "show_history": flag, "signed_at": at, "signed_name": name,
+                "consent_version": consent,
             })),
         )
         .unwrap();
@@ -372,6 +397,7 @@ async fn a_flagged_page_lists_the_other_flagged_signed_requests_of_the_same_file
             "title": "Raced", "signer_name": "Requested Raced", "document_id": f.doc,
             "document_hash": f.file, "state": "declined", "show_history": true,
             "signed_at": "2026-11-03T09:00:00.000000Z", "signed_name": "Raced Example",
+            "consent_version": WITH_HISTORY_EN,
         })),
     )
     .unwrap();
@@ -381,6 +407,7 @@ async fn a_flagged_page_lists_the_other_flagged_signed_requests_of_the_same_file
         &fields(json!({
             "title": "By hand", "signer_name": "Requested By hand", "document_id": f.doc,
             "document_hash": f.file, "state": "signed", "show_history": true,
+            "consent_version": WITH_HISTORY_EN,
         })),
     )
     .unwrap();
@@ -615,7 +642,8 @@ async fn a_name_in_the_store_is_shown_as_text_whatever_it_holds() {
         "sign_request",
         "stored-badtime",
         &fields(json!({"document_id": f.doc, "document_hash": f.file, "state": "signed",
-                       "show_history": true, "signed_at": "yesterday", "signed_name": "Nina Example"})),
+                       "show_history": true, "signed_at": "yesterday", "signed_name": "Nina Example",
+                       "consent_version": WITH_HISTORY_EN})),
     )
     .unwrap();
     b.insert(
@@ -624,7 +652,7 @@ async fn a_name_in_the_store_is_shown_as_text_whatever_it_holds() {
         &fields(
             json!({"document_id": f.doc, "document_hash": f.file, "state": "signed",
                        "show_history": "true", "signed_at": "2026-11-03T09:00:00.000000Z",
-                       "signed_name": "Tex Example"}),
+                       "signed_name": "Tex Example", "consent_version": WITH_HISTORY_EN}),
         ),
     )
     .unwrap();
@@ -1495,7 +1523,10 @@ async fn the_door_follows_an_update_and_a_rollback_of_the_package_for_the_switch
     );
 
     // 4. Updated again, the data that stayed is honoured again: a new request that asks sees the
-    // signature that was made while the switch was inert (its request asked, and it signed).
+    // signature that carries the mark of the sentence (Alice's) and not the one that was made
+    // while the switch was inert (Jane's): she signed under the id of the wording without the
+    // sentence, so she was never told her name would be shown. Her box is on in the record, and
+    // that is not enough.
     other
         .installer
         .install(&Bundled.fetch("sign").unwrap(), "marketplace", "test")
@@ -1504,8 +1535,9 @@ async fn the_door_follows_an_update_and_a_rollback_of_the_package_for_the_switch
     let after = made(&f, &f.doc, "After", Some(true)).await;
     assert_eq!(
         names(&page_of(&f, &after.path, 174).await),
-        ["Alice Example", "Jane Test"]
+        ["Alice Example"]
     );
+    assert_eq!(f.record("sign_request", &f.req)["show_history"], true);
 }
 
 #[tokio::test]
@@ -1614,4 +1646,940 @@ async fn the_upgrade_from_the_package_before_the_history_adds_one_optional_field
     assert_eq!(installed_sign(&f), "0.2.1");
     let back: Vec<_> = ids.iter().map(|id| f.record("sign_request", id)).collect();
     assert_eq!(back, before);
+}
+
+// ---- the list is served only while the link is within its end ---------------------------------
+
+const DAY: i64 = 24 * 3_600_000_000;
+
+/// The end of a link, as the service reads it.
+fn link_end(f: &Fx, link_id: &str) -> i64 {
+    let rec = f.record("sign_link", link_id);
+    obop_values::datetime::Instant::parse(rec["expires_at"].as_str().unwrap())
+        .unwrap()
+        .micros()
+}
+
+fn at_micros(f: &Fx, micros: i64) {
+    f.service().set_clock(Arc::new(move || micros));
+}
+
+/// The page of a link in English, from one source (a test has far fewer than 120 views).
+async fn view(f: &Fx, path: &str) -> Resp {
+    f.get(&format!("{path}?lang=en"), &ip(220)).await
+}
+
+/// 200 and the page that follows signing, with no list on it and no name of anyone.
+fn no_list(r: &Resp) {
+    assert_eq!(r.status, 200, "{}", r.text());
+    no_names(r);
+}
+
+/// Whatever the status, no list and no name of anyone on the page.
+fn no_names(r: &Resp) {
+    let html = r.text();
+    assert!(
+        !html.contains("Signed so far")
+            && !html.contains("Nobody has signed")
+            && !html.contains("<li>")
+            && !html.contains("(you)"),
+        "a list on a page that must have none:\n{html}"
+    );
+    for name in [
+        "Alpha", "Beta", "Gamma", "Delta", "Echo", "Plain", "Example",
+    ] {
+        assert!(!html.contains(name), "{name} is on the page:\n{html}");
+    }
+}
+
+/// The page of a link that is over is the page of the link of a request that never asked, signed
+/// at the same instant: byte for byte, the request id and the secret aside.
+async fn is_the_plain_end_page(f: &Fx, m: &Made, plain: &Made, why: &str) {
+    let (got, want) = (view(f, &m.path).await, view(f, &plain.path).await);
+    no_list(&got);
+    assert_eq!(
+        normalised(&got.text(), &m.id, m.token()),
+        normalised(&want.text(), &plain.id, plain.token()),
+        "{why}"
+    );
+}
+
+#[tokio::test]
+async fn the_list_is_served_only_while_the_link_is_within_its_end_and_not_revoked() {
+    let f = fixture().await;
+    let base = now_micros();
+    let a = made(&f, &f.doc, "Alpha", Some(true)).await;
+    let b = made(&f, &f.doc, "Beta", Some(true)).await;
+    let c = made(&f, &f.doc, "Gamma", Some(true)).await;
+    // The plain request signs at the same instant as Alpha: its page that follows signing is the
+    // page Alpha's must be once Alpha's link is over.
+    let plain = made(&f, &f.doc, "Plain", None).await;
+    // A request that ends on a day of its own (3 days on), before its link does (14).
+    let ends_on = obop_values::datetime::Instant::from_micros(base + 3 * DAY)
+        .unwrap()
+        .canonical()[..10]
+        .to_string();
+    let d = made_with(
+        &f,
+        &f.doc,
+        "Delta",
+        Some(true),
+        json!({"expires_on": ends_on}),
+    )
+    .await;
+    let e = made(&f, &f.doc, "Echo", Some(true)).await;
+    // Second links, never used: Gamma's, and Echo's, whose end will be unreadable.
+    let (second_id, second) = f.mint("mia", &c.id).await;
+    let (echo2_id, echo2) = f.mint("mia", &e.id).await;
+    for (secs, m, name, hist, n) in [
+        (10, &a, "Alpha Example", true, 200),
+        (10, &plain, "Plain Example", false, 201),
+        (20, &b, "Beta Example", true, 202),
+        (30, &c, "Gamma Example", true, 203),
+        (50, &d, "Delta Example", true, 204),
+        (55, &e, "Echo Example", true, 205),
+    ] {
+        clock_at(&f, base, secs);
+        assert_eq!(sign(&f, m, &f.file, name, hist, n).await.status, 303);
+    }
+    let all = [
+        "Alpha Example",
+        "Beta Example",
+        "Gamma Example",
+        "Delta Example",
+        "Echo Example",
+    ];
+
+    // Within its end, the link that signed and a second link of a signed request list everyone.
+    clock_at(&f, base, 60);
+    for path in [&a.path, &second, &d.path, &echo2] {
+        assert_eq!(names(&view(&f, path).await.text()), all, "{path}");
+    }
+    // A second link whose end cannot be read is a link that does not work: no list.
+    f.app
+        .store
+        .backend()
+        .update(
+            "sign_link",
+            &echo2_id,
+            &fields(json!({"expires_at": "not a time"})),
+        )
+        .unwrap();
+    no_list(&view(&f, &echo2).await);
+    assert_eq!(
+        f.get(&format!("{echo2}/document.pdf"), &ip(221))
+            .await
+            .status,
+        410
+    );
+
+    // The end of the request's day: the list is there at the last microsecond and gone at the next.
+    let day_end = obop_values::datetime::Instant::parse(&format!("{ends_on}T23:59:59.999999Z"))
+        .unwrap()
+        .micros();
+    at_micros(&f, day_end);
+    assert_eq!(
+        names(&view(&f, &d.path).await.text()),
+        all,
+        "the last microsecond"
+    );
+    at_micros(&f, day_end + 1);
+    no_list(&view(&f, &d.path).await);
+    assert_eq!(
+        names(&view(&f, &a.path).await.text()),
+        all,
+        "a request that has not ended, with a link that has days left"
+    );
+
+    // The end of a link: the same, to the microsecond, for the link that signed ...
+    let end_a = link_end(&f, &a.link_id);
+    at_micros(&f, end_a);
+    assert_eq!(names(&view(&f, &a.path).await.text()), all, "at its end");
+    at_micros(&f, end_a + 1);
+    is_the_plain_end_page(&f, &a, &plain, "the link that signed, 1 microsecond over").await;
+    // ... and for a second link of a signed request: `status()` shows it the page that follows
+    // signing whatever its end, and the list on it stops with the link.
+    let end_second = link_end(&f, &second_id);
+    assert!(
+        end_second > end_a + 1,
+        "the second link was made after the first"
+    );
+    at_micros(&f, end_second);
+    assert_eq!(names(&view(&f, &second).await.text()), all);
+    at_micros(&f, end_second + 1);
+    no_list(&view(&f, &second).await);
+
+    // A used link 40 days after signing, a link 100 days old that was never used: no list, and
+    // the page that follows signing is the page it was before the history.
+    at_micros(&f, base + 40 * DAY);
+    is_the_plain_end_page(&f, &a, &plain, "the link that signed, 40 days on").await;
+    no_list(&view(&f, &b.path).await);
+    no_list(&view(&f, &second).await);
+    at_micros(&f, base + 100 * DAY);
+    is_the_plain_end_page(&f, &a, &plain, "the link that signed, 100 days on").await;
+    no_list(&view(&f, &second).await);
+    // The PDF has always been refused to these.
+    for path in [&a.path, &second] {
+        assert_eq!(
+            f.get(&format!("{path}/document.pdf"), &ip(222))
+                .await
+                .status,
+            410
+        );
+    }
+
+    // A link that was revoked. A manager cannot revoke a link that signed; an administrator can,
+    // and the link then shows the page it always did, without the list.
+    clock_at(&f, base, 60);
+    assert_eq!(names(&view(&f, &a.path).await.text()), all);
+    let revoke_a = json!({"id": a.link_id, "revoked_at": "2026-11-04T12:00:00Z"});
+    let (s, v) = f
+        .api("mia", "/api/sign_link/update", revoke_a.clone())
+        .await;
+    assert_eq!(s, 400, "{v}");
+    assert_eq!(names(&view(&f, &a.path).await.text()), all, "still shown");
+    let (s, v) = f.api("admin", "/api/sign_link/update", revoke_a).await;
+    assert_eq!(s, 200, "{v}");
+    is_the_plain_end_page(&f, &a, &plain, "the link that signed, revoked").await;
+    // A second link that was never used is revoked by a manager: 410, as it always was.
+    assert_eq!(names(&view(&f, &second).await.text()), all);
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_link/update",
+            json!({"id": second_id, "revoked_at": "2026-11-04T12:00:00Z"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let r = view(&f, &second).await;
+    assert_eq!(r.status, 410);
+    no_names(&r);
+}
+
+// ---- a signature is listed only if its signer was told ------------------------------------------
+
+#[tokio::test]
+async fn a_signature_made_without_the_sentence_is_listed_to_nobody_whatever_the_box_says_later() {
+    let f = fixture().await;
+    let base = now_micros();
+    // Alice signs a request whose box is not ticked: her page said nothing about a list.
+    let alice = made(&f, &f.doc, "Alice", None).await;
+    clock_at(&f, base, 10);
+    assert_eq!(
+        sign(&f, &alice, &f.file, "Alice Example", false, 230)
+            .await
+            .status,
+        303
+    );
+    assert_eq!(
+        f.record("sign_request", &alice.id)["consent_version"],
+        PLAIN_EN
+    );
+    // An administrator ticks the box on her signed request afterwards (nobody else may).
+    for who in ["mia", "ann"] {
+        let (s, v) = f
+            .api(
+                who,
+                "/api/sign_request/update",
+                json!({"id": alice.id, "show_history": true}),
+            )
+            .await;
+        assert_eq!(s, 400, "{who}: {v}");
+    }
+    let (s, v) = f
+        .api(
+            "admin",
+            "/api/sign_request/update",
+            json!({"id": alice.id, "show_history": true}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    assert_eq!(f.record("sign_request", &alice.id)["show_history"], true);
+    // A request that asks and has not been signed lists nobody: Alice never read the sentence.
+    let dave = made(&f, &f.doc, "Dave", Some(true)).await;
+    let html = page(&f, &dave, 231).await.text();
+    assert!(html.contains("Nobody has signed this file yet."), "{html}");
+    assert!(!html.contains("Alice") && !html.contains("<li>"), "{html}");
+
+    // Bob signs a request that asks, on a page that carried the sentence: his id says so.
+    let bob = made(&f, &f.doc, "Bob", Some(true)).await;
+    clock_at(&f, base, 20);
+    assert_eq!(
+        sign(&f, &bob, &f.file, "Bob Example", true, 232)
+            .await
+            .status,
+        303
+    );
+    assert_eq!(
+        f.record("sign_request", &bob.id)["consent_version"],
+        WITH_HISTORY_EN
+    );
+    // Dave sees Bob and not Alice. Bob's page after signing has himself, marked, and not Alice.
+    // Alice's own page, whose box is on now, has Bob and not herself.
+    assert_eq!(names(&page(&f, &dave, 233).await.text()), ["Bob Example"]);
+    assert_eq!(
+        marked(&page(&f, &bob, 234).await.text()),
+        [("Bob Example".to_string(), true)]
+    );
+    assert_eq!(
+        marked(&page(&f, &alice, 235).await.text()),
+        [("Bob Example".to_string(), false)]
+    );
+}
+
+#[tokio::test]
+async fn an_id_with_the_mark_keeps_a_signature_listed_whatever_the_hash_part_says() {
+    let f = fixture().await;
+    let base = now_micros();
+    let viewer = made(&f, &f.doc, "Viewer", Some(true)).await;
+    // (name, the consent id stored with the signature, listed). The first three are ids of a
+    // wording that is not the wording of today: a later edit of the sentence moves the hash of
+    // the signatures that follow and takes nobody out of the list.
+    let cases: [(&str, &str, bool); 14] = [
+        ("Old Wording", "v1-draft/en/00000000/history", true),
+        ("Other Language", "v1-draft/de/ffffffff/history", true),
+        ("Other Version", "v2/pl/12345678/history", true),
+        ("Today", WITH_HISTORY_EN, true),
+        ("Plain", PLAIN_EN, false),
+        ("No Mark", "v1-draft/en/e2880db0", false),
+        ("Empty", "", false),
+        ("Bare", "v1-draft", false),
+        ("Mark Only", "history", false),
+        ("Capital", "v1-draft/en/e2880db0/History", false),
+        ("Extra Part", "v1-draft/en/e2880db0/history/x", false),
+        ("No Hash", "v1-draft/en//history", false),
+        ("Three Parts", "v1-draft/en/history", false),
+        ("Spaced", "v1-draft/en/e2880db0/history ", false),
+    ];
+    for (i, (name, consent, _)) in cases.iter().enumerate() {
+        stored_signed_as(
+            &f,
+            &format!("case-{i:02}"),
+            &f.doc,
+            &f.file,
+            &format!("{name} Example"),
+            base + i as i64 * 1_000_000,
+            true,
+            consent,
+        );
+    }
+    // A record that holds no consent id at all, one that holds null and one that holds a number.
+    for (i, value) in [None, Some(J::Null), Some(json!(5))]
+        .into_iter()
+        .enumerate()
+    {
+        let mut rec = json!({
+            "title": "Raw", "signer_name": "Raw", "document_id": f.doc, "document_hash": f.file,
+            "state": "signed", "show_history": true,
+            "signed_at": "2026-11-03T09:00:00.000000Z", "signed_name": format!("Raw {i} Example"),
+        });
+        if let Some(v) = value {
+            rec["consent_version"] = v;
+        }
+        f.app
+            .store
+            .backend()
+            .insert("sign_request", &format!("raw-{i}"), &fields(rec))
+            .unwrap();
+    }
+    let want: Vec<String> = cases
+        .iter()
+        .filter(|c| c.2)
+        .map(|c| format!("{} Example", c.0))
+        .collect();
+    assert_eq!(names(&page(&f, &viewer, 240).await.text()), want);
+}
+
+// ---- requests with no Document or no hash share no list -----------------------------------------
+
+/// What a stored record can hold in a place that should hold the Document or the hash.
+fn blanks() -> [(&'static str, J); 2] {
+    [("an empty text", json!("")), ("null", J::Null)]
+}
+
+/// A flagged request that signs at the door, and then loses its Document or its hash (an
+/// administrator, an import or an older version could leave a record so); and another signed
+/// request, written to the store, that has the same blank. The two must not list each other, and
+/// neither may list anybody else.
+async fn blank_pair(which: &str, value: &J, n: u8) {
+    let f = fixture().await;
+    let base = now_micros();
+    let viewer = made(&f, &f.doc, "Viewer", Some(true)).await;
+    clock_at(&f, base, 10);
+    assert_eq!(
+        sign(&f, &viewer, &f.file, "Viewer Example", true, n)
+            .await
+            .status,
+        303
+    );
+    // A third request about the real file, signed and listed, that must not show up either.
+    stored_signed(
+        &f,
+        "real",
+        &f.doc,
+        &f.file,
+        "Real Example",
+        base + 5_000_000,
+        true,
+    );
+    let b = f.app.store.backend();
+    // The viewer's own record is blanked in the one place.
+    let mut blank = serde_json::Map::new();
+    blank.insert(which.to_string(), value.clone());
+    b.update("sign_request", &viewer.id, &blank).unwrap();
+    // The other record has the same blank and, in the other place, what the viewer has: so that
+    // the blank is the only thing that could make the two alike.
+    let (doc, hash) = match which {
+        "document_id" => (value.clone(), json!(f.file)),
+        _ => (json!(f.doc), value.clone()),
+    };
+    b.insert(
+        "sign_request",
+        "blank",
+        &fields(json!({
+            "title": "Blank", "signer_name": "Blank", "document_id": doc, "document_hash": hash,
+            "state": "signed", "show_history": true,
+            "signed_at": "2026-11-03T09:00:00.000000Z", "signed_name": "Blank Example",
+            "consent_version": WITH_HISTORY_EN,
+        })),
+    )
+    .unwrap();
+    // And one that is blank in both places.
+    b.insert(
+        "sign_request",
+        "blank-both",
+        &fields(json!({
+            "title": "Both", "signer_name": "Both", "document_id": value, "document_hash": value,
+            "state": "signed", "show_history": true,
+            "signed_at": "2026-11-03T09:00:01.000000Z", "signed_name": "Both Example",
+            "consent_version": WITH_HISTORY_EN,
+        })),
+    )
+    .unwrap();
+    let r = page(&f, &viewer, n + 1).await;
+    let html = r.text();
+    assert_eq!(r.status, 200, "{html}");
+    for gone in [
+        "Blank Example",
+        "Both Example",
+        "Real Example",
+        "<li>",
+        "(you)",
+    ] {
+        assert!(
+            !html.contains(gone),
+            "{which} = {value}: {gone} is on the page:\n{html}"
+        );
+    }
+    assert!(
+        !html.contains("Signed so far"),
+        "{which} = {value}: a request about no file has no list at all:\n{html}"
+    );
+}
+
+#[tokio::test]
+async fn requests_with_no_document_or_no_hash_never_list_each_other() {
+    let mut n = 10;
+    for which in ["document_id", "document_hash"] {
+        for (_, value) in blanks() {
+            blank_pair(which, &value, n).await;
+            n += 4;
+        }
+    }
+}
+
+#[tokio::test]
+async fn two_requests_with_neither_a_document_nor_a_hash_share_no_list() {
+    let f = fixture().await;
+    let base = now_micros();
+    let viewer = made(&f, &f.doc, "Viewer", Some(true)).await;
+    clock_at(&f, base, 10);
+    assert_eq!(
+        sign(&f, &viewer, &f.file, "Viewer Example", true, 60)
+            .await
+            .status,
+        303
+    );
+    let b = f.app.store.backend();
+    b.update(
+        "sign_request",
+        &viewer.id,
+        &fields(json!({"document_id": "", "document_hash": ""})),
+    )
+    .unwrap();
+    for (i, (_, value)) in blanks().into_iter().enumerate() {
+        b.insert(
+            "sign_request",
+            &format!("none-{i}"),
+            &fields(json!({
+                "title": "None", "signer_name": "None", "document_id": value,
+                "document_hash": value, "state": "signed", "show_history": true,
+                "signed_at": "2026-11-03T09:00:00.000000Z",
+                "signed_name": format!("None {i} Example"),
+                "consent_version": WITH_HISTORY_EN,
+            })),
+        )
+        .unwrap();
+    }
+    // One with no such keys at all.
+    b.insert(
+        "sign_request",
+        "none-missing",
+        &fields(json!({
+            "title": "None", "signer_name": "None", "state": "signed", "show_history": true,
+            "signed_at": "2026-11-03T09:00:00.000000Z", "signed_name": "None Missing Example",
+            "consent_version": WITH_HISTORY_EN,
+        })),
+    )
+    .unwrap();
+    let html = page(&f, &viewer, 61).await.text();
+    assert!(
+        !html.contains("Example") && !html.contains("<li>") && !html.contains("Signed so far"),
+        "{html}"
+    );
+}
+
+// ---- no line to standard error, no read beyond the old ones ------------------------------------
+
+/// One walk through the door for a request that has a link (and a second one): the page in two
+/// languages, the PDF, the signature (with the field of a page that carried the sentence when
+/// `hist`), the page that follows it from the link that signed and from the second one, and the
+/// answers to links that are no links. Every status is checked, so the walk is a test of its own.
+async fn walk(f: &Fx, rid: &str, first: &str, second: &str, hist: bool, n: u8) {
+    for (path, want) in [
+        (format!("{first}?lang=en"), 200),
+        (format!("{first}?lang=de"), 200),
+        (format!("{first}/document.pdf"), 200),
+        (
+            format!(
+                "/sign/{rid}/{}?lang=en",
+                "1".repeat(first.len() - rid.len() - 7)
+            ),
+            404,
+        ),
+    ] {
+        assert_eq!(f.get(&path, &ip(n)).await.status, want, "{path}");
+    }
+    let m = Made {
+        id: rid.to_string(),
+        link_id: String::new(),
+        path: first.to_string(),
+    };
+    assert_eq!(
+        sign(f, &m, &f.file, "Jane Test", hist, n + 1).await.status,
+        303
+    );
+    for path in [first, second] {
+        assert_eq!(
+            f.get(&format!("{path}?lang=en"), &ip(n + 2)).await.status,
+            200
+        );
+        assert_eq!(
+            f.get(&format!("{path}/document.pdf"), &ip(n + 2))
+                .await
+                .status,
+            410
+        );
+    }
+}
+
+/// The paths a quiet request takes: no field at all, the field off, the field on, and, on an
+/// instance whose package is still 0.2.1, a record that holds the field.
+async fn the_walks_that_must_stay_quiet() {
+    let f = fixture().await;
+    for (i, flag) in [None, Some(false), Some(true)].into_iter().enumerate() {
+        let m = made(&f, &f.doc, &format!("Quiet {i}"), flag).await;
+        let (_, second) = f.mint("mia", &m.id).await;
+        walk(
+            &f,
+            &m.id,
+            &m.path,
+            &second,
+            flag == Some(true),
+            10 + 10 * i as u8,
+        )
+        .await;
+    }
+    let (f, _) = on_0_2_1().await;
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_request/send_document",
+            json!({"id": f.req}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let (_, first) = f.mint("mia", &f.req.clone()).await;
+    let (_, second) = f.mint("mia", &f.req.clone()).await;
+    f.app
+        .store
+        .backend()
+        .update(
+            "sign_request",
+            &f.req,
+            &fields(json!({"show_history": true})),
+        )
+        .unwrap();
+    walk(&f, &f.req.clone(), &first, &second, false, 100).await;
+}
+
+/// What a refused store makes the door write: the one line of `unavailable`.
+async fn the_walk_that_makes_a_line() {
+    let (f, flaky) = counted().await;
+    let m = made(&f, &f.doc, "Noisy", None).await;
+    flaky.refuse_model("sign_request", Mode::Reads);
+    let r = f.get(&format!("{}?lang=en", m.path), &ip(200)).await;
+    assert_eq!(r.status, 503, "{}", r.text());
+}
+
+#[tokio::test]
+async fn walks_that_must_stay_quiet() {
+    the_walks_that_must_stay_quiet().await;
+}
+
+#[tokio::test]
+async fn a_walk_that_makes_a_line() {
+    the_walk_that_makes_a_line().await;
+}
+
+/// The test binary again, with only `test` run and its output let through, so that what the test
+/// wrote to standard output and standard error can be read. (`libtest` keeps the output of a test
+/// to itself, and the door's only sink is `eprintln!`.)
+fn in_a_child(test: &str) -> (String, String, String) {
+    let path = format!("{}::{test}", module_path!().split_once("::").unwrap().1);
+    let out = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([path.as_str(), "--exact", "--nocapture", "--test-threads=1"])
+        .output()
+        .unwrap();
+    let (stdout, stderr) = (
+        String::from_utf8_lossy(&out.stdout).into_owned(),
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+    );
+    assert!(out.status.success(), "{path} failed:\n{stdout}\n{stderr}");
+    (path, stdout, stderr)
+}
+
+#[test]
+fn the_door_writes_no_line_for_a_request_that_does_not_ask_or_on_the_package_before_the_history() {
+    // The control first: the same kind of walk, with a store that refuses, is heard. If this
+    // fails, the way the lines are read below is blind.
+    let (path, stdout, stderr) = in_a_child("a_walk_that_makes_a_line");
+    assert!(
+        stderr.contains("sign: the store refused"),
+        "the line of a refused store was not heard on standard error of {path}:\n{stdout}\n{stderr}"
+    );
+    // The walks: nothing on standard error, and on standard output only what the harness says.
+    let (path, stdout, stderr) = in_a_child("walks_that_must_stay_quiet");
+    assert_eq!(stderr.trim(), "", "{path} wrote to standard error");
+    let said: Vec<&str> = stdout
+        .lines()
+        .map(str::trim_end)
+        .filter(|l| !l.is_empty() && !l.starts_with("running ") && !l.starts_with("test result:"))
+        .collect();
+    assert_eq!(
+        said,
+        [format!("test {path} ... ok")],
+        "{path} wrote to standard output"
+    );
+}
+
+/// The new code has no sink of its own: no print, no `dbg!`, no tracing or log macro and no
+/// entry of the security log. (The walks above hear a line; this reads for a sink they would not
+/// reach, such as a line on a path of a refused store.)
+#[test]
+fn the_history_module_has_no_sink_for_a_line() {
+    let source = include_str!("../../../kernel/obop-commands/src/sign/history.rs");
+    let code: String = source
+        .lines()
+        .filter(|l| !l.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    for sink in [
+        "println!",
+        "eprintln!",
+        "print!",
+        "eprint!",
+        "dbg!",
+        "tracing::",
+        "log::",
+        "record_event",
+        "event_op",
+        "kv_put",
+        "std::io::stderr",
+        "std::io::stdout",
+    ] {
+        assert!(!code.contains(sink), "history.rs holds `{sink}`");
+    }
+    // The one line the door writes is the one for a refused store, in one place.
+    let door = include_str!("../../../kernel/obop-commands/src/sign/door.rs");
+    assert_eq!(door.matches("eprintln!").count(), 1);
+    assert!(door.contains("eprintln!(\"sign: the store refused: {e}\");"));
+}
+
+/// The reads of the door, as the service made them on `origin/main` (commit 09861505, before the
+/// history), for a request that does not ask: a throwaway test that did these steps and printed
+/// the counters of `Flaky` (with the two counters `count` and `kv_reads`, which did not exist
+/// then and are 0 there). The pages of a request that does not ask read exactly these rows.
+fn reads_before_the_history() -> [(&'static str, Reads); 5] {
+    let gets = |gets| Reads {
+        gets,
+        ..Reads::default()
+    };
+    [
+        ("the page", gets(4)),
+        ("the PDF", gets(5)),
+        ("the signature", gets(5)),
+        ("the page after signing, from the link that signed", gets(2)),
+        ("the page after signing, from a second link", gets(2)),
+    ]
+}
+
+/// The steps of that measurement, on a request that was sent and has two links.
+async fn door_reads(f: &Fx, flaky: &Flaky, p1: &str, p2: &str) -> Vec<(&'static str, Reads)> {
+    let mut out = Vec::new();
+    flaky.reset_reads();
+    assert_eq!(f.get(&format!("{p1}?lang=en"), &ip(1)).await.status, 200);
+    out.push(("the page", flaky.reads()));
+    flaky.reset_reads();
+    assert_eq!(
+        f.get(&format!("{p1}/document.pdf"), &ip(2)).await.status,
+        200
+    );
+    out.push(("the PDF", flaky.reads()));
+    flaky.reset_reads();
+    let r = f
+        .post(
+            p1,
+            &ip(3),
+            &[
+                ("name", "Jane Test"),
+                ("agree", "1"),
+                ("doc", &f.file),
+                ("lang", "en"),
+            ],
+        )
+        .await;
+    assert_eq!(r.status, 303, "{}", r.text());
+    out.push(("the signature", flaky.reads()));
+    flaky.reset_reads();
+    assert_eq!(f.get(&format!("{p1}?lang=en"), &ip(4)).await.status, 200);
+    out.push((
+        "the page after signing, from the link that signed",
+        flaky.reads(),
+    ));
+    flaky.reset_reads();
+    assert_eq!(f.get(&format!("{p2}?lang=en"), &ip(5)).await.status, 200);
+    out.push(("the page after signing, from a second link", flaky.reads()));
+    out
+}
+
+async fn counted_request(flag: Option<bool>, old_package: bool) -> (Fx, Arc<Flaky>) {
+    let (f, flaky) = if old_package {
+        self::on_0_2_1().await
+    } else {
+        counted().await
+    };
+    if let Some(v) = flag {
+        let (s, r) = f
+            .api(
+                "mia",
+                "/api/sign_request/update",
+                json!({"id": f.req, "show_history": v}),
+            )
+            .await;
+        assert_eq!(s, 200, "{r}");
+    }
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_request/send_document",
+            json!({"id": f.req}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    if old_package {
+        // A record left by a later version.
+        f.app
+            .store
+            .backend()
+            .update(
+                "sign_request",
+                &f.req,
+                &fields(json!({"show_history": true})),
+            )
+            .unwrap();
+    }
+    (f, flaky)
+}
+
+#[tokio::test]
+async fn the_pages_of_a_request_that_does_not_ask_read_exactly_what_they_read_before_the_history() {
+    // No field, the field off, and a record that holds the field on the package of before.
+    for (flag, old, what) in [
+        (None, false, "no field"),
+        (Some(false), false, "the field off"),
+        (
+            None,
+            true,
+            "the field on, on the package before the history",
+        ),
+    ] {
+        let (f, flaky) = counted_request(flag, old).await;
+        let (_, p1) = f.mint("mia", &f.req.clone()).await;
+        let (_, p2) = f.mint("mia", &f.req.clone()).await;
+        let got = door_reads(&f, &flaky, &p1, &p2).await;
+        let want = reads_before_the_history();
+        for ((step, got), (_, want)) in got.iter().zip(want.iter()) {
+            assert_eq!(got, want, "{what}: {step}");
+        }
+        assert_eq!(got.len(), want.len());
+    }
+}
+
+// ---- the guard of the switch in a bulk create, in every spelling the importer reads -----------
+
+fn count_of(f: &Fx, model: &str) -> usize {
+    f.app.store.backend().count(model).unwrap()
+}
+
+#[tokio::test]
+async fn a_csv_import_cannot_carry_the_switch_in_any_spelling() {
+    let f = fixture().await;
+    let row = "Forged,Jane Test,true\n";
+    // The spellings of `a_csv_import_cannot_carry_evidence_columns_in_any_spelling`, with the
+    // column of the switch.
+    let cases: Vec<(&str, String)> = vec![
+        (
+            "plain header",
+            format!("title,signer_name,show_history\n{row}"),
+        ),
+        (
+            "a blank line first",
+            format!("\ntitle,signer_name,show_history\n{row}"),
+        ),
+        (
+            "a lone CR after the header",
+            format!("title,signer_name,show_history\r{row}"),
+        ),
+        (
+            "a quoted header with an inner space",
+            format!("title,signer_name,\" show_history\"\n{row}"),
+        ),
+        (
+            "a quoted header that starts with a line break",
+            format!("title,signer_name,\"\nshow_history\"\n{row}"),
+        ),
+        (
+            "a byte order mark and a blank line",
+            format!("\u{feff}\ntitle,signer_name,show_history\n{row}"),
+        ),
+        (
+            "semicolons",
+            "title;signer_name;show_history\nForged;Jane Test;true\n".to_string(),
+        ),
+        (
+            "the column first",
+            "show_history,title,signer_name\ntrue,Forged,Jane Test\n".to_string(),
+        ),
+    ];
+    let before = count_of(&f, "sign_request");
+    for who in ["sam", "dan"] {
+        for (what, csv) in &cases {
+            let (s, v) = f
+                .api(who, "/api/sign_request/bulk_create", json!({"csv": csv}))
+                .await;
+            assert_eq!(s, 400, "{who}, {what}: {v}");
+            assert!(
+                err(&v).contains("show_history") && err(&v).contains("sign.manager"),
+                "{who}, {what}: {v}"
+            );
+        }
+    }
+    assert_eq!(count_of(&f, "sign_request"), before, "nothing was made");
+    // The same files are good files, and a manager and an administrator import the switch: so the
+    // refusals above are the guard's and not a file that could not be read.
+    for who in ["mia", "admin"] {
+        for (what, csv) in &cases {
+            let (s, v) = f
+                .api(who, "/api/sign_request/bulk_create", json!({"csv": csv}))
+                .await;
+            assert_eq!(s, 200, "{who}, {what}: {v}");
+        }
+    }
+    let forged: Vec<_> = f
+        .app
+        .store
+        .backend()
+        .list("sign_request")
+        .unwrap()
+        .into_iter()
+        .filter(|(_, r)| r["title"] == "Forged")
+        .collect();
+    assert_eq!(forged.len(), 2 * cases.len());
+    assert!(forged.iter().all(|(_, r)| r["show_history"] == true));
+    // An ordinary file still imports for the person with no more than `sign.user`.
+    let (s, v) = f
+        .api(
+            "sam",
+            "/api/sign_request/bulk_create",
+            json!({"csv": "title,signer_name\nPlain row,Jane Test\n"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+}
+
+#[tokio::test]
+async fn the_switch_in_any_row_of_a_bulk_create_is_refused_to_a_caller_without_the_manager_group() {
+    let f = fixture().await;
+    let plain = |i: usize| json!({"title": format!("Row {i}"), "signer_name": "Jane Test"});
+    let before = count_of(&f, "sign_request");
+    for who in ["sam", "dan"] {
+        for at in 0..3 {
+            for value in [json!(true), json!(false), J::Null] {
+                let rows: Vec<J> = (0..3)
+                    .map(|i| {
+                        let mut r = plain(i);
+                        if i == at {
+                            r["show_history"] = value.clone();
+                        }
+                        r
+                    })
+                    .collect();
+                let (s, v) = f
+                    .api(who, "/api/sign_request/bulk_create", json!({"rows": rows}))
+                    .await;
+                assert_eq!(s, 400, "{who}, the key in row {at} with {value}: {v}");
+                assert!(
+                    err(&v).contains("show_history") && err(&v).contains("sign.manager"),
+                    "{who}, row {at}: {v}"
+                );
+            }
+        }
+    }
+    assert_eq!(
+        count_of(&f, "sign_request"),
+        before,
+        "not one row of a refused list was made"
+    );
+    // The same three rows without the key are made, and a manager may send the key in the last.
+    let rows: Vec<J> = (0..3).map(plain).collect();
+    let (s, v) = f
+        .api(
+            "sam",
+            "/api/sign_request/bulk_create",
+            json!({"rows": rows}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let mut rows: Vec<J> = (0..3).map(plain).collect();
+    rows[2]["show_history"] = json!(true);
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_request/bulk_create",
+            json!({"rows": rows}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    assert_eq!(count_of(&f, "sign_request"), before + 6);
 }

@@ -33,7 +33,10 @@ mod token;
 pub use door::{
     Client, Done, DoorError, Gone, Invalid, SignForm, View, ViewData, digest_of_request,
 };
-pub use history::{HISTORY_FLAG, HISTORY_MAX, History, HistoryEntry};
+pub use history::{
+    HISTORY_CONSENT_MARK, HISTORY_FLAG, HISTORY_MAX, History, HistoryEntry,
+    consent_names_the_history,
+};
 
 use crate::engine::Models as ModelsMap;
 use crate::store::Store;

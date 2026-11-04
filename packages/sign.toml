@@ -110,7 +110,7 @@ write_group = "sign.user"
 
   [[model.field]]
   name = "show_history"
-  description = "Show the signer who has already signed this same file (same Document, same SHA-256): typed names and times, from requests with this box ticked too. The signer is told before signing. Only for a file that several named people sign together, never for one sent to unrelated people. Managers and administrators only. Off when empty"
+  description = "Lists on the signer's page who signed this same file (same Document and SHA-256) through a request with this box ticked: typed name and time. The signer is told before signing that theirs are shown too. Only for a file several named people sign together, never one sent to unrelated people. A request signed before the box was ticked is never listed. Off when empty"
   class = "none"
   kind = "bool"
   group = "sign.manager"

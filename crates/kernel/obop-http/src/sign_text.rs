@@ -45,6 +45,7 @@
 //! `consent` takes `{name}` (the requested person), because the sentence names the person who is
 //! asked to sign (lead decision 9; attacker finding S7).
 
+use obop_commands::sign::HISTORY_CONSENT_MARK;
 use obop_oauth::page::{LANGS, esc};
 
 /// The version of the consent wording, the first part of the id recorded with the evidence of a
@@ -93,12 +94,18 @@ pub fn consent_version_for(lang: &str) -> String {
 }
 
 /// `consent_version` for a request that shows the signatures so far: as [`consent_version_for`],
-/// with the hash also over the [`HISTORY_WORDING_KEYS`] texts. It differs from the id of a request
-/// that does not, in every language, because the sentence is part of what it hashes.
+/// with the hash also over the [`HISTORY_WORDING_KEYS`] texts, and a fourth part, the mark
+/// [`HISTORY_CONSENT_MARK`] (`v1-draft/en/e2880db0/history`). It differs from the id of a request
+/// that does not, in every language, because the sentence is part of what it hashes and because of
+/// the mark. **The mark is what the door reads** to decide that a signature may be listed to the
+/// others (`consent_names_the_history`): it is stored with the signature and not worked out again,
+/// so a later edit of the sentence moves the hash of the signatures that follow and leaves the ones
+/// already made listed. Put the mark on these words only while they say that the signer's name and
+/// the time are shown to the other people who sign the file.
 pub fn consent_version_with_history_for(lang: &str) -> String {
     let i = lang_idx(lang);
     format!(
-        "{CONSENT_VERSION}/{}/{}",
+        "{CONSENT_VERSION}/{}/{}/{HISTORY_CONSENT_MARK}",
         LANGS[i],
         history_wording_id(CATALOGUE, i)
     )
@@ -262,6 +269,7 @@ pub const CATALOGUE: &[(&str, [&str; 7])] = &[
 #[cfg(test)]
 mod tests {
     use super::*;
+    use obop_commands::sign::consent_names_the_history;
 
     /// The keys the signer door and its page may ask for (D92, section 4.1), in the design's
     /// order. A key outside the list, or one missing from it, fails here.
@@ -540,13 +548,13 @@ mod tests {
     /// the others. The same second net as above, for the other wording: an edit of the sentence, or
     /// of one of the eight, moves them. (Nothing real has been signed under these ids yet.)
     const PINNED_WITH_HISTORY: [&str; 7] = [
-        "v1-draft/en/e2880db0",
-        "v1-draft/de/d08d0039",
-        "v1-draft/fr/d5b05e47",
-        "v1-draft/pl/4c40cc63",
-        "v1-draft/fi/79117ed1",
-        "v1-draft/sv/84f4affe",
-        "v1-draft/es/8aa40e67",
+        "v1-draft/en/e2880db0/history",
+        "v1-draft/de/d08d0039/history",
+        "v1-draft/fr/d5b05e47/history",
+        "v1-draft/pl/4c40cc63/history",
+        "v1-draft/fi/79117ed1/history",
+        "v1-draft/sv/84f4affe/history",
+        "v1-draft/es/8aa40e67/history",
     ];
 
     #[test]
@@ -574,10 +582,16 @@ mod tests {
             assert_ne!(without, with, "{lang}");
             let (a, b): (Vec<&str>, Vec<&str>) =
                 (without.split('/').collect(), with.split('/').collect());
+            assert_eq!((a.len(), b.len()), (3, 4), "{lang}: {without} / {with}");
             assert_eq!((a[0], a[1]), (b[0], b[1]), "{lang}");
             assert_ne!(a[2], b[2], "{lang}");
             assert_eq!(b[2].len(), 8, "{lang}");
             assert!(b[2].bytes().all(|c| c.is_ascii_hexdigit()), "{lang}");
+            // The mark is the fourth part, and the door reads it: the id of the wording with the
+            // sentence is one that may be listed, the id of the wording without it never is.
+            assert_eq!(b[3], HISTORY_CONSENT_MARK, "{lang}");
+            assert!(consent_names_the_history(&with), "{lang}: {with}");
+            assert!(!consent_names_the_history(&without), "{lang}: {without}");
             // Only the sentence is the difference: the hash over the eight texts alone is the
             // unflagged id, and adding the sentence to it is what makes the other.
             assert_eq!(a[2], wording_id(CATALOGUE, i), "{lang}");
