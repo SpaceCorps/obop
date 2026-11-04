@@ -96,7 +96,7 @@ describe("the count of a trip from its stored points", () => {
     expect(progressFrom([second, third, first]).signal).toMatchObject({ accuracyM: 260 });
   });
 
-  test("a newest point without a radius leaves the radius out of the note", () => {
+  test("a newest point without a radius is not imprecise: nothing is said when none was dropped for its place", () => {
     // Three too imprecise, then a point without a radius: it is the first that counts.
     const stored = [
       point(1, 0, 0, "150.00"),
@@ -104,15 +104,27 @@ describe("the count of a trip from its stored points", () => {
       point(3, 30, 0, "150.00"),
       point(4, 45, 0, null),
     ];
-    expect(progressFrom(stored).signal).toEqual({
-      kind: "weak",
-      dropped: 3,
-      stored: 4,
-      accuracyM: null,
-    });
+    expect(progressFrom(stored)).toMatchObject({ points: 4, metres: 0, signal: null });
   });
 
-  test("a stored radius of 0.00 is not a radius to name", () => {
+  test("a newest point without a radius, where a position was dropped for its place: not fitting, no radius", () => {
+    const stored = [
+      point(1, 0, 0, "5.00"),
+      point(2, 15, 0, "150.00"),
+      point(3, 30, 0, "150.00"),
+      point(4, 45, 20_000, null),
+    ];
+    const progress = progressFrom(stored);
+    expect(analyseTrack).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(analyseTrack).mock.results[0]!.value).toMatchObject({
+      accepted: 1,
+      skippedAccuracy: 2,
+      skippedSpeed: 1,
+    });
+    expect(progress.signal).toEqual({ kind: "jumpy", dropped: 3, stored: 4 });
+  });
+
+  test("a stored radius of 0.00 is not over the limit, so it is no radius to name", () => {
     // A good point, two too imprecise, and a newest one that is 20 km away within 40 s.
     const stored = [
       point(1, 0, 0, "5.00"),
@@ -120,12 +132,7 @@ describe("the count of a trip from its stored points", () => {
       point(3, 30, 0, "150.00"),
       point(4, 40, 20_000, "0.00"),
     ];
-    expect(progressFrom(stored).signal).toEqual({
-      kind: "weak",
-      dropped: 3,
-      stored: 4,
-      accuracyM: null,
-    });
+    expect(progressFrom(stored).signal).toEqual({ kind: "jumpy", dropped: 3, stored: 4 });
   });
 
   test("the track is analysed once, and the distance and the note come from that analysis", () => {
@@ -176,5 +183,140 @@ describe("the first seconds of a trip", () => {
     // Positions 5 s apart for 10 s, long after the start of the trip: still the first seconds.
     const late = imprecise(3, 5).map((p) => ({ ...p, t: p.t + 3_600_000 }));
     expect(progressFrom(late).signal).toBeNull();
+  });
+});
+
+describe("the kind of the note follows the newest stored point (the highest seq)", () => {
+  /** A point at a wrong place, 1,800 km from the others. */
+  const wrong = (seq: number, secs: number, accuracy: string): StoredPoint => ({
+    ...point(seq, secs, 0, accuracy),
+    lat: "40.0000000",
+    lon: "-3.0000000",
+  });
+
+  /**
+   * A wrong first point, `bad` imprecise ones (200 m) 5 s apart from t = 5 s, then `good` fine ones
+   * (6 m) 5 s apart (L37 after a cold start).
+   */
+  const coldStartWrongFirst = (bad: number, good: number): StoredPoint[] => [
+    wrong(1, 0, "20.00"),
+    ...Array.from({ length: bad }, (_, i) => point(i + 2, (i + 1) * 5, (i % 3) * 4, "200.00")),
+    ...Array.from({ length: good }, (_, i) => point(bad + i + 2, (bad + i + 1) * 5, i * 4, "6.00")),
+  ];
+
+  /** The kind of note after each point, as the points arrive. */
+  const kindsAlong = (stored: StoredPoint[]) =>
+    stored.map((_, n) => progressFrom(stored.slice(0, n + 1)).signal?.kind ?? "none");
+
+  test("a wrong first point, then imprecise points: weak while the newest is imprecise", () => {
+    expect(progressFrom(coldStartWrongFirst(12, 0)).signal).toEqual({
+      kind: "weak",
+      dropped: 12,
+      stored: 13,
+      accuracyM: 200,
+    });
+  });
+
+  test("then good points: jumpy from the first good point on, although more were imprecise", () => {
+    const progress = progressFrom(coldStartWrongFirst(12, 7));
+    const analysis = vi.mocked(analyseTrack).mock.results[0]!.value as ReturnType<
+      typeof analyseTrack
+    >;
+    // The older rule (the larger counter) said weak here, for a phone that was already outside.
+    expect(analysis.skippedAccuracy).toBe(12);
+    expect(analysis.skippedSpeed).toBe(7);
+    expect(progress.signal).toEqual({ kind: "jumpy", dropped: 19, stored: 20 });
+    expect(progressFrom(coldStartWrongFirst(12, 1)).signal).toEqual({
+      kind: "jumpy",
+      dropped: 13,
+      stored: 14,
+    });
+  });
+
+  test("point by point, from the stored texts: weak at 30 s, jumpy at the first good point", () => {
+    const kinds = kindsAlong(coldStartWrongFirst(12, 8));
+    expect(kinds.slice(0, 6)).toEqual(Array(6).fill("none")); // up to 25 s
+    expect(kinds.slice(6, 13)).toEqual(Array(7).fill("weak")); // 30 s to 60 s
+    expect(kinds.slice(13)).toEqual(Array(8).fill("jumpy")); // 65 s on
+  });
+
+  test("imprecise points, then good ones at the right place: weak, then nothing", () => {
+    const stored = [
+      ...imprecise(12, 5),
+      ...Array.from({ length: 3 }, (_, i) => point(13 + i, 60 + i * 5, i * 4, "6.00")),
+    ];
+    const kinds = kindsAlong(stored);
+    expect(kinds.slice(0, 6)).toEqual(Array(6).fill("none"));
+    expect(kinds.slice(6, 12)).toEqual(Array(6).fill("weak"));
+    // The first good point is the first that counts and none was dropped for its place: nothing.
+    expect(kinds.slice(12)).toEqual(["none", "none", "none"]);
+    expect(progressFrom(stored.slice(0, 13))).toMatchObject({ points: 13, metres: 0 });
+  });
+
+  test("the newest is the highest seq, not the last of the list: unsorted storage", () => {
+    const stored = coldStartWrongFirst(12, 2); // the highest seq is a good point: jumpy
+    const mixed = [stored[5]!, stored[14]!, stored[0]!, stored[13]!, ...stored.slice(1, 5)].concat(
+      stored.slice(6, 13),
+    );
+    expect(mixed).toHaveLength(stored.length);
+    expect(progressFrom(stored).signal?.kind).toBe("jumpy");
+    expect(progressFrom([...stored].reverse()).signal?.kind).toBe("jumpy");
+    expect(progressFrom(mixed).signal?.kind).toBe("jumpy");
+    // And the other way: the highest seq is an imprecise point, a good one comes last in the list.
+    const flipped = coldStartWrongFirst(12, 0);
+    expect(progressFrom([...flipped].reverse()).signal?.kind).toBe("weak");
+    expect(progressFrom([flipped[12]!, ...flipped.slice(0, 12)]).signal?.kind).toBe("weak");
+  });
+
+  test("the newest is by seq, not by time: a later seq with an earlier time stamp", () => {
+    // seq 5 was stored last but carries an early time stamp (the clock went back).
+    const stored = [
+      wrong(1, 0, "20.00"),
+      point(2, 20, 0, "6.00"),
+      point(3, 40, 0, "6.00"),
+      point(4, 60, 0, "6.00"),
+      point(5, 10, 0, "200.00"),
+    ];
+    expect(progressFrom(stored).signal).toMatchObject({ kind: "weak", accuracyM: 200 });
+    // With the radii swapped the newest by time is the imprecise one and the newest by seq is good.
+    const swapped = [
+      wrong(1, 0, "20.00"),
+      point(2, 20, 0, "6.00"),
+      point(3, 40, 0, "6.00"),
+      point(4, 60, 0, "200.00"),
+      point(5, 10, 0, "6.00"),
+    ];
+    expect(progressFrom(swapped).signal).toMatchObject({ kind: "jumpy" });
+  });
+
+  test("equal time stamps: the higher seq decides, in whatever order they are listed", () => {
+    // seq 6 and seq 7 were taken at the same millisecond.
+    const base = [
+      wrong(1, 0, "20.00"),
+      point(2, 10, 0, "200.00"),
+      point(3, 20, 0, "200.00"),
+      point(4, 30, 0, "200.00"),
+      point(5, 40, 0, "200.00"),
+    ];
+    const imprecisePoint = (seq: number) => point(seq, 50, 0, "200.00");
+    const finePoint = (seq: number) => point(seq, 50, 0, "6.00");
+    const goodNewest = [...base, imprecisePoint(6), finePoint(7)];
+    const impreciseNewest = [...base, finePoint(6), imprecisePoint(7)];
+    expect(progressFrom(goodNewest).signal?.kind).toBe("jumpy");
+    expect(progressFrom([...goodNewest].reverse()).signal?.kind).toBe("jumpy");
+    expect(progressFrom(impreciseNewest).signal?.kind).toBe("weak");
+    expect(progressFrom([...impreciseNewest].reverse()).signal?.kind).toBe("weak");
+  });
+
+  test("the radius named is the newest point's, from the two decimals of the store, in whole metres", () => {
+    const stored = [
+      wrong(1, 0, "20.00"),
+      ...imprecise(7, 5).map((p) => ({ ...p, seq: p.seq + 1 })),
+    ];
+    const newest = stored.at(-1)!;
+    stored[stored.length - 1] = { ...newest, accuracyM: "260.49" };
+    expect(progressFrom(stored).signal).toMatchObject({ kind: "weak", accuracyM: 260 });
+    stored[stored.length - 1] = { ...newest, accuracyM: "260.50" };
+    expect(progressFrom(stored).signal).toMatchObject({ kind: "weak", accuracyM: 261 });
   });
 });

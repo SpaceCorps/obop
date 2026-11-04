@@ -30,13 +30,22 @@ const sequence = (fixes: readonly Fix[]): Fix[] =>
 const indoor = (n: number): Fix[] =>
   sequence(Array.from({ length: n }, (_, i) => fix(0, 0, (i % 3) * 4, 150)));
 
-/** A good first position, then `jumps` positions far away and `bad` positions with a radius of 150 m. */
-const anchored = (bad: number, jumps: number): Fix[] => {
-  const dropped: Fix[] = [
-    ...Array.from({ length: jumps }, () => fix(0, 0, FAR_M, 5)),
-    ...Array.from({ length: bad }, () => fix(0, 0, 0, 150)),
-  ];
-  return sequence([fix(0, 0, 0, 5), ...dropped]);
+/**
+ * A good first position, then `jumps` positions far away and `bad` positions with a radius of 150 m.
+ * `newest` says which of the two kinds comes last: the dropped positions are all of one kind at the
+ * end, so the newest stored position is imprecise (the default) or a good one that does not fit.
+ */
+const anchored = (
+  bad: number,
+  jumps: number,
+  newest: "imprecise" | "jump" = "imprecise",
+): Fix[] => {
+  const far = Array.from({ length: jumps }, () => fix(0, 0, FAR_M, 5));
+  const imprecise = Array.from({ length: bad }, () => fix(0, 0, 0, 150));
+  return sequence([
+    fix(0, 0, 0, 5),
+    ...(newest === "imprecise" ? [...far, ...imprecise] : [...imprecise, ...far]),
+  ]);
 };
 
 /** A trip whose first position is far from all the others (L37), the others 5 s apart. */
@@ -53,6 +62,47 @@ const drive = (n: number): Fix[] =>
 /** The same place, the same radius, `STEP_S` seconds apart. */
 const standing = (n: number, accuracyM: number | null = 8): Fix[] =>
   Array.from({ length: n }, (_, i) => fix(i + 1, i * STEP_S, 0, accuracyM));
+
+/**
+ * A phone that has just started: `bad` positions with a radius of 200 m, 5 s apart (the first at
+ * t = 5 s), then `good` positions with a radius of 6 m, 5 s apart and a few metres from each other.
+ * With `wrongFirst` the trip begins with one position at a wrong place (a radius of 20 m, so the
+ * rule accepts it) and the good positions are therefore all too far from it (L37).
+ */
+function coldStart(bad: number, good: number, wrongFirst: boolean): Fix[] {
+  const first: Fix[] = wrongFirst ? [{ seq: 1, t: T0, lat: 40, lon: -3, accuracyM: 20 }] : [];
+  const at = (i: number) => T0 + (i + 1) * 5000;
+  const imprecise = Array.from({ length: bad }, (_, i) => ({
+    seq: first.length + i + 1,
+    t: at(i),
+    lat: north((i % 3) * 4),
+    lon: 13,
+    accuracyM: 200 as number | null,
+  }));
+  const fine = Array.from({ length: good }, (_, i) => ({
+    seq: first.length + bad + i + 1,
+    t: at(bad + i),
+    lat: north(i * 4),
+    lon: 13,
+    accuracyM: 6 as number | null,
+  }));
+  return [...first, ...imprecise, ...fine];
+}
+
+/**
+ * What the note says as the positions arrive one by one: the seconds after the start of the newest
+ * stored position, and the kind of note (or "none") from that position on, listed where it changes.
+ */
+function transitions(fixes: readonly Fix[]): [number, string][] {
+  const changes: [number, string][] = [];
+  let previous = "none";
+  for (let n = 1; n <= fixes.length; n++) {
+    const kind = noteFor(fixes.slice(0, n))?.kind ?? "none";
+    if (kind !== previous) changes.push([(fixes[n - 1]!.t - T0) / 1000, kind]);
+    previous = kind;
+  }
+  return changes;
+}
 
 /** The newest time stamp minus the oldest one. */
 function spanOf(fixes: readonly Fix[]): number {
@@ -94,6 +144,28 @@ describe("the lists behind the tests are what they claim to be", () => {
     expect(counters(drive(20))).toEqual({ accepted: 20, skippedAccuracy: 0, skippedSpeed: 0 });
     expect(counters(standing(2))).toEqual({ accepted: 2, skippedAccuracy: 0, skippedSpeed: 0 });
     expect(counters(anchored(2, 3))).toEqual({ accepted: 1, skippedAccuracy: 2, skippedSpeed: 3 });
+    expect(counters(anchored(2, 3, "jump"))).toEqual({
+      accepted: 1,
+      skippedAccuracy: 2,
+      skippedSpeed: 3,
+    });
+    // A cold start with a wrong first position: every good position is too far from it.
+    expect(counters(coldStart(12, 8, true))).toEqual({
+      accepted: 1,
+      skippedAccuracy: 12,
+      skippedSpeed: 8,
+    });
+    // A cold start at the right place: the first good position is the first that counts.
+    expect(counters(coldStart(12, 1, false))).toEqual({
+      accepted: 1,
+      skippedAccuracy: 12,
+      skippedSpeed: 0,
+    });
+    expect(counters(coldStart(12, 2, false))).toEqual({
+      accepted: 2,
+      skippedAccuracy: 12,
+      skippedSpeed: 0,
+    });
     expect(analyseTrack(standing(2)).distanceM).toBe(0);
   });
 
@@ -261,87 +333,167 @@ describe("how many positions count", () => {
   });
 });
 
-describe("weak or jumpy", () => {
-  // [dropped for accuracy, dropped for speed], with one position that counts as the anchor. The
-  // number in the line is every position that was left out, whatever the reason.
-  const cases: [number, number, SignalNote | null][] = [
-    [1, 0, null], // two stored: too few
-    [3, 0, { kind: "weak", dropped: 3, stored: 4, accuracyM: 150 }],
-    [0, 3, { kind: "jumpy", dropped: 3, stored: 4 }],
-    [2, 2, { kind: "weak", dropped: 4, stored: 5, accuracyM: 150 }], // a tie is weak
-    [1, 1, { kind: "weak", dropped: 2, stored: 3, accuracyM: 150 }],
-    [3, 2, { kind: "weak", dropped: 5, stored: 6, accuracyM: 150 }],
-    [2, 3, { kind: "jumpy", dropped: 5, stored: 6 }],
-    [1, 5, { kind: "jumpy", dropped: 6, stored: 7 }],
-    [5, 1, { kind: "weak", dropped: 6, stored: 7, accuracyM: 150 }],
+describe("weak or jumpy: the kind follows the newest stored position", () => {
+  // [dropped for accuracy, dropped for speed, which of them is the newest], with one position that
+  // counts as the anchor. The number in the line is every position that was left out.
+  const cases: [number, number, "imprecise" | "jump", SignalNote | null][] = [
+    [1, 0, "imprecise", null], // two stored: too few
+    [3, 0, "imprecise", { kind: "weak", dropped: 3, stored: 4, accuracyM: 150 }],
+    [0, 3, "jump", { kind: "jumpy", dropped: 3, stored: 4 }],
+    [2, 2, "imprecise", { kind: "weak", dropped: 4, stored: 5, accuracyM: 150 }],
+    [2, 2, "jump", { kind: "jumpy", dropped: 4, stored: 5 }],
+    [1, 1, "imprecise", { kind: "weak", dropped: 2, stored: 3, accuracyM: 150 }],
+    [1, 1, "jump", { kind: "jumpy", dropped: 2, stored: 3 }],
+    // More dropped for accuracy than for speed, and the newest is a good position that does not fit.
+    [3, 2, "jump", { kind: "jumpy", dropped: 5, stored: 6 }],
+    [5, 1, "jump", { kind: "jumpy", dropped: 6, stored: 7 }],
+    [3, 2, "imprecise", { kind: "weak", dropped: 5, stored: 6, accuracyM: 150 }],
+    // More dropped for speed than for accuracy, and the newest is an imprecise one.
+    [2, 3, "imprecise", { kind: "weak", dropped: 5, stored: 6, accuracyM: 150 }],
+    [1, 5, "imprecise", { kind: "weak", dropped: 6, stored: 7, accuracyM: 150 }],
+    [2, 3, "jump", { kind: "jumpy", dropped: 5, stored: 6 }],
+    [1, 5, "jump", { kind: "jumpy", dropped: 6, stored: 7 }],
+    [5, 1, "imprecise", { kind: "weak", dropped: 6, stored: 7, accuracyM: 150 }],
   ];
-  test.each(cases)("%i imprecise and %i not fitting", (bad, jumps, expected) => {
-    // `anchored` puts the jumps first and the imprecise ones last: the newest is imprecise, or a
-    // jump when there is no imprecise one.
-    const fixes = anchored(bad, jumps);
+  test.each(cases)(
+    "%i imprecise and %i not fitting, the newest is %s",
+    (bad, jumps, newest, want) => {
+      const fixes = anchored(bad, jumps, newest);
+      const analysis = analyseTrack(fixes);
+      expect(analysis.accepted).toBe(1);
+      expect(analysis.skippedAccuracy).toBe(bad);
+      expect(analysis.skippedSpeed).toBe(jumps);
+      expect(noteFor(fixes)).toEqual(want);
+    },
+  );
+
+  test("the same counters give both kinds: only the newest position differs", () => {
+    const a = anchored(4, 3, "imprecise");
+    const b = anchored(4, 3, "jump");
+    const counted = (fixes: Fix[]) => {
+      const { accepted, skippedAccuracy, skippedSpeed } = analyseTrack(fixes);
+      return [accepted, skippedAccuracy, skippedSpeed];
+    };
+    expect(counted(a)).toEqual(counted(b));
+    expect(noteFor(a)).toMatchObject({ kind: "weak", dropped: 7, stored: 8 });
+    expect(noteFor(b)).toMatchObject({ kind: "jumpy", dropped: 7, stored: 8 });
+  });
+
+  test("the newest position is the one with the highest seq, whatever the order of the list", () => {
+    // The last of the list is imprecise; the highest seq is a good one that does not fit.
+    const fixes = anchored(2, 2, "jump");
+    expect(noteFor(fixes)).toMatchObject({ kind: "jumpy" });
+    expect(noteFor([...fixes].reverse())).toMatchObject({ kind: "jumpy" });
+    expect(noteFor([fixes[3]!, fixes[0]!, fixes[4]!, fixes[2]!, fixes[1]!])).toMatchObject({
+      kind: "jumpy",
+    });
+    const other = anchored(2, 2, "imprecise");
+    expect(noteFor([...other].reverse())).toMatchObject({ kind: "weak" });
+  });
+
+  test("a good position that fits (or the first that counts) is no reason for a note", () => {
+    // The phone is outside and delivering good positions: imprecise ones before, nothing rejected
+    // for its place. The next position that counts makes a distance.
+    const fixes = coldStart(12, 1, false);
     const analysis = analyseTrack(fixes);
-    expect(analysis.accepted).toBe(1);
-    expect(analysis.skippedAccuracy).toBe(bad);
-    expect(analysis.skippedSpeed).toBe(jumps);
-    expect(noteFor(fixes)).toEqual(expected);
-  });
-
-  test("the kind is the more common reason, the number is every position left out", () => {
-    expect(noteFor(anchored(4, 3))).toMatchObject({ kind: "weak", dropped: 7, stored: 8 });
-    expect(noteFor(anchored(3, 4))).toMatchObject({ kind: "jumpy", dropped: 7, stored: 8 });
-  });
-
-  test("the order of the dropped positions does not change the kind", () => {
-    // The imprecise ones first, then the jumps.
-    const reordered = sequence([
-      fix(0, 0, 0, 5),
-      fix(0, 0, 0, 150),
-      fix(0, 0, 0, 150),
-      fix(0, 0, FAR_M, 5),
-      fix(0, 0, FAR_M, 5),
-      fix(0, 0, FAR_M, 5),
+    expect([analysis.accepted, analysis.skippedAccuracy, analysis.skippedSpeed]).toEqual([
+      1, 12, 0,
     ]);
-    const analysis = analyseTrack(reordered);
-    expect([analysis.accepted, analysis.skippedAccuracy, analysis.skippedSpeed]).toEqual([1, 2, 3]);
-    expect(noteFor(reordered)).toEqual({ kind: "jumpy", dropped: 5, stored: 6 });
+    expect(noteForLongTrack(fixes)).toBeNull();
+    // The same with a first fix that has no radius at all.
+    const unknown = coldStart(12, 1, false).map((f, i, all) =>
+      i === all.length - 1 ? { ...f, accuracyM: null } : f,
+    );
+    expect(analyseTrack(unknown).accepted).toBe(1);
+    expect(noteForLongTrack(unknown)).toBeNull();
+  });
+});
+
+describe("a phone that starts indoors or with a wrong first position, position by position", () => {
+  test("a wrong first position (L37), then imprecise positions, then good ones: weak, then jumpy at once", () => {
+    const fixes = coldStart(12, 8, true);
+    // 7 stored and 30 s at t = 30 s: weak. The first good position (t = 65 s) is rejected for its
+    // place, and from then on the note is the other one.
+    expect(transitions(fixes)).toEqual([
+      [30, "weak"],
+      [65, "jumpy"],
+    ]);
+  });
+
+  test("the counters are still in favour of weak when it is already jumpy", () => {
+    // At t = 95 s: 12 positions rejected for their accuracy, 6 for their place. The old rule (the
+    // larger counter) said weak here, for another 30 s, to a phone that was outside.
+    const fixes = coldStart(12, 6, true);
+    const analysis = analyseTrack(fixes);
+    expect(analysis.skippedAccuracy).toBeGreaterThan(analysis.skippedSpeed);
+    expect(noteFor(fixes)).toEqual({ kind: "jumpy", dropped: 18, stored: 19 });
+  });
+
+  test("imprecise positions, then good ones at the right place: weak, then nothing at the first good one", () => {
+    // The first stored position is at t = 5 s here, so 30 s of positions are there at t = 35 s.
+    expect(transitions(coldStart(12, 4, false))).toEqual([
+      [35, "weak"],
+      [65, "none"],
+    ]);
+  });
+
+  test("a good run, then positions that do not fit, then indoors, then outside again: both ways", () => {
+    // A good first position; a far-off position (20 s), another (40 s): jumpy; an imprecise one
+    // (60 s): weak; a far-off one again (80 s): jumpy; an imprecise one again (100 s): weak.
+    const fixes = sequence([
+      fix(0, 0, 0, 5),
+      fix(0, 0, FAR_M, 5),
+      fix(0, 0, FAR_M, 5),
+      fix(0, 0, 0, 150),
+      fix(0, 0, FAR_M, 5),
+      fix(0, 0, 0, 150),
+    ]);
+    expect(transitions(fixes)).toEqual([
+      [40, "jumpy"],
+      [60, "weak"],
+      [80, "jumpy"],
+      [100, "weak"],
+    ]);
   });
 });
 
 describe("the accuracy of the newest position", () => {
-  const analysis = analyseTrack(indoor(4));
+  const imprecise = analyseTrack(indoor(4));
+  const jumps = analyseTrack(anchored(0, 3, "jump"));
+  /** Four positions that were all too imprecise, the newest with this radius. */
   const weakWith = (newestAccuracyM: number | null | undefined) =>
-    signalNote({ analysis, stored: 4, spanMs: MIN_SPAN_MS, newestAccuracyM });
+    signalNote({ analysis: imprecise, stored: 4, spanMs: MIN_SPAN_MS, newestAccuracyM });
+  /** Three positions that do not fit the anchor, the newest with this radius. */
+  const jumpyWith = (newestAccuracyM: number | null | undefined) =>
+    signalNote({ analysis: jumps, stored: 4, spanMs: MIN_SPAN_MS, newestAccuracyM });
 
-  test("is given in whole metres", () => {
-    expect(weakWith(150)).toMatchObject({ accuracyM: 150 });
+  test("over the limit of the rule: weak, in whole metres", () => {
+    expect(weakWith(150)).toMatchObject({ kind: "weak", accuracyM: 150 });
     expect(weakWith(150.4)).toMatchObject({ accuracyM: 150 });
     expect(weakWith(150.5)).toMatchObject({ accuracyM: 151 });
     expect(weakWith(1234.6)).toMatchObject({ accuracyM: 1235 });
   });
 
-  test("is left out when it is not known", () => {
-    expect(weakWith(null)).toEqual({ kind: "weak", dropped: 4, stored: 4, accuracyM: null });
-    expect(weakWith(undefined)).toEqual({ kind: "weak", dropped: 4, stored: 4, accuracyM: null });
-    expect(weakWith(Number.NaN)).toMatchObject({ accuracyM: null });
-    expect(weakWith(Number.POSITIVE_INFINITY)).toMatchObject({ accuracyM: null });
-  });
-
-  test("is left out when it is zero or negative (CoreLocation: not valid)", () => {
-    expect(weakWith(0)).toMatchObject({ accuracyM: null });
-    expect(weakWith(-1)).toMatchObject({ accuracyM: null });
-    expect(weakWith(-150)).toMatchObject({ accuracyM: null });
-  });
-
-  test("is left out when the newest position is not itself over the limit the rule drops at", () => {
-    // 100 m is still accepted by the rule; "within 20 m" beside "imprecise" would contradict it.
-    expect(weakWith(MAX_ACCURACY_M)).toMatchObject({ accuracyM: null });
-    expect(weakWith(99.9)).toMatchObject({ accuracyM: null });
-    expect(weakWith(20)).toMatchObject({ accuracyM: null });
-    expect(weakWith(MAX_ACCURACY_M + 0.01)).toMatchObject({ accuracyM: MAX_ACCURACY_M });
+  test("the limit is the rule's: at the limit a position counts, over it does not", () => {
+    expect(weakWith(MAX_ACCURACY_M + 0.01)).toEqual({
+      kind: "weak",
+      dropped: 4,
+      stored: 4,
+      accuracyM: MAX_ACCURACY_M,
+    });
     expect(weakWith(MAX_ACCURACY_M + 1)).toMatchObject({ accuracyM: MAX_ACCURACY_M + 1 });
+    // At the limit and below, the newest position is a good one: no weak note, and with nothing
+    // dropped for its place no note at all.
+    expect(weakWith(MAX_ACCURACY_M)).toBeNull();
+    expect(weakWith(99.9)).toBeNull();
+    expect(weakWith(20)).toBeNull();
+    // With positions that do not fit, the same radii give the other note.
+    expect(jumpyWith(MAX_ACCURACY_M)).toEqual({ kind: "jumpy", dropped: 3, stored: 4 });
+    expect(jumpyWith(99.9)).toMatchObject({ kind: "jumpy" });
+    expect(jumpyWith(MAX_ACCURACY_M + 0.01)).toMatchObject({ kind: "weak" });
   });
 
-  test("the limit is the one of the rule: positions at the limit count, positions over it do not", () => {
+  test("the limit is the one of the rule: three positions at the limit count, over it do not", () => {
     // If the rule moved, the note would follow it, because the counters come from the rule.
     expect(noteForLongTrack(standing(3, MAX_ACCURACY_M))).toBeNull();
     expect(noteForLongTrack(standing(3, MAX_ACCURACY_M + 0.01))).toEqual({
@@ -352,17 +504,41 @@ describe("the accuracy of the newest position", () => {
     });
   });
 
+  test("not known: not over the limit, so the other positions decide", () => {
+    for (const unknown of [null, undefined, Number.NaN]) {
+      expect(weakWith(unknown)).toBeNull();
+      expect(jumpyWith(unknown)).toEqual({ kind: "jumpy", dropped: 3, stored: 4 });
+    }
+  });
+
+  test("zero or negative (CoreLocation: not valid): not over the limit either", () => {
+    for (const radius of [0, -1, -150, Number.NEGATIVE_INFINITY]) {
+      expect(weakWith(radius)).toBeNull();
+      expect(jumpyWith(radius)).toMatchObject({ kind: "jumpy" });
+    }
+  });
+
+  test("a radius that is not a finite number but is over the limit: weak, without a radius to name", () => {
+    expect(weakWith(Number.POSITIVE_INFINITY)).toEqual({
+      kind: "weak",
+      dropped: 4,
+      stored: 4,
+      accuracyM: null,
+    });
+  });
+
   test("a jumpy note carries no radius", () => {
     const jumpy = signalNote({
       analysis: analyseTrack(farFirst(5)),
       stored: 6,
       spanMs: MIN_SPAN_MS,
-      newestAccuracyM: 500,
+      newestAccuracyM: 6,
     });
     expect(jumpy).toEqual({ kind: "jumpy", dropped: 5, stored: 6 });
+    expect(jumpy).not.toHaveProperty("accuracyM");
   });
 
-  test("a newest position without a radius, in a trip that is mostly imprecise", () => {
+  test("a newest position without a radius, among imprecise ones and one that does not fit", () => {
     const fixes = sequence([
       fix(0, 0, 0, 5),
       fix(0, 0, 0, 150),
@@ -371,7 +547,16 @@ describe("the accuracy of the newest position", () => {
     ]);
     const counted = analyseTrack(fixes);
     expect([counted.accepted, counted.skippedAccuracy, counted.skippedSpeed]).toEqual([1, 2, 1]);
-    expect(noteFor(fixes)).toEqual({ kind: "weak", dropped: 3, stored: 4, accuracyM: null });
+    // The newest has no radius: it is not imprecise, and one position was dropped for its place.
+    expect(noteFor(fixes)).toEqual({ kind: "jumpy", dropped: 3, stored: 4 });
+    // The same positions with an imprecise newest one.
+    const imp = sequence([
+      fix(0, 0, 0, 5),
+      fix(0, 0, FAR_M, 5),
+      fix(0, 0, 0, 150),
+      fix(0, 0, 0, 150),
+    ]);
+    expect(noteFor(imp)).toEqual({ kind: "weak", dropped: 3, stored: 4, accuracyM: 150 });
   });
 });
 
@@ -421,6 +606,14 @@ describe("what the function does not do", () => {
     const input = { analysis, spanMs: MIN_SPAN_MS };
     expect(signalNote({ ...input, stored: 3, newestAccuracyM: 8 })).toBeNull();
     expect(signalNote({ ...input, stored: 20_000, newestAccuracyM: 150 })).toBeNull();
+  });
+
+  test("the newest position is good and none was dropped for its place: nothing, however many were imprecise", () => {
+    const input = { analysis: analyseTrack(indoor(40)), stored: 41, spanMs: 3_600_000 };
+    expect(signalNote({ ...input, newestAccuracyM: 20 })).toBeNull();
+    expect(signalNote({ ...input, newestAccuracyM: MAX_ACCURACY_M })).toBeNull();
+    expect(signalNote({ ...input, newestAccuracyM: null })).toBeNull();
+    expect(signalNote({ ...input, newestAccuracyM: 101 })).toMatchObject({ kind: "weak" });
   });
 
   test("counters that are not numbers say nothing", () => {
