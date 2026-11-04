@@ -16,6 +16,7 @@ use tower::ServiceExt;
 
 mod door;
 mod hardening;
+mod history;
 mod pinned;
 mod recheck;
 mod rules;
@@ -378,11 +379,25 @@ pub(crate) fn fixture_sync(
     bytes: Option<Arc<MemoryBytes>>,
     scratch: Option<obop_storage::testing::TestDb>,
 ) -> Fx {
+    fixture_sync_with(store, bytes, scratch, &Bundled.fetch("sign").unwrap())
+}
+
+/// As `fixture_sync`, with the text of the `sign` package given: an instance that still has an
+/// older version of it (the order of a deploy: the new binary first, the package later).
+pub(crate) fn fixture_sync_with(
+    store: Store,
+    bytes: Option<Arc<MemoryBytes>>,
+    scratch: Option<obop_storage::testing::TestDb>,
+    sign: &str,
+) -> Fx {
     let app = App::with_store(store);
     let auth = Arc::new(Auth::with_test_params(app.store.backend()));
-    for id in ["documents", "sign"] {
+    for (id, text) in [
+        ("documents", Bundled.fetch("documents").unwrap()),
+        ("sign", sign.to_string()),
+    ] {
         app.installer
-            .install(&Bundled.fetch(id).unwrap(), "marketplace", "test")
+            .install(&text, "marketplace", "test")
             .unwrap_or_else(|e| panic!("{id}: {e}"));
     }
     for (name, groups) in PEOPLE {
