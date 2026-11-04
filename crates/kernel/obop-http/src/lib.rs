@@ -116,10 +116,16 @@ impl HttpState {
         })
     }
 
-    /// How many lines this server has written about a post to the signer door that was refused
-    /// for its origin: at most one a minute, however many were refused (for tests and metrics).
-    pub fn sign_origin_lines(&self) -> u64 {
-        self.sign_origin_log.written()
+    /// For tests: replace the clock (seconds) and the sink of the line this server writes about a
+    /// post to the signer door that was refused for its origin (at most one every sixty seconds
+    /// of that clock, D92). False when it was set before. The default is the time since the server
+    /// started on a monotonic clock, and standard error.
+    pub fn set_sign_origin_log(
+        &self,
+        clock: impl Fn() -> u64 + Send + Sync + 'static,
+        sink: impl Fn(&str) + Send + Sync + 'static,
+    ) -> bool {
+        self.sign_origin_log.set_hooks(clock, sink)
     }
 
     /// Why a limited session is refused: it owes a new password (an administrator reset it) or

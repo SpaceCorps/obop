@@ -179,6 +179,33 @@ impl Fx {
         send(&self.router, b.body(Body::from(body)).unwrap()).await
     }
 
+    /// As `post`, with the browser string as these bytes (which need not be text).
+    pub async fn post_with_agent(
+        &self,
+        path: &str,
+        from: &str,
+        pairs: &[(&str, &str)],
+        agent: &[u8],
+    ) -> Resp {
+        let body = pairs
+            .iter()
+            .map(|(k, v)| format!("{}={}", enc(k), enc(v)))
+            .collect::<Vec<_>>()
+            .join("&");
+        let req = Request::post(path)
+            .header("host", HOST)
+            .header("origin", ORIGIN)
+            .header("content-type", "application/x-www-form-urlencoded")
+            .header("x-forwarded-for", from)
+            .header(
+                "user-agent",
+                axum::http::HeaderValue::from_bytes(agent).unwrap(),
+            )
+            .body(Body::from(body))
+            .unwrap();
+        send(&self.router, req).await
+    }
+
     pub fn service(&self) -> Arc<obop_commands::SignService> {
         self.app.dispatcher.sign_service().expect("sign service")
     }

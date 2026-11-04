@@ -4,6 +4,8 @@
 use super::*;
 use obop_commands::sign::digest_of_request;
 use obop_storage::blob::{BlobBytes, NewBlob};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 
 const HOUR: i64 = 3_600_000_000;
 const DAY: i64 = 24 * HOUR;
@@ -714,10 +716,9 @@ async fn a_name_and_a_user_agent_are_cleaned_before_they_are_kept() {
         "{detail:?}"
     );
 
-    // A browser string with a byte that is not ASCII (here a character that reorders text) cannot
-    // be read as text by the HTTP layer (`HeaderValue::to_str`): the evidence then holds no
-    // browser at all, and not the part before the character. (The cleaning of a string that did
-    // get through is the first half of this test.)
+    // A browser string with a byte that is not ASCII is read lossily, like the forwarded lines (it
+    // used to be dropped whole, and the evidence then held no browser at all). Here a character
+    // that reorders text, which the cleaning takes out like it does from the name above.
     let (f, _, path, _) = sent().await;
     let r = f
         .post_with(
@@ -735,7 +736,37 @@ async fn a_name_and_a_user_agent_are_cleaned_before_they_are_kept() {
         .as_str()
         .unwrap()
         .to_string();
-    assert!(agent.is_empty(), "{agent:?}");
+    assert_eq!(agent, "AgentOne (made up)");
+
+    // A byte that is not UTF-8 at all (an accented letter of a Latin-1 string) is recorded as the
+    // replacement character, and the browser is still named.
+    let (f, _, path, _) = sent().await;
+    let r = f
+        .post_with_agent(
+            &path,
+            &ip(66),
+            &good_form(&f, "Jane Test"),
+            b"Mozilla/5.0 (M\xfcller; Latin-1)",
+        )
+        .await;
+    assert_eq!(r.status, 303, "{}", r.text());
+    let agent = f.record("sign_request", &f.req)["signer_user_agent"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert_eq!(agent, "Mozilla/5.0 (M\u{fffd}ller; Latin-1)");
+    // A string of 600 bytes that are not text is cut to 300 characters, not refused.
+    let (f, _, path, _) = sent().await;
+    let r = f
+        .post_with_agent(&path, &ip(67), &good_form(&f, "Jane Test"), &[0xe9; 600])
+        .await;
+    assert_eq!(r.status, 303, "{}", r.text());
+    let agent = f.record("sign_request", &f.req)["signer_user_agent"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert_eq!(agent.chars().count(), 300);
+    assert!(agent.chars().all(|c| c == '\u{fffd}'), "{agent:?}");
 }
 
 #[tokio::test]
@@ -822,25 +853,55 @@ async fn posts_from_another_site_cost_the_signer_nothing_and_the_log_one_line_a_
     // Anybody can send a post with a foreign origin without a link. It is refused before any
     // limit of the door is touched (so a flood of them cannot use up the budget of a signer
     // behind the same address), and it writes one line of the log a minute, not one a post.
+    // The handler runs for real; the clock of the line is set by hand and its sink keeps what it
+    // was given, with the second it was given at.
     let (f, _, path, _) = sent().await;
+    let now = Arc::new(AtomicU64::new(0));
+    let lines = Arc::new(Mutex::new(Vec::<(u64, String)>::new()));
+    let (c, n, l) = (now.clone(), now.clone(), lines.clone());
+    assert!(f.state.set_sign_origin_log(
+        move || c.load(Ordering::Relaxed),
+        move |line| {
+            l.lock()
+                .unwrap()
+                .push((n.load(Ordering::Relaxed), line.to_string()))
+        }
+    ));
+    let line = format!("sign: a post was refused because its origin is not {ORIGIN}");
     let from = ip(69);
     let form = good_form(&f, "Jane Test");
-    for i in 0..30 {
-        let r = f
-            .post_with(&path, &from, &form, &[("origin", "http://evil.test")])
-            .await;
-        assert_eq!(r.status, 403, "post {i}");
-    }
+    let burst = |t: u64, times: usize| {
+        now.store(t, Ordering::Relaxed);
+        let (f, path, from, form) = (&f, &path, &from, &form);
+        async move {
+            for i in 0..times {
+                let r = f
+                    .post_with(path, from, form, &[("origin", "http://evil.test")])
+                    .await;
+                assert_eq!(r.status, 403, "post {i} at {t}");
+            }
+        }
+    };
+    let seen = || lines.lock().unwrap().clone();
+    burst(0, 30).await;
     assert_eq!(
-        f.state.sign_origin_lines(),
-        1,
-        "thirty refused posts in a moment are one line of the log"
+        seen(),
+        [(0, line.clone())],
+        "thirty refused posts in a moment are one line, with the base the server expected"
+    );
+    burst(59, 30).await;
+    assert_eq!(seen().len(), 1, "nor one before the minute is over");
+    burst(60, 30).await;
+    assert_eq!(
+        seen(),
+        [(0, line.clone()), (60, line.clone())],
+        "then one more"
     );
     // Thirty posts is three times the ten a source may make: none of them was counted.
     let r = f.post(&path, &from, &form).await;
     assert_eq!(r.status, 303, "{}", r.text());
     assert_eq!(f.record("sign_request", &f.req)["state"], "signed");
-    assert_eq!(f.state.sign_origin_lines(), 1);
+    assert_eq!(seen().len(), 2, "a post that is allowed writes no line");
 }
 
 #[tokio::test]

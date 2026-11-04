@@ -80,37 +80,83 @@ fn lang_for(s: &HttpState, parts: &Parts, form_lang: Option<&str>) -> &'static s
     )
 }
 
+/// The seconds between two lines of the log about a refused origin.
+const ORIGIN_LOG_EVERY: u64 = 60;
+
+/// The value of `OriginLog::last` before the first line: no time is "never", the clock may read 0.
+const NEVER: u64 = u64::MAX;
+
+/// What the log of a refused origin reads and writes: the seconds since the server started (a
+/// monotonic clock, so that a step of the wall clock neither silences the line nor floods it) and
+/// the place a line goes (standard error). A test replaces both.
+struct OriginHooks {
+    clock: Box<dyn Fn() -> u64 + Send + Sync>,
+    sink: Box<dyn Fn(&str) + Send + Sync>,
+}
+
 /// The line of the log about a refused origin, written at most once a minute for the whole
 /// process: anybody can cause it without a link, so it must not grow with the number of posts.
-/// One per server (`HttpState`), not a global, so that a test can count the lines it caused.
-#[derive(Default)]
+/// One per server (`HttpState`), not a global, so that a test can capture the lines it caused.
 pub(crate) struct OriginLog {
-    /// When the line was last written (seconds since the epoch; 0 for never).
+    /// When the process started, for the default clock.
+    started: std::time::Instant,
+    /// When the line was last written, on the clock (`NEVER` before the first).
     last: AtomicU64,
-    /// How many lines this server has written.
-    written: AtomicU64,
+    /// Set by a test before the first post.
+    hooks: std::sync::OnceLock<OriginHooks>,
+}
+
+impl Default for OriginLog {
+    fn default() -> Self {
+        Self {
+            started: std::time::Instant::now(),
+            last: AtomicU64::new(NEVER),
+            hooks: std::sync::OnceLock::new(),
+        }
+    }
 }
 
 impl OriginLog {
-    /// Write the line when one is due.
-    fn note(&self, now: u64, base: &str) {
-        if log_due(&self.last, now, 60) {
-            self.written.fetch_add(1, Ordering::Relaxed);
-            eprintln!("sign: a post was refused because its origin is not {base}");
-        }
+    /// Replace the clock (seconds, ought to be monotonic) and the sink of the lines; false when
+    /// the log was already set. For tests: the handler is then run for real and the lines it
+    /// wrote and the second each was written at are read back.
+    pub(crate) fn set_hooks(
+        &self,
+        clock: impl Fn() -> u64 + Send + Sync + 'static,
+        sink: impl Fn(&str) + Send + Sync + 'static,
+    ) -> bool {
+        self.hooks
+            .set(OriginHooks {
+                clock: Box::new(clock),
+                sink: Box::new(sink),
+            })
+            .is_ok()
     }
 
-    /// How many lines were written.
-    pub(crate) fn written(&self) -> u64 {
-        self.written.load(Ordering::Relaxed)
+    /// Write the line when one is due.
+    pub(crate) fn note(&self, base: &str) {
+        let now = match self.hooks.get() {
+            Some(h) => (h.clock)(),
+            None => self.started.elapsed().as_secs(),
+        };
+        if log_due(&self.last, now, ORIGIN_LOG_EVERY) {
+            let line = format!("sign: a post was refused because its origin is not {base}");
+            match self.hooks.get() {
+                Some(h) => (h.sink)(&line),
+                None => eprintln!("{line}"),
+            }
+        }
     }
 }
 
 /// Whether a line of the log is due: at most one in every `every` seconds, whoever asks and
-/// however many ask at once.
+/// however many ask at once. The first is always due, whatever the clock reads (`NEVER` is above
+/// every reading). A clock that reads less than at the last line (a test clock; the default one
+/// cannot) starts the minute again, so that a diagnostic is never held back for as long as the
+/// clock was ahead.
 fn log_due(last: &AtomicU64, now: u64, every: u64) -> bool {
     let before = last.load(Ordering::Relaxed);
-    (before == 0 || now >= before.saturating_add(every))
+    (now < before || now >= before.saturating_add(every))
         && last
             .compare_exchange(before, now, Ordering::Relaxed, Ordering::Relaxed)
             .is_ok()
@@ -133,12 +179,16 @@ fn forwarded_lines(parts: &Parts, n: usize) -> String {
 }
 
 fn client(s: &HttpState, parts: &Parts) -> Client {
+    // The browser's string is read lossily, like the forwarded lines: a byte that is not text
+    // (or an accented letter in a Latin-1 string) is recorded as U+FFFD, not as an empty browser.
     let cut = |v: Option<&HeaderValue>, n: usize| {
-        v.and_then(|v| v.to_str().ok())
-            .unwrap_or("")
-            .chars()
-            .take(n)
-            .collect::<String>()
+        v.map(|v| {
+            String::from_utf8_lossy(v.as_bytes())
+                .chars()
+                .take(n)
+                .collect()
+        })
+        .unwrap_or_default()
     };
     Client {
         addr: client_ip(s, parts),
@@ -262,10 +312,7 @@ pub(crate) async fn submit(
             // every post look foreign (docs/SIGN.md: set OBOP_PUBLIC_URL). The log says so, once
             // a minute: anybody can cause this without a link, and the refusal is made before
             // any limit of the door.
-            let now = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map_or(0, |d| d.as_secs());
-            s.sign_origin_log.note(now, &base);
+            s.sign_origin_log.note(&base);
             return page_response(StatusCode::FORBIDDEN, sign_page::message(lang, "forbidden"));
         }
         let ct = parts
@@ -374,16 +421,84 @@ mod tests {
         );
     }
 
+    /// A log whose clock is set by hand and whose sink keeps what it was given with the second it
+    /// was written at.
+    fn hand_log() -> (
+        OriginLog,
+        Arc<AtomicU64>,
+        Arc<std::sync::Mutex<Vec<(u64, String)>>>,
+    ) {
+        let now = Arc::new(AtomicU64::new(0));
+        let lines = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let log = OriginLog::default();
+        let (c, n, l) = (now.clone(), now.clone(), lines.clone());
+        assert!(log.set_hooks(
+            move || c.load(Ordering::Relaxed),
+            move |line| {
+                l.lock()
+                    .unwrap()
+                    .push((n.load(Ordering::Relaxed), line.to_string()))
+            }
+        ));
+        (log, now, lines)
+    }
+
     #[test]
-    fn a_line_of_the_log_about_a_refused_origin_is_due_once_a_minute() {
-        let last = AtomicU64::new(0);
-        assert!(log_due(&last, 1_000, 60), "the first is due");
-        assert!(!log_due(&last, 1_000, 60), "not twice in one second");
-        assert!(!log_due(&last, 1_059, 60), "nor before the minute is over");
-        assert!(log_due(&last, 1_060, 60), "then again");
-        assert!(!log_due(&last, 1_061, 60));
-        // A clock that goes back does not open the gate.
-        assert!(!log_due(&last, 500, 60));
+    fn the_line_about_a_refused_origin_is_written_once_every_sixty_seconds_of_the_clock() {
+        let (log, now, lines) = hand_log();
+        let at = |t: u64, times: usize| {
+            now.store(t, Ordering::Relaxed);
+            for _ in 0..times {
+                log.note("https://obop.test");
+            }
+            lines
+                .lock()
+                .unwrap()
+                .iter()
+                .map(|(t, _)| *t)
+                .collect::<Vec<_>>()
+        };
+        // The first is due when the clock reads 0, and a burst is one line.
+        assert_eq!(at(0, 30), [0]);
+        assert_eq!(at(1, 30), [0]);
+        assert_eq!(at(59, 30), [0]);
+        assert_eq!(at(60, 30), [0, 60]);
+        assert_eq!(at(61, 1), [0, 60]);
+        assert_eq!(at(119, 1), [0, 60]);
+        assert_eq!(at(120, 1), [0, 60, 120]);
+        // The line says what the operator has to do something about.
+        assert_eq!(
+            lines.lock().unwrap()[0].1,
+            "sign: a post was refused because its origin is not https://obop.test"
+        );
+        // A clock that reads less than at the last line (a step back) starts the minute again,
+        // and is not silent for as long as the clock was ahead.
+        assert_eq!(at(10, 3), [0, 60, 120, 10]);
+        assert_eq!(at(69, 3), [0, 60, 120, 10]);
+        assert_eq!(at(70, 3), [0, 60, 120, 10, 70]);
+        // The hooks are set once.
+        assert!(!log.set_hooks(|| 0, |_| {}));
+    }
+
+    #[test]
+    fn the_first_line_is_due_whatever_the_clock_reads_and_two_at_once_are_one() {
+        let last = AtomicU64::new(NEVER);
+        assert!(log_due(&last, u64::MAX - 1, 60));
+        let last = AtomicU64::new(NEVER);
+        assert!(log_due(&last, 0, 60));
+        assert!(!log_due(&last, 0, 60));
+        // Two threads that ask at the same second: one line.
+        let last = Arc::new(AtomicU64::new(NEVER));
+        let due: usize = (0..8)
+            .map(|_| {
+                let l = last.clone();
+                std::thread::spawn(move || usize::from(log_due(&l, 5, 60)))
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+            .map(|h| h.join().unwrap())
+            .sum();
+        assert_eq!(due, 1);
     }
 
     #[test]
