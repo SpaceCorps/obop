@@ -61,9 +61,10 @@ pub(crate) fn lex(src: &str) -> Lexed {
                 blank(&mut code, i, j);
                 i = j;
             }
+            // `r"..."`, `br"..."` (bytes) and `cr"..."` (a C string): no escape inside.
             b'r' if (i == 0
                 || !is_ident(b[i - 1])
-                || (b[i - 1] == b'b' && (i == 1 || !is_ident(b[i - 2]))))
+                || (matches!(b[i - 1], b'b' | b'c') && (i == 1 || !is_ident(b[i - 2]))))
                 && raw_string(b, i).is_some() =>
             {
                 let (open, close, hashes) = raw_string(b, i).unwrap();
@@ -421,6 +422,23 @@ pub(crate) fn strip_test_items(lexed: &mut Lexed) -> Vec<String> {
     out_of_line
 }
 
+/// Whether the file is test code as a whole: one of the inner attributes at its very top
+/// (`#![cfg(test)]`, `#![cfg(all(test, ..))]`, after any other inner attributes; comments are
+/// blank already) holds in a test build only. An inner attribute anywhere else belongs to the
+/// module, function or macro it is in, not to the file.
+pub(crate) fn is_test_file(code: &[u8]) -> bool {
+    let mut j = skip_ws(code, 0);
+    while code[j..].starts_with(b"#![") {
+        let end = after_bracket(code, j + 2);
+        let attr = String::from_utf8_lossy(&code[j + 3..end]).into_owned();
+        if is_test_cfg(&format!("#[{attr}")) {
+            return true;
+        }
+        j = skip_ws(code, end);
+    }
+    false
+}
+
 /// The name of the function whose body contains `at`, the innermost one.
 pub(crate) fn enclosing_fn(code: &[u8], at: usize) -> Option<String> {
     let mut best: Option<(usize, String)> = None;
@@ -506,7 +524,7 @@ pub(crate) fn non_test(files: &BTreeMap<String, String>) -> BTreeMap<String, Lex
     for (path, src) in files {
         let mut l = lex(src);
         // `#![cfg(test)]` at the top makes the whole file test code.
-        let whole = String::from_utf8_lossy(&l.code).contains("#![cfg(test)]");
+        let whole = is_test_file(&l.code);
         let names = strip_test_items(&mut l);
         let (dir, file) = path.rsplit_once('/').unwrap_or(("", path));
         let child_dir = if matches!(file, "lib.rs" | "main.rs" | "mod.rs") {

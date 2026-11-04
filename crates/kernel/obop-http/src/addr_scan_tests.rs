@@ -13,8 +13,9 @@
 //!   list ([`HEADER_NAMES`]: `x-forwarded-for`, `forwarded`, `x-real-ip`, `cf-connecting-ip`,
 //!   `true-client-ip`, `x-client-ip` and the platform headers listed there, in any case), or that
 //!   starts with `x-forwarded` or `x-original-forwarded` without being `x-forwarded-proto` or
-//!   `x-forwarded-host` (so `starts_with("x-forwarded")`, a `concat!` of such a name and an
-//!   escaped spelling are found);
+//!   `x-forwarded-host` (so `starts_with("x-forwarded")` and a `concat!` whose first piece
+//!   starts that way are found, and so is a name with an escape after that prefix,
+//!   `"x-forwarded-\x66or"`: a literal is read as written, escapes are not decoded);
 //! - the identifiers `ConnectInfo`, `peer_addr`, `remote_addr` and the constants of those headers
 //!   (`X_FORWARDED_FOR`, ..., and `FORWARDED` as `header::FORWARDED`, in a `use` of the `header`
 //!   module, or bare where the file glob-imports `header::*`).
@@ -26,13 +27,32 @@
 //! own.** It is reviewed against D92 (the address in the evidence and in every limiter is
 //! `addr::client_address` and nothing else), not fixed to make this test pass.
 //!
-//! **What it does not catch.** A header name that is built at run time (`format!("x-{}", ..)`) or
-//! with `concat!` from pieces that do not start with `x-forwarded` (`concat!("x-real", "-ip")`), a
-//! platform header that is not on the list, one read through a constant in another crate, an
-//! address taken from a socket another way (a `TcpStream` the code accepted itself), and Rust
-//! outside `crates/`. `x-forwarded-proto` and `x-forwarded-host` are allowed (they decide the
-//! scheme and host of a page, not the client). It is a textual scan, not a parser; it makes a
-//! second reader visible, it does not stop one who works around it.
+//! **What it does not see.** It is a textual scan, not a parser: it makes a second reader
+//! visible, it does not stop one who works around it (docs/ISSUES.md O6 and D92 list the same).
+//! - Names: a header name built at run time (`format!("x-{}", ..)`) or with `concat!` from pieces
+//!   that do not start with `x-forwarded` (`concat!("x-real", "-ip")`); a platform header that is
+//!   not on the list; a name inside longer text (`"x-real-ip,cf-connecting-ip"`); a name spelled
+//!   with an escape (`"x\x2dreal\x2dip"`, `"x-real-\u{69}p"`) or split by a `\`-newline
+//!   continuation: literals are not unescaped, so only a name whose escape comes after the
+//!   `x-forwarded` prefix is found; a header read for the code by a dependency (an extractor
+//!   crate leaves no name and no identifier here); `FORWARDED` through a glob other than
+//!   `header::*` (`header::{self, *}`, an alias of the module).
+//! - The stripping of test code: a production module in a directory named `tests` or `benches`
+//!   is left out as test code, and so is a module declared `#[cfg(test)] mod x;` beside a
+//!   `#[cfg(not(test))] mod x;`; `#[cfg(test)]` on a generic parameter with a default
+//!   (`<#[cfg(test)] const N: usize = 0>`) is taken for an item and blanks the item after it, and
+//!   the table of constructs does not count it.
+//! - What is not a `.rs` file under `crates/`: generated code, `include!` of another file, a
+//!   build script's output, a proc macro; Rust outside `crates/`; an address taken from a socket
+//!   another way (a `TcpStream` the code accepted itself); one read through a constant in another
+//!   crate.
+//! - The burden: a new `#[cfg(test)]` field, arm or statement in a file that is not in the table
+//!   of constructs, a block of more than 12 lines under one, and the rename of a function that
+//!   the injection test is anchored on (seven of them) each fail a test that someone then has to
+//!   read and change. That is the price of failing closed.
+//!
+//! `x-forwarded-proto` and `x-forwarded-host` are allowed (they decide the scheme and host of a
+//! page, not the client).
 
 use crate::src_scan::{enclosing_fn, line_of, non_test, read_tree, tree, words};
 use std::collections::BTreeMap;
@@ -486,7 +506,53 @@ fn a_cfg_that_is_also_true_in_a_production_build_is_code() {
 }
 
 #[test]
-fn the_whole_header_list_and_the_peer_are_found_in_any_spelling() {
+fn the_closed_lists_are_the_lists_written_here() {
+    // The test below walks the lists itself, so it cannot notice a name leave them; this one is
+    // the lists written out again (ISSUES O6 names several of the headers).
+    assert_eq!(
+        HEADER_NAMES,
+        [
+            "x-forwarded-for",
+            "forwarded",
+            "x-real-ip",
+            "cf-connecting-ip",
+            "cf-connecting-ipv6",
+            "true-client-ip",
+            "x-client-ip",
+            "x-cluster-client-ip",
+            "fastly-client-ip",
+            "fly-client-ip",
+            "do-connecting-ip",
+            "x-original-forwarded-for",
+            "client-ip",
+            "x-azure-clientip",
+            "x-azure-socketip",
+            "x-envoy-external-address",
+            "x-appengine-user-ip",
+            "x-proxyuser-ip",
+            "x-forwarded-client-cert",
+            "x-original-for",
+        ]
+    );
+    assert_eq!(
+        IDENTIFIERS,
+        [
+            "ConnectInfo",
+            "peer_addr",
+            "remote_addr",
+            "X_FORWARDED_FOR",
+            "X_REAL_IP",
+            "CF_CONNECTING_IP",
+            "TRUE_CLIENT_IP",
+            "X_CLIENT_IP",
+            "X_CLUSTER_CLIENT_IP",
+            "FASTLY_CLIENT_IP",
+        ]
+    );
+}
+
+#[test]
+fn the_whole_header_list_the_forwarded_prefix_and_the_peer_are_found() {
     let mut reads: Vec<String> = HEADER_NAMES
         .iter()
         .map(|n| format!("h.get(\"{n}\")"))
@@ -505,6 +571,7 @@ fn the_whole_header_list_and_the_peer_are_found_in_any_spelling() {
             // The compile-time and prefix spellings that start like a forwarding header.
             "h.get(concat!(\"x-forwarded-\", \"for\"))",
             "h.get(concat!(\"x-forwarded\", \"-for\"))",
+            // An escape after the prefix (literals are not unescaped: the prefix is what is found).
             "h.get(\"x-forwarded-\\x66or\")",
             "k.as_str().starts_with(\"x-forwarded\")",
             "h.get(\"x-forwarded-port\")",
@@ -625,6 +692,62 @@ fn a_module_declared_as_test_only_takes_its_files_and_the_modules_under_them_wit
     // A `;`-terminated test item directly before a production function.
     let src = "#[cfg(test)]\nuse a::b;\nfn late(h: &HeaderMap) { h.get(\"x-real-ip\"); }\n";
     assert_eq!(problems(&[("kernel/x/src/a.rs", src)], &[]).len(), 1);
+}
+
+#[test]
+fn an_inner_cfg_test_below_the_top_of_a_file_does_not_take_the_file_out() {
+    // `#![cfg(test)]` belongs to the module, function or macro it is in; only at the top of a
+    // file is it the file's. A reader in the rest of the file must still be found, and so must
+    // one in the files of the module directory under it.
+    let reader = "fn leak(h: &HeaderMap) { h.get(\"x-real-ip\"); }\n";
+    for (what, tail) in [
+        ("a module", "mod z { #![cfg(test)] fn t() {} }\n"),
+        ("a function", "fn other() { #![cfg(test)] let _ = 1; }\n"),
+        ("a macro", "macro_rules! m { () => { #![cfg(test)] }; }\n"),
+        (
+            "a test-only module",
+            "#[cfg(test)]\nmod z { #![cfg(test)] }\n",
+        ),
+    ] {
+        let src = format!("{reader}{tail}");
+        let files = [
+            ("kernel/x/src/oauth.rs", src.as_str()),
+            ("kernel/x/src/oauth/inner.rs", reader),
+        ];
+        let p = problems(&files, &[]);
+        assert_eq!(p.len(), 2, "{what}: {p:?}");
+    }
+    // At the top it is the file's, after the doc comment and after other inner attributes, and
+    // for the cfgs that are test-only; not for the ones that are also a production build.
+    for (cfg, whole) in [
+        ("test", true),
+        ("all(test, feature = \"x\")", true),
+        ("not(test)", false),
+        ("any(test, unix)", false),
+        ("feature = \"test\"", false),
+    ] {
+        let src = format!("//! docs\n#![allow(dead_code)]\n#![cfg({cfg})]\n{reader}");
+        let files = [
+            ("kernel/x/src/oauth.rs", src.as_str()),
+            ("kernel/x/src/oauth/inner.rs", reader),
+        ];
+        let p = problems(&files, &[]);
+        assert_eq!(p.len(), if whole { 0 } else { 2 }, "{cfg}: {p:?}");
+    }
+}
+
+#[test]
+fn a_raw_c_string_is_lexed_like_a_raw_string() {
+    // `cr"\"` has no escape and ends at its second quote. Read as an ordinary string it ran on,
+    // took the code after it for a string and the next string for code, and the reader below
+    // went out of sight.
+    for lit in [r#"cr"\""#, r##"cr#"\"#"##, r#"br"\""#, r#"r"\""#] {
+        let src = format!(
+            "fn a() {{ let _ = {lit}; }}\nfn late(h: &HeaderMap) {{ h.get(\"x-real-ip\"); }}\n"
+        );
+        let p = problems(&[("kernel/x/src/a.rs", &src)], &[]);
+        assert_eq!(p.len(), 1, "{lit}: {p:?}");
+    }
 }
 
 #[test]

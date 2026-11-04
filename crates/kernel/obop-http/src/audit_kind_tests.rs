@@ -17,11 +17,18 @@
 //!    longer needed (its kind is passed to a writer directly now, or is not listed) is a failure
 //!    too.
 //!
-//! **What it does not check.** The direction in (2) is strong for the kinds passed to a writer and
+//! **What it does not see.** The direction in (2) is strong for the kinds passed to a writer and
 //! weak for those in [`VIA`]: a `VIA` kind stays on the list as long as its literal stays in its
-//! file, whether or not anything still writes it. A kind built at run time in another way is not
-//! seen at all. A new function that wraps one of the writers must be added to [`WRITERS`]. It is
-//! a textual scan (`src_scan.rs`), not a parser.
+//! file, whether or not anything still writes it. In direction (1) a new kind is seen only when
+//! its literal is the whole of the argument at the place of a call to a function of [`WRITERS`]:
+//! a kind that reaches a writer through a constant, a variable, an `if` or a `match` arm, a
+//! `format!`, a turbofish call, a function alias or a wrapper that is not in [`WRITERS`] is not
+//! seen (those of [`VIA`] and [`BUILT`] are followed because someone listed them, a new one is
+//! not). A new function that wraps one of the writers must be added to [`WRITERS`]. Like the
+//! scan of the client address it reads only `.rs` files under `crates/`, and leaves out test
+//! directories as it leaves out test code (`src_scan.rs`: a production module in a directory
+//! named `tests` or `benches` is not read); it is a textual scan, not a parser, and it fails
+//! closed, so its price is a test that someone reads and edits (docs/ISSUES.md O6).
 
 use crate::src_scan::{Lexed, is_ident, line_of, non_test, read_tree, tree};
 use std::collections::{BTreeMap, BTreeSet};
@@ -71,7 +78,8 @@ const BUILT: [(&str, &str, &str); 2] = [
         "kernel/obop-http/src/drive.rs",
     ),
 ];
-/// The text the `format!` of [`BUILT`] has.
+/// The text the `format!` of [`BUILT`] has: the kind of the row is the base kind and what follows
+/// `{kind}` here.
 const BUILT_FORMAT: &str = "{kind}_failed";
 
 /// Kinds that reach a writer through a constant, a `match` arm or a variable, with the file that
@@ -131,9 +139,14 @@ fn unaccounted(
             let formatted = lexed
                 .get(*file)
                 .is_some_and(|l| has_literal(l, BUILT_FORMAT));
-            if !called || !formatted {
+            // The literal is the format of this row only when it adds what the row's kind adds
+            // to its base kind (`drive_create` and `_failed` make `drive_create_failed`).
+            let suffix = BUILT_FORMAT.strip_prefix("{kind}").unwrap_or(BUILT_FORMAT);
+            let makes_it = k.strip_suffix(suffix) == Some(*base);
+            if !called || !formatted || !makes_it {
                 out.push(format!(
-                    "{k}: BUILT says {file} passes {base} to a writer and builds {BUILT_FORMAT:?}                      (passes: {called}, builds: {formatted})"
+                    "{k}: BUILT says {file} passes {base} to a writer and builds {BUILT_FORMAT:?} \
+                     (passes: {called}, builds: {formatted}, that makes the kind: {makes_it})"
                 ));
             }
         } else {
@@ -152,9 +165,29 @@ fn unaccounted(
             out.push(format!(
                 "BUILT names {k}, which is not listed: drop the row"
             ));
+        } else if written.contains_key(*k) {
+            out.push(format!("{k} is passed to a writer now: drop its BUILT row"));
         }
     }
     out
+}
+
+/// The kinds the list names more than once.
+fn duplicates(list: &[String]) -> Vec<String> {
+    let mut seen = BTreeSet::new();
+    list.iter()
+        .filter(|k| !seen.insert(k.as_str()))
+        .cloned()
+        .collect()
+}
+
+/// The kinds the code writes that the list does not name, with where they are written.
+fn unlisted(list: &[String], written: &BTreeMap<String, Vec<String>>) -> Vec<String> {
+    written
+        .iter()
+        .filter(|(k, _)| !list.contains(k))
+        .map(|(k, at)| format!("{k} (written at {})", at.join(", ")))
+        .collect()
 }
 
 /// The argument ranges of the call whose `(` is at `open`.
@@ -267,10 +300,8 @@ fn the_kinds_the_code_writes_are_the_kinds_the_description_lists() {
     let list = listed(&lexed);
     let written = written_by(&lexed);
 
-    let mut seen = BTreeSet::new();
-    for k in &list {
-        assert!(seen.insert(k), "{k} is listed twice");
-    }
+    let twice = duplicates(&list);
+    assert!(twice.is_empty(), "listed twice: {twice:?}");
     // The scan found the writers it is meant to find (a scan that reads nothing finds no gap).
     for k in [
         "plan_lost",
@@ -293,11 +324,7 @@ fn the_kinds_the_code_writes_are_the_kinds_the_description_lists() {
     }
     assert!(written.len() > 40, "only {} kinds found", written.len());
 
-    let missing: Vec<String> = written
-        .iter()
-        .filter(|(k, _)| !list.contains(k))
-        .map(|(k, at)| format!("{k} (written at {})", at.join(", ")))
-        .collect();
+    let missing = unlisted(&list, &written);
     assert!(
         missing.is_empty(),
         "the code writes kinds that the description of security_event.kind (installer.rs) does \
@@ -307,10 +334,9 @@ fn the_kinds_the_code_writes_are_the_kinds_the_description_lists() {
     let gone = unaccounted(&list, &written, &lexed, &VIA, &BUILT);
     assert!(
         gone.is_empty(),
-        "the description lists kinds that no code writes any more, or a row of VIA or BUILT is          stale:
-{}",
-        gone.join("
-")
+        "the description lists kinds that no code writes any more, or a row of VIA or BUILT is \
+         stale:\n{}",
+        gone.join("\n")
     );
 }
 
@@ -323,6 +349,8 @@ fn a(db: &dyn Backend) {
     let op = event_op(1, "u", "alpha_three", "root", "d");
     obop_ops::audit_event(db, 1, "root", "alpha_four", "d");
     let _ = audit_row(1, "root", "alpha_five", "d");
+    // Six arguments: the kind is the fourth, not the second (that is the three-argument form).
+    record_event(db, "second_arg_not_a_kind", "u", "alpha_six", "root", "d");
 }
 fn b(&self) {
     self.audit("u", "beta_one", "d");
@@ -358,6 +386,7 @@ fn late(db: &dyn Backend) { record_event(db, 1, "u", "late_one", "root", "d"); }
         [
             "alpha_four",
             "alpha_one",
+            "alpha_six",
             "alpha_three",
             "alpha_two",
             "alpha_five",
@@ -381,6 +410,24 @@ fn late(db: &dyn Backend) { record_event(db, 1, "u", "late_one", "root", "d"); }
         r#"fn f(&self) { self.audit("s", "release_published", "a", "d"); }"#,
     )]);
     assert!(written_by(&non_test(&files)).is_empty());
+}
+
+#[test]
+fn a_kind_listed_twice_and_a_kind_written_and_not_listed_are_reported() {
+    let list = |names: &[&str]| names.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    assert!(duplicates(&list(&["a", "b", "c"])).is_empty());
+    assert_eq!(
+        duplicates(&list(&["a", "b", "a", "c", "b", "a"])),
+        ["a", "b", "a"]
+    );
+    let mut written: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    written.insert("a".into(), vec!["x.rs:1".into()]);
+    written.insert("b".into(), vec!["y.rs:2".into(), "z.rs:3".into()]);
+    assert!(unlisted(&list(&["a", "b"]), &written).is_empty());
+    assert_eq!(
+        unlisted(&list(&["a"]), &written),
+        ["b (written at y.rs:2, z.rs:3)"]
+    );
 }
 
 #[test]
@@ -449,4 +496,36 @@ fn a_listed_kind_that_only_a_string_somewhere_names_is_not_written() {
     let no_base = [("made_failed", "unmade", "kernel/x/src/made.rs")];
     assert_eq!(none(&list(&["made_failed"]), &[], &no_base).len(), 1);
     assert_eq!(none(&list(&[]), &[], &built).len(), 1);
+    // A literal in the file that is not the format of this row (the kind of the row is not its
+    // base and the text after `{kind}`): the row does not hold.
+    let other = [("made_other", "made", "kernel/x/src/made.rs")];
+    let got = none(&list(&["made_other"]), &[], &other);
+    assert_eq!(got.len(), 1, "{got:?}");
+    assert!(got[0].contains("that makes the kind: false"), "{got:?}");
+}
+
+#[test]
+fn a_built_row_for_a_kind_that_a_writer_gets_as_a_literal_is_stale() {
+    // The kind is passed to a writer directly (`direct.rs`); the row that says it is built is not
+    // needed any more, as a VIA row would not be.
+    let files = tree(&[
+        (
+            "kernel/x/src/made.rs",
+            r#"fn h(&self) { let _ = format!("{kind}_failed"); self.audit("u", "made", "d"); }"#,
+        ),
+        (
+            "kernel/x/src/direct.rs",
+            r#"fn d(&self) { self.audit("u", "made_failed", "d"); self.audit("u", "made", "d"); }"#,
+        ),
+    ]);
+    let lexed = non_test(&files);
+    let written = written_by(&lexed);
+    let list = vec!["made".to_string(), "made_failed".to_string()];
+    let built = [("made_failed", "made", "kernel/x/src/made.rs")];
+    let got = unaccounted(&list, &written, &lexed, &[], &built);
+    assert_eq!(
+        got,
+        ["made_failed is passed to a writer now: drop its BUILT row"]
+    );
+    assert!(unaccounted(&list, &written, &lexed, &[], &[]).is_empty());
 }
