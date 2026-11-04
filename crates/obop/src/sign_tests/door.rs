@@ -3,7 +3,7 @@
 
 use super::*;
 use obop_commands::sign::digest_of_request;
-use obop_storage::blob::BlobBytes;
+use obop_storage::blob::{BlobBytes, Blobs, NewBlob};
 
 const HOUR: i64 = 3_600_000_000;
 const DAY: i64 = 24 * HOUR;
@@ -457,6 +457,78 @@ async fn a_held_copy_that_is_another_file_than_the_hashed_one_is_not_shown_or_si
 }
 
 #[tokio::test]
+async fn a_file_that_is_not_what_its_id_says_or_is_too_large_is_not_sent_for_signature() {
+    // At send time the Document's file is read back and hashed: a store that was written behind
+    // our back must not give a request the hash of something else.
+    let f = fixture().await;
+    f.bytes
+        .as_ref()
+        .unwrap()
+        .put(&f.file, b"%PDF-1.4\n% somebody wrote here\n")
+        .unwrap();
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_request/send_document",
+            json!({"id": f.req}),
+        )
+        .await;
+    assert_eq!(s, 400, "{v}");
+    assert!(
+        v["error"]
+            .as_str()
+            .unwrap()
+            .contains("does not match its hash"),
+        "{v}"
+    );
+    let r = f.record("sign_request", &f.req);
+    assert_eq!(r["state"], "draft");
+    assert!(r.get("document_hash").is_none_or(J::is_null), "{r:?}");
+
+    // And a PDF over 25 MiB is not sent, whatever it hashes to. (The upload route refuses such a
+    // file at 25600 KiB; this is the second line, for a file that got into the store another way.)
+    let f = fixture().await;
+    let mut big = b"%PDF-1.4
+"
+    .to_vec();
+    big.resize(25 * 1024 * 1024 + 1, b'a');
+    let info = f
+        .app
+        .store
+        .blobs()
+        .put(
+            &big,
+            NewBlob {
+                content_type: "application/pdf".into(),
+                width: None,
+                height: None,
+                uploader: "ann".into(),
+                filename: "big.pdf".into(),
+            },
+        )
+        .unwrap();
+    let file = info.id;
+    let (s, v) = f
+        .api(
+            "ann",
+            "/api/documents_document/update",
+            json!({"id": f.doc, "attachment": file}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_request/send_document",
+            json!({"id": f.req}),
+        )
+        .await;
+    assert_eq!(s, 400, "{v}");
+    assert!(v["error"].as_str().unwrap().contains("25 MiB"), "{v}");
+    assert_eq!(f.record("sign_request", &f.req)["state"], "draft");
+}
+
+#[tokio::test]
 async fn a_form_made_for_another_document_is_refused() {
     let (f, _, path, _) = sent().await;
     let other = "0".repeat(64);
@@ -690,7 +762,10 @@ async fn the_address_is_the_one_the_proxy_reports_and_is_kept_in_one_form() {
 }
 
 #[tokio::test]
-async fn an_address_that_is_not_one_is_kept_as_unknown() {
+async fn with_no_socket_an_address_that_is_not_one_is_kept_as_unknown() {
+    // The test rig has no socket, so there is no peer to fall back to and the evidence says
+    // `unknown`; with a socket the same input is the peer (`recheck.rs`, "an entry of the proxy
+    // that is not an address leaves the peer as the address").
     let (f, _, path, _) = sent().await;
     let r = f
         .post(

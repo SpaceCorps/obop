@@ -202,6 +202,12 @@ async fn a_csv_import_cannot_start_a_request_that_signs_without_the_door() {
         };
         let (s, v) = f.api("mia", path, body.clone()).await;
         assert_eq!(s, 400, "{path} {body}: {v}");
+        // Refused for the reason of the rule, not for some other: the request is about a
+        // Document and is signed at the door.
+        assert!(
+            err(&v).contains("through the signing link"),
+            "{path} {body}: {v}"
+        );
         assert_eq!(f.record("sign_request", &imported)["state"], "sent");
     }
     assert_eq!(count(&f, "sign_link"), 0);
@@ -1448,6 +1454,11 @@ async fn a_signer_whose_twin_click_won_is_sent_to_the_signed_page_and_nothing_is
     });
     let r = f.post(&path, &ip(63), &good_form(&f, "Jane Test")).await;
     assert_eq!(r.status, 303, "{}", r.text());
+    assert_eq!(
+        r.h("location"),
+        path,
+        "to the page of the link, which now says signed"
+    );
     let kept = f.record("sign_request", &f.req);
     assert_eq!(kept["state"], "signed");
     assert_eq!(

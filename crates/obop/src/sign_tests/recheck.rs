@@ -897,3 +897,26 @@ async fn the_language_of_the_consent_id_is_the_one_the_post_names_not_a_proof_of
         );
     }
 }
+
+#[tokio::test]
+async fn the_dates_of_a_request_are_free_for_a_plain_user_to_set_today() {
+    // Known and documented (docs/ISSUES.md O34): `sent_on` and `signed_on` are not door-owned, so
+    // a sign.user can write them on any request that is not signed. They are labels for lists,
+    // not evidence (the evidence is `signed_at`, which only the door writes). The fix that is
+    // proposed there (add both to the door's keys) would fail this test, which is the point of
+    // having it: change O34 with it.
+    let (f, _, _, _) = sent().await;
+    let (s, v) = f
+        .api(
+            "sam",
+            "/api/sign_request/update",
+            json!({"id": f.req, "sent_on": "2001-01-01", "signed_on": "2001-01-02"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let r = f.record("sign_request", &f.req);
+    assert_eq!(r["sent_on"], "2001-01-01");
+    assert_eq!(r["signed_on"], "2001-01-02");
+    assert!(r.get("signed_at").is_none_or(J::is_null), "no evidence");
+    assert_eq!(r["state"], "sent");
+}

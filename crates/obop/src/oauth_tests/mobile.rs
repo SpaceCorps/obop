@@ -95,11 +95,122 @@ async fn an_entry_of_the_proxy_that_is_not_an_address_does_not_choose_the_limit_
         429,
         "an address of its own has a count of its own"
     );
-    assert_ne!(
+    // A port is not part of the address: once an address has used up its count, the same address
+    // with a port is that address (a port that changed with every connection would otherwise
+    // give a client a bucket of its own for each).
+    let mut spent = 0;
+    for _ in 0..40 {
+        spent = post("198.51.100.201".to_string()).await;
+        if spent == 429 {
+            break;
+        }
+    }
+    assert_eq!(spent, 429, "the address ran into its limit");
+    assert_eq!(
         post("198.51.100.201:5000".to_string()).await,
         429,
         "a port is not part of the address"
     );
+    assert_eq!(
+        post("198.51.100.201:5001".to_string()).await,
+        429,
+        "nor is another port"
+    );
+}
+
+#[tokio::test]
+async fn the_token_revoke_and_authorize_limits_read_the_address_by_the_same_rule() {
+    // The same two properties as for the registration, at the other endpoints that limit by
+    // address: made-up last entries share the peer's bucket (they do not each get their own), an
+    // address with a port is its address, and another address is not held up by either.
+    // (Passkeys, the step-up pages and the Microsoft return call the same function; the scan in
+    // `obop-http` `addr.rs` keeps every other place from reading the header on its own.)
+    for endpoint in ["token", "revoke", "authorize"] {
+        let rig = rig();
+        let client = {
+            let c = call(
+                &rig.r,
+                "POST",
+                "/oauth/register",
+                &[],
+                Some((
+                    "application/json",
+                    json!({"client_name": "Claude", "redirect_uris": [REDIRECT],
+                           "token_endpoint_auth_method": "none"})
+                    .to_string(),
+                )),
+            )
+            .await;
+            assert_eq!(c.status, 201, "{}", c.text());
+            c.json()["client_id"].as_str().unwrap().to_string()
+        };
+        let hit = |xff: String| {
+            let r = rig.r.clone();
+            let client = client.clone();
+            async move {
+                let h = [("x-forwarded-for", xff.as_str())];
+                match endpoint {
+                    "token" => {
+                        let form = format!(
+                            "grant_type=refresh_token&refresh_token=nothing&client_id={client}"
+                        );
+                        call(
+                            &r,
+                            "POST",
+                            "/oauth/token",
+                            &h,
+                            Some(("application/x-www-form-urlencoded", form)),
+                        )
+                        .await
+                        .status
+                    }
+                    "revoke" => {
+                        let form = format!("token=nothing&client_id={client}");
+                        call(
+                            &r,
+                            "POST",
+                            "/oauth/revoke",
+                            &h,
+                            Some(("application/x-www-form-urlencoded", form)),
+                        )
+                        .await
+                        .status
+                    }
+                    _ => {
+                        call(&r, "GET", &authorize_url(&client, REDIRECT, &[]), &h, None)
+                            .await
+                            .status
+                    }
+                }
+            }
+        };
+        let mut last = 0;
+        for n in 0..200 {
+            last = hit(format!("203.0.113.9, client-{n}")).await;
+            if last == 429 {
+                break;
+            }
+        }
+        assert_eq!(last, 429, "{endpoint}: made-up entries ran into one limit");
+        assert_ne!(
+            hit("198.51.100.210".to_string()).await,
+            429,
+            "{endpoint}: an address of its own has a count of its own"
+        );
+        let mut spent = 0;
+        for _ in 0..200 {
+            spent = hit("198.51.100.211".to_string()).await;
+            if spent == 429 {
+                break;
+            }
+        }
+        assert_eq!(spent, 429, "{endpoint}: the address ran into its limit");
+        assert_eq!(
+            hit("198.51.100.211:5000".to_string()).await,
+            429,
+            "{endpoint}: a port is not part of the address"
+        );
+    }
 }
 
 /// A mobile client that declares the groups it will ask for (the three of the demo that a person
