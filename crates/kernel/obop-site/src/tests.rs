@@ -1933,8 +1933,8 @@ fn the_whole_flow_works_on_memory() {
 
 #[test]
 fn the_whole_flow_works_on_sqlite_and_persists() {
-    let path = std::env::temp_dir().join(format!("obop-site-test-{}.db", std::process::id()));
-    let url = format!("sqlite://{}", path.display());
+    let path = obop_storage::testing::TempPath::new("obop-site-test");
+    let url = path.url();
     {
         let s = build(Store::open(&url).unwrap(), true);
         full_flow(&s);
@@ -1943,9 +1943,6 @@ fn the_whole_flow_works_on_sqlite_and_persists() {
     let again = build(Store::open(&url).unwrap(), false);
     assert!(text(&get(&again, "/about")).contains("About Fernhill Goods"));
     assert_eq!(again.store.count("ecommerce_order"), 1);
-    for ext in ["", "-wal", "-shm"] {
-        let _ = std::fs::remove_file(format!("{}{ext}", path.display()));
-    }
 }
 
 #[test]

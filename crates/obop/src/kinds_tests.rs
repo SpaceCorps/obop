@@ -378,15 +378,9 @@ async fn rest_and_mcp_round_trip_ten_thousand_generated_decimals() {
 
 #[test]
 fn cli_import_and_call_round_trip_decimals_and_instants() {
-    let dir = std::env::temp_dir().join(format!(
-        "obop-kinds-cli-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&dir).unwrap();
+    // A directory of this run's own, removed when the test ends (after the stores are closed).
+    let _guard = obop_storage::testing::TempPath::dir("obop-kinds-cli");
+    let dir = _guard.path().to_path_buf();
     let path = |n: &str| dir.join(n).to_str().unwrap().to_string();
     let db = format!("sqlite://{}", path("cli.db"));
     {
@@ -562,7 +556,6 @@ fn cli_import_and_call_round_trip_decimals_and_instants() {
         .is_err()
     );
     assert_eq!(rows().len(), 1004);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[tokio::test]
@@ -907,8 +900,9 @@ fn cli_modules_check_accepts_the_kinds_and_explains_mistakes() {
         assert!(e.contains(want), "{want}: {e}");
     }
     // The command itself reads files, prints ok or FAIL and exits accordingly.
-    let dir = std::env::temp_dir().join(format!("obop-kinds-check-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    // A directory of this run's own, removed when the test ends (after the stores are closed).
+    let _guard = obop_storage::testing::TempPath::dir("obop-kinds-check");
+    let dir = _guard.path().to_path_buf();
     let good = dir.join("ledger.toml");
     let bad = dir.join("broken.toml");
     std::fs::write(&good, PACKAGE).unwrap();
@@ -916,5 +910,4 @@ fn cli_modules_check_accepts_the_kinds_and_explains_mistakes() {
     let (g, b) = (good.to_str().unwrap(), bad.to_str().unwrap());
     assert!(crate::modules_check_files_with(&[g], false, false).is_ok());
     assert!(crate::modules_check_files_with(&[g, b], false, false).is_err());
-    let _ = std::fs::remove_dir_all(&dir);
 }

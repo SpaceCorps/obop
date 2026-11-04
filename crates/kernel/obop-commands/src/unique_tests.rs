@@ -894,16 +894,12 @@ fn race_in_one_server(url: &str, trials: usize) {
 
 #[test]
 fn two_creates_of_one_key_at_once_give_one_success_and_one_refusal_on_sqlite() {
-    let path = std::env::temp_dir().join(format!("obop-race-{}.db", std::process::id()));
-    let url = format!("sqlite://{}", path.display());
+    // A path of this run's own, removed again with everything the store keeps beside it.
+    let path = obop_storage::testing::TempPath::new("obop-race");
+    let url = path.url();
     let (checked, backstop) = race(&url, 100);
     eprintln!("sqlite: 100 of 100 rounds; refused by the check {checked}, by the index {backstop}");
     race_in_one_server(&url, 100);
-    for ext in ["", "-wal", "-shm", ".blobs"] {
-        let p = format!("{}{ext}", path.display());
-        let _ = std::fs::remove_file(&p);
-        let _ = std::fs::remove_dir_all(&p);
-    }
 }
 
 #[test]

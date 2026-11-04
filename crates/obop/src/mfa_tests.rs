@@ -674,9 +674,9 @@ async fn control_plane_accounts_can_opt_in_to_two_factor() {
 #[test]
 fn the_break_glass_command_resets_a_user_in_a_real_database() {
     use obop_commands::{Authenticator, MfaApi};
-    let dir = std::env::temp_dir().join(format!("obop-mfa-cli-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let url = format!("sqlite://{}", dir.join("t.db").display());
+    // A directory of this run's own, removed again when the test ends, however it ends.
+    let dir = obop_storage::testing::TempPath::dir("obop-mfa-cli");
+    let url = format!("sqlite://{}", dir.path().join("t.db").display());
     let store = obop_commands::Store::open(&url).unwrap();
     let auth = Auth::with_test_config(store.backend(), AuthConfig::insecure_dev());
     auth.set_clock_for_test(T0);
@@ -710,5 +710,4 @@ fn the_break_glass_command_resets_a_user_in_a_real_database() {
         log.iter()
             .any(|(_, f)| f["kind"] == "reset" && f["actor"] == "operator")
     );
-    let _ = std::fs::remove_dir_all(dir);
 }

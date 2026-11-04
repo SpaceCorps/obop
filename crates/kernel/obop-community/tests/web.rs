@@ -1850,9 +1850,8 @@ fn status_console_is_staff_only_and_csrf_protected() {
 
 #[test]
 fn data_survives_a_restart_on_sqlite() {
-    let dir = std::env::temp_dir().join(format!("obop-community-test-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let url = format!("sqlite://{}/c.db", dir.display());
+    let dir = obop_storage::testing::TempPath::dir("obop-community-test");
+    let url = format!("sqlite://{}/c.db", dir.path().display());
     {
         let a = app_on(obop_storage::open(&url).unwrap());
         let s = signup(&a, "ada@example.test", "Ada", NOW);
@@ -1879,7 +1878,6 @@ fn data_survives_a_restart_on_sqlite() {
     );
     assert!(get(&a, "/status", "", NOW + 3).body_str().contains("Kept"));
     // The old session still works after the restart (sessions are stored too).
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]

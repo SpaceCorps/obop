@@ -485,15 +485,9 @@ fn cli_opts(db: &str) -> crate::Opts {
 
 #[test]
 fn cli_import_checks_first_writes_a_private_password_file_and_never_overwrites() {
-    let dir = std::env::temp_dir().join(format!(
-        "obop-accounts-cli-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&dir).unwrap();
+    // A directory of this run's own, removed when the test ends (after the stores are closed).
+    let _guard = obop_storage::testing::TempPath::dir("obop-accounts-cli");
+    let dir = _guard.path().to_path_buf();
     let path = |n: &str| dir.join(n).to_str().unwrap().to_string();
     let db = format!("sqlite://{}", path("cli.db"));
     let o = cli_opts(&db);
@@ -548,5 +542,4 @@ fn cli_import_checks_first_writes_a_private_password_file_and_never_overwrites()
     );
     crate::accounts_cmd::disable(&o, "ben", false).unwrap();
     crate::accounts_cmd::users(&o).unwrap();
-    let _ = std::fs::remove_dir_all(&dir);
 }

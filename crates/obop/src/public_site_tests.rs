@@ -15,7 +15,8 @@ struct Fixture {
     router: axum::Router,
     token: String,
     app: App,
-    _dir: std::path::PathBuf,
+    /// Last: the directory goes after the app and the router.
+    _dir: obop_storage::testing::TempPath,
 }
 
 async fn fixture(public: bool) -> Fixture {
@@ -33,11 +34,12 @@ async fn fixture(public: bool) -> Fixture {
         &["platform.admin".into()],
     )
     .unwrap();
-    let dir = std::env::temp_dir().join(format!(
-        "obop-admin-{}-{}",
-        std::process::id(),
-        if public { "p" } else { "o" }
-    ));
+    let guard = obop_storage::testing::TempPath::dir(if public {
+        "obop-admin-p"
+    } else {
+        "obop-admin-o"
+    });
+    let dir = guard.path().to_path_buf();
     std::fs::create_dir_all(dir.join("assets")).unwrap();
     std::fs::write(dir.join("index.html"), "<html>BACKOFFICE-SHELL</html>").unwrap();
     std::fs::write(dir.join("assets/app.js"), "console.log('admin')").unwrap();
@@ -63,7 +65,7 @@ async fn fixture(public: bool) -> Fixture {
         router,
         token: String::new(),
         app,
-        _dir: dir,
+        _dir: guard,
     };
     let (_, b, _) = send(
         &f.router,
