@@ -40,7 +40,11 @@ pub mod website;
 #[cfg(test)]
 mod addr_scan_tests;
 #[cfg(test)]
+mod audit_kind_tests;
+#[cfg(test)]
 mod error_tests;
+#[cfg(test)]
+mod src_scan;
 
 pub struct HttpState {
     dispatcher: Arc<Dispatcher>,
