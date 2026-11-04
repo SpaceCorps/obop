@@ -109,6 +109,10 @@ describe("the place of the note in the Recording screen (the text of the file)",
     expect(source).toContain("const [measured, setMeasured] = useState<Progress | null>(null);");
   });
 
+  test("what it measured is `progressFrom` over the stored points of the open trip", () => {
+    expect(lines).toContain("return progressFrom(await rt.store.points(clientTripId));");
+  });
+
   test("it follows the last banner and comes before the clock, outside any condition", () => {
     const previous = lines.slice(0, at).filter((line) => !line.startsWith("{/*"));
     const next = lines.slice(at + 1).filter((line) => line !== "");
