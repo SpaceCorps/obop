@@ -148,6 +148,58 @@ describe("go(): the palette, the panel's close button", () => {
   });
 });
 
+describe("go() to the address that is already shown (Save, Ctrl+S under the open dialog)", () => {
+  // Saving a record goes to the record's own address, which is the one on screen. Nothing is left, so
+  // nothing is asked, whatever is unsaved or held: a question about a link that is not going
+  // anywhere teaches the person to click "Leave anyway" on the one prompt that matters.
+  const lead = async () => {
+    await act(async () => go({ app: "crm", model: "lead" }));
+    await settle();
+  };
+
+  it("asks nothing when the address does not change, although the form is dirty and a hold exists", async () => {
+    await lead();
+    const ask = answerWith(false);
+    nav.dirty = () => true;
+    await act(async () => setHold({ ...hold, whenUnsaved: both }));
+    await lead();
+    expect(ask).not.toHaveBeenCalled();
+    expect(text()).toBe("elsewhere");
+  });
+
+  it("counts the home address as unchanged when the page opened with no address at all", async () => {
+    const ask = answerWith(false);
+    await act(async () => setHold(hold));
+    await act(async () => go({}));
+    await settle();
+    expect(ask).not.toHaveBeenCalled();
+  });
+
+  it("counts an empty view as no view", async () => {
+    await lead();
+    const ask = answerWith(false);
+    await act(async () => setHold(hold));
+    await act(async () => go({ app: "crm", model: "lead", view: "" }));
+    await settle();
+    expect(ask).not.toHaveBeenCalled();
+  });
+
+  it("still asks when the record or the view in the address changes", async () => {
+    await lead();
+    const ask = answerWith(false);
+    await act(async () => setHold(hold));
+    await act(async () => go({ app: "crm", model: "lead", id: "other" }));
+    await settle();
+    expect(ask).toHaveBeenCalledTimes(1);
+    await act(async () => go({ app: "crm", model: "lead", view: "kanban" }));
+    await settle();
+    expect(ask).toHaveBeenCalledTimes(2);
+    await act(async () => go({ app: "sales", model: "lead" }));
+    await settle();
+    expect(ask).toHaveBeenCalledTimes(3);
+  });
+});
+
 describe("the browser's own address change: Back, a swipe", () => {
   const change = async () => {
     await act(async () => {

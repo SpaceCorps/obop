@@ -437,6 +437,17 @@ describe("leaving the page while the link is shown (Back, a reload, the palette,
     expect(text()).not.toContain("elsewhere");
   });
 
+  it("does not ask when the address does not change (Save, Ctrl+S while the link is shown)", async () => {
+    const ask = answerWith(false);
+    await openDialog(<Page />);
+    // Saving the form goes to the record's own address, which is the one on screen.
+    await act(async () => go({}));
+    await settle();
+    expect(ask).not.toHaveBeenCalled();
+    expect(dialog(), "the dialog went away").not.toBeNull();
+    expect(asked()).toBe(false);
+  });
+
   it("does not ask once the link was copied", async () => {
     const ask = answerWith(false);
     await openDialog(<Page />);

@@ -35,6 +35,13 @@ export function parse(hash: string): Route {
   };
 }
 
+/** Whether two addresses are the same place, however they are written (`#`, `#/`, an empty view). */
+function sameRoute(a: string, b: string): boolean {
+  const x = parse(a);
+  const y = parse(b);
+  return (Object.keys(x) as (keyof Route)[]).every((k) => x[k] === y[k]);
+}
+
 export function href(r: Partial<Route>): string {
   const q = new URLSearchParams();
   if (r.view) q.set("view", r.view);
@@ -116,7 +123,9 @@ export function useRoute(): [Route, Go] {
       last.current = h;
       setRoute(parse(h));
     };
-    const question = nav.ask ? leaveQuestion() : null;
+    // Going to the address that is already shown (saving a record goes to its own address) leaves
+    // nothing behind, so nothing is asked.
+    const question = nav.ask && !sameRoute(h, location.hash) ? leaveQuestion() : null;
     if (question && nav.ask) {
       void nav.ask(question.message, question.leave, question.stay).then((leave) => {
         if (!leave) return;
