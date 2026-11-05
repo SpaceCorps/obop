@@ -988,6 +988,13 @@ describe("what a module may add to a file that an older build uses", () => {
       "NOT NULL DEFAULT 'a' DEFAULT ( null )",
       "NOT NULL DEFAULT 'a' DEFAULT +NULL",
       "NOT NULL DEFAULT 'a' DEFAULT -NULL",
+      // SQLite gives the default as it was written, minus the outer parentheses: it keeps inner
+      // parentheses, a sign, and the space between a sign and the word.
+      "NOT NULL DEFAULT 'a' DEFAULT ((NULL))",
+      "NOT NULL DEFAULT 'a' DEFAULT (+NULL)",
+      "NOT NULL DEFAULT 'a' DEFAULT + NULL",
+      "NOT NULL DEFAULT 'a' DEFAULT - NULL",
+      "NOT NULL DEFAULT 'a' DEFAULT ( + NULL )",
       "DEFAULT NULL NOT NULL",
       "NOT NULL DEFAULT (NULL)",
       "NOT NULL",
@@ -1599,6 +1606,72 @@ describe("a table of the first layout that a migration makes", () => {
     ]);
     expect(await tables(db)).toEqual(["module_schema", "point", "trip"]);
     expect(await db.all("SELECT id FROM trip")).toEqual([{ id: "t1" }]);
+  });
+
+  // SQLite does not tell `trip` from `Trip`, so a table that the file has under the other spelling
+  // is the one the module declares, and is neither made again nor dropped.
+  test.each([
+    ["trip", "Trip"],
+    ["Trip", "trip"],
+  ])("declared as %s, and in the file as %s, is the same table", async (declared, inFile) => {
+    const db = memoryDb();
+    await db.exec(`
+      CREATE TABLE ${inFile} (id TEXT PRIMARY KEY NOT NULL, x TEXT);
+      INSERT INTO ${inFile} (id, x) VALUES ('t1', 'one');
+      PRAGMA user_version = 1;
+    `);
+    const definition = DEFINITION.replace("trip", declared);
+    await ensureModules(db, [
+      module("m", {
+        legacyTables: [declared],
+        legacyDefinitions: { [declared]: definition },
+        steps: { 1: [definition] },
+      }),
+    ]);
+    expect(await versions(db)).toEqual({ m: 1 });
+    expect(await db.all("SELECT id FROM trip")).toEqual([{ id: "t1" }]);
+    expect(
+      (await db.all<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table'")).map(
+        (t) => t.name,
+      ),
+    ).toContain(inFile);
+  });
+
+  test("with a double quote in its name is looked at, made and dropped again like any other", async () => {
+    const name = 'm_x"y';
+    const definition = `CREATE TABLE IF NOT EXISTS "m_x""y" (id TEXT PRIMARY KEY NOT NULL)`;
+    const db = memoryDb();
+    await ensureModules(db, [
+      module("m", {
+        legacyTables: [name],
+        legacyDefinitions: { [name]: definition },
+        steps: { 1: [definition, `ALTER TABLE "m_x""y" ADD COLUMN note TEXT`] },
+      }),
+    ]);
+    expect(await tables(db)).toEqual([name, "module_schema"]);
+  });
+
+  test("that a file lacks while a later version of the module runs is the first layout there too", async () => {
+    // A file of layout 1 that has `trip` and no `point`: the later version makes `point` again,
+    // which is a table of the first layout and not a new one.
+    const POINT = "CREATE TABLE IF NOT EXISTS point (id TEXT PRIMARY KEY NOT NULL)";
+    const db = memoryDb();
+    await db.exec(`
+      CREATE TABLE trip (id TEXT PRIMARY KEY NOT NULL, x TEXT);
+      INSERT INTO trip (id, x) VALUES ('t1', 'one');
+      PRAGMA user_version = 1;
+    `);
+    await ensureModules(db, [
+      module("m", {
+        legacyVersion: 1,
+        legacyTables: ["trip", "point"],
+        legacyDefinitions: { trip: DEFINITION, point: POINT },
+        steps: { 1: [DEFINITION, POINT], 2: [POINT, "ALTER TABLE trip ADD COLUMN note TEXT"] },
+      }),
+    ]);
+    expect(await versions(db)).toEqual({ m: 2 });
+    expect(await tables(db)).toEqual(["module_schema", "point", "trip"]);
+    expect(await db.all("SELECT id, note FROM trip")).toEqual([{ id: "t1", note: null }]);
   });
 
   test("a table whose name only looks like a legacy table is not one", async () => {
