@@ -63,6 +63,10 @@ description = "Dagen då begäran skickades (ÅÅÅÅ-MM-DD)"
 label = "Utgångsdatum"
 description = "Sista dagen begäran kan signeras (ÅÅÅÅ-MM-DD)"
 
+[labels.sv.model.sign_request.field.show_history]
+label = "Visa tidigare signaturer för den som signerar"
+description = "Visar för den som signerar vilka som signerat samma fil (samma dokument och SHA-256) genom en begäran med ikryssad ruta: inskrivet namn och tid. Personen får veta innan hen signerar att också hens uppgifter visas. Bara för en fil som flera namngivna personer signerar tillsammans, aldrig för personer utan koppling. En begäran som signerades innan rutan kryssades visas aldrig. Tom betyder av"
+
 [labels.sv.model.sign_request.field.signed_on]
 label = "Signerad den"
 description = "Dagen då dokumentet signerades (ÅÅÅÅ-MM-DD)"

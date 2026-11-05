@@ -21,6 +21,16 @@
 //! page (the only original); any other language, German included, is machine-drafted and must be
 //! read by a native speaker first.
 //!
+//! **A request that shows the signatures so far** (`sign_request.show_history`, an amendment of
+//! D92 dated 2026-11-04, PROPOSED) adds one sentence after the notice, `history_notice`, which tells
+//! the signer that their name and the time they sign are shown to the other people who sign the
+//! file. For such a request the id is [`consent_version_with_history_for`]: the same hash over the
+//! eight texts and then over that sentence ([`HISTORY_WORDING_KEYS`]). The id of any other request
+//! is unchanged. The heading (`history_title`), the line for an empty list (`history_none`), the
+//! mark of the signer's own entry (`history_you`), the line that says the list is cut
+//! (`history_more`) and the message of a page that changed under the signer (`err_history`) are not
+//! texts the signer relies on and are not covered, like the title and the refusal pages.
+//!
 //! **Placeholders.** `{title}`, `{name}`, `{hash}` and `{time}` are the only ones. Every column of
 //! a key carries the same set (a test). The caller passes plain values; [`html`] escapes both the
 //! catalogue text and the values, [`fill`] does not escape anything (for a `<title>` or a header
@@ -35,6 +45,7 @@
 //! `consent` takes `{name}` (the requested person), because the sentence names the person who is
 //! asked to sign (lead decision 9; attacker finding S7).
 
+use obop_commands::sign::HISTORY_CONSENT_MARK;
 use obop_oauth::page::{LANGS, esc};
 
 /// The version of the consent wording, the first part of the id recorded with the evidence of a
@@ -62,6 +73,11 @@ pub const WORDING_KEYS: [&str; 8] = [
     "fingerprint",
 ];
 
+/// The text a signer relies on, besides [`WORDING_KEYS`], when the request shows the signatures so
+/// far: the sentence that says their name and the time they sign are shown to the others. It is
+/// hashed after the eight texts, so the id of a request that does not show them stays what it was.
+pub const HISTORY_WORDING_KEYS: [&str; 1] = ["history_notice"];
+
 /// `consent_version` as stored on the request: `<CONSENT_VERSION>/<language>/<wording>`, for
 /// example `v1-draft/de/9ebff173`, where `<wording>` is the first 8 hex characters of the SHA-256
 /// of the texts of [`WORDING_KEYS`] in that language (`key`, a line feed, the text and a line
@@ -77,12 +93,46 @@ pub fn consent_version_for(lang: &str) -> String {
     )
 }
 
+/// `consent_version` for a request that shows the signatures so far: as [`consent_version_for`],
+/// with the hash also over the [`HISTORY_WORDING_KEYS`] texts, and a fourth part, the mark
+/// [`HISTORY_CONSENT_MARK`] (`v1-draft/en/e2880db0/history`). It differs from the id of a request
+/// that does not, in every language, because the sentence is part of what it hashes and because of
+/// the mark. **The mark is what the door reads** to decide that a signature may be listed to the
+/// others (`consent_names_the_history`): it is stored with the signature and not worked out again,
+/// so a later edit of the sentence moves the hash of the signatures that follow and leaves the ones
+/// already made listed. Put the mark on these words only while they say that the signer's name and
+/// the time are shown to the other people who sign the file.
+pub fn consent_version_with_history_for(lang: &str) -> String {
+    let i = lang_idx(lang);
+    format!(
+        "{CONSENT_VERSION}/{}/{}/{HISTORY_CONSENT_MARK}",
+        LANGS[i],
+        history_wording_id(CATALOGUE, i)
+    )
+}
+
 /// The first 8 hex characters of the SHA-256 over the [`WORDING_KEYS`] texts in column `i` of
 /// `catalogue`. A text that is empty in a language is read from English, as [`text`] does.
 fn wording_id(catalogue: &[(&str, [&str; 7])], i: usize) -> String {
+    wording_hash(catalogue, i, &WORDING_KEYS)
+}
+
+/// As [`wording_id`], then also over the [`HISTORY_WORDING_KEYS`] texts.
+fn history_wording_id(catalogue: &[(&str, [&str; 7])], i: usize) -> String {
+    let keys: Vec<&str> = WORDING_KEYS
+        .iter()
+        .chain(&HISTORY_WORDING_KEYS)
+        .copied()
+        .collect();
+    wording_hash(catalogue, i, &keys)
+}
+
+/// The first 8 hex characters of the SHA-256 over `key`, a line feed, the text and a line feed,
+/// for each of `keys` in turn.
+fn wording_hash(catalogue: &[(&str, [&str; 7])], i: usize, keys: &[&str]) -> String {
     use sha2::{Digest, Sha256};
     let mut h = Sha256::new();
-    for key in WORDING_KEYS {
+    for key in keys.iter().copied() {
         let cols = catalogue
             .iter()
             .find(|(k, _)| *k == key)
@@ -208,15 +258,22 @@ pub const CATALOGUE: &[(&str, [&str; 7])] = &[
     ("unavailable", ["This page is temporarily unavailable. Try again in a few minutes.", "Diese Seite ist vorübergehend nicht verfügbar. Versuchen Sie es in einigen Minuten erneut.", "Cette page est temporairement indisponible. Réessayez dans quelques minutes.", "Ta strona jest tymczasowo niedostępna. Spróbuj ponownie za kilka minut.", "Sivu ei ole tilapäisesti käytettävissä. Yritä uudelleen muutaman minuutin kuluttua.", "Sidan är tillfälligt otillgänglig. Försök igen om några minuter.", "Esta página no está disponible temporalmente. Inténtelo de nuevo en unos minutos."]),
     ("forbidden", ["This request could not be checked. Open the link again and sign from that page.", "Diese Anfrage konnte nicht überprüft werden. Öffnen Sie den Link erneut und unterschreiben Sie auf dieser Seite.", "Cette demande n'a pas pu être vérifiée. Rouvrez le lien et signez depuis cette page.", "Nie udało się zweryfikować tego żądania. Otwórz link ponownie i podpisz z tej strony.", "Tätä pyyntöä ei voitu tarkistaa. Avaa linkki uudelleen ja allekirjoita siltä sivulta.", "Den här begäran kunde inte kontrolleras. Öppna länken igen och signera från den sidan.", "No se pudo comprobar esta solicitud. Abra el enlace de nuevo y firme desde esa página."]),
     ("closed", ["This request is closed. It was declined or has expired, or it no longer needs your signature. Ask the sender if you think this is a mistake.", "Diese Anfrage ist geschlossen. Sie wurde abgelehnt oder ist abgelaufen oder braucht Ihre Unterschrift nicht mehr. Fragen Sie den Absender, wenn Sie glauben, dass es sich um einen Fehler handelt.", "Cette demande est clôturée. Elle a été refusée ou a expiré, ou elle n'a plus besoin de votre signature. Demandez à l'expéditeur si vous pensez qu'il s'agit d'une erreur.", "Ta prośba jest zamknięta. Została odrzucona lub wygasła albo nie wymaga już Twojego podpisu. Zapytaj nadawcę, jeśli uważasz, że to pomyłka.", "Tämä pyyntö on suljettu. Se on hylätty tai vanhentunut, tai se ei enää tarvitse allekirjoitustasi. Kysy lähettäjältä, jos luulet, että tämä on virhe.", "Den här begäran är stängd. Den har avslagits eller gått ut, eller behöver inte längre din signatur. Fråga avsändaren om du tror att det är ett misstag.", "Esta solicitud está cerrada. Fue rechazada o ha caducado, o ya no necesita su firma. Pregunte al remitente si cree que es un error."]),
+    ("history_title", ["Signed so far", "Bisher unterschrieben", "Déjà signé par", "Dotychczas podpisali", "Allekirjoittaneet tähän mennessä", "Signerat hittills", "Firmado hasta ahora"]),
+    ("history_none", ["Nobody has signed this file yet.", "Diese Datei hat noch niemand unterschrieben.", "Personne n'a encore signé ce fichier.", "Nikt jeszcze nie podpisał tego pliku.", "Kukaan ei ole vielä allekirjoittanut tätä tiedostoa.", "Ingen har signerat den här filen ännu.", "Nadie ha firmado todavía este archivo."]),
+    ("history_you", ["(you)", "(Sie)", "(vous)", "(Ty)", "(sinä)", "(du)", "(usted)"]),
+    ("history_more", ["Only the earliest signatures are listed here.", "Hier sind nur die frühesten Unterschriften aufgeführt.", "Seules les premières signatures sont listées ici.", "Wymieniono tu tylko najwcześniejsze podpisy.", "Tässä on lueteltu vain varhaisimmat allekirjoitukset.", "Bara de tidigaste signaturerna visas här.", "Aquí solo se muestran las primeras firmas."]),
+    ("history_notice", ["Your name, as you type it, and the time you sign are shown to the other people who sign this file.", "Ihr Name, wie Sie ihn eingeben, und der Zeitpunkt Ihrer Unterschrift werden den anderen Personen angezeigt, die diese Datei unterschreiben.", "Votre nom, tel que vous le saisissez, et l'heure de votre signature sont montrés aux autres personnes qui signent ce fichier.", "Twoje imię i nazwisko, w brzmieniu, jakie wpiszesz, oraz czas podpisu są pokazywane innym osobom, które podpisują ten plik.", "Nimesi sellaisena kuin kirjoitat sen ja allekirjoitusaikasi näytetään muille tämän tiedoston allekirjoittaville.", "Ditt namn, så som du skriver det, och tiden du signerar visas för de andra som signerar den här filen.", "Su nombre, tal como lo escribe, y la hora de su firma se muestran a las demás personas que firman este archivo."]),
+    ("err_history", ["The page has changed since you opened it: it now says that your name and the time you sign are shown to the other people who sign this file. Read the notice below, then press Sign again.", "Die Seite hat sich seit dem Öffnen geändert: Sie weist jetzt darauf hin, dass Ihr Name und der Zeitpunkt Ihrer Unterschrift den anderen Personen angezeigt werden, die diese Datei unterschreiben. Lesen Sie den Hinweis unten und klicken Sie erneut auf Unterschreiben.", "La page a changé depuis son ouverture : elle indique maintenant que votre nom et l'heure de votre signature sont montrés aux autres personnes qui signent ce fichier. Lisez l'avis ci-dessous, puis cliquez de nouveau sur Signer.", "Strona zmieniła się od jej otwarcia: teraz informuje, że Twoje imię i nazwisko oraz czas podpisu są pokazywane innym osobom, które podpisują ten plik. Przeczytaj uwagę poniżej, a potem kliknij Podpisz jeszcze raz.", "Sivu on muuttunut sen avaamisen jälkeen: nyt siinä kerrotaan, että nimesi ja allekirjoitusaikasi näytetään muille tämän tiedoston allekirjoittaville. Lue alla oleva huomautus ja paina sitten Allekirjoita uudelleen.", "Sidan har ändrats sedan du öppnade den: den säger nu att ditt namn och tiden du signerar visas för de andra som signerar den här filen. Läs meddelandet nedan och tryck sedan på Signera igen.", "La página ha cambiado desde que la abrió: ahora indica que su nombre y la hora de su firma se muestran a las demás personas que firman este archivo. Lea el aviso de abajo y vuelva a pulsar Firmar."]),
 ];
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use obop_commands::sign::consent_names_the_history;
 
     /// The keys the signer door and its page may ask for (D92, section 4.1), in the design's
     /// order. A key outside the list, or one missing from it, fails here.
-    const KEYS: [&str; 24] = [
+    const KEYS: [&str; 30] = [
         "title",
         "document",
         "open_full",
@@ -241,6 +298,12 @@ mod tests {
         "for",
         "forbidden",
         "closed",
+        "history_title",
+        "history_none",
+        "history_you",
+        "history_more",
+        "history_notice",
+        "err_history",
     ];
 
     /// The `{placeholders}` of a text, in order of appearance.
@@ -477,6 +540,149 @@ mod tests {
                 "a text of WORDING_KEYS changed in `{lang}`: the id is now different (that is what                  it is for). If the change is meant, put the new ids in PINNED:
 {have:#?}"
             );
+        }
+    }
+
+    /// The ids of the words a signer of a request that shows the signatures so far agrees to: the
+    /// eight texts of [`PINNED`] and then the sentence that says their name and time are shown to
+    /// the others. The same second net as above, for the other wording: an edit of the sentence, or
+    /// of one of the eight, moves them. (Nothing real has been signed under these ids yet.)
+    const PINNED_WITH_HISTORY: [&str; 7] = [
+        "v1-draft/en/e2880db0/history",
+        "v1-draft/de/d08d0039/history",
+        "v1-draft/fr/d5b05e47/history",
+        "v1-draft/pl/4c40cc63/history",
+        "v1-draft/fi/79117ed1/history",
+        "v1-draft/sv/84f4affe/history",
+        "v1-draft/es/8aa40e67/history",
+    ];
+
+    #[test]
+    fn the_wording_of_a_request_that_shows_the_signatures_so_far_is_pinned_to_its_id() {
+        let have: Vec<String> = LANGS
+            .iter()
+            .map(|l| consent_version_with_history_for(l))
+            .collect();
+        for (i, lang) in LANGS.iter().enumerate() {
+            assert_eq!(
+                have[i], PINNED_WITH_HISTORY[i],
+                "a text of WORDING_KEYS or HISTORY_WORDING_KEYS changed in `{lang}`: the id of a request that shows the signatures so far is now different (that is what it is for). If the change is meant, put the new ids in PINNED_WITH_HISTORY:
+{have:#?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_signature_made_with_the_sentence_never_carries_the_id_of_one_made_without() {
+        // The stored id is the proof of which words the signer read. In every language the two
+        // differ in the hash part, and agree in the version and the language.
+        for (i, lang) in LANGS.iter().enumerate() {
+            let without = consent_version_for(lang);
+            let with = consent_version_with_history_for(lang);
+            assert_ne!(without, with, "{lang}");
+            let (a, b): (Vec<&str>, Vec<&str>) =
+                (without.split('/').collect(), with.split('/').collect());
+            assert_eq!((a.len(), b.len()), (3, 4), "{lang}: {without} / {with}");
+            assert_eq!((a[0], a[1]), (b[0], b[1]), "{lang}");
+            assert_ne!(a[2], b[2], "{lang}");
+            assert_eq!(b[2].len(), 8, "{lang}");
+            assert!(b[2].bytes().all(|c| c.is_ascii_hexdigit()), "{lang}");
+            // The mark is the fourth part, and the door reads it: the id of the wording with the
+            // sentence is one that may be listed, the id of the wording without it never is.
+            assert_eq!(b[3], HISTORY_CONSENT_MARK, "{lang}");
+            assert!(consent_names_the_history(&with), "{lang}: {with}");
+            assert!(!consent_names_the_history(&without), "{lang}: {without}");
+            // Only the sentence is the difference: the hash over the eight texts alone is the
+            // unflagged id, and adding the sentence to it is what makes the other.
+            assert_eq!(a[2], wording_id(CATALOGUE, i), "{lang}");
+            assert_eq!(b[2], history_wording_id(CATALOGUE, i), "{lang}");
+        }
+        // An unknown language is English for both, as before.
+        assert_eq!(
+            consent_version_with_history_for("zz"),
+            consent_version_with_history_for("en")
+        );
+    }
+
+    #[test]
+    fn the_sentence_is_covered_by_the_id_of_its_own_language_only_and_by_no_other_id() {
+        let base: Vec<String> = (0..LANGS.len())
+            .map(|i| history_wording_id(CATALOGUE, i))
+            .collect();
+        let plain: Vec<String> = (0..LANGS.len()).map(|i| wording_id(CATALOGUE, i)).collect();
+        for (i, edited) in LANGS.iter().enumerate() {
+            let mut cat: Vec<(&'static str, [&'static str; 7])> = CATALOGUE.to_vec();
+            let row = cat
+                .iter_mut()
+                .find(|(k, _)| *k == "history_notice")
+                .unwrap();
+            row.1[i] = Box::leak(format!("{} (edited)", row.1[i]).into_boxed_str());
+            for (j, other) in LANGS.iter().enumerate() {
+                if j == i {
+                    assert_ne!(
+                        history_wording_id(&cat, j),
+                        base[j],
+                        "editing the sentence in {edited} left the id"
+                    );
+                } else {
+                    assert_eq!(
+                        history_wording_id(&cat, j),
+                        base[j],
+                        "editing the sentence in {edited} moved {other}"
+                    );
+                }
+                // The id of a request that does not show them does not know the sentence.
+                assert_eq!(wording_id(&cat, j), plain[j], "{edited}/{other}");
+            }
+        }
+        // Each of the eight texts moves the id of a request that shows them too.
+        for key in WORDING_KEYS {
+            let mut cat: Vec<(&'static str, [&'static str; 7])> = CATALOGUE.to_vec();
+            let row = cat.iter_mut().find(|(k, _)| *k == key).unwrap();
+            row.1[0] = Box::leak(format!("{} (edited)", row.1[0]).into_boxed_str());
+            assert_ne!(history_wording_id(&cat, 0), base[0], "{key}");
+        }
+        // The texts around the sentence are not covered: the heading, the line for an empty list,
+        // the mark of the signer's own entry, the cut line and the message of a changed page.
+        for key in [
+            "history_title",
+            "history_none",
+            "history_you",
+            "history_more",
+            "err_history",
+        ] {
+            let mut cat: Vec<(&'static str, [&'static str; 7])> = CATALOGUE.to_vec();
+            let row = cat.iter_mut().find(|(k, _)| *k == key).unwrap();
+            row.1[0] = Box::leak(format!("{} (edited)", row.1[0]).into_boxed_str());
+            assert_eq!(history_wording_id(&cat, 0), base[0], "{key} moved the id");
+        }
+    }
+
+    #[test]
+    fn the_sentence_for_a_request_that_shows_the_signatures_says_what_is_shown_and_to_whom() {
+        assert_eq!(HISTORY_WORDING_KEYS, ["history_notice"]);
+        let name_and_time = [
+            ["name", "time"],
+            ["name", "time"],
+            ["nom", "heure"],
+            ["imię", "czas"],
+            ["nimesi", "aika"],
+            ["namn", "tiden"],
+            ["nombre", "hora"],
+        ];
+        for (i, lang) in LANGS.iter().enumerate() {
+            let t = text(lang, "history_notice");
+            assert!(!t.contains('{'), "history_notice in {lang} takes no value");
+            if lang == &"de" {
+                assert!(t.contains("Name") && t.contains("Zeitpunkt"), "{t}");
+                continue;
+            }
+            for w in name_and_time[i] {
+                assert!(
+                    t.to_lowercase().contains(w) || t.to_lowercase().contains("allekirjoitus"),
+                    "history_notice in {lang} lost the word {w:?}: {t}"
+                );
+            }
         }
     }
 

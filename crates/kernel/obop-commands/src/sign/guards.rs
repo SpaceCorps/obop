@@ -3,6 +3,12 @@
 //! signed request is changed or deleted by an administrator only. An administrator can still
 //! change any record: this is a rule against mistakes and against staff without the role, not
 //! against someone with the database.
+//!
+//! The switch `show_history` (the signer's page lists the others who signed the same file) is
+//! not evidence but it shows a person's name to other people, so it is set by a caller who holds
+//! `sign.manager` (a person, or a token whose scopes name the group) or by an administrator only:
+//! the same refusal, whatever the value, in `create`, `update`, the rows of a bulk create and a
+//! CSV column.
 
 use super::*;
 use crate::Value;
@@ -16,6 +22,7 @@ pub(super) fn install(d: &Dispatcher, svc: &Arc<SignService>) {
         Box::new(move |p, input, inner| {
             if !is_admin(p) {
                 s.refuse_door_fields(p, input, None)?;
+                refuse_history_flag(p, input)?;
             }
             inner(input)
         }),
@@ -25,6 +32,9 @@ pub(super) fn install(d: &Dispatcher, svc: &Arc<SignService>) {
         "sign_request.update",
         Box::new(move |p, input, inner| {
             if !is_admin(p) {
+                // First, before the record is looked at: the refusal does not depend on whether
+                // the request exists.
+                refuse_history_flag(p, input)?;
                 s.check_update(p, input)?;
             }
             inner(input)
@@ -50,6 +60,7 @@ pub(super) fn install(d: &Dispatcher, svc: &Arc<SignService>) {
         Box::new(move |p, input, inner| {
             if !is_admin(p) {
                 s.refuse_in_rows(p, input)?;
+                refuse_history_flag_in_rows(p, input)?;
             }
             inner(input)
         }),
@@ -61,6 +72,50 @@ const DOCUMENT_FIXED: &str =
 
 const SIGNED: &str =
     "sign_request: a signed request cannot be changed or deleted; ask an administrator";
+
+fn history_message() -> String {
+    format!(
+        "sign_request.{HISTORY_FLAG} can be changed only by someone with sign.manager, or by an administrator"
+    )
+}
+
+/// Refuse the key `show_history` to a caller who does not hold `sign.manager` (a scoped token
+/// holds it only when its scopes name it), whatever the value: the field has the group, so such a
+/// caller is never shown it and has nothing to send back. An administrator who is a person never
+/// gets here (the wrappers skip them).
+fn refuse_history_flag(p: &Principal, input: &Value) -> Result<(), String> {
+    match input {
+        Value::Map(m) if m.contains_key(HISTORY_FLAG) && !p.allows("sign.manager") => {
+            Err(history_message())
+        }
+        _ => Ok(()),
+    }
+}
+
+/// The same for the rows of a bulk create and for a CSV column that names the key.
+fn refuse_history_flag_in_rows(p: &Principal, input: &Value) -> Result<(), String> {
+    let Value::Map(m) = input else {
+        return Ok(());
+    };
+    if p.allows("sign.manager") {
+        return Ok(());
+    }
+    if let Some(Value::List(rows)) = m.get("rows")
+        && rows
+            .iter()
+            .any(|r| matches!(r, Value::Map(r) if r.contains_key(HISTORY_FLAG)))
+    {
+        return Err(history_message());
+    }
+    if let Some(Value::Text(csv)) = m.get("csv") {
+        // The header as the importer reads it (see `refuse_csv_columns`).
+        let table = crate::csv::parse(csv.as_bytes(), crate::csv::MAX_ROWS)?;
+        if table.headers.iter().any(|c| c == HISTORY_FLAG) {
+            return Err(history_message());
+        }
+    }
+    Ok(())
+}
 
 fn door_message(k: &str) -> String {
     format!(

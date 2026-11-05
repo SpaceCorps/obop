@@ -63,6 +63,10 @@ description = "Dzień wysłania wniosku (YYYY-MM-DD)"
 label = "Data wygaśnięcia"
 description = "Ostatni dzień, w którym można podpisać wniosek (YYYY-MM-DD)"
 
+[labels.pl.model.sign_request.field.show_history]
+label = "Pokaż podpisującemu dotychczasowe podpisy"
+description = "Pokazuje podpisującemu, kto podpisał ten sam plik (ten sam dokument i SHA-256) przez prośbę z zaznaczonym polem: imię i nazwisko oraz czas. Przed podpisem jest informowany, że jego dane też są pokazywane. Tylko dla pliku, który wspólnie podpisuje kilka wskazanych osób, nigdy dla osób niezwiązanych. Prośba podpisana przed zaznaczeniem pola nigdy nie jest pokazywana. Puste oznacza wyłączone"
+
 [labels.pl.model.sign_request.field.signed_on]
 label = "Data podpisania"
 description = "Dzień podpisania dokumentu (YYYY-MM-DD)"
