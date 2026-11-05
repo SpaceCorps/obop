@@ -2,6 +2,10 @@
 //! cookie: one stylesheet, allowed by its hash. The words come from the catalogue of
 //! `sign_text.rs`; this file knows the markup and nothing about the store.
 //!
+//! The list of the signatures so far on the file (`History`) is shown only when the request asks
+//! for it; a page without it is the page it always was, byte for byte, and the stylesheet is not
+//! touched for it (it would change the hash in the policy and so every page).
+//!
 //! The PDF is offered to the browser's own viewer in an `<object>` that falls back to the text
 //! "open it in full size", and a visible link opens it in a new tab (a phone shows one page of an
 //! embedded PDF at most, so on a coarse pointer the object is hidden and the link is the way to
@@ -9,6 +13,7 @@
 //! `default-src 'none'` would otherwise leave the box empty (spike of 2026-11-03, docs/SIGN.md).
 
 use crate::sign_text::{self as txt, text};
+use obop_commands::sign::History;
 use obop_oauth::page::esc;
 use obop_oauth::util::b64std;
 use sha2::{Digest, Sha256};
@@ -79,17 +84,54 @@ pub(crate) fn message(lang: &str, key: &str) -> Page {
     )
 }
 
-/// The page after signing, and for a link that was used.
-pub(crate) fn done(lang: &str, at: &str) -> Page {
+/// The page after signing, and for a link that was used. `history` is the list of the signatures
+/// so far when the request asks for it, with the signer's own entry marked.
+pub(crate) fn done(lang: &str, at: &str, history: Option<&History>) -> Page {
     shell(
         lang,
         text(lang, "done_title"),
         &format!(
-            "<h1>{}</h1><p>{}</p>",
+            "<h1>{}</h1><p>{}</p>{}",
             txt::html(lang, "done_title", &[]),
-            txt::html(lang, "done_body", &[("time", at)])
+            txt::html(lang, "done_body", &[("time", at)]),
+            history.map_or_else(String::new, |h| history_block(lang, h))
         ),
     )
+}
+
+/// The block "Signed so far": a heading and the entries, oldest first, each the typed name and the
+/// time (UTC, to the second) and nothing else; the line for an empty list; the line that says the
+/// list is cut. Every value is escaped. No class is new, so the stylesheet is the one of every page.
+fn history_block(lang: &str, h: &History) -> String {
+    let mut out = format!("<h2>{}</h2>", txt::html(lang, "history_title", &[]));
+    if h.entries.is_empty() {
+        out.push_str(&format!(
+            "<p class=\"muted\">{}</p>",
+            txt::html(lang, "history_none", &[])
+        ));
+    } else {
+        out.push_str("<ul>");
+        for e in &h.entries {
+            let you = if e.own {
+                format!(" <strong>{}</strong>", txt::html(lang, "history_you", &[]))
+            } else {
+                String::new()
+            };
+            out.push_str(&format!(
+                "<li>{} <span class=\"muted\">{}</span>{you}</li>",
+                esc(&e.name),
+                esc(&e.at)
+            ));
+        }
+        out.push_str("</ul>");
+    }
+    if h.cut {
+        out.push_str(&format!(
+            "<p class=\"muted\">{}</p>",
+            txt::html(lang, "history_more", &[])
+        ));
+    }
+    out
 }
 
 /// What the form shows.
@@ -103,8 +145,12 @@ pub(crate) struct Form<'a> {
     pub document_hash: &'a str,
     /// The name as typed on an earlier try, to be given back.
     pub typed: &'a str,
-    /// `err_name` or `err_agree` when the last try was refused.
+    /// `err_name`, `err_agree` or `err_history` when the last try was refused.
     pub error: Option<&'a str>,
+    /// The signatures so far on this file, when the request asks for them (`show_history`): the
+    /// list, the sentence after the notice that tells the signer their name and time are shown, and
+    /// the hidden field that lets the door see the signer read it. `None` leaves the page as it was.
+    pub history: Option<&'a History>,
 }
 
 pub(crate) fn form(lang: &str, f: &Form<'_>) -> Page {
@@ -127,15 +173,15 @@ pub(crate) fn form(lang: &str, f: &Form<'_>) -> Page {
 <h2>{document}: {doc_title}</h2>\
 <object class=\"doc\" type=\"application/pdf\" data=\"{pdf}\"><p>{no_viewer}</p></object>\
 <p><a class=\"btn\" href=\"{pdf}\" target=\"_blank\" rel=\"noopener noreferrer\">{open_full}</a></p>\
-<p class=\"muted\">{fingerprint}</p>{error}\
+<p class=\"muted\">{fingerprint}</p>{history}{error}\
 <form method=\"post\" action=\"{base}\">\
-<input type=\"hidden\" name=\"doc\" value=\"{hash}\"><input type=\"hidden\" name=\"lang\" value=\"{lang}\">\
+<input type=\"hidden\" name=\"doc\" value=\"{hash}\"><input type=\"hidden\" name=\"lang\" value=\"{lang}\">{seen}\
 <label for=\"name\">{name_label}</label>\
 <input id=\"name\" name=\"name\" type=\"text\" maxlength=\"120\" autocomplete=\"name\" required value=\"{typed}\">\
 <p class=\"muted\">{name_hint}</p>\
 <div class=\"opt\"><input id=\"agree\" type=\"checkbox\" name=\"agree\" value=\"1\" required>\
 <label for=\"agree\">{consent}</label></div>\
-<p class=\"notice\">{records}</p>\
+<p class=\"notice\">{records}{history_notice}</p>\
 <button class=\"primary\" type=\"submit\">{submit}</button></form>",
         request = txt::html(lang, "request", &[("title", f.title)]),
         for_ = txt::html(lang, "for", &[("name", f.signer_name)]),
@@ -152,6 +198,19 @@ pub(crate) fn form(lang: &str, f: &Form<'_>) -> Page {
         consent = txt::html(lang, "consent", &[("name", f.signer_name)]),
         records = txt::html(lang, "records", &[]),
         submit = txt::html(lang, "submit", &[]),
+        history = f
+            .history
+            .map_or_else(String::new, |h| history_block(lang, h)),
+        seen = if f.history.is_some() {
+            "<input type=\"hidden\" name=\"hist\" value=\"1\">"
+        } else {
+            ""
+        },
+        history_notice = if f.history.is_some() {
+            format!(" {}", txt::html(lang, "history_notice", &[]))
+        } else {
+            String::new()
+        },
     );
     shell(
         lang,
@@ -178,6 +237,7 @@ mod tests {
                 document_hash: &"ab".repeat(32),
                 typed: "",
                 error: None,
+                history: None,
             },
         )
         .html
@@ -196,6 +256,256 @@ mod tests {
             from = end;
         }
         panic!("no <{tag}> with {needle} in the page");
+    }
+
+    fn sha(s: &str) -> String {
+        Sha256::digest(s.as_bytes())
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect()
+    }
+
+    /// The pages of a request that does not ask for the history, for the same input, as the code
+    /// before the history rendered them (taken from `origin/main` at 0986150, before any change of
+    /// this feature): the SHA-256 of the whole page, for the form, the page after signing and a
+    /// refusal. A change to the markup, the stylesheet or the texts of these pages fails it.
+    const BEFORE_THE_HISTORY: [(&str, &str, &str, &str); 7] = [
+        (
+            "en",
+            "e2f5a74fadf062bd79179968af846ddc813393613acf41ba2e9941cb51863003",
+            "00aeefff203f27f268115d0486b7b96f72625ed1ad5f6c67d2b74415e9de5d0f",
+            "fc0e820fa0379310efbbc309ec8a279f708695ded8eb166a0a69d9387aeabada",
+        ),
+        (
+            "de",
+            "6cc03defc51ddf23c8b7c3873a67d4d3fa7a1bb162742ae256031e892f68fcff",
+            "9f923b401b135fc382a046fd277a2381e7186c260a06beaa089d75ce0fbe3dad",
+            "d76174b3d47b31039d055b962c3bcf251bf10116f43f02fd675983c4f4f686e5",
+        ),
+        (
+            "fr",
+            "b4c3aeaf9fbb9f847707c1bbab7466bbe10ee4413c976239d718f6b869c4aeeb",
+            "5d2289079d28fa8e573163bda368759d20fbd233e4d93522571a5e1aa05320cb",
+            "7dc5fa9345cc22488faec6b1ffedd3e89f311cdf1d3f3d48f6ab163ca4a702a5",
+        ),
+        (
+            "pl",
+            "a0f2e158d6827802ddf37019ed9c2778f2d80db160fc182115be2a64014fc7dc",
+            "02f1e59b6267abe7d667e7e57dd0a17f672c1e2b86b45884ce086b263fbd3dd5",
+            "1e5cab3926d75356d646ad4f4adbe29e9cd603ac5245cfa487ba6e74f9f0b387",
+        ),
+        (
+            "fi",
+            "3148cb8f06c2070f537619b392af000d0365eddac3f92473092c3c0ac8bc3a5d",
+            "cddb81a95ce9401428fded6e9d8db9104d73811cca0faeef0932bbb9b80879f9",
+            "aa5471f0c91b1887cca657e115958611610af0e70cef2777c6360e8d54e60590",
+        ),
+        (
+            "sv",
+            "1eb834f4e95498af9e15239d73c84131fdeaefeb9c84eebf8405b02a85f0e1cf",
+            "9549d7acf2ef94dd44dfaa9105ef7922760faca82124e07a2fc4cb2e46d1b0ef",
+            "4340a6f63b713a38b91c1a0d84d5caef884533ce35dd646d471fbabcf7809b21",
+        ),
+        (
+            "es",
+            "4e84a06fb316ecc79a5b35d8fb0c7e26ec35781b0b23d48999abd10871dbd19d",
+            "da15b9b7dc498c819ddd78425064f0edc01e0849bf6e27e7d3f21629ac1b653f",
+            "49fc77ed26da535e42adfde6fba660a18240178580a8f6e6b543ef5fc9f8435e",
+        ),
+    ];
+
+    #[test]
+    fn the_pages_without_a_history_are_byte_for_byte_what_they_were_before_it() {
+        for (lang, form_hash, done_hash, closed_hash) in BEFORE_THE_HISTORY {
+            assert_eq!(sha(&form_html(lang)), form_hash, "{lang}: the form");
+            assert_eq!(
+                sha(&done(lang, "2026-11-03T10:00:00.000000Z", None).html),
+                done_hash,
+                "{lang}: the page after signing"
+            );
+            assert_eq!(
+                sha(&message(lang, "closed").html),
+                closed_hash,
+                "{lang}: a refusal"
+            );
+        }
+    }
+
+    /// The form again after a refused try (`err_name`, `err_agree`), as the door gives it back.
+    fn form_again(lang: &str, error: &str, history: Option<&History>) -> String {
+        form(
+            lang,
+            &Form {
+                rid: "rid1",
+                token: "tok1",
+                title: "Test NDA",
+                message: "",
+                signer_name: "Jane Test",
+                document_title: "Test NDA",
+                document_hash: &"ab".repeat(32),
+                typed: "",
+                error: Some(error),
+                history,
+            },
+        )
+        .html
+    }
+
+    #[test]
+    fn the_form_that_comes_back_after_a_refused_try_has_no_history_when_the_request_does_not_ask() {
+        for lang in LANGS {
+            let plain = form_html(lang);
+            let sentence = txt::html(lang, "history_notice", &[]);
+            for key in ["err_name", "err_agree"] {
+                let again = form_again(lang, key, None);
+                // Not the hidden field and not the sentence: the signer of a request that does not
+                // ask is not told that their name is shown, and the post does not claim it was.
+                assert!(
+                    !again.contains("name=\"hist\""),
+                    "{lang} {key}: the hidden field"
+                );
+                assert!(!again.contains(&sentence), "{lang} {key}: the sentence");
+                // The error line is the only difference from the page they first had.
+                let line = format!(
+                    "<div class=\"error\" role=\"alert\">{}</div>",
+                    txt::html(lang, key, &[])
+                );
+                assert_eq!(
+                    again.matches(&line).count(),
+                    1,
+                    "{lang} {key}: the error line"
+                );
+                // It sits where the door puts it, right before the form, and nothing else moved.
+                let expected = plain.replacen("<form method", &format!("{line}<form method"), 1);
+                assert_eq!(again, expected, "{lang} {key}: nothing else");
+            }
+        }
+    }
+
+    fn entry(name: &str, at: &str, own: bool) -> obop_commands::sign::HistoryEntry {
+        obop_commands::sign::HistoryEntry {
+            name: name.to_string(),
+            at: at.to_string(),
+            own,
+        }
+    }
+
+    fn form_with(lang: &str, history: Option<&History>) -> Page {
+        form(
+            lang,
+            &Form {
+                rid: "rid1",
+                token: "tok1",
+                title: "Test NDA",
+                message: "",
+                signer_name: "Jane Test",
+                document_title: "Test NDA",
+                document_hash: &"ab".repeat(32),
+                typed: "",
+                error: None,
+                history,
+            },
+        )
+    }
+
+    #[test]
+    fn a_page_with_a_history_adds_to_the_page_and_changes_neither_the_style_nor_the_policy() {
+        let h = History {
+            entries: vec![
+                entry("Alice Example", "2026-11-03T10:00:00Z", false),
+                entry("Bob Example", "2026-11-03T11:30:05Z", false),
+            ],
+            cut: false,
+        };
+        for lang in LANGS {
+            let plain = form_with(lang, None);
+            let with = form_with(lang, Some(&h));
+            assert_eq!(plain.csp, with.csp, "{lang}: the policy");
+            assert!(with.html.contains(CSS), "{lang}");
+            // The block sits between the fingerprint and the form, in the order given.
+            let title = txt::html(lang, "history_title", &[]);
+            let fingerprint = txt::html(lang, "fingerprint", &[("hash", &"ab".repeat(8))]);
+            let (f, t, a, b, form_at) = (
+                with.html.find(&fingerprint).unwrap(),
+                with.html.find(&format!("<h2>{title}</h2>")).unwrap(),
+                with.html.find("Alice Example").unwrap(),
+                with.html.find("Bob Example").unwrap(),
+                with.html.find("<form").unwrap(),
+            );
+            assert!(f < t && t < a && a < b && b < form_at, "{lang}: order");
+            assert!(with.html.contains("2026-11-03T10:00:00Z"), "{lang}");
+            assert!(with.html.contains("2026-11-03T11:30:05Z"), "{lang}");
+            // The sentence is in the notice, after the words it already holds, and the form tells
+            // the door that the signer was shown it.
+            let records = txt::html(lang, "records", &[]);
+            let notice = txt::html(lang, "history_notice", &[]);
+            assert!(
+                with.html
+                    .contains(&format!("<p class=\"notice\">{records} {notice}</p>")),
+                "{lang}: the notice"
+            );
+            assert_eq!(with.html.matches("name=\"hist\"").count(), 1, "{lang}");
+            assert_eq!(plain.html.matches("name=\"hist\"").count(), 0, "{lang}");
+            // Nothing else was added: take the additions out and the page is the plain one.
+            let stripped = with
+                .html
+                .replace(&format!(" {notice}"), "")
+                .replace("<input type=\"hidden\" name=\"hist\" value=\"1\">", "");
+            let block_start = stripped.find(&format!("<h2>{title}</h2>")).unwrap();
+            let block_end = stripped[block_start..].find("<form").unwrap() + block_start;
+            let stripped = format!("{}{}", &stripped[..block_start], &stripped[block_end..]);
+            assert_eq!(stripped, plain.html, "{lang}");
+            // Still no script and no style attribute.
+            assert!(!with.html.contains("<script") && !with.html.contains(" style="));
+        }
+    }
+
+    #[test]
+    fn the_history_block_is_escaped_marks_the_viewer_and_says_when_nothing_or_not_everything() {
+        let evil = "<script>alert(1)</script> & \"q\" 'x'";
+        let h = History {
+            entries: vec![
+                entry(evil, "2026-11-03T10:00:00Z", false),
+                entry("Alice Example", "2026-11-03T10:00:01Z", true),
+            ],
+            cut: true,
+        };
+        let page = done("en", "2026-11-03T10:00:01.000000Z", Some(&h)).html;
+        assert!(!page.contains("<script"), "{page}");
+        assert!(
+            page.contains(&esc(evil)) && esc(evil).contains("&lt;script&gt;"),
+            "{page}"
+        );
+        // Only the viewer's own row is marked.
+        assert_eq!(page.matches("<strong>(you)</strong>").count(), 1, "{page}");
+        let own = page.find("Alice Example").unwrap();
+        assert!(page[own..].contains("<strong>(you)</strong>"));
+        assert!(page[..own].matches("<strong>").count() == 0);
+        // Cut: the line says so.
+        assert!(page.contains("Only the earliest signatures are listed here."));
+        // Empty, and not cut.
+        let none = done(
+            "en",
+            "2026-11-03T10:00:01.000000Z",
+            Some(&History::default()),
+        )
+        .html;
+        assert!(none.contains("Nobody has signed this file yet."));
+        assert!(!none.contains("<ul>") && !none.contains("Only the earliest"));
+        // The page after signing is the old one plus the block, in every language.
+        for lang in LANGS {
+            let plain = done(lang, "2026-11-03T10:00:01.000000Z", None).html;
+            let with = done(lang, "2026-11-03T10:00:01.000000Z", Some(&h)).html;
+            let head = &plain[..plain.find("</div></main>").unwrap()];
+            assert!(
+                with.starts_with(head),
+                "{lang}: the old page is the start of the new"
+            );
+            assert!(
+                with.contains(&txt::html(lang, "history_you", &[])),
+                "{lang}"
+            );
+        }
     }
 
     #[test]

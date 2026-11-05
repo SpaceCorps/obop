@@ -175,6 +175,11 @@ pub struct Reads {
     /// returned.
     pub keyed: u64,
     pub keyed_rows: u64,
+    /// Calls of `count`.
+    pub counts: u64,
+    /// Calls that read a short-lived value or a counter (`kv_get`, `kv_scan`, `counter_get`,
+    /// `counter_ttl_ms`).
+    pub kv_reads: u64,
 }
 
 /// What [`Flaky::after_the_next_insert_into`] runs, with the wrapped backend.
@@ -579,6 +584,7 @@ impl Backend for Flaky {
     }
     fn count(&self, model: &str) -> Result<usize> {
         self.gate_m(false, model)?;
+        self.reads.lock().unwrap().counts += 1;
         self.inner.count(model)
     }
     fn delete(&self, model: &str, id: &str) -> Result<bool> {
@@ -701,10 +707,12 @@ impl Backend for Flaky {
     }
     fn counter_get(&self, key: &str) -> Result<u64> {
         self.gate(false)?;
+        self.reads.lock().unwrap().kv_reads += 1;
         self.inner.counter_get(key)
     }
     fn counter_ttl_ms(&self, key: &str) -> Result<Option<u64>> {
         self.gate(false)?;
+        self.reads.lock().unwrap().kv_reads += 1;
         self.inner.counter_ttl_ms(key)
     }
     fn counter_reset(&self, key: &str) -> Result<()> {
@@ -756,6 +764,7 @@ impl Backend for Flaky {
             let _ = self.inner.kv_delete(key);
         }
         self.gate(false)?;
+        self.reads.lock().unwrap().kv_reads += 1;
         self.inner.kv_get(key)
     }
     fn kv_delete(&self, key: &str) -> Result<bool> {
@@ -764,6 +773,7 @@ impl Backend for Flaky {
     }
     fn kv_scan(&self, prefix: &str) -> Result<Vec<(String, String)>> {
         self.gate(false)?;
+        self.reads.lock().unwrap().kv_reads += 1;
         self.inner.kv_scan(prefix)
     }
     fn purge_expired(&self) -> Result<usize> {

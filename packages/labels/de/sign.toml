@@ -63,6 +63,10 @@ description = "Tag, an dem die Anfrage gesendet wurde (YYYY-MM-DD)"
 label = "Läuft ab am"
 description = "Letzter Tag, an dem die Anfrage unterzeichnet werden kann (YYYY-MM-DD)"
 
+[labels.de.model.sign_request.field.show_history]
+label = "Bisherige Unterschriften der unterzeichnenden Person zeigen"
+description = "Zeigt der unterzeichnenden Person, wer dieselbe Datei (gleiches Dokument, SHA-256) über eine Anfrage mit gesetztem Häkchen unterzeichnet hat: Name und Zeit. Vorher wird sie darauf hingewiesen, dass ihre eigenen auch gezeigt werden. Nur für eine Datei, die mehrere benannte Personen gemeinsam unterzeichnen, nie für Unbeteiligte. Vor dem Häkchen Unterzeichnetes wird nie gezeigt. Leer bedeutet aus"
+
 [labels.de.model.sign_request.field.signed_on]
 label = "Unterzeichnet am"
 description = "Tag, an dem das Dokument unterzeichnet wurde (YYYY-MM-DD)"

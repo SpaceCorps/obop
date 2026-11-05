@@ -1,7 +1,10 @@
 //! The signer's door: what the page at `/sign/{request}/{token}` calls.
 //!
-//! The signer is not a principal. The link is a capability that reaches exactly one held PDF and
-//! one change of state. Every outcome that is not a success is one of [`DoorError`]; an unknown
+//! The signer is not a principal. The link is a capability that reaches one held PDF and moves
+//! one request. When that request asks for it (`show_history`, see `history.rs`) the page of the
+//! link also lists the typed name and the time of the other signed requests of the same file:
+//! the door reads those requests to find them, puts those two fields on the page, and changes
+//! nothing of them. Every outcome that is not a success is one of [`DoorError`]; an unknown
 //! link, a wrong token, a token for another request and a malformed address are all `NotFound`
 //! and cannot be told apart.
 //!
@@ -95,6 +98,10 @@ pub enum Gone {
 pub enum Invalid {
     Name,
     Agree,
+    /// The request shows the signatures so far (`show_history`) and the form was made from a page
+    /// that did not say so: the staff switch was turned on after the signer opened the page. Nothing
+    /// was written; the page is shown again with the notice.
+    History,
 }
 
 /// What the page shows for a link that works.
@@ -107,6 +114,9 @@ pub struct ViewData {
     /// The SHA-256 of the document (hex); the form sends it back as `doc`.
     pub document_hash: String,
     pub expires_at: String,
+    /// The signatures so far on this file, when the request asks for them (`show_history`); `None`
+    /// for every other request, which is shown the page it has always been shown.
+    pub history: Option<History>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -115,6 +125,8 @@ pub enum View {
     /// The link was used: the request is signed at this time.
     Signed {
         at: String,
+        /// As [`ViewData::history`], with the signer's own entry marked.
+        history: Option<History>,
     },
 }
 
@@ -129,6 +141,17 @@ pub struct SignForm {
     /// `v1-draft/de/9ebff173` (derived by the HTTP layer from the page texts, `sign_text.rs`); an
     /// empty id is stored as `v1-draft`.
     pub consent_version: String,
+    /// The same for a request that shows the signatures so far (`sign_text.rs`,
+    /// `consent_version_with_history_for`): it also covers the sentence that tells the signer their
+    /// name and time are shown to the others, and ends in [`HISTORY_CONSENT_MARK`], for example
+    /// `v1-draft/de/d08d0039/history`. The door stores this one, and not `consent_version`, for
+    /// such a request. Empty is stored as `v1-draft`, as above; a signature stored without the
+    /// mark is never listed to the others.
+    pub consent_version_history: String,
+    /// The form says it came from a page that carried that sentence (the hidden field `hist`).
+    /// This is the client's word: the door cannot tell what the browser was shown, only that a
+    /// form for a request that asks must say so (see `submit`).
+    pub saw_history: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -137,11 +160,11 @@ pub struct Done {
     pub already: bool,
 }
 
-struct Found {
-    id: String,
-    rid: String,
-    link: Fields,
-    req: Fields,
+pub(super) struct Found {
+    pub(super) id: String,
+    pub(super) rid: String,
+    pub(super) link: Fields,
+    pub(super) req: Fields,
 }
 
 /// A signed request shows the time it was signed. One that carries no time was not signed at the
@@ -159,7 +182,7 @@ enum Status {
     Gone(Gone),
 }
 
-fn unavailable(e: String) -> DoorError {
+pub(super) fn unavailable(e: String) -> DoorError {
     eprintln!("sign: the store refused: {e}");
     DoorError::Unavailable
 }
@@ -172,7 +195,7 @@ fn logged(raw: &str, max: usize) -> String {
 
 /// A text from outside made safe for a log line or a record: hidden characters and line breaks
 /// gone, cut to `max` characters.
-fn clean(raw: &str, max: usize) -> String {
+pub(super) fn clean(raw: &str, max: usize) -> String {
     strip_hidden(&raw.chars().take(max * 2).collect::<String>())
         .chars()
         .take(max)
@@ -259,6 +282,31 @@ impl SignService {
         })
     }
 
+    /// The link's own end and the end of the request's `expires_on` day, whichever is first, have
+    /// passed (the clock of the service). A link without a readable end has ended: it does not
+    /// work. The one rule of the page, of the PDF and of the history of the file. Where it is
+    /// looked at is the order of [`Self::status`]: for a link that was used, or that was not used
+    /// and belongs to a signed request, `status` does not look at it at all (the page after
+    /// signing is given whatever the end) and only the list on that page stops with it.
+    pub(super) fn ended(&self, f: &Found) -> bool {
+        let mut end = instant_micros(text(&f.link, "expires_at")).unwrap_or(i64::MIN);
+        if let Some(day_end) = end_of_day_micros(text(&f.req, "expires_on")) {
+            end = end.min(day_end);
+        }
+        self.now_micros() > end
+    }
+
+    /// What a link shows, by the first of these that holds (docs/SIGN.md, "When the list is
+    /// served"; `the_door_looks_at_a_link_in_the_order_the_documents_state` pins it):
+    ///
+    /// 1. the link was used (`used_at`): the page after signing when the request is signed and
+    ///    carries a time, else "closed"; neither `revoked_at` nor the end is looked at;
+    /// 2. the link was not used and is revoked: "revoked" (410), whatever the request is;
+    /// 3. the link was not used and the request is signed: the page after signing, or "closed"
+    ///    when it carries no time; the end of the link is not looked at;
+    /// 4. the link has ended ([`Self::ended`]): "expired";
+    /// 5. the request is not `sent`: "closed";
+    /// 6. the form.
     fn status(&self, f: &Found) -> Status {
         if !text(&f.link, "used_at").is_empty() {
             return if text(&f.req, "state") == "signed" {
@@ -276,14 +324,7 @@ impl SignService {
         if text(&f.req, "state") == "signed" {
             return signed(f);
         }
-        // The link's own end, and the end of the request, whichever is first. A link without a
-        // readable end does not work.
-        let now = self.now_micros();
-        let mut end = instant_micros(text(&f.link, "expires_at")).unwrap_or(i64::MIN);
-        if let Some(day_end) = end_of_day_micros(text(&f.req, "expires_on")) {
-            end = end.min(day_end);
-        }
-        if now > end {
+        if self.ended(f) {
             return Status::Gone(Gone::Expired);
         }
         if text(&f.req, "state") != "sent" {
@@ -357,7 +398,12 @@ impl SignService {
             WINDOW_10_MIN,
         )?;
         match self.status(&f) {
-            Status::Signed(at) => Ok(View::Signed { at }),
+            Status::Signed(at) => Ok(View::Signed {
+                // The end page of a link that is over, or of a used link that was revoked, is the
+                // page it always was: no list (`history_for_end_page`).
+                history: self.history_for_end_page(&f)?,
+                at,
+            }),
             Status::Gone(g) => Err(DoorError::Gone(g)),
             Status::Usable => {
                 let doc = self.cheap_integrity(&f, client)?;
@@ -371,6 +417,7 @@ impl SignService {
                     document_title: cut(text(&doc, "title"), 200),
                     document_hash: text(&f.req, "document_hash").to_string(),
                     expires_at: text(&f.link, "expires_at").to_string(),
+                    history: self.history_for(&f)?,
                 }))
             }
         }
@@ -444,6 +491,17 @@ impl SignService {
             }
             Status::Usable => {}
         }
+        // A request that shows the signatures so far tells the signer so on its page. A form that
+        // does not say it came from such a page (the switch was turned on after the page was made)
+        // is not signed. What this keeps true is narrow: a request that asks is never signed under
+        // the id of the wording without the sentence, and one that does not ask is never signed
+        // under the id with it (the batch below compares the switch with what is read here). The
+        // field `hist` is the client's word, so it does not prove that the browser showed the
+        // sentence: a script that posts it without opening the page is stored under that id too.
+        let history = self.history_on(&f.req);
+        if history && !form.saw_history {
+            return Err(DoorError::Invalid(Invalid::History));
+        }
         let name = clean_name(&form.name).ok_or(DoorError::Invalid(Invalid::Name))?;
         if !form.agree {
             return Err(DoorError::Invalid(Invalid::Agree));
@@ -475,7 +533,12 @@ impl SignService {
         let ip = client.ip();
         let agent = clean(&client.user_agent, 300);
         let reference = format!("typed:{name}");
-        let consent = match clean(&form.consent_version, 40) {
+        let wording = if history {
+            &form.consent_version_history
+        } else {
+            &form.consent_version
+        };
+        let consent = match clean(wording, 40) {
             c if c.is_empty() => "v1-draft".to_string(),
             c => c,
         };
@@ -522,6 +585,12 @@ impl SignService {
                 expect: vec![
                     ("state".into(), J::from("sent")),
                     ("document_hash".into(), J::from(hash.clone())),
+                    // The switch is what the door read: one turned on or off after the read would
+                    // leave a signature under the wording of the other (the id stored above).
+                    (
+                        HISTORY_FLAG.into(),
+                        f.req.get(HISTORY_FLAG).cloned().unwrap_or(J::Null),
+                    ),
                 ],
             },
             // An empty patch that only checks, in the same transaction, that the Document still

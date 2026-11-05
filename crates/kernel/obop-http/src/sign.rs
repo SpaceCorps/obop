@@ -4,11 +4,15 @@
 //! browser post came from.
 //!
 //! No cookie is set or read, there is no script, and a `GET` changes no request, link or
-//! evidence (a mail scanner or a link preview that opens the link is harmless; it counts toward
-//! the rate limits and, when the integrity check fails, writes one `sign_refused` entry). Every
-//! answer of these handlers that is not the PDF has the headers of the other pages of the server
-//! (`harden`) plus `noindex`, and so has the PDF's, which otherwise has its own set
-//! (`inline_pdf_response`), because `X-Frame-Options: DENY` would stop the page from showing it.
+//! evidence record (it counts toward the rate limits and, when the integrity check fails, writes
+//! one `sign_refused` entry). That is all a view does to the records, and it is not the same as
+//! showing nothing: for a request that shows the history of the file the page of a working link
+//! includes the typed names and times of the others who signed the file, and it is given to any
+//! `GET` of the link, so to a mail scanner, a link preview or a proxy as to the signer, and the
+//! view is not logged (docs/ISSUES.md O53, O58). Every answer of these handlers that is not the
+//! PDF has the headers of the other pages of the server (`harden`) plus `noindex`, and so has the
+//! PDF's, which otherwise has its own set (`inline_pdf_response`), because
+//! `X-Frame-Options: DENY` would stop the page from showing it.
 //! The rejections of the framework before a handler runs (405, 413, a bad encoding in the
 //! address) are plain text with neither set. The address comes from `client_ip`, which trusts
 //! `X-Forwarded-For` only with `--trust-proxy`; the log entry of a signature also holds the peer
@@ -273,6 +277,7 @@ fn form_page(v: &FormView<'_>) -> Response {
                 document_hash: &v.data.document_hash,
                 typed: v.typed,
                 error: v.error,
+                history: v.data.history.as_ref(),
             },
         ),
     )
@@ -302,7 +307,9 @@ pub(crate) async fn page(
                 error: None,
                 status: StatusCode::OK,
             }),
-            Ok(View::Signed { at }) => page_response(StatusCode::OK, sign_page::done(lang, &at)),
+            Ok(View::Signed { at, history }) => {
+                page_response(StatusCode::OK, sign_page::done(lang, &at, history.as_ref()))
+            }
             Err(e) => refusal(&e, lang),
         }
     })
@@ -358,6 +365,10 @@ pub(crate) async fn submit(
             agree: pair(&pairs, "agree") == Some("1"),
             doc: pair(&pairs, "doc").unwrap_or("").to_string(),
             consent_version: txt::consent_version_for(lang),
+            // For a request that shows the signatures so far; the door picks between the two.
+            consent_version_history: txt::consent_version_with_history_for(lang),
+            // The hidden field of the page that carried the sentence about it.
+            saw_history: pair(&pairs, "hist") == Some("1"),
         };
         let c = client(&s, &parts);
         match svc.submit(&rid, &tok, &form, &c) {
@@ -379,11 +390,12 @@ pub(crate) async fn submit(
                         error: Some(match why {
                             Invalid::Name => "err_name",
                             Invalid::Agree => "err_agree",
+                            Invalid::History => "err_history",
                         }),
                         status: StatusCode::BAD_REQUEST,
                     }),
-                    Ok(View::Signed { at }) => {
-                        page_response(StatusCode::OK, sign_page::done(lang, &at))
+                    Ok(View::Signed { at, history }) => {
+                        page_response(StatusCode::OK, sign_page::done(lang, &at, history.as_ref()))
                     }
                     Err(e) => refusal(&e, lang),
                 }
@@ -589,6 +601,7 @@ mod tests {
             DoorError::Unavailable,
             DoorError::Invalid(Invalid::Name),
             DoorError::Invalid(Invalid::Agree),
+            DoorError::Invalid(Invalid::History),
             DoorError::Refused,
         ] {
             let (_, key) = refusal_parts(&e);

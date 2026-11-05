@@ -63,6 +63,10 @@ description = "Jour d’envoi de la demande (YYYY-MM-DD)"
 label = "Expire le"
 description = "Dernier jour où la demande peut être signée (YYYY-MM-DD)"
 
+[labels.fr.model.sign_request.field.show_history]
+label = "Montrer au signataire les signatures déjà apposées"
+description = "Montre au signataire qui a signé ce même fichier (même document et SHA-256) par une demande à case cochée : nom saisi et heure. Il est averti avant de signer que les siens sont montrés aussi. Seulement pour un fichier que plusieurs personnes nommées signent ensemble, jamais pour des personnes sans lien. Une demande signée avant que la case soit cochée n'est jamais montrée. Vide signifie désactivé"
+
 [labels.fr.model.sign_request.field.signed_on]
 label = "Signé le"
 description = "Jour où le document a été signé (YYYY-MM-DD)"
