@@ -1,0 +1,451 @@
+//! `brand::apply`: merge, validation, idempotence, `dry_run` (docs/spec/branding.md, section 3 and
+//! section 13, "Merge" and "Commands").
+
+use super::*;
+use crate::brand::{Action, Applied, Failure, apply, changes_json, refusals_json};
+use obop_brand::{logo, tile};
+
+fn cfg(pairs: &[(&str, &str)]) -> Action {
+    Action::Configure(
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect(),
+    )
+}
+
+fn run(spy: &Spy, action: &Action) -> Result<Applied, Failure> {
+    apply(spy, None, "ada", action, false)
+}
+
+fn ok(spy: &Spy, pairs: &[(&str, &str)]) -> Applied {
+    run(spy, &cfg(pairs)).unwrap_or_else(|e| panic!("refused: {e}"))
+}
+
+fn refusals(r: Result<Applied, Failure>) -> Vec<(String, String)> {
+    match r {
+        Err(Failure::Refused(list)) => list.into_iter().map(|r| (r.field, r.rule)).collect(),
+        other => panic!("expected a refusal, got {other:?}"),
+    }
+}
+
+fn stored(spy: &Spy) -> Option<Fields> {
+    spy.get(MODEL, ROW_ID).unwrap()
+}
+
+fn text(f: &Fields, k: &str) -> String {
+    f.get(k).and_then(J::as_str).unwrap_or("").to_string()
+}
+
+fn events(spy: &Spy) -> usize {
+    spy.list("security_event").unwrap().len()
+}
+
+#[test]
+fn the_first_call_needs_a_name() {
+    let spy = Spy::memory();
+    let r = refusals(run(&spy, &cfg(&[("title_en", "Hello")])));
+    assert_eq!(r.len(), 1);
+    assert_eq!(r[0].0, "name");
+    assert!(r[0].1.contains("required"), "{}", r[0].1);
+    assert!(
+        stored(&spy).is_none() && events(&spy) == 0,
+        "nothing is stored"
+    );
+    // An empty call has no name either.
+    assert_eq!(refusals(run(&spy, &cfg(&[])))[0].0, "name");
+}
+
+#[test]
+fn the_first_call_with_a_name_stores_the_row_and_answers_the_version_of_the_logo() {
+    let spy = Spy::memory();
+    put_theme(&*spy, "#c2410c");
+    let a = ok(&spy, &[("name", "MOHV")]);
+    assert_eq!(a.changes.len(), 1);
+    assert_eq!(
+        (a.changes[0].field.as_str(), a.changes[0].old.as_str()),
+        ("name", "")
+    );
+    assert_eq!(a.changes[0].new, "MOHV");
+    assert!(!a.dry_run && a.refusals.is_empty() && !a.cleared);
+    // The tile follows the theme accent, and v is the hash of what the route will serve.
+    let tile = tile::svg("MOHV", Some("#c2410c"), None);
+    assert_eq!(a.v, logo::version(tile.as_bytes()));
+    let row = stored(&spy).unwrap();
+    assert_eq!(text(&row, "name"), "MOHV");
+    assert_eq!(
+        row.len(),
+        1,
+        "only the fields that hold a value are stored: {row:?}"
+    );
+}
+
+#[test]
+fn the_one_flag_logo_swap_keeps_the_name_titles_and_messages() {
+    let spy = Spy::memory();
+    ok(
+        &spy,
+        &[
+            ("name", "MOHV"),
+            ("title_sv", "Logga in"),
+            ("message_en", "Welcome"),
+            ("slug", "mohv"),
+        ],
+    );
+    let a = ok(&spy, &[("logo_svg", M_ARTWORK)]);
+    assert_eq!(a.changes.len(), 1);
+    assert_eq!(a.changes[0].field, "logo_svg");
+    assert_eq!(a.changes[0].old, "");
+    assert_eq!(a.changes[0].new, logo::version(M_ARTWORK.as_bytes()));
+    assert_eq!(a.v, logo::version(M_ARTWORK.as_bytes()));
+    let row = stored(&spy).unwrap();
+    assert_eq!(text(&row, "name"), "MOHV");
+    assert_eq!(text(&row, "title_sv"), "Logga in");
+    assert_eq!(text(&row, "message_en"), "Welcome");
+    assert_eq!(text(&row, "slug"), "mohv");
+    assert_eq!(text(&row, "logo_svg"), M_ARTWORK);
+    // The clear flag returns to the tile and touches nothing else.
+    let a = ok(&spy, &[("logo_svg", "")]);
+    assert_eq!(a.changes.len(), 1);
+    assert_eq!(a.changes[0].old, logo::version(M_ARTWORK.as_bytes()));
+    assert_eq!(a.changes[0].new, "");
+    let row = stored(&spy).unwrap();
+    assert!(!row.contains_key("logo_svg"));
+    assert_eq!(text(&row, "name"), "MOHV");
+    assert_eq!(text(&row, "title_sv"), "Logga in");
+}
+
+#[test]
+fn an_empty_text_clears_only_that_field() {
+    let spy = Spy::memory();
+    ok(
+        &spy,
+        &[
+            ("name", "MOHV"),
+            ("title_sv", "Logga in"),
+            ("title_de", "Anmelden"),
+        ],
+    );
+    let a = ok(&spy, &[("title_sv", "")]);
+    assert_eq!(a.changes.len(), 1);
+    let row = stored(&spy).unwrap();
+    assert!(!row.contains_key("title_sv"));
+    assert_eq!(text(&row, "title_de"), "Anmelden");
+    // A slug is cleared the same way.
+    ok(&spy, &[("slug", "mohv")]);
+    ok(&spy, &[("slug", "")]);
+    assert!(!stored(&spy).unwrap().contains_key("slug"));
+}
+
+#[test]
+fn a_name_cannot_be_cleared_only_replaced() {
+    let spy = Spy::memory();
+    ok(&spy, &[("name", "MOHV")]);
+    let r = refusals(run(&spy, &cfg(&[("name", "")])));
+    assert_eq!(r[0].0, "name");
+    assert_eq!(text(&stored(&spy).unwrap(), "name"), "MOHV");
+    ok(&spy, &[("name", "MOHV Two")]);
+    assert_eq!(text(&stored(&spy).unwrap(), "name"), "MOHV Two");
+}
+
+#[test]
+fn a_second_identical_call_changes_nothing_and_writes_no_event() {
+    let spy = Spy::memory();
+    let call = [
+        ("name", "MOHV"),
+        ("title_sv", "Logga in"),
+        ("logo_svg", M_ARTWORK),
+    ];
+    ok(&spy, &call);
+    let (batches, logged, row) = (spy.batches().len(), events(&spy), stored(&spy));
+    let a = ok(&spy, &call);
+    assert!(a.changes.is_empty(), "{:?}", a.changes);
+    assert_eq!(
+        a.v,
+        logo::version(M_ARTWORK.as_bytes()),
+        "v is still answered"
+    );
+    assert_eq!(spy.batches().len(), batches, "no batch at all");
+    assert_eq!(events(&spy), logged);
+    assert_eq!(stored(&spy), row);
+}
+
+#[test]
+fn a_refused_field_stores_nothing_of_the_call() {
+    let spy = Spy::memory();
+    ok(&spy, &[("name", "MOHV")]);
+    let (row, logged) = (stored(&spy), events(&spy));
+    let r = refusals(run(
+        &spy,
+        &cfg(&[
+            ("name", "Zed"),
+            ("title_en", "Fine"),
+            ("message_en", "visit shop.example"),
+        ]),
+    ));
+    assert_eq!(r.len(), 1);
+    assert_eq!(r[0].0, "message_en");
+    assert_eq!(stored(&spy), row, "not even the valid fields");
+    assert_eq!(events(&spy), logged);
+}
+
+#[test]
+fn every_refusal_is_in_the_message_one_per_line_as_field_and_rule() {
+    let spy = Spy::memory();
+    let e = run(
+        &spy,
+        &cfg(&[
+            ("name", "a:b"),
+            ("title_sv", "<b>"),
+            ("message_fi", "call 1234567"),
+        ]),
+    )
+    .unwrap_err();
+    let msg = e.to_string();
+    let lines: Vec<&str> = msg.lines().collect();
+    assert_eq!(lines.len(), 3, "{msg}");
+    assert!(lines[0].starts_with("name: "), "{msg}");
+    assert!(lines[1].starts_with("title_sv: "), "{msg}");
+    assert!(lines[2].starts_with("message_fi: "), "{msg}");
+    // The refusals repeat no raw text of the input.
+    assert!(!msg.contains("1234567") || msg.contains("digit"));
+}
+
+#[test]
+fn dry_run_writes_nothing_logs_nothing_and_reports_the_same_refusals() {
+    let spy = Spy::memory();
+    let bad = cfg(&[("name", "a:b"), ("message_en", "see shop.example")]);
+    let real = refusals(run(&spy, &bad));
+    let dry = apply(&*spy, None, "ada", &bad, true).unwrap();
+    assert!(dry.dry_run);
+    assert!(dry.changes.is_empty());
+    let dry_list: Vec<(String, String)> = dry
+        .refusals
+        .iter()
+        .map(|r| (r.field.clone(), r.rule.clone()))
+        .collect();
+    assert_eq!(dry_list, real, "the same refusals, typed");
+    // A dry run with a good call says what would change and writes nothing.
+    let good = cfg(&[("name", "MOHV"), ("logo_svg", M_ARTWORK)]);
+    let dry = apply(&*spy, None, "ada", &good, true).unwrap();
+    assert!(dry.refusals.is_empty());
+    assert_eq!(dry.changes.len(), 2);
+    assert_eq!(dry.v, logo::version(M_ARTWORK.as_bytes()));
+    assert!(stored(&spy).is_none());
+    assert_eq!(events(&spy), 0);
+    assert!(spy.batches().is_empty());
+    // A dry run on a missing name says so too.
+    let dry = apply(&*spy, None, "ada", &cfg(&[("title_en", "x")]), true).unwrap();
+    assert_eq!(dry.refusals[0].field, "name");
+    // And the JSON of the answer carries the fields of the spec.
+    let j: J = serde_json::from_str(&refusals_json(&dry.refusals)).unwrap();
+    assert_eq!(j[0]["field"], "name");
+    assert!(j[0]["rule"].is_string());
+}
+
+#[test]
+fn unknown_keys_are_refused_by_name_and_the_name_is_made_safe_to_repeat() {
+    let spy = Spy::memory();
+    for key in [
+        "v",
+        "id",
+        "set",
+        "changes",
+        "dry_run",
+        "hide_product_docs",
+        "frob",
+    ] {
+        let r = refusals(run(&spy, &cfg(&[("name", "MOHV"), (key, "x")])));
+        assert_eq!(r.len(), 1, "{key}");
+        assert_eq!(r[0].0, key);
+        assert!(r[0].1.contains("not a field"), "{}", r[0].1);
+        assert!(stored(&spy).is_none());
+    }
+    let r = refusals(run(&spy, &cfg(&[("name", "MOHV"), ("a\nb\u{202e}c", "x")])));
+    assert_eq!(
+        r[0].0, "a?b?c",
+        "no control or bidirectional character is repeated"
+    );
+    let long = "k".repeat(100);
+    let r = refusals(run(&spy, &cfg(&[("name", "MOHV"), (long.as_str(), "x")])));
+    assert!(r[0].0.len() <= 43, "{}", r[0].0);
+}
+
+#[test]
+fn a_field_this_binary_does_not_know_survives_a_merge() {
+    // A newer binary stored a field (S2 adds hide_product_docs). An older binary that changes a
+    // title must not drop it by replacing the whole row.
+    let spy = Spy::memory();
+    put_row(
+        &*spy,
+        &[
+            ("name", s("MOHV")),
+            ("hide_product_docs", J::Bool(true)),
+            ("future_field", s("kept")),
+        ],
+    );
+    ok(&spy, &[("title_sv", "Logga in")]);
+    let row = stored(&spy).unwrap();
+    assert_eq!(row.get("hide_product_docs"), Some(&J::Bool(true)));
+    assert_eq!(text(&row, "future_field"), "kept");
+    assert_eq!(text(&row, "title_sv"), "Logga in");
+}
+
+#[test]
+fn a_stored_field_that_is_not_supplied_is_not_checked_again_but_a_supplied_one_is() {
+    // A message with a link was written around the command (or by a release with a looser policy).
+    // Changing the name does not refuse it; sending it again does.
+    let spy = Spy::memory();
+    put_row(
+        &*spy,
+        &[("name", s("MOHV")), ("message_en", s("visit shop.example"))],
+    );
+    ok(&spy, &[("name", "MOHV Two")]);
+    assert_eq!(
+        text(&stored(&spy).unwrap(), "message_en"),
+        "visit shop.example"
+    );
+    let r = refusals(run(&spy, &cfg(&[("message_en", "visit shop.example")])));
+    assert_eq!(r[0].0, "message_en");
+}
+
+#[test]
+fn text_is_stored_in_nfc() {
+    let spy = Spy::memory();
+    ok(&spy, &[("name", "Cafe\u{301}")]);
+    assert_eq!(text(&stored(&spy).unwrap(), "name"), "Caf\u{e9}");
+    // The same value in the other form is no change.
+    let a = ok(&spy, &[("name", "Caf\u{e9}")]);
+    assert!(a.changes.is_empty());
+}
+
+#[test]
+fn an_artwork_is_stored_in_canonical_form_never_as_given() {
+    let spy = Spy::memory();
+    let given = "<?xml version=\"1.0\"?>\n<svg  xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\">\n  <path d=\"M .5 .5 L 10.000000 10 L 5. 20 Z\" fill=\"#FFFFFF\"/>\n</svg>\n";
+    let canonical = obop_brand::svg::canonical(given.as_bytes()).unwrap();
+    assert_ne!(canonical, given);
+    ok(&spy, &[("name", "MOHV"), ("logo_svg", given)]);
+    assert_eq!(text(&stored(&spy).unwrap(), "logo_svg"), canonical);
+    // The same file again is no change.
+    assert!(ok(&spy, &[("logo_svg", given)]).changes.is_empty());
+}
+
+#[test]
+fn an_artwork_the_reader_refuses_names_the_reason_and_stores_nothing() {
+    let spy = Spy::memory();
+    ok(&spy, &[("name", "MOHV")]);
+    for (what, svg, named) in [
+        (
+            "a script",
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\"><script>x</script></svg>",
+            "script",
+        ),
+        (
+            "a link",
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\"><a href=\"https://x.example\"/></svg>",
+            "<a>",
+        ),
+        ("not svg", "hello", ""),
+    ] {
+        let r = refusals(run(&spy, &cfg(&[("logo_svg", svg)])));
+        assert!(!r.is_empty(), "{what}");
+        assert!(
+            r.iter()
+                .all(|(f, rule)| f == "logo_svg" && !rule.is_empty()),
+            "{what}"
+        );
+        assert!(
+            r.iter().any(|(_, rule)| rule.contains(named)),
+            "{what}: {r:?}"
+        );
+        assert!(!stored(&spy).unwrap().contains_key("logo_svg"));
+    }
+    // A file over 16 KiB is refused.
+    let big = format!("{M_ARTWORK}{}", " ".repeat(17 * 1024));
+    assert!(!refusals(run(&spy, &cfg(&[("logo_svg", big.as_str())]))).is_empty());
+}
+
+#[test]
+fn clear_removes_the_row_and_answers_cleared() {
+    let spy = Spy::memory();
+    ok(&spy, &[("name", "MOHV"), ("title_en", "Hi")]);
+    let a = run(&spy, &Action::Clear).unwrap();
+    assert!(a.cleared && !a.dry_run);
+    assert_eq!(a.v, "");
+    assert!(stored(&spy).is_none());
+    let (r, _) = reader(&spy, LONG);
+    assert!(!r.current().is_set(), "today's look is back");
+}
+
+#[test]
+fn clear_with_no_row_answers_cleared_false_and_writes_nothing() {
+    let spy = Spy::memory();
+    let a = run(&spy, &Action::Clear).unwrap();
+    assert!(!a.cleared);
+    assert!(a.changes.is_empty());
+    assert!(spy.batches().is_empty());
+    assert_eq!(events(&spy), 0);
+}
+
+#[test]
+fn clear_with_dry_run_removes_nothing_and_says_what_it_would_do() {
+    let spy = Spy::memory();
+    ok(&spy, &[("name", "MOHV")]);
+    let (row, logged) = (stored(&spy), events(&spy));
+    let a = apply(&*spy, None, "ada", &Action::Clear, true).unwrap();
+    assert!(a.cleared && a.dry_run, "would remove");
+    assert_eq!(stored(&spy), row);
+    assert_eq!(events(&spy), logged);
+    let none = Spy::memory();
+    let a = apply(&*none, None, "ada", &Action::Clear, true).unwrap();
+    assert!(!a.cleared && a.dry_run);
+}
+
+#[test]
+fn a_call_with_a_reader_updates_it_and_a_call_without_one_does_not() {
+    let spy = Spy::memory();
+    ok(&spy, &[("name", "One")]);
+    let (r, _) = reader(&spy, LONG);
+    assert_eq!(r.current().brand().name(), "One");
+    // The command line has no dispatcher: its change reaches a running server within the bound.
+    ok(&spy, &[("name", "Two")]);
+    assert_eq!(r.current().brand().name(), "One");
+    r.expire();
+    assert_eq!(r.current().brand().name(), "Two");
+    // The dispatcher passes its reader: at once.
+    apply(&*spy, Some(&r), "ada", &cfg(&[("name", "Three")]), false).unwrap();
+    assert_eq!(r.current().brand().name(), "Three");
+}
+
+#[test]
+fn a_store_that_cannot_be_read_fails_the_call_with_its_text_unchanged() {
+    let spy = Spy::memory();
+    spy.fail(MODEL, "storage_busy: the pool is full");
+    let e = run(&spy, &cfg(&[("name", "MOHV")])).unwrap_err();
+    assert_eq!(e, Failure::Storage("storage_busy: the pool is full".into()));
+    assert_eq!(e.to_string(), "storage_busy: the pool is full");
+    // The theme is read for the answer's v, before anything is written: a failure there changes
+    // nothing either.
+    spy.heal();
+    spy.fail(SETTING_MODEL, "storage_timeout: waited 5s");
+    let e = run(&spy, &cfg(&[("name", "MOHV")])).unwrap_err();
+    assert!(matches!(e, Failure::Storage(ref t) if t.starts_with("storage_timeout")));
+    assert!(stored(&spy).is_none() && events(&spy) == 0);
+}
+
+#[test]
+fn the_answers_carry_the_changes_as_json() {
+    let spy = Spy::memory();
+    let a = ok(&spy, &[("name", "MOHV"), ("title_sv", "Logga in")]);
+    let j: J = serde_json::from_str(&changes_json(&a.changes)).unwrap();
+    assert_eq!(j.as_array().unwrap().len(), 2);
+    assert_eq!(
+        j[0],
+        serde_json::json!({"field": "name", "old": "", "new": "MOHV"})
+    );
+    assert_eq!(
+        j[1],
+        serde_json::json!({"field": "title_sv", "old": "", "new": "Logga in"})
+    );
+}

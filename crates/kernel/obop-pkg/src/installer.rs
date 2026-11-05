@@ -2712,6 +2712,24 @@ mod tests {
         }
     }
 
+    /// The reader of the instance brand (docs/spec/branding.md, section 4) is created by
+    /// `register_admin`, which runs in every composition; a dispatcher that never ran it gives an
+    /// inert one.
+    #[test]
+    fn register_admin_creates_the_reader_of_the_instance_brand() {
+        assert!(Dispatcher::new().brand().is_inert());
+        let store = Store::new();
+        let (d, _) = setup(&store);
+        let reader = d.brand();
+        assert!(!reader.is_inert());
+        assert!(
+            Arc::ptr_eq(&reader, &d.brand()),
+            "one reader for the dispatcher"
+        );
+        assert!(!reader.current().is_set(), "no row: the default brand");
+        assert_eq!(reader.current().brand().name(), "obop");
+    }
+
     /// B7: a change to the `security` settings is logged with who made it and what changed.
     #[test]
     fn changes_to_the_security_settings_are_written_to_the_security_log() {

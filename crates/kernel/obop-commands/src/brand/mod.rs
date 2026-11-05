@@ -91,3 +91,6 @@ impl Dispatcher {
             .clone()
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -315,6 +315,30 @@ impl Reader {
             cell.shown = Some(Arc::new(row::read_row(row, accent)));
         }
     }
+
+    /// Poisons the mutex of the cell, as a thread that panics while it holds it would. For tests.
+    #[cfg(test)]
+    pub(crate) fn poison_cell(self: &Arc<Self>) {
+        let me = self.clone();
+        let _ = std::thread::spawn(move || {
+            let _held = me.cell.lock().unwrap();
+            panic!("a panic while the cell is held");
+        })
+        .join();
+    }
+
+    /// The counter of the cell. For tests.
+    #[cfg(test)]
+    pub(crate) fn generation(&self) -> u64 {
+        recover(&self.cell).generation
+    }
+
+    /// Makes the cell stale without touching the last good value, as two seconds going by would.
+    /// For tests.
+    #[cfg(test)]
+    pub(crate) fn expire(&self) {
+        recover(&self.cell).at = None;
+    }
 }
 
 /// The brand read from the row alone, every time, never from a cache and without the theme: for
