@@ -77,6 +77,52 @@ fn one_event_per_changed_field_with_the_old_and_the_new_value() {
     assert_eq!(got[3].2, "operator", "the actor is operator at a terminal");
 }
 
+fn now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+}
+
+#[test]
+fn every_event_of_a_call_is_dated_now_and_all_alike() {
+    let spy = Spy::memory();
+    let before = now();
+    assert!(before > 1_700_000_000, "the clock of this machine");
+    apply(
+        &*spy,
+        None,
+        "ada",
+        &cfg(&[
+            ("name", "MOHV"),
+            ("title_sv", "Logga in"),
+            ("message_en", "Welcome"),
+        ]),
+        false,
+    )
+    .unwrap();
+    apply(&*spy, None, "ada", &Action::Clear, false).unwrap();
+    let after = now();
+    let list = spy.list("security_event").unwrap();
+    assert_eq!(list.len(), 6);
+    // The id of an event starts with its Unix time; the field `at` is the same instant as text.
+    let secs: Vec<u64> = list
+        .iter()
+        .map(|(id, _)| id.split('-').next().unwrap().parse().unwrap())
+        .collect();
+    for ((_, f), s) in list.iter().zip(&secs) {
+        assert!(
+            (before..=after).contains(s),
+            "{s} is not between {before} and {after}"
+        );
+        assert_eq!(f["at"].as_str().unwrap(), crate::audit::rfc3339(*s));
+    }
+    assert!(
+        secs[..3].windows(2).all(|w| w[0] == w[1]) && secs[3..].windows(2).all(|w| w[0] == w[1]),
+        "one instant for the events of one call: {secs:?}"
+    );
+}
+
 #[test]
 fn the_artwork_is_recorded_as_its_version_never_as_text() {
     let spy = Spy::memory();
@@ -252,10 +298,41 @@ fn a_value_written_around_the_command_cannot_forge_or_reorder_a_line_of_the_log(
     );
     // A readable value is shown as it is, with its non-ASCII letters.
     assert_eq!(d[1], "title_en: \"Caf\u{e9}\" -> removed");
-    assert!(d[2].starts_with("message_en: \"yyyy"), "{}", &d[2][..40]);
-    assert!(
-        d[2].contains("...") && d[2].len() < 360,
-        "cut: {} bytes",
-        d[2].len()
+    assert_eq!(
+        d[2],
+        format!("message_en: \"{}\"... -> removed", "y".repeat(300)),
+        "cut at 300 characters, with the mark after the closing quote"
+    );
+}
+
+#[test]
+fn a_value_is_cut_at_exactly_300_characters_and_marked_only_when_it_was_cut() {
+    for (len, marked) in [(299, false), (300, false), (301, true)] {
+        let spy = Spy::memory();
+        let value = "y".repeat(len);
+        put_row(&*spy, &[("name", s("MOHV")), ("message_en", s(&value))]);
+        apply(&*spy, None, "ada", &Action::Clear, false).unwrap();
+        let shown = "y".repeat(len.min(300));
+        let mark = if marked { "..." } else { "" };
+        assert_eq!(
+            details(&spy)[1],
+            format!("message_en: \"{shown}\"{mark} -> removed"),
+            "{len} characters"
+        );
+    }
+}
+
+#[test]
+fn a_long_value_with_multibyte_characters_is_cut_between_characters_never_inside_one() {
+    // 401 characters, 801 bytes, and byte 300 is inside a character: a cut by bytes would panic.
+    // The value is one a message must not hold on a read (over 240 characters), so it is written
+    // with every non-ASCII character as an escape, 299 of them after the first letter.
+    let spy = Spy::memory();
+    let value = format!("a{}", "\u{e9}".repeat(400));
+    put_row(&*spy, &[("name", s("MOHV")), ("message_en", s(&value))]);
+    apply(&*spy, None, "operator", &Action::Clear, false).unwrap();
+    assert_eq!(
+        details(&spy)[1],
+        format!("message_en: \"a{}\"... -> removed", "\\u{00E9}".repeat(299))
     );
 }

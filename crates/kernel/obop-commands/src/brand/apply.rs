@@ -12,7 +12,9 @@
 //!   first call needs a `name`. Every supplied value is checked with the whole character policy (the
 //!   artwork by the strict SVG reader, and what is stored is the canonical text it printed, never
 //!   the input). Nothing is stored unless every supplied value passes.
-//! - It is idempotent by construction: the same values twice change nothing and write no event.
+//! - It is idempotent by construction: the same values twice change nothing and write no event. That
+//!   holds for an artwork stored in a valid form that is not canonical too: it is the same logo, with
+//!   the same version `v`, and sending it again writes nothing.
 //! - The row and one event per changed field are written in one atomic batch
 //!   (`Backend::apply_checked`), so the log has the entry exactly when the change exists.
 //! - `dry_run` does every check, writes nothing, logs nothing and reports what would happen.
@@ -67,7 +69,8 @@ pub struct Refused {
 
 /// A field that changed (or would, with `dry_run`). For the artwork `old` and `new` are the
 /// versions of the logo (`v`), empty when there is none, and `unreadable` for a stored artwork the
-/// strict reader refuses.
+/// strict reader refuses. For any other field they are the values as stored: the answer carries a
+/// value that was written around the command whole, where the log line is cut (`LOG_CUT`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Changed {
     pub field: String,
@@ -268,11 +271,16 @@ fn plan_configure(backend: &dyn Backend, supplied: &[(String, String)]) -> Resul
                     } else {
                         (before.to_string(), stored.clone())
                     };
-                    changes.push(Changed {
-                        field: field.clone(),
-                        old: o,
-                        new: n,
-                    });
+                    // A stored artwork that is valid but not in canonical form, sent again: what is
+                    // served and its version are the same as before, so there is nothing to record
+                    // (the row is canonical again if the call writes it for another field).
+                    if o != n {
+                        changes.push(Changed {
+                            field: field.clone(),
+                            old: o,
+                            new: n,
+                        });
+                    }
                 }
                 if stored.is_empty() {
                     row.remove(field);

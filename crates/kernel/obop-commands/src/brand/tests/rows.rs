@@ -45,6 +45,29 @@ fn a_script_in_a_name_and_a_title_falls_back_for_those_fields_only() {
     // Nothing raw reaches the tile either: the glyph is that of the name it fell back to.
     assert!(shown.logo().unwrap().is_tile());
     assert!(!shown.logo().unwrap().served().contains("script"));
+    assert_eq!(
+        shown.logo().unwrap().served(),
+        tile::svg("obop", None, None),
+        "the tile of the effective name (an O), not of the stored one (an S)"
+    );
+    assert_ne!(
+        tile::svg("obop", None, None),
+        tile::svg("<script>alert(1)</script>", None, None)
+    );
+}
+
+#[test]
+fn the_tile_of_a_name_that_fell_back_has_the_glyph_of_the_default_name_and_the_theme_accent() {
+    let spy = Spy::memory();
+    put_theme(&*spy, "#c2410c");
+    put_row(&*spy, &[("name", s("<script>alert(1)</script>"))]);
+    let (r, _) = reader(&spy, LONG);
+    let shown = r.current();
+    assert_eq!(shown.brand().name(), "obop");
+    assert_eq!(
+        shown.logo().unwrap().served(),
+        tile::svg("obop", Some("#c2410c"), None)
+    );
 }
 
 #[test]
@@ -83,6 +106,38 @@ fn a_name_that_breaks_the_safety_subset_falls_back() {
         assert_eq!(shown.fallbacks().len(), 1, "{name:?}");
         assert_eq!(shown.fallbacks()[0].code, code, "{name:?}");
     }
+}
+
+#[test]
+fn the_read_side_limit_of_each_field_is_its_own_counted_in_code_points() {
+    // name 40, title 60, message 240: the last length that is shown and the first that falls back,
+    // with an ASCII letter and with one that is two bytes long.
+    for letter in ["a", "\u{e9}"] {
+        for (field, max) in [("name", 40), ("title_pl", 60), ("message_es", 240)] {
+            let at_the_limit = letter.repeat(max);
+            let (shown, _) = shown_of(&[("name", s("Acme")), (field, s(&at_the_limit))]);
+            assert!(
+                shown.fallbacks().is_empty(),
+                "{field} at {max} {letter:?}: {:?}",
+                shown.fallbacks()
+            );
+            let over = letter.repeat(max + 1);
+            let (shown, _) = shown_of(&[("name", s("Acme")), (field, s(&over))]);
+            assert_eq!(fields_of(&shown), [field], "{field} at {}", max + 1);
+            assert_eq!(shown.fallbacks()[0].code, "too_long", "{field}");
+            assert_eq!(shown.fallbacks()[0].reason, "too_long", "{field}");
+        }
+    }
+    // The fallback of a name that is too long is the default name, not a cut of the stored one.
+    let (shown, _) = shown_of(&[("name", s(&"a".repeat(41)))]);
+    assert_eq!(shown.brand().name(), "obop");
+    // A title of 41 to 60 characters and a message of 61 to 240 are not names or titles.
+    let (shown, _) = shown_of(&[
+        ("name", s("Acme")),
+        ("title_en", s(&"t".repeat(50))),
+        ("message_en", s(&"m".repeat(200))),
+    ]);
+    assert!(shown.fallbacks().is_empty(), "{:?}", shown.fallbacks());
 }
 
 #[test]
@@ -391,7 +446,7 @@ fn the_stderr_line_is_written_once_per_field_names_the_field_and_holds_nothing_o
     for (line, (field, code)) in got.iter().zip([
         ("name", "unsafe_character"),
         ("slug", "invalid_slug"),
-        ("logo_svg", ""),
+        ("logo_svg", "svg_text"),
     ]) {
         assert!(line.contains(&format!("stored {field} ")), "{line}");
         assert!(line.contains(code), "{line}");
@@ -447,4 +502,143 @@ fn fresh_lists_the_fallbacks_and_gives_the_stored_fields_as_stored() {
     let v: J = serde_json::from_str(&json).unwrap();
     assert_eq!(v[0]["field"], "slug");
     assert!(v[0]["reason"].as_str().unwrap().contains("invalid_slug"));
+}
+
+#[test]
+fn each_hostile_artwork_falls_back_with_the_code_and_the_reason_of_the_reader() {
+    // The code is the one of the first refusal of the SVG reader, and the reason is that refusal in
+    // words, with the number of the others after it when there are more.
+    let expected: &[(&str, &str)] = &[
+        ("script", "svg_text"),
+        ("a form after the root", "svg_malformed"),
+        ("a form in a closed root", "svg_malformed"),
+        ("a link", "svg_element"),
+        ("an onload attribute", "svg_attribute"),
+        ("17 KiB", "svg_too_large"),
+        ("a number with an exponent", "svg_value"),
+        ("a number over the bound", "svg_value"),
+        ("a number of 25 characters", "svg_value"),
+        ("a byte order mark", "svg_byte_order_mark"),
+        ("an external image", "svg_element"),
+        ("not svg at all", "svg_text"),
+    ];
+    let corpus = hostile_artworks();
+    assert_eq!(corpus.len(), expected.len());
+    for ((what, stored), (named, code)) in corpus.iter().zip(expected) {
+        assert_eq!(what, named);
+        let (shown, _) = shown_of(&[("name", s("Acme")), ("logo_svg", s(stored))]);
+        let f = &shown.fallbacks()[0];
+        assert_eq!(f.field, "logo_svg", "{what}");
+        assert_eq!(f.code, *code, "{what}");
+        assert!(
+            f.reason.starts_with(&format!("{code}: ")),
+            "{what}: {}",
+            f.reason
+        );
+    }
+    // One refusal gives its reason alone; more give the count of the others.
+    let ns = "http://www.w3.org/2000/svg";
+    let one = format!(
+        "<svg xmlns=\"{ns}\" viewBox=\"0 0 64 64\"><a href=\"https://evil.example\"><path d=\"M 0 0\"/></a></svg>"
+    );
+    let (shown, _) = shown_of(&[("name", s("Acme")), ("logo_svg", s(&one))]);
+    assert_eq!(
+        shown.fallbacks()[0].reason,
+        "svg_element: the element <a> is not allowed (only g, path, rect, circle, ellipse, line and polygon are); delete it"
+    );
+    let two = format!(
+        "<svg xmlns=\"{ns}\" viewBox=\"0 0 64 64\"><script>x</script><a href=\"x\"/></svg>"
+    );
+    let (shown, _) = shown_of(&[("name", s("Acme")), ("logo_svg", s(&two))]);
+    assert_eq!(
+        shown.fallbacks()[0].reason,
+        "svg_text: text outside the elements is not allowed (<text> and <title> are not either) (and 2 more)"
+    );
+}
+
+#[test]
+fn the_stderr_lines_are_fixed_texts_that_name_the_field_and_the_code() {
+    let ns = "http://www.w3.org/2000/svg";
+    let spy = Spy::memory();
+    // An element and an attribute with a name that imitates a log line: the reason in `get` may
+    // repeat what the reader made safe, the line on stderr repeats nothing of the file.
+    let forged = format!(
+        "<svg xmlns=\"{ns}\" viewBox=\"0 0 64 64\" obop-FORGED-line=\"1\"><obop-FORGED-element/></svg>"
+    );
+    put_row(
+        &*spy,
+        &[
+            ("name", s("a<b")),
+            ("slug", s("Foo/Bar")),
+            ("title_fi", s("x".repeat(61).as_str())),
+            ("logo_svg", s(&forged)),
+        ],
+    );
+    let (r, kept) = reader(&spy, LONG);
+    r.current();
+    let line = |field: &str, code: &str| {
+        format!(
+            "obop: the stored {field} of the instance branding is not used ({code}); the default is shown instead (obop admin brand status lists it)"
+        )
+    };
+    assert_eq!(
+        *kept.lock().unwrap(),
+        [
+            line("name", "unsafe_character"),
+            line("slug", "invalid_slug"),
+            line("title_fi", "too_long"),
+            line("logo_svg", "svg_attribute"),
+        ]
+    );
+}
+
+#[test]
+fn the_fallbacks_come_in_the_order_of_the_fields() {
+    // name, slug, the titles in the order of the languages, the messages in the same order, the
+    // artwork.
+    let (shown, _) = shown_of(&[
+        ("logo_svg", s("nope")),
+        ("message_en", s("a<b")),
+        ("title_sv", s("a<b")),
+        ("message_es", s("a<b")),
+        ("title_en", s("a<b")),
+        ("slug", s("Foo/Bar")),
+        ("name", s("a<b")),
+    ]);
+    assert_eq!(
+        fields_of(&shown),
+        [
+            "name",
+            "slug",
+            "title_en",
+            "title_sv",
+            "message_en",
+            "message_es",
+            "logo_svg"
+        ]
+    );
+}
+
+#[test]
+fn a_theme_setting_of_more_than_256_kib_is_not_parsed_and_gives_no_accent() {
+    // The settings are refused above 64 KiB when written; a bigger text was put there around the
+    // command, and the reader does not parse it on every refill.
+    let accent_with = |pad: usize| {
+        let spy = Spy::memory();
+        put_row(&*spy, &[("name", s("Acme"))]);
+        let text = format!(
+            "{{\"theme\":{{\"accent\":\"#c2410c\"}},\"pad\":\"{}\"}}",
+            "x".repeat(pad)
+        );
+        spy.apply_checked(&[Op::Put {
+            model: SETTING_MODEL.into(),
+            id: SETTING_ID.into(),
+            fields: fields(&[("value", s(&text))]),
+        }])
+        .unwrap();
+        let (r, _) = reader(&spy, LONG);
+        r.current().theme_accent().map(str::to_string)
+    };
+    assert_eq!(accent_with(100 * 1024), Some("#c2410c".to_string()));
+    assert_eq!(accent_with(300 * 1024), None);
 }

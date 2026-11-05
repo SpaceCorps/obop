@@ -2730,6 +2730,27 @@ mod tests {
         assert_eq!(reader.current().brand().name(), "obop");
     }
 
+    /// The accent that the settings writer stores is the one the reader of the brand reads (the
+    /// generated tile and the meta tag carry it): written through the writer's own path, read by
+    /// the reader of the dispatcher, not by a row put together in the brand's own tests.
+    #[test]
+    fn the_theme_accent_written_by_the_settings_is_read_by_the_brand() {
+        let store = Store::new();
+        let (d, inst) = setup(&store);
+        inst.set_settings(r##"{"theme":{"accent":"#c2410c"}}"##)
+            .unwrap();
+        // Through the uncached read, and through the cell of a reader that has not read yet.
+        assert_eq!(
+            d.brand().fresh().unwrap().shown().theme_accent(),
+            Some("#c2410c")
+        );
+        assert_eq!(d.brand().current().theme_accent(), Some("#c2410c"));
+        // A theme alone is no brand: the tile is drawn only once a row exists.
+        let shown = d.brand().current();
+        assert!(!shown.is_set());
+        assert_eq!(shown.v(), "");
+    }
+
     /// B7: a change to the `security` settings is logged with who made it and what changed.
     #[test]
     fn changes_to_the_security_settings_are_written_to_the_security_log() {

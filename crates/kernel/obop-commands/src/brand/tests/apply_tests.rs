@@ -207,8 +207,155 @@ fn every_refusal_is_in_the_message_one_per_line_as_field_and_rule() {
     assert!(lines[0].starts_with("name: "), "{msg}");
     assert!(lines[1].starts_with("title_sv: "), "{msg}");
     assert!(lines[2].starts_with("message_fi: "), "{msg}");
-    // The refusals repeat no raw text of the input.
-    assert!(!msg.contains("1234567") || msg.contains("digit"));
+    // The refusals repeat no raw text of the input, and say the rule that was broken.
+    assert!(!msg.contains("1234567"), "{msg}");
+    assert_eq!(
+        lines[2],
+        "message_fi: must not hold 7 or more digits in a row: it looks like a phone number"
+    );
+}
+
+const LONGER_THAN_40: &str =
+    "is longer than 40 characters (Unicode code points, after normalisation)";
+const LONGER_THAN_60: &str =
+    "is longer than 60 characters (Unicode code points, after normalisation)";
+const LONGER_THAN_240: &str =
+    "is longer than 240 characters (Unicode code points, after normalisation)";
+
+#[test]
+fn each_field_is_checked_by_its_own_policy_class_and_its_own_limit() {
+    // name 40, title 60, message 240, counted in code points: the limit of a class is not the
+    // limit of another, so a field checked as the wrong class fails one of these.
+    let spy = Spy::memory();
+    let cases: [(&str, usize, &str); 3] = [
+        ("name", 40, LONGER_THAN_40),
+        ("title_sv", 60, LONGER_THAN_60),
+        ("message_fi", 240, LONGER_THAN_240),
+    ];
+    ok(&spy, &[("name", "MOHV")]);
+    for (field, max, rule) in cases {
+        for letter in ["a", "\u{e9}"] {
+            let at_the_limit = letter.repeat(max);
+            ok(&spy, &[(field, at_the_limit.as_str())]);
+            assert_eq!(text(&stored(&spy).unwrap(), field), at_the_limit, "{field}");
+            let over = letter.repeat(max + 1);
+            let r = refusals(run(&spy, &cfg(&[(field, over.as_str())])));
+            assert_eq!(r, [(field.to_string(), rule.to_string())], "{field}");
+            assert_eq!(
+                text(&stored(&spy).unwrap(), field),
+                at_the_limit,
+                "{field}: nothing stored"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_name_and_a_title_may_not_hold_the_punctuation_that_a_message_may() {
+    let spy = Spy::memory();
+    ok(&spy, &[("name", "MOHV")]);
+    for text_ in ["Foo?", "Foo; bar", "A $ B"] {
+        for field in ["name", "title_en"] {
+            let r = refusals(run(&spy, &cfg(&[(field, text_)])));
+            assert_eq!(r[0].0, field, "{text_:?} as {field}");
+        }
+    }
+    ok(
+        &spy,
+        &[("message_en", "Is this you? Yes; sign in for 5 $ a month")],
+    );
+    assert_eq!(
+        text(&stored(&spy).unwrap(), "message_en"),
+        "Is this you? Yes; sign in for 5 $ a month"
+    );
+}
+
+#[test]
+fn a_slug_is_checked_against_its_pattern_when_it_is_written() {
+    let spy = Spy::memory();
+    ok(&spy, &[("name", "MOHV")]);
+    let thirty_one = "a".repeat(31);
+    for bad in [
+        "Foo/Bar",
+        "9x",
+        "a-",
+        "UPPER",
+        "-a",
+        "a_b",
+        "a b",
+        &thirty_one,
+    ] {
+        let r = refusals(run(&spy, &cfg(&[("slug", bad)])));
+        assert_eq!(r.len(), 1, "{bad:?}");
+        assert_eq!(r[0].0, "slug", "{bad:?}");
+        assert!(!r[0].1.is_empty());
+        assert!(!stored(&spy).unwrap().contains_key("slug"), "{bad:?}");
+    }
+    let thirty = "a".repeat(30);
+    for good in ["mohv", "a-b-9", "x", &thirty] {
+        ok(&spy, &[("slug", good)]);
+        assert_eq!(text(&stored(&spy).unwrap(), "slug"), good);
+    }
+}
+
+#[test]
+fn a_later_pair_with_the_same_name_wins() {
+    let spy = Spy::memory();
+    ok(&spy, &[("name", "First"), ("name", "Second")]);
+    assert_eq!(text(&stored(&spy).unwrap(), "name"), "Second");
+    // The earlier value is not even checked: only what wins is stored and policed.
+    ok(&spy, &[("title_en", "a<b"), ("title_en", "Fine")]);
+    assert_eq!(text(&stored(&spy).unwrap(), "title_en"), "Fine");
+}
+
+#[test]
+fn a_stored_row_without_a_name_still_needs_one_in_the_call() {
+    let spy = Spy::memory();
+    put_row(&*spy, &[("title_en", s("Hello"))]);
+    let r = refusals(run(&spy, &cfg(&[("title_sv", "Hej")])));
+    assert_eq!(
+        r,
+        [(
+            "name".to_string(),
+            "is required: a brand needs a name".to_string()
+        )]
+    );
+    // An empty name is refused for being empty, and is not refused twice.
+    let r = refusals(run(&spy, &cfg(&[("name", "")])));
+    assert_eq!(r.len(), 1);
+    assert_eq!(r[0].1, "must not be empty");
+    // With a name the stored title is carried along unchecked.
+    ok(&spy, &[("name", "MOHV")]);
+    assert_eq!(text(&stored(&spy).unwrap(), "title_en"), "Hello");
+}
+
+#[test]
+fn a_valid_artwork_stored_in_another_form_is_the_same_logo_and_sending_it_again_writes_nothing() {
+    // The row holds a valid file that is not in canonical form (an older writer, a restore). It is
+    // served re-serialised, so it is the same logo as its canonical form: nothing changes.
+    let spy = Spy::memory();
+    let given = "<svg  xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0  64 64\" ><path d=\"M .5 .5 L 10.000000 10 Z\" fill=\"#FFFFFF\" /></svg>";
+    let canonical = obop_brand::svg::canonical(given.as_bytes()).unwrap();
+    assert_ne!(canonical, given);
+    put_row(&*spy, &[("name", s("MOHV")), ("logo_svg", s(given))]);
+    let (batches, logged) = (spy.batches().len(), events(&spy));
+    let a = ok(&spy, &[("logo_svg", given)]);
+    assert!(a.changes.is_empty(), "{:?}", a.changes);
+    assert_eq!(a.v, logo::version(canonical.as_bytes()));
+    assert_eq!(spy.batches().len(), batches, "no batch");
+    assert_eq!(events(&spy), logged, "no event");
+    assert_eq!(
+        text(&stored(&spy).unwrap(), "logo_svg"),
+        given,
+        "the row is left as it was"
+    );
+    // Another field changing in the same call: one event, for that field; the artwork is stored in
+    // canonical form with it.
+    let a = ok(&spy, &[("name", "MOHV Two"), ("logo_svg", given)]);
+    assert_eq!(a.changes.len(), 1);
+    assert_eq!(a.changes[0].field, "name");
+    assert_eq!(events(&spy), logged + 1);
+    assert_eq!(text(&stored(&spy).unwrap(), "logo_svg"), canonical);
 }
 
 #[test]
