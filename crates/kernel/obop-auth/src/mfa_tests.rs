@@ -722,13 +722,16 @@ fn pins_the_otpauth_label_and_issuer_of_an_enrolment() {
     );
 }
 
-/// The issuer a server starts with when `OBOP_MFA_ISSUER` is not set. (The variable is read
-/// from the process environment, so a run that sets it is not holding the default.)
+/// The issuer a server starts with when `OBOP_MFA_ISSUER` is not set. The variable is read from
+/// the process environment, so a run that sets it does not hold the default: the test fails
+/// loudly with a message that says so, and never passes without having checked anything.
 #[test]
 fn pins_the_default_issuer_of_a_server() {
-    if std::env::var_os("OBOP_MFA_ISSUER").is_some() {
-        return;
-    }
+    assert!(
+        std::env::var_os("OBOP_MFA_ISSUER").is_none(),
+        "OBOP_MFA_ISSUER is set in the environment of this run, so `AuthConfig::from_env` does not \
+         give the default issuer and this pin cannot check it. Unset the variable and run again."
+    );
     assert_eq!(AuthConfig::from_env().issuer, "obop");
     assert_eq!(AuthConfig::insecure_dev().issuer, "obop");
 }

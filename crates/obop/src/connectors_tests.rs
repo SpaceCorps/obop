@@ -864,8 +864,13 @@ async fn pins_the_return_page_of_the_oauth_callback_as_an_instance_with_no_brand
     // depend on them, only on whether the exchange worked.
     let l = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = l.local_addr().unwrap().port();
-    std::thread::spawn(move || {
+    let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let stopped = stop.clone();
+    let listener = std::thread::spawn(move || {
         for s in l.incoming() {
+            if stopped.load(std::sync::atomic::Ordering::SeqCst) {
+                break;
+            }
             let Ok(mut s) = s else { break };
             let mut buf = Vec::new();
             let mut chunk = [0u8; 4096];
@@ -900,6 +905,27 @@ async fn pins_the_return_page_of_the_oauth_callback_as_an_instance_with_no_brand
             );
         }
     });
+    // Ends the listener thread when the test ends, by a pass or by a failed pin alike: it sets the
+    // flag, wakes the blocked `accept` with one connection and joins the thread.
+    struct EndListener {
+        stop: Arc<std::sync::atomic::AtomicBool>,
+        port: u16,
+        thread: Option<std::thread::JoinHandle<()>>,
+    }
+    impl Drop for EndListener {
+        fn drop(&mut self) {
+            self.stop.store(true, std::sync::atomic::Ordering::SeqCst);
+            let _ = std::net::TcpStream::connect(("127.0.0.1", self.port));
+            if let Some(t) = self.thread.take() {
+                let _ = t.join();
+            }
+        }
+    }
+    let _end_listener = EndListener {
+        stop,
+        port,
+        thread: Some(listener),
+    };
     let mut fake = obop_connectors::catalog::provider("rest_api_pull").unwrap();
     fake.id = "fake_oauth";
     fake.name = "Fake OAuth provider";

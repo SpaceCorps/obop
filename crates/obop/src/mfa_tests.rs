@@ -724,7 +724,8 @@ fn the_break_glass_command_resets_a_user_in_a_real_database() {
 ///     --test-threads=1
 /// ```
 ///
-/// which prints each table as Rust source instead of asserting it. (The pin of the return page
+/// which prints each table as Rust source instead of asserting it, and then panics: print mode is
+/// not a check, so a stray `OBOP_PRINT_PINS=1` cannot give a green run. (The pin of the return page
 /// after a Drive sign-in is a scenario of `the_google_drive_page_end_to_end_against_a_fake_google`,
 /// which shares one fake Google, so that test is in the filter. `OBOP_SHOW_PINNED=1` prints the
 /// text of an answer that `sha` hashes.)
@@ -753,7 +754,10 @@ pub(crate) mod pin {
             }
             out.push_str(&format!("];\n//@end {table}\n"));
             println!("{out}");
-            return;
+            panic!(
+                "OBOP_PRINT_PINS=1 is print mode, not a check: this run printed the table and \
+                 proved nothing. Unset it to run the pins."
+            );
         }
         assert!(
             !pinned.is_empty(),

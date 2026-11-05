@@ -10,6 +10,10 @@
 //! {html}\nContent-Security-Policy: {policy}\n
 //! ```
 //!
+//! So the OAuth pages and the signer pages are pinned as HTML plus the policy header, and nothing
+//! else of the answer: their status code and their other headers (`Cache-Control`, the content
+//! type and the rest) are NOT pinned by these tests.
+//!
 //! To read the values again from the tree as it is (after a change that is meant to move them, in
 //! the same commit that explains why), run
 //!
@@ -17,7 +21,27 @@
 //! OBOP_PRINT_PINS=1 cargo test -p obop-oauth pins -- --nocapture --test-threads=1
 //! ```
 //!
-//! which prints each table as Rust source instead of asserting it.
+//! which prints each table as Rust source instead of asserting it. Print mode is not a check: a
+//! pin that runs with `OBOP_PRINT_PINS=1` prints its table and then panics, so a stray variable in
+//! the environment cannot give a green run.
+//!
+//! # Running every pin
+//!
+//! The pins sit in several crates. These two commands (from the repository root, with a Docker-free
+//! `PATH` on this machine) run all of them in assert mode; each filter is an OR of its words:
+//!
+//! ```text
+//! cargo test --locked -p obop-oauth -p obop-auth -p obop-http -p obop-site -- pins signer_pins
+//! cargo test --locked -p obop -- pins the_google_drive_page_end_to_end
+//! ```
+//!
+//! The first selects every test whose name has `pins` in it (the pages here, the shop files, the
+//! authenticator label and the default issuer, the relying-party name of the OAuth ceremony site)
+//! and the signer pin of `obop-http`, whose name has `signer_pins` in it. The second selects the
+//! pins of the `obop` crate by `pins`, and the container test
+//! `the_google_drive_page_end_to_end_against_a_fake_google`, one scenario of which is the pin of
+//! the return page after a Drive sign-in (the scenarios share one fake Google, so they run in one
+//! test and that pin has no test name of its own).
 
 use crate::client::Class;
 use crate::flow::FlowCtx;
@@ -48,7 +72,10 @@ fn check(table: &str, pinned: &[(&str, &str)], now: &[(String, String)]) {
         }
         out.push_str(&format!("];\n//@end {table}\n"));
         println!("{out}");
-        return;
+        panic!(
+            "OBOP_PRINT_PINS=1 is print mode, not a check: this run printed the table and proved \
+             nothing. Unset it to run the pins."
+        );
     }
     assert!(
         !pinned.is_empty(),

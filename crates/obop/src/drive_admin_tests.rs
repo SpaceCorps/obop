@@ -493,6 +493,7 @@ async fn the_google_drive_page_end_to_end_against_a_fake_google() {
     a_sign_in_without_a_refresh_token_is_refused_with_the_way_out().await;
     a_workspace_drive_scopes_browsing_and_lets_the_write_group_create_files().await;
     a_sign_in_that_did_not_grant_writing_cannot_create_and_says_how_to_fix_it().await;
+    // A pin: `cargo test --locked -p obop -- pins the_google_drive_page_end_to_end` selects this test.
     pins_the_return_page_after_a_drive_sign_in().await;
     the_google_addresses_cannot_be_pointed_anywhere_but_loopback();
 }

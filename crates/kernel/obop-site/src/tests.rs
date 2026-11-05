@@ -2138,7 +2138,10 @@ fn check_pins(table: &str, pinned: &[(&str, &str)], now: &[(String, String)]) {
         }
         out.push_str(&format!("];\n//@end {table}\n"));
         println!("{out}");
-        return;
+        panic!(
+            "OBOP_PRINT_PINS=1 is print mode, not a check: this run printed the table and proved \
+             nothing. Unset it to run the pins."
+        );
     }
     assert!(
         !pinned.is_empty(),

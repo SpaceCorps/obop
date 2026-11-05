@@ -665,6 +665,10 @@ fn late() { txt::html(lang, \"late_key\"); }
     /// ```text
     /// {html}\nContent-Security-Policy: {policy}\n
     /// ```
+    ///
+    /// The signer pages are therefore pinned as HTML plus the policy header only: the status code
+    /// and the other headers of the answer are not pinned here (the same holds for the OAuth pages;
+    /// `obop-oauth/src/golden_tests.rs` says so too and lists every filter that runs the pins).
     fn pin_of(p: &Page) -> String {
         sha(&format!("{}\nContent-Security-Policy: {}\n", p.html, p.csp))
     }
@@ -679,7 +683,10 @@ fn late() { txt::html(lang, \"late_key\"); }
             }
             out.push_str(&format!("];\n//@end {table}\n"));
             println!("{out}");
-            return;
+            panic!(
+                "OBOP_PRINT_PINS=1 is print mode, not a check: this run printed the table and \
+                 proved nothing. Unset it to run the pins."
+            );
         }
         assert!(
             !pinned.is_empty(),
