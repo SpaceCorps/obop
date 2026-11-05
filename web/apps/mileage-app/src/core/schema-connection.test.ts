@@ -52,6 +52,8 @@ const WHY = {
     "a pragma changes the connection (its locking mode, what it may write, how it treats foreign keys), the app keeps using that connection, and a migration that is refused does not take it back; the one pragma a migration may use is user_version, which the lint compares before and after",
   alter:
     "SQLite refuses a default of that kind on a column added to a table that has rows and accepts it on a table with none, so a migration with one passes on a new file and fails on a phone with trips, also where a later statement makes the table again; the text of an ALTER TABLE may not have the word",
+  optimize:
+    "the table-valued function pragma_optimize runs PRAGMA optimize, which can run ANALYZE and write the table sqlite_stat1 into the file, and the check afterwards does not look at the tables of SQLite's own, so a migration may not name it",
 };
 
 describe("the reader of the words that reach past the transaction", () => {
@@ -628,6 +630,28 @@ describe("the temporary schema", () => {
       }
     });
 
+    // The temporary schema is compared by what it holds, not by how much: a table made again with
+    // another text of the same length, or a table renamed to a name of the same length, is a change.
+    test.each([
+      [
+        "made again with another column of the same length",
+        "DROP TABLE zz; CREATE TEMP TABLE zz (b TEXT)",
+      ],
+      ["renamed to a name of the same length", "ALTER TABLE zz RENAME TO yy"],
+      [
+        "made again with another type of the same length",
+        "DROP TABLE zz; CREATE TEMP TABLE zz (a REAL)",
+      ],
+    ])("a temporary table that was there and is %s is refused", async (_, work) => {
+      const { db, m } = viaTheConnection("CREATE TEMP TABLE zz (a TEXT)", (sqlite) =>
+        sqlite.exec(work),
+      );
+      const error = await ensureModules(db, [m]).catch((e: unknown) => e);
+      expect(error, String(error)).toBeInstanceOf(SchemaError);
+      expect((error as Error).message).toBe(`module a ${CHANGED}`);
+      expect(await objectsOf(db)).toEqual([]);
+    });
+
     test("a temporary schema that has the same objects afterwards is not a finding, in whatever order they were made", async () => {
       const { db, m } = viaTheConnection(
         "CREATE TEMP TABLE zx (a TEXT); CREATE TEMP TABLE zy (a TEXT)",
@@ -1010,5 +1034,406 @@ describe("the text that the look at the first layout runs", () => {
     await db.exec("CREATE TABLE a_t (x TEXT); PRAGMA user_version = 1");
     await ensureModules(db, [declaring("CREATE TABLE IF NOT EXISTS a_t (x TEXT); COMMIT")]);
     expect(await db.all("SELECT * FROM module_schema")).toEqual([{ module: "a", version: 1 }]);
+  });
+});
+
+// The function pragma_optimize runs PRAGMA optimize, which can run ANALYZE and write the table
+// sqlite_stat1 into the file. The lint does not look at tables of SQLite's own (the snapshot leaves
+// out every name that begins with sqlite_), and the word PRAGMA is not in the text, so it is
+// refused by its name, as a bare word and as a name in double quotes, backticks or brackets, in
+// any case. The other pragma_* functions are not refused (the sweep below says what that rests on).
+describe("the function pragma_optimize", () => {
+  const OPTIMIZE_WORD = { ran: "text with the word PRAGMA_OPTIMIZE", why: WHY.optimize };
+  const OPTIMIZE_NAME = { ran: "text with the name pragma_optimize", why: WHY.optimize };
+
+  test.each([
+    "SELECT * FROM pragma_optimize",
+    "SELECT * FROM pragma_optimize(0x10002)",
+    "SELECT * FROM pragma_optimize AS p",
+    "SELECT 1 FROM (SELECT * FROM pragma_optimize)",
+    "SELECT * FROM main.pragma_optimize",
+    "SELECT * FROM a_t, pragma_optimize",
+    "INSERT INTO a_t SELECT * FROM pragma_optimize",
+  ])("%s is refused, in every casing and behind every prefix", (form) => {
+    for (const casing of casings("pragma_optimize")) {
+      for (const prefix of PREFIXES) {
+        const sql = prefix + form.replace("pragma_optimize", casing);
+        expect(forbiddenInMigration(sql), sql).toEqual(OPTIMIZE_WORD);
+      }
+    }
+  });
+
+  test.each(['"pragma_optimize"', "`pragma_optimize`", "[pragma_optimize]", '"Pragma_OPTIMIZE"'])(
+    "the name %s is refused, with and without an argument and behind every prefix",
+    (name) => {
+      for (const prefix of PREFIXES) {
+        for (const sql of [
+          `${prefix}SELECT * FROM ${name}`,
+          `${prefix}SELECT * FROM ${name}(0x10002)`,
+          `${prefix}SELECT * FROM main.${name}`,
+        ]) {
+          expect(forbiddenInMigration(sql), sql).toEqual(OPTIMIZE_NAME);
+        }
+      }
+    },
+  );
+
+  // The positive controls: what is not the function is not refused.
+  test.each([
+    "SELECT 'pragma_optimize'",
+    "INSERT INTO a_t (x) VALUES ('call pragma_optimize later')",
+    "SELECT 1 -- pragma_optimize\n",
+    "/* pragma_optimize */ SELECT 1",
+    "SELECT 1 AS pragma_optimized",
+    "SELECT 1 AS my_pragma_optimize",
+    "SELECT * FROM pragma_optimize_x",
+    "SELECT * FROM pragma_table_info('trip')",
+    "SELECT * FROM pragma_index_list('trip')",
+    "SELECT user_version FROM pragma_user_version",
+    "SELECT * FROM pragma_integrity_check",
+    "SELECT * FROM pragma_foreign_key_check",
+    "SELECT * FROM pragma_database_list",
+    "SELECT * FROM pragma_pragma_list WHERE name = 'optimize'",
+  ])("%s is not refused", (sql) => {
+    expect(forbiddenInMigration(sql)).toBeNull();
+  });
+
+  // A limit, pinned: SQLite also reads a single-quoted string in the place of a table name, and
+  // this guard reads that as a string, which is not refused (a string with the name in it is no
+  // harm anywhere else). So this text passes the guard and writes sqlite_stat1; so does the
+  // statement ANALYZE, which is not refused either. Both are planner statistics and the older
+  // build does not mind them (the probe passes), but they are a write that the guard and the
+  // checks afterwards neither refuse nor report.
+  test.each(["SELECT * FROM 'pragma_optimize'", "ANALYZE"])(
+    "%s passes the guard, writes sqlite_stat1 and is not reported (a limit)",
+    async (sql) => {
+      expect(forbiddenInMigration(sql)).toBeNull();
+      const db = await legacyFile();
+      await ensureModules(db, [HOST_SCHEMA, mileageAt2((tx) => tx.exec(sql))]);
+      expect((await objectsOf(db)).map((o) => o.name)).toContain("sqlite_stat1");
+      expect(await probeOlderBuild(db)).toEqual({ ok: true });
+    },
+  );
+
+  describe.each(METHODS)("through %s, on a file of the first build with rows", (method) => {
+    test.each([
+      ["SELECT * FROM pragma_optimize", OPTIMIZE_WORD.ran],
+      ['SELECT * FROM "pragma_optimize"', OPTIMIZE_NAME.ran],
+    ])("%s is refused before it runs and nothing is written", async (sql, was) => {
+      const db = await legacyFile();
+      const message = await expectUntouched(db, () =>
+        ensureModules(db, [
+          HOST_SCHEMA,
+          mileageAt2(async (tx) => {
+            await call(tx, method, sql);
+          }),
+        ]),
+      );
+      expect(message).toBe(`module mileage ran ${was}; ${WHY.optimize}`);
+      expect((await objectsOf(db)).map((o) => o.name)).not.toContain("sqlite_stat1");
+    });
+  });
+
+  test("a refusal that the migration swallows leaves the function unrun, and the manager judges the rest", async () => {
+    const db = await legacyFile();
+    await ensureModules(db, [
+      HOST_SCHEMA,
+      mileageAt2(async (tx) => {
+        await tx.all("SELECT * FROM pragma_optimize").catch(() => undefined);
+      }),
+    ]);
+    expect((await objectsOf(db)).map((o) => o.name)).not.toContain("sqlite_stat1");
+  });
+
+  // What "the other pragma_* functions only read" rests on, as far as it goes: every pragma that
+  // SQLite lists, and that this SQLite offers as a function, is called with 15 shapes of argument
+  // inside a transaction, and the catalogue, the temporary schema and the value of every pragma
+  // that can be read without acting are compared before and after. Only optimize changes anything.
+  // This is a sweep of one build of SQLite (the one Node has), not a proof for any other function
+  // or any other build; a build that has a function with an effect makes this test fail.
+  test("of the pragma_* functions of this SQLite only pragma_optimize changes the file or the connection", () => {
+    const make = () => {
+      const sqlite = new DatabaseSync(":memory:");
+      sqlite.exec(
+        "CREATE TABLE t (a TEXT, b TEXT); CREATE INDEX t_a ON t (a); INSERT INTO t VALUES ('x', 'y'), ('x', 'z')",
+      );
+      return sqlite;
+    };
+    const probe = make();
+    const pragmas = probe
+      .prepare("SELECT name FROM pragma_pragma_list ORDER BY name")
+      .all()
+      .map((r) => String(r.name));
+    const functions = pragmas.filter((name) => {
+      try {
+        probe.prepare(`SELECT * FROM pragma_${name}`).all();
+        return true;
+      } catch (e) {
+        return !/no such table/i.test(String(e));
+      }
+    });
+    expect(functions).toContain("optimize");
+    expect(functions).toContain("table_info");
+    expect(functions.length).toBeGreaterThan(40);
+    expect(functions.length).toBeLessThanOrEqual(pragmas.length);
+
+    // A pragma that does something when it is only read is not part of the state that is compared.
+    const acts = new Set([
+      "optimize",
+      "shrink_memory",
+      "wal_checkpoint",
+      "incremental_vacuum",
+      "stats",
+      "lock_status",
+      "key",
+      "rekey",
+      "hexkey",
+      "hexrekey",
+      "textkey",
+      "textrekey",
+      "activate_extensions",
+      "parser_trace",
+      "vdbe_trace",
+      "vdbe_listing",
+      "vdbe_addoptrace",
+      "vdbe_debug",
+      "vdbe_eqp",
+      "sql_trace",
+      "temp_store_directory",
+      "data_store_directory",
+      "lock_proxy_file",
+      "integrity_check",
+      "quick_check",
+      "foreign_key_check",
+      "database_list",
+      "module_list",
+      "function_list",
+      "pragma_list",
+      "collation_list",
+      "compile_options",
+      "table_list",
+    ]);
+    const compared = pragmas.filter((name) => !acts.has(name));
+    const state = (sqlite: DatabaseSync): Record<string, string> => {
+      const out: Record<string, string> = {};
+      for (const name of compared) {
+        try {
+          out[name] = JSON.stringify(sqlite.prepare(`PRAGMA ${name}`).all());
+        } catch (e) {
+          out[name] = `error ${String(e)}`;
+        }
+      }
+      out["catalogue"] = JSON.stringify(
+        sqlite.prepare("SELECT type, name, tbl_name, sql FROM sqlite_master ORDER BY name").all(),
+      );
+      out["temporary"] = JSON.stringify(sqlite.prepare("SELECT * FROM sqlite_temp_master").all());
+      out["databases"] = JSON.stringify(sqlite.prepare("PRAGMA database_list").all());
+      return out;
+    };
+    const shapes = [
+      "",
+      "(0)",
+      "(1)",
+      "(2)",
+      "(-1)",
+      "('main')",
+      "('temp')",
+      "('t')",
+      "('main', 't')",
+      "('t', 'main')",
+      "(0x10002)",
+      "(NULL)",
+      "('t_a')",
+      "('exclusive')",
+      "(1, 2)",
+    ];
+    expect(shapes).toHaveLength(15);
+    const changed: string[] = [];
+    let calls = 0;
+    for (const name of functions) {
+      const sqlite = make();
+      sqlite.exec("BEGIN IMMEDIATE");
+      state(sqlite); // the first read opens what a read opens
+      const before = state(sqlite);
+      for (const shape of shapes) {
+        const sql = `SELECT * FROM pragma_${name}${shape}`;
+        // The guard refuses this one function by its name and lets the others through.
+        expect(forbiddenInMigration(sql) === null, sql).toBe(name !== "optimize");
+        try {
+          sqlite.prepare(sql).all();
+        } catch {
+          // Many shapes are wrong for a function (too many arguments, no such schema).
+        }
+        calls++;
+        const after = state(sqlite);
+        if (Object.keys(before).some((key) => before[key] !== after[key])) {
+          if (!changed.includes(name)) changed.push(name);
+        }
+      }
+      sqlite.exec("ROLLBACK");
+    }
+    expect(calls).toBe(functions.length * shapes.length);
+    expect(changed).toEqual(["optimize"]);
+  });
+});
+
+// Seven statements of the manager name `main.` and the tests above cannot show that they have to:
+// removing the `main.` from them changes no result, because SQLite itself reads the unqualified
+// form as the file's even where a temporary object has the name. The other ten (the versions, the
+// counts, the columns, the foreign keys, the indexes, the keys of an index, the drops, the two
+// writes of a version) are shown above with a temporary table of the same name. This is the test
+// of the fact that the seven rest on, one statement at a time, in the text the manager uses: if a
+// build of SQLite read them otherwise, this fails and the `main.` becomes necessary.
+describe("the statements of the manager for which main. is for the reader", () => {
+  const raw = () => {
+    const sqlite = new DatabaseSync(":memory:");
+    sqlite.exec(
+      "CREATE TABLE trip (client_trip_id TEXT); PRAGMA main.user_version = 1; PRAGMA temp.user_version = 77",
+    );
+    return sqlite;
+  };
+  const SHADOW =
+    "CREATE TEMP TABLE module_schema (module TEXT PRIMARY KEY NOT NULL, version INTEGER NOT NULL) WITHOUT ROWID";
+
+  test("the layout is the file's: PRAGMA user_version read (readState and snapshot) and set (the end of ensureModules)", () => {
+    const sqlite = raw();
+    expect(sqlite.prepare("PRAGMA user_version").get()).toEqual({ user_version: 1 });
+    sqlite.exec("PRAGMA user_version = 2");
+    expect(sqlite.prepare("PRAGMA main.user_version").get()).toEqual({ user_version: 2 });
+    expect(sqlite.prepare("PRAGMA temp.user_version").get()).toEqual({ user_version: 77 });
+  });
+
+  test("the catalogue is the file's: readState, the snapshot and the look read sqlite_master, which a temporary object cannot take the place of", () => {
+    const sqlite = raw();
+    sqlite.exec(SHADOW);
+    // readState: the file has no module_schema, the temporary schema has one.
+    expect(
+      sqlite
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'module_schema'")
+        .all(),
+    ).toEqual([]);
+    // The snapshot and the look: only the file's objects are listed.
+    expect(
+      sqlite
+        .prepare(
+          "SELECT type, name, tbl_name, sql FROM sqlite_master WHERE name NOT LIKE 'sqlite\\_%' ESCAPE '\\'",
+        )
+        .all()
+        .map((o) => o.name),
+    ).toEqual(["trip"]);
+    expect(
+      sqlite
+        .prepare("SELECT name FROM sqlite_master")
+        .all()
+        .map((o) => o.name),
+    ).toEqual(["trip"]);
+    // Nothing can be made to take the name: it is reserved.
+    expect(() => sqlite.exec("CREATE TEMP TABLE sqlite_master (a TEXT)")).toThrow(/reserved/);
+  });
+
+  test("module_schema is made in the file, also where a temporary table has the name", () => {
+    const sqlite = raw();
+    sqlite.exec(SHADOW);
+    sqlite.exec(
+      "CREATE TABLE IF NOT EXISTS module_schema (module TEXT PRIMARY KEY NOT NULL, version INTEGER NOT NULL) WITHOUT ROWID",
+    );
+    expect(
+      sqlite
+        .prepare("SELECT name FROM main.sqlite_master WHERE name = 'module_schema'")
+        .all()
+        .map((o) => o.name),
+    ).toEqual(["module_schema"]);
+  });
+});
+
+// A quoted name or a string is not a word. It matters where the reader looks for a word at the
+// start of a statement or after PRAGMA: a name there is not the word, so the guard does not take it
+// for one (SQLite refuses such a text itself, and says so), and `PRAGMA "user_version"` is not the
+// pragma that may be used (refused, as what is not on the list is).
+describe("a quoted name or a string where the reader looks for a word", () => {
+  const WORDS = ["BEGIN", "COMMIT", "END", "ROLLBACK", "SAVEPOINT", "RELEASE", "ALTER", "PRAGMA"];
+
+  test.each(WORDS)(
+    "%s as a quoted name or a string at the start of a statement is not the word",
+    (word) => {
+      for (const written of [`"${word}"`, `[${word}]`, `\`${word}\``, `'${word}'`]) {
+        for (const sql of [written, `SELECT 1; ${written}`, `${written} CURRENT_TIME`]) {
+          expect(transactionControl(sql), sql).toBeNull();
+          expect(forbiddenInMigration(sql), sql).toBeNull();
+        }
+      }
+    },
+  );
+
+  test.each(["BEGIN", "COMMIT", "ROLLBACK"])(
+    "a migration that runs \"%s\" gets SQLite's syntax error and not the guard's refusal",
+    async (word) => {
+      const db = memoryDb();
+      const error = await ensureModules(db, [
+        { id: "a", version: 1, migrate: (tx) => tx.exec(`"${word}"`) },
+      ]).catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(Error);
+      expect(error).not.toBeInstanceOf(SchemaError);
+      expect((error as Error).message).toMatch(/syntax error/);
+    },
+  );
+
+  test('PRAGMA user_version is the one pragma that may be used, and PRAGMA "user_version" is not it', () => {
+    expect(forbiddenInMigration("PRAGMA user_version")).toBeNull();
+    expect(forbiddenInMigration("PRAGMA user_version = 1")).toBeNull();
+    for (const sql of ['PRAGMA "user_version"', "PRAGMA [user_version]", "PRAGMA 'user_version'"]) {
+      expect(forbiddenInMigration(sql)?.why, sql).toBe(WHY.pragma);
+    }
+  });
+
+  test("a quoted name after CREATE is not TEMP, TEMPORARY or TRIGGER", () => {
+    // `CREATE "TEMP" TABLE` is not a temporary table (SQLite refuses it as a syntax error), and
+    // `CREATE "TRIGGER" ...` is not a trigger whose body is read to its END: the text is split at
+    // the semicolons, and the END that follows one is the first word of a statement.
+    expect(ran('CREATE "TEMP" TABLE a_t (x TEXT)')).toBeNull();
+    expect(transactionControl('CREATE "TRIGGER" x BEGIN SELECT 1; END')).toEqual({ word: "END" });
+  });
+});
+
+// Limit 4 of 8.7.1: connection state that no refused word names, and another handle to the
+// database. A migration is code. This one closes over the handle the test passes in (the app has
+// nothing like it) and registers a SQL function through it: no text is run that the guard could
+// read, the catalogue does not change, the manager accepts the migration, and the function is on
+// the connection afterwards. It is there also after a migration that the manager refused and took
+// back, because the transaction does not hold it. Through the text of the guarded transaction no
+// state of this kind is known (the words above are the ones that were found).
+describe("a limit: connection state that no word names, set through another handle", () => {
+  function viaTheHandle(after?: (tx: SqlTx) => Promise<void>) {
+    const sqlite = new DatabaseSync(":memory:");
+    const db = sqlDbOver(sqlite);
+    const m: SchemaModule = {
+      id: "a",
+      version: 1,
+      async migrate(tx) {
+        await tx.exec("CREATE TABLE a_items (id TEXT)");
+        sqlite.function("zz_marker", () => 42);
+        await after?.(tx);
+      },
+    };
+    return { sqlite, db, m };
+  }
+
+  test("a function registered through the handle is on the connection after an accepted migration, and nothing says so", async () => {
+    const { sqlite, db, m } = viaTheHandle();
+    expect(() => sqlite.prepare("SELECT zz_marker() AS v").get()).toThrow(/no such function/);
+    await ensureModules(db, [m]);
+    expect(sqlite.prepare("SELECT zz_marker() AS v").get()).toEqual({ v: 42 });
+    expect(await db.all("SELECT * FROM module_schema")).toEqual([{ module: "a", version: 1 }]);
+  });
+
+  test("it is there also after a migration that was refused and taken back", async () => {
+    const { sqlite, db, m } = viaTheHandle((tx) =>
+      tx.exec("CREATE TRIGGER a_g AFTER INSERT ON a_items BEGIN SELECT 1; END"),
+    );
+    const error = await ensureModules(db, [m]).catch((e: unknown) => e);
+    expect(error, String(error)).toBeInstanceOf(SchemaError);
+    expect(await objectsOf(db)).toEqual([]);
+    expect(await layout(db)).toBe(0);
+    expect(sqlite.prepare("SELECT zz_marker() AS v").get()).toEqual({ v: 42 });
   });
 });

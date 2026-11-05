@@ -1,9 +1,11 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vite-plus/test";
 import { HOST_SCHEMA } from "./host-state.ts";
 import { SchemaError, ensureModules, transactionControl, type SchemaModule } from "./schema.ts";
 import type { SqlDb, SqlTx } from "./sql.ts";
 import { MILEAGE_SCHEMA } from "./sql-store.ts";
-import { emptyLegacyFile, legacyFile } from "../test-support/legacy-file.ts";
+import { emptyLegacyFile, legacyFile, seed } from "../test-support/legacy-file.ts";
+import { migrate as firstBuildMigration } from "../test-support/legacy-schema.ts";
 import { memoryDb } from "../test-support/memory-db.ts";
 import { probeOlderBuild } from "../test-support/older-build-probe.ts";
 import { tempDatabase } from "../test-support/temp-db.ts";
@@ -1123,5 +1125,152 @@ describe("a limit: a migration whose own statements depend on the rows", () => {
     expect(await objectsOf(db)).toEqual(objects);
     expect(await rowsOf(db)).toEqual(rows);
     expect(await layout(db)).toBe(1);
+  });
+});
+
+// Limit 3 of 8.7.1, in the forms that are visible in the text. The lint compares the file before
+// and after a migration, and the end state is what it judges. A column that is added with an
+// ALTER and whose text a later rebuild of the table does not keep is not in the end state, so the
+// lint never sees it; SQLite itself refuses some of those ADD COLUMN statements, but only on a
+// table that has rows. The words CURRENT_TIME, CURRENT_DATE and CURRENT_TIMESTAMP are refused by
+// the guard in any ALTER text, so a migration with one fails on every file alike; these five forms
+// are not, and each is accepted on a new file and on an empty file of the first build and refused
+// by SQLite on a file with trips, which every installed phone has. The failure takes the migration
+// back as a whole (the file is as it was, byte for byte), so nothing is damaged, and it is found on
+// the phone. These tests pin that behaviour as it is: a lint that learns to refuse one of the forms
+// has to change the test of that form, and says so.
+describe("a limit: an added column that depends on the rows, hidden by a rebuild of the table", () => {
+  /** The text SQLite keeps for `point` after `ADD COLUMN c TEXT`, which the rebuild is made to match. */
+  async function textAfterPlainAdd(): Promise<string> {
+    const db = await emptyLegacyFile();
+    await db.exec("ALTER TABLE point ADD COLUMN c TEXT");
+    return (await db.one<{ sql: string }>("SELECT sql FROM sqlite_master WHERE name = 'point'"))!
+      .sql;
+  }
+  const COPY_BACK =
+    "INSERT INTO point (client_trip_id, seq, t, lat, lon, accuracy_m, speed_mps) SELECT client_trip_id, seq, t, lat, lon, accuracy_m, speed_mps FROM mileage_tmp";
+
+  /** The module of the app at version 2 and what it does after its own step. */
+  const after = (work: (tx: SqlTx) => Promise<void>): SchemaModule => ({
+    ...MILEAGE_SCHEMA,
+    version: 2,
+    async migrate(tx, from) {
+      await MILEAGE_SCHEMA.migrate(tx, from);
+      if (from < 2) await work(tx);
+    },
+  });
+
+  /** Adds the column with `definition`, copies the table out, drops it, makes it again with a plain `c TEXT`, and copies back. */
+  async function absorbed(definition: string): Promise<SchemaModule> {
+    const text = await textAfterPlainAdd();
+    return after(async (tx) => {
+      await tx.exec(`ALTER TABLE point ADD COLUMN ${definition}`);
+      await tx.exec("CREATE TABLE mileage_tmp AS SELECT * FROM point");
+      await tx.exec("DROP TABLE point");
+      await tx.exec(text);
+      await tx.exec(COPY_BACK);
+      await tx.exec("DROP TABLE mileage_tmp");
+    });
+  }
+
+  /** The same column, added and left in the text of the table. */
+  const kept = (definition: string): SchemaModule =>
+    after((tx) => tx.exec(`ALTER TABLE point ADD COLUMN ${definition}`));
+
+  const FORMS: { form: string; definition: string; sqlite: RegExp; lint: RegExp }[] = [
+    {
+      form: "a default that is an expression",
+      definition: "c TEXT DEFAULT (1+1)",
+      sqlite: /Cannot add a column with non-constant default/,
+      lint: /^module mileage added the column point\.c with a default that is not a plain value/,
+    },
+    {
+      form: "NOT NULL with no default",
+      definition: "c TEXT NOT NULL",
+      sqlite: /Cannot add a NOT NULL column with default value NULL/,
+      lint: /^module mileage added the column point\.c as NOT NULL without a default/,
+    },
+    {
+      form: "NOT NULL with a default of NULL",
+      definition: "c TEXT NOT NULL DEFAULT NULL",
+      sqlite: /Cannot add a NOT NULL column with default value NULL/,
+      lint: /^module mileage added the column point\.c as NOT NULL without a default/,
+    },
+    {
+      form: "REFERENCES with a default that is not NULL",
+      definition: "c TEXT REFERENCES meta DEFAULT 'a'",
+      sqlite: /Cannot add a REFERENCES column with non-NULL default value/,
+      lint: /^module mileage added the column point\.c with a foreign key/,
+    },
+    {
+      form: "a generated column that is STORED",
+      definition: "c TEXT GENERATED ALWAYS AS (1) STORED",
+      sqlite: /cannot add a STORED column/,
+      lint: /^module mileage added the column point\.c with a generated value/,
+    },
+  ];
+
+  const POINT_COLUMNS = ["client_trip_id", "seq", "t", "lat", "lon", "accuracy_m", "speed_mps"];
+  const columnsOfPoint = async (db: SqlDb) =>
+    (await db.all<{ name: string }>("PRAGMA main.table_xinfo(point)")).map((c) => c.name);
+
+  describe.each(FORMS)("$form", ({ definition, sqlite, lint }) => {
+    test.each([
+      ["a new file", async () => memoryDb()],
+      ["an empty file of the first build", emptyLegacyFile],
+    ] as [string, () => Promise<SqlDb>][])(
+      "the rebuild that hides it is accepted on %s, and the file passes the probe",
+      async (_, start) => {
+        const db = await start();
+        await ensureModules(db, [HOST_SCHEMA, await absorbed(definition)]);
+        expect(await columnsOfPoint(db)).toEqual([...POINT_COLUMNS, "c"]);
+        expect(await db.all("SELECT * FROM module_schema ORDER BY module")).toEqual([
+          { module: "host", version: 1 },
+          { module: "mileage", version: 2 },
+        ]);
+        expect(await probeOlderBuild(db)).toEqual({ ok: true });
+      },
+    );
+
+    test("on a file with trips SQLite refuses the ADD COLUMN, with its own error, and the file is as it was, byte for byte", async () => {
+      const file = tempDatabase();
+      try {
+        const { db } = file.connect();
+        await firstBuildMigration(db);
+        await seed(db);
+        const bytes = readFileSync(file.path);
+        const objects = await objectsOf(db);
+        const rows = await rowsOf(db);
+        const error = await ensureModules(db, [HOST_SCHEMA, await absorbed(definition)]).catch(
+          (e: unknown) => e,
+        );
+        expect(error).toBeInstanceOf(Error);
+        expect(error).not.toBeInstanceOf(SchemaError);
+        expect((error as Error).message).toMatch(sqlite);
+        expect(readFileSync(file.path).equals(bytes)).toBe(true);
+        expect(await objectsOf(db)).toEqual(objects);
+        expect(await rowsOf(db)).toEqual(rows);
+        expect(await layout(db)).toBe(1);
+        // The same migration with a plain column instead is accepted on this file, so that the
+        // refusal above is the form's and not the rebuild's.
+        await ensureModules(db, [HOST_SCHEMA, await absorbed("c TEXT")]);
+        expect(await columnsOfPoint(db)).toEqual([...POINT_COLUMNS, "c"]);
+        expect(await probeOlderBuild(db)).toEqual({ ok: true });
+      } finally {
+        file.close();
+      }
+    });
+
+    test("left in the text of the table, the lint refuses the same column on a new file and on an empty file", async () => {
+      for (const start of [async () => memoryDb(), emptyLegacyFile]) {
+        const db = await start();
+        const error = await ensureModules(db, [HOST_SCHEMA, kept(definition)]).catch(
+          (e: unknown) => e,
+        );
+        expect(error, definition).toBeInstanceOf(SchemaError);
+        expect((error as Error).message).toMatch(lint);
+        expect(await columnsOfPoint(db)).not.toContain("c");
+      }
+    });
   });
 });

@@ -241,6 +241,24 @@ describe("what the probe reads back, key by key", () => {
     },
   );
 
+  // The same for the later reads of these statements: a key put in fails the probe at every read
+  // of the ten statements but the two that the next test names (they are used by a value).
+  test("a key put in fails the probe at every read of the ten statements but two", async () => {
+    const db = await emptyLegacyFile();
+    const all = await reads(db);
+    const counted = all.filter((r) => r.sql === Q.countAndTop);
+    const left = all.filter((r) => r.sql === Q.pointCount);
+    const ignored = new Set([counted[1]!.n, left[2]!.n]);
+    const whole = new Set(WHOLE.map(([, sql]) => sql));
+    let tried = 0;
+    for (const read of all.filter((r) => whole.has(r.sql) && !ignored.has(r.n))) {
+      const added = await withAltered(db, { n: read.n, row: 0 }, (row) => void (row.zz_added = 1));
+      expect(added.ok, `read ${read.n} (${read.sql.slice(0, 40)})`).toBe(false);
+      tried++;
+    }
+    expect(tried).toBe(14);
+  });
+
   // The reads that a key put in does not fail, each for a reason that is written above: the probe
   // takes a value or a number out of them and does not compare the row whole.
   test("a key put into a read that is not compared whole is not a failure", async () => {
