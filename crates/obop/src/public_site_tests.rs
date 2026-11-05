@@ -470,3 +470,43 @@ async fn the_public_router_hands_the_site_the_last_forwarded_address_only_behind
         "the header is ignored unless the operator said the proxy is theirs"
     );
 }
+
+// ---- Golden pins of the logo address (S1a-0 of the branding work) --------------------------------
+
+/// `/api/brand/logo.svg` today, in the two other layouts the router tests build: the back office
+/// build served next to the API (`static`) and the instance with the public site (`public`). The
+/// branding work adds this route in slice S1b, which changes the `POST` rows on purpose and the
+/// `GET` row from a refusal to the artwork. The generic command route matches the address for a
+/// `POST` only, so a `GET` is refused, a `POST` with no token is a 401 and one with the owner's
+/// token is the answer for a command that does not exist (the layout with the API alone is pinned
+/// in `mcp_tests`).
+#[tokio::test]
+async fn pins_what_the_logo_address_answers_in_the_back_office_and_public_site_layouts() {
+    use crate::mfa_tests::pin;
+    let mut now = Vec::new();
+    for (layout, public) in [("static", false), ("public", true)] {
+        let f = fixture(public).await;
+        for (name, method, token) in [
+            ("get", "GET", None),
+            ("post", "POST", None),
+            ("post_with_token", "POST", Some(f.token.as_str())),
+        ] {
+            now.push((
+                format!("{layout}/{name}"),
+                pin::sha(&pin::exchange_as(&f.router, method, "/api/brand/logo.svg", token).await),
+            ));
+        }
+    }
+    pin::check("LOGO_ADDRESS_LAYOUT_PINS", LOGO_ADDRESS_LAYOUT_PINS, &now);
+}
+
+// Printed by `OBOP_PRINT_PINS=1` on origin/main 12a59a79 and pasted here.
+#[rustfmt::skip]
+const LOGO_ADDRESS_LAYOUT_PINS: &[(&str, &str)] = &[
+    ("static/get", "75580546a192d3f6a33f4571a2f74352599d81116c0354c171b7a675b2d8cb11"),
+    ("static/post", "31f8cb6fb137b93d90187b38fccc2895192d1c543ddb349113a427764e31b987"),
+    ("static/post_with_token", "23fee73b6a79601cb87a949221e7445d2fd143719ef46f3cb185a6b15465c5c3"),
+    ("public/get", "75580546a192d3f6a33f4571a2f74352599d81116c0354c171b7a675b2d8cb11"),
+    ("public/post", "31f8cb6fb137b93d90187b38fccc2895192d1c543ddb349113a427764e31b987"),
+    ("public/post_with_token", "23fee73b6a79601cb87a949221e7445d2fd143719ef46f3cb185a6b15465c5c3"),
+];

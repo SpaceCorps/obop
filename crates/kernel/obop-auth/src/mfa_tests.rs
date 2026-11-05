@@ -702,3 +702,33 @@ fn the_whole_flow_works_on_postgres_when_available() {
         assert!(kinds.iter().any(|k| k == want), "{want} in {kinds:?}");
     }
 }
+
+// ---- Golden pins of the authenticator label (S1a-0 of the branding work) -------------------------
+
+/// What an authenticator app is given when a person enrols: the account is listed as `obop:ada`
+/// and the issuer is `obop`, both in the path and as the `issuer` parameter. With no brand row an
+/// instance sends exactly this; the brand work keeps it for every instance that has not set a name.
+#[test]
+fn pins_the_otpauth_label_and_issuer_of_an_enrolment() {
+    let r = rig();
+    user_with(&r.a, "ada", &["base.user"]);
+    let (_, p) = session(&r.a, "ada");
+    let begun = r.a.begin(&p).unwrap();
+    let secret = begun["secret"].as_str().unwrap();
+    // The whole URI, but for the secret, which is random.
+    assert_eq!(
+        begun["uri"].as_str().unwrap().replace(secret, "SECRET"),
+        "otpauth://totp/obop:ada?secret=SECRET&issuer=obop&algorithm=SHA1&digits=6&period=30"
+    );
+}
+
+/// The issuer a server starts with when `OBOP_MFA_ISSUER` is not set. (The variable is read
+/// from the process environment, so a run that sets it is not holding the default.)
+#[test]
+fn pins_the_default_issuer_of_a_server() {
+    if std::env::var_os("OBOP_MFA_ISSUER").is_some() {
+        return;
+    }
+    assert_eq!(AuthConfig::from_env().issuer, "obop");
+    assert_eq!(AuthConfig::insecure_dev().issuer, "obop");
+}

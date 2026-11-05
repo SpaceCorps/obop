@@ -911,3 +911,33 @@ async fn the_passkey_limits_count_the_address_by_the_one_rule() {
         }
     }
 }
+
+// ---- Golden pin of the relying party name (S1a-0 of the branding work) ---------------------------
+
+/// The registration options name the relying party "obop", the name an authenticator shows next
+/// to the passkey: with no brand row that is what an instance sends, before and after the brand
+/// work. (The OAuth pages' ceremony site carries the same name; it is asserted in `obop-http`,
+/// where that function is visible.)
+#[tokio::test]
+async fn pins_the_relying_party_name_of_the_registration_options() {
+    let rig = rig(false);
+    let r = &rig.r;
+    let t = session(r, "ada").await;
+    let (s, opts) = post(
+        r,
+        Some(&t),
+        "/api/auth/passkeys/register/options",
+        json!({"password": PW}),
+    )
+    .await;
+    assert_eq!(s, 200, "{opts}");
+    assert_eq!(opts["publicKey"]["rp"]["name"], "obop", "{opts}");
+    assert_eq!(opts["publicKey"]["rp"]["id"], "inst.test", "{opts}");
+    assert_eq!(
+        opts["publicKey"]["rp"]
+            .as_object()
+            .map(|o| o.keys().cloned().collect::<Vec<_>>()),
+        Some(vec!["id".to_string(), "name".to_string()]),
+        "the relying party carries an id and a name and nothing else"
+    );
+}

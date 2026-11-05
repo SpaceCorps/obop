@@ -493,6 +493,7 @@ async fn the_google_drive_page_end_to_end_against_a_fake_google() {
     a_sign_in_without_a_refresh_token_is_refused_with_the_way_out().await;
     a_workspace_drive_scopes_browsing_and_lets_the_write_group_create_files().await;
     a_sign_in_that_did_not_grant_writing_cannot_create_and_says_how_to_fix_it().await;
+    pins_the_return_page_after_a_drive_sign_in().await;
     the_google_addresses_cannot_be_pointed_anywhere_but_loopback();
 }
 
@@ -973,3 +974,43 @@ fn the_google_addresses_cannot_be_pointed_anywhere_but_loopback() {
     // The fake of the other tests is still in place.
     let _ = fake();
 }
+
+// ---- Golden pin of the return page after a Drive sign-in (S1a-0 of the branding work) -----------
+
+/// `GET /oauth/callback` after a good Google sign-in answers "Connected" with the way back to the
+/// Drive page of the back office. `connectors_tests` pins the other answers of this page (and the
+/// one for any other connection); this one needs the fake Google, so it is a scenario of the test
+/// above, which shares that fake. It is what an instance with no brand sends today.
+async fn pins_the_return_page_after_a_drive_sign_in() {
+    use crate::mfa_tests::pin;
+    let r = rig().await;
+    let g = fake();
+    let (_id, q) = r.start("product.manager").await;
+    g.state
+        .lock()
+        .unwrap()
+        .codes
+        .insert("code-pin".into(), q["code_challenge"].clone());
+    let req = Request::get(format!(
+        "/oauth/callback?state={}&code=code-pin",
+        q["state"]
+    ))
+    .body(Body::empty())
+    .unwrap();
+    let answer = pin::answer(r.router.clone().oneshot(req).await.unwrap()).await;
+    assert!(
+        answer.contains("Connected") && answer.contains("href=\"/#/connectors/google_drive\""),
+        "{answer}"
+    );
+    pin::check(
+        "CONNECTOR_DRIVE_PINS",
+        CONNECTOR_DRIVE_PINS,
+        &[("connected_drive".to_string(), pin::sha(&answer))],
+    );
+}
+
+// Printed by `OBOP_PRINT_PINS=1` on origin/main 12a59a79 and pasted here.
+#[rustfmt::skip]
+const CONNECTOR_DRIVE_PINS: &[(&str, &str)] = &[
+    ("connected_drive", "a510fe706af0ae76a5be5ee787d1eafd75e64d072fa25c0960f547767e175cc8"),
+];

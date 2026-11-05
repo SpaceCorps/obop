@@ -712,3 +712,197 @@ fn the_break_glass_command_resets_a_user_in_a_real_database() {
     );
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// Golden pins (S1a-0 of the branding work, docs/spec/branding.md): the digests of what an
+/// instance with no brand row sends today, taken from `origin/main` before any brand code
+/// existed. A table is a list of `(name, SHA-256 hex)`; a test makes the same list from the real
+/// router and holds it to the table. To read the values again from the tree as it is (in the
+/// commit that explains why they move), run
+///
+/// ```text
+/// OBOP_PRINT_PINS=1 cargo test -p obop -- pins the_google_drive_page_end_to_end --nocapture \
+///     --test-threads=1
+/// ```
+///
+/// which prints each table as Rust source instead of asserting it. (The pin of the return page
+/// after a Drive sign-in is a scenario of `the_google_drive_page_end_to_end_against_a_fake_google`,
+/// which shares one fake Google, so that test is in the filter. `OBOP_SHOW_PINNED=1` prints the
+/// text of an answer that `sha` hashes.)
+pub(crate) mod pin {
+    use super::{Arc, Auth, AuthConfig, PW, send};
+    use crate::app::App;
+    use serde_json::json;
+
+    /// The SHA-256 of a text, as lowercase hex. With `OBOP_SHOW_PINNED=1` the text is printed too
+    /// (`--nocapture`), to see what a pin that moved was a pin of.
+    pub(crate) fn sha(text: &str) -> String {
+        let digest = obop_oauth::util::sha_hex(text);
+        if std::env::var("OBOP_SHOW_PINNED").is_ok_and(|v| v == "1") {
+            println!("\n---- text of {digest} ----\n{text}\n---- end ----");
+        }
+        digest
+    }
+
+    /// Print the table as source, or hold `now` to `pinned`: the same names in the same order, the
+    /// same digests. A failure lists every pin that moved.
+    pub(crate) fn check(table: &str, pinned: &[(&str, &str)], now: &[(String, String)]) {
+        if std::env::var("OBOP_PRINT_PINS").is_ok_and(|v| v == "1") {
+            let mut out = format!("\n//@pins {table}\nconst {table}: &[(&str, &str)] = &[\n");
+            for (name, digest) in now {
+                out.push_str(&format!("    (\"{name}\", \"{digest}\"),\n"));
+            }
+            out.push_str(&format!("];\n//@end {table}\n"));
+            println!("{out}");
+            return;
+        }
+        assert!(
+            !pinned.is_empty(),
+            "{table} is empty: print it with OBOP_PRINT_PINS=1"
+        );
+        let mut moved = Vec::new();
+        for (i, (name, digest)) in now.iter().enumerate() {
+            match pinned.get(i) {
+                Some((n, d)) if n == name && d == digest => {}
+                Some((n, _)) if n != name => moved.push(format!("{name}: the table has {n} here")),
+                Some(_) => moved.push(format!("{name}: {digest}")),
+                None => moved.push(format!("{name}: not in the table")),
+            }
+        }
+        if pinned.len() > now.len() {
+            moved.push(format!(
+                "the table has {} entries, the test makes {}",
+                pinned.len(),
+                now.len()
+            ));
+        }
+        assert!(
+            moved.is_empty(),
+            "{table}: {} of {} pins moved (an output differs from what an instance with no brand \
+             row has always sent):\n{}",
+            moved.len(),
+            now.len(),
+            moved.join("\n")
+        );
+    }
+
+    /// The answer of a router as one text: the status, every header (sorted by name; not the
+    /// length, which the body's own pin already holds and which moves with the version string), a
+    /// blank line and the body. What the pin of a response hashes.
+    pub(crate) async fn answer(resp: axum::response::Response) -> String {
+        use http_body_util::BodyExt;
+        let status = resp.status().as_u16();
+        let mut headers: Vec<String> = resp
+            .headers()
+            .iter()
+            .filter(|(k, _)| *k != axum::http::header::CONTENT_LENGTH)
+            .map(|(k, v)| format!("{k}: {}", String::from_utf8_lossy(v.as_bytes())))
+            .collect();
+        headers.sort();
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        format!(
+            "{status}\n{}\n\n{}",
+            headers.join("\n"),
+            String::from_utf8_lossy(&body)
+        )
+    }
+
+    /// An instance whose anonymous documents are pinned: its name in the pin table, its router and
+    /// a token that works on it.
+    pub(crate) struct Instance {
+        pub(crate) name: &'static str,
+        pub(crate) router: axum::Router,
+        pub(crate) token: String,
+    }
+
+    /// The two instances the anonymous documents are pinned on: `dev`, over the development
+    /// authenticator (no OAuth server), and `auth`, over the real `Auth` (which has one). Both use
+    /// the default configuration, so a variable of the environment (`OBOP_PUBLIC_URL`) cannot move
+    /// a pin.
+    pub(crate) async fn instances() -> Vec<Instance> {
+        let app = App::new();
+        app.seed_demo();
+        let dev = obop_http::router(
+            obop_http::HttpState::with_mcp(
+                app.dispatcher.clone(),
+                Arc::new(crate::app::DevAuth),
+                obop_http::mcp::McpConfig::default(),
+            ),
+            None,
+        );
+        let app = App::new();
+        app.seed_demo();
+        let auth = Arc::new(Auth::with_test_config(
+            app.store.backend(),
+            AuthConfig::insecure_dev(),
+        ));
+        auth.create_user("ada", PW, &["base.user".to_string()])
+            .unwrap();
+        let real = obop_http::router(
+            obop_http::HttpState::with_mcp(
+                app.dispatcher.clone(),
+                auth,
+                obop_http::mcp::McpConfig::default(),
+            ),
+            None,
+        );
+        let (s, b) = send(
+            &real,
+            "POST",
+            None,
+            "/api/auth/login",
+            json!({"username": "ada", "password": PW}),
+        )
+        .await;
+        assert_eq!(s, 200, "{b}");
+        let token = b["token"].as_str().unwrap().to_string();
+        vec![
+            Instance {
+                name: "dev",
+                router: dev,
+                token: "dev-agent".into(),
+            },
+            Instance {
+                name: "auth",
+                router: real,
+                token,
+            },
+        ]
+    }
+
+    /// `GET path` as a client of `inst.test` behind a TLS proxy asks, with no token: the answer as
+    /// the pin hashes it, with the version of this build written as `<CORE_VERSION>`.
+    pub(crate) async fn document(r: &axum::Router, path: &str) -> String {
+        exchange(r, "GET", path).await
+    }
+
+    /// As `document`, for any method and with an empty body.
+    pub(crate) async fn exchange(r: &axum::Router, method: &str, path: &str) -> String {
+        exchange_as(r, method, path, None).await
+    }
+
+    /// As `exchange`, signed in with the bearer `token` when there is one.
+    pub(crate) async fn exchange_as(
+        r: &axum::Router,
+        method: &str,
+        path: &str,
+        token: Option<&str>,
+    ) -> String {
+        use tower::ServiceExt;
+        let mut req = axum::http::Request::builder()
+            .method(method)
+            .uri(path)
+            .header("host", "inst.test")
+            .header("x-forwarded-proto", "https");
+        if let Some(t) = token {
+            req = req.header("authorization", format!("Bearer {t}"));
+        }
+        let req = req.body(axum::body::Body::empty()).unwrap();
+        unversioned(&answer(r.clone().oneshot(req).await.unwrap()).await)
+    }
+
+    /// The text with the version of this build written as `<CORE_VERSION>`, so that a pin of a
+    /// document that names the version does not move with every release.
+    pub(crate) fn unversioned(text: &str) -> String {
+        text.replace(obop_types::CORE_VERSION, "<CORE_VERSION>")
+    }
+}
