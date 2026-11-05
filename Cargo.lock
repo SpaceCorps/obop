@@ -1341,6 +1341,7 @@ dependencies = [
  "icu_collator",
  "icu_locale",
  "obop-blob-gdrive",
+ "obop-brand",
  "obop-keys",
  "obop-masking",
  "obop-media",

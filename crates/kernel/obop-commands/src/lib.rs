@@ -286,6 +286,9 @@ pub struct Dispatcher {
     /// The wrappers of the `sign` package and the signer's door (D92), created with the first
     /// module registered against a store.
     sign_service: std::sync::OnceLock<Arc<sign::SignService>>,
+    /// The reader of the instance brand (`brand::Reader`), created by `register_admin`; a
+    /// dispatcher without one gives an inert reader (`Dispatcher::brand`).
+    brand: std::sync::OnceLock<Arc<brand::Reader>>,
     /// Wrappers around a command's handler, by command id (see `around`).
     around: std::sync::RwLock<HashMap<String, Arc<Around>>>,
     /// Models whose writes run under the transaction lock because a rule needs it: a unique
@@ -745,7 +748,9 @@ impl Dispatcher {
             Arc::new(Registered {
                 id: format!("{model}.{command}"),
                 module: module.id.clone(),
-                description: crate::import_map::describe(m.name, command).unwrap_or(c.description),
+                description: crate::import_map::describe(m.name, command)
+                    .or_else(|| crate::brand::describe(m.name, command))
+                    .unwrap_or(c.description),
                 needs_approval: c.needs_approval,
                 model: m.name,
                 permission_group: c.permission_group,
@@ -1724,6 +1729,7 @@ pub trait PasskeyApi: Send + Sync {
 pub mod accounts;
 pub mod aggregate;
 pub mod blobs;
+pub mod brand;
 pub mod collate;
 pub mod csv;
 pub mod devices;

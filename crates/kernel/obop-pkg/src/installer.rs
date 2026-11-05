@@ -2483,6 +2483,9 @@ pub fn admin_module() -> Module {
 
 /// Bind handlers for the admin commands. Called once at start-up.
 pub fn register_admin(d: &Dispatcher, inst: &Arc<Installer>) {
+    // The reader of the instance brand (docs/spec/branding.md, section 4): created here because this
+    // runs in every composition and has the store; `Dispatcher::brand` hands it to whoever asks.
+    d.install_brand(inst.backend.clone());
     let m = admin_module();
     let i = inst.clone();
     d.register(&m, "module", "list", Box::new(move |_| Ok(i.module_rows())));
