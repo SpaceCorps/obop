@@ -203,24 +203,59 @@ fn a_configure_in_the_same_process_shows_at_once_and_reads_nothing() {
 
 #[test]
 fn apply_replaces_the_brand_in_the_cell_and_leaves_its_age_alone() {
-    // The cell was filled at t0 and lives 400 ms. A change at t0 + 250 ms is shown at once, and the
-    // cell still expires at t0 + 400 ms: the next call after that reads the store, which a change
-    // that renewed the age would have put off to t0 + 650 ms.
+    // The cell was filled a second ago, with the bound of two. A change now is shown at once, and
+    // the cell still expires when it would have: after a second more the next call reads the store,
+    // which a change that renewed the age would have put off by another second. (The age is moved
+    // by the test, not waited for.)
     let spy = seeded();
-    let (r, _) = reader(&spy, Duration::from_millis(400));
+    let r = Arc::new(Reader::new(spy.clone()));
     assert_eq!(name(&r), "Acme");
-    thread::sleep(Duration::from_millis(250));
+    r.back_date(Duration::from_secs(1));
     configure(&spy, Some(&r), &[("name", "Zed")]);
     let before = spy.gets(MODEL);
     assert_eq!(name(&r), "Zed");
     assert_eq!(spy.gets(MODEL), before, "shown at once, with no read");
-    thread::sleep(Duration::from_millis(250));
+    r.back_date(Duration::from_millis(1500));
     assert_eq!(name(&r), "Zed");
     assert_eq!(
         spy.gets(MODEL),
         before + 1,
         "the cell expired on the age of its refill"
     );
+}
+
+#[test]
+fn the_bound_is_two_seconds() {
+    assert_eq!(super::super::reader::DEFAULT_BOUND, Duration::from_secs(2));
+    let spy = seeded();
+    let r = Arc::new(Reader::new(spy.clone()));
+    assert_eq!(name(&r), "Acme");
+    put_row(&*spy, &[("name", s("Zed"))]);
+    r.back_date(Duration::from_secs(1));
+    assert_eq!(name(&r), "Acme", "a second old: still the cell");
+    r.back_date(Duration::from_millis(1500));
+    assert_eq!(name(&r), "Zed", "two and a half seconds old: read again");
+}
+
+#[test]
+fn a_slow_read_does_not_keep_the_row_longer_than_the_bound() {
+    // The age of what a refill stores is counted from the start of its read. A read that is held in
+    // the store for longer than the bound has stored a value that is already stale, so the next
+    // call reads again and a change made meanwhile shows at once.
+    let spy = seeded();
+    let (r, _) = reader(&spy, Duration::from_millis(100));
+    spy.park_next(MODEL);
+    let owner = {
+        let r = r.clone();
+        thread::spawn(move || name(&r))
+    };
+    spy.wait_parked(1);
+    put_row(&*spy, &[("name", s("Zed"))]);
+    // Time passes in the store: the bound is gone before the read returns.
+    thread::sleep(Duration::from_millis(300));
+    spy.release();
+    assert_eq!(owner.join().unwrap(), "Acme", "it read the row before");
+    assert_eq!(name(&r), "Zed", "and what it stored was stale on arrival");
 }
 
 #[test]
@@ -356,10 +391,131 @@ fn a_caller_that_waited_for_a_flight_that_apply_overtook_does_not_get_the_replac
         let r = r.clone();
         thread::spawn(move || name(&r))
     };
-    thread::sleep(Duration::from_millis(50));
+    // The waiter is about to block behind the owner: a condition, not a time.
+    wait_waiting(&r, 1);
     spy.release();
     assert_eq!(owner.join().unwrap(), "Acme");
     assert_eq!(waiter.join().unwrap(), "Zed");
+}
+
+#[test]
+fn a_refill_that_fails_after_an_overlapping_change_serves_the_brand_just_written() {
+    // The refill read the row, a change committed while it was in the store, and then it failed:
+    // its caller gets the brand that was just written (after a clear, the default), not the one
+    // that was in the cell when the read began.
+    for clear in [false, true] {
+        let spy = seeded();
+        let (r, _) = reader(&spy, LONG);
+        assert_eq!(name(&r), "Acme");
+        r.expire();
+        spy.park_next(MODEL);
+        let owner = {
+            let r = r.clone();
+            thread::spawn(move || r.current())
+        };
+        spy.wait_parked(1);
+        if clear {
+            apply(&*spy, Some(&r), "ada", &Action::Clear, false).unwrap();
+        } else {
+            configure(&spy, Some(&r), &[("name", "Zed")]);
+        }
+        spy.fail(MODEL, "storage_unavailable: down");
+        spy.release();
+        let served = owner.join().unwrap();
+        if clear {
+            assert!(!served.is_set(), "clear={clear}: never the cleared brand");
+            assert_eq!(served.brand().name(), "obop");
+        } else {
+            assert_eq!(
+                served.brand().name(),
+                "Zed",
+                "clear={clear}: never the replaced brand"
+            );
+        }
+    }
+}
+
+#[test]
+fn the_accent_of_a_cell_filled_with_no_row_survives_the_first_configure_and_a_clear() {
+    // The theme part of the cell is what its refill read. With no row the brand is the default and
+    // the accent is still kept, so the tile of the first `configure` and of what follows a `clear`
+    // has the colour of the theme.
+    let spy = Spy::memory();
+    put_theme(&*spy, "#c2410c");
+    let (r, _) = reader(&spy, LONG);
+    let shown = r.current();
+    assert!(!shown.is_set());
+    assert_eq!(shown.theme_accent(), Some("#c2410c"), "kept with no row");
+    configure(&spy, Some(&r), &[("name", "Zed")]);
+    let shown = r.current();
+    assert_eq!(shown.theme_accent(), Some("#c2410c"));
+    assert_eq!(
+        shown.logo().unwrap().served(),
+        obop_brand::tile::svg("Zed", Some("#c2410c"), None)
+    );
+    apply(&*spy, Some(&r), "ada", &Action::Clear, false).unwrap();
+    let shown = r.current();
+    assert!(!shown.is_set());
+    assert_eq!(shown.theme_accent(), Some("#c2410c"), "kept after a clear");
+}
+
+#[test]
+fn apply_builds_its_value_with_the_cell_free_and_keeps_a_refill_that_stored_meanwhile() {
+    // `applied` bumps the counter, then builds the new value with no lock held, then puts it in. The
+    // test runs a whole refill, on another thread, in the gap between: it must not be blocked by
+    // `applied`, it read the new row (the batch has committed) and a theme change made just before,
+    // and `applied` must not put a value that was built from the older cell over it.
+    let spy = seeded();
+    let (r, _) = reader(&spy, LONG);
+    assert_eq!(name(&r), "Acme");
+    assert_eq!(r.current().theme_accent(), Some("#c2410c"));
+    let (hook_spy, hook_reader) = (spy.clone(), r.clone());
+    r.on_applied_gap(Arc::new(move || {
+        put_theme(&*hook_spy, "#0f766e");
+        hook_reader.expire();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let me = hook_reader.clone();
+        thread::spawn(move || tx.send(me.current()).unwrap());
+        let shown = rx
+            .recv_timeout(Duration::from_secs(10))
+            .expect("a refill in the gap was blocked: the cell was held while the value was built");
+        assert_eq!(shown.brand().name(), "Zed", "it read the committed row");
+        assert_eq!(shown.theme_accent(), Some("#0f766e"), "and the new accent");
+    }));
+    configure(&spy, Some(&r), &[("name", "Zed")]);
+    let shown = r.current();
+    assert_eq!(shown.brand().name(), "Zed");
+    assert_eq!(
+        shown.theme_accent(),
+        Some("#0f766e"),
+        "the value the refill stored stays: the older accent of the cell is not put over it"
+    );
+}
+
+#[test]
+fn a_refill_that_began_before_a_change_cannot_store_once_the_counter_moved() {
+    // The counter moves before the new value is built, not after: a refill that began before the
+    // change and stores in the gap is refused, and `applied` then puts the new value in.
+    let spy = seeded();
+    let (r, _) = reader(&spy, LONG);
+    assert_eq!(name(&r), "Acme");
+    r.expire();
+    spy.park_next(MODEL);
+    let older = {
+        let r = r.clone();
+        thread::spawn(move || name(&r))
+    };
+    spy.wait_parked(1);
+    let hook_spy = spy.clone();
+    let hook_older = std::sync::Mutex::new(Some(older));
+    r.on_applied_gap(Arc::new(move || {
+        // The older refill finishes here, in the gap: it read the old row.
+        hook_spy.release();
+        let older = hook_older.lock().unwrap().take().unwrap();
+        assert_eq!(older.join().unwrap(), "Acme");
+    }));
+    configure(&spy, Some(&r), &[("name", "Zed")]);
+    assert_eq!(name(&r), "Zed", "the older refill kept nothing");
 }
 
 #[test]

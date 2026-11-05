@@ -18,27 +18,39 @@
 //! - *Would block*: a refill is running. A caller with a last good value serves it at once. A caller
 //!   with none (a process that never had a good read) blocks on the refill mutex and, when it gets
 //!   it, reads the outcome the owner left in the slot of the flight (a good value or the failure; the
-//!   default for a failure) and does not read the store itself.
+//!   default for a failure) and does not read the store itself. It refills for itself, as an owner,
+//!   in the three cases where that slot is not an answer for it: the slot is empty (the owner
+//!   panicked), `apply` committed while that flight ran (its outcome may be the row that was
+//!   replaced), or the slot belongs to a flight that had already finished when this caller arrived
+//!   (the lock was held by another waiter that was reading it, not by a running flight: the slot is
+//!   not the cache, and a caller that comes later never reads it). Each finished flight takes the
+//!   next number of a counter; a caller notes the counter when it finds the cell stale and uses a
+//!   slot only if the number in it is newer.
 //!
-//! A failed refill is never kept: the cell stays as it was, the owner gets the last good value (the
-//! default if there is none) and the next caller starts a refill of its own. When `apply` changes the
-//! row in this process it replaces the brand part of the cell once its batch has committed and bumps
-//! a counter; a refill stores its outcome only if the counter is the one it started under, so a refill
-//! that read the old row before the change cannot put the replaced brand back.
+//! A failed refill is never kept: the cell stays as it was, the owner gets the last good value of the
+//! cell as it is when the read fails (the default if there is none), and the next caller starts a
+//! refill of its own. When `apply` changes the row in this process it bumps a counter and, once its
+//! batch has committed, replaces the brand part of the cell; a refill stores its outcome only if the
+//! counter is the one it started under, so a refill that read the old row before the change cannot
+//! put the replaced brand back. The cell is dated by the start of the read, not by its end, so a slow
+//! store cannot keep an old row for longer than the bound after the flight ended.
 //!
 //! **`fresh()`** is the uncached read of the row and the theme that `get` makes: a store failure is
 //! an error, never `set: false`. **[`strict`]** reads the row alone, every time, for the text that is
 //! written into the person's own device.
 //!
-//! The reader is a total function of what the store holds: it never panics on a row. It does not
-//! hide a store failure from D74: the read is not run inside `fault::detached`, so the request that
-//! met the fault is answered with the 503 by the layer above.
+//! The reader is a total function of what the store holds: it never panics on a row. Its own lines
+//! (the sink) are written after the refill lock is released, and the default sink ignores a stderr
+//! that cannot be written. It does not hide a store failure from D74: the read is not run inside
+//! `fault::detached`, so the request that met the fault is answered with the 503 by the layer above.
 
 use super::row::{self, Fallback, Shown};
 use super::{MODEL, ROW_ID, SETTING_ID, SETTING_MODEL, UNREADABLE};
 use obop_brand::Brand;
 use obop_storage::{Backend, Fields};
 use std::collections::HashSet;
+use std::io::Write;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, TryLockError};
 use std::time::{Duration, Instant};
 
@@ -75,6 +87,9 @@ struct Slot {
     outcome: Option<Arc<Shown>>,
     /// The counter of the cell when the flight started.
     generation: u64,
+    /// The number the flight took when it finished (`Reader::finished`): a caller that noted a
+    /// number at least this high arrived after the flight and does not read its slot.
+    epoch: u64,
 }
 
 /// The state of the refill mutex: the slot of the flight that ran last. The next flight clears it
@@ -91,10 +106,19 @@ pub struct Reader {
     bound: Duration,
     cell: Mutex<Cell>,
     refill: Mutex<Flight>,
+    /// How many flights have finished (left a slot). Written under the refill lock.
+    finished: AtomicU64,
     /// The fields already written to the sink: one line per field and process.
     noted: Mutex<HashSet<String>>,
     sink: Sink,
     inert: Arc<Shown>,
+    /// Callers that found a flight running and no last good value, counted just before they block
+    /// on the refill lock. For tests: a rendezvous that is a condition and not a time.
+    #[cfg(test)]
+    waiting: std::sync::atomic::AtomicUsize,
+    /// Runs in `applied` between the counter bump and the replacement. For tests.
+    #[cfg(test)]
+    gap: Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
 }
 
 /// The uncached read of the row and the theme setting, with the row as it is stored.
@@ -165,9 +189,17 @@ impl Reader {
             bound,
             cell: Mutex::new(Cell::default()),
             refill: Mutex::new(Flight::default()),
+            finished: AtomicU64::new(0),
             noted: Mutex::new(HashSet::new()),
-            sink: Arc::new(|line| eprintln!("{line}")),
+            // Not `eprintln!`, which panics when stderr cannot be written: the reader is total.
+            sink: Arc::new(|line| {
+                let _ = writeln!(std::io::stderr(), "{line}");
+            }),
             inert: Arc::new(Shown::not_set(None)),
+            #[cfg(test)]
+            waiting: std::sync::atomic::AtomicUsize::new(0),
+            #[cfg(test)]
+            gap: Mutex::new(None),
         }
     }
 
@@ -202,6 +234,9 @@ impl Reader {
     /// another flight has stored, which is the gap between the two that the owner's second look at
     /// the cell exists for.
     pub(super) fn after_stale(&self, backend: &dyn Backend) -> Arc<Shown> {
+        // The flights that had finished when this caller found the cell stale: the slot of one of
+        // them is not the answer to this caller.
+        let seen = self.finished.load(Ordering::Acquire);
         match self.refill.try_lock() {
             Ok(flight) => self.own(flight, backend),
             Err(TryLockError::Poisoned(p)) => self.own(p.into_inner(), backend),
@@ -212,16 +247,21 @@ impl Reader {
                     return shown;
                 }
                 // A caller with none waits for the flight and reads what its owner left.
+                #[cfg(test)]
+                self.waiting
+                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                 let flight = recover(&self.refill);
                 let generation = recover(&self.cell).generation;
                 match &flight.slot {
-                    Some(slot) if slot.generation == generation => slot
+                    Some(slot) if slot.epoch > seen && slot.generation == generation => slot
                         .outcome
                         .clone()
                         .unwrap_or_else(|| Arc::new(Shown::not_set(None))),
                     // The flight left nothing (its owner panicked), or an `apply` committed while
-                    // it ran: its outcome may be the row that was replaced. This caller holds the
-                    // lock, so it refills itself.
+                    // it ran (its outcome may be the row that was replaced), or the slot is of a
+                    // flight that had finished before this caller arrived (the lock was held by
+                    // another waiter that was reading it). This caller holds the lock, so it
+                    // refills itself.
                     _ => self.own(flight, backend),
                 }
             }
@@ -230,35 +270,45 @@ impl Reader {
 
     /// The owner of a flight. Looks at the cell again first, then reads and stores the outcome.
     fn own(&self, mut flight: MutexGuard<'_, Flight>, backend: &dyn Backend) -> Arc<Shown> {
-        let (last_good, started) = {
+        let (began, started) = {
             let cell = recover(&self.cell);
             if let Some(shown) = cell.fresh(self.bound) {
                 return shown;
             }
-            (cell.shown.clone(), cell.generation)
+            // What this flight stores is dated from here, not from the end of a read that a slow
+            // store may have stretched.
+            (Instant::now(), cell.generation)
         };
         flight.slot = None;
         match read_unit(backend) {
             Ok((stored, accent)) => {
                 let shown = Arc::new(row::read_row(stored.as_ref(), accent));
-                self.note(shown.fallbacks());
                 {
                     let mut cell = recover(&self.cell);
                     if cell.generation == started {
                         cell.shown = Some(shown.clone());
-                        cell.at = Some(Instant::now());
+                        cell.at = Some(began);
                     }
                 }
                 flight.slot = Some(Slot {
                     outcome: Some(shown.clone()),
                     generation: started,
+                    epoch: self.finished.fetch_add(1, Ordering::AcqRel) + 1,
                 });
+                // The lines go out with no lock held: a sink is not the reader's to trust.
+                drop(flight);
+                self.note(shown.fallbacks());
                 shown
             }
             Err(_) => {
+                // The last good value as the cell holds it now, not as it held it when the read
+                // began: an `apply` that committed meanwhile has replaced it, and a failing refill
+                // never serves the brand that was replaced or cleared.
+                let last_good = recover(&self.cell).shown.clone();
                 flight.slot = Some(Slot {
                     outcome: None,
                     generation: started,
+                    epoch: self.finished.fetch_add(1, Ordering::AcqRel) + 1,
                 });
                 last_good.unwrap_or_else(|| Arc::new(Shown::not_set(None)))
             }
@@ -307,12 +357,33 @@ impl Reader {
     /// value, replaces its brand part with what the new row shows. The cell keeps its theme part
     /// and its age. A process that has not read yet has nothing to replace, and its first read
     /// reads the new row. `row` is the row that was written, or none after a `clear`.
+    ///
+    /// The cell is held twice, for a moment each, and not while the row is read: the first time to
+    /// bump the counter (from then on no refill that began before the change can store) and to take
+    /// the accent and the age of the value, the second to put the new value in. The parse and the
+    /// hash of the artwork happen between, with no lock held. A refill that began after the bump
+    /// read the new row; if one stored in between, the age of the cell has moved and its value
+    /// stays.
     pub(crate) fn applied(&self, row: Option<&Fields>) {
+        let (accent, at) = {
+            let mut cell = recover(&self.cell);
+            cell.generation = cell.generation.wrapping_add(1);
+            match &cell.shown {
+                Some(old) => (old.theme_accent().map(str::to_string), cell.at),
+                None => return,
+            }
+        };
+        #[cfg(test)]
+        {
+            let hook = recover(&self.gap).clone();
+            if let Some(hook) = hook {
+                hook();
+            }
+        }
+        let built = Arc::new(row::read_row(row, accent));
         let mut cell = recover(&self.cell);
-        cell.generation = cell.generation.wrapping_add(1);
-        if let Some(old) = &cell.shown {
-            let accent = old.theme_accent().map(str::to_string);
-            cell.shown = Some(Arc::new(row::read_row(row, accent)));
+        if cell.at == at {
+            cell.shown = Some(built);
         }
     }
 
@@ -338,6 +409,46 @@ impl Reader {
     #[cfg(test)]
     pub(crate) fn expire(&self) {
         recover(&self.cell).at = None;
+    }
+
+    /// Makes the value in the cell `by` older than it is. For tests.
+    #[cfg(test)]
+    pub(crate) fn back_date(&self, by: Duration) {
+        let mut cell = recover(&self.cell);
+        if let Some(at) = cell.at {
+            cell.at = Some(at.checked_sub(by).expect("the machine has been up longer"));
+        }
+    }
+
+    /// Holds the refill lock, as a waiter that is reading a slot does. For tests.
+    #[cfg(test)]
+    pub(crate) fn hold_refill(&self) -> impl Sized + '_ {
+        recover(&self.refill)
+    }
+
+    /// Whether a thread panicked while it held the refill lock. For tests.
+    #[cfg(test)]
+    pub(crate) fn refill_is_poisoned(&self) -> bool {
+        self.refill.is_poisoned()
+    }
+
+    /// Whether the slot of the last flight is empty. For tests.
+    #[cfg(test)]
+    pub(crate) fn slot_is_empty(&self) -> bool {
+        recover(&self.refill).slot.is_none()
+    }
+
+    /// How many callers have found a flight running with no last good value to serve. For tests.
+    #[cfg(test)]
+    pub(crate) fn waiting(&self) -> usize {
+        self.waiting.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Runs `hook` inside `applied`, between the bump of the counter and the replacement of the
+    /// value, with no lock held. For tests.
+    #[cfg(test)]
+    pub(crate) fn on_applied_gap(&self, hook: Arc<dyn Fn() + Send + Sync>) {
+        *recover(&self.gap) = Some(hook);
     }
 }
 

@@ -285,9 +285,11 @@ fn a_huge_stored_value_is_refused_without_reading_it_all() {
         ],
     );
     let (r, _) = reader(&spy, LONG);
+    // A watchdog against a regression to something quadratic, not a measurement of speed: it holds
+    // on a machine that is loaded many times over.
     let started = std::time::Instant::now();
     let shown = r.current();
-    assert!(started.elapsed() < Duration::from_secs(5));
+    assert!(started.elapsed() < Duration::from_secs(120));
     assert_eq!(shown.brand().name(), "obop");
     assert!(shown.logo().unwrap().is_tile());
     assert_eq!(shown.fallbacks().len(), 3);

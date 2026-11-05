@@ -6,8 +6,9 @@
 use super::{MODEL, ROW_ID, Reader, SETTING_ID, SETTING_MODEL, Sink};
 use obop_storage::{Backend, Fields, Op};
 use serde_json::Value as J;
+use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 mod apply_tests;
 mod audit;
@@ -15,6 +16,7 @@ mod cache;
 mod describe;
 mod double;
 mod faults;
+mod pins;
 mod race;
 mod rows;
 mod strict;
@@ -73,3 +75,36 @@ pub fn reader(spy: &Arc<Spy>, bound: Duration) -> (Arc<Reader>, Arc<Mutex<Vec<St
 
 /// A bound so long that a test never sees the cell expire by itself.
 pub const LONG: Duration = Duration::from_secs(3600);
+
+/// Waits until `n` callers of the reader have found a flight running with no last good value and
+/// are about to block on it. A condition and not a time: the owner holds the refill lock until the
+/// test lets it go, so a caller that is counted cannot be answered before then. Panics after ten
+/// seconds.
+pub fn wait_waiting(r: &Reader, n: usize) {
+    let until = Instant::now() + Duration::from_secs(10);
+    while r.waiting() < n {
+        assert!(
+            Instant::now() < until,
+            "{} callers are waiting, not {n}",
+            r.waiting()
+        );
+        std::thread::sleep(Duration::from_millis(1));
+    }
+}
+
+/// The next `n` messages of a channel. When they do not come within ten seconds the parked reads
+/// of the double are let go (so that no thread stays blocked) and the test fails, naming `what`:
+/// a regression that makes a caller wait for a running flight fails the test and does not hang it.
+pub fn take<T>(rx: &Receiver<T>, n: usize, spy: &double::Spy, what: &str) -> Vec<T> {
+    let mut got = Vec::new();
+    while got.len() < n {
+        match rx.recv_timeout(Duration::from_secs(10)) {
+            Ok(x) => got.push(x),
+            Err(_) => {
+                spy.release();
+                panic!("{what}: {} of {n} answers in ten seconds", got.len());
+            }
+        }
+    }
+    got
+}
