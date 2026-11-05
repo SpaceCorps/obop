@@ -33,6 +33,7 @@ obop-community = { path = "crates/kernel/obop-community" }
 obop-site = { path = "crates/kernel/obop-site" }
 obop-http = { path = "crates/kernel/obop-http" }
 obop-mcp = { path = "crates/kernel/obop-mcp" }
+obop-sie = { path = "crates/kernel/obop-sie" }
 base = { path = "crates/modules/base" }
 invoicing = { path = "crates/modules/invoicing" }
 sales = { path = "crates/modules/sales" }
