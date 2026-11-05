@@ -683,6 +683,157 @@ async fn a_name_in_the_store_is_shown_as_text_whatever_it_holds() {
     assert!(end.contains(&obop_oauth::page::esc(evil)), "{end}");
 }
 
+/// `NAME_MAX` of `history.rs`: the longest name the list shows, in characters.
+const NAME_MAX: usize = 120;
+
+#[tokio::test]
+async fn a_listed_name_is_cut_to_120_characters_not_bytes_and_the_order_is_the_time_not_the_length()
+{
+    let f = fixture().await;
+    let base = now_micros();
+    let viewer = made(&f, &f.doc, "Viewer", Some(true)).await;
+    // What a stale or imported record could hold (the door refuses a typed name over 120). The
+    // records go in newest first, so that the order shown can only be the time. The last name is
+    // made of characters of three bytes each: the unit of the cut is the character, so the cut
+    // name is 360 bytes, not 120 and not 40.
+    let exactly = "A".repeat(NAME_MAX);
+    let one_over = format!("{exactly}B");
+    let far_over = "C".repeat(5000);
+    let wide = "\u{540d}".repeat(200);
+    assert_eq!(wide.len(), 600, "three bytes a character");
+    for (id, name, secs) in [
+        ("stored-4-wide", wide.as_str(), 3),
+        ("stored-3-far", far_over.as_str(), 2),
+        ("stored-2-over", one_over.as_str(), 1),
+        ("stored-1-exact", exactly.as_str(), 0),
+    ] {
+        stored_signed(&f, id, &f.doc, &f.file, name, base + secs * 1_000_000, true);
+    }
+    let at = |secs: i64| {
+        let t = obop_values::datetime::Instant::from_micros(base + secs * 1_000_000)
+            .unwrap()
+            .canonical();
+        format!("{}Z", &t[..19])
+    };
+    let listed = |html: &str, own_last: bool| {
+        let rows = entries(html);
+        assert_eq!(rows.len(), 4 + usize::from(own_last), "{html}");
+        // The order is the time of the signatures: 0, 1, 2, 3 seconds after `base`.
+        for (i, (name, time, own)) in rows.iter().take(4).enumerate() {
+            assert_eq!(time, &at(i as i64), "entry {i}");
+            assert_eq!(name.chars().count(), NAME_MAX, "entry {i} is cut to 120");
+            assert!(!own, "entry {i}");
+        }
+        let names: Vec<&str> = rows.iter().take(4).map(|r| r.0.as_str()).collect();
+        assert_eq!(
+            names,
+            [
+                exactly.as_str(),
+                exactly.as_str(),
+                "C".repeat(NAME_MAX).as_str(),
+                "\u{540d}".repeat(NAME_MAX).as_str()
+            ],
+            "{html}"
+        );
+        // Counted in characters, not bytes: the wide name keeps 360 bytes.
+        assert_eq!(rows[3].0.len(), NAME_MAX * 3, "the unit is the character");
+        // No run of one character more than the cut allows, in any of the four letters.
+        for c in ["A", "B", "C", "\u{540d}"] {
+            assert!(
+                !html.contains(&c.repeat(NAME_MAX + 1)),
+                "a run of {} {c} on the page",
+                NAME_MAX + 1
+            );
+        }
+        assert!(
+            !html.contains(&format!("{exactly}B")),
+            "the 121st character"
+        );
+        rows
+    };
+    let html = page(&f, &viewer, 90).await.text();
+    listed(&html, false);
+    // The same cut on the page after signing, where the viewer's own line comes last and marked.
+    clock_at(&f, base, 10);
+    assert_eq!(
+        sign(&f, &viewer, &f.file, "Viewer Example", true, 91)
+            .await
+            .status,
+        303
+    );
+    let end = page(&f, &viewer, 92).await.text();
+    let rows = listed(&end, true);
+    assert_eq!(rows[4].0, "Viewer Example");
+    assert!(rows[4].2, "the viewer's own line is marked");
+}
+
+#[tokio::test]
+async fn two_requests_that_share_the_requested_name_and_the_typed_name_are_told_apart_by_the_mark()
+{
+    let f = fixture().await;
+    let base = now_micros();
+    // The same name asked for, the same name typed: nothing about the two but their ids differs.
+    let same = json!({"signer_name": "Casey Example"});
+    let first = made_with(&f, &f.doc, "Casey one", Some(true), same.clone()).await;
+    let second = made_with(&f, &f.doc, "Casey two", Some(true), same).await;
+    for m in [&first, &second] {
+        let rec = f.record("sign_request", &m.id);
+        assert_eq!(rec["signer_name"], "Casey Example");
+    }
+    let at = |secs: i64| {
+        let t = obop_values::datetime::Instant::from_micros(base + secs * 1_000_000)
+            .unwrap()
+            .canonical();
+        format!("{}Z", &t[..19])
+    };
+    clock_at(&f, base, 10);
+    assert_eq!(
+        sign(&f, &first, &f.file, "Casey Example", true, 100)
+            .await
+            .status,
+        303
+    );
+    // Only the first has signed: one line, and it is the first's own.
+    let end = page(&f, &first, 101).await.text();
+    assert_eq!(marked(&end), [("Casey Example".to_string(), true)], "{end}");
+
+    clock_at(&f, base, 20);
+    assert_eq!(
+        sign(&f, &second, &f.file, "Casey Example", true, 102)
+            .await
+            .status,
+        303
+    );
+    // Both have signed, under one name and one requested name. Each link's page lists two lines
+    // and marks exactly one: the line of the request of that link, not the other and not both.
+    for (m, n, mine) in [(&first, 103, 0), (&second, 104, 1)] {
+        let end = page(&f, m, n).await.text();
+        let rows = entries(&end);
+        assert_eq!(rows.len(), 2, "{end}");
+        assert_eq!(
+            rows.iter().map(|r| r.0.as_str()).collect::<Vec<_>>(),
+            ["Casey Example", "Casey Example"],
+            "{end}"
+        );
+        assert_eq!(
+            (rows[0].1.as_str(), rows[1].1.as_str()),
+            (at(10).as_str(), at(20).as_str()),
+            "{end}"
+        );
+        assert_eq!(
+            end.matches("<strong>(you)</strong>").count(),
+            1,
+            "exactly one line is marked:\n{end}"
+        );
+        let own: Vec<bool> = rows.iter().map(|r| r.2).collect();
+        let want: Vec<bool> = (0..2).map(|i| i == mine).collect();
+        assert_eq!(
+            own, want,
+            "the link of request {mine} marks the line of request {mine}"
+        );
+    }
+}
+
 #[tokio::test]
 async fn the_list_shows_the_typed_name_and_the_time_and_nothing_else_of_the_others() {
     let f = fixture().await;
