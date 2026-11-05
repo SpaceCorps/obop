@@ -61,6 +61,9 @@ COPY deploy/entrypoint.sh /usr/local/bin/obop-entrypoint
 COPY --from=build /src/target/release/obop /usr/local/bin/obop
 COPY --from=web /src/web/apps/backoffice/dist /srv/backoffice
 COPY --from=web /site /srv/site
+# Apache-2.0 sections 4(a) and 4(d): the licence and the attribution notice travel with the binary.
+# They are files in the image, not text the product shows to anyone.
+COPY --chmod=0644 LICENSE NOTICE /usr/share/doc/obop/
 EXPOSE 8080
 ENTRYPOINT ["obop-entrypoint"]
 # An instance serves its public site and shop at / (a friendly page until content exists) and the
