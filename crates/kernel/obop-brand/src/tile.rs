@@ -7,12 +7,13 @@ use crate::theme;
 use crate::unicode::{category, is_letter};
 use icu_properties::props::GeneralCategory as Gc;
 
-/// The default accent of the back office, `#6d3fd0` (`UI/src/theme.ts`, `UI/src/tokens.css`). A
-/// stored accent that equals it counts as no accent for the tile.
+/// The default accent of the back office, `#6d3fd0` (the Violet preset of
+/// `web/packages/ui/src/theme.ts`, and `tokens.css`). A stored accent that equals it counts as no
+/// accent for the tile.
 pub const DEFAULT_VIOLET: &str = "#6d3fd0";
 
 /// The tile's accent when the theme stores none, or only the default violet: the neutral slate
-/// of the Slate preset of the theme (`UI/src/theme.ts`).
+/// of the Slate preset of the theme (`web/packages/ui/src/theme.ts`).
 pub const SLATE: &str = "#495670";
 
 /// The glyph of a name that holds no letter or digit (a row written around the command): the first
