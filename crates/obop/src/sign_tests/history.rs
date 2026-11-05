@@ -899,6 +899,9 @@ async fn a_signature_on_a_request_that_asks_stores_the_id_of_the_wording_with_th
             .unwrap()
             .to_string()
     };
+    // The posts below never open the page: `hist=1` is the client's word, and the id stored for a
+    // request that asks is the one with the sentence and the mark all the same (docs/SIGN.md,
+    // "What keeps the stored id true, and what does not"; O55).
     let flagged_en = made(&f, &f.doc, "Flagged en", Some(true)).await;
     let flagged_de = made(&f, &f.doc, "Flagged de", Some(true)).await;
     let plain_en = made(&f, &f.doc, "Plain en", None).await;
@@ -1864,6 +1867,59 @@ async fn the_list_is_served_only_while_the_link_is_within_its_end_and_not_revoke
 }
 
 // ---- a signature is listed only if its signer was told ------------------------------------------
+
+#[tokio::test]
+async fn a_link_that_is_over_or_revoked_makes_no_query_for_the_list() {
+    let (f, flaky) = counted().await;
+    let base = now_micros();
+    let a = made(&f, &f.doc, "Alpha", Some(true)).await;
+    let b = made(&f, &f.doc, "Beta", Some(true)).await;
+    clock_at(&f, base, 10);
+    assert_eq!(
+        sign(&f, &a, &f.file, "Alpha Example", true, 250)
+            .await
+            .status,
+        303
+    );
+    assert_eq!(
+        sign(&f, &b, &f.file, "Beta Example", true, 251)
+            .await
+            .status,
+        303
+    );
+    // Within its end the page after signing is one `find`.
+    flaky.reset_reads();
+    assert_eq!(names(&page(&f, &a, 252).await.text()).len(), 2);
+    assert_eq!(flaky.reads().finds, 1);
+    // Over its end, or revoked: the same page as for any link, and no query at all for the list.
+    at_micros(&f, base + 20 * DAY);
+    flaky.reset_reads();
+    no_list(&page(&f, &a, 253).await);
+    let reads = flaky.reads();
+    assert_eq!(
+        (
+            reads.finds,
+            reads.keyed,
+            reads.lists,
+            reads.scans,
+            reads.counts
+        ),
+        (0, 0, 0, 0, 0),
+        "{reads:?}"
+    );
+    clock_at(&f, base, 30);
+    let (s, v) = f
+        .api(
+            "admin",
+            "/api/sign_link/update",
+            json!({"id": b.link_id, "revoked_at": "2026-11-04T12:00:00Z"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    flaky.reset_reads();
+    no_list(&page(&f, &b, 254).await);
+    assert_eq!(flaky.reads().finds, 0);
+}
 
 #[tokio::test]
 async fn a_signature_made_without_the_sentence_is_listed_to_nobody_whatever_the_box_says_later() {
