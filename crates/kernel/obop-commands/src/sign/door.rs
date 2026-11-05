@@ -1,7 +1,10 @@
 //! The signer's door: what the page at `/sign/{request}/{token}` calls.
 //!
-//! The signer is not a principal. The link is a capability that reaches exactly one held PDF and
-//! one change of state. Every outcome that is not a success is one of [`DoorError`]; an unknown
+//! The signer is not a principal. The link is a capability that reaches one held PDF and moves
+//! one request. When that request asks for it (`show_history`, see `history.rs`) the page of the
+//! link also lists the typed name and the time of the other signed requests of the same file:
+//! the door reads those requests to find them, puts those two fields on the page, and changes
+//! nothing of them. Every outcome that is not a success is one of [`DoorError`]; an unknown
 //! link, a wrong token, a token for another request and a malformed address are all `NotFound`
 //! and cannot be told apart.
 //!

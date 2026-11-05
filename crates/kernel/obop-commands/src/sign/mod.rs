@@ -12,7 +12,10 @@
 //! - **Door** ([`SignService::view`], [`SignService::pdf`], [`SignService::submit`]): what
 //!   `obop-http` calls for `/sign/{request}/{token}`. The signer is not a principal and holds no
 //!   group; the link is the capability. The door reads one request, its held copy and its link,
-//!   and writes one batch (link used, request signed, a `sign_signed` security event).
+//!   and writes one batch (link used, request signed, a `sign_signed` security event). When the
+//!   request asks for it (`show_history`), the door also reads the other requests that hold the
+//!   same file's hash and puts two fields of the signed ones, the typed name and the time, on the
+//!   page; it writes nothing for them.
 //! - **Guards on the generic writes**: the evidence fields belong to the door; `sign_request`
 //!   `create`, `update` and `bulk_create` refuse them from everyone but an administrator, a
 //!   signed request is changed or deleted by an administrator only, and `sign_link` takes no
