@@ -23,7 +23,7 @@ Two rules shape every stage.
 | 1. Ledger | Accounts, journals, entries, periods, fiscal years, gapless numbering, approval to post | Built (`packages/accounting.toml`), plus the Swedish company and voucher series models of this PR |
 | 2. VAT | VAT boxes, VAT codes, the VAT report per period with propose and approve | This PR (`packages/contrib/accounting_se/accounting_se.toml`, installable by upload, not bundled); computing the boxes from the ledger is not built |
 | 3. SIE 4 | Import and export of SIE 4 files | Being built in parallel (crate `obop-sie`); not part of this PR's package |
-| 4. OAS importer | `obop import oas` reads the OAS SQLite file and documents directory | Not built |
+| 4. OAS importer | `obop import oas` reads the OAS SQLite file and documents directory | Built for company, accounts, vouchers with entries, customers and receipts (`crates/obop/src/import_oas/`, section 5.3); invoices, payroll, bank, time are listed as skipped; tested against generated data only, never against real books |
 | 5. Invoices | Customer invoices with the ledger voucher | Not built for Sweden (the `invoicing` module exists; the link to the ledger and the Swedish rules do not) |
 | 6. Payroll and AGI | Employees, pay runs, employer contributions, AGI file | Not built (a new later package; every rate UNVERIFIED) |
 | 7. Receipts and bank | Receipt archive, bank lines, matching | Parts exist (`documents`, `accounting_bank_statement_line`); matching and booking not built |
@@ -75,7 +75,7 @@ Being built in parallel by another agent; this document only fixes the boundary.
 
 ## 5. Stage 4: the OAS importer (`obop import oas`)
 
-Planned as an operator command: `obop import oas --db FILE.sqlite --documents DIR`. It reads the OAS SQLite file and the documents directory and writes obop records through the commands. It is CLI-only until the owner approves otherwise (the exemption list in the project instructions).
+An operator command: `obop import oas --from FILE.sqlite --documents DIR` (the first draft of this section said `--db`; `--db` is the obop database, as for every command). It reads the OAS SQLite file and the documents directory and writes obop records through the commands. It is CLI-only until the owner approves otherwise (the exemption list in the project instructions).
 
 ### 5.1 Table mapping
 
@@ -102,6 +102,23 @@ Planned as an operator command: `obop import oas --db FILE.sqlite --documents DI
 5. **Dates and ids.** Dates are text `YYYY-MM-DD` in OAS and the same in obop. `bulk_create` takes ids of records, not names, and cannot point at another row of the same file, so the importer creates in dependency order and keeps a map from OAS id to obop id.
 6. **Closed periods.** Entries inside a closed fiscal year need the year open at import time, then closed again by the approver. The importer opens nothing itself.
 7. **Idempotency.** The import record holds the OAS database fingerprint and a row count per table, so a second run is refused or resumed, not repeated.
+
+### 5.3 What is built (first version)
+
+`obop import oas --from OAS.db [--documents DIR] [--dry-run] [--post] [--default-account-types | --account-types FILE] [--allow-broken-chain] [--db URL] [--token T]`
+
+- **Read-only source.** The OAS file is opened read-only. The OAS hash chain is verified first with the same rule as the OAS `verify` route (numbering without gaps, `prev_hash`, the hash over the voucher); a broken chain is refused unless `--allow-broken-chain` is given. A voucher that does not balance is always refused.
+- **Writes through the commands**, as the person who runs it, so every permission and limit applies. Nothing is written before the preflight (chain, balance, account types, receipt hashes) has passed.
+- **Account types** (5.1) are confirmed by the person: the run refuses until `--default-account-types` accepts the built-in table (ranges by Swedish chart class, UNVERIFIED) or `--account-types FILE` (`number,type` lines) gives them. A dry run prints the table.
+- **Posted history (5.2, items 1 and 2), decided as follows.** Every voucher is created as a draft `accounting_move` in OAS voucher order, with the OAS series and number (`A17`) in `reference`, the description, counterparty, who created and approved it, the corrected voucher and the attached receipts in `narration`, and a VAT code as `[S25]` in the line label. Without `--post` it stops there. With `--post` it runs the real `accounting_move.post` action, one voucher at a time in OAS order, as the importing person; an agent or a token narrowed by scopes is refused, and so is a person without `accounting.approver`. There is no bulk-posting command and no bypass of the approval rule: the approval is the importing person's own, once, for the whole run. JE numbers therefore follow the OAS order, but their `{year}` is the year of the posting (the clock of the run), not of the voucher date; the voucher date and the OAS number stay on the move. The operator command for a batch of posted entries (item 1, first option) is still not built.
+- **Check after the run.** The per account debit and credit totals of the imported moves are compared with the totals OAS computes (the SQL of its `trial-balance` report, run on the same file); the line count and, with `--post`, the posted state of every move are compared too. A difference fails the run (exit 1) and says which accounts differ. The check is done by the importer against the file, not by calling an OAS server.
+- **Idempotency.** A local ledger of records `oas_import_map` (source id from the company name and organisation number, OAS table and id, obop model and id, the OAS hash of a voucher) remembers what exists. A re-run creates only what is missing (so a failed or draft-only run can be continued, and `--post` can follow later), refuses if a voucher that was imported has changed in the file, and refuses a move that has the same reference in the same journal but is not in the ledger (an interrupted run or a hand entry). A run that changed something also leaves one `oas_import_run` record with the last hash of each series. This ledger is local to the importer; a shared source-key store is not used.
+- **Receipts** become `documents_document` records (kind other, confidentiality internal) with the file as the attachment. Each file is found under `DIR/ab/abcdef...` (or `DIR/abcdef...`), hashed, and compared with the SHA-256 and the size OAS recorded; a mismatch or a missing file is refused before anything is written. The vendor, amount and date go into the summary text. Without `--documents`, receipts are not imported and the report says so.
+- **Customers** become `party` records; organisation number, VAT number, address and country go into `notes` because `party` has no fields for them.
+- **Company** becomes `accounting_se_company` when that package is installed. OAS has no fiscal year start or VAT period, so the importer sets month 1 and quarterly and says so; confirm them.
+- **Journals.** One `accounting_journal` (kind general, code = the OAS series letter) is created per series, or an existing journal with that code is used.
+- **Not imported, and always listed with row counts in the report** (dry run included): invoices and their lines (the `invoicing` model has no issue date, due date or VAT rate and numbers at post, so issued OAS invoices do not fit), employees, payroll, VAT configuration, bank transactions and matches, unapproved drafts, time entries, projects, the audit log and the OAS accounts and tokens. Columns without a target field (company contact name and phone, payment info, hashes) are listed too. Correcting vouchers stay ordinary moves with a note; they are not turned into reversal pairs.
+- **Not done:** a closed fiscal year is not opened or closed by the importer (a post that the command refuses stops the run and a re-run continues; not tested against a closed period); no run against a real OAS database or a real Entra/production instance; `corrects_voucher_id` as `reverse` is not built.
 
 ## 6. Stage 5: invoices
 

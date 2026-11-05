@@ -32,6 +32,9 @@ mod health_tests;
 mod import_cmd;
 #[cfg(test)]
 mod import_map_tests;
+mod import_oas;
+#[cfg(test)]
+mod import_oas_tests;
 #[cfg(test)]
 mod kinds_tests;
 #[cfg(test)]
@@ -253,6 +256,14 @@ const USAGE: &str = "usage: obop <command>
   site seed                                     fill an empty instance with an invented demo shop and blog
   site set KEY VALUE | site show                set or list the site settings (title, accent, default_lang ...)
   mcp [--token TOKEN]                           MCP server on stdio (token or OBOP_TOKEN)
+  import oas --from OAS.db [--documents DIR] [--dry-run] [--post] [--default-account-types | --account-types FILE]
+      [--allow-broken-chain] [--db URL] [--token TOKEN]
+                                                import an open-accounting-sweden SQLite file (docs/spec/accounting-se.md 5): company,
+                                                accounts, vouchers with entries (drafts, original series and number in `reference`),
+                                                customers and receipts (SHA-256 checked). --post then runs the real post action as you
+                                                (needs accounting.approver; an agent is refused) in OAS order and checks the trial
+                                                balance against OAS. --dry-run lists what would happen and every skipped table; a
+                                                re-run only adds what is missing. CLI-only operator command
   import MODEL FILE.csv [--token TOKEN] [--mode partial] [--dry-run] [--key KEY]
                                                 create many records of MODEL from a CSV file (header = field names, references by id,
                                                 numbers, decimals and date-times as text, UTF-8, at most 1000 rows and 1 MiB) through bulk_create, with every
@@ -344,6 +355,9 @@ fn main() -> ExitCode {
     let (on_existing, args) = take_opt(&args, "--on-existing");
     let (map_model, args) = take_opt(&args, "--model");
     let (map_id, args) = take_opt(&args, "--source-id");
+    let (oas_from, args) = take_opt(&args, "--from");
+    let (oas_documents, args) = take_opt(&args, "--documents");
+    let (oas_types, args) = take_opt(&args, "--account-types");
     let (sso_tenant, args) = take_opt(&args, "--tenant");
     let (sso_client, args) = take_opt(&args, "--client-id");
     let (flags, args): (Vec<&str>, Vec<&str>) = args.into_iter().partition(|a| {
@@ -361,6 +375,9 @@ fn main() -> ExitCode {
                 | "--secret-stdin"
                 | "--disabled"
                 | "--enabled"
+                | "--post"
+                | "--allow-broken-chain"
+                | "--default-account-types"
         )
     });
     let has = |f: &str| flags.contains(&f);
@@ -494,6 +511,23 @@ fn main() -> ExitCode {
         ["site", "seed"] => site_seed(&opts),
         ["site", "show"] => site_show(&opts),
         ["site", "set", key, value] => site_set(&opts, key, value),
+        ["import", "oas"] => match oas_from {
+            Some(from) => import_oas::run_cli(
+                &opts,
+                &import_oas::Args {
+                    from,
+                    documents: oas_documents,
+                    dry_run: has("--dry-run"),
+                    post: has("--post"),
+                    allow_broken_chain: has("--allow-broken-chain"),
+                    default_account_types: has("--default-account-types"),
+                    account_types: oas_types,
+                },
+            ),
+            None => Err(fail(
+                "usage: obop import oas --from OAS.db [--documents DIR] [--dry-run] [--post]",
+            )),
+        },
         ["import", model, file] => import_cmd::run(
             &opts,
             &import_cmd::Args {
@@ -583,6 +617,12 @@ fn csv(s: Option<&str>) -> Vec<String> {
 /// Open the configured database; default is a local SQLite file. Fake demo data goes into an
 /// empty SQLite database, or into any database when `--demo` is given.
 fn open_app(o: &Opts) -> Result<App, ExitCode> {
+    open_app_with(o, true)
+}
+
+/// `seed_allowed` false keeps the demo data out of a SQLite database that is about to receive
+/// real records (the importers).
+fn open_app_with(o: &Opts, seed_allowed: bool) -> Result<App, ExitCode> {
     let url = o.db.clone().unwrap_or_else(|| "sqlite://obop.db".into());
     let store = obop_commands::Store::open(&url)
         .map_err(|e| fail(&format!("cannot open database: {e}")))?;
@@ -590,7 +630,7 @@ fn open_app(o: &Opts) -> Result<App, ExitCode> {
     // that needs migration steps gets them (--auto-migrate) or the command to run them.
     ops::guard_database(&store.backend(), &url)?;
     eprintln!("database: {}", store.backend_kind());
-    let seed = o.demo || store.backend_kind() == "sqlite";
+    let seed = seed_allowed && (o.demo || store.backend_kind() == "sqlite");
     let app = App::with_store(store);
     app.set_zones_from_env()
         .map_err(|e| fail(&format!("error: {e}")))?;
