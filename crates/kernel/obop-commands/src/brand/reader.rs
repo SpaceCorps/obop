@@ -113,13 +113,8 @@ pub struct Reader {
     noted: Mutex<HashSet<String>>,
     sink: Sink,
     inert: Arc<Shown>,
-    /// Callers that found a flight running and no last good value, counted just before they block
-    /// on the refill lock. For tests: a rendezvous that is a condition and not a time.
-    #[cfg(test)]
-    waiting: std::sync::atomic::AtomicUsize,
-    /// Runs in `applied` between the counter bump and the replacement. For tests.
-    #[cfg(test)]
-    gap: Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
+    /// Hooks for the tests; empty and free in a build that is not a test build.
+    probe: probe::Probe,
 }
 
 /// The uncached read of the row and the theme setting, with the row as it is stored.
@@ -197,10 +192,7 @@ impl Reader {
                 let _ = writeln!(std::io::stderr(), "{line}");
             }),
             inert: Arc::new(Shown::not_set(None)),
-            #[cfg(test)]
-            waiting: std::sync::atomic::AtomicUsize::new(0),
-            #[cfg(test)]
-            gap: Mutex::new(None),
+            probe: probe::Probe::new(),
         }
     }
 
@@ -248,9 +240,7 @@ impl Reader {
                     return shown;
                 }
                 // A caller with none waits for the flight and reads what its owner left.
-                #[cfg(test)]
-                self.waiting
-                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                self.probe.about_to_wait();
                 let flight = recover(&self.refill);
                 let generation = recover(&self.cell).generation;
                 match &flight.slot {
@@ -374,13 +364,7 @@ impl Reader {
                 None => return,
             }
         };
-        #[cfg(test)]
-        {
-            let hook = recover(&self.gap).clone();
-            if let Some(hook) = hook {
-                hook();
-            }
-        }
+        self.probe.in_apply_gap();
         let built = Arc::new(row::read_row(row, accent));
         let mut cell = recover(&self.cell);
         if cell.at == at {
@@ -442,14 +426,14 @@ impl Reader {
     /// How many callers have found a flight running with no last good value to serve. For tests.
     #[cfg(test)]
     pub(crate) fn waiting(&self) -> usize {
-        self.waiting.load(std::sync::atomic::Ordering::SeqCst)
+        self.probe.waiting()
     }
 
     /// Runs `hook` inside `applied`, between the bump of the counter and the replacement of the
     /// value, with no lock held. For tests.
     #[cfg(test)]
-    pub(crate) fn on_applied_gap(&self, hook: Arc<dyn Fn() + Send + Sync>) {
-        *recover(&self.gap) = Some(hook);
+    pub(crate) fn on_applied_gap(&self, hook: probe::Hook) {
+        self.probe.set_gap(hook);
     }
 }
 
@@ -468,4 +452,69 @@ pub fn strict(backend: &dyn Backend) -> Result<Brand, String> {
         return Err(format!("{UNREADABLE}: the stored name cannot be shown"));
     }
     Ok(brand)
+}
+
+/// What the tests need to see and to hold still inside the reader: a count of the callers that are
+/// about to block behind a flight (a rendezvous that is a condition and not a time) and a hook that
+/// runs inside `applied`. Outside a test build the probe has no state and no cost. It is a module
+/// with a `#[cfg]` on it, and not fields and statements with one, so that the scan of `obop-http`
+/// that lists every `#[cfg(test)]` on a construct of the code stays as it is.
+#[cfg(not(test))]
+mod probe {
+    pub(super) struct Probe;
+
+    impl Probe {
+        pub(super) fn new() -> Probe {
+            Probe
+        }
+
+        #[inline(always)]
+        pub(super) fn about_to_wait(&self) {}
+
+        #[inline(always)]
+        pub(super) fn in_apply_gap(&self) {}
+    }
+}
+
+#[cfg(test)]
+mod probe {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{Arc, Mutex};
+
+    pub type Hook = Arc<dyn Fn() + Send + Sync>;
+
+    pub(super) struct Probe {
+        waiting: AtomicUsize,
+        gap: Mutex<Option<Hook>>,
+    }
+
+    impl Probe {
+        pub(super) fn new() -> Probe {
+            Probe {
+                waiting: AtomicUsize::new(0),
+                gap: Mutex::new(None),
+            }
+        }
+
+        /// A caller with no last good value found a flight running and will block on it.
+        pub(super) fn about_to_wait(&self) {
+            self.waiting.fetch_add(1, Ordering::SeqCst);
+        }
+
+        pub(super) fn waiting(&self) -> usize {
+            self.waiting.load(Ordering::SeqCst)
+        }
+
+        /// `applied` has bumped the counter and holds no lock.
+        pub(super) fn in_apply_gap(&self) {
+            let hook = self.gap.lock().unwrap_or_else(|e| e.into_inner()).clone();
+            if let Some(hook) = hook {
+                hook();
+            }
+        }
+
+        pub(super) fn set_gap(&self, hook: Hook) {
+            *self.gap.lock().unwrap_or_else(|e| e.into_inner()) = Some(hook);
+        }
+    }
 }
