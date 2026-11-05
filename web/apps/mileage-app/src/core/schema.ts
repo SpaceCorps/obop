@@ -67,6 +67,9 @@ export class SchemaError extends Error {
 
 const MODULE_ID = /^[a-z][a-z0-9]*$/;
 
+/** The table the manager keeps for itself; no module may own it or have a name that would own it. */
+const MANAGER_TABLE = "module_schema";
+
 /** Throws for a list of modules that cannot work together; `defineStartup` calls it when the app starts. */
 export function checkModules(modules: readonly SchemaModule[]): void {
   const seen = new Set<string>();
@@ -76,6 +79,11 @@ export function checkModules(modules: readonly SchemaModule[]): void {
     if (!MODULE_ID.test(m.id)) {
       throw new SchemaError(
         `module id ${JSON.stringify(m.id)} must be lower-case letters and digits`,
+      );
+    }
+    if (MANAGER_TABLE.startsWith(`${m.id}_`)) {
+      throw new SchemaError(
+        `module id ${m.id} is the manager's: a module owns the tables named ${m.id}_*, and ${MANAGER_TABLE} is the manager's`,
       );
     }
     if (seen.has(m.id)) throw new SchemaError(`module ${m.id} is listed twice`);
@@ -100,6 +108,7 @@ export function checkModules(modules: readonly SchemaModule[]): void {
         throw new SchemaError(`the table ${table} is claimed by ${owner} and by ${m.id}`);
       }
       if (table.startsWith("sqlite_")) throw new SchemaError(`${table} is a table of SQLite`);
+      if (table === MANAGER_TABLE) throw new SchemaError(`${table} is the manager's`);
       legacy.set(table, m.id);
     }
     for (const table of Object.keys(m.legacyDefinitions ?? {})) {
@@ -125,8 +134,13 @@ function owns(module: SchemaModule, table: string): boolean {
   return table.startsWith(`${module.id}_`) || (module.legacyTables ?? []).includes(table);
 }
 
+/**
+ * Every statement the manager runs on its own account names the schema it means (`main.`). The
+ * connection that runs a migration is the one the app keeps using, and an object in the temporary
+ * schema shadows one of the file of the same name wherever the name is not qualified.
+ */
 const CREATE_MODULE_SCHEMA =
-  "CREATE TABLE IF NOT EXISTS module_schema (module TEXT PRIMARY KEY NOT NULL, version INTEGER NOT NULL) WITHOUT ROWID";
+  "CREATE TABLE IF NOT EXISTS main.module_schema (module TEXT PRIMARY KEY NOT NULL, version INTEGER NOT NULL) WITHOUT ROWID";
 
 type Reader = Pick<SqlTx, "all" | "one">;
 
@@ -139,15 +153,15 @@ interface State {
 
 async function readState(q: Reader): Promise<State> {
   const layout = Number(
-    (await q.one<{ user_version: number }>("PRAGMA user_version"))?.user_version ?? 0,
+    (await q.one<{ user_version: number }>("PRAGMA main.user_version"))?.user_version ?? 0,
   );
   const table = await q.one<{ name: string }>(
-    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'module_schema'",
+    "SELECT name FROM main.sqlite_master WHERE type = 'table' AND name = 'module_schema'",
   );
   const recorded = new Map<string, number>();
   if (table !== null) {
     const rows = await q.all<{ module: string; version: number }>(
-      "SELECT module, version FROM module_schema",
+      "SELECT module, version FROM main.module_schema",
     );
     for (const row of rows) recorded.set(row.module, Number(row.version));
   }
@@ -223,6 +237,8 @@ interface Snapshot {
   rows: Map<string, number>;
   /** The versions in `module_schema`, which only the manager writes; empty where the table is missing. */
   versions: Map<string, number>;
+  /** The objects of the temporary schema, as JSON: a migration leaves it as it found it. */
+  temp: string;
 }
 
 const objectKey = (o: { type: string; name: string }) => `${o.type} ${o.name}`;
@@ -230,10 +246,10 @@ const quoted = (name: string) => `"${name.replaceAll('"', '""')}"`;
 
 async function snapshot(tx: SqlTx): Promise<Snapshot> {
   const layout = Number(
-    (await tx.one<{ user_version: number }>("PRAGMA user_version"))?.user_version ?? 0,
+    (await tx.one<{ user_version: number }>("PRAGMA main.user_version"))?.user_version ?? 0,
   );
   const rows = await tx.all<SchemaObject>(
-    "SELECT type, name, tbl_name, sql FROM sqlite_master WHERE name NOT LIKE 'sqlite\\_%' ESCAPE '\\'",
+    "SELECT type, name, tbl_name, sql FROM main.sqlite_master WHERE name NOT LIKE 'sqlite\\_%' ESCAPE '\\'",
   );
   const objects = new Map(rows.map((o) => [objectKey(o), o]));
   const columns = new Map<string, Column[]>();
@@ -242,20 +258,20 @@ async function snapshot(tx: SqlTx): Promise<Snapshot> {
   const counts = new Map<string, number>();
   for (const o of rows) {
     if (o.type !== "table") continue;
-    const count = await tx.one<{ n: number }>(`SELECT COUNT(*) AS n FROM ${quoted(o.name)}`);
+    const count = await tx.one<{ n: number }>(`SELECT COUNT(*) AS n FROM main.${quoted(o.name)}`);
     counts.set(o.name, Number(count?.n ?? 0));
-    columns.set(o.name, await tx.all<Column>(`PRAGMA table_xinfo(${quoted(o.name)})`));
-    const keys = await tx.all<{ table: string }>(`PRAGMA foreign_key_list(${quoted(o.name)})`);
+    columns.set(o.name, await tx.all<Column>(`PRAGMA main.table_xinfo(${quoted(o.name)})`));
+    const keys = await tx.all<{ table: string }>(`PRAGMA main.foreign_key_list(${quoted(o.name)})`);
     parents.set(
       o.name,
       keys.map((k) => k.table),
     );
     const listed = await tx.all<{ name: string; unique: number; partial: number }>(
-      `PRAGMA index_list(${quoted(o.name)})`,
+      `PRAGMA main.index_list(${quoted(o.name)})`,
     );
     for (const index of listed) {
       const parts = await tx.all<{ cid: number; key: number }>(
-        `PRAGMA index_xinfo(${quoted(index.name)})`,
+        `PRAGMA main.index_xinfo(${quoted(index.name)})`,
       );
       indexes.set(index.name, {
         unique: Number(index.unique) === 1,
@@ -267,11 +283,16 @@ async function snapshot(tx: SqlTx): Promise<Snapshot> {
   const versions = new Map<string, number>();
   if (objects.has(objectKey({ type: "table", name: "module_schema" }))) {
     const recorded = await tx.all<{ module: string; version: number }>(
-      "SELECT module, version FROM module_schema",
+      "SELECT module, version FROM main.module_schema",
     );
     for (const row of recorded) versions.set(row.module, Number(row.version));
   }
-  return { layout, objects, columns, parents, indexes, rows: counts, versions };
+  const temp = JSON.stringify(
+    await tx.all<SchemaObject>(
+      "SELECT type, name, tbl_name, sql FROM sqlite_temp_master ORDER BY type, name",
+    ),
+  );
+  return { layout, objects, columns, parents, indexes, rows: counts, versions, temp };
 }
 
 /**
@@ -279,93 +300,192 @@ async function snapshot(tx: SqlTx): Promise<Snapshot> {
  * declares (`legacyDefinitions`) and the file does not have, which is the case in a new file, are
  * made for the length of the look and dropped again, so that the migration is judged against the
  * first layout there as it is in an old file. They are empty, and the migration sees the file as
- * it was.
+ * it was. The text that makes them is the module's, and is run through the guard like a migration.
  */
 async function snapshotBefore(tx: SqlTx, module: SchemaModule): Promise<Snapshot> {
   const declared = Object.entries(module.legacyDefinitions ?? {});
   if (declared.length === 0) return snapshot(tx);
   const present = new Set(
-    (await tx.all<{ name: string }>("SELECT name FROM sqlite_master")).map((o) =>
+    (await tx.all<{ name: string }>("SELECT name FROM main.sqlite_master")).map((o) =>
       o.name.toLowerCase(),
     ),
   );
   const missing = declared.filter(([name]) => !present.has(name.toLowerCase()));
-  for (const [, definition] of missing) await tx.exec(definition);
+  // The text is the module's, and goes through the same guard as its migration.
+  const own = guarded(tx, module);
+  for (const [, definition] of missing) await own.exec(definition);
   const before = await snapshot(tx);
-  for (const [name] of missing.reverse()) await tx.exec(`DROP TABLE ${quoted(name)}`);
+  for (const [name] of missing.reverse()) await tx.exec(`DROP TABLE main.${quoted(name)}`);
   return before;
 }
 
 /** The words that begin, end or nest a transaction. A statement starts with one of them or with none. */
 const TRANSACTION_WORDS = new Set(["BEGIN", "COMMIT", "END", "ROLLBACK", "SAVEPOINT", "RELEASE"]);
 
+/** A text split into statements, with the tokens of each. */
+interface Reading {
+  /** The tokens of each statement that was read, in order. A trigger is one statement, its body in it. */
+  statements: Token[][];
+  /** False where the rest of the text could not be split with certainty. */
+  complete: boolean;
+}
+
 /**
- * Whether `sql` holds a statement that begins, ends or nests a transaction: the first word of any
- * statement is BEGIN, COMMIT, END, ROLLBACK, SAVEPOINT or RELEASE. The text is split with the
- * tokenizer of this file, so a word inside a string, a quoted name or a comment is not a statement,
- * and a statement begins after every `;` that is not inside one of those. Answers the word that
- * was found, or `unreadable` where it cannot split the text with certainty (a string or comment
- * that does not end, the body of a trigger that does not end), because a text that cannot be split
- * cannot be shown to leave the transaction alone. Exported for its tests.
- *
- * A trigger is the one statement that has statements inside it: `CREATE TRIGGER ... BEGIN ...; END`.
- * It is read to the `END` that follows a `;` and comes before a `;` or the end of the text, because
- * no statement of a trigger's body can begin with that word. Everything in between is the trigger's.
- * (A trigger is refused by `checkChange` afterwards; the point here is that a COMMIT after it, in
- * the same text, is found.)
+ * Splits `sql` into statements with the tokenizer of this file: a statement begins after every `;`
+ * that is not inside a string, a quoted name, a blob or a comment. A trigger is the one statement
+ * that has statements inside it, `CREATE TRIGGER ... BEGIN ...; END`, and is read to the `END` that
+ * follows a `;` and comes before a `;` or the end of the text, because no statement of a trigger's
+ * body can begin with that word. A text that cannot be split with certainty (a string or comment
+ * that does not end, the body of a trigger that does not end, a NUL, after which a driver may or may
+ * not go on reading) is `complete: false`, with the statements that were read before the point
+ * where it failed.
  */
-export function transactionControl(sql: string): { word: string } | "unreadable" | null {
+function readStatements(sql: string): Reading {
+  if (sql.includes("\0")) return { statements: [], complete: false };
   const tokens = tokenise(sql);
-  if (tokens === null) return "unreadable";
-  let starts = true;
+  if (tokens === null) return { statements: [], complete: false };
+  const statements: Token[][] = [];
+  let current: Token[] | null = null;
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i] as Token;
     if (isMark(t, ";")) {
-      starts = true;
+      current = null;
       continue;
     }
-    if (!starts) continue;
-    starts = false;
-    if (t.kind !== "word") continue;
-    const word = t.text.toUpperCase();
-    if (TRANSACTION_WORDS.has(word)) return { word };
-    if (word !== "CREATE") continue;
-    let j = i + 1;
-    if (isWord(tokens[j], "TEMP") || isWord(tokens[j], "TEMPORARY")) j++;
-    if (!isWord(tokens[j], "TRIGGER")) continue;
-    let end = -1;
-    for (let k = j + 1; k < tokens.length; k++) {
-      if (
-        isMark(tokens[k - 1], ";") &&
-        isWord(tokens[k], "END") &&
-        (tokens[k + 1] === undefined || isMark(tokens[k + 1], ";"))
-      ) {
-        end = k;
-        break;
+    if (current === null) {
+      current = [];
+      statements.push(current);
+      if (isWord(t, "CREATE")) {
+        let j = i + 1;
+        if (isWord(tokens[j], "TEMP") || isWord(tokens[j], "TEMPORARY")) j++;
+        if (isWord(tokens[j], "TRIGGER")) {
+          let end = -1;
+          for (let k = j + 1; k < tokens.length; k++) {
+            if (
+              isMark(tokens[k - 1], ";") &&
+              isWord(tokens[k], "END") &&
+              (tokens[k + 1] === undefined || isMark(tokens[k + 1], ";"))
+            ) {
+              end = k;
+              break;
+            }
+          }
+          if (end < 0) {
+            statements.pop();
+            return { statements, complete: false };
+          }
+          current.push(...tokens.slice(i, end + 1));
+          i = end;
+          continue;
+        }
       }
     }
-    if (end < 0) return "unreadable";
-    i = end;
+    current.push(t);
+  }
+  return { statements, complete: true };
+}
+
+/**
+ * Whether `sql` holds a statement that begins, ends or nests a transaction: the first word of any
+ * statement is BEGIN, COMMIT, END, ROLLBACK, SAVEPOINT or RELEASE. A word inside a string, a quoted
+ * name or a comment is not a statement. Answers the word that was found, or `unreadable` where the
+ * text cannot be split with certainty (see `readStatements`), because a text that cannot be split
+ * cannot be shown to leave the transaction alone. Exported for its tests.
+ *
+ * This is the first word of a statement and nothing else. A ROLLBACK that is a conflict resolution
+ * (`INSERT OR ROLLBACK`, `ON CONFLICT ROLLBACK`, `RAISE(ROLLBACK, ...)`) ends the transaction as the
+ * statement does without being the first word of one, and is refused by `forbiddenInMigration`.
+ */
+export function transactionControl(sql: string): { word: string } | "unreadable" | null {
+  const { statements, complete } = readStatements(sql);
+  for (const statement of statements) {
+    const first = statement[0];
+    if (first === undefined || first.kind !== "word") continue;
+    const word = first.text.toUpperCase();
+    if (TRANSACTION_WORDS.has(word)) return { word };
+  }
+  return complete ? null : "unreadable";
+}
+
+const TEMP_WHY =
+  "objects in the temporary schema last as long as the connection and take the place of the tables of the file for any name that is not qualified, so a migration may not make one (a column called temp is written as a quoted name)";
+const ATTACH_WHY =
+  "a database that is attached to the connection stays attached when the migration ends, also when it is refused and taken back, so a migration may not attach or detach one";
+const PRAGMA_WHY =
+  "a pragma changes the connection (its locking mode, what it may write, how it treats foreign keys), the app keeps using that connection, and a migration that is refused does not take it back; the one pragma a migration may use is user_version, which the lint compares before and after";
+const ROLLBACK_WHY =
+  "a ROLLBACK conflict clause (INSERT OR ROLLBACK, ON CONFLICT ROLLBACK, RAISE(ROLLBACK, ...)) ends the transaction that the manager holds as the statement does, so a migration may not use the word at all (a column called rollback is written as a quoted name)";
+const ALTER_TIME_WHY =
+  "SQLite refuses a default of that kind on a column added to a table that has rows and accepts it on a table with none, so a migration with one passes on a new file and fails on a phone with trips, also where a later statement makes the table again; the text of an ALTER TABLE may not have the word";
+
+/** The words that a migration may not use anywhere in its text, outside strings, quoted names and comments. */
+const REFUSED_WORDS = new Map<string, string>([
+  ["ROLLBACK", ROLLBACK_WHY],
+  ["TEMP", TEMP_WHY],
+  ["TEMPORARY", TEMP_WHY],
+  ["ATTACH", ATTACH_WHY],
+  ["DETACH", ATTACH_WHY],
+]);
+
+/**
+ * What in the text of a migration reaches past the transaction it was given, other than a statement
+ * that controls the transaction (`transactionControl`): the words ROLLBACK, TEMP, TEMPORARY, ATTACH
+ * and DETACH anywhere in the text; the name `temp` (quoted or in a string) as a schema qualifier; any
+ * PRAGMA but `PRAGMA user_version`; and CURRENT_TIME, CURRENT_DATE or CURRENT_TIMESTAMP in an
+ * ALTER statement. All outside strings, quoted names and comments, so a word in one of those does
+ * no harm, and a bare word does harm wherever it stands: a column that is called `temp` has to be
+ * quoted. Answers the first one found, as what the migration ran and why that is refused, or null.
+ * It looks at the statements that could be read, so a text that cannot be read is
+ * `transactionControl`'s to refuse. Exported for its tests.
+ */
+export function forbiddenInMigration(sql: string): { ran: string; why: string } | null {
+  for (const statement of readStatements(sql).statements) {
+    const alter = isWord(statement[0], "ALTER");
+    for (const [i, t] of statement.entries()) {
+      if (t.kind === "word") {
+        const word = t.text.toUpperCase();
+        const why = REFUSED_WORDS.get(word);
+        if (why !== undefined) return { ran: `text with the word ${word}`, why };
+        if (word === "PRAGMA" && !isWord(statement[i + 1], "USER_VERSION")) {
+          return { ran: `PRAGMA ${statement[i + 1]?.text ?? ""}`.trimEnd(), why: PRAGMA_WHY };
+        }
+        if (alter && TIME_DEFAULT_WORDS.has(word)) {
+          return { ran: `an ALTER TABLE with ${word}`, why: ALTER_TIME_WHY };
+        }
+      } else if (
+        (t.kind === "name" || t.kind === "string") &&
+        t.text.toLowerCase() === "temp" &&
+        isMark(statement[i + 1], ".")
+      ) {
+        return { ran: "text with the schema name temp", why: TEMP_WHY };
+      }
+    }
   }
   return null;
 }
 
 /**
  * The transaction as a migration gets it: the same, except that every method that runs text
- * refuses text that begins, ends or nests a transaction, before anything runs. The manager holds one
- * transaction for all the modules and takes it all back when anything fails; a COMMIT in a migration
- * would keep what came before it whatever happens after, and a ROLLBACK would leave the rest of the
- * migration to run outside any transaction.
+ * refuses, before anything runs, text that begins, ends or nests a transaction
+ * (`transactionControl`) and text that reaches past it (`forbiddenInMigration`). The manager holds
+ * one transaction for all the modules and takes it all back when anything fails; a COMMIT in a
+ * migration would keep what came before it whatever happens after, and a ROLLBACK, by statement or
+ * by conflict clause, would leave the rest of the migration to run outside any transaction.
  */
 function guarded(tx: SqlTx, module: SchemaModule): SqlTx {
   const check = (sql: string): void => {
     const found = transactionControl(sql);
-    if (found === null) return;
-    throw new SchemaError(
-      found === "unreadable"
-        ? `module ${module.id} ran text that cannot be split into statements with certainty, so it cannot be shown to leave the manager's transaction alone`
-        : `module ${module.id} ran ${found.word}; the manager holds the transaction and takes all of it back when anything fails, so a migration may not begin, end or nest one (BEGIN, COMMIT, END, ROLLBACK, SAVEPOINT, RELEASE)`,
-    );
+    if (found !== null) {
+      throw new SchemaError(
+        found === "unreadable"
+          ? `module ${module.id} ran text that cannot be split into statements with certainty, so it cannot be shown to leave the manager's transaction alone`
+          : `module ${module.id} ran ${found.word}; the manager holds the transaction and takes all of it back when anything fails, so a migration may not begin, end or nest one (BEGIN, COMMIT, END, ROLLBACK, SAVEPOINT, RELEASE)`,
+      );
+    }
+    const refused = forbiddenInMigration(sql);
+    if (refused !== null) {
+      throw new SchemaError(`module ${module.id} ran ${refused.ran}; ${refused.why}`);
+    }
   };
   return {
     exec: async (sql) => {
@@ -497,6 +617,14 @@ function checkChange(module: SchemaModule, before: Snapshot, after: Snapshot): v
   const fail: (what: string) => never = (what) => {
     throw new SchemaError(`module ${module.id} ${what}`);
   };
+  // The temporary schema belongs to the connection, which the app goes on using, and its objects
+  // take the place of the file's for a name that is not qualified. The words that make one are
+  // refused before they run; this is the look at what the words miss.
+  if (before.temp !== after.temp) {
+    fail(
+      "changed the temporary schema; objects in it last as long as the connection and take the place of the tables of the file for any name that is not qualified",
+    );
+  }
   for (const [key, o] of after.objects) {
     if (!before.objects.has(key) && !owns(module, o.tbl_name)) {
       fail(
@@ -620,7 +748,7 @@ function checkChange(module: SchemaModule, before: Snapshot, after: Snapshot): v
     const has = after.rows.get(table);
     if (has !== undefined && has < had) {
       fail(
-        `lost rows of the table ${table} (${had} before, ${has} after); a migration may add rows and may not delete any`,
+        `lost rows of the table ${table} (${had} before, ${has} after); ${table === MANAGER_TABLE ? "only the manager writes the versions" : "a migration may add rows and may not delete any"}`,
       );
     }
   }
@@ -987,7 +1115,7 @@ export async function ensureModules(
         for (const m of modules) {
           if (m.legacyVersion === undefined) continue;
           await tx.run(
-            "INSERT INTO module_schema (module, version) VALUES (?, ?) ON CONFLICT(module) DO NOTHING",
+            "INSERT INTO main.module_schema (module, version) VALUES (?, ?) ON CONFLICT(module) DO NOTHING",
             [m.id, m.legacyVersion],
           );
           state.recorded.set(m.id, m.legacyVersion);
@@ -1003,12 +1131,13 @@ export async function ensureModules(
       await releaseMigration(tx, m);
       checkChange(m, before, await snapshot(tx));
       await tx.run(
-        "INSERT INTO module_schema (module, version) VALUES (?, ?) ON CONFLICT(module) DO UPDATE SET version = excluded.version",
+        "INSERT INTO main.module_schema (module, version) VALUES (?, ?) ON CONFLICT(module) DO UPDATE SET version = excluded.version",
         [m.id, m.version],
       );
       state.recorded.set(m.id, m.version);
     }
-    if (state.layout < LAYOUT_VERSION) await tx.exec(`PRAGMA user_version = ${LAYOUT_VERSION}`);
+    if (state.layout < LAYOUT_VERSION)
+      await tx.exec(`PRAGMA main.user_version = ${LAYOUT_VERSION}`);
   });
 }
 

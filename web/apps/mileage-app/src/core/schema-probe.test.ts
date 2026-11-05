@@ -1003,6 +1003,14 @@ const LINT_ONLY: LintOnly[] = [
 ];
 
 describe("the manager's check against the probe", () => {
+  // 8.7.1 and the description of the pull request count the shapes of each group. These are those
+  // numbers: a shape taken out of a group, or put in, changes the count and fails here.
+  test("the groups have the sizes that are quoted: 15 accepted, 38 that break the first build, 19 that only the lint refuses", () => {
+    expect(ACCEPTED).toHaveLength(15);
+    expect(BREAKS).toHaveLength(38);
+    expect(LINT_ONLY).toHaveLength(19);
+  });
+
   describe("what it lets through, the first build still works on", () => {
     test.each(ACCEPTED)("%s", async (_, statements) => {
       // By hand: the first build is not stopped by it.
@@ -1126,6 +1134,10 @@ describe("the manager's check against the probe", () => {
         /lost rows of the table meta \(4 before, 0 after\)/,
       ],
     ];
+
+    test("there are 8 migrations that lose rows, as quoted", () => {
+      expect(LOSS).toHaveLength(8);
+    });
 
     test.each(LOSS)("%s", async (_, statements, message) => {
       // By hand: the first build works on what is left. That is why it is not in the other groups.

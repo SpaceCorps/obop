@@ -1974,3 +1974,125 @@ describe("two connections to one file", () => {
     expect(m.ran).toEqual([0]);
   });
 });
+
+// A table that is dropped and made again is judged by what the file records of its columns and by
+// its text. The text is compared by pieces: the pieces that were there must be there letter for
+// letter, in their places, and the new definitions are read as columns only, so the white space
+// inside a new definition and around it is free. What is not free is any piece that was there,
+// the part before the first parenthesis, and the part after the last.
+describe("a table made again: the pieces that were there are kept, the new definitions are columns", () => {
+  const OLD = "CREATE TABLE a_items (id TEXT PRIMARY KEY NOT NULL, note TEXT)";
+
+  /** Version 1 makes `a_items` with two rows; version 2 drops it, makes it again as `text`, and copies the rows back. */
+  async function remade(text: string) {
+    const db = memoryDb();
+    await ensureModules(db, [
+      module("a", {
+        steps: {
+          1: [OLD, "INSERT INTO a_items (id, note) VALUES ('1', 'one'), ('2', 'two')"],
+        },
+      }),
+    ]);
+    const error = await ensureModules(db, [
+      module("a", {
+        steps: {
+          1: [OLD],
+          2: [
+            "CREATE TABLE a_hold AS SELECT * FROM a_items",
+            "DROP TABLE a_items",
+            text,
+            "INSERT INTO a_items (id, note) SELECT id, note FROM a_hold",
+            "DROP TABLE a_hold",
+          ],
+        },
+      }),
+    ]).catch((e: unknown) => e);
+    return { db, error };
+  }
+
+  test.each([
+    ["as ADD COLUMN leaves it", ", more TEXT"],
+    ["with no space after the comma", ",more TEXT"],
+    ["with two spaces after the comma", ",  more TEXT"],
+    ["with a line break and an indent after the comma", ",\n  more TEXT"],
+    ["with a tab after the comma", ",\tmore TEXT"],
+    ["with a space before the closing parenthesis", ", more TEXT "],
+    ["with a line break before the closing parenthesis", ", more TEXT\n"],
+    ["with the type and the name far apart", ", more   TEXT"],
+    ["with a default and a NOT NULL, written loosely", ",\n  more  TEXT  NOT NULL   DEFAULT  'x'"],
+  ])("a new definition %s is accepted: it is read as a column", async (_, added) => {
+    const { db, error } = await remade(
+      `CREATE TABLE a_items (id TEXT PRIMARY KEY NOT NULL, note TEXT${added})`,
+    );
+    expect(error, String(error)).toBeUndefined();
+    expect((await versions(db)).a).toBe(2);
+    expect(await db.all("SELECT id, note FROM a_items ORDER BY id")).toEqual([
+      { id: "1", note: "one" },
+      { id: "2", note: "two" },
+    ]);
+  });
+
+  test.each([
+    [
+      "a piece that was there with a space more",
+      "CREATE TABLE a_items (id TEXT PRIMARY KEY NOT NULL,  note TEXT, more TEXT)",
+    ],
+    [
+      "a piece that was there after a line break",
+      "CREATE TABLE a_items (id TEXT PRIMARY KEY NOT NULL,\n  note TEXT, more TEXT)",
+    ],
+    [
+      "a piece that was there with a space after it",
+      "CREATE TABLE a_items (id TEXT PRIMARY KEY NOT NULL, note TEXT , more TEXT)",
+    ],
+    [
+      "the first piece with two spaces inside it",
+      "CREATE TABLE a_items (id  TEXT PRIMARY KEY NOT NULL, note TEXT, more TEXT)",
+    ],
+    [
+      "a piece that was there with a comment in it",
+      "CREATE TABLE a_items (id TEXT PRIMARY KEY NOT NULL, note TEXT /* x */, more TEXT)",
+    ],
+    [
+      "the part before the first parenthesis with a space more",
+      "CREATE TABLE a_items  (id TEXT PRIMARY KEY NOT NULL, note TEXT, more TEXT)",
+    ],
+    [
+      "the part before the first parenthesis written in another way",
+      'CREATE TABLE "a_items" (id TEXT PRIMARY KEY NOT NULL, note TEXT, more TEXT)',
+    ],
+    [
+      "the part after the last parenthesis",
+      "CREATE TABLE a_items (id TEXT PRIMARY KEY NOT NULL, note TEXT, more TEXT) WITHOUT ROWID",
+    ],
+    [
+      "the new definition in front of the pieces that were there",
+      "CREATE TABLE a_items (more TEXT, id TEXT PRIMARY KEY NOT NULL, note TEXT)",
+    ],
+    [
+      "the new definition between the pieces that were there",
+      "CREATE TABLE a_items (id TEXT PRIMARY KEY NOT NULL, more TEXT, note TEXT)",
+    ],
+  ])("%s is refused as a rebuilt table", async (_, text) => {
+    const { db, error } = await remade(text);
+    expect(error, String(error)).toBeInstanceOf(SchemaError);
+    expect((error as Error).message).toMatch(
+      /^module a (rebuilt the table a_items|changed the column a_items\.)/,
+    );
+    // Taken back: the rows are there and the module is still at version 1.
+    expect((await versions(db)).a).toBe(1);
+    expect(await db.all("SELECT id, note FROM a_items ORDER BY id")).toEqual([
+      { id: "1", note: "one" },
+      { id: "2", note: "two" },
+    ]);
+  });
+
+  test("a piece that was there is refused as a rebuilt table, with the message of that rule", async () => {
+    const { error } = await remade(
+      "CREATE TABLE a_items (id TEXT PRIMARY KEY NOT NULL,  note TEXT, more TEXT)",
+    );
+    expect((error as Error).message).toBe(
+      "module a rebuilt the table a_items; an older build only works with it if the definitions of new columns are all that was added",
+    );
+  });
+});

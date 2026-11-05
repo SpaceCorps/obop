@@ -13,8 +13,19 @@ import { expectRow, probeOlderBuild } from "../test-support/older-build-probe.ts
 //
 // A read is altered after the file has answered it: one key of one row is taken out, given another
 // value, given the same value as another kind of value (a number as text, a text as a blob, NULL as
-// 0), or a key is put in that the statement does not have. The probe has to fail. The two reads that
-// the probe does not compare whole are said so below.
+// 0), or a key is put in that the statement does not have. The probe has to fail. The exceptions
+// are few, and each one is said below with its reason and held by a test:
+//
+// - The list of trips is not compared whole (the three trips have to be in it).
+// - A column that a later version added to `trip` is in the answer of `SELECT *` and is not
+//   compared, so a key put into a row of a trip is not a failure (on purpose, tested below).
+// - Three reads are used by their value or their numbers and not compared whole, so a key put into
+//   them is not a failure: the rows of `meta` (the probe reads `.value`), the count and top of the
+//   fixes that "stop a trip" binds into the trip (the trip is compared afterwards), and the count
+//   of the other trip's fixes at the end (the probe reads `.n`). Each is tested below.
+// - The count that "stop a trip" binds into the trip: a number that comes back as the text of the
+//   same number is an integer again in an INTEGER column, so that one alteration is made with a
+//   blob, which the column keeps as a blob, and the stopped trip is then found different.
 
 type Row = Record<string, SqlValue>;
 
@@ -77,6 +88,10 @@ const asAnotherKind = (value: SqlValue): SqlValue =>
     : typeof value === "number"
       ? String(value)
       : (Uint8Array.from(Buffer.from(value)) as unknown as SqlValue);
+
+/** The same value as a blob, which an INTEGER column keeps as a blob (a text of digits it turns back into a number). */
+const asBlob = (value: SqlValue): SqlValue =>
+  Uint8Array.from(Buffer.from(String(value))) as unknown as SqlValue;
 
 type Alteration = [what: string, change: (row: Row, key: string) => void];
 const ALTERATIONS: Alteration[] = [
@@ -156,8 +171,8 @@ describe("what the probe reads back, key by key", () => {
     // The count of the fixes that "stop a trip" reads is not compared there: it is written into
     // the trip (`expected_points` and `last_seq`, INTEGER columns), and the stopped trip is
     // compared afterwards. A number that comes back as text is an integer again in an INTEGER
-    // column, so that is the one alteration of the two keys that the file itself undoes; any other
-    // change of them is found at the trip.
+    // column, so for that read the same value as another kind of value is a blob, which the column
+    // keeps; any other change of the two keys is found at the trip as it is.
     const counted = all.filter((read) => read.sql === Q.countAndTop);
     expect(counted).toHaveLength(2);
     const writtenToTheTrip = counted[1]!.n;
@@ -165,10 +180,11 @@ describe("what the probe reads back, key by key", () => {
       if (read.sql === Q.listTrips) continue;
       for (const [row, values] of read.rows.entries()) {
         for (const key of Object.keys(values)) {
-          for (const [what, change] of ALTERATIONS) {
-            if (read.n === writtenToTheTrip && what === ALTERATIONS[2]![0]) continue;
-            // A key of a trip that is taken out has to be named by the failure; the others fail
-            // however the comparison words it.
+          for (const [what, alteration] of ALTERATIONS) {
+            const change =
+              read.n === writtenToTheTrip && what === ALTERATIONS[2]![0]
+                ? (r: Row, k: string) => void (r[k] = asBlob(r[k]!))
+                : alteration;
             const result = await withAltered(db, { n: read.n, row }, (r) => change(r, key));
             tried++;
             if (result.ok) {
@@ -181,16 +197,40 @@ describe("what the probe reads back, key by key", () => {
       }
     }
     expect(missed).toEqual([]);
-    // 24 columns on 9 trips, the keys of the other answers, three alterations each (less two).
-    expect(tried).toBeGreaterThanOrEqual(3 * (24 * 9 + 40) - 2);
+    // 24 columns on 9 trips and the keys of the other answers, three alterations of each, none left out.
+    const keys = all
+      .filter((read) => read.sql !== Q.listTrips)
+      .reduce((n, read) => n + read.rows.reduce((m, row) => m + Object.keys(row).length, 0), 0);
+    expect(tried).toBe(keys * ALTERATIONS.length);
+    expect(keys).toBeGreaterThanOrEqual(24 * 9 + 40);
   }, 120_000);
 
-  test.each(["lastPoint", "points", "countAndTop", "nextRange"] as const)(
+  // A key that the statement does not select is held against the answer in both directions: for
+  // each statement that the probe compares whole, the first read of it gets a key put in and then
+  // loses each key it has, and the probe fails every time. Ten of the thirteen statements are
+  // compared whole; the other three are in the test after this one.
+  const WHOLE: [name: string, sql: string][] = [
+    ["lastPoint", Q.lastPoint],
+    ["points", Q.points],
+    ["countAndTop", Q.countAndTop],
+    ["pointCount", Q.pointCount],
+    ["batchPoints", Q.batchPoints],
+    ["openBatch", Q.openBatch],
+    ["batchTop", Q.batchTop],
+    ["nextRange", Q.nextRange],
+    ["the count of all the fixes", "SELECT COUNT(*) AS n FROM point"],
+    ["the count of all the batches", "SELECT COUNT(*) AS n FROM batch"],
+  ];
+  test("ten statements are compared whole", () => {
+    expect(WHOLE).toHaveLength(10);
+  });
+
+  test.each(WHOLE)(
     "the answer of %s is held to the keys it has, in both directions",
-    async (name) => {
+    async (_, sql) => {
       const db = await emptyLegacyFile();
       const all = await reads(db);
-      const read = all.find((r) => r.sql === Q[name])!;
+      const read = all.find((r) => r.sql === sql)!;
       const key = "zz_added";
       const added = await withAltered(db, { n: read.n, row: 0 }, (row) => void (row[key] = 1));
       expect(added.ok, "a key the statement does not select").toBe(false);
@@ -200,6 +240,29 @@ describe("what the probe reads back, key by key", () => {
       }
     },
   );
+
+  // The reads that a key put in does not fail, each for a reason that is written above: the probe
+  // takes a value or a number out of them and does not compare the row whole.
+  test("a key put into a read that is not compared whole is not a failure", async () => {
+    const db = await emptyLegacyFile();
+    const all = await reads(db);
+    const added = async (read: Read) =>
+      withAltered(db, { n: read.n, row: 0 }, (row) => void (row.zz_added = 1));
+    // The rows of `meta`: the probe reads `.value`.
+    for (const read of all.filter((r) => r.sql === Q.selectMeta)) {
+      expect(await added(read), `meta read ${read.n}`).toEqual({ ok: true });
+    }
+    // The count that "stop a trip" binds into the trip: the second read of the count of the fixes.
+    const counted = all.filter((r) => r.sql === Q.countAndTop);
+    expect(await added(counted[1]!), "bound into the trip").toEqual({ ok: true });
+    expect((await added(counted[0]!)).ok, "the first count is compared whole").toBe(false);
+    // The count of the other trip's fixes at the end: the probe reads `.n`. The two before it are whole.
+    const left = all.filter((r) => r.sql === Q.pointCount);
+    expect(left).toHaveLength(3);
+    expect((await added(left[0]!)).ok).toBe(false);
+    expect((await added(left[1]!)).ok).toBe(false);
+    expect(await added(left[2]!), "read for its n").toEqual({ ok: true });
+  });
 
   test.each(TRIP_READS.map((what, i) => [what, i] as const))(
     "%s: each column of the first layout is named when it is taken out, changed in value or in kind",
@@ -403,6 +466,53 @@ describe("the comparison of a row with what the first build expects", () => {
     ],
   ])("fails for %s", (_, answer, expected, message) => {
     expect(() => same(answer, expected)).toThrow(new Error(message));
+  });
+
+  // JSON writes Infinity, -Infinity and NaN as null and -0 as 0, so a comparison through plain JSON
+  // takes them for NULL and for 0. SQLite can answer Infinity (`SELECT 9e999`). They are tagged.
+  test.each<[string, SqlValue, SqlValue]>([
+    ["Infinity for NULL", Infinity, null],
+    ["-Infinity for NULL", -Infinity, null],
+    ["NaN for NULL", NaN, null],
+    ["NULL for Infinity", null, Infinity],
+    ["NULL for NaN", null, NaN],
+    ["Infinity for -Infinity", Infinity, -Infinity],
+    ["Infinity for NaN", Infinity, NaN],
+    ["-Infinity for NaN", -Infinity, NaN],
+    ["-0 for 0", -0, 0],
+    ["0 for -0", 0, -0],
+    ["-0 for NULL", -0, null],
+    ["Infinity for its text", Infinity, "Infinity"],
+    ["NaN for its text", NaN, "NaN"],
+    ["-0 for its text", -0, "-0"],
+  ])("tells %s", (_, got, want) => {
+    expect(() => same({ ...row, n: got }, { id: "a", name: null, n: want })).toThrow(
+      /the row: the column n is /,
+    );
+  });
+
+  test("says what it found, with the tag", () => {
+    expect(() => same({ ...row, n: -0 }, { id: "a", name: null, n: 0 })).toThrow(
+      new Error('the row: the column n is {"$number":"-0"}, expected 0'),
+    );
+    expect(() => same({ ...row, n: Infinity }, { id: "a", name: null, n: 0 })).toThrow(
+      new Error('the row: the column n is {"$number":"Infinity"}, expected 0'),
+    );
+    expect(() => same({ ...row, n: NaN }, { id: "a", name: null, n: 0 })).toThrow(
+      new Error('the row: the column n is {"$number":"NaN"}, expected 0'),
+    );
+  });
+
+  test.each([Infinity, -Infinity, NaN, -0])("passes %s when it is what is expected", (value) => {
+    expect(() => same({ ...row, n: value }, { id: "a", name: null, n: value })).not.toThrow();
+  });
+
+  test("a BigInt is not a number and is not an error of the comparison", () => {
+    const big = 1n as unknown as SqlValue;
+    expect(() => same({ ...row, n: big }, { id: "a", name: null, n: 1 })).toThrow(
+      /the row: the column n is /,
+    );
+    expect(() => same({ ...row, n: big }, { id: "a", name: null, n: big })).not.toThrow();
   });
 
   test("tells a blob from a text of the same bytes", () => {

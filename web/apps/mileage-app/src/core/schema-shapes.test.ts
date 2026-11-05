@@ -141,6 +141,14 @@ async function run(table: "trip" | "point" | "batch", sample: Shape[]) {
       if (JSON.stringify(await dump(db)) !== before && error !== undefined) {
         wrong.push(`${shape.text}: not undone`);
       }
+      if (shape.pieces.some((piece) => piece.startsWith("DEFAULT CURRENT_"))) {
+        // The time of the insert: SQLite refuses it on a table that has rows and accepts it on one
+        // that has none. The guard refuses the text of the ALTER TABLE before SQLite is asked, so
+        // the answer is the manager's and the same in both files.
+        if (!(error instanceof SchemaError)) wrong.push(`${shape.text}: not refused by the guard`);
+        refused++;
+        continue;
+      }
       if (alone !== undefined) {
         // SQLite's own refusal comes out as it is, and it is not the manager's.
         if (error === undefined || error instanceof SchemaError)

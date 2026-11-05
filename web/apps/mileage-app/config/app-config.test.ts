@@ -14,6 +14,7 @@ const expoCli = createRequire(import.meta.url).resolve("expo/bin/cli");
 
 type Plist = Record<string, unknown>;
 interface Introspected {
+  slug: string;
   version: string;
   scheme: string;
   android: { package: string };
@@ -50,6 +51,9 @@ function introspect(env: Record<string, string> = {}): Introspected {
 describe("the configuration that expo prebuild gets", { timeout: 30_000 }, () => {
   test("a build without the test variables is the plain one", () => {
     const c = introspect();
+    // The slug is the name of the project at Expo, and the development client builds its scheme
+    // (`exp+<slug>`) from it; an installed app and its store listing know it.
+    expect(c.slug).toBe("obop-mileage");
     expect(c.scheme).toBe("org.obop.mileage");
     expect(c.ios.bundleIdentifier).toBe("org.obop.mileage");
     expect(c.android.package).toBe("org.obop.mileage");
@@ -97,6 +101,11 @@ describe("the configuration that expo prebuild gets", { timeout: 30_000 }, () =>
     const dev = introspect({ OBOP_DEV_CLIENT: "1" }).ios.infoPlist;
     expect(dev.NSBonjourServices).toEqual(["_expo._tcp"]);
     expect(JSON.stringify(dev.CFBundleURLTypes)).toContain("exp+obop-mileage");
+    // As a whole scheme, not as the start of a longer one.
+    const schemes = (dev.CFBundleURLTypes as { CFBundleURLSchemes: string[] }[]).flatMap(
+      (type) => type.CFBundleURLSchemes,
+    );
+    expect(schemes).toContain("exp+obop-mileage");
   });
 
   test("a bundle id of the wrong form stops the build before anything is generated", () => {

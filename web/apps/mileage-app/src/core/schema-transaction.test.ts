@@ -603,17 +603,17 @@ describe("the versions in module_schema are the manager's alone", () => {
     [
       "its own row deleted",
       ["DELETE FROM module_schema WHERE module = 'a'"],
-      "module a lost rows of the table module_schema (2 before, 1 after); a migration may add rows and may not delete any",
+      "module a lost rows of the table module_schema (2 before, 1 after); only the manager writes the versions",
     ],
     [
       "another module's row deleted",
       ["DELETE FROM module_schema WHERE module = 'b'"],
-      "module a lost rows of the table module_schema (2 before, 1 after); a migration may add rows and may not delete any",
+      "module a lost rows of the table module_schema (2 before, 1 after); only the manager writes the versions",
     ],
     [
       "all the rows deleted",
       ["DELETE FROM module_schema"],
-      "module a lost rows of the table module_schema (2 before, 0 after); a migration may add rows and may not delete any",
+      "module a lost rows of the table module_schema (2 before, 0 after); only the manager writes the versions",
     ],
     [
       "a row put in for a module that is not there",
@@ -654,6 +654,32 @@ describe("the versions in module_schema are the manager's alone", () => {
       { module: "a", version: 1 },
       { module: "b", version: 1 },
     ]);
+  });
+
+  // The words of the message for lost rows depend on the table: the rows of module_schema are the
+  // manager's, and the rows of any other table may be added to and not deleted.
+  test("the message for lost rows says what is true of the table", async () => {
+    const lost = async (statement: string) => {
+      const db = await legacyFile();
+      const error = await ensureModules(db, [
+        HOST_SCHEMA,
+        {
+          ...MILEAGE_SCHEMA,
+          version: 2,
+          async migrate(tx, from) {
+            await MILEAGE_SCHEMA.migrate(tx, from);
+            if (from < 2) await tx.exec(statement);
+          },
+        },
+      ]).catch((e: unknown) => e);
+      return (error as Error).message;
+    };
+    expect(await lost("DELETE FROM point")).toBe(
+      "module mileage lost rows of the table point (3 before, 0 after); a migration may add rows and may not delete any",
+    );
+    expect(await lost("DELETE FROM module_schema WHERE module = 'host'")).toBe(
+      "module mileage lost rows of the table module_schema (2 before, 1 after); only the manager writes the versions",
+    );
   });
 
   test("a version moved up cannot hide a step: the next start does not refuse the file either way", async () => {
@@ -813,5 +839,248 @@ describe("what the look at the first layout and the layout version leave open", 
     const old = await emptyLegacyFile();
     await ensureModules(old, [HOST_SCHEMA, MILEAGE_SCHEMA]);
     expect(await layout(old)).toBe(1);
+  });
+});
+
+// A migration that is given values to bind gets them: the guarded transaction hands `params` on
+// through each of the three methods that take them, and a migration that used a parameter would
+// otherwise write NULL or find nothing without any test noticing.
+describe("a migration binds parameters through run, all and one", () => {
+  test("each method hands its parameters on, and what was bound is in the file afterwards", async () => {
+    const db = memoryDb();
+    const seen: Record<string, unknown> = {};
+    const m: SchemaModule = {
+      id: "a",
+      version: 1,
+      async migrate(tx) {
+        await tx.exec("CREATE TABLE a_log (note TEXT, n INTEGER)");
+        await tx.run("INSERT INTO a_log (note, n) VALUES (?, ?)", ["kept", 7]);
+        await tx.run("INSERT INTO a_log (note, n) VALUES (?, ?)", ["other", 8]);
+        seen.all = await tx.all("SELECT note, n FROM a_log WHERE note = ? AND n = ?", ["kept", 7]);
+        seen.one = await tx.one("SELECT note, n FROM a_log WHERE note = ? AND n = ?", ["other", 8]);
+        seen.none = await tx.one("SELECT note FROM a_log WHERE note = ?", ["nothing like it"]);
+      },
+    };
+    await ensureModules(db, [m]);
+    expect(seen.all).toEqual([{ note: "kept", n: 7 }]);
+    expect(seen.one).toEqual({ note: "other", n: 8 });
+    expect(seen.none).toBeNull();
+    expect(await db.all("SELECT note, n FROM a_log ORDER BY n")).toEqual([
+      { note: "kept", n: 7 },
+      { note: "other", n: 8 },
+    ]);
+  });
+
+  test("run binds: a parameter is written, not NULL", async () => {
+    const db = memoryDb();
+    await ensureModules(db, [
+      {
+        id: "a",
+        version: 1,
+        async migrate(tx) {
+          await tx.exec("CREATE TABLE a_log (note TEXT)");
+          await tx.run("INSERT INTO a_log (note) VALUES (?)", ["kept"]);
+        },
+      },
+    ]);
+    expect(await db.all("SELECT note FROM a_log")).toEqual([{ note: "kept" }]);
+  });
+
+  test("all binds: a parameter selects the row", async () => {
+    const db = memoryDb();
+    let rows: unknown[] = [];
+    await ensureModules(db, [
+      {
+        id: "a",
+        version: 1,
+        async migrate(tx) {
+          await tx.exec("CREATE TABLE a_log (note TEXT)");
+          await tx.exec("INSERT INTO a_log (note) VALUES ('kept'), ('other')");
+          rows = await tx.all("SELECT note FROM a_log WHERE note = ?", ["kept"]);
+        },
+      },
+    ]);
+    expect(rows).toEqual([{ note: "kept" }]);
+  });
+
+  test("one binds: a parameter selects the row", async () => {
+    const db = memoryDb();
+    let row: unknown = "unset";
+    await ensureModules(db, [
+      {
+        id: "a",
+        version: 1,
+        async migrate(tx) {
+          await tx.exec("CREATE TABLE a_log (note TEXT)");
+          await tx.exec("INSERT INTO a_log (note) VALUES ('kept'), ('other')");
+          row = await tx.one("SELECT note FROM a_log WHERE note = ?", ["other"]);
+        },
+      },
+    ]);
+    expect(row).toEqual({ note: "other" });
+  });
+
+  test("a parameter that holds a word the guard refuses is a value, not a statement", async () => {
+    const db = memoryDb();
+    await ensureModules(db, [
+      {
+        id: "a",
+        version: 1,
+        async migrate(tx) {
+          await tx.exec("CREATE TABLE a_log (note TEXT)");
+          await tx.run("INSERT INTO a_log (note) VALUES (?)", ["COMMIT; ROLLBACK; TEMP"]);
+        },
+      },
+    ]);
+    expect(await db.all("SELECT note FROM a_log")).toEqual([{ note: "COMMIT; ROLLBACK; TEMP" }]);
+  });
+});
+
+// The table is the manager's. Each case is a migration of a module on a file in which the table is
+// there before the migration runs (in a new file the manager makes it first), and each is refused
+// with the lint's own message and taken back. Lowering a version makes the next start run that
+// module's migration again; dropping or altering the table takes away what records the versions.
+describe("module_schema cannot be lowered, dropped or altered by a migration", () => {
+  const BRIEF = "only the manager writes the versions";
+  const starts: [string, () => Promise<SqlDb>][] = [
+    ["a new file", async () => memoryDb()],
+    ["a file of the first build with no rows", emptyLegacyFile],
+    ["a file of the first build with rows", legacyFile],
+  ];
+  const mileageDoing = (statements: string[]): SchemaModule => ({
+    ...MILEAGE_SCHEMA,
+    version: 2,
+    async migrate(tx, from) {
+      await MILEAGE_SCHEMA.migrate(tx, from);
+      if (from < 2) for (const statement of statements) await tx.exec(statement);
+    },
+  });
+  const CASES: [string, string[], string][] = [
+    [
+      "the version of the module before it lowered to 0",
+      ["UPDATE module_schema SET version = 0 WHERE module = 'host'"],
+      `module mileage changed the version recorded for host in module_schema (1 before, 0 after); ${BRIEF}`,
+    ],
+    [
+      "the version of the module before it lowered by one",
+      ["UPDATE module_schema SET version = version - 1 WHERE module = 'host'"],
+      `module mileage changed the version recorded for host in module_schema (1 before, 0 after); ${BRIEF}`,
+    ],
+    [
+      "the table dropped",
+      ["DROP TABLE module_schema"],
+      "module mileage changed the table module_schema, which belongs to another module",
+    ],
+    [
+      "the table dropped and made again with another column",
+      [
+        "DROP TABLE module_schema",
+        "CREATE TABLE module_schema (module TEXT PRIMARY KEY NOT NULL, version INTEGER NOT NULL, x TEXT) WITHOUT ROWID",
+      ],
+      "module mileage changed the table module_schema, which belongs to another module",
+    ],
+    [
+      "a column added",
+      ["ALTER TABLE module_schema ADD COLUMN x TEXT"],
+      "module mileage changed the table module_schema, which belongs to another module",
+    ],
+    [
+      "the table renamed",
+      ["ALTER TABLE module_schema RENAME TO mileage_schema"],
+      "module mileage changed the table module_schema, which belongs to another module",
+    ],
+    [
+      "an index made on it",
+      ["CREATE INDEX mileage_idx ON module_schema (version)"],
+      "module mileage made the index mileage_idx on module_schema, which it does not own (its tables are named mileage_*)",
+    ],
+  ];
+
+  describe.each(starts)("in %s", (_, start) => {
+    test.each(CASES)(
+      "%s is refused with the lint's message and taken back",
+      async (__, list, message) => {
+        const db = await start();
+        const before = await objectsOf(db);
+        const layoutBefore = await layout(db);
+        const error = await ensureModules(db, [HOST_SCHEMA, mileageDoing(list)]).catch(
+          (e: unknown) => e,
+        );
+        expect(error, String(error)).toBeInstanceOf(SchemaError);
+        expect((error as Error).message).toBe(message);
+        expect(await objectsOf(db)).toEqual(before);
+        expect(await layout(db)).toBe(layoutBefore);
+      },
+    );
+  });
+
+  // The manager's rows are compared before and after, not watched: a write with no net effect is
+  // not a change, and passes. (Writes that change a version or the set of rows are refused above
+  // and in the tests of the versions.)
+  describe("a write that changes nothing is not a change", () => {
+    test.each([
+      ["a version set to itself", ["UPDATE module_schema SET version = version"]],
+      [
+        "a row replaced by the same row",
+        ["INSERT OR REPLACE INTO module_schema (module, version) VALUES ('host', 1)"],
+      ],
+      [
+        "REPLACE of the same row",
+        ["REPLACE INTO module_schema (module, version) VALUES ('host', 1)"],
+      ],
+      [
+        "an insert that does nothing on a conflict",
+        [
+          "INSERT INTO module_schema (module, version) VALUES ('host', 1) ON CONFLICT(module) DO NOTHING",
+        ],
+      ],
+      [
+        "a row deleted and put in again as it was",
+        [
+          "DELETE FROM module_schema WHERE module = 'host'",
+          "INSERT INTO module_schema (module, version) VALUES ('host', 1)",
+        ],
+      ],
+    ])("%s passes", async (_, list) => {
+      const db = await legacyFile();
+      await ensureModules(db, [HOST_SCHEMA, mileageDoing(list)]);
+      expect(await db.all("SELECT * FROM module_schema ORDER BY module")).toEqual([
+        { module: "host", version: 1 },
+        { module: "mileage", version: 2 },
+      ]);
+    });
+
+    test("the table dropped and made again in its own text, with its rows put back, passes", async () => {
+      const db = await legacyFile();
+      await ensureModules(db, [
+        HOST_SCHEMA,
+        {
+          ...MILEAGE_SCHEMA,
+          version: 2,
+          async migrate(tx, from) {
+            await MILEAGE_SCHEMA.migrate(tx, from);
+            if (from >= 2) return;
+            const text = (await tx.one<{ sql: string }>(
+              "SELECT sql FROM sqlite_master WHERE name = 'module_schema'",
+            ))!.sql;
+            const rows = await tx.all<{ module: string; version: number }>(
+              "SELECT module, version FROM module_schema",
+            );
+            await tx.exec("DROP TABLE module_schema");
+            await tx.exec(text);
+            for (const row of rows) {
+              await tx.run("INSERT INTO module_schema (module, version) VALUES (?, ?)", [
+                row.module,
+                row.version,
+              ]);
+            }
+          },
+        },
+      ]);
+      expect(await db.all("SELECT * FROM module_schema ORDER BY module")).toEqual([
+        { module: "host", version: 1 },
+        { module: "mileage", version: 2 },
+      ]);
+    });
   });
 });

@@ -87,13 +87,20 @@ const fixes = (): Row[] =>
 /**
  * JSON with the keys of every object in order, so that two rows are the same when their keys and
  * their values are, as JavaScript sees a value: text, number, NULL and blob are different things.
+ * JSON writes Infinity, -Infinity and NaN as null and -0 as 0, so those are tagged first: a real
+ * that comes back as one of them (`SELECT 9e999` is Infinity) is not the NULL or the 0 that was
+ * expected, and neither is a whole number that comes back as a BigInt.
  */
 const canon = (value: unknown): string =>
-  JSON.stringify(value, (_, v: unknown) =>
-    v !== null && typeof v === "object" && !Array.isArray(v)
+  JSON.stringify(value, (_, v: unknown) => {
+    if (typeof v === "number" && (!Number.isFinite(v) || Object.is(v, -0))) {
+      return { $number: Object.is(v, -0) ? "-0" : String(v) };
+    }
+    if (typeof v === "bigint") return { $bigint: String(v) };
+    return v !== null && typeof v === "object" && !Array.isArray(v)
       ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
-      : v,
-  );
+      : v;
+  });
 
 /** The columns of `trip` in the first layout, from the text the first build made the table with. */
 let tripColumnsOnce: Promise<string[]> | undefined;
