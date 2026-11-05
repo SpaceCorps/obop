@@ -1,4 +1,4 @@
-import type { SqlDb, SqlTx } from "./sql.ts";
+import type { SqlDb, SqlTx, SqlValue } from "./sql.ts";
 
 /**
  * A version for each part of the code that keeps tables in the one database file, and the rules
@@ -221,6 +221,8 @@ interface Snapshot {
   indexes: Map<string, IndexInfo>;
   /** The number of rows of every table. */
   rows: Map<string, number>;
+  /** The versions in `module_schema`, which only the manager writes; empty where the table is missing. */
+  versions: Map<string, number>;
 }
 
 const objectKey = (o: { type: string; name: string }) => `${o.type} ${o.name}`;
@@ -262,7 +264,14 @@ async function snapshot(tx: SqlTx): Promise<Snapshot> {
       });
     }
   }
-  return { layout, objects, columns, parents, indexes, rows: counts };
+  const versions = new Map<string, number>();
+  if (objects.has(objectKey({ type: "table", name: "module_schema" }))) {
+    const recorded = await tx.all<{ module: string; version: number }>(
+      "SELECT module, version FROM module_schema",
+    );
+    for (const row of recorded) versions.set(row.module, Number(row.version));
+  }
+  return { layout, objects, columns, parents, indexes, rows: counts, versions };
 }
 
 /**
@@ -285,6 +294,116 @@ async function snapshotBefore(tx: SqlTx, module: SchemaModule): Promise<Snapshot
   const before = await snapshot(tx);
   for (const [name] of missing.reverse()) await tx.exec(`DROP TABLE ${quoted(name)}`);
   return before;
+}
+
+/** The words that begin, end or nest a transaction. A statement starts with one of them or with none. */
+const TRANSACTION_WORDS = new Set(["BEGIN", "COMMIT", "END", "ROLLBACK", "SAVEPOINT", "RELEASE"]);
+
+/**
+ * Whether `sql` holds a statement that begins, ends or nests a transaction: the first word of any
+ * statement is BEGIN, COMMIT, END, ROLLBACK, SAVEPOINT or RELEASE. The text is split with the
+ * tokenizer of this file, so a word inside a string, a quoted name or a comment is not a statement,
+ * and a statement begins after every `;` that is not inside one of those. Answers the word that
+ * was found, or `unreadable` where it cannot split the text with certainty (a string or comment
+ * that does not end, the body of a trigger that does not end), because a text that cannot be split
+ * cannot be shown to leave the transaction alone. Exported for its tests.
+ *
+ * A trigger is the one statement that has statements inside it: `CREATE TRIGGER ... BEGIN ...; END`.
+ * It is read to the `END` that follows a `;` and comes before a `;` or the end of the text, because
+ * no statement of a trigger's body can begin with that word. Everything in between is the trigger's.
+ * (A trigger is refused by `checkChange` afterwards; the point here is that a COMMIT after it, in
+ * the same text, is found.)
+ */
+export function transactionControl(sql: string): { word: string } | "unreadable" | null {
+  const tokens = tokenise(sql);
+  if (tokens === null) return "unreadable";
+  let starts = true;
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i] as Token;
+    if (isMark(t, ";")) {
+      starts = true;
+      continue;
+    }
+    if (!starts) continue;
+    starts = false;
+    if (t.kind !== "word") continue;
+    const word = t.text.toUpperCase();
+    if (TRANSACTION_WORDS.has(word)) return { word };
+    if (word !== "CREATE") continue;
+    let j = i + 1;
+    if (isWord(tokens[j], "TEMP") || isWord(tokens[j], "TEMPORARY")) j++;
+    if (!isWord(tokens[j], "TRIGGER")) continue;
+    let end = -1;
+    for (let k = j + 1; k < tokens.length; k++) {
+      if (
+        isMark(tokens[k - 1], ";") &&
+        isWord(tokens[k], "END") &&
+        (tokens[k + 1] === undefined || isMark(tokens[k + 1], ";"))
+      ) {
+        end = k;
+        break;
+      }
+    }
+    if (end < 0) return "unreadable";
+    i = end;
+  }
+  return null;
+}
+
+/**
+ * The transaction as a migration gets it: the same, except that every method that runs text
+ * refuses text that begins, ends or nests a transaction, before anything runs. The manager holds one
+ * transaction for all the modules and takes it all back when anything fails; a COMMIT in a migration
+ * would keep what came before it whatever happens after, and a ROLLBACK would leave the rest of the
+ * migration to run outside any transaction.
+ */
+function guarded(tx: SqlTx, module: SchemaModule): SqlTx {
+  const check = (sql: string): void => {
+    const found = transactionControl(sql);
+    if (found === null) return;
+    throw new SchemaError(
+      found === "unreadable"
+        ? `module ${module.id} ran text that cannot be split into statements with certainty, so it cannot be shown to leave the manager's transaction alone`
+        : `module ${module.id} ran ${found.word}; the manager holds the transaction and takes all of it back when anything fails, so a migration may not begin, end or nest one (BEGIN, COMMIT, END, ROLLBACK, SAVEPOINT, RELEASE)`,
+    );
+  };
+  return {
+    exec: async (sql) => {
+      check(sql);
+      return tx.exec(sql);
+    },
+    run: async (sql, params) => {
+      check(sql);
+      return tx.run(sql, params);
+    },
+    all: async <T>(sql: string, params?: readonly SqlValue[]) => {
+      check(sql);
+      return tx.all<T>(sql, params);
+    },
+    one: async <T>(sql: string, params?: readonly SqlValue[]) => {
+      check(sql);
+      return tx.one<T>(sql, params);
+    },
+  };
+}
+
+/** The savepoint that the manager sets before a migration and releases after it. */
+const MIGRATION_SAVEPOINT = "schema_migration";
+
+/**
+ * Throws unless the transaction that was open before the migration is the one that is open now.
+ * A savepoint set before the migration is gone when the transaction was ended (COMMIT, ROLLBACK, END,
+ * or COMMIT and a new BEGIN), so releasing it is the question. This only detects: what a COMMIT
+ * did is committed. The guard (`guarded`) is what keeps a migration from ending the transaction.
+ */
+async function releaseMigration(tx: SqlTx, module: SchemaModule): Promise<void> {
+  try {
+    await tx.exec(`RELEASE ${MIGRATION_SAVEPOINT}`);
+  } catch {
+    throw new SchemaError(
+      `module ${module.id} ended the transaction that the manager holds; what it did before that is committed or lost and cannot be taken back`,
+    );
+  }
 }
 
 /** Why a kind of object is refused. */
@@ -327,15 +446,49 @@ const REFUSED_KINDS: Record<string, string> = {
  *     for letter as it was, and each new definition is a name that is not a keyword of a
  *     constraint, an optional type, and `NOT NULL` and one `DEFAULT <plain value>` as wanted, with
  *     no `CHECK`, `REFERENCES`, `COLLATE`, generated value, `UNIQUE`, `PRIMARY KEY`, named
- *     constraint, second `DEFAULT` or `DEFAULT (expression)`. Such a table is not renamed or
- *     retyped, and its text is not rewritten. It may be dropped and made again in the very text it
- *     had (or that text with the new definitions put in): an older build opens a table by its name
- *     and finds what it had, so that is harmless as long as no row is lost, which is the next point;
+ *     constraint, second `DEFAULT`, `DEFAULT (expression)` or a default of `CURRENT_TIME`,
+ *     `CURRENT_DATE` or `CURRENT_TIMESTAMP` (SQLite refuses those on an added column when the table
+ *     has rows, which is every installed phone, and accepts them on an empty table, so a migration
+ *     with one passes on a new file and fails on an upgrade). Such a table is not renamed or
+ *     retyped, and its text is not rewritten. It may be dropped and made again in the byte-exact
+ *     text it had, or in the byte-exact text that `ADD COLUMN` would have left (`, <definition>`
+ *     put in right after the last column definition, with no space or line break of its own, so
+ *     `a TEXT
+)` becomes `a TEXT
+, b TEXT)`); a tidier way of writing the same table
+ *     (`a TEXT,
+  b TEXT
+)`) is refused as a rebuilt table. An older build opens a table by its
+ *     name and finds what it had, so the first is harmless as long as no row is lost, which is
+ *     the next point;
  * - lost no rows: every table that was there has as many rows as it had, or more (the rows are
  *   counted inside the same transaction, before and after the migration, and a migration may add
  *   rows). This is a count and not a proof that the rows are the same ones, so a migration that
  *   replaces a row by another passes;
- * - left `PRAGMA user_version` as it was: the layout is `LAYOUT_VERSION`, set by the manager.
+ * - left the versions in `module_schema` as they were: that table is the manager's, and a
+ *   migration that inserts, updates or deletes one of its rows is refused, also for its own
+ *   module's row (the rows are compared before and after, so a version cannot be moved to hide a
+ *   step, or set to one that makes the next start refuse the whole file);
+ * - left `PRAGMA user_version` as it was: the layout is `LAYOUT_VERSION`, set by the manager. It
+ *   is compared with what it was before the migration, and that differs by the kind of file: 0 in
+ *   a new file, 1 in an old one. So `PRAGMA user_version = 0` passes in a new file (it changes
+ *   nothing there) and is refused in an old one, and `= 1` the other way round; any other number
+ *   is refused in both.
+ *
+ * What a migration cannot do to the transaction. The manager holds one transaction for all the
+ * modules and takes all of it back when anything fails. A migration therefore gets a transaction
+ * (`guarded`) that refuses, before it runs, any statement that begins, ends or nests a transaction
+ * (BEGIN, COMMIT, END, ROLLBACK, SAVEPOINT, RELEASE), and the manager checks afterwards that the
+ * transaction it opened is still the one that is open (`SAVEPOINT` before, `RELEASE` after). The
+ * second only detects: what a COMMIT has done is committed, and nothing can undo it. The first is
+ * the guard.
+ *
+ * What the look at the first layout does not cover. The tables of the first layout that are put
+ * into "before" are the ones the migrating module declares itself. A table of a module that comes
+ * later in the list is not there when an earlier module migrates in a new file (it is there in an
+ * old file), so a table of the earlier module with a foreign key to it is judged differently in the
+ * two: accepted in a new file, refused in an old one. The modules of the app do not do that (the
+ * host's table has no foreign key, and the outbox comes after it), and nothing checks it.
  *
  * This is a lint, not a proof: it refuses what the author of the rules could think of that would
  * stop an older build, and it is written to refuse what it cannot classify. What proves a given
@@ -391,7 +544,7 @@ function checkChange(module: SchemaModule, before: Snapshot, after: Snapshot): v
       // definition for. An older build opens a table of that name and writes to it.
       if ((module.legacyTables ?? []).includes(o.name)) {
         fail(
-          `made the table ${o.name}, which an older build also makes and writes to; it has to be exactly the definition of the first layout, and the module declares none`,
+          `made the table ${o.name}, a table of the first layout that an older build opens and writes to; the module declares no definition of it (legacyDefinitions), so a migration cannot make it`,
         );
       }
     } else if (o.type === "index") {
@@ -472,6 +625,23 @@ function checkChange(module: SchemaModule, before: Snapshot, after: Snapshot): v
     if (has !== undefined && has < had) {
       fail(
         `lost rows of the table ${table} (${had} before, ${has} after); a migration may add rows and may not delete any`,
+      );
+    }
+  }
+  // The manager alone writes `module_schema`. The rows were counted above, so a row that is gone is
+  // already refused; this is the rest: a version changed, a row put in, a row replaced.
+  for (const [name, was] of before.versions) {
+    const now = after.versions.get(name);
+    if (now !== was) {
+      fail(
+        `${now === undefined ? "deleted" : "changed"} the version recorded for ${name} in module_schema (${was} before${now === undefined ? "" : `, ${now} after`}); only the manager writes the versions`,
+      );
+    }
+  }
+  for (const [name, now] of after.versions) {
+    if (!before.versions.has(name)) {
+      fail(
+        `recorded a version (${now}) for ${name} in module_schema; only the manager writes the versions`,
       );
     }
   }
@@ -658,13 +828,14 @@ const CONSTRAINT_WORDS = new Map<string, string>([
 ]);
 /** The words that end the name or the type of a column: those above, and the ones of NOT NULL and DEFAULT. */
 const BEGINS_CLAUSE = new Set([...CONSTRAINT_WORDS.keys(), "NOT", "NULL", "DEFAULT"]);
-const PLAIN_DEFAULT_WORDS = new Set([
-  "TRUE",
-  "FALSE",
-  "CURRENT_TIME",
-  "CURRENT_DATE",
-  "CURRENT_TIMESTAMP",
-]);
+const PLAIN_DEFAULT_WORDS = new Set(["TRUE", "FALSE"]);
+/**
+ * The defaults that are the time of the insert. SQLite refuses them for a column that is added to a
+ * table that has rows ("Cannot add a column with non-constant default") and accepts them on a table
+ * with none, so a migration that has one passes on a new file and on an empty table and fails on a
+ * phone that has trips. Refused here for every table, so that it fails where it is tried.
+ */
+const TIME_DEFAULT_WORDS = new Set(["CURRENT_TIME", "CURRENT_DATE", "CURRENT_TIMESTAMP"]);
 
 /**
  * Why the column definitions in `, a TEXT, b INTEGER NOT NULL DEFAULT 0` are not all plain; null if
@@ -761,6 +932,8 @@ function plainColumn(def: Token[]): string | null {
       } else if (v?.kind === "word" && PLAIN_DEFAULT_WORDS.has(v.text.toUpperCase())) {
         i++;
         value = true;
+      } else if (v?.kind === "word" && TIME_DEFAULT_WORDS.has(v.text.toUpperCase())) {
+        return `a default of ${v.text}, which SQLite refuses on a column added to a table that has rows`;
       } else {
         return "a default that is not a plain value";
       }
@@ -826,7 +999,9 @@ export async function ensureModules(
     for (const m of todo) {
       const from = state.recorded.get(m.id) ?? 0;
       const before = await snapshotBefore(tx, m);
-      await m.migrate(tx, from);
+      await tx.exec(`SAVEPOINT ${MIGRATION_SAVEPOINT}`);
+      await m.migrate(guarded(tx, m), from);
+      await releaseMigration(tx, m);
       checkChange(m, before, await snapshot(tx));
       await tx.run(
         "INSERT INTO module_schema (module, version) VALUES (?, ?) ON CONFLICT(module) DO UPDATE SET version = excluded.version",

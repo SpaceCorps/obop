@@ -17,8 +17,9 @@ import { probeOlderBuild } from "../test-support/older-build-probe.ts";
 //     build still works on the file, with rows in it and without, and the rows are still there;
 //   - what it lets through is what the grammar says is plain, by a rule written here again, in
 //     terms of the pieces and not of the text: at most one DEFAULT, and a NOT NULL column has a
-//     default that is not NULL. (Shapes that SQLite itself refuses, a default that is the current
-//     time, are not the manager's to judge.)
+//     default that is not NULL, and no default that is the current time. (Shapes that SQLite
+//     itself refuses, as it refuses that one on a table that has rows, are not the manager's to
+//     judge; on an empty table SQLite accepts it, and the manager refuses it all the same.)
 //
 // This is a sample of the shapes, not all of them, and the oracle is the probe on SQLite as Node
 // has it. The grammar is this file's own: the generator of the fuzz that found the second-DEFAULT
@@ -82,10 +83,15 @@ function shapes(): Shape[] {
   return [...out.values()];
 }
 
-/** What the grammar says: at most one DEFAULT, and NOT NULL only with a default that is not NULL. */
+/**
+ * What the grammar says: at most one DEFAULT, and NOT NULL only with a default that is not NULL,
+ * and no default that is the time of the insert (SQLite refuses it when the table has rows and
+ * accepts it when it has none, so it is refused for every table).
+ */
 function plain({ pieces }: Shape): boolean {
   const defaults = pieces.filter((piece) => piece.startsWith("DEFAULT"));
   if (defaults.length > 1) return false;
+  if (defaults.some((piece) => piece.startsWith("DEFAULT CURRENT_"))) return false;
   if (!pieces.includes("NOT NULL")) return true;
   return defaults.length === 1 && defaults[0] !== "DEFAULT NULL";
 }

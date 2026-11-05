@@ -1,6 +1,7 @@
 import type { SqlDb, SqlTx, SqlValue } from "../core/sql.ts";
-import { migrate as firstBuildMigration } from "./legacy-schema.ts";
+import { SCHEMA as FIRST_LAYOUT, migrate as firstBuildMigration } from "./legacy-schema.ts";
 import { FIRST_BUILD_SQL as Q } from "./legacy-statements.ts";
+import { memoryDb } from "./memory-db.ts";
 
 /**
  * Whether the first build still works on a database file: the oracle for any migration of a
@@ -12,8 +13,15 @@ import { FIRST_BUILD_SQL as Q } from "./legacy-statements.ts";
  * runs the first build's own statements (`legacy-statements.ts`, copies of the store of the first
  * build) in the order of its flows: start a trip, record fixes, cut batches, stop, submit, discard,
  * patch, merge what the server says, list, keep a note, delete, clear. Each statement is checked
- * for what the first build expects of it, down to the type of each value that comes back. All of it
- * runs in a transaction that is rolled back, so the file is as it was afterwards, with its rows.
+ * for what the first build expects of it, both ways: every column the answer has is expected and
+ * every column that is expected is in the answer (a row of a trip is held to the columns of the
+ * first layout, from the first build's own schema text, so a column that a later version added to
+ * `trip` is in the answer of `SELECT *` and is not compared, because the first build reads a row by
+ * the names it knows), and every value is compared as JavaScript sees it: text, number, NULL and
+ * blob are told apart, an integer and a real of the same value are not (and the first build,
+ * which reads numbers as JavaScript numbers, does not tell them apart either). The one answer that
+ * is not compared whole is the list of trips: it has to hold the three trips the probe made. All of
+ * it runs in a transaction that is rolled back, so the file is as it was afterwards, with its rows.
  *
  * A migration of a module version 2 comes with a test that runs the probe on the file after it. The
  * probe has no rows in a table that a migration adds (the first build never opens those), so a
@@ -76,7 +84,10 @@ const fixes = (): Row[] =>
     speed_mps: null,
   }));
 
-/** JSON with the keys of every object in order, so that two rows are the same when their values are, type for type. */
+/**
+ * JSON with the keys of every object in order, so that two rows are the same when their keys and
+ * their values are, as JavaScript sees a value: text, number, NULL and blob are different things.
+ */
 const canon = (value: unknown): string =>
   JSON.stringify(value, (_, v: unknown) =>
     v !== null && typeof v === "object" && !Array.isArray(v)
@@ -84,24 +95,26 @@ const canon = (value: unknown): string =>
       : v,
   );
 
-/** The columns that the first build's `patchTrip` sets, in the order of its parameters. */
-const PATCHED = [
-  "server_id",
-  "ended_at",
-  "create_attempted",
-  "end_done",
-  "submit_requested",
-  "submit_done",
-  "discard_done",
-  "server_state",
-  "distance_m",
-  "integrity",
-  "reject_reason",
-  "attempts",
-  "problem_step",
-  "problem_code",
-  "problem_message",
-] as const;
+/** The columns of `trip` in the first layout, from the text the first build made the table with. */
+let tripColumnsOnce: Promise<string[]> | undefined;
+const firstLayoutTripColumns = (): Promise<string[]> => {
+  tripColumnsOnce ??= (async () => {
+    const db = memoryDb();
+    await db.exec(FIRST_LAYOUT);
+    return (await db.all<{ name: string }>("PRAGMA table_info(trip)")).map((c) => c.name);
+  })();
+  return tripColumnsOnce;
+};
+
+/** The columns that the statement of the first build sets, from its text: `SET a = ?, b = ? WHERE`. */
+const PATCHED: readonly string[] = (() => {
+  const set = /^UPDATE trip SET (.*) WHERE client_trip_id = \?$/.exec(Q.patchTrip)?.[1];
+  const columns = (set ?? "").split(", ").map((part) => /^(\w+) = \?$/.exec(part)?.[1] ?? "");
+  if (set === undefined || columns.includes("")) {
+    throw new Error("the statement patchTrip is not a list of `column = ?`");
+  }
+  return columns;
+})();
 
 function expectSame(what: string, actual: unknown, expected: unknown): void {
   const a = canon(actual);
@@ -126,14 +139,37 @@ function steps(tx: SqlTx): [string, () => Promise<void>][] {
   const run = (sql: string, params: SqlValue[] = []) => tx.run(sql, params);
   const one = (sql: string, params: SqlValue[] = []) => tx.one<Row>(sql, params);
   const all = (sql: string, params: SqlValue[] = []) => tx.all<Row>(sql, params);
-  /** The named columns of the trip with this id, read by name as the first build reads them. */
-  const trip = async (id: string, columns: string[]): Promise<Row | null> => {
+  /**
+   * The trip with this id as `SELECT *` gives it, held to the columns of the first layout both
+   * ways: the row the probe expects has exactly those columns (a probe that forgot one would not
+   * look at it), and the answer has every one of them, each with the value and the kind of value
+   * expected. A column that a later version added is in the answer and is not looked at.
+   */
+  const expectTrip = async (what: string, id: string, expected: Row) => {
+    const columns = await firstLayoutTripColumns();
+    const named = Object.keys(expected);
+    for (const column of columns) {
+      if (!named.includes(column)) {
+        throw new Error(`${what}: the probe expects no value for the column ${column}`);
+      }
+    }
+    for (const column of named) {
+      if (!columns.includes(column)) {
+        throw new Error(
+          `${what}: the probe expects a column ${column}, which the first layout lacks`,
+        );
+      }
+    }
     const row = await one(Q.tripById, [id]);
-    if (row === null) return null;
-    return Object.fromEntries(columns.map((c) => [c, row[c]]));
+    if (row === null) throw new Error(`${what}: expected the trip ${id}, got null`);
+    for (const column of columns) {
+      if (!(column in row)) throw new Error(`${what}: the column ${column} is gone`);
+      const got = canon(row[column]);
+      const want = canon(expected[column]);
+      if (got !== want)
+        throw new Error(`${what}: the column ${column} is ${got}, expected ${want}`);
+    }
   };
-  const expectTrip = async (what: string, id: string, expected: Row) =>
-    expectSame(what, await trip(id, Object.keys(expected)), expected);
   const pointsOf = async (id: string) => all(Q.points, [id]);
   const stopped: Row = {
     ...newTrip(A, "business", T0, 1),
@@ -141,6 +177,40 @@ function steps(tx: SqlTx): [string, () => Promise<void>][] {
     ended_at: T1,
     expected_points: 3,
     last_seq: 3,
+  };
+  const submitted: Row = { ...stopped, submit_requested: 1 };
+  /** What `patchTrip` is given, one value for each column it sets, and nothing else. */
+  const set: Row = {
+    server_id: "s-1",
+    ended_at: T2,
+    create_attempted: 1,
+    end_done: 1,
+    submit_requested: 1,
+    submit_done: 1,
+    discard_done: 1,
+    server_state: "in_review",
+    distance_m: "12.5",
+    integrity: "ok",
+    reject_reason: "none",
+    attempts: 2,
+    problem_step: "points",
+    problem_code: "offline",
+    problem_message: "No network",
+  };
+  const patched: Row = { ...submitted, ...set };
+  const cleared: Row = {
+    ...patched,
+    problem_step: null,
+    problem_code: null,
+    problem_message: null,
+    attempts: 0,
+  };
+  const merged: Row = {
+    ...cleared,
+    server_state: "confirmed",
+    distance_m: "13.0",
+    integrity: "checked",
+    reject_reason: null,
   };
 
   return [
@@ -239,9 +309,10 @@ function steps(tx: SqlTx): [string, () => Promise<void>][] {
       "submit and discard a trip",
       async () => {
         await run(Q.requestSubmit, [A]);
-        await expectTrip("the submitted trip", A, { ...stopped, submit_requested: 1 });
+        await expectTrip("the submitted trip", A, submitted);
         await run(Q.requestDiscard, ["wrong trip", T2, B]);
         await expectTrip("the discarded trip", B, {
+          ...newTrip(B, "business", T0, 1),
           discard_reason: "wrong trip",
           stop_requested: 1,
           ended_at: T2,
@@ -251,47 +322,22 @@ function steps(tx: SqlTx): [string, () => Promise<void>][] {
     [
       "patch a trip with every column it can set, then clear its problem",
       async () => {
-        const set: Row = {
-          server_id: "s-1",
-          ended_at: T2,
-          create_attempted: 1,
-          end_done: 1,
-          submit_requested: 1,
-          submit_done: 1,
-          discard_done: 1,
-          server_state: "in_review",
-          distance_m: "12.5",
-          integrity: "ok",
-          reject_reason: "none",
-          attempts: 2,
-          problem_step: "points",
-          problem_code: "offline",
-          problem_message: "No network",
-        };
+        if (canon(Object.keys(set).sort()) !== canon([...PATCHED].sort())) {
+          throw new Error("the values of the probe are not the columns that patchTrip sets");
+        }
         await run(Q.patchTrip, [...PATCHED.map((column) => set[column]!), A]);
-        await expectTrip("the patched trip", A, set);
+        await expectTrip("the patched trip", A, patched);
         // The problem the patch left on the trip (it is the only statement that sets one) is what
         // the statement that clears it has to clear.
         await run(Q.clearProblem, [A]);
-        await expectTrip("the problem is cleared", A, {
-          problem_step: null,
-          problem_code: null,
-          problem_message: null,
-          attempts: 0,
-        });
+        await expectTrip("the problem is cleared", A, cleared);
       },
     ],
     [
       "merge what the server says",
       async () => {
         await run(Q.mergeUpdate, ["s-2", "confirmed", "13.0", "checked", null, A]);
-        await expectTrip("the merged trip", A, {
-          server_id: "s-1",
-          server_state: "confirmed",
-          distance_m: "13.0",
-          integrity: "checked",
-          reject_reason: null,
-        });
+        await expectTrip("the merged trip", A, merged);
         await run(Q.mergeInsert, [
           C,
           "s-3",

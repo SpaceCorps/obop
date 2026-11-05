@@ -1212,7 +1212,6 @@ describe("the reader of the columns that a migration added", () => {
     [", a TEXT DEFAULT NULL"],
     [", a INT DEFAULT TRUE"],
     [", a INT DEFAULT false"],
-    [", a TEXT DEFAULT CURRENT_TIMESTAMP"],
     [", a TEXT NULL"],
     [", a text not null default 0"],
     [", a TEXT /* CHECK (a > 0) */ NOT NULL DEFAULT 0 -- UNIQUE\n, b TEXT"],
@@ -1294,6 +1293,28 @@ describe("the reader of the columns that a migration added", () => {
     [", a TEXT DEFAULT -x", "a", /default that is not a plain value/],
     [", a TEXT DEFAULT (1)", "a", /default that is not a plain value/],
     [", a TEXT DEFAULT abc", "a", /default that is not a plain value/],
+    // The time of the insert is refused by SQLite for a column added to a table that has rows, and
+    // accepted for a table with none: refused here for every table, with the reason.
+    [
+      ", a TEXT DEFAULT CURRENT_TIMESTAMP",
+      "a",
+      /^a default of CURRENT_TIMESTAMP, which SQLite refuses on a column added to a table that has rows$/,
+    ],
+    [
+      ", a TEXT DEFAULT current_date",
+      "a",
+      /^a default of current_date, which SQLite refuses on a column added to a table that has rows$/,
+    ],
+    [
+      ", a TEXT NOT NULL DEFAULT CURRENT_TIME",
+      "a",
+      /^a default of CURRENT_TIME, which SQLite refuses on a column added to a table that has rows$/,
+    ],
+    [
+      ", a TEXT, b TEXT DEFAULT CURRENT_DATE",
+      "b",
+      /^a default of CURRENT_DATE, which SQLite refuses on a column added to a table that has rows$/,
+    ],
     [", a TEXT UNIQUE", "a", /a UNIQUE constraint/],
     [", a TEXT PRIMARY KEY", "a", /a primary key/],
     [", a TEXT CHECK (a > 0)", "a", /a CHECK constraint/],
@@ -1551,7 +1572,11 @@ describe("a table of the first layout that a migration makes", () => {
       }),
     ]).catch((e: unknown) => e);
     expect(error, String(error)).toBeInstanceOf(SchemaError);
-    expect((error as Error).message).toMatch(/the module declares none$/);
+    // The whole message: the table is of the first layout, the module declares no definition of
+    // it, and so a migration cannot make it.
+    expect((error as Error).message).toBe(
+      "module m made the table trip, a table of the first layout that an older build opens and writes to; the module declares no definition of it (legacyDefinitions), so a migration cannot make it",
+    );
     expect(await tables(db)).toEqual([]);
   });
 
