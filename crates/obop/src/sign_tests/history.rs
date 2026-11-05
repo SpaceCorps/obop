@@ -2646,3 +2646,568 @@ async fn the_switch_in_any_row_of_a_bulk_create_is_refused_to_a_caller_without_t
     assert_eq!(s, 200, "{v}");
     assert_eq!(count_of(&f, "sign_request"), before + 6);
 }
+
+// ---- the end of a link, in both directions ----------------------------------------------------
+
+const HOUR: i64 = 3_600_000_000;
+
+/// The day `n` days after `base`, as the text `expires_on` holds.
+fn day_in(base: i64, n: i64) -> String {
+    obop_values::datetime::Instant::from_micros(base + n * DAY)
+        .unwrap()
+        .canonical()[..10]
+        .to_string()
+}
+
+/// The last microsecond of that day (UTC), the way the door reads `expires_on`.
+fn last_microsecond_of(day: &str) -> i64 {
+    obop_values::datetime::Instant::parse(&format!("{day}T23:59:59.999999Z"))
+        .unwrap()
+        .micros()
+}
+
+/// The names listed on the page of a link, which must be a page that works (200).
+async fn listed(f: &Fx, path: &str) -> Vec<String> {
+    let r = view(f, path).await;
+    assert_eq!(r.status, 200, "{}", r.text());
+    names(&r.text())
+}
+
+/// The status of the held copy of a link, from one source.
+async fn pdf_of(f: &Fx, path: &str) -> u16 {
+    f.get(&format!("{path}/document.pdf"), &ip(221))
+        .await
+        .status
+}
+
+/// 200 and the form, with the list on it, and the copy is served.
+async fn form_with_list(f: &Fx, path: &str, want: &[&str], why: &str) {
+    let r = view(f, path).await;
+    assert_eq!(r.status, 200, "{why}: {}", r.text());
+    assert!(r.text().contains("name=\"agree\""), "{why}: not the form");
+    assert_eq!(names(&r.text()), want, "{why}");
+    assert_eq!(pdf_of(f, path).await, 200, "{why}: the copy");
+}
+
+/// The link of a request that waits has run out: 410 and the words of the page for that, no
+/// name of anyone, no copy, and a post signs nothing.
+async fn expired_link(f: &Fx, m: &Made, n: u8, why: &str) {
+    let r = view(f, &m.path).await;
+    assert_eq!(r.status, 410, "{why}: {}", r.text());
+    assert!(r.text().contains("This link has expired."), "{why}");
+    no_names(&r);
+    assert_eq!(pdf_of(f, &m.path).await, 410, "{why}: the copy");
+    let r = sign(f, m, &f.file, "Late Example", true, n).await;
+    assert_eq!(r.status, 410, "{why}: a post");
+    assert_eq!(f.record("sign_request", &m.id)["state"], "sent", "{why}");
+}
+
+#[tokio::test]
+async fn a_request_that_lasts_60_days_does_not_stretch_a_link_that_was_made_for_14() {
+    // The ordinary configuration: the request's day is far off and the link's own end comes first.
+    // The end of a link is the earlier of the two (`SignService::ended`); a rule that took the
+    // request's day alone would keep every one of these links alive for 60 days.
+    let f = fixture().await;
+    let base = now_micros();
+    let ordinary = json!({"expires_on": day_in(base, 60)});
+    let a = made_with(&f, &f.doc, "Alpha", Some(true), ordinary.clone()).await;
+    let b = made_with(&f, &f.doc, "Beta", Some(true), ordinary.clone()).await;
+    // Signs at the same instant as Alpha: its page after signing is the page Alpha's must become.
+    let plain = made_with(&f, &f.doc, "Plain", None, ordinary.clone()).await;
+    // Never signed: the link of a request that waits.
+    let waiting = made_with(&f, &f.doc, "Gamma", Some(true), ordinary.clone()).await;
+    let (second_id, second) = f.mint("mia", &a.id).await;
+
+    let request_day_end = last_microsecond_of(&day_in(base, 60));
+    for (what, id) in [
+        ("the first link", &a.link_id),
+        ("the link that waits", &waiting.link_id),
+        ("the second link", &second_id),
+    ] {
+        let end = link_end(&f, id);
+        assert!(
+            (end - (base + 14 * DAY)).abs() < HOUR,
+            "{what} was made for 14 days"
+        );
+        assert!(
+            end + 40 * DAY < request_day_end,
+            "{what} ends weeks before the request's day"
+        );
+    }
+
+    at_micros(&f, base + 5 * DAY);
+    assert_eq!(
+        sign(&f, &a, &f.file, "Alpha Example", true, 160)
+            .await
+            .status,
+        303
+    );
+    assert_eq!(
+        sign(&f, &plain, &f.file, "Plain Example", false, 161)
+            .await
+            .status,
+        303
+    );
+    at_micros(&f, base + 6 * DAY);
+    assert_eq!(
+        sign(&f, &b, &f.file, "Beta Example", true, 162)
+            .await
+            .status,
+        303
+    );
+    let all = ["Alpha Example", "Beta Example"];
+
+    // Day 10, within the 14 days: the page that waits works and lists the two, the copy is served,
+    // and so do the page after signing of the link that signed and that of the second link.
+    at_micros(&f, base + 10 * DAY);
+    form_with_list(&f, &waiting.path, &all, "day 10").await;
+    assert_eq!(listed(&f, &a.path).await, all);
+    assert_eq!(listed(&f, &second).await, all);
+
+    // The link's own end, to the microsecond, for the page that waits ...
+    let end_waiting = link_end(&f, &waiting.link_id);
+    at_micros(&f, end_waiting);
+    form_with_list(&f, &waiting.path, &all, "at its end").await;
+    at_micros(&f, end_waiting + 1);
+    expired_link(&f, &waiting, 163, "1 microsecond over").await;
+    // ... and for the page after signing, of the link that signed and of a second link.
+    for (path, end, why) in [
+        (&a.path, link_end(&f, &a.link_id), "the link that signed"),
+        (&second, link_end(&f, &second_id), "the second link"),
+    ] {
+        at_micros(&f, end);
+        assert_eq!(listed(&f, path).await, all, "{why}, at its end");
+        at_micros(&f, end + 1);
+        no_list(&view(&f, path).await);
+    }
+
+    // Day 20, 6 days past the 14 and 40 short of the 60: the page that waits is gone, the pages
+    // after signing show the time and no list.
+    at_micros(&f, base + 20 * DAY);
+    expired_link(&f, &waiting, 164, "day 20").await;
+    no_list(&view(&f, &second).await);
+    no_list(&view(&f, &b.path).await);
+    is_the_plain_end_page(&f, &a, &plain, "the link that signed, day 20").await;
+}
+
+#[tokio::test]
+async fn a_request_that_ends_before_its_link_ends_the_link() {
+    // The other direction: the request's day is shortened after the links were made for 14 days,
+    // and the request's day is the end. A rule that took the later of the two, or the link's own
+    // end alone, would keep these alive.
+    let f = fixture().await;
+    let base = now_micros();
+    let a = made(&f, &f.doc, "Alpha", Some(true)).await;
+    let early = made(&f, &f.doc, "Beta", Some(true)).await;
+    let early_signed = made(&f, &f.doc, "Gamma", Some(true)).await;
+    for (i, (m, name, n)) in [
+        (&a, "Alpha Example", 170),
+        (&early_signed, "Gamma Example", 171),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        at_micros(&f, base + DAY + i as i64 * 1_000_000);
+        assert_eq!(sign(&f, m, &f.file, name, true, n).await.status, 303);
+    }
+    let ends_on = day_in(base, 3);
+    for m in [&early, &early_signed] {
+        let (s, v) = f
+            .api(
+                "admin",
+                "/api/sign_request/update",
+                json!({"id": m.id, "expires_on": ends_on}),
+            )
+            .await;
+        assert_eq!(s, 200, "{v}");
+    }
+    let day_end = last_microsecond_of(&ends_on);
+    for m in [&early, &early_signed, &a] {
+        assert!(
+            link_end(&f, &m.link_id) > day_end + 9 * DAY,
+            "the link has days left when the request's day is over"
+        );
+    }
+    let both = ["Alpha Example", "Gamma Example"];
+
+    at_micros(&f, base + 2 * DAY);
+    form_with_list(&f, &early.path, &both, "day 2").await;
+    assert_eq!(listed(&f, &early_signed.path).await, both);
+    // The last microsecond of the request's day, and the next.
+    at_micros(&f, day_end);
+    form_with_list(&f, &early.path, &both, "the last microsecond").await;
+    assert_eq!(listed(&f, &early_signed.path).await, both);
+    at_micros(&f, day_end + 1);
+    expired_link(&f, &early, 172, "the request's day is over").await;
+    no_list(&view(&f, &early_signed.path).await);
+    // A request that has no day of its own goes on, with a link that has days left.
+    assert_eq!(listed(&f, &a.path).await, both);
+}
+
+// ---- the order in which the door looks at a link ---------------------------------------------
+
+/// 200 and the page after signing: the time, and either the list in full or none at all.
+fn end_page(r: &Resp, list: Option<&[&str]>, why: &str) {
+    assert_eq!(r.status, 200, "{why}: {}", r.text());
+    let html = r.text();
+    assert!(
+        html.contains("This document was signed on"),
+        "{why}: not the page after signing:\n{html}"
+    );
+    match list {
+        Some(want) => assert_eq!(names(&html), want, "{why}"),
+        None => no_names(r),
+    }
+}
+
+/// 410 with the words of the page that was meant, and no name on it.
+fn gone_with(r: &Resp, words: &str, why: &str) {
+    assert_eq!(r.status, 410, "{why}: {}", r.text());
+    assert!(r.text().contains(words), "{why}: {}", r.text());
+    no_names(r);
+}
+
+#[tokio::test]
+async fn the_door_looks_at_a_link_in_the_order_the_documents_state() {
+    // docs/SIGN.md, "When the list is served", is the order of `status()` in door.rs:
+    //   1. the link was used: the page after signing (or "closed" when the request is not signed
+    //      or carries no time); the revoke and the end are not looked at;
+    //   2. the link was not used and is revoked: "can no longer be used", whatever the request is;
+    //   3. the link was not used and the request is signed: the page after signing (or "closed"
+    //      when it carries no time); the end of the link is not looked at, the list on the page is
+    //      (`history_for_end_page`);
+    //   4. the link has ended: "has expired";
+    //   5. the request is not waiting any more: "closed";
+    //   6. the form.
+    let f = fixture().await;
+    let base = now_micros();
+    // X is signed by its first link and has two more that are never used.
+    let x = made(&f, &f.doc, "Alpha", Some(true)).await;
+    let (_, x2) = f.mint("mia", &x.id).await;
+    let (x3_id, x3) = f.mint("mia", &x.id).await;
+    let y = made(&f, &f.doc, "Beta", Some(true)).await; // waits, the link works
+    let z = made(&f, &f.doc, "Gamma", Some(true)).await; // waits, the link is revoked
+    let v = made(&f, &f.doc, "Delta", Some(true)).await; // declined
+    let u = made(&f, &f.doc, "Echo", Some(true)).await; // signed, the time is gone
+    let (_, u2) = f.mint("mia", &u.id).await;
+    let t = made(&f, &f.doc, "Plain", Some(true)).await; // signed, then moved to declined
+
+    at_micros(&f, base + DAY);
+    for (m, name, n) in [
+        (&x, "Alpha Example", 180),
+        (&u, "Echo Example", 181),
+        (&t, "Plain Example", 182),
+    ] {
+        assert_eq!(sign(&f, m, &f.file, name, true, n).await.status, 303);
+    }
+    revoke(&f, &z).await;
+    let (s, body) = f
+        .api("mia", "/api/sign_request/decline", json!({"id": v.id}))
+        .await;
+    assert_eq!(s, 200, "{body}");
+    // Written straight to the store, as an administrator's edit or an import could leave them.
+    let b = f.app.store.backend();
+    b.update("sign_request", &u.id, &fields(json!({"signed_at": ""})))
+        .unwrap();
+    b.update("sign_request", &t.id, &fields(json!({"state": "declined"})))
+        .unwrap();
+    // Echo's request has no time any more and Plain's is not signed: the list holds Alpha alone.
+    let alpha = ["Alpha Example"];
+
+    // Within the end of every link.
+    end_page(&view(&f, &x.path).await, Some(&alpha), "1, used");
+    end_page(&view(&f, &x2).await, Some(&alpha), "3, unused, signed");
+    let r = view(&f, &y.path).await;
+    assert!(r.status == 200 && r.text().contains("name=\"agree\""), "6");
+    gone_with(
+        &view(&f, &z.path).await,
+        "This link can no longer be used.",
+        "2, waiting",
+    );
+    gone_with(
+        &view(&f, &v.path).await,
+        "This request is closed.",
+        "5, declined",
+    );
+    gone_with(
+        &view(&f, &u.path).await,
+        "This request is closed.",
+        "1, used, no time",
+    );
+    gone_with(
+        &view(&f, &t.path).await,
+        "This request is closed.",
+        "1, used, not signed",
+    );
+    gone_with(
+        &view(&f, &u2).await,
+        "This request is closed.",
+        "3, unused, no time",
+    );
+
+    // A manager revokes a link that was never used, of a signed request: 2 comes before 3.
+    let (s, body) = f
+        .api(
+            "mia",
+            "/api/sign_link/update",
+            json!({"id": x3_id, "revoked_at": "2026-11-04T12:00:00Z"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{body}");
+    gone_with(
+        &view(&f, &x3).await,
+        "This link can no longer be used.",
+        "2, unused, signed",
+    );
+    // An administrator revokes the link that signed: 1 comes before 2. The page stays, the list
+    // does not (`history_for_end_page`).
+    let (s, body) = f
+        .api(
+            "admin",
+            "/api/sign_link/update",
+            json!({"id": x.link_id, "revoked_at": "2026-11-04T12:00:00Z"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{body}");
+    end_page(&view(&f, &x.path).await, None, "1, used and revoked");
+    end_page(&view(&f, &x2).await, Some(&alpha), "3, unaffected");
+
+    // Every link is 6 days past its end. 3 comes before 4: the page after signing stays, without
+    // the list. 1 comes before 2 and 4: used, revoked and over, still the page after signing.
+    at_micros(&f, base + 20 * DAY);
+    end_page(&view(&f, &x2).await, None, "3 before 4");
+    end_page(&view(&f, &x.path).await, None, "1 before 2 and 4");
+    // 2 comes before 4: revoked and over is "can no longer be used", not "has expired".
+    gone_with(
+        &view(&f, &x3).await,
+        "This link can no longer be used.",
+        "2 before 4, signed",
+    );
+    gone_with(
+        &view(&f, &z.path).await,
+        "This link can no longer be used.",
+        "2 before 4, waiting",
+    );
+    // 4 comes before 5: declined and over is "has expired".
+    gone_with(
+        &view(&f, &v.path).await,
+        "This link has expired.",
+        "4 before 5",
+    );
+    gone_with(
+        &view(&f, &y.path).await,
+        "This link has expired.",
+        "4, waiting",
+    );
+    // The first clause of 1 is not changed by the end either.
+    gone_with(
+        &view(&f, &u.path).await,
+        "This request is closed.",
+        "1, used, no time, over",
+    );
+}
+
+// ---- a form cannot choose the id of its own consent -------------------------------------------
+
+/// A signer's post with these extra fields, from address `n`.
+async fn sign_with(
+    f: &Fx,
+    m: &Made,
+    name: &str,
+    lang: &str,
+    extra: &[(&str, &str)],
+    n: u8,
+) -> Resp {
+    let mut pairs = vec![
+        ("name", name),
+        ("agree", "1"),
+        ("doc", f.file.as_str()),
+        ("lang", lang),
+    ];
+    pairs.extend_from_slice(extra);
+    let agent = format!("Browser-of-{n}/1.0");
+    f.post_with(
+        &m.path,
+        &ip(n),
+        &pairs,
+        &[("origin", ORIGIN), ("user-agent", &agent)],
+    )
+    .await
+}
+
+#[tokio::test]
+async fn a_form_cannot_choose_the_consent_id_or_the_mark_that_is_stored_with_its_signature() {
+    // The door reads `name`, `agree`, `doc`, `lang` and `hist` from the form and nothing else
+    // (`obop-http` `sign.rs`). The id is worked out by the server from the texts of the post's
+    // language and picked by the switch of the request as the door reads it. A script that adds
+    // fields with the names of the id, of the mark or of the switch, valid-looking or not, gets
+    // the id of the request it posts to.
+    let f = fixture().await;
+    let base = now_micros();
+    let garbage = "<script>alert(1)</script>/../;'--";
+    let forged_hash = "v1-draft/de/00000000/history";
+
+    // Requests whose box is not ticked: nothing in the form can put the mark on the signature.
+    let absent = made(&f, &f.doc, "Absent", None).await;
+    let off = made(&f, &f.doc, "Off", Some(false)).await;
+    // `hist` alone, on a request that never had the box: the field is compared with the switch of
+    // the request and nothing else. (The request whose box was turned off after its page was made
+    // is the second half of `a_form_made_before_the_switch_was_turned_on_...`: it is stored under
+    // the plain id as well.)
+    let hist_only = made(&f, &f.doc, "Hist only", None).await;
+    // Requests whose box is ticked.
+    let flagged = made(&f, &f.doc, "Flagged", Some(true)).await;
+    let flagged_de = made(&f, &f.doc, "Flagged de", Some(true)).await;
+    let viewer = made(&f, &f.doc, "Viewer", Some(true)).await;
+
+    // 1. Valid-looking ids of the other wording in every field a script might guess, and the
+    //    switch in two spellings, on a request that does not ask. No `hist`.
+    clock_at(&f, base, 10);
+    let r = sign_with(
+        &f,
+        &absent,
+        "Una Example",
+        "en",
+        &[
+            ("consent_version", WITH_HISTORY_EN),
+            ("consent_version_history", WITH_HISTORY_EN),
+            ("consent_id", WITH_HISTORY_EN),
+            ("consent", WITH_HISTORY_EN),
+            ("history", "1"),
+            ("show_history", "1"),
+            ("show_history", "true"),
+        ],
+        190,
+    )
+    .await;
+    assert_eq!(r.status, 303, "{}", r.text());
+    // 2. Garbage in the same fields and `hist=1`, on a request whose box is explicitly off.
+    clock_at(&f, base, 20);
+    let r = sign_with(
+        &f,
+        &off,
+        "Ola Example",
+        "en",
+        &[
+            ("consent_version", garbage),
+            ("consent_version_history", garbage),
+            ("consent_id", garbage),
+            ("consent", garbage),
+            ("history", garbage),
+            ("show_history", "1"),
+            ("saw_history", "1"),
+            ("hist", "1"),
+        ],
+        191,
+    )
+    .await;
+    assert_eq!(r.status, 303, "{}", r.text());
+    // 3. `hist=1` alone, in German, on a request that never had the box.
+    clock_at(&f, base, 30);
+    let r = sign_with(&f, &hist_only, "Hans Example", "de", &[("hist", "1")], 192).await;
+    assert_eq!(r.status, 303, "{}", r.text());
+    // 4. The request asks: the plain id of its language and garbage, with the `hist=1` its page
+    //    carried.
+    clock_at(&f, base, 40);
+    let r = sign_with(
+        &f,
+        &flagged,
+        "Fay Example",
+        "en",
+        &[
+            ("hist", "1"),
+            ("consent_version", PLAIN_EN),
+            ("consent_version_history", garbage),
+            ("consent_id", PLAIN_EN),
+            ("consent", PLAIN_EN),
+            ("history", "0"),
+            ("show_history", "0"),
+        ],
+        193,
+    )
+    .await;
+    assert_eq!(r.status, 303, "{}", r.text());
+    // 5. The request asks, in German: the mark on a hash that is not the wording's.
+    clock_at(&f, base, 50);
+    let r = sign_with(
+        &f,
+        &flagged_de,
+        "Gita Example",
+        "de",
+        &[
+            ("hist", "1"),
+            ("consent_version", WITH_HISTORY_DE),
+            ("consent_version_history", forged_hash),
+            ("consent_id", forged_hash),
+            ("consent", forged_hash),
+        ],
+        194,
+    )
+    .await;
+    assert_eq!(r.status, 303, "{}", r.text());
+
+    // What is stored is what the server worked out, to the character.
+    let stored = |m: &Made| {
+        f.record("sign_request", &m.id)["consent_version"]
+            .as_str()
+            .unwrap()
+            .to_string()
+    };
+    assert_eq!(stored(&absent), PLAIN_EN, "1: no box, forged ids");
+    assert_eq!(stored(&off), PLAIN_EN, "2: box off, garbage and hist=1");
+    assert_eq!(stored(&hist_only), PLAIN_DE, "3: hist=1 alone, no box");
+    assert_eq!(
+        stored(&flagged),
+        WITH_HISTORY_EN,
+        "4: box on, forged plain id"
+    );
+    assert_eq!(
+        stored(&flagged_de),
+        WITH_HISTORY_DE,
+        "5: box on, forged mark"
+    );
+    // The log entry and the digest say the same, and no forged text is in any record or entry.
+    let details: Vec<String> = f
+        .events_of("sign_signed")
+        .iter()
+        .map(|e| e["detail"].as_str().unwrap().to_string())
+        .collect();
+    for (m, want) in [
+        (&absent, PLAIN_EN),
+        (&off, PLAIN_EN),
+        (&hist_only, PLAIN_DE),
+        (&flagged, WITH_HISTORY_EN),
+        (&flagged_de, WITH_HISTORY_DE),
+    ] {
+        let line = details
+            .iter()
+            .find(|d| d.starts_with(&format!("request {};", m.id)))
+            .unwrap();
+        assert!(line.contains(&format!("consent {want};")), "{line}");
+        let rec = f.record("sign_request", &m.id);
+        assert!(line.contains(&format!(
+            "digest {}",
+            digest_of_request(&m.link_id, &m.id, &rec)
+        )));
+    }
+    let everything = f.everything_stored();
+    for forged in ["alert(1)", "<script>", forged_hash] {
+        assert!(
+            !everything.contains(forged),
+            "{forged} got into the store:\n{everything}"
+        );
+    }
+
+    // Only the two signatures made under the id with the mark are listed, oldest first, and the
+    // signatures of the requests that do not ask are listed nowhere.
+    let seen = names(&page(&f, &viewer, 195).await.text());
+    assert_eq!(seen, ["Fay Example", "Gita Example"]);
+    let end = page(&f, &flagged, 196).await.text();
+    assert_eq!(
+        marked(&end),
+        [
+            ("Fay Example".to_string(), true),
+            ("Gita Example".to_string(), false)
+        ]
+    );
+}

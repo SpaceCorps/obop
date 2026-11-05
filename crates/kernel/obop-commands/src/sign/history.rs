@@ -88,14 +88,17 @@ impl SignService {
         matches!(req.get(HISTORY_FLAG), Some(J::Bool(true))) && self.history_declared()
     }
 
-    /// The history for the page that follows signing (`View::Signed`), or `None`. That page is
-    /// shown to a link that signed and to any other link of a signed request, and `status()` hands
-    /// it out before the revoke and the expiry are looked at; the list is not: it is served only
-    /// while the link is within its end, the end of the link and of the request's `expires_on`
-    /// day, by the rule of the page and of the PDF (`ended`), and only while the link is not
-    /// revoked (an administrator can revoke a link that was used; the page it shows stays). A link
-    /// that is over, or revoked, is shown the page it was always shown, with nobody's name on it,
-    /// not even its own signer's: and no query is made for it.
+    /// The history for the page that follows signing (`View::Signed`), or `None`. `status()` gives
+    /// that page to two kinds of link, and the order in it matters (see there): a link that was
+    /// used, whatever its `revoked_at` and its end, and a link that was not used, is not revoked
+    /// and belongs to a signed request, whatever its end. A link that was not used and is revoked
+    /// is answered 410 before the request is looked at, so it never gets here. The list is not
+    /// served with the page as a matter of course: only while the link is within its end, the end
+    /// of the link and of the request's `expires_on` day, by the rule of the page and of the PDF
+    /// (`ended`), and only while `revoked_at` is empty, which can matter for the link that
+    /// signed alone (an administrator can write it on a link that was used; the page stays). A
+    /// link that is over, or a used link that was revoked, is shown the page it was always shown,
+    /// with nobody's name on it, not even its own signer's, and no query is made for it.
     pub(super) fn history_for_end_page(&self, f: &Found) -> Result<Option<History>, DoorError> {
         if !self.history_on(&f.req) {
             return Ok(None);

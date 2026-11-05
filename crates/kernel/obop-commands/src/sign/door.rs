@@ -281,7 +281,10 @@ impl SignService {
 
     /// The link's own end and the end of the request's `expires_on` day, whichever is first, have
     /// passed (the clock of the service). A link without a readable end has ended: it does not
-    /// work. The one rule of the page, of the PDF and of the history of the file.
+    /// work. The one rule of the page, of the PDF and of the history of the file. Where it is
+    /// looked at is the order of [`Self::status`]: for a link that was used, or that was not used
+    /// and belongs to a signed request, `status` does not look at it at all (the page after
+    /// signing is given whatever the end) and only the list on that page stops with it.
     pub(super) fn ended(&self, f: &Found) -> bool {
         let mut end = instant_micros(text(&f.link, "expires_at")).unwrap_or(i64::MIN);
         if let Some(day_end) = end_of_day_micros(text(&f.req, "expires_on")) {
@@ -290,6 +293,17 @@ impl SignService {
         self.now_micros() > end
     }
 
+    /// What a link shows, by the first of these that holds (docs/SIGN.md, "When the list is
+    /// served"; `the_door_looks_at_a_link_in_the_order_the_documents_state` pins it):
+    ///
+    /// 1. the link was used (`used_at`): the page after signing when the request is signed and
+    ///    carries a time, else "closed"; neither `revoked_at` nor the end is looked at;
+    /// 2. the link was not used and is revoked: "revoked" (410), whatever the request is;
+    /// 3. the link was not used and the request is signed: the page after signing, or "closed"
+    ///    when it carries no time; the end of the link is not looked at;
+    /// 4. the link has ended ([`Self::ended`]): "expired";
+    /// 5. the request is not `sent`: "closed";
+    /// 6. the form.
     fn status(&self, f: &Found) -> Status {
         if !text(&f.link, "used_at").is_empty() {
             return if text(&f.req, "state") == "signed" {
@@ -382,8 +396,8 @@ impl SignService {
         )?;
         match self.status(&f) {
             Status::Signed(at) => Ok(View::Signed {
-                // The end page of a link that is over, or was revoked, is the page it always was:
-                // no list (`history_for_end_page`).
+                // The end page of a link that is over, or of a used link that was revoked, is the
+                // page it always was: no list (`history_for_end_page`).
                 history: self.history_for_end_page(&f)?,
                 at,
             }),
