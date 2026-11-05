@@ -65,6 +65,9 @@ mod payments_tests;
 mod public_site_tests;
 #[cfg(test)]
 mod settings_cmd_tests;
+mod sie;
+#[cfg(test)]
+mod sie_tests;
 #[cfg(test)]
 mod sign_tests;
 #[cfg(test)]
@@ -264,6 +267,16 @@ const USAGE: &str = "usage: obop <command>
                                                 (needs accounting.approver; an agent is refused) in OAS order and checks the trial
                                                 balance against OAS. --dry-run lists what would happen and every skipped table; a
                                                 re-run only adds what is missing. CLI-only operator command
+  sie export --year YYYY [--out FILE] [--db URL] [--token TOKEN]
+                                                write a SIE 4 file (CP437) of the posted moves of the fiscal year that starts in
+                                                YYYY (calendar year if there is none), with the company of accounting_se_company
+                                                when installed; needs accounting.user. The typed command is sie_exchange.export
+  sie import FILE [--dry-run] [--post] [--default-account-types | --account-types FILE] [--db URL] [--token TOKEN]
+                                                import a SIE 4 file: missing accounts (types UNVERIFIED, you confirm them), one journal
+                                                per series, draft moves with series and number in `reference`. --post runs the real
+                                                post action as you (accounting.approver; an agent is refused) in file order. Re-runs
+                                                create nothing new; the per account totals are checked against the file. --dry-run
+                                                writes nothing. The typed command is sie_exchange.import (no --post)
   import MODEL FILE.csv [--token TOKEN] [--mode partial] [--dry-run] [--key KEY]
                                                 create many records of MODEL from a CSV file (header = field names, references by id,
                                                 numbers, decimals and date-times as text, UTF-8, at most 1000 rows and 1 MiB) through bulk_create, with every
@@ -358,6 +371,7 @@ fn main() -> ExitCode {
     let (oas_from, args) = take_opt(&args, "--from");
     let (oas_documents, args) = take_opt(&args, "--documents");
     let (oas_types, args) = take_opt(&args, "--account-types");
+    let (sie_year, args) = take_opt(&args, "--year");
     let (sso_tenant, args) = take_opt(&args, "--tenant");
     let (sso_client, args) = take_opt(&args, "--client-id");
     let (flags, args): (Vec<&str>, Vec<&str>) = args.into_iter().partition(|a| {
@@ -528,6 +542,28 @@ fn main() -> ExitCode {
                 "usage: obop import oas --from OAS.db [--documents DIR] [--dry-run] [--post]",
             )),
         },
+        ["sie", "export"] => match sie_year {
+            Some(year) => sie::export_cli(
+                &opts,
+                &sie::ExportArgs {
+                    year,
+                    out: out_file,
+                },
+            ),
+            None => Err(fail(
+                "usage: obop sie export --year YYYY [--out FILE] [--db URL] [--token TOKEN]",
+            )),
+        },
+        ["sie", "import", file] => sie::import_cli(
+            &opts,
+            &sie::ImportArgs {
+                file,
+                dry_run: has("--dry-run"),
+                post: has("--post"),
+                default_account_types: has("--default-account-types"),
+                account_types: oas_types,
+            },
+        ),
         ["import", model, file] => import_cmd::run(
             &opts,
             &import_cmd::Args {
