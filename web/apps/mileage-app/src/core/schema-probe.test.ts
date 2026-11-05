@@ -313,6 +313,202 @@ describe("the older-build probe", () => {
       /^delete a trip/,
       /^the other trip is not: /,
     ],
+    // What the probe reads back after it wrote, one file for each, so that no read is there for
+    // show: every file below does what a trigger or a row that was there already can do to the
+    // one thing named, and passes everything before it. (Taking the line out of the probe, one
+    // statement at a time, is what showed which of these were missing.)
+    [
+      "a trip of the first trip's id that is there already",
+      [
+        "INSERT INTO trip (client_trip_id, purpose, started_at, created_ms) VALUES ('probe-a', 'private', 'x', 0)",
+      ],
+      /^start a trip/,
+      /^no trip yet: /,
+    ],
+    [
+      "an active trip that is another trip once it is kept",
+      [
+        "CREATE TRIGGER x AFTER INSERT ON meta WHEN NEW.key = 'active_trip' BEGIN UPDATE meta SET value = 'other' WHERE key = 'active_trip'; END",
+      ],
+      /^start a trip/,
+      /^the active trip: /,
+    ],
+    [
+      "a second trip that is not what was recorded",
+      [
+        "CREATE TRIGGER x AFTER INSERT ON trip WHEN NEW.client_trip_id = 'probe-b' BEGIN UPDATE trip SET attempts = 5 WHERE client_trip_id = 'probe-b'; END",
+      ],
+      /^start a second trip/,
+      /^the second trip: /,
+    ],
+    [
+      "a fix of the first trip that is there before any is recorded",
+      [
+        "CREATE TRIGGER x AFTER INSERT ON trip WHEN NEW.client_trip_id = 'probe-a' BEGIN INSERT INTO point (client_trip_id, seq, t, lat, lon) VALUES ('probe-a', 9, 9, '0', '0'); END",
+      ],
+      /^record fixes/,
+      /^no fix yet: /,
+    ],
+    [
+      "a last fix that is not the one recorded",
+      [
+        "CREATE TRIGGER x AFTER INSERT ON point WHEN NEW.client_trip_id = 'probe-a' AND NEW.seq = 3 BEGIN UPDATE point SET lat = '0' WHERE client_trip_id = 'probe-a' AND seq = 3; END",
+      ],
+      /^record fixes/,
+      /^the last fix: /,
+    ],
+    [
+      "a fix in the middle that is not the one recorded",
+      [
+        "CREATE TRIGGER x AFTER INSERT ON point WHEN NEW.client_trip_id = 'probe-a' AND NEW.seq = 3 BEGIN UPDATE point SET lat = '0' WHERE client_trip_id = 'probe-a' AND seq = 2; END",
+      ],
+      /^record fixes/,
+      /^the fixes: /,
+    ],
+    [
+      "a stopped trip that has another count of attempts",
+      [
+        "CREATE TRIGGER x AFTER UPDATE ON trip WHEN NEW.client_trip_id = 'probe-a' AND NEW.stop_requested = 1 AND OLD.stop_requested = 0 BEGIN UPDATE trip SET attempts = 7 WHERE client_trip_id = 'probe-a'; END",
+      ],
+      /^stop a trip/,
+      /^the stopped trip: /,
+    ],
+    [
+      "an active trip that comes back when it is deleted",
+      [
+        "CREATE TRIGGER x AFTER DELETE ON meta WHEN OLD.key = 'active_trip' BEGIN INSERT INTO meta (key, value) VALUES ('active_trip', 'other'); END",
+      ],
+      /^stop a trip/,
+      /^no active trip: /,
+    ],
+    [
+      "an open batch that is there when the first trip is stopped",
+      [
+        "CREATE TRIGGER x AFTER UPDATE ON trip WHEN NEW.client_trip_id = 'probe-a' AND NEW.stop_requested = 1 AND OLD.stop_requested = 0 BEGIN INSERT INTO batch (client_trip_id, first_seq, last_seq, sent) VALUES ('probe-a', 1, 1, 0); END",
+      ],
+      /^cut and send batches/,
+      /^no open batch: /,
+    ],
+    [
+      "a batch that is sent already, with a low range, when the first trip is stopped",
+      [
+        "CREATE TRIGGER x AFTER UPDATE ON trip WHEN NEW.client_trip_id = 'probe-a' AND NEW.stop_requested = 1 AND OLD.stop_requested = 0 BEGIN INSERT INTO batch (client_trip_id, first_seq, last_seq, sent) VALUES ('probe-a', 7, 8, 1); END",
+      ],
+      /^cut and send batches/,
+      /^nothing cut yet: /,
+    ],
+    [
+      "a batch that has another range once it is cut",
+      [
+        "CREATE TRIGGER x AFTER INSERT ON batch WHEN NEW.client_trip_id = 'probe-a' AND NEW.first_seq = 1 BEGIN UPDATE batch SET last_seq = 2 WHERE client_trip_id = 'probe-a' AND first_seq = 1; END",
+      ],
+      /^cut and send batches/,
+      /^the open batch: /,
+    ],
+    [
+      "a fix in a batch that is not the one recorded, once the batch is cut",
+      [
+        "CREATE TRIGGER x AFTER INSERT ON batch WHEN NEW.client_trip_id = 'probe-a' BEGIN UPDATE point SET lat = '0' WHERE client_trip_id = 'probe-a' AND seq = 2; END",
+      ],
+      /^cut and send batches/,
+      /^the points of the batch: /,
+    ],
+    [
+      "a batch that is open again once it is sent",
+      [
+        "CREATE TRIGGER x AFTER UPDATE ON batch WHEN NEW.sent = 1 AND OLD.sent = 0 BEGIN UPDATE batch SET sent = 0 WHERE client_trip_id = NEW.client_trip_id AND first_seq = NEW.first_seq; END",
+      ],
+      /^cut and send batches/,
+      /^no open batch after: /,
+    ],
+    [
+      "a submitted trip that has another count of attempts",
+      [
+        "CREATE TRIGGER x AFTER UPDATE ON trip WHEN NEW.client_trip_id = 'probe-a' AND NEW.submit_requested = 1 AND OLD.submit_requested = 0 BEGIN UPDATE trip SET attempts = 3 WHERE client_trip_id = 'probe-a'; END",
+      ],
+      /^submit and discard/,
+      /^the submitted trip: /,
+    ],
+    [
+      "a discarded trip that has no end",
+      [
+        "CREATE TRIGGER x AFTER UPDATE OF discard_reason ON trip WHEN NEW.client_trip_id = 'probe-b' BEGIN UPDATE trip SET ended_at = NULL WHERE client_trip_id = 'probe-b'; END",
+      ],
+      /^submit and discard/,
+      /^the discarded trip: /,
+    ],
+    [
+      "a merged trip that has another distance",
+      [
+        "CREATE TRIGGER x AFTER UPDATE OF server_state ON trip WHEN NEW.server_state = 'confirmed' BEGIN UPDATE trip SET distance_m = '1' WHERE client_trip_id = NEW.client_trip_id; END",
+      ],
+      /^merge what the server says/,
+      /^the merged trip: /,
+    ],
+    [
+      "a trip from the server that has another count of attempts",
+      [
+        "CREATE TRIGGER x AFTER INSERT ON trip WHEN NEW.client_trip_id = 'probe-c' BEGIN UPDATE trip SET attempts = 4 WHERE client_trip_id = 'probe-c'; END",
+      ],
+      /^merge what the server says/,
+      /^the trip from the server: /,
+    ],
+    [
+      "a note that is another note once it is updated",
+      [
+        "CREATE TRIGGER x AFTER UPDATE ON meta WHEN NEW.key = 'probe-note' AND NEW.value = 'two' BEGIN UPDATE meta SET value = 'three' WHERE key = 'probe-note'; END",
+      ],
+      /^keep a note/,
+      /^the note: /,
+    ],
+    [
+      "a note that comes back when it is deleted",
+      [
+        "CREATE TRIGGER x AFTER DELETE ON meta WHEN OLD.key = 'probe-note' BEGIN INSERT INTO meta (key, value) VALUES ('probe-note', 'back'); END",
+      ],
+      /^keep a note/,
+      /^the note is gone: /,
+    ],
+    [
+      "a first trip that comes back when it is deleted",
+      [
+        "CREATE TRIGGER x AFTER DELETE ON trip WHEN OLD.client_trip_id = 'probe-a' BEGIN INSERT INTO trip (client_trip_id, purpose, started_at, created_ms) VALUES ('probe-a', 'private', 'x', 0); END",
+      ],
+      /^delete a trip/,
+      /^the trip is gone: /,
+    ],
+    [
+      "a fix of the first trip that comes back when its fixes are deleted",
+      [
+        "CREATE TRIGGER x AFTER DELETE ON point WHEN OLD.client_trip_id = 'probe-a' BEGIN INSERT OR IGNORE INTO point (client_trip_id, seq, t, lat, lon) VALUES ('probe-a', 99, 0, '0', '0'); END",
+      ],
+      /^delete a trip/,
+      /^its fixes are gone: /,
+    ],
+    [
+      "a trip that is made when the third trip is deleted",
+      [
+        "CREATE TRIGGER x AFTER DELETE ON trip WHEN OLD.client_trip_id = 'probe-c' BEGIN INSERT INTO trip (client_trip_id, purpose, started_at, created_ms) VALUES ('probe-z', 'private', 'x', 0); END",
+      ],
+      /^clear everything/,
+      /^no trip: /,
+    ],
+    [
+      "a fix that is made when the last fix of the second trip is cleared",
+      [
+        "CREATE TRIGGER x AFTER DELETE ON point WHEN OLD.client_trip_id = 'probe-b' AND OLD.seq = 3 BEGIN INSERT OR IGNORE INTO point (client_trip_id, seq, t, lat, lon) VALUES ('probe-b', 99, 0, '0', '0'); END",
+      ],
+      /^clear everything/,
+      /^no fix: /,
+    ],
+    [
+      "a batch that is made when the batch of the second trip is cleared",
+      [
+        "CREATE TRIGGER x AFTER DELETE ON batch WHEN OLD.client_trip_id = 'probe-b' BEGIN INSERT OR IGNORE INTO batch (client_trip_id, first_seq, last_seq, sent) VALUES ('probe-b', 99, 99, 1); END",
+      ],
+      /^clear everything/,
+      /^no batch: /,
+    ],
   ])("fails at the right step for %s", async (_, statements, step, thing) => {
     const result = await probeOlderBuild(await byHand(statements));
     expect(result).toMatchObject({ ok: false });
@@ -373,6 +569,14 @@ const ACCEPTED: Accepted[] = [
       "ALTER TABLE trip ADD COLUMN h INTEGER DEFAULT 0x10",
       "ALTER TABLE trip ADD COLUMN r REAL DEFAULT 1e3",
       "ALTER TABLE trip ADD COLUMN z TEXT NULL",
+    ],
+  ],
+  [
+    "NOT NULL columns whose default is the text NULL, or has the word in it",
+    [
+      "ALTER TABLE trip ADD COLUMN word TEXT NOT NULL DEFAULT 'NULL'",
+      "ALTER TABLE point ADD COLUMN phrase TEXT NOT NULL DEFAULT 'a NULL b'",
+      "ALTER TABLE batch ADD COLUMN lower TEXT NOT NULL DEFAULT 'null'",
     ],
   ],
   [
@@ -777,6 +981,12 @@ const LINT_ONLY: LintOnly[] = [
     rebuilt("point", " WITHOUT ROWID", ""),
     /rebuilt the table point/,
     "the same statements give the same answers; only the way the file stores the table differs",
+  ],
+  [
+    "the fixes made again with the two columns of the key the other way round",
+    rebuilt("point", "PRIMARY KEY (client_trip_id, seq)", "PRIMARY KEY (seq, client_trip_id)"),
+    /changed the column point\.client_trip_id/,
+    "every statement of the first build names the order it wants; only the order the file keeps the fixes in, and so what a lookup by trip costs, differs",
   ],
   [
     "the trips made again with a column added, written in a tidier way than ADD COLUMN writes it",
