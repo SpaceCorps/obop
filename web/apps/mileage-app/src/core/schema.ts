@@ -15,6 +15,11 @@ import type { SqlDb, SqlTx } from "./sql.ts";
  * written to the file until a module has something to change. Then the table is made and those
  * versions are recorded in the same transaction. A build that finds nothing to change reads the
  * file and writes nothing, as the build before it did.
+ *
+ * A migration of a module is judged against the file as it was before it ran, and for the tables of
+ * the first layout that the module declares (`legacyDefinitions`) as they were in the first layout,
+ * also when the file is new and has none of them yet. So a new file and an old one go the same
+ * way: the first layout, then what the module's migration did to it.
  */
 
 /** The layout of the file: the four tables of the first build, and `module_schema` when it was needed. */
@@ -37,8 +42,10 @@ export interface SchemaModule {
   /**
    * The definition that each of those tables had in the first layout, as the first build wrote it
    * (`CREATE TABLE IF NOT EXISTS name (...)`). A build from before the schema manager opens a table
-   * of that name and writes to it, so a migration that makes one has to make exactly this table.
-   * A legacy table that has no definition here can be found in a file but not made.
+   * of that name and writes to it. When a migration runs and the file does not have such a table
+   * (a new file), the manager judges the migration against the file with this table in it, so a
+   * table of the first layout is treated the same in a new file and in an old one. A legacy table
+   * that has no definition here can be found in a file but not made.
    */
   readonly legacyDefinitions?: Readonly<Record<string, string>>;
   /** Keys of the table `meta` that this module uses although they do not start with `<id>.`. */
@@ -116,17 +123,6 @@ export function checkModules(modules: readonly SchemaModule[]): void {
 /** Whether a table belongs to a module by its name. */
 function owns(module: SchemaModule, table: string): boolean {
   return table.startsWith(`${module.id}_`) || (module.legacyTables ?? []).includes(table);
-}
-
-/**
- * The text that SQLite keeps for a table made by `definition`: `CREATE TABLE`, then the name and
- * what follows, without `IF NOT EXISTS` and without the closing semicolon. Exported for its tests.
- */
-export function storedDefinition(definition: string): string {
-  return definition
-    .trim()
-    .replace(/;\s*$/, "")
-    .replace(/^CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?/i, "CREATE TABLE ");
 }
 
 const CREATE_MODULE_SCHEMA =
@@ -223,6 +219,8 @@ interface Snapshot {
   /** The tables that the foreign keys of each table refer to. */
   parents: Map<string, string[]>;
   indexes: Map<string, IndexInfo>;
+  /** The number of rows of every table. */
+  rows: Map<string, number>;
 }
 
 const objectKey = (o: { type: string; name: string }) => `${o.type} ${o.name}`;
@@ -239,8 +237,11 @@ async function snapshot(tx: SqlTx): Promise<Snapshot> {
   const columns = new Map<string, Column[]>();
   const parents = new Map<string, string[]>();
   const indexes = new Map<string, IndexInfo>();
+  const counts = new Map<string, number>();
   for (const o of rows) {
     if (o.type !== "table") continue;
+    const count = await tx.one<{ n: number }>(`SELECT COUNT(*) AS n FROM ${quoted(o.name)}`);
+    counts.set(o.name, Number(count?.n ?? 0));
     columns.set(o.name, await tx.all<Column>(`PRAGMA table_xinfo(${quoted(o.name)})`));
     const keys = await tx.all<{ table: string }>(`PRAGMA foreign_key_list(${quoted(o.name)})`);
     parents.set(
@@ -261,7 +262,29 @@ async function snapshot(tx: SqlTx): Promise<Snapshot> {
       });
     }
   }
-  return { layout, objects, columns, parents, indexes };
+  return { layout, objects, columns, parents, indexes, rows: counts };
+}
+
+/**
+ * The file as the migration of `module` finds it. The tables of the first layout that the module
+ * declares (`legacyDefinitions`) and the file does not have, which is the case in a new file, are
+ * made for the length of the look and dropped again, so that the migration is judged against the
+ * first layout there as it is in an old file. They are empty, and the migration sees the file as
+ * it was.
+ */
+async function snapshotBefore(tx: SqlTx, module: SchemaModule): Promise<Snapshot> {
+  const declared = Object.entries(module.legacyDefinitions ?? {});
+  if (declared.length === 0) return snapshot(tx);
+  const present = new Set(
+    (await tx.all<{ name: string }>("SELECT name FROM sqlite_master")).map((o) =>
+      o.name.toLowerCase(),
+    ),
+  );
+  const missing = declared.filter(([name]) => !present.has(name.toLowerCase()));
+  for (const [, definition] of missing) await tx.exec(definition);
+  const before = await snapshot(tx);
+  for (const [name] of missing.reverse()) await tx.exec(`DROP TABLE ${quoted(name)}`);
+  return before;
 }
 
 /** Why a kind of object is refused. */
@@ -272,19 +295,23 @@ const REFUSED_KINDS: Record<string, string> = {
 
 /**
  * What a module may have done to the file, by comparing the file before and after its migration.
+ * "Before" is the file as the migration finds it, with the tables of the first layout that the
+ * module declares put in where the file has none (`snapshotBefore`): a new file and an old one are
+ * judged the same way, so a change that is accepted on an upgrade is accepted on a new file, and a
+ * table of the first layout that a migration does not make, or takes away, is refused in both.
  * The point is that a build from before `module_schema` (which cannot know that a table has moved
  * on) still works on the file: it creates its tables with `CREATE TABLE IF NOT EXISTS`, inserts,
  * updates, deletes and reads. So the module:
  *
  * - created objects only on tables it owns (tables named `<id>_*` and its legacy tables), and
- *   changed or removed no object that belongs to another module, and removed no table or index of
- *   its own that was there;
+ *   changed or removed no object that belongs to another module, and left every table and index of
+ *   its own that was there in the file;
  * - made nothing but tables of its own, indexes, and columns on tables that were there:
  *   - a table of its own that is new may be as it likes, except that it is not a virtual table, has
  *     no foreign key to a table that was in the file before (an older build deletes from that table,
- *     and with foreign keys on the new table would refuse the delete), and, if its name is that of a
- *     legacy table, is exactly the definition that the module declares for it (an older build opens
- *     a table of that name and writes to it);
+ *     and with foreign keys on the new table would refuse the delete; the tables of the first
+ *     layout count as in the file), and is not named like a legacy table that the module declares
+ *     no definition for (an older build opens a table of that name and writes to it);
  *   - an index is not unique (an older build's insert would fail on a duplicate), has no `WHERE`
  *     and no expression in its key (a function can raise an error on a row that the older build
  *     writes);
@@ -294,14 +321,20 @@ const REFUSED_KINDS: Record<string, string> = {
  *   - a table that was there is changed by `ADD COLUMN` only, which is checked in two ways. By what
  *     the file records (`PRAGMA table_xinfo`): every column that was there is the same in all of
  *     it (position, name, type, NOT NULL, default, key position, hidden or generated), and a new
- *     column that is NOT NULL has a default. By the table's text: it is what it was with the
- *     definitions of the new columns added, in the one place where SQLite adds them (after the last
- *     column, before the constraints of the table), every other piece of it letter for letter as it
- *     was, and each new definition is a name that is not a keyword of a constraint, an optional
- *     type, and `NOT NULL` and `DEFAULT <plain value>` as wanted, with no `CHECK`, `REFERENCES`,
- *     `COLLATE`, generated value, `UNIQUE`, `PRIMARY KEY`, named constraint or `DEFAULT
- *     (expression)`. Such a table is never dropped, renamed or rebuilt, and a text that cannot be
- *     read with certainty is refused;
+ *     column that is NOT NULL has a default that is not NULL. By the table's text: it is what it
+ *     was with the definitions of the new columns added, in the one place where SQLite adds them
+ *     (after the last column, before the constraints of the table), every other piece of it letter
+ *     for letter as it was, and each new definition is a name that is not a keyword of a
+ *     constraint, an optional type, and `NOT NULL` and one `DEFAULT <plain value>` as wanted, with
+ *     no `CHECK`, `REFERENCES`, `COLLATE`, generated value, `UNIQUE`, `PRIMARY KEY`, named
+ *     constraint, second `DEFAULT` or `DEFAULT (expression)`. Such a table is not renamed or
+ *     retyped, and its text is not rewritten. It may be dropped and made again in the very text it
+ *     had (or that text with the new definitions put in): an older build opens a table by its name
+ *     and finds what it had, so that is harmless as long as no row is lost, which is the next point;
+ * - lost no rows: every table that was there has as many rows as it had, or more (the rows are
+ *   counted inside the same transaction, before and after the migration, and a migration may add
+ *   rows). This is a count and not a proof that the rows are the same ones, so a migration that
+ *   replaces a row by another passes;
  * - left `PRAGMA user_version` as it was: the layout is `LAYOUT_VERSION`, set by the manager.
  *
  * This is a lint, not a proof: it refuses what the author of the rules could think of that would
@@ -309,7 +342,7 @@ const REFUSED_KINDS: Record<string, string> = {
  * migration safe is running the older build's own statements against the file it made (the probe
  * of the tests, `test-support/older-build-probe.ts`). A change that cannot be made this way needs
  * `LAYOUT_VERSION` raised, which makes every older build refuse the file. What a migration writes
- * into rows is not checked here.
+ * into rows is not checked here, beyond their number.
  */
 function checkChange(module: SchemaModule, before: Snapshot, after: Snapshot): void {
   const fail: (what: string) => never = (what) => {
@@ -353,13 +386,13 @@ function checkChange(module: SchemaModule, before: Snapshot, after: Snapshot): v
           );
         }
       }
+      // A table of the first layout that the module declares is in `before`, whether the file had it
+      // or not (`snapshotBefore`), so a new table with such a name is one the module declares no
+      // definition for. An older build opens a table of that name and writes to it.
       if ((module.legacyTables ?? []).includes(o.name)) {
-        const wanted = module.legacyDefinitions?.[o.name];
-        if (wanted === undefined || o.sql !== storedDefinition(wanted)) {
-          fail(
-            `made the table ${o.name}, which an older build also makes and writes to; it has to be exactly the definition of the first layout, and ${wanted === undefined ? "the module declares none" : "this is not it"}`,
-          );
-        }
+        fail(
+          `made the table ${o.name}, which an older build also makes and writes to; it has to be exactly the definition of the first layout, and the module declares none`,
+        );
       }
     } else if (o.type === "index") {
       const index = after.indexes.get(o.name);
@@ -399,7 +432,13 @@ function checkChange(module: SchemaModule, before: Snapshot, after: Snapshot): v
     }
     const added = now.slice(was.length);
     for (const column of added) {
-      if (column.notnull === 1 && column.dflt_value === null) {
+      // What the file records, whatever the text says: SQLite keeps the last of two defaults, so
+      // `NOT NULL DEFAULT 'a' DEFAULT NULL` is a NOT NULL column whose default is NULL, and the
+      // first insert of an older build that leaves it out fails.
+      if (
+        column.notnull === 1 &&
+        (column.dflt_value === null || isNullDefault(column.dflt_value))
+      ) {
         fail(`added the column ${table}.${column.name} as NOT NULL without a default`);
       }
     }
@@ -425,7 +464,26 @@ function checkChange(module: SchemaModule, before: Snapshot, after: Snapshot): v
   if (after.layout !== before.layout) {
     fail("changed PRAGMA user_version; the layout version is LAYOUT_VERSION, set by the manager");
   }
+  // The rows are counted, not compared: a table that was there has as many rows as it had, or more.
+  // This is what stops a table that is dropped and made again, in the very text it had, from
+  // taking the person's trips with it. It does not show that the rows are the same rows.
+  for (const [table, had] of before.rows) {
+    const has = after.rows.get(table);
+    if (has !== undefined && has < had) {
+      fail(
+        `lost rows of the table ${table} (${had} before, ${has} after); a migration may add rows and may not delete any`,
+      );
+    }
+  }
 }
+
+/**
+ * Whether the default that `PRAGMA table_xinfo` gives for a column is NULL. SQLite gives the text
+ * as it was written, without the outer parentheses: `NULL`, `null`, `( null )` and `+NULL` are all
+ * the NULL that a NOT NULL column cannot have as its default.
+ */
+const isNullDefault = (value: string): boolean =>
+  value.replace(/[\s()+-]/g, "").toUpperCase() === "NULL";
 
 /** A table's text taken apart: what comes before and after the parentheses, and the pieces between the commas. */
 interface Definition {
@@ -676,6 +734,7 @@ function plainColumn(def: Token[]): string | null {
   }
   let notNull = false;
   let value = false;
+  let defaulted = false;
   while (i < def.length) {
     const t = def[i] as Token;
     if (isWord(t, "NOT") && isWord(def[i + 1], "NULL")) {
@@ -684,6 +743,10 @@ function plainColumn(def: Token[]): string | null {
     } else if (isWord(t, "NULL")) {
       i++;
     } else if (isWord(t, "DEFAULT")) {
+      // SQLite takes a second DEFAULT without a word and keeps the last one, so what this reads as
+      // the default would not be the default. Refused rather than guessed at.
+      if (defaulted) return "more than one DEFAULT";
+      defaulted = true;
       i++;
       const v = def[i];
       if (isMark(v, "+") || isMark(v, "-")) {
@@ -762,7 +825,7 @@ export async function ensureModules(
 
     for (const m of todo) {
       const from = state.recorded.get(m.id) ?? 0;
-      const before = await snapshot(tx);
+      const before = await snapshotBefore(tx, m);
       await m.migrate(tx, from);
       checkChange(m, before, await snapshot(tx));
       await tx.run(

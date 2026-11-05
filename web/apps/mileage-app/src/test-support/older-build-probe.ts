@@ -84,6 +84,25 @@ const canon = (value: unknown): string =>
       : v,
   );
 
+/** The columns that the first build's `patchTrip` sets, in the order of its parameters. */
+const PATCHED = [
+  "server_id",
+  "ended_at",
+  "create_attempted",
+  "end_done",
+  "submit_requested",
+  "submit_done",
+  "discard_done",
+  "server_state",
+  "distance_m",
+  "integrity",
+  "reject_reason",
+  "attempts",
+  "problem_step",
+  "problem_code",
+  "problem_message",
+] as const;
+
 function expectSame(what: string, actual: unknown, expected: unknown): void {
   const a = canon(actual);
   const b = canon(expected);
@@ -182,7 +201,9 @@ function steps(tx: SqlTx): [string, () => Promise<void>][] {
       "count the fixes",
       async () => {
         expectSame("the count", await one(Q.countAndTop, [A]), { n: 3, top: 3 });
-        expectSame("the count of the other", await one(Q.pointCount, [B]), { n: 3 });
+        // The count of a trip with fixes is read again at the end of the flow, after the writes
+        // in between ("delete a trip"); here, straight after the fixes were recorded and read
+        // back, nothing could have changed it, so it is not asked for twice.
         expectSame("the count of a trip without", await one(Q.pointCount, ["probe-none"]), {
           n: 0,
         });
@@ -215,7 +236,7 @@ function steps(tx: SqlTx): [string, () => Promise<void>][] {
       },
     ],
     [
-      "submit, discard and clear a problem",
+      "submit and discard a trip",
       async () => {
         await run(Q.requestSubmit, [A]);
         await expectTrip("the submitted trip", A, { ...stopped, submit_requested: 1 });
@@ -225,12 +246,10 @@ function steps(tx: SqlTx): [string, () => Promise<void>][] {
           stop_requested: 1,
           ended_at: T2,
         });
-        await run(Q.clearProblem, [B]);
-        await expectTrip("the problem is cleared", B, { problem_code: null, attempts: 0 });
       },
     ],
     [
-      "patch a trip with every column it can set",
+      "patch a trip with every column it can set, then clear its problem",
       async () => {
         const set: Row = {
           server_id: "s-1",
@@ -249,8 +268,17 @@ function steps(tx: SqlTx): [string, () => Promise<void>][] {
           problem_code: "offline",
           problem_message: "No network",
         };
-        await run(Q.patchTrip, [...Object.values(set), A]);
+        await run(Q.patchTrip, [...PATCHED.map((column) => set[column]!), A]);
         await expectTrip("the patched trip", A, set);
+        // The problem the patch left on the trip (it is the only statement that sets one) is what
+        // the statement that clears it has to clear.
+        await run(Q.clearProblem, [A]);
+        await expectTrip("the problem is cleared", A, {
+          problem_step: null,
+          problem_code: null,
+          problem_message: null,
+          attempts: 0,
+        });
       },
     ],
     [

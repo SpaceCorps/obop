@@ -70,6 +70,34 @@ async function byHand(statements: readonly string[]): Promise<SqlDb> {
   return db;
 }
 
+/** A table of the first layout dropped and made again in the very text it had. */
+const remade = (name: string): string[] => [`DROP TABLE ${name}`, ddl(name)];
+
+/** The columns of the trips as the first layout had them. */
+const TRIP_COLUMNS =
+  "client_trip_id, server_id, origin, purpose, started_at, ended_at, create_attempted, stop_requested, expected_points, last_seq, end_done, submit_requested, submit_done, discard_reason, discard_done, server_state, distance_m, integrity, reject_reason, attempts, problem_step, problem_code, problem_message, created_ms";
+
+/** Every row of the first layout, by the columns it had: what has to survive any migration. */
+const kept = async (db: SqlDb) => ({
+  trip: await db.all(`SELECT ${TRIP_COLUMNS} FROM trip ORDER BY client_trip_id`),
+  point: await db.all(
+    "SELECT client_trip_id, seq, t, lat, lon, accuracy_m, speed_mps FROM point ORDER BY 1, 2",
+  ),
+  batch: await db.all("SELECT client_trip_id, first_seq, last_seq, sent FROM batch ORDER BY 1, 2"),
+  meta: await db.all("SELECT key, value FROM meta ORDER BY key"),
+});
+
+/**
+ * The files that a migration of the outbox's module is tried on. A file of the first build is
+ * upgraded; a new file gets the same migration as its first one, and has to be judged the same.
+ * The number is the layout the file has before.
+ */
+const NEW_FILE = () => Promise.resolve(memoryDb());
+const STARTS: [name: string, start: () => Promise<SqlDb>, layoutBefore: number][] = [
+  ["a file of the first build", emptyLegacyFile, 1],
+  ["a new file", NEW_FILE, 0],
+];
+
 describe("the older-build probe", () => {
   test("passes on a file of the first build, with no rows and with rows", async () => {
     expect(await probeOlderBuild(await emptyLegacyFile())).toEqual({ ok: true });
@@ -119,9 +147,13 @@ describe("the older-build probe", () => {
     expect(await layout(db)).toBe(0);
   });
 
-  // Each step of the probe is there because a file can be made that fails only at that step. A step
-  // that nothing could fail at would be a line that tests nothing.
-  test.each<[string, string[], RegExp]>([
+  // Each step of the probe, and each thing it asks of a step, is there because a file can be made
+  // that fails only there: the step is named, and where a step asks several things, so is the thing
+  // (the start of the error). A line that nothing could fail would test nothing. One was found
+  // and taken out: the count of the second trip's fixes, which is asked right after they were
+  // recorded and read back, with nothing written in between that could change it; it is asked at
+  // the end of the flow instead ("delete a trip"), where the deletes before it can.
+  test.each<[string, string[], RegExp, RegExp?]>([
     [
       "a unique index on the purpose of a trip",
       ["CREATE UNIQUE INDEX x ON trip (purpose)"],
@@ -167,7 +199,7 @@ describe("the older-build probe", () => {
       [
         "CREATE TRIGGER x BEFORE UPDATE OF discard_reason ON trip BEGIN SELECT RAISE(ABORT, 'no'); END",
       ],
-      /^submit, discard/,
+      /^submit and discard/,
     ],
     [
       "a trigger that refuses the patching of the integrity of a trip",
@@ -216,10 +248,76 @@ describe("the older-build probe", () => {
       /^start a trip/,
     ],
     ["a layout that the first build refuses", ["PRAGMA user_version = 7"], /^open the file/],
-  ])("fails at the right step for %s", async (_, statements, step) => {
+    // The things a step asks, one at a time. Each file passes everything before and fails here.
+    [
+      "a fix of the first trip that goes when the second trip's last fix is recorded",
+      [
+        "CREATE TRIGGER x AFTER INSERT ON point WHEN NEW.client_trip_id = 'probe-b' AND NEW.seq = 3 BEGIN DELETE FROM point WHERE client_trip_id = 'probe-a' AND seq = 3; END",
+      ],
+      /^count the fixes/,
+      /^the count: /,
+    ],
+    [
+      "a fix for a trip that has none, left when the second trip's last fix is recorded",
+      [
+        "CREATE TRIGGER x AFTER INSERT ON point WHEN NEW.client_trip_id = 'probe-b' AND NEW.seq = 3 BEGIN INSERT INTO point (client_trip_id, seq, t, lat, lon) VALUES ('probe-none', 1, 0, '0', '0'); END",
+      ],
+      /^count the fixes/,
+      /^the count of a trip without: /,
+    ],
+    [
+      "a fix of the first trip that goes when the first trip is stopped",
+      [
+        "CREATE TRIGGER x AFTER UPDATE ON trip WHEN NEW.client_trip_id = 'probe-a' AND NEW.stop_requested = 1 AND OLD.stop_requested = 0 BEGIN DELETE FROM point WHERE client_trip_id = 'probe-a' AND seq = 3; END",
+      ],
+      /^cut and send batches/,
+      /^the range: /,
+    ],
+    [
+      "a batch that is sent already, with a higher range, left when the first is cut",
+      [
+        "CREATE TRIGGER x AFTER INSERT ON batch WHEN NEW.client_trip_id = 'probe-a' AND NEW.first_seq = 1 BEGIN INSERT INTO batch (client_trip_id, first_seq, last_seq, sent) VALUES ('probe-a', 9, 99, 1); END",
+      ],
+      /^cut and send batches/,
+      /^the cut: /,
+    ],
+    [
+      "a patch that leaves no problem on the trip",
+      [
+        "CREATE TRIGGER x AFTER UPDATE OF problem_code ON trip WHEN NEW.problem_code IS NOT NULL BEGIN UPDATE trip SET problem_code = NULL WHERE client_trip_id = NEW.client_trip_id; END",
+      ],
+      /^patch a trip/,
+      /^the patched trip: /,
+    ],
+    [
+      "a clearing that leaves the problem on the trip",
+      [
+        "CREATE TRIGGER x AFTER UPDATE ON trip WHEN NEW.problem_code IS NULL AND OLD.problem_code IS NOT NULL BEGIN UPDATE trip SET problem_code = OLD.problem_code WHERE client_trip_id = NEW.client_trip_id; END",
+      ],
+      /^patch a trip/,
+      /^the problem is cleared: /,
+    ],
+    [
+      "a first trip that is gone from the list when a trip from the server comes in",
+      [
+        "CREATE TRIGGER x AFTER INSERT ON trip WHEN NEW.origin = 'server' BEGIN DELETE FROM trip WHERE client_trip_id = 'probe-b'; END",
+      ],
+      /^list the trips/,
+      /^the list does not have probe-b/,
+    ],
+    [
+      "a fix of the second trip that goes when the fixes of the first are deleted",
+      [
+        "CREATE TRIGGER x AFTER DELETE ON point WHEN OLD.client_trip_id = 'probe-a' BEGIN DELETE FROM point WHERE client_trip_id = 'probe-b' AND seq = 3; END",
+      ],
+      /^delete a trip/,
+      /^the other trip is not: /,
+    ],
+  ])("fails at the right step for %s", async (_, statements, step, thing) => {
     const result = await probeOlderBuild(await byHand(statements));
     expect(result).toMatchObject({ ok: false });
     expect((result as { step: string }).step).toMatch(step);
+    if (thing !== undefined) expect((result as { error: string }).error).toMatch(thing);
   });
 
   test("passes when a table that the first build never opens is added", async () => {
@@ -310,8 +408,22 @@ const ACCEPTED: Accepted[] = [
     ],
   ],
   [
-    "the trips made again with a column added where ADD COLUMN puts it",
-    rebuilt("trip", /\n\)$/, "\n, extra TEXT)"),
+    "the trips made again with a column added where ADD COLUMN puts it, their rows copied back",
+    [
+      "CREATE TABLE mileage_hold AS SELECT * FROM trip",
+      ...rebuilt("trip", /\n\)$/, "\n, extra TEXT)"),
+      `INSERT INTO trip (${TRIP_COLUMNS}) SELECT ${TRIP_COLUMNS} FROM mileage_hold`,
+      "DROP TABLE mileage_hold",
+    ],
+  ],
+  [
+    "the fixes made again in the very text they had, their rows copied back",
+    [
+      "CREATE TABLE mileage_hold AS SELECT * FROM point",
+      ...remade("point"),
+      "INSERT INTO point SELECT * FROM mileage_hold",
+      "DROP TABLE mileage_hold",
+    ],
   ],
 ];
 
@@ -499,7 +611,7 @@ const BREAKS: Breaks[] = [
       "CREATE TRIGGER mileage_trip_discard BEFORE UPDATE OF discard_reason ON trip BEGIN SELECT RAISE(ABORT, 'no'); END",
     ],
     /made the trigger mileage_trip_discard/,
-    /^submit, discard/,
+    /^submit and discard/,
   ],
   [
     "a trigger on the patching of the integrity",
@@ -530,6 +642,39 @@ const BREAKS: Breaks[] = [
     ["PRAGMA user_version = 7"],
     /changed PRAGMA user_version/,
     /^open the file/,
+  ],
+  // SQLite keeps the last of two defaults, so each of these is a NOT NULL column whose default is
+  // NULL, which the first build's insert leaves out. SQLite refuses to add such a column to a
+  // table that has rows; on one without rows it adds it.
+  [
+    "a NOT NULL column with a default, and then a default of NULL",
+    ["ALTER TABLE trip ADD COLUMN extra TEXT NOT NULL DEFAULT 'a' DEFAULT NULL"],
+    /added the column trip\.extra as NOT NULL without a default/,
+    /^start a trip/,
+  ],
+  [
+    "a default of NULL, and then NOT NULL",
+    ["ALTER TABLE trip ADD COLUMN extra TEXT DEFAULT NULL NOT NULL"],
+    /added the column trip\.extra as NOT NULL without a default/,
+    /^start a trip/,
+  ],
+  [
+    "a NOT NULL column with no default",
+    ["ALTER TABLE trip ADD COLUMN extra TEXT NOT NULL"],
+    /added the column trip\.extra as NOT NULL without a default/,
+    /^start a trip/,
+  ],
+  [
+    "a NOT NULL column with a default, and then a default of null in small letters, on the fixes",
+    ["ALTER TABLE point ADD COLUMN extra TEXT NOT NULL DEFAULT 'a' DEFAULT null"],
+    /added the column point\.extra as NOT NULL without a default/,
+    /^record fixes/,
+  ],
+  [
+    "a NOT NULL column with a default, and then a default of NULL, on the batches",
+    ["ALTER TABLE batch ADD COLUMN extra TEXT NOT NULL DEFAULT 'a' DEFAULT NULL"],
+    /added the column batch\.extra as NOT NULL without a default/,
+    /^cut and send batches/,
   ],
 ];
 
@@ -639,6 +784,12 @@ const LINT_ONLY: LintOnly[] = [
     /rebuilt the table trip/,
     "the same table; the text is compared letter for letter, so that a piece of it cannot hide",
   ],
+  [
+    "a second DEFAULT on a column that may be empty",
+    ["ALTER TABLE trip ADD COLUMN extra TEXT DEFAULT 'a' DEFAULT 'b'"],
+    /added the column trip\.extra with more than one DEFAULT/,
+    "SQLite keeps the last one and the first build never sets the column; refused so that the reader never has to say which of two defaults is the one",
+  ],
 ];
 
 describe("the manager's check against the probe", () => {
@@ -646,9 +797,12 @@ describe("the manager's check against the probe", () => {
     test.each(ACCEPTED)("%s", async (_, statements) => {
       // By hand: the first build is not stopped by it.
       expect(await probeOlderBuild(await byHand(statements))).toEqual({ ok: true });
-      // Through the manager, on a file with no rows and on one with rows.
-      for (const file of [emptyLegacyFile, legacyFile]) {
+      // Through the manager, in a file with no rows, in one with rows, and in a new file.
+      for (const file of [emptyLegacyFile, legacyFile, NEW_FILE]) {
         const db = await file();
+        // A new file has no tables yet, and no rows.
+        const before =
+          file === NEW_FILE ? { trip: [], point: [], batch: [], meta: [] } : await kept(db);
         await ensureModules(db, [HOST_SCHEMA, mileageAt2(statements)]);
         const recorded = await db.all<{ module: string; version: number }>(
           "SELECT module, version FROM module_schema ORDER BY module",
@@ -659,68 +813,249 @@ describe("the manager's check against the probe", () => {
         ]);
         expect(await layout(db)).toBe(1);
         expect(await probeOlderBuild(db)).toEqual({ ok: true });
+        // Every row that was there is there, by every column it had.
+        expect(await kept(db)).toEqual(before);
       }
+      // The file with rows had rows: the line above compared something.
+      const rows = await kept(await legacyFile());
+      expect([rows.trip.length, rows.point.length, rows.batch.length, rows.meta.length]).toEqual([
+        2, 3, 1, 4,
+      ]);
     });
   });
 
   describe("what it refuses because the first build breaks on it", () => {
-    test.each(BREAKS)("%s", async (_, statements, message, step) => {
-      // By hand: the probe fails at this step. This is the control.
-      const broken = await probeOlderBuild(await byHand(statements));
-      expect(broken).toMatchObject({ ok: false });
-      expect((broken as { step: string }).step).toMatch(step);
+    describe.each(STARTS)("in %s", (_start, start, layoutBefore) => {
+      test.each(BREAKS)("%s", async (_, statements, message, step) => {
+        // By hand: the probe fails at this step. This is the control.
+        const broken = await probeOlderBuild(await byHand(statements));
+        expect(broken).toMatchObject({ ok: false });
+        expect((broken as { step: string }).step).toMatch(step);
 
-      // Through the manager: refused, taken back, and the first build is as well off as before.
-      const db = await emptyLegacyFile();
-      const before = await objectsOf(db);
-      const error = await ensureModules(db, [HOST_SCHEMA, mileageAt2(statements)]).catch(
-        (e: unknown) => e,
-      );
-      expect(error, String(error)).toBeInstanceOf(SchemaError);
-      expect((error as Error).message).toMatch(message);
-      expect(await objectsOf(db)).toEqual(before);
-      expect(await layout(db)).toBe(1);
-      expect(await probeOlderBuild(db)).toEqual({ ok: true });
+        // Through the manager: refused, taken back, and the first build is as well off as before.
+        const db = await start();
+        const before = await objectsOf(db);
+        const error = await ensureModules(db, [HOST_SCHEMA, mileageAt2(statements)]).catch(
+          (e: unknown) => e,
+        );
+        expect(error, String(error)).toBeInstanceOf(SchemaError);
+        expect((error as Error).message).toMatch(message);
+        expect(await objectsOf(db)).toEqual(before);
+        expect(await layout(db)).toBe(layoutBefore);
+        expect(await probeOlderBuild(db)).toEqual({ ok: true });
+      });
     });
   });
 
   describe("what it refuses although the probe cannot show the first build break on it", () => {
-    test.each(LINT_ONLY)("%s", async (_, statements, message, why) => {
-      expect(why.length).toBeGreaterThan(20);
-      // The probe passes on it made by hand: this is why it is in this group.
-      expect(await probeOlderBuild(await byHand(statements))).toEqual({ ok: true });
+    describe.each(STARTS)("in %s", (_start, start, layoutBefore) => {
+      test.each(LINT_ONLY)("%s", async (_, statements, message, why) => {
+        expect(why.length).toBeGreaterThan(20);
+        // The probe passes on it made by hand: this is why it is in this group.
+        expect(await probeOlderBuild(await byHand(statements))).toEqual({ ok: true });
 
-      const db = await emptyLegacyFile();
-      const before = await objectsOf(db);
+        const db = await start();
+        const before = await objectsOf(db);
+        const error = await ensureModules(db, [HOST_SCHEMA, mileageAt2(statements)]).catch(
+          (e: unknown) => e,
+        );
+        expect(error, String(error)).toBeInstanceOf(SchemaError);
+        expect((error as Error).message).toMatch(message);
+        expect(await objectsOf(db)).toEqual(before);
+        expect(await layout(db)).toBe(layoutBefore);
+        expect(await probeOlderBuild(db)).toEqual({ ok: true });
+      });
+    });
+  });
+
+  // A migration that loses the person's rows is one the first build cannot see: its statements
+  // work on an empty table as they do on a full one. The manager counts the rows of every table
+  // before and after, and a table that has fewer afterwards is refused. Only a file with rows can
+  // show it, so these run on the file of the first build with the rows of `legacyFile`.
+  describe("what it refuses because rows are lost, which the probe cannot see", () => {
+    const LOSS: [name: string, statements: string[], message: RegExp][] = [
+      [
+        "the fixes dropped and made again in the very text they had",
+        remade("point"),
+        /lost rows of the table point \(3 before, 0 after\)/,
+      ],
+      [
+        "the trips dropped and made again in the very text they had",
+        remade("trip"),
+        /lost rows of the table trip \(2 before, 0 after\)/,
+      ],
+      [
+        "the batches dropped and made again in the very text they had",
+        remade("batch"),
+        /lost rows of the table batch \(1 before, 0 after\)/,
+      ],
+      [
+        "the fixes dropped and made again with a column added, nothing copied back",
+        rebuilt("point", /,\n {2}PRIMARY KEY/, ",\n  extra TEXT,\n  PRIMARY KEY"),
+        /lost rows of the table point \(3 before, 0 after\)/,
+      ],
+      [
+        "the fixes made again with only some of the rows copied back",
+        [
+          "CREATE TABLE mileage_hold AS SELECT * FROM point",
+          ...remade("point"),
+          "INSERT INTO point SELECT * FROM mileage_hold WHERE seq < 3",
+          "DROP TABLE mileage_hold",
+        ],
+        /lost rows of the table point \(3 before, 2 after\)/,
+      ],
+      [
+        "a row of the trips deleted",
+        ["DELETE FROM trip WHERE client_trip_id = 'c1'"],
+        /lost rows of the table trip \(2 before, 1 after\)/,
+      ],
+      ["the fixes emptied", ["DELETE FROM point"], /lost rows of the table point \(3 before, 0/],
+      [
+        "the notes of the host emptied (they are not the module's)",
+        ["DELETE FROM meta"],
+        /lost rows of the table meta \(4 before, 0 after\)/,
+      ],
+    ];
+
+    test.each(LOSS)("%s", async (_, statements, message) => {
+      // By hand: the first build works on what is left. That is why it is not in the other groups.
+      const hand = await legacyFile();
+      for (const statement of statements) await hand.exec(statement);
+      expect(await probeOlderBuild(hand)).toEqual({ ok: true });
+
+      const db = await legacyFile();
+      const before = { objects: await objectsOf(db), rows: await rowsOf(db) };
       const error = await ensureModules(db, [HOST_SCHEMA, mileageAt2(statements)]).catch(
         (e: unknown) => e,
       );
       expect(error, String(error)).toBeInstanceOf(SchemaError);
       expect((error as Error).message).toMatch(message);
-      expect(await objectsOf(db)).toEqual(before);
-      expect(await probeOlderBuild(db)).toEqual({ ok: true });
+      // Taken back: the rows are all there, and the file is as it was.
+      expect(await objectsOf(db)).toEqual(before.objects);
+      expect(await rowsOf(db)).toEqual(before.rows);
+      expect(await layout(db)).toBe(1);
+    });
+
+    test("a migration may add rows, and a table without rows may be made again", async () => {
+      const db = await legacyFile();
+      const added = [
+        "INSERT INTO trip (client_trip_id, purpose, started_at, created_ms) VALUES ('c3', 'private', '2026-10-16T09:00:00.000Z', 3)",
+        "DELETE FROM batch WHERE 0",
+      ];
+      await ensureModules(db, [HOST_SCHEMA, mileageAt2(added)]);
+      expect((await rowsOf(db)).trip).toHaveLength(3);
+
+      const empty = await emptyLegacyFile();
+      await ensureModules(empty, [HOST_SCHEMA, mileageAt2(remade("point"))]);
+      expect(await probeOlderBuild(empty)).toEqual({ ok: true });
+    });
+
+    test("the count is not a proof: a row replaced by another passes, and the notes say so", async () => {
+      const db = await legacyFile();
+      await ensureModules(db, [
+        HOST_SCHEMA,
+        mileageAt2([
+          "DELETE FROM batch",
+          "INSERT INTO batch (client_trip_id, first_seq, last_seq, sent) VALUES ('c9', 1, 1, 0)",
+        ]),
+      ]);
+      expect((await rowsOf(db)).batch).toEqual([
+        { client_trip_id: "c9", first_seq: 1, last_seq: 1, sent: 0 },
+      ]);
     });
   });
 
-  test("a legacy table that a migration makes has to be the first layout's, in a new file", async () => {
-    // A module that makes the trips differently in a new file: the first build opens that table.
-    const changed: SchemaModule = {
-      ...MILEAGE_SCHEMA,
-      async migrate(tx) {
-        await tx.exec(
-          [ddl("trip").replace("DEFAULT 'device'", "DEFAULT 'server'"), ddl("point"), ddl("batch")]
-            .map((statement) => `${statement};`)
-            .join("\n"),
+  describe("the first layout in a new file", () => {
+    // The tables of the first layout are made by the migration of a new file, and nothing was there
+    // to compare them with. They are compared with the first layout that the module declares, so a
+    // change that is accepted when it is made to a file of the first build is accepted here, and a
+    // change that is refused there is refused here (every shape above runs on both).
+    test("a column on the trips is accepted in a new file as in an old one", async () => {
+      const statements = ["ALTER TABLE trip ADD COLUMN note TEXT"];
+      const fresh = memoryDb();
+      await ensureModules(fresh, [HOST_SCHEMA, mileageAt2(statements)]);
+      const old = await emptyLegacyFile();
+      await ensureModules(old, [HOST_SCHEMA, mileageAt2(statements)]);
+      expect(await objectsOf(fresh)).toEqual(await objectsOf(old));
+      expect(await probeOlderBuild(fresh)).toEqual({ ok: true });
+    });
+
+    test.each<[string, string[]]>([
+      ["the trips are not made", ["DROP TABLE trip"]],
+      ["the trips are renamed", ["ALTER TABLE trip RENAME TO mileage_trip"]],
+      ["the batches are dropped", ["DROP TABLE batch"]],
+    ])("a new file in which %s is refused, as an old one is", async (_, statements) => {
+      for (const [, start, layoutBefore] of STARTS) {
+        const db = await start();
+        const error = await ensureModules(db, [HOST_SCHEMA, mileageAt2(statements)]).catch(
+          (e: unknown) => e,
         );
-      },
-    };
-    const db = memoryDb();
-    const error = await ensureModules(db, [HOST_SCHEMA, changed]).catch((e: unknown) => e);
-    expect(error, String(error)).toBeInstanceOf(SchemaError);
-    expect((error as Error).message).toMatch(
-      /made the table trip, which an older build also makes/,
-    );
-    expect(await objectsOf(db)).toEqual([]);
-    expect(await layout(db)).toBe(0);
+        expect(error, String(error)).toBeInstanceOf(SchemaError);
+        expect((error as Error).message).toMatch(/^module mileage removed the table (trip|batch)/);
+        expect(await layout(db)).toBe(layoutBefore);
+      }
+    });
+
+    test("a table of its own with a foreign key to the trips is refused in a new file, as in an old one", async () => {
+      const statements = [
+        "CREATE TABLE mileage_note (id TEXT PRIMARY KEY NOT NULL, trip TEXT REFERENCES trip(client_trip_id))",
+      ];
+      for (const [, start] of STARTS) {
+        const error = await ensureModules(await start(), [
+          HOST_SCHEMA,
+          mileageAt2(statements),
+        ]).catch((e: unknown) => e);
+        expect(error, String(error)).toBeInstanceOf(SchemaError);
+        expect((error as Error).message).toMatch(
+          /made the table mileage_note with a foreign key to trip/,
+        );
+      }
+    });
+
+    test("a module that makes the trips differently in a new file is refused: the first build opens that table", async () => {
+      const changed: SchemaModule = {
+        ...MILEAGE_SCHEMA,
+        async migrate(tx) {
+          await tx.exec(
+            [
+              ddl("trip").replace("DEFAULT 'device'", "DEFAULT 'server'"),
+              ddl("point"),
+              ddl("batch"),
+            ]
+              .map((statement) => `${statement};`)
+              .join("\n"),
+          );
+        },
+      };
+      const db = memoryDb();
+      const error = await ensureModules(db, [HOST_SCHEMA, changed]).catch((e: unknown) => e);
+      expect(error, String(error)).toBeInstanceOf(SchemaError);
+      expect((error as Error).message).toMatch(/changed the column trip\.origin/);
+      expect(await objectsOf(db)).toEqual([]);
+      expect(await layout(db)).toBe(0);
+    });
+
+    test("the same module with the other change that the first build cannot live with, in a new file", async () => {
+      // The trips made with a CHECK that nothing satisfies, in the migration of a new file.
+      const changed: SchemaModule = {
+        ...MILEAGE_SCHEMA,
+        async migrate(tx) {
+          await tx.exec(
+            [ddl("trip").replace(/\n\)$/, ",\n  CHECK (0)\n)"), ddl("point"), ddl("batch")]
+              .map((statement) => `${statement};`)
+              .join("\n"),
+          );
+        },
+      };
+      const db = memoryDb();
+      const error = await ensureModules(db, [HOST_SCHEMA, changed]).catch((e: unknown) => e);
+      expect((error as Error).message).toMatch(/rebuilt the table trip/);
+      // And the file the first build would have made from it does break the first build.
+      const hand = await emptyLegacyFile();
+      for (const statement of rebuilt("trip", /\n\)$/, ",\n  CHECK (0)\n)")) {
+        await hand.exec(statement);
+      }
+      expect(await probeOlderBuild(hand)).toMatchObject({ ok: false, step: "start a trip" });
+    });
   });
 });

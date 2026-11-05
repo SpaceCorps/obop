@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vite-plus/test";
 import { HOST_SCHEMA, createHostState } from "./host-state.ts";
 import { openOutbox, policyFor, type OpenNames } from "./open-outbox.ts";
-import { ensureModules, storedDefinition, type SchemaModule } from "./schema.ts";
+import { ensureModules, type SchemaModule } from "./schema.ts";
 import type { SqlDb } from "./sql.ts";
 import { MILEAGE_SCHEMA, createSqlStore, migrate } from "./sql-store.ts";
 import { FakeDatabaseFile, FakeSecrets, fakePorts } from "../test-support/fake-file.ts";
@@ -130,7 +130,14 @@ describe("the definitions that the modules declare for the tables of the first l
           "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
           [table],
         );
-        expect(storedDefinition(m.legacyDefinitions?.[table] ?? "")).toBe(stored?.sql);
+        // The declared text, run through SQLite, gives the text the first build's file has.
+        const scratch = memoryDb();
+        await scratch.exec(m.legacyDefinitions?.[table] ?? "");
+        const made = await scratch.one<{ sql: string }>(
+          "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
+          [table],
+        );
+        expect(made?.sql).toBe(stored?.sql);
       }
     },
   );
