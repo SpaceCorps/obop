@@ -116,6 +116,41 @@ const PATCHED: readonly string[] = (() => {
   return columns;
 })();
 
+/**
+ * Holds an answer to `columns` both ways: the row the probe expects has exactly those columns (a
+ * probe that forgot one would not look at it, and one that has an extra would not look at that),
+ * and the answer has every one of them, with the value and the kind of value expected. A column
+ * of the answer that is not in `columns` is not looked at: it is one that a later version of the
+ * app added to `trip`, and the first build reads a row by the names it knows. Exported for its tests.
+ */
+export function expectRow(
+  what: string,
+  columns: readonly string[],
+  row: Row | null,
+  expected: Row,
+): void {
+  const named = Object.keys(expected);
+  for (const column of columns) {
+    if (!named.includes(column)) {
+      throw new Error(`${what}: the probe expects no value for the column ${column}`);
+    }
+  }
+  for (const column of named) {
+    if (!columns.includes(column)) {
+      throw new Error(
+        `${what}: the probe expects a column ${column}, which the first layout lacks`,
+      );
+    }
+  }
+  if (row === null) throw new Error(`${what}: expected a row, got null`);
+  for (const column of columns) {
+    if (!(column in row)) throw new Error(`${what}: the column ${column} is gone`);
+    const got = canon(row[column]);
+    const want = canon(expected[column]);
+    if (got !== want) throw new Error(`${what}: the column ${column} is ${got}, expected ${want}`);
+  }
+}
+
 function expectSame(what: string, actual: unknown, expected: unknown): void {
   const a = canon(actual);
   const b = canon(expected);
@@ -139,37 +174,9 @@ function steps(tx: SqlTx): [string, () => Promise<void>][] {
   const run = (sql: string, params: SqlValue[] = []) => tx.run(sql, params);
   const one = (sql: string, params: SqlValue[] = []) => tx.one<Row>(sql, params);
   const all = (sql: string, params: SqlValue[] = []) => tx.all<Row>(sql, params);
-  /**
-   * The trip with this id as `SELECT *` gives it, held to the columns of the first layout both
-   * ways: the row the probe expects has exactly those columns (a probe that forgot one would not
-   * look at it), and the answer has every one of them, each with the value and the kind of value
-   * expected. A column that a later version added is in the answer and is not looked at.
-   */
-  const expectTrip = async (what: string, id: string, expected: Row) => {
-    const columns = await firstLayoutTripColumns();
-    const named = Object.keys(expected);
-    for (const column of columns) {
-      if (!named.includes(column)) {
-        throw new Error(`${what}: the probe expects no value for the column ${column}`);
-      }
-    }
-    for (const column of named) {
-      if (!columns.includes(column)) {
-        throw new Error(
-          `${what}: the probe expects a column ${column}, which the first layout lacks`,
-        );
-      }
-    }
-    const row = await one(Q.tripById, [id]);
-    if (row === null) throw new Error(`${what}: expected the trip ${id}, got null`);
-    for (const column of columns) {
-      if (!(column in row)) throw new Error(`${what}: the column ${column} is gone`);
-      const got = canon(row[column]);
-      const want = canon(expected[column]);
-      if (got !== want)
-        throw new Error(`${what}: the column ${column} is ${got}, expected ${want}`);
-    }
-  };
+  /** The trip with this id as `SELECT *` gives it, held to the columns of the first layout. */
+  const expectTrip = async (what: string, id: string, expected: Row) =>
+    expectRow(what, await firstLayoutTripColumns(), await one(Q.tripById, [id]), expected);
   const pointsOf = async (id: string) => all(Q.points, [id]);
   const stopped: Row = {
     ...newTrip(A, "business", T0, 1),

@@ -2,7 +2,7 @@ import { describe, expect, test } from "vite-plus/test";
 import type { SqlDb, SqlTx, SqlValue } from "./sql.ts";
 import { FIRST_BUILD_SQL as Q } from "../test-support/legacy-statements.ts";
 import { emptyLegacyFile } from "../test-support/legacy-file.ts";
-import { probeOlderBuild } from "../test-support/older-build-probe.ts";
+import { expectRow, probeOlderBuild } from "../test-support/older-build-probe.ts";
 
 // The probe says that the first build still works on a file by comparing what the file answers
 // with what the first build expects of it. This file shows that the comparison is exact: every key
@@ -248,9 +248,7 @@ describe("what the probe reads back, key by key", () => {
       altered(db, (read) => (read.n === all[0]!.n ? [] : read.rows)),
     );
     expect(result).toMatchObject({ ok: false, step: "start a trip" });
-    expect((result as { error: string }).error).toBe(
-      "the trip: expected the trip probe-a, got null",
-    );
+    expect((result as { error: string }).error).toBe("the trip: expected a row, got null");
   });
 
   // The list of trips is the one answer that the probe does not compare whole: the trips of
@@ -281,5 +279,95 @@ describe("what the probe reads back, key by key", () => {
       const quiet = await withAltered(db, { n: list.n, row }, (r) => void (r.purpose = "other"));
       expect(quiet, "not compared").toEqual({ ok: true });
     }
+  });
+});
+
+// The comparison on its own, with a made-up row of three columns.
+describe("the comparison of a row with what the first build expects", () => {
+  const columns = ["id", "name", "n"];
+  const row: Row = { id: "a", name: null, n: 0 };
+  const same = (answer: Row | null, expected: Row) =>
+    expectRow("the row", columns, answer, expected);
+
+  test("passes when every column has the value and the kind of value expected", () => {
+    expect(() => same(row, { id: "a", name: null, n: 0 })).not.toThrow();
+    // The order of the keys does not matter.
+    expect(() => same(row, { n: 0, name: null, id: "a" })).not.toThrow();
+  });
+
+  test("does not look at a column that is not one of the first layout's", () => {
+    expect(() => same({ ...row, added: "later" }, { id: "a", name: null, n: 0 })).not.toThrow();
+  });
+
+  test.each<[string, Row | null, Row, string]>([
+    [
+      "a row that is not there",
+      null,
+      { id: "a", name: null, n: 0 },
+      "the row: expected a row, got null",
+    ],
+    [
+      "a column that is gone",
+      { id: "a", n: 0 },
+      { id: "a", name: null, n: 0 },
+      "the row: the column name is gone",
+    ],
+    [
+      "another text",
+      { ...row, id: "b" },
+      { id: "a", name: null, n: 0 },
+      'the row: the column id is "b", expected "a"',
+    ],
+    [
+      "a number for NULL",
+      { ...row, name: 0 },
+      { id: "a", name: null, n: 0 },
+      "the row: the column name is 0, expected null",
+    ],
+    [
+      "NULL for a number",
+      { ...row, n: null },
+      { id: "a", name: null, n: 0 },
+      "the row: the column n is null, expected 0",
+    ],
+    [
+      "text for a number",
+      { ...row, n: "0" },
+      { id: "a", name: null, n: 0 },
+      'the row: the column n is "0", expected 0',
+    ],
+    [
+      "a number for text",
+      { ...row, id: 1 },
+      { id: "1", name: null, n: 0 },
+      'the row: the column id is 1, expected "1"',
+    ],
+    [
+      "a value that was expected to be NULL",
+      { ...row, name: "x" },
+      { id: "a", name: null, n: 0 },
+      'the row: the column name is "x", expected null',
+    ],
+    [
+      "a column that the probe does not expect a value for",
+      row,
+      { id: "a", name: null },
+      "the row: the probe expects no value for the column n",
+    ],
+    [
+      "a column that the probe expects and the first layout lacks",
+      row,
+      { id: "a", name: null, n: 0, extra: 1 },
+      "the row: the probe expects a column extra, which the first layout lacks",
+    ],
+  ])("fails for %s", (_, answer, expected, message) => {
+    expect(() => same(answer, expected)).toThrow(new Error(message));
+  });
+
+  test("tells a blob from a text of the same bytes", () => {
+    const blob = Uint8Array.from(Buffer.from("a")) as unknown as SqlValue;
+    expect(() => same({ ...row, id: blob }, { id: "a", name: null, n: 0 })).toThrow(
+      /the column id is /,
+    );
   });
 });
