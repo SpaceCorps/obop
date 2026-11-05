@@ -21,7 +21,7 @@ Two rules shape every stage.
 | Stage | What it is | Status |
 |---|---|---|
 | 1. Ledger | Accounts, journals, entries, periods, fiscal years, gapless numbering, approval to post | Built (`packages/accounting.toml`), plus the Swedish company and voucher series models of this PR |
-| 2. VAT | VAT boxes, VAT codes, the VAT report per period with propose and approve | This PR (`packages/contrib/accounting_se/accounting_se.toml`, installable by upload, not bundled); computing the boxes from the ledger is not built |
+| 2. VAT | VAT boxes, VAT codes, the VAT report per period with propose and approve | `packages/accounting_se.toml` (bundled in the catalogue; labels in de, fr, pl, fi, sv and es are machine-drafted); computing the boxes from the ledger is not built |
 | 3. SIE 4 | Import and export of SIE 4 files | Being built in parallel (crate `obop-sie`); not part of this PR's package |
 | 4. OAS importer | `obop import oas` reads the OAS SQLite file and documents directory | Built for company, accounts, vouchers with entries, customers and receipts (`crates/obop/src/import_oas/`, section 5.3); invoices, payroll, bank, time are listed as skipped; tested against generated data only, never against real books |
 | 5. Invoices | Customer invoices with the ledger voucher | Not built for Sweden (the `invoicing` module exists; the link to the ledger and the Swedish rules do not) |
@@ -140,7 +140,7 @@ OAS makes vouchers append-only with database triggers and a hash chain. In obop 
 
 ## 10. Order of work
 
-1. This PR: the package and this document. Check: `obop modules check packages/contrib/accounting_se/accounting_se.toml` and `--complete` with the Swedish labels.
+1. This PR: the package and this document. Check: `obop modules check packages/accounting_se.toml` and `--complete` with the Swedish labels.
 2. Bundle the package in the catalogue (needs the labels in the other six languages, the catalogue tests updated, and a decision whether `requires_core` may be `^0.2.1` for a bundled package; see the PR notes).
 3. `obop-sie` export, then import.
 4. The operator command for posted history (5.2, item 1), then `obop import oas`.

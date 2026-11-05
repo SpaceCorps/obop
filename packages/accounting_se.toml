@@ -1,6 +1,6 @@
 [module]
 id = "accounting_se"
-version = "0.1.0"
+version = "0.2.0"
 name = "Accounting Sweden"
 description = "Swedish localisation of Accounting, ported from the domain model of open-accounting-sweden: company data (organisation number, VAT number, F-tax, start of the fiscal year), voucher series (verifikationsserier) tied to journals, Swedish VAT (moms) codes with the box and the account each code feeds, the boxes of the VAT return, and a VAT report per period that anyone may propose and only the stricter accounting.approver group may approve. UNVERIFIED: nothing in this package has been checked against Skatteverket (form SKV 4700) or the SIE specification. Every VAT box and every VAT code starts as unverified, the package ships no box or code rows, and a report cannot be approved until the approver confirms that the boxes were compared with the official form. The package contains no chart of accounts: the BAS chart is not redistributed here (decision D34), account numbers are chosen by the user, and a later version takes a BAS file supplied by the licensee. Amounts are money fields in minor units (ore) and rates are in basis points. Nothing is filed with Skatteverket from here."
 author = "SpaceCorps"
