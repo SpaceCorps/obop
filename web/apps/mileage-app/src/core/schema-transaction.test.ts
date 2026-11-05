@@ -1091,8 +1091,9 @@ describe("module_schema cannot be lowered, dropped or altered by a migration", (
 // phone. A migration whose own statements succeed or fail depending on the rows passes on a new
 // file and on a file with no trips, and fails on a phone that has trips. The failure takes the
 // migration back and is reported (with the database's own error), so nothing is damaged, but it is
-// found on the phone and not by the lint. The one rule of this kind that the lint can see in the
-// text (a default of the time of the insert on an added column) is refused by its words.
+// found on the phone and not by the lint. The one kind of text that the guard refuses by its words
+// for this reason is a default of the time of the insert in an ALTER; the five forms in the next
+// describe are visible in the text too and are not refused.
 describe("a limit: a migration whose own statements depend on the rows", () => {
   const dependsOnTrips: SchemaModule = {
     ...MILEAGE_SCHEMA,
@@ -1271,6 +1272,23 @@ describe("a limit: an added column that depends on the rows, hidden by a rebuild
         expect((error as Error).message).toMatch(lint);
         expect(await columnsOfPoint(db)).not.toContain("c");
       }
+    });
+
+    // On a file with trips SQLite refuses the ALTER first, with its own message, and the lint,
+    // which reads the file after the migration, does not run: the error is not a SchemaError.
+    test("left in the text of the table, on a file with trips SQLite refuses the ADD COLUMN first, with its own error, and the lint does not run", async () => {
+      const db = await legacyFile();
+      const objects = await objectsOf(db);
+      const rows = await rowsOf(db);
+      const error = await ensureModules(db, [HOST_SCHEMA, kept(definition)]).catch(
+        (e: unknown) => e,
+      );
+      expect(error).toBeInstanceOf(Error);
+      expect(error).not.toBeInstanceOf(SchemaError);
+      expect((error as Error).message).toMatch(sqlite);
+      expect(await objectsOf(db)).toEqual(objects);
+      expect(await rowsOf(db)).toEqual(rows);
+      expect(await layout(db)).toBe(1);
     });
   });
 });

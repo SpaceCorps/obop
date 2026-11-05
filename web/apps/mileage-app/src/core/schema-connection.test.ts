@@ -19,7 +19,7 @@ import { tempDatabase } from "../test-support/temp-db.ts";
 
 // A migration is given the transaction the manager holds, and the connection under it is the one
 // the app goes on using. This file holds what the guard refuses besides a statement that controls
-// the transaction (the words ROLLBACK, TEMP, TEMPORARY, ATTACH and DETACH anywhere, the name temp
+// the transaction (the words ROLLBACK, TEMP, TEMPORARY, ATTACH and DETACH at any place, the name temp
 // as a schema qualifier, any PRAGMA but user_version, and the time of the insert as a default in an
 // ALTER TABLE), the statements of the manager that name their schema, and the look at the
 // temporary schema afterwards. `schema-transaction.test.ts` holds the six words that begin, end or
@@ -93,8 +93,8 @@ describe("the reader of the words that reach past the transaction", () => {
     ["TEMP", "CREATE TEMP TRIGGER a_g BEFORE INSERT ON a_t BEGIN SELECT 1; END"],
     ["TEMPORARY", "CREATE TEMPORARY TRIGGER a_g BEFORE INSERT ON a_t BEGIN SELECT 1; END"],
     ["TEMP", "CREATE TEMP INDEX a_i ON a_t (x)"],
-    ["TEMP", "INSERT INTO temp.a_t (x) VALUES (1)"],
-    ["TEMP", "CREATE TABLE a_t (temp TEXT)"],
+    ["TEMP", "INSERT INTO TEMP.a_t (x) VALUES (1)"],
+    ["TEMP", "CREATE TABLE a_t (TEMP TEXT)"],
   ])("finds the word %s in %j, in every casing and behind every prefix", (word, form) => {
     for (const casing of casings(word)) {
       for (const prefix of PREFIXES) {
@@ -130,11 +130,19 @@ describe("the reader of the words that reach past the transaction", () => {
     }
   });
 
+  // The first two forms of each word begin with it; the other three do not (behind EXPLAIN, as a bare
+  // column name in a CREATE TABLE and in a SELECT), so the word is refused at those places too.
   test.each([
     ["ATTACH", "ATTACH DATABASE ':memory:' AS z"],
     ["ATTACH", "ATTACH ':memory:' AS z"],
+    ["ATTACH", "EXPLAIN ATTACH ':memory:' AS z"],
+    ["ATTACH", "CREATE TABLE a_t (ATTACH TEXT)"],
+    ["ATTACH", "SELECT ATTACH FROM a_t"],
     ["DETACH", "DETACH DATABASE z"],
     ["DETACH", "DETACH z"],
+    ["DETACH", "EXPLAIN DETACH z"],
+    ["DETACH", "CREATE TABLE a_t (DETACH TEXT)"],
+    ["DETACH", "SELECT DETACH FROM a_t"],
   ])("finds the word %s in %j, in every casing and behind every prefix", (word, form) => {
     for (const casing of casings(word)) {
       for (const prefix of PREFIXES) {
@@ -181,6 +189,34 @@ describe("the reader of the words that reach past the transaction", () => {
   ])("lets %j through: it is the one pragma the lint judges", (sql) => {
     expect(forbiddenInMigration(sql), sql).toBeNull();
   });
+
+  // Limit 5 of 8.7.1: a column that is called temp, rollback, attach, detach or pragma, written as a
+  // bare word, is refused (the guard fails closed); written as a quoted name it is not. A cost and
+  // not a hole, and held here, in four casings, for a CREATE TABLE and for an ALTER.
+  test.each([
+    ["temp", "text with the word TEMP", WHY.temp],
+    ["rollback", "text with the word ROLLBACK", WHY.rollback],
+    ["attach", "text with the word ATTACH", WHY.attach],
+    ["detach", "text with the word DETACH", WHY.attach],
+    ["pragma", "PRAGMA TEXT", WHY.pragma],
+  ])(
+    "a column called %s is refused as a bare word and not as a quoted name",
+    (name, found, why) => {
+      for (const casing of casings(name)) {
+        const shapes = (column: string) => [
+          `CREATE TABLE a_t (${column} TEXT)`,
+          `ALTER TABLE a_t ADD COLUMN ${column} TEXT`,
+        ];
+        for (const sql of shapes(casing)) {
+          expect(ran(sql), sql).toBe(found);
+          expect(forbiddenInMigration(sql)?.why, sql).toBe(why);
+        }
+        for (const quoted of [`"${casing}"`, `[${casing}]`, `\`${casing}\``]) {
+          for (const sql of shapes(quoted)) expect(forbiddenInMigration(sql), sql).toBeNull();
+        }
+      }
+    },
+  );
 
   test.each(["ALTER", "alter", "Alter"])(
     "finds the time of the insert in a statement that begins with %s",
@@ -1214,6 +1250,13 @@ describe("the function pragma_optimize", () => {
       "table_list",
     ]);
     const compared = pragmas.filter((name) => !acts.has(name));
+    // The numbers 8.7.1 quotes were counted on this build of SQLite; another build is swept, not refused.
+    const version = String(
+      (probe.prepare("SELECT sqlite_version() AS v").get() as { v: string }).v,
+    );
+    if (version === "3.54.0") {
+      expect([pragmas.length, functions.length, compared.length]).toEqual([67, 59, 51]);
+    }
     const state = (sqlite: DatabaseSync): Record<string, string> => {
       const out: Record<string, string> = {};
       for (const name of compared) {
@@ -1392,6 +1435,16 @@ describe("a quoted name or a string where the reader looks for a word", () => {
     // the semicolons, and the END that follows one is the first word of a statement.
     expect(ran('CREATE "TEMP" TABLE a_t (x TEXT)')).toBeNull();
     expect(transactionControl('CREATE "TRIGGER" x BEGIN SELECT 1; END')).toEqual({ word: "END" });
+    // The same for the words TEMP and TEMPORARY that may stand between CREATE and TRIGGER: a quoted
+    // name there is not one, so the text is not read as a trigger (SQLite refuses it as a syntax error).
+    expect(transactionControl('CREATE "TEMP" TRIGGER x BEGIN SELECT 1; END')).toEqual({
+      word: "END",
+    });
+    expect(transactionControl('CREATE "TEMPORARY" TRIGGER x BEGIN SELECT 1; END')).toEqual({
+      word: "END",
+    });
+    expect(transactionControl("CREATE TEMP TRIGGER x BEGIN SELECT 1; END")).toBeNull();
+    expect(transactionControl("CREATE TEMPORARY TRIGGER x BEGIN SELECT 1; END")).toBeNull();
   });
 });
 

@@ -420,7 +420,7 @@ const PRAGMA_OPTIMIZE_WHY =
 const ALTER_TIME_WHY =
   "SQLite refuses a default of that kind on a column added to a table that has rows and accepts it on a table with none, so a migration with one passes on a new file and fails on a phone with trips, also where a later statement makes the table again; the text of an ALTER TABLE may not have the word";
 
-/** The words that a migration may not use anywhere in its text, outside strings, quoted names and comments. */
+/** The words that a migration may not use at any place in a statement, outside strings, quoted names and comments. */
 const REFUSED_WORDS = new Map<string, string>([
   ["ROLLBACK", ROLLBACK_WHY],
   ["TEMP", TEMP_WHY],
@@ -440,15 +440,15 @@ const REFUSED_NAMES = new Map<string, string>([["PRAGMA_OPTIMIZE", PRAGMA_OPTIMI
 /**
  * What in the text of a migration reaches past the transaction it was given, other than a statement
  * that controls the transaction (`transactionControl`): the words ROLLBACK, TEMP, TEMPORARY, ATTACH
- * and DETACH anywhere in the text; the name `temp` (quoted or in a string) as a schema qualifier; any
- * PRAGMA but `PRAGMA user_version`; the function `pragma_optimize` (as a word, or as a name in
- * double quotes, backticks or brackets; a single-quoted string with that text is a string and is
- * not refused, although SQLite also reads one in the place of a table name); and CURRENT_TIME,
- * CURRENT_DATE or CURRENT_TIMESTAMP in an ALTER statement. All outside strings, quoted names and
- * comments, except as said, so a word in one of those does no harm, and a bare word does harm
- * wherever it stands: a column that is called `temp` has to be quoted. Answers the first one found,
- * as what the migration ran and why that is refused, or null. It looks at the statements that could
- * be read, so a text that cannot be read is `transactionControl`'s to refuse. Exported for its tests.
+ * and DETACH; the name `temp` (quoted or in a string) as a schema qualifier; any PRAGMA but `PRAGMA
+ * user_version`; the function `pragma_optimize` (as a word, or as a name in double quotes,
+ * backticks or brackets; a single-quoted string with that text is a string and is not refused,
+ * although SQLite also reads one in the place of a table name); and CURRENT_TIME, CURRENT_DATE or
+ * CURRENT_TIMESTAMP in an ALTER statement. The place each rule looks at is the one in the list in
+ * the header of `checkChange`. Outside strings, quoted names and comments, except as said there,
+ * so a word in one of those is not refused. Answers the first one found, as what the migration ran
+ * and why that is refused, or null. It looks at the statements that could be read, so a text that
+ * cannot be read is `transactionControl`'s to refuse. Exported for its tests.
  */
 export function forbiddenInMigration(sql: string): { ran: string; why: string } | null {
   for (const statement of readStatements(sql).statements) {
@@ -532,7 +532,8 @@ const MIGRATION_SAVEPOINT = "schema_migration";
  * A savepoint set before the migration is gone when the transaction was ended (COMMIT, ROLLBACK, END,
  * or COMMIT and a new BEGIN), so releasing it is the question. This only detects: what a COMMIT
  * did is committed. The guard (`guarded`) is what refuses the text that would end it; a migration
- * that has another way to the connection is outside the guard, and this finds it only afterwards.
+ * that has another way to the connection is outside the guard, and this detects only that the
+ * transaction was ended, and only afterwards.
  */
 async function releaseMigration(tx: SqlTx, module: SchemaModule): Promise<void> {
   try {
@@ -619,27 +620,34 @@ const REFUSED_KINDS: Record<string, string> = {
  * transaction for all the modules and takes all of it back when anything fails. A migration
  * therefore gets a transaction (`guarded`) that reads each text into whole statements (a trigger
  * body is part of its statement) and refuses, before it runs, a text that
- * - has a statement whose first word begins, ends or nests a transaction (BEGIN, COMMIT, END,
- *   ROLLBACK, SAVEPOINT, RELEASE, `transactionControl`);
- * - has the word ROLLBACK, TEMP, TEMPORARY, ATTACH or DETACH anywhere outside a string, a comment
- *   or a quoted name, or the name `temp` as a schema in front of a dot, or any PRAGMA but `PRAGMA
- *   user_version`, or the function `pragma_optimize`, or CURRENT_TIME, CURRENT_DATE or
- *   CURRENT_TIMESTAMP in an ALTER statement (`forbiddenInMigration`: a ROLLBACK conflict clause or
- *   a trigger's RAISE(ROLLBACK) ends the transaction from inside a statement, a temporary table or
+ * - has a statement whose FIRST word is BEGIN, COMMIT, END, ROLLBACK, SAVEPOINT or RELEASE
+ *   (`transactionControl`; at the start of a statement only, so a column called `end` is not
+ *   refused);
+ * - has the word ROLLBACK, TEMP, TEMPORARY, ATTACH or DETACH at any place in a statement outside a
+ *   string, a comment or a quoted name (`forbiddenInMigration`; a ROLLBACK conflict clause or a
+ *   trigger's RAISE(ROLLBACK) ends the transaction from inside a statement, a temporary table or
  *   trigger takes the place of the file's for a name that is not qualified and lasts as long as
- *   the connection, an attached file and most PRAGMAs set state of the connection that outlives
- *   the transaction, and `pragma_optimize` can write `sqlite_stat1` where nothing looks);
+ *   the connection, and an attached file stays attached);
+ * - has the name `temp` (quoted, or in a string) in front of a dot;
+ * - has a PRAGMA other than `PRAGMA user_version`, decided by the word after PRAGMA (a PRAGMA can
+ *   set state of the connection that outlives the transaction);
+ * - has the function `pragma_optimize`, as a bare word or as a name in double quotes, backticks or
+ *   brackets (it can write `sqlite_stat1` where nothing looks);
+ * - has CURRENT_TIME, CURRENT_DATE or CURRENT_TIMESTAMP inside an ALTER statement, and in no other;
  * - cannot be read to its end with certainty (an unterminated trigger, a NUL): refused as that.
- * The words are refused wherever they stand, which is cheaper to read than the place where a word
- * is a problem; a column called `temp` or `rollback` has to be written as a quoted name. What the
- * tests cover of this is stated in 8.7.1 (the reader of the words, for the combinations of word,
- * casing and prefix named there; the manager, for the pairs of word and method named there).
+ * That list is the one place in this file that says where each rule looks. Reading all the places
+ * of a statement for the five words is cheaper than finding the place where such a word is a
+ * problem, so a column called `temp`, `rollback`, `attach`, `detach` or `pragma` has to be written
+ * as a quoted name. What the tests cover of this is stated in 8.7.1 (the reader of the words, for
+ * the combinations of word, casing and prefix named there; the manager, for the pairs of word and
+ * method named there).
  * Behind the guard the manager checks afterwards that the transaction it opened is still the one
- * that is open (`SAVEPOINT` before, `RELEASE` after) and that the temporary schema is as it was;
- * those two only detect, since what a COMMIT has done is committed and nothing can undo it. The
- * manager's own statements are qualified with `main.`; for ten of them a temporary table of the
- * same name would have taken the place of the file's table without it, and for the other seven
- * SQLite reads the unqualified form as the file's anyway (8.7.1 says which).
+ * that is open (`SAVEPOINT` before, `RELEASE` after) and that the temporary schema is as it was.
+ * Those two are all that is checked of the connection, and they only detect: other state of the
+ * connection (limit 4 in 8.7.1) is not looked at, and what a COMMIT has done is committed and
+ * nothing can undo it. The manager's own statements are qualified with `main.`; for ten of them a
+ * temporary table of the same name would have taken the place of the file's table without it, and
+ * for the other seven SQLite reads the unqualified form as the file's anyway (8.7.1 says which).
  *
  * What the guard is. It is a lint for a version 2 of a module that no module has yet, written for
  * the author of a migration who makes a mistake, not for one who works against it: it reads the
@@ -1140,12 +1148,12 @@ export interface EnsureOptions {
  * must not run twice. In that transaction: `module_schema` is made if it is missing, the versions
  * of a layout-1 file are recorded for the modules that were in it, every module that is behind is
  * migrated in list order and checked (`checkChange`), its version is recorded, and the layout
- * version is set. A migration is given a transaction that refuses a text that begins, ends or
- * nests a transaction, or sets state of the connection that outlives it (`guarded`: the words and
- * the limits are in the header of `checkChange`), and runs between a savepoint and its release,
- * which fails when the transaction was ended by another way (`releaseMigration`). Any failure
- * rolls all of it back, except what a COMMIT has already committed. A file of a newer version is refused for every module at once, on purpose: the modules
- * share one file and one transaction.
+ * version is set. A migration is given a transaction that refuses the texts listed in the header
+ * of `checkChange` (`guarded`: the transaction words, the words and names that reach past the
+ * transaction, and the limits of that list), and runs between a savepoint and its release, which
+ * fails when the transaction was ended by another way (`releaseMigration`). Any failure rolls all
+ * of it back, except what a COMMIT has already committed. A file of a newer version is refused for
+ * every module at once, on purpose: the modules share one file and one transaction.
  */
 export async function ensureModules(
   db: SqlDb,
