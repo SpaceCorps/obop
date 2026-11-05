@@ -453,13 +453,9 @@ const REFUSED_KINDS: Record<string, string> = {
  *     retyped, and its text is not rewritten. It may be dropped and made again in the byte-exact
  *     text it had, or in the byte-exact text that `ADD COLUMN` would have left (`, <definition>`
  *     put in right after the last column definition, with no space or line break of its own, so
- *     `a TEXT
-)` becomes `a TEXT
-, b TEXT)`); a tidier way of writing the same table
- *     (`a TEXT,
-  b TEXT
-)`) is refused as a rebuilt table. An older build opens a table by its
- *     name and finds what it had, so the first is harmless as long as no row is lost, which is
+ *     `a TEXT\n)` becomes `a TEXT\n, b TEXT)`); a tidier way of writing the same table
+ *     (`a TEXT,\n  b TEXT\n)`) is refused as a rebuilt table. An older build opens a table by
+ *     its name and finds what it had, so the first is harmless as long as no row is lost, which is
  *     the next point;
  * - lost no rows: every table that was there has as many rows as it had, or more (the rows are
  *   counted inside the same transaction, before and after the migration, and a migration may add

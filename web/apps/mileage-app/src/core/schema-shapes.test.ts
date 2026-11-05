@@ -166,7 +166,7 @@ async function run(table: "trip" | "point" | "batch", sample: Shape[]) {
 describe("every column that the grammar gives, put on a table of the first build", () => {
   test("the shapes are the same every time, and there are enough of them", () => {
     expect(ALL.length).toBe(shapes().length);
-    expect(ALL.length).toBeGreaterThanOrEqual(755);
+    expect(ALL.length).toBe(990);
     expect(new Set(ALL.map((shape) => shape.text)).size).toBe(ALL.length);
   });
 
@@ -182,6 +182,7 @@ describe("every column that the grammar gives, put on a table of the first build
     "on the %s, every fifth of them",
     async (table) => {
       const sample = ALL.filter((_, i) => i % 5 === 0);
+      expect(sample.length).toBe(198);
       const { wrong, accepted, refused } = await run(table, sample);
       expect(wrong).toEqual([]);
       expect(accepted).toBeGreaterThan(0);
