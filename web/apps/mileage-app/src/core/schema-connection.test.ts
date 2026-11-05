@@ -190,11 +190,12 @@ describe("the reader of the words that reach past the transaction", () => {
     expect(forbiddenInMigration(sql), sql).toBeNull();
   });
 
-  // Limit 5 of 8.7.1: a column that is called temp, rollback, attach, detach or pragma, written as a
-  // bare word, is refused (the guard fails closed); written as a quoted name it is not. A cost and
+  // Limit 5 of 8.7.1: a column that is called temp, temporary, rollback, attach, detach or pragma,
+  // written as a bare word, is refused (the guard fails closed); written as a quoted name it is not. A cost and
   // not a hole, and held here, in four casings, for a CREATE TABLE and for an ALTER.
   test.each([
     ["temp", "text with the word TEMP", WHY.temp],
+    ["temporary", "text with the word TEMPORARY", WHY.temp],
     ["rollback", "text with the word ROLLBACK", WHY.rollback],
     ["attach", "text with the word ATTACH", WHY.attach],
     ["detach", "text with the word DETACH", WHY.attach],
@@ -1295,6 +1296,26 @@ describe("the function pragma_optimize", () => {
       "(1, 2)",
     ];
     expect(shapes).toHaveLength(15);
+    // What the sweep compares is shown to see a change: each statement below changes one of the
+    // things that state() reads, and that one has to show it (other keys may show it too: a new
+    // table also moves page_count and schema_version).
+    for (const [key, sql] of [
+      ["catalogue", "CREATE TABLE a_t (x TEXT)"],
+      ["temporary", "CREATE TEMP TABLE a_t (x TEXT)"],
+      ["databases", "ATTACH DATABASE ':memory:' AS zz"],
+      ["cache_size", "PRAGMA cache_size = -123"],
+    ] as const) {
+      const control = make();
+      state(control); // the first read opens what a read opens
+      const was = state(control);
+      control.exec(sql);
+      const now = state(control);
+      expect(
+        Object.keys(was).filter((k) => was[k] !== now[k]),
+        sql,
+      ).toContain(key);
+    }
+    expect(compared).toContain("cache_size");
     const changed: string[] = [];
     let calls = 0;
     for (const name of functions) {

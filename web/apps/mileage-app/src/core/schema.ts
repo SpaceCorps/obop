@@ -635,10 +635,10 @@ const REFUSED_KINDS: Record<string, string> = {
  *   brackets (it can write `sqlite_stat1` where nothing looks);
  * - has CURRENT_TIME, CURRENT_DATE or CURRENT_TIMESTAMP inside an ALTER statement, and in no other;
  * - cannot be read to its end with certainty (an unterminated trigger, a NUL): refused as that.
- * That list is the one place in this file that says where each rule looks. Reading all the places
- * of a statement for the five words is cheaper than finding the place where such a word is a
- * problem, so a column called `temp`, `rollback`, `attach`, `detach` or `pragma` has to be written
- * as a quoted name. What the tests cover of this is stated in 8.7.1 (the reader of the words, for
+ * That list says where each rule looks. Reading all the places of a statement for the six words
+ * (ROLLBACK, TEMP, TEMPORARY, ATTACH, DETACH and, by the word after it, PRAGMA) is cheaper than
+ * finding the place where such a word is a problem, so a column called `temp`, `temporary`,
+ * `rollback`, `attach`, `detach` or `pragma` has to be written as a quoted name. What the tests cover of this is stated in 8.7.1 (the reader of the words, for
  * the combinations of word, casing and prefix named there; the manager, for the pairs of word and
  * method named there).
  * Behind the guard the manager checks afterwards that the transaction it opened is still the one
