@@ -12,9 +12,13 @@ pub mod logo;
 pub mod policy;
 pub mod refusal;
 pub mod slug;
+pub mod svg;
+pub mod theme;
+pub mod tile;
 mod unicode;
 
 pub use brand::{Brand, DEFAULT_NAME, LANGS, fold, lang_index};
+pub use logo::Logo;
 pub use policy::{Kind, clean, safe};
 pub use refusal::Refusal;
 
@@ -29,4 +33,8 @@ mod slug_tests;
 #[cfg(test)]
 mod spike_tests;
 #[cfg(test)]
+mod svg_tests;
+#[cfg(test)]
 mod testutil;
+#[cfg(test)]
+mod tile_tests;

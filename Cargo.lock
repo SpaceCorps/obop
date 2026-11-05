@@ -1576,6 +1576,7 @@ dependencies = [
  "base",
  "form_urlencoded",
  "getrandom 0.4.3",
+ "obop-brand",
  "obop-commands",
  "obop-media",
  "obop-pkg",

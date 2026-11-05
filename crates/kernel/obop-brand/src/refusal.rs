@@ -1,5 +1,5 @@
 //! What a rule says when it refuses a value: a stable code and a sentence for a person. Neither
-//! ever holds raw text from the input, only what [`show_char`] makes safe, so a
+//! ever holds raw text from the input, only what [`show_char`] and `show_text` make safe, so a
 //! refusal can be written to a log line or shown on a page as it is.
 
 use std::fmt;
@@ -38,6 +38,24 @@ pub(crate) fn show_char(c: char) -> String {
     }
 }
 
+/// Text from the input made safe to repeat: only `A-Z a-z 0-9` and `: _ . - # %` kept, every
+/// other character shown as `?`, cut at `max` characters with `...`.
+pub(crate) fn show_text(s: &str, max: usize) -> String {
+    let mut out = String::new();
+    for (i, c) in s.chars().enumerate() {
+        if i == max {
+            out.push_str("...");
+            break;
+        }
+        if c.is_ascii_alphanumeric() || matches!(c, ':' | '_' | '.' | '-' | '#' | '%') {
+            out.push(c);
+        } else {
+            out.push('?');
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -46,5 +64,7 @@ mod tests {
     fn a_refusal_never_repeats_raw_text() {
         assert_eq!(show_char('\u{202E}'), "U+202E");
         assert_eq!(show_char(':'), "U+003A ':'");
+        assert_eq!(show_text("a\u{202E}b<c>\n", 40), "a?b?c??");
+        assert_eq!(show_text("abcdefghij", 4), "abcd...");
     }
 }
