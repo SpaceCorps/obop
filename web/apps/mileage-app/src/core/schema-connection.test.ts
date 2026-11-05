@@ -1250,12 +1250,16 @@ describe("the function pragma_optimize", () => {
       "table_list",
     ]);
     const compared = pragmas.filter((name) => !acts.has(name));
-    // The numbers 8.7.1 quotes were counted on this build of SQLite; another build is swept, not refused.
+    // The numbers 8.7.1 quotes were counted on SQLite 3.54.0 of Node 26.13.0 on Windows (67 pragmas
+    // listed). The Linux runner of the CI, with the same version text, lists 66 (one pragma that only
+    // some builds have, among those in `acts`); the functions and the compared ones are the same on
+    // both. Another version of SQLite is swept, not refused.
     const version = String(
       (probe.prepare("SELECT sqlite_version() AS v").get() as { v: string }).v,
     );
     if (version === "3.54.0") {
-      expect([pragmas.length, functions.length, compared.length]).toEqual([67, 59, 51]);
+      expect([66, 67]).toContain(pragmas.length);
+      expect([functions.length, compared.length]).toEqual([59, 51]);
     }
     const state = (sqlite: DatabaseSync): Record<string, string> => {
       const out: Record<string, string> = {};
