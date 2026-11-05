@@ -5,7 +5,8 @@ use crate::logo::{LOGO_HEADERS, Logo, logo_etag, logo_url, version};
 use crate::testutil::{Rng, text};
 use crate::theme;
 use crate::tile::{
-    DEFAULT_VIOLET, FALLBACK_GLYPH, SLATE, TileAccent, glyph, svg, tile_accent, valid_accent,
+    DEFAULT_VIOLET, FALLBACK_GLYPH, SLATE, TileAccent, escape, glyph, svg, tile_accent,
+    valid_accent,
 };
 
 // ---- The glyph ------------------------------------------------------------------------------------------
@@ -432,4 +433,115 @@ fn resolving_a_logo_never_panics() {
         }
     });
     assert!(outcome.is_ok());
+}
+
+// ---- Escaping, the glyph search, the inline tile, the moved colour maths ---------------------------------
+
+#[test]
+fn escape_covers_the_characters_that_can_open_or_close_markup() {
+    // The glyph is always a letter or a digit today, so `escape` cannot be reached with a special
+    // character through `svg`; it is tested on its own, so that a change to the glyph rule (a symbol,
+    // a currency sign) cannot let markup into the tile.
+    assert_eq!(escape("<"), "&lt;");
+    assert_eq!(escape(">"), "&gt;");
+    assert_eq!(escape("&"), "&amp;");
+    assert_eq!(escape("\""), "&quot;");
+    assert_eq!(escape("'"), "&#39;");
+    assert_eq!(
+        escape("<script>\"a\" & 'b'</script>"),
+        "&lt;script&gt;&quot;a&quot; &amp; &#39;b&#39;&lt;/script&gt;"
+    );
+    // The ampersand first: nothing is escaped twice.
+    assert_eq!(escape("&lt;"), "&amp;lt;");
+    assert_eq!(escape("plain é 株 7"), "plain é 株 7");
+    assert_eq!(escape(""), "");
+}
+
+#[test]
+fn the_glyph_search_takes_a_letter_or_a_decimal_digit_and_skips_other_numbers() {
+    // A superscript two (No) and a roman numeral (Nl) are numbers, not letters or digits.
+    assert_eq!(glyph("\u{00B2}A"), 'A');
+    assert_eq!(glyph("\u{2167} zed"), 'Z');
+    assert_eq!(glyph("\u{00BD}7"), '7');
+    assert_eq!(glyph("\u{2167}"), FALLBACK_GLYPH);
+    assert_eq!(glyph("\u{00B2}"), FALLBACK_GLYPH);
+}
+
+#[test]
+fn the_inline_logo_of_a_tile_is_the_tile_with_the_size_on_the_root() {
+    let l = Logo::resolve("", "MOHV", Some("#e11d48"));
+    assert!(l.is_tile());
+    let inline = l.inline(28);
+    assert!(inline.contains(" width=\"28\" height=\"28\" viewBox=\"0 0 64 64\""));
+    assert!(inline.contains(&format!(
+        "fill=\"{}\"/>",
+        theme::resolve("#e11d48").light.fill
+    )));
+    assert!(inline.contains(">M</text>"));
+    assert_eq!(inline, svg("MOHV", Some("#e11d48"), Some(28)));
+    assert_eq!(
+        inline.replacen(" width=\"28\" height=\"28\"", "", 1),
+        l.served(),
+        "the served bytes differ by the two attributes only"
+    );
+    // The name, the accent and the size all come from the brand.
+    let other = Logo::resolve("", "Zed", None);
+    assert!(other.inline(40).contains(" width=\"40\" height=\"40\""));
+    assert!(other.inline(40).contains(">Z</text>"));
+    assert!(other.inline(40).contains("fill=\"#495670\"/>"));
+    // A stored artwork that failed the parse is the tile, inline too.
+    let broken = Logo::resolve(
+        "<svg viewBox=\"0 0 1 1\"><script/></svg>",
+        "MOHV",
+        Some("#e11d48"),
+    );
+    assert!(broken.is_tile() && broken.fallback().is_some());
+    assert_eq!(broken.inline(28), inline);
+}
+
+/// The colour maths moved here from the public site. The shop's own pins hold its output; these hold
+/// the leaf crate by itself, so that a change cannot hide behind a test of another crate.
+#[test]
+fn the_moved_colour_maths_is_pinned_by_value() {
+    for (accent, light, dark) in [
+        (
+            "#e11d48",
+            ("#e11d48", "#ffffff", "#d6023f"),
+            ("#ee2f52", "#0c0d12", "#fd4f65"),
+        ),
+        (
+            "#0f766e",
+            ("#0f766e", "#ffffff", "#0f766e"),
+            ("#3d978e", "#0c0d12", "#449d94"),
+        ),
+        (
+            "#495670",
+            ("#495670", "#ffffff", "#495670"),
+            ("#7886a3", "#0c0d12", "#818fac"),
+        ),
+        (
+            "#ffff00",
+            ("#93930e", "#0c0d12", "#717107"),
+            ("#ffff00", "#0c0d12", "#ffff00"),
+        ),
+    ] {
+        let r = theme::resolve(accent);
+        assert_eq!(r.chosen, accent);
+        let of = |m: &theme::ModeAccent| (m.fill.clone(), m.on_fill.clone(), m.ink.clone());
+        let tuple = |t: (&str, &str, &str)| (t.0.to_string(), t.1.to_string(), t.2.to_string());
+        assert_eq!(of(&r.light), tuple(light), "{accent} light");
+        assert_eq!(of(&r.dark), tuple(dark), "{accent} dark");
+    }
+    for (accent, seed, light, dark) in [
+        ("#0f766e", 0u64, "#ddf3d6", "#21341b"),
+        ("#0f766e", 3, "#caf6f0", "#043632"),
+        ("#0f766e", 6, "#d7effe", "#103243"),
+        ("#e11d48", 10, "#fee4e4", "#442324"),
+    ] {
+        assert_eq!(
+            theme::card_tints(accent, seed),
+            (light.to_string(), dark.to_string()),
+            "{accent} {seed}"
+        );
+    }
 }

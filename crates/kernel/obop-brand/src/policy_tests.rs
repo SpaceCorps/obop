@@ -590,3 +590,102 @@ fn the_policy_never_panics_on_generated_text() {
     });
     assert!(outcome.is_ok(), "the policy panicked");
 }
+
+// ---- Pinned by value: the limits, the Cf clause, the boundaries of the lints ----------------------------
+
+#[test]
+fn the_limits_are_the_numbers_of_the_spec_not_only_their_constants() {
+    assert_eq!(
+        (NAME_MAX, TITLE_MAX, MESSAGE_MAX, crate::policy::SLUG_MAX),
+        (40, 60, 240, 30)
+    );
+    for (kind, fits, over) in [(NAME, 40, 41), (TITLE, 60, 61), (MESSAGE, 240, 241)] {
+        assert_eq!(accepted(kind, &"a".repeat(fits)), "a".repeat(fits));
+        assert_eq!(refused(kind, &"a".repeat(over)), "too_long", "{kind:?}");
+        assert_eq!(safe(kind, &"a".repeat(fits)), Ok(()), "{kind:?}");
+        assert_eq!(
+            safe(kind, &"a".repeat(over)),
+            Err(reason::TOO_LONG),
+            "{kind:?}"
+        );
+    }
+}
+
+#[test]
+fn the_reason_words_of_the_read_check_are_fixed() {
+    assert_eq!(reason::EMPTY, "empty");
+    assert_eq!(reason::TOO_LONG, "too_long");
+    assert_eq!(reason::UNSAFE_CHARACTER, "unsafe_character");
+    assert_eq!(reason::INVALID_SLUG, "invalid_slug");
+    assert_eq!(reason::INVALID_ARTWORK, "invalid_artwork");
+}
+
+#[test]
+fn format_characters_that_are_not_default_ignorable_are_refused_in_both_directions() {
+    use crate::testutil::format_but_not_ignorable;
+    use crate::unicode::{category, default_ignorable};
+    use icu_properties::props::GeneralCategory as Gc;
+    let cf = format_but_not_ignorable();
+    // The characters the review found: category Cf, and not default ignorable.
+    for c in ['\u{0600}', '\u{06DD}', '\u{08E2}', '\u{FFF9}'] {
+        assert_eq!(category(c), Gc::Format, "U+{:04X}", c as u32);
+        assert!(!default_ignorable(c), "U+{:04X}", c as u32);
+        assert!(cf.contains(&c));
+    }
+    assert!(cf.len() >= 20, "{} characters", cf.len());
+    for c in cf {
+        let text = format!("Zed{c}Co");
+        for kind in [NAME, TITLE, MESSAGE] {
+            assert_eq!(
+                refused(kind, &text),
+                "invisible_character",
+                "{kind:?} U+{:04X}",
+                c as u32
+            );
+            assert_eq!(
+                safe(kind, &text),
+                Err(reason::UNSAFE_CHARACTER),
+                "{kind:?} U+{:04X}",
+                c as u32
+            );
+        }
+    }
+}
+
+#[test]
+fn a_combining_mark_after_a_space_is_refused() {
+    // x has no precomposed form with an acute accent, so the mark stays a mark after NFC.
+    for kind in [NAME, TITLE, MESSAGE] {
+        assert_eq!(accepted(kind, "x\u{0301}b"), "x\u{0301}b");
+        assert_eq!(refused(kind, "x \u{0301}b"), "mark_position", "{kind:?}");
+    }
+}
+
+#[test]
+fn a_host_needs_two_letters_or_digits_after_the_dot_as_well_as_before() {
+    for kind in [NAME, TITLE, MESSAGE] {
+        // Two before, one after: not a host. One before, two after: not a host either.
+        for ok in ["mohv.s", "ab.c", "x.yz", "visit mohv.s", "a.io"] {
+            assert_eq!(accepted(kind, ok), ok, "{kind:?} {ok}");
+        }
+        // Two and two, with a letter in either group: a host.
+        for bad in ["ab.cd", "mohv.se", "12.ab", "ab.12"] {
+            assert_eq!(refused(kind, bad), "host_like", "{kind:?} {bad}");
+        }
+    }
+    // Two and two, digits only: a date or a time.
+    assert_eq!(accepted(MESSAGE, "12.30"), "12.30");
+}
+
+#[test]
+fn a_name_of_40_decomposed_hangul_syllables_is_measured_after_normalising() {
+    // Each syllable is three jamo before NFC: 120 code points, 40 after.
+    let jamo = "\u{1112}\u{1161}\u{11AB}".repeat(40);
+    assert_eq!(jamo.chars().count(), 120);
+    assert_eq!(accepted(NAME, &jamo), "\u{D55C}".repeat(40));
+    // 41 of them are 41 after NFC: too long.
+    assert_eq!(
+        refused(NAME, &"\u{1112}\u{1161}\u{11AB}".repeat(41)),
+        "too_long"
+    );
+}

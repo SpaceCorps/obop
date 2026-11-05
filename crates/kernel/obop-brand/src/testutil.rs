@@ -120,3 +120,17 @@ pub(crate) fn text(rng: &mut Rng, max: usize) -> String {
     let n = rng.below(max + 1);
     (0..n).map(|_| *rng.pick(NASTY)).collect()
 }
+
+/// Every code point of general category `Cf` that is not `Default_Ignorable_Code_Point`, read from
+/// the tables compiled into the binary (so it follows them): the Arabic number sign U+0600, the end
+/// of ayah U+06DD, the interlinear annotation anchors U+FFF9 and the like. A check that tests the
+/// property only on the default-ignorable format characters (the zero-width space and joiners, the
+/// soft hyphen, the bidirectional controls) cannot tell the `Cf` clause from the other.
+pub(crate) fn format_but_not_ignorable() -> Vec<char> {
+    use crate::unicode::{category, default_ignorable};
+    use icu_properties::props::GeneralCategory as Gc;
+    (0..=0x10_FFFF_u32)
+        .filter_map(char::from_u32)
+        .filter(|c| category(*c) == Gc::Format && !default_ignorable(*c))
+        .collect()
+}

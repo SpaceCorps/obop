@@ -253,3 +253,38 @@ fn the_brand_functions_never_panic_on_generated_text() {
     });
     assert!(outcome.is_ok());
 }
+
+#[test]
+fn format_characters_that_are_not_default_ignorable_do_not_defeat_the_comparison() {
+    use crate::testutil::format_but_not_ignorable;
+    let b = zed();
+    let cf = format_but_not_ignorable();
+    assert!(cf.contains(&'\u{0600}') && cf.contains(&'\u{06DD}') && cf.contains(&'\u{08E2}'));
+    for c in cf {
+        // Z + the Arabic number sign + ed is Zed to a person who reads the page, and so to the fold.
+        assert_eq!(fold(&format!("Z{c}ed")), "zed", "U+{:04X}", c as u32);
+        assert!(b.matches_client(&format!("Z{c}ed")), "U+{:04X}", c as u32);
+        assert!(
+            b.matches_client(&format!("{c}Zed{c}")),
+            "U+{:04X}",
+            c as u32
+        );
+    }
+}
+
+#[test]
+fn a_name_or_title_that_folds_to_nothing_matches_no_client() {
+    // A stored name of one space passes the safety subset of the read side and folds to nothing; a
+    // client name of invisible characters folds to nothing too. The two are not the same name.
+    let mut b = Brand::new(" ");
+    for client in ["\u{200B}", " ", "", "\u{200D}\u{2060}", "\u{FE0F}"] {
+        assert!(!b.matches_client(client), "{client:?}");
+    }
+    // Nor does an empty title, or a title of one space, in a brand whose name is not empty.
+    b = Brand::new("Zed");
+    b.set_title("sv", " ");
+    for client in ["\u{200B}", " ", ""] {
+        assert!(!b.matches_client(client), "{client:?}");
+    }
+    assert!(b.matches_client("zed"));
+}

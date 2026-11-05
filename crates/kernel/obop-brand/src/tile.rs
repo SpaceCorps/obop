@@ -57,6 +57,12 @@ pub fn tile_accent(stored: Option<&str>) -> TileAccent {
 /// The glyph of a name: its first letter or digit, as one scalar value, in upper case only when
 /// the uppercase mapping gives a single scalar (`ß` stays `ß`, it does not become `SS`); `O` when
 /// the name holds none.
+///
+/// The mapping is Rust's full uppercase mapping (`char::to_uppercase`), kept only when it is one
+/// scalar; Rust has no API for the simple, one-to-one mapping of Unicode. The two differ for the
+/// few Greek letters with an iota subscript (U+1FB3 has the simple uppercase U+1FBC and the full
+/// uppercase `ΑΙ`, two scalars, so it stays U+1FB3 here); for `ß`, `ŉ` and `ǰ` and every other letter
+/// they agree.
 pub fn glyph(name: &str) -> char {
     let Some(c) = name
         .chars()
@@ -71,7 +77,10 @@ pub fn glyph(name: &str) -> char {
     }
 }
 
-fn escape(s: &str) -> String {
+/// HTML-escapes text for the glyph of the tile. The glyph is a letter or a digit today, which
+/// needs no escaping; the function is kept so that a change to the glyph rule cannot put markup into
+/// the tile, and is tested on its own.
+pub(crate) fn escape(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for c in s.chars() {
         match c {
