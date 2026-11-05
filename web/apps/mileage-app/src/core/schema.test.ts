@@ -499,6 +499,9 @@ describe("what a module may do to the file", () => {
         remake("id TEXT PRIMARY KEY NOT NULL, n INTEGER NOT NULL DEFAULT 0, note TEXT"),
         "note",
       ],
+      // The last column has nothing after it to take its place, so only a column that is missing
+      // can show that it is gone.
+      ["its presence, when it is the last", "ALTER TABLE a_items DROP COLUMN n", "n"],
     ])("may not change %s of a column that was there", async (_, statement, column) => {
       const { db, error } = await later(statement);
       expect(error, String(error)).toBeInstanceOf(SchemaError);
@@ -1402,6 +1405,16 @@ describe("the pieces that a migration added to a table's text", () => {
     ],
   ])("finds nothing when there is %s", (_, was, now, kept, added) => {
     expect(appended(was, now, kept, added)).toBeNull();
+  });
+
+  test("reads the first group of parentheses only, and nothing that closes before it opens", () => {
+    expect(
+      appended("CREATE TABLE t (a TEXT) (x, y)", "CREATE TABLE t (a TEXT, b TEXT) (x, y)", 1, 1),
+    ).toEqual([" b TEXT"]);
+    // A closing parenthesis with no opening one is not the beginning of a group: the text is unreadable.
+    expect(
+      appended("CREATE TABLE t ) ((a TEXT)", "CREATE TABLE t ) ((a TEXT, b TEXT)", 1, 1),
+    ).toBeNull();
   });
 
   test("looks for the new pieces after the columns that were kept, not at the end", () => {

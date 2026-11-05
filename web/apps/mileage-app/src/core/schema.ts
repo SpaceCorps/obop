@@ -446,7 +446,7 @@ function definition(sql: string): Definition | null {
   const commas: number[] = [];
   for (const t of tokens) {
     if (isMark(t, "(")) {
-      if (depth === 0 && open < 0) open = t.end;
+      if (depth === 0) open = t.end;
       depth++;
     } else if (isMark(t, ")")) {
       depth--;

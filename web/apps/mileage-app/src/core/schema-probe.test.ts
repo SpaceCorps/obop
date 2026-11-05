@@ -103,15 +103,20 @@ describe("the older-build probe", () => {
     expect(await rowsOf(db)).toEqual(before.rows);
   });
 
-  test.each([
-    ["a file of a newer layout", "PRAGMA user_version = 2"],
-    ["a file with no layout", "PRAGMA user_version = 0"],
-  ])("does not open %s", async (_, statement) => {
+  test("does not open a file of a newer layout: the first build's own migration refuses it", async () => {
     const db = await emptyLegacyFile();
-    await db.exec(statement);
+    await db.exec("PRAGMA user_version = 2");
     const result = await probeOlderBuild(db);
     expect(result).toMatchObject({ ok: false, step: "open the file" });
-    expect(await objectsOf(db)).toEqual(await objectsOf(await emptyLegacyFile()));
+    expect((result as { error: string }).error).toMatch(/newer version of the app \(schema 2\)/);
+    expect(await layout(db)).toBe(2);
+  });
+
+  test("opens a file with no layout the way the first build does, as a new one, and leaves it with no layout", async () => {
+    const db = await emptyLegacyFile();
+    await db.exec("PRAGMA user_version = 0");
+    expect(await probeOlderBuild(db)).toEqual({ ok: true });
+    expect(await layout(db)).toBe(0);
   });
 
   // Each step of the probe is there because a file can be made that fails only at that step. A step
@@ -192,6 +197,23 @@ describe("the older-build probe", () => {
         "CREATE TRIGGER x BEFORE DELETE ON batch WHEN OLD.client_trip_id = 'probe-b' BEGIN SELECT RAISE(ABORT, 'no'); END",
       ],
       /^clear everything/,
+    ],
+    [
+      "batches that can be recorded twice",
+      rebuilt("batch", ",\n  PRIMARY KEY (client_trip_id, first_seq)\n) WITHOUT ROWID", "\n)"),
+      /^cut and send batches/,
+    ],
+    [
+      "a trigger that refuses the deleting of the batches of the first trip",
+      [
+        "CREATE TRIGGER x BEFORE DELETE ON batch WHEN OLD.client_trip_id = 'probe-a' BEGIN SELECT RAISE(ABORT, 'no'); END",
+      ],
+      /^delete a trip/,
+    ],
+    [
+      "the last column of the trips gone",
+      ["ALTER TABLE trip DROP COLUMN created_ms"],
+      /^start a trip/,
     ],
     ["a layout that the first build refuses", ["PRAGMA user_version = 7"], /^open the file/],
   ])("fails at the right step for %s", async (_, statements, step) => {
@@ -433,6 +455,26 @@ const BREAKS: Breaks[] = [
     ["ALTER TABLE trip DROP COLUMN problem_message"],
     /changed the column trip\.problem_message/,
     /^start a trip/,
+  ],
+  [
+    "a dropped last column",
+    ["ALTER TABLE trip DROP COLUMN created_ms"],
+    /changed the column trip\.created_ms/,
+    /^start a trip/,
+  ],
+  [
+    "the batches made again without their key and as a table with a rowid",
+    rebuilt("batch", ",\n  PRIMARY KEY (client_trip_id, first_seq)\n) WITHOUT ROWID", "\n)"),
+    /changed the column batch\.client_trip_id/,
+    /^cut and send batches/,
+  ],
+  [
+    "a trigger on the deleting of the batches of the first trip",
+    [
+      "CREATE TRIGGER mileage_batch_first BEFORE DELETE ON batch WHEN OLD.client_trip_id = 'probe-a' BEGIN SELECT RAISE(ABORT, 'no'); END",
+    ],
+    /made the trigger mileage_batch_first/,
+    /^delete a trip/,
   ],
   ["a dropped table", ["DROP TABLE batch"], /removed the table batch/, /^cut and send batches/],
   ["a renamed table", ["ALTER TABLE batch RENAME TO batch_old"], /batch/, /^cut and send batches/],

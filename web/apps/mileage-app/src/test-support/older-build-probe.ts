@@ -340,29 +340,22 @@ function steps(tx: SqlTx): [string, () => Promise<void>][] {
 }
 
 /**
- * Runs the first build against `db`, a file of layout 1, and says whether everything it does
- * works. The file is left as it was.
+ * Runs the first build against `db` and says whether everything it does works. The file is left
+ * as it was. The first build's own migration comes first, inside the transaction that is rolled
+ * back: on a file of layout 1 it reads the layout and does nothing, on a file of a newer layout
+ * it refuses, and on a file with no layout it takes the file for a new one and makes its tables
+ * (which are there, so nothing changes) and sets the layout.
  */
 export async function probeOlderBuild(db: SqlDb): Promise<ProbeResult> {
-  const layout = Number(
-    (await db.one<{ user_version: number }>("PRAGMA user_version"))?.user_version,
-  );
-  if (layout !== 1) {
-    return {
-      ok: false,
-      step: "open the file",
-      error: `the first build opens a file of layout 1; this one is ${layout}`,
-    };
-  }
-  try {
-    // The first build's own migration: it reads the layout and, finding 1, does nothing.
-    await firstBuildMigration(db);
-  } catch (error) {
-    return { ok: false, step: "open the file", error: String(error) };
-  }
   try {
     await db.transaction(async (tx) => {
-      for (const [step, run] of steps(tx)) {
+      // The migration asks for a transaction of its own; the one that is open is the one it gets.
+      const asDb: SqlDb = { ...tx, transaction: (fn) => fn(tx) };
+      const open: [string, () => Promise<void>] = [
+        "open the file",
+        () => firstBuildMigration(asDb),
+      ];
+      for (const [step, run] of [open, ...steps(tx)]) {
         try {
           await run();
         } catch (error) {
