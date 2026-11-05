@@ -596,9 +596,11 @@ fn input_over_16_kib_is_refused_and_16_kib_is_not() {
 
 #[test]
 fn canonical_text_over_16_kib_is_refused() {
-    // ".5" is two bytes on input and "0.5 " four on output.
-    let pairs = format!("M{}", ".5".repeat(3_500));
-    let input = wrap(&format!("<path d=\"{pairs}\"/><path d=\"{pairs}\"/>"));
+    // ".5" is two bytes on input and "0.5 " four on output. One list stays under 8 KiB when it is
+    // written out (7,601 bytes); the text of three of them does not stay under 16 KiB.
+    let pairs = format!("M{}", ".5".repeat(1_900));
+    let path = format!("<path d=\"{pairs}\"/>");
+    let input = wrap(&path.repeat(3));
     assert!(input.len() < MAX_BYTES, "{}", input.len());
     let r = canonical(input.as_bytes()).unwrap_err();
     assert!(
@@ -606,8 +608,8 @@ fn canonical_text_over_16_kib_is_refused() {
         "{:?}",
         messages(&r)
     );
-    // One of them is fine.
-    assert!(canonical(wrap(&format!("<path d=\"{pairs}\"/>")).as_bytes()).is_ok());
+    // Two of them are fine.
+    assert!(canonical(wrap(&path.repeat(2)).as_bytes()).is_ok());
 }
 
 #[test]
@@ -685,9 +687,10 @@ fn every_reason_is_listed_up_to_a_limit() {
 
 // ---- The hostile corpus ----------------------------------------------------------------------------
 
-#[test]
-fn the_hostile_corpus_is_refused_with_a_named_reason() {
-    let corpus: Vec<(&str, String, &str)> = vec![
+/// The hostile corpus: `(label, input, a word the list of reasons must hold)`. Shared by the test
+/// that refuses each entry and by the totality test, which cuts every entry at every length.
+fn hostile_corpus() -> Vec<(&'static str, String, &'static str)> {
+    vec![
         ("script", wrap("<script>alert(1)</script>"), "<script>"),
         (
             "script with a CDATA",
@@ -909,8 +912,12 @@ fn the_hostile_corpus_is_refused_with_a_named_reason() {
             wrap("<path d=\"M0 0\u{0}\"/>"),
             "expected a number",
         ),
-    ];
-    for (label, input, named) in corpus {
+    ]
+}
+
+#[test]
+fn the_hostile_corpus_is_refused_with_a_named_reason() {
+    for (label, input, named) in hostile_corpus() {
         let r = refuse(&input);
         assert!(
             r.iter().any(|r| r.message.contains(named)),
@@ -994,6 +1001,11 @@ fn join_nums(rng: &mut Rng, n: usize) -> String {
 }
 
 fn path_text(rng: &mut Rng) -> String {
+    // Now and then a long compact run: `.5` is two bytes on input and four on output, so it passes
+    // the 8 KiB of the input and may not pass it written out.
+    if rng.below(40) == 0 {
+        return format!("M{}", ".5".repeat(2 * (750 + rng.below(1_500))));
+    }
     let mut parts: Vec<String> = Vec::new();
     let mut tokens = format!("M{}", join_nums(rng, 2));
     for _ in 0..rng.below(8) {
@@ -1108,7 +1120,11 @@ fn element_text(rng: &mut Rng, depth: usize, budget: &mut usize) -> String {
         }
         "polygon" => {
             let n = 2 * (1 + rng.below(5));
-            let points = join_nums(rng, n);
+            let points = if rng.below(40) == 0 {
+                ".5".repeat(2 * (750 + rng.below(1_500)))
+            } else {
+                join_nums(rng, n)
+            };
             give(rng, &mut attrs, "points", points);
         }
         _ => {}
@@ -1184,19 +1200,27 @@ fn document_text(rng: &mut Rng) -> String {
     } else {
         ""
     };
-    // The size of the view box is positive; its origin is any number.
+    // The size of the view box is positive; its origin is any number. Now and then the size is tiny:
+    // the writer rounds to 4 decimals, so 0.00004 prints as 0 and the file is refused.
     let view_box = {
         let mut items = nums(rng, 2);
-        items.push(format!("{}", 1 + rng.below(500)));
-        items.push(format!("{}", 1 + rng.below(500)));
+        for _ in 0..2 {
+            items.push(if rng.below(8) == 0 {
+                rng.pick(&["0.00004", "0.0001", ".00005", "0.00001", "0.5"])
+                    .to_string()
+            } else {
+                format!("{}", 1 + rng.below(500))
+            });
+        }
         join(rng, &items)
     };
     format!("{decl}<svg xmlns=\"{NS}\"{size} viewBox=\"{view_box}\">{body}</svg>\n")
 }
 
 /// A property test over a fixed-seed generator written in the test: whatever the reader accepts, the
-/// output has only the bytes of section 8 and the quote rule holds, and the printer is
-/// idempotent: `print(parse(print(x)))` equals `print(x)` byte for byte.
+/// output has only the bytes of section 8 and the quote rule holds, the reader accepts its own
+/// output (what `configure` stores is read back), and the printer is idempotent:
+/// `print(parse(print(x)))` equals `print(x)` byte for byte.
 #[test]
 fn the_printer_is_idempotent_over_generated_files() {
     let mut rng = Rng::new(0x5EED_5151);
@@ -1259,6 +1283,14 @@ fn the_reader_never_panics_on_truncated_mutated_and_hostile_text() {
     );
     seeds.push(wrap(&"<g>".repeat(300)));
     seeds.push(wrap(&"</g>".repeat(300)));
+    // The hostile corpus itself: every entry is cut at every length below, and mutated.
+    let corpus = hostile_corpus();
+    assert!(corpus.len() >= 60, "{} entries", corpus.len());
+    let corpus_seeds = corpus.len();
+    seeds.extend(corpus.into_iter().map(|(_, input, _)| input));
+    assert!(seeds.len() >= corpus_seeds + 25);
+    // One cut for every character boundary and the end of every seed, at least.
+    let cuts: usize = seeds.iter().map(|s| s.chars().count() + 1).sum();
     let outcome = std::panic::catch_unwind(move || {
         let mut tried = 0usize;
         for seed in &seeds {
@@ -1310,7 +1342,7 @@ fn the_reader_never_panics_on_truncated_mutated_and_hostile_text() {
         tried
     });
     let tried = outcome.expect("the reader panicked");
-    assert!(tried > 10_000, "{tried}");
+    assert!(tried > 10_000 && tried >= cuts, "{tried} of {cuts} cuts");
 }
 
 #[test]
@@ -1340,4 +1372,202 @@ fn nesting_is_bounded_and_a_deep_file_is_refused_without_overflow() {
     let many: String = (0..500).map(|i| format!(" a{i}=\"1\"")).collect();
     let r = parse(wrap(&format!("<g{many}/>")).as_bytes()).unwrap_err();
     assert!(r.iter().any(|r| r.message.contains("attributes")));
+}
+
+// ---- What the reader accepts is read back; the numbers of section 8 are pinned by value ------------------
+
+/// Whether a reason of the list has this code.
+fn has_code(r: &[Refusal], code: &str) -> bool {
+    r.iter().any(|r| r.code == code)
+}
+
+#[test]
+fn a_size_that_prints_as_zero_is_refused_because_the_print_would_not_be_read_back() {
+    // The writer rounds to 4 decimals: 0.00004 prints as 0, and the read side refuses a size of 0.
+    for bad in [
+        "0 0 0.00004 64",
+        "0 0 64 0.00004",
+        "0 0 0.00001 0.00001",
+        "0 0 .00004 .00004",
+        "5 5 0.00004 1",
+    ] {
+        let r = refuse_naming(&format!("<svg viewBox=\"{bad}\"/>"), "viewBox");
+        assert!(has_code(&r, "svg_canonical"), "{bad}: {:?}", messages(&r));
+    }
+    // The smallest size that survives the print is 0.0001; an origin that rounds to 0 is fine.
+    assert_eq!(
+        accept("<svg viewBox=\"0 0 0.0001 0.0001\"/>"),
+        format!("<svg xmlns=\"{NS}\" viewBox=\"0 0 0.0001 0.0001\"></svg>")
+    );
+    assert_eq!(
+        accept("<svg viewBox=\"0.00004 -0.00004 1 1\"/>"),
+        format!("<svg xmlns=\"{NS}\" viewBox=\"0 0 1 1\"></svg>")
+    );
+}
+
+#[test]
+fn a_compact_list_that_prints_longer_than_8_kib_is_refused_when_it_is_read() {
+    // `.5` is two bytes on input and `0.5 ` four on output.
+    let points = |k: usize, negatives: usize| {
+        let mut list = String::new();
+        for i in 0..k {
+            list.push_str(if i < negatives { "-.5" } else { ".5" });
+        }
+        wrap(&format!("<polygon points=\"{list}\"/>"))
+    };
+    // 2048 numbers print as 8191 bytes, and one `-` more as 8192: accepted.
+    let printed = canonical(points(2048, 0).as_bytes()).unwrap();
+    assert!(printed.contains(&format!("points=\"{}\"", ["0.5"; 2048].join(" "))));
+    let exact = canonical(points(2048, 1).as_bytes()).unwrap();
+    assert_eq!(exact.split('"').nth(5).unwrap().len(), 8_192);
+    // 8193 and more: refused, though the input list is under 8 KiB (4,097 bytes and more).
+    for (k, negatives) in [(2048, 2), (2050, 0), (3_000, 0)] {
+        let input = points(k, negatives);
+        let r = canonical(input.as_bytes()).unwrap_err();
+        assert!(has_code(&r, "svg_canonical"), "{k}: {:?}", messages(&r));
+        assert!(
+            r.iter()
+                .all(|r| r.message.contains("points on <polygon>") && r.message.contains("8 KiB")),
+            "{k}: {:?}",
+            messages(&r)
+        );
+    }
+    // The same for a path: `Z` is one byte on input and two on output.
+    let path = |start: &str, zs: usize| wrap(&format!("<path d=\"{start}{}\"/>", "Z".repeat(zs)));
+    let printed = canonical(path("M10 0", 4_093).as_bytes()).unwrap();
+    assert_eq!(printed.split('"').nth(5).unwrap().len(), 8_192);
+    assert!(canonical(path("M0 0", 4_093).as_bytes()).is_ok(), "8191");
+    for (start, zs) in [("M0 0", 4_094), ("M10 0", 4_094), ("M0 0", 4_100)] {
+        let input = path(start, zs);
+        let r = canonical(input.as_bytes()).unwrap_err();
+        assert!(has_code(&r, "svg_canonical"), "{start} {zs}");
+        assert!(
+            r.iter()
+                .all(|r| r.message.contains("d on <path>") && r.message.contains("8 KiB")),
+            "{start} {zs}: {:?}",
+            messages(&r)
+        );
+    }
+}
+
+#[test]
+fn the_numbers_of_section_8_are_pinned_by_value() {
+    assert_eq!(MAX_BYTES, 16_384);
+    assert_eq!(MAX_ELEMENTS, 128);
+    assert_eq!(crate::svg::MAX_GROUP_DEPTH, 4);
+    assert_eq!(crate::svg::MAX_LIST_BYTES, 8_192);
+    assert_eq!(crate::svg::MAX_TRANSFORMS, 4);
+    assert_eq!(crate::svg::MAX_NUMBER_CHARS, 24);
+    assert!((crate::svg::MAX_ABS - 100_000.0).abs() < f64::EPSILON);
+    assert_eq!(crate::svg::MAX_REFUSALS, 20);
+}
+
+#[test]
+fn the_input_limit_is_16384_bytes_to_the_byte() {
+    let mut exact = String::from("<svg viewBox=\"0 0 1 1\"/>");
+    exact.push_str(&" ".repeat(16_384 - exact.len()));
+    assert_eq!(exact.len(), 16_384);
+    assert!(parse(exact.as_bytes()).is_ok());
+    assert!(parse_str(&exact).is_ok());
+    exact.push(' ');
+    assert_eq!(exact.len(), 16_385);
+    assert!(parse(exact.as_bytes()).is_err());
+    assert!(parse_str(&exact).is_err());
+}
+
+/// A file whose canonical text is exactly `target` bytes. It is written in the compact form so that
+/// the file itself stays small: `.5` is two bytes on input and ` 0.5` four on output, and `-.5` is
+/// three and ` -0.5` five, which gives a step of one byte.
+fn file_with_canonical_len(target: usize) -> String {
+    let empty = canonical(wrap("").as_bytes()).unwrap().len();
+    let remaining = target - empty;
+    for paths in 1..=8usize {
+        for negatives in 0..8usize {
+            // Each path is `<path d="M` + ` 0.5` for each number + `"/>`: 13 bytes and 4 per number.
+            let Some(rest) = remaining.checked_sub(13 * paths + negatives) else {
+                continue;
+            };
+            if rest % 8 != 0 {
+                continue;
+            }
+            let mut numbers = rest / 4;
+            if numbers < 2 * paths || numbers > 2_046 * paths {
+                continue;
+            }
+            let mut negatives_left = negatives;
+            let mut body = String::new();
+            for i in 0..paths {
+                let reserve = 2 * (paths - i - 1);
+                let k = (numbers - reserve).min(2_046);
+                numbers -= k;
+                let mut d = String::from("M");
+                for _ in 0..k {
+                    if negatives_left > 0 {
+                        negatives_left -= 1;
+                        d.push_str("-.5");
+                    } else {
+                        d.push_str(".5");
+                    }
+                }
+                body.push_str(&format!("<path d=\"{d}\"/>"));
+            }
+            let input = wrap(&body);
+            assert!(input.len() <= 16_384, "{} bytes in", input.len());
+            return input;
+        }
+    }
+    panic!("no file of {target} bytes");
+}
+
+#[test]
+fn the_canonical_limit_is_16384_bytes_to_the_byte() {
+    let at = file_with_canonical_len(16_384);
+    assert!(at.len() < 16_384, "the input is smaller than its print");
+    assert_eq!(canonical(at.as_bytes()).unwrap().len(), 16_384);
+    for over in [16_385, 16_386, 17_000] {
+        let file = file_with_canonical_len(over);
+        let r = canonical(file.as_bytes()).unwrap_err();
+        assert!(
+            r.iter().any(|r| r.code == "svg_too_large"
+                && r.message.contains(&format!("{over} bytes"))
+                && r.message.contains("16384")),
+            "{over}: {:?}",
+            messages(&r)
+        );
+    }
+}
+
+#[test]
+fn a_list_of_8192_bytes_on_input_is_read_and_8193_is_refused() {
+    let padded = |head: &str, total: usize| format!("{head}{}", " ".repeat(total - head.len()));
+    let d = |total: usize| wrap(&format!("<path d=\"{}\"/>", padded("M 0 0", total)));
+    let points = |total: usize| wrap(&format!("<polygon points=\"{}\"/>", padded("0 0", total)));
+    assert!(canonical(d(8_192).as_bytes()).is_ok());
+    assert!(canonical(points(8_192).as_bytes()).is_ok());
+    for refused in [d(8_193), points(8_193)] {
+        let r = canonical(refused.as_bytes()).unwrap_err();
+        assert!(
+            r.iter().any(|r| r.message.contains("8192 bytes (8 KiB)")),
+            "{:?}",
+            messages(&r)
+        );
+    }
+}
+
+#[test]
+fn identical_reasons_are_listed_once() {
+    let r = refuse(&wrap(&"<script/>".repeat(100)));
+    assert_eq!(r.len(), 1, "{:?}", messages(&r));
+    assert!(r[0].message.contains("<script>"));
+}
+
+#[test]
+fn a_radius_cannot_be_negative_and_a_transform_cannot_start_with_a_comma() {
+    for attr in ["rx", "ry"] {
+        let r = refuse_naming(&wrap(&format!("<ellipse {attr}=\"-1\"/>")), attr);
+        assert!(r.iter().any(|r| r.message.contains("negative")));
+    }
+    assert!(canonical(wrap("<ellipse rx=\"0\" ry=\"0\"/>").as_bytes()).is_ok());
+    assert!(transform_of(",translate(1)").is_err());
+    assert!(transform_of("translate(1),scale(2)").is_ok());
 }

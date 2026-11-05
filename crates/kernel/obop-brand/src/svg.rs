@@ -13,6 +13,13 @@
 //! attributes `fill`, `stroke`, `fill-rule`, `stroke-width` and `transform` and the geometry of
 //! each kind. Everything else is refused with a reason that names it.
 //!
+//! Three rules are stricter than a plain reading of that sentence, on purpose (they fail closed and
+//! cost a design-tool export one edit): a root `width` or `height`, though ignored, must be a plain
+//! number with an optional unit (`px`, `pt`, `em`, `cm`, `mm`, `in` or `%`), so `width="auto"` is
+//! refused; the width and the height of the `viewBox` must be positive; and whatever is accepted is
+//! read back (see `read`): a size below 0.0001 prints as 0, and a compact list that prints longer
+//! than 8 KiB written out (`.5.5` is four bytes, `0.5 0.5` seven) is refused.
+//!
 //! The canonical text is one line made only of the bytes `A-Z a-z 0-9` and space `, . : / # ( ) = < >
 //! " -`, and every `"` delimits an attribute value that the writer produced.
 
@@ -431,7 +438,41 @@ fn is_name_char(b: u8) -> bool {
     b.is_ascii_alphanumeric() || matches!(b, b'_' | b':' | b'.' | b'-')
 }
 
+/// Reads a text, and holds what it accepts to what the read side will accept: the canonical text
+/// is what is stored, and the read side parses the stored text again. The writer rounds every
+/// number to 4 decimals and writes every list in full with one space between two items, so a size
+/// below 0.0001 prints as 0 and a compact list (`.5.5`) can print longer than its input; either
+/// would pass the checks on the input and be refused when it is read back. Reading the printed
+/// text once here makes accepting and re-reading agree by construction, and the refusal names what
+/// the re-reading refused.
 fn read(text: &str) -> Result<Svg, Vec<Refusal>> {
+    let svg = read_once(text)?;
+    let printed = svg.print();
+    if printed.len() > MAX_BYTES {
+        return Err(vec![Refusal::new(
+            "svg_too_large",
+            format!(
+                "the canonical text is {} bytes; the limit is {MAX_BYTES} bytes (16 KiB)",
+                printed.len()
+            ),
+        )]);
+    }
+    if let Err(again) = read_once(&printed) {
+        let first = again.first().map_or("", |r| r.message.as_str());
+        return Err(vec![Refusal::new(
+            "svg_canonical",
+            format!(
+                "the canonical text of the file would be refused when it is read back ({first}); \
+                 the writer prints every number in full, rounded to 4 decimals, with one space \
+                 between two, so make the size larger or the list shorter"
+            ),
+        )]);
+    }
+    Ok(svg)
+}
+
+/// The reading itself, with no check of the canonical text.
+fn read_once(text: &str) -> Result<Svg, Vec<Refusal>> {
     let mut sink = Sink::new();
     let tree = match tokenize(text, &mut sink) {
         Ok(tree) => tree,
@@ -453,16 +494,6 @@ fn read(text: &str) -> Result<Svg, Vec<Refusal>> {
             "the file holds no <svg> element",
         )]);
     };
-    let printed = svg.print();
-    if printed.len() > MAX_BYTES {
-        return Err(vec![Refusal::new(
-            "svg_too_large",
-            format!(
-                "the canonical text is {} bytes; the limit is {MAX_BYTES} bytes (16 KiB)",
-                printed.len()
-            ),
-        )]);
-    }
     Ok(svg)
 }
 
