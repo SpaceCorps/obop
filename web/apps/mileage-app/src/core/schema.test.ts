@@ -1004,6 +1004,32 @@ describe("what a module may add to a file that an older build uses", () => {
       [`ALTER TABLE a_items ADD COLUMN k TEXT ${clauses}`],
       /^module a added the column a_items\.k as NOT NULL without a default/,
     ]),
+    // Several columns in one migration: the one the file records badly is named, wherever it is.
+    [
+      "a NOT NULL column with a NULL default, before one that is fine",
+      [
+        "ALTER TABLE a_items ADD COLUMN k TEXT NOT NULL DEFAULT 'a' DEFAULT NULL",
+        "ALTER TABLE a_items ADD COLUMN m TEXT",
+      ],
+      /^module a added the column a_items\.k as NOT NULL without a default/,
+    ],
+    [
+      "a NOT NULL column with a NULL default, between two that are fine",
+      [
+        "ALTER TABLE a_items ADD COLUMN j TEXT",
+        "ALTER TABLE a_items ADD COLUMN k TEXT NOT NULL DEFAULT 'a' DEFAULT NULL",
+        "ALTER TABLE a_items ADD COLUMN m TEXT",
+      ],
+      /^module a added the column a_items\.k as NOT NULL without a default/,
+    ],
+    [
+      "a NOT NULL column with a NULL default, after one that is fine",
+      [
+        "ALTER TABLE a_items ADD COLUMN j TEXT",
+        "ALTER TABLE a_items ADD COLUMN k TEXT NOT NULL DEFAULT 'a' DEFAULT NULL",
+      ],
+      /^module a added the column a_items\.k as NOT NULL without a default/,
+    ],
     [
       "a second DEFAULT on a column that may be empty",
       ["ALTER TABLE a_items ADD COLUMN k TEXT DEFAULT 'a' DEFAULT 'b'"],

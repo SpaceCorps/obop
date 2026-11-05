@@ -963,8 +963,11 @@ export interface EnsureOptions {
  * must not run twice. In that transaction: `module_schema` is made if it is missing, the versions
  * of a layout-1 file are recorded for the modules that were in it, every module that is behind is
  * migrated in list order and checked (`checkChange`), its version is recorded, and the layout
- * version is set. Any failure rolls all of it back. A file of a newer version is refused for every
- * module at once, on purpose: the modules share one file and one transaction.
+ * version is set. A migration is given a transaction that refuses any statement that begins, ends
+ * or nests a transaction (`guarded`), and runs between a savepoint and its release, which fails
+ * when the transaction was ended by another way (`releaseMigration`). Any failure rolls all of it
+ * back. A file of a newer version is refused for every module at once, on purpose: the modules
+ * share one file and one transaction.
  */
 export async function ensureModules(
   db: SqlDb,

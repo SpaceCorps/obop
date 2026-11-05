@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vite-plus/test";
+import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 import type { SqlDb, SqlTx, SqlValue } from "./sql.ts";
 import { FIRST_BUILD_SQL as Q } from "../test-support/legacy-statements.ts";
 import { emptyLegacyFile } from "../test-support/legacy-file.ts";
@@ -279,6 +279,47 @@ describe("what the probe reads back, key by key", () => {
       const quiet = await withAltered(db, { n: list.n, row }, (r) => void (r.purpose = "other"));
       expect(quiet, "not compared").toEqual({ ok: true });
     }
+  });
+});
+
+describe("what the probe does not take for a difference, and what it takes for one in its own setup", () => {
+  test("the order of the keys of an answer does not matter, the first build reads a row by name", async () => {
+    const db = await emptyLegacyFile();
+    const backwards = altered(db, (read) =>
+      read.rows.map((row) => Object.fromEntries(Object.entries(row).reverse())),
+    );
+    expect(await probeOlderBuild(backwards)).toEqual({ ok: true });
+  });
+
+  afterEach(() => {
+    vi.doUnmock("../test-support/legacy-statements.ts");
+    vi.resetModules();
+  });
+
+  // The probe gives `patchTrip` one value for each column the statement sets, and says so when the
+  // statement of the first build and the values of the probe are not the same list: here the
+  // statement is made to set one column more than the probe gives a value for.
+  test("a patchTrip that sets a column the probe has no value for is said so, before it runs", async () => {
+    vi.resetModules();
+    vi.doMock("../test-support/legacy-statements.ts", async (original) => {
+      const real = await original<typeof import("../test-support/legacy-statements.ts")>();
+      return {
+        ...real,
+        FIRST_BUILD_SQL: {
+          ...real.FIRST_BUILD_SQL,
+          patchTrip: real.FIRST_BUILD_SQL.patchTrip.replace(
+            " WHERE client_trip_id = ?",
+            ", created_ms = ? WHERE client_trip_id = ?",
+          ),
+        },
+      };
+    });
+    const probe = await import("../test-support/older-build-probe.ts");
+    expect(await probe.probeOlderBuild(await emptyLegacyFile())).toEqual({
+      ok: false,
+      step: "patch a trip with every column it can set, then clear its problem",
+      error: "the values of the probe are not the columns that patchTrip sets",
+    });
   });
 });
 
