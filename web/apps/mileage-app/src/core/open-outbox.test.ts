@@ -1,15 +1,22 @@
 import { describe, expect, test } from "vite-plus/test";
 import { FakeDatabaseFile, FakeSecrets, fakePorts } from "../test-support/fake-file.ts";
+import { HOST_SCHEMA } from "./host-state.ts";
 import {
   META_STALE_FILE_RECOVERED,
   dismissStaleFileNote,
   isNotADatabase,
-  openOutbox,
+  openOutbox as openOutboxWith,
   policyFor,
   staleFileRecoveredAt,
   type OpenNames,
+  type OpenPolicy,
+  type OpenPorts,
 } from "./open-outbox.ts";
-import { createSqlStore } from "./sql-store.ts";
+import { MILEAGE_SCHEMA, createSqlStore } from "./sql-store.ts";
+
+/** The call of every test below: the modules of the app are the same in all of them. */
+const openOutbox = (ports: OpenPorts, names: OpenNames, policy: OpenPolicy) =>
+  openOutboxWith(ports, names, policy, [HOST_SCHEMA, MILEAGE_SCHEMA]);
 
 const NAMES: OpenNames = {
   databaseKey: "db-key",
