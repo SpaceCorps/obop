@@ -331,6 +331,59 @@ mod tests {
         }
     }
 
+    /// The form again after a refused try (`err_name`, `err_agree`), as the door gives it back.
+    fn form_again(lang: &str, error: &str, history: Option<&History>) -> String {
+        form(
+            lang,
+            &Form {
+                rid: "rid1",
+                token: "tok1",
+                title: "Test NDA",
+                message: "",
+                signer_name: "Jane Test",
+                document_title: "Test NDA",
+                document_hash: &"ab".repeat(32),
+                typed: "",
+                error: Some(error),
+                history,
+            },
+        )
+        .html
+    }
+
+    #[test]
+    fn the_form_that_comes_back_after_a_refused_try_has_no_history_when_the_request_does_not_ask() {
+        for lang in LANGS {
+            let plain = form_html(lang);
+            let sentence = txt::html(lang, "history_notice", &[]);
+            for key in ["err_name", "err_agree"] {
+                let again = form_again(lang, key, None);
+                // Not the hidden field and not the sentence: the signer of a request that does not
+                // ask is not told that their name is shown, and the post does not claim it was.
+                assert!(
+                    !again.contains("name=\"hist\""),
+                    "{lang} {key}: the hidden field"
+                );
+                assert!(!again.contains(&sentence), "{lang} {key}: the sentence");
+                // The error line is the only difference from the page they first had.
+                let line = format!(
+                    "<div class=\"error\" role=\"alert\">{}</div>",
+                    txt::html(lang, key, &[])
+                );
+                assert_eq!(
+                    again.matches(&line).count(),
+                    1,
+                    "{lang} {key}: the error line"
+                );
+                assert_eq!(
+                    again.replace(&line, ""),
+                    plain,
+                    "{lang} {key}: nothing else"
+                );
+            }
+        }
+    }
+
     fn entry(name: &str, at: &str, own: bool) -> obop_commands::sign::HistoryEntry {
         obop_commands::sign::HistoryEntry {
             name: name.to_string(),

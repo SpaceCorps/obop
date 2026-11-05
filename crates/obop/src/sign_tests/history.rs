@@ -1108,6 +1108,59 @@ async fn a_signature_on_a_request_that_asks_stores_the_id_of_the_wording_with_th
 }
 
 #[tokio::test]
+async fn the_page_that_comes_back_after_a_typo_has_no_history_for_a_request_that_does_not_ask() {
+    // A refused try is answered with the form again. For a request without the box, or with it
+    // off, that page must not claim the signer's name is shown to anyone, carry the hidden field,
+    // or list anyone: the same page as before the history, with the error line.
+    let f = fixture().await;
+    let none = made(&f, &f.doc, "No switch", None).await;
+    let off = made(&f, &f.doc, "Switch off", Some(false)).await;
+    let mut n = 150u8;
+    for (m, what) in [(&none, "no switch"), (&off, "switch off")] {
+        // A name that is too short.
+        let r = f
+            .post(
+                &m.path,
+                &ip(n),
+                &[
+                    ("name", "x"),
+                    ("agree", "1"),
+                    ("doc", &f.file),
+                    ("lang", "en"),
+                ],
+            )
+            .await;
+        n += 1;
+        assert_eq!(r.status, 400, "{what}: {}", r.text());
+        let html = r.text();
+        assert!(html.contains("Type your full name"), "{what}: {html}");
+        // The box is not ticked.
+        let r = f
+            .post(
+                &m.path,
+                &ip(n),
+                &[("name", "Jane Test"), ("doc", &f.file), ("lang", "en")],
+            )
+            .await;
+        n += 1;
+        assert_eq!(r.status, 400, "{what}: {}", r.text());
+        let html2 = r.text();
+        assert!(html2.contains("Tick the box"), "{what}: {html2}");
+        for html in [&html, &html2] {
+            assert!(
+                !html.contains("name=\"hist\"")
+                    && !html.contains("shown to the other people")
+                    && !html.contains("Signed so far")
+                    && !html.contains("Nobody has signed this file yet"),
+                "{what}: {html}"
+            );
+        }
+        assert_eq!(f.record("sign_request", &m.id)["state"], "sent", "{what}");
+    }
+    assert!(f.events_of("sign_signed").is_empty());
+}
+
+#[tokio::test]
 async fn a_form_made_before_the_switch_was_turned_on_is_not_signed_and_comes_back_with_the_sentence()
  {
     let f = fixture().await;
