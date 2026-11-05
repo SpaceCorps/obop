@@ -1,7 +1,7 @@
 //! The brand of an instance as a page reads it: the name, the slug, a title and a message per
 //! language, and the one switch that says a brand is set (docs/spec/branding.md, sections 2, 7 and
-//! 10). No I/O: the reader of `obop-commands` builds a [`Brand`] from the stored row, field by
-//! field, after the read check.
+//! 10). No I/O: the reader that `obop-commands` will hold builds a [`Brand`] from the stored row,
+//! field by field, after the read check.
 
 use crate::slug;
 use crate::unicode::{category, default_ignorable, nfkc};
@@ -11,8 +11,8 @@ use icu_properties::props::GeneralCategory as Gc;
 pub const DEFAULT_NAME: &str = "obop";
 
 /// The languages of the pages, in the order of the stored fields (`title_<lang>`,
-/// `message_<lang>`). The same list as the OAuth pages' `LANGS`; a test of `obop-commands` or
-/// `obop` ties the model's language fields to it.
+/// `message_<lang>`). The same list as the OAuth pages' `LANGS`; a test added with the model will
+/// tie the model's language fields to it.
 pub const LANGS: [&str; 7] = ["en", "de", "fr", "pl", "fi", "sv", "es"];
 
 /// The position of a language in [`LANGS`], `None` for any other.

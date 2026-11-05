@@ -1,5 +1,6 @@
-//! The accent colour of the shop: whatever the owner picks is nudged until text on it and text
-//! in it meets WCAG 2.2 AA in light and in dark mode. The same maths as the backoffice colour
+//! The accent colour maths, shared by the public shop (`obop-site` re-exports this module) and the
+//! generated brand tile (`crate::tile`): whatever the owner picks is nudged until text on it and
+//! text in it meets WCAG 2.2 AA in light and in dark mode. The same maths as the backoffice colour
 //! picker (`web/packages/ui/src/colors.ts`): OKLCH lightness is moved in small steps until every
 //! check passes, so the hue the owner chose is kept.
 

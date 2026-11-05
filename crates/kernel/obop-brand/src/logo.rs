@@ -1,14 +1,17 @@
 //! The logo route's fixed answer: the path, and the headers that never change (docs/spec/branding.md,
-//! section 4, "The logo route"). The route lives in `obop-http` and the shop's favicon in
-//! `obop-site`; neither can depend on the other, so the constants live here.
+//! section 4, "The logo route"). The route will live in `obop-http` and the shop's favicon in
+//! `obop-site`; neither can depend on the other, so the constants live here. No route is added by
+//! this crate.
 
 use crate::refusal::Refusal;
 use crate::svg::{self, Svg};
 use crate::tile;
 use sha2::{Digest, Sha256};
 
-/// `GET /api/brand/logo.svg`: public, takes no path or id, serves the artwork or the tile and
-/// nothing else. A query string is ignored except that it is part of the browser's cache key.
+/// The path of the logo route, `GET /api/brand/logo.svg`, for when the route is added: public,
+/// takes no path or id, serves the artwork or the tile and nothing else. A query string is ignored
+/// except that it is part of the browser's cache key. Until the route exists, this path is not a
+/// route of the server.
 pub const LOGO_PATH: &str = "/api/brand/logo.svg";
 
 /// `Content-Type` of the logo.

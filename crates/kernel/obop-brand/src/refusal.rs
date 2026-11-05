@@ -1,6 +1,9 @@
 //! What a rule says when it refuses a value: a stable code and a sentence for a person. Neither
-//! ever holds raw text from the input, only what [`show_char`] and `show_text` make safe, so a
-//! refusal can be written to a log line or shown on a page as it is.
+//! ever holds raw text from the input, only what [`show_char`] and `show_text` make safe: no
+//! control, invisible or bidirectional character, and no newline, so a refusal cannot forge a log
+//! line or reorder the text around it. It is not HTML: a sentence holds printable ASCII as it is
+//! (the `<` of `<script>` that names an element, the `'<'` of a refused character), so a page, a
+//! JSON string or a command line that shows one escapes it like any other text.
 
 use std::fmt;
 

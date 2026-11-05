@@ -3,9 +3,10 @@
 //! chain, the neutral-wording switch and the comparison with a client's name.
 //!
 //! A leaf crate: no I/O, and it depends on neither `obop-commands` nor `obop-site`. The reader that
-//! keeps the stored row in memory, and the commands that write it, live in `obop-commands`. Every
-//! function here is total: whatever text it is given, it returns a value or a refusal and never
-//! panics, so a row written around the commands cannot take a page down.
+//! will keep the stored row in memory, and the commands that will write it, are not here: they are
+//! built on this crate, in `obop-commands`. Every function here is total: whatever text it is
+//! given, it returns a value or a refusal and never panics, so a row written around the commands
+//! cannot take a page down.
 
 pub mod brand;
 pub mod logo;
