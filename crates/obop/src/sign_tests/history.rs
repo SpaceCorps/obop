@@ -1551,6 +1551,62 @@ async fn once_signed_the_switch_is_an_administrators_to_change() {
     );
 }
 
+#[tokio::test]
+async fn clearing_the_box_on_a_signed_request_stops_the_list_on_its_own_links_too() {
+    // The documents say an administrator who clears the box on a signed request stops the lists
+    // on every link of that request, the one that signed and one that was never used. Pin it.
+    let f = fixture().await;
+    let a = made(&f, &f.doc, "Alice", Some(true)).await;
+    let (_, second) = f.mint("mia", &a.id).await;
+    let b = made(&f, &f.doc, "Bob", Some(true)).await;
+    assert_eq!(
+        sign(&f, &b, &f.file, "Bob Example", true, 160).await.status,
+        303
+    );
+    assert_eq!(
+        sign(&f, &a, &f.file, "Alice Example", true, 161)
+            .await
+            .status,
+        303
+    );
+    let names = |html: &str| -> Vec<String> {
+        let mut v: Vec<String> = entries(html).into_iter().map(|e| e.0).collect();
+        v.sort();
+        v
+    };
+    // While the box is ticked both links of the signed request list both signers.
+    for (path, n) in [(&a.path, 162u8), (&second, 163)] {
+        let html = page_of(&f, path, n).await;
+        assert_eq!(
+            names(&html),
+            ["Alice Example", "Bob Example"],
+            "{path}: {html}"
+        );
+        assert!(html.contains("Signed so far"), "{path}");
+    }
+    let (s, v) = f
+        .api(
+            "admin",
+            "/api/sign_request/update",
+            json!({"id": a.id, "show_history": false}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    // Cleared: neither link shows the block or a name, and both still answer with the page after
+    // signing.
+    for (path, n) in [(&a.path, 164u8), (&second, 165)] {
+        let html = page_of(&f, path, n).await;
+        assert!(
+            !html.contains("Signed so far") && names(&html).is_empty(),
+            "{path}: {html}"
+        );
+        assert!(!html.contains("Alice Example") && !html.contains("Bob Example"));
+    }
+    // Bob's own request still lists nobody else's name: Alice's entry is gone from his list too.
+    let html = page_of(&f, &b.path, 166).await;
+    assert_eq!(names(&html), ["Bob Example"], "{html}");
+}
+
 // ---- the order of a deploy and the package ----------------------------------------------------
 
 /// An instance whose `sign` is the package of before the history (0.2.1), with the people, the

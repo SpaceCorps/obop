@@ -375,11 +375,9 @@ mod tests {
                     1,
                     "{lang} {key}: the error line"
                 );
-                assert_eq!(
-                    again.replace(&line, ""),
-                    plain,
-                    "{lang} {key}: nothing else"
-                );
+                // It sits where the door puts it, right before the form, and nothing else moved.
+                let expected = plain.replacen("<form method", &format!("{line}<form method"), 1);
+                assert_eq!(again, expected, "{lang} {key}: nothing else");
             }
         }
     }
