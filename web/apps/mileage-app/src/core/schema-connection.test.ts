@@ -1429,7 +1429,7 @@ describe("a quoted name or a string where the reader looks for a word", () => {
     }
   });
 
-  test("a quoted name after CREATE is not TEMP, TEMPORARY or TRIGGER", () => {
+  test("a quoted name or a string after CREATE is not TEMP, TEMPORARY or TRIGGER", () => {
     // `CREATE "TEMP" TABLE` is not a temporary table (SQLite refuses it as a syntax error), and
     // `CREATE "TRIGGER" ...` is not a trigger whose body is read to its END: the text is split at
     // the semicolons, and the END that follows one is the first word of a statement.
@@ -1445,6 +1445,13 @@ describe("a quoted name or a string where the reader looks for a word", () => {
     });
     expect(transactionControl("CREATE TEMP TRIGGER x BEGIN SELECT 1; END")).toBeNull();
     expect(transactionControl("CREATE TEMPORARY TRIGGER x BEGIN SELECT 1; END")).toBeNull();
+    // A string in those places is not the word either.
+    for (const between of ["'TEMP'", "'TEMPORARY'"]) {
+      expect(transactionControl(`CREATE ${between} TRIGGER x BEGIN SELECT 1; END`)).toEqual({
+        word: "END",
+      });
+    }
+    expect(transactionControl("CREATE 'TRIGGER' x BEGIN SELECT 1; END")).toEqual({ word: "END" });
   });
 });
 
