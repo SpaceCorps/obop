@@ -41,6 +41,7 @@ export const HOST_SCHEMA: SchemaModule = {
   version: 1,
   legacyVersion: 1,
   legacyTables: ["meta"],
+  legacyDefinitions: { meta: CREATE_META },
   legacyMetaKeys: [META_OWNER, DISCLOSURE_META, META_STALE_FILE_RECOVERED],
   async migrate(tx, from) {
     if (from < 1) await tx.exec(CREATE_META);

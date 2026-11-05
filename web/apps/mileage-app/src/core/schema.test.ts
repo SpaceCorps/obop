@@ -3,10 +3,12 @@ import { HOST_SCHEMA } from "./host-state.ts";
 import {
   LAYOUT_VERSION,
   SchemaError,
+  appended,
   columnsProblem,
   ensureModules,
   moduleMetaKeyAllowed,
   scopedMeta,
+  storedDefinition,
   type SchemaModule,
 } from "./schema.ts";
 import type { SqlDb } from "./sql.ts";
@@ -336,7 +338,11 @@ describe("what a module may do to the file", () => {
   test("owns the legacy tables it declares, and no others", async () => {
     const db = memoryDb();
     await ensureModules(db, [
-      module("a", { legacyTables: ["trip"], steps: { 1: ["CREATE TABLE trip (id TEXT)"] } }),
+      module("a", {
+        legacyTables: ["trip"],
+        legacyDefinitions: { trip: "CREATE TABLE trip (id TEXT)" },
+        steps: { 1: ["CREATE TABLE trip (id TEXT)"] },
+      }),
     ]);
     expect(await tables(db)).toEqual(["module_schema", "trip"]);
     const error = await ensureModules(db, [
@@ -452,6 +458,58 @@ describe("what a module may do to the file", () => {
         ["n", 0],
       ]);
     });
+
+    // Each of these keeps every column but one, and changes that one in one respect only, so that
+    // it is the comparison of that respect, and nothing else, that has to notice. The message is
+    // asserted because the check of the table's text refuses a rebuild as well, with another
+    // message, and would hide a comparison that is missing.
+    const remake = (columns: string) =>
+      `CREATE TABLE a_new (${columns}); DROP TABLE a_items; ALTER TABLE a_new RENAME TO a_items`;
+    test.each([
+      [
+        "the type",
+        remake("id TEXT PRIMARY KEY NOT NULL, note INTEGER, n INTEGER NOT NULL DEFAULT 0"),
+        "note",
+      ],
+      [
+        "NOT NULL",
+        remake("id TEXT PRIMARY KEY NOT NULL, note TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0"),
+        "note",
+      ],
+      [
+        "the default",
+        remake("id TEXT PRIMARY KEY NOT NULL, note TEXT, n INTEGER NOT NULL DEFAULT 1"),
+        "n",
+      ],
+      [
+        "the default, by taking it away",
+        remake("id TEXT PRIMARY KEY NOT NULL, note TEXT, n INTEGER NOT NULL"),
+        "n",
+      ],
+      [
+        "whether it is a generated column",
+        remake(
+          "id TEXT PRIMARY KEY NOT NULL, note TEXT GENERATED ALWAYS AS ('x') VIRTUAL, n INTEGER NOT NULL DEFAULT 0",
+        ),
+        "note",
+      ],
+      ["the name, in capitals only", "ALTER TABLE a_items RENAME COLUMN note TO NOTE", "note"],
+      [
+        "its place among the columns",
+        remake("id TEXT PRIMARY KEY NOT NULL, n INTEGER NOT NULL DEFAULT 0, note TEXT"),
+        "note",
+      ],
+    ])("may not change %s of a column that was there", async (_, statement, column) => {
+      const { db, error } = await later(statement);
+      expect(error, String(error)).toBeInstanceOf(SchemaError);
+      expect((error as Error).message).toMatch(
+        new RegExp(`^module a changed the column a_items\\.${column}; `),
+      );
+      expect((await versions(db)).a).toBe(1);
+      expect(
+        (await db.all<{ name: string }>("PRAGMA table_info(a_items)")).map((c) => c.name),
+      ).toEqual(["id", "note", "n"]);
+    });
   });
 });
 
@@ -479,12 +537,22 @@ describe("which tables a module owns", () => {
     [
       "m, with the legacy table trip,",
       "trip_log",
-      () => module("m", { legacyTables: ["trip"], steps: { 1: ["CREATE TABLE trip (id TEXT)"] } }),
+      () =>
+        module("m", {
+          legacyTables: ["trip"],
+          legacyDefinitions: { trip: "CREATE TABLE trip (id TEXT)" },
+          steps: { 1: ["CREATE TABLE trip (id TEXT)"] },
+        }),
     ],
     [
       "m, with the legacy table trip,",
       "trips",
-      () => module("m", { legacyTables: ["trip"], steps: { 1: ["CREATE TABLE trip (id TEXT)"] } }),
+      () =>
+        module("m", {
+          legacyTables: ["trip"],
+          legacyDefinitions: { trip: "CREATE TABLE trip (id TEXT)" },
+          steps: { 1: ["CREATE TABLE trip (id TEXT)"] },
+        }),
     ],
   ])("%s does not make the table %s", async (_, table, build) => {
     const db = memoryDb();
@@ -590,6 +658,24 @@ describe("what a module may add to a file that an older build uses", () => {
         "ALTER TABLE a_items ADD COLUMN r REAL DEFAULT 1e3",
         "ALTER TABLE a_items ADD COLUMN z TEXT NULL",
       ],
+    ],
+    [
+      "columns whose names are keywords, written as quoted names",
+      [
+        `ALTER TABLE a_items ADD COLUMN "check" TEXT`,
+        `ALTER TABLE a_items ADD COLUMN "default" TEXT`,
+        `ALTER TABLE a_items ADD COLUMN "generated" TEXT`,
+      ],
+    ],
+    [
+      "a column and an index on a table and an index whose names have a double quote in them",
+      [`ALTER TABLE "a_x""y" ADD COLUMN more TEXT`, `CREATE INDEX "a_j""z" ON "a_x""y" (more)`],
+      {
+        first: [
+          `CREATE TABLE "a_x""y" (id TEXT PRIMARY KEY NOT NULL, note TEXT)`,
+          `CREATE INDEX "a_i""x" ON "a_x""y" (note)`,
+        ],
+      },
     ],
     [
       "columns on a table with a key over two columns and WITHOUT ROWID",
@@ -768,6 +854,111 @@ describe("what a module may add to a file that an older build uses", () => {
       ],
       /rebuilt the table a_items/,
     ],
+    [
+      "the table made again with a table CHECK after the last column (it is not a column called CHECK)",
+      [
+        "DROP TABLE a_items",
+        "CREATE TABLE a_items (id TEXT PRIMARY KEY NOT NULL, note TEXT, n INTEGER NOT NULL DEFAULT 0, CHECK (0))",
+      ],
+      /rebuilt the table a_items/,
+    ],
+    [
+      "the table made again with a new column and a table CHECK after it",
+      [
+        "DROP TABLE a_items",
+        "CREATE TABLE a_items (id TEXT PRIMARY KEY NOT NULL, note TEXT, n INTEGER NOT NULL DEFAULT 0, more TEXT, CHECK (0))",
+      ],
+      /rebuilt the table a_items/,
+    ],
+    [
+      "the table made again with a new column spliced into the definition of the last one, which takes its default",
+      [
+        "DROP TABLE a_items",
+        "CREATE TABLE a_items (id TEXT PRIMARY KEY NOT NULL, note TEXT, n INTEGER NOT NULL, extra INTEGER DEFAULT 0)",
+      ],
+      /changed the column a_items\.n;/,
+    ],
+    [
+      "the table made again with a new column between the others",
+      [
+        "DROP TABLE a_items",
+        "CREATE TABLE a_items (id TEXT PRIMARY KEY NOT NULL, extra TEXT, note TEXT, n INTEGER NOT NULL DEFAULT 0)",
+      ],
+      /changed the column a_items\.note;/,
+    ],
+    [
+      "the table made again with the columns in another order",
+      [
+        "DROP TABLE a_items",
+        "CREATE TABLE a_items (id TEXT PRIMARY KEY NOT NULL, n INTEGER NOT NULL DEFAULT 0, note TEXT)",
+      ],
+      /changed the column a_items\.note;/,
+    ],
+    [
+      "the table made again with a UNIQUE on a kept column",
+      [
+        "DROP TABLE a_items",
+        "CREATE TABLE a_items (id TEXT PRIMARY KEY NOT NULL, note TEXT UNIQUE, n INTEGER NOT NULL DEFAULT 0)",
+      ],
+      /rebuilt the table a_items/,
+    ],
+    [
+      "the table made again with a collation on a kept column",
+      [
+        "DROP TABLE a_items",
+        "CREATE TABLE a_items (id TEXT PRIMARY KEY NOT NULL, note TEXT COLLATE NOCASE, n INTEGER NOT NULL DEFAULT 0)",
+      ],
+      /rebuilt the table a_items/,
+    ],
+    [
+      "the table made again with a CHECK on a kept column",
+      [
+        "DROP TABLE a_items",
+        "CREATE TABLE a_items (id TEXT PRIMARY KEY NOT NULL, note TEXT, n INTEGER NOT NULL DEFAULT 0 CHECK (n >= 0))",
+      ],
+      /rebuilt the table a_items/,
+    ],
+    [
+      "the table made again with its text written in another way",
+      [
+        "DROP TABLE a_items",
+        "CREATE TABLE a_items (id TEXT PRIMARY KEY NOT NULL,\n  note TEXT, n INTEGER NOT NULL DEFAULT 0)",
+      ],
+      /rebuilt the table a_items/,
+    ],
+    [
+      "a column whose name is a word that starts a clause",
+      ["ALTER TABLE a_items ADD COLUMN generated TEXT"],
+      /added the column a_items\.generated with the word generated where the name of a column should be/,
+    ],
+    [
+      "the removal of an index of its own",
+      ["DROP INDEX a_items_note"],
+      /removed the index a_items_note, which an older build still uses/,
+      { first: [...BASE, "CREATE INDEX a_items_note ON a_items (note)"] },
+    ],
+    [
+      "a unique index on a table whose name has a double quote in it",
+      [`CREATE UNIQUE INDEX "a_u""x" ON "a_x""y" (note)`],
+      /made the unique index a_u"x/,
+      {
+        first: [
+          `CREATE TABLE "a_x""y" (id TEXT PRIMARY KEY NOT NULL, note TEXT)`,
+          `CREATE INDEX "a_i""x" ON "a_x""y" (note)`,
+        ],
+      },
+    ],
+    [
+      "a CHECK on a column added to a table whose name has a double quote in it",
+      [`ALTER TABLE "a_x""y" ADD COLUMN chk INTEGER NOT NULL DEFAULT 1 CHECK (chk > 0)`],
+      /added the column a_x"y\.chk with a CHECK constraint/,
+      {
+        first: [
+          `CREATE TABLE "a_x""y" (id TEXT PRIMARY KEY NOT NULL, note TEXT)`,
+          `CREATE INDEX "a_i""x" ON "a_x""y" (note)`,
+        ],
+      },
+    ],
     ["the layout version", ["PRAGMA user_version = 7"], /changed PRAGMA user_version/],
   ])("may not add %s", async (_, statements, message, more) => {
     const { db, error, objects } = await moveOn(statements, more);
@@ -803,6 +994,7 @@ describe("what a module may add to a file that an older build uses", () => {
       const db = memoryDb();
       const m = module("m", {
         legacyTables: ["trip", "point"],
+        legacyDefinitions: { trip: "CREATE TABLE trip (id TEXT, x TEXT)" },
         steps: { 1: ["CREATE TABLE trip (id TEXT, x TEXT)", ...statements] },
       });
       const error = await ensureModules(db, [m]).catch((e: unknown) => e);
@@ -844,8 +1036,55 @@ describe("the reader of the columns that a migration added", () => {
     [", a text not null default 0"],
     [", a TEXT /* CHECK (a > 0) */ NOT NULL DEFAULT 0 -- UNIQUE\n, b TEXT"],
     [", a TEXT, b INTEGER NOT NULL DEFAULT 0"],
+    // A word that starts a clause is a name when it is quoted.
+    [`, "check" TEXT, "default" TEXT, [generated] TEXT, \`unique\` TEXT`],
   ])("%s is plain", (added) => {
     expect(columnsProblem(added)).toBeNull();
+  });
+
+  // The words that start a constraint of a column or of a table, or a clause of a column, are not
+  // names: `, CHECK (0)` is a constraint of the table, and read as a column called CHECK with a
+  // size it let a rebuild of a table through that no column of the file showed.
+  test.each([
+    "CONSTRAINT",
+    "PRIMARY",
+    "UNIQUE",
+    "CHECK",
+    "FOREIGN",
+    "GENERATED",
+    "REFERENCES",
+    "DEFAULT",
+    "COLLATE",
+    "NOT",
+    "NULL",
+    "AS",
+    "ON",
+    "check",
+  ])("the word %s is not the name of a column", (word) => {
+    for (const text of [`, ${word} TEXT`, `, ${word} (0)`, `, ok TEXT, ${word}`]) {
+      const problem = columnsProblem(text);
+      expect(problem, text).not.toBeNull();
+      expect(problem?.why, text).toMatch(/where the name of a column should be/);
+    }
+  });
+
+  test("a constraint of the table is not a column, whatever it looks like", () => {
+    expect(columnsProblem(", CHECK (0)")).toEqual({
+      column: "CHECK",
+      why: "the word CHECK where the name of a column should be",
+    });
+    expect(columnsProblem(", PRIMARY KEY (a, b)")?.column).toBe("PRIMARY");
+    expect(columnsProblem(", UNIQUE (a)")?.column).toBe("UNIQUE");
+    expect(columnsProblem(", FOREIGN KEY (a) REFERENCES t(id)")?.column).toBe("FOREIGN");
+    expect(columnsProblem(", CONSTRAINT c CHECK (a)")?.column).toBe("CONSTRAINT");
+  });
+
+  test.each([
+    [", a TEXT FOREIGN KEY", /a foreign key/],
+    [", a TEXT GENERATED", /a generated value/],
+    [", a TEXT GENERATED ALWAYS", /a generated value/],
+  ])("the word that starts a clause ends the type: %s", (text, why) => {
+    expect(columnsProblem(text)?.why).toMatch(why);
   });
 
   test.each<[string, string, RegExp]>([
@@ -916,11 +1155,262 @@ describe("a list of modules that cannot work", () => {
       [module("a", { legacyTables: ["sqlite_sequence"] })],
       /SQLite/,
     ],
+    [
+      "a definition for a table that is not one of its legacy tables",
+      [
+        module("a", {
+          legacyTables: ["trip"],
+          legacyDefinitions: { point: "CREATE TABLE point (id TEXT)" },
+        }),
+      ],
+      /point has a legacy definition but is not in legacyTables/,
+    ],
   ])("%s is refused before anything is written", async (_, modules, message) => {
     const db = memoryDb();
     const { spy, log } = watched(db);
     await expect(ensureModules(spy, modules)).rejects.toThrow(message);
     expect(log).toEqual([]);
+  });
+});
+
+describe("a table of the first layout that a migration makes", () => {
+  // An older build opens the tables of the first layout and writes to them. A migration that makes
+  // one of them (the first one, in a new file) has to make exactly the table the module says that
+  // the first layout had, or the older build is writing to a table it does not know.
+  const DEFINITION = "CREATE TABLE IF NOT EXISTS trip (id TEXT PRIMARY KEY NOT NULL, x TEXT);";
+  const makes = (statement: string, options: Partial<SchemaModule> = {}) =>
+    module("m", {
+      legacyTables: ["trip"],
+      legacyDefinitions: { trip: DEFINITION },
+      steps: { 1: [statement] },
+      ...options,
+    });
+
+  test.each([
+    [
+      "written as the definition is",
+      "CREATE TABLE IF NOT EXISTS trip (id TEXT PRIMARY KEY NOT NULL, x TEXT)",
+    ],
+    ["written without IF NOT EXISTS", "CREATE TABLE trip (id TEXT PRIMARY KEY NOT NULL, x TEXT)"],
+    [
+      "written in small letters and over two lines",
+      "create table\n  if not exists trip (id TEXT PRIMARY KEY NOT NULL, x TEXT);",
+    ],
+  ])("may be made %s", async (_, statement) => {
+    const db = memoryDb();
+    await ensureModules(db, [makes(statement)]);
+    expect(await tables(db)).toEqual(["module_schema", "trip"]);
+  });
+
+  test.each([
+    ["another type", "CREATE TABLE trip (id TEXT PRIMARY KEY NOT NULL, x INTEGER)"],
+    ["another column", "CREATE TABLE trip (id TEXT PRIMARY KEY NOT NULL, x TEXT, y TEXT)"],
+    ["another key", "CREATE TABLE trip (id TEXT NOT NULL, x TEXT)"],
+    ["a constraint", "CREATE TABLE trip (id TEXT PRIMARY KEY NOT NULL, x TEXT, CHECK (0))"],
+    ["other spacing", "CREATE TABLE trip (id TEXT PRIMARY KEY NOT NULL,x TEXT)"],
+    [
+      "another table option",
+      "CREATE TABLE trip (id TEXT PRIMARY KEY NOT NULL, x TEXT) WITHOUT ROWID",
+    ],
+  ])("may not be made with %s", async (_, statement) => {
+    const db = memoryDb();
+    const error = await ensureModules(db, [makes(statement)]).catch((e: unknown) => e);
+    expect(error, String(error)).toBeInstanceOf(SchemaError);
+    expect((error as Error).message).toMatch(
+      /^module m made the table trip, which an older build also makes and writes to; .*this is not it$/,
+    );
+    expect(await tables(db)).toEqual([]);
+    expect(await layout(db)).toBe(0);
+  });
+
+  test("may not be made by a module that does not say what the table was", async () => {
+    const db = memoryDb();
+    const error = await ensureModules(db, [
+      makes("CREATE TABLE trip (id TEXT PRIMARY KEY NOT NULL, x TEXT)", {
+        legacyDefinitions: undefined,
+      }),
+    ]).catch((e: unknown) => e);
+    expect(error, String(error)).toBeInstanceOf(SchemaError);
+    expect((error as Error).message).toMatch(/the module declares none$/);
+    expect(await tables(db)).toEqual([]);
+  });
+
+  test("may be found in a file, whatever the module says about it: that is not making it", async () => {
+    // The file has the table already; `IF NOT EXISTS` does nothing, and the module did not make it.
+    const db = memoryDb();
+    await db.exec("CREATE TABLE trip (id TEXT); PRAGMA user_version = 1");
+    await ensureModules(db, [
+      module("m", {
+        legacyTables: ["trip"],
+        steps: { 1: ["CREATE TABLE IF NOT EXISTS trip (id TEXT, other TEXT)"] },
+      }),
+    ]);
+    expect(await versions(db)).toEqual({ m: 1 });
+    expect((await db.all<{ name: string }>("PRAGMA table_info(trip)")).map((c) => c.name)).toEqual([
+      "id",
+    ]);
+  });
+
+  test("a table whose name only looks like a legacy table is not one", async () => {
+    const db = memoryDb();
+    const error = await ensureModules(db, [
+      module("m", {
+        legacyTables: ["trip"],
+        legacyDefinitions: { trip: DEFINITION },
+        steps: { 1: ["CREATE TABLE trip_log (id TEXT)"] },
+      }),
+    ]).catch((e: unknown) => e);
+    expect((error as Error).message).toMatch(/made the table trip_log .*does not own/);
+  });
+});
+
+describe("the text that SQLite keeps for a table", () => {
+  test.each([
+    "CREATE TABLE IF NOT EXISTS t (a TEXT);",
+    "create\n table if not exists t (a TEXT)",
+    "CREATE TABLE t (\n  a TEXT PRIMARY KEY,\n  b TEXT\n) WITHOUT ROWID;\n",
+    "  CREATE  TABLE  IF  NOT  EXISTS  t (a TEXT)  ",
+    "CREATE TABLE t (a TEXT);  ",
+  ])("is what `storedDefinition` makes of %j", async (statement) => {
+    const db = memoryDb();
+    await db.exec(statement);
+    const stored = await db.one<{ sql: string }>("SELECT sql FROM sqlite_master WHERE name = 't'");
+    expect(storedDefinition(statement)).toBe(stored?.sql);
+  });
+
+  test("a definition in the middle of a text is left as it is", () => {
+    expect(storedDefinition("CREATE TABLE IF NOT EXISTS t (a TEXT DEFAULT 'IF NOT EXISTS')")).toBe(
+      "CREATE TABLE t (a TEXT DEFAULT 'IF NOT EXISTS')",
+    );
+    expect(storedDefinition("CREATE TABLE t (a TEXT);")).toBe("CREATE TABLE t (a TEXT)");
+  });
+});
+
+describe("the pieces that a migration added to a table's text", () => {
+  // `appended(was, now, kept, added)`: what `now` has and `was` has not, when `now` is `was` with
+  // `added` definitions put in after the first `kept` pieces and nothing else is different.
+  const PLAIN = "CREATE TABLE t (a TEXT, b TEXT)";
+
+  test.each<[string, string, string, number, number, string[]]>([
+    ["one column at the end", PLAIN, "CREATE TABLE t (a TEXT, b TEXT, c TEXT)", 2, 1, [" c TEXT"]],
+    [
+      "two columns",
+      PLAIN,
+      "CREATE TABLE t (a TEXT, b TEXT, c TEXT, d INTEGER DEFAULT 0)",
+      2,
+      2,
+      [" c TEXT", " d INTEGER DEFAULT 0"],
+    ],
+    [
+      "a column where ALTER TABLE puts it: before the constraints of the table",
+      "CREATE TABLE t (a TEXT, b TEXT,\n  PRIMARY KEY (a, b)\n) WITHOUT ROWID",
+      "CREATE TABLE t (a TEXT, b TEXT, c TEXT,\n  PRIMARY KEY (a, b)\n) WITHOUT ROWID",
+      2,
+      1,
+      [" c TEXT"],
+    ],
+    [
+      "a column where ALTER TABLE puts it when the last piece ends in a line break",
+      "CREATE TABLE t (\n  a TEXT,\n  b TEXT\n)",
+      "CREATE TABLE t (\n  a TEXT,\n  b TEXT\n, c TEXT)",
+      2,
+      1,
+      [" c TEXT"],
+    ],
+    [
+      "a column whose default has a comma and a bracket in it, and pieces with comments",
+      "CREATE TABLE t (a TEXT DEFAULT 'x, (y', -- one, two\n b /* ), */ TEXT)",
+      "CREATE TABLE t (a TEXT DEFAULT 'x, (y', -- one, two\n b /* ), */ TEXT, c TEXT DEFAULT ')')",
+      2,
+      1,
+      [" c TEXT DEFAULT ')'"],
+    ],
+    ["nothing added to a table that is the same", PLAIN, PLAIN, 2, 0, []],
+  ])("finds %s", (_, was, now, kept, added, expected) => {
+    expect(appended(was, now, kept, added)).toEqual(expected);
+  });
+
+  test.each<[string, string, string, number, number]>([
+    ["a piece changed", PLAIN, "CREATE TABLE t (a TEXT, b INTEGER, c TEXT)", 2, 1],
+    ["a piece changed only by a space", PLAIN, "CREATE TABLE t (a TEXT,  b TEXT, c TEXT)", 2, 1],
+    ["a column put in the middle", PLAIN, "CREATE TABLE t (a TEXT, c TEXT, b TEXT)", 2, 1],
+    ["a column put first", PLAIN, "CREATE TABLE t (c TEXT, a TEXT, b TEXT)", 2, 1],
+    ["the columns in another order", PLAIN, "CREATE TABLE t (b TEXT, a TEXT)", 2, 0],
+    [
+      "a constraint put after the new column when none was there",
+      PLAIN,
+      "CREATE TABLE t (a TEXT, b TEXT, c TEXT, CHECK (0))",
+      2,
+      1,
+    ],
+    ["a constraint added and no column", PLAIN, "CREATE TABLE t (a TEXT, b TEXT, CHECK (0))", 2, 0],
+    [
+      "a piece too many for the columns that were added",
+      PLAIN,
+      "CREATE TABLE t (a TEXT, b TEXT, c TEXT, d TEXT)",
+      2,
+      1,
+    ],
+    [
+      "a piece too few for the columns that were added",
+      PLAIN,
+      "CREATE TABLE t (a TEXT, b TEXT, c TEXT)",
+      2,
+      2,
+    ],
+    ["a piece removed", PLAIN, "CREATE TABLE t (a TEXT)", 2, 0],
+    ["another name", PLAIN, "CREATE TABLE u (a TEXT, b TEXT, c TEXT)", 2, 1],
+    ["another beginning", PLAIN, "CREATE TEMP TABLE t (a TEXT, b TEXT, c TEXT)", 2, 1],
+    [
+      "another end",
+      "CREATE TABLE t (a TEXT, b TEXT) WITHOUT ROWID",
+      "CREATE TABLE t (a TEXT, b TEXT, c TEXT)",
+      2,
+      1,
+    ],
+    ["an end added", PLAIN, "CREATE TABLE t (a TEXT, b TEXT, c TEXT) STRICT", 2, 1],
+    ["an old text without parentheses", "CREATE TABLE t", "CREATE TABLE t (a TEXT)", 0, 1],
+    ["a new text without parentheses", PLAIN, "CREATE TABLE t", 2, 0],
+    [
+      "an old text that closes before it opens",
+      "CREATE TABLE t ) (a TEXT",
+      "CREATE TABLE t ) (a TEXT, b TEXT",
+      1,
+      1,
+    ],
+    [
+      "an old text that does not close",
+      "CREATE TABLE t (a TEXT",
+      "CREATE TABLE t (a TEXT, b TEXT",
+      1,
+      1,
+    ],
+    ["a new text that does not close", PLAIN, "CREATE TABLE t (a TEXT, b TEXT, c TEXT", 2, 1],
+    [
+      "a text with a string that does not end",
+      "CREATE TABLE t (a TEXT DEFAULT 'x)",
+      "CREATE TABLE t (a TEXT DEFAULT 'x), b TEXT)",
+      1,
+      1,
+    ],
+    [
+      "a text with a comment that does not end",
+      "CREATE TABLE t (a TEXT /* x)",
+      "CREATE TABLE t (a TEXT /* x), b TEXT)",
+      1,
+      1,
+    ],
+  ])("finds nothing when there is %s", (_, was, now, kept, added) => {
+    expect(appended(was, now, kept, added)).toBeNull();
+  });
+
+  test("looks for the new pieces after the columns that were kept, not at the end", () => {
+    // Five pieces now, three before: the two new ones are after the first two, whatever comes next.
+    const was = "CREATE TABLE t (a, b, PRIMARY KEY (a))";
+    const now = "CREATE TABLE t (a, b, c, d, PRIMARY KEY (a))";
+    expect(appended(was, now, 2, 2)).toEqual([" c", " d"]);
+    expect(appended(was, now, 3, 2)).toBeNull();
+    expect(appended(was, now, 1, 2)).toBeNull();
   });
 });
 

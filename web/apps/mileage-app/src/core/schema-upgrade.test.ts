@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vite-plus/test";
 import { HOST_SCHEMA, createHostState } from "./host-state.ts";
 import { openOutbox, policyFor, type OpenNames } from "./open-outbox.ts";
-import { ensureModules, type SchemaModule } from "./schema.ts";
+import { ensureModules, storedDefinition, type SchemaModule } from "./schema.ts";
 import type { SqlDb } from "./sql.ts";
 import { MILEAGE_SCHEMA, createSqlStore, migrate } from "./sql-store.ts";
 import { FakeDatabaseFile, FakeSecrets, fakePorts } from "../test-support/fake-file.ts";
@@ -11,7 +11,10 @@ import {
   SCHEMA as LEGACY_SCHEMA,
   migrate as legacyMigrate,
 } from "../test-support/legacy-schema.ts";
+import { T0, legacyFile } from "../test-support/legacy-file.ts";
+import { FIRST_BUILD_SQL } from "../test-support/legacy-statements.ts";
 import { memoryDb } from "../test-support/memory-db.ts";
+import { probeOlderBuild } from "../test-support/older-build-probe.ts";
 import { watched } from "../test-support/watched-db.ts";
 
 // The real modules (the host's and the outbox's) against the files that the first builds made.
@@ -25,47 +28,9 @@ import { watched } from "../test-support/watched-db.ts";
 const KEY = "a".repeat(64);
 const NAMES: OpenNames = { databaseKey: "db-key", session: ["server", "tokens"] };
 const MODULES = [HOST_SCHEMA, MILEAGE_SCHEMA];
-const T0 = Date.parse("2026-10-15T09:00:00Z");
 
 /** The tables of the first layout, and no other. */
 const LEGACY_TABLES = ["batch", "meta", "point", "trip"];
-
-/** A file as the first build leaves it after a few days of use. */
-async function seed(db: SqlDb): Promise<void> {
-  const trip = (id: string, at: number) =>
-    db.run(
-      "INSERT INTO trip (client_trip_id, purpose, started_at, created_ms) VALUES (?, ?, ?, ?)",
-      [id, "business", new Date(at).toISOString(), at],
-    );
-  await trip("c1", T0);
-  await trip("c2", T0 + 3_600_000);
-  for (const seq of [1, 2, 3]) {
-    await db.run("INSERT INTO point (client_trip_id, seq, t, lat, lon) VALUES (?, ?, ?, ?, ?)", [
-      "c1",
-      seq,
-      T0 + seq * 1000,
-      `60.17${seq}`,
-      `24.94${seq}`,
-    ]);
-  }
-  await db.run(
-    "INSERT INTO batch (client_trip_id, first_seq, last_seq, sent) VALUES (?, ?, ?, ?)",
-    ["c1", 1, 3, 1],
-  );
-  const meta = (key: string, value: string) =>
-    db.run("INSERT INTO meta (key, value) VALUES (?, ?)", [key, value]);
-  await meta("owner", JSON.stringify({ origin: "https://phone.example", user: "dave" }));
-  await meta("location_disclosure_accepted", "2026-10-01T08:00:00.000Z");
-  await meta("stale_file_recovered_at", "2026-10-30T10:00:00.000Z");
-  await meta("active_trip", "c2");
-}
-
-async function legacyFile(): Promise<SqlDb> {
-  const db = memoryDb();
-  await legacyMigrate(db);
-  await seed(db);
-  return db;
-}
 
 interface Entry {
   type: string;
@@ -131,11 +96,50 @@ describe("the frozen copy of the first build", () => {
     );
   });
 
+  test("has the statements that the first build ran, as the store it shipped had them", () => {
+    // Each of the statements was compared with `sql-store.ts` of that commit, word for word, when
+    // this was written (all but `patchTrip`, which that store builds from a list of columns).
+    expect(Object.keys(FIRST_BUILD_SQL)).toHaveLength(30);
+    expect(createHash("sha256").update(JSON.stringify(FIRST_BUILD_SQL)).digest("hex")).toBe(
+      "e970ed0222ea23aab1b9ee25f55af8cb2f426632feaca075b1a2230db9f9c337",
+    );
+  });
+
   test("makes the four tables and sets the layout to 1", async () => {
     const db = memoryDb();
     await legacyMigrate(db);
     expect(await tableNames(db)).toEqual(LEGACY_TABLES);
     expect(await layout(db)).toBe(1);
+  });
+});
+
+describe("the definitions that the modules declare for the tables of the first layout", () => {
+  test.each([
+    ["host", HOST_SCHEMA],
+    ["mileage", MILEAGE_SCHEMA],
+  ])(
+    "are, for the tables of %s, the text the first build's migration leaves in the file",
+    async (_, m) => {
+      const first = memoryDb();
+      await legacyMigrate(first);
+      expect(Object.keys(m.legacyDefinitions ?? {}).sort()).toEqual(
+        [...(m.legacyTables ?? [])].sort(),
+      );
+      for (const table of m.legacyTables ?? []) {
+        const stored = await first.one<{ sql: string }>(
+          "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
+          [table],
+        );
+        expect(storedDefinition(m.legacyDefinitions?.[table] ?? "")).toBe(stored?.sql);
+      }
+    },
+  );
+
+  test("cover the four tables between them", () => {
+    const declared = [HOST_SCHEMA, MILEAGE_SCHEMA].flatMap((m) =>
+      Object.keys(m.legacyDefinitions ?? {}),
+    );
+    expect(declared.sort()).toEqual(LEGACY_TABLES);
   });
 });
 
@@ -273,6 +277,8 @@ describe("a file that this build made, opened by the first build", () => {
       const { spy, log } = watched(db);
       await legacyMigrate(spy);
       expect(log).toEqual([]);
+      // And everything the first build does, on the file as it is with its rows.
+      expect(await probeOlderBuild(db)).toEqual({ ok: true });
     });
 
     test("and the statements of the first build work: a trip inserted with the old columns gets the defaults", async () => {
@@ -342,6 +348,7 @@ describe("a file that this build made, opened by the first build", () => {
       expect(await db.one("SELECT note FROM batch WHERE client_trip_id = 'c2'")).toEqual({
         note: null,
       });
+      expect(await probeOlderBuild(db)).toEqual({ ok: true });
       // What the store does with them.
       const store = createSqlStore(db);
       expect(await store.pointCount("c1")).toBe(3);

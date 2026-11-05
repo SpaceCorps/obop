@@ -34,6 +34,13 @@ export interface SchemaModule {
   readonly requires?: readonly string[];
   /** Tables of the first layout that this module owns although their names do not start with `<id>_`. */
   readonly legacyTables?: readonly string[];
+  /**
+   * The definition that each of those tables had in the first layout, as the first build wrote it
+   * (`CREATE TABLE IF NOT EXISTS name (...)`). A build from before the schema manager opens a table
+   * of that name and writes to it, so a migration that makes one has to make exactly this table.
+   * A legacy table that has no definition here can be found in a file but not made.
+   */
+  readonly legacyDefinitions?: Readonly<Record<string, string>>;
   /** Keys of the table `meta` that this module uses although they do not start with `<id>.`. */
   readonly legacyMetaKeys?: readonly string[];
   /**
@@ -88,6 +95,13 @@ export function checkModules(modules: readonly SchemaModule[]): void {
       if (table.startsWith("sqlite_")) throw new SchemaError(`${table} is a table of SQLite`);
       legacy.set(table, m.id);
     }
+    for (const table of Object.keys(m.legacyDefinitions ?? {})) {
+      if (!(m.legacyTables ?? []).includes(table)) {
+        throw new SchemaError(
+          `module ${m.id}: ${table} has a legacy definition but is not in legacyTables`,
+        );
+      }
+    }
     for (const key of m.legacyMetaKeys ?? []) {
       const owner = legacyKeys.get(key);
       if (owner !== undefined) {
@@ -102,6 +116,17 @@ export function checkModules(modules: readonly SchemaModule[]): void {
 /** Whether a table belongs to a module by its name. */
 function owns(module: SchemaModule, table: string): boolean {
   return table.startsWith(`${module.id}_`) || (module.legacyTables ?? []).includes(table);
+}
+
+/**
+ * The text that SQLite keeps for a table made by `definition`: `CREATE TABLE`, then the name and
+ * what follows, without `IF NOT EXISTS` and without the closing semicolon. Exported for its tests.
+ */
+export function storedDefinition(definition: string): string {
+  return definition
+    .trim()
+    .replace(/;\s*$/, "")
+    .replace(/^CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?/i, "CREATE TABLE ");
 }
 
 const CREATE_MODULE_SCHEMA =
@@ -155,13 +180,25 @@ function plan(state: State, modules: readonly SchemaModule[]): SchemaModule[] {
   return modules.filter((m) => versionIn(state, m) < m.version);
 }
 
+/** A row of `PRAGMA table_xinfo`: all there is to a column that is not in the table's text. */
 interface Column {
   name: string;
   type: string;
   notnull: number;
   dflt_value: string | null;
   pk: number;
+  /** 0 for an ordinary column, 1 for a hidden column of a virtual table, 2 and 3 for a generated one. */
+  hidden: number;
 }
+
+/** Whether a column is, in every respect that the file records, the column it was. */
+const sameColumn = (a: Column, b: Column): boolean =>
+  a.name === b.name &&
+  a.type === b.type &&
+  a.notnull === b.notnull &&
+  a.dflt_value === b.dflt_value &&
+  a.pk === b.pk &&
+  a.hidden === b.hidden;
 
 interface SchemaObject {
   type: string;
@@ -204,7 +241,7 @@ async function snapshot(tx: SqlTx): Promise<Snapshot> {
   const indexes = new Map<string, IndexInfo>();
   for (const o of rows) {
     if (o.type !== "table") continue;
-    columns.set(o.name, await tx.all<Column>(`PRAGMA table_info(${quoted(o.name)})`));
+    columns.set(o.name, await tx.all<Column>(`PRAGMA table_xinfo(${quoted(o.name)})`));
     const keys = await tx.all<{ table: string }>(`PRAGMA foreign_key_list(${quoted(o.name)})`);
     parents.set(
       o.name,
@@ -240,27 +277,39 @@ const REFUSED_KINDS: Record<string, string> = {
  * updates, deletes and reads. So the module:
  *
  * - created objects only on tables it owns (tables named `<id>_*` and its legacy tables), and
- *   changed or removed no object that belongs to another module;
+ *   changed or removed no object that belongs to another module, and removed no table or index of
+ *   its own that was there;
  * - made nothing but tables of its own, indexes, and columns on tables that were there:
- *   - a table of its own may be as it likes, except that it is not a virtual table and has no
- *     foreign key to a table that was in the file before (an older build deletes from that table,
- *     and with foreign keys on the new table would refuse the delete);
+ *   - a table of its own that is new may be as it likes, except that it is not a virtual table, has
+ *     no foreign key to a table that was in the file before (an older build deletes from that table,
+ *     and with foreign keys on the new table would refuse the delete), and, if its name is that of a
+ *     legacy table, is exactly the definition that the module declares for it (an older build opens
+ *     a table of that name and writes to it);
  *   - an index is not unique (an older build's insert would fail on a duplicate), has no `WHERE`
  *     and no expression in its key (a function can raise an error on a row that the older build
  *     writes);
  *   - a trigger is refused (it runs on the older build's statements) and so is a view (a view with
  *     the name of a table of the first layout makes the older build's `CREATE TABLE IF NOT EXISTS`
  *     do nothing); so is every other kind of object;
- *   - a table that was there is changed by `ADD COLUMN` only: its text is what it was with column
- *     definitions added, every column that was there is as it was (type, key, NOT NULL), and each
- *     new column is a name, an optional type, and `NOT NULL` and `DEFAULT <plain value>` as wanted,
- *     with no `CHECK`, `REFERENCES`, `COLLATE`, generated value, `UNIQUE`, `PRIMARY KEY`, named
- *     constraint or `DEFAULT (expression)`; a new column that is NOT NULL has a default. Such a
- *     table is never dropped, renamed or rebuilt;
+ *   - a table that was there is changed by `ADD COLUMN` only, which is checked in two ways. By what
+ *     the file records (`PRAGMA table_xinfo`): every column that was there is the same in all of
+ *     it (position, name, type, NOT NULL, default, key position, hidden or generated), and a new
+ *     column that is NOT NULL has a default. By the table's text: it is what it was with the
+ *     definitions of the new columns added, in the one place where SQLite adds them (after the last
+ *     column, before the constraints of the table), every other piece of it letter for letter as it
+ *     was, and each new definition is a name that is not a keyword of a constraint, an optional
+ *     type, and `NOT NULL` and `DEFAULT <plain value>` as wanted, with no `CHECK`, `REFERENCES`,
+ *     `COLLATE`, generated value, `UNIQUE`, `PRIMARY KEY`, named constraint or `DEFAULT
+ *     (expression)`. Such a table is never dropped, renamed or rebuilt, and a text that cannot be
+ *     read with certainty is refused;
  * - left `PRAGMA user_version` as it was: the layout is `LAYOUT_VERSION`, set by the manager.
  *
- * A change that cannot be made this way needs `LAYOUT_VERSION` raised, which makes every older
- * build refuse the file. What a migration writes into rows is not checked here.
+ * This is a lint, not a proof: it refuses what the author of the rules could think of that would
+ * stop an older build, and it is written to refuse what it cannot classify. What proves a given
+ * migration safe is running the older build's own statements against the file it made (the probe
+ * of the tests, `test-support/older-build-probe.ts`). A change that cannot be made this way needs
+ * `LAYOUT_VERSION` raised, which makes every older build refuse the file. What a migration writes
+ * into rows is not checked here.
  */
 function checkChange(module: SchemaModule, before: Snapshot, after: Snapshot): void {
   const fail: (what: string) => never = (what) => {
@@ -304,6 +353,14 @@ function checkChange(module: SchemaModule, before: Snapshot, after: Snapshot): v
           );
         }
       }
+      if ((module.legacyTables ?? []).includes(o.name)) {
+        const wanted = module.legacyDefinitions?.[o.name];
+        if (wanted === undefined || o.sql !== storedDefinition(wanted)) {
+          fail(
+            `made the table ${o.name}, which an older build also makes and writes to; it has to be exactly the definition of the first layout, and ${wanted === undefined ? "the module declares none" : "this is not it"}`,
+          );
+        }
+      }
     } else if (o.type === "index") {
       const index = after.indexes.get(o.name);
       if (index === undefined) {
@@ -331,44 +388,33 @@ function checkChange(module: SchemaModule, before: Snapshot, after: Snapshot): v
   for (const [table, was] of before.columns) {
     if (!owns(module, table)) continue;
     const now = after.columns.get(table) ?? [];
-    for (const column of was) {
-      const kept = now.find((c) => c.name === column.name);
-      if (
-        kept === undefined ||
-        kept.type !== column.type ||
-        kept.pk !== column.pk ||
-        kept.notnull !== column.notnull
-      ) {
+    // New columns are added at the end, so the columns that were there are the first ones, as they were.
+    for (const [position, column] of was.entries()) {
+      const kept = now[position];
+      if (kept === undefined || !sameColumn(column, kept)) {
         fail(
           `changed the column ${table}.${column.name}; a change that an older build cannot read raises the layout version instead`,
         );
       }
     }
-    for (const column of now) {
-      if (
-        !was.some((c) => c.name === column.name) &&
-        column.notnull === 1 &&
-        column.dflt_value === null
-      ) {
+    const added = now.slice(was.length);
+    for (const column of added) {
+      if (column.notnull === 1 && column.dflt_value === null) {
         fail(`added the column ${table}.${column.name} as NOT NULL without a default`);
       }
     }
     // The columns say what the table has. Its text says what else it is made of: a key over two
     // columns, a CHECK, a UNIQUE, WITHOUT ROWID, STRICT, and what the new columns carry.
-    const textBefore = before.objects.get(`table ${table}`)?.sql;
-    const textAfter = after.objects.get(`table ${table}`)?.sql;
-    if (
-      typeof textBefore === "string" &&
-      typeof textAfter === "string" &&
-      textBefore !== textAfter
-    ) {
-      const added = insertion(textBefore, textAfter);
-      if (added === null) {
+    const textBefore = before.objects.get(`table ${table}`)?.sql ?? "";
+    const textAfter = after.objects.get(`table ${table}`)?.sql ?? "";
+    if (textBefore !== textAfter) {
+      const items = appended(textBefore, textAfter, was.length, added.length);
+      if (items === null) {
         fail(
-          `rebuilt the table ${table}; an older build only works with it if columns are all that was added`,
+          `rebuilt the table ${table}; an older build only works with it if the definitions of new columns are all that was added`,
         );
       }
-      const problem = columnsProblem(added);
+      const problem = columnsProblem(items.map((item) => `,${item}`).join(""));
       if (problem !== null) {
         fail(
           `added the column ${table}.${problem.column} with ${problem.why}; a new column is a plain one that may be empty or has a default`,
@@ -381,26 +427,76 @@ function checkChange(module: SchemaModule, before: Snapshot, after: Snapshot): v
   }
 }
 
-/**
- * The text that `now` has and `was` has not, when `now` is `was` with one piece added; else null.
- * `ALTER TABLE ... ADD COLUMN` puts `, <column definition>` after the last column and before the
- * constraints of the table (a key over two columns, WITHOUT ROWID), so the piece starts with a comma.
- */
-function insertion(was: string, now: string): string | null {
-  if (now.length <= was.length) return null;
-  let common = 0;
-  while (common < was.length && was[common] === now[common]) common++;
-  for (let at = common; at >= 0; at--) {
-    if (!now.endsWith(was.slice(at))) continue;
-    const piece = now.slice(at, now.length - (was.length - at));
-    if (piece.startsWith(",")) return piece;
+/** A table's text taken apart: what comes before and after the parentheses, and the pieces between the commas. */
+interface Definition {
+  /** Up to and including the opening parenthesis. */
+  head: string;
+  /** From the closing parenthesis on. */
+  tail: string;
+  /** The column definitions and then the constraints of the table, each as written. */
+  items: string[];
+}
+
+function definition(sql: string): Definition | null {
+  const tokens = tokenise(sql);
+  if (tokens === null) return null;
+  let depth = 0;
+  let open = -1;
+  let close = -1;
+  const commas: number[] = [];
+  for (const t of tokens) {
+    if (isMark(t, "(")) {
+      if (depth === 0 && open < 0) open = t.end;
+      depth++;
+    } else if (isMark(t, ")")) {
+      depth--;
+      if (depth < 0) return null;
+      if (depth === 0) {
+        close = t.start;
+        break;
+      }
+    } else if (isMark(t, ",") && depth === 1) {
+      commas.push(t.start);
+    }
   }
-  return null;
+  if (open < 0 || close < 0) return null;
+  const items: string[] = [];
+  let from = open;
+  for (const comma of commas) {
+    items.push(sql.slice(from, comma));
+    from = comma + 1;
+  }
+  items.push(sql.slice(from, close));
+  return { head: sql.slice(0, open), tail: sql.slice(close), items };
+}
+
+/**
+ * The pieces that `now` has and `was` has not, if `now` is `was` with `added` definitions put in
+ * after the first `kept` pieces and with nothing else different; else null. `ALTER TABLE ... ADD
+ * COLUMN` puts `, <definition>` after the last column and before the constraints of the table (the
+ * comma that comes before the first constraint stays where it was), so that is where the new
+ * definitions are looked for, and the pieces on both sides of them have to be the ones that were there.
+ * Exported for its tests.
+ */
+export function appended(was: string, now: string, kept: number, added: number): string[] | null {
+  const before = definition(was);
+  const after = definition(now);
+  if (before === null || after === null) return null;
+  if (before.head !== after.head || before.tail !== after.tail) return null;
+  const fresh = after.items.slice(kept, kept + added);
+  if (fresh.length !== added) return null;
+  const expected = [...before.items.slice(0, kept), ...fresh, ...before.items.slice(kept)];
+  if (expected.length !== after.items.length) return null;
+  return expected.every((piece, i) => piece === after.items[i]) ? fresh : null;
 }
 
 interface Token {
   kind: "word" | "name" | "string" | "blob" | "number" | "mark";
+  /** The word, the text between the quotes, the digits, the mark. */
   text: string;
+  /** Where it starts and ends in the text that was read. */
+  start: number;
+  end: number;
 }
 
 const NUMBER = /(?:0[xX][0-9a-fA-F]+|(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)/y;
@@ -446,7 +542,12 @@ function tokenise(sql: string): Token[] | null {
         j = end;
         break;
       }
-      out.push({ kind: c === "'" ? "string" : "name", text: sql.slice(i + 1, j) });
+      out.push({
+        kind: c === "'" ? "string" : "name",
+        text: sql.slice(i + 1, j),
+        start: i,
+        end: j + 1,
+      });
       i = j + 1;
       continue;
     }
@@ -455,21 +556,21 @@ function tokenise(sql: string): Token[] | null {
       if (/^[xX]$/.test(word) && sql[i + 1] === "'") {
         const end = sql.indexOf("'", i + 2);
         if (end < 0) return null;
-        out.push({ kind: "blob", text: sql.slice(i + 2, end) });
+        out.push({ kind: "blob", text: sql.slice(i + 2, end), start: i, end: end + 1 });
         i = end + 1;
         continue;
       }
-      out.push({ kind: "word", text: word });
+      out.push({ kind: "word", text: word, start: i, end: i + word.length });
       i += word.length;
       continue;
     }
     const number = at(NUMBER, i);
     if (number !== null) {
-      out.push({ kind: "number", text: number });
+      out.push({ kind: "number", text: number, start: i, end: i + number.length });
       i += number.length;
       continue;
     }
-    out.push({ kind: "mark", text: c });
+    out.push({ kind: "mark", text: c, start: i, end: i + 1 });
     i++;
   }
   return out;
@@ -481,19 +582,24 @@ const isMark = (t: Token | undefined, mark: string): boolean =>
   t !== undefined && t.kind === "mark" && t.text === mark;
 
 /**
- * The words that start a constraint of a column. A type name does not contain them. (`GENERATED
- * ALWAYS AS (...)` is not listed on its own: it contains `AS`, which is.)
+ * The words that start a constraint of a column or of a table. A type name does not contain them,
+ * and neither does a column name (a column that is called one of them has to be quoted, and that is
+ * a name, not a word).
  */
 const CONSTRAINT_WORDS = new Map<string, string>([
   ["CONSTRAINT", "a named constraint"],
   ["PRIMARY", "a primary key"],
   ["UNIQUE", "a UNIQUE constraint"],
   ["CHECK", "a CHECK constraint"],
+  ["FOREIGN", "a foreign key"],
   ["COLLATE", "a collation"],
   ["REFERENCES", "a foreign key"],
+  ["GENERATED", "a generated value"],
   ["AS", "a generated value"],
   ["ON", "an ON CONFLICT clause"],
 ]);
+/** The words that end the name or the type of a column: those above, and the ones of NOT NULL and DEFAULT. */
+const BEGINS_CLAUSE = new Set([...CONSTRAINT_WORDS.keys(), "NOT", "NULL", "DEFAULT"]);
 const PLAIN_DEFAULT_WORDS = new Set([
   "TRUE",
   "FALSE",
@@ -537,15 +643,17 @@ export function columnsProblem(added: string): { column: string; why: string } |
 function plainColumn(def: Token[]): string | null {
   const first = def[0];
   if (first === undefined || (first.kind !== "word" && first.kind !== "name")) return "no name";
+  // A word that starts a clause is not a name: `, CHECK (0)` is a constraint of the table, not a
+  // column called CHECK with a size. (A column that is called that is written as a quoted name.)
+  if (first.kind === "word" && BEGINS_CLAUSE.has(first.text.toUpperCase())) {
+    return `the word ${first.text} where the name of a column should be`;
+  }
   let i = 1;
   // The type: words that do not start a constraint, then a size.
   for (;;) {
     const t = def[i];
     if (t === undefined || t.kind !== "word") break;
-    const upper = t.text.toUpperCase();
-    if (CONSTRAINT_WORDS.has(upper) || upper === "NOT" || upper === "NULL" || upper === "DEFAULT") {
-      break;
-    }
+    if (BEGINS_CLAUSE.has(t.text.toUpperCase())) break;
     i++;
   }
   const sign = (): void => {

@@ -20,12 +20,11 @@ import { plausible, STALE_FIX_MS, toStored } from "./values.ts";
 const ACTIVE = "active_trip";
 
 /**
- * The three tables of the first layout, with the text of their first definition: the file keeps
+ * The three tables of the first layout, each with the text of its first definition: the file keeps
  * this text, so it is written out the way it always was. The fourth table of that layout, `meta`,
  * is the host's (`host-state.ts`).
  */
-const TABLES_V1 = `
-CREATE TABLE IF NOT EXISTS trip (
+const CREATE_TRIP = `CREATE TABLE IF NOT EXISTS trip (
   client_trip_id TEXT PRIMARY KEY NOT NULL,
   server_id TEXT,
   origin TEXT NOT NULL DEFAULT 'device',
@@ -50,8 +49,8 @@ CREATE TABLE IF NOT EXISTS trip (
   problem_code TEXT,
   problem_message TEXT,
   created_ms INTEGER NOT NULL
-);
-CREATE TABLE IF NOT EXISTS point (
+);`;
+const CREATE_POINT = `CREATE TABLE IF NOT EXISTS point (
   client_trip_id TEXT NOT NULL,
   seq INTEGER NOT NULL,
   t INTEGER NOT NULL,
@@ -60,15 +59,14 @@ CREATE TABLE IF NOT EXISTS point (
   accuracy_m TEXT,
   speed_mps TEXT,
   PRIMARY KEY (client_trip_id, seq)
-) WITHOUT ROWID;
-CREATE TABLE IF NOT EXISTS batch (
+) WITHOUT ROWID;`;
+const CREATE_BATCH = `CREATE TABLE IF NOT EXISTS batch (
   client_trip_id TEXT NOT NULL,
   first_seq INTEGER NOT NULL,
   last_seq INTEGER NOT NULL,
   sent INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (client_trip_id, first_seq)
-) WITHOUT ROWID;
-`;
+) WITHOUT ROWID;`;
 
 /**
  * The tables of the trip outbox in the schema manager (`schema.ts`). They are named `trip`,
@@ -83,9 +81,10 @@ export const MILEAGE_SCHEMA: SchemaModule = {
   legacyVersion: 1,
   requires: ["host"],
   legacyTables: ["trip", "point", "batch"],
+  legacyDefinitions: { trip: CREATE_TRIP, point: CREATE_POINT, batch: CREATE_BATCH },
   legacyMetaKeys: [ACTIVE],
   async migrate(tx, from) {
-    if (from < 1) await tx.exec(TABLES_V1);
+    if (from < 1) await tx.exec([CREATE_TRIP, CREATE_POINT, CREATE_BATCH].join("\n"));
   },
 };
 
