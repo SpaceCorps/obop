@@ -302,6 +302,19 @@ impl Reader {
             None => Ok(Brand::default()),
         }
     }
+
+    /// Called by `apply` once its batch has committed: bumps the counter and, when the cell holds a
+    /// value, replaces its brand part with what the new row shows. The cell keeps its theme part
+    /// and its age. A process that has not read yet has nothing to replace, and its first read
+    /// reads the new row. `row` is the row that was written, or none after a `clear`.
+    pub(crate) fn applied(&self, row: Option<&Fields>) {
+        let mut cell = recover(&self.cell);
+        cell.generation = cell.generation.wrapping_add(1);
+        if let Some(old) = &cell.shown {
+            let accent = old.theme_accent().map(str::to_string);
+            cell.shown = Some(Arc::new(row::read_row(row, accent)));
+        }
+    }
 }
 
 /// The brand read from the row alone, every time, never from a cache and without the theme: for

@@ -16,9 +16,11 @@
 //! No code outside this module reads the model `instance_brand` (a scan added with the first page
 //! that uses the reader checks it). There is no global: the reader belongs to the dispatcher.
 
+mod apply;
 mod reader;
 mod row;
 
+pub use apply::{Action, Applied, Changed, Failure, Refused, apply, changes_json, refusals_json};
 pub use reader::{Fresh, Reader, Sink, strict};
 pub use row::{Fallback, Shown, fallbacks_json};
 
