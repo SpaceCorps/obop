@@ -3362,3 +3362,43 @@ async fn a_form_cannot_choose_the_consent_id_or_the_mark_that_is_stored_with_its
         ]
     );
 }
+
+#[tokio::test]
+async fn a_form_for_a_request_that_asks_is_signed_only_with_hist_1_whatever_else_it_carries() {
+    // The door reads `hist` and no other spelling of it: a form for a request whose box is ticked
+    // that carries the switch under another name, or `hist` with another value, is not a form from
+    // a page that showed the sentence. It is answered 400, nothing is written, and the link still
+    // works for the form that does carry `hist=1`.
+    let f = fixture().await;
+    let m = made(&f, &f.doc, "Strict", Some(true)).await;
+    let tries: [(&str, &[(&str, &str)]); 8] = [
+        ("no hist at all", &[]),
+        ("history=1", &[("history", "1")]),
+        ("show_history=1", &[("show_history", "1")]),
+        ("show_history=true", &[("show_history", "true")]),
+        ("saw_history=1", &[("saw_history", "1")]),
+        ("hist=0", &[("hist", "0")]),
+        ("hist=true", &[("hist", "true")]),
+        ("hist=", &[("hist", "")]),
+    ];
+    for (i, (what, extra)) in tries.iter().enumerate() {
+        let r = sign_with(&f, &m, "Sam Example", "en", extra, 200 + i as u8).await;
+        assert_eq!(r.status, 400, "{what}: {}", r.text());
+        assert!(
+            r.text()
+                .contains("The page has changed since you opened it"),
+            "{what}"
+        );
+        let rec = f.record("sign_request", &m.id);
+        assert_eq!(rec["state"], "sent", "{what}: nothing was written");
+        assert!(rec.get("consent_version").is_none_or(J::is_null), "{what}");
+    }
+    assert!(f.events_of("sign_signed").is_empty());
+    // The form that carries the field is signed, under the id with the mark.
+    let r = sign_with(&f, &m, "Sam Example", "en", &[("hist", "1")], 210).await;
+    assert_eq!(r.status, 303, "{}", r.text());
+    assert_eq!(
+        f.record("sign_request", &m.id)["consent_version"],
+        WITH_HISTORY_EN
+    );
+}
