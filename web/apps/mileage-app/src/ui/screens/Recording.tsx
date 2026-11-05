@@ -1,9 +1,10 @@
-import { analyseTrack, type Fix } from "@obop/trip-core";
 import { Banner, Button, Screen, Text } from "@obop/ui-native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, AppState } from "react-native";
 import { recordingHealth, type Readiness } from "../../core/liveness.ts";
 import { formatMetres } from "../../core/present.ts";
+import type { Progress } from "../../core/progress.ts";
+import { startProgressReader } from "../../core/progress-reader.ts";
 import { MAX_POINTS_PER_TRIP } from "../../core/types.ts";
 import { clock } from "../../core/values.ts";
 import { t, tp } from "../../i18n/index.ts";
@@ -16,28 +17,7 @@ import { announce } from "../announce.ts";
 import { useNow, useOutbox } from "../hooks.ts";
 import { tOs } from "../os-text.ts";
 import type { Nav } from "../router.ts";
-
-interface Progress {
-  points: number;
-  metres: number;
-  /** When the newest stored position was taken (ms), or `null`. */
-  lastFixMs: number | null;
-}
-
-/** The phone's own count of the trip so far: the same rules as the server (`trip-core`), for the preview only. */
-async function progressOf(rt: Runtime, clientTripId: string): Promise<Progress> {
-  const stored = await rt.store.points(clientTripId);
-  const fixes: Fix[] = stored.map((p) => ({
-    seq: p.seq,
-    t: p.t,
-    lat: Number(p.lat),
-    lon: Number(p.lon),
-    accuracyM: p.accuracyM === null ? null : Number(p.accuracyM),
-  }));
-  let lastFixMs: number | null = null;
-  for (const p of stored) lastFixMs = lastFixMs === null ? p.t : Math.max(lastFixMs, p.t);
-  return { points: stored.length, metres: analyseTrack(fixes).distanceM, lastFixMs };
-}
+import { SignalNote } from "../SignalNote.tsx";
 
 /** A trip that was started this recently has just had its service started: no need to start it again. */
 const JUST_STARTED_MS = 10_000;
@@ -63,7 +43,7 @@ export function Recording({
   const now = useNow();
   // `null` until the stored positions have been read once: nothing is said about them before.
   const [measured, setMeasured] = useState<Progress | null>(null);
-  const progress: Progress = measured ?? { points: 0, metres: 0, lastFixMs: null };
+  const progress: Progress = measured ?? { points: 0, metres: 0, lastFixMs: null, signal: null };
   const [running, setRunning] = useState(true);
   const [blocked, setBlocked] = useState<Exclude<Readiness, "ready"> | null>(null);
   const [restartFailed, setRestartFailed] = useState(false);
@@ -74,28 +54,22 @@ export function Recording({
   const id = active?.clientTripId ?? null;
   const startedAt = active?.startedAt ?? null;
 
-  // The count is read when a point arrives, and at most every few seconds.
-  useEffect(() => {
-    if (id === null) return;
-    let alive = true;
-    let last = 0;
-    const read = () => {
-      const at = Date.now();
-      if (at - last < 4000) return;
-      last = at;
-      progressOf(rt, id).then(
-        (p) => alive && setMeasured(p),
-        () => undefined,
-      );
-    };
-    last = 0;
-    read();
-    const off = onChange(read);
-    return () => {
-      alive = false;
-      off();
-    };
-  }, [rt, id]);
+  // The phone's own count of the trip: the same rules as the server (`trip-core`), for the preview
+  // only. It is read when a point arrives, at most every few seconds, and a point that arrives
+  // sooner is read when those seconds are up (`progress-reader.ts`).
+  useEffect(
+    () =>
+      startProgressReader({
+        id,
+        read: (tripId) => rt.store.points(tripId),
+        subscribe: onChange,
+        clock: () => Date.now(),
+        set: setMeasured,
+        setTimeout: (run, ms) => setTimeout(run, ms),
+        clearTimeout: (timer) => clearTimeout(timer as ReturnType<typeof setTimeout>),
+      }),
+    [rt, id],
+  );
 
   // Starts the service again when it is not running, and says what stands in the way when the
   // phone cannot record. The system does not restart the service after the process was restarted,
@@ -287,6 +261,8 @@ export function Recording({
           message={t("recording.full.message")}
         />
       ) : null}
+      {/* Why the distance stays at 0 m; `measured` is `null` until the points have been read once. */}
+      <SignalNote measured={measured} />
 
       <Text variant="display" accessibilityRole="timer" testID="elapsed">
         {clock(now - Date.parse(active.startedAt))}
