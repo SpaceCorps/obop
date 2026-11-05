@@ -1325,6 +1325,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "obop-brand"
+version = "0.2.1"
+dependencies = [
+ "icu_normalizer",
+ "icu_properties",
+ "sha2",
+]
+
+[[package]]
 name = "obop-commands"
 version = "0.2.1"
 dependencies = [
