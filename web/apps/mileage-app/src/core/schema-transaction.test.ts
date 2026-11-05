@@ -357,7 +357,7 @@ describe("a migration that tries to begin, end or nest the manager's transaction
     expect(await objectsOf(db)).toEqual([]);
   });
 
-  // The four files of the verifier's reports: a module of the app at version 2 on a file of the
+  // Four files that were damaged before the guard existed: a module of the app at version 2 on a file of the
   // first build, with rows. Each used to be refused with some message and still lose its work.
   describe("on a file of the first build, with rows", () => {
     function mileageAt2(statements: readonly string[]): SchemaModule {

@@ -461,7 +461,7 @@ async function expectUntouched(db: SqlDb, run: () => Promise<unknown>) {
   return (error as Error).message;
 }
 
-// The four files of the verifier's report on a rollback that comes from a conflict clause. The
+// Four files in which a rollback comes from a conflict clause and not from a statement. The
 // migration catches the refusal of the guard and goes on, as it did when nothing refused: the
 // statement that follows is the one that did the harm, and it is taken back with the rest.
 describe("a rollback by conflict clause, on a file of the first build with rows", () => {
