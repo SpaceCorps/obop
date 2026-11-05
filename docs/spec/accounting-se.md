@@ -25,7 +25,7 @@ Two rules shape every stage.
 | 3. SIE 4 | Import and export of SIE 4 files | Being built in parallel (crate `obop-sie`); not part of this PR's package |
 | 4. OAS importer | `obop import oas` reads the OAS SQLite file and documents directory | Built for company, accounts, vouchers with entries, customers and receipts (`crates/obop/src/import_oas/`, section 5.3); invoices, payroll, bank, time are listed as skipped; tested against generated data only, never against real books |
 | 5. Invoices | Customer invoices with the ledger voucher | Not built for Sweden (the `invoicing` module exists; the link to the ledger and the Swedish rules do not) |
-| 6. Payroll and AGI | Employees, pay runs, employer contributions, AGI file | Not built (a new later package; every rate UNVERIFIED) |
+| 6. Payroll and AGI | Employees, pay runs, employer contributions, AGI file | Data model only, in `packages/contrib/payroll_se/payroll_se.toml` ([payroll-se.md](payroll-se.md); installable by upload, not bundled; every rate and rule UNVERIFIED, nothing seeded); no computation, no AGI XML |
 | 7. Receipts and bank | Receipt archive, bank lines, matching | Parts exist (`documents`, `accounting_bank_statement_line`); matching and booking not built |
 | 8. Time tracking | Projects, time entries, billing | Parts exist (`timesheets` package); the link to invoices is not built |
 | 9. Immutability and hash chain | Vouchers that cannot change, with a verifiable chain | Not built; waits on K5 (see 9) |

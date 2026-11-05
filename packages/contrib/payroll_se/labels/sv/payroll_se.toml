@@ -1,0 +1,287 @@
+[labels.sv.module]
+name = "Lön Sverige"
+description = "Svenskt lönestöd efter open-accounting-sweden: lönedata per anställd, lönekörningar med brutto, preliminärskatt, arbetsgivaravgift och netto, en avgiftstabell i baspunkter med granskningsstatus och en AGI-post. Bara payroll.approver godkänner. OVERIFIERAT: inget är kontrollerat mot Skatteverket och inga satser eller tabeller ingår. AGI-XML genereras inte."
+
+[labels.sv.model.payroll_se_employee]
+name = "Anställd (lön)"
+description = "Svensk lönedata för en anställd i modulen hr. Personuppgifter i känsliga klasser; se gallringsanteckningen i docs/spec/payroll-se.md. Alla skatteuppgifter skrivs in av användaren"
+
+[labels.sv.model.payroll_se_employee.field.employee_id]
+label = "Anställd"
+description = "Den anställde i modulen hr som lönedatan hör till; en post per anställd"
+
+[labels.sv.model.payroll_se_employee.field.personnummer]
+label = "Personnummer"
+description = "Personnummer, tolv siffror som 19900101-1234. Personuppgift i klassen confidential_hr: maskas för den som inte har payroll.preparer och visas aldrig för agenter; paketet kontrollerar inte kontrollsiffran"
+
+[labels.sv.model.payroll_se_employee.field.age_class]
+label = "Åldersklass"
+description = "Åldersklass som väljer arbetsgivaravgiften: standard, senior, over_79, youth, other. Väljs av användaren; ingenting härleds ur personnumret och klassnamnen är OVERIFIERADE etiketter, inte Skatteverkets termer"
+
+[labels.sv.model.payroll_se_employee.field.age_class.options]
+standard = "Standard"
+senior = "Senior"
+over_79 = "Över 79 år"
+youth = "Ungdom"
+other = "Övrig"
+
+[labels.sv.model.payroll_se_employee.field.tax_basis]
+label = "Skattegrund"
+description = "Hur preliminärskatten hittas: table (skattetabell och kolumn nedan), percent (fast procent nedan), adjustment (jämkningsbeslut nedan). Användaren bestämmer; inget slås upp"
+
+[labels.sv.model.payroll_se_employee.field.tax_basis.options]
+table = "Tabell"
+percent = "Procent"
+adjustment = "Jämkning"
+
+[labels.sv.model.payroll_se_employee.field.tax_table]
+label = "Skattetabell"
+description = "Skattetabellens nummer som användaren skrivit in från Skatteverket, till exempel 33. Kontrolleras inte, ingen tabell ingår"
+
+[labels.sv.model.payroll_se_employee.field.tax_column]
+label = "Tabellkolumn"
+description = "Skattetabellens kolumn som användaren skrivit in. Kontrolleras inte"
+
+[labels.sv.model.payroll_se_employee.field.tax_percent_bp]
+label = "Skatteprocent (bp)"
+description = "Fast preliminärskatt i baspunkter när skattegrunden är percent: 3000 betyder 30,00 procent. Anges av användaren"
+
+[labels.sv.model.payroll_se_employee.field.adjustment_percent_bp]
+label = "Jämkningsprocent (bp)"
+description = "Skatteprocent i baspunkter enligt ett jämkningsbeslut när skattegrunden är adjustment. Anges av användaren från beslutet"
+
+[labels.sv.model.payroll_se_employee.field.adjustment_valid_from]
+label = "Jämkning gäller från"
+description = "Första dag jämkningsbeslutet gäller (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.payroll_se_employee.field.adjustment_valid_to]
+label = "Jämkning gäller till"
+description = "Sista dag jämkningsbeslutet gäller (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.payroll_se_employee.field.active]
+label = "Aktiv"
+description = "Om den anställde kan läggas på nya lönekörningar"
+
+[labels.sv.model.payroll_se_employee.field.note]
+label = "Anteckning"
+description = "Handläggarens anmärkningar. Skriv inte personnummer eller hälsouppgifter här"
+
+[labels.sv.model.payroll_se_rate]
+name = "Avgiftssats"
+description = "En arbetsgivaravgift för en åldersklass och en giltighetstid. OVERIFIERAD tills godkännaren har kontrollerat den mot Skatteverket"
+
+[labels.sv.model.payroll_se_rate.field.name]
+label = "Namn"
+description = "Radens korta namn, till exempel standard från 2026-01"
+
+[labels.sv.model.payroll_se_rate.field.age_class]
+label = "Åldersklass"
+description = "Åldersklassen satsen gäller: standard, senior, over_79, youth, other"
+
+[labels.sv.model.payroll_se_rate.field.age_class.options]
+standard = "Standard"
+senior = "Senior"
+over_79 = "Över 79 år"
+youth = "Ungdom"
+other = "Övrig"
+
+[labels.sv.model.payroll_se_rate.field.rate_bp]
+label = "Sats (bp)"
+description = "Arbetsgivaravgift i baspunkter: 3142 betyder 31,42 procent. Skrivs in av användaren; paketet levererar inget värde"
+
+[labels.sv.model.payroll_se_rate.field.valid_from]
+label = "Gäller från"
+description = "Första dag satsen gäller (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.payroll_se_rate.field.valid_to]
+label = "Gäller till"
+description = "Sista dag satsen gäller (ÅÅÅÅ-MM-DD); tomt betyder utan slutdatum"
+
+[labels.sv.model.payroll_se_rate.field.review]
+label = "Granskning"
+description = "Satsens granskningsstatus: unverified, verified. Börjar overifierad; bara godkännaren verifierar, efter kontroll mot Skatteverket"
+
+[labels.sv.model.payroll_se_rate.field.review.options]
+unverified = "Overifierad"
+verified = "Verifierad"
+
+[labels.sv.model.payroll_se_rate.field.verified]
+label = "Verifierad"
+description = "Om satsen har verifierats av ägaren; falskt tills dess"
+
+[labels.sv.model.payroll_se_rate.field.verified_by]
+label = "Verifierad av"
+description = "Inloggningsnamn för den som verifierade"
+
+[labels.sv.model.payroll_se_rate.field.verified_on]
+label = "Verifierad den"
+description = "Datum då satsen verifierades (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.payroll_se_rate.field.source]
+label = "Källa"
+description = "Var satsen kommer ifrån och vad som kontrollerades; tomt betyder att ingen källa kontrollerats"
+
+[labels.sv.model.payroll_se_rate.action.verify]
+label = "Verifiera"
+description = "Markera satsen som kontrollerad mot Skatteverket (bara godkännaren)"
+
+[labels.sv.model.payroll_se_rate.action.unverify]
+label = "Ta bort verifiering"
+description = "Återkalla verifieringen av satsen (bara godkännaren)"
+
+[labels.sv.model.payroll_se_pay_run]
+name = "Lönekörning"
+description = "En lönekörning för en period: rader med brutto, preliminärskatt, arbetsgivaravgift och netto, föreslagen av en handläggare och godkänd av en person. OVERIFIERAD: paketet kontrollerar ingen sats eller regel"
+
+[labels.sv.model.payroll_se_pay_run.field.period]
+label = "Period"
+description = "Löneperiod, till exempel 2026-10; en körning per period"
+
+[labels.sv.model.payroll_se_pay_run.field.pay_date]
+label = "Utbetalningsdatum"
+description = "Dag då lönerna betalas (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.payroll_se_pay_run.field.total_gross]
+label = "Summa brutto"
+description = "Körningens samlade bruttolön i öre"
+
+[labels.sv.model.payroll_se_pay_run.field.total_tax]
+label = "Summa skatt"
+description = "Samlad avdragen preliminärskatt i öre"
+
+[labels.sv.model.payroll_se_pay_run.field.total_contribution]
+label = "Summa avgifter"
+description = "Samlade arbetsgivaravgifter i öre, som de skrivits på raderna"
+
+[labels.sv.model.payroll_se_pay_run.field.total_net]
+label = "Summa netto"
+description = "Samlad nettolön i öre: brutto minus preliminärskatt"
+
+[labels.sv.model.payroll_se_pay_run.field.rates_confirmed]
+label = "Satser bekräftade"
+description = "Godkännaren bekräftar att varje sats och skatteuppgift på raderna jämförts med Skatteverket och att de satsrader som använts är verifierade"
+
+[labels.sv.model.payroll_se_pay_run.field.notes]
+label = "Anteckningar"
+description = "Handläggarens eller godkännarens anmärkningar"
+
+[labels.sv.model.payroll_se_pay_run.field.state]
+label = "Status"
+description = "Körningens status: draft, proposed, approved, paid"
+
+[labels.sv.model.payroll_se_pay_run.field.state.options]
+draft = "Utkast"
+proposed = "Föreslagen"
+approved = "Godkänd"
+paid = "Betald"
+
+[labels.sv.model.payroll_se_pay_run.action.propose]
+label = "Föreslå"
+description = "Föreslå körningen för godkännande; agenter får göra detta"
+
+[labels.sv.model.payroll_se_pay_run.action.withdraw]
+label = "Dra tillbaka"
+description = "Skicka en föreslagen körning tillbaka till utkast"
+
+[labels.sv.model.payroll_se_pay_run.action.approve]
+label = "Godkänn"
+description = "Godkänn körningen (bara godkännaren; satserna måste vara bekräftade mot Skatteverket)"
+
+[labels.sv.model.payroll_se_pay_run.action.approve.assert.rates_checked]
+message = "Satserna är inte bekräftade som kontrollerade mot Skatteverket"
+
+[labels.sv.model.payroll_se_pay_run.action.record_paid]
+label = "Registrera betald"
+description = "Registrera att lönerna betalats utanför systemet (bara godkännaren)"
+
+[labels.sv.model.payroll_se_pay_run_line]
+name = "Lönerad"
+description = "En anställd i en lönekörning; alla belopp skrivs in av handläggaren"
+
+[labels.sv.model.payroll_se_pay_run_line.field.run_id]
+label = "Lönekörning"
+description = "Lönekörningen raden tillhör"
+
+[labels.sv.model.payroll_se_pay_run_line.field.employee_id]
+label = "Anställd"
+description = "Den anställde som får lön"
+
+[labels.sv.model.payroll_se_pay_run_line.field.gross]
+label = "Brutto"
+description = "Bruttolön i öre"
+
+[labels.sv.model.payroll_se_pay_run_line.field.preliminary_tax]
+label = "Preliminärskatt"
+description = "Avdragen preliminärskatt i öre, inskriven av användaren från tabell eller beslut; beräknas inte här"
+
+[labels.sv.model.payroll_se_pay_run_line.field.age_class]
+label = "Åldersklass"
+description = "Åldersklassen som avgiftssatsen valdes för"
+
+[labels.sv.model.payroll_se_pay_run_line.field.age_class.options]
+standard = "Standard"
+senior = "Senior"
+over_79 = "Över 79 år"
+youth = "Ungdom"
+other = "Övrig"
+
+[labels.sv.model.payroll_se_pay_run_line.field.rate_bp]
+label = "Sats (bp)"
+description = "Arbetsgivaravgift i baspunkter som handläggaren använt, kopierad från en satsrad"
+
+[labels.sv.model.payroll_se_pay_run_line.field.rate_id]
+label = "Satsrad"
+description = "Satsraden procenten kommer från; godkännaren kontrollerar att den är verifierad"
+
+[labels.sv.model.payroll_se_pay_run_line.field.employer_contribution]
+label = "Arbetsgivaravgift"
+description = "Arbetsgivaravgift i öre, inskriven av användaren; beräknas inte här"
+
+[labels.sv.model.payroll_se_pay_run_line.field.net]
+label = "Netto"
+description = "Nettolön i öre: brutto minus preliminärskatt"
+
+[labels.sv.model.payroll_se_pay_run_line.field.note]
+label = "Anteckning"
+description = "Varför beloppen är som de är, för godkännaren"
+
+[labels.sv.model.payroll_se_agi_submission]
+name = "AGI-inlämning"
+description = "En post för en arbetsgivardeklaration på individnivå (AGI) för en period. XML-filen genereras inte här och inget skickas; posten registrerar bara vad som förberetts och lämnats in utanför systemet. OVERIFIERAD"
+
+[labels.sv.model.payroll_se_agi_submission.field.period]
+label = "Period"
+description = "Deklarationsperiod, till exempel 2026-10"
+
+[labels.sv.model.payroll_se_agi_submission.field.run_id]
+label = "Lönekörning"
+description = "Lönekörningen deklarationen bygger på"
+
+[labels.sv.model.payroll_se_agi_submission.field.file_reference]
+label = "Filreferens"
+description = "Namn eller hash på AGI-filen som gjorts utanför systemet. Själva filen lagras inte här; den innehåller personnummer, så förvara den som ett begränsat dokument"
+
+[labels.sv.model.payroll_se_agi_submission.field.submitted_on]
+label = "Inlämnad den"
+description = "Datum då den lämnades till Skatteverket utanför systemet (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.payroll_se_agi_submission.field.receipt_reference]
+label = "Kvittensreferens"
+description = "Kvittens eller bekräftelse från Skatteverket, inskriven av användaren"
+
+[labels.sv.model.payroll_se_agi_submission.field.state]
+label = "Status"
+description = "Status: draft, prepared, recorded_submitted"
+
+[labels.sv.model.payroll_se_agi_submission.field.state.options]
+draft = "Utkast"
+prepared = "Förberedd"
+recorded_submitted = "Inlämnad (registrerad)"
+
+[labels.sv.model.payroll_se_agi_submission.action.mark_prepared]
+label = "Markera förberedd"
+description = "Registrera att en fil förberetts utanför systemet"
+
+[labels.sv.model.payroll_se_agi_submission.action.record_submitted]
+label = "Registrera inlämnad"
+description = "Registrera att deklarationen lämnats in utanför systemet (bara godkännaren)"
