@@ -1,0 +1,345 @@
+[labels.fi.module]
+name = "Kirjanpito Ruotsi"
+description = "Kirjanpidon ruotsalainen lokalisointi: yrityksen tiedot, tositesarjat, alv-koodit ja -ruudut sekä jaksokohtainen alv-raportti, jonka ryhmä accounting.approver hyväksyy. TARKISTAMATON: mitään ei ole tarkistettu Skatteverketin (SKV 4700) tai SIE:n mukaan. BAS-tilikarttaa ei sisälly; käyttäjä valitsee tilit. Summat örinä, verokannat peruspisteinä. Täältä ei toimiteta mitään."
+
+[labels.fi.model.accounting_se_company]
+name = "Yritys"
+description = "Ruotsalainen yritys, jonka kirjat ovat; yleensä yksi tietue"
+
+[labels.fi.model.accounting_se_company.field.name]
+label = "Nimi"
+description = "Yrityksen virallinen nimi"
+
+[labels.fi.model.accounting_se_company.field.org_number]
+label = "Organisaatiotunnus"
+description = "Organisaatiotunnus, kymmenen numeroa kuten 556000-0000; yksityiselinkeinonharjoittajalla se on henkilötunnus ja siis henkilötieto"
+
+[labels.fi.model.accounting_se_company.field.vat_number]
+label = "Alv-tunnus"
+description = "Alv-tunnus kuten SE556000000001; tyhjä, jos yritys ei ole arvonlisäverovelvollisten rekisterissä"
+
+[labels.fi.model.accounting_se_company.field.f_skatt]
+label = "F-skatt"
+description = "Onko yritys hyväksytty F-skatt-järjestelmään (F-tax)"
+
+[labels.fi.model.accounting_se_company.field.fiscal_year_start_month]
+label = "Tilikauden alkukuukausi"
+description = "Kuukausi, jona tilikausi alkaa, 1–12; 1 tarkoittaa kalenterivuotta"
+
+[labels.fi.model.accounting_se_company.field.vat_period]
+label = "Alv-kausi"
+description = "Kuinka usein arvonlisäveroilmoitus annetaan: monthly, quarterly, yearly"
+
+[labels.fi.model.accounting_se_company.field.vat_period.options]
+monthly = "Kuukausittain"
+quarterly = "Neljännesvuosittain"
+yearly = "Vuosittain"
+
+[labels.fi.model.accounting_se_company.field.currency]
+label = "Valuutta"
+description = "Kirjojen ISO 4217 -valuuttakoodi, yleensä SEK"
+
+[labels.fi.model.accounting_se_company.field.address]
+label = "Osoite"
+description = "Rekisteröity osoite"
+
+[labels.fi.model.accounting_se_company.field.contact_email]
+label = "Yhteyssähköposti"
+description = "Kirjanpidon yhteyssähköposti"
+
+[labels.fi.model.accounting_se_voucher_series]
+name = "Tositesarja"
+description = "Tositesarja, kirjain kuten A, joka kokoaa yhden lajin tositteet"
+
+[labels.fi.model.accounting_se_voucher_series.field.code]
+label = "Koodi"
+description = "Sarjan koodi, yhdestä kolmeen kirjainta, esimerkiksi A; kahdella sarjalla ei ole samaa koodia"
+
+[labels.fi.model.accounting_se_voucher_series.field.name]
+label = "Nimi"
+description = "Mitä sarja sisältää, esimerkiksi Manuaaliset tositteet"
+
+[labels.fi.model.accounting_se_voucher_series.field.journal_id]
+label = "Päiväkirja"
+description = "Kirjanpidon päiväkirja, jonka tositteet kuuluvat sarjaan"
+
+[labels.fi.model.accounting_se_voucher_series.field.is_default]
+label = "Oletus"
+description = "Käytetäänkö sarjaa, kun mitään ei ole annettu"
+
+[labels.fi.model.accounting_se_voucher_series.field.active]
+label = "Aktiivinen"
+description = "Voiko sarjaa vielä käyttää"
+
+[labels.fi.model.accounting_se_voucher_series.field.note]
+label = "Muistiinpano"
+description = "Huomautuksia sarjan käytöstä"
+
+[labels.fi.model.accounting_se_vat_box]
+name = "Alv-ruutu"
+description = "Ruotsin arvonlisäveroilmoituksen ruutu. TARKISTAMATON, kunnes se on tarkistettu SKV 4700:n mukaan"
+
+[labels.fi.model.accounting_se_vat_box.field.box]
+label = "Ruutu"
+description = "Ruudun numero lomakkeen mukaan, esimerkiksi 05; kahdella ruudulla ei ole samaa numeroa"
+
+[labels.fi.model.accounting_se_vat_box.field.label]
+label = "Otsikko"
+description = "Ruudun ruotsinkielinen otsikko lomakkeen mukaan"
+
+[labels.fi.model.accounting_se_vat_box.field.kind]
+label = "Laji"
+description = "Mitä ruutu sisältää: base (veron peruste), output (myynnin vero), input (ostojen vero), result (maksettava tai palautettava vero)"
+
+[labels.fi.model.accounting_se_vat_box.field.kind.options]
+base = "Peruste"
+output = "Myynnin vero"
+input = "Ostojen vero"
+result = "Tulos"
+
+[labels.fi.model.accounting_se_vat_box.field.not_used]
+label = "Ei käytössä"
+description = "Onko ruutu yrityksen käyttämättömissä; käyttämättömään ruutuun osuva summa on virhe"
+
+[labels.fi.model.accounting_se_vat_box.field.review]
+label = "Tarkistus"
+description = "Ruudun tarkistustila: unverified, verified. Alkaa tarkistamattomana; vain hyväksyjä tarkistaa SKV 4700:n mukaan"
+
+[labels.fi.model.accounting_se_vat_box.field.review.options]
+unverified = "Tarkistamaton"
+verified = "Tarkistettu"
+
+[labels.fi.model.accounting_se_vat_box.field.verified]
+label = "Tarkistettu"
+description = "Onko omistaja tarkistanut ruudun; siihen asti epätosi"
+
+[labels.fi.model.accounting_se_vat_box.field.verified_by]
+label = "Tarkistaja"
+description = "Tarkistaneen henkilön kirjautumisnimi"
+
+[labels.fi.model.accounting_se_vat_box.field.verified_on]
+label = "Tarkistettu pvm"
+description = "Tarkistuksen päivämäärä (VVVV-KK-PP)"
+
+[labels.fi.model.accounting_se_vat_box.field.source]
+label = "Lähde"
+description = "Mistä ruutu on peräisin ja mitä on tarkistettu, esimerkiksi SKV 4700:n painos; tyhjä tarkoittaa, ettei lähdettä ole tarkistettu"
+
+[labels.fi.model.accounting_se_vat_box.action.verify]
+label = "Tarkista"
+description = "Merkitse ruutu SKV 4700:n mukaan tarkistetuksi (vain hyväksyjät)"
+
+[labels.fi.model.accounting_se_vat_box.action.unverify]
+label = "Peru tarkistus"
+description = "Peru ruudun tarkistus (vain hyväksyjät)"
+
+[labels.fi.model.accounting_se_vat_code]
+name = "Alv-koodi"
+description = "Alv-koodi, jonka pääkirjan rivi voi sisältää; liitetty peruste- ja alv-ruutuun sekä tileihin. TARKISTAMATON, kunnes se on tarkistettu SKV 4700:n mukaan"
+
+[labels.fi.model.accounting_se_vat_code.field.code]
+label = "Koodi"
+description = "Lyhyt koodi kuten S25 (myynti 25 prosentilla); kahdella koodilla ei ole samaa arvoa"
+
+[labels.fi.model.accounting_se_vat_code.field.label]
+label = "Kuvaus"
+description = "Mitä koodi tarkoittaa sanoin"
+
+[labels.fi.model.accounting_se_vat_code.field.treatment]
+label = "Käsittely"
+description = "Tapahtuman laji: sale_domestic, purchase_domestic, reverse_charge_eu, reverse_charge_non_eu, sale_eu_goods, sale_eu_services, export, exempt, none"
+
+[labels.fi.model.accounting_se_vat_code.field.treatment.options]
+sale_domestic = "Myynti Ruotsissa"
+purchase_domestic = "Osto Ruotsista"
+reverse_charge_eu = "Käännetty verovelvollisuus, EU"
+reverse_charge_non_eu = "Käännetty verovelvollisuus, EU:n ulkopuoli"
+sale_eu_goods = "Tavaroiden myynti EU:hun"
+sale_eu_services = "Palvelujen myynti EU:hun"
+export = "Vientimyynti"
+exempt = "Verovapaa"
+none = "Ei arvonlisäveroa"
+
+[labels.fi.model.accounting_se_vat_code.field.rate_bp]
+label = "Alv-kanta (peruspisteet)"
+description = "Alv-kanta peruspisteinä: 2500 tarkoittaa 25,00 prosenttia, 1200 12,00, 600 6,00, 0 ei mitään"
+
+[labels.fi.model.accounting_se_vat_code.field.base_box_id]
+label = "Perusteruutu"
+description = "Ruutu, joka vastaanottaa tällä koodilla olevien rivien nettosumman; tyhjä, jos ei ole"
+
+[labels.fi.model.accounting_se_vat_code.field.base_side]
+label = "Perusteen puoli"
+description = "Rivin puoli, joka lasketaan perusteeksi: credit tai debit"
+
+[labels.fi.model.accounting_se_vat_code.field.base_side.options]
+credit = "Kredit"
+debit = "Debet"
+
+[labels.fi.model.accounting_se_vat_code.field.vat_box_id]
+label = "Alv-ruutu"
+description = "Ruutu, joka vastaanottaa alv-tilille kirjatun veron määrän; tyhjä, jos ei ole"
+
+[labels.fi.model.accounting_se_vat_code.field.vat_account_id]
+label = "Alv-tili"
+description = "Tili, jolle veron määrä kirjataan. Käyttäjä valitsee sen omasta tilikartastaan; paketti ei toimita yhtään"
+
+[labels.fi.model.accounting_se_vat_code.field.vat_side]
+label = "Alv-tilin puoli"
+description = "Alv-tilin puoli, joka lasketaan ruudun verona: credit tai debit"
+
+[labels.fi.model.accounting_se_vat_code.field.vat_side.options]
+credit = "Kredit"
+debit = "Debet"
+
+[labels.fi.model.accounting_se_vat_code.field.tax_id]
+label = "Vero"
+description = "Kirjanpidon verokanta, jota koodi vastaa, jos sellainen on"
+
+[labels.fi.model.accounting_se_vat_code.field.active]
+label = "Aktiivinen"
+description = "Voiko koodin vielä asettaa uusille riveille"
+
+[labels.fi.model.accounting_se_vat_code.field.review]
+label = "Tarkistus"
+description = "Koodin tarkistustila: unverified, verified. Alkaa tarkistamattomana; vain hyväksyjä tarkistaa SKV 4700:n mukaan"
+
+[labels.fi.model.accounting_se_vat_code.field.review.options]
+unverified = "Tarkistamaton"
+verified = "Tarkistettu"
+
+[labels.fi.model.accounting_se_vat_code.field.verified]
+label = "Tarkistettu"
+description = "Onko omistaja tarkistanut koodin; siihen asti epätosi"
+
+[labels.fi.model.accounting_se_vat_code.field.verified_by]
+label = "Tarkistaja"
+description = "Tarkistaneen henkilön kirjautumisnimi"
+
+[labels.fi.model.accounting_se_vat_code.field.verified_on]
+label = "Tarkistettu pvm"
+description = "Tarkistuksen päivämäärä (VVVV-KK-PP)"
+
+[labels.fi.model.accounting_se_vat_code.field.source]
+label = "Lähde"
+description = "Mistä koodi on peräisin ja mitä on tarkistettu, esimerkiksi SKV 4700:n painos; tyhjä tarkoittaa, ettei lähdettä ole tarkistettu"
+
+[labels.fi.model.accounting_se_vat_code.action.verify]
+label = "Tarkista"
+description = "Merkitse koodi SKV 4700:n mukaan tarkistetuksi (vain hyväksyjät)"
+
+[labels.fi.model.accounting_se_vat_code.action.unverify]
+label = "Peru tarkistus"
+description = "Peru koodin tarkistus (vain hyväksyjät)"
+
+[labels.fi.model.accounting_se_vat_report]
+name = "Alv-raportti"
+description = "Jakson alv-raportti, laadittu pääkirjasta ja henkilön hyväksymä ennen käyttöä. TARKISTAMATON: tämä paketti ei ole verrannut sitä SKV 4700:aan"
+
+[labels.fi.model.accounting_se_vat_report.field.name]
+label = "Nimi"
+description = "Jakson nimi, esimerkiksi 2026-Q3"
+
+[labels.fi.model.accounting_se_vat_report.field.period_kind]
+label = "Jakson pituus"
+description = "Jakson pituus: month, quarter, year"
+
+[labels.fi.model.accounting_se_vat_report.field.period_kind.options]
+month = "Kuukausi"
+quarter = "Neljännes"
+year = "Vuosi"
+
+[labels.fi.model.accounting_se_vat_report.field.start_on]
+label = "Ensimmäinen päivä"
+description = "Jakson ensimmäinen päivä (VVVV-KK-PP)"
+
+[labels.fi.model.accounting_se_vat_report.field.end_on]
+label = "Viimeinen päivä"
+description = "Jakson viimeinen päivä (VVVV-KK-PP)"
+
+[labels.fi.model.accounting_se_vat_report.field.due_on]
+label = "Eräpäivä"
+description = "Päivä, johon mennessä ilmoituksen on oltava perillä; valmistelija antaa sen, paketti ei laske sitä"
+
+[labels.fi.model.accounting_se_vat_report.field.company_id]
+label = "Yritys"
+description = "Yritys, jota raportti koskee"
+
+[labels.fi.model.accounting_se_vat_report.field.output_vat]
+label = "Myynnin vero"
+description = "Jakson myynnin vero örinä, myyntirivien summa"
+
+[labels.fi.model.accounting_se_vat_report.field.input_vat]
+label = "Ostojen vero"
+description = "Jakson vähennyskelpoinen ostojen vero örinä, ostorivien summa"
+
+[labels.fi.model.accounting_se_vat_report.field.vat_to_pay]
+label = "Maksettava alv"
+description = "Myynnin vero miinus ostojen vero örinä; negatiivinen tarkoittaa palautusta (ruutu 49)"
+
+[labels.fi.model.accounting_se_vat_report.field.boxes_confirmed]
+label = "Ruudut vahvistettu"
+description = "Hyväksyjä vahvistaa, että raportin jokainen ruutu on verrattu lomakkeeseen SKV 4700 ja että käytetyt kytkennät on tarkistettu"
+
+[labels.fi.model.accounting_se_vat_report.field.notes]
+label = "Muistiinpanot"
+description = "Valmistelijan tai hyväksyjän huomautukset"
+
+[labels.fi.model.accounting_se_vat_report.field.state]
+label = "Tila"
+description = "Raportin tila: draft, proposed, approved, filed"
+
+[labels.fi.model.accounting_se_vat_report.field.state.options]
+draft = "Luonnos"
+proposed = "Ehdotettu"
+approved = "Hyväksytty"
+filed = "Toimitettu"
+
+[labels.fi.model.accounting_se_vat_report.action.propose]
+label = "Ehdota"
+description = "Ehdota raporttia hyväksyttäväksi; agentit saavat tehdä tämän"
+
+[labels.fi.model.accounting_se_vat_report.action.withdraw]
+label = "Peru ehdotus"
+description = "Palauta ehdotettu raportti luonnokseksi"
+
+[labels.fi.model.accounting_se_vat_report.action.approve]
+label = "Hyväksy"
+description = "Hyväksy raportti (vain hyväksyjät; ruudut on vahvistettava SKV 4700:n mukaan tarkistetuiksi)"
+
+[labels.fi.model.accounting_se_vat_report.action.approve.assert.boxes_checked]
+message = "Ruutuja ei ole vahvistettu SKV 4700:n mukaan tarkistetuiksi"
+
+[labels.fi.model.accounting_se_vat_report.action.record_filed]
+label = "Kirjaa toimitus"
+description = "Kirjaa, että ilmoitus on toimitettu Skatteverketille tämän järjestelmän ulkopuolella (vain hyväksyjät)"
+
+[labels.fi.model.accounting_se_vat_report_line]
+name = "Alv-raportin rivi"
+description = "Alv-raportin ruutu summineen"
+
+[labels.fi.model.accounting_se_vat_report_line.field.report_id]
+label = "Raportti"
+description = "Raportti, johon rivi kuuluu"
+
+[labels.fi.model.accounting_se_vat_report_line.field.box_id]
+label = "Ruutu"
+description = "Alv-ruutu"
+
+[labels.fi.model.accounting_se_vat_report_line.field.kind]
+label = "Laji"
+description = "Ruudun laji, valmistelijan kopioima: base, output, input, result"
+
+[labels.fi.model.accounting_se_vat_report_line.field.kind.options]
+base = "Peruste"
+output = "Myynnin vero"
+input = "Ostojen vero"
+result = "Tulos"
+
+[labels.fi.model.accounting_se_vat_report_line.field.amount]
+label = "Summa"
+description = "Ruudun summa örinä"
+
+[labels.fi.model.accounting_se_vat_report_line.field.vouchers]
+label = "Tositteet"
+description = "Viittaukset summan muodostaviin tositteisiin, yksi riviä kohti, jotta tarkastaja voi seurata sitä"

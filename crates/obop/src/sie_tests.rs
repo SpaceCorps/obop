@@ -25,12 +25,13 @@ fn app() -> App {
     app.installer
         .install(&Bundled.fetch("accounting").unwrap(), "marketplace", "test")
         .unwrap();
-    let se = std::fs::read_to_string(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../packages/contrib/accounting_se/accounting_se.toml"
-    ))
-    .unwrap();
-    app.installer.install(&se, "file", "test").unwrap();
+    app.installer
+        .install(
+            &Bundled.fetch("accounting_se").unwrap(),
+            "marketplace",
+            "test",
+        )
+        .unwrap();
     app
 }
 
