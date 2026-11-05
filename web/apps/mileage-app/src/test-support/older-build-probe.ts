@@ -19,7 +19,8 @@ import { memoryDb } from "./memory-db.ts";
  * `trip` is in the answer of `SELECT *` and is not compared, because the first build reads a row by
  * the names it knows), and every value is compared as JavaScript sees it: text, number, NULL and
  * blob are told apart, an integer and a real of the same value are not (and the first build,
- * which reads numbers as JavaScript numbers, does not tell them apart either). The one answer that
+ * which reads numbers as JavaScript numbers, does not tell them apart either; Infinity, NaN and
+ * -0 are told apart from NULL, 0 and text, as `canon` tags them). The one answer that
  * is not compared whole is the list of trips: it has to hold the three trips the probe made. All of
  * it runs in a transaction that is rolled back, so the file is as it was afterwards, with its rows.
  *

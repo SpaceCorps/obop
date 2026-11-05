@@ -569,35 +569,62 @@ const REFUSED_KINDS: Record<string, string> = {
  *     constraint, second `DEFAULT`, `DEFAULT (expression)` or a default of `CURRENT_TIME`,
  *     `CURRENT_DATE` or `CURRENT_TIMESTAMP` (SQLite refuses those on an added column when the table
  *     has rows, which is every installed phone, and accepts them on an empty table, so a migration
- *     with one passes on a new file and fails on an upgrade). Such a table is not renamed or
- *     retyped, and its text is not rewritten. It may be dropped and made again in the byte-exact
- *     text it had, or in the byte-exact text that `ADD COLUMN` would have left (`, <definition>`
- *     put in right after the last column definition, with no space or line break of its own, so
- *     `a TEXT\n)` becomes `a TEXT\n, b TEXT)`); a tidier way of writing the same table
- *     (`a TEXT,\n  b TEXT\n)`) is refused as a rebuilt table. An older build opens a table by
- *     its name and finds what it had, so the first is harmless as long as no row is lost, which is
- *     the next point;
+ *     with one passes on a new file and fails on an upgrade; refused here before the statement
+ *     runs, for every `ALTER` text, because SQLite's own refusal depends on the rows). Such a table
+ *     is not renamed or retyped, and its text is not rewritten. It may be dropped and made again
+ *     (`appended`): the text before the first parenthesis, the text after the last one and every
+ *     piece that was there are letter for letter as they were and in their places, and the new
+ *     pieces sit where `ADD COLUMN` would put them; the new pieces are read as column definitions
+ *     only (`columnsProblem`), so the white space in and around them is free, while a piece that
+ *     was there with a space more, or a tidier way of writing the same table
+ *     (`a TEXT,\n  b TEXT\n)` for `a TEXT\n)`), is refused as a rebuilt table. An older build
+ *     opens a table by its name and finds what it had, so this is harmless as long as no row is
+ *     lost, which is the next point;
  * - lost no rows: every table that was there has as many rows as it had, or more (the rows are
  *   counted inside the same transaction, before and after the migration, and a migration may add
  *   rows). This is a count and not a proof that the rows are the same ones, so a migration that
  *   replaces a row by another passes;
- * - left the versions in `module_schema` as they were: that table is the manager's, and a
- *   migration that inserts, updates or deletes one of its rows is refused, also for its own
- *   module's row (the rows are compared before and after, so a version cannot be moved to hide a
- *   step, or set to one that makes the next start refuse the whole file);
+ * - left the versions in `module_schema` as they were: that table is the manager's (no module id
+ *   or legacy table may take its name, `checkModules`), and the rows are compared before and
+ *   after, so a version that was moved, or a row that was added or removed, is found and refused,
+ *   also for the module's own row; the table itself is a table of no module, so dropping,
+ *   altering or renaming it, or making an index on it, is refused like a change to a table of
+ *   another module. What is compared is the result: a write that changes nothing (`UPDATE ...
+ *   SET version = version`) is not a change and passes;
  * - left `PRAGMA user_version` as it was: the layout is `LAYOUT_VERSION`, set by the manager. It
  *   is compared with what it was before the migration, and that differs by the kind of file: 0 in
  *   a new file, 1 in an old one. So `PRAGMA user_version = 0` passes in a new file (it changes
  *   nothing there) and is refused in an old one, and `= 1` the other way round; any other number
  *   is refused in both.
  *
- * What a migration cannot do to the transaction. The manager holds one transaction for all the
- * modules and takes all of it back when anything fails. A migration therefore gets a transaction
- * (`guarded`) that refuses, before it runs, any statement that begins, ends or nests a transaction
- * (BEGIN, COMMIT, END, ROLLBACK, SAVEPOINT, RELEASE), and the manager checks afterwards that the
- * transaction it opened is still the one that is open (`SAVEPOINT` before, `RELEASE` after). The
- * second only detects: what a COMMIT has done is committed, and nothing can undo it. The first is
- * the guard.
+ * What a migration cannot do to the transaction or to the connection. The manager holds one
+ * transaction for all the modules and takes all of it back when anything fails. A migration
+ * therefore gets a transaction (`guarded`) that reads each text into whole statements (a trigger
+ * body is part of its statement) and refuses, before it runs, a text that
+ * - has a statement whose first word begins, ends or nests a transaction (BEGIN, COMMIT, END,
+ *   ROLLBACK, SAVEPOINT, RELEASE, `transactionControl`);
+ * - has the word ROLLBACK, TEMP, TEMPORARY, ATTACH or DETACH anywhere outside a string, a comment
+ *   or a quoted name, or the name `temp` as a schema in front of a dot, or any PRAGMA but `PRAGMA
+ *   user_version`, or CURRENT_TIME, CURRENT_DATE or CURRENT_TIMESTAMP in an ALTER statement
+ *   (`forbiddenInMigration`: a ROLLBACK conflict clause or a trigger's RAISE(ROLLBACK) ends the
+ *   transaction from inside a statement, a temporary table or trigger takes the place of the
+ *   file's for a name that is not qualified and lasts as long as the connection, an attached
+ *   file and most PRAGMAs set state of the connection that outlives the transaction);
+ * - cannot be read to its end with certainty (an unterminated trigger, a NUL): refused as that.
+ * The words are refused wherever they stand, because that is cheap to read and no position of the
+ * word gets round it; a column called `temp` or `rollback` has to be written as a quoted name.
+ * Behind the guard the manager checks afterwards that the transaction it opened is still the one
+ * that is open (`SAVEPOINT` before, `RELEASE` after) and that the temporary schema is as it was;
+ * those two only detect, since what a COMMIT has done is committed and nothing can undo it. The
+ * manager's own statements are qualified with `main.`, so an object in the temporary schema cannot
+ * stand in for the file's table.
+ *
+ * What the guard is. It is a lint for a version 2 of a module that no module has yet, written for
+ * the author of a migration who makes a mistake, not for one who works against it: it reads the
+ * text of the statements and does not run in a sandbox, a migration is code that runs with the
+ * connection of the app, and code can do more to a connection than any list of words refuses. What
+ * it does not reach is stated: connection state other than the words above, and the limits in
+ * `docs/spec/mobile.md` 8.7.1.
  *
  * What the look at the first layout does not cover. The tables of the first layout that are put
  * into "before" are the ones the migrating module declares itself. A table of a module that comes
@@ -957,7 +984,10 @@ const PLAIN_DEFAULT_WORDS = new Set(["TRUE", "FALSE"]);
  * The defaults that are the time of the insert. SQLite refuses them for a column that is added to a
  * table that has rows ("Cannot add a column with non-constant default") and accepts them on a table
  * with none, so a migration that has one passes on a new file and on an empty table and fails on a
- * phone that has trips. Refused here for every table, so that it fails where it is tried.
+ * phone that has trips. Refused for every added column, so that it fails where it is tried: in an
+ * `ALTER` text before the statement runs (`forbiddenInMigration`, whatever the file holds), and in
+ * a new definition of a table that is made again (`columnsProblem`, here). The default of a column
+ * in the `CREATE TABLE` of a new table of the module's own is not looked at: it is the table's own.
  */
 const TIME_DEFAULT_WORDS = new Set(["CURRENT_TIME", "CURRENT_DATE", "CURRENT_TIMESTAMP"]);
 
@@ -1087,10 +1117,11 @@ export interface EnsureOptions {
  * must not run twice. In that transaction: `module_schema` is made if it is missing, the versions
  * of a layout-1 file are recorded for the modules that were in it, every module that is behind is
  * migrated in list order and checked (`checkChange`), its version is recorded, and the layout
- * version is set. A migration is given a transaction that refuses any statement that begins, ends
- * or nests a transaction (`guarded`), and runs between a savepoint and its release, which fails
- * when the transaction was ended by another way (`releaseMigration`). Any failure rolls all of it
- * back. A file of a newer version is refused for every module at once, on purpose: the modules
+ * version is set. A migration is given a transaction that refuses a text that begins, ends or
+ * nests a transaction, or sets state of the connection that outlives it (`guarded`: the words and
+ * the limits are in the header of `checkChange`), and runs between a savepoint and its release,
+ * which fails when the transaction was ended by another way (`releaseMigration`). Any failure
+ * rolls all of it back, except what a COMMIT has already committed. A file of a newer version is refused for every module at once, on purpose: the modules
  * share one file and one transaction.
  */
 export async function ensureModules(

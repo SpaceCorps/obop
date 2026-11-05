@@ -17,9 +17,12 @@ import { probeOlderBuild } from "../test-support/older-build-probe.ts";
 //     build still works on the file, with rows in it and without, and the rows are still there;
 //   - what it lets through is what the grammar says is plain, by a rule written here again, in
 //     terms of the pieces and not of the text: at most one DEFAULT, and a NOT NULL column has a
-//     default that is not NULL, and no default that is the current time. (Shapes that SQLite
-//     itself refuses, as it refuses that one on a table that has rows, are not the manager's to
-//     judge; on an empty table SQLite accepts it, and the manager refuses it all the same.)
+//     default that is not NULL, and no default that is the current time. (The current time as a
+//     default is the one shape on which SQLite's answer depends on the rows: it refuses it on a
+//     table that has rows and accepts it on an empty one. The guard refuses the text of the ALTER
+//     before SQLite is asked, so the answer is the manager's and the same in both files. Other
+//     shapes that SQLite itself refuses come out as SQLite's error, which is not the manager's to
+//     judge.)
 //
 // This is a sample of the shapes, not all of them, and the oracle is the probe on SQLite as Node
 // has it. The grammar is this file's own: the generator of the fuzz that found the second-DEFAULT

@@ -14,6 +14,7 @@ const expoCli = createRequire(import.meta.url).resolve("expo/bin/cli");
 
 type Plist = Record<string, unknown>;
 interface Introspected {
+  name: string;
   slug: string;
   version: string;
   scheme: string;
@@ -54,6 +55,8 @@ describe("the configuration that expo prebuild gets", { timeout: 30_000 }, () =>
     // The slug is the name of the project at Expo, and the development client builds its scheme
     // (`exp+<slug>`) from it; an installed app and its store listing know it.
     expect(c.slug).toBe("obop-mileage");
+    // The name under the icon and in the store listing.
+    expect(c.name).toBe("obop Mileage");
     expect(c.scheme).toBe("org.obop.mileage");
     expect(c.ios.bundleIdentifier).toBe("org.obop.mileage");
     expect(c.android.package).toBe("org.obop.mileage");

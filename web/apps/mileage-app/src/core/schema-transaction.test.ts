@@ -1084,3 +1084,44 @@ describe("module_schema cannot be lowered, dropped or altered by a migration", (
     });
   });
 });
+
+// A limit that 8.7.1 states: the lint reads text and does not run the statements on the rows of a
+// phone. A migration whose own statements succeed or fail depending on the rows passes on a new
+// file and on a file with no trips, and fails on a phone that has trips. The failure takes the
+// migration back and is reported (with the database's own error), so nothing is damaged, but it is
+// found on the phone and not by the lint. The one rule of this kind that the lint can see in the
+// text (a default of the time of the insert on an added column) is refused by its words.
+describe("a limit: a migration whose own statements depend on the rows", () => {
+  const dependsOnTrips: SchemaModule = {
+    ...MILEAGE_SCHEMA,
+    version: 2,
+    async migrate(tx, from) {
+      await MILEAGE_SCHEMA.migrate(tx, from);
+      if (from >= 2) return;
+      await tx.exec("CREATE TABLE mileage_x (n INTEGER CHECK (n > 0))");
+      await tx.exec("INSERT INTO mileage_x (n) SELECT 0 FROM trip");
+    },
+  };
+
+  test.each([
+    ["a new file", async () => memoryDb()],
+    ["a file of the first build with no trips", emptyLegacyFile],
+  ] as [string, () => Promise<SqlDb>][])("it passes on %s", async (_, start) => {
+    const db = await start();
+    await ensureModules(db, [HOST_SCHEMA, dependsOnTrips]);
+    expect(await db.all("SELECT * FROM mileage_x")).toEqual([]);
+  });
+
+  test("it fails on a file with trips, with the database's own error, and the file is as it was", async () => {
+    const db = await legacyFile();
+    const objects = await objectsOf(db);
+    const rows = await rowsOf(db);
+    const error = await ensureModules(db, [HOST_SCHEMA, dependsOnTrips]).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(Error);
+    expect(error).not.toBeInstanceOf(SchemaError);
+    expect((error as Error).message).toMatch(/CHECK constraint failed/);
+    expect(await objectsOf(db)).toEqual(objects);
+    expect(await rowsOf(db)).toEqual(rows);
+    expect(await layout(db)).toBe(1);
+  });
+});
