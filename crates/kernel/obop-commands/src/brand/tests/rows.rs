@@ -536,7 +536,14 @@ fn each_hostile_artwork_falls_back_with_the_code_and_the_reason_of_the_reader() 
             f.reason
         );
     }
-    // One refusal gives its reason alone; more give the count of the others.
+    // One refusal gives its reason alone; more give the count of the others (here exactly one).
+    let (what, stored) = &corpus[0];
+    let (shown, _) = shown_of(&[("name", s("Acme")), ("logo_svg", s(stored))]);
+    assert_eq!(
+        shown.fallbacks()[0].reason,
+        "svg_text: text outside the elements is not allowed (<text> and <title> are not either) (and 1 more)",
+        "{what}"
+    );
     let ns = "http://www.w3.org/2000/svg";
     let one = format!(
         "<svg xmlns=\"{ns}\" viewBox=\"0 0 64 64\"><a href=\"https://evil.example\"><path d=\"M 0 0\"/></a></svg>"

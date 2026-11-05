@@ -66,7 +66,8 @@ pub const DEFAULT_BOUND: Duration = Duration::from_secs(2);
 struct Cell {
     /// The last good brand, of any age.
     shown: Option<Arc<Shown>>,
-    /// When the last good refill stored it. `apply` replaces `shown` and leaves this alone.
+    /// When the read of the last good refill began (not when it ended). `apply` replaces `shown`
+    /// and leaves this alone.
     at: Option<Instant>,
     /// Bumped by every `apply` that committed.
     generation: u64,
