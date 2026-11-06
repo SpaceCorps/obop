@@ -20,14 +20,31 @@
 //!
 //! **What a line may hold.** The lines about `--from FILE` name the field or the table and the
 //! rule, never a value of the file. The refusals of `configure` come from `apply`, whose reasons
-//! repeat only what the rules made safe to repeat. A change is shown as the security log holds it
-//! (`brand::change_line`), so a stored value that is not safe to print is escaped.
+//! repeat only what `obop_brand::refusal` makes safe to repeat: a fixed sentence, the code point of a
+//! character that broke a rule, or the name of an element or attribute of an artwork; never the
+//! text of a value. A change is shown as the security log holds it (`brand::change_line`), so a
+//! stored value that is not safe to print is escaped.
+//!
+//! **The exit status.** 0 when the command did what it was asked; 2 for a command line that is
+//! spelled wrong (a word or flag the area does not have, a flag that needs a value, a field given
+//! twice, nothing to set), as for the usage text of any command; 1 for a value, a file or a store
+//! that was refused or could not be read; 75 when the store itself refused the call (the D74 code
+//! words `storage_busy`, `storage_unavailable` and `storage_timeout`, "try again later"), with the
+//! line `obop call` prints for it. A store that cannot be read is never "no brand".
+//!
+//! **What a command says.** `status`, `configure` and `clear` work over a store and return a
+//! [`Said`], the text for the two streams and the status, which [`Said::print`] writes; a test
+//! reads the [`Said`] and needs no process. The functions that open the database and read the
+//! files are the thin part around them.
 
 use super::{Exit, Opts, fail, open_app_with};
 use obop_brand::{logo, svg};
 use obop_commands::brand::{self, Action, Failure, Fresh, LANGS, Reader, change_line};
+use obop_commands::errors;
+use obop_storage::Backend;
 use serde_json::Value as J;
 use std::process::ExitCode;
+use std::sync::Arc;
 
 /// The actor of the events a change made at a terminal writes to the security log.
 const OPERATOR: &str = "operator";
@@ -39,6 +56,63 @@ const USAGE: &str = "usage:
   obop admin brand clear [--dry-run]
   obop admin brand check FILE.svg
 (--db URL as for every command; LANG is one of en, de, fr, pl, fi, sv, es)";
+
+/// What a command of the area prints on each stream and the status it ends with, kept apart from
+/// the printing so that a test reads all three. Every line ends with a newline.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct Said {
+    pub out: String,
+    pub err: String,
+    pub code: u8,
+}
+
+impl Said {
+    fn out(text: String) -> Said {
+        Said {
+            out: text,
+            ..Said::default()
+        }
+    }
+
+    fn failed(code: u8, err: String) -> Said {
+        Said {
+            err,
+            code,
+            ..Said::default()
+        }
+    }
+
+    /// Writes both streams and ends with the status.
+    fn print(self) -> Exit {
+        print!("{}", self.out);
+        eprint!("{}", self.err);
+        match self.code {
+            0 => Ok(()),
+            code => Err(ExitCode::from(code)),
+        }
+    }
+}
+
+/// The status of a command line that is spelled wrong, as for the usage text of any command.
+pub const EXIT_MISUSE: u8 = 2;
+
+/// A command line that is spelled wrong: the line, and status [`EXIT_MISUSE`].
+pub fn misuse(msg: &str) -> ExitCode {
+    eprintln!("{msg}");
+    ExitCode::from(EXIT_MISUSE)
+}
+
+/// The line and the status of a store that failed: for a refusal of the store (the D74 code word
+/// at the start of its text) the line `obop call` prints and status 75, "try again later"; for any
+/// other text `error: ` and the text, status 1. The text is the store's own, which never names a
+/// host, a user or a statement.
+pub fn storage_said(text: &str) -> Said {
+    let (line, code) = match errors::of_storage_text(text) {
+        Some(c) => (format!("error: {}", c.cli), c.exit),
+        None => (format!("error: {text}"), 1),
+    };
+    Said::failed(code, format!("{line}\n"))
+}
 
 /// The flags of the area `admin brand` that the global options do not have, or have with another
 /// meaning.
@@ -101,8 +175,9 @@ fn lang_text(flag: &str, pair: Option<&str>) -> Result<(String, String), String>
 
 /// Pulls the flags of the area out of a command line, when the command is `admin brand`. Returns
 /// them (`None` for any other command) and the rest of the arguments, in their order. A flag that
-/// takes a value and has none, a `--title` or `--message` that is not `LANG=TEXT` or names a language
-/// the record does not have, and a flag given twice are refused.
+/// takes a value and has none (`--from` included, which stays a global option), a `--title` or
+/// `--message` that is not `LANG=TEXT` or names a language the record does not have, and a flag
+/// given twice are refused.
 pub fn take_flags(args: Vec<&str>) -> Result<(Option<Flags>, Vec<&str>), String> {
     let Some(at) = area_at(&args) else {
         return Ok((None, args));
@@ -145,10 +220,24 @@ pub fn take_flags(args: Vec<&str>) -> Result<(Option<Flags>, Vec<&str>), String>
                 list.push((lang, text));
             }
             "--clear-logo" => flags.clear_logo = true,
+            // `--from` stays a global option, which takes the next argument as its file. With none
+            // it would yield no file, and the call would go on as if no file had been meant.
+            "--from" => {
+                rest.push(a);
+                rest.push(value(a, "a file")?);
+            }
             other => rest.push(other),
         }
     }
     Ok((Some(flags), rest))
+}
+
+/// The database for a command of the area. It seeds no demo data: `open_app` fills a new SQLite
+/// database with fake parties, products and orders, and the first thing an operator does to a new
+/// instance is `configure` (spec, section 14, the rollout), so the branding must not be the first
+/// write to a database that then holds a demo company.
+fn open(o: &Opts) -> Result<super::App, ExitCode> {
+    open_app_with(o, false)
 }
 
 /// `obop admin brand ...`: `words` are the words after `admin brand`, `from` the global `--from`.
@@ -157,7 +246,7 @@ pub fn run(o: &Opts, words: &[&str], flags: Flags, from: Option<&str>, dry_run: 
         if flags.is_empty() && from.is_none() && !dry_run {
             Ok(())
         } else {
-            Err(fail(&format!(
+            Err(misuse(&format!(
                 "error: `admin brand {verb}` takes no options\n{USAGE}"
             )))
         }
@@ -173,7 +262,7 @@ pub fn run(o: &Opts, words: &[&str], flags: Flags, from: Option<&str>, dry_run: 
         }
         ["clear"] => {
             if !flags.is_empty() || from.is_some() {
-                return Err(fail(&format!(
+                return Err(misuse(&format!(
                     "error: `admin brand clear` takes only --dry-run\n{USAGE}"
                 )));
             }
@@ -182,7 +271,7 @@ pub fn run(o: &Opts, words: &[&str], flags: Flags, from: Option<&str>, dry_run: 
         ["configure"] => configure(o, &flags, from, dry_run),
         _ => {
             eprintln!("{USAGE}");
-            Err(ExitCode::from(2))
+            Err(ExitCode::from(EXIT_MISUSE))
         }
     }
 }
@@ -206,7 +295,7 @@ fn supplied(flags: &Flags, from: Option<&str>) -> Result<Vec<(String, String)>, 
     }
     let mut add = |field: String, text: String| {
         if out.iter().any(|(f, _)| *f == field) {
-            return Err(fail(&format!(
+            return Err(misuse(&format!(
                 "error: {field} is given twice: by the values file and by a flag"
             )));
         }
@@ -226,7 +315,7 @@ fn supplied(flags: &Flags, from: Option<&str>) -> Result<Vec<(String, String)>, 
         add(format!("message_{lang}"), text.clone())?;
     }
     if flags.clear_logo && flags.logo_file.is_some() {
-        return Err(fail("error: give --logo-file or --clear-logo, not both"));
+        return Err(misuse("error: give --logo-file or --clear-logo, not both"));
     }
     if let Some(path) = &flags.logo_file {
         add("logo_svg".into(), read_logo(path)?)?;
@@ -238,17 +327,14 @@ fn supplied(flags: &Flags, from: Option<&str>) -> Result<Vec<(String, String)>, 
 }
 
 /// The text of an artwork file. A file that is not UTF-8 is refused here with the reasons the SVG
-/// reader gives (a UTF-16 file, bytes that are not text), because a call carries text; a byte order
-/// mark is UTF-8 and goes on, to be refused by the reader with its own reason.
+/// reader gives (a UTF-16 file, bytes that are not text; the reader has a reason for every input
+/// that is not UTF-8), because a call carries text; a byte order mark is UTF-8 and goes on, to be
+/// refused by the reader with its own reason.
 fn read_logo(path: &str) -> Result<String, ExitCode> {
     let bytes = std::fs::read(path)
         .map_err(|e| fail(&format!("error: cannot read the logo file {path}: {e}")))?;
     String::from_utf8(bytes).map_err(|e| {
-        let reasons = svg::parse(e.as_bytes()).err().unwrap_or_default();
-        if reasons.is_empty() {
-            eprintln!("error: logo_svg: the file is not valid UTF-8");
-        }
-        for r in reasons {
+        for r in svg::parse(e.as_bytes()).err().unwrap_or_default() {
             eprintln!("error: logo_svg: {r}");
         }
         ExitCode::FAILURE
@@ -258,109 +344,117 @@ fn read_logo(path: &str) -> Result<String, ExitCode> {
 fn configure(o: &Opts, flags: &Flags, from: Option<&str>, dry_run: bool) -> Exit {
     let fields = supplied(flags, from)?;
     if fields.is_empty() {
-        return Err(fail(&format!(
+        return Err(misuse(&format!(
             "error: nothing to set: give a field flag or a --from file whose [record] table has fields\n{USAGE}"
         )));
     }
-    let app = open_app_with(o, false)?;
-    let backend = app.store.backend();
-    let applied = brand::apply(
-        &*backend,
-        None,
-        OPERATOR,
-        &Action::Configure(fields),
-        dry_run,
-    )
-    .map_err(failure)?;
+    let app = open(o)?;
+    configure_over(&*app.store.backend(), fields, dry_run).print()
+}
+
+/// `configure` over a store, as the operator: what it prints and its status. A refusal is status 1
+/// with every reason on a line of its own, a store that failed is [`storage_said`].
+pub fn configure_over(backend: &dyn Backend, fields: Vec<(String, String)>, dry_run: bool) -> Said {
+    let applied = match brand::apply(backend, None, OPERATOR, &Action::Configure(fields), dry_run) {
+        Ok(applied) => applied,
+        Err(f) => return failure_said(f),
+    };
     if !applied.refusals.is_empty() {
+        let mut err = String::new();
         for r in &applied.refusals {
-            eprintln!("error: {}: {}", r.field, r.rule);
+            err.push_str(&format!("error: {}: {}\n", r.field, r.rule));
         }
-        eprintln!("dry run: a real call would be refused; nothing was written");
-        return Err(ExitCode::FAILURE);
+        err.push_str("dry run: a real call would be refused; nothing was written\n");
+        return Said::failed(1, err);
     }
+    let mut out = String::new();
     if applied.changes.is_empty() {
-        println!(
-            "{}",
-            if dry_run {
-                "dry run: nothing would change"
-            } else {
-                "nothing changed"
-            }
-        );
+        out.push_str(if dry_run {
+            "dry run: nothing would change\n"
+        } else {
+            "nothing changed\n"
+        });
     } else {
-        println!(
-            "{}",
-            if dry_run {
-                "dry run, nothing was written; a real call would change:"
-            } else {
-                "changed:"
-            }
-        );
+        out.push_str(if dry_run {
+            "dry run, nothing was written; a real call would change:\n"
+        } else {
+            "changed:\n"
+        });
         for c in &applied.changes {
-            println!("  {}", change_line(c, false));
+            out.push_str(&format!("  {}\n", change_line(c, false)));
         }
         if !dry_run {
-            println!("recorded in the security log");
+            out.push_str("recorded in the security log\n");
         }
     }
     if !applied.v.is_empty() {
-        println!("logo version: {}", applied.v);
+        out.push_str(&format!("logo version: {}\n", applied.v));
     }
-    Ok(())
+    Said::out(out)
 }
 
 fn clear(o: &Opts, dry_run: bool) -> Exit {
-    let app = open_app_with(o, false)?;
-    let backend = app.store.backend();
-    let applied =
-        brand::apply(&*backend, None, OPERATOR, &Action::Clear, dry_run).map_err(failure)?;
-    if !applied.cleared {
-        println!("no brand is set; nothing to remove");
-        return Ok(());
-    }
-    println!(
-        "{}",
-        if dry_run {
-            "dry run, nothing was written; a real call would remove the brand:"
-        } else {
-            "brand removed:"
-        }
-    );
-    for c in &applied.changes {
-        println!("  {}", change_line(c, true));
-    }
-    if !dry_run {
-        println!("recorded in the security log");
-    }
-    Ok(())
+    let app = open(o)?;
+    clear_over(&*app.store.backend(), dry_run).print()
 }
 
-/// The exit of a call that changed nothing: every refusal on its own line, or the store's text.
-fn failure(f: Failure) -> ExitCode {
+/// `clear` over a store, as the operator: what it prints and its status.
+pub fn clear_over(backend: &dyn Backend, dry_run: bool) -> Said {
+    let applied = match brand::apply(backend, None, OPERATOR, &Action::Clear, dry_run) {
+        Ok(applied) => applied,
+        Err(f) => return failure_said(f),
+    };
+    if !applied.cleared {
+        return Said::out("no brand is set; nothing to remove\n".to_string());
+    }
+    let mut out = String::from(if dry_run {
+        "dry run, nothing was written; a real call would remove the brand:\n"
+    } else {
+        "brand removed:\n"
+    });
+    for c in &applied.changes {
+        out.push_str(&format!("  {}\n", change_line(c, true)));
+    }
+    if !dry_run {
+        out.push_str("recorded in the security log\n");
+    }
+    Said::out(out)
+}
+
+/// What a call that changed nothing says: every refusal on a line of its own, or the store's text.
+fn failure_said(f: Failure) -> Said {
     match f {
         Failure::Refused(list) => {
+            let mut err = String::new();
             for r in list {
-                eprintln!("error: {}: {}", r.field, r.rule);
+                err.push_str(&format!("error: {}: {}\n", r.field, r.rule));
             }
-            eprintln!("nothing was stored");
-            ExitCode::FAILURE
+            err.push_str("nothing was stored\n");
+            Said::failed(1, err)
         }
-        Failure::Storage(e) => fail(&format!("error: {e}")),
+        Failure::Storage(e) => storage_said(&e),
     }
 }
 
 fn status(o: &Opts) -> Exit {
-    let app = open_app_with(o, false)?;
-    let fresh = Reader::new(app.store.backend())
-        .fresh()
-        .map_err(|e| fail(&format!("error: {e}")))?;
-    print!("{}", render_status(&fresh));
-    Ok(())
+    let app = open(o)?;
+    status_over(app.store.backend()).print()
 }
 
-/// What `status` prints: whether a brand is set, the values in force with the source that won, the
-/// titles and messages that are set, and the stored fields that fell back to a default.
+/// `status` over a store: the text of [`render_status`], or, for a store that cannot be read, its
+/// error and no text at all. A failed read is never "no brand".
+pub fn status_over(backend: Arc<dyn Backend>) -> Said {
+    match Reader::new(backend).fresh() {
+        Ok(fresh) => Said::out(render_status(&fresh)),
+        Err(e) => storage_said(&e),
+    }
+}
+
+/// What `status` prints: whether a brand is set, every value in force with the source that won
+/// (the entries of the `effective` answer of `get`, so an entry a later slice adds shows here
+/// without a change), the titles and messages that are stored (a language that shows another
+/// language's title or the name through the fallback chain has no line of its own), and the stored
+/// fields that fell back to a default.
 pub fn render_status(fresh: &Fresh) -> String {
     let shown = fresh.shown();
     let effective: J = serde_json::from_str(&fresh.effective_json()).unwrap_or(J::Null);
@@ -381,10 +475,19 @@ pub fn render_status(fresh: &Fresh) -> String {
         };
         out.push_str(&format!("{key}: {value} ({source})\n"));
     };
-    line("name", false);
-    line("slug", false);
-    line("logo", true);
-    line("tile_accent", false);
+    const LEADING: [&str; 4] = ["name", "slug", "logo", "tile_accent"];
+    for key in LEADING {
+        line(key, key == "logo");
+    }
+    let language = |key: &str| key.starts_with("title_") || key.starts_with("message_");
+    for key in effective
+        .as_object()
+        .into_iter()
+        .flat_map(|entries| entries.keys())
+        .filter(|key| !LEADING.contains(&key.as_str()) && !language(key))
+    {
+        line(key, false);
+    }
     let fell_back = |field: &str| shown.fallbacks().iter().any(|f| f.field == field);
     for prefix in ["title", "message"] {
         for lang in LANGS {

@@ -3,9 +3,12 @@
 //! flags of `admin brand` are taken before the global ones"). The commands through the real binary,
 //! the `--from` cases and the local smoke are in `tests/brand_cli.rs`.
 
-use crate::brand_cmd::{Flags, render_status, take_flags};
+use crate::brand_cmd::{
+    Flags, Said, clear_over, configure_over, render_status, status_over, storage_said, take_flags,
+};
 use obop_commands::Store;
 use obop_commands::brand::{Action, Reader, apply};
+use obop_storage::testing::{Flaky, Mode};
 use obop_storage::{Backend, Fields, Op};
 use serde_json::json;
 
@@ -177,6 +180,10 @@ fn a_flag_that_cannot_be_read_is_refused_without_repeating_the_argument() {
     assert_eq!(with(&["--name"]), "--name needs a value");
     assert_eq!(with(&["--slug"]), "--slug needs a value");
     assert_eq!(with(&["--logo-file"]), "--logo-file needs a value");
+    // `--from` stays a global option, but a `--from` with no file is refused here, or the call would
+    // go on as if no file had been meant.
+    assert_eq!(with(&["--from"]), "--from needs a file");
+    assert_eq!(with(&["--name", "A", "--from"]), "--from needs a file");
     assert!(with(&["--title"]).starts_with("--title needs LANG=TEXT"));
     assert!(with(&["--message"]).starts_with("--message needs LANG=TEXT"));
     assert!(with(&["--title", "NOSIGNSECRET"]).starts_with("--title needs LANG=TEXT"));
@@ -331,4 +338,261 @@ fn status_names_a_stored_field_that_fell_back_and_prints_nothing_of_its_value() 
     // Only the stored fields that passed are listed under their own name.
     assert!(!text.contains("title_de: "), "{text}");
     assert!(!text.contains("message_pl: "), "{text}");
+}
+
+// ---- a store that fails ---------------------------------------------------------------------------------
+//
+// The branches of the command line that a healthy store never takes: a store that cannot be read is
+// an error and never "no brand" (spec, section 3, "What `get` shows"), and a write that the store
+// refuses is the line and the status `obop call` gives, with nothing stored.
+
+const BUSY: &str = "storage_busy: all database connections are in use, try again";
+
+fn flaky_with(fields: &[(&str, &str)]) -> (std::sync::Arc<Flaky>, std::sync::Arc<dyn Backend>) {
+    let (flaky, backend) = Flaky::memory();
+    if !fields.is_empty() {
+        configure(&backend, fields);
+    }
+    (flaky, backend)
+}
+
+fn stored_name(backend: &std::sync::Arc<dyn Backend>) -> Option<String> {
+    backend
+        .get("instance_brand", "instance")
+        .unwrap()
+        .and_then(|row| row.get("name").and_then(|v| v.as_str()).map(String::from))
+}
+
+#[test]
+fn a_refusal_of_the_store_is_the_line_and_status_75_of_obop_call_and_any_other_text_is_status_1() {
+    assert_eq!(
+        storage_said(BUSY),
+        Said {
+            out: String::new(),
+            err: format!("error: {BUSY} (nothing was changed; try again in 1 s)\n"),
+            code: 75,
+        }
+    );
+    assert_eq!(
+        storage_said("disk full"),
+        Said {
+            out: String::new(),
+            err: "error: disk full\n".into(),
+            code: 1,
+        }
+    );
+    // The code word counts at the start only: text that merely holds one is not a fault, and no
+    // caller is made to retry its own bad input.
+    let said = storage_said(&format!("could not save: {BUSY}"));
+    assert_eq!(said.code, 1, "{said:?}");
+    assert_eq!(said.err, format!("error: could not save: {BUSY}\n"));
+}
+
+#[test]
+fn status_of_a_store_that_cannot_be_read_is_an_error_and_never_no_brand() {
+    for fields in [&[][..], &[("name", "MOHV")][..]] {
+        let (flaky, backend) = flaky_with(fields);
+        for mode in [Mode::Reads, Mode::All] {
+            flaky.set(mode);
+            let said = status_over(backend.clone());
+            assert_eq!(said.code, 75, "{mode:?}: {said:?}");
+            assert_eq!(said.out, "", "no text at all: {said:?}");
+            assert!(said.err.starts_with("error: storage_busy: "), "{said:?}");
+            assert!(
+                !said.err.contains("not set") && !said.err.contains("brand:"),
+                "{said:?}"
+            );
+        }
+        // Either of the two reads (the row, then the theme setting) failing fails the whole answer.
+        flaky.set(Mode::Healthy);
+        flaky.refuse_call_after(1);
+        let said = status_over(backend.clone());
+        assert_eq!(said.code, 75, "the second read refused: {said:?}");
+        assert_eq!(said.out, "", "{said:?}");
+        // And once the store answers again, so does the command.
+        let said = status_over(backend.clone());
+        assert_eq!(said.code, 0, "{said:?}");
+        assert!(said.out.starts_with("brand: "), "{said:?}");
+        assert_eq!(said.err, "");
+    }
+}
+
+#[test]
+fn a_write_the_store_refuses_is_status_75_and_stores_nothing() {
+    let (flaky, backend) = flaky_with(&[]);
+    flaky.refuse_applies(1);
+    // A dry run writes no batch, so it passes by the refusal that is waiting for the real call.
+    let dry = configure_over(&*backend, pairs(&[("name", "MOHV")]), true);
+    assert_eq!(dry.code, 0, "{dry:?}");
+    assert!(dry.out.contains("dry run"), "{dry:?}");
+    let said = configure_over(&*backend, pairs(&[("name", "MOHV")]), false);
+    assert_eq!(said.code, 75, "{said:?}");
+    assert_eq!(said.out, "", "{said:?}");
+    assert!(
+        said.err.starts_with("error: storage_busy: ")
+            && said
+                .err
+                .ends_with("(nothing was changed; try again in 1 s)\n"),
+        "{said:?}"
+    );
+    assert_eq!(stored_name(&backend), None);
+    assert!(backend.list("security_event").unwrap().is_empty());
+    // The refusal is spent: the same call now writes, and says so.
+    let said = configure_over(&*backend, pairs(&[("name", "MOHV")]), false);
+    assert_eq!(said.code, 0, "{said:?}");
+    assert!(
+        said.out.contains("recorded in the security log"),
+        "{said:?}"
+    );
+    assert_eq!(stored_name(&backend).as_deref(), Some("MOHV"));
+
+    // `clear` the same way: the row stays, with its events.
+    let events = backend.list("security_event").unwrap().len();
+    flaky.refuse_applies(1);
+    let said = clear_over(&*backend, false);
+    assert_eq!(said.code, 75, "{said:?}");
+    assert_eq!(said.out, "", "{said:?}");
+    assert!(said.err.starts_with("error: storage_busy: "), "{said:?}");
+    assert_eq!(stored_name(&backend).as_deref(), Some("MOHV"));
+    assert_eq!(backend.list("security_event").unwrap().len(), events);
+    let said = clear_over(&*backend, false);
+    assert_eq!(said.code, 0, "{said:?}");
+    assert_eq!(stored_name(&backend), None);
+}
+
+#[test]
+fn a_store_that_cannot_be_read_while_a_call_is_planned_is_status_75_too() {
+    let (flaky, backend) = flaky_with(&[("name", "MOHV")]);
+    flaky.set(Mode::Reads);
+    for said in [
+        configure_over(&*backend, pairs(&[("name", "Other")]), false),
+        configure_over(&*backend, pairs(&[("name", "Other")]), true),
+        clear_over(&*backend, false),
+        clear_over(&*backend, true),
+    ] {
+        assert_eq!(said.code, 75, "{said:?}");
+        assert_eq!(said.out, "", "{said:?}");
+        assert!(said.err.starts_with("error: storage_busy: "), "{said:?}");
+    }
+    flaky.set(Mode::Healthy);
+    assert_eq!(stored_name(&backend).as_deref(), Some("MOHV"));
+}
+
+#[test]
+fn what_a_refused_call_and_the_dry_run_of_one_say_and_the_status_they_end_with() {
+    let (_flaky, backend) = flaky_with(&[]);
+    // No name on the first call: the refusal, one line per rule, and nothing stored.
+    let said = configure_over(&*backend, pairs(&[("slug", "mohv")]), false);
+    assert_eq!(
+        said,
+        Said {
+            out: String::new(),
+            err: "error: name: is required: a brand needs a name\nnothing was stored\n".into(),
+            code: 1,
+        }
+    );
+    // The dry run of the same call: the same reason, and what a real call would be.
+    let dry = configure_over(&*backend, pairs(&[("slug", "mohv")]), true);
+    assert_eq!(
+        dry,
+        Said {
+            out: String::new(),
+            err: "error: name: is required: a brand needs a name\n\
+                  dry run: a real call would be refused; nothing was written\n"
+                .into(),
+            code: 1,
+        }
+    );
+    assert_eq!(stored_name(&backend), None);
+}
+
+#[test]
+fn a_dry_run_of_clear_says_what_a_real_one_would_and_not_that_it_was_logged() {
+    let (_flaky, backend) = flaky_with(&[("name", "MOHV")]);
+    let dry = clear_over(&*backend, true);
+    assert_eq!(dry.code, 0, "{dry:?}");
+    assert!(
+        dry.out
+            .starts_with("dry run, nothing was written; a real call would remove the brand:\n"),
+        "{dry:?}"
+    );
+    assert!(!dry.out.contains("recorded in the security log"), "{dry:?}");
+    assert_eq!(stored_name(&backend).as_deref(), Some("MOHV"));
+    let real = clear_over(&*backend, false);
+    assert!(real.out.starts_with("brand removed:\n"), "{real:?}");
+    assert!(
+        real.out.ends_with("recorded in the security log\n"),
+        "{real:?}"
+    );
+    assert_eq!(
+        clear_over(&*backend, false).out,
+        "no brand is set; nothing to remove\n"
+    );
+}
+
+// ---- status and the answer of get -------------------------------------------------------------------------
+
+#[test]
+fn every_entry_of_the_effective_answer_has_a_line_in_status_or_is_a_language_with_no_text_of_its_own()
+ {
+    let hostile = {
+        let (_store, backend) = memory();
+        let mut row = Fields::new();
+        for (k, v) in [
+            ("name", "Acme"),
+            ("title_de", "a<b"),
+            ("title_sv", "Logga in"),
+        ] {
+            row.insert(k.into(), json!(v));
+        }
+        backend
+            .apply_checked(&[Op::Put {
+                model: "instance_brand".into(),
+                id: "instance".into(),
+                fields: row,
+            }])
+            .unwrap();
+        backend
+    };
+    let states: Vec<std::sync::Arc<dyn Backend>> = vec![
+        memory().1,
+        {
+            let (_store, backend) = memory();
+            configure(&backend, &[("name", "MOHV")]);
+            backend
+        },
+        {
+            let (_store, backend) = memory();
+            configure(
+                &backend,
+                &[
+                    ("name", "MOHV"),
+                    ("title_en", "Sign in"),
+                    ("title_sv", "Logga in"),
+                    ("message_fi", "Tervetuloa"),
+                ],
+            );
+            backend
+        },
+        hostile,
+    ];
+    for backend in states {
+        let fresh = Reader::new(backend).fresh().unwrap();
+        let text = render_status(&fresh);
+        let effective: serde_json::Value = serde_json::from_str(&fresh.effective_json()).unwrap();
+        for key in effective.as_object().unwrap().keys() {
+            let printed = text.lines().any(|l| l.starts_with(&format!("{key}: ")));
+            if key.starts_with("title_") || key.starts_with("message_") {
+                // A language shows a line when its own text is stored and passed the read check.
+                let fell_back = fresh.shown().fallbacks().iter().any(|f| f.field == *key);
+                assert_eq!(
+                    printed,
+                    !fresh.stored_text(key).is_empty() && !fell_back,
+                    "{key}: {text}"
+                );
+            } else {
+                assert!(printed, "{key} has no line in\n{text}");
+            }
+        }
+    }
 }

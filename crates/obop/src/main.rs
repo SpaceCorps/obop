@@ -131,7 +131,8 @@ const USAGE: &str = "usage: obop <command>
                                                 after it, and two other administrators who keep a password
                                                 and a second factor), or turn that off
   admin brand status                            the instance branding (name, slug, logo, a title and a message per language): what is
-                                                in force and where each value comes from, and any stored field that fell back
+                                                in force and where each value comes from, the titles and messages that are stored,
+                                                and any stored field that fell back
   admin brand configure [--name N] [--slug S] [--title LANG=TEXT]... [--message LANG=TEXT]...
                         [--logo-file FILE.svg | --clear-logo] [--from FILE.toml] [--dry-run]
                                                 set the fields given and keep the others (the first call needs --name); an empty text
@@ -350,7 +351,7 @@ fn main() -> ExitCode {
     // pulled out first, and only for that command.
     let (brand_flags, args) = match brand_cmd::take_flags(args) {
         Ok(taken) => taken,
-        Err(e) => return fail(&format!("error: {e}")),
+        Err(e) => return brand_cmd::misuse(&format!("error: {e}")),
     };
     let (db, args) = take_opt(&args, "--db");
     let (token, args) = take_opt(&args, "--token");
@@ -502,7 +503,7 @@ fn main() -> ExitCode {
             // A `--title` or `--message` that reached the global options was not given right after
             // `admin brand`; ignoring it would drop a field of the call without a word.
             if title.is_some() || message.is_some() {
-                return fail(
+                return brand_cmd::misuse(
                     "error: give --title and --message after `admin brand`, as LANG=TEXT, once for each language",
                 );
             }

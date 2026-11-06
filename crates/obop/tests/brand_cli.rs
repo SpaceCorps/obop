@@ -62,6 +62,17 @@ impl Drop for Dir {
 /// The binary with the settings of a test in its environment and `--db URL` last. `cwd` is where
 /// it runs: a command that needs no database must not make one there.
 fn run(url: Option<&str>, args: &[&str], stdin: Option<&str>, cwd: Option<&PathBuf>) -> Output {
+    run_with(url, args, stdin, cwd, &[])
+}
+
+/// As [`run`], with more settings in the environment of the process.
+fn run_with(
+    url: Option<&str>,
+    args: &[&str],
+    stdin: Option<&str>,
+    cwd: Option<&PathBuf>,
+    env: &[(&str, &str)],
+) -> Output {
     let mut c = Command::new(env!("CARGO_BIN_EXE_obop"));
     c.env_clear();
     for keep in ["SystemRoot", "SYSTEMROOT", "PATH", "TEMP", "TMP", "HOME"] {
@@ -71,6 +82,7 @@ fn run(url: Option<&str>, args: &[&str], stdin: Option<&str>, cwd: Option<&PathB
     }
     c.env("OBOP_SECRET_KEY", KEY)
         .env("OBOP_REQUIRE_MFA_FOR_ADMINS", "0")
+        .envs(env.iter().copied())
         .args(args);
     if let Some(url) = url {
         c.args(["--db", url]);
@@ -308,6 +320,10 @@ fn the_smoke_configure_status_check_and_clear_as_the_operator() {
     let cleared = ok(obop(&url, &["admin", "brand", "clear"], None));
     assert!(cleared.contains("brand removed:\n"), "{cleared}");
     assert!(
+        cleared.contains("recorded in the security log"),
+        "a real clear says it was logged: {cleared}"
+    );
+    assert!(
         cleared.contains("  name: \"MOHV\" -> removed\n"),
         "{cleared}"
     );
@@ -345,14 +361,22 @@ fn the_smoke_configure_status_check_and_clear_as_the_operator() {
 fn what_the_operator_set_is_what_get_returns_and_an_agent_token_cannot_change_it() {
     let dir = Dir::started("get");
     let url = dir.url();
-    let token = out(&obop(
-        &url,
-        &["agent-token", "ada", "--scopes", "base.user"],
-        None,
-    ))
-    .trim()
-    .to_string();
+    // An agent of the administrator who holds `platform.admin` itself: the group does not stop it,
+    // only the rule that these commands are for a person. A second agent with a narrower scope is
+    // refused for the lack of the group, which is another refusal.
+    let issue = |scopes: &str| {
+        out(&obop(
+            &url,
+            &["agent-token", "ada", "--scopes", scopes],
+            None,
+        ))
+        .trim()
+        .to_string()
+    };
+    let token = issue("platform.admin");
+    let narrow = issue("base.user");
     assert!(token.starts_with("obop_"), "an agent token was issued");
+    assert!(narrow.starts_with("obop_"), "an agent token was issued");
     ok(obop(
         &url,
         &[
@@ -386,20 +410,45 @@ fn what_the_operator_set_is_what_get_returns_and_an_agent_token_cannot_change_it
         serde_json::from_str(got["effective"].as_str().unwrap()).unwrap();
     assert_eq!(effective["title_sv"]["value"], "Logga in");
     assert_eq!(effective["name"]["source"], "record");
-    // The commands that write refuse the agent token, and the row is as the operator left it.
-    let refused_call = obop(
+    // The commands that write refuse the agent token that holds the group, by the rule that they are
+    // for a person; and the row is as the operator left it.
+    for command in ["configure", "clear"] {
+        let args = if command == "configure" {
+            vec!["name=Other"]
+        } else {
+            vec![]
+        };
+        let mut call = vec!["call", "--token", &token, "instance_brand", command];
+        call.extend(args);
+        let refused_call = obop(&url, &call, None);
+        assert!(!refused_call.status.success(), "{}", text(&refused_call));
+        assert!(
+            err(&refused_call).contains("by a person with platform.admin"),
+            "{command}: {}",
+            text(&refused_call)
+        );
+    }
+    // The narrower agent is refused too, but not by that rule: the call is as hidden as a command
+    // that does not exist. So the refusal above is the rule of the wrapper and not a mistake in the
+    // way the call is spelled.
+    let hidden = obop(
         &url,
         &[
             "call",
             "--token",
-            &token,
+            &narrow,
             "instance_brand",
             "configure",
             "name=Other",
         ],
         None,
     );
-    assert!(!refused_call.status.success(), "{}", text(&refused_call));
+    assert!(!hidden.status.success(), "{}", text(&hidden));
+    assert!(
+        !err(&hidden).contains("by a person with platform.admin"),
+        "{}",
+        text(&hidden)
+    );
     assert!(status(&url).contains("name: \"MOHV\" (record)\n"));
     assert_eq!(events(&url).len(), 2);
 }
@@ -488,32 +537,42 @@ fn status_incident_keeps_its_global_title_and_message() {
     let l = ok(obop(&url, &["status", "incident", "list"], None));
     assert!(l.contains("Database slow"), "{l}");
     // The flags in front of nothing else are not the area's, whatever order they come in.
-    let o = obop(
-        &url,
-        &["--title", "x", "admin", "brand", "configure", "--name", "A"],
-        None,
+    let r = refused(
+        obop(
+            &url,
+            &["--title", "x", "admin", "brand", "configure", "--name", "A"],
+            None,
+        ),
+        2,
     );
-    assert!(!o.status.success(), "{}", text(&o));
+    assert!(
+        r.contains("give --title and --message after `admin brand`"),
+        "{r}"
+    );
 }
 
 #[test]
 fn a_title_or_message_that_reached_the_global_options_is_refused_not_dropped() {
     let dir = Dir::started("order");
     let url = dir.url();
-    // `--title` before the words is the global option of `status incident`; the area would drop it.
-    let r = refused(
-        obop(
-            &url,
-            &["--title", "sv=Hej", "admin", "brand", "status"],
-            None,
-        ),
-        1,
-    );
-    assert!(
-        r.contains("give --title and --message after `admin brand`, as LANG=TEXT"),
-        "{r}"
-    );
-    assert!(!r.contains("Hej"), "{r}");
+    // `--title` or `--message` before the words is the global option of `status incident`; the area
+    // would drop it. Both are refused, with the flag first or after `--db URL`, and the answer is a
+    // usage error that repeats no value.
+    for flag in ["--title", "--message"] {
+        for args in [
+            vec![flag, "sv=Hej", "admin", "brand", "status"],
+            vec!["--db", &url, flag, "sv=Hej", "admin", "brand", "status"],
+        ] {
+            let with_db = args.first() == Some(&"--db");
+            let o = run(if with_db { None } else { Some(&url) }, &args, None, None);
+            let r = refused(o, 2);
+            assert!(
+                r.contains("give --title and --message after `admin brand`, as LANG=TEXT"),
+                "{args:?}: {r}"
+            );
+            assert!(!r.contains("Hej"), "{args:?}: {r}");
+        }
+    }
     // With `--db URL` first the words are still found, and the flags are the area's.
     let c = ok(run(
         None,
@@ -596,6 +655,10 @@ fn a_dry_run_checks_and_reports_and_writes_nothing() {
         "{d}"
     );
     assert!(d.contains("  name: \"MOHV\" -> removed\n"), "{d}");
+    assert!(
+        !d.contains("recorded in the security log"),
+        "a dry run of clear logs nothing and does not say so: {d}"
+    );
     assert!(status(&url).starts_with("brand: set"));
     assert_eq!(events(&url).len(), n);
 
@@ -701,7 +764,7 @@ fn a_refused_field_stores_nothing_of_the_call_and_every_refusal_is_listed() {
 }
 
 #[test]
-fn two_processes_at_once_on_different_fields_both_survive() {
+fn five_processes_at_once_on_different_fields_all_survive() {
     let dir = Dir::started("race");
     let url = dir.url();
     ok(obop(
@@ -737,10 +800,10 @@ fn two_processes_at_once_on_different_fields_both_survive() {
 }
 
 #[test]
-fn a_call_with_nothing_to_set_and_a_misused_area_are_usage_errors() {
+fn a_call_with_nothing_to_set_and_a_misused_area_are_usage_errors_with_one_status() {
     let dir = Dir::started("usage");
     let url = dir.url();
-    let r = refused(obop(&url, &["admin", "brand", "configure"], None), 1);
+    let r = refused(obop(&url, &["admin", "brand", "configure"], None), 2);
     assert!(r.contains("nothing to set"), "{r}");
     for args in [
         vec!["admin", "brand"],
@@ -751,6 +814,8 @@ fn a_call_with_nothing_to_set_and_a_misused_area_are_usage_errors() {
         let r = refused(obop(&url, &args, None), 2);
         assert!(r.contains("obop admin brand status"), "{args:?}: {r}");
     }
+    // Every command line that is spelled wrong ends with status 2, and a verb never takes an option
+    // it does not have: a flag it would drop is refused, not ignored.
     for (args, needle) in [
         (
             vec!["admin", "brand", "status", "--name", "A"],
@@ -761,8 +826,20 @@ fn a_call_with_nothing_to_set_and_a_misused_area_are_usage_errors() {
             "takes no options",
         ),
         (
+            vec!["admin", "brand", "status", "--from", "x.toml"],
+            "`admin brand status` takes no options",
+        ),
+        (
             vec!["admin", "brand", "check", "x.svg", "--name", "A"],
             "takes no options",
+        ),
+        (
+            vec!["admin", "brand", "check", "x.svg", "--from", "x.toml"],
+            "`admin brand check` takes no options",
+        ),
+        (
+            vec!["admin", "brand", "check", "x.svg", "--dry-run"],
+            "`admin brand check` takes no options",
         ),
         (
             vec!["admin", "brand", "clear", "--name", "A"],
@@ -797,18 +874,35 @@ fn a_call_with_nothing_to_set_and_a_misused_area_are_usage_errors() {
         ),
     ] {
         let o = obop(&url, &args, None);
-        assert!(!o.status.success(), "{args:?}: {}", text(&o));
+        assert_eq!(o.status.code(), Some(2), "{args:?}: {}", text(&o));
         assert!(err(&o).contains(needle), "{args:?}: {}", err(&o));
     }
     // A flag that takes a value and is the last word has none (`--db URL` goes in front here, or
-    // it would be taken for the value).
-    let o = run(
-        None,
-        &["--db", &url, "admin", "brand", "configure", "--logo-file"],
-        None,
-        None,
-    );
-    assert_eq!(refused(o, 1).trim(), "error: --logo-file needs a value");
+    // it would be taken for the value). `--from` is a global option, and without its file the call
+    // would go on as if no file had been meant and write the fields that were given.
+    for (flag, said) in [
+        ("--logo-file", "error: --logo-file needs a value"),
+        ("--from", "error: --from needs a file"),
+    ] {
+        let o = run(
+            None,
+            &[
+                "--db",
+                &url,
+                "admin",
+                "brand",
+                "configure",
+                "--name",
+                "NEVERSET",
+                flag,
+            ],
+            None,
+            None,
+        );
+        assert_eq!(refused(o, 2).trim(), said);
+    }
+    assert!(status(&url).starts_with("brand: not set"));
+    assert!(events(&url).is_empty());
 }
 
 // ---- --from FILE ---------------------------------------------------------------------------------------------------
@@ -949,23 +1043,27 @@ fn from_refuses_what_is_not_a_field_by_name_and_prints_no_value() {
     assert!(status(&url).starts_with("brand: not set"));
     assert!(events(&url).is_empty());
 
-    // A value the rules refuse: the field and the rule, not the value.
+    // A value the rules refuse: the field and the rule, never the text of the value. A rule is a
+    // fixed sentence (the host-name rule has `shop.example` in it as its example, so the value
+    // below is another host name), and a character that broke one is named by its code point.
     let f = dir.file(
         "policy.toml",
-        "[record]\nname = \"POLICYVALUE<b\"\ntitle_de = \"https://x.example\"\n",
+        "[record]\nname = \"POLICYVALUE<b\"\ntitle_de = \"https://x.example\"\nmessage_en = \"visit demo.invalid today\"\n",
     );
     let r = refused(
         obop(&url, &["admin", "brand", "configure", "--from", &f], None),
         1,
     );
     assert!(
-        r.contains("error: name: ") && r.contains("error: title_de: "),
+        r.contains("error: name: ")
+            && r.contains("error: title_de: ")
+            && r.contains("error: message_en: "),
         "{r}"
     );
-    assert!(
-        !r.contains("POLICYVALUE") && !r.contains("x.example"),
-        "{r}"
-    );
+    assert!(r.contains("host name (shop.example)"), "the host rule: {r}");
+    for value in ["POLICYVALUE", "x.example", "demo.invalid", "visit", "today"] {
+        assert!(!r.contains(value), "{value} is in\n{r}");
+    }
 
     // A file that does not exist, and a field given by the file and by a flag.
     let missing = dir.0.join("missing.toml").display().to_string();
@@ -993,7 +1091,7 @@ fn from_refuses_what_is_not_a_field_by_name_and_prints_no_value() {
             ],
             None,
         ),
-        1,
+        2,
     );
     assert!(
         r.contains("name is given twice: by the values file and by a flag"),
@@ -1016,7 +1114,7 @@ fn from_refuses_what_is_not_a_field_by_name_and_prints_no_value() {
             ],
             None,
         ),
-        1,
+        2,
     );
     assert!(r.contains("not both"), "{r}");
     assert!(status(&url).starts_with("brand: not set"));
@@ -1130,6 +1228,60 @@ fn a_logo_file_is_refused_with_the_reasons_of_the_reader_and_a_swap_keeps_the_re
         reasons(&checked, &format!("{hostile}: ")),
         reasons(&r, "error: logo_svg: ")
     );
+    assert!(!reasons(&r, "error: logo_svg: ").is_empty());
+    let dry = refused(
+        obop(
+            &url,
+            &[
+                "admin",
+                "brand",
+                "configure",
+                "--name",
+                "MOHV",
+                "--logo-file",
+                &hostile,
+                "--dry-run",
+            ],
+            None,
+        ),
+        1,
+    );
+    assert_eq!(
+        reasons(&dry, "error: logo_svg: "),
+        reasons(&r, "error: logo_svg: ")
+    );
+    assert!(
+        dry.contains("dry run: a real call would be refused; nothing was written"),
+        "{dry}"
+    );
+
+    // A byte order mark is UTF-8, so it reaches the reader, which refuses it as `check` does. The
+    // file is not cleaned up on the way in: the same artwork is refused on every surface.
+    let mut with_mark = vec![0xEF, 0xBB, 0xBF];
+    with_mark.extend_from_slice(LOGO.as_bytes());
+    let marked = dir.bytes("marked.svg", &with_mark);
+    let r = refused(
+        obop(
+            &url,
+            &[
+                "admin",
+                "brand",
+                "configure",
+                "--name",
+                "MOHV",
+                "--logo-file",
+                &marked,
+            ],
+            None,
+        ),
+        1,
+    );
+    assert!(
+        r.contains("error: logo_svg: the file starts with a byte order mark"),
+        "{r}"
+    );
+    assert!(status(&url).starts_with("brand: not set"));
+    assert!(events(&url).is_empty());
 
     // UTF-16 and bytes that are not text: named by the reader, not by a decoding error.
     let utf16: Vec<u8> = std::iter::once(0xFEFFu16)
@@ -1223,6 +1375,229 @@ fn a_logo_file_is_refused_with_the_reasons_of_the_reader_and_a_swap_keeps_the_re
     ] {
         assert!(s.contains(kept), "{kept} is not in\n{s}");
     }
+}
+
+// ---- the version of an artwork is that of the text the reader writes ------------------------------------------------
+
+/// What a design tool exports: an extra space, a newline between the elements and at the end, and
+/// numbers as `32.000` and `.5`. The reader accepts it and writes it back in its own form, so the
+/// bytes of this file are not the bytes the logo route serves.
+const LOGO_EXPORT: &str = "<svg  xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\">\n <circle cx=\"32\" cy=\"32.000\" r=\".5\" fill=\"#0f766e\" />\n</svg>\n";
+
+#[test]
+fn the_version_is_that_of_the_text_the_reader_writes_not_of_the_bytes_of_the_file() {
+    let dir = Dir::started("canon");
+    let url = dir.url();
+    let file = dir.file("export.svg", LOGO_EXPORT);
+    let canonical = obop_brand::svg::parse(LOGO_EXPORT.as_bytes())
+        .expect("the export is an artwork the reader accepts")
+        .print()
+        .to_string();
+    assert_ne!(
+        canonical, LOGO_EXPORT,
+        "the sample must not be in canonical form"
+    );
+    let v = obop_brand::logo::version(canonical.as_bytes()).to_string();
+    let of_the_file = obop_brand::logo::version(LOGO_EXPORT.as_bytes()).to_string();
+    assert_ne!(
+        v, of_the_file,
+        "the two hashes must differ for this to tell"
+    );
+
+    // `check`, a dry run, the real call and `status` all say the one version.
+    let checked = ok(obop(&url, &["admin", "brand", "check", &file], None));
+    assert_eq!(version_after(&checked, "v="), v, "{checked}");
+    let call = |dry: bool| {
+        let mut args = vec![
+            "admin",
+            "brand",
+            "configure",
+            "--name",
+            "MOHV",
+            "--logo-file",
+            &file,
+        ];
+        if dry {
+            args.push("--dry-run");
+        }
+        ok(obop(&url, &args, None))
+    };
+    let dry = call(true);
+    assert_eq!(version_after(&dry, "logo version:"), v, "{dry}");
+    assert!(
+        dry.contains(&format!("  logo_svg: none -> v={v}\n")),
+        "{dry}"
+    );
+    let real = call(false);
+    assert_eq!(version_after(&real, "logo version:"), v, "{real}");
+    assert!(
+        real.contains(&format!("  logo_svg: none -> v={v}\n")),
+        "{real}"
+    );
+    assert_eq!(version_after(&status(&url), "logo version:"), v);
+    assert_eq!(
+        details(&url, "brand_configured"),
+        [
+            format!("logo_svg: none -> v={v}"),
+            "name: \"\" -> \"MOHV\"".to_string()
+        ]
+    );
+}
+
+// ---- no demo data -----------------------------------------------------------------------------------------------------
+
+#[test]
+fn the_commands_leave_a_new_sqlite_database_free_of_demo_data() {
+    // The rollout of an instance starts with `configure` on a database that is new (spec, section
+    // 14). Another command opens a new SQLite database with a demo company in it; these must not.
+    let demo = |url: &str| -> Vec<(&'static str, usize)> {
+        let backend = obop_storage::open(url).unwrap();
+        ["party", "product", "lead"]
+            .into_iter()
+            .map(|model| (model, backend.list(model).unwrap().len()))
+            .filter(|(_, rows)| *rows > 0)
+            .collect()
+    };
+    let control = Dir::new("seeded");
+    ok(obop(
+        &control.url(),
+        &["call", "--dev-auth", "party", "list", "limit=1"],
+        None,
+    ));
+    assert!(
+        !demo(&control.url()).is_empty(),
+        "the control: `call` seeds a new database, so this test can see demo data"
+    );
+
+    let dir = Dir::new("nodemo");
+    let url = dir.url();
+    let steps: [&[&str]; 4] = [
+        &["admin", "brand", "status"],
+        &["admin", "brand", "configure", "--name", "MOHV"],
+        &["admin", "brand", "clear", "--dry-run"],
+        &["admin", "brand", "clear"],
+    ];
+    for args in steps {
+        ok(obop(&url, args, None));
+        assert!(
+            demo(&url).is_empty(),
+            "{args:?} left demo data in the database"
+        );
+    }
+    assert_eq!(events(&url).len(), 2, "the commands did run");
+}
+
+// ---- a store that refuses ---------------------------------------------------------------------------------------------
+
+#[test]
+fn a_write_the_store_refuses_is_status_75_with_the_line_of_obop_call_and_stores_nothing() {
+    // The test build of the store refuses the first atomic batch of the process as `storage_busy`,
+    // as the PostgreSQL pool would (`OBOP_TEST_FAULTS`, see `tests/error_seam.rs`).
+    let faults = [("OBOP_TEST_FAULTS", "apply:0")];
+    let with_faults = |url: &str, args: &[&str]| run_with(Some(url), args, None, None, &faults);
+    let line_of = |r: &str| {
+        r.lines()
+            .find(|l| l.starts_with("error: "))
+            .unwrap_or_else(|| panic!("no error line in {r}"))
+            .to_string()
+    };
+    let dir = Dir::started("busy");
+    let url = dir.url();
+
+    // `configure`: the refusal is the line `obop call` prints and the status "try again later".
+    let configure = ["admin", "brand", "configure", "--name", "MOHV"];
+    let line = line_of(&refused(with_faults(&url, &configure), 75));
+    assert!(
+        line.starts_with("error: storage_busy: ")
+            && line.ends_with("(nothing was changed; try again in 1 s)"),
+        "{line}"
+    );
+    assert!(status(&url).starts_with("brand: not set"));
+    assert!(events(&url).is_empty());
+    // A dry run writes no batch, so the fault that waits for one does not touch it.
+    let mut dry = configure.to_vec();
+    dry.push("--dry-run");
+    let said = ok(with_faults(&url, &dry));
+    assert!(said.contains("dry run, nothing was written"), "{said}");
+
+    // The same call without the fault writes.
+    ok(obop(&url, &configure, None));
+    assert_eq!(events(&url).len(), 1);
+
+    // `clear` the same way: the row and the events stay.
+    let line = line_of(&refused(
+        with_faults(&url, &["admin", "brand", "clear"]),
+        75,
+    ));
+    assert!(
+        line.starts_with("error: storage_busy: ")
+            && line.ends_with("(nothing was changed; try again in 1 s)"),
+        "{line}"
+    );
+    assert!(status(&url).contains("name: \"MOHV\" (record)\n"));
+    assert_eq!(events(&url).len(), 1);
+    ok(obop(&url, &["admin", "brand", "clear"], None));
+    assert!(status(&url).starts_with("brand: not set"));
+}
+
+// ---- a stored value that is not safe to print ---------------------------------------------------------------------------
+
+#[test]
+fn a_stored_value_that_is_not_safe_to_print_is_escaped_where_configure_and_clear_show_it() {
+    let dir = Dir::started("escaped");
+    let url = dir.url();
+    // A row written around the command: an escape sequence and a bidirectional override.
+    let plant = || {
+        let backend = obop_storage::open(&url).unwrap();
+        let mut row = obop_storage::Fields::new();
+        row.insert("name".into(), serde_json::json!("A\u{1b}[31mB\u{202e}C"));
+        backend
+            .apply_checked(&[obop_storage::Op::Put {
+                model: "instance_brand".into(),
+                id: "instance".into(),
+                fields: row,
+            }])
+            .unwrap();
+    };
+    let escaped = "A\\u{001B}[31mB\\u{202E}C";
+    let safe = |said: &str| {
+        assert!(
+            !said.chars().any(|c| c == '\u{1b}' || c == '\u{202e}'),
+            "a raw character reached the terminal: {said:?}"
+        );
+        assert!(said.contains(escaped), "{said}");
+    };
+
+    plant();
+    let dry = ok(obop(
+        &url,
+        &[
+            "admin",
+            "brand",
+            "configure",
+            "--name",
+            "Clean",
+            "--dry-run",
+        ],
+        None,
+    ));
+    safe(&dry);
+    let real = ok(obop(
+        &url,
+        &["admin", "brand", "configure", "--name", "Clean"],
+        None,
+    ));
+    safe(&real);
+    for detail in details(&url, "brand_configured") {
+        safe(&detail);
+    }
+
+    plant();
+    let cleared = ok(obop(&url, &["admin", "brand", "clear"], None));
+    safe(&cleared);
+    let logged = details(&url, "brand_cleared");
+    assert_eq!(logged.len(), 1, "{logged:?}");
+    safe(&logged[0]);
 }
 
 // ---- the lines the reader writes name this command ------------------------------------------------------------------
