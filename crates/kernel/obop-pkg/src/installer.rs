@@ -996,13 +996,13 @@ impl Installer {
         // The rules of the models (effects, computed fields, access) are checked against the
         // models they use, now that the dependencies are registered.
         let look = |n: &str| d.model_def(n).map(Arc::new);
-        let problems = obop_registry::check_module_in(&module, &look);
+        let mut problems: Vec<String> = obop_registry::check_module_in(&module, &look)
+            .iter()
+            .map(|v| format!("{}: {}", v.path, v.problem))
+            .collect();
+        problems.extend(effect_target_problems(&d, &module));
         if !problems.is_empty() {
-            return Err(problems
-                .iter()
-                .map(|v| format!("{}: {}", v.path, v.problem))
-                .collect::<Vec<_>>()
-                .join("; "));
+            return Err(problems.join("; "));
         }
         let at = now();
         let mut f = Fields::new();
@@ -2101,6 +2101,35 @@ fn refuse_skipped_dependencies(i: &BTreeMap<String, Value>) -> Result<(), String
         );
     }
     Ok(())
+}
+
+/// What an action effect of `module` may not do: write a model that the module does not declare
+/// and that is changed by its own commands only (the branding, the single sign-on provider, the
+/// settings, the logs). An effect writes a record the way the generated `create` and `update` do,
+/// so it reaches only a model that has them; those other models have their own guards and their
+/// own audit, which an effect would skip. The engine refuses the same writes again when the effect
+/// runs, so a package stored before this check is held too.
+fn effect_target_problems(d: &Dispatcher, module: &Module) -> Vec<String> {
+    let own: BTreeSet<&str> = module.models.iter().map(|m| m.name).collect();
+    let mut out = Vec::new();
+    for model in &module.models {
+        for command in &model.commands {
+            for (n, e) in command.effects.iter().enumerate() {
+                let target = e.model();
+                if !own.contains(target) && d.has_model(target) && !d.effects_may_write(target) {
+                    out.push(format!(
+                        "{}.{}.{}: effect {} ({}) writes {target}, which is changed by its own commands only; an action effect can write only a model that has the generated create and update",
+                        module.id,
+                        model.name,
+                        command.name,
+                        n + 1,
+                        e.kind_name(),
+                    ));
+                }
+            }
+        }
+    }
+    out
 }
 
 /// Registry metadata of the admin commands. The models are virtual: they have no stored

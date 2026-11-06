@@ -13,6 +13,7 @@ use serde_json::{Value as J, json};
 
 const MODEL: &str = brand::MODEL;
 
+mod effects;
 mod labels;
 
 struct Rig {

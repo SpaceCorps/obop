@@ -6,6 +6,12 @@
 //! action it starts and goes through that action's own checks, assertions and effects, and every
 //! record involved must be visible to the caller under the row-level rules. A `set_state` effect
 //! therefore cannot do what the caller could not have done by pressing that button.
+//!
+//! An effect writes a record the way the generated `create` and `update` do, so it reaches only a
+//! model that has them. A model whose commands are hand-registered (the branding, the single
+//! sign-on provider, the settings, the logs) is changed by its own commands alone, with their
+//! guards and their audit: an effect on it is refused when it runs, and the install gate refuses
+//! it before.
 
 use super::access::{Gate, creator_blocked};
 use super::computed::Computer;
@@ -563,8 +569,20 @@ impl Runner<'_> {
         }
     }
 
+    /// An effect writes only a model that has the generated `create` and `update`.
+    fn writable(&self, def: &ModelDef) -> R<()> {
+        if self.eng.effects_may_write(def.name) {
+            return Ok(());
+        }
+        Err(format!(
+            "{} is changed by its own commands only, so an action cannot write it",
+            def.name
+        ))
+    }
+
     /// Create a record the way the generated `create` does, for the caller.
     fn create(&self, unit: &mut Unit<'_>, def: &Arc<ModelDef>, mut f: Fields) -> R<String> {
+        self.writable(def)?;
         if !self.actor.holds(def.write_group) {
             return Err(format!(
                 "creating a {} needs the {} group",
@@ -593,6 +611,7 @@ impl Runner<'_> {
         id: &str,
         mut patch: Fields,
     ) -> R<()> {
+        self.writable(def)?;
         if !self.actor.holds(def.write_group) {
             return Err(format!(
                 "changing a {} needs the {} group",

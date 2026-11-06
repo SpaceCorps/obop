@@ -331,6 +331,12 @@ pub(crate) struct ModelMeta {
     pub(crate) fields: Vec<FieldDef>,
     module_description: String,
     translations: Arc<Translations>,
+    /// The generated `create` and `update` are bound for this model (`register_crud`). An action
+    /// effect writes a record the way those two commands do, for the caller, so it reaches only a
+    /// model that has them: a model whose commands are hand-registered (the branding, the single
+    /// sign-on provider, the settings, the logs) is changed by those commands alone, with their
+    /// guards and their audit, and never by an effect of a package.
+    pub(crate) generated_writes: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -680,7 +686,7 @@ impl Dispatcher {
     /// Bind a handler to a command declared in `module`'s registry metadata. A handler for an
     /// undeclared command is a programming error: the surface is generated from the registry.
     pub fn register(&self, module: &Module, model: &str, command: &str, handler: Handler) {
-        self.register_inner(module, model, command, handler, false);
+        self.register_inner(module, model, command, handler, false, false);
     }
 
     /// Like `register`, for a handler that decides by the roles of the caller: the dispatcher
@@ -693,7 +699,7 @@ impl Dispatcher {
         command: &str,
         handler: Handler,
     ) {
-        self.register_inner(module, model, command, handler, true);
+        self.register_inner(module, model, command, handler, true, false);
     }
 
     /// Like `register`, for the generated handlers, which read the caller from their input.
@@ -704,7 +710,9 @@ impl Dispatcher {
         command: &str,
         handler: Handler,
     ) {
-        self.register_inner(module, model, command, handler, true);
+        // The generated `create` and `update` are what lets an effect write the model.
+        let writes = matches!(command, "create" | "update");
+        self.register_inner(module, model, command, handler, true, writes);
     }
 
     fn register_inner(
@@ -714,6 +722,7 @@ impl Dispatcher {
         command: &str,
         handler: Handler,
         actor: bool,
+        generated_write: bool,
     ) {
         let m = module
             .models
@@ -725,18 +734,27 @@ impl Dispatcher {
             .into_iter()
             .find(|c| c.name == command)
             .unwrap_or_else(|| panic!("{}.{model}: command {command} is not declared", module.id));
-        self.models.write().unwrap().insert(
-            m.name.to_string(),
-            ModelMeta {
-                def: Arc::new(m.clone()),
-                module: module.id.clone(),
-                module_name: module.name.clone(),
-                module_description: module.description.clone(),
-                translations: module.translations.clone(),
-                description: m.description,
-                fields: m.fields.clone(),
-            },
-        );
+        {
+            let mut models = self.models.write().unwrap();
+            // Each command registered replaces the entry, so the mark is carried over.
+            let generated_writes = generated_write
+                || models
+                    .get(m.name)
+                    .is_some_and(|before| before.generated_writes);
+            models.insert(
+                m.name.to_string(),
+                ModelMeta {
+                    def: Arc::new(m.clone()),
+                    module: module.id.clone(),
+                    module_name: module.name.clone(),
+                    module_description: module.description.clone(),
+                    translations: module.translations.clone(),
+                    description: m.description,
+                    fields: m.fields.clone(),
+                    generated_writes,
+                },
+            );
+        }
         {
             let mut order = self.order.write().unwrap();
             if !order.contains(&module.id) {
@@ -960,6 +978,19 @@ impl Dispatcher {
             g.extend(from_model.filter(|x| *x != ANY_GROUP).map(String::from));
         }
         g.into_iter().collect()
+    }
+
+    /// Whether an action effect of a package may write `model`: it is registered and has the
+    /// generated `create` and `update`. A model with hand-registered commands only (the branding,
+    /// the single sign-on provider, the settings, the logs) is changed by those commands alone, so
+    /// no effect may reach it (the install gate asks this; the engine refuses it again when the
+    /// effect runs).
+    pub fn effects_may_write(&self, model: &str) -> bool {
+        self.models
+            .read()
+            .unwrap()
+            .get(model)
+            .is_some_and(|m| m.generated_writes)
     }
 
     /// Whether any command of `model` is registered.

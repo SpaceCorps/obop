@@ -405,7 +405,7 @@ impl Dispatcher {
 mod tests {
     use super::*;
     use crate::{Principal, Surface, Vault};
-    use obop_registry::{FieldDef, ModelDef};
+    use obop_registry::{CommandDef, FieldDef, ModelDef};
     use obop_types::DataClass;
 
     fn f(name: &'static str) -> FieldDef {
@@ -481,6 +481,52 @@ mod tests {
     fn rejects(r: Result<Value, String>, want: &str) {
         let e = r.expect_err("should be rejected");
         assert!(e.contains(want), "{e:?} should contain {want:?}");
+    }
+
+    /// An action effect writes a record the way the generated `create` and `update` do, so the
+    /// engine lets it reach only a model that has them. A model with hand-registered commands
+    /// (the branding, the single sign-on provider, the settings) and a model registered read-only
+    /// (the logs) have none, whatever their write group says.
+    #[test]
+    fn an_effect_may_write_only_a_model_with_the_generated_create_and_update() {
+        let (d, s, _) = setup();
+        assert!(d.effects_may_write("customer"));
+        assert!(d.effects_may_write("deal"));
+        assert!(!d.effects_may_write("nothing"), "not registered");
+        let model = |name| ModelDef {
+            name,
+            description: "d",
+            read_group: "t.user",
+            write_group: "t.user",
+            access: None,
+            fields: vec![f("title")],
+            commands: vec![CommandDef::new("tweak", "Tweak", "t.user")],
+            ext: Default::default(),
+        };
+        let module = Module {
+            id: "h".into(),
+            name: "H".into(),
+            models: vec![model("hand"), model("log")],
+            network_destinations: vec![],
+            description: String::new(),
+            translations: Default::default(),
+            meta: Default::default(),
+        };
+        // Hand-registered: `get` and a command of its own, no generated `create` or `update`.
+        d.register(&module, "hand", "get", Box::new(|_| Ok(Value::Null)));
+        d.register(&module, "hand", "tweak", Box::new(|_| Ok(Value::Null)));
+        d.register_read_only(&module, "log", &s);
+        assert!(d.has_model("hand") && d.has_model("log"));
+        assert!(!d.effects_may_write("hand"));
+        assert!(!d.effects_may_write("log"));
+        // A module that is taken out and put back as a generated one is judged by what is bound.
+        d.unregister_module("h");
+        assert!(!d.has_model("hand"));
+        d.register_crud(&module, &s);
+        assert!(d.effects_may_write("hand"));
+        assert!(d.effects_may_write("log"));
+        d.unregister_module("h");
+        assert!(!d.effects_may_write("hand"));
     }
 
     #[test]
