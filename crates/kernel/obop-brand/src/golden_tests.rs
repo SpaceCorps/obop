@@ -2,7 +2,9 @@
 //! (docs/spec/branding.md, section 13, "Golden names"). A release that tightens the character policy
 //! fails here, instead of refusing a customer's own name on its next save. The lists are read by a
 //! human: add a line when a real customer needs one, and never remove or edit a line to make a
-//! change pass. Every name here is made up.
+//! change pass. Every name here is made up, and a name that has the shape of a company's (a legal
+//! form, a trade) says so in the name itself with the word for "example" of its language
+//! (`Example`, `Beispiel`, `Esimerkki`, `Exempel`, ...), so that none can be taken for a real one.
 
 use crate::policy::{Kind, clean, safe};
 use crate::slug;
@@ -18,7 +20,7 @@ const GOLDEN_NAMES: &[&str] = &[
     "C+ Care",
     "Yay! Tea",
     "Beispiel (Nord) GmbH",
-    "Musterstadt-Bau GmbH & Co. KG",
+    "Beispielstadt-Bau GmbH & Co. KG",
     "my_instance",
     "Zeta 7 Studio",
     "24 Stunden Dienst",
@@ -32,10 +34,10 @@ const GOLDEN_NAMES: &[&str] = &[
     "Example Inc.",
     // Finnish and Swedish.
     "Esimerkki Kahvila Oy",
-    "Kalatukku Länsi Oy",
-    "Päiväkoti Auringonkukka ry",
+    "Esimerkki Kalatukku Länsi Oy",
+    "Esimerkki Päiväkoti Auringonkukka ry",
     "Exempelbolaget Östra AB",
-    "Bageri Äpplet & Söner AB",
+    "Exempel Bageri Äpplet & Söner AB",
     // One script that is not Latin.
     "Пример Бюро",
     "Παράδειγμα Α.Ε.",

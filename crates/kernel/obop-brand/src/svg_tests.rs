@@ -1374,6 +1374,48 @@ fn nesting_is_bounded_and_a_deep_file_is_refused_without_overflow() {
     assert!(r.iter().any(|r| r.message.contains("attributes")));
 }
 
+/// The reader's own bound on nesting (16 levels, `<svg>` included) stops a file before any rule is
+/// applied to it; it is not the same as the rule about groups (4 deep) or the element limit (128),
+/// both of which a deep file also breaks, so the test names the reason it expects at each depth.
+#[test]
+fn the_reader_stops_at_sixteen_levels_before_the_rules_about_groups_are_applied() {
+    let deep = |groups: usize| {
+        wrap(&format!(
+            "{}{}",
+            "<g>".repeat(groups),
+            "</g>".repeat(groups)
+        ))
+    };
+    // <svg> and 15 groups: 16 levels. The reader reads it and the rule about groups refuses it.
+    let r = refuse(&deep(15));
+    assert!(
+        r.iter()
+            .any(|r| r.message.contains("<g> nested more than 4 deep")),
+        "{:?}",
+        messages(&r)
+    );
+    assert!(
+        !r.iter()
+            .any(|r| r.message.contains("elements nested more than 16 deep")),
+        "{:?}",
+        messages(&r)
+    );
+    // One more level: the reader refuses it, with its own reason, and reads no further.
+    let r = refuse(&deep(16));
+    assert!(
+        r.iter()
+            .any(|r| r.message.contains("elements nested more than 16 deep")),
+        "{:?}",
+        messages(&r)
+    );
+    assert!(
+        !r.iter()
+            .any(|r| r.message.contains("<g> nested more than 4 deep")),
+        "{:?}",
+        messages(&r)
+    );
+}
+
 // ---- What the reader accepts is read back; the numbers of section 8 are pinned by value ------------------
 
 /// Whether a reason of the list has this code.
