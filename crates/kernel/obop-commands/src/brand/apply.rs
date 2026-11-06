@@ -280,8 +280,10 @@ fn plan_configure(backend: &dyn Backend, supplied: &[(String, String)]) -> Resul
                     };
                     // A stored artwork that is valid but not in canonical form, sent again: what is
                     // served and its version are the same as before, so there is nothing to record
-                    // (the row is canonical again if the call writes it for another field).
-                    if o != n {
+                    // (the row is canonical again if the call writes it for another field). A value
+                    // that was not text is always a change, even when the text sent is the very
+                    // word the log reads it as: the row is written, so the change is logged.
+                    if !was_text || o != n {
                         changes.push(Changed {
                             field: field.clone(),
                             old: o,

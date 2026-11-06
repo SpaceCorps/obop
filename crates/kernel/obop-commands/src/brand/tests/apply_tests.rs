@@ -744,3 +744,25 @@ fn a_value_replaces_a_stored_value_that_is_not_text_and_the_log_says_what_it_rep
     assert_eq!(text(&stored(&spy).unwrap(), "title_de"), "Hallo");
     assert_eq!(details(&spy), ["title_de: \"not_text\" -> \"Hallo\""]);
 }
+
+#[test]
+fn the_word_for_a_non_text_value_sent_as_text_still_replaces_the_value() {
+    use serde_json::json;
+    // The log reads a stored value that is not text as the word `not_text`. A person who sends that
+    // very word cannot make the call look like no change: the stored value was a number, and now
+    // it is text, so the row is written and the change is logged (its two sides read alike).
+    let spy = Spy::memory();
+    put_row(&*spy, &[("name", s("Acme Co")), ("title_en", json!(5))]);
+    let a = ok(&spy, &[("title_en", "not_text")]);
+    assert_eq!(a.changes.len(), 1, "{:?}", a.changes);
+    assert_eq!(
+        stored(&spy).unwrap().get("title_en"),
+        Some(&json!("not_text")),
+        "the number is gone"
+    );
+    assert_eq!(details(&spy), ["title_en: \"not_text\" -> \"not_text\""]);
+    // Now it is text: the same call is no change.
+    let again = ok(&spy, &[("title_en", "not_text")]);
+    assert!(again.changes.is_empty());
+    assert_eq!(events(&spy), 1);
+}
