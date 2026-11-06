@@ -1301,8 +1301,8 @@ mod tests {
                 "{name} is reserved already"
             );
         }
-        // The accounts, the sessions, the OAuth grants, the package records and the two models
-        // that only their own commands may write.
+        // The accounts, the sessions, the OAuth grants, the package records and the log of
+        // security events, which only its own commands may write.
         for name in [
             "auth_user",
             "auth_token",
