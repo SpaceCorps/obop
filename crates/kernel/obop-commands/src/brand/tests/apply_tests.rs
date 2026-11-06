@@ -668,10 +668,15 @@ fn the_answers_carry_the_changes_as_json() {
     );
 }
 
+/// The details of the log in the order they were written. The list of the store is in insertion
+/// order; the ids are not a usable order here (an id is the second and a random suffix, so the
+/// events of one call, which share a second, sort at random).
 fn details(spy: &Spy) -> Vec<String> {
-    let mut rows = spy.list("security_event").unwrap();
-    rows.sort_by(|a, b| a.0.cmp(&b.0));
-    rows.into_iter().map(|(_, f)| text(&f, "detail")).collect()
+    spy.list("security_event")
+        .unwrap()
+        .into_iter()
+        .map(|(_, f)| text(&f, "detail"))
+        .collect()
 }
 
 #[test]
