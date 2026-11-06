@@ -95,6 +95,10 @@ fn a_package_cannot_declare_a_table_the_program_reads_and_writes_itself() {
         ("auth", "auth_passkey"),
         ("oauth", "oauth_grant"),
         ("oauth", "oauth_refresh"),
+        ("oauth", "oauth_client"),
+        ("obop", "obop_package"),
+        ("obop", "obop_migration"),
+        ("obop", "obop_meta"),
         ("bulk", "bulk_idempotency"),
         ("connector", "connector_vault"),
     ] {
@@ -116,12 +120,14 @@ fn a_package_cannot_declare_a_table_the_program_reads_and_writes_itself() {
             id,
             &record(&package(id, "0.1.0", &[table]), "0.1.0", None, J::Null),
         );
+        // (The package table also holds the sentinel row, which is no package: it fails by itself.)
         let failed = b.inst.load_installed();
-        assert_eq!(failed.len(), 1, "{table}: {failed:?}");
+        let ours: Vec<_> = failed.iter().filter(|(i, _)| i == id).collect();
+        assert_eq!(ours.len(), 1, "{table}: {failed:?}");
         assert!(
-            failed[0].1.contains(&format!("`{table}`")) && failed[0].1.contains("not registered"),
+            ours[0].1.contains(&format!("`{table}`")) && ours[0].1.contains("not registered"),
             "{table}: {}",
-            failed[0].1
+            ours[0].1
         );
         assert!(!b.d.has_model(table), "{table}: not registered by the load");
         // The holder of the package's group has no command over the table, and it is as it was.
