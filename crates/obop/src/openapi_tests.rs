@@ -28,6 +28,8 @@ const KNOWN_OMITTED: &[&str] = &[
     "module_plan.preview",
     "setting.get",
     "setting.update",
+    "sie_exchange.export",
+    "sie_exchange.import",
 ];
 
 /// The committed copy: `web/packages/client/openapi.json`, from the root of the workspace.
@@ -147,7 +149,7 @@ fn it_lists_every_command_of_an_account_with_every_group() {
     }
     missing.sort();
     // The document is made from `Dispatcher::meta`, which skips a model that has no `list`
-    // command, so these twelve commands (REST ones included) have no operation, in the document
+    // command, so these fourteen commands (REST ones included) have no operation, in the document
     // an instance serves as well (docs/ISSUES.md K26). A new omission fails here; when one of
     // these gains an operation, remove its id from the list.
     assert_eq!(

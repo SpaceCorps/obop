@@ -286,7 +286,7 @@ fn app() -> App {
     }
     let se = std::fs::read_to_string(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../packages/contrib/accounting_se/accounting_se.toml"
+        "/../../packages/accounting_se.toml"
     ))
     .unwrap();
     app.installer.install(&se, "file", "test").unwrap();

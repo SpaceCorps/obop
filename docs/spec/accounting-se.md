@@ -21,11 +21,11 @@ Two rules shape every stage.
 | Stage | What it is | Status |
 |---|---|---|
 | 1. Ledger | Accounts, journals, entries, periods, fiscal years, gapless numbering, approval to post | Built (`packages/accounting.toml`), plus the Swedish company and voucher series models of this PR |
-| 2. VAT | VAT boxes, VAT codes, the VAT report per period with propose and approve | This PR (`packages/contrib/accounting_se/accounting_se.toml`, installable by upload, not bundled); computing the boxes from the ledger is not built |
-| 3. SIE 4 | Import and export of SIE 4 files | Being built in parallel (crate `obop-sie`); not part of this PR's package |
+| 2. VAT | VAT boxes, VAT codes, the VAT report per period with propose and approve | `packages/accounting_se.toml` (bundled in the catalogue; labels in de, fr, pl, fi, sv and es are machine-drafted); computing the boxes from the ledger is not built |
+| 3. SIE 4 | Import and export of SIE 4 files | Built: the crate `obop-sie` (file format) and the commands `obop sie export|import` and `sie_exchange.export|import` (section 4.1); tested on generated files only, NOT checked against the official SIE specification, never run against Fortnox, Visma or a real file |
 | 4. OAS importer | `obop import oas` reads the OAS SQLite file and documents directory | Built for company, accounts, vouchers with entries, customers and receipts (`crates/obop/src/import_oas/`, section 5.3); invoices, payroll, bank, time are listed as skipped; tested against generated data only, never against real books |
 | 5. Invoices | Customer invoices with the ledger voucher | Not built for Sweden (the `invoicing` module exists; the link to the ledger and the Swedish rules do not) |
-| 6. Payroll and AGI | Employees, pay runs, employer contributions, AGI file | Not built (a new later package; every rate UNVERIFIED) |
+| 6. Payroll and AGI | Employees, pay runs, employer contributions, AGI file | Data model only, in `packages/contrib/payroll_se/payroll_se.toml` ([payroll-se.md](payroll-se.md); installable by upload, not bundled; every rate and rule UNVERIFIED, nothing seeded); no computation, no AGI XML |
 | 7. Receipts and bank | Receipt archive, bank lines, matching | Parts exist (`documents`, `accounting_bank_statement_line`); matching and booking not built |
 | 8. Time tracking | Projects, time entries, billing | Parts exist (`timesheets` package); the link to invoices is not built |
 | 9. Immutability and hash chain | Vouchers that cannot change, with a verifiable chain | Not built; waits on K5 (see 9) |
@@ -67,11 +67,27 @@ The package `accounting_se` depends on `accounting` (`^0.3`) and needs core 0.2.
 
 ## 4. Stage 3: SIE 4 (crate `obop-sie`)
 
-Being built in parallel by another agent; this document only fixes the boundary. The crate reads and writes SIE 4 files (the Swedish accounting exchange format) for the `accounting` models. OAS already exports SIE 4 from `ledger.rs`.
+The crate reads and writes SIE 4 files (the Swedish accounting exchange format) for the `accounting` models. OAS already exports SIE 4 from `ledger.rs`.
 
 - The export is a function of posted entries, accounts, fiscal years and the company record. It needs the account names, which come from the user's own chart.
 - The import is the other half of the BAS problem: a SIE file carries account names that come from the sender's chart. Importing creates the accounts of that file in the user's database. Whether the public repository may hold a fixture file with BAS names is a D34 question, so fixtures use invented numbers and names.
-- Status of correctness: the file layout used by OAS and by the crate has not been compared with the official SIE specification here. Interoperability with Fortnox, Visma or a real auditor's tool is untested.
+- Status of correctness: the file layout used by OAS and by the crate has **not** been compared with the official SIE specification. Interoperability with Fortnox, Visma or a real auditor's tool is untested.
+
+### 4.1 The commands (built)
+
+`obop sie export --year YYYY [--out FILE] [--db URL] [--token T]`
+- Builds a `SieFile` of the posted moves (states `posted` and `reversed`; a reversed move was posted and its opposite move is an ordinary posted one) whose date is in the year: the `accounting_fiscal_year` that starts in YYYY, else the calendar year. Writes CP437 bytes with CRLF to `--out` (default `YYYY.se`) and prints counts and the SHA-256. Needs `accounting.user`.
+- Company name and organisation number come from `accounting_se_company` when that package is installed (the organisation number of a sole trader is a personal identity number, so the file holds personal data); otherwise the file says `Unnamed company`. `#KTYP` comes from the account type (asset, liability and equity, income, expense). `#IB` of the balance sheet accounts is the sum of the posted moves before the year; `#UB` and `#RES` are derived by `obop-sie`. Accounts with a non-numeric code are left out, and an exported line on one is an error.
+- Voucher series and number: the `reference` if it looks like `A17` (letters, then digits without a leading zero), so an imported file round-trips; else the journal code and the digits at the end of the move number; else the next free number of the journal's series. A pair is never used twice.
+
+`obop sie import FILE [--dry-run] [--post] [--default-account-types | --account-types FILE] [--db URL] [--token T]`
+- Parses the file (an unbalanced voucher, a duplicate series and number, or a voucher on an account without `#KONTO` is refused before anything is written). New accounts (matched by code) need a confirmed type, as for the OAS importer, with the same table (`import_oas::types`, UNVERIFIED defaults by class; a file without `#KTYP` is typed from the class of the number). One journal per series (an existing journal with that code is used). Each voucher is a draft `accounting_move` with series and number in `reference` (`A17`), the text and `#VER` dates in `narration`, and its lines.
+- Idempotent through the import map: accounts and moves are created with `bulk_create` and a `source` key (system `sie:<hash of company name and organisation number>`, table `voucher`, id `<year start>:<series>:<number>`), so a re-run creates nothing; a move without lines (an interrupted run) gets them. A move with the same reference in the same journal that is not in the map is refused.
+- `--post` runs the real `accounting_move.post`, one voucher at a time in file order, as the signed-in person (needs `accounting.approver`; an agent or a scoped token is refused). JE numbers follow the file order and carry the year of the posting.
+- After a real run the debit and credit totals per account of the imported moves, the line count and (with `--post`) the posted state are compared with the file; a difference fails the run with exit 1.
+- Not imported and always listed: `#IB` opening balances (no opening entry model), `#UB`/`#RES` (derived), object tags (`#DIM`/`#OBJEKT`), other years, `#SRU`, `#VALUTA`, `#KSUMMA`. The bulk rate limit (`OBOP_BULK_PER_MINUTE`, 12 calls a minute) is waited out by the CLI, 1000 rows per call.
+
+The typed commands `sie_exchange.export` (input `year`) and `sie_exchange.import` (input `content_base64`, `dry_run`, `default_account_types`, `account_types`) carry the file as base64 and run the same functions for REST and MCP callers as themselves. They have no `--post`, and an agent may only dry-run the import (see cli.md). Tests: `crates/obop/src/sie_tests.rs` (generated files only: round trip into a fresh database with an equal trial balance, dry run writes nothing, unbalanced file refused, re-run creates nothing).
 
 ## 5. Stage 4: the OAS importer (`obop import oas`)
 
@@ -140,7 +156,7 @@ OAS makes vouchers append-only with database triggers and a hash chain. In obop 
 
 ## 10. Order of work
 
-1. This PR: the package and this document. Check: `obop modules check packages/contrib/accounting_se/accounting_se.toml` and `--complete` with the Swedish labels.
+1. This PR: the package and this document. Check: `obop modules check packages/accounting_se.toml` and `--complete` with the Swedish labels.
 2. Bundle the package in the catalogue (needs the labels in the other six languages, the catalogue tests updated, and a decision whether `requires_core` may be `^0.2.1` for a bundled package; see the PR notes).
 3. `obop-sie` export, then import.
 4. The operator command for posted history (5.2, item 1), then `obop import oas`.

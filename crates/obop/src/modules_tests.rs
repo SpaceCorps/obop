@@ -68,7 +68,7 @@ fn the_core_version_is_the_workspace_version() {
 #[test]
 fn every_bundled_package_declares_its_metadata() {
     let all = bundled();
-    assert_eq!(all.len(), 23);
+    assert_eq!(all.len(), 24);
     let builtin: BTreeSet<String> = App::new().modules.iter().map(|m| m.id.clone()).collect();
     let ids: BTreeSet<String> = all.iter().map(|m| m.module.id.clone()).collect();
     for m in &all {
@@ -76,7 +76,14 @@ fn every_bundled_package_declares_its_metadata() {
         let id = &x.id;
         assert_eq!(x.license, "Apache-2.0", "{id}: first-party licence (OR-1)");
         assert!(obop_pkg::spdx::check(&x.license).is_ok(), "{id}");
-        assert_eq!(x.requires_core, "^0.2", "{id}");
+        // The bundled packages keep `^0.2` (OR-35 h, OR-37 b). The one exception is a package that
+        // uses the field-limit keys (D90), which only core 0.2.1 parses: it writes `^0.2.1`.
+        let expected = if id == "accounting_se" {
+            "^0.2.1"
+        } else {
+            "^0.2"
+        };
+        assert_eq!(x.requires_core, expected, "{id}");
         assert_eq!(x.author, "SpaceCorps", "{id}");
         assert!(
             !x.summary.is_empty() && x.summary.chars().count() <= 140,
@@ -199,8 +206,8 @@ fn all_23_packages_install_with_their_dependencies_and_the_module_list_shows_eve
             .unwrap()
             .value,
     );
-    // 7 built-in (6 modules and the admin module) plus 23.
-    assert_eq!(rows.len(), app.modules.len() + 23);
+    // 7 built-in (6 modules and the admin module) plus 24.
+    assert_eq!(rows.len(), app.modules.len() + 24);
     for r in &rows {
         let Value::Map(m) = r else { panic!() };
         let id = format!("{:?}", m["id"]);
@@ -280,7 +287,7 @@ fn the_check_command_applies_the_catalogue_rules_and_reports_warnings() {
         .map(|p| p.to_string_lossy().to_string())
         .collect();
     files.sort();
-    assert_eq!(files.len(), 23);
+    assert_eq!(files.len(), 24);
     let refs: Vec<&str> = files.iter().map(String::as_str).collect();
     assert!(
         modules_check_files_with(&refs, false, true).is_ok(),

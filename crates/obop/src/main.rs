@@ -72,6 +72,9 @@ mod payments_tests;
 mod public_site_tests;
 #[cfg(test)]
 mod settings_cmd_tests;
+mod sie;
+#[cfg(test)]
+mod sie_tests;
 #[cfg(test)]
 mod sign_tests;
 #[cfg(test)]
@@ -282,6 +285,16 @@ const USAGE: &str = "usage: obop <command>
                                                 (needs accounting.approver; an agent is refused) in OAS order and checks the trial
                                                 balance against OAS. --dry-run lists what would happen and every skipped table; a
                                                 re-run only adds what is missing. CLI-only operator command
+  sie export --year YYYY [--out FILE] [--db URL] [--token TOKEN]
+                                                write a SIE 4 file (CP437) of the posted moves of the fiscal year that starts in
+                                                YYYY (calendar year if there is none), with the company of accounting_se_company
+                                                when installed; needs accounting.user. The typed command is sie_exchange.export
+  sie import FILE [--dry-run] [--post] [--default-account-types | --account-types FILE] [--db URL] [--token TOKEN]
+                                                import a SIE 4 file: missing accounts (types UNVERIFIED, you confirm them), one journal
+                                                per series, draft moves with series and number in `reference`. --post runs the real
+                                                post action as you (accounting.approver; an agent is refused) in file order. Re-runs
+                                                create nothing new; the per account totals are checked against the file. --dry-run
+                                                writes nothing. The typed command is sie_exchange.import (no --post)
   import MODEL FILE.csv [--token TOKEN] [--mode partial] [--dry-run] [--key KEY]
                                                 create many records of MODEL from a CSV file (header = field names, references by id,
                                                 numbers, decimals and date-times as text, UTF-8, at most 1000 rows and 1 MiB) through bulk_create, with every
@@ -383,6 +396,7 @@ fn main() -> ExitCode {
     let (oas_from, args) = take_opt(&args, "--from");
     let (oas_documents, args) = take_opt(&args, "--documents");
     let (oas_types, args) = take_opt(&args, "--account-types");
+    let (sie_year, args) = take_opt(&args, "--year");
     let (sso_tenant, args) = take_opt(&args, "--tenant");
     let (sso_client, args) = take_opt(&args, "--client-id");
     let (flags, args): (Vec<&str>, Vec<&str>) = args.into_iter().partition(|a| {
@@ -569,6 +583,28 @@ fn main() -> ExitCode {
                 "usage: obop import oas --from OAS.db [--documents DIR] [--dry-run] [--post]",
             )),
         },
+        ["sie", "export"] => match sie_year {
+            Some(year) => sie::export_cli(
+                &opts,
+                &sie::ExportArgs {
+                    year,
+                    out: out_file,
+                },
+            ),
+            None => Err(fail(
+                "usage: obop sie export --year YYYY [--out FILE] [--db URL] [--token TOKEN]",
+            )),
+        },
+        ["sie", "import", file] => sie::import_cli(
+            &opts,
+            &sie::ImportArgs {
+                file,
+                dry_run: has("--dry-run"),
+                post: has("--post"),
+                default_account_types: has("--default-account-types"),
+                account_types: oas_types,
+            },
+        ),
         ["import", model, file] => import_cmd::run(
             &opts,
             &import_cmd::Args {
@@ -3302,6 +3338,9 @@ mod bundled_packages {
         ("accounting_bank_statement_line", "reconciled"),
         ("accounting_fiscal_year", "closed"),
         ("accounting_move", "reversed"),
+        ("accounting_se_vat_box", "verified"),
+        ("accounting_se_vat_code", "verified"),
+        ("accounting_se_vat_report", "filed"),
         ("accounting_period", "closed"),
         ("ecommerce_order", "refunded"),
         ("ecommerce_payment", "failed"),
@@ -3392,6 +3431,24 @@ mod bundled_packages {
             .collect()
     }
 
+    /// The select field the actions of `model` move: the `field` of its first action, `state`
+    /// for a model without actions. Most packages call it `state`; `accounting_se` also has
+    /// `review`.
+    fn state_field(model: &str) -> String {
+        static FIELDS: std::sync::OnceLock<HashMap<String, String>> = std::sync::OnceLock::new();
+        FIELDS
+            .get_or_init(|| {
+                all_manifests()
+                    .iter()
+                    .flat_map(|m| m.model.iter())
+                    .filter_map(|x| Some((x.name.clone(), x.action.first()?.field.clone())))
+                    .collect()
+            })
+            .get(model)
+            .cloned()
+            .unwrap_or_else(|| "state".to_string())
+    }
+
     static UNIQUE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(1);
 
     /// Builds sample records from field metadata, creating referenced records first.
@@ -3417,9 +3474,21 @@ mod bundled_packages {
                     // A unique field gets a value no earlier record has.
                     "text" if f.unique => {
                         let n = UNIQUE.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                        Value::Text(format!("sample-{n}"))
+                        let s = format!("sample-{n}");
+                        match f.max_length {
+                            // A field with a short `max_length` (D90) gets the tail of the number.
+                            Some(max) if (max as usize) < s.chars().count() => {
+                                let d = n.to_string();
+                                let skip = d.chars().count().saturating_sub(max as usize);
+                                Value::Text(d.chars().skip(skip).collect())
+                            }
+                            _ => Value::Text(s),
+                        }
                     }
-                    "text" => Value::text("sample"),
+                    "text" => {
+                        let max = f.max_length.map_or(usize::MAX, |m| m as usize);
+                        Value::Text("sample".chars().take(max).collect())
+                    }
                     "longtext" => Value::text("a longer sample text"),
                     "number" => Value::Int(1),
                     "money" => Value::Int(12_345),
@@ -3430,8 +3499,8 @@ mod bundled_packages {
                         n => format!("1.{}", "5".repeat(usize::from(n))),
                     }),
                     "bool" => Value::Bool(true),
-                    "select" => match (f.name, state) {
-                        ("state", Some(s)) => Value::text(s),
+                    "select" => match state {
+                        Some(s) if f.name == state_field(model) => Value::text(s),
                         _ => Value::text(f.options[0]),
                     },
                     "ref" => {
@@ -3532,7 +3601,7 @@ mod bundled_packages {
     }
 
     fn state_of(app: &App, model: &str, id: &str) -> String {
-        match app.store.field(model, id, "state") {
+        match app.store.field(model, id, &state_field(model)) {
             Some(Value::Text(t)) => t,
             other => panic!("{model} {id} has no state: {other:?}"),
         }
@@ -3701,7 +3770,8 @@ mod bundled_packages {
                 }
 
                 // The workflow, walked from its first state, ends where it should.
-                let states = model.field.iter().find(|f| f.name == "state").unwrap();
+                let sf = state_field(name);
+                let states = model.field.iter().find(|f| f.name == sf).unwrap();
                 let mut now = states.options[0].clone();
                 let rec = mk.fresh(name, &now);
                 let mut visited = BTreeSet::from([now.clone()]);
@@ -3739,7 +3809,7 @@ mod bundled_packages {
                         &format!("{name}.update"),
                         Value::map([
                             ("id", Value::text(&by_update)),
-                            ("state", Value::text(&a.to)),
+                            (sf.as_str(), Value::text(&a.to)),
                         ]),
                     )
                     .unwrap_or_else(|e| panic!("{name}: update to {} failed: {e:?}", a.to));
@@ -3757,7 +3827,7 @@ mod bundled_packages {
                     else {
                         unreachable!()
                     };
-                    input.insert("state".into(), Value::text(&late));
+                    input.insert(sf.clone(), Value::text(&late));
                     let who = if name == "sign_request" {
                         &admin
                     } else {
@@ -3786,7 +3856,7 @@ mod bundled_packages {
                         &app,
                         &user,
                         &format!("{name}.update"),
-                        Value::map([("id", Value::text(&rec)), ("state", Value::text(jump))]),
+                        Value::map([("id", Value::text(&rec)), (sf.as_str(), Value::text(jump))]),
                     )
                     .unwrap_err();
                     assert!(
@@ -4279,7 +4349,7 @@ mod bundled_packages {
                 }
             }
         }
-        assert_eq!(files.len(), 6 * 31);
+        assert_eq!(files.len(), 6 * 32);
         let refs: Vec<&str> = files.iter().map(String::as_str).collect();
         assert!(modules_check_files(&refs, true).is_ok());
     }

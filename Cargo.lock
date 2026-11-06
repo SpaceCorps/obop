@@ -1256,6 +1256,7 @@ version = "0.2.1"
 dependencies = [
  "axum",
  "base",
+ "base64 0.22.1",
  "connectors",
  "crm",
  "http-body-util",
@@ -1279,6 +1280,7 @@ dependencies = [
  "obop-pkg",
  "obop-platform",
  "obop-registry",
+ "obop-sie",
  "obop-site",
  "obop-storage",
  "obop-types",
