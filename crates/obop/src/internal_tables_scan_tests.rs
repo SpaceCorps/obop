@@ -572,15 +572,10 @@ fn impl_type_of(code: &[u8], at: usize) -> Option<String> {
     let header = String::from_utf8_lossy(&code[from..open]).to_string();
     let header = header.split_whitespace().collect::<Vec<_>>().join(" ");
     let header = header.split(" where ").next().unwrap_or("").trim();
-    let rest = if let Some(r) = header
+    let rest = header
         .strip_prefix("impl")
         .or_else(|| header.strip_prefix("pub trait"))
-        .or_else(|| header.strip_prefix("trait"))
-    {
-        r
-    } else {
-        return None;
-    };
+        .or_else(|| header.strip_prefix("trait"))?;
     // `impl<T> Trait for Op<T>` is `Op`; `impl Op` too; a trait's own name for `trait Op: Send`.
     let rest = rest.split(" for ").last().unwrap_or(rest).trim_start();
     let rest = if rest.starts_with('<') {
