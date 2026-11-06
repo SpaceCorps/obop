@@ -1002,6 +1002,18 @@ impl Dispatcher {
         names
     }
 
+    /// The ids of the modules that have a command registered right now, sorted. The installer
+    /// takes them when it starts, beside [`Dispatcher::model_names`]: every module that exists
+    /// before any package is registered is the program's, and no package may take its id (a
+    /// package called `sie` would be unregistered together with the commands of the module `sie`).
+    /// It asks again when it registers a package, for a module that something else registered
+    /// since.
+    pub fn module_ids(&self) -> Vec<String> {
+        let mut ids = self.order.read().unwrap().clone();
+        ids.sort();
+        ids
+    }
+
     /// The id of the module that registered `model` (the last one to register a command of it),
     /// or `None` when no module has. The installer asks it before it registers a package: a
     /// package may not take a model of another module, whichever route registers it.

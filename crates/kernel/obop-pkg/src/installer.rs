@@ -122,6 +122,19 @@ pub struct Installer {
     /// another process and the load at start), all ask this one set. (A model that a module
     /// registers later is not in it; `register` asks the dispatcher who owns a model, too.)
     reserved: BTreeSet<String>,
+    /// The module ids no package may take: the ids of the built-in modules given to
+    /// [`Installer::new`] and of every module the dispatcher already had when the installer was
+    /// made (the binary registers some, such as the one for the SIE exchange, that it does not hand
+    /// to the installer as built-in). A package with one of these ids would be registered under the
+    /// module's id, and removed together with the module's commands by the next uninstall, upgrade or
+    /// sync. (A module that something else registers later is caught by `id_taken`, which asks the
+    /// dispatcher too.)
+    reserved_ids: BTreeSet<String>,
+    /// The ids of the modules this installer has registered, and only those. The installer removes
+    /// only what it registered, and lets a package register again the models of a module of its own
+    /// id only if the installer made that module: a module of the same id that anything else
+    /// registered is not the package's.
+    ours: Mutex<BTreeSet<String>>,
     market: Arc<dyn Marketplace>,
     /// Plans are applied one at a time.
     pub(crate) apply: Mutex<()>,
@@ -237,10 +250,38 @@ fn owned_model_refusal(model: &str, owner: &str) -> String {
     )
 }
 
-/// Why a package is not registered: its id is the id of a built-in module.
+/// Why a package is not registered: its id is the id of a module the program has (a built-in module,
+/// or one that the binary registers itself).
 fn builtin_id_refusal(id: &str) -> String {
     format!(
         "its id `{id}` is the id of a built-in module, so it is not registered. Its record is untouched; nothing of the built-in module was changed"
+    )
+}
+
+/// Why a package may not take a module id.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum IdConflict {
+    /// A built-in module, or one that the binary registered before the installer was made.
+    Program,
+    /// A module that something other than this installer registered since.
+    Registered,
+}
+
+/// Why a package is not registered: a module with its id is registered, and the installer did not
+/// register it.
+fn registered_id_refusal(id: &str) -> String {
+    format!(
+        "its id `{id}` is the id of a module that is registered and is not a package, so it is not registered. Its record is untouched; nothing of that module was changed"
+    )
+}
+
+/// Why a package is not registered: the record is kept under another id than the one its manifest
+/// declares. Both are shown the way a stored name is shown.
+fn key_mismatch_refusal(key: &str, id: &str) -> String {
+    format!(
+        "the record is kept under the id `{}`, but its manifest declares the id `{}`, so it is not registered. Its record is untouched",
+        shown_name(key),
+        shown_name(id)
     )
 }
 
@@ -263,12 +304,19 @@ impl Installer {
             .chain(obop_registry::RESERVED_MODELS.map(String::from))
             .chain(obop_registry::INTERNAL_TABLES.map(String::from))
             .collect();
+        let reserved_ids = builtin
+            .iter()
+            .map(|m| m.id.clone())
+            .chain(dispatcher.module_ids())
+            .collect();
         Arc::new(Self {
             backend: store.backend(),
             store,
             dispatcher: Arc::downgrade(dispatcher),
             builtin,
             reserved,
+            reserved_ids,
+            ours: Mutex::default(),
             market,
             apply: Mutex::new(()),
             registered: Mutex::default(),
@@ -504,9 +552,60 @@ impl Installer {
         Ok(m)
     }
 
-    /// Whether `id` is the id of a built-in module.
-    pub(crate) fn is_builtin_id(&self, id: &str) -> bool {
-        self.builtin.iter().any(|b| b.id == id)
+    /// Whether `id` is the id of a module the program had before any package: a built-in module,
+    /// or one the binary registers itself and does not give the installer.
+    pub(crate) fn reserves_id(&self, id: &str) -> bool {
+        self.reserved_ids.contains(id)
+    }
+
+    /// Whether this installer made the module `id`.
+    fn is_ours(&self, id: &str) -> bool {
+        self.ours
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .contains(id)
+    }
+
+    /// Why a package may not take the id, if it may not: a module of the program has it, or some
+    /// module that this installer did not make has been registered under it since (the dispatcher
+    /// knows). `d` is `None` when the dispatcher is gone: only the ids known at the start count.
+    fn id_conflict(&self, d: Option<&Dispatcher>, id: &str) -> Option<IdConflict> {
+        if self.reserves_id(id) {
+            return Some(IdConflict::Program);
+        }
+        let registered = d.is_some_and(|d| d.module_ids().iter().any(|m| m == id));
+        (registered && !self.is_ours(id)).then_some(IdConflict::Registered)
+    }
+
+    /// Remove the commands of a package this installer registered. It does nothing for an id the
+    /// installer did not register: a record that carries the id of another module, however it got
+    /// there, can then not take that module's commands with it.
+    pub(crate) fn unregister(&self, d: &Dispatcher, id: &str) {
+        let removed = self
+            .ours
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(id);
+        if removed {
+            d.unregister_module(id);
+        }
+    }
+
+    /// The manifest of a stored record, with the bundled labels, held to the record's key: the
+    /// package is known by its key (the installed set, the sync, the uninstall) and registered
+    /// under the id its manifest declares, so a record whose two differ would be registered as one
+    /// thing and removed as another, or replace the models of the package that does have that id.
+    fn stored_manifest(key: &str, stored: &Fields) -> Result<Manifest, String> {
+        let source = stored.get("source").and_then(J::as_str).unwrap_or("upload");
+        let m = stored
+            .get("manifest")
+            .and_then(J::as_str)
+            .ok_or_else(|| "no manifest".to_string())
+            .and_then(|t| Self::with_bundled_labels(t, source))?;
+        if m.module.id != key {
+            return Err(key_mismatch_refusal(key, &m.module.id));
+        }
+        Ok(m)
     }
 
     fn register(&self, m: &Manifest, module: &Module) -> Result<(), String> {
@@ -523,10 +622,15 @@ impl Installer {
         // and an upgrade; this also catches a package stored before the name was taken, one that an
         // older process stored, and the manifest a rollback goes back to.) Nothing of the package
         // is touched, and the message says what to do. The id of the module is no exemption: a
-        // stored package can carry any id, that of a built-in module included, and that is refused
-        // too (it would be unregistered with the built-in module's commands at the next sync).
-        if self.is_builtin_id(&module.id) {
-            return Err(builtin_id_refusal(&module.id));
+        // stored package can carry any id, that of a module of the program included (a built-in
+        // one, or one the binary registers itself such as the SIE exchange), and that is refused
+        // too (it would be registered under the module's id and unregistered with the module's
+        // commands at the next uninstall, upgrade or sync).
+        let d = self.d()?;
+        match self.id_conflict(Some(&d), &module.id) {
+            Some(IdConflict::Program) => return Err(builtin_id_refusal(&module.id)),
+            Some(IdConflict::Registered) => return Err(registered_id_refusal(&module.id)),
+            None => {}
         }
         if let Some(x) = module
             .models
@@ -535,12 +639,13 @@ impl Installer {
         {
             return Err(reserved_model_refusal(x.name));
         }
-        let d = self.d()?;
         // The set above was taken when the installer was made. The dispatcher knows the rest: a
         // model that another module has registered since (a built-in one bound late, or another
         // package) is that module's, and registering this package over it would replace its
         // definition, its groups and its data classes. A package is let register its own models
-        // again (an upgrade, the sync, an undo).
+        // again (the load runs twice, a sync re-registers). That the module of its id is one this
+        // installer made, and not one that anything else registered under the same id, was
+        // settled above (`id_conflict`).
         if let Some((x, owner)) = module.models.iter().find_map(|x| {
             d.model_owner(x.name)
                 .filter(|owner| *owner != module.id)
@@ -551,6 +656,10 @@ impl Installer {
         // Registers the generated commands and, from the transitions declared in the registry
         // metadata, the guards that govern state fields (D48).
         d.register_crud(module, &self.store);
+        self.ours
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(module.id.clone());
         for model in &m.model {
             for a in &model.action {
                 d.register_transition(module, intern(&model.name), &a.name, &self.store);
@@ -558,7 +667,7 @@ impl Installer {
         }
         // Public exposure (D50) takes effect only once the models exist; the gate runs again.
         if let Err(e) = d.register_public(&m.module.id, m.public_specs()?) {
-            d.unregister_module(&m.module.id);
+            self.unregister(&d, &m.module.id);
             return Err(e);
         }
         Ok(())
@@ -648,13 +757,28 @@ impl Installer {
             registered: &|m| self.d().is_ok_and(|d| d.has_model(m)),
         };
         let mut plan = resolve::plan_install(&world, &root, source);
-        // The models of the built-in modules, every model registered before any package and the
-        // tables of the program may not be taken, nor may a model another module has registered
-        // (an installed package's, say), by an install or by an upgrade that adds one.
+        // The ids of the modules of the program, the models of the built-in modules, every model
+        // registered before any package and the tables of the program may not be taken, nor may a
+        // model another module has registered (an installed package's, say), by an install or by
+        // an upgrade that adds one. A package may keep the models of the module it has itself
+        // (an upgrade); a module of its id that this installer did not make is blocked by its id.
         let dispatcher = self.d().ok();
         for s in &plan.steps {
             if s.action == StepAction::Skip {
                 continue;
+            }
+            match self.id_conflict(dispatcher.as_deref(), &s.id) {
+                Some(IdConflict::Program) => plan.blockers.push(resolve::Blocker {
+                    module: s.id.clone(),
+                    kind: "builtin",
+                    message: format!("{} is a built-in module and is part of the core", s.id),
+                }),
+                Some(IdConflict::Registered) => plan.blockers.push(resolve::Blocker {
+                    module: s.id.clone(),
+                    kind: "conflict",
+                    message: format!("a module with the id {} is already registered", s.id),
+                }),
+                None => {}
             }
             for m in &s.manifest.model {
                 let held_by_another = dispatcher
@@ -1010,7 +1134,7 @@ impl Installer {
         let manifest = &step.manifest;
         let module = manifest.to_module()?;
         let id = manifest.module.id.clone();
-        if self.is_builtin_id(&id) {
+        if self.reserves_id(&id) {
             return Err(format!("{id} is a built-in module"));
         }
         let d = self.d()?;
@@ -1129,7 +1253,7 @@ impl Installer {
             );
         }
         if existing.is_some() {
-            d.unregister_module(&id);
+            self.unregister(&d, &id);
         }
         if let Err(e) = self.register(manifest, &module) {
             if let Some(old) = &existing {
@@ -1216,16 +1340,10 @@ impl Installer {
 
     /// Put the registration of a stored package back (after a failed upgrade or a rollback).
     pub(crate) fn reregister(&self, id: &str, stored: &Fields) {
-        let source = stored.get("source").and_then(J::as_str).unwrap_or("upload");
-        let r = stored
-            .get("manifest")
-            .and_then(J::as_str)
-            .ok_or_else(|| "no manifest".to_string())
-            .and_then(|t| Self::with_bundled_labels(t, source))
-            .and_then(|m| {
-                m.to_module_installed()
-                    .and_then(|module| self.register(&m, &module))
-            });
+        let r = Self::stored_manifest(id, stored).and_then(|m| {
+            m.to_module_installed()
+                .and_then(|module| self.register(&m, &module))
+        });
         if let Err(e) = r {
             eprintln!("could not restore module {id}: {e}");
         }
@@ -1235,7 +1353,7 @@ impl Installer {
     fn unwind(&self, done: Vec<Undo>) {
         for u in done.into_iter().rev() {
             if let Ok(d) = self.d() {
-                d.unregister_module(&u.id);
+                self.unregister(&d, &u.id);
             }
             if let Some(f) = u.previous {
                 self.reregister(&u.id, &f);
@@ -1333,11 +1451,18 @@ impl Installer {
     }
 
     fn try_rollback(&self, id: &str, by: &str) -> Result<PackageInfo, Failure> {
-        // A stored record can carry any id. Rolling back one with the id of a built-in module would
-        // unregister the commands of that module before the registration of the older version is
-        // refused (`register` does), and the built-in module would stay without them.
-        if self.is_builtin_id(id) {
-            return Err(Failure::Refused(format!("{id} is a built-in module")));
+        // A stored record can carry any id. Rolling back one with the id of a module of the program
+        // would unregister the commands of that module before the registration of the older version
+        // is refused (`register` does), and the module would stay without them.
+        let d = self.d().map_err(Failure::Refused)?;
+        match self.id_conflict(Some(&d), id) {
+            Some(IdConflict::Program) => {
+                return Err(Failure::Refused(format!("{id} is a built-in module")));
+            }
+            Some(IdConflict::Registered) => {
+                return Err(Failure::Refused(registered_id_refusal(id)));
+            }
+            None => {}
         }
         let stored = self
             .backend
@@ -1361,6 +1486,9 @@ impl Installer {
             .map(|a| a.iter().filter_map(migrate::Step::from_json).collect())
             .unwrap_or_default();
         let prev = Self::with_bundled_labels(prev_text, &source).map_err(Failure::Refused)?;
+        if prev.module.id != id {
+            return Err(Failure::Refused(key_mismatch_refusal(id, &prev.module.id)));
+        }
         // The way back is read from the stored record and replayed on whatever model it names, so
         // it is held to what the update wrote: the manifest rule keeps a data step to the models
         // the package declares, so a step on a model of neither version, or on a model that was
@@ -1388,7 +1516,6 @@ impl Installer {
         }
         // The version being put back was installed once: it may have a name that is reserved now.
         let prev_module = prev.to_module_installed().map_err(Failure::Refused)?;
-        let d = self.d().map_err(Failure::Refused)?;
         let receipt = self
             .run_gate(
                 "module.rollback",
@@ -1418,7 +1545,7 @@ impl Installer {
         f.insert("installed_at".into(), J::from(at));
         f.insert("updated_at".into(), J::from(at));
         f.insert("rolled_back_from".into(), J::from(current_v));
-        d.unregister_module(id);
+        self.unregister(&d, id);
         if let Err(e) = self.register(&prev, &prev_module) {
             self.reregister(id, &stored);
             return Err(Failure::Refused(e));
@@ -1476,7 +1603,7 @@ impl Installer {
     /// refused is an error: read as "nothing is installed" it said that nothing depends on `id`,
     /// and the package was removed from under the ones that need it.
     pub fn try_uninstall_blocker(&self, id: &str) -> Result<Option<resolve::Blocker>, String> {
-        if self.builtin.iter().any(|b| b.id == id) {
+        if self.reserves_id(id) {
             return Ok(Some(resolve::Blocker {
                 module: id.into(),
                 kind: "builtin",
@@ -1511,7 +1638,8 @@ impl Installer {
         if !self.backend.delete(TABLE, id)? {
             return Err(format!("{id} is not installed"));
         }
-        self.d()?.unregister_module(id);
+        let d = self.d()?;
+        self.unregister(&d, id);
         self.note_local_change(&[id.to_string()]);
         self.audit(
             by,
@@ -1581,16 +1709,10 @@ impl Installer {
     pub fn load_installed(&self) -> Vec<(String, String)> {
         let mut failed = Vec::new();
         for (id, f) in self.stored() {
-            let source = f.get("source").and_then(J::as_str).unwrap_or("upload");
-            let r = f
-                .get("manifest")
-                .and_then(J::as_str)
-                .ok_or_else(|| "no manifest".to_string())
-                .and_then(|t| Self::with_bundled_labels(t, source))
-                .and_then(|m| {
-                    m.to_module_installed()
-                        .and_then(|module| self.register(&m, &module))
-                });
+            let r = Self::stored_manifest(&id, &f).and_then(|m| {
+                m.to_module_installed()
+                    .and_then(|module| self.register(&m, &module))
+            });
             if let Err(e) = r {
                 failed.push((id, e));
             }
