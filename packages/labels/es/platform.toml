@@ -736,7 +736,7 @@ description = "El nombre del producto, de 1 a 40 caracteres (letras, dígitos, e
 
 [labels.es.model.instance_brand.field.slug]
 label = "Identificador corto"
-description = "Un identificador corto: a-z, 0-9 y -, empieza por una letra, 30 caracteres como máximo. Vacío significa derivado del nombre. Público por diseño, por lo que no contiene datos personales"
+description = "Un identificador corto: a-z, 0-9 y -, empieza por una letra, no termina en -, 30 caracteres como máximo. Vacío significa derivado del nombre. Público por diseño, por lo que no contiene datos personales"
 
 [labels.es.model.instance_brand.field.title_en]
 label = "Título (inglés)"
@@ -812,7 +812,7 @@ description = "Respuesta de get y configure: la versión del logotipo (16 dígit
 
 [labels.es.model.instance_brand.field.effective]
 label = "En vigor"
-description = "Respuesta de get: un objeto JSON con, para cada valor en vigor (name, slug, logo, tile_accent, title_XX y message_XX), su valor y la fuente que ganó: record, theme o default"
+description = "Respuesta de get: un objeto JSON con, para cada valor en vigor (name, slug, logo, tile_accent, title_XX y message_XX; XX es el código del idioma: en, de, fr, pl, fi, sv, es), su valor y la fuente que ganó: record, theme o default"
 
 [labels.es.model.instance_brand.field.fallbacks]
 label = "Valores de respaldo"
@@ -835,8 +835,8 @@ label = "Configurar"
 description = "Definir la marca de la instancia. Indique solo los campos que cambian (los demás conservan su valor); la primera llamada necesita name. Campos: name, slug, title_XX, message_XX, logo_svg (texto SVG). Un texto vacío borra un campo, salvo name. dry_run (true o false) no escribe nada. Responde con changes y v (con dry_run también refusals). Solo una persona con platform.admin puede ejecutarlo"
 
 [labels.es.model.instance_brand.action.clear]
-label = "Restablecer"
-description = "Eliminar la marca de la instancia: se borra el único registro, así que no hay ninguna marca definida. dry_run (true o false) solo comprueba y no elimina nada. Responde con cleared: true cuando se eliminó una marca (con dry_run: se eliminaría), si no false, y entonces no se escribe nada. Solo una persona con platform.admin puede ejecutarlo"
+label = "Eliminar"
+description = "Eliminar la marca de la instancia: se borra el único registro, así que no hay ninguna marca definida. dry_run (true o false) solo comprueba y no elimina nada. Responde con cleared: true cuando se eliminó una marca (con dry_run: se eliminaría), en caso contrario false, y entonces no se escribe nada. Solo una persona con platform.admin puede ejecutarlo"
 
 [labels.es.model.import_map]
 name = "Mapa de importación"

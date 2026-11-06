@@ -736,7 +736,7 @@ description = "Produktens namn, 1 till 40 tecken (bokstäver, siffror, mellansla
 
 [labels.sv.model.instance_brand.field.slug]
 label = "Kortnamn"
-description = "En kort identifierare: a-z, 0-9 och -, börjar med en bokstav, högst 30 tecken. Tomt betyder härlett från namnet. Offentligt med avsikt, så det innehåller inga personuppgifter"
+description = "En kort identifierare: a-z, 0-9 och -, börjar med en bokstav, slutar inte på -, högst 30 tecken. Tomt betyder härlett från namnet. Offentligt med avsikt, så det innehåller inga personuppgifter"
 
 [labels.sv.model.instance_brand.field.title_en]
 label = "Titel (engelska)"
@@ -768,31 +768,31 @@ description = "Titeln på spanska: raden bredvid logotypen, högst 60 tecken. To
 
 [labels.sv.model.instance_brand.field.message_en]
 label = "Meddelande (engelska)"
-description = "Meddelandet på engelska: en enkel text på högst 240 tecken, utan länkar eller markering. Tomt betyder inget. Det är också meddelandet för varje språk som saknar ett eget. Offentligt med avsikt, så det innehåller inga personuppgifter"
+description = "Meddelandet på engelska: en enkel text på högst 240 tecken, utan länkar eller formatering. Tomt betyder inget. Det är också meddelandet för varje språk som saknar ett eget. Offentligt med avsikt, så det innehåller inga personuppgifter"
 
 [labels.sv.model.instance_brand.field.message_de]
 label = "Meddelande (tyska)"
-description = "Meddelandet på tyska: en enkel text på högst 240 tecken, utan länkar eller markering. Tomt betyder det engelska meddelandet, därefter inget. Offentligt med avsikt, så det innehåller inga personuppgifter"
+description = "Meddelandet på tyska: en enkel text på högst 240 tecken, utan länkar eller formatering. Tomt betyder det engelska meddelandet, därefter inget. Offentligt med avsikt, så det innehåller inga personuppgifter"
 
 [labels.sv.model.instance_brand.field.message_fr]
 label = "Meddelande (franska)"
-description = "Meddelandet på franska: en enkel text på högst 240 tecken, utan länkar eller markering. Tomt betyder det engelska meddelandet, därefter inget. Offentligt med avsikt, så det innehåller inga personuppgifter"
+description = "Meddelandet på franska: en enkel text på högst 240 tecken, utan länkar eller formatering. Tomt betyder det engelska meddelandet, därefter inget. Offentligt med avsikt, så det innehåller inga personuppgifter"
 
 [labels.sv.model.instance_brand.field.message_pl]
 label = "Meddelande (polska)"
-description = "Meddelandet på polska: en enkel text på högst 240 tecken, utan länkar eller markering. Tomt betyder det engelska meddelandet, därefter inget. Offentligt med avsikt, så det innehåller inga personuppgifter"
+description = "Meddelandet på polska: en enkel text på högst 240 tecken, utan länkar eller formatering. Tomt betyder det engelska meddelandet, därefter inget. Offentligt med avsikt, så det innehåller inga personuppgifter"
 
 [labels.sv.model.instance_brand.field.message_fi]
 label = "Meddelande (finska)"
-description = "Meddelandet på finska: en enkel text på högst 240 tecken, utan länkar eller markering. Tomt betyder det engelska meddelandet, därefter inget. Offentligt med avsikt, så det innehåller inga personuppgifter"
+description = "Meddelandet på finska: en enkel text på högst 240 tecken, utan länkar eller formatering. Tomt betyder det engelska meddelandet, därefter inget. Offentligt med avsikt, så det innehåller inga personuppgifter"
 
 [labels.sv.model.instance_brand.field.message_sv]
 label = "Meddelande (svenska)"
-description = "Meddelandet på svenska: en enkel text på högst 240 tecken, utan länkar eller markering. Tomt betyder det engelska meddelandet, därefter inget. Offentligt med avsikt, så det innehåller inga personuppgifter"
+description = "Meddelandet på svenska: en enkel text på högst 240 tecken, utan länkar eller formatering. Tomt betyder det engelska meddelandet, därefter inget. Offentligt med avsikt, så det innehåller inga personuppgifter"
 
 [labels.sv.model.instance_brand.field.message_es]
 label = "Meddelande (spanska)"
-description = "Meddelandet på spanska: en enkel text på högst 240 tecken, utan länkar eller markering. Tomt betyder det engelska meddelandet, därefter inget. Offentligt med avsikt, så det innehåller inga personuppgifter"
+description = "Meddelandet på spanska: en enkel text på högst 240 tecken, utan länkar eller formatering. Tomt betyder det engelska meddelandet, därefter inget. Offentligt med avsikt, så det innehåller inga personuppgifter"
 
 [labels.sv.model.instance_brand.field.logo_svg]
 label = "Logotyp (SVG)"
@@ -812,7 +812,7 @@ description = "Svar från get och configure: logotypens version (16 hexadecimala
 
 [labels.sv.model.instance_brand.field.effective]
 label = "Gällande"
-description = "Svar från get: ett JSON-objekt med värdet och den vinnande källan (record, theme eller default) för varje gällande värde (name, slug, logo, tile_accent, title_XX och message_XX)"
+description = "Svar från get: ett JSON-objekt med värdet och den vinnande källan (record, theme eller default) för varje gällande värde (name, slug, logo, tile_accent, title_XX och message_XX; XX är språkkoden: en, de, fr, pl, fi, sv, es)"
 
 [labels.sv.model.instance_brand.field.fallbacks]
 label = "Reservvärden"
@@ -832,10 +832,10 @@ description = "Svar från clear: om ett varumärke togs bort (med dry_run: om de
 
 [labels.sv.model.instance_brand.action.configure]
 label = "Konfigurera"
-description = "Ange instansens varumärke. Ange bara de fält som ska ändras (de andra behåller sitt värde); det första anropet kräver name. Fält: name, slug, title_XX, message_XX, logo_svg (SVG-text). En tom text rensar ett fält, utom name. dry_run (true eller false) skriver inget. Svarar med changes och v (med dry_run även refusals). Bara en person med platform.admin får köra det"
+description = "Ställ in instansens varumärke. Ange bara de fält som ska ändras (de andra behåller sitt värde); det första anropet kräver name. Fält: name, slug, title_XX, message_XX, logo_svg (SVG-text). En tom text rensar ett fält, utom name. dry_run (true eller false) skriver inget. Svarar med changes och v (med dry_run även refusals). Bara en person med platform.admin får köra det"
 
 [labels.sv.model.instance_brand.action.clear]
-label = "Återställ"
+label = "Ta bort"
 description = "Ta bort instansens varumärke: den enda posten raderas, så inget varumärke är angivet. dry_run (true eller false) kontrollerar bara och tar inte bort något. Svarar med cleared: true när ett varumärke togs bort (med dry_run: skulle tas bort), annars false, och då skrivs inget. Bara en person med platform.admin får köra det"
 
 [labels.sv.model.import_map]

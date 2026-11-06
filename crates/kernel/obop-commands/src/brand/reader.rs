@@ -307,7 +307,10 @@ impl Reader {
     }
 
     /// Writes one line for each field that fell back, once per field for the life of the reader.
-    /// The line names the field and a fixed reason word; it holds nothing of the stored value.
+    /// The line names the field and a fixed reason word; it holds nothing of the stored value. The
+    /// command it points to, `obop admin brand status` (the command line of `get`, spec section 3),
+    /// is not built at this head: the command-line step of the same slice adds it, and with it a
+    /// test that the command named here exists.
     fn note(&self, fallbacks: &[Fallback]) {
         for f in fallbacks {
             if recover(&self.noted).insert(f.field.clone()) {

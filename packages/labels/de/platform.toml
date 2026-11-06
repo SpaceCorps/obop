@@ -736,7 +736,7 @@ description = "Der Produktname, 1 bis 40 Zeichen (Buchstaben, Ziffern, Leerzeich
 
 [labels.de.model.instance_brand.field.slug]
 label = "Kurzname"
-description = "Eine kurze Kennung: a-z, 0-9 und -, beginnt mit einem Buchstaben, höchstens 30 Zeichen. Leer bedeutet: aus dem Namen abgeleitet. Bewusst öffentlich, daher ohne personenbezogene Daten"
+description = "Eine kurze Kennung: a-z, 0-9 und -, beginnt mit einem Buchstaben, endet nicht auf -, höchstens 30 Zeichen. Leer bedeutet: aus dem Namen abgeleitet. Bewusst öffentlich, daher ohne personenbezogene Daten"
 
 [labels.de.model.instance_brand.field.title_en]
 label = "Titel (Englisch)"
@@ -812,7 +812,7 @@ description = "Antwort von get und configure: die Version des Logos (16 Hexziffe
 
 [labels.de.model.instance_brand.field.effective]
 label = "Wirksam"
-description = "Antwort von get: ein JSON-Objekt mit dem Wert und der gewinnenden Quelle (record, theme oder default) für jeden geltenden Wert (name, slug, logo, tile_accent, title_XX und message_XX)"
+description = "Antwort von get: ein JSON-Objekt mit dem Wert und der gewinnenden Quelle (record, theme oder default) für jeden geltenden Wert (name, slug, logo, tile_accent, title_XX und message_XX; XX ist der Sprachcode: en, de, fr, pl, fi, sv, es)"
 
 [labels.de.model.instance_brand.field.fallbacks]
 label = "Rückfallwerte"
@@ -831,11 +831,11 @@ label = "Entfernt"
 description = "Antwort von clear: ob eine Marke entfernt wurde (mit dry_run: ob sie entfernt würde)"
 
 [labels.de.model.instance_brand.action.configure]
-label = "Konfigurieren"
+label = "Einrichten"
 description = "Das Branding der Instanz setzen. Nur die zu ändernden Felder angeben (die übrigen behalten ihren Wert); der erste Aufruf braucht name. Felder: name, slug, title_XX, message_XX, logo_svg (SVG-Text). Ein leerer Text löscht ein Feld, außer name. dry_run (true oder false) schreibt nichts. Antwortet mit changes und v (mit dry_run auch refusals). Nur eine Person mit platform.admin darf es ausführen"
 
 [labels.de.model.instance_brand.action.clear]
-label = "Zurücksetzen"
+label = "Entfernen"
 description = "Das Branding der Instanz entfernen: Der eine Datensatz wird gelöscht, es ist also keine Marke gesetzt. dry_run (true oder false) prüft nur und entfernt nichts. Antwortet mit cleared: true, wenn eine Marke entfernt wurde (mit dry_run: würde), sonst false, und dann wird nichts geschrieben. Nur eine Person mit platform.admin darf es ausführen"
 
 [labels.de.model.import_map]

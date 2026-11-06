@@ -736,7 +736,7 @@ description = "Le nom du produit, de 1 à 40 caractères (lettres, chiffres, esp
 
 [labels.fr.model.instance_brand.field.slug]
 label = "Identifiant court"
-description = "Un identifiant court : a-z, 0-9 et -, commençant par une lettre, 30 caractères au plus. Vide : dérivé du nom. Public par conception, donc sans données personnelles"
+description = "Un identifiant court : a-z, 0-9 et -, commençant par une lettre, ne finissant pas par -, 30 caractères au plus. Vide : dérivé du nom. Public par conception, donc sans données personnelles"
 
 [labels.fr.model.instance_brand.field.title_en]
 label = "Titre (anglais)"
@@ -812,7 +812,7 @@ description = "Réponse de get et configure : la version du logo (16 chiffres he
 
 [labels.fr.model.instance_brand.field.effective]
 label = "En vigueur"
-description = "Réponse de get : un objet JSON qui donne, pour chaque valeur en vigueur (name, slug, logo, tile_accent, title_XX et message_XX), sa valeur et la source retenue : record, theme ou default"
+description = "Réponse de get : un objet JSON qui donne, pour chaque valeur en vigueur (name, slug, logo, tile_accent, title_XX et message_XX; XX est le code de la langue : en, de, fr, pl, fi, sv, es), sa valeur et la source retenue : record, theme ou default"
 
 [labels.fr.model.instance_brand.field.fallbacks]
 label = "Valeurs de repli"
@@ -832,11 +832,11 @@ description = "Réponse de clear : si une marque a été supprimée (avec dry_ru
 
 [labels.fr.model.instance_brand.action.configure]
 label = "Configurer"
-description = "Définir l'image de marque de l'instance. Ne donnez que les champs à modifier (les autres gardent leur valeur) ; le premier appel exige name. Champs : name, slug, title_XX, message_XX, logo_svg (texte SVG). Un texte vide efface un champ, sauf name. dry_run (true ou false) n'écrit rien. Répond par changes et v (avec dry_run aussi refusals). Réservé aux personnes avec platform.admin"
+description = "Définir l'image de marque de l'instance. Ne donnez que les champs à modifier (les autres gardent leur valeur) ; le premier appel exige name. Champs : name, slug, title_XX, message_XX, logo_svg (texte SVG). Un texte vide efface un champ, sauf name. dry_run (true ou false) n'écrit rien. Répond par changes et v (avec dry_run aussi refusals). Seule une personne avec platform.admin peut l'exécuter"
 
 [labels.fr.model.instance_brand.action.clear]
-label = "Réinitialiser"
-description = "Supprimer l'image de marque de l'instance : l'unique enregistrement est effacé, aucune marque n'est donc définie. dry_run (true ou false) vérifie sans rien supprimer. Répond par cleared : true quand une marque a été supprimée (avec dry_run, le serait), false sinon, et rien n'est écrit alors. Seule une personne disposant de platform.admin peut l'exécuter"
+label = "Supprimer"
+description = "Supprimer l'image de marque de l'instance : l'unique enregistrement est effacé, aucune marque n'est donc définie. dry_run (true ou false) vérifie sans rien supprimer. Répond par cleared : true quand une marque a été supprimée (avec dry_run, le serait), false sinon, et rien n'est écrit alors. Seule une personne avec platform.admin peut l'exécuter"
 
 [labels.fr.model.import_map]
 name = "Table d'import"

@@ -1,10 +1,11 @@
 //! `brand::apply`: the one function that writes the brand row, for `configure` and `clear` on every
-//! surface (docs/spec/branding.md, section 3). The dispatcher and the command line both call it, so
-//! there is one rule:
+//! surface (docs/spec/branding.md, section 3). The dispatcher calls it for both commands. The
+//! command line (`obop admin brand`) is not built yet; it will call it too, so that there is one
+//! rule:
 //!
 //! - It takes the cross-process lock `brand.write` itself and does the read, the merge and the write
 //!   under it, so two changes at once, from this process or another, cannot lose each other. It does
-//!   not rely on the dispatcher's transaction lock: the command line has no dispatcher, and
+//!   not rely on the dispatcher's transaction lock: the command line will have no dispatcher, and
 //!   `Backend::lock` is not re-entrant.
 //! - `configure` merges by supplied field. A field that is not supplied keeps its stored value, also
 //!   one this binary does not know (a newer binary's field survives). Each field has an explicit
@@ -18,12 +19,12 @@
 //! - The row and one event per changed field are written in one atomic batch
 //!   (`Backend::apply_checked`), so the log has the entry exactly when the change exists.
 //! - `dry_run` does every check, writes nothing, logs nothing and reports what would happen.
-//! - When a reader is given (the dispatcher passes its own, the command line none) its cell is
-//!   updated after the batch has committed and never before.
+//! - When a reader is given (the dispatcher passes its own; the command line, once it exists,
+//!   passes none) its cell is updated after the batch has committed and never before.
 //!
 //! **The audit events.** Kind `brand_configured` for `configure` and `brand_cleared` for `clear`;
-//! `user` is `(instance)`; the actor is the principal's id, or `operator` at a terminal. The detail
-//! is one line that names the field and gives the old and the new value:
+//! `user` is `(instance)`; the actor is the principal's id (the command line will pass `operator`).
+//! The detail is one line that names the field and gives the old and the new value:
 //!
 //! ```text
 //! name: "obop" -> "MOHV"            a text field: both values as quoted text, "" when unset
@@ -407,8 +408,8 @@ fn now_secs() -> u64 {
 }
 
 /// Writes (or, with `dry_run`, only checks) one change of the brand. See the module documentation.
-/// `actor` is the principal's id, or `operator` at a terminal; `reader` is the dispatcher's reader,
-/// or none at a terminal.
+/// `actor` is the principal's id (the command line will pass `operator`); `reader` is the
+/// dispatcher's reader, or none (what the command line will pass).
 pub fn apply(
     backend: &dyn Backend,
     reader: Option<&Reader>,
