@@ -581,8 +581,12 @@ pub const RESERVED_MODELS: [&str; 5] = [
 
 /// The tables the program's own crates read and write by name: the accounts and their sessions
 /// (`auth_user`, `auth_token`, `auth_mfa_token`, `auth_passkey`, the single sign-on records), the
-/// OAuth grants, the package records, the migration ledger, the backups, the sealed keys of the
-/// connectors, the log of security events and the rest.
+/// OAuth grants, the package records, the migration ledger, the backups, the sealed keys and the
+/// pseudonym, origin and external-id tables of the connectors, the counters of the document
+/// sequences (`sequence_counter`), the log of security events and the rest. The tables of the
+/// forum, the status page and the control plane (`community_*`, `status_*`, `platform_*`) are on it
+/// too: they live in the database of the control plane, not in an instance's, but the program names
+/// them, and an instance has no use for a package that declares one.
 ///
 /// A table is named by a model, and the generated commands of a model reach the table of that
 /// name. A package that declared a model of one of these names (the manifest rule lets the package
@@ -591,14 +595,18 @@ pub const RESERVED_MODELS: [&str; 5] = [
 /// reserves these names beside [`RESERVED_MODELS`] and the models of the built-in modules, so no
 /// package is installed, upgraded, rolled back or loaded with one. The list does not depend on
 /// what the dispatcher had registered when the installer was made. The models of the built-in
-/// modules and of the bundled packages that the program also spells (the branding among them) are
-/// not in it: the installer refuses those because their module owns them.
+/// modules (the branding among them) are not in it: the installer refuses those because their
+/// module owns them. Nor are the models of bundled packages that the program also spells (the shop's
+/// orders, the signing requests): the package owns them while it is installed, and they are
+/// the one gap that `internal_tables_scan_tests` lists in `BUNDLED_MODELS` (docs/ISSUES.md N17).
 ///
-/// `obop-http`'s `internal_tables_scan_tests` reads the code of every crate and fails when it finds
-/// the name of a table that is on no list, so a table added to the program is added here, or the
-/// build fails. (`obop_record` and `obop_record_change` are the SQL tables of the SQLite and
-/// PostgreSQL stores: not models, listed because the name is the program's.)
-pub const INTERNAL_TABLES: [&str; 37] = [
+/// The binary's `internal_tables_scan_tests` reads the code of every crate and fails when it finds
+/// the name of a table that is on no list, so a table added to the program that way is added here,
+/// or the build fails; `recorded_tables_tests` does the same for every model the real `App` asks
+/// the storage for while it runs. Neither sees a name built at run time. (`obop_record` and
+/// `obop_record_change` are the SQL tables of the SQLite and PostgreSQL stores: not models, listed
+/// because the name is the program's.)
+pub const INTERNAL_TABLES: [&str; 52] = [
     "auth_mfa_token",
     "auth_passkey",
     "auth_sso_link",
@@ -606,11 +614,19 @@ pub const INTERNAL_TABLES: [&str; 37] = [
     "auth_token",
     "auth_user",
     "bulk_idempotency",
+    "community_audit",
+    "community_category",
+    "community_member",
+    "community_post",
     "community_session",
+    "community_thread",
     "connector_dead",
+    "connector_extmap",
     "connector_job",
     "connector_key",
     "connector_oauth_state",
+    "connector_origin",
+    "connector_pseudonym",
     "connector_pseudonym_key",
     "connector_seen",
     "connector_vault",
@@ -634,8 +650,15 @@ pub const INTERNAL_TABLES: [&str; 37] = [
     "obop_storage_attestation",
     "obop_update",
     "platform_instance",
+    "platform_release",
+    "platform_update_token",
     "security_event",
+    "sequence_counter",
     "sie_exchange",
+    "status_day",
+    "status_incident",
+    "status_maint",
+    "status_recent",
 ];
 
 /// The built-in model of a reserved name, by the module that owns it: the one place a reserved

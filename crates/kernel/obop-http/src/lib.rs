@@ -46,8 +46,6 @@ mod brand_scan_tests;
 #[cfg(test)]
 mod error_tests;
 #[cfg(test)]
-mod internal_tables_scan_tests;
-#[cfg(test)]
 mod src_scan;
 
 pub struct HttpState {

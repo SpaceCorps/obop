@@ -43,6 +43,8 @@ mod import_oas;
 #[cfg(test)]
 mod import_oas_tests;
 #[cfg(test)]
+mod internal_tables_scan_tests;
+#[cfg(test)]
 mod kinds_tests;
 #[cfg(test)]
 mod limits_tests;
@@ -71,12 +73,21 @@ mod payments_tests;
 #[cfg(test)]
 mod public_site_tests;
 #[cfg(test)]
+mod recorded_tables_tests;
+#[cfg(test)]
 mod settings_cmd_tests;
 mod sie;
 #[cfg(test)]
 mod sie_tests;
 #[cfg(test)]
 mod sign_tests;
+// The reader of the Rust source that the scans of obop-http use, compiled here too (it is a file of
+// that crate's tests and uses nothing of it): the scan of the tables the program names needs the
+// real `App`, which only this crate has. What this crate's scan does not use is left alone.
+#[cfg(test)]
+#[allow(dead_code)]
+#[path = "../../kernel/obop-http/src/src_scan.rs"]
+mod src_scan;
 #[cfg(test)]
 mod sso_tests;
 mod storage_cli;
