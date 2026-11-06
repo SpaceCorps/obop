@@ -76,6 +76,25 @@ fn the_area_is_found_behind_any_global_option() {
     .unwrap();
     assert_eq!(flags, Some(Flags::default()));
     assert_eq!(rest.len(), 8);
+    // `--year N` (the SIE options of `main`) is a global option with a value like the others: the
+    // `2026` after it is not the command word, and a `--title` after the words is the area's.
+    let (flags, rest) = take_flags(vec![
+        "--year",
+        "2026",
+        "admin",
+        "brand",
+        "configure",
+        "--title",
+        "sv=X",
+        "--dry-run",
+    ])
+    .unwrap();
+    let flags = flags.expect("the area was not found behind --year 2026");
+    assert_eq!(flags.titles, pairs(&[("sv", "X")]));
+    assert_eq!(
+        rest,
+        vec!["--year", "2026", "admin", "brand", "configure", "--dry-run"]
+    );
     // Another command with the same words later on is not the area.
     let (flags, _) = take_flags(vec!["--label", "t", "call", "admin", "brand"]).unwrap();
     assert_eq!(flags, None);

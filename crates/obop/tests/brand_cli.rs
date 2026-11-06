@@ -591,6 +591,25 @@ fn a_title_or_message_that_reached_the_global_options_is_refused_not_dropped() {
         None,
     ));
     assert!(c.contains("  title_sv: \"\" -> \"Hej\"\n"), "{c}");
+    // `--year N`, a global option of the SIE commands, is skipped with its value like the rest: the
+    // `2026` is not read as the command word, so the area is found and its `--title` is the area's.
+    // (The failure was the usage error above, status 2, for a call that is spelled right.)
+    let c = ok(obop(
+        &url,
+        &[
+            "--year",
+            "2026",
+            "admin",
+            "brand",
+            "configure",
+            "--title",
+            "sv=X",
+            "--dry-run",
+        ],
+        None,
+    ));
+    assert!(c.contains("  title_sv: \"Hej\" -> \"X\"\n"), "{c}");
+    assert!(!c.contains("give --title and --message"), "{c}");
 }
 
 // ---- --dry-run --------------------------------------------------------------------------------------------
