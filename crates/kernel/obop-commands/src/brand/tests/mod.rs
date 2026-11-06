@@ -15,6 +15,7 @@ mod audit;
 mod cache;
 mod describe;
 mod double;
+mod effective;
 mod faults;
 mod pins;
 mod race;

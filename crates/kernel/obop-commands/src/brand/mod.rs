@@ -17,15 +17,18 @@
 //! that uses the reader checks it). There is no global: the reader belongs to the dispatcher.
 
 mod apply;
+mod effective;
 mod reader;
 mod row;
 
-pub use apply::{Action, Applied, Changed, Failure, Refused, apply, changes_json, refusals_json};
+pub use apply::{
+    Action, Applied, Changed, Failure, Refused, apply, changes_json, refusals_json, show_key,
+};
 pub use reader::{Fresh, Reader, Sink, strict};
 pub use row::{Fallback, Shown, fallbacks_json};
 
 use crate::Dispatcher;
-use obop_brand::LANGS;
+pub use obop_brand::LANGS;
 use obop_storage::Backend;
 use std::sync::Arc;
 

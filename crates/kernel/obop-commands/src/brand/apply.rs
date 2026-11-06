@@ -175,8 +175,9 @@ fn kind_of(field: &str) -> Kind {
 }
 
 /// An unknown input key as it may be repeated in a refusal: ASCII letters, digits, `_` and `-`,
-/// cut at 40 characters.
-fn show_key(k: &str) -> String {
+/// cut at 40 characters. The one place that decides what of a caller's key a message repeats, so a
+/// key cannot shape a line of the log or of a terminal.
+pub fn show_key(k: &str) -> String {
     let mut out: String = k
         .chars()
         .take(40)
