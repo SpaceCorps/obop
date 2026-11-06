@@ -11,6 +11,9 @@ mod backup_cli;
 mod backup_gate_tests;
 #[cfg(test)]
 mod blobs_tests;
+mod brand_cmd;
+#[cfg(test)]
+mod brand_cmd_tests;
 #[cfg(test)]
 mod brand_commands_tests;
 mod build_commit;
@@ -127,6 +130,16 @@ const USAGE: &str = "usage: obop <command>
   admin sso only USER on|off                    make USER sign in with Microsoft only (needs a binding, one sign-in with the button
                                                 after it, and two other administrators who keep a password
                                                 and a second factor), or turn that off
+  admin brand status                            the instance branding (name, slug, logo, a title and a message per language): what is
+                                                in force and where each value comes from, and any stored field that fell back
+  admin brand configure [--name N] [--slug S] [--title LANG=TEXT]... [--message LANG=TEXT]...
+                        [--logo-file FILE.svg | --clear-logo] [--from FILE.toml] [--dry-run]
+                                                set the fields given and keep the others (the first call needs --name); an empty text
+                                                clears a field (--title sv=); --from reads the [record] table of a values file;
+                                                --dry-run checks and writes nothing; every change is written to the security log
+  admin brand clear [--dry-run]                 remove the branding
+  admin brand check FILE.svg                    say whether FILE.svg is an artwork the branding accepts and its version, or every
+                                                reason it is refused (no database)
   admin reset-mfa USER --db URL                break-glass: remove USER's two-factor (app and passkeys) and sessions (needs database
                                                 access; writes an audit record); see docs/DEPLOY.md
   agent-token USER --scopes a,b [--label TEXT]  issue a scoped agent token (shown once)
@@ -332,6 +345,13 @@ fn main() -> ExitCode {
     }
     let args = ops::take_migrate_flags(args);
     let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    // `obop admin brand` has repeatable `--title LANG=TEXT` and `--message LANG=TEXT`, where the
+    // global options of the same names take one value each for `status incident`: its flags are
+    // pulled out first, and only for that command.
+    let (brand_flags, args) = match brand_cmd::take_flags(args) {
+        Ok(taken) => taken,
+        Err(e) => return fail(&format!("error: {e}")),
+    };
     let (db, args) = take_opt(&args, "--db");
     let (token, args) = take_opt(&args, "--token");
     let (scopes, args) = take_opt(&args, "--scopes");
@@ -478,6 +498,22 @@ fn main() -> ExitCode {
                 (false, false) => None,
             },
         ),
+        ["admin", "brand", words @ ..] => {
+            // A `--title` or `--message` that reached the global options was not given right after
+            // `admin brand`; ignoring it would drop a field of the call without a word.
+            if title.is_some() || message.is_some() {
+                return fail(
+                    "error: give --title and --message after `admin brand`, as LANG=TEXT, once for each language",
+                );
+            }
+            brand_cmd::run(
+                &opts,
+                words,
+                brand_flags.unwrap_or_default(),
+                oas_from,
+                has("--dry-run"),
+            )
+        }
         ["admin", "sso", "clear"] => accounts_cmd::sso_clear(&opts),
         ["admin", "sso", verb @ ("bind" | "unbind" | "only"), user] => {
             accounts_cmd::sso_account(&opts, verb, user, None)

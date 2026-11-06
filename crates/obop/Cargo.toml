@@ -9,6 +9,7 @@ repository.workspace = true
 
 [dependencies]
 obop-types.workspace = true
+obop-brand.workspace = true
 obop-registry.workspace = true
 obop-values.workspace = true
 base.workspace = true

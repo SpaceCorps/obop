@@ -1263,6 +1263,7 @@ dependencies = [
  "mileage",
  "obop-auth",
  "obop-blob-gdrive",
+ "obop-brand",
  "obop-commands",
  "obop-community",
  "obop-connectors",

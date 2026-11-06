@@ -17,12 +17,13 @@
 //!
 //! **One rule.** Both writing commands call `obop_commands::brand::apply`, which merges by supplied
 //! field, validates with the whole character policy, takes the lock `brand.write` and writes the row
-//! with its audit events in one atomic batch. (The command line will call it too; it is not built
-//! yet.) This module only turns a call into its arguments and its result into the declared answer
-//! fields: the input keys are checked by name here (a key that is not a writable field or `dry_run`
-//! is refused, and so is a value that is not text), because a hand-registered command has the
-//! generic object schema on REST and MCP. The keys the dispatcher adds itself (`_caller` and the
-//! actor-prefixed ones) pass; no other key that starts with `_` does.
+//! with its audit events in one atomic batch. (The command line, `obop admin brand`, calls it too,
+//! as the operator and with no reader.) This module only turns a call into its arguments and its
+//! result into the declared answer fields: the input keys are checked by name here (a key that is
+//! not a writable field or `dry_run` is refused, and so is a value that is not text), because a
+//! hand-registered command has the generic object schema on REST and MCP. The keys the dispatcher
+//! adds itself (`_caller` and the actor-prefixed ones) pass; no other key that starts with `_`
+//! does.
 //!
 //! **The answers are declared fields.** A key of an answer that is not a declared field of the model
 //! is withheld on every surface, so the keys of the three answers (`dry_run`, `set`, `v`,
@@ -361,7 +362,7 @@ pub(crate) fn register(d: &Dispatcher, backend: &Arc<dyn Backend>, m: &Module) {
 
 /// The fields of the `[record]` table of a values file, in the order of the writable fields of the
 /// record, or every reason the file is refused. This is the reader of the `--from FILE` of `obop
-/// admin brand configure` (spec, section 3), which is not built yet: only tests call it. One file
+/// admin brand configure` (spec, section 3; `crates/obop/src/brand_cmd.rs` calls it). One file
 /// holds the record's values and, in a `[phone]` table that only the generator of the phone app
 /// reads, the phone-only values, so the name is stated once.
 ///

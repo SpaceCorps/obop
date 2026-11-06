@@ -22,7 +22,8 @@ mod reader;
 mod row;
 
 pub use apply::{
-    Action, Applied, Changed, Failure, Refused, apply, changes_json, refusals_json, show_key,
+    Action, Applied, Changed, Failure, Refused, apply, change_line, changes_json, refusals_json,
+    show_key,
 };
 pub use reader::{Fresh, Reader, Sink, strict};
 pub use row::{Fallback, Shown, fallbacks_json};
