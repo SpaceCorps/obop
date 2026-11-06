@@ -126,7 +126,7 @@ pub struct Installer {
     /// [`Installer::new`] and of every module the dispatcher already had **with a command** when the
     /// installer was made (the binary registers some, such as the one for the SIE exchange, that it
     /// does not hand to the installer as built-in; a module that has only an observer or a guard is
-    /// not in the dispatcher's list of modules, so it is not here: docs/ISSUES.md N17). A package
+    /// not in the dispatcher's list of modules, so it is not here: docs/ISSUES.md K58). A package
     /// with one of these ids would be registered under the module's id, and removed together with
     /// the module's commands by the next uninstall, upgrade or sync. (A module that something else
     /// registers later is caught by `id_conflict`, which asks the dispatcher too.)

@@ -559,8 +559,8 @@ pub fn render_status(fresh: &Fresh) -> String {
 }
 
 /// `obop admin brand check FILE.svg`: the strict SVG reader on a file, with no database. Prints the
-/// version of the logo it would have, or every reason the file is refused (the reasons `configure
-/// --dry-run` gives for the artwork).
+/// version of the logo it would have, or the reasons the file is refused (at most 20; the reasons
+/// `configure --dry-run` gives for the artwork).
 fn check(file: &str) -> Exit {
     let bytes =
         std::fs::read(file).map_err(|e| fail(&format!("error: cannot read {file}: {e}")))?;

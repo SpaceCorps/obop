@@ -157,8 +157,13 @@ fn a_package_cannot_take_the_id_of_a_module_registered_before_the_installer() {
         // The record is a leftover (a package stored before the id was taken, or written around
         // the installer), and the uninstall removes it: it is the only way to get rid of it. The
         // module is not the record's, so nothing of it is unregistered.
+        let version = store.backend().counter_get("modules.version").unwrap_or(0);
         b.inst.uninstall(id).unwrap();
         assert!(store.backend().get(TABLE, id).unwrap().is_none());
+        assert!(
+            store.backend().counter_get("modules.version").unwrap_or(0) > version,
+            "{own_model}: the other processes are told that a record went"
+        );
         module_intact(&b, id, "ledger_entry", "after the uninstall");
         let line = events(&store)
             .into_iter()
