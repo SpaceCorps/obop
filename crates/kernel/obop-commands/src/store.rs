@@ -529,6 +529,51 @@ mod tests {
         assert!(!d.effects_may_write("hand"));
     }
 
+    /// The mark is set by the generated commands that write a record, each on its own: a registrar
+    /// that binds `update` alone, or `create` alone, still makes a model an effect may write, and
+    /// the reads and the delete do not.
+    #[test]
+    fn a_generated_create_or_update_alone_marks_the_model_and_a_read_or_delete_does_not() {
+        let (d, _, _) = setup();
+        let model = |name| ModelDef {
+            name,
+            description: "d",
+            read_group: "t.user",
+            write_group: "t.user",
+            access: None,
+            fields: vec![f("title")],
+            commands: vec![],
+            ext: Default::default(),
+        };
+        let names = [
+            "only_update",
+            "only_create",
+            "only_get",
+            "only_list",
+            "only_search",
+            "only_delete",
+        ];
+        let module = Module {
+            id: "lone".into(),
+            name: "Lone".into(),
+            models: names.iter().map(|n| model(*n)).collect(),
+            network_destinations: vec![],
+            description: String::new(),
+            translations: Default::default(),
+            meta: Default::default(),
+        };
+        for name in names {
+            let command = name.strip_prefix("only_").unwrap();
+            d.register_generic(&module, name, command, Box::new(|_| Ok(Value::Null)));
+            assert!(d.has_model(name), "{name} is registered");
+        }
+        assert!(d.effects_may_write("only_update"));
+        assert!(d.effects_may_write("only_create"));
+        for name in ["only_get", "only_list", "only_search", "only_delete"] {
+            assert!(!d.effects_may_write(name), "{name}");
+        }
+    }
+
     /// An action that an effect starts writes its record the way the generated `update` does, so
     /// it too reaches only a model that has it. A model whose transition is hand-registered (the
     /// devices, the states of a connector) has that command's own checks and audit, which a
@@ -615,6 +660,11 @@ mod tests {
         );
         assert_eq!(state("hand", &hand_id), Some(Value::text("open")));
         assert_eq!(state("note", &n), Some(Value::text("new")), "and the note");
+        // Only the effect that starts the action is refused: the caller who names the action runs it
+        // for the model it was registered for, with the checks of its own.
+        call(&d, &u, "hand.lock", vec![("id", Value::text(&hand_id))])
+            .expect("the action called directly runs");
+        assert_eq!(state("hand", &hand_id), Some(Value::text("locked")));
         // The same wiring against an ordinary model does lock it.
         let n = note("peer_id", &peer_id);
         call(&d, &u, "note.lock_peer", vec![("id", Value::text(&n))]).unwrap();
