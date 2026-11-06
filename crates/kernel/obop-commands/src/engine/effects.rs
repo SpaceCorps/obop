@@ -215,6 +215,12 @@ impl Runner<'_> {
         if depth > MAX_EFFECT_DEPTH {
             return Err("actions started by effects are nested too deeply".into());
         }
+        // An action started by an effect writes the record the way the generated `update` does,
+        // so it reaches only a model that has it. The action the caller named runs for the model
+        // it was registered for, and needs no such check.
+        if depth > 0 {
+            self.writable(def)?;
+        }
         if !self.actor.holds(cmd.permission_group) {
             return Err(format!(
                 "{}.{} needs the {} group",

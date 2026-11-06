@@ -134,27 +134,47 @@ fn an_effect_on_a_model_of_the_package_itself_is_not_in_the_way() {
     .unwrap();
 }
 
-/// A module registered around the install gate (as a package stored by an older version would be):
-/// a note with a ref to the branding row and to an ordinary record, and two actions, one whose
-/// effect writes the branding row and one whose effect writes the ordinary record.
-fn forced_module() -> Module {
-    const G: &str = "forced.user";
-    let f = |name: &'static str| FieldDef::new(name, "d", DataClass::None, false, G);
-    let model = |name: &'static str, fields: Vec<FieldDef>, commands: Vec<CommandDef>| ModelDef {
+const FORCED_GROUP: &str = "forced.user";
+
+fn forced_field(name: &'static str) -> FieldDef {
+    FieldDef::new(name, "d", DataClass::None, false, FORCED_GROUP)
+}
+
+fn forced_model(name: &'static str, fields: Vec<FieldDef>, commands: Vec<CommandDef>) -> ModelDef {
+    ModelDef {
         name,
         description: "d",
-        read_group: G,
-        write_group: G,
+        read_group: FORCED_GROUP,
+        write_group: FORCED_GROUP,
         access: None,
         fields,
         commands,
         ext: Default::default(),
-    };
+    }
+}
+
+fn forced_wrap(id: &str, models: Vec<ModelDef>) -> Module {
     Module {
-        id: "forced".into(),
-        name: "Forced".into(),
-        models: vec![
-            model(
+        id: id.into(),
+        name: id.into(),
+        models,
+        network_destinations: vec![],
+        description: String::new(),
+        translations: Default::default(),
+        meta: Default::default(),
+    }
+}
+
+/// A module registered around the install gate (as a package stored by an older version would be):
+/// a note with a ref to the branding row and to an ordinary record, and two actions, one whose
+/// effect writes the branding row and one whose effect writes the ordinary record.
+fn forced_module() -> Module {
+    const G: &str = FORCED_GROUP;
+    let f = forced_field;
+    forced_wrap(
+        "forced",
+        vec![
+            forced_model(
                 "forced_note",
                 vec![
                     f("title"),
@@ -179,13 +199,41 @@ fn forced_module() -> Module {
                         )),
                 ],
             ),
-            model("forced_target", vec![f("title")], vec![]),
+            forced_model("forced_target", vec![f("title")], vec![]),
         ],
-        network_destinations: vec![],
-        description: String::new(),
-        translations: Default::default(),
-        meta: Default::default(),
-    }
+    )
+}
+
+/// A module registered around the install gate and around the registry's checks (an adjust of a
+/// text field is not a valid effect): two actions whose effects make the branding row, one as a
+/// `create` effect and one as the missing record of an `adjust`.
+fn forced_makers() -> Module {
+    const G: &str = FORCED_GROUP;
+    forced_wrap(
+        "forced_makers",
+        vec![forced_model(
+            "forced_maker",
+            vec![
+                forced_field("title"),
+                forced_field("state").select(&["new", "made", "tallied"]),
+            ],
+            vec![
+                CommandDef::new("make", "Make the brand", G)
+                    .transition("state", Some("new"), "made")
+                    .effect(Effect::create(MODEL, &[("name", "$self.title")])),
+                CommandDef::new("tally", "Count on the brand", G)
+                    .transition("state", Some("new"), "tallied")
+                    .effect(Effect::adjust_match(
+                        MODEL,
+                        &[("name", "$self.title")],
+                        "name",
+                        false,
+                        "1",
+                        true,
+                    )),
+            ],
+        )],
+    )
 }
 
 #[test]
@@ -288,4 +336,57 @@ fn the_same_wiring_writes_an_ordinary_record() {
         call("forced_target.get", &[("id", &target)])["title"],
         "new"
     );
+}
+
+#[test]
+fn a_forced_create_or_adjust_effect_cannot_make_the_brand_row_for_anyone() {
+    // With a row and without one: the effect that makes a record must not make this one, whether
+    // it is a `create` effect or the missing record of an `adjust` (`create_missing`).
+    for with_row in [true, false] {
+        let rig = rig();
+        if with_row {
+            rig.configure(&[("name", "MOHV")]).unwrap();
+        }
+        let module = forced_makers();
+        rig.d.register_crud(&module, &rig.store);
+        for c in module.models.iter().flat_map(|m| m.commands.iter()) {
+            rig.d
+                .register_transition(&module, "forced_maker", c.name, &rig.store);
+        }
+        let rows = || rig.store.backend().list(MODEL).unwrap();
+        let (before_row, before_rows, before_events) = (rig.row(), rows(), rig.events());
+        for who in [
+            Principal::agent(
+                "ada/agent",
+                &[ADMIN_GROUP, FORCED_GROUP],
+                &[ADMIN_GROUP, FORCED_GROUP],
+            ),
+            Principal::user("ada", &[ADMIN_GROUP, FORCED_GROUP]),
+        ] {
+            for action in ["make", "tally"] {
+                let call = |id: &str, pairs: &[(&str, &str)]| {
+                    rig.d.call(
+                        Surface::Rest,
+                        &who,
+                        &mut Vault::new(),
+                        id,
+                        &text_input(pairs),
+                    )
+                };
+                let created = call("forced_maker.create", &[("title", "Evil Name")])
+                    .unwrap_or_else(|e| panic!("{e:?}"));
+                let id = created.value.to_json()["id"].as_str().unwrap().to_string();
+                let e = call(&format!("forced_maker.{action}"), &[("id", &id)])
+                    .expect_err("the effect makes the branding row");
+                let m = handler_text(e);
+                assert!(
+                    m.contains("instance_brand is changed by its own commands only"),
+                    "{action}: {m}"
+                );
+                assert_eq!(rig.row(), before_row, "{action}: the row is as it was");
+                assert_eq!(rows(), before_rows, "{action}: and no other row was made");
+                assert_eq!(rig.events(), before_events, "{action}: and no event");
+            }
+        }
+    }
 }
