@@ -418,6 +418,77 @@ fn unknown_keys_are_refused_by_name_and_the_name_is_made_safe_to_repeat() {
     assert!(r[0].0.len() <= 43, "{}", r[0].0);
 }
 
+/// `show_key` decides what of a caller's key a refusal may repeat, on every surface (a REST body,
+/// MCP tool text, a terminal, the log). It is an allow-list: the only characters repeated are the
+/// ASCII letters, digits, `_` and `-`. These are the cases a deny-list would miss, one by one, and
+/// then every Unicode scalar value.
+#[test]
+fn show_key_repeats_only_ascii_letters_digits_underscore_and_hyphen() {
+    use crate::brand::show_key;
+    // The classes by name: bidirectional controls and isolates, zero-width and joiner characters,
+    // line and paragraph separators, the byte order mark, tag characters, variation selectors,
+    // fillers, no-break and soft-hyphen characters, other spaces, C0 and C1 controls, and the
+    // ASCII characters that mean something in markup, a path, a shell or a log line.
+    let mut hostile: Vec<char> = Vec::new();
+    hostile.extend('\u{202a}'..='\u{202e}');
+    hostile.extend('\u{2066}'..='\u{2069}');
+    hostile.extend('\u{200b}'..='\u{200f}');
+    hostile.extend(['\u{2028}', '\u{2029}', '\u{0085}', '\u{feff}']);
+    hostile.extend('\u{2060}'..='\u{2064}');
+    hostile.extend('\u{206a}'..='\u{206f}');
+    hostile.extend(['\u{e0001}', '\u{e0020}', '\u{e0041}', '\u{e007f}']);
+    hostile.extend('\u{fe00}'..='\u{fe0f}');
+    hostile.extend(['\u{e0100}', '\u{e01ef}']);
+    hostile.extend(['\u{3164}', '\u{ffa0}', '\u{115f}', '\u{1160}', '\u{034f}']);
+    hostile.extend(['\u{00a0}', '\u{00ad}', '\u{180e}', '\u{2000}', '\u{3000}']);
+    hostile.extend('\u{0000}'..='\u{001f}');
+    hostile.extend('\u{007f}'..='\u{009f}');
+    hostile.extend("<>\"'&/\\;:. ,()%`$|*?[]{}!@#=+~^".chars());
+    // Letters and digits of other scripts, and look-alikes of ASCII ones.
+    hostile.extend([
+        '\u{e9}', '\u{df}', '\u{436}', '\u{5b57}', '\u{663}', '\u{ff21}', '\u{ff5a}', '\u{ff10}',
+    ]);
+    for c in hostile {
+        assert_eq!(
+            show_key(&format!("a{c}b")),
+            "a?b",
+            "U+{:04X} is repeated",
+            c as u32
+        );
+    }
+    // The characters that are repeated.
+    assert_eq!(show_key("Aa_Zz-09"), "Aa_Zz-09");
+    // Every scalar value, alone: it is repeated only when it is one of the allowed ASCII ones.
+    for n in 0..=0x10_ffff_u32 {
+        let Some(c) = char::from_u32(n) else {
+            continue;
+        };
+        let allowed = c.is_ascii_alphanumeric() || c == '_' || c == '-';
+        assert_eq!(
+            show_key(&c.to_string()),
+            if allowed { c.to_string() } else { "?".into() },
+            "U+{n:04X}"
+        );
+    }
+    // The cut: 40 characters, then three dots, and nothing outside the allowed set but the dots.
+    let mixed: String = (0..300u32)
+        .map(|n| char::from_u32(0x20 + n * 7).unwrap_or('x'))
+        .collect();
+    for key in [mixed.as_str(), &"k".repeat(41), &"\u{e9}".repeat(500)] {
+        let shown = show_key(key);
+        let (head, tail) = shown.split_at(40);
+        assert_eq!(tail, "...", "{shown:?}");
+        assert!(
+            head.chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '?'),
+            "{shown:?}"
+        );
+    }
+    // Exactly 40 characters is not cut, and nothing is nothing.
+    assert_eq!(show_key(&"k".repeat(40)), "k".repeat(40));
+    assert_eq!(show_key(""), "");
+}
+
 #[test]
 fn a_field_this_binary_does_not_know_survives_a_merge() {
     // A newer binary stored a field (S2 adds hide_product_docs). An older binary that changes a

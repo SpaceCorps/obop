@@ -29,6 +29,11 @@ pub use row::{Fallback, Shown, fallbacks_json};
 
 use crate::Dispatcher;
 pub use obop_brand::LANGS;
+/// The limits `configure` enforces, for the texts that state them (the descriptions of the model
+/// and their translations are held to these numbers by a test): the longest name, title, message
+/// and slug in characters, and the largest artwork in bytes.
+pub use obop_brand::policy::{MESSAGE_MAX, NAME_MAX, SLUG_MAX, TITLE_MAX};
+pub use obop_brand::svg::MAX_BYTES as ARTWORK_MAX_BYTES;
 use obop_storage::Backend;
 use std::sync::Arc;
 

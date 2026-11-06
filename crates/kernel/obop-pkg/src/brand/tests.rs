@@ -13,6 +13,8 @@ use serde_json::{Value as J, json};
 
 const MODEL: &str = brand::MODEL;
 
+mod labels;
+
 struct Rig {
     d: Arc<Dispatcher>,
     store: Store,
@@ -759,6 +761,12 @@ fn an_input_key_that_is_not_a_writable_field_or_dry_run_is_refused_by_name() {
         "logo",
         "title_xx",
         "message_",
+        // Only the two keys the dispatcher itself adds pass: not every key that starts with `_`.
+        "_foo",
+        "_caller2",
+        "_Actor",
+        "__caller",
+        "caller",
     ] {
         let m = r.configure(&[("name", "MOHV"), (key, "x")]).unwrap_err();
         assert!(
@@ -1258,5 +1266,314 @@ fn a_values_file_is_total_over_truncated_and_odd_text() {
         "[record.name]\nx = 1\n",
     ] {
         let _ = read_values_file(odd);
+    }
+}
+
+// ---- the reader of the dispatcher follows a command ----------------------------------------------
+//
+// `configure` and `clear` hand the dispatcher's own reader to `brand::apply` (`Some(reader)`), and
+// that is what makes a change made through a command show at once in the process that made it, and
+// what stops a refill that began before the change from putting the replaced brand back. Passing
+// `None` instead leaves every test that calls `brand::apply` itself green, so these two tests pin
+// the wiring (docs/spec/branding.md, section 13, "Cache": "a `configure` in the same process shows
+// at once"; "a refill that read the old row before a `configure` and finishes after it stores
+// nothing").
+
+#[test]
+fn a_configure_and_a_clear_through_the_dispatcher_show_in_its_reader_at_once() {
+    let r = rig();
+    let reader = r.d.brand();
+    // The cell is filled first: its value is good for two seconds, so a change that did not reach
+    // it would not show.
+    let before = reader.current();
+    assert_eq!(before.brand().name(), "obop");
+    assert!(!before.is_set());
+
+    r.configure(&[("name", "First")]).unwrap();
+    let shown = reader.current();
+    assert_eq!(shown.brand().name(), "First");
+    assert!(shown.is_set());
+
+    // Another change merges over the first one and shows at once too.
+    r.configure(&[("title_sv", "Logga in"), ("name", "Second")])
+        .unwrap();
+    let shown = reader.current();
+    assert_eq!(shown.brand().name(), "Second");
+    assert_eq!(shown.brand().title("sv"), "Logga in");
+
+    // A dry run writes nothing and moves nothing.
+    r.configure(&[("name", "Third"), ("dry_run", "true")])
+        .unwrap();
+    assert_eq!(reader.current().brand().name(), "Second");
+    r.run("instance_brand.clear", &[("dry_run", "true")])
+        .unwrap();
+    assert_eq!(reader.current().brand().name(), "Second");
+
+    // A clear shows the default at once.
+    r.run("instance_brand.clear", &[]).unwrap();
+    let shown = reader.current();
+    assert_eq!(shown.brand().name(), "obop");
+    assert!(!shown.is_set());
+    assert_eq!(shown.brand().title("sv"), "obop");
+}
+
+/// Runs `id` as the person, from inside the read of a refill (`Flaky::after_the_get_of`): the
+/// refill has read the old row and has not stored yet, which is what a slow store does to it.
+fn during_the_refill(flaky: &Flaky, r: &Rig, id: &'static str, pairs: &[(&str, &str)]) {
+    let d = r.d.clone();
+    let input = text_input(pairs);
+    flaky.after_the_get_of(
+        MODEL,
+        0,
+        Box::new(move |_| {
+            d.call(Surface::Rest, &person(), &mut Vault::new(), id, &input)
+                .unwrap();
+        }),
+    );
+}
+
+#[test]
+fn a_refill_that_read_the_row_before_a_command_changed_it_does_not_put_the_old_brand_back() {
+    // Each case has its own dispatcher, so its cell is empty and the next `current()` is a refill.
+    let rig = || {
+        let (flaky, backend) = Flaky::memory();
+        let r = rig_over(Store::over(backend));
+        (flaky, r)
+    };
+
+    // The refill reads "no row", a `configure` commits inside it, the refill ends.
+    let (flaky, r) = rig();
+    let reader = r.d.brand();
+    during_the_refill(
+        &flaky,
+        &r,
+        "instance_brand.configure",
+        &[("name", "Fresh"), ("title_de", "Willkommen")],
+    );
+    let _ = reader.current();
+    assert!(r.row().is_some(), "the command ran inside the refill");
+    let shown = reader.current();
+    assert_eq!(
+        shown.brand().name(),
+        "Fresh",
+        "the refill stored nothing: the default it read is not kept"
+    );
+    assert_eq!(shown.brand().title("de"), "Willkommen");
+    assert!(shown.is_set());
+
+    // The refill reads a row, a `configure` replaces it inside the refill, the refill ends.
+    let (flaky, r) = rig();
+    let reader = r.d.brand();
+    r.configure(&[("name", "One")]).unwrap();
+    during_the_refill(&flaky, &r, "instance_brand.configure", &[("name", "Two")]);
+    let _ = reader.current();
+    assert_eq!(reader.current().brand().name(), "Two");
+
+    // The refill reads a row, a `clear` removes it inside the refill, the refill ends.
+    let (flaky, r) = rig();
+    let reader = r.d.brand();
+    r.configure(&[("name", "One"), ("title_sv", "Logga in")])
+        .unwrap();
+    during_the_refill(&flaky, &r, "instance_brand.clear", &[]);
+    let _ = reader.current();
+    assert!(r.row().is_none(), "the command ran inside the refill");
+    let shown = reader.current();
+    assert_eq!(
+        shown.brand().name(),
+        "obop",
+        "the refill did not put the cleared brand back"
+    );
+    assert!(!shown.is_set());
+    assert_eq!(shown.brand().title("sv"), "obop");
+}
+
+// ---- the input keys, the refusal lines and the defensive rules of the handlers ---------------------
+
+#[test]
+fn only_the_caller_and_the_actor_prefix_are_keys_of_the_dispatcher() {
+    assert!(dispatcher_key("_caller"));
+    assert!(dispatcher_key("_actor"));
+    assert!(dispatcher_key("_actor_groups"));
+    for key in [
+        "_foo", "_caller2", "_Caller", "caller", "actor", "__actor", "_", "",
+    ] {
+        assert!(!dispatcher_key(key), "{key:?}");
+    }
+}
+
+#[test]
+fn the_problems_with_the_input_are_listed_one_per_line_before_anything_is_stored() {
+    let r = rig();
+    // Two unknown keys, a value that is not text and a bad `dry_run`, in one call.
+    let input = Value::map([
+        ("name", Value::text("MOHV")),
+        ("zz1", Value::text("x")),
+        ("zz2", Value::text("x")),
+        ("title_de", Value::Int(5)),
+        ("dry_run", Value::text("maybe")),
+    ]);
+    let m = handler_text(
+        r.call(&person(), "instance_brand.configure", &input)
+            .unwrap_err(),
+    );
+    assert_eq!(m.lines().count(), 4, "{m}");
+    for line in m.lines() {
+        assert!(line.starts_with("instance_brand"), "{line}");
+    }
+    assert!(m.contains("the key zz1 "), "{m}");
+    assert!(m.contains("the key zz2 "), "{m}");
+    assert!(m.contains("title_de must be text"), "{m}");
+    assert!(m.contains("dry_run must be true or false"), "{m}");
+    assert!(r.row().is_none() && r.events().is_empty());
+    // And for `clear`.
+    let input = Value::map([
+        ("zz1", Value::text("x")),
+        ("name", Value::text("x")),
+        ("dry_run", Value::Int(1)),
+    ]);
+    let m = handler_text(
+        r.call(&person(), "instance_brand.clear", &input)
+            .unwrap_err(),
+    );
+    assert_eq!(m.lines().count(), 3, "{m}");
+}
+
+/// Every kind of character that a deny-list of controls would let through, in a key, repeated as
+/// one `?`: through `configure`, through `clear` and through a values file (the full table is the
+/// test of `show_key` in `obop-commands`).
+#[test]
+fn a_hostile_key_is_repeated_as_question_marks_by_configure_clear_and_a_values_file() {
+    let r = rig();
+    for c in [
+        '\u{200b}',
+        '\u{200f}',
+        '\u{2028}',
+        '\u{2029}',
+        '\u{0085}',
+        '\u{2066}',
+        '\u{2069}',
+        '\u{feff}',
+        '\u{e0001}',
+        '\u{e0041}',
+        '\u{fe0f}',
+        '\u{3164}',
+        '\u{00a0}',
+        '\u{00ad}',
+        '\u{202e}',
+        '\u{1b}',
+        '\n',
+        '<',
+        '>',
+        '"',
+        '\'',
+        '&',
+        '/',
+        '\\',
+        ';',
+        ' ',
+        '.',
+    ] {
+        let key = format!("a{c}b");
+        let want = "the key a?b is not accepted";
+        let m = r
+            .configure(&[("name", "MOHV"), (key.as_str(), "x")])
+            .unwrap_err();
+        assert!(m.ends_with(want), "U+{:04X}: {m:?}", c as u32);
+        assert_eq!(m.lines().count(), 1, "U+{:04X}: {m:?}", c as u32);
+        let m = r
+            .run("instance_brand.clear", &[(key.as_str(), "x")])
+            .unwrap_err();
+        assert!(m.ends_with(want), "U+{:04X}: {m:?}", c as u32);
+        // In a values file the key is written with TOML's escapes.
+        let file = format!(
+            "[record]\nname = \"MOHV\"\n\"a\\U{:08X}b\" = \"1\"\n",
+            c as u32
+        );
+        let reasons = file_err(&file);
+        assert_eq!(reasons.len(), 1, "U+{:04X}: {reasons:?}", c as u32);
+        assert!(
+            reasons[0].starts_with("[record] the key a?b is not a field of the brand"),
+            "U+{:04X}: {:?}",
+            c as u32,
+            reasons[0]
+        );
+    }
+}
+
+#[test]
+fn a_call_without_a_caller_is_refused_and_stores_nothing() {
+    let r = rig();
+    let backend = r.store.backend();
+    let reader = r.d.brand();
+    // The dispatcher always sets `_caller`; a handler called without it (or with an empty one)
+    // would write an event with no actor, so it refuses.
+    for caller in [None, Some(Value::text("")), Some(Value::Int(1))] {
+        let with_caller = |mut m: Input| {
+            if let Some(c) = &caller {
+                m.insert("_caller".to_string(), c.clone());
+            }
+            Value::Map(m)
+        };
+        let named = Input::from([("name".to_string(), Value::text("MOHV"))]);
+        let m = configure(&*backend, &reader, &with_caller(named)).unwrap_err();
+        assert!(m.contains("the caller is not known"), "{caller:?}: {m}");
+        let m = clear(&*backend, &reader, &with_caller(Input::new())).unwrap_err();
+        assert!(m.contains("the caller is not known"), "{caller:?}: {m}");
+        assert!(r.row().is_none() && r.events().is_empty(), "{caller:?}");
+    }
+}
+
+#[test]
+fn the_message_of_the_toml_parser_is_cut_to_one_clean_short_line() {
+    use serde::de::Error as _;
+    // A parser that quoted the file would put anything in its message: a line break, an escape
+    // sequence, a right-to-left override, other scripts and any length.
+    let nasty = format!(
+        "bad\n\u{1b}[2J \u{202e} caf\u{e9} {} the-very-end",
+        "x".repeat(500)
+    );
+    let e = toml::de::Error::custom(nasty);
+    let reason = parse_reason("[record]\nname = \"MOHV\"\n", &e);
+    assert!(
+        reason.starts_with("the file is not valid TOML: bad"),
+        "{reason}"
+    );
+    assert_eq!(reason.lines().count(), 1, "{reason:?}");
+    assert!(
+        reason.chars().all(|c| c.is_ascii_graphic() || c == ' '),
+        "{reason:?}"
+    );
+    assert!(reason.len() < 200, "{}", reason.len());
+    assert!(!reason.contains("the-very-end"), "cut: {reason}");
+}
+
+#[test]
+fn get_returns_every_stored_text_exactly_as_it_is_stored() {
+    let r = rig();
+    // A row written around the command, with texts that trimming, normalising or collapsing white
+    // space would change: surrounding and inner double spaces, a decomposed letter, a trailing
+    // space on a message.
+    let stored = [
+        ("name", "  MOHV  Mileage  "),
+        ("title_de", "Zu\u{308}rich  Anmelden "),
+        ("title_sv", "Logga  in"),
+        ("message_en", "Welcome  back "),
+        ("slug", "mo-hv"),
+    ];
+    let mut f = obop_storage::Fields::new();
+    for (k, v) in stored {
+        f.insert(k.into(), json!(v));
+    }
+    r.store
+        .backend()
+        .apply_checked(&[obop_storage::Op::Put {
+            model: MODEL.into(),
+            id: "instance".into(),
+            fields: f,
+        }])
+        .unwrap();
+    let g = r.get();
+    for (k, v) in stored {
+        assert_eq!(g[k], json!(v), "{k}");
     }
 }

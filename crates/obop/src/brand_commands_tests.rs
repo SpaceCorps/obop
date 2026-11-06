@@ -249,6 +249,76 @@ async fn rest_get_configure_and_clear_for_a_person_with_platform_admin() {
     assert_eq!(body["value"], json!({"cleared": false}));
 }
 
+/// The reader the pages will ask is the dispatcher's own, and `configure` and `clear` tell it of a
+/// change that committed: it shows at once in the process that made it, whatever surface the call
+/// came by (docs/spec/branding.md, section 13, "Cache"). The cell is filled first, because a value
+/// in it is good for two seconds and a change that did not reach it would not show.
+#[tokio::test]
+async fn rest_configure_and_clear_show_in_the_reader_of_the_dispatcher_at_once() {
+    let app = App::new();
+    let r = router(&app);
+    let reader = app.dispatcher.brand();
+    let before = reader.current();
+    assert_eq!(before.brand().name(), "obop");
+    assert!(!before.is_set());
+
+    let (s, out) = post(&r, "admin", "configure", json!({"name": "MOHV"})).await;
+    assert_eq!(s, 200, "{out}");
+    let shown = reader.current();
+    assert_eq!(shown.brand().name(), "MOHV");
+    assert!(shown.is_set());
+
+    let (s, out) = post(
+        &r,
+        "admin",
+        "configure",
+        json!({"name": "Zed", "title_sv": "Logga in"}),
+    )
+    .await;
+    assert_eq!(s, 200, "{out}");
+    let shown = reader.current();
+    assert_eq!(shown.brand().name(), "Zed");
+    assert_eq!(shown.brand().title("sv"), "Logga in");
+
+    // A dry run, and a refusal, move nothing.
+    post(
+        &r,
+        "admin",
+        "configure",
+        json!({"name": "Other", "dry_run": true}),
+    )
+    .await;
+    let (s, _) = post(&r, "admin", "configure", json!({"name": "a:b"})).await;
+    assert_eq!(s, 400);
+    assert_eq!(reader.current().brand().name(), "Zed");
+
+    let (s, out) = post(&r, "admin", "clear", json!({})).await;
+    assert_eq!(s, 200, "{out}");
+    let shown = reader.current();
+    assert_eq!(shown.brand().name(), "obop");
+    assert!(!shown.is_set());
+}
+
+/// A client cannot send the keys the dispatcher adds: a `_caller` in the body is dropped, and the
+/// event of the change names the person who signed in.
+#[tokio::test]
+async fn rest_a_caller_sent_by_the_client_does_not_change_the_actor_of_the_event() {
+    let app = App::new();
+    let r = router(&app);
+    let (s, out) = post(
+        &r,
+        "admin",
+        "configure",
+        json!({"name": "MOHV", "_caller": "mallory", "_actor": "mallory", "_actor_groups": "x"}),
+    )
+    .await;
+    assert_eq!(s, 200, "{out}");
+    let events = app.store.backend().list("security_event").unwrap();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].1["kind"], json!("brand_configured"));
+    assert_eq!(events[0].1["actor"], json!("ada"));
+}
+
 #[tokio::test]
 async fn rest_refuses_an_agent_a_scoped_token_a_mobile_token_and_a_person_without_the_group() {
     let app = App::new();
@@ -300,7 +370,16 @@ async fn rest_get_is_open_to_every_signed_in_principal() {
 async fn rest_refuses_unknown_keys_by_name_and_accepts_a_bool_as_text_or_json() {
     let app = App::new();
     let r = router(&app);
-    for key in ["v", "id", "set", "bogus", "hide_product_docs"] {
+    // The keys the dispatcher adds itself pass; no other key that starts with `_` does.
+    for key in [
+        "v",
+        "id",
+        "set",
+        "bogus",
+        "hide_product_docs",
+        "_foo",
+        "_caller2",
+    ] {
         let (s, out) = post(&r, "admin", "configure", json!({"name": "MOHV", key: "x"})).await;
         assert_eq!(s, 400, "{key}: {out}");
         assert!(
@@ -772,10 +851,38 @@ fn obop_call_get_works_on_the_command_line_and_obop_import_of_the_model_is_refus
     let (value, denied) = crate::call_json(&o, "instance_brand", "get", &[]).unwrap();
     assert!(denied.is_empty(), "{denied:?}");
     assert_eq!(value["set"], json!(false));
-    // The six generated commands do not exist at a terminal either.
+    // The six generated commands do not exist at a terminal either. `update` and `delete` are given
+    // the id of the one row, so a refusal for a missing id cannot be what is seen: each answers
+    // exactly as a command that was never defined does, and `call_json` stops with that status.
+    let hidden_status = {
+        let app = crate::open_app(&o).expect("the database opens");
+        let p = crate::principal(&app, &o).expect("the dev principal");
+        let answer = |command: &str| {
+            let input = Value::map([("id", Value::text("instance")), ("name", Value::text("x"))]);
+            crate::dispatch_call(&app, &p, &format!("instance_brand.{command}"), &input)
+        };
+        let line = |c: &str| format!("error: UnknownCommand(\"instance_brand.{c}\")");
+        let nothing = answer("no_such_command").expect_err("a command that does not exist");
+        assert_eq!(nothing.0, line("no_such_command"));
+        for c in [
+            "create",
+            "update",
+            "delete",
+            "bulk_create",
+            "list",
+            "search",
+        ] {
+            assert_eq!(answer(c).expect_err(c), (line(c), nothing.1), "{c}");
+        }
+        // And the commands that are bound do work for the same principal.
+        let (value, _) = crate::dispatch_call(&app, &p, "instance_brand.get", &Value::map([]))
+            .expect("get is bound");
+        assert_eq!(value["set"], json!(false));
+        nothing.1
+    };
     for c in ["create", "update", "delete", "list", "search"] {
         assert!(
-            crate::call_json(&o, "instance_brand", c, &["name=x"]).is_err(),
+            crate::call_json(&o, "instance_brand", c, &["id=instance", "name=x"]).is_err(),
             "{c}"
         );
     }
@@ -796,10 +903,16 @@ fn obop_call_get_works_on_the_command_line_and_obop_import_of_the_model_is_refus
             },
         )
     };
-    assert!(run().is_err(), "the import is refused");
+    // It stops with the status of a command that does not exist, and nothing was stored.
+    let refused = run().expect_err("the import is refused");
+    assert_eq!(
+        format!("{refused:?}"),
+        format!("{:?}", std::process::ExitCode::from(hidden_status)),
+        "the status of an unknown command"
+    );
     let after = obop_storage::open(&db).unwrap();
     assert_eq!(
-        after.count("instance_brand").unwrap_or(0),
+        after.count("instance_brand").expect("the store counts"),
         0,
         "and nothing was stored"
     );
