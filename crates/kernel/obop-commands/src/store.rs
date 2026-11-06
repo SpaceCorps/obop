@@ -405,7 +405,7 @@ impl Dispatcher {
 mod tests {
     use super::*;
     use crate::{Principal, Surface, Vault};
-    use obop_registry::{FieldDef, ModelDef};
+    use obop_registry::{CommandDef, FieldDef, ModelDef};
     use obop_types::DataClass;
 
     fn f(name: &'static str) -> FieldDef {
@@ -481,6 +481,194 @@ mod tests {
     fn rejects(r: Result<Value, String>, want: &str) {
         let e = r.expect_err("should be rejected");
         assert!(e.contains(want), "{e:?} should contain {want:?}");
+    }
+
+    /// An action effect writes a record the way the generated `create` and `update` do, so the
+    /// engine lets it reach only a model that has them. A model with hand-registered commands
+    /// (the branding, the single sign-on provider, the settings) and a model registered read-only
+    /// (the logs) have none, whatever their write group says.
+    #[test]
+    fn an_effect_may_write_only_a_model_with_the_generated_create_and_update() {
+        let (d, s, _) = setup();
+        assert!(d.effects_may_write("customer"));
+        assert!(d.effects_may_write("deal"));
+        assert!(!d.effects_may_write("nothing"), "not registered");
+        let model = |name| ModelDef {
+            name,
+            description: "d",
+            read_group: "t.user",
+            write_group: "t.user",
+            access: None,
+            fields: vec![f("title")],
+            commands: vec![CommandDef::new("tweak", "Tweak", "t.user")],
+            ext: Default::default(),
+        };
+        let module = Module {
+            id: "h".into(),
+            name: "H".into(),
+            models: vec![model("hand"), model("log")],
+            network_destinations: vec![],
+            description: String::new(),
+            translations: Default::default(),
+            meta: Default::default(),
+        };
+        // Hand-registered: `get` and a command of its own, no generated `create` or `update`.
+        d.register(&module, "hand", "get", Box::new(|_| Ok(Value::Null)));
+        d.register(&module, "hand", "tweak", Box::new(|_| Ok(Value::Null)));
+        d.register_read_only(&module, "log", &s);
+        assert!(d.has_model("hand") && d.has_model("log"));
+        assert!(!d.effects_may_write("hand"));
+        assert!(!d.effects_may_write("log"));
+        // A module that is taken out and put back as a generated one is judged by what is bound.
+        d.unregister_module("h");
+        assert!(!d.has_model("hand"));
+        d.register_crud(&module, &s);
+        assert!(d.effects_may_write("hand"));
+        assert!(d.effects_may_write("log"));
+        d.unregister_module("h");
+        assert!(!d.effects_may_write("hand"));
+    }
+
+    /// The mark is set by the generated commands that write a record, each on its own: a registrar
+    /// that binds `update` alone, or `create` alone, still makes a model an effect may write, and
+    /// the reads and the delete do not.
+    #[test]
+    fn a_generated_create_or_update_alone_marks_the_model_and_a_read_or_delete_does_not() {
+        let (d, _, _) = setup();
+        let model = |name| ModelDef {
+            name,
+            description: "d",
+            read_group: "t.user",
+            write_group: "t.user",
+            access: None,
+            fields: vec![f("title")],
+            commands: vec![],
+            ext: Default::default(),
+        };
+        let names = [
+            "only_update",
+            "only_create",
+            "only_get",
+            "only_list",
+            "only_search",
+            "only_delete",
+        ];
+        let module = Module {
+            id: "lone".into(),
+            name: "Lone".into(),
+            models: names.iter().map(|n| model(*n)).collect(),
+            network_destinations: vec![],
+            description: String::new(),
+            translations: Default::default(),
+            meta: Default::default(),
+        };
+        for name in names {
+            let command = name.strip_prefix("only_").unwrap();
+            d.register_generic(&module, name, command, Box::new(|_| Ok(Value::Null)));
+            assert!(d.has_model(name), "{name} is registered");
+        }
+        assert!(d.effects_may_write("only_update"));
+        assert!(d.effects_may_write("only_create"));
+        for name in ["only_get", "only_list", "only_search", "only_delete"] {
+            assert!(!d.effects_may_write(name), "{name}");
+        }
+    }
+
+    /// An action that an effect starts writes its record the way the generated `update` does, so
+    /// it too reaches only a model that has it. A model whose transition is hand-registered (the
+    /// devices, the states of a connector) has that command's own checks and audit, which a
+    /// `set_state` effect would skip. The install gate refuses such a package; this is the
+    /// run-time layer for one stored before the gate.
+    #[test]
+    fn a_set_state_effect_cannot_start_an_action_of_a_model_with_no_generated_update() {
+        use obop_registry::Effect;
+        const G: &str = "t.user";
+        let model = |name, fields, commands| ModelDef {
+            name,
+            description: "d",
+            read_group: G,
+            write_group: G,
+            access: None,
+            fields,
+            commands,
+            ext: Default::default(),
+        };
+        let module = |id: &str, models| Module {
+            id: id.into(),
+            name: id.into(),
+            models,
+            network_destinations: vec![],
+            description: String::new(),
+            translations: Default::default(),
+            meta: Default::default(),
+        };
+        let lock =
+            || CommandDef::new("lock", "Lock", G).transition("state", Some("open"), "locked");
+        let states = || f("state").select(&["open", "locked"]);
+        // A model with a transition of its own, bound by hand: no generated create or update.
+        let hand = module("hand", vec![model("hand", vec![states()], vec![lock()])]);
+        // Notes with an action that locks the related record, of the hand-bound model and of an
+        // ordinary one.
+        let notes = module(
+            "notes",
+            vec![
+                model(
+                    "note",
+                    vec![
+                        f("hand_id").reference("hand"),
+                        f("peer_id").reference("peer"),
+                        f("state").select(&["new", "done", "also"]),
+                    ],
+                    vec![
+                        CommandDef::new("lock_hand", "Lock the hand", G)
+                            .transition("state", Some("new"), "done")
+                            .effect(Effect::set_state_ref("hand", "hand_id", "lock")),
+                        CommandDef::new("lock_peer", "Lock the peer", G)
+                            .transition("state", Some("new"), "also")
+                            .effect(Effect::set_state_ref("peer", "peer_id", "lock")),
+                    ],
+                ),
+                model("peer", vec![states()], vec![lock()]),
+            ],
+        );
+        let (d, s) = (Dispatcher::new(), Store::new());
+        d.register(&hand, "hand", "get", Box::new(|_| Ok(Value::Null)));
+        d.register_transition(&hand, "hand", "lock", &s);
+        d.register_crud(&notes, &s);
+        d.register_transition(&notes, "note", "lock_hand", &s);
+        d.register_transition(&notes, "note", "lock_peer", &s);
+        d.register_transition(&notes, "peer", "lock", &s);
+        assert!(!d.effects_may_write("hand") && d.effects_may_write("peer"));
+        let u = Principal::user("u", &[G]);
+        let open = |model: &str| {
+            s.insert(model, [("state".to_string(), Value::text("open"))].into())
+                .unwrap()
+        };
+        let state = |model: &str, id: &str| s.field(model, id, "state");
+        let (hand_id, peer_id) = (open("hand"), open("peer"));
+        let note = |field: &str, id: &str| {
+            let v = call(&d, &u, "note.create", vec![(field, Value::text(id))]).unwrap();
+            v.to_json()["id"].as_str().unwrap().to_string()
+        };
+        // The record of the model without the generated update stays as it was.
+        let n = note("hand_id", &hand_id);
+        let e = call(&d, &u, "note.lock_hand", vec![("id", Value::text(&n))])
+            .expect_err("the effect starts the lock of the hand-bound model");
+        assert!(
+            e.contains("hand is changed by its own commands only"),
+            "{e}"
+        );
+        assert_eq!(state("hand", &hand_id), Some(Value::text("open")));
+        assert_eq!(state("note", &n), Some(Value::text("new")), "and the note");
+        // Only the effect that starts the action is refused: the caller who names the action runs it
+        // for the model it was registered for, with the checks of its own.
+        call(&d, &u, "hand.lock", vec![("id", Value::text(&hand_id))])
+            .expect("the action called directly runs");
+        assert_eq!(state("hand", &hand_id), Some(Value::text("locked")));
+        // The same wiring against an ordinary model does lock it.
+        let n = note("peer_id", &peer_id);
+        call(&d, &u, "note.lock_peer", vec![("id", Value::text(&n))]).unwrap();
+        assert_eq!(state("peer", &peer_id), Some(Value::text("locked")));
     }
 
     #[test]

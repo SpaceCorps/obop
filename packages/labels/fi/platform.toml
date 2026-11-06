@@ -726,6 +726,118 @@ description = "Aseta Microsoft Entra -vuokraaja, jolla henkilöt kirjautuvat. An
 label = "Poista"
 description = "Poista Microsoft-kirjautumisen asetukset. Sidokset säilyvät. Vain Microsoftilla kirjautuvat tilit pääsevät silloin sisään vain ylläpitäjien kautta, joilla on salasana ja toinen tekijä. Hylätään agenteilta"
 
+[labels.fi.model.instance_brand]
+name = "Instanssin brändi"
+description = "Instanssin brändäys: nimi, lyhyt tunniste, logo sekä otsikko ja viesti kullekin kielelle. Yksi tietue, tarkoituksella julkinen, jota muuttaa vain platform.admin-oikeuden omaava henkilö eikä koskaan agentti"
+
+[labels.fi.model.instance_brand.field.name]
+label = "Nimi"
+description = "Tuotteen nimi, 1–40 merkkiä (kirjaimet, numerot, välilyönnit sekä - . , & ' + _ ( ) !). Pakollinen: brändiä ilman nimeä ei tallenneta. Tarkoituksella julkinen, joten se ei sisällä henkilötietoja"
+
+[labels.fi.model.instance_brand.field.slug]
+label = "Lyhyt tunniste"
+description = "Lyhyt tunniste: a-z, 0-9 ja -, alkaa kirjaimella, ei pääty merkkiin -, enintään 30 merkkiä. Tyhjä tarkoittaa nimestä johdettua. Tarkoituksella julkinen, joten se ei sisällä henkilötietoja"
+
+[labels.fi.model.instance_brand.field.title_en]
+label = "Otsikko (englanti)"
+description = "Otsikko englanniksi: logon vieressä oleva rivi, enintään 60 merkkiä. Tyhjä tarkoittaa nimeä. Se on myös jokaisen sellaisen kielen otsikko, jolla ei ole omaa. Tarkoituksella julkinen, joten se ei sisällä henkilötietoja"
+
+[labels.fi.model.instance_brand.field.title_de]
+label = "Otsikko (saksa)"
+description = "Otsikko saksaksi: logon vieressä oleva rivi, enintään 60 merkkiä. Tyhjä tarkoittaa englanninkielistä otsikkoa ja sitten nimeä. Tarkoituksella julkinen, joten se ei sisällä henkilötietoja"
+
+[labels.fi.model.instance_brand.field.title_fr]
+label = "Otsikko (ranska)"
+description = "Otsikko ranskaksi: logon vieressä oleva rivi, enintään 60 merkkiä. Tyhjä tarkoittaa englanninkielistä otsikkoa ja sitten nimeä. Tarkoituksella julkinen, joten se ei sisällä henkilötietoja"
+
+[labels.fi.model.instance_brand.field.title_pl]
+label = "Otsikko (puola)"
+description = "Otsikko puolaksi: logon vieressä oleva rivi, enintään 60 merkkiä. Tyhjä tarkoittaa englanninkielistä otsikkoa ja sitten nimeä. Tarkoituksella julkinen, joten se ei sisällä henkilötietoja"
+
+[labels.fi.model.instance_brand.field.title_fi]
+label = "Otsikko (suomi)"
+description = "Otsikko suomeksi: logon vieressä oleva rivi, enintään 60 merkkiä. Tyhjä tarkoittaa englanninkielistä otsikkoa ja sitten nimeä. Tarkoituksella julkinen, joten se ei sisällä henkilötietoja"
+
+[labels.fi.model.instance_brand.field.title_sv]
+label = "Otsikko (ruotsi)"
+description = "Otsikko ruotsiksi: logon vieressä oleva rivi, enintään 60 merkkiä. Tyhjä tarkoittaa englanninkielistä otsikkoa ja sitten nimeä. Tarkoituksella julkinen, joten se ei sisällä henkilötietoja"
+
+[labels.fi.model.instance_brand.field.title_es]
+label = "Otsikko (espanja)"
+description = "Otsikko espanjaksi: logon vieressä oleva rivi, enintään 60 merkkiä. Tyhjä tarkoittaa englanninkielistä otsikkoa ja sitten nimeä. Tarkoituksella julkinen, joten se ei sisällä henkilötietoja"
+
+[labels.fi.model.instance_brand.field.message_en]
+label = "Viesti (englanti)"
+description = "Viesti englanniksi: yksi pelkkä teksti, enintään 240 merkkiä, ilman linkkejä tai merkintäkieltä. Tyhjä tarkoittaa, ettei viestiä ole. Se on myös jokaisen sellaisen kielen viesti, jolla ei ole omaa. Tarkoituksella julkinen, joten se ei sisällä henkilötietoja"
+
+[labels.fi.model.instance_brand.field.message_de]
+label = "Viesti (saksa)"
+description = "Viesti saksaksi: yksi pelkkä teksti, enintään 240 merkkiä, ilman linkkejä tai merkintäkieltä. Tyhjä tarkoittaa englanninkielistä viestiä, ja jos sitäkään ei ole, ei viestiä. Tarkoituksella julkinen, joten se ei sisällä henkilötietoja"
+
+[labels.fi.model.instance_brand.field.message_fr]
+label = "Viesti (ranska)"
+description = "Viesti ranskaksi: yksi pelkkä teksti, enintään 240 merkkiä, ilman linkkejä tai merkintäkieltä. Tyhjä tarkoittaa englanninkielistä viestiä, ja jos sitäkään ei ole, ei viestiä. Tarkoituksella julkinen, joten se ei sisällä henkilötietoja"
+
+[labels.fi.model.instance_brand.field.message_pl]
+label = "Viesti (puola)"
+description = "Viesti puolaksi: yksi pelkkä teksti, enintään 240 merkkiä, ilman linkkejä tai merkintäkieltä. Tyhjä tarkoittaa englanninkielistä viestiä, ja jos sitäkään ei ole, ei viestiä. Tarkoituksella julkinen, joten se ei sisällä henkilötietoja"
+
+[labels.fi.model.instance_brand.field.message_fi]
+label = "Viesti (suomi)"
+description = "Viesti suomeksi: yksi pelkkä teksti, enintään 240 merkkiä, ilman linkkejä tai merkintäkieltä. Tyhjä tarkoittaa englanninkielistä viestiä, ja jos sitäkään ei ole, ei viestiä. Tarkoituksella julkinen, joten se ei sisällä henkilötietoja"
+
+[labels.fi.model.instance_brand.field.message_sv]
+label = "Viesti (ruotsi)"
+description = "Viesti ruotsiksi: yksi pelkkä teksti, enintään 240 merkkiä, ilman linkkejä tai merkintäkieltä. Tyhjä tarkoittaa englanninkielistä viestiä, ja jos sitäkään ei ole, ei viestiä. Tarkoituksella julkinen, joten se ei sisällä henkilötietoja"
+
+[labels.fi.model.instance_brand.field.message_es]
+label = "Viesti (espanja)"
+description = "Viesti espanjaksi: yksi pelkkä teksti, enintään 240 merkkiä, ilman linkkejä tai merkintäkieltä. Tyhjä tarkoittaa englanninkielistä viestiä, ja jos sitäkään ei ole, ei viestiä. Tarkoituksella julkinen, joten se ei sisällä henkilötietoja"
+
+[labels.fi.model.instance_brand.field.logo_svg]
+label = "Logo (SVG)"
+description = "Komennon configure syöte: SVG-tiedoston teksti, enintään 16 KiB, tiukka osajoukko (muodot ja polut yksivärisinä; ei skriptiä, tekstiä, kuvaa tai linkkiä). Tallennetaan kanoninen teksti, jonka palvelin kirjoitti uudelleen, ei koskaan syötettä; get ei palauta sitä. Tyhjä poistaa sen, ja logo piirretään silloin nimestä"
+
+[labels.fi.model.instance_brand.field.dry_run]
+label = "Kokeilu"
+description = "Komentojen configure ja clear syöte: true tai false. Arvolla true kaikki tarkistetaan eikä mitään kirjoiteta tai kirjata; vastaus kertoo, mitä tapahtuisi, ja palauttaa dry_run-arvon"
+
+[labels.fi.model.instance_brand.field.set]
+label = "Asetettu"
+description = "Komennon get vastaus: onko brändi asetettu eli onko tietue olemassa"
+
+[labels.fi.model.instance_brand.field.v]
+label = "Logon versio"
+description = "Komentojen get ja configure vastaus: logon versio (16 heksadesimaalinumeroa), joka muuttuu logon mukana; tyhjä, kun brändiä ei ole asetettu"
+
+[labels.fi.model.instance_brand.field.effective]
+label = "Voimassa olevat"
+description = "Komennon get vastaus: JSON-objekti, jossa jokaisen voimassa olevan arvon (name, slug, logo, tile_accent, title_XX ja message_XX; XX on kielikoodi: en, de, fr, pl, fi, sv, es) arvo ja voittanut lähde: record, theme tai default"
+
+[labels.fi.model.instance_brand.field.fallbacks]
+label = "Varaarvot"
+description = "Komennon get vastaus: JSON-lista tallennetuista kentistä, jotka eivät läpäisseet lukutarkistusta ja palasivat oletusarvoon, kussakin on kenttä ja syy"
+
+[labels.fi.model.instance_brand.field.changes]
+label = "Muutokset"
+description = "Komennon configure vastaus: JSON-lista muuttuneista kentistä (dry_run-arvolla: jotka muuttuisivat), kussakin on avaimet field, old ja new; logo vanhana ja uutena versiona"
+
+[labels.fi.model.instance_brand.field.refusals]
+label = "Hylkäykset"
+description = "Komennon configure vastaus dry_run-arvolla: JSON-lista siitä, mitä oikea kutsu hylkäisi, kussakin on avaimet field ja rule"
+
+[labels.fi.model.instance_brand.field.cleared]
+label = "Poistettu"
+description = "Komennon clear vastaus: poistettiinko brändi (dry_run-arvolla: poistettaisiinko)"
+
+[labels.fi.model.instance_brand.action.configure]
+label = "Määritä"
+description = "Aseta instanssin brändäys. Anna vain muutettavat kentät (muut säilyttävät arvonsa); ensimmäinen kutsu vaatii kentän name. Kentät: name, slug, title_XX, message_XX, logo_svg (SVG-teksti). Tyhjä teksti tyhjentää kentän, paitsi name. dry_run (true tai false) ei kirjoita mitään. Vastaa kentillä changes ja v (dry_run-arvolla myös refusals). Vain platform.admin-oikeuden omaava henkilö voi ajaa sen"
+
+[labels.fi.model.instance_brand.action.clear]
+label = "Poista"
+description = "Poista instanssin brändäys: yksi tietue poistetaan, joten brändiä ei ole asetettu. dry_run (true tai false) vain tarkistaa eikä poista mitään. Vastaa kentällä cleared: true, kun brändi poistettiin (dry_run-arvolla: poistettaisiin), muuten false, eikä silloin kirjoiteta mitään. Vain platform.admin-oikeuden omaava henkilö voi ajaa sen"
+
 [labels.fi.model.import_map]
 name = "Tuontikartta"
 description = "Mistä tuotu tietue on peräisin: sen luoneen rivin avain (lähdejärjestelmä, lähdetaulu, lähdetunniste). Avaimen hakee komento search, tietueen komento get."

@@ -9,6 +9,7 @@ repository.workspace = true
 description = "Server-rendered public website and web shop of an instance, built from the published records of the website and ecommerce packages"
 
 [dependencies]
+obop-brand.workspace = true
 obop-commands.workspace = true
 obop-storage.workspace = true
 obop-media.workspace = true

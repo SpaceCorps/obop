@@ -842,3 +842,181 @@ async fn the_purge_command_applies_retention_to_a_real_database() {
     );
     let _ = std::fs::remove_file(&path);
 }
+
+// ---- Golden pins of the return page (S1a-0 of the branding work) -------------------------------
+
+use crate::mfa_tests::pin;
+
+/// The whole answer of `GET uri` on the rig's router: status, headers and body, as one text.
+async fn answer_of(r: &Rig, uri: &str) -> String {
+    let req = Request::builder().uri(uri).body(Body::empty()).unwrap();
+    pin::answer(r.router.clone().oneshot(req).await.unwrap()).await
+}
+
+/// `GET /oauth/callback` answers with one page in five ways (`page()` in `obop-http`'s
+/// `connectors.rs`): the provider said no, the account is connected (to Google Drive or to any
+/// other connection), the answer could not be completed, and the bare address. This pins four of
+/// them, each with its status, headers and body; the Drive one is pinned in `drive_admin_tests`,
+/// which has the fake Google it needs. They are what an instance with no brand sends today.
+#[tokio::test]
+async fn pins_the_return_page_of_the_oauth_callback_as_an_instance_with_no_brand_sends_it() {
+    // A provider on loopback whose token endpoint hands tokens to any code: the page does not
+    // depend on them, only on whether the exchange worked.
+    let l = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = l.local_addr().unwrap().port();
+    let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let stopped = stop.clone();
+    let listener = std::thread::spawn(move || {
+        for s in l.incoming() {
+            if stopped.load(std::sync::atomic::Ordering::SeqCst) {
+                break;
+            }
+            let Ok(mut s) = s else { break };
+            let mut buf = Vec::new();
+            let mut chunk = [0u8; 4096];
+            loop {
+                let n = s.read(&mut chunk).unwrap_or(0);
+                if n == 0 {
+                    break;
+                }
+                buf.extend_from_slice(&chunk[..n]);
+                let text = String::from_utf8_lossy(&buf).to_string();
+                if let Some((head, body)) = text.split_once("\r\n\r\n") {
+                    let want = head
+                        .lines()
+                        .find_map(|l| {
+                            l.to_ascii_lowercase()
+                                .strip_prefix("content-length:")
+                                .map(|v| v.trim().parse::<usize>().unwrap_or(0))
+                        })
+                        .unwrap_or(0);
+                    if body.len() >= want {
+                        break;
+                    }
+                }
+            }
+            let body = r#"{"access_token":"at-pin-secret","refresh_token":"rt-pin-secret","expires_in":3600}"#;
+            let _ = s.write_all(
+                format!(
+                    "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
+                    body.len()
+                )
+                .as_bytes(),
+            );
+        }
+    });
+    // Ends the listener thread when the test ends, by a pass or by a failed pin alike: it sets the
+    // flag, wakes the blocked `accept` with one connection and joins the thread.
+    struct EndListener {
+        stop: Arc<std::sync::atomic::AtomicBool>,
+        port: u16,
+        thread: Option<std::thread::JoinHandle<()>>,
+    }
+    impl Drop for EndListener {
+        fn drop(&mut self) {
+            self.stop.store(true, std::sync::atomic::Ordering::SeqCst);
+            let _ = std::net::TcpStream::connect(("127.0.0.1", self.port));
+            if let Some(t) = self.thread.take() {
+                let _ = t.join();
+            }
+        }
+    }
+    let _end_listener = EndListener {
+        stop,
+        port,
+        thread: Some(listener),
+    };
+    let mut fake = obop_connectors::catalog::provider("rest_api_pull").unwrap();
+    fake.id = "fake_oauth";
+    fake.name = "Fake OAuth provider";
+    fake.auth_kind = "oauth2";
+    fake.allowed_hosts = vec!["127.0.0.1"];
+    fake.oauth = Some(OAuthDef {
+        auth_url: Box::leak(format!("http://127.0.0.1:{port}/authorize").into_boxed_str()),
+        token_url: Box::leak(format!("http://127.0.0.1:{port}/token").into_boxed_str()),
+        scopes: "read",
+        extra: &[],
+    });
+    let r = rig_with(vec![fake]);
+    r.ok(
+        "dev-admin",
+        "provider_policy.create",
+        json!({"provider": "fake_oauth", "enabled": true, "users_may_use": true,
+               "dpa_recorded": true, "oauth_client_id": "cid", "oauth_client_secret": CLIENT_SECRET}),
+    )
+    .await;
+    let c = r
+        .ok("dev-admin", "connection.create", json!({"name": "Calendar", "provider": "fake_oauth",
+            "config": json!({"url": format!("http://127.0.0.1:{port}/events"), "target_model": "lead"}).to_string()}))
+        .await;
+    let id = c["id"].as_str().unwrap().to_string();
+    let start = r
+        .ok("dev-admin", "connection.oauth_start", json!({"id": id}))
+        .await;
+    let url = url::Url::parse(
+        serde_json::from_str::<J>(start["result"].as_str().unwrap()).unwrap()["url"]
+            .as_str()
+            .unwrap(),
+    )
+    .unwrap();
+    let state = url_pairs(url.query().unwrap())["state"].clone();
+
+    let mut now = Vec::new();
+    let mut add = |name: &str, answer: String| now.push((name.to_string(), pin::sha(&answer)));
+    add(
+        "denied",
+        answer_of(
+            &r,
+            "/oauth/callback?error=access_denied&error_description=%3Cscript%3E",
+        )
+        .await,
+    );
+    add(
+        "failed",
+        answer_of(&r, "/oauth/callback?state=guess&code=code-1").await,
+    );
+    add("bare", answer_of(&r, "/oauth/callback").await);
+    add(
+        "connected_other",
+        answer_of(&r, &format!("/oauth/callback?state={state}&code=code-1")).await,
+    );
+    pin::check("CONNECTOR_RETURN_PINS", CONNECTOR_RETURN_PINS, &now);
+}
+
+// Printed by `OBOP_PRINT_PINS=1` on origin/main 12a59a79 and pasted here.
+#[rustfmt::skip]
+const CONNECTOR_RETURN_PINS: &[(&str, &str)] = &[
+    ("denied", "2af756626a9d549919c4bcc1df9a35983756a9db416553b5ee9972cd61e0884e"),
+    ("failed", "299fa05160734f985cb0dcf3ef242e5f9d6b4db336de372fa17b530057a8d4fd"),
+    ("bare", "c05a8a0a704b1e7b71fa83d23f0c6720011d9a3f9356f4bd566eb7b88debd854"),
+    ("connected_other", "90e66d9567052d7ed8008da5fa6fd2877dc088374e15014f9c785b3b77124f8c"),
+];
+
+/// S1a: with a brand row in the store, the return pages that need no provider are the ones an
+/// instance with no row sends, byte for byte, held to their rows of `CONNECTOR_RETURN_PINS`. The
+/// router is the one of a real app (the rig of the pins above has no administrator module, so its
+/// dispatcher has an inert reader that could never see a row).
+#[tokio::test]
+async fn with_a_brand_row_the_return_pages_of_the_oauth_callback_are_what_they_were() {
+    let app = crate::app::App::new();
+    crate::brand_row_tests::set_brand(&app);
+    let state = obop_http::HttpState::new(app.dispatcher.clone(), Arc::new(DevAuth));
+    state.set_connectors(app.connectors.clone());
+    let router = obop_http::router(state, None);
+    for (name, uri) in [
+        (
+            "denied",
+            "/oauth/callback?error=access_denied&error_description=%3Cscript%3E",
+        ),
+        ("failed", "/oauth/callback?state=guess&code=code-1"),
+        ("bare", "/oauth/callback"),
+    ] {
+        let req = Request::builder().uri(uri).body(Body::empty()).unwrap();
+        let page = pin::answer(router.clone().oneshot(req).await.unwrap()).await;
+        let (_, pinned) = CONNECTOR_RETURN_PINS
+            .iter()
+            .find(|(n, _)| *n == name)
+            .unwrap();
+        assert_eq!(pin::sha(&page), *pinned, "{name}");
+    }
+}

@@ -726,6 +726,118 @@ description = "Establecer el inquilino de Microsoft Entra con el que inician ses
 label = "Eliminar"
 description = "Eliminar la configuración del inicio de sesión con Microsoft. Los vínculos se conservan. Las cuentas que inician sesión solo con Microsoft solo podrán entrar entonces por los administradores que conservan contraseña y segundo factor. Se rechaza para agentes"
 
+[labels.es.model.instance_brand]
+name = "Marca de la instancia"
+description = "La marca de la instancia: el nombre, el identificador corto, el logotipo y un título y un mensaje por idioma. Un solo registro, público por diseño, que solo cambia una persona con platform.admin y nunca un agente"
+
+[labels.es.model.instance_brand.field.name]
+label = "Nombre"
+description = "El nombre del producto, de 1 a 40 caracteres (letras, dígitos, espacios y - . , & ' + _ ( ) !). Obligatorio: una marca sin nombre no se guarda. Público por diseño, por lo que no contiene datos personales"
+
+[labels.es.model.instance_brand.field.slug]
+label = "Identificador corto"
+description = "Un identificador corto: a-z, 0-9 y -, empieza por una letra, no termina en -, 30 caracteres como máximo. Vacío significa derivado del nombre. Público por diseño, por lo que no contiene datos personales"
+
+[labels.es.model.instance_brand.field.title_en]
+label = "Título (inglés)"
+description = "El título en inglés: la línea junto al logotipo, 60 caracteres como máximo. Vacío significa el nombre. Es también el título de cada idioma que no tiene uno propio. Público por diseño, por lo que no contiene datos personales"
+
+[labels.es.model.instance_brand.field.title_de]
+label = "Título (alemán)"
+description = "El título en alemán: la línea junto al logotipo, 60 caracteres como máximo. Vacío significa el título en inglés y después el nombre. Público por diseño, por lo que no contiene datos personales"
+
+[labels.es.model.instance_brand.field.title_fr]
+label = "Título (francés)"
+description = "El título en francés: la línea junto al logotipo, 60 caracteres como máximo. Vacío significa el título en inglés y después el nombre. Público por diseño, por lo que no contiene datos personales"
+
+[labels.es.model.instance_brand.field.title_pl]
+label = "Título (polaco)"
+description = "El título en polaco: la línea junto al logotipo, 60 caracteres como máximo. Vacío significa el título en inglés y después el nombre. Público por diseño, por lo que no contiene datos personales"
+
+[labels.es.model.instance_brand.field.title_fi]
+label = "Título (finés)"
+description = "El título en finés: la línea junto al logotipo, 60 caracteres como máximo. Vacío significa el título en inglés y después el nombre. Público por diseño, por lo que no contiene datos personales"
+
+[labels.es.model.instance_brand.field.title_sv]
+label = "Título (sueco)"
+description = "El título en sueco: la línea junto al logotipo, 60 caracteres como máximo. Vacío significa el título en inglés y después el nombre. Público por diseño, por lo que no contiene datos personales"
+
+[labels.es.model.instance_brand.field.title_es]
+label = "Título (español)"
+description = "El título en español: la línea junto al logotipo, 60 caracteres como máximo. Vacío significa el título en inglés y después el nombre. Público por diseño, por lo que no contiene datos personales"
+
+[labels.es.model.instance_brand.field.message_en]
+label = "Mensaje (inglés)"
+description = "El mensaje en inglés: un texto sencillo de 240 caracteres como máximo, sin enlaces ni marcado. Vacío significa ninguno. Es también el mensaje de cada idioma que no tiene uno propio. Público por diseño, por lo que no contiene datos personales"
+
+[labels.es.model.instance_brand.field.message_de]
+label = "Mensaje (alemán)"
+description = "El mensaje en alemán: un texto sencillo de 240 caracteres como máximo, sin enlaces ni marcado. Vacío significa el mensaje en inglés y después ninguno. Público por diseño, por lo que no contiene datos personales"
+
+[labels.es.model.instance_brand.field.message_fr]
+label = "Mensaje (francés)"
+description = "El mensaje en francés: un texto sencillo de 240 caracteres como máximo, sin enlaces ni marcado. Vacío significa el mensaje en inglés y después ninguno. Público por diseño, por lo que no contiene datos personales"
+
+[labels.es.model.instance_brand.field.message_pl]
+label = "Mensaje (polaco)"
+description = "El mensaje en polaco: un texto sencillo de 240 caracteres como máximo, sin enlaces ni marcado. Vacío significa el mensaje en inglés y después ninguno. Público por diseño, por lo que no contiene datos personales"
+
+[labels.es.model.instance_brand.field.message_fi]
+label = "Mensaje (finés)"
+description = "El mensaje en finés: un texto sencillo de 240 caracteres como máximo, sin enlaces ni marcado. Vacío significa el mensaje en inglés y después ninguno. Público por diseño, por lo que no contiene datos personales"
+
+[labels.es.model.instance_brand.field.message_sv]
+label = "Mensaje (sueco)"
+description = "El mensaje en sueco: un texto sencillo de 240 caracteres como máximo, sin enlaces ni marcado. Vacío significa el mensaje en inglés y después ninguno. Público por diseño, por lo que no contiene datos personales"
+
+[labels.es.model.instance_brand.field.message_es]
+label = "Mensaje (español)"
+description = "El mensaje en español: un texto sencillo de 240 caracteres como máximo, sin enlaces ni marcado. Vacío significa el mensaje en inglés y después ninguno. Público por diseño, por lo que no contiene datos personales"
+
+[labels.es.model.instance_brand.field.logo_svg]
+label = "Logotipo (SVG)"
+description = "Entrada de configure: el texto de un archivo SVG, 16 KiB como máximo, un subconjunto estricto (formas y trazados en colores lisos; sin script, texto, imagen ni enlace). Lo que se guarda es el texto canónico que el servidor reescribió, nunca la entrada; get no lo devuelve. Vacío lo borra, y el logotipo se dibuja entonces a partir del nombre"
+
+[labels.es.model.instance_brand.field.dry_run]
+label = "Simulación"
+description = "Entrada de configure y clear: true o false. Con true se comprueba todo y no se escribe ni se registra nada; la respuesta dice qué ocurriría y devuelve dry_run"
+
+[labels.es.model.instance_brand.field.set]
+label = "Definida"
+description = "Respuesta de get: si hay una marca definida, es decir, si el registro existe"
+
+[labels.es.model.instance_brand.field.v]
+label = "Versión del logotipo"
+description = "Respuesta de get y configure: la versión del logotipo (16 dígitos hexadecimales), que cambia cuando cambia el logotipo; vacía si no hay marca definida"
+
+[labels.es.model.instance_brand.field.effective]
+label = "En vigor"
+description = "Respuesta de get: un objeto JSON con, para cada valor en vigor (name, slug, logo, tile_accent, title_XX y message_XX; XX es el código del idioma: en, de, fr, pl, fi, sv, es), su valor y la fuente que ganó: record, theme o default"
+
+[labels.es.model.instance_brand.field.fallbacks]
+label = "Valores de respaldo"
+description = "Respuesta de get: una lista JSON de los campos guardados que no pasaron la comprobación de lectura y volvieron a un valor por defecto, cada uno con su campo y su motivo"
+
+[labels.es.model.instance_brand.field.changes]
+label = "Cambios"
+description = "Respuesta de configure: una lista JSON de los campos que cambiaron (con dry_run, que cambiarían), cada uno con field, old y new; el logotipo como versión anterior y nueva"
+
+[labels.es.model.instance_brand.field.refusals]
+label = "Rechazos"
+description = "Respuesta de configure con dry_run: una lista JSON de lo que una llamada real rechazaría, cada uno con field y rule"
+
+[labels.es.model.instance_brand.field.cleared]
+label = "Eliminada"
+description = "Respuesta de clear: si se eliminó una marca (con dry_run, si se eliminaría)"
+
+[labels.es.model.instance_brand.action.configure]
+label = "Configurar"
+description = "Definir la marca de la instancia. Indique solo los campos que cambian (los demás conservan su valor); la primera llamada necesita name. Campos: name, slug, title_XX, message_XX, logo_svg (texto SVG). Un texto vacío borra un campo, salvo name. dry_run (true o false) no escribe nada. Responde con changes y v (con dry_run también refusals). Solo una persona con platform.admin puede ejecutarlo"
+
+[labels.es.model.instance_brand.action.clear]
+label = "Eliminar"
+description = "Eliminar la marca de la instancia: se borra el único registro, así que no hay ninguna marca definida. dry_run (true o false) solo comprueba y no elimina nada. Responde con cleared: true cuando se eliminó una marca (con dry_run: se eliminaría), en caso contrario false, y entonces no se escribe nada. Solo una persona con platform.admin puede ejecutarlo"
+
 [labels.es.model.import_map]
 name = "Mapa de importación"
 description = "De dónde viene un registro importado: la clave (sistema de origen, tabla de origen, id de origen) de la fila de la que se creó. Busque una clave con search y un registro con get."

@@ -2,6 +2,7 @@
 //! marketplace, and the admin commands that drive them.
 
 pub mod accounts;
+pub mod brand;
 pub mod check;
 pub mod describe;
 pub mod devices;

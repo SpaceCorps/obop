@@ -911,4 +911,93 @@ mod tests {
         h.remove("sec-fetch-site");
         assert!(!same_origin(&h, "https://a.test"));
     }
+
+    /// An identity provider that issues nothing and answers no one, only enough for the OAuth
+    /// server to exist (it needs the provider's `oauth()` port).
+    struct Idp;
+
+    impl obop_commands::OAuthTokens for Idp {
+        fn principal_of(&self, _: &str) -> Option<obop_commands::Principal> {
+            None
+        }
+        fn issue_oauth_access(
+            &self,
+            _: &str,
+            _: &[String],
+            _: &str,
+            _: u64,
+            _: &str,
+            _: &str,
+        ) -> Result<(String, String), String> {
+            Err("not in this test".into())
+        }
+        fn revoke_token_id(&self, _: &str) -> bool {
+            false
+        }
+        fn revoke_session(&self, _: &str) -> bool {
+            false
+        }
+        fn grant_of(&self, _: &str) -> Option<String> {
+            None
+        }
+        fn audit(&self, _: &str, _: &str, _: &str, _: &str) {}
+    }
+
+    impl obop_commands::Authenticator for Idp {
+        fn resolve(&self, _: &str) -> Option<obop_commands::Principal> {
+            None
+        }
+        fn login(&self, _: &str, _: &str) -> Result<String, String> {
+            Err("not in this test".into())
+        }
+        fn issue_agent_token(
+            &self,
+            _: &obop_commands::Principal,
+            _: &[String],
+            _: &str,
+        ) -> Result<String, String> {
+            Err("not in this test".into())
+        }
+        fn oauth(&self) -> Option<&dyn obop_commands::OAuthTokens> {
+            Some(self)
+        }
+    }
+
+    /// The passkey steps of the OAuth pages build the ceremony site with the relying party name
+    /// "obop" (S1a-0 of the branding work: with no brand row that is what an instance sends). The
+    /// name reaches an authenticator only through the registration options, which the REST
+    /// routes make (pinned in `passkey_tests` of the `obop` crate); this holds the same literal
+    /// here, where `webauthn_ctx` is visible, together with the site it builds.
+    #[test]
+    fn pins_the_relying_party_name_of_the_oauth_pages_ceremony_site() {
+        let state = crate::HttpState::with_mcp(
+            Arc::new(obop_commands::Dispatcher::new()),
+            Arc::new(Idp),
+            crate::mcp::McpConfig {
+                public_url: Some("https://inst.test".into()),
+                ..crate::mcp::McpConfig::default()
+            },
+        );
+        let st = Step {
+            o: state.oauth.clone().expect("the OAuth server exists"),
+            base: "https://inst.test".into(),
+            pairs: Vec::new(),
+            flow: String::new(),
+            csrf: String::new(),
+            binder: String::new(),
+            ip: "198.51.100.7".into(),
+            lang: "en",
+        };
+        let parts = axum::http::Request::builder()
+            .uri("/oauth/authorize/passkey/options")
+            .body(())
+            .unwrap()
+            .into_parts()
+            .0;
+        let ctx = webauthn_ctx(&state, &parts, &st).expect("a ceremony site");
+        assert_eq!(ctx.rp_name, "obop");
+        assert_eq!(ctx.rp_id, "inst.test");
+        assert_eq!(ctx.origin, "https://inst.test");
+        assert_eq!(ctx.ip, "198.51.100.7");
+    }
 }

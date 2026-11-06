@@ -18,6 +18,9 @@ use tower::ServiceExt;
 const KNOWN_OMITTED: &[&str] = &[
     "import_map.get",
     "import_map.search",
+    "instance_brand.clear",
+    "instance_brand.configure",
+    "instance_brand.get",
     "instance_update.check",
     "instance_update.rollback",
     "instance_update.start",
@@ -146,7 +149,7 @@ fn it_lists_every_command_of_an_account_with_every_group() {
     }
     missing.sort();
     // The document is made from `Dispatcher::meta`, which skips a model that has no `list`
-    // command, so these eleven commands (REST ones included) have no operation, in the document
+    // command, so these fourteen commands (REST ones included) have no operation, in the document
     // an instance serves as well (docs/ISSUES.md K26). A new omission fails here; when one of
     // these gains an operation, remove its id from the list.
     assert_eq!(
@@ -311,4 +314,47 @@ fn a_bulk_row_does_not_offer_the_image_and_file_fields_that_bulk_create_refuses(
         }
     }
     assert!(checked > 5, "{checked}");
+}
+
+// ---- Golden pins of the anonymous OpenAPI document (S1a-0 of the branding work) ------------------
+
+/// `GET /api/openapi.json` with no token: the document an instance with no brand row sends to
+/// anyone (sign-in and the discovery endpoints), on an instance without an OAuth server (`dev`)
+/// and on one with it (`auth`). The host is `inst.test`, the protocol https, and the version of
+/// this build is written `<CORE_VERSION>` before hashing. (The document of a signed-in account is
+/// the committed `openapi.json`, held by `the_committed_openapi_document_is_current`.)
+#[tokio::test]
+async fn pins_the_anonymous_openapi_document_as_an_instance_with_no_brand_sends_it() {
+    use crate::mfa_tests::pin;
+    let mut now = Vec::new();
+    for inst in pin::instances().await {
+        now.push((
+            format!("{}/openapi", inst.name),
+            pin::sha(&pin::document(&inst.router, "/api/openapi.json").await),
+        ));
+    }
+    pin::check("OPENAPI_ANONYMOUS_PINS", OPENAPI_ANONYMOUS_PINS, &now);
+}
+
+// Printed by `OBOP_PRINT_PINS=1` on origin/main 12a59a79 and pasted here.
+#[rustfmt::skip]
+const OPENAPI_ANONYMOUS_PINS: &[(&str, &str)] = &[
+    ("dev/openapi", "dfb5fe807d7fdcba1a5a57aedb327f1f6fec2ffe6089d5ba2ce00405743a68f6"),
+    ("auth/openapi", "00ccf5de37ea58c660fe82c8033793864d1f7070ed4bc12bc0f5c486dfdf2162"),
+];
+
+/// S1a: the brand row is in the store and the anonymous document is the one an instance with no
+/// row sends (see `with_a_brand_row_the_anonymous_documents_and_initialize_are_what_they_were`).
+#[tokio::test]
+async fn with_a_brand_row_the_anonymous_openapi_document_is_what_it_was() {
+    use crate::mfa_tests::pin;
+    let mut now = Vec::new();
+    for inst in pin::instances().await {
+        crate::brand_row_tests::set_brand(&inst.app);
+        now.push((
+            format!("{}/openapi", inst.name),
+            pin::sha(&pin::document(&inst.router, "/api/openapi.json").await),
+        ));
+    }
+    pin::check("OPENAPI_ANONYMOUS_PINS", OPENAPI_ANONYMOUS_PINS, &now);
 }

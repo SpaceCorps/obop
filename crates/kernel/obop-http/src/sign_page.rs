@@ -656,4 +656,207 @@ fn late() { txt::html(lang, \"late_key\"); }
             );
         }
     }
+
+    // ---- Golden pins of the whole page and its policy (S1a-0 of the branding work) -----------
+
+    /// The pin of a page: the SHA-256 of its HTML joined to its policy header, in this form
+    /// (`BEFORE_THE_HISTORY` above hashes the HTML alone):
+    ///
+    /// ```text
+    /// {html}\nContent-Security-Policy: {policy}\n
+    /// ```
+    ///
+    /// The signer pages are therefore pinned as HTML plus the policy header only: the status code
+    /// and the other headers of the answer are not pinned here (the same holds for the OAuth pages;
+    /// `obop-oauth/src/golden_tests.rs` says so too and lists every filter that runs the pins).
+    fn pin_of(p: &Page) -> String {
+        sha(&format!("{}\nContent-Security-Policy: {}\n", p.html, p.csp))
+    }
+
+    /// Print the table as source (`OBOP_PRINT_PINS=1 cargo test -p obop-http signer_pins --
+    /// --nocapture --test-threads=1`), or hold the pages to it.
+    fn check(table: &str, pinned: &[(&str, &str)], now: &[(String, String)]) {
+        if std::env::var("OBOP_PRINT_PINS").is_ok_and(|v| v == "1") {
+            let mut out = format!("\n//@pins {table}\nconst {table}: &[(&str, &str)] = &[\n");
+            for (name, digest) in now {
+                out.push_str(&format!("    (\"{name}\", \"{digest}\"),\n"));
+            }
+            out.push_str(&format!("];\n//@end {table}\n"));
+            println!("{out}");
+            panic!(
+                "OBOP_PRINT_PINS=1 is print mode, not a check: this run printed the table and \
+                 proved nothing. Unset it to run the pins."
+            );
+        }
+        assert!(
+            !pinned.is_empty(),
+            "{table} is empty: print it with OBOP_PRINT_PINS=1"
+        );
+        let mut moved = Vec::new();
+        for (i, (name, digest)) in now.iter().enumerate() {
+            match pinned.get(i) {
+                Some((n, d)) if n == name && d == digest => {}
+                Some((n, _)) if n != name => moved.push(format!("{name}: the table has {n} here")),
+                Some(_) => moved.push(format!("{name}: {digest}")),
+                None => moved.push(format!("{name}: not in the table")),
+            }
+        }
+        if pinned.len() > now.len() {
+            moved.push(format!(
+                "the table has {} entries, the test makes {}",
+                pinned.len(),
+                now.len()
+            ));
+        }
+        assert!(
+            moved.is_empty(),
+            "{table}: {} of {} pins moved (a page differs from what an instance with no brand \
+             row has always sent):\n{}",
+            moved.len(),
+            now.len(),
+            moved.join("\n")
+        );
+    }
+
+    /// The signatures so far, as a page that asks for them shows them: one other signer, the
+    /// viewer's own entry, and the line that says the list is cut.
+    fn pinned_history() -> History {
+        History {
+            entries: vec![
+                entry("Alice Example", "2026-11-03T10:00:00Z", false),
+                entry("Bob Example", "2026-11-03T11:30:05Z", true),
+            ],
+            cut: true,
+        }
+    }
+
+    /// Every page the signer's door can send, in every language, with its policy header: the form,
+    /// the page after signing, the closed request, the same two with the history, and the eight
+    /// refusals (`refusal_parts` in `sign.rs`). 13 pages in each of the 7 languages.
+    #[test]
+    fn signer_pins_every_page_and_its_policy_is_what_it_was_before_the_brand() {
+        let history = pinned_history();
+        let mut now = Vec::new();
+        for lang in LANGS {
+            let mut add = |kind: &str, p: Page| now.push((format!("{kind}/{lang}"), pin_of(&p)));
+            add("form", form_with(lang, None));
+            add("done", done(lang, "2026-11-03T10:00:00.000000Z", None));
+            add("closed", message(lang, "closed"));
+            add("form_history", form_with(lang, Some(&history)));
+            add(
+                "done_history",
+                done(lang, "2026-11-03T10:00:00.000000Z", Some(&history)),
+            );
+            for key in [
+                "unknown",
+                "gone_expired",
+                "gone_revoked",
+                "changed",
+                "busy",
+                "unavailable",
+                "err_name",
+                "forbidden",
+            ] {
+                add(&format!("msg_{key}"), message(lang, key));
+            }
+        }
+        assert_eq!(now.len(), 13 * 7, "13 pages in 7 languages");
+        check("SIGNER_PINS", SIGNER_PINS, &now);
+    }
+
+    // Printed by `OBOP_PRINT_PINS=1` on origin/main 12a59a79 and pasted here.
+    #[rustfmt::skip]
+    const SIGNER_PINS: &[(&str, &str)] = &[
+        ("form/en", "1e1d61cad3d9af5e945acefb1c286c694b30929cf95938f16606ac9ef128a32f"),
+        ("done/en", "ce47739c881ba48ad44e4455cbd57c76c30ae86ea238cff596bba02ac72bec85"),
+        ("closed/en", "6e684a757dfb11494f102e1d90073a9e702d1f101fe722ad7c40a042dc7a3e5f"),
+        ("form_history/en", "10e23fa0199c3b28aff773a8b789b741f8692cb87fc616d13b68cda0f0a5bc1d"),
+        ("done_history/en", "1092efbae7248530dbea2b67c3a08adb0ce3d822323ccd766735d92a8ddd3e7d"),
+        ("msg_unknown/en", "d7cb391cdb401549948bdd034bbe9ce3c60571608d4b623f8e453fa8cfee60dc"),
+        ("msg_gone_expired/en", "04e23020bf82642ed3cf06d708ea501204ed9b7e7bec0d1d83563918a7482fc7"),
+        ("msg_gone_revoked/en", "bb4b357166fad56c9fcbcce4798066a2cb5479d0891b46ffbcfb5691816ec8ea"),
+        ("msg_changed/en", "3347857fa267f186efaf4b9a7105b3420b61db17fad910409a5f047d1289b245"),
+        ("msg_busy/en", "7948c335b5550837708bff8dbf71731e51f6cb91339c96cf41fa7783c8fc53d4"),
+        ("msg_unavailable/en", "ea56b5716c103b12be2631c95035778d480547643b1b731e6a0cb538a6ac32b4"),
+        ("msg_err_name/en", "b25ae8e71423892640c8363924790e69eec36dfd289e0be565fec23eb106995a"),
+        ("msg_forbidden/en", "4acf9e30d488b55ae0679dee0acc36dad17351badc291af1f366790f6dcf7800"),
+        ("form/de", "9d6ff40df2320f0d18c4cf87f36d62986e76bf629f6ad318fea2d9481bd55820"),
+        ("done/de", "0d0e8e6912f6b2382f94e90968e801cf76b83f77ec5f2101be622fbd67c22b7b"),
+        ("closed/de", "4e7747ae7b1553942944d25b041f8574ac877164fbc8626961e1b19a1f44aece"),
+        ("form_history/de", "1ec5ff78e2ebb510240c746b05b695848a6804ba65e4f06d8d682bb0c0ac18f8"),
+        ("done_history/de", "81a9e006d182b432480d07c307a2201627d6f07a66b4ec91446db6c60b4bc11a"),
+        ("msg_unknown/de", "4e6cec7497089d57caa24f49452144a8ae0d07704595c0ac7ef60f509e44087f"),
+        ("msg_gone_expired/de", "9673c46a6725a080134491e304c2aacbabd8751a4cec10a2168d896eae178b66"),
+        ("msg_gone_revoked/de", "0802e9a90bbba1ccd846af058ef8955de344021524e8d4fdb8a5b1d12b437adb"),
+        ("msg_changed/de", "0d408127537a9bf927811b0201e3c6d1f21a9e3b33d561c35c8984c3490b598e"),
+        ("msg_busy/de", "dd04d4dbc331bea4702cc52feed76fb0292e353ae2ba63a49657ce70cdaaec6e"),
+        ("msg_unavailable/de", "bf93933df3694c8ffb7d78b6c30781c16d857dd6920549febe84ff31e31bebaf"),
+        ("msg_err_name/de", "82fd7834c8424122278a62fa75a474f228bb3b98aaf6abbfbc364f021f62e50b"),
+        ("msg_forbidden/de", "8dfb498d51829dec1ed614c1a4591cda2982343e0a16a1e0741f32a6240e3cac"),
+        ("form/fr", "97c9f9889c71097785bdb4f1ebd019eef6d14eebd7a37c497109c95f19f0e2bf"),
+        ("done/fr", "6a2b5976597425eb122f01b9bd5b50873ac91899d7f7d6c34a96e61381832744"),
+        ("closed/fr", "3dc5230584f02df78441571d92f1a24fdffdef7404cbdc843a21c0a62525f856"),
+        ("form_history/fr", "44db871bebcbe2d3798c3c49e5bd3e1c514ed7ea97c0ae147722a5da62b2b70b"),
+        ("done_history/fr", "98c0eceb392bc7a53ec8121e6d31f8c94f30995daf794d57c08ba2a6251e6761"),
+        ("msg_unknown/fr", "344a9e58918d714e3b178f676ed8a2122e6c7f81227dfa051b765b8fecb21d6c"),
+        ("msg_gone_expired/fr", "14aca3df43cabb32a1020dba5e5a347c37efe0196b48bc1ded8942ce4f286514"),
+        ("msg_gone_revoked/fr", "fd1ce4b06078135255d513a9fee4e1b4986fe388c68dff68f5d1e9657f3b5564"),
+        ("msg_changed/fr", "ef8f28d800ff58eb217345c16c64ac61460c25ee5f61d5ff18b45d9ecd719b41"),
+        ("msg_busy/fr", "7a0ec2d5c763c7c4646b33b221b6db9b7cf95578bb1e71cd8648f3e0b9ec5206"),
+        ("msg_unavailable/fr", "14e1b4576516b5479cdd369ad27b238118c53fb05e17acea51ba54647c085ca3"),
+        ("msg_err_name/fr", "44b24198b9f85214f1a90d6c8b834e7d096cdc350b089341028b4f3d7360fae2"),
+        ("msg_forbidden/fr", "ae95927ee81afc5de863d3c08ca78f694eb4efd6de59b4d92b1771242d39d72a"),
+        ("form/pl", "55964dde3173ca70c5146f415fdf6e8878bd2455f391f6071620f74c833e5f93"),
+        ("done/pl", "1094928de630d5257f8d3aaa3ad188aa074c9d30aff11e12f3561da1a446d0f1"),
+        ("closed/pl", "71c85b1a39f147daad6cef28d5501e246cfcd3041c1456a10a1c0ce425e11c65"),
+        ("form_history/pl", "68eac7a254a29651317d91fb1d16377666ee9e5b475224e6d01a33ab026b9234"),
+        ("done_history/pl", "c23e2da1c9da3ecf4bf9ef9480dbe04d934cba58561549b5867f8a6636cd74c1"),
+        ("msg_unknown/pl", "83358ddaf731426628f2efa390824d8ff333e163d3359731eb140cd4718b2b6f"),
+        ("msg_gone_expired/pl", "ec5a042e5fc9034037990974539dc1608ac0f85a157acf808810808196aa1554"),
+        ("msg_gone_revoked/pl", "df8d2267865fc82a9ecffc5adbdf9c9a88d0f42cc9489fa044db2005eff5734e"),
+        ("msg_changed/pl", "8cf8c9cebbc1fffa5a5989a2922568fc3b45a148d7cf651e6572a1ee107968b0"),
+        ("msg_busy/pl", "7a73c87fb5c6b3bbaebd2660a1f9cc4e6814f6181a70d1aebf53e26e496e2d11"),
+        ("msg_unavailable/pl", "679c00b82c2a7442554cfe5ba9834fa1871900570c836870c06f1f76d7a8157f"),
+        ("msg_err_name/pl", "a89772c18ea8e0db5ec1bfa970524b7551e5a3c5de437496afd126b64d05ce1a"),
+        ("msg_forbidden/pl", "7bad13652deee7638ac920d946834f4e74c51f8d89af2a977601906fd7be5aee"),
+        ("form/fi", "32278ca1006a4cbb6c2628b1f2fc3dd482ec72fc843cc5ebb335be8baa052b71"),
+        ("done/fi", "f30440399c1f304bae115136b046278cef2e35a5f112f9cd49f8d90391bb6c60"),
+        ("closed/fi", "6db6dad0266304b454522927ed04fbb94b0c9367146ebfb65b4ee2ae69ec80e3"),
+        ("form_history/fi", "d9149f5936dbf540967dc5cc98346c075faf0030c163e90ac4ad5f54788f8fa1"),
+        ("done_history/fi", "15d798f42a7eeb0cc110a20483cc0c3c4913928d10a8dc56fcca6f7e779d2838"),
+        ("msg_unknown/fi", "329c82ce5cb53b205c9b5ff6f750b2decb559c62b91d1020f69afb8c9026dd3e"),
+        ("msg_gone_expired/fi", "f44932b4116dbf608c47492e0b52346c36eaca9de2604be97e39f91b8d6e5dd4"),
+        ("msg_gone_revoked/fi", "32b5458fb64866b84b425e531474f6e84f77e8c0750a1b59e28c37fa4f167fa8"),
+        ("msg_changed/fi", "cbc42c8b279cbfdeefef013a95ce0fef9da72730d44616b7367864a0193a0d91"),
+        ("msg_busy/fi", "d8d6e672fe713982da3c9ba06d5ed34b2011cb6559adf31e4e3533c0e961059c"),
+        ("msg_unavailable/fi", "5947e830f0d0710810a943ae54fe40b725c6067fa45e306eb599341f0d1685e6"),
+        ("msg_err_name/fi", "e291f3f4be3ec6d231a93a862fd205e381103454e886b7adc249f76f011312f3"),
+        ("msg_forbidden/fi", "b9206e44ad7ef6974c8cc895052904fac270e05fa9c3041adf314323f79bb837"),
+        ("form/sv", "b2a91adcbfb6d6d6c2e1abc0e86e5f020a0839b21db6294198f2d97ecfbb9d33"),
+        ("done/sv", "eafb8f385ce59443e9f5117097d29f5a87d4b9f6f6c5a05a8ce61ba71ad98907"),
+        ("closed/sv", "66d6bea8f5acb0562716fa587332c61c3e7c3b32b5a176f2294fc0183d344bfb"),
+        ("form_history/sv", "949aec6eff2a0ce4ca821432857bb91a63f5cd2e2cbfb87b90529436a541f931"),
+        ("done_history/sv", "4189d23ac7654333a11db951d7a8f1f3ccfcef22bb93d675574f96bc34594087"),
+        ("msg_unknown/sv", "91fc264c52034cc9ea17d14332a507fa891795f56f128878a99a0659ac73a447"),
+        ("msg_gone_expired/sv", "beb2c64e230c8e69f15a3a298a7351ccfbc987232247b61a1416cb045cadd87d"),
+        ("msg_gone_revoked/sv", "bc92d71f6035a1c2a13d4f23d6be2d0e95d90c7745537b5b492ab02af404541e"),
+        ("msg_changed/sv", "0797098731124eb1d6113266fafc9a0c8c6ae78e77e46892b840779b73a8c487"),
+        ("msg_busy/sv", "1a93aafc11a6577dc446bc13a59836f9457cdf1e0b95f8e44c0232afb6ffd777"),
+        ("msg_unavailable/sv", "47a596b9a16b8dedddc8df22847361f6c54c27f2ee521f016b6fd1696819e0e2"),
+        ("msg_err_name/sv", "3795016c2ac9ea049d3cf1aefcd3877bb9a3fb877d409fdc72ca884c5186f9df"),
+        ("msg_forbidden/sv", "a1371a049e878f0ba55f311cfa01475ca759680a88546c11fc52d13313ae3eba"),
+        ("form/es", "e5a6b373fa09a384a08c55ada5593262277e665caa34fcdaa9ea67f4f5f9f989"),
+        ("done/es", "b73b576eb0cd45a69f838e0346fc0289f5e9caf6fc10be296eb6cf324e9f1660"),
+        ("closed/es", "2edd31cb803477e617e990f47f7dad927491b263adaf91fab8aff12c5b0d3ea2"),
+        ("form_history/es", "450b135424ddcb5f323089e2ed2d1b616452ae82716b3563c1d18bdceba374e7"),
+        ("done_history/es", "9cb530b5d12794cea94d5170c3200036aaf27f18a15006b3bbd65faaa5a28d0e"),
+        ("msg_unknown/es", "8f19d80bc2733308847012bb5eec8fe95a7f9d7b8a91b29233b2637668d15a14"),
+        ("msg_gone_expired/es", "44c3533f68f40058bdf876abf8c69e262109f32aa361aa18021c356201d7ffd1"),
+        ("msg_gone_revoked/es", "52950d2463ac7775bf91f72e378a186d0b5a2dd2700ccee4559b6dc50c66090a"),
+        ("msg_changed/es", "22ec2e66b4b0f626e4b65c070c7c6f7b5f363e485e938cf2a8f7d7d1c0509417"),
+        ("msg_busy/es", "21044c6536717fbf5fa3ac2f1e746ec4b4f0d704b2fd52f9b6478546e9b80e84"),
+        ("msg_unavailable/es", "defd82bb91836f34222f0333017787b1363f584f4e40225b5804bb6f3c9ac076"),
+        ("msg_err_name/es", "288bb64e475a47886250e5a0cc0bc98f33f3132c4eb6951dc50216b2f68afcf1"),
+        ("msg_forbidden/es", "0a6ac8acbc00597d3b05ab68c80902352bb36d1a189e12723024da5bb01a3838"),
+    ];
 }
