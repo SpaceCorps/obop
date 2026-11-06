@@ -340,3 +340,19 @@ const OPENAPI_ANONYMOUS_PINS: &[(&str, &str)] = &[
     ("dev/openapi", "dfb5fe807d7fdcba1a5a57aedb327f1f6fec2ffe6089d5ba2ce00405743a68f6"),
     ("auth/openapi", "00ccf5de37ea58c660fe82c8033793864d1f7070ed4bc12bc0f5c486dfdf2162"),
 ];
+
+/// S1a: the brand row is in the store and the anonymous document is the one an instance with no
+/// row sends (see `with_a_brand_row_the_anonymous_documents_and_initialize_are_what_they_were`).
+#[tokio::test]
+async fn with_a_brand_row_the_anonymous_openapi_document_is_what_it_was() {
+    use crate::mfa_tests::pin;
+    let mut now = Vec::new();
+    for inst in pin::instances().await {
+        crate::brand_row_tests::set_brand(&inst.app);
+        now.push((
+            format!("{}/openapi", inst.name),
+            pin::sha(&pin::document(&inst.router, "/api/openapi.json").await),
+        ));
+    }
+    pin::check("OPENAPI_ANONYMOUS_PINS", OPENAPI_ANONYMOUS_PINS, &now);
+}

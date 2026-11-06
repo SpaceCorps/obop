@@ -735,3 +735,34 @@ fn pins_the_default_issuer_of_a_server() {
     assert_eq!(AuthConfig::from_env().issuer, "obop");
     assert_eq!(AuthConfig::insecure_dev().issuer, "obop");
 }
+
+/// S1a: with a brand row in the store, an enrolment is still given the label `obop:ada` and the
+/// issuer `obop` (the pin above): `begin` does not read the row yet, and `OBOP_MFA_ISSUER` is not
+/// set. The slice that makes the authenticator entry show the name moves this assertion.
+#[test]
+fn with_a_brand_row_the_otpauth_label_and_issuer_of_an_enrolment_are_what_they_were() {
+    let r = rig();
+    user_with(&r.a, "ada", &["base.user"]);
+    obop_commands::brand::apply(
+        &*r.b,
+        None,
+        "operator",
+        &obop_commands::brand::Action::Configure(vec![
+            ("name".into(), "MOHV".into()),
+            ("slug".into(), "mohv".into()),
+        ]),
+        false,
+    )
+    .unwrap();
+    assert!(
+        r.b.get("instance_brand", "instance").unwrap().is_some(),
+        "the row is in the store"
+    );
+    let (_, p) = session(&r.a, "ada");
+    let begun = r.a.begin(&p).unwrap();
+    let secret = begun["secret"].as_str().unwrap();
+    assert_eq!(
+        begun["uri"].as_str().unwrap().replace(secret, "SECRET"),
+        "otpauth://totp/obop:ada?secret=SECRET&issuer=obop&algorithm=SHA1&digits=6&period=30"
+    );
+}

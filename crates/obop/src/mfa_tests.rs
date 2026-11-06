@@ -816,6 +816,8 @@ pub(crate) mod pin {
         pub(crate) name: &'static str,
         pub(crate) router: axum::Router,
         pub(crate) token: String,
+        /// The app behind the router, for a test that writes a record to its store.
+        pub(crate) app: App,
     }
 
     /// The two instances the anonymous documents are pinned on: `dev`, over the development
@@ -823,11 +825,11 @@ pub(crate) mod pin {
     /// the default configuration, so a variable of the environment (`OBOP_PUBLIC_URL`) cannot move
     /// a pin.
     pub(crate) async fn instances() -> Vec<Instance> {
-        let app = App::new();
-        app.seed_demo();
+        let dev_app = App::new();
+        dev_app.seed_demo();
         let dev = obop_http::router(
             obop_http::HttpState::with_mcp(
-                app.dispatcher.clone(),
+                dev_app.dispatcher.clone(),
                 Arc::new(crate::app::DevAuth),
                 obop_http::mcp::McpConfig::default(),
             ),
@@ -864,11 +866,13 @@ pub(crate) mod pin {
                 name: "dev",
                 router: dev,
                 token: "dev-agent".into(),
+                app: dev_app,
             },
             Instance {
                 name: "auth",
                 router: real,
                 token,
+                app,
             },
         ]
     }

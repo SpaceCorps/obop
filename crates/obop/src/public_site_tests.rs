@@ -510,3 +510,61 @@ const LOGO_ADDRESS_LAYOUT_PINS: &[(&str, &str)] = &[
     ("public/post", "31f8cb6fb137b93d90187b38fccc2895192d1c543ddb349113a427764e31b987"),
     ("public/post_with_token", "23fee73b6a79601cb87a949221e7445d2fd143719ef46f3cb185a6b15465c5c3"),
 ];
+
+// ---- With a brand row (S1a of the branding work) --------------------------------------------------
+
+/// One answer as one text: the status, every header sorted by name, a blank line and the body.
+async fn shown(r: &axum::Router, path: &str) -> String {
+    let (status, body, headers) = get(r, path).await;
+    let mut lines: Vec<String> = headers
+        .iter()
+        .map(|(k, v)| format!("{k}: {}", String::from_utf8_lossy(v.as_bytes())))
+        .collect();
+    lines.sort();
+    format!("{status}\n{}\n\n{body}", lines.join("\n"))
+}
+
+/// S1a: the brand row is in the store and no surface reads it yet. The shop's files and pages go
+/// through `PublicApi::site_settings` on every request here (the fixture's cache lives zero
+/// seconds), the one door the site reads settings by, and the back office index is the file of the
+/// build; with a row written through `brand::apply` every one of them answers the bytes it
+/// answered without one, headers included.
+#[tokio::test]
+async fn with_a_brand_row_the_shop_files_and_the_back_office_index_are_what_they_were() {
+    for (public, paths) in [
+        (
+            true,
+            vec![
+                "/favicon.svg",
+                "/favicon.ico",
+                "/",
+                "/assets/site.css",
+                "/robots.txt",
+                "/sitemap.xml",
+                "/admin/",
+                "/admin/index.html",
+            ],
+        ),
+        (false, vec!["/", "/index.html", "/assets/app.js"]),
+    ] {
+        let f = fixture(public).await;
+        let mut was = Vec::new();
+        for p in &paths {
+            was.push(shown(&f.router, p).await);
+        }
+        assert!(
+            was[0].starts_with("200\n"),
+            "{}: the first file is served: {}",
+            paths[0],
+            was[0]
+        );
+        crate::brand_row_tests::set_brand(&f.app);
+        for (p, before) in paths.iter().zip(&was) {
+            assert_eq!(
+                &shown(&f.router, p).await,
+                before,
+                "{p} (public site: {public}) moved when a brand row was written"
+            );
+        }
+    }
+}

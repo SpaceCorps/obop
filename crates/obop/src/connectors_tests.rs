@@ -991,3 +991,32 @@ const CONNECTOR_RETURN_PINS: &[(&str, &str)] = &[
     ("bare", "c05a8a0a704b1e7b71fa83d23f0c6720011d9a3f9356f4bd566eb7b88debd854"),
     ("connected_other", "90e66d9567052d7ed8008da5fa6fd2877dc088374e15014f9c785b3b77124f8c"),
 ];
+
+/// S1a: with a brand row in the store, the return pages that need no provider are the ones an
+/// instance with no row sends, byte for byte, held to their rows of `CONNECTOR_RETURN_PINS`. The
+/// router is the one of a real app (the rig of the pins above has no administrator module, so its
+/// dispatcher has an inert reader that could never see a row).
+#[tokio::test]
+async fn with_a_brand_row_the_return_pages_of_the_oauth_callback_are_what_they_were() {
+    let app = crate::app::App::new();
+    crate::brand_row_tests::set_brand(&app);
+    let state = obop_http::HttpState::new(app.dispatcher.clone(), Arc::new(DevAuth));
+    state.set_connectors(app.connectors.clone());
+    let router = obop_http::router(state, None);
+    for (name, uri) in [
+        (
+            "denied",
+            "/oauth/callback?error=access_denied&error_description=%3Cscript%3E",
+        ),
+        ("failed", "/oauth/callback?state=guess&code=code-1"),
+        ("bare", "/oauth/callback"),
+    ] {
+        let req = Request::builder().uri(uri).body(Body::empty()).unwrap();
+        let page = pin::answer(router.clone().oneshot(req).await.unwrap()).await;
+        let (_, pinned) = CONNECTOR_RETURN_PINS
+            .iter()
+            .find(|(n, _)| *n == name)
+            .unwrap();
+        assert_eq!(pin::sha(&page), *pinned, "{name}");
+    }
+}

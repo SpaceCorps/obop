@@ -16,6 +16,8 @@ mod brand_cmd;
 mod brand_cmd_tests;
 #[cfg(test)]
 mod brand_commands_tests;
+#[cfg(test)]
+mod brand_row_tests;
 mod build_commit;
 #[cfg(test)]
 mod build_commit_tests;

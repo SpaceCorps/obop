@@ -1399,43 +1399,71 @@ async fn pins_the_anonymous_documents_and_initialize_as_an_instance_with_no_bran
     use crate::mfa_tests::pin;
     let mut now = Vec::new();
     for inst in pin::instances().await {
-        let (_, init) = initialize(&inst.router, &inst.token, "2025-11-25").await;
+        now.extend(document_table(&inst).await);
+    }
+    pin::check("DOCUMENT_PINS", DOCUMENT_PINS, &now);
+}
+
+/// The rows of `DOCUMENT_PINS` for one instance: the `initialize` result and the six anonymous
+/// documents. (The same builder is held to the same table with a brand row in the store, by
+/// `with_a_brand_row_the_anonymous_documents_and_initialize_are_what_they_were`.)
+pub(crate) async fn document_table(
+    inst: &crate::mfa_tests::pin::Instance,
+) -> Vec<(String, String)> {
+    use crate::mfa_tests::pin;
+    let mut now = Vec::new();
+    let (_, init) = initialize(&inst.router, &inst.token, "2025-11-25").await;
+    now.push((
+        format!("{}/initialize", inst.name),
+        pin::sha(&pin::unversioned(&init.to_string())),
+    ));
+    for (name, path) in [
+        (
+            "protected_resource",
+            "/.well-known/oauth-protected-resource",
+        ),
+        (
+            "protected_resource_mcp",
+            "/.well-known/oauth-protected-resource/mcp",
+        ),
+        (
+            "server_card_well_known",
+            "/.well-known/mcp/server-card.json",
+        ),
+        ("server_card", "/mcp/server-card"),
+        ("ai_catalog", "/.well-known/ai-catalog.json"),
+        (
+            "authorization_server",
+            "/.well-known/oauth-authorization-server",
+        ),
+    ] {
         now.push((
-            format!("{}/initialize", inst.name),
-            pin::sha(&pin::unversioned(&init.to_string())),
+            format!("{}/{name}", inst.name),
+            pin::sha(&pin::document(&inst.router, path).await),
         ));
-        for (name, path) in [
-            (
-                "protected_resource",
-                "/.well-known/oauth-protected-resource",
-            ),
-            (
-                "protected_resource_mcp",
-                "/.well-known/oauth-protected-resource/mcp",
-            ),
-            (
-                "server_card_well_known",
-                "/.well-known/mcp/server-card.json",
-            ),
-            ("server_card", "/mcp/server-card"),
-            ("ai_catalog", "/.well-known/ai-catalog.json"),
-            (
-                "authorization_server",
-                "/.well-known/oauth-authorization-server",
-            ),
-        ] {
-            now.push((
-                format!("{}/{name}", inst.name),
-                pin::sha(&pin::document(&inst.router, path).await),
-            ));
-        }
+    }
+    now
+}
+
+/// S1a: the brand row is in the store and no surface reads it yet, so the documents are the ones
+/// an instance with no row sends, byte for byte. The reader of the dispatcher is told the row
+/// exists (`set_brand` checks that it answers the name), so a document that began to read it would
+/// move a digest here. The slice that makes a document show the name moves its pin in its own
+/// commit, with the reason.
+#[tokio::test]
+async fn with_a_brand_row_the_anonymous_documents_and_initialize_are_what_they_were() {
+    use crate::mfa_tests::pin;
+    let mut now = Vec::new();
+    for inst in pin::instances().await {
+        crate::brand_row_tests::set_brand(&inst.app);
+        now.extend(document_table(&inst).await);
     }
     pin::check("DOCUMENT_PINS", DOCUMENT_PINS, &now);
 }
 
 // Printed by `OBOP_PRINT_PINS=1` on origin/main 12a59a79 and pasted here.
 #[rustfmt::skip]
-const DOCUMENT_PINS: &[(&str, &str)] = &[
+pub(crate) const DOCUMENT_PINS: &[(&str, &str)] = &[
     ("dev/initialize", "8a3f084efbe055ac106ace611ea479ac11fafeb26ad0b847e07e4f62bfb7d9fd"),
     ("dev/protected_resource", "e3e57b571ff64b0181b39e754bfb08de13fd750617d8ddac25c5c27802695f7d"),
     ("dev/protected_resource_mcp", "926657cda56f9be9a4b624ab9bac92342d9a517a269790fa85048c69d327091f"),

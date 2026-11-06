@@ -941,3 +941,32 @@ async fn pins_the_relying_party_name_of_the_registration_options() {
         "the relying party carries an id and a name and nothing else"
     );
 }
+
+/// S1a: with a brand row in the store, the registration options and the TOTP enrolment of a real
+/// app still name the product "obop" (the relying party an authenticator shows next to the
+/// passkey, and the issuer of the authenticator entry): no enrolment reads the row yet. The slice
+/// that does moves these two assertions in its own commit.
+#[tokio::test]
+async fn with_a_brand_row_the_relying_party_name_and_the_authenticator_label_are_what_they_were() {
+    let acc = crate::accounts_tests::rig();
+    crate::brand_row_tests::set_brand(&acc.app);
+    let r = &acc.rig.r;
+    let t = session(r, "ada").await;
+    let (s, opts) = post(
+        r,
+        Some(&t),
+        "/api/auth/passkeys/register/options",
+        json!({"password": PW}),
+    )
+    .await;
+    assert_eq!(s, 200, "{opts}");
+    assert_eq!(opts["publicKey"]["rp"]["name"], "obop", "{opts}");
+    assert_eq!(opts["publicKey"]["rp"]["id"], "inst.test", "{opts}");
+    let (s, begun) = post(r, Some(&t), "/api/auth/mfa/begin", json!({})).await;
+    assert_eq!(s, 200, "{begun}");
+    let secret = begun["secret"].as_str().unwrap();
+    assert_eq!(
+        begun["uri"].as_str().unwrap().replace(secret, "SECRET"),
+        "otpauth://totp/obop:ada?secret=SECRET&issuer=obop&algorithm=SHA1&digits=6&period=30"
+    );
+}
