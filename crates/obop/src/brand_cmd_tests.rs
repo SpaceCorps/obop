@@ -4,7 +4,8 @@
 //! the `--from` cases and the local smoke are in `tests/brand_cli.rs`.
 
 use crate::brand_cmd::{
-    Flags, Said, clear_over, configure_over, render_status, status_over, storage_said, take_flags,
+    Flags, Said, USAGE, VALUE_OPTIONS, clear_over, configure_over, render_status, status_over,
+    storage_said, take_flags,
 };
 use obop_commands::Store;
 use obop_commands::brand::{Action, Reader, apply};
@@ -16,6 +17,86 @@ fn pairs(list: &[(&str, &str)]) -> Vec<(String, String)> {
     list.iter()
         .map(|(a, b)| (a.to_string(), b.to_string()))
         .collect()
+}
+
+/// The languages the usage text lists are the languages of the record, all seven and in their order.
+#[test]
+fn the_usage_lists_every_language_of_the_record() {
+    let line = USAGE
+        .lines()
+        .find(|l| l.contains("LANG is one of"))
+        .unwrap();
+    assert!(
+        line.ends_with(&format!(
+            "LANG is one of {})",
+            obop_commands::brand::LANGS.join(", ")
+        )),
+        "{line}"
+    );
+}
+
+/// A correctly spelled call finds its area behind any global option that takes a value, not only
+/// `--db` and `--token` (a wrong message and status 2 for `obop --label t admin brand configure ...`
+/// was the failure), and behind a flag without a value.
+#[test]
+fn the_area_is_found_behind_any_global_option() {
+    for option in VALUE_OPTIONS {
+        let args = vec![
+            option,
+            "x",
+            "admin",
+            "brand",
+            "configure",
+            "--name",
+            "N",
+            "--title",
+            "sv=Hej",
+        ];
+        let (flags, rest) = take_flags(args.clone()).unwrap();
+        let flags = flags.unwrap_or_else(|| panic!("{option}: the area was not found"));
+        assert_eq!(flags.name.as_deref(), Some("N"), "{option}");
+        assert_eq!(flags.titles, pairs(&[("sv", "Hej")]), "{option}");
+        assert_eq!(
+            rest,
+            vec![option, "x", "admin", "brand", "configure"],
+            "{option}"
+        );
+    }
+    // Several of them, a flag with no value among them, and the words after.
+    let (flags, rest) = take_flags(vec![
+        "--label",
+        "t",
+        "--dry-run",
+        "--db",
+        "sqlite://x",
+        "admin",
+        "brand",
+        "clear",
+    ])
+    .unwrap();
+    assert_eq!(flags, Some(Flags::default()));
+    assert_eq!(rest.len(), 8);
+    // Another command with the same words later on is not the area.
+    let (flags, _) = take_flags(vec!["--label", "t", "call", "admin", "brand"]).unwrap();
+    assert_eq!(flags, None);
+}
+
+/// The list the area uses is the list `main` takes: every `take_opt(&args, "--x")` of `main.rs`
+/// is a value option here and every value option here is taken there.
+#[test]
+fn the_value_options_are_the_ones_main_takes() {
+    let main = include_str!("main.rs");
+    let marker = "take_opt(&args, \"";
+    let mut taken = Vec::new();
+    let mut rest = main;
+    while let Some(i) = rest.find(marker) {
+        rest = &rest[i + marker.len()..];
+        taken.push(&rest[..rest.find('"').unwrap()]);
+    }
+    taken.sort_unstable();
+    let mut listed = VALUE_OPTIONS.to_vec();
+    listed.sort_unstable();
+    assert_eq!(taken, listed);
 }
 
 #[test]
@@ -135,7 +216,8 @@ fn the_area_is_found_past_leading_global_options_and_only_there() {
     // A command that only mentions the words, or has them after another word, is not the area.
     for args in [
         vec!["call", "admin", "brand", "--title", "x"],
-        vec!["--title", "x", "admin", "brand", "status"],
+        vec!["serve", "--title", "x", "admin", "brand", "status"],
+        vec!["x", "admin", "brand", "status"],
         vec!["admin", "--db", "x", "brand", "status"],
     ] {
         let (flags, rest) = take_flags(args.clone()).unwrap();
@@ -594,5 +676,40 @@ fn every_entry_of_the_effective_answer_has_a_line_in_status_or_is_a_language_wit
                 assert!(printed, "{key} has no line in\n{text}");
             }
         }
+    }
+}
+
+/// The command line acts as the operator: every event it writes names `operator` as the actor and
+/// `(instance)` as the user, for a change and for a removal alike. (The integration test of the
+/// binary reads the same, but a run of this file alone must hold it too.)
+#[test]
+fn the_events_of_the_command_line_are_written_by_the_operator() {
+    let backend = Store::new().backend();
+    let said = configure_over(
+        &*backend,
+        pairs(&[("name", "MOHV"), ("slug", "mohv")]),
+        false,
+    );
+    assert_eq!(said.code, 0, "{said:?}");
+    let said = clear_over(&*backend, false);
+    assert_eq!(said.code, 0, "{said:?}");
+    let mut events: Vec<(String, String, String, String)> = backend
+        .list("security_event")
+        .unwrap()
+        .into_iter()
+        .map(|(_, f)| {
+            let g = |k: &str| f[k].as_str().unwrap().to_string();
+            (g("kind"), g("actor"), g("user"), g("detail"))
+        })
+        .collect();
+    events.sort();
+    assert_eq!(events.len(), 4, "{events:?}");
+    for (kind, actor, user, detail) in &events {
+        assert!(
+            kind == "brand_configured" || kind == "brand_cleared",
+            "{kind}"
+        );
+        assert_eq!(actor, "operator", "{detail}");
+        assert_eq!(user, "(instance)", "{detail}");
     }
 }

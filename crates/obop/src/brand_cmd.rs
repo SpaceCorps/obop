@@ -49,7 +49,7 @@ use std::sync::Arc;
 /// The actor of the events a change made at a terminal writes to the security log.
 const OPERATOR: &str = "operator";
 
-const USAGE: &str = "usage:
+pub(crate) const USAGE: &str = "usage:
   obop admin brand status
   obop admin brand configure [--name N] [--slug S] [--title LANG=TEXT]... [--message LANG=TEXT]...
                              [--logo-file FILE.svg | --clear-logo] [--from FILE.toml] [--dry-run]
@@ -134,19 +134,52 @@ impl Flags {
     }
 }
 
+/// The global options that take a value: the ones `main` takes with `take_opt`, before it looks
+/// at the command. Here to find the words of the area past any of them; a test reads `main.rs` and
+/// holds this list to the `take_opt` calls in it, so a global option added there is added here.
+pub const VALUE_OPTIONS: [&str; 30] = [
+    "--db",
+    "--token",
+    "--scopes",
+    "--groups",
+    "--label",
+    "--addr",
+    "--static",
+    "--provisioner",
+    "--instance-static",
+    "--title",
+    "--impact",
+    "--status",
+    "--components",
+    "--message",
+    "--admin-prefix",
+    "--out",
+    "--note",
+    "--mode",
+    "--key",
+    "--source-system",
+    "--source-table",
+    "--source-ids",
+    "--on-existing",
+    "--model",
+    "--source-id",
+    "--from",
+    "--documents",
+    "--account-types",
+    "--tenant",
+    "--client-id",
+];
+
 /// Where the words `admin brand` stand: at the start of the command line, past any leading global
-/// options (`--db URL`, `--token T`, and flags without a value). `None` for every other command.
+/// options (`--db URL` and every other option of [`VALUE_OPTIONS`] with its value, and flags
+/// without a value). `None` for every other command.
 fn area_at(args: &[&str]) -> Option<usize> {
     let mut i = 0;
     while let Some(a) = args.get(i) {
         if !a.starts_with("--") {
             break;
         }
-        i += if matches!(*a, "--db" | "--token") {
-            2
-        } else {
-            1
-        };
+        i += if VALUE_OPTIONS.contains(a) { 2 } else { 1 };
     }
     (args.get(i) == Some(&"admin") && args.get(i + 1) == Some(&"brand")).then_some(i)
 }
