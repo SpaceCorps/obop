@@ -212,7 +212,7 @@ fn a_refused_batch_leaves_neither_the_record_nor_the_events() {
 }
 
 #[test]
-fn clear_writes_one_event_per_non_empty_stored_field_with_its_old_value() {
+fn clear_writes_one_event_per_stored_key_with_its_old_value() {
     let spy = Spy::memory();
     apply(
         &*spy,

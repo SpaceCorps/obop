@@ -153,8 +153,8 @@ fn the_fill_is_the_resolved_light_fill_and_the_glyph_its_on_fill() {
     assert!(!yellow.contains("fill=\"#ffff00\""), "{yellow}");
 }
 
-/// For the slate the value the colour search returns is pinned here: the spec expected it to be the
-/// slate itself and did not compute it.
+/// For the slate the value the colour search returns is pinned here: it leaves the slate where it
+/// is (`#495670` in, `#495670` out), and the tile of the placeholder name prints exactly this text.
 #[test]
 fn the_slate_tile_is_pinned() {
     let resolved = theme::resolve(SLATE);

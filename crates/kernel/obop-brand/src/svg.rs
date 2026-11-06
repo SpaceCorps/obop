@@ -20,9 +20,9 @@
 //! read back (see `read`): a size below 0.0001 prints as 0, and a compact list that prints longer
 //! than 8 KiB written out (`.5.5` is four bytes, `0.5 0.5` seven) is refused.
 //!
-//! Two more bounds are implementation limits that the spec does not list, and both refuse before any
-//! rule about the content is applied: elements nested more than 16 levels deep, `<svg>` included,
-//! and more than 32 attributes on one element. (The element limit alone would also bound a file,
+//! Two more bounds refuse before any rule about the content is applied (they are in the limits of
+//! section 8 of the spec): elements nested more than 16 levels deep, `<svg>` included, and more than
+//! 32 attributes on one element. (The element limit alone would also bound a file,
 //! but only after the reader has built the tree; these two keep the tree shallow and narrow.)
 //!
 //! The canonical text is one line made only of the bytes `A-Z a-z 0-9` and space `, . : / # ( ) = < >

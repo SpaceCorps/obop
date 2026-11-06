@@ -28,7 +28,7 @@
 //! is that line, for a caller that shows a change the way the log holds it):
 //!
 //! ```text
-//! name: "obop" -> "MOHV"            a text field: both values as quoted text, "" when unset
+//! name: "" -> "MOHV"                a text field: both values as quoted text, "" when unset
 //! title_sv: "" -> "Logga in"
 //! logo_svg: none -> v=0123456789abcdef   the artwork is never written: its version `v` instead,
 //!                                        `none` when there is no artwork, `unreadable` when the
