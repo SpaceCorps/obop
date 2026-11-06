@@ -11,6 +11,8 @@ mod backup_cli;
 mod backup_gate_tests;
 #[cfg(test)]
 mod blobs_tests;
+#[cfg(test)]
+mod brand_commands_tests;
 mod build_commit;
 #[cfg(test)]
 mod build_commit_tests;
