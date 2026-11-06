@@ -1002,6 +1002,17 @@ impl Dispatcher {
         names
     }
 
+    /// The id of the module that registered `model` (the last one to register a command of it),
+    /// or `None` when no module has. The installer asks it before it registers a package: a
+    /// package may not take a model of another module, whichever route registers it.
+    pub fn model_owner(&self, model: &str) -> Option<String> {
+        self.models
+            .read()
+            .unwrap()
+            .get(model)
+            .map(|m| m.module.clone())
+    }
+
     /// Whether any command of `model` is registered.
     pub fn has_model(&self, model: &str) -> bool {
         self.commands

@@ -15,12 +15,23 @@
 use super::*;
 use obop_storage::Fields;
 
-const TABLE: &str = "obop_package";
-const SQUAT: &str = "squat.user";
+pub(super) const TABLE: &str = "obop_package";
+pub(super) const SQUAT: &str = "squat.user";
 
 /// The text of a package `id` at `version` with the models given, each with a text field `name`
-/// (and, for `squat`, the group `squat.user` for reading and writing).
-fn package(id: &str, version: &str, models: &[&str]) -> String {
+/// and the group `squat.user` for reading and writing.
+pub(super) fn package(id: &str, version: &str, models: &[&str]) -> String {
+    package_in(id, version, models, SQUAT, &[])
+}
+
+/// As [`package`], with the group of the package given and its dependencies (`id` and range).
+pub(super) fn package_in(
+    id: &str,
+    version: &str,
+    models: &[&str],
+    group: &str,
+    deps: &[(&str, &str)],
+) -> String {
     let mut text = format!(
         r#"
 [module]
@@ -31,14 +42,20 @@ description = "A package"
 requires_core = "^0.2"
 "#
     );
+    if !deps.is_empty() {
+        text.push_str("\n[module.dependencies]\n");
+        for (dep, range) in deps {
+            text.push_str(&format!("{dep} = \"{range}\"\n"));
+        }
+    }
     for model in models {
         text.push_str(&format!(
             r#"
 [[model]]
 name = "{model}"
 description = "A model"
-read_group = "{SQUAT}"
-write_group = "{SQUAT}"
+read_group = "{group}"
+write_group = "{group}"
 
   [[model.field]]
   name = "name"
@@ -52,7 +69,12 @@ write_group = "{SQUAT}"
 
 /// The record of a package as the installer writes it (an older binary, another process, or a
 /// restore wrote it around the install gate). With `previous` it can be rolled back.
-fn record(manifest: &str, version: &str, previous: Option<(&str, &str)>, steps: J) -> Fields {
+pub(super) fn record(
+    manifest: &str,
+    version: &str,
+    previous: Option<(&str, &str)>,
+    steps: J,
+) -> Fields {
     let mut f: Fields = [
         ("manifest".to_string(), J::from(manifest)),
         ("version".to_string(), J::from(version)),
@@ -71,11 +93,11 @@ fn record(manifest: &str, version: &str, previous: Option<(&str, &str)>, steps: 
     f
 }
 
-fn put(store: &Store, id: &str, f: &Fields) {
+pub(super) fn put(store: &Store, id: &str, f: &Fields) {
     store.backend().insert(TABLE, id, f).unwrap();
 }
 
-fn stored_version(store: &Store, id: &str) -> String {
+pub(super) fn stored_version(store: &Store, id: &str) -> String {
     store.backend().get(TABLE, id).unwrap().unwrap()["version"]
         .as_str()
         .unwrap()
@@ -84,30 +106,35 @@ fn stored_version(store: &Store, id: &str) -> String {
 
 /// A process: the dispatcher with the admin module and an installer over it, as `App::new` makes
 /// them.
-struct Boot {
-    d: Arc<Dispatcher>,
-    inst: Arc<Installer>,
+pub(super) struct Boot {
+    pub(super) d: Arc<Dispatcher>,
+    pub(super) inst: Arc<Installer>,
 }
 
-fn boot(store: &Store) -> Boot {
+pub(super) fn boot(store: &Store) -> Boot {
     let d = Arc::new(Dispatcher::new());
     let inst = Installer::new(store.clone(), &d, vec![admin_module()], Arc::new(Bundled));
     register_admin(&d, &inst);
     Boot { d, inst }
 }
 
-fn squatter() -> Principal {
+pub(super) fn squatter() -> Principal {
     Principal::user("squatter", &[SQUAT])
 }
 
 impl Boot {
-    fn call(&self, p: &Principal, id: &str, pairs: &[(&str, &str)]) -> Result<Response, CallError> {
+    pub(super) fn call(
+        &self,
+        p: &Principal,
+        id: &str,
+        pairs: &[(&str, &str)],
+    ) -> Result<Response, CallError> {
         self.d
             .call(Surface::Rest, p, &mut Vault::new(), id, &text_input(pairs))
     }
 
     /// The row of the branding, and the events of the log, as they are.
-    fn state(&self, store: &Store) -> (Option<Fields>, Vec<(String, String)>) {
+    pub(super) fn state(&self, store: &Store) -> (Option<Fields>, Vec<(String, String)>) {
         let events = store
             .backend()
             .list("security_event")
@@ -121,7 +148,7 @@ impl Boot {
     /// What the holder of the package's group can do to the two models: nothing. Every generated
     /// command is unknown (the models have hand-registered commands only), and the row and the log
     /// are as they were.
-    fn assert_untouched(&self, store: &Store, what: &str) {
+    pub(super) fn assert_untouched(&self, store: &Store, what: &str) {
         let before = self.state(store);
         for (model, calls) in [
             (
@@ -164,7 +191,7 @@ impl Boot {
 }
 
 /// Configures the brand as a person, so there is a row and an event to lose.
-fn configured(store: &Store) -> Boot {
+pub(super) fn configured(store: &Store) -> Boot {
     let b = boot(store);
     b.call(&person(), "instance_brand.configure", &[("name", "MOHV")])
         .unwrap();
@@ -456,7 +483,7 @@ fn a_model_registered_before_the_installer_is_reserved_without_being_in_the_buil
 /// A stored package `probe` at 0.2.0 whose way back (the steps stored for a rollback) is `steps`,
 /// both versions declaring `probe_note`, and the version being left `probe_extra` besides. The
 /// brand is configured. What the rollback answers, and the state around it.
-fn rollback_with(
+pub(super) fn rollback_with(
     steps: J,
     earlier: &[&str],
 ) -> (Store, Boot, Result<crate::installer::PackageInfo, String>) {
@@ -477,7 +504,7 @@ fn rollback_with(
     (store, b, answer)
 }
 
-fn drop_field(model: &str, field: &str) -> J {
+pub(super) fn drop_field(model: &str, field: &str) -> J {
     json!([{"op": "drop_field", "model": model, "field": field, "to": null,
             "value": null, "description": ""}])
 }

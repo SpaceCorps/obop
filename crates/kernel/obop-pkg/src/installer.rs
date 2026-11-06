@@ -113,9 +113,14 @@ pub struct Installer {
     builtin: Vec<Module>,
     /// The model names no package may declare: the models of the built-in modules given to
     /// [`Installer::new`], every model the dispatcher already had when the installer was made (the
-    /// ones that were registered before any package), and `device`. The install plan, the upgrade
-    /// plan and `register`, which every route registers a package through (install, upgrade,
-    /// rollback, undo, the sync with another process and the load at start), all ask this one set.
+    /// ones that were registered before any package), the names the registry reserves for the
+    /// platform ([`obop_registry::RESERVED_MODELS`], `device` among them) and the tables the
+    /// program's own crates read and write by name ([`obop_registry::INTERNAL_TABLES`]: the
+    /// accounts, the sessions, the package records ... which are not models of any module, so the
+    /// dispatcher does not know them). The install plan, the upgrade plan and `register`, which
+    /// every route registers a package through (install, upgrade, rollback, undo, the sync with
+    /// another process and the load at start), all ask this one set. (A model that a module
+    /// registers later is not in it; `register` asks the dispatcher who owns a model, too.)
     reserved: BTreeSet<String>,
     market: Arc<dyn Marketplace>,
     /// Plans are applied one at a time.
@@ -197,16 +202,45 @@ fn now() -> u64 {
         .map_or(0, |t| t.as_secs())
 }
 
-/// Why a package is not registered: it declares a model named like a built-in one. `device` keeps
-/// its own text (the devices of mobile apps, the D64 amendment). Both name the model and the
-/// remedy, and say that nothing of the package is touched.
+/// A model name that came from a stored record, as the message of a refusal may show it: ASCII
+/// letters, digits and `_` only (no line break, quote or look-alike letter), at most 40 of them.
+fn shown_name(model: &str) -> String {
+    model
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '_')
+        .take(40)
+        .collect()
+}
+
+/// What a refusal to register a package says to do. The first remedy is the one that works whatever
+/// the table holds: an update cannot remove a model that has records (they would be orphaned), and
+/// the table of a built-in model always has some.
+const REGISTER_REMEDY: &str = "Uninstall the package; its records stay where they are. A new version that renames the model is accepted only while the model holds no records";
+
+/// Why a package is not registered: it declares a model named like a built-in one, or a table of the
+/// program. `device` keeps its own text (the devices of mobile apps, the D64 amendment). Both name
+/// the model and the remedy, and say that nothing of the package is touched.
 fn reserved_model_refusal(model: &str) -> String {
     if model == obop_commands::devices::MODEL {
         return "it declares a model named `device`, which this version of obop keeps for the devices of mobile apps (a built-in model of Customize), so it is not registered. Its records are untouched. Rename the model in a new version of the package, or export its records and uninstall it"
             .to_string();
     }
     format!(
-        "it declares a model named `{model}`, which a built-in model of this version of obop already has, so it is not registered. Its records are untouched. Rename the model in a new version of the package, or uninstall it"
+        "it declares a model named `{model}`, which this version of obop keeps for its own records (a built-in model or a table of the program), so it is not registered. Its records are untouched. {REGISTER_REMEDY}"
+    )
+}
+
+/// Why a package is not registered: it declares a model that another module has registered.
+fn owned_model_refusal(model: &str, owner: &str) -> String {
+    format!(
+        "it declares a model named `{model}`, which the module `{owner}` already has, so it is not registered. Its records are untouched. {REGISTER_REMEDY}"
+    )
+}
+
+/// Why a package is not registered: its id is the id of a built-in module.
+fn builtin_id_refusal(id: &str) -> String {
+    format!(
+        "its id `{id}` is the id of a built-in module, so it is not registered. Its record is untouched; nothing of the built-in module was changed"
     )
 }
 
@@ -220,11 +254,14 @@ impl Installer {
         // Taken now, before the installer registers anything: what the dispatcher holds at this
         // moment was put there by the program, never by a package. (The models of the built-in
         // modules that are bound later, such as the accounts and the devices, are in `builtin`.)
+        // The tables of the program that no module registers are named by the registry, not
+        // learned here: the dispatcher cannot tell us about a table it never saw.
         let reserved = builtin
             .iter()
             .flat_map(|m| m.models.iter().map(|x| x.name.to_string()))
             .chain(dispatcher.model_names())
-            .chain([obop_commands::devices::MODEL.to_string()])
+            .chain(obop_registry::RESERVED_MODELS.map(String::from))
+            .chain(obop_registry::INTERNAL_TABLES.map(String::from))
             .collect();
         Arc::new(Self {
             backend: store.backend(),
@@ -467,19 +504,30 @@ impl Installer {
         Ok(m)
     }
 
+    /// Whether `id` is the id of a built-in module.
+    pub(crate) fn is_builtin_id(&self, id: &str) -> bool {
+        self.builtin.iter().any(|b| b.id == id)
+    }
+
     fn register(&self, m: &Manifest, module: &Module) -> Result<(), String> {
         // A model name that a model registered before any package already has (every built-in
         // model: the branding, the log of security events, the settings, the accounts, the devices
-        // of mobile apps, the single sign-on provider ...) is never given to a package. A package
-        // of that name would get the generated create, update and delete over the table of the
-        // built-in model, which skip the checks, the lock and the audit that its own commands make
-        // (nothing else may write the branding row or the security log). So no package module is
-        // registered with one, by any route: install, upgrade, rollback, undo, the sync with
-        // another process and the load at start all come through here. (The plan refuses the name
-        // for an install and an upgrade; this also catches a package stored before the name was
-        // taken, one that an older process stored, and the manifest a rollback goes back to.)
-        // Nothing of the package is touched, and the message says what to do. The id of the module
-        // is no exemption: a stored package can carry any id, that of a built-in module included.
+        // of mobile apps, the single sign-on provider ...), and the name of a table that the
+        // program reads and writes itself (the accounts and their sessions, the package records ...),
+        // is never given to a package. A package of that name would get the generated create,
+        // update and delete over the table of the built-in model, which skip the checks, the lock
+        // and the audit that its own commands make (nothing else may write the branding row or the
+        // security log), or over the table of the accounts. So no package module is registered
+        // with one, by any route: install, upgrade, rollback, undo, the sync with another process
+        // and the load at start all come through here. (The plan refuses the name for an install
+        // and an upgrade; this also catches a package stored before the name was taken, one that an
+        // older process stored, and the manifest a rollback goes back to.) Nothing of the package
+        // is touched, and the message says what to do. The id of the module is no exemption: a
+        // stored package can carry any id, that of a built-in module included, and that is refused
+        // too (it would be unregistered with the built-in module's commands at the next sync).
+        if self.is_builtin_id(&module.id) {
+            return Err(builtin_id_refusal(&module.id));
+        }
         if let Some(x) = module
             .models
             .iter()
@@ -488,6 +536,18 @@ impl Installer {
             return Err(reserved_model_refusal(x.name));
         }
         let d = self.d()?;
+        // The set above was taken when the installer was made. The dispatcher knows the rest: a
+        // model that another module has registered since (a built-in one bound late, or another
+        // package) is that module's, and registering this package over it would replace its
+        // definition, its groups and its data classes. A package is let register its own models
+        // again (an upgrade, the sync, an undo).
+        if let Some((x, owner)) = module.models.iter().find_map(|x| {
+            d.model_owner(x.name)
+                .filter(|owner| *owner != module.id)
+                .map(|owner| (x, owner))
+        }) {
+            return Err(owned_model_refusal(x.name, &owner));
+        }
         // Registers the generated commands and, from the transitions declared in the registry
         // metadata, the guards that govern state fields (D48).
         d.register_crud(module, &self.store);
@@ -588,14 +648,20 @@ impl Installer {
             registered: &|m| self.d().is_ok_and(|d| d.has_model(m)),
         };
         let mut plan = resolve::plan_install(&world, &root, source);
-        // The models of the built-in modules, and every model registered before any package, may
-        // not be taken, by an install or by an upgrade that adds one.
+        // The models of the built-in modules, every model registered before any package and the
+        // tables of the program may not be taken, nor may a model another module has registered
+        // (an installed package's, say), by an install or by an upgrade that adds one.
+        let dispatcher = self.d().ok();
         for s in &plan.steps {
             if s.action == StepAction::Skip {
                 continue;
             }
             for m in &s.manifest.model {
-                if self.reserved.contains(m.name.as_str()) {
+                let held_by_another = dispatcher
+                    .as_ref()
+                    .and_then(|d| d.model_owner(m.name.as_str()))
+                    .is_some_and(|owner| owner != s.id);
+                if self.reserved.contains(m.name.as_str()) || held_by_another {
                     plan.blockers.push(resolve::Blocker {
                         module: s.id.clone(),
                         kind: "conflict",
@@ -944,7 +1010,7 @@ impl Installer {
         let manifest = &step.manifest;
         let module = manifest.to_module()?;
         let id = manifest.module.id.clone();
-        if self.builtin.iter().any(|b| b.id == id) {
+        if self.is_builtin_id(&id) {
             return Err(format!("{id} is a built-in module"));
         }
         let d = self.d()?;
@@ -1267,6 +1333,12 @@ impl Installer {
     }
 
     fn try_rollback(&self, id: &str, by: &str) -> Result<PackageInfo, Failure> {
+        // A stored record can carry any id. Rolling back one with the id of a built-in module would
+        // unregister the commands of that module before the registration of the older version is
+        // refused (`register` does), and the built-in module would stay without them.
+        if self.is_builtin_id(id) {
+            return Err(Failure::Refused(format!("{id} is a built-in module")));
+        }
         let stored = self
             .backend
             .get(TABLE, id)
@@ -1309,14 +1381,9 @@ impl Installer {
             .iter()
             .find(|s| self.reserved.contains(&s.model) || !declares(&s.model))
         {
-            let shown: String = s
-                .model
-                .chars()
-                .filter(|c| c.is_ascii_alphanumeric() || *c == '_')
-                .take(40)
-                .collect();
             return Err(Failure::Refused(format!(
-                "the way back stored for {id} has a data step on the model `{shown}`, which is not a model of {id}, so nothing was changed. The record was not written by this version of obop; restore the backup taken before the update instead"
+                "the way back stored for {id} has a data step on the model `{}`, which is not a model of {id}, so nothing was changed. The record was not written by this version of obop; restore the backup taken before the update instead",
+                shown_name(&s.model)
             )));
         }
         // The version being put back was installed once: it may have a name that is reserved now.

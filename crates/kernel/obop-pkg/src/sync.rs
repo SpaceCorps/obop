@@ -92,8 +92,14 @@ impl Installer {
         let _one_at_a_time = self.apply.lock().unwrap_or_else(|e| e.into_inner());
         let stored = self.stored();
         let mut reg = self.registered.lock().unwrap_or_else(|e| e.into_inner());
+        // A record that carries the id of a built-in module is not a package: it is never
+        // registered (`register` refuses it), so it is never unregistered either, which would take
+        // the commands of the built-in module with it.
         // Removed elsewhere.
         for id in reg.keys().cloned().collect::<Vec<_>>() {
+            if self.is_builtin_id(&id) {
+                continue;
+            }
             if !stored.iter().any(|(i, _)| *i == id) {
                 d.unregister_module(&id);
                 reg.remove(&id);
@@ -101,6 +107,9 @@ impl Installer {
         }
         // Installed or upgraded elsewhere.
         for (id, f) in &stored {
+            if self.is_builtin_id(id) {
+                continue;
+            }
             let fp = fingerprint(f);
             if reg.get(id) == Some(&fp) {
                 continue;

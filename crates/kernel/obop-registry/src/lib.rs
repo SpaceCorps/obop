@@ -579,6 +579,65 @@ pub const RESERVED_MODELS: [&str; 5] = [
     "device",
 ];
 
+/// The tables the program's own crates read and write by name: the accounts and their sessions
+/// (`auth_user`, `auth_token`, `auth_mfa_token`, `auth_passkey`, the single sign-on records), the
+/// OAuth grants, the package records, the migration ledger, the backups, the sealed keys of the
+/// connectors, the log of security events and the rest.
+///
+/// A table is named by a model, and the generated commands of a model reach the table of that
+/// name. A package that declared a model of one of these names (the manifest rule lets the package
+/// `auth` declare `auth_user`) would get create, update, delete, list and search over it: the
+/// password hashes, the bearer tokens, the record of the packages themselves. The installer
+/// reserves these names beside [`RESERVED_MODELS`] and the models of the built-in modules, so no
+/// package is installed, upgraded, rolled back or loaded with one. The list does not depend on
+/// what the dispatcher had registered when the installer was made. The models of the built-in
+/// modules and of the bundled packages that the program also spells (the branding among them) are
+/// not in it: the installer refuses those because their module owns them.
+///
+/// `obop-http`'s `internal_tables_scan_tests` reads the code of every crate and fails when it finds
+/// the name of a table that is on no list, so a table added to the program is added here, or the
+/// build fails. (`obop_record` and `obop_record_change` are the SQL tables of the SQLite and
+/// PostgreSQL stores: not models, listed because the name is the program's.)
+pub const INTERNAL_TABLES: [&str; 37] = [
+    "auth_mfa_token",
+    "auth_passkey",
+    "auth_sso_link",
+    "auth_sso_provider",
+    "auth_token",
+    "auth_user",
+    "bulk_idempotency",
+    "community_session",
+    "connector_dead",
+    "connector_job",
+    "connector_key",
+    "connector_oauth_state",
+    "connector_pseudonym_key",
+    "connector_seen",
+    "connector_vault",
+    "import_map",
+    "oas_import_map",
+    "oas_import_run",
+    "oauth_client",
+    "oauth_grant",
+    "oauth_refresh",
+    "obop_backup",
+    "obop_blob",
+    "obop_fake_payment",
+    "obop_meta",
+    "obop_migration",
+    "obop_migration_plan",
+    "obop_package",
+    "obop_record",
+    "obop_record_change",
+    "obop_restore_drill",
+    "obop_setting",
+    "obop_storage_attestation",
+    "obop_update",
+    "platform_instance",
+    "security_event",
+    "sie_exchange",
+];
+
 /// The built-in model of a reserved name, by the module that owns it: the one place a reserved
 /// name is allowed (the `platform` module declares `device` itself).
 pub const OWNED_RESERVED: [(&str, &str); 1] = [("platform", "device")];
@@ -1218,6 +1277,41 @@ mod tests {
         let mut f = ok_field();
         f.name = "id";
         assert!(gate(f)[0].problem.contains("`id`"));
+    }
+
+    /// The tables of the program are a sorted list of plain names that does not repeat a reserved
+    /// model (the installer takes the union, and a name twice would hide a slip), and the names
+    /// that matter most are on it.
+    #[test]
+    fn the_internal_tables_are_a_sorted_list_of_plain_names() {
+        assert!(
+            INTERNAL_TABLES.windows(2).all(|w| w[0] < w[1]),
+            "sorted, once each"
+        );
+        for name in INTERNAL_TABLES {
+            assert!(
+                name.starts_with(|c: char| c.is_ascii_lowercase())
+                    && name
+                        .bytes()
+                        .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_'),
+                "{name}"
+            );
+            assert!(
+                !RESERVED_MODELS.contains(&name),
+                "{name} is reserved already"
+            );
+        }
+        // The accounts, the sessions, the OAuth grants, the package records and the two models
+        // that only their own commands may write.
+        for name in [
+            "auth_user",
+            "auth_token",
+            "oauth_grant",
+            "obop_package",
+            "security_event",
+        ] {
+            assert!(INTERNAL_TABLES.contains(&name), "{name}");
+        }
     }
 
     #[test]

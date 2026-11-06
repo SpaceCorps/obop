@@ -1414,6 +1414,7 @@ dependencies = [
  "obop-migrate",
  "obop-oauth",
  "obop-ops",
+ "obop-registry",
  "obop-site",
  "obop-storage",
  "obop-types",
