@@ -264,11 +264,15 @@ fn plan_configure(backend: &dyn Backend, supplied: &[(String, String)]) -> Resul
                 rule,
             })),
             Ok(stored) => {
-                let before = old
-                    .as_ref()
-                    .and_then(|r| text_of(r, field).ok())
-                    .unwrap_or("");
-                if before != stored {
+                // A stored value that is not text (a row written around the command) reads as the
+                // word `not_text` for the log, and any supplied value, an empty one included,
+                // replaces it: the empty text is how a field is cleared, and it must repair this
+                // as well.
+                let (before, was_text) = match old.as_ref().map_or(Ok(""), |r| text_of(r, field)) {
+                    Ok(text) => (text, true),
+                    Err(word) => (word, false),
+                };
+                if !was_text || before != stored {
                     let (o, n) = if field == ARTWORK {
                         (artwork_v(before), artwork_v(&stored))
                     } else {
@@ -355,6 +359,33 @@ fn plan_clear(backend: &dyn Backend) -> Result<Plan, Failure> {
     })
 }
 
+/// `v` with every character that is not an ASCII graphic character or a space as `\u{...}`, the
+/// backslash as `\\` and, with `quotes`, the double quote as `\"`.
+fn escaped(v: &str, quotes: bool) -> String {
+    let mut s = String::new();
+    for c in v.chars() {
+        match c {
+            '"' if quotes => s.push_str("\\\""),
+            '\\' => s.push_str("\\\\"),
+            c if c.is_ascii_graphic() || c == ' ' => s.push(c),
+            c => s.push_str(&format!("\\u{{{:04X}}}", c as u32)),
+        }
+    }
+    s
+}
+
+/// A stored text as it may be shown where nothing escapes it, such as the answer of `get` that
+/// `obop call` prints to a terminal: the text itself when it passes the safety subset of the policy
+/// (so the stored text of every field that passes the read check comes back exactly as stored), else
+/// ASCII only, with every other character as `\u{...}` and the backslash doubled, so that a value
+/// written around the command cannot move a cursor, reorder a line or recolour a terminal.
+pub fn printable(field: &str, v: &str) -> String {
+    if field != ARTWORK && policy::safe(kind_of(field), v).is_ok() {
+        return v.to_string();
+    }
+    escaped(v, false)
+}
+
 /// A value for the log (see the module documentation).
 fn quoted(field: &str, v: &str) -> String {
     if field == ARTWORK {
@@ -369,17 +400,7 @@ fn quoted(field: &str, v: &str) -> String {
     let mut out = if policy::safe(kind_of(field), &cut).is_ok() {
         J::String(cut).to_string()
     } else {
-        let mut s = String::from("\"");
-        for c in cut.chars() {
-            match c {
-                '"' => s.push_str("\\\""),
-                '\\' => s.push_str("\\\\"),
-                c if c.is_ascii_graphic() || c == ' ' => s.push(c),
-                c => s.push_str(&format!("\\u{{{:04X}}}", c as u32)),
-            }
-        }
-        s.push('"');
-        s
+        format!("\"{}\"", escaped(&cut, true))
     };
     if more {
         out.push_str("...");

@@ -219,9 +219,10 @@ fn lines(problems: Vec<String>) -> String {
     problems.join("\n")
 }
 
-/// `get`: the stored fields as stored (the artwork is served by the logo route, not returned),
-/// whether a brand is set, the version of the logo, the values in force with their sources and the
-/// fields that fell back. It reads the row and the theme itself, every time, through the reader's
+/// `get`: the stored fields as stored (the artwork is served by the logo route, not returned; a
+/// text that failed the read check comes back escaped, `brand::printable`, because `obop call`
+/// prints the answer to a terminal), whether a brand is set, the version of the logo, the values in
+/// force with their sources and the fields that fell back. It reads the row and the theme itself, every time, through the reader's
 /// uncached read: a store that cannot be read is the error, never `set: false`.
 fn get(reader: &Reader) -> Result<Value, String> {
     let fresh = reader.fresh()?;
@@ -229,7 +230,7 @@ fn get(reader: &Reader) -> Result<Value, String> {
     let mut m = BTreeMap::new();
     for field in brand::writable_fields() {
         if field != "logo_svg" {
-            let value = Value::text(fresh.stored_text(&field));
+            let value = Value::text(&brand::printable(&field, fresh.stored_text(&field)));
             m.insert(field, value);
         }
     }

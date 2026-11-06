@@ -13,8 +13,9 @@
 //!   under the lock `brand.write`, with the audit events in the same atomic batch.
 //! - [`Dispatcher::brand`]: the reader the dispatcher holds, created by `register_admin`.
 //!
-//! No code outside this module reads the model `instance_brand` (a scan added with the first page
-//! that uses the reader checks it). There is no global: the reader belongs to the dispatcher.
+//! No code outside this module reads the model `instance_brand`: `brand_scan_tests` in `obop-http`
+//! lists the few files that name it or the reader, with the reason of each, and fails on any other.
+//! There is no global: the reader belongs to the dispatcher.
 
 mod apply;
 mod effective;
@@ -22,8 +23,8 @@ mod reader;
 mod row;
 
 pub use apply::{
-    Action, Applied, Changed, Failure, Refused, apply, change_line, changes_json, refusals_json,
-    show_key,
+    Action, Applied, Changed, Failure, Refused, apply, change_line, changes_json, printable,
+    refusals_json, show_key,
 };
 pub use reader::{Fresh, Reader, Sink, strict};
 pub use row::{Fallback, Shown, fallbacks_json};
@@ -75,7 +76,7 @@ pub(crate) fn describe(model: &str, command: &str) -> Option<&'static str> {
     }
     match command {
         "get" => Some(
-            "Read the instance branding. Takes no input. Returns the stored fields as stored (not the artwork), set (whether a brand exists), v (the version of the logo), effective (the values in force, each with the source that won) and fallbacks (the stored fields that failed the read check and fell back to a default, each with the reason). With no brand set the answer is the defaults and set false, which is not an error; a store that cannot be read is an error",
+            "Read the instance branding. Takes no input. Returns the stored fields as stored (not the artwork; a stored text that failed the read check comes back in ASCII with each other character written as \\u{XXXX}), set (whether a brand exists), v (the version of the logo), effective (the values in force, each with the source that won) and fallbacks (the stored fields that failed the read check and fell back to a default, each with the reason). With no brand set the answer is the defaults and set false, which is not an error; a store that cannot be read is an error",
         ),
         _ => None,
     }

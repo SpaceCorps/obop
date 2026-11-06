@@ -667,3 +667,75 @@ fn the_answers_carry_the_changes_as_json() {
         serde_json::json!({"field": "title_sv", "old": "", "new": "Logga in"})
     );
 }
+
+fn details(spy: &Spy) -> Vec<String> {
+    let mut rows = spy.list("security_event").unwrap();
+    rows.sort_by(|a, b| a.0.cmp(&b.0));
+    rows.into_iter().map(|(_, f)| text(&f, "detail")).collect()
+}
+
+#[test]
+fn an_empty_text_repairs_a_stored_value_that_is_not_text() {
+    use serde_json::json;
+    let spy = Spy::memory();
+    put_row(
+        &*spy,
+        &[
+            ("name", s("Acme Co")),
+            ("slug", json!(true)),
+            ("title_en", json!(5)),
+            ("message_sv", json!(["a"])),
+            ("logo_svg", json!(12)),
+        ],
+    );
+    // The empty text is how a field is cleared, so it clears this one too: the value is gone, the
+    // change is written to the log (old value as the word the fallback list uses), and the
+    // fallback is gone.
+    let a = ok(
+        &spy,
+        &[
+            ("slug", ""),
+            ("title_en", ""),
+            ("message_sv", ""),
+            ("logo_svg", ""),
+        ],
+    );
+    let changed: Vec<&str> = a.changes.iter().map(|c| c.field.as_str()).collect();
+    assert_eq!(changed, ["slug", "title_en", "message_sv", "logo_svg"]);
+    let row = stored(&spy).unwrap();
+    assert_eq!(row.keys().collect::<Vec<_>>(), ["name"], "{row:?}");
+    assert_eq!(
+        details(&spy),
+        [
+            "slug: \"not_text\" -> \"\"",
+            "title_en: \"not_text\" -> \"\"",
+            "message_sv: \"not_text\" -> \"\"",
+            "logo_svg: unreadable -> none",
+        ]
+    );
+    // The same call again changes nothing and writes nothing.
+    let again = ok(
+        &spy,
+        &[
+            ("slug", ""),
+            ("title_en", ""),
+            ("message_sv", ""),
+            ("logo_svg", ""),
+        ],
+    );
+    assert!(again.changes.is_empty());
+    assert_eq!(events(&spy), 4);
+}
+
+#[test]
+fn a_value_replaces_a_stored_value_that_is_not_text_and_the_log_says_what_it_replaced() {
+    use serde_json::json;
+    let spy = Spy::memory();
+    put_row(
+        &*spy,
+        &[("name", s("Acme Co")), ("title_de", json!({"x": 1}))],
+    );
+    ok(&spy, &[("title_de", "Hallo")]);
+    assert_eq!(text(&stored(&spy).unwrap(), "title_de"), "Hallo");
+    assert_eq!(details(&spy), ["title_de: \"not_text\" -> \"Hallo\""]);
+}

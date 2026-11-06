@@ -308,6 +308,10 @@ fn an_agent_a_scoped_token_and_a_mobile_token_are_refused_for_configure_and_clea
             );
             let m = handler_text(e);
             assert!(m.contains("by a person"), "{who} {id}: {m}");
+            // It says why (the branding is public) and not that pages show it: the wording is the
+            // one the owner reads when an agent is turned away.
+            assert!(m.contains("the branding is public"), "{who} {id}: {m}");
+            assert!(!m.contains("pages"), "{who} {id}: {m}");
         }
     }
     assert!(r.row().is_none(), "nothing was stored");
@@ -536,6 +540,49 @@ fn get_lists_the_fields_that_failed_the_read_check() {
     }
     let e = parsed(&g, "effective");
     assert_eq!(e["name"], json!({"value": "obop", "source": "default"}));
+}
+
+#[test]
+fn get_returns_a_stored_text_that_failed_the_read_check_escaped_so_a_terminal_cannot_be_shaped() {
+    let r = rig();
+    // A row written around the command: a title with a bidirectional override and a C1 control
+    // (the start of an escape sequence for some terminals), a slug with a backslash, and a title
+    // that is fine.
+    let mut f = obop_storage::Fields::new();
+    f.insert("name".into(), json!("MOHV"));
+    f.insert("title_de".into(), json!("a\u{202E}b\u{9B}31m"));
+    f.insert("title_sv".into(), json!("Logga in"));
+    f.insert("slug".into(), json!("a\\b"));
+    r.store
+        .backend()
+        .apply_checked(&[obop_storage::Op::Put {
+            model: MODEL.into(),
+            id: "instance".into(),
+            fields: f,
+        }])
+        .unwrap();
+    let g = r.get();
+    assert_eq!(g["title_de"], json!("a\\u{202E}b\\u{009B}31m"));
+    // A slug that breaks its pattern but holds nothing a terminal acts on is as stored.
+    assert_eq!(g["slug"], json!("a\\b"));
+    let fb = parsed(&g, "fallbacks");
+    let fields: Vec<&str> = fb
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|x| x["field"].as_str().unwrap())
+        .collect();
+    assert_eq!(fields, ["slug", "title_de"]);
+    // A text that works comes back as stored.
+    assert_eq!(g["name"], json!("MOHV"));
+    assert_eq!(g["title_sv"], json!("Logga in"));
+    // What `obop call` prints holds no character that a terminal acts on.
+    let printed = serde_json::to_string_pretty(&g).unwrap();
+    assert!(
+        printed.chars().all(|c| !c.is_control() || c == '\n'),
+        "{printed}"
+    );
+    assert!(!printed.contains('\u{202E}'), "{printed}");
 }
 
 #[test]
@@ -1576,4 +1623,55 @@ fn get_returns_every_stored_text_exactly_as_it_is_stored() {
     for (k, v) in stored {
         assert_eq!(g[k], json!(v), "{k}");
     }
+}
+
+/// The module row of `platform` that Customize lists is one of the differences S1a makes on
+/// purpose for an administrator: the model joins the models of the module, with its 17 stored and 8
+/// answer fields, and the field and data-class counters of the row grow by 25. Pinned here so that
+/// a later change to the model's fields is a deliberate act.
+#[test]
+fn the_platform_module_row_lists_the_model_with_its_twenty_five_fields() {
+    let r = rig();
+    let row = r
+        .call(
+            &person(),
+            "module.get",
+            &Value::map([("id", Value::text("platform"))]),
+        )
+        .unwrap()
+        .value
+        .to_json();
+    let listed: Vec<&str> = row["models"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|m| m.as_str())
+        .collect();
+    assert!(listed.contains(&MODEL), "{row}");
+    let entry = row["contents"]["models"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["name"] == MODEL)
+        .unwrap_or_else(|| panic!("no entry for the model: {row}"));
+    assert_eq!(entry["fields"], 25, "17 stored and 8 answer fields");
+    assert_eq!(model().fields.len(), 25);
+    assert_eq!(
+        (entry["read_group"].as_str(), entry["write_group"].as_str()),
+        (Some("*"), Some("platform.admin"))
+    );
+    let actions: Vec<&str> = entry["actions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|a| a["name"].as_str())
+        .collect();
+    assert_eq!(actions, ["configure", "clear"]);
+    // The counter of the row is the sum over the models, so it grew by 25 with this one.
+    let all: usize = admin_module().models.iter().map(|m| m.fields.len()).sum();
+    assert_eq!(
+        row["contents"]["fields"].as_u64(),
+        Some(all as u64),
+        "{row}"
+    );
 }

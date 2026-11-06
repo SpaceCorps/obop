@@ -7,8 +7,9 @@
 //! from this slice: `name`, `slug`, `logo`, `tile_accent`, `title_<lang>` and `message_<lang>`
 //! (seven languages each). `authenticator_issuer` arrives with the slice that reads the record for the
 //! authenticator entry, the `site.*` entries and the favicon with the one that reads it for the public
-//! site, and `accent` with the one that reads it for the back office. Each of those adds its entries
-//! here and its cases to the tests.
+//! site (both are in S1 of the spec, section 12, and not in this part of it), and `accent` with the
+//! one that reads it for the back office (S2). Each of those adds its entries here and its cases to
+//! the tests.
 //!
 //! **The source.** `record` when the value is the stored value of a field that passed the read check,
 //! or is derived from one (the effective slug from a stored name, a title that falls back to the
