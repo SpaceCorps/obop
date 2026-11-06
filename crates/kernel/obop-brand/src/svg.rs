@@ -1253,17 +1253,20 @@ fn parse_paint(value: &str) -> Result<Paint, String> {
     ))
 }
 
-/// A width or height of the root: a plain number with an optional unit. Ignored, not stored.
+/// The units a width or height of the root may carry, lower case, directly after the number.
+const LENGTH_UNITS: [&str; 7] = ["px", "pt", "em", "cm", "mm", "in", "%"];
+
+/// A width or height of the root: a plain number (no exponent) with an optional unit. Ignored, not
+/// stored. The unit is cut off first: `em` begins with the letter that begins an exponent, so the
+/// number reader, which refuses every exponent, would otherwise refuse `1em` before it saw the unit.
 fn plain_length(value: &str) -> bool {
     let v = value.trim_matches(|c: char| c.is_ascii() && is_list_space(c as u8));
-    let b = v.as_bytes();
-    let Ok((_, end)) = scan_number(b, 0) else {
-        return false;
-    };
-    matches!(
-        &v[end..],
-        "" | "px" | "pt" | "em" | "cm" | "mm" | "in" | "%"
-    )
+    let number = LENGTH_UNITS
+        .iter()
+        .find_map(|unit| v.strip_suffix(unit))
+        .unwrap_or(v);
+    // The number is all that is left, with no space between it and the unit.
+    scan_number(number.as_bytes(), 0).is_ok_and(|(_, end)| end == number.len())
 }
 
 fn parse_transform(value: &str) -> Result<Vec<Transform>, String> {

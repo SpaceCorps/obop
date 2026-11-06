@@ -140,6 +140,48 @@ fn width_and_height_of_the_root_are_ignored_and_not_stored() {
     );
 }
 
+/// Every unit the refusal lists is accepted, `em` included (an icon library exports
+/// `width="1em" height="1em"`): `em` begins with the letter an exponent begins with, and a number
+/// reader that sees the exponent first refused every `em` value while its refusal advertised the
+/// unit. The number part keeps its grammar: no exponent, and the unit follows the number directly,
+/// in lower case.
+#[test]
+fn the_width_and_height_of_the_root_take_every_listed_unit_em_included() {
+    let canonical_root = format!("<svg xmlns=\"{NS}\" viewBox=\"0 0 1 1\"></svg>");
+    for value in [
+        "1em", "2.5em", ".5em", "5.em", "12", "2px", "2pt", "2cm", "2mm", "2in", "2%", "2.5%",
+        " 2in ", "+1em", "0em",
+    ] {
+        for name in ["width", "height"] {
+            let out = accept(&format!(
+                "<svg xmlns=\"{NS}\" {name}=\"{value}\" viewBox=\"0 0 1 1\"/>"
+            ));
+            assert_eq!(
+                out, canonical_root,
+                "{name}=\"{value}\" is ignored, not stored"
+            );
+        }
+    }
+    for value in [
+        "1e3", "1E3", "1e3em", "2e", "2 in", "2 em", "2IN", "2EM", "em", "1emem", "1pxem",
+        "1.2.3em", "auto", "28vw", "", "%",
+    ] {
+        for name in ["width", "height"] {
+            let r = refuse_naming(
+                &format!("<svg xmlns=\"{NS}\" {name}=\"{value}\" viewBox=\"0 0 1 1\"/>"),
+                name,
+            );
+            assert!(
+                r.iter().any(|r| r.message.contains(
+                    "is not a plain number with an optional unit (px, pt, em, cm, mm, in or %)"
+                )),
+                "{name}=\"{value}\": {:?}",
+                messages(&r)
+            );
+        }
+    }
+}
+
 #[test]
 fn a_root_without_the_namespace_is_accepted_and_the_output_carries_it() {
     assert_eq!(
