@@ -598,15 +598,17 @@ pub const RESERVED_MODELS: [&str; 5] = [
 /// modules (the branding among them) are not in it: the installer refuses those because their
 /// module owns them. Nor are the models of bundled packages that the program also spells (the shop's
 /// orders, the signing requests): the package owns them while it is installed, and they are
-/// the one gap that `internal_tables_scan_tests` lists in `BUNDLED_MODELS` (docs/ISSUES.md N17).
+/// a gap that `internal_tables_scan_tests` lists in `BUNDLED_MODELS` and that docs/ISSUES.md N17
+/// keeps open (the list is not proven complete).
 ///
 /// The binary's `internal_tables_scan_tests` reads the code of every crate and fails when it finds
-/// the name of a table that is on no list, so a table added to the program that way is added here,
-/// or the build fails; `recorded_tables_tests` does the same for every model the real `App` asks
-/// the storage for while it runs. Neither sees a name built at run time. (`obop_record` and
-/// `obop_record_change` are the SQL tables of the SQLite and PostgreSQL stores: not models, listed
-/// because the name is the program's.)
-pub const INTERNAL_TABLES: [&str; 52] = [
+/// the name of a table that is on no list, so a table added to the program in a way it can read is
+/// added here, or the build fails; `recorded_tables_tests` does the same for the models the real
+/// `App` asks the storage for while it runs a few flows (`Flaky::models_asked`), which reach only
+/// some of these tables. Neither sees a name built at run time, and N17 lists the other gaps.
+/// (`obop_record` and `obop_record_change` are the SQL tables of the SQLite and PostgreSQL stores:
+/// not models, listed because the name is the program's.)
+pub const INTERNAL_TABLES: [&str; 55] = [
     "auth_mfa_token",
     "auth_passkey",
     "auth_sso_link",
@@ -618,6 +620,7 @@ pub const INTERNAL_TABLES: [&str; 52] = [
     "community_category",
     "community_member",
     "community_post",
+    "community_probe",
     "community_session",
     "community_thread",
     "connector_dead",
@@ -638,6 +641,7 @@ pub const INTERNAL_TABLES: [&str; 52] = [
     "oauth_refresh",
     "obop_backup",
     "obop_blob",
+    "obop_drill_probe",
     "obop_fake_payment",
     "obop_meta",
     "obop_migration",
@@ -658,6 +662,7 @@ pub const INTERNAL_TABLES: [&str; 52] = [
     "status_day",
     "status_incident",
     "status_maint",
+    "status_probe_api",
     "status_recent",
 ];
 

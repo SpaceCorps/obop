@@ -332,12 +332,16 @@ impl Checks {
     }
 }
 
+/// The model the smoke test writes its probe record to, in the scratch copy. It is a table of the
+/// program (`obop_registry::INTERNAL_TABLES`), so no package may declare it.
+const PROBE_MODEL: &str = "obop_drill_probe";
+
 /// The fixed read and write set: a record is written, read, changed and removed, and every model
 /// can be listed.
 pub fn smoke(backend: &Arc<dyn Backend>, models: &[String]) -> Result<String, String> {
     use serde_json::json;
     let probe = |v: serde_json::Value| v.as_object().cloned().unwrap_or_default();
-    let (m, id) = ("obop_drill_probe", "p1");
+    let (m, id) = (PROBE_MODEL, "p1");
     backend.insert(m, id, &probe(json!({"n": 1})))?;
     if backend.get(m, id)?.map(|f| f["n"].clone()) != Some(json!(1)) {
         return Err("a record written to the copy did not read back".into());
