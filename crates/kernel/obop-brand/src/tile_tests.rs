@@ -154,7 +154,7 @@ fn the_fill_is_the_resolved_light_fill_and_the_glyph_its_on_fill() {
 }
 
 /// For the slate the value the colour search returns is pinned here: it leaves the slate where it
-/// is (`#495670` in, `#495670` out), and the tile of the placeholder name prints exactly this text.
+/// is (`#495670` in, `#495670` out), and the tile of the name MOHV prints exactly this text.
 #[test]
 fn the_slate_tile_is_pinned() {
     let resolved = theme::resolve(SLATE);
