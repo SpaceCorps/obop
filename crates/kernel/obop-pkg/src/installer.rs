@@ -2313,6 +2313,9 @@ pub fn admin_module() -> Module {
             },
             crate::accounts::user_account_model(),
             crate::sso::sso_provider_model(),
+            // The instance branding (docs/spec/branding.md): `get`, `configure` and `clear`, bound
+            // by `crate::brand::register`; no list, so it is not in `/api/meta`.
+            crate::brand::instance_brand_model(),
             ModelDef {
                 name: "marketplace_listing",
                 description: "A module offered by the marketplace",
@@ -2487,6 +2490,7 @@ pub fn register_admin(d: &Dispatcher, inst: &Arc<Installer>) {
     // runs in every composition and has the store; `Dispatcher::brand` hands it to whoever asks.
     d.install_brand(inst.backend.clone());
     let m = admin_module();
+    crate::brand::register(d, &inst.backend, &m);
     let i = inst.clone();
     d.register(&m, "module", "list", Box::new(move |_| Ok(i.module_rows())));
     let i = inst.clone();
@@ -3041,8 +3045,8 @@ mod tests {
         ));
         assert_eq!(
             d.visible(Surface::Rest, &user),
-            ["setting.get"],
-            "only the settings everyone may read"
+            ["instance_brand.get", "setting.get"],
+            "only what everyone may read: the branding and the settings"
         );
     }
 
