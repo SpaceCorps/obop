@@ -12,12 +12,13 @@
 //! installer, and not on the list of built-in modules it is given.
 
 use super::routes::{
-    Boot, SQUAT, TABLE, package, package_in, put, record, squatter, stored_version,
+    Boot, SQUAT, TABLE, drop_field, package, package_in, put, record, squatter, stored_version,
 };
 use super::*;
-use crate::installer::Request;
+use crate::installer::{GateReceipt, GateRequest, MigrationGate, Request};
 use crate::manifest::Manifest;
 use crate::resolve::{Plan, Step, StepAction};
+use std::sync::Mutex;
 use std::sync::atomic::Ordering;
 
 /// The group of the models of the modules that are registered by hand.
@@ -53,6 +54,20 @@ fn hand_module(id: &str, model: &'static str) -> Module {
 
 fn owner() -> Principal {
     Principal::user("owner", &[OWNER])
+}
+
+/// The security events of the log, oldest first: `(kind, user, detail)`.
+fn events(store: &Store) -> Vec<(String, String, String)> {
+    store
+        .backend()
+        .list("security_event")
+        .unwrap()
+        .into_iter()
+        .map(|(_, f)| {
+            let g = |k: &str| f[k].as_str().unwrap_or("").to_string();
+            (g("kind"), g("user"), g("detail"))
+        })
+        .collect()
 }
 
 /// A process whose dispatcher holds `before` (registered before the installer is made, and not on
@@ -139,13 +154,27 @@ fn a_package_cannot_take_the_id_of_a_module_registered_before_the_installer() {
         assert!(!b.d.has_model(own_model) || own_model == "ledger_entry");
         module_intact(&b, id, "ledger_entry", "after the load");
 
-        // The uninstall is refused, and the record stays.
+        // The record is a leftover (a package stored before the id was taken, or written around
+        // the installer), and the uninstall removes it: it is the only way to get rid of it. The
+        // module is not the record's, so nothing of it is unregistered.
+        b.inst.uninstall(id).unwrap();
+        assert!(store.backend().get(TABLE, id).unwrap().is_none());
+        module_intact(&b, id, "ledger_entry", "after the uninstall");
+        let line = events(&store)
+            .into_iter()
+            .find(|(kind, subject, _)| kind == "module_uninstall" && subject == id);
+        assert!(line.is_some(), "{own_model}: the removal is in the log");
+        // With no record there is only the module, and that is not for an uninstall.
         let e = b.inst.uninstall(id).unwrap_err();
         assert_eq!(e, format!("{id} is a built-in module"), "{own_model}");
-        assert!(store.backend().get(TABLE, id).unwrap().is_some());
-        module_intact(&b, id, "ledger_entry", "after the uninstall");
+        module_intact(&b, id, "ledger_entry", "after the second uninstall");
 
         // The record is removed by another process: the sync does not unregister the module.
+        put(
+            &store,
+            id,
+            &record(&package(id, "0.1.0", &[own_model]), "0.1.0", None, J::Null),
+        );
         store.backend().delete(TABLE, id).unwrap();
         sync(&b, &store);
         module_intact(&b, id, "ledger_entry", "after the sync that saw it removed");
@@ -444,4 +473,299 @@ fn a_forged_plan_with_the_id_of_a_module_of_the_program_is_refused_by_the_step()
     }
     module_intact(&b, "ledger", "ledger_entry", "after the forged plans");
     b.call(&super::person(), "module.list", &[]).unwrap();
+}
+
+// ---- a record is listed and counted only as the package it is kept as -----------------------
+
+/// A record kept under another key than its manifest's id is not registered (above), so it is not
+/// an installed package either: the list shows the package once, the resolver does not count the
+/// record, and the dependencies it declares do not hold back the uninstall of what it names.
+#[test]
+fn a_record_kept_under_another_key_is_not_listed_or_counted_as_an_installed_package() {
+    let store = Store::new();
+    let b = process(&store, &[], &[]);
+    b.inst
+        .install(&package("fleet", "0.1.0", &["fleet_a"]), "upload", "root")
+        .unwrap();
+    // The same id under another key, and a record under yet another that needs `fleet`.
+    put(
+        &store,
+        "zz",
+        &record(
+            &package("fleet", "0.1.0", &["fleet_a"]),
+            "0.1.0",
+            None,
+            J::Null,
+        ),
+    );
+    let needs = package_in("other", "0.1.0", &["other_a"], SQUAT, &[("fleet", "^0.1")]);
+    put(&store, "yy", &record(&needs, "0.1.0", None, J::Null));
+
+    let listed: Vec<String> = b.inst.list().into_iter().map(|p| p.id).collect();
+    assert_eq!(
+        listed.iter().filter(|id| *id == "fleet").count(),
+        1,
+        "{listed:?}"
+    );
+    assert!(!listed.iter().any(|id| id == "other"), "{listed:?}");
+    let keys: Vec<String> = b.inst.installed_manifests().into_keys().collect();
+    assert_eq!(keys, ["fleet"], "only the package under its own key");
+    assert!(
+        b.inst.uninstall_blocker("fleet").is_none(),
+        "{:?}: a record that is not registered needs nothing",
+        b.inst.uninstall_blocker("fleet").map(|x| x.message)
+    );
+    // The records can still be removed by their keys.
+    b.inst.uninstall("zz").unwrap();
+    b.inst.uninstall("yy").unwrap();
+    assert!(store.backend().get(TABLE, "fleet").unwrap().is_some());
+    assert!(b.d.has_model("fleet_a"), "the package is untouched");
+}
+
+// ---- the refusal of the dispatcher at the last step of a registration -----------------------
+
+/// A package that every check of the manifest accepts and that the dispatcher alone refuses when it
+/// registers the public declarations: the model `{id}_line` names `head_id` as its receipt parent,
+/// and the model it refers to has no receipt token.
+fn refused_by_the_dispatcher(id: &str, version: &str) -> String {
+    format!(
+        r#"
+[module]
+id = "{id}"
+version = "{version}"
+name = "Squatter"
+description = "A package"
+requires_core = "^0.2"
+
+[[model]]
+name = "{id}_head"
+description = "A model"
+read_group = "{SQUAT}"
+write_group = "{SQUAT}"
+
+  [[model.field]]
+  name = "name"
+  description = "A name"
+  class = "none"
+
+[[model]]
+name = "{id}_line"
+description = "A model"
+read_group = "{SQUAT}"
+write_group = "{SQUAT}"
+
+  [model.public]
+  receipt_parent = "head_id"
+  receipt_fields = ["name"]
+
+  [[model.field]]
+  name = "head_id"
+  description = "The head"
+  class = "none"
+  kind = "ref"
+  to = "{id}_head"
+
+  [[model.field]]
+  name = "name"
+  description = "A name"
+  class = "none"
+"#
+    )
+}
+
+const PUBLIC_REFUSAL: &str = "receipt_parent must refer to a model with a receipt_token_field";
+
+fn nothing_of_it_is_registered(b: &Boot, id: &str, what: &str) {
+    assert!(!b.d.has_model(&format!("{id}_head")), "{what}: head");
+    assert!(!b.d.has_model(&format!("{id}_line")), "{what}: line");
+    assert!(!b.d.module_ids().iter().any(|m| m == id), "{what}: module");
+}
+
+/// The registration fails at its last step, after the commands are registered: the commands are
+/// taken out again, whichever route registered the package, so a package that is refused leaves
+/// no model, no command and no module behind (and no record).
+#[test]
+fn a_package_the_dispatcher_refuses_at_the_last_step_leaves_nothing_registered() {
+    let text = refused_by_the_dispatcher("fleet", "0.1.0");
+    assert!(Manifest::parse(&text).is_ok(), "the manifest passes");
+
+    // A new install.
+    let store = Store::new();
+    let b = process(&store, &[], &[]);
+    let e = b.inst.install(&text, "upload", "root").unwrap_err();
+    assert!(e.contains(PUBLIC_REFUSAL), "{e}");
+    nothing_of_it_is_registered(&b, "fleet", "after the install");
+    assert!(store.backend().get(TABLE, "fleet").unwrap().is_none());
+    // And the id is still free for a package that is fine.
+    b.inst
+        .install(&package("fleet", "0.1.0", &["fleet_a"]), "upload", "root")
+        .unwrap();
+    assert!(b.d.has_model("fleet_a"));
+}
+
+/// The same package kept as a record (an older binary stored it, or it was restored) is not
+/// registered by the load at start, and leaves nothing registered either.
+#[test]
+fn a_stored_package_the_dispatcher_refuses_at_the_last_step_leaves_nothing_registered() {
+    let text = refused_by_the_dispatcher("fleet", "0.1.0");
+    let store = Store::new();
+    let b = process(&store, &[], &[]);
+    put(&store, "fleet", &record(&text, "0.1.0", None, J::Null));
+    let failed = b.inst.load_installed();
+    assert_eq!(failed.len(), 1, "{failed:?}");
+    assert!(failed[0].1.contains(PUBLIC_REFUSAL), "{}", failed[0].1);
+    nothing_of_it_is_registered(&b, "fleet", "after the load");
+}
+
+/// An upgrade whose new version the dispatcher refuses at the last step: the commands of the new
+/// version are taken out and those of the version in force are back, with its definition.
+#[test]
+fn an_upgrade_the_dispatcher_refuses_at_the_last_step_puts_the_old_version_back() {
+    let store = Store::new();
+    let b = process(&store, &[], &[]);
+    b.inst
+        .install(&package("fleet", "0.1.0", &["fleet_a"]), "upload", "root")
+        .unwrap();
+    let e = b
+        .inst
+        .install(
+            &refused_by_the_dispatcher("fleet", "0.2.0"),
+            "upload",
+            "root",
+        )
+        .unwrap_err();
+    assert!(e.contains(PUBLIC_REFUSAL), "{e}");
+    assert!(!b.d.has_model("fleet_head") && !b.d.has_model("fleet_line"));
+    assert_eq!(stored_version(&store, "fleet"), "0.1.0");
+    assert_eq!(b.d.model_owner("fleet_a").as_deref(), Some("fleet"));
+    assert!(b.call(&squatter(), "fleet_a.list", &[]).is_ok());
+    // Still the installer's own: it can remove the package.
+    b.inst.uninstall("fleet").unwrap();
+    assert!(!b.d.has_model("fleet_a"));
+}
+
+// ---- the registrations that an update, a way back and a sync replace ------------------------
+
+/// The upgrade takes the commands of the old version out before it registers the new one: a model
+/// the new version no longer declares (it holds no records, so the update may drop it) is gone.
+#[test]
+fn an_upgrade_that_drops_a_model_unregisters_it() {
+    let store = Store::new();
+    let b = process(&store, &[], &[]);
+    b.inst
+        .install(
+            &package("fleet", "0.1.0", &["fleet_a", "fleet_b"]),
+            "upload",
+            "root",
+        )
+        .unwrap();
+    b.inst
+        .install(&package("fleet", "0.2.0", &["fleet_a"]), "upload", "root")
+        .unwrap();
+    assert_eq!(stored_version(&store, "fleet"), "0.2.0");
+    assert!(b.d.has_model("fleet_a"));
+    assert!(!b.d.has_model("fleet_b"), "the dropped model is gone");
+}
+
+/// The way back takes the commands of the newer version out: the model it added is gone.
+#[test]
+fn a_rollback_unregisters_the_model_the_newer_version_added() {
+    let store = Store::new();
+    let b = process(&store, &[], &[]);
+    b.inst
+        .install(&package("fleet", "0.1.0", &["fleet_a"]), "upload", "root")
+        .unwrap();
+    b.inst
+        .install(
+            &package("fleet", "0.2.0", &["fleet_a", "fleet_b"]),
+            "upload",
+            "root",
+        )
+        .unwrap();
+    assert!(b.d.has_model("fleet_b"));
+    b.inst.rollback("fleet", "root").unwrap();
+    assert_eq!(stored_version(&store, "fleet"), "0.1.0");
+    assert!(b.d.has_model("fleet_a"));
+    assert!(!b.d.has_model("fleet_b"), "the model of the newer version");
+}
+
+/// The sync of an upgrade made by another process: the old registration is taken out before the new
+/// one is made, so a model the new version dropped is gone from this process too.
+#[test]
+fn a_sync_of_an_upgrade_made_elsewhere_unregisters_the_model_it_dropped() {
+    let store = Store::new();
+    let b = process(&store, &[], &[]);
+    b.inst
+        .install(
+            &package("fleet", "0.1.0", &["fleet_a", "fleet_b"]),
+            "upload",
+            "root",
+        )
+        .unwrap();
+    let mut newer = record(
+        &package("fleet", "0.2.0", &["fleet_a"]),
+        "0.2.0",
+        None,
+        J::Null,
+    );
+    newer.insert("installed_at".into(), J::from(1_800_000_000_u64));
+    store.backend().update(TABLE, "fleet", &newer).unwrap();
+    sync(&b, &store);
+    assert!(b.d.has_model("fleet_a"));
+    assert!(!b.d.has_model("fleet_b"), "the model the upgrade dropped");
+}
+
+// ---- a way back that is refused by the id costs no backup -----------------------------------
+
+/// A gate that counts the times it is asked.
+#[derive(Default)]
+struct CountingGate {
+    asked: Mutex<usize>,
+}
+
+impl MigrationGate for CountingGate {
+    fn before(&self, _: &GateRequest) -> Result<GateReceipt, String> {
+        *self.asked.lock().unwrap() += 1;
+        Ok(GateReceipt::default())
+    }
+}
+
+/// The refusal of a way back by the id comes before the backup gate, which would otherwise take a
+/// verified backup for a rollback that is then refused. The control is the same record under an id
+/// that is free: the gate is asked, so the setup does reach it.
+#[test]
+fn a_rollback_refused_by_the_id_does_not_ask_the_backup_gate() {
+    for (id, refused) in [("late", true), ("fleet", false)] {
+        let store = Store::new();
+        let b = process(&store, &[], &[("late", "late_thing")]);
+        let gate = Arc::new(CountingGate::default());
+        b.inst.set_gate(gate.clone());
+        // A model of the package that holds a record, so that the step of the way back rewrites
+        // something and the gate would be asked.
+        let model = format!("{id}_note");
+        let mut f = obop_storage::Fields::new();
+        f.insert("name".into(), J::from("a"));
+        store.backend().insert(&model, "1", &f).unwrap();
+        put(
+            &store,
+            id,
+            &record(
+                &package(id, "0.2.0", &[model.as_str()]),
+                "0.2.0",
+                Some((&package(id, "0.1.0", &[model.as_str()]), "0.1.0")),
+                drop_field(&model, "name"),
+            ),
+        );
+        if refused {
+            let e = b.inst.rollback(id, "root").unwrap_err();
+            assert!(e.contains("registered and is not a package"), "{e}");
+            assert_eq!(*gate.asked.lock().unwrap(), 0, "{id}");
+        } else {
+            // The record becomes a package of this process by the load, then it is rolled back.
+            let loaded = b.inst.load_installed();
+            assert!(loaded.is_empty(), "{loaded:?}");
+            b.inst.rollback(id, "root").unwrap();
+            assert_eq!(*gate.asked.lock().unwrap(), 1, "{id}");
+        }
+    }
 }

@@ -123,17 +123,21 @@ pub struct Installer {
     /// registers later is not in it; `register` asks the dispatcher who owns a model, too.)
     reserved: BTreeSet<String>,
     /// The module ids no package may take: the ids of the built-in modules given to
-    /// [`Installer::new`] and of every module the dispatcher already had when the installer was
-    /// made (the binary registers some, such as the one for the SIE exchange, that it does not hand
-    /// to the installer as built-in). A package with one of these ids would be registered under the
-    /// module's id, and removed together with the module's commands by the next uninstall, upgrade or
-    /// sync. (A module that something else registers later is caught by `id_taken`, which asks the
-    /// dispatcher too.)
+    /// [`Installer::new`] and of every module the dispatcher already had **with a command** when the
+    /// installer was made (the binary registers some, such as the one for the SIE exchange, that it
+    /// does not hand to the installer as built-in; a module that has only an observer or a guard is
+    /// not in the dispatcher's list of modules, so it is not here: docs/ISSUES.md N17). A package
+    /// with one of these ids would be registered under the module's id, and removed together with
+    /// the module's commands by the next uninstall, upgrade or sync. (A module that something else
+    /// registers later is caught by `id_conflict`, which asks the dispatcher too.)
     reserved_ids: BTreeSet<String>,
     /// The ids of the modules this installer has registered, and only those. The installer removes
     /// only what it registered, and lets a package register again the models of a module of its own
     /// id only if the installer made that module: a module of the same id that anything else
-    /// registered is not the package's.
+    /// registered is not the package's. The set is not reconciled with the dispatcher: a module of
+    /// the installer's that something else unregisters, and whose id a program module then takes, is
+    /// still believed to be ours (nothing but the installer unregisters a module in the binary
+    /// today, so that cannot happen there).
     ours: Mutex<BTreeSet<String>>,
     market: Arc<dyn Marketplace>,
     /// Plans are applied one at a time.
@@ -502,14 +506,22 @@ impl Installer {
         self.backend.list(TABLE).unwrap_or_default()
     }
 
+    /// The manifest of a stored record that is the package it is kept as: it parses, and its id is
+    /// the record's key. A record whose two differ is not registered (`stored_manifest` refuses
+    /// it), so it is not an installed package: not listed, not counted by the resolver, and its
+    /// dependencies hold nothing back. (It can still be uninstalled by its key.)
+    fn installed_manifest(key: &str, stored: &Fields) -> Option<Manifest> {
+        stored
+            .get("manifest")
+            .and_then(J::as_str)
+            .and_then(|t| Manifest::parse_installed(t).ok())
+            .filter(|m| m.module.id == key)
+    }
+
     pub fn list(&self) -> Vec<PackageInfo> {
         let mut v: Vec<_> = self.builtin.iter().map(Self::builtin_info).collect();
-        for (_, f) in self.stored() {
-            if let Some(m) = f
-                .get("manifest")
-                .and_then(J::as_str)
-                .and_then(|t| Manifest::parse_installed(t).ok())
-            {
+        for (key, f) in self.stored() {
+            if let Some(m) = Self::installed_manifest(&key, &f) {
                 v.push(Self::info_stored(&m, &f));
             }
         }
@@ -520,12 +532,7 @@ impl Installer {
     pub fn installed_manifests(&self) -> BTreeMap<String, Manifest> {
         self.stored()
             .into_iter()
-            .filter_map(|(id, f)| {
-                f.get("manifest")
-                    .and_then(J::as_str)
-                    .and_then(|t| Manifest::parse_installed(t).ok())
-                    .map(|m| (id, m))
-            })
+            .filter_map(|(id, f)| Self::installed_manifest(&id, &f).map(|m| (id, m)))
             .collect()
     }
 
@@ -1614,12 +1621,7 @@ impl Installer {
             .backend
             .list(TABLE)?
             .into_iter()
-            .filter_map(|(id, f)| {
-                f.get("manifest")
-                    .and_then(J::as_str)
-                    .and_then(|t| Manifest::parse_installed(t).ok())
-                    .map(|m| (id, m))
-            })
+            .filter_map(|(id, f)| Self::installed_manifest(&id, &f).map(|m| (id, m)))
             .collect();
         Ok(resolve::uninstall_blocker(&installed, id))
     }
@@ -1632,6 +1634,24 @@ impl Installer {
 
     pub fn uninstall_as(&self, id: &str, by: &str) -> Result<(), String> {
         let _x = self.exclusive()?;
+        if self.reserves_id(id) {
+            // The id is a module of the program's. A record kept under it is not that module (the
+            // load refuses it and `register` never made it ours), only a leftover of a package
+            // stored before the id was taken or written around the installer: it can be removed,
+            // and nothing is unregistered (the module is not the record's). With no record there
+            // is only the module, and that is not for an uninstall.
+            if !self.backend.delete(TABLE, id)? {
+                return Err(format!("{id} is a built-in module"));
+            }
+            self.note_local_change(&[id.to_string()]);
+            self.audit(
+                by,
+                "module_uninstall",
+                id,
+                &format!("the record {id} removed; the built-in module {id} was not changed"),
+            );
+            return Ok(());
+        }
         if let Some(b) = self.try_uninstall_blocker(id)? {
             return Err(b.message);
         }
