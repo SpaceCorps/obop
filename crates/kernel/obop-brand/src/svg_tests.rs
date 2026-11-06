@@ -1237,11 +1237,16 @@ fn document_text(rng: &mut Rng) -> String {
     } else {
         ""
     };
-    let size = if rng.below(2) == 0 {
-        " width=\"24\" height=\"24\""
-    } else {
-        ""
-    };
+    // The root size is ignored but must be a number with an optional unit: none, a plain number,
+    // and each kind of unit that is a size on the page (`em` is the one that begins like an exponent).
+    let size: &str = rng.pick(&[
+        "",
+        " width=\"24\" height=\"24\"",
+        " width=\"1em\" height=\"1em\"",
+        " width=\"2.5em\" height=\"2.5em\"",
+        " width=\"100%\" height=\"100%\"",
+        " width=\"24px\" height=\"24px\"",
+    ]);
     // The size of the view box is positive; its origin is any number. Now and then the size is tiny:
     // the writer rounds to 4 decimals, so 0.00004 prints as 0 and the file is refused.
     let view_box = {
@@ -1267,11 +1272,17 @@ fn document_text(rng: &mut Rng) -> String {
 fn the_printer_is_idempotent_over_generated_files() {
     let mut rng = Rng::new(0x5EED_5151);
     let mut accepted = 0;
+    // How many accepted files had each kind of root size (the size is ignored, but it is read).
+    let sizes = ["\"24\"", "\"1em\"", "\"2.5em\"", "\"100%\"", "\"24px\""];
+    let mut sized = [0_usize; 5];
     for n in 0..3_000 {
         let input = document_text(&mut rng);
         match parse(input.as_bytes()) {
             Ok(svg) => {
                 accepted += 1;
+                for (count, size) in sized.iter_mut().zip(sizes) {
+                    *count += usize::from(input.contains(&format!("width={size}")));
+                }
                 let p1 = svg.print();
                 check_output(&p1);
                 let p2 = canonical(p1.as_bytes())
@@ -1294,6 +1305,11 @@ fn the_printer_is_idempotent_over_generated_files() {
     assert!(
         accepted > 1_500,
         "the generator should be accepted most of the time: {accepted}"
+    );
+    // Every kind of root size is read, accepted and printed back without it, many times over.
+    assert!(
+        sized.iter().all(|n| *n > 100),
+        "accepted files by root size {sizes:?}: {sized:?}"
     );
 }
 
