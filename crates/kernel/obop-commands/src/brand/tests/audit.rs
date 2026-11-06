@@ -336,3 +336,156 @@ fn a_long_value_with_multibyte_characters_is_cut_between_characters_never_inside
         format!("message_en: \"a{}\"... -> removed", "\\u{00E9}".repeat(299))
     );
 }
+
+// ---- clear accounts for every key of the row ------------------------------------------------------
+
+/// A row written around the command (a restore, an older or newer binary, a direct edit) can hold
+/// a field whose value is not text and keys this binary does not know. The delete removes all of
+/// them, so the log has an event for each, and none of them writes the value: `<not text>` and
+/// `<unknown>` stand for it.
+#[test]
+fn clear_logs_a_value_that_is_not_text_and_a_key_it_does_not_know_without_the_value() {
+    let spy = Spy::memory();
+    let long_key = "k".repeat(50);
+    put_row(
+        &*spy,
+        &[
+            ("name", serde_json::json!(5)),
+            ("title_sv", s("Logga in")),
+            (
+                "message_en",
+                serde_json::json!(["a list that must not be printed"]),
+            ),
+            (
+                "logo_svg",
+                serde_json::json!({"nested": "an object that must not be printed"}),
+            ),
+            ("hide_product_docs", serde_json::json!(true)),
+            ("zz-secret", s("a value that must not be printed")),
+            ("a\nb", s("x")),
+            (long_key.as_str(), s("y")),
+        ],
+    );
+    let a = apply(&*spy, None, "operator", &Action::Clear, false).unwrap();
+    assert!(a.cleared);
+    // The known fields in the order of the fields, then the other keys in the order of their names.
+    let got = details(&spy);
+    assert_eq!(
+        got,
+        [
+            "name: <not text> -> removed".to_string(),
+            "title_sv: \"Logga in\" -> removed".to_string(),
+            "message_en: <not text> -> removed".to_string(),
+            "logo_svg: <not text> -> removed".to_string(),
+            "a?b: <unknown> -> removed".to_string(),
+            "hide_product_docs: <unknown> -> removed".to_string(),
+            format!("{}...: <unknown> -> removed", "k".repeat(40)),
+            "zz-secret: <unknown> -> removed".to_string(),
+        ]
+    );
+    for line in &got {
+        assert!(!line.contains("must not be printed"), "{line}");
+        assert!(!line.contains('\n'), "{line:?}");
+    }
+    for (kind, user, actor, _) in events(&spy) {
+        assert_eq!(
+            (kind.as_str(), user.as_str(), actor.as_str()),
+            ("brand_cleared", "(instance)", "operator")
+        );
+    }
+    // The answer says which changes carry no value, and the command line prints the same lines.
+    assert_eq!(a.changes.iter().filter(|c| c.withheld).count(), 7);
+    assert_eq!(
+        a.changes
+            .iter()
+            .map(|c| crate::brand::change_line(c, true))
+            .collect::<Vec<_>>(),
+        got
+    );
+    // The row and the events went in one batch.
+    let last = spy.batches().pop().unwrap();
+    assert!(matches!(&last[0], Op::Delete { model, id } if model == MODEL && id == ROW_ID));
+    assert_eq!(last.len(), 1 + got.len());
+    assert!(spy.get(MODEL, ROW_ID).unwrap().is_none());
+}
+
+#[test]
+fn a_row_with_keys_and_no_text_value_writes_one_event_per_key() {
+    for (row, expected) in [
+        (
+            vec![("hide_product_docs", serde_json::json!(true))],
+            vec!["hide_product_docs: <unknown> -> removed"],
+        ),
+        (
+            vec![("name", serde_json::json!(5))],
+            vec!["name: <not text> -> removed"],
+        ),
+        (
+            vec![("slug", serde_json::json!(false)), ("future-field", s("v"))],
+            vec![
+                "slug: <not text> -> removed",
+                "future-field: <unknown> -> removed",
+            ],
+        ),
+        // A key that holds the empty text or null: nothing to lose, but the key is accounted for.
+        (
+            vec![("name", s("")), ("title_en", serde_json::Value::Null)],
+            vec!["name: \"\" -> removed", "title_en: \"\" -> removed"],
+        ),
+        (vec![("logo_svg", s(""))], vec!["logo_svg: none -> removed"]),
+    ] {
+        let spy = Spy::memory();
+        put_row(&*spy, &row);
+        let a = apply(&*spy, None, "operator", &Action::Clear, false).unwrap();
+        assert!(a.cleared, "{row:?}");
+        assert_eq!(details(&spy), expected, "{row:?}");
+        assert!(spy.get(MODEL, ROW_ID).unwrap().is_none(), "{row:?}");
+    }
+}
+
+#[test]
+fn a_row_with_no_key_at_all_is_deleted_with_no_event() {
+    let spy = Spy::memory();
+    put_row(&*spy, &[]);
+    assert!(
+        spy.get(MODEL, ROW_ID).unwrap().is_some(),
+        "a row that holds no key"
+    );
+    let a = apply(&*spy, None, "operator", &Action::Clear, false).unwrap();
+    assert!(a.cleared && a.changes.is_empty());
+    assert!(spy.get(MODEL, ROW_ID).unwrap().is_none());
+    assert!(events(&spy).is_empty());
+    let last = spy.batches().pop().unwrap();
+    assert!(matches!(last.as_slice(), [Op::Delete { .. }]), "{last:?}");
+}
+
+#[test]
+fn a_dry_run_of_clear_lists_the_same_changes_and_writes_nothing() {
+    let spy = Spy::memory();
+    put_row(
+        &*spy,
+        &[
+            ("name", s("MOHV")),
+            ("title_en", serde_json::json!(3)),
+            ("hide_product_docs", serde_json::json!(true)),
+        ],
+    );
+    let before = spy.get(MODEL, ROW_ID).unwrap();
+    let sent = spy.batches().len();
+    let a = apply(&*spy, None, "operator", &Action::Clear, true).unwrap();
+    assert!(a.cleared && a.dry_run);
+    assert_eq!(
+        a.changes
+            .iter()
+            .map(|c| crate::brand::change_line(c, true))
+            .collect::<Vec<_>>(),
+        [
+            "name: \"MOHV\" -> removed",
+            "title_en: <not text> -> removed",
+            "hide_product_docs: <unknown> -> removed",
+        ]
+    );
+    assert_eq!(spy.get(MODEL, ROW_ID).unwrap(), before);
+    assert!(events(&spy).is_empty());
+    assert_eq!(spy.batches().len(), sent, "nothing was sent to the store");
+}

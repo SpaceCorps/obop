@@ -33,8 +33,15 @@
 //! logo_svg: none -> v=0123456789abcdef   the artwork is never written: its version `v` instead,
 //!                                        `none` when there is no artwork, `unreadable` when the
 //!                                        stored one fails the strict reader
-//! name: "MOHV" -> removed           clear: one event per non-empty stored field, with its old value
+//! name: "MOHV" -> removed           clear: one event per key of the row, a text field with its
+//!                                   old value
+//! name: <not text> -> removed       a field whose stored value is not text: no value
+//! hide_product_docs: <unknown> -> removed   a key this binary does not know: no value
 //! ```
+//!
+//! `clear` accounts for every key the row holds: a row of only unknown keys writes one event per
+//! key, and a row with no key at all is deleted with no event. A key is written as [`show_key`]
+//! shows it.
 //!
 //! A quoted value is the JSON text of the value when it passes the safety subset of the policy; a
 //! value written around the command that does not (a control, format or bidirectional character, a
@@ -73,19 +80,25 @@ pub struct Refused {
 /// versions of the logo (`v`), empty when there is none, and `unreadable` for a stored artwork the
 /// strict reader refuses. For any other field they are the values as stored: the answer carries a
 /// value that was written around the command whole, where the log line is cut (`LOG_CUT`).
+///
+/// `withheld` is set only for a key that `clear` removed and whose value is not written down: a
+/// value that is not text, or a key this binary does not know (a newer binary's field, a switch of
+/// a later slice). `old` is then the marker (`<not text>` or `<unknown>`), `field` is the key as
+/// [`show_key`] shows it, and the log line is `key: <marker> -> removed`, with no value.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Changed {
     pub field: String,
     pub old: String,
     pub new: String,
+    pub withheld: bool,
 }
 
 /// What a call did (or, with `dry_run`, would do).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Applied {
     pub dry_run: bool,
-    /// The fields that changed. For `clear`, the non-empty stored fields that were removed (`new`
-    /// is empty).
+    /// The fields that changed. For `clear`, every key of the removed row (`new` is empty; see
+    /// [`Changed::withheld`] for the keys whose value is not written down).
     pub changes: Vec<Changed>,
     /// With `dry_run` only: what a real call would refuse. A real call returns the refusals as a
     /// [`Failure`].
@@ -165,6 +178,10 @@ const ARTWORK: &str = "logo_svg";
 const UNREADABLE_ARTWORK: &str = "unreadable";
 /// A value of the log is cut here (see the module documentation).
 const LOG_CUT: usize = 300;
+/// What the log says in place of the value of a key that `clear` removed and does not write down
+/// (see [`Changed::withheld`]): a value that is not text, and a key this binary does not know.
+const LOG_NOT_TEXT: &str = "<not text>";
+const LOG_UNKNOWN: &str = "<unknown>";
 
 fn kind_of(field: &str) -> Kind {
     if field.starts_with("title_") {
@@ -288,6 +305,7 @@ fn plan_configure(backend: &dyn Backend, supplied: &[(String, String)]) -> Resul
                             field: field.clone(),
                             old: o,
                             new: n,
+                            withheld: false,
                         });
                     }
                 }
@@ -334,23 +352,44 @@ fn plan_clear(backend: &dyn Backend) -> Result<Plan, Failure> {
             after: None,
         });
     };
+    // One change for every key the row holds, so the log accounts for all that the delete removes:
+    // a text field with its old value (an empty or null one with the empty text); a field whose
+    // value is not text, and a key this binary does not know, as a marker with no value (what such
+    // a value is cannot be written safely into a line of the log, and a later field's value must
+    // not be logged before its slice says how). A row with no key at all is deleted with no event.
+    let known = writable_fields();
     let mut changes = Vec::new();
-    for field in writable_fields() {
-        let Ok(text) = text_of(&row, &field) else {
-            continue;
-        };
-        if text.is_empty() {
+    for field in &known {
+        if !row.contains_key(field) {
             continue;
         }
-        let old = if field == ARTWORK {
-            artwork_v(text)
-        } else {
-            text.to_string()
-        };
+        changes.push(match text_of(&row, field) {
+            Ok(text) => Changed {
+                field: field.clone(),
+                old: if field == ARTWORK {
+                    artwork_v(text)
+                } else {
+                    text.to_string()
+                },
+                new: String::new(),
+                withheld: false,
+            },
+            Err(_) => Changed {
+                field: field.clone(),
+                old: LOG_NOT_TEXT.to_string(),
+                new: String::new(),
+                withheld: true,
+            },
+        });
+    }
+    let mut others: Vec<&String> = row.keys().filter(|k| !known.contains(k)).collect();
+    others.sort();
+    for key in others {
         changes.push(Changed {
-            field,
-            old,
+            field: show_key(key),
+            old: LOG_UNKNOWN.to_string(),
             new: String::new(),
+            withheld: true,
         });
     }
     Ok(Plan {
@@ -422,6 +461,9 @@ fn detail(field: &str, old: &str, new: Option<&str>) -> String {
 /// artwork is its version, never its text, and a value that is not safe to print is escaped, so a
 /// terminal that shows the line cannot be shaped by a stored value.
 pub fn change_line(change: &Changed, cleared: bool) -> String {
+    if change.withheld {
+        return format!("{}: {} -> removed", change.field, change.old);
+    }
     if cleared {
         detail(&change.field, &change.old, None)
     } else {
