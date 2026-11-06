@@ -1638,6 +1638,21 @@ fn clear_says_it_recorded_the_removal_only_when_an_event_was_written() {
     };
 
     plant(obop_storage::Fields::new());
+    // The dry run says what the real call will do: remove the row and record nothing.
+    let dry = ok(obop(&url, &["admin", "brand", "clear", "--dry-run"], None));
+    assert!(
+        dry.contains(
+            "a real call would remove the row, which holds no key, and record nothing in the security log"
+        ),
+        "{dry}"
+    );
+    assert!(!dry.contains("would remove the brand:"), "{dry}");
+    let still = obop_storage::open(&url).unwrap();
+    assert!(
+        still.get("instance_brand", "instance").unwrap().is_some(),
+        "a dry run removed the row"
+    );
+    drop(still);
     let said = ok(obop(&url, &["admin", "brand", "clear"], None));
     assert!(said.contains("brand removed"), "{said}");
     assert!(

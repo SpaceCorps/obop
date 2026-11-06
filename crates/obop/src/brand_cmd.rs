@@ -441,6 +441,13 @@ pub fn clear_over(backend: &dyn Backend, dry_run: bool) -> Said {
     if !applied.cleared {
         return Said::out("no brand is set; nothing to remove\n".to_string());
     }
+    if dry_run && applied.changes.is_empty() {
+        // The real call deletes a row with no key and writes no event, and the dry run says so.
+        return Said::out(
+            "dry run, nothing was written; a real call would remove the row, which holds no key, and record nothing in the security log\n"
+                .to_string(),
+        );
+    }
     let mut out = String::from(if dry_run {
         "dry run, nothing was written; a real call would remove the brand:\n"
     } else {
