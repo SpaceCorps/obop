@@ -329,7 +329,7 @@ fn clear(backend: &dyn Backend, reader: &Reader, input: &Value) -> Result<Value,
 fn person_only() -> Box<Around> {
     Box::new(|p, input, inner| {
         if !p.is_person() {
-            return Err("instance_brand: the branding names the product to the people who sign in, so it is changed by a person with platform.admin, not by an agent, a scoped token or a phone app".into());
+            return Err("instance_brand: the branding is public, so it is changed by a person with platform.admin, not by an agent, a scoped token or a phone app".into());
         }
         inner(input)
     })
