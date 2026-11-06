@@ -111,6 +111,12 @@ pub struct Installer {
     store: Store,
     dispatcher: Weak<Dispatcher>,
     builtin: Vec<Module>,
+    /// The model names no package may declare: the models of the built-in modules given to
+    /// [`Installer::new`], every model the dispatcher already had when the installer was made (the
+    /// ones that were registered before any package), and `device`. The install plan, the upgrade
+    /// plan and `register`, which every route registers a package through (install, upgrade,
+    /// rollback, undo, the sync with another process and the load at start), all ask this one set.
+    reserved: BTreeSet<String>,
     market: Arc<dyn Marketplace>,
     /// Plans are applied one at a time.
     pub(crate) apply: Mutex<()>,
@@ -191,6 +197,19 @@ fn now() -> u64 {
         .map_or(0, |t| t.as_secs())
 }
 
+/// Why a package is not registered: it declares a model named like a built-in one. `device` keeps
+/// its own text (the devices of mobile apps, the D64 amendment). Both name the model and the
+/// remedy, and say that nothing of the package is touched.
+fn reserved_model_refusal(model: &str) -> String {
+    if model == obop_commands::devices::MODEL {
+        return "it declares a model named `device`, which this version of obop keeps for the devices of mobile apps (a built-in model of Customize), so it is not registered. Its records are untouched. Rename the model in a new version of the package, or export its records and uninstall it"
+            .to_string();
+    }
+    format!(
+        "it declares a model named `{model}`, which a built-in model of this version of obop already has, so it is not registered. Its records are untouched. Rename the model in a new version of the package, or uninstall it"
+    )
+}
+
 impl Installer {
     pub fn new(
         store: Store,
@@ -198,11 +217,21 @@ impl Installer {
         builtin: Vec<Module>,
         market: Arc<dyn Marketplace>,
     ) -> Arc<Self> {
+        // Taken now, before the installer registers anything: what the dispatcher holds at this
+        // moment was put there by the program, never by a package. (The models of the built-in
+        // modules that are bound later, such as the accounts and the devices, are in `builtin`.)
+        let reserved = builtin
+            .iter()
+            .flat_map(|m| m.models.iter().map(|x| x.name.to_string()))
+            .chain(dispatcher.model_names())
+            .chain([obop_commands::devices::MODEL.to_string()])
+            .collect();
         Arc::new(Self {
             backend: store.backend(),
             store,
             dispatcher: Arc::downgrade(dispatcher),
             builtin,
+            reserved,
             market,
             apply: Mutex::new(()),
             registered: Mutex::default(),
@@ -439,23 +468,24 @@ impl Installer {
     }
 
     fn register(&self, m: &Manifest, module: &Module) -> Result<(), String> {
-        // The model `device` is the built-in model of the devices of mobile apps (the D64
-        // amendment), and a package's records of that name would live in the same table. So no
-        // package module is registered with one, by any route: install, upgrade, rollback, undo,
-        // the sync with another process and the load at start all come through here. (The
-        // install gate refuses the name for a new install; this also catches a package stored
-        // before the name was taken, and one that an older process stored.) Nothing of the
-        // package is touched, and the message says what to do.
-        if module.id != "platform"
-            && module
-                .models
-                .iter()
-                .any(|x| x.name == obop_commands::devices::MODEL)
+        // A model name that a model registered before any package already has (every built-in
+        // model: the branding, the log of security events, the settings, the accounts, the devices
+        // of mobile apps, the single sign-on provider ...) is never given to a package. A package
+        // of that name would get the generated create, update and delete over the table of the
+        // built-in model, which skip the checks, the lock and the audit that its own commands make
+        // (nothing else may write the branding row or the security log). So no package module is
+        // registered with one, by any route: install, upgrade, rollback, undo, the sync with
+        // another process and the load at start all come through here. (The plan refuses the name
+        // for an install and an upgrade; this also catches a package stored before the name was
+        // taken, one that an older process stored, and the manifest a rollback goes back to.)
+        // Nothing of the package is touched, and the message says what to do. The id of the module
+        // is no exemption: a stored package can carry any id, that of a built-in module included.
+        if let Some(x) = module
+            .models
+            .iter()
+            .find(|x| self.reserved.contains(x.name))
         {
-            return Err(
-                "it declares a model named `device`, which this version of obop keeps for the devices of mobile apps (a built-in model of Customize), so it is not registered. Its records are untouched. Rename the model in a new version of the package, or export its records and uninstall it"
-                    .to_string(),
-            );
+            return Err(reserved_model_refusal(x.name));
         }
         let d = self.d()?;
         // Registers the generated commands and, from the transitions declared in the registry
@@ -558,18 +588,14 @@ impl Installer {
             registered: &|m| self.d().is_ok_and(|d| d.has_model(m)),
         };
         let mut plan = resolve::plan_install(&world, &root, source);
-        // Models of the built-in modules and of other packages may not be taken.
-        let taken: BTreeSet<&str> = self
-            .builtin
-            .iter()
-            .flat_map(|m| m.models.iter().map(|x| x.name))
-            .collect();
+        // The models of the built-in modules, and every model registered before any package, may
+        // not be taken, by an install or by an upgrade that adds one.
         for s in &plan.steps {
             if s.action == StepAction::Skip {
                 continue;
             }
             for m in &s.manifest.model {
-                if taken.contains(m.name.as_str()) {
+                if self.reserved.contains(m.name.as_str()) {
                     plan.blockers.push(resolve::Blocker {
                         module: s.id.clone(),
                         kind: "conflict",

@@ -993,6 +993,15 @@ impl Dispatcher {
             .is_some_and(|m| m.generated_writes)
     }
 
+    /// The names of the models that have a command registered right now, sorted. The installer
+    /// takes them when it starts: every model that exists before any package is registered is a
+    /// built-in one, and no package may declare its name.
+    pub fn model_names(&self) -> Vec<String> {
+        let mut names: Vec<String> = self.models.read().unwrap().keys().cloned().collect();
+        names.sort();
+        names
+    }
+
     /// Whether any command of `model` is registered.
     pub fn has_model(&self, model: &str) -> bool {
         self.commands

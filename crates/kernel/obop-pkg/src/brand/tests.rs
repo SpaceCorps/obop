@@ -15,6 +15,7 @@ const MODEL: &str = brand::MODEL;
 
 mod effects;
 mod labels;
+mod routes;
 
 struct Rig {
     d: Arc<Dispatcher>,
