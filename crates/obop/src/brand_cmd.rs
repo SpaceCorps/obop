@@ -450,7 +450,12 @@ pub fn clear_over(backend: &dyn Backend, dry_run: bool) -> Said {
         out.push_str(&format!("  {}\n", change_line(c, true)));
     }
     if !dry_run {
-        out.push_str("recorded in the security log\n");
+        // A row with no key at all is deleted with no event (`apply`), and the line says so.
+        out.push_str(if applied.changes.is_empty() {
+            "nothing was recorded in the security log: the row held no key\n"
+        } else {
+            "recorded in the security log\n"
+        });
     }
     Said::out(out)
 }

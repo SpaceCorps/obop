@@ -1619,6 +1619,47 @@ fn a_stored_value_that_is_not_safe_to_print_is_escaped_where_configure_and_clear
     safe(&logged[0]);
 }
 
+/// `clear` says "recorded in the security log" only when it wrote an event. A row written around the
+/// command with no key at all is deleted with no event (`apply`), and the line says that nothing was
+/// recorded; a row with a key still says it was.
+#[test]
+fn clear_says_it_recorded_the_removal_only_when_an_event_was_written() {
+    let dir = Dir::started("emptyrow");
+    let url = dir.url();
+    let plant = |fields: obop_storage::Fields| {
+        let backend = obop_storage::open(&url).unwrap();
+        backend
+            .apply_checked(&[obop_storage::Op::Put {
+                model: "instance_brand".into(),
+                id: "instance".into(),
+                fields,
+            }])
+            .unwrap();
+    };
+
+    plant(obop_storage::Fields::new());
+    let said = ok(obop(&url, &["admin", "brand", "clear"], None));
+    assert!(said.contains("brand removed"), "{said}");
+    assert!(
+        said.contains("nothing was recorded in the security log: the row held no key"),
+        "{said}"
+    );
+    assert!(!said.contains("\nrecorded in the security log"), "{said}");
+    assert!(
+        details(&url, "brand_cleared").is_empty(),
+        "an event was written for a row with no key"
+    );
+    assert!(status(&url).contains("brand: not set"), "the row is gone");
+
+    let mut row = obop_storage::Fields::new();
+    row.insert("name".into(), serde_json::json!("MOHV"));
+    plant(row);
+    let said = ok(obop(&url, &["admin", "brand", "clear"], None));
+    assert!(said.contains("\nrecorded in the security log"), "{said}");
+    assert!(!said.contains("nothing was recorded"), "{said}");
+    assert_eq!(details(&url, "brand_cleared").len(), 1);
+}
+
 // ---- the lines the reader writes name this command ------------------------------------------------------------------
 
 #[test]
