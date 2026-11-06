@@ -443,6 +443,80 @@ fn a_row_with_keys_and_no_text_value_writes_one_event_per_key() {
     }
 }
 
+/// A row written around the command can hold any number of keys this binary does not know. The
+/// first 50, in the order of their names, are accounted for one by one; the rest are one event with
+/// their number, so the batch (and the lock it is written under) does not grow with the row.
+#[test]
+fn clear_accounts_for_at_most_fifty_unknown_keys_one_by_one_and_the_rest_in_one_event() {
+    for (count, summary) in [
+        (49, None),
+        (50, None),
+        (51, Some("and 1 more key: <unknown> -> removed")),
+        (200, Some("and 150 more keys: <unknown> -> removed")),
+    ] {
+        let spy = Spy::memory();
+        let keys: Vec<String> = (0..count).map(|i| format!("future_{i:03}")).collect();
+        let mut pairs: Vec<(&str, serde_json::Value)> = vec![("name", s("MOHV"))];
+        pairs.extend(
+            keys.iter()
+                .map(|k| (k.as_str(), s("a value of a newer binary"))),
+        );
+        put_row(&*spy, &pairs);
+        let a = apply(&*spy, None, "operator", &Action::Clear, false).unwrap();
+        assert!(a.cleared, "{count}");
+        let got = details(&spy);
+        let itemised = count.min(50);
+        assert_eq!(
+            got.len(),
+            1 + itemised + usize::from(summary.is_some()),
+            "{count}: the name, the first {itemised} keys, and one more event when there are more"
+        );
+        assert_eq!(got[0], "name: \"MOHV\" -> removed");
+        // The keys in the order of their names; the ones after the fiftieth are only counted.
+        for (i, line) in got[1..=itemised].iter().enumerate() {
+            assert_eq!(
+                *line,
+                format!("future_{i:03}: <unknown> -> removed"),
+                "{count}"
+            );
+        }
+        if let Some(line) = summary {
+            assert_eq!(got.last().unwrap(), line, "{count}");
+        }
+        assert!(
+            got.iter().all(|l| !l.contains("a value of a newer binary")),
+            "{count}: no value is written"
+        );
+        // The answer carries the same entries, and the row is gone with its events in one batch.
+        assert_eq!(a.changes.len(), got.len(), "{count}");
+        assert!(spy.get(MODEL, ROW_ID).unwrap().is_none(), "{count}");
+        let last = spy.batches().pop().unwrap();
+        assert_eq!(
+            last.len(),
+            1 + got.len(),
+            "{count}: the delete and the events"
+        );
+    }
+}
+
+/// The limit of the log, written down next to `show_key`: keys that differ only in characters it
+/// does not show are shown alike, and the summary line of the cap cannot be a key of a row (it has
+/// spaces, which no shown key has).
+#[test]
+fn keys_that_differ_only_in_characters_that_are_not_shown_are_shown_alike() {
+    use crate::brand::show_key;
+    assert_eq!(
+        show_key(
+            "a
+b"
+        ),
+        "a?b"
+    );
+    assert_eq!(show_key("a b"), "a?b");
+    assert_eq!(show_key("a?b"), "a?b");
+    assert!(!show_key("and 3 more keys").contains(' '));
+}
+
 #[test]
 fn a_row_with_no_key_at_all_is_deleted_with_no_event() {
     let spy = Spy::memory();

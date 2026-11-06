@@ -41,7 +41,9 @@
 //!
 //! `clear` accounts for every key the row holds: a row of only unknown keys writes one event per
 //! key, and a row with no key at all is deleted with no event. A key is written as [`show_key`]
-//! shows it.
+//! shows it. At most 50 unknown keys are written one by one (in the order of their names); the
+//! rest are one event, `and N more keys: <unknown> -> removed`, so that a row written around the
+//! command cannot make the batch, and the lock it holds, as long as it likes.
 //!
 //! A quoted value is the JSON text of the value when it passes the safety subset of the policy; a
 //! value written around the command that does not (a control, format or bidirectional character, a
@@ -182,6 +184,9 @@ const LOG_CUT: usize = 300;
 /// (see [`Changed::withheld`]): a value that is not text, and a key this binary does not know.
 const LOG_NOT_TEXT: &str = "<not text>";
 const LOG_UNKNOWN: &str = "<unknown>";
+/// The most keys this binary does not know that `clear` accounts for one by one; the rest are one
+/// event with their number.
+const LOG_MAX_UNKNOWN: usize = 50;
 
 fn kind_of(field: &str) -> Kind {
     if field.starts_with("title_") {
@@ -195,7 +200,10 @@ fn kind_of(field: &str) -> Kind {
 
 /// An unknown input key as it may be repeated in a refusal: ASCII letters, digits, `_` and `-`,
 /// cut at 40 characters. The one place that decides what of a caller's key a message repeats, so a
-/// key cannot shape a line of the log or of a terminal.
+/// key cannot shape a line of the log or of a terminal. Every other character is shown as `?`, so
+/// two keys that differ only in such characters (a line break, a space or a question mark between
+/// `a` and `b`) are shown the same: the log accounts for each key of a cleared row, and does not
+/// tell those apart.
 pub fn show_key(k: &str) -> String {
     let mut out: String = k
         .chars()
@@ -384,9 +392,23 @@ fn plan_clear(backend: &dyn Backend) -> Result<Plan, Failure> {
     }
     let mut others: Vec<&String> = row.keys().filter(|k| !known.contains(k)).collect();
     others.sort();
-    for key in others {
+    // The keys this binary knows are a handful; a row written around the command can hold any
+    // number of others, and each would be an event of the batch that is written under the lock. So
+    // the first LOG_MAX_UNKNOWN (in the order of their names) are accounted for one by one and the
+    // rest by one event with their number. Its field has spaces, which `show_key` never writes, so
+    // it cannot be taken for the key of a row.
+    let rest = others.len().saturating_sub(LOG_MAX_UNKNOWN);
+    for key in others.into_iter().take(LOG_MAX_UNKNOWN) {
         changes.push(Changed {
             field: show_key(key),
+            old: LOG_UNKNOWN.to_string(),
+            new: String::new(),
+            withheld: true,
+        });
+    }
+    if rest > 0 {
+        changes.push(Changed {
+            field: format!("and {rest} more {}", if rest == 1 { "key" } else { "keys" }),
             old: LOG_UNKNOWN.to_string(),
             new: String::new(),
             withheld: true,
