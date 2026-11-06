@@ -1289,6 +1289,36 @@ impl Installer {
             .map(|a| a.iter().filter_map(migrate::Step::from_json).collect())
             .unwrap_or_default();
         let prev = Self::with_bundled_labels(prev_text, &source).map_err(Failure::Refused)?;
+        // The way back is read from the stored record and replayed on whatever model it names, so
+        // it is held to what the update wrote: the manifest rule keeps a data step to the models
+        // the package declares, so a step on a model of neither version, or on a model that was
+        // there before any package, is not one this package made. It is refused before anything
+        // is touched; a stored record cannot make a rollback rewrite the branding row (or any
+        // other model that is not the package's).
+        let current = stored
+            .get("manifest")
+            .and_then(J::as_str)
+            .and_then(|t| Manifest::parse_installed(t).ok());
+        let declares = |model: &str| {
+            prev.model
+                .iter()
+                .chain(current.iter().flat_map(|c| c.model.iter()))
+                .any(|x| x.name == model)
+        };
+        if let Some(s) = inverse
+            .iter()
+            .find(|s| self.reserved.contains(&s.model) || !declares(&s.model))
+        {
+            let shown: String = s
+                .model
+                .chars()
+                .filter(|c| c.is_ascii_alphanumeric() || *c == '_')
+                .take(40)
+                .collect();
+            return Err(Failure::Refused(format!(
+                "the way back stored for {id} has a data step on the model `{shown}`, which is not a model of {id}, so nothing was changed. The record was not written by this version of obop; restore the backup taken before the update instead"
+            )));
+        }
         // The version being put back was installed once: it may have a name that is reserved now.
         let prev_module = prev.to_module_installed().map_err(Failure::Refused)?;
         let d = self.d().map_err(Failure::Refused)?;

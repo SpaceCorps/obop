@@ -453,6 +453,107 @@ fn a_model_registered_before_the_installer_is_reserved_without_being_in_the_buil
     assert!(e.contains("model ledger already exists"), "{e}");
 }
 
+/// A stored package `probe` at 0.2.0 whose way back (the steps stored for a rollback) is `steps`,
+/// both versions declaring `probe_note`, and the version being left `probe_extra` besides. The
+/// brand is configured. What the rollback answers, and the state around it.
+fn rollback_with(
+    steps: J,
+    earlier: &[&str],
+) -> (Store, Boot, Result<crate::installer::PackageInfo, String>) {
+    let store = Store::new();
+    let b = configured(&store);
+    put(
+        &store,
+        "probe",
+        &record(
+            &package("probe", "0.2.0", &["probe_note", "probe_extra"]),
+            "0.2.0",
+            Some((&package("probe", "0.1.0", earlier), "0.1.0")),
+            steps,
+        ),
+    );
+    assert!(b.inst.load_installed().is_empty());
+    let answer = b.inst.rollback("probe", "root");
+    (store, b, answer)
+}
+
+fn drop_field(model: &str, field: &str) -> J {
+    json!([{"op": "drop_field", "model": model, "field": field, "to": null,
+            "value": null, "description": ""}])
+}
+
+/// A stored way back is replayed on the models it names. It is held to the models of the two
+/// versions of the package, and never to a model that was there before any package.
+#[test]
+fn a_stored_way_back_is_replayed_only_on_models_of_the_package() {
+    // The attack: a record whose way back clears the name of the branding row.
+    let (store, b, answer) = rollback_with(drop_field(MODEL, "name"), &["probe_note"]);
+    let e = answer.unwrap_err();
+    assert!(
+        e.contains("data step on the model `instance_brand`") && e.contains("nothing was changed"),
+        "{e}"
+    );
+    assert_eq!(b.state(&store).0.unwrap()["name"], "MOHV");
+    assert_eq!(b.state(&store).1.len(), 1, "and no event was written");
+    assert_eq!(stored_version(&store, "probe"), "0.2.0");
+
+    // The log too, and a model that does not exist at all.
+    for model in ["security_event", "nothing_like_it", "setting"] {
+        let (store, _b, answer) = rollback_with(drop_field(model, "detail"), &["probe_note"]);
+        let e = answer.unwrap_err();
+        assert!(e.contains(&format!("`{model}`")), "{e}");
+        assert_eq!(stored_version(&store, "probe"), "0.2.0");
+    }
+
+    // What is shown of a model name that came from a stored record is letters, digits and `_`.
+    let (_, _, answer) = rollback_with(drop_field("a\nb \u{202e}c\"d", "name"), &["probe_note"]);
+    let e = answer.unwrap_err();
+    assert!(e.contains("`abcd`"), "{e}");
+    assert!(
+        !e.contains('\n') && !e.contains('\u{202e}') && !e.contains('"'),
+        "{e}"
+    );
+}
+
+/// A model that was there before any package is refused even when a version of the package
+/// declares it: the earlier version is on the list of the package's models, and the step names the
+/// branding model. (The refusal of the manifest comes after, and would also stop it, but with
+/// another text and after the backup gate.)
+#[test]
+fn a_stored_way_back_on_a_built_in_model_is_refused_also_when_a_version_declares_it() {
+    let store = Store::new();
+    let b = configured(&store);
+    put(
+        &store,
+        "instance",
+        &record(
+            &package("instance", "0.2.0", &["instance_other"]),
+            "0.2.0",
+            Some((&package("instance", "0.1.0", &[MODEL]), "0.1.0")),
+            drop_field(MODEL, "name"),
+        ),
+    );
+    assert!(b.inst.load_installed().is_empty());
+    let e = b.inst.rollback("instance", "root").unwrap_err();
+    assert!(e.contains("data step on the model `instance_brand`"), "{e}");
+    assert_eq!(b.state(&store).0.unwrap()["name"], "MOHV");
+}
+
+/// The controls: a step on a model both versions declare, and one on a model only the version being
+/// left declares, are the package's own and run.
+#[test]
+fn a_stored_way_back_on_the_models_of_the_package_runs() {
+    for (earlier, step_model) in [
+        (vec!["probe_note", "probe_extra"], "probe_note"),
+        (vec!["probe_note"], "probe_extra"),
+    ] {
+        let (store, _b, answer) = rollback_with(drop_field(step_model, "name"), &earlier);
+        let back = answer.unwrap_or_else(|e| panic!("a step on {step_model}: {e}"));
+        assert_eq!(back.version, "0.1.0");
+        assert_eq!(stored_version(&store, "probe"), "0.1.0");
+    }
+}
+
 /// `device` keeps being refused where the installer is made without the admin module among its
 /// built-in ones (the tests of other crates make it so): its name is reserved by itself.
 #[test]
