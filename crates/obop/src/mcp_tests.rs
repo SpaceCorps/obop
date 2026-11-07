@@ -1494,14 +1494,20 @@ async fn pins_the_server_name_of_initialize() {
     );
 }
 
-/// `/api/brand/logo.svg` today: the address of the logo route that the branding work adds
-/// (slice S1b, which changes the `POST` rows on purpose and the `GET` row from a refusal to the
-/// artwork). No route owns it yet; the generic command route (`/api/{model}/{command}`) matches
-/// it for a `POST` only, so a `GET` is refused with `Allow: POST`, a `POST` with no token is a 401
-/// and one with a token is the answer for a command that does not exist. In the layout with the API
-/// alone (the back office and public site layouts are pinned in `public_site_tests`).
+/// `/api/brand/logo.svg` with no brand row, in the layout with the API alone (the back office and
+/// public site layouts are pinned in `public_site_tests`). Slice S1b added the route, a literal
+/// `GET` route (`HEAD` comes with it), and moved these rows on purpose; the first commit of the work
+/// held the answers of the path while no route owned it:
+///
+/// - `GET`: the generic command route (`/api/{model}/{command}`) matches the path for a `POST` only,
+///   so a `GET` was refused with `405` and `Allow: POST` (digest 75580546...); it is now the `404`
+///   JSON of an unknown path of the API (digest fd0f798e...), since there is no brand row (a `200`
+///   with the logo when there is one, `brand_http_tests`).
+/// - `POST` with no token was a `401` (31f8cb6f...) and with a token the `404` of a command that
+///   does not exist (23fee73b...); both are now the `405` of the route that owns the path, with
+///   `Allow: GET,HEAD` and no body (39252dd2...). A `POST` no longer reaches the command route.
 #[tokio::test]
-async fn pins_what_the_logo_address_answers_before_the_brand_route_exists() {
+async fn pins_what_the_logo_address_answers_with_no_brand_in_the_api_layout() {
     use crate::mfa_tests::pin;
     let r = router();
     let mut now = Vec::new();
@@ -1518,10 +1524,12 @@ async fn pins_what_the_logo_address_answers_before_the_brand_route_exists() {
     pin::check("LOGO_ADDRESS_API_PINS", LOGO_ADDRESS_API_PINS, &now);
 }
 
-// Printed by `OBOP_PRINT_PINS=1` on origin/main 12a59a79 and pasted here.
+// Printed by `OBOP_PRINT_PINS=1` on origin/main 12a59a79 and pasted here; the three rows were
+// printed again on the branch of slice S1b (the route exists, no brand row), the digests they had are
+// in the comment above.
 #[rustfmt::skip]
 const LOGO_ADDRESS_API_PINS: &[(&str, &str)] = &[
-    ("api_only/get", "75580546a192d3f6a33f4571a2f74352599d81116c0354c171b7a675b2d8cb11"),
-    ("api_only/post", "31f8cb6fb137b93d90187b38fccc2895192d1c543ddb349113a427764e31b987"),
-    ("api_only/post_with_token", "23fee73b6a79601cb87a949221e7445d2fd143719ef46f3cb185a6b15465c5c3"),
+    ("api_only/get", "fd0f798e1d7f498e3d2d38a0c65f7cfbf2875753e6387a380404fdc9f0ca69b4"),
+    ("api_only/post", "39252dd2a34eca81eb92a358f89d76949b1d25f4060f41e7ee88ab4477df73e1"),
+    ("api_only/post_with_token", "39252dd2a34eca81eb92a358f89d76949b1d25f4060f41e7ee88ab4477df73e1"),
 ];

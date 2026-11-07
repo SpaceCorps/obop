@@ -249,10 +249,11 @@ async fn rest_get_configure_and_clear_for_a_person_with_platform_admin() {
     assert_eq!(body["value"], json!({"cleared": false}));
 }
 
-/// The reader the pages will ask is the dispatcher's own, and `configure` and `clear` tell it of a
-/// change that committed: it shows at once in the process that made it, whatever surface the call
-/// came by (docs/spec/branding.md, section 13, "Cache"). The cell is filled first, because a value
-/// in it is good for two seconds and a change that did not reach it would not show.
+/// The reader that the logo route asks (the pages ask it from slices S1c to S1f, not built) is the
+/// dispatcher's own, and `configure` and `clear` tell it of a change that committed: it shows at
+/// once in the process that made it, whatever surface the call came by (docs/spec/branding.md,
+/// section 13, "Cache"). The cell is filled first, because a value in it is good for two seconds
+/// and a change that did not reach it would not show.
 #[tokio::test]
 async fn rest_configure_and_clear_show_in_the_reader_of_the_dispatcher_at_once() {
     let app = App::new();

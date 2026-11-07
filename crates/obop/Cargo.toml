@@ -54,6 +54,8 @@ obop-storage = { workspace = true, features = ["test-support"] }
 obop-auth = { workspace = true, features = ["test-support"] }
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
+# The brand route tests serve the router on a loopback socket and bound their waits.
+tokio = { version = "1.53", features = ["net", "time"] }
 postgres = "0.19"
 axum = "0.8.9"
 url = "2"

@@ -81,7 +81,7 @@ pub fn router(
     site: Arc<Site>,
     cfg: PublicConfig,
 ) -> Router {
-    let mut app = api_routes(state.clone());
+    let mut app = api_routes(state.clone(), json_404);
     if let Some(dir) = static_dir {
         let admin = super::shell::Shell::new(dir, state.default_language()).into_router();
         app = app.nest_service(&cfg.admin_prefix, admin);

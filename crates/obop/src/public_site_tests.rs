@@ -473,13 +473,21 @@ async fn the_public_router_hands_the_site_the_last_forwarded_address_only_behind
 
 // ---- Golden pins of the logo address (S1a-0 of the branding work) --------------------------------
 
-/// `/api/brand/logo.svg` today, in the two other layouts the router tests build: the back office
-/// build served next to the API (`static`) and the instance with the public site (`public`). The
-/// branding work adds this route in slice S1b, which changes the `POST` rows on purpose and the
-/// `GET` row from a refusal to the artwork. The generic command route matches the address for a
-/// `POST` only, so a `GET` is refused, a `POST` with no token is a 401 and one with the owner's
-/// token is the answer for a command that does not exist (the layout with the API alone is pinned
-/// in `mcp_tests`).
+/// `/api/brand/logo.svg` with no brand row, in the two other layouts the router tests build: the
+/// back office build served next to the API (`static`) and the instance with the public site
+/// (`public`). Slice S1b added the route and moved these rows on purpose; the first commit of the
+/// work held the answers while no route owned the path (the generic command route matched it for a
+/// `POST` only):
+///
+/// - `GET` was a `405` with `Allow: POST` and no body (75580546...); it is now the answer of the
+///   layout to an unknown path of the API, since there is no brand row: the JSON with a code and a
+///   hint beside the back office (fd0f798e...), the short JSON of the public site's router
+///   (23fee73b...).
+/// - `POST` was a `401` without a token (31f8cb6f...) and the `404` of a command that does not
+///   exist with the owner's token (23fee73b...); it is now the `405` of the route that owns the
+///   path in both layouts, with `Allow: GET,HEAD` and no body (39252dd2...).
+///
+/// The layout with the API alone is pinned in `mcp_tests`.
 #[tokio::test]
 async fn pins_what_the_logo_address_answers_in_the_back_office_and_public_site_layouts() {
     use crate::mfa_tests::pin;
@@ -500,15 +508,17 @@ async fn pins_what_the_logo_address_answers_in_the_back_office_and_public_site_l
     pin::check("LOGO_ADDRESS_LAYOUT_PINS", LOGO_ADDRESS_LAYOUT_PINS, &now);
 }
 
-// Printed by `OBOP_PRINT_PINS=1` on origin/main 12a59a79 and pasted here.
+// Printed by `OBOP_PRINT_PINS=1` on origin/main 12a59a79 and pasted here; the six rows were printed
+// again on the branch of slice S1b (the route exists, no brand row), the digests they had are in the
+// comment above.
 #[rustfmt::skip]
 const LOGO_ADDRESS_LAYOUT_PINS: &[(&str, &str)] = &[
-    ("static/get", "75580546a192d3f6a33f4571a2f74352599d81116c0354c171b7a675b2d8cb11"),
-    ("static/post", "31f8cb6fb137b93d90187b38fccc2895192d1c543ddb349113a427764e31b987"),
-    ("static/post_with_token", "23fee73b6a79601cb87a949221e7445d2fd143719ef46f3cb185a6b15465c5c3"),
-    ("public/get", "75580546a192d3f6a33f4571a2f74352599d81116c0354c171b7a675b2d8cb11"),
-    ("public/post", "31f8cb6fb137b93d90187b38fccc2895192d1c543ddb349113a427764e31b987"),
-    ("public/post_with_token", "23fee73b6a79601cb87a949221e7445d2fd143719ef46f3cb185a6b15465c5c3"),
+    ("static/get", "fd0f798e1d7f498e3d2d38a0c65f7cfbf2875753e6387a380404fdc9f0ca69b4"),
+    ("static/post", "39252dd2a34eca81eb92a358f89d76949b1d25f4060f41e7ee88ab4477df73e1"),
+    ("static/post_with_token", "39252dd2a34eca81eb92a358f89d76949b1d25f4060f41e7ee88ab4477df73e1"),
+    ("public/get", "23fee73b6a79601cb87a949221e7445d2fd143719ef46f3cb185a6b15465c5c3"),
+    ("public/post", "39252dd2a34eca81eb92a358f89d76949b1d25f4060f41e7ee88ab4477df73e1"),
+    ("public/post_with_token", "39252dd2a34eca81eb92a358f89d76949b1d25f4060f41e7ee88ab4477df73e1"),
 ];
 
 // ---- With a brand row (S1a of the branding work) --------------------------------------------------

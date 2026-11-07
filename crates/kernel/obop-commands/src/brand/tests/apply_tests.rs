@@ -68,7 +68,7 @@ fn the_first_call_with_a_name_stores_the_row_and_answers_the_version_of_the_logo
     );
     assert_eq!(a.changes[0].new, "MOHV");
     assert!(!a.dry_run && a.refusals.is_empty() && !a.cleared);
-    // The tile follows the theme accent, and v is the hash of what the route will serve.
+    // The tile follows the theme accent, and v is the hash of what the route serves.
     let tile = tile::svg("MOHV", Some("#c2410c"), None);
     assert_eq!(a.v, logo::version(tile.as_bytes()));
     let row = stored(&spy).unwrap();

@@ -17,6 +17,7 @@ use std::sync::Arc;
 mod accounts;
 mod addr;
 pub mod blobs;
+mod brand;
 pub mod community;
 pub mod connectors;
 pub mod cors;
@@ -315,8 +316,9 @@ async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> 
     out
 }
 
-/// The REST routes under `/api`, without any static or public fallback.
-pub(crate) fn api_routes(state: Arc<HttpState>) -> Router {
+/// The REST routes under `/api`, without any static or public fallback. `not_found` is what the
+/// layout answers a path of the API that is no route; the logo route sends it when no brand is set.
+pub(crate) fn api_routes(state: Arc<HttpState>, not_found: brand::NotFound) -> Router {
     Router::new()
         .route("/healthz", get(ops::healthz))
         .route("/readyz", get(ops::readyz))
@@ -360,6 +362,7 @@ pub(crate) fn api_routes(state: Arc<HttpState>) -> Router {
             "/api/drive/upload",
             post(drive::upload).layer(axum::extract::DefaultBodyLimit::disable()),
         )
+        .merge(brand::routes(not_found))
         .route("/api/{model}/{command}", post(call))
         .route("/mcp", any(mcp::endpoint))
         .route("/mcp/server-card", get(mcp::server_card_canonical))
@@ -442,6 +445,11 @@ fn body_limit() -> axum::extract::DefaultBodyLimit {
 
 /// Unknown API paths answer JSON, never the HTML shell, so agents can parse the error.
 async fn api_not_found() -> Response {
+    api_not_found_response()
+}
+
+/// The answer of `api_not_found`, for the one route that sends it when it has nothing to serve.
+fn api_not_found_response() -> Response {
     api_error(
         StatusCode::NOT_FOUND,
         "not found",
@@ -483,7 +491,7 @@ fn instance_openapi_blocking(s: Arc<HttpState>, h: HeaderMap) -> Response {
 }
 
 pub fn router(state: Arc<HttpState>, static_dir: Option<&str>) -> Router {
-    let api = api_routes(state.clone());
+    let api = api_routes(state.clone(), api_not_found_response);
     let app = match static_dir {
         Some(dir) => api.fallback_service(spa_with_json_api_404(dir, state.default_language())),
         None => api.fallback(api_not_found),
