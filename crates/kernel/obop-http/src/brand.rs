@@ -4,9 +4,10 @@
 //! **The route.** Public like `/api/openapi.json`; it takes no path or id and a query string is
 //! ignored, so it is not a file server. It answers the artwork as the reader re-serialised it, or
 //! the generated tile, and nothing else, with the fixed headers of `obop_brand::logo` and an `ETag`
-//! equal to the version `v` of what is served (a matching `If-None-Match` is a 304). It does not
-//! read the store itself: it asks the reader of the dispatcher, whose answer is the one read check
-//! every surface shares, so a stored artwork that fails the check is the tile here too.
+//! that is the version `v` of what is served, quoted (a matching `If-None-Match` is a 304 that
+//! carries the `Content-Length` of the 200). It does not read the store itself: it asks the reader
+//! of the dispatcher, whose answer is the one read check every surface shares, so a stored artwork
+//! that fails the check is the tile here too.
 //!
 //! **No brand set.** The record does not exist, and for `GET` and `HEAD` the path answers as an
 //! unknown one-segment path of the API does (`/api/nothing`): the 404 that the layout the route is
