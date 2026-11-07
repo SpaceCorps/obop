@@ -58,8 +58,10 @@ export interface OutboxStore {
   listTrips(): Promise<LocalTrip[]>;
   /**
    * Adds fixes to a trip that is recording, in order, with consecutive `seq` from 1. A fix not
-   * newer than the last stored one is dropped (the server compares the times). Answers the number
-   * stored, and 0 for a trip that is not recording (no longer active, stopped or discarded).
+   * newer than the last stored one is dropped (the server compares the times), and so is one that
+   * comes too soon after it without being far from it (`thin.ts`; iOS delivers about one fix per
+   * second, Android one per 5 seconds). Answers the number stored, and 0 for a trip that is not
+   * recording (no longer active, stopped or discarded).
    */
   appendFixes(clientTripId: string, fixes: readonly NewFix[]): Promise<number>;
   /**

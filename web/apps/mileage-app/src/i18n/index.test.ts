@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
-import { formatDateTime, formatNumber, t, tp } from "./index.ts";
+import { formatDateTime, formatNumber, t, tOn, tp } from "./index.ts";
 import { en } from "./en.ts";
 import { formatDistance, integrityLines, unsentSentence } from "../core/present.ts";
 
@@ -40,6 +40,63 @@ describe("sentences with a count", () => {
 
   test("a placeholder without a value stays visible", () => {
     expect(t("home.open.message")).toBe("Started {when}. Stop it or discard it.");
+  });
+});
+
+describe("sentences for the system the app runs on", () => {
+  const record = en as Record<string, string>;
+  const iosKeys = Object.keys(en).filter((k) => k.endsWith(".ios"));
+
+  test("iOS gets its own sentence where the catalogue has one, every other system the usual one", () => {
+    expect(tOn("ios", "guide.body")).toContain("app switcher");
+    expect(tOn("android", "guide.body")).toContain("Unrestricted in the Android settings");
+    expect(tOn("android", "guide.body")).toBe(t("guide.body"));
+    expect(tOn("web", "guide.body")).toBe(t("guide.body"));
+  });
+
+  test("the way out of the Failed screen is the system's own: Clear storage on Android, deleting the app on iOS", () => {
+    expect(tOn("android", "error.database.hint")).toContain("Clear storage");
+    const ios = tOn("ios", "error.database.hint");
+    expect(ios).not.toMatch(/Clear storage|Settings, Apps|Storage/);
+    expect(ios).toContain("delete the app");
+    expect(ios).toContain("which deletes the trips that were not sent");
+  });
+
+  test("a sentence without an iOS version is the same on iOS, and placeholders are filled", () => {
+    expect(tOn("ios", "recording.stop")).toBe(t("recording.stop"));
+    expect(tOn("ios", "home.open.message", { when: "today" })).toBe(
+      "Started today. Stop it or discard it.",
+    );
+  });
+
+  const holders = (text: string) => (text.match(/\{\w+\}/g) ?? []).sort().join(" ");
+
+  test("the check of placeholders tells a sentence with one from a sentence without", () => {
+    // The check below can only fail if this one can: an earlier pattern matched the literal text
+    // "{w}" and never failed.
+    expect(holders("Started {when}. Stop it.")).toBe("{when}");
+    expect(holders("The last position is {count} minutes old")).not.toBe(
+      holders("The last position is old"),
+    );
+    expect(holders("{b} then {a}")).toBe(holders("{a} then {b}"));
+    expect(holders("no placeholder")).toBe("");
+  });
+
+  test("every iOS sentence belongs to a sentence of the catalogue and has its placeholders", () => {
+    expect(iosKeys.length).toBeGreaterThan(0);
+    for (const key of iosKeys) {
+      const base = key.replace(/\.ios$/, "");
+      expect(Object.keys(en), key).toContain(base);
+      expect(holders(record[key]!), key).toBe(holders(record[base]!));
+    }
+  });
+
+  test("an iOS sentence does not name what only Android has", () => {
+    for (const key of iosKeys) {
+      expect(record[key], key).not.toMatch(
+        /Android|Google|quick settings|notification|force-stop/i,
+      );
+    }
   });
 });
 
@@ -93,7 +150,7 @@ describe("the checks of the server", () => {
   });
 });
 
-/** Hermes, the JavaScript engine of the app on Android, has no `Intl.PluralRules`: the app crashed at start. */
+/** Hermes, the JavaScript engine of the app, has no `Intl.PluralRules` on Android: the app crashed at start. */
 describe("a runtime with less Intl than Node", () => {
   afterEach(() => vi.unstubAllGlobals());
 

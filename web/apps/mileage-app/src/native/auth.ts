@@ -22,7 +22,7 @@ import {
   type ServerConfig,
   type Session,
 } from "../core/session.ts";
-import { CLIENT_NAME, REDIRECT_URI, SCOPE } from "./config.ts";
+import type { StartupConfig } from "../core/startup-config.ts";
 import { deviceInfo, oauthDeps } from "./platform-deps.ts";
 
 /** Why a sign-in failed, as a word; the catalogue holds the sentence for each. */
@@ -56,6 +56,11 @@ export function checkAddress(input: string): string {
   return result.address;
 }
 
+/** Whether the app may talk to an address it stored earlier: the rule of `checkAddress`, as a yes or no. */
+export function addressAllowed(address: string): boolean {
+  return checkAddressText(address, cleartextAllowed()).ok;
+}
+
 function failure(error: unknown): SignInError {
   if (error instanceof SignInError) return error;
   if (error instanceof ObopNetworkError) return new SignInError("network", error);
@@ -69,6 +74,8 @@ function failure(error: unknown): SignInError {
 
 /** What a sign-in needs from the runtime. */
 export interface SignInHost {
+  /** The identity and the groups of the app: the redirect, the name of the client, what it asks for. */
+  startup: StartupConfig;
   session: Session;
   /** Decides about the trips already on the phone, before anything is uploaded. */
   bindIdentity(owner: Owner): Promise<Binding>;
@@ -121,22 +128,24 @@ async function probeAuthorize(url: string): Promise<number | null> {
  */
 export async function signIn(host: SignInHost, input: string): Promise<void> {
   const { session } = host;
+  const { identity, groups } = host.startup;
   try {
     const baseUrl = checkAddress(input);
     const register = async (): Promise<ServerConfig> => {
       const clientId = await registerMobileClient(oauthDeps, {
         baseUrl,
-        redirectUri: REDIRECT_URI,
-        name: CLIENT_NAME,
-        scope: SCOPE,
+        redirectUri: identity.redirectUri,
+        name: identity.clientName,
+        scope: groups,
       });
-      const fresh = { baseUrl, clientId };
+      const fresh = { baseUrl, clientId, groups: [...groups] };
       await session.setConfig(fresh);
       return fresh;
     };
     let config = session.config();
     let registeredNow = false;
-    if (needsRegistration(config, baseUrl, Date.now())) {
+    const declared = { current: groups, legacy: host.startup.legacyGroups };
+    if (needsRegistration(config, baseUrl, Date.now(), declared)) {
       config = await register();
       registeredNow = true;
     }
@@ -147,10 +156,10 @@ export async function signIn(host: SignInHost, input: string): Promise<void> {
       buildAuthorizeUrl({
         baseUrl,
         clientId,
-        redirectUri: REDIRECT_URI,
+        redirectUri: identity.redirectUri,
         challenge: pkce.challenge,
         state,
-        scope: SCOPE,
+        scope: groups,
       });
     let url = authorizeUrl(config.clientId);
     // A client that is used again may have been forgotten by the instance for a reason other than
@@ -160,13 +169,13 @@ export async function signIn(host: SignInHost, input: string): Promise<void> {
       config = await register();
       url = authorizeUrl(config.clientId);
     }
-    const result = await WebBrowser.openAuthSessionAsync(url, REDIRECT_URI);
+    const result = await WebBrowser.openAuthSessionAsync(url, identity.redirectUri);
     if (result.type !== "success") throw new SignInError("cancelled");
     const code = parseAuthorizationResponse(result.url, { state, baseUrl });
     const tokens = await exchangeCode(oauthDeps, {
       baseUrl,
       clientId: config.clientId,
-      redirectUri: REDIRECT_URI,
+      redirectUri: identity.redirectUri,
       code,
       verifier: pkce.verifier,
       device: deviceInfo(),

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { NO_FIX_MS, QUIET_MS, readiness, recordingHealth } from "./liveness.ts";
+import { NO_FIX_MS, QUIET_MS, readiness, recordingHealth, reportedAccuracy } from "./liveness.ts";
 
 const T0 = Date.parse("2026-10-15T09:00:00Z");
 
@@ -60,5 +60,59 @@ describe("can the phone record now", () => {
   });
   test("location switched off is named last", () => {
     expect(readiness({ ...base, servicesEnabled: false })).toBe("services_off");
+  });
+});
+
+describe("the accuracy of a granted permission on either platform", () => {
+  const ready = (permission: Parameters<typeof reportedAccuracy>[0]) =>
+    readiness({
+      granted: true,
+      accuracy: reportedAccuracy(permission),
+      servicesEnabled: true,
+    });
+
+  test("Android says fine or coarse and that is passed on", () => {
+    expect(reportedAccuracy({ android: { accuracy: "fine" } })).toBe("fine");
+    expect(reportedAccuracy({ android: { accuracy: "coarse" } })).toBe("coarse");
+    expect(ready({ android: { accuracy: "fine" } })).toBe("ready");
+    expect(ready({ android: { accuracy: "coarse" } })).toBe("approximate");
+  });
+
+  test("iOS says full or reduced: full is precise, reduced is approximate", () => {
+    expect(reportedAccuracy({ ios: { accuracy: "full" } })).toBe("fine");
+    expect(reportedAccuracy({ ios: { accuracy: "reduced" } })).toBe("coarse");
+    expect(ready({ ios: { accuracy: "full" } })).toBe("ready");
+    expect(ready({ ios: { accuracy: "reduced" } })).toBe("approximate");
+  });
+
+  test("a word that is not known is not taken for precise", () => {
+    expect(ready({ ios: { accuracy: "something new" } })).toBe("approximate");
+    expect(ready({ android: { accuracy: "none" } })).toBe("approximate");
+  });
+
+  test("a platform that says nothing has no choice to make", () => {
+    expect(reportedAccuracy({})).toBeUndefined();
+    expect(reportedAccuracy({ ios: {} })).toBeUndefined();
+    expect(ready({})).toBe("ready");
+  });
+});
+
+describe("iOS names the switch of the phone before the permission", () => {
+  const off = { granted: false, accuracy: undefined, servicesEnabled: false };
+  test("with Location Services off the refusal that iOS reports is not what the driver is told", () => {
+    expect(readiness({ ...off, servicesFirst: true })).toBe("services_off");
+    expect(readiness({ ...off, granted: true, accuracy: "fine", servicesFirst: true })).toBe(
+      "services_off",
+    );
+  });
+  test("with the switch on the order does not matter", () => {
+    const on = { ...off, servicesEnabled: true, servicesFirst: true };
+    expect(readiness(on)).toBe("no_permission");
+    expect(readiness({ ...on, granted: true, accuracy: "coarse" })).toBe("approximate");
+    expect(readiness({ ...on, granted: true, accuracy: "fine" })).toBe("ready");
+  });
+  test("Android's order is the default", () => {
+    expect(readiness(off)).toBe("no_permission");
+    expect(readiness({ ...off, servicesFirst: false })).toBe("no_permission");
   });
 });

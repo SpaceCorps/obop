@@ -18,7 +18,11 @@ const tokens = (n: number, expiresAt: number) => ({
 
 function rig(
   initial = tokens(1, 100_000),
-  options: { refreshTimeoutMs?: number; onEndUntold?: () => void } = {},
+  options: {
+    refreshTimeoutMs?: number;
+    onEndUntold?: () => void;
+    acceptAddress?: (baseUrl: string) => boolean;
+  } = {},
 ) {
   const saved: (ReturnType<typeof tokens> | null)[] = [];
   const configs: unknown[] = [];
@@ -115,6 +119,48 @@ function rig(
     },
   };
 }
+
+describe("the stored session meets the address rule again", () => {
+  test("a session at an address the build may not use is dropped, and no token is sent to it", async () => {
+    // A release build finds the `http` address that a test build stored (the iOS Keychain
+    // survives an uninstall; the Android Keystore survives an update).
+    const seen: string[] = [];
+    const r = rig(tokens(1, 100), {
+      acceptAddress: (baseUrl) => {
+        seen.push(baseUrl);
+        return baseUrl.startsWith("https://");
+      },
+    });
+    await r.session.restore();
+    expect(seen).toEqual(["http://h"]);
+    expect(r.session.status()).toBe("signed_out");
+    expect(r.session.config()).toBeNull();
+    expect(r.session.deviceId()).toBeNull();
+    expect(r.saved).toEqual([null]);
+    expect(r.configs).toEqual([null]);
+    // The token is old enough to be refreshed; with no session nothing is asked of the instance.
+    expect(await r.session.accessToken()).toBeNull();
+    expect(r.bodies).toHaveLength(0);
+  });
+
+  test("a session at an address the build may use is restored as it was", async () => {
+    const r = rig(tokens(1, 100_000), { acceptAddress: (baseUrl) => baseUrl === "http://h" });
+    await r.session.restore();
+    expect(r.session.status()).toBe("signed_in");
+    expect(r.session.config()).toEqual({ baseUrl: "http://h", clientId: "cid" });
+    expect(await r.session.accessToken()).toBe("AT-1");
+    expect(r.saved).toEqual([]);
+    expect(r.configs).toEqual([]);
+  });
+
+  test("a keystore that refuses the cleaning does not stop the start", async () => {
+    const r = rig(tokens(1, 100_000), { acceptAddress: () => false });
+    r.failSaves(1);
+    await r.session.restore();
+    expect(r.session.status()).toBe("signed_out");
+    expect(await r.session.accessToken()).toBeNull();
+  });
+});
 
 describe("the session", () => {
   test("a token with time left is used as it is", async () => {
@@ -248,6 +294,57 @@ describe("the session", () => {
     expect(needsRegistration({ ...used, usedAt: now - CLIENT_FRESH_MS + 1 }, "http://h", now)).toBe(
       false,
     );
+  });
+
+  test("a client registers again when the app asks for groups it was not registered with", () => {
+    const now = 1_000_000_000_000;
+    const mileage = ["mileage.driver"];
+    // A config that an earlier build stored: no list. It was registered with what every earlier
+    // build asked for, and the app says what that was.
+    const installed = { baseUrl: "http://h", clientId: "c", usedAt: now - 1000 };
+    const declared = { current: mileage, legacy: mileage };
+    expect(needsRegistration(installed, "http://h", now, declared)).toBe(false);
+    // A build that asks for one more: the client the instance knows was registered without it.
+    expect(
+      needsRegistration(installed, "http://h", now, {
+        current: [...mileage, "fleet.driver"],
+        legacy: mileage,
+      }),
+    ).toBe(true);
+    // The list that the app stored when it registered: the order does not matter.
+    const stored = { ...installed, groups: ["fleet.driver", "mileage.driver"] };
+    expect(
+      needsRegistration(stored, "http://h", now, { current: ["mileage.driver", "fleet.driver"] }),
+    ).toBe(false);
+    expect(needsRegistration(stored, "http://h", now, { current: mileage, legacy: mileage })).toBe(
+      true,
+    );
+    expect(
+      needsRegistration(stored, "http://h", now, { current: ["mileage.driver", "other.user"] }),
+    ).toBe(true);
+    // Nothing is known about a config without a list and no legacy list: register again.
+    expect(needsRegistration(installed, "http://h", now, { current: mileage })).toBe(true);
+    // Something that is not a list of names counts as no list.
+    expect(
+      needsRegistration(
+        { ...installed, groups: "mileage.driver" as never },
+        "http://h",
+        now,
+        declared,
+      ),
+    ).toBe(false);
+    expect(
+      needsRegistration({ ...installed, groups: [1] as never }, "http://h", now, {
+        current: mileage,
+      }),
+    ).toBe(true);
+    // The other reasons to register again still count, with or without the groups.
+    expect(needsRegistration({ ...stored, usedAt: undefined }, "http://h", now, declared)).toBe(
+      true,
+    );
+    expect(needsRegistration(stored, "http://other", now, { current: stored.groups })).toBe(true);
+    // Without the argument the answer is the one it always was.
+    expect(needsRegistration(installed, "http://h", now)).toBe(false);
   });
 
   test("only the 400 error page of the authorization page means that the instance does not know the client", () => {

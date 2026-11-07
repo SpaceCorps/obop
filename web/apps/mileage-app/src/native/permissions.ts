@@ -1,6 +1,6 @@
 import * as Location from "expo-location";
 import { Linking, PermissionsAndroid, Platform } from "react-native";
-import { readiness, type Readiness } from "../core/liveness.ts";
+import { readiness, reportedAccuracy, type Readiness } from "../core/liveness.ts";
 
 /** What the app can do about the location permission now. */
 export type LocationAccess =
@@ -10,13 +10,17 @@ export type LocationAccess =
   /** Not asked yet, or refused once: the system dialog can be shown. */
   | "ask"
   /** Refused with "don't ask again": only the system settings can change it. */
-  | "blocked";
+  | "blocked"
+  /** iOS: Location Services are switched off for the whole phone (the app's own status then reads "denied"). */
+  | "services_off";
 
 function access(r: Location.LocationPermissionResponse): LocationAccess {
   if (r.granted) {
-    // Android 12 and later let the driver allow Precise or Approximate. Approximate fixes are
-    // about two kilometres wide and the phone and the server drop everything wider than 100 m.
-    return readiness({ granted: true, accuracy: r.android?.accuracy, servicesEnabled: true }) ===
+    // Android 12 and later (Precise or Approximate) and iOS 14 and later (the switch "Precise
+    // Location") let the driver allow only an approximate position. Approximate fixes are about
+    // two kilometres wide. The server drops every fix wider than 100 m, so a trip recorded with
+    // Approximate location would be empty. The app refuses to start instead.
+    return readiness({ granted: true, accuracy: reportedAccuracy(r), servicesEnabled: true }) ===
       "approximate"
       ? "approximate"
       : "granted";
@@ -24,13 +28,23 @@ function access(r: Location.LocationPermissionResponse): LocationAccess {
   return r.canAskAgain ? "ask" : "blocked";
 }
 
+/**
+ * On iOS the switch of the whole phone is asked first: with it off the permission of the app reads
+ * "denied" and the driver would be sent to the settings of the app, which cannot help. Android
+ * reports the permission as it is and the switch only where the permission is granted.
+ */
+async function withServices(r: Location.LocationPermissionResponse): Promise<LocationAccess> {
+  if (Platform.OS === "ios" && !(await Location.hasServicesEnabledAsync())) return "services_off";
+  return access(r);
+}
+
 export async function locationAccess(): Promise<LocationAccess> {
-  return access(await Location.getForegroundPermissionsAsync());
+  return withServices(await Location.getForegroundPermissionsAsync());
 }
 
 /** Shows the system dialog. Call it after the disclosure, never before. */
 export async function requestLocation(): Promise<LocationAccess> {
-  return access(await Location.requestForegroundPermissionsAsync());
+  return withServices(await Location.requestForegroundPermissionsAsync());
 }
 
 /**
@@ -40,11 +54,14 @@ export async function requestLocation(): Promise<LocationAccess> {
  */
 export async function locationReadiness(): Promise<Readiness> {
   const permission = await Location.getForegroundPermissionsAsync();
-  const servicesEnabled = permission.granted ? await Location.hasServicesEnabledAsync() : true;
+  const ios = Platform.OS === "ios";
+  const servicesEnabled =
+    ios || permission.granted ? await Location.hasServicesEnabledAsync() : true;
   return readiness({
     granted: permission.granted,
-    accuracy: permission.android?.accuracy,
+    accuracy: reportedAccuracy(permission),
     servicesEnabled,
+    servicesFirst: ios,
   });
 }
 

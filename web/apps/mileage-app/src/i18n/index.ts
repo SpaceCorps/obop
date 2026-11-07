@@ -21,6 +21,19 @@ export function t(key: MessageKey, params: Params = {}): string {
   return fill(catalogue[key], params);
 }
 
+/**
+ * A sentence of the catalogue for the system the app runs on: `name.ios` on iOS where the
+ * catalogue has one (a sentence that names something Android has and iOS has not), else `name`.
+ * The system is passed in (the screens pass `Platform.OS`, `ui/os-text.ts`), so this stays free of
+ * React Native and runs in `vp test`.
+ */
+export function tOn(os: string, key: MessageKey, params: Params = {}): string {
+  const iosKey = `${key}.ios`;
+  if (os === "ios" && iosKey in catalogue)
+    return fill((catalogue as Record<string, string>)[iosKey]!, params);
+  return fill(catalogue[key], params);
+}
+
 /** The keys that have plural forms: `name` where the catalogue holds `name.one`, `name.other`, and so on. */
 export type PluralKey = MessageKey extends infer K
   ? K extends `${infer Base}.other`
@@ -28,7 +41,7 @@ export type PluralKey = MessageKey extends infer K
     : never
   : never;
 
-/** The plural rules of English, for a runtime that has no `Intl.PluralRules` (Hermes on Android has none). */
+/** The plural rules of English, for a runtime that has no `Intl.PluralRules` (Hermes on Android has none; iOS was not checked, and the fallback is used wherever it is missing). */
 export const englishPlural = (count: number): "one" | "other" => (count === 1 ? "one" : "other");
 
 let rules: Intl.PluralRules | null = null;

@@ -14,7 +14,27 @@ export interface ServerConfig {
   user?: string;
   /** When a sign-in last finished with this client (ms). The instance forgets a client that no sign-in used. */
   usedAt?: number;
+  /**
+   * The groups the client was registered with. The instance offers a phone only the groups that its
+   * client declared, so a build that asks for another group has to register again. A config that an
+   * earlier build stored has no list; see `DeclaredGroups.legacy`. Older builds keep the field when
+   * they write the config back (they spread what they read) and ignore it otherwise.
+   */
+  groups?: readonly string[];
 }
+
+/** The groups the app asks for now, and what a config without a stored list is taken to have registered with. */
+export interface DeclaredGroups {
+  current: readonly string[];
+  legacy?: readonly string[];
+}
+
+const groupList = (value: unknown): readonly string[] | null =>
+  Array.isArray(value) && value.every((g) => typeof g === "string") ? (value as string[]) : null;
+
+/** The same groups, in any order. */
+const sameGroups = (a: readonly string[], b: readonly string[]): boolean =>
+  new Set(a).size === new Set(b).size && a.every((g) => b.includes(g));
 
 /** The instance forgets a registered client that nothing has used for a day, and a used one after about 180 idle days. */
 export const CLIENT_FRESH_MS = 30 * 24 * 3600 * 1000;
@@ -28,8 +48,15 @@ export function needsRegistration(
   config: ServerConfig | null,
   baseUrl: string,
   nowMs: number,
+  declared?: DeclaredGroups,
 ): boolean {
   if (config === null || config.baseUrl !== baseUrl) return true;
+  if (declared !== undefined) {
+    // The groups the client was registered with: the stored list, or for a config without one what
+    // every build before the list was stored registered with. With neither, register again.
+    const registered = groupList(config.groups) ?? declared.legacy ?? null;
+    if (registered === null || !sameGroups(registered, declared.current)) return true;
+  }
   return config.usedAt === undefined || nowMs - config.usedAt > CLIENT_FRESH_MS;
 }
 
@@ -43,7 +70,7 @@ export function needsRegistration(
  */
 export const clientUnknown = (status: number | null): boolean => status === 400;
 
-/** Where the session is kept. On the phone: the Android Keystore through expo-secure-store. */
+/** Where the session is kept. On the phone: the Android Keystore or the iOS Keychain through expo-secure-store. */
 export interface SessionStorage {
   loadConfig(): Promise<ServerConfig | null>;
   saveConfig(config: ServerConfig | null): Promise<void>;
@@ -111,6 +138,14 @@ export interface SessionOptions {
    * browser does not stop it.
    */
   onEndUntold?: () => void;
+  /**
+   * Whether the app may talk to the stored address (the same rule as at sign-in: `https`, or
+   * `http` only in a build made for a test instance). Checked when the stored session is loaded,
+   * because the session outlives the build that made it: the iOS Keychain survives an uninstall,
+   * and Android keeps the Keystore over an update, so a release build can find an `http` address
+   * that a test build stored. A session at an address the app may not use is dropped.
+   */
+  acceptAddress?: (baseUrl: string) => boolean;
 }
 
 /** The longest a refresh waits: longer than a slow cellular answer, and the outcome is unknown after it. */
@@ -134,6 +169,7 @@ export function createSession({
   skewMs = 60_000,
   refreshTimeoutMs = REFRESH_TIMEOUT_MS,
   onEndUntold,
+  acceptAddress = () => true,
 }: SessionOptions): Session {
   let status: SessionStatus = "signed_out";
   let ended: EndedBy | null = null;
@@ -278,6 +314,12 @@ export function createSession({
     async restore() {
       config = await storage.loadConfig();
       tokens = await storage.loadTokens();
+      if (config !== null && !acceptAddress(config.baseUrl)) {
+        // No token is ever sent to an address the app may not use: the sign-in at it is over.
+        config = null;
+        tokens = null;
+        await Promise.all([save(null), storage.saveConfig(null)]).catch(() => undefined);
+      }
       generation += 1;
       ended = null;
       status = tokens && config ? "signed_in" : "signed_out";
