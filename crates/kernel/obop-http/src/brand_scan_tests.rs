@@ -27,17 +27,21 @@
 //! anything ([`Limit::Any`]). A file of a surface that only asks the reader ([`Limit::Reads`]) may
 //! call `brand()` as many times as the row says, name the paths through the module `brand` that
 //! the row lists, call `.current(`, `.fresh(` and `.strict(` as many times in all as the row says,
-//! and name the types the row lists as types only (never `Reader::new`, `Reader::with_bound`,
-//! `Reader::inert` or any other function reached through the type, which would build a second
-//! reader or reach round the one it was handed), and nothing else: so the reason of such a row ("it
-//! reads nothing", "the route asks the reader once") is held by the scan, and a second reader added
-//! to a large file such as `obop-http/src/lib.rs` is found.
+//! and name the types the row lists as types only, and nothing else. A type "as a type only" is
+//! never reached by `::` (`Reader::new`, `Reader::with_bound`, `Reader::inert`, `<Reader>::inert`
+//! or any other function, which would build a second reader or reach round the one the file was
+//! handed), never given a second name (`use ...::Reader as Rd;`, `type Rd = Reader;`) and never
+//! implemented for (`impl Tr for Reader`, `impl Reader`). So the reason of such a row ("it reads
+//! nothing", "the route asks the reader once and builds none") is held by the scan, and a second
+//! reader added to a large file such as `obop-http/src/lib.rs` is found.
 //!
 //! **What it does not see.** It is a textual scan, not a parser. Text built at run time
 //! (`format!("{}_brand", "instance")`), the model reached through a constant of another crate that
 //! is not spelled in the file, a reader passed in as a trait object by a file that is on the list,
-//! and Rust outside `crates/` are not seen. It makes a second reader visible; it does not stop one
-//! who works around it. The behaviour is held by `crates/obop/src/brand_row_tests.rs`: with a
+//! a reader built through a trait without the name of its type (`Default::default()`; `Reader` has
+//! no `Default`, and a release that gives it one must extend the rules above), and Rust outside
+//! `crates/` are not seen. It makes a second reader visible; it does not stop one who works
+//! around it. The behaviour is held by `crates/obop/src/brand_row_tests.rs`: with a
 //! row, every output that is pinned is what it was without one (the logo path is the exception: it
 //! answers the artwork with a row, `crates/obop/src/brand_http_tests.rs`).
 
@@ -53,7 +57,8 @@ enum Limit {
     /// Ask the reader and nothing else: at most `calls` calls of `brand()`, at most `reads` calls
     /// in all of `.current(`, `.fresh(` and `.strict(` (the three ways of asking a reader), and
     /// paths through the module `brand` only to the names in `paths`; a name in `types` may be
-    /// written (it is in `paths` too) but nothing may be reached through it with `::`. The model,
+    /// written (it is in `paths` too) but nothing may be reached through it with `::`, and it may
+    /// be neither renamed (`as`, `type X =`) nor implemented for (`impl`, `for`). The model,
     /// `install_brand`, any other path and the accessor named without a call are not allowed.
     Reads {
         calls: usize,
@@ -88,7 +93,7 @@ const ALLOWED: [(&str, &str, Limit); 7] = [
     ),
     (
         "kernel/obop-http/src/brand.rs",
-        "the logo route `GET /api/brand/logo.svg` and `current()`: the route gets the reader of the dispatcher once and asks it once, through the blocking pool; it builds no reader",
+        "the logo route `GET /api/brand/logo.svg` and `current()`: the route gets the reader of the dispatcher once and asks it once, through the blocking pool; it names the types `Reader` and `Shown` as types only (no function through them, no second name, no impl), so it builds no reader",
         Limit::Reads {
             calls: 1,
             reads: 1,
@@ -134,6 +139,7 @@ const PATH: &str = "a path through the module `brand`";
 const CALL: &str = "a call of the reader accessor `brand()`";
 const READ: &str = "a call of `.current(`, `.fresh(` or `.strict(`";
 const THROUGH: &str = "a function reached through a type the row lets the file name as a type only";
+const RENAMED: &str = "a type the row lets the file name as a type only, renamed or implemented";
 const VALUE: &str = "the module `brand` or the reader accessor `brand` named without a call";
 
 /// What in a file names the row or its reader: the offset, what was found and, for a path through
@@ -182,14 +188,32 @@ fn targets(code: &[u8], from: usize) -> Vec<String> {
     names
 }
 
+/// The word that ends just before `at`, ignoring white space (`impl` in `impl Reader`), or "" when
+/// what precedes is not a word (an `=`, a `<`, a `:`).
+fn word_before(code: &[u8], at: usize) -> &str {
+    use crate::src_scan::is_ident;
+    let end = code[..at]
+        .iter()
+        .rposition(|c| !c.is_ascii_whitespace())
+        .map_or(0, |p| p + 1);
+    let start = code[..end]
+        .iter()
+        .rposition(|c| !is_ident(*c))
+        .map_or(0, |p| p + 1);
+    std::str::from_utf8(&code[start..end]).unwrap_or("")
+}
+
 /// What a file with a row of [`Limit::Reads`] does with a reader once it has one: a call of
 /// `.current(`, `.fresh(` or `.strict(` (a method call: the word follows a `.` and a `(` follows it),
-/// and a function reached through one of `types` (`Reader::new`, `Reader::with_bound`,
-/// `Reader::inert`: the word is followed by `::`). They are looked for only in the files of such a
-/// row, where they are the whole of what the file may do with the reader: elsewhere a method called
-/// `current` is no business of this scan.
+/// a function reached through one of `types` (`Reader::new`, `Reader::with_bound`,
+/// `Reader::inert`, `<Reader>::inert`: the word is followed by `::`, past the `>` that closes a
+/// generic), and a type given a second name or an implementation, which is a way round the first
+/// rule (`use ...::Reader as Rd;`, `type Rd = Reader;`, `impl Tr for Reader`: the word is followed
+/// by `as`, follows an `=`, or follows `impl` or `for`). They are looked for only in the files of
+/// such a row, where they are the whole of what the file may do with the reader: elsewhere a method
+/// called `current` is no business of this scan.
 fn uses(l: &Lexed, types: &[&str]) -> Vec<Hit> {
-    use crate::src_scan::skip_ws;
+    use crate::src_scan::{skip_ws, word_at};
     let code = &l.code;
     let mut out = Vec::new();
     for name in ["current", "fresh", "strict"] {
@@ -211,13 +235,28 @@ fn uses(l: &Lexed, types: &[&str]) -> Vec<Hit> {
     for name in types {
         for at in words(code, name) {
             let after = skip_ws(code, at + name.len());
-            if code[after..].starts_with(b"::") {
-                out.push(Hit {
-                    at,
-                    what: THROUGH,
-                    names: vec![name.to_string()],
-                });
+            let mut tail = after;
+            while code.get(tail) == Some(&b'>') {
+                tail = skip_ws(code, tail + 1);
             }
+            let what = if code[tail..].starts_with(b"::") {
+                THROUGH
+            } else if word_at(code, after) == "as"
+                || code[..at]
+                    .iter()
+                    .rposition(|c| !c.is_ascii_whitespace())
+                    .is_some_and(|p| code[p] == b'=')
+                || matches!(word_before(code, at), "impl" | "for")
+            {
+                RENAMED
+            } else {
+                continue;
+            };
+            out.push(Hit {
+                at,
+                what,
+                names: vec![name.to_string()],
+            });
         }
     }
     out
@@ -305,6 +344,11 @@ fn beyond(limit: Limit, hits: &[Hit]) -> Vec<(&Hit, String)> {
             }
             THROUGH => Some(format!(
                 "`{}::` is a second way to a reader; the row lets the file name the type only",
+                h.names[0]
+            )),
+            RENAMED => Some(format!(
+                "`{}` under another name or with an impl is a second way to a reader; the row \
+                 lets the file name the type only",
                 h.names[0]
             )),
             _ => Some("the row lets the file ask the reader and nothing else".to_string()),
@@ -557,6 +601,12 @@ fn a_row_with_limits_lets_its_file_ask_the_reader_as_the_row_says_and_nothing_el
             lib,
             "fn current() -> u8 { 1 } fn f() { let current = current(); let _ = current; }",
         ),
+        // A type named inside generics, in a bound, in a `let` annotation and in a return type is
+        // named as a type: the `>` that closes the generic is not a way through it.
+        (
+            route,
+            "use obop_commands::brand::{Reader, Shown}; fn f<T: Into<Arc<Reader>>>(x: T) -> Option<Arc<Shown>> where T: Send { let r: Arc<Reader> = x.into(); Some(r.current()) }",
+        ),
     ] {
         let (found, _) = scan(&tree(&[(path, src)]));
         assert!(found.is_empty(), "{path}: {src}: {found:?}");
@@ -601,11 +651,59 @@ fn a_row_with_limits_lets_its_file_ask_the_reader_as_the_row_says_and_nothing_el
             "async fn f(s: &S) { let _ = s.dispatcher.brand(); let _ = s.dispatcher.brand(); }",
             CALL,
         ),
-        // A second reader built in the file, however the type is written.
+        // A second reader built in the file: by the path of the type, by its imported name, by a
+        // qualified call with the type in angle brackets, through a second name given to the
+        // type (`as`, `type X =`) and through an implementation. Each is found once, where the
+        // type is named in the way that gets round the first rule.
         (
             route,
             "fn f() { let _other = obop_commands::brand::Reader::inert(); }",
             THROUGH,
+        ),
+        (
+            route,
+            "use obop_commands::brand::Reader; fn f() { let _other = <Reader>::inert(); }",
+            THROUGH,
+        ),
+        (
+            route,
+            "use obop_commands::brand::Reader; fn f() { let _other = < Reader > :: inert(); }",
+            THROUGH,
+        ),
+        (
+            route,
+            "use obop_commands::brand::Reader as Rd; fn f() { let _other = Rd::inert(); }",
+            RENAMED,
+        ),
+        (
+            route,
+            "use obop_commands::brand::{Reader as Rd, Shown}; fn f() { let _other = Rd::inert(); }",
+            RENAMED,
+        ),
+        (
+            route,
+            "use obop_commands::brand::Reader; fn f() { let _other = <Reader as Make>::make(); }",
+            RENAMED,
+        ),
+        (
+            route,
+            "use obop_commands::brand::Reader; type Rd = Reader; fn f() { let _other = Rd::inert(); }",
+            RENAMED,
+        ),
+        (
+            route,
+            "use obop_commands::brand::Reader; type Rd =\n    Reader;",
+            RENAMED,
+        ),
+        (
+            route,
+            "use obop_commands::brand::Reader; impl Make for Reader { fn make() -> Self { Self::inert() } }",
+            RENAMED,
+        ),
+        (
+            route,
+            "use obop_commands::brand::Reader; impl Reader { fn make() {} }",
+            RENAMED,
         ),
         (
             route,
@@ -669,13 +767,40 @@ fn a_row_with_limits_lets_its_file_ask_the_reader_as_the_row_says_and_nothing_el
     )]));
     assert_eq!(found.len(), 1, "{found:?}");
     assert!(found[0].starts_with(&format!("{route}:2:")), "{found:?}");
-    // The same for the calls of the reader's methods: the second is the one that is found.
+    // The same for the calls of the reader's methods: the second, in the order of the file, is the
+    // one that is found, whichever of the three names it is. The two orders matter: the scan finds
+    // the calls name by name (`current`, `fresh`, `strict`), so the excess is the later one in the
+    // file only if the hits are put in the order of the file.
+    for (src, line_of_the_second) in [
+        (
+            "fn a(r: &Reader) { r.current(); }\nfn b(r: &Reader) { r.fresh(); }",
+            2,
+        ),
+        (
+            "fn a(r: &Reader) { r.fresh(); }\nfn b(r: &Reader) { r.current(); }",
+            2,
+        ),
+        (
+            "fn a(r: &Reader) { r.strict(); }\nfn b(r: &Reader) { r.current(); }\nfn c() {}",
+            2,
+        ),
+    ] {
+        let (found, _) = scan(&tree(&[(route, src)]));
+        assert_eq!(found.len(), 1, "{src}: {found:?}");
+        assert!(
+            found[0].starts_with(&format!("{route}:{line_of_the_second}:")),
+            "{src}: {found:?}"
+        );
+    }
+    // And a second way to a reader that comes first in the file is not reported after a later call
+    // of a method: each hit is at its own line.
     let (found, _) = scan(&tree(&[(
         route,
-        "fn a(r: &Reader) { r.current(); }\nfn b(r: &Reader) { r.fresh(); }",
+        "use obop_commands::brand::Reader;\nfn a(r: &Reader) { r.current(); }\nfn b() { let _ = Reader::inert(); }\nfn c(r: &Reader) { r.fresh(); }",
     )]));
-    assert_eq!(found.len(), 1, "{found:?}");
-    assert!(found[0].starts_with(&format!("{route}:2:")), "{found:?}");
+    assert_eq!(found.len(), 2, "{found:?}");
+    assert!(found[0].starts_with(&format!("{route}:3:")), "{found:?}");
+    assert!(found[1].starts_with(&format!("{route}:4:")), "{found:?}");
     // Test code of those files is left alone, as everywhere.
     let (found, _) = scan(&tree(&[(
         lib,
