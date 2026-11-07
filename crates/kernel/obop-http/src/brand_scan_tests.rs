@@ -35,7 +35,7 @@ use std::path::Path;
 
 /// Where the brand is read or written: the path from `crates/` (a prefix when it ends with `/`)
 /// and why.
-const ALLOWED: [(&str, &str); 5] = [
+const ALLOWED: [(&str, &str); 7] = [
     (
         "kernel/obop-commands/src/brand/",
         "the module itself: the reader, `strict()`, `apply` and the read of `get`",
@@ -51,6 +51,14 @@ const ALLOWED: [(&str, &str); 5] = [
     (
         "kernel/obop-pkg/src/installer.rs",
         "the built-in module `platform` lists the model, and `register_admin` creates the reader",
+    ),
+    (
+        "kernel/obop-http/src/brand.rs",
+        "the logo route `GET /api/brand/logo.svg` and `current()`, the one way a handler of this crate asks the reader (through the blocking pool)",
+    ),
+    (
+        "kernel/obop-http/src/lib.rs",
+        "`api_routes` registers the logo route (`brand::routes`) and passes it the answer of the layout to an unknown path; it reads nothing",
     ),
     (
         "obop/src/brand_cmd.rs",
@@ -260,6 +268,14 @@ fn the_scan_sees_the_ways_a_file_can_read_the_row_and_leaves_the_allowed_files_a
         (
             "kernel/obop-commands/src/lib.rs",
             "fn f() { crate::brand::describe(); }",
+        ),
+        (
+            "kernel/obop-http/src/brand.rs",
+            "async fn f(s: &S) { let _ = s.dispatcher.brand().current(); let _ = obop_commands::brand::Reader::inert(); }",
+        ),
+        (
+            "kernel/obop-http/src/lib.rs",
+            "fn f() { let _ = brand::routes(g); }",
         ),
     ]);
     let (found, stale) = scan(&files);

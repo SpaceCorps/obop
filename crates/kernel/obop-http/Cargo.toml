@@ -8,6 +8,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+obop-brand.workspace = true
 obop-commands.workspace = true
 obop-connectors.workspace = true
 obop-community.workspace = true

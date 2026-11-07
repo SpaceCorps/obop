@@ -1406,6 +1406,7 @@ dependencies = [
  "getrandom 0.4.3",
  "http-body-util",
  "mime_guess",
+ "obop-brand",
  "obop-commands",
  "obop-community",
  "obop-connectors",
