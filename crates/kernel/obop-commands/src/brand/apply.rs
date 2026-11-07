@@ -222,8 +222,8 @@ pub fn show_key(k: &str) -> String {
     out
 }
 
-/// The version of a stored artwork, as the logo route would serve it: the hash of the printer's
-/// output for its parse. Empty for no artwork, `unreadable` when the reader refuses it.
+/// The version of a stored artwork, as the logo route serves it: the hash of the printer's output
+/// for its parse. Empty for no artwork, `unreadable` when the reader refuses it.
 fn artwork_v(stored: &str) -> String {
     if stored.is_empty() {
         return String::new();

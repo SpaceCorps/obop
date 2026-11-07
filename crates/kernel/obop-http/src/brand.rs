@@ -4,21 +4,29 @@
 //! **The route.** Public like `/api/openapi.json`; it takes no path or id and a query string is
 //! ignored, so it is not a file server. It answers the artwork as the reader re-serialised it, or
 //! the generated tile, and nothing else, with the fixed headers of `obop_brand::logo` and an `ETag`
-//! that is the version `v` of what is served, quoted (a matching `If-None-Match` is a 304 that
-//! carries the `Content-Length` of the 200). It does not read the store itself: it asks the reader
-//! of the dispatcher, whose answer is the one read check every surface shares, so a stored artwork
-//! that fails the check is the tile here too.
+//! that is the version `v` of what is served, quoted. A matching `If-None-Match` is a 304 with the
+//! same headers but the `Content-Type`, and no body. The handler sets the `Content-Length` of the
+//! 200 on it (RFC 9110 section 8.6 allows that value and no other); the HTTP server sends it on a
+//! `HEAD` 304 and omits it on a `GET` 304, which the same section allows. The tests that call the
+//! router hold the handler's part and the length where a client sees it (a `HEAD`); the test over a
+//! socket holds the header set of both on the wire. It does not read the store itself: it asks the
+//! reader of the dispatcher, whose answer is the one read check every surface shares, so a stored
+//! artwork that fails the check is the tile here too.
 //!
-//! **No brand set.** The record does not exist, and for `GET` and `HEAD` the path answers as an
-//! unknown one-segment path of the API does (`/api/nothing`): the 404 that the layout the route is
-//! mounted in gives, status, headers and body (`api_not_found` for the API alone and for the back
-//! office build next to it, the JSON 404 of the public site's router). The layout passes its own
-//! answer in. So the answer to a `GET` does not tell a scanner whether a brand is set. It does not
-//! hide that the route exists, and no test or comment may say it does: a path of the same shape,
+//! **No brand set.** The record does not exist, and for `GET` and `HEAD` the path answers exactly
+//! what a one-segment unknown path of the API (`/api/nothing`) answers in that layout: the 404 that
+//! the layout the route is mounted in gives, status, headers and body (`api_not_found` for the API
+//! alone and for the back office build next to it, the JSON 404 of the public site's router). The
+//! layout passes its own answer in. A set brand shows itself by the 200 and the artwork, which is
+//! public by design, and the route shows nothing else about the instance. It does not hide that
+//! the route exists, and no test or comment may say it does: a path of the same shape,
 //! `/api/zzz/logo.svg`, is matched by `/api/{model}/{command}`, which takes `POST` only, and answers
 //! a 405 with `Allow: POST`, while this path answers every method but `GET` and `HEAD` (a `POST`,
-//! an `OPTIONS` that no CORS layer takes) with a 405 and `Allow: GET,HEAD`; and while the store
-//! cannot be read the path answers the 503 of D74 where an unknown path answers 404.
+//! an `OPTIONS` that no CORS layer takes) with a 405 and `Allow: GET,HEAD`. While the store cannot
+//! be read, only the request that runs the failing refill gets the 503 of D74 where an unknown path
+//! answers 404; while the cell is fresh, or a refill is in flight, the others get the last good
+//! logo, and a request that waits behind a failed first read in a process that has never had a good
+//! read gets the no-brand 404.
 //!
 //! **The reader is asked through [`current`]**, never on an async worker: the PostgreSQL client
 //! panics there (`blocking`). A call that finds the cell fresh takes a standard mutex for a moment
@@ -88,9 +96,9 @@ async fn logo(s: Arc<HttpState>, h: HeaderMap, not_found: NotFound) -> Response 
         set(name, value);
     }
     // The length of the 200, also on a 304: RFC 9110 section 8.6 allows it there and forbids any
-    // other value. Left unset, axum sets `Content-Length: 0` and the server layer sends it with a
-    // `HEAD` 304 (measured with curl on the real binary); it sends none with a `GET` 304, which is
-    // as valid.
+    // other value. Left unset, axum sets `Content-Length: 0` and the server layer sends that with a
+    // `HEAD` 304, which says the 200 is empty. The server layer sends the length with a `HEAD` 304
+    // and none with a `GET` 304, which is as valid; the socket test pins both.
     set(header::CONTENT_LENGTH, &logo.served().len().to_string());
     if same {
         return r.body(Body::empty()).expect("static response");
