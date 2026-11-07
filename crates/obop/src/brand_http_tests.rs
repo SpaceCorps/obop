@@ -19,6 +19,7 @@ use axum::{
 use http_body_util::BodyExt;
 use obop_brand::logo::{LOGO_CACHE_CONTROL, LOGO_CONTENT_TYPE, LOGO_CSP, LOGO_NOSNIFF};
 use obop_commands::{ADMIN_GROUP, Authenticator, Principal, Store};
+use obop_http::mcp::McpConfig;
 use obop_storage::Op;
 use obop_storage::testing::{Flaky, Mode};
 use serde_json::{Value as J, json};
@@ -273,10 +274,14 @@ fn write_around_the_command(app: &App, model: &str, row: J) {
 
 // ---- No brand set -----------------------------------------------------------------------------
 
-/// With no row the route is not there: the answer is the one the layout gives a path of the API
-/// that no route owns, status, headers and body, byte for byte. In the API alone and beside the
-/// back office that is the JSON with a code and a hint; in the public site's router it is the short
-/// JSON of `json_404`.
+/// With no row a `GET` or `HEAD` of the path is answered as the layout answers a one-segment path of
+/// the API that no route owns (`/api/nothing`), status, headers and body, byte for byte. In the API
+/// alone and beside the back office that is the JSON with a code and a hint; in the public site's
+/// router it is the short JSON of `json_404`. That is the whole of the property: a path of the same
+/// shape with two segments is matched by `/api/{model}/{command}`, which takes `POST` only, so it
+/// answers 405 with `Allow: POST`, and the logo path answers `POST` (and every other method but
+/// `GET` and `HEAD`) with 405 and `Allow: GET,HEAD`. A scanner can tell that the route exists, and
+/// cannot tell from a `GET` whether a brand is set; the relation is pinned below.
 #[tokio::test]
 async fn with_no_brand_the_logo_path_answers_as_an_unknown_api_path_in_every_layout() {
     for l in layouts() {
@@ -330,6 +335,31 @@ async fn with_no_brand_the_logo_path_answers_as_an_unknown_api_path_in_every_lay
             "{}",
             l.name
         );
+        // The neighbour of the same shape (two segments, and a `.svg` at the end) is not an unknown
+        // path of the API but a command of a model that does not exist: refused for its method.
+        // The difference is the one the doc comment states, and no other.
+        let shape = ask(&l.router, "GET", "/api/zzz/logo.svg", &[]).await;
+        assert_eq!(shape.status, 405, "{}", l.name);
+        assert_eq!(shape.header("allow"), "POST", "{}", l.name);
+        assert!(shape.body.is_empty(), "{}", l.name);
+        assert_ne!(shape.status, plain.status, "{}", l.name);
+        let shape_head = ask(&l.router, "HEAD", "/api/zzz/logo.svg", &[]).await;
+        assert_eq!(shape_head.status, 405, "{}", l.name);
+        let post_shape = ask(&l.router, "POST", "/api/zzz/logo.svg", &[]).await;
+        let post_logo = ask(&l.router, "POST", PATH, &[]).await;
+        assert_eq!(
+            post_shape.status, 401,
+            "{}: reaches the command route",
+            l.name
+        );
+        assert_eq!(post_logo.status, 405, "{}", l.name);
+        assert_eq!(post_logo.header("allow"), "GET,HEAD", "{}", l.name);
+        // A one-segment path that is not a route is what the logo path is answered as.
+        for unknown in ["/api/nothing", "/api/logo.svg", "/api/brand"] {
+            let u = ask(&l.router, "GET", unknown, &[]).await;
+            assert_eq!(u.status, 404, "{} {unknown}", l.name);
+            assert_eq!(u.body, plain.body, "{} {unknown}", l.name);
+        }
     }
 }
 
@@ -366,7 +396,7 @@ async fn with_a_brand_the_stored_artwork_is_served_with_the_fixed_headers_in_eve
         );
         assert_eq!(a.header("content-security-policy"), SPEC_CSP, "{}", l.name);
         assert_eq!(a.header("cache-control"), SPEC_CACHE_CONTROL, "{}", l.name);
-        // The constants the shop's favicon will share say the same.
+        // The constants that the shop favicon is to share (slice S1f, not built) say the same.
         assert_eq!(SPEC_CONTENT_TYPE, LOGO_CONTENT_TYPE);
         assert_eq!(SPEC_NOSNIFF, LOGO_NOSNIFF);
         assert_eq!(SPEC_CSP, LOGO_CSP);
@@ -443,11 +473,18 @@ async fn head_is_the_get_without_a_body() {
         assert!(h.body.is_empty(), "{}", l.name);
         assert_eq!(h.header_lines(), g.header_lines(), "{}", l.name);
         assert_eq!(h.header("content-length"), g.body.len().to_string());
-        // A `HEAD` with the validator is a 304, as the `GET` is.
+        // A `HEAD` with the validator is a 304, as the `GET` is, and its `Content-Length` is that of
+        // the 200 (RFC 9110 section 8.6 allows no other; the server layer would send 0 for it).
         let etag = g.header("etag").to_string();
         let h304 = ask(&l.router, "HEAD", PATH, &[("if-none-match", &etag)]).await;
         assert_eq!(h304.status, 304, "{}", l.name);
         assert!(h304.body.is_empty());
+        assert_eq!(
+            h304.header("content-length"),
+            g.body.len().to_string(),
+            "{}",
+            l.name
+        );
     }
 }
 
@@ -484,6 +521,13 @@ async fn a_matching_validator_is_a_304_with_the_headers_a_304_carries() {
             assert_eq!(a.header("content-security-policy"), SPEC_CSP);
             assert!(!a.has("content-type"), "{}: {inm}", l.name);
             assert!(!a.has("set-cookie"), "{}: {inm}", l.name);
+            // The length of the 200 it validates, never another (RFC 9110 section 8.6).
+            assert_eq!(
+                a.header("content-length"),
+                full.body.len().to_string(),
+                "{}: {inm}",
+                l.name
+            );
         }
         // Two header lines are one list.
         let two = ask(
@@ -701,6 +745,110 @@ async fn a_post_to_the_logo_path_is_a_405_and_does_not_reach_the_command_route()
     }
 }
 
+/// Every method but `GET` and `HEAD` is refused by the route that owns the path: 405, `Allow:
+/// GET,HEAD` and no body, with a brand and without one, with a token and without (it was `Allow:
+/// POST` before the route existed; the golden digests hold the `GET` and the `POST` only, so this is
+/// the test that holds the others). An `OPTIONS` that the cross-origin layer does not take is one of
+/// them; with `OBOP_ALLOWED_ORIGINS` set the layer answers a preflight first, see below.
+#[tokio::test]
+async fn every_other_method_on_the_logo_path_is_a_405_that_names_get_and_head() {
+    for l in layouts() {
+        for brand in [false, true] {
+            if brand {
+                set_brand(&l.app);
+            }
+            for method in ["PUT", "PATCH", "DELETE", "OPTIONS", "POST"] {
+                for headers in [vec![], vec![("authorization", "Bearer admin")]] {
+                    let a = ask(&l.router, method, PATH, &headers).await;
+                    let what = format!("{} {method} brand={brand} {headers:?}", l.name);
+                    assert_eq!(a.status, 405, "{what}");
+                    assert_eq!(a.header("allow"), "GET,HEAD", "{what}");
+                    assert!(a.body.is_empty(), "{what}");
+                    assert!(!a.has("www-authenticate"), "{what}");
+                }
+            }
+        }
+    }
+}
+
+// ---- Cross-origin access -------------------------------------------------------------------------
+
+/// The `access-control-*` headers of an answer, sorted, as `name: value`.
+fn cross_origin(a: &Answer) -> Vec<String> {
+    a.header_lines()
+        .into_iter()
+        .filter(|l| l.starts_with("access-control-"))
+        .collect()
+}
+
+/// The route adds no cross-origin header of its own. With `OBOP_ALLOWED_ORIGINS` set, the layer that
+/// every route goes through decides, and the logo route is answered exactly as `/api/openapi.json`,
+/// the other public route, is: no `Access-Control-Allow-Origin` without an `Origin` or for one that
+/// is not listed, the listed one echoed (never `*`) with `Vary: Origin` and no credentials, on the
+/// 200 and on the 304, and a preflight as for the other route.
+#[tokio::test]
+async fn the_logo_route_has_the_cross_origin_headers_of_the_layer_and_none_of_its_own() {
+    const LISTED: &str = "https://app.example.com";
+    const FOREIGN: &str = "https://elsewhere.example";
+    let app = App::new();
+    let router = obop_http::router(
+        obop_http::HttpState::with_mcp(
+            app.dispatcher.clone(),
+            Arc::new(Tokens),
+            McpConfig {
+                allowed_origins: vec![LISTED.to_string()],
+                ..McpConfig::default()
+            },
+        ),
+        None,
+    );
+    set_brand(&app);
+    let etag = get(&router, PATH).await.header("etag").to_string();
+    for origin in [None, Some(FOREIGN), Some(LISTED)] {
+        let headers: Vec<(&str, &str)> = origin.map(|o| ("origin", o)).into_iter().collect();
+        let mut revalidating = headers.clone();
+        revalidating.push(("if-none-match", &etag));
+        for (answered, status) in [(&headers, 200), (&revalidating, 304)] {
+            let logo = ask(&router, "GET", PATH, answered).await;
+            let other = ask(&router, "GET", "/api/openapi.json", &headers).await;
+            let what = format!("origin {origin:?} -> {status}");
+            assert_eq!(logo.status, status, "{what}");
+            assert_eq!(other.status, 200, "{what}");
+            assert_eq!(cross_origin(&logo), cross_origin(&other), "{what}");
+            assert!(!logo.has("access-control-allow-credentials"), "{what}");
+            assert_ne!(logo.header("access-control-allow-origin"), "*", "{what}");
+            if origin == Some(LISTED) {
+                assert_eq!(logo.header("access-control-allow-origin"), LISTED, "{what}");
+                assert!(
+                    logo.header("vary").to_lowercase().contains("origin"),
+                    "{what}"
+                );
+            } else {
+                assert!(!logo.has("access-control-allow-origin"), "{what}");
+            }
+        }
+    }
+    // A preflight is the layer's: the same as for the other route, and nothing from the handler.
+    for origin in [FOREIGN, LISTED] {
+        let h = [
+            ("origin", origin),
+            ("access-control-request-method", "GET"),
+            ("access-control-request-headers", "if-none-match"),
+        ];
+        let logo = ask(&router, "OPTIONS", PATH, &h).await;
+        let other = ask(&router, "OPTIONS", "/api/openapi.json", &h).await;
+        assert_eq!(logo.status, other.status, "preflight from {origin}");
+        assert_eq!(
+            cross_origin(&logo),
+            cross_origin(&other),
+            "preflight from {origin}"
+        );
+        assert!(!logo.has("access-control-allow-credentials"), "{origin}");
+        assert_ne!(logo.header("access-control-allow-origin"), "*", "{origin}");
+        assert!(logo.body.is_empty(), "{origin}");
+    }
+}
+
 // ---- Hosting --------------------------------------------------------------------------------------
 
 /// In the instance with the public site the back office is served under `/admin`, and the route is
@@ -743,30 +891,50 @@ fn router_of(app: &App) -> axum::Router {
     obop_http::router(state(app), None)
 }
 
-/// After a good read, a store that then fails: while the reader's cell is fresh the route does not
-/// touch the store and serves the logo; once the cell has expired, the request that runs the refill
-/// meets the fault and is answered by D74, 503 with `Retry-After`, never with the logo and never
-/// with a page that says `obop`; the next request reads again (a failed refill is not kept) and is
-/// answered the same way; after the store recovers, the logo is back.
+/// While the reader's cell is fresh (two seconds after the read that filled it) the route asks the
+/// cell and not the store, so a store that fails in the meantime is not met and the logo is served.
+/// The test needs a moment inside those two seconds; on a machine too slow to give it, it starts
+/// again with a fresh read, and it fails, never skips, if five tries were each too slow.
+#[tokio::test]
+async fn while_the_cell_is_fresh_a_failing_store_is_not_met() {
+    for _try in 0..5 {
+        let (flaky, app) = flaky_app();
+        let router = router_of(&app);
+        // Taken before the read that fills the cell, so it is never younger than the cell.
+        let started = std::time::Instant::now();
+        set_brand(&app);
+        let good = get(&router, PATH).await;
+        assert_eq!(good.status, 200);
+        flaky.refuse_model("instance_brand", Mode::Reads);
+        let cached = get(&router, PATH).await;
+        if started.elapsed() >= std::time::Duration::from_millis(1500) {
+            continue;
+        }
+        assert_eq!(cached.status, 200, "{}", cached.text());
+        assert_eq!(cached.body, good.body);
+        assert_eq!(flaky.refused(), 0, "the cache-hit path reads nothing");
+        return;
+    }
+    panic!("five tries were each slower than 1.5 s: the machine cannot run this test");
+}
+
+/// After a good read, a store that then fails: once the cell has expired, the request that runs the
+/// refill meets the fault and is answered by D74, 503 with `Retry-After`, never with the logo and
+/// never with a page that says `obop`; the next request reads again (a failed refill is not kept)
+/// and is answered the same way; after the store recovers, the logo is back. (While the cell is
+/// fresh the store is not met: the test above.)
 #[tokio::test]
 async fn after_a_good_read_a_failing_store_answers_the_request_that_runs_the_refill_with_a_503() {
     let (flaky, app) = flaky_app();
     let router = router_of(&app);
-    set_brand(&app);
-    // The refill that `set_brand` made is the last good read; it is at most this old.
+    // Taken before the read that fills the cell, so it is never younger than the cell.
     let after_the_read = std::time::Instant::now();
+    set_brand(&app);
     let good = get(&router, PATH).await;
     assert_eq!(good.status, 200);
     let logo = good.body.clone();
 
     flaky.refuse_model("instance_brand", Mode::Reads);
-    if after_the_read.elapsed() < std::time::Duration::from_millis(1000) {
-        // The cell is fresh: the route asks it and not the store, so a failing store is not met.
-        let cached = get(&router, PATH).await;
-        assert_eq!(cached.status, 200);
-        assert_eq!(cached.body, logo);
-        assert_eq!(flaky.refused(), 0, "the cache-hit path reads nothing");
-    }
     // Two seconds after the read the cell is stale.
     let wait = std::time::Duration::from_millis(2100).saturating_sub(after_the_read.elapsed());
     std::thread::sleep(wait);
@@ -898,9 +1066,17 @@ async fn a_request_that_arrives_behind_a_failing_first_refill_is_not_answered_wi
         let r = router.clone();
         tokio::spawn(async move { get(&r, PATH).await })
     };
-    tokio::task::spawn_blocking(move || parked_rx.recv().unwrap())
-        .await
-        .unwrap();
+    // Bounded, so that a route that never reads the store through the reader fails this test (the
+    // sender lives inside the double, so an unbounded `recv` would wait for ever).
+    let parked = tokio::task::spawn_blocking(move || {
+        parked_rx.recv_timeout(std::time::Duration::from_secs(20))
+    })
+    .await
+    .unwrap();
+    assert!(
+        parked.is_ok(),
+        "the first request never reached the store: the route does not read it through the reader"
+    );
     let second = {
         let r = router.clone();
         tokio::spawn(async move { get(&r, PATH).await })
@@ -947,6 +1123,37 @@ async fn the_store_is_read_on_a_blocking_thread_and_never_on_the_one_that_polls_
 
 // ---- The runtime of the server ----------------------------------------------------------------
 
+const SCRATCH_PREFIX: &str = "obop-brand-rt-";
+
+/// Removes the scratch directories that earlier runs of the test below left behind: those of
+/// another process that are more than ten minutes old, so a run in parallel keeps its own. Where the
+/// directory is still in use, the removal fails and the directory stays for the next run. (The same
+/// as `sweep_scratch` of `brand_commands_tests`, for this prefix.)
+fn sweep_scratch() {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let Ok(entries) = std::fs::read_dir(std::env::temp_dir()) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let Some((pid, nanos)) = name
+            .strip_prefix(SCRATCH_PREFIX)
+            .and_then(|rest| rest.split_once('-'))
+        else {
+            continue;
+        };
+        let (Ok(pid), Ok(nanos)) = (pid.parse::<u32>(), nanos.parse::<u128>()) else {
+            continue;
+        };
+        if pid != std::process::id() && now.saturating_sub(nanos) > 600_000_000_000 {
+            let _ = std::fs::remove_dir_all(entry.path());
+        }
+    }
+}
+
 /// The route on a multi-threaded runtime over every store the tests have (SQLite always, PostgreSQL
 /// when `OBOP_TEST_POSTGRES_URL` is set): the reader is asked through the blocking pool, because the
 /// PostgreSQL client panics on an async worker. With no PostgreSQL this proves the route works on
@@ -954,13 +1161,27 @@ async fn the_store_is_read_on_a_blocking_thread_and_never_on_the_one_that_polls_
 /// runs where the variable is set.
 #[test]
 fn the_route_works_on_the_runtime_of_the_server_over_every_store() {
+    // Removes the directory when the test ends, by a failed assertion too. A name that no other run
+    // has: a process id is reused (often, on Windows), and a directory that an earlier run left
+    // behind holds its database, with the brand row the first assertion below says is not there.
+    // On Windows the removal can fail with a sharing violation while the process lives (the
+    // application keeps the database file open), so a run cannot always clean up after itself;
+    // `sweep_scratch` of the next run does.
     struct Scratch(std::path::PathBuf);
     impl Drop for Scratch {
         fn drop(&mut self) {
             let _ = std::fs::remove_dir_all(&self.0);
         }
     }
-    let dir = Scratch(std::env::temp_dir().join(format!("obop-brand-rt-{}", std::process::id())));
+    sweep_scratch();
+    let dir = Scratch(std::env::temp_dir().join(format!(
+        "{SCRATCH_PREFIX}{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    )));
     std::fs::create_dir_all(&dir.0).unwrap();
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)

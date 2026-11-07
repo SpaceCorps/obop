@@ -1,12 +1,13 @@
 //! With a brand row in the store, an instance sends what it sent without one (docs/spec/branding.md,
-//! slice S1a): the record exists, the reader of the dispatcher answers it, and no surface asks the
-//! reader yet. The golden pins of the first commit of the slice (`pins_*`) hold what an instance
-//! with **no** row sends; the tests named `with_a_brand_row_*`, next to each pin, build the same
-//! outputs after [`set_brand`] has written a row through `brand::apply` and hold them to the same
-//! digests (or, where the output carries a token that changes from run to run, to the same
-//! output without the row). A page, a document or a route that starts to read the row without its
-//! slice moves one of them. The slice that makes a surface show the name moves the pin of that
-//! surface in its own commit, with the reason, and the test beside it then asserts the name.
+//! slice S1a): the record exists, the reader of the dispatcher answers it, and no surface but the
+//! logo route asks the reader (`brand_http_tests`). The golden pins of the first commit of the
+//! slice (`pins_*`) hold what an instance with **no** row sends; the tests named
+//! `with_a_brand_row_*`, next to each pin, build the same outputs after [`set_brand`] has written a
+//! row through `brand::apply` and hold them to the same digests (or, where the output carries a
+//! token that changes from run to run, to the same output without the row). A page, a document or
+//! a route that starts to read the row without its slice moves one of them. The slice that makes a
+//! surface show the name moves the pin of that surface in its own commit, with the reason, and the
+//! test beside it then asserts the name.
 //!
 //! The filter for the family is `cargo test -p obop -- with_a_brand_row` (and `-p obop-auth`,
 //! `-p obop-site` for their members). They are not `pins_*`, so the print mode of the pins
