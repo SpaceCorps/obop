@@ -274,14 +274,15 @@ fn write_around_the_command(app: &App, model: &str, row: J) {
 
 // ---- No brand set -----------------------------------------------------------------------------
 
-/// With no row a `GET` or `HEAD` of the path is answered as the layout answers a one-segment path of
-/// the API that no route owns (`/api/nothing`), status, headers and body, byte for byte. In the API
-/// alone and beside the back office that is the JSON with a code and a hint; in the public site's
-/// router it is the short JSON of `json_404`. That is the whole of the property: a path of the same
-/// shape with two segments is matched by `/api/{model}/{command}`, which takes `POST` only, so it
-/// answers 405 with `Allow: POST`, and the logo path answers `POST` (and every other method but
-/// `GET` and `HEAD`) with 405 and `Allow: GET,HEAD`. A scanner can tell that the route exists, and
-/// cannot tell from a `GET` whether a brand is set; the relation is pinned below.
+/// With no row a `GET` or `HEAD` of the path is answered exactly as the layout answers a
+/// one-segment path of the API that no route owns (`/api/nothing`), status, headers and body, byte
+/// for byte. In the API alone and beside the back office that is the JSON with a code and a hint;
+/// in the public site's router it is the short JSON of `json_404`. A set brand shows itself by the
+/// 200 and the artwork (public by design), and the route shows nothing else about the instance.
+/// The route does not hide that it exists: a path of the same shape with two segments is matched by
+/// `/api/{model}/{command}`, which takes `POST` only, so it answers 405 with `Allow: POST`, and the
+/// logo path answers `POST` (and every other method but `GET` and `HEAD`) with 405 and `Allow:
+/// GET,HEAD`; the relation is pinned below.
 #[tokio::test]
 async fn with_no_brand_the_logo_path_answers_as_an_unknown_api_path_in_every_layout() {
     for l in layouts() {
@@ -463,6 +464,10 @@ async fn the_query_string_changes_nothing() {
 }
 
 /// `HEAD` is the `GET` without a body, headers and length included (it comes from the `GET` route).
+/// Before the route existed a `HEAD` of the path was a 405 with `Allow: POST`; it is now the answer
+/// of the route, a deliberate change of the answer of the path (spec, sections 4, 12 and 13). This
+/// test holds it with a brand, the first test of this file without one, and the test over a socket
+/// on the wire.
 #[tokio::test]
 async fn head_is_the_get_without_a_body() {
     for l in layouts() {
@@ -474,7 +479,8 @@ async fn head_is_the_get_without_a_body() {
         assert_eq!(h.header_lines(), g.header_lines(), "{}", l.name);
         assert_eq!(h.header("content-length"), g.body.len().to_string());
         // A `HEAD` with the validator is a 304, as the `GET` is, and its `Content-Length` is that of
-        // the 200 (RFC 9110 section 8.6 allows no other; the server layer would send 0 for it).
+        // the 200 (the handler sets it, RFC 9110 section 8.6 allows no other value; the server layer
+        // sends it with a `HEAD` 304, and `the_304_on_the_wire_...` holds it over a socket).
         let etag = g.header("etag").to_string();
         let h304 = ask(&l.router, "HEAD", PATH, &[("if-none-match", &etag)]).await;
         assert_eq!(h304.status, 304, "{}", l.name);
@@ -490,7 +496,11 @@ async fn head_is_the_get_without_a_body() {
 
 /// The validator: quoted, a strong or weak match of any entry of the list or `*` is a 304 that
 /// carries what a 304 must carry (the `ETag` and `Cache-Control`) and the security headers, and no
-/// body and no `Content-Type`; anything else is the whole answer.
+/// body and no `Content-Type`; anything else is the whole answer. The `Content-Length` of a `GET` 304
+/// is not asserted here: the handler sets the length of the 200 on it, the HTTP server omits it from
+/// a `GET` 304, and a router called without a server shows the handler's header, which no client
+/// sees. What a client sees, on a `GET` and on a `HEAD`, is held over a socket by
+/// `the_304_on_the_wire_...`.
 #[tokio::test]
 async fn a_matching_validator_is_a_304_with_the_headers_a_304_carries() {
     for l in layouts() {
@@ -521,13 +531,6 @@ async fn a_matching_validator_is_a_304_with_the_headers_a_304_carries() {
             assert_eq!(a.header("content-security-policy"), SPEC_CSP);
             assert!(!a.has("content-type"), "{}: {inm}", l.name);
             assert!(!a.has("set-cookie"), "{}: {inm}", l.name);
-            // The length of the 200 it validates, never another (RFC 9110 section 8.6).
-            assert_eq!(
-                a.header("content-length"),
-                full.body.len().to_string(),
-                "{}: {inm}",
-                l.name
-            );
         }
         // Two header lines are one list.
         let two = ask(
@@ -749,7 +752,8 @@ async fn a_post_to_the_logo_path_is_a_405_and_does_not_reach_the_command_route()
 /// GET,HEAD` and no body, with a brand and without one, with a token and without (it was `Allow:
 /// POST` before the route existed; the golden digests hold the `GET` and the `POST` only, so this is
 /// the test that holds the others). An `OPTIONS` that the cross-origin layer does not take is one of
-/// them; with `OBOP_ALLOWED_ORIGINS` set the layer answers a preflight first, see below.
+/// them; with `OBOP_ALLOWED_ORIGINS` set the layer answers a preflight first, see below. A `HEAD` is
+/// not among them (it is the `GET` without the body: `head_is_the_get_without_a_body`).
 #[tokio::test]
 async fn every_other_method_on_the_logo_path_is_a_405_that_names_get_and_head() {
     for l in layouts() {
@@ -846,8 +850,179 @@ async fn the_logo_route_has_the_cross_origin_headers_of_the_layer_and_none_of_it
         assert!(!logo.has("access-control-allow-credentials"), "{origin}");
         assert_ne!(logo.header("access-control-allow-origin"), "*", "{origin}");
         assert!(logo.body.is_empty(), "{origin}");
+        // The `Allow` of that answer names the methods of the route that owns the path, as it does
+        // for the other route. It was `POST` while the path belonged to `/api/{model}/{command}`:
+        // a deliberate change of the answer of the path (spec, sections 4, 12 and 13).
+        assert_eq!(logo.header("allow"), "GET,HEAD", "{origin}");
+        assert_eq!(logo.header("allow"), other.header("allow"), "{origin}");
     }
 }
+
+// ---- On the wire ----------------------------------------------------------------------------------
+
+/// What a client of a socket reads: the status line, the header lines (the names in lower case, as
+/// the server sends them) and the body.
+struct Wire {
+    status: String,
+    headers: Vec<(String, String)>,
+    body: Vec<u8>,
+}
+
+impl Wire {
+    fn header(&self, name: &str) -> Option<&str> {
+        self.headers
+            .iter()
+            .find(|(k, _)| k == name)
+            .map(|(_, v)| v.as_str())
+    }
+
+    /// The names of the headers, sorted, without `date` and `connection`, which the server sets and
+    /// the route and its layers do not.
+    fn names(&self) -> Vec<&str> {
+        let mut names: Vec<&str> = self
+            .headers
+            .iter()
+            .map(|(k, _)| k.as_str())
+            .filter(|k| !matches!(*k, "date" | "connection"))
+            .collect();
+        names.sort_unstable();
+        names
+    }
+}
+
+/// The router served on a loopback socket the way `obop_http::serve` serves it, and its address.
+async fn on_a_socket(router: axum::Router) -> std::net::SocketAddr {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        axum::serve(
+            listener,
+            router.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+        )
+        .await
+        .unwrap();
+    });
+    addr
+}
+
+/// One request over TCP, read to the end of the connection (it says `Connection: close`), with a
+/// bound on every read, so that a server that does not answer fails the test and does not hang it.
+async fn on_the_wire(addr: std::net::SocketAddr, method: &str, headers: &[(&str, &str)]) -> Wire {
+    use std::io::{Read, Write};
+    let mut request = format!("{method} {PATH} HTTP/1.1\r\nHost: {HOST}\r\nConnection: close\r\n");
+    for (k, v) in headers {
+        request.push_str(&format!("{k}: {v}\r\n"));
+    }
+    request.push_str("\r\n");
+    tokio::task::spawn_blocking(move || {
+        let mut s = std::net::TcpStream::connect(addr).unwrap();
+        s.set_read_timeout(Some(std::time::Duration::from_secs(20)))
+            .unwrap();
+        s.write_all(request.as_bytes()).unwrap();
+        let mut raw = Vec::new();
+        s.read_to_end(&mut raw).expect("the server answered");
+        let split = raw
+            .windows(4)
+            .position(|w| w == b"\r\n\r\n")
+            .expect("a response head");
+        let head = String::from_utf8(raw[..split].to_vec()).unwrap();
+        let mut lines = head.split("\r\n");
+        let status = lines.next().unwrap().to_string();
+        let headers = lines
+            .map(|l| {
+                let (k, v) = l.split_once(':').expect("a header line");
+                (k.trim().to_ascii_lowercase(), v.trim().to_string())
+            })
+            .collect();
+        Wire {
+            status,
+            headers,
+            body: raw[split + 4..].to_vec(),
+        }
+    })
+    .await
+    .unwrap()
+}
+
+/// What a client sees of a 304, over a real socket, because a router called without a server shows
+/// the headers the handler set and not the ones the server sends. The handler sets the length of
+/// the 200 on a 304; the HTTP server sends it on a `HEAD` 304 and leaves it out of a `GET` 304
+/// (RFC 9110 section 8.6 allows both), and `Transfer-Encoding` is on neither. The header sets are
+/// pinned whole: a `GET` 304 is the validators and the security headers, and a `HEAD` 304 is the
+/// same with the length; a 200 and a `HEAD` 200 carry the length and the type.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_304_on_the_wire_carries_the_length_on_a_head_and_none_on_a_get() {
+    for l in layouts() {
+        set_brand(&l.app);
+        let addr = on_a_socket(l.router.clone()).await;
+        let what = l.name;
+
+        let full = on_the_wire(addr, "GET", &[]).await;
+        assert_eq!(full.status, "HTTP/1.1 200 OK", "{what}");
+        let length = full.body.len().to_string();
+        assert_eq!(
+            full.header("content-length"),
+            Some(length.as_str()),
+            "{what}"
+        );
+        assert_eq!(full.body, artwork().as_bytes(), "{what}");
+        let etag = full.header("etag").expect("an ETag").to_string();
+        let head = on_the_wire(addr, "HEAD", &[]).await;
+        assert_eq!(head.status, "HTTP/1.1 200 OK", "{what}");
+        assert!(head.body.is_empty(), "{what}");
+        assert_eq!(
+            head.header("content-length"),
+            Some(length.as_str()),
+            "{what}"
+        );
+        assert_eq!(head.names(), full.names(), "{what}: HEAD 200");
+
+        let revalidating = [("if-none-match", etag.as_str())];
+        let get_304 = on_the_wire(addr, "GET", &revalidating).await;
+        assert_eq!(get_304.status, "HTTP/1.1 304 Not Modified", "{what}");
+        assert!(get_304.body.is_empty(), "{what}");
+        assert_eq!(get_304.header("etag"), Some(etag.as_str()), "{what}");
+        assert_eq!(get_304.header("cache-control"), Some("no-cache"), "{what}");
+        assert_eq!(
+            get_304.names(),
+            GET_304_HEADERS,
+            "{what}: the headers of a GET 304 on the wire"
+        );
+
+        let head_304 = on_the_wire(addr, "HEAD", &revalidating).await;
+        assert_eq!(head_304.status, "HTTP/1.1 304 Not Modified", "{what}");
+        assert!(head_304.body.is_empty(), "{what}");
+        assert_eq!(
+            head_304.header("content-length"),
+            Some(length.as_str()),
+            "{what}: the length of the 200"
+        );
+        assert_eq!(
+            head_304.names(),
+            HEAD_304_HEADERS,
+            "{what}: the headers of a HEAD 304 on the wire"
+        );
+    }
+}
+
+/// The names of the headers of a 304 as the server sends it: the validator, the cache policy and
+/// the two security headers of the 200, and no `Content-Type`, no `Content-Length` (a `GET` 304) and
+/// no `Transfer-Encoding`.
+const GET_304_HEADERS: [&str; 4] = [
+    "cache-control",
+    "content-security-policy",
+    "etag",
+    "x-content-type-options",
+];
+
+/// The same with the length of the 200, which the server sends with a `HEAD` 304.
+const HEAD_304_HEADERS: [&str; 5] = [
+    "cache-control",
+    "content-length",
+    "content-security-policy",
+    "etag",
+    "x-content-type-options",
+];
 
 // ---- Hosting --------------------------------------------------------------------------------------
 
@@ -918,6 +1093,22 @@ async fn while_the_cell_is_fresh_a_failing_store_is_not_met() {
     panic!("five tries were each slower than 1.5 s: the machine cannot run this test");
 }
 
+/// The bound of the reader's cell (`obop_commands::brand::DEFAULT_BOUND`): the dispatcher's reader
+/// has this one, and a test in this crate cannot make it shorter or expire the cell by hand.
+const READER_BOUND: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Returns when the cell that the read before `filled` made is stale. `filled` is an instant taken
+/// after that read: the cell is dated from the start of the read, so it is at least as old as
+/// `filled` is, and it is stale once the bound has gone by since `filled`, however long the machine
+/// took between the read and the instant. The loop is on the clock, so an early wake-up does not
+/// end it early.
+fn wait_until_stale(filled: std::time::Instant) {
+    let stale = READER_BOUND + std::time::Duration::from_millis(50);
+    while filled.elapsed() <= stale {
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+}
+
 /// After a good read, a store that then fails: once the cell has expired, the request that runs the
 /// refill meets the fault and is answered by D74, 503 with `Retry-After`, never with the logo and
 /// never with a page that says `obop`; the next request reads again (a failed refill is not kept)
@@ -927,17 +1118,16 @@ async fn while_the_cell_is_fresh_a_failing_store_is_not_met() {
 async fn after_a_good_read_a_failing_store_answers_the_request_that_runs_the_refill_with_a_503() {
     let (flaky, app) = flaky_app();
     let router = router_of(&app);
-    // Taken before the read that fills the cell, so it is never younger than the cell.
-    let after_the_read = std::time::Instant::now();
     set_brand(&app);
     let good = get(&router, PATH).await;
     assert_eq!(good.status, 200);
     let logo = good.body.clone();
+    // Taken after the read that filled the cell (`set_brand` read it): the cell is dated from the
+    // start of that read, so it is at least as old as this instant.
+    let filled = std::time::Instant::now();
 
     flaky.refuse_model("instance_brand", Mode::Reads);
-    // Two seconds after the read the cell is stale.
-    let wait = std::time::Duration::from_millis(2100).saturating_sub(after_the_read.elapsed());
-    std::thread::sleep(wait);
+    wait_until_stale(filled);
 
     let refused_before = flaky.refused();
     let first = get(&router, PATH).await;
@@ -1096,6 +1286,204 @@ async fn a_request_that_arrives_behind_a_failing_first_refill_is_not_answered_wi
     );
     assert_eq!(first.header("retry-after"), "1");
     assert_eq!(second.status, 404, "behind it: the default, no error");
+}
+
+/// What a refill that is held inside the store does to the server (spec, section 13, "A blocked
+/// store"), through the route: the request that runs the refill waits for the store, and nothing
+/// else does. The runtime has one worker, so a read on the thread that polls the requests would stop
+/// everything below. While the refill is parked, `/healthz` answers, and a hundred requests to the
+/// logo route are answered with the last good logo, before the refill is let go; the double counts
+/// one read for all of it, the owner's (the route has one flight, and the callers read nothing).
+/// After the release the owner is answered with the logo and the cell is fresh again. Every wait is
+/// on a condition and has a bound, so a route that waits for the refill fails the test.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn while_a_refill_is_parked_in_the_store_the_logo_is_served_from_the_last_good_value() {
+    let (flaky, app) = flaky_app();
+    let router = router_of(&app);
+    set_brand(&app);
+    let good = get(&router, PATH).await;
+    assert_eq!(good.status, 200);
+    let filled = std::time::Instant::now();
+    tokio::task::spawn_blocking(move || wait_until_stale(filled))
+        .await
+        .unwrap();
+
+    // The refill that the next request runs parks in the store after it has read the row.
+    let (parked_tx, parked_rx) = std::sync::mpsc::channel::<()>();
+    let (go_tx, go_rx) = std::sync::mpsc::channel::<()>();
+    flaky.after_the_get_of(
+        "instance_brand",
+        0,
+        Box::new(move |_| {
+            parked_tx.send(()).unwrap();
+            // Bounded, and let go at once when the test fails (the sender is dropped with it).
+            let _ = go_rx.recv_timeout(std::time::Duration::from_secs(30));
+        }),
+    );
+    flaky.reset_reads();
+    let owner = {
+        let r = router.clone();
+        tokio::spawn(async move { get(&r, PATH).await })
+    };
+    let parked = tokio::task::spawn_blocking(move || {
+        parked_rx.recv_timeout(std::time::Duration::from_secs(20))
+    })
+    .await
+    .unwrap();
+    assert!(
+        parked.is_ok(),
+        "the request never reached the store: the cell was not stale"
+    );
+    assert_eq!(flaky.reads().gets, 1, "the owner has read the row");
+
+    let bound = std::time::Duration::from_secs(20);
+    let health = tokio::time::timeout(bound, ask(&router, "GET", "/healthz", &[]))
+        .await
+        .expect("/healthz was not answered while the refill is parked: the runtime is held");
+    assert_eq!(health.status, 200);
+
+    let mut set = tokio::task::JoinSet::new();
+    for _ in 0..100 {
+        let r = router.clone();
+        set.spawn(async move { get(&r, PATH).await });
+    }
+    let answers = tokio::time::timeout(bound, async {
+        let mut all = Vec::new();
+        while let Some(a) = set.join_next().await {
+            all.push(a.unwrap());
+        }
+        all
+    })
+    .await
+    .expect("a request waited for the parked refill: it was not answered with the last good logo");
+    assert_eq!(answers.len(), 100);
+    for a in &answers {
+        assert_eq!(a.status, 200, "{}", a.text());
+        assert_eq!(a.body, good.body, "the last good logo");
+    }
+    assert_eq!(
+        flaky.reads().gets,
+        1,
+        "the hundred read nothing: one flight, the owner's"
+    );
+    assert!(!owner.is_finished(), "the owner is still in the store");
+
+    go_tx.send(()).unwrap();
+    let owner = owner.await.unwrap();
+    assert_eq!((owner.status, owner.body), (200, good.body.clone()));
+    assert_eq!(flaky.reads().gets, 2, "the row and the theme: one flight");
+    // The cell is fresh again: the next request reads nothing.
+    assert_eq!(get(&router, PATH).await.body, good.body);
+    assert_eq!(flaky.reads().gets, 2);
+}
+
+/// A burst of requests at a reader whose cell is empty costs one flight, two reads of the store (the
+/// row and the theme setting), however many arrive and whether or not a row exists: the route has
+/// no read of its own and the reader's single flight is the whole of the cost (spec, section 9).
+/// The count holds only while the cell stays fresh, so a burst that took more than 1.5 seconds on a
+/// slow machine is started again, and five slow tries fail the test.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_burst_of_cold_requests_costs_one_flight_of_two_reads() {
+    for row in [true, false] {
+        let mut counted = false;
+        for _try in 0..5 {
+            let (flaky, app) = flaky_app();
+            let router = router_of(&app);
+            if row {
+                write_around_the_command(&app, "instance_brand", json!({"name": "MOHV"}));
+            }
+            flaky.reset_reads();
+            let started = std::time::Instant::now();
+            let mut set = tokio::task::JoinSet::new();
+            for _ in 0..200 {
+                let r = router.clone();
+                set.spawn(async move { get(&r, PATH).await.status });
+            }
+            let mut statuses = Vec::new();
+            while let Some(s) = set.join_next().await {
+                statuses.push(s.unwrap());
+            }
+            if started.elapsed() >= std::time::Duration::from_millis(1500) {
+                continue;
+            }
+            let want = if row { 200 } else { 404 };
+            assert!(
+                statuses.iter().all(|s| *s == want),
+                "row={row}: {statuses:?}"
+            );
+            assert_eq!(statuses.len(), 200);
+            assert_eq!(flaky.reads().gets, 2, "row={row}: one flight, two reads");
+            counted = true;
+            break;
+        }
+        assert!(
+            counted,
+            "row={row}: five bursts were each slower than 1.5 s"
+        );
+    }
+}
+
+/// A process that never had a good read has no logo to serve while the first read waits for the
+/// store, and the pool gives up on it after its bound (the double holds the read until the test
+/// lets it go, then times out as the pool does: the fault is noted on the thread of the read and the
+/// refill's next read is refused). The request that runs that refill is the one that waits for the
+/// store, and it is answered by D74: 503 with `Retry-After` 5 and the code word `storage_timeout`,
+/// not the 404 of an unknown path and not an error page of the route's own. `/healthz` answers while
+/// the read is held, and the failure is not kept: when the store answers, the route answers from it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn a_first_read_that_times_out_in_the_store_is_answered_503_with_retry_after() {
+    let (flaky, app) = flaky_app();
+    let router = router_of(&app);
+    let (parked_tx, parked_rx) = std::sync::mpsc::channel::<()>();
+    let (go_tx, go_rx) = std::sync::mpsc::channel::<()>();
+    let f = flaky.clone();
+    flaky.after_the_get_of(
+        "instance_brand",
+        0,
+        Box::new(move |_| {
+            parked_tx.send(()).unwrap();
+            let _ = go_rx.recv_timeout(std::time::Duration::from_secs(30));
+            // The bound has run out: the timeout of the pool, noted on this thread as the pool notes
+            // it (the first fault of a request is the one it is answered with), and the next read of
+            // the refill, the theme setting, is refused.
+            obop_storage::fault::note(obop_storage::fault::Fault::Timeout);
+            f.refuse_next(1);
+        }),
+    );
+    let first = {
+        let r = router.clone();
+        tokio::spawn(async move { get(&r, PATH).await })
+    };
+    let parked = tokio::task::spawn_blocking(move || {
+        parked_rx.recv_timeout(std::time::Duration::from_secs(20))
+    })
+    .await
+    .unwrap();
+    assert!(parked.is_ok(), "the request never reached the store");
+    let health = tokio::time::timeout(
+        std::time::Duration::from_secs(20),
+        ask(&router, "GET", "/healthz", &[]),
+    )
+    .await
+    .expect("/healthz was not answered while the first read is held: the runtime is held");
+    assert_eq!(health.status, 200);
+    assert!(!first.is_finished(), "the request waits for the store");
+
+    go_tx.send(()).unwrap();
+    let first = first.await.unwrap();
+    assert_eq!(first.status, 503, "{}", first.text());
+    assert_eq!(first.header("retry-after"), "5");
+    assert_eq!(first.header("x-obop-applied"), "none");
+    let body: J = serde_json::from_slice(&first.body).unwrap();
+    assert_eq!(body["code"], "storage_timeout", "{body}");
+    assert!(!first.text().contains("<svg"), "not the logo");
+
+    // Nothing was kept: the store answers, and so does the route (no row: the unknown-path 404).
+    flaky.allow_models();
+    let unknown = get(&router, "/api/nothing").await;
+    let healed = get(&router, PATH).await;
+    assert_eq!(healed.status, 404);
+    assert_eq!(healed.body, unknown.body);
 }
 
 /// The store is never read on the thread that polls the request: the PostgreSQL client panics on an
