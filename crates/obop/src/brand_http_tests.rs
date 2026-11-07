@@ -789,7 +789,9 @@ fn cross_origin(a: &Answer) -> Vec<String> {
 /// every route goes through decides, and the logo route is answered exactly as `/api/openapi.json`,
 /// the other public route, is: no `Access-Control-Allow-Origin` without an `Origin` or for one that
 /// is not listed, the listed one echoed (never `*`) with `Vary: Origin` and no credentials, on the
-/// 200 and on the 304, and a preflight as for the other route.
+/// 200 and on the 304, and a preflight as for the other route: a request the layer accepts from the
+/// listed origin is a 204 that echoes it, one from another origin is a 403 with nothing of the
+/// kind, and the `Allow` of both names the methods of the route that owns the path.
 #[tokio::test]
 async fn the_logo_route_has_the_cross_origin_headers_of_the_layer_and_none_of_its_own() {
     const LISTED: &str = "https://app.example.com";
@@ -833,29 +835,54 @@ async fn the_logo_route_has_the_cross_origin_headers_of_the_layer_and_none_of_it
         }
     }
     // A preflight is the layer's: the same as for the other route, and nothing from the handler.
+    // The request headers it asks for are ones the layer knows (`accept`, `authorization`) or none:
+    // the layer refuses a list with a name it does not know for every origin, so a preflight that
+    // asked for one would show nothing of the listed origin (the case after the loop).
     for origin in [FOREIGN, LISTED] {
-        let h = [
-            ("origin", origin),
-            ("access-control-request-method", "GET"),
-            ("access-control-request-headers", "if-none-match"),
-        ];
-        let logo = ask(&router, "OPTIONS", PATH, &h).await;
-        let other = ask(&router, "OPTIONS", "/api/openapi.json", &h).await;
-        assert_eq!(logo.status, other.status, "preflight from {origin}");
-        assert_eq!(
-            cross_origin(&logo),
-            cross_origin(&other),
-            "preflight from {origin}"
-        );
-        assert!(!logo.has("access-control-allow-credentials"), "{origin}");
-        assert_ne!(logo.header("access-control-allow-origin"), "*", "{origin}");
-        assert!(logo.body.is_empty(), "{origin}");
-        // The `Allow` of that answer names the methods of the route that owns the path, as it does
-        // for the other route. It was `POST` while the path belonged to `/api/{model}/{command}`:
-        // a deliberate change of the answer of the path (spec, sections 4, 12 and 13).
-        assert_eq!(logo.header("allow"), "GET,HEAD", "{origin}");
-        assert_eq!(logo.header("allow"), other.header("allow"), "{origin}");
+        for asked in [Some("accept, authorization"), None] {
+            let mut h = vec![("origin", origin), ("access-control-request-method", "GET")];
+            h.extend(asked.map(|list| ("access-control-request-headers", list)));
+            let logo = ask(&router, "OPTIONS", PATH, &h).await;
+            let other = ask(&router, "OPTIONS", "/api/openapi.json", &h).await;
+            let what = format!("preflight from {origin} asking for {asked:?}");
+            assert_eq!(logo.status, other.status, "{what}");
+            assert_eq!(cross_origin(&logo), cross_origin(&other), "{what}");
+            assert!(logo.body.is_empty(), "{what}");
+            assert!(!logo.has("access-control-allow-credentials"), "{what}");
+            assert_ne!(logo.header("access-control-allow-origin"), "*", "{what}");
+            if origin == LISTED {
+                // Accepted: 204, the listed origin echoed (never `*`) with `Vary: Origin`, the
+                // methods of the layer, and no credentials.
+                assert_eq!(logo.status, 204, "{what}");
+                assert_eq!(logo.header("access-control-allow-origin"), LISTED, "{what}");
+                assert!(logo.header("access-control-allow-methods").contains("GET"));
+                assert!(
+                    logo.header("vary").to_lowercase().contains("origin"),
+                    "{what}"
+                );
+            } else {
+                assert_eq!(logo.status, 403, "{what}");
+                assert!(!logo.has("access-control-allow-origin"), "{what}");
+            }
+            // The `Allow` of that answer names the methods of the route that owns the path, as it
+            // does for the other route. It was `POST` while the path belonged to
+            // `/api/{model}/{command}`: a deliberate change of the answer of the path (spec,
+            // sections 4, 12 and 13).
+            assert_eq!(logo.header("allow"), "GET,HEAD", "{what}");
+            assert_eq!(logo.header("allow"), other.header("allow"), "{what}");
+        }
     }
+    // A preflight that asks for a header the layer does not know (`if-none-match`) is refused, for
+    // the listed origin too, and for the other route alike: the 403 has no `access-control-*`.
+    let h = [
+        ("origin", LISTED),
+        ("access-control-request-method", "GET"),
+        ("access-control-request-headers", "if-none-match"),
+    ];
+    let logo = ask(&router, "OPTIONS", PATH, &h).await;
+    let other = ask(&router, "OPTIONS", "/api/openapi.json", &h).await;
+    assert_eq!((logo.status, other.status), (403, 403));
+    assert!(cross_origin(&logo).is_empty() && cross_origin(&other).is_empty());
 }
 
 // ---- On the wire ----------------------------------------------------------------------------------
@@ -1093,9 +1120,34 @@ async fn while_the_cell_is_fresh_a_failing_store_is_not_met() {
     panic!("five tries were each slower than 1.5 s: the machine cannot run this test");
 }
 
-/// The bound of the reader's cell (`obop_commands::brand::DEFAULT_BOUND`): the dispatcher's reader
-/// has this one, and a test in this crate cannot make it shorter or expire the cell by hand.
+/// The bound of the reader's cell: the constant `DEFAULT_BOUND` of
+/// `crates/kernel/obop-commands/src/brand/reader.rs` (not exported, and pinned at two seconds by
+/// `brand/tests/cache.rs`). The dispatcher's reader has this bound, and a test in this crate cannot
+/// make it shorter or expire the cell by hand. If the constant changes, the tests below that wait
+/// for the cell to go stale fail loudly (the request they expect to be refused is answered 200, or
+/// the wait is far too long), not silently.
 const READER_BOUND: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// A `GET /healthz` that the runtime's worker must poll, answered within `bound`, and the answer.
+/// The test body runs on the thread that drives the runtime (`block_on`), not on a worker, so a
+/// request polled there is not delayed by a worker that is held in the store; a task spawned on
+/// the runtime is. The wait for the task is not under `tokio::time::timeout`, because a held
+/// worker is also the thread that drives that timer; it is the elapsed time that is checked, and
+/// the hold in the store has a bound of its own (30 seconds), so a runtime that is held fails the
+/// test and does not hang it.
+async fn healthz_within(router: &axum::Router, bound: std::time::Duration, why: &str) -> Answer {
+    let r = router.clone();
+    let started = std::time::Instant::now();
+    let answer = tokio::spawn(async move { ask(&r, "GET", "/healthz", &[]).await })
+        .await
+        .unwrap();
+    assert!(
+        started.elapsed() < bound,
+        "/healthz was answered only after {:?} ({why}): the runtime is held",
+        started.elapsed()
+    );
+    answer
+}
 
 /// Returns when the cell that the read before `filled` made is stale. `filled` is an instant taken
 /// after that read: the cell is dated from the start of the read, so it is at least as old as
@@ -1337,25 +1389,24 @@ async fn while_a_refill_is_parked_in_the_store_the_logo_is_served_from_the_last_
     assert_eq!(flaky.reads().gets, 1, "the owner has read the row");
 
     let bound = std::time::Duration::from_secs(20);
-    let health = tokio::time::timeout(bound, ask(&router, "GET", "/healthz", &[]))
-        .await
-        .expect("/healthz was not answered while the refill is parked: the runtime is held");
+    let health = healthz_within(&router, bound, "while the refill is parked").await;
     assert_eq!(health.status, 200);
 
+    let started = std::time::Instant::now();
     let mut set = tokio::task::JoinSet::new();
     for _ in 0..100 {
         let r = router.clone();
         set.spawn(async move { get(&r, PATH).await });
     }
-    let answers = tokio::time::timeout(bound, async {
-        let mut all = Vec::new();
-        while let Some(a) = set.join_next().await {
-            all.push(a.unwrap());
-        }
-        all
-    })
-    .await
-    .expect("a request waited for the parked refill: it was not answered with the last good logo");
+    let mut answers = Vec::new();
+    while let Some(a) = set.join_next().await {
+        answers.push(a.unwrap());
+    }
+    assert!(
+        started.elapsed() < bound,
+        "the hundred were answered only after {:?}: a request waited for the parked refill",
+        started.elapsed()
+    );
     assert_eq!(answers.len(), 100);
     for a in &answers {
         assert_eq!(a.status, 200, "{}", a.text());
@@ -1424,9 +1475,11 @@ async fn a_burst_of_cold_requests_costs_one_flight_of_two_reads() {
 }
 
 /// A process that never had a good read has no logo to serve while the first read waits for the
-/// store, and the pool gives up on it after its bound (the double holds the read until the test
-/// lets it go, then times out as the pool does: the fault is noted on the thread of the read and the
-/// refill's next read is refused). The request that runs that refill is the one that waits for the
+/// store. The double holds the refill after its first read (the row of `instance_brand`) until the
+/// test lets it go; it then notes `Fault::Timeout` on the thread, as the pool does when its bound
+/// runs out, and refuses the refill's next read (the theme setting). No bound is shortened and none
+/// is waited for: the test pins what the route and D74 do with a timeout, not the wording or the
+/// timing of the pool's own. The request that runs that refill is the one that waits for the
 /// store, and it is answered by D74: 503 with `Retry-After` 5 and the code word `storage_timeout`,
 /// not the 404 of an unknown path and not an error page of the route's own. `/healthz` answers while
 /// the read is held, and the failure is not kept: when the store answers, the route answers from it.
@@ -1460,12 +1513,12 @@ async fn a_first_read_that_times_out_in_the_store_is_answered_503_with_retry_aft
     .await
     .unwrap();
     assert!(parked.is_ok(), "the request never reached the store");
-    let health = tokio::time::timeout(
+    let health = healthz_within(
+        &router,
         std::time::Duration::from_secs(20),
-        ask(&router, "GET", "/healthz", &[]),
+        "while the first read is held",
     )
-    .await
-    .expect("/healthz was not answered while the first read is held: the runtime is held");
+    .await;
     assert_eq!(health.status, 200);
     assert!(!first.is_finished(), "the request waits for the store");
 

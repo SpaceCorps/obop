@@ -1501,8 +1501,8 @@ async fn pins_the_server_name_of_initialize() {
 ///
 /// - `GET`: the generic command route (`/api/{model}/{command}`) matches the path for a `POST` only,
 ///   so a `GET` was refused with `405` and `Allow: POST` (digest 75580546...); it is now the `404`
-///   JSON of an unknown path of the API, since there is no brand row (a `200` with the logo when
-///   there is one, `brand_http_tests`).
+///   JSON of an unknown path of the API (digest fd0f798e...), since there is no brand row (a `200`
+///   with the logo when there is one, `brand_http_tests`).
 /// - `POST` with no token was a `401` (31f8cb6f...) and with a token the `404` of a command that
 ///   does not exist (23fee73b...); both are now the `405` of the route that owns the path, with
 ///   `Allow: GET,HEAD` and no body (39252dd2...). A `POST` no longer reaches the command route.
