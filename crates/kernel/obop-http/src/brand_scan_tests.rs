@@ -25,10 +25,13 @@
 //!
 //! **A row carries a [`Limit`].** The files of the module, the model and the command line may do
 //! anything ([`Limit::Any`]). A file of a surface that only asks the reader ([`Limit::Reads`]) may
-//! call `brand()` as many times as the row says and name the paths through the module `brand` that
-//! the row lists, and nothing else: so the reason of such a row ("it reads nothing", "the route
-//! asks the reader once") is held by the scan, and a second reader added to a large file such as
-//! `obop-http/src/lib.rs` is found.
+//! call `brand()` as many times as the row says, name the paths through the module `brand` that
+//! the row lists, call `.current(`, `.fresh(` and `.strict(` as many times in all as the row says,
+//! and name the types the row lists as types only (never `Reader::new`, `Reader::with_bound`,
+//! `Reader::inert` or any other function reached through the type, which would build a second
+//! reader or reach round the one it was handed), and nothing else: so the reason of such a row ("it
+//! reads nothing", "the route asks the reader once") is held by the scan, and a second reader added
+//! to a large file such as `obop-http/src/lib.rs` is found.
 //!
 //! **What it does not see.** It is a textual scan, not a parser. Text built at run time
 //! (`format!("{}_brand", "instance")`), the model reached through a constant of another crate that
@@ -47,12 +50,16 @@ use std::path::Path;
 enum Limit {
     /// Anything: the file belongs to the module, or acts on the row as its owner.
     Any,
-    /// Ask the reader and nothing else: at most `calls` calls of `brand()`, and paths through the
-    /// module `brand` only to the names in `paths`. The model, `install_brand`, any other path and
-    /// the accessor named without a call are not allowed.
+    /// Ask the reader and nothing else: at most `calls` calls of `brand()`, at most `reads` calls
+    /// in all of `.current(`, `.fresh(` and `.strict(` (the three ways of asking a reader), and
+    /// paths through the module `brand` only to the names in `paths`; a name in `types` may be
+    /// written (it is in `paths` too) but nothing may be reached through it with `::`. The model,
+    /// `install_brand`, any other path and the accessor named without a call are not allowed.
     Reads {
         calls: usize,
+        reads: usize,
         paths: &'static [&'static str],
+        types: &'static [&'static str],
     },
 }
 
@@ -81,10 +88,12 @@ const ALLOWED: [(&str, &str, Limit); 7] = [
     ),
     (
         "kernel/obop-http/src/brand.rs",
-        "the logo route `GET /api/brand/logo.svg` and `current()`: the route asks the reader once, through the blocking pool",
+        "the logo route `GET /api/brand/logo.svg` and `current()`: the route gets the reader of the dispatcher once and asks it once, through the blocking pool; it builds no reader",
         Limit::Reads {
             calls: 1,
+            reads: 1,
             paths: &["Reader", "Shown"],
+            types: &["Reader", "Shown"],
         },
     ),
     (
@@ -92,7 +101,9 @@ const ALLOWED: [(&str, &str, Limit); 7] = [
         "`api_routes` registers the logo route (`brand::routes`) and passes it the answer of the layout to an unknown path; it reads nothing",
         Limit::Reads {
             calls: 0,
+            reads: 0,
             paths: &["routes", "NotFound"],
+            types: &[],
         },
     ),
     (
@@ -121,6 +132,8 @@ const MODEL_LITERAL: &str = "the model `instance_brand` in a literal";
 const INSTALL: &str = "`install_brand`";
 const PATH: &str = "a path through the module `brand`";
 const CALL: &str = "a call of the reader accessor `brand()`";
+const READ: &str = "a call of `.current(`, `.fresh(` or `.strict(`";
+const THROUGH: &str = "a function reached through a type the row lets the file name as a type only";
 const VALUE: &str = "the module `brand` or the reader accessor `brand` named without a call";
 
 /// What in a file names the row or its reader: the offset, what was found and, for a path through
@@ -167,6 +180,47 @@ fn targets(code: &[u8], from: usize) -> Vec<String> {
         }
     }
     names
+}
+
+/// What a file with a row of [`Limit::Reads`] does with a reader once it has one: a call of
+/// `.current(`, `.fresh(` or `.strict(` (a method call: the word follows a `.` and a `(` follows it),
+/// and a function reached through one of `types` (`Reader::new`, `Reader::with_bound`,
+/// `Reader::inert`: the word is followed by `::`). They are looked for only in the files of such a
+/// row, where they are the whole of what the file may do with the reader: elsewhere a method called
+/// `current` is no business of this scan.
+fn uses(l: &Lexed, types: &[&str]) -> Vec<Hit> {
+    use crate::src_scan::skip_ws;
+    let code = &l.code;
+    let mut out = Vec::new();
+    for name in ["current", "fresh", "strict"] {
+        for at in words(code, name) {
+            let after = skip_ws(code, at + name.len());
+            let dot = code[..at]
+                .iter()
+                .rposition(|c| !c.is_ascii_whitespace())
+                .is_some_and(|p| code[p] == b'.');
+            if dot && code.get(after) == Some(&b'(') {
+                out.push(Hit {
+                    at,
+                    what: READ,
+                    names: vec![],
+                });
+            }
+        }
+    }
+    for name in types {
+        for at in words(code, name) {
+            let after = skip_ws(code, at + name.len());
+            if code[after..].starts_with(b"::") {
+                out.push(Hit {
+                    at,
+                    what: THROUGH,
+                    names: vec![name.to_string()],
+                });
+            }
+        }
+    }
+    out
 }
 
 fn readers(l: &Lexed) -> Vec<Hit> {
@@ -219,10 +273,16 @@ fn readers(l: &Lexed) -> Vec<Hit> {
 
 /// The hits that the row `limit` does not let its file make, with what the row allows in words.
 fn beyond(limit: Limit, hits: &[Hit]) -> Vec<(&Hit, String)> {
-    let Limit::Reads { calls, paths } = limit else {
+    let Limit::Reads {
+        calls,
+        reads,
+        paths,
+        ..
+    } = limit
+    else {
         return Vec::new();
     };
-    let mut asked = 0;
+    let (mut asked, mut read) = (0, 0);
     let mut out = Vec::new();
     for h in hits {
         let said = match h.what {
@@ -239,6 +299,14 @@ fn beyond(limit: Limit, hits: &[Hit]) -> Vec<(&Hit, String)> {
                 asked += 1;
                 (asked > calls).then(|| format!("call number {asked}, the row lets it ask {calls}"))
             }
+            READ => {
+                read += 1;
+                (read > reads).then(|| format!("call number {read}, the row lets it ask {reads}"))
+            }
+            THROUGH => Some(format!(
+                "`{}::` is a second way to a reader; the row lets the file name the type only",
+                h.names[0]
+            )),
             _ => Some("the row lets the file ask the reader and nothing else".to_string()),
         };
         if let Some(said) = said {
@@ -257,7 +325,13 @@ fn scan(files: &BTreeMap<String, String>) -> (Vec<String>, Vec<String>) {
         if path.starts_with(LEAF) {
             continue;
         }
-        let hits = readers(l);
+        let mut hits = readers(l);
+        if let Some(i) = allowed(path)
+            && let Limit::Reads { types, .. } = ALLOWED[i].2
+        {
+            hits.extend(uses(l, types));
+            hits.sort_by_key(|h| h.at);
+        }
         if hits.is_empty() {
             continue;
         }
@@ -330,7 +404,8 @@ fn the_leaf_crate_that_is_not_scanned_has_no_way_to_the_store() {
 
 #[test]
 fn the_scan_sees_the_ways_a_file_can_read_the_row_and_leaves_the_allowed_files_alone() {
-    // Mutation of the review: the public site reads the row itself.
+    // Each of these is a file that reads the row or the reader around the module (the public site
+    // asking the store for the row itself is the first).
     for (src, what) in [
         (
             r#"fn site_settings(b: &dyn Backend) { let _ = b.get("instance_brand", "instance"); }"#,
@@ -415,7 +490,7 @@ fn the_scan_sees_the_ways_a_file_can_read_the_row_and_leaves_the_allowed_files_a
         ),
         (
             "kernel/obop-http/src/brand.rs",
-            "async fn f(s: &S) { let _ = s.dispatcher.brand().current(); let _ = obop_commands::brand::Reader::inert(); }",
+            "use obop_commands::brand::{Reader, Shown}; fn f(s: &S) -> Arc<Reader> { s.dispatcher.brand() } fn g(r: Arc<Reader>) -> Arc<Shown> { r.current() }",
         ),
         (
             "kernel/obop-http/src/lib.rs",
@@ -472,18 +547,32 @@ fn a_row_with_limits_lets_its_file_ask_the_reader_as_the_row_says_and_nothing_el
             "use obop_commands::brand::{Reader, Shown}; async fn f(s: &S) { let _ = s.dispatcher.brand(); }",
         ),
         (route, "fn f(r: &obop_commands::brand::Reader) {}"),
+        // The one reader, handed to the file, asked once, and the types named as types.
+        (
+            route,
+            "use obop_commands::brand::{Reader, Shown}; fn current(r: Arc<Reader>) -> Arc<Shown> { r.current() }",
+        ),
+        // A local or a function called `current` is no call of a method of a reader.
+        (
+            lib,
+            "fn current() -> u8 { 1 } fn f() { let current = current(); let _ = current; }",
+        ),
     ] {
         let (found, _) = scan(&tree(&[(path, src)]));
         assert!(found.is_empty(), "{path}: {src}: {found:?}");
     }
     // What it does not say: every one of these is found, once, with the reason.
     for (path, src, what) in [
-        // A second reader in the file that registers the route (mutation S4 of the review).
+        // A second reader in the file that registers the route: a handler there that asks the
+        // dispatcher for the reader, and one that asks a reader it was handed.
         (
             lib,
-            "fn probe(s: &S) { let _ = s.dispatcher.brand().current(); }",
+            "fn probe(s: &S) { let _ = s.dispatcher.brand(); }",
             CALL,
         ),
+        (lib, "fn probe(r: &Reader) { let _ = r.current(); }", READ),
+        (lib, "fn probe(r: &Reader) { let _ = r.fresh(); }", READ),
+        (lib, "fn probe(r: &Reader) { let _ = r.strict(); }", READ),
         (lib, "fn f() { brand::strict(b); }", PATH),
         (
             lib,
@@ -505,11 +594,44 @@ fn a_row_with_limits_lets_its_file_ask_the_reader_as_the_row_says_and_nothing_el
             VALUE,
         ),
         (lib, "use obop_commands::brand;", VALUE),
-        // The route file asks once, through `current()`, and reads the paths of its types only.
+        // The route file gets the reader once, asks it once, builds none, and reads the paths of
+        // its types only.
         (
             route,
             "async fn f(s: &S) { let _ = s.dispatcher.brand(); let _ = s.dispatcher.brand(); }",
             CALL,
+        ),
+        // A second reader built in the file, however the type is written.
+        (
+            route,
+            "fn f() { let _other = obop_commands::brand::Reader::inert(); }",
+            THROUGH,
+        ),
+        (
+            route,
+            "use obop_commands::brand::Reader; fn f(b: Arc<dyn Backend>) { let _ = Reader::new(b); }",
+            THROUGH,
+        ),
+        (
+            route,
+            "use obop_commands::brand::Reader; fn f(b: Arc<dyn Backend>) { let _ = Reader :: with_bound(b, d); }",
+            THROUGH,
+        ),
+        (
+            route,
+            "use obop_commands::brand::Reader; fn f(r: &Reader) { let _ = Reader::fresh(r); }",
+            THROUGH,
+        ),
+        // The one reader asked a second way, or twice: `current()` is the one place that asks it.
+        (
+            route,
+            "fn current(r: Arc<Reader>) { let _ = r.fresh(); let _ = r.current(); }",
+            READ,
+        ),
+        (
+            route,
+            "fn current(r: Arc<Reader>) { let _ = r.current(); let _ = r\n    .strict(); }",
+            READ,
         ),
         (
             route,
@@ -544,6 +666,13 @@ fn a_row_with_limits_lets_its_file_ask_the_reader_as_the_row_says_and_nothing_el
     let (found, _) = scan(&tree(&[(
         route,
         "fn a(s: &S) { s.dispatcher.brand(); }\nfn b(s: &S) { s.dispatcher.brand(); }",
+    )]));
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(found[0].starts_with(&format!("{route}:2:")), "{found:?}");
+    // The same for the calls of the reader's methods: the second is the one that is found.
+    let (found, _) = scan(&tree(&[(
+        route,
+        "fn a(r: &Reader) { r.current(); }\nfn b(r: &Reader) { r.fresh(); }",
     )]));
     assert_eq!(found.len(), 1, "{found:?}");
     assert!(found[0].starts_with(&format!("{route}:2:")), "{found:?}");
