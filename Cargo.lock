@@ -1264,6 +1264,7 @@ dependencies = [
  "mileage",
  "obop-auth",
  "obop-blob-gdrive",
+ "obop-brand",
  "obop-commands",
  "obop-community",
  "obop-connectors",
@@ -1327,6 +1328,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "obop-brand"
+version = "0.2.1"
+dependencies = [
+ "icu_normalizer",
+ "icu_properties",
+ "sha2",
+]
+
+[[package]]
 name = "obop-commands"
 version = "0.2.1"
 dependencies = [
@@ -1334,6 +1344,7 @@ dependencies = [
  "icu_collator",
  "icu_locale",
  "obop-blob-gdrive",
+ "obop-brand",
  "obop-keys",
  "obop-masking",
  "obop-media",
@@ -1403,6 +1414,7 @@ dependencies = [
  "obop-migrate",
  "obop-oauth",
  "obop-ops",
+ "obop-registry",
  "obop-site",
  "obop-storage",
  "obop-types",
@@ -1569,6 +1581,7 @@ dependencies = [
  "base",
  "form_urlencoded",
  "getrandom 0.4.3",
+ "obop-brand",
  "obop-commands",
  "obop-media",
  "obop-pkg",

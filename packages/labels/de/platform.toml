@@ -726,6 +726,118 @@ description = "Den Microsoft-Entra-Mandanten festlegen, mit dem sich Personen an
 label = "Entfernen"
 description = "Die Konfiguration der Microsoft-Anmeldung entfernen. Bindungen bleiben. Konten, die sich nur mit Microsoft anmelden, kommen dann nur noch über die Administratoren hinein, die Passwort und zweiten Faktor behalten. Für Agenten abgelehnt"
 
+[labels.de.model.instance_brand]
+name = "Marke der Instanz"
+description = "Das Branding der Instanz: der Name, das Kürzel, das Logo sowie ein Titel und ein Hinweis je Sprache. Ein Datensatz, bewusst öffentlich, nur von einer Person mit platform.admin änderbar und nie von einem Agenten"
+
+[labels.de.model.instance_brand.field.name]
+label = "Name"
+description = "Der Produktname, 1 bis 40 Zeichen (Buchstaben, Ziffern, Leerzeichen und - . , & ' + _ ( ) !). Pflicht: Eine Marke ohne Namen wird nicht gespeichert. Bewusst öffentlich, daher ohne personenbezogene Daten"
+
+[labels.de.model.instance_brand.field.slug]
+label = "Kurzname"
+description = "Eine kurze Kennung: a-z, 0-9 und -, beginnt mit einem Buchstaben, endet nicht auf -, höchstens 30 Zeichen. Leer bedeutet: aus dem Namen abgeleitet. Bewusst öffentlich, daher ohne personenbezogene Daten"
+
+[labels.de.model.instance_brand.field.title_en]
+label = "Titel (Englisch)"
+description = "Der Titel auf Englisch: die Zeile neben dem Logo, höchstens 60 Zeichen. Leer bedeutet: der Name. Gilt auch als Titel jeder Sprache, die keinen eigenen hat. Bewusst öffentlich, daher ohne personenbezogene Daten"
+
+[labels.de.model.instance_brand.field.title_de]
+label = "Titel (Deutsch)"
+description = "Der Titel auf Deutsch: die Zeile neben dem Logo, höchstens 60 Zeichen. Leer bedeutet: der englische Titel, dann der Name. Bewusst öffentlich, daher ohne personenbezogene Daten"
+
+[labels.de.model.instance_brand.field.title_fr]
+label = "Titel (Französisch)"
+description = "Der Titel auf Französisch: die Zeile neben dem Logo, höchstens 60 Zeichen. Leer bedeutet: der englische Titel, dann der Name. Bewusst öffentlich, daher ohne personenbezogene Daten"
+
+[labels.de.model.instance_brand.field.title_pl]
+label = "Titel (Polnisch)"
+description = "Der Titel auf Polnisch: die Zeile neben dem Logo, höchstens 60 Zeichen. Leer bedeutet: der englische Titel, dann der Name. Bewusst öffentlich, daher ohne personenbezogene Daten"
+
+[labels.de.model.instance_brand.field.title_fi]
+label = "Titel (Finnisch)"
+description = "Der Titel auf Finnisch: die Zeile neben dem Logo, höchstens 60 Zeichen. Leer bedeutet: der englische Titel, dann der Name. Bewusst öffentlich, daher ohne personenbezogene Daten"
+
+[labels.de.model.instance_brand.field.title_sv]
+label = "Titel (Schwedisch)"
+description = "Der Titel auf Schwedisch: die Zeile neben dem Logo, höchstens 60 Zeichen. Leer bedeutet: der englische Titel, dann der Name. Bewusst öffentlich, daher ohne personenbezogene Daten"
+
+[labels.de.model.instance_brand.field.title_es]
+label = "Titel (Spanisch)"
+description = "Der Titel auf Spanisch: die Zeile neben dem Logo, höchstens 60 Zeichen. Leer bedeutet: der englische Titel, dann der Name. Bewusst öffentlich, daher ohne personenbezogene Daten"
+
+[labels.de.model.instance_brand.field.message_en]
+label = "Hinweis (Englisch)"
+description = "Der Hinweis auf Englisch: ein einfacher Text mit höchstens 240 Zeichen, ohne Links oder Auszeichnung. Leer bedeutet: keiner. Gilt auch als Hinweis jeder Sprache, die keinen eigenen hat. Bewusst öffentlich, daher ohne personenbezogene Daten"
+
+[labels.de.model.instance_brand.field.message_de]
+label = "Hinweis (Deutsch)"
+description = "Der Hinweis auf Deutsch: ein einfacher Text mit höchstens 240 Zeichen, ohne Links oder Auszeichnung. Leer bedeutet: der englische Hinweis, dann keiner. Bewusst öffentlich, daher ohne personenbezogene Daten"
+
+[labels.de.model.instance_brand.field.message_fr]
+label = "Hinweis (Französisch)"
+description = "Der Hinweis auf Französisch: ein einfacher Text mit höchstens 240 Zeichen, ohne Links oder Auszeichnung. Leer bedeutet: der englische Hinweis, dann keiner. Bewusst öffentlich, daher ohne personenbezogene Daten"
+
+[labels.de.model.instance_brand.field.message_pl]
+label = "Hinweis (Polnisch)"
+description = "Der Hinweis auf Polnisch: ein einfacher Text mit höchstens 240 Zeichen, ohne Links oder Auszeichnung. Leer bedeutet: der englische Hinweis, dann keiner. Bewusst öffentlich, daher ohne personenbezogene Daten"
+
+[labels.de.model.instance_brand.field.message_fi]
+label = "Hinweis (Finnisch)"
+description = "Der Hinweis auf Finnisch: ein einfacher Text mit höchstens 240 Zeichen, ohne Links oder Auszeichnung. Leer bedeutet: der englische Hinweis, dann keiner. Bewusst öffentlich, daher ohne personenbezogene Daten"
+
+[labels.de.model.instance_brand.field.message_sv]
+label = "Hinweis (Schwedisch)"
+description = "Der Hinweis auf Schwedisch: ein einfacher Text mit höchstens 240 Zeichen, ohne Links oder Auszeichnung. Leer bedeutet: der englische Hinweis, dann keiner. Bewusst öffentlich, daher ohne personenbezogene Daten"
+
+[labels.de.model.instance_brand.field.message_es]
+label = "Hinweis (Spanisch)"
+description = "Der Hinweis auf Spanisch: ein einfacher Text mit höchstens 240 Zeichen, ohne Links oder Auszeichnung. Leer bedeutet: der englische Hinweis, dann keiner. Bewusst öffentlich, daher ohne personenbezogene Daten"
+
+[labels.de.model.instance_brand.field.logo_svg]
+label = "Logo (SVG)"
+description = "Eingabe von configure: der Text einer SVG-Datei, höchstens 16 KiB, eine strenge Teilmenge (Formen und Pfade in einfachen Farben; kein Skript, kein Text, kein Bild, kein Link). Gespeichert wird der kanonische Text, den der Server neu geschrieben hat, nie die Eingabe; get gibt ihn nicht zurück. Leer löscht ihn, und das Logo wird dann aus dem Namen gezeichnet"
+
+[labels.de.model.instance_brand.field.dry_run]
+label = "Probelauf"
+description = "Eingabe von configure und clear: true oder false. Mit true wird alles geprüft und nichts geschrieben oder protokolliert; die Antwort sagt, was geschehen würde, und gibt dry_run zurück"
+
+[labels.de.model.instance_brand.field.set]
+label = "Gesetzt"
+description = "Antwort von get: ob eine Marke gesetzt ist, also ob der Datensatz existiert"
+
+[labels.de.model.instance_brand.field.v]
+label = "Logo-Version"
+description = "Antwort von get und configure: die Version des Logos (16 Hexziffern), die sich mit dem Logo ändert; leer, wenn keine Marke gesetzt ist"
+
+[labels.de.model.instance_brand.field.effective]
+label = "Wirksam"
+description = "Antwort von get: ein JSON-Objekt mit dem Wert und der gewinnenden Quelle (record, theme oder default) für jeden geltenden Wert (name, slug, logo, tile_accent, title_XX und message_XX; XX ist der Sprachcode: en, de, fr, pl, fi, sv, es)"
+
+[labels.de.model.instance_brand.field.fallbacks]
+label = "Rückfallwerte"
+description = "Antwort von get: eine JSON-Liste der gespeicherten Felder, die die Leseprüfung nicht bestanden haben und auf einen Standardwert zurückfielen, je mit Feld und Grund"
+
+[labels.de.model.instance_brand.field.changes]
+label = "Änderungen"
+description = "Antwort von configure: eine JSON-Liste der geänderten Felder (mit dry_run: die sich ändern würden), je mit field, old und new; das Logo als alte und neue Version"
+
+[labels.de.model.instance_brand.field.refusals]
+label = "Ablehnungen"
+description = "Antwort von configure mit dry_run: eine JSON-Liste dessen, was ein echter Aufruf ablehnen würde, je mit field und rule"
+
+[labels.de.model.instance_brand.field.cleared]
+label = "Entfernt"
+description = "Antwort von clear: ob eine Marke entfernt wurde (mit dry_run: ob sie entfernt würde)"
+
+[labels.de.model.instance_brand.action.configure]
+label = "Einrichten"
+description = "Das Branding der Instanz setzen. Nur die zu ändernden Felder angeben (die übrigen behalten ihren Wert); der erste Aufruf braucht name. Felder: name, slug, title_XX, message_XX, logo_svg (SVG-Text). Ein leerer Text löscht ein Feld, außer name. dry_run (true oder false) schreibt nichts. Antwortet mit changes und v (mit dry_run auch refusals). Nur eine Person mit platform.admin darf es ausführen"
+
+[labels.de.model.instance_brand.action.clear]
+label = "Entfernen"
+description = "Das Branding der Instanz entfernen: Der eine Datensatz wird gelöscht, es ist also keine Marke gesetzt. dry_run (true oder false) prüft nur und entfernt nichts. Antwortet mit cleared: true, wenn eine Marke entfernt wurde (mit dry_run: würde), sonst false, und dann wird nichts geschrieben. Nur eine Person mit platform.admin darf es ausführen"
+
 [labels.de.model.import_map]
 name = "Importzuordnung"
 description = "Woher ein importierter Datensatz stammt: der Schlüssel (Quellsystem, Quelltabelle, Quell-ID) der Zeile, aus der er entstand. Mit search einen Schlüssel nachschlagen, mit get einen Datensatz."

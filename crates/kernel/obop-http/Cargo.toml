@@ -30,6 +30,7 @@ http-body-util = "0.1"
 tower = { version = "0.5", features = ["util"] }
 
 [dev-dependencies]
+obop-registry.workspace = true
 obop-storage = { workspace = true, features = ["test-support"] }
 tower = { version = "0.5", features = ["util"] }
 
