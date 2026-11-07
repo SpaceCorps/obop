@@ -131,6 +131,20 @@ export const en = {
   "recording.points.one": "{count} point saved on this phone",
   "recording.points.other": "{count} points saved on this phone",
   "recording.nofix": "Waiting for the first location fix. Go outside or wait a moment.",
+  "recording.weak.title": "The location signal is too weak to measure a distance",
+  // The words of the banner are fixed per kind: the banner is read aloud whenever its text changes,
+  // so the counts are in the muted line below it (`recording.signal.detail`).
+  "recording.weak.message":
+    "Positions that are too imprecise are left out of the distance. If you are indoors, move to a window or go outside.",
+  "recording.jumpy.title": "The positions do not fit together",
+  "recording.jumpy.message":
+    "Positions that do not fit the first position that was counted are left out of the distance. If the distance stays at 0 m, stop this trip, discard it and start a new one.",
+  "recording.signal.detail.one": "{count} of {total} positions was left out",
+  "recording.signal.detail.other": "{count} of {total} positions were left out",
+  "recording.signal.detail.last.one":
+    "{count} of {total} positions was left out (the last one was only known to within {accuracy})",
+  "recording.signal.detail.last.other":
+    "{count} of {total} positions were left out (the last one was only known to within {accuracy})",
   "recording.stop": "Stop",
   "recording.stop.title": "Stop the trip?",
   "recording.stop.message": "The trip ends here and is uploaded.",
