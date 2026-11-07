@@ -1,6 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import type { FileHandle, OpenPorts } from "../core/open-outbox.ts";
-import type { SqlValue } from "../core/sql.ts";
+import { createSqlDb, type SqlDb, type SqlValue } from "../core/sql.ts";
 
 /**
  * A database file that behaves like an SQLCipher file for the parts that `openOutbox` depends on:
@@ -41,13 +41,15 @@ export class FakeDatabaseFile {
     this.sqlite.exec("CREATE TABLE secret_of_the_old_phone (x TEXT)");
   }
 
-  /** The file was made with `key` and holds a database that `migrate` has run on. */
-  async makeFile(key: string): Promise<void> {
+  /**
+   * The file was made with `key` and holds a database that `migrate` has run on, or that
+   * `migrateWith` has run on (the frozen migration of an earlier build, for a file it made).
+   */
+  async makeFile(key: string, migrateWith?: (db: SqlDb) => Promise<void>): Promise<void> {
     const handle = await this.openFile();
     await handle.exec(`PRAGMA key = "x'${key}'"`);
     const { migrate } = await import("../core/sql-store.ts");
-    const { createSqlDb } = await import("../core/sql.ts");
-    await migrate(createSqlDb(handle));
+    await (migrateWith ?? migrate)(createSqlDb(handle));
     await handle.close();
   }
 
