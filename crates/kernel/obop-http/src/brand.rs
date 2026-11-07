@@ -8,11 +8,16 @@
 //! read the store itself: it asks the reader of the dispatcher, whose answer is the one read check
 //! every surface shares, so a stored artwork that fails the check is the tile here too.
 //!
-//! **No brand set.** The record does not exist, and the path answers as every other path of the
-//! API that is not a route: the 404 that the layout the route is mounted in gives an unknown path
-//! (`api_not_found` for the API alone and for the back office build next to it, the JSON 404 of the
-//! public site's router). The layout passes its own answer in, so the route is neither a route
-//! that tells a scanner an instance has no brand nor an answer that differs from the one beside it.
+//! **No brand set.** The record does not exist, and for `GET` and `HEAD` the path answers as an
+//! unknown one-segment path of the API does (`/api/nothing`): the 404 that the layout the route is
+//! mounted in gives, status, headers and body (`api_not_found` for the API alone and for the back
+//! office build next to it, the JSON 404 of the public site's router). The layout passes its own
+//! answer in. So the answer to a `GET` does not tell a scanner whether a brand is set. It does not
+//! hide that the route exists, and no test or comment may say it does: a path of the same shape,
+//! `/api/zzz/logo.svg`, is matched by `/api/{model}/{command}`, which takes `POST` only, and answers
+//! a 405 with `Allow: POST`, while this path answers every method but `GET` and `HEAD` (a `POST`,
+//! an `OPTIONS` that no CORS layer takes) with a 405 and `Allow: GET,HEAD`; and while the store
+//! cannot be read the path answers the 503 of D74 where an unknown path answers 404.
 //!
 //! **The reader is asked through [`current`]**, never on an async worker: the PostgreSQL client
 //! panics there (`blocking`). A call that finds the cell fresh takes a standard mutex for a moment
@@ -81,12 +86,16 @@ async fn logo(s: Arc<HttpState>, h: HeaderMap, not_found: NotFound) -> Response 
         }
         set(name, value);
     }
+    // The length of the 200, also on a 304: RFC 9110 section 8.6 allows it there and forbids any
+    // other value. Left unset, axum sets `Content-Length: 0` and the server layer sends it with a
+    // `HEAD` 304 (measured with curl on the real binary); it sends none with a `GET` 304, which is
+    // as valid.
+    set(header::CONTENT_LENGTH, &logo.served().len().to_string());
     if same {
         return r.body(Body::empty()).expect("static response");
     }
-    let body = logo.served().to_string();
-    set(header::CONTENT_LENGTH, &body.len().to_string());
-    r.body(Body::from(body)).expect("valid response")
+    r.body(Body::from(logo.served().to_string()))
+        .expect("valid response")
 }
 
 /// Whether `If-None-Match` matches `etag`: `*`, or any entity-tag of the list under the weak
@@ -131,8 +140,37 @@ mod tests {
             (vec!["\"0123456789abcdef\"x"], false),
             (vec![""], false),
             (vec!["W/"], false),
+            // `*` is the whole entry, not a character in it; a prefix is taken off once.
+            (vec!["\"*\""], false),
+            (vec!["a*"], false),
+            (vec!["**"], false),
+            (vec!["W/*"], false),
+            (vec!["W/W/\"0123456789abcdef\""], false),
+            (vec!["x\"0123456789abcdef\""], false),
         ] {
             assert_eq!(if_none_match(&headers(&lines), tag), want, "{lines:?}");
         }
+    }
+
+    /// A header value that is not text (a byte above 0x7f is legal in a header) is no validator
+    /// and is skipped, whatever else is on the line or on the other lines; it never panics.
+    #[test]
+    fn a_header_value_that_is_not_text_is_skipped_and_never_a_panic() {
+        let tag = "\"0123456789abcdef\"";
+        let opaque = HeaderValue::from_bytes(b"\xff\xfe").unwrap();
+        assert!(
+            opaque.to_str().is_err(),
+            "the case is not text to begin with"
+        );
+        let mut h = HeaderMap::new();
+        h.append(header::IF_NONE_MATCH, opaque.clone());
+        assert!(!if_none_match(&h, tag));
+        // The line before and the line after it still count.
+        h.append(header::IF_NONE_MATCH, HeaderValue::from_str(tag).unwrap());
+        assert!(if_none_match(&h, tag));
+        let mut h = HeaderMap::new();
+        h.append(header::IF_NONE_MATCH, HeaderValue::from_str(tag).unwrap());
+        h.append(header::IF_NONE_MATCH, opaque);
+        assert!(if_none_match(&h, tag));
     }
 }
