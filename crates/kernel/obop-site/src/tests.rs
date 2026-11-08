@@ -2101,6 +2101,26 @@ fn get_with_cookie(s: &Shop, path: &str) -> Resp {
 /// `OBOP_PRINT_PINS=1 cargo test -p obop-site pins -- --nocapture --test-threads=1`.
 #[test]
 fn pins_the_shop_files_and_home_page_as_an_instance_with_no_brand_sends_them() {
+    let now = shop_answers(shop());
+    check_pins("SHOP_PINS", SHOP_PINS, &now);
+}
+
+/// The same pins with the reader of the brand installed, as `register_admin` makes it on a running
+/// instance, and no brand row: the shop is what it was. The test before it runs the shop over an
+/// inert reader, which never reads the store.
+#[test]
+fn the_reader_of_the_brand_with_no_row_leaves_the_shop_files_as_they_were() {
+    let s = shop();
+    let reader = s.d.install_brand(s.store.backend());
+    assert!(!reader.current().is_set(), "no row, no brand");
+    let now = shop_answers(s);
+    check_pins("SHOP_PINS", SHOP_PINS, &now);
+}
+
+/// The answers the pins hold, in the order of the table, for a shop whose settings are then written
+/// as the pins say. Besides the table, `/favicon.ico` is held to the answer at `/favicon.svg` (one
+/// handler, whose digests are pinned) in each of the three states, so the pinned digests cover it.
+fn shop_answers(s: Shop) -> Vec<(String, String)> {
     let explicit = serde_json::json!({
         "title": "Café Nord", "tagline": "Tea & cake", "accent": "#e11d48",
         "footer_text": "Open on Saturdays",
@@ -2112,9 +2132,15 @@ fn pins_the_shop_files_and_home_page_as_an_instance_with_no_brand_sends_them() {
         if std::env::var("OBOP_SHOW_PINNED").is_ok_and(|v| v == "1") {
             println!("\n---- text of {name} ----\n{text}\n---- end ----");
         }
+        if path == "/favicon.svg" {
+            assert_eq!(
+                answer_text(&get_with_cookie(s, "/favicon.ico")),
+                text,
+                "{name}: the tab icon at /favicon.ico is the one at /favicon.svg"
+            );
+        }
         now.push((name.to_string(), util::sha256_hex(&text)));
     };
-    let s = shop();
     add("favicon_default", &s, "/favicon.svg");
     add("home_default", &s, "/");
     add("site_css_default", &s, "/assets/site.css");
@@ -2124,8 +2150,7 @@ fn pins_the_shop_files_and_home_page_as_an_instance_with_no_brand_sends_them() {
     set_site(&s, explicit);
     add("favicon_title_accent", &s, "/favicon.svg");
     add("home_explicit", &s, "/");
-
-    check_pins("SHOP_PINS", SHOP_PINS, &now);
+    now
 }
 
 /// Print the table as source (`OBOP_PRINT_PINS=1`), or hold the answers to it: the same names in
