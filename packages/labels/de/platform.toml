@@ -812,7 +812,7 @@ description = "Antwort von get und configure: die Version des Logos (16 Hexziffe
 
 [labels.de.model.instance_brand.field.effective]
 label = "Wirksam"
-description = "Antwort von get: ein JSON-Objekt mit dem Wert und der gewinnenden Quelle (record, theme oder default) für jeden geltenden Wert (name, slug, logo, tile_accent, title_XX und message_XX; XX ist der Sprachcode: en, de, fr, pl, fi, sv, es)"
+description = "Antwort von get: ein JSON-Objekt mit dem Wert und der gewinnenden Quelle (record, site, theme oder default) für jeden geltenden Wert (name, slug, logo, tile_accent, site.title, site.logo_url, site.accent, favicon, title_XX und message_XX; XX ist der Sprachcode: en, de, fr, pl, fi, sv, es)"
 
 [labels.de.model.instance_brand.field.fallbacks]
 label = "Rückfallwerte"

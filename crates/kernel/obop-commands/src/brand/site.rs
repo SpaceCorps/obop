@@ -59,6 +59,17 @@ pub(crate) enum Source {
     Default,
 }
 
+impl Source {
+    pub(crate) fn word(self) -> &'static str {
+        match self {
+            Source::Site => "site",
+            Source::Record => "record",
+            Source::Theme => "theme",
+            Source::Default => "default",
+        }
+    }
+}
+
 /// A value in force and where it came from.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Chosen {
@@ -81,6 +92,8 @@ pub(crate) struct View {
     pub title: Chosen,
     pub logo_url: Chosen,
     pub accent: Chosen,
+    /// `artwork` (the record's, served on the shop's tab icon address) or `tile` (the shop's own).
+    pub favicon: Chosen,
     /// The artwork and its version, when the tab icon is the record's.
     pub artwork: Option<(String, String)>,
 }
@@ -162,10 +175,15 @@ pub(crate) fn view(site: &Map<String, J>, shown: &Shown) -> View {
         .logo()
         .filter(|l| !l.is_tile())
         .map(|l| (l.served().to_string(), l.v().to_string()));
+    let favicon = match artwork {
+        Some(_) => Chosen::new("artwork", Source::Record),
+        None => Chosen::new("tile", Source::Default),
+    };
     View {
         title,
         logo_url,
         accent,
+        favicon,
         artwork,
     }
 }

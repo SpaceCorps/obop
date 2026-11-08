@@ -350,7 +350,7 @@ fn the_text_of_effective_lists_the_keys_and_the_sources_of_the_answer_of_get() {
     };
     let with_row = r.get();
     let keys = keys_of(&with_row);
-    // The sources: a stored value, a stored theme accent, and the defaults.
+    // The sources: a stored value, an explicit `site.*` key, a stored theme accent, and the defaults.
     let mut sources: BTreeSet<String> = BTreeSet::new();
     let mut collect = |answer: &J| {
         for v in parsed(answer, "effective").as_object().unwrap().values() {
@@ -358,7 +358,7 @@ fn the_text_of_effective_lists_the_keys_and_the_sources_of_the_answer_of_get() {
         }
     };
     collect(&with_row);
-    let themed = json!({"theme": {"accent": "#0a8f7a"}}).to_string();
+    let themed = json!({"theme": {"accent": "#0a8f7a"}, "site": {"title": "Shop"}}).to_string();
     let mut f = obop_storage::Fields::new();
     f.insert("value".into(), json!(themed));
     r.store
@@ -373,7 +373,7 @@ fn the_text_of_effective_lists_the_keys_and_the_sources_of_the_answer_of_get() {
     collect(&rig().get());
     assert_eq!(
         sources,
-        ["default", "record", "theme"]
+        ["default", "record", "site", "theme"]
             .map(String::from)
             .into_iter()
             .collect::<BTreeSet<_>>(),

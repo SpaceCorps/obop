@@ -48,6 +48,7 @@ use super::row::{self, Fallback, Shown};
 use super::{MODEL, ROW_ID, SETTING_ID, SETTING_MODEL, UNREADABLE};
 use obop_brand::Brand;
 use obop_storage::{Backend, Fields};
+use serde_json::{Map, Value as J};
 use std::collections::HashSet;
 use std::io::Write;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -121,6 +122,9 @@ pub struct Reader {
 pub struct Fresh {
     shown: Shown,
     stored: Option<Fields>,
+    /// The `site` object of the instance settings, from the read that gave the theme (empty when
+    /// the settings hold none): what the public site's entries of `effective` are decided from.
+    site: Map<String, J>,
 }
 
 impl Fresh {
@@ -147,18 +151,23 @@ impl Fresh {
     pub fn stored(&self) -> Option<&Fields> {
         self.stored.as_ref()
     }
+
+    /// The `site` object of the instance settings as the read left it.
+    pub(crate) fn site(&self) -> &Map<String, J> {
+        &self.site
+    }
 }
 
 fn recover<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-/// Reads the row and then the theme setting. Either failing fails the unit, with the storage error
-/// unchanged.
-fn read_unit(backend: &dyn Backend) -> Result<(Option<Fields>, Option<String>), String> {
+/// Reads the row and then the instance settings (the theme the brand defers to, and the `site`
+/// object that `get` reports on). Either failing fails the unit, with the storage error unchanged.
+fn read_unit(backend: &dyn Backend) -> Result<(Option<Fields>, Option<Fields>), String> {
     let stored = backend.get(MODEL, ROW_ID)?;
     let setting = backend.get(SETTING_MODEL, SETTING_ID)?;
-    Ok((stored, row::accent_of(setting.as_ref())))
+    Ok((stored, setting))
 }
 
 impl Reader {
@@ -272,7 +281,8 @@ impl Reader {
         };
         flight.slot = None;
         match read_unit(backend) {
-            Ok((stored, accent)) => {
+            Ok((stored, setting)) => {
+                let accent = row::accent_of(setting.as_ref());
                 let shown = Arc::new(row::read_row(stored.as_ref(), accent));
                 {
                     let mut cell = recover(&self.cell);
@@ -329,12 +339,14 @@ impl Reader {
             return Ok(Fresh {
                 shown: Shown::not_set(None),
                 stored: None,
+                site: Map::new(),
             });
         };
-        let (stored, accent) = read_unit(&**backend)?;
+        let (stored, setting) = read_unit(&**backend)?;
         Ok(Fresh {
-            shown: row::read_row(stored.as_ref(), accent),
+            shown: row::read_row(stored.as_ref(), row::accent_of(setting.as_ref())),
             stored,
+            site: row::site_of(setting.as_ref()),
         })
     }
 

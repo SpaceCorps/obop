@@ -1,9 +1,10 @@
 //! The `effective` answer of `get` (docs/spec/branding.md, section 3, "What `get` shows", and section
 //! 13, "Commands"): each value in force with the source that won, one case per value and source. The
 //! object is staged by slice, so these tests also pin what it does not hold yet: the entries of the
-//! surfaces that are not built (`authenticator_issuer`, `accent`, the `site.*` keys and the
-//! favicon) are not there, because an entry whose precedence involves a surface that is not wired
-//! would be untrue.
+//! surfaces that are not built (`authenticator_issuer` and `accent`) are not there, because an entry
+//! whose precedence involves a surface that is not wired would be untrue. The entries of the public
+//! site (`site.title`, `site.logo_url`, `site.accent` and `favicon`) arrived with the slice that
+//! wires the shop to the record.
 
 use super::*;
 use obop_brand::LANGS;
@@ -18,6 +19,18 @@ fn effective(row: Option<&[(&str, J)]>, theme: Option<&str>) -> J {
     if let Some(accent) = theme {
         put_theme(&*spy, accent);
     }
+    let (r, _) = reader(&spy, LONG);
+    let text = r.fresh().unwrap().effective_json();
+    serde_json::from_str(&text).unwrap()
+}
+
+/// As [`effective`], with the instance settings given whole (the theme and the `site` keys).
+fn effective_with_settings(row: Option<&[(&str, J)]>, settings: J) -> J {
+    let spy = Spy::memory();
+    if let Some(row) = row {
+        put_row(&*spy, row);
+    }
+    put_settings(&*spy, settings);
     let (r, _) = reader(&spy, LONG);
     let text = r.fresh().unwrap().effective_json();
     serde_json::from_str(&text).unwrap()
@@ -51,6 +64,11 @@ fn with_no_row_every_value_is_the_default() {
         is(&e, &format!("title_{lang}"), "obop", "default");
         is(&e, &format!("message_{lang}"), "", "default");
     }
+    // The public site with nothing set and no brand: today's defaults.
+    is(&e, "site.title", "My Shop", "default");
+    is(&e, "site.logo_url", "", "default");
+    is(&e, "site.accent", "#0f766e", "default");
+    is(&e, "favicon", "tile", "default");
 }
 
 #[test]
@@ -58,33 +76,35 @@ fn the_object_holds_exactly_the_entries_of_the_surfaces_that_exist() {
     let e = effective(Some(&[("name", s("MOHV"))]), None);
     let mut keys: Vec<&str> = e.as_object().unwrap().keys().map(String::as_str).collect();
     keys.sort_unstable();
-    let mut want: Vec<String> = ["name", "slug", "logo", "tile_accent"]
-        .iter()
-        .map(|k| k.to_string())
-        .collect();
+    let mut want: Vec<String> = [
+        "name",
+        "slug",
+        "logo",
+        "tile_accent",
+        "site.title",
+        "site.logo_url",
+        "site.accent",
+        "favicon",
+    ]
+    .iter()
+    .map(|k| k.to_string())
+    .collect();
     for lang in LANGS {
         want.push(format!("title_{lang}"));
         want.push(format!("message_{lang}"));
     }
     want.sort();
     assert_eq!(keys, want.iter().map(String::as_str).collect::<Vec<_>>());
-    assert_eq!(keys.len(), 4 + 14);
-    // Every entry is exactly a value and a source, and the source is one of the three.
+    assert_eq!(keys.len(), 8 + 14);
+    // Every entry is exactly a value and a source, and the source is one of the four.
     for (k, v) in e.as_object().unwrap() {
         assert_eq!(v.as_object().unwrap().len(), 2, "{k}");
         assert!(
-            ["record", "theme", "default"].contains(&v["source"].as_str().unwrap()),
+            ["record", "site", "theme", "default"].contains(&v["source"].as_str().unwrap()),
             "{k}"
         );
     }
-    for later in [
-        "authenticator_issuer",
-        "accent",
-        "site.title",
-        "site.logo_url",
-        "site.accent",
-        "favicon",
-    ] {
+    for later in ["authenticator_issuer", "accent"] {
         assert!(e.get(later).is_none(), "{later} arrives with its surface");
     }
 }
@@ -246,4 +266,136 @@ fn a_value_written_around_the_command_never_breaks_the_object() {
     is(&e, "title_en", "obop", "default");
     is(&e, "message_en", "", "default");
     is(&e, "logo", "tile", "default");
+}
+
+/// The entries of the public site, one case per value and source (docs/spec/branding.md, section 3
+/// and section 5): an explicit `site.*` key is `site` and wins, the record is `record`, the accent of
+/// the theme is `theme`, and the defaults are `default`.
+#[test]
+fn the_shop_entries_name_the_source_that_won() {
+    let row: &[(&str, J)] = &[("name", s("MOHV"))];
+    // A brand and no `site.*` key: the shop is told the name, the logo route and the tile accent.
+    let e = effective_with_settings(Some(row), json!({}));
+    is(&e, "site.title", "MOHV", "record");
+    let (logo_url, source) = entry(&e, "site.logo_url");
+    assert_eq!(source, "record");
+    let version = logo_url
+        .strip_prefix("/api/brand/logo.svg?v=")
+        .unwrap_or("");
+    assert_eq!(version.len(), 16, "{logo_url}");
+    assert!(version.bytes().all(|b| b.is_ascii_hexdigit()), "{logo_url}");
+    is(&e, "site.accent", "#495670", "default");
+    // No artwork: the shop keeps its own tile.
+    is(&e, "favicon", "tile", "default");
+
+    // An artwork on the record is the shop's tab icon.
+    let e = effective_with_settings(
+        Some(&[("name", s("MOHV")), ("logo_svg", s(M_ARTWORK))]),
+        json!({}),
+    );
+    is(&e, "favicon", "artwork", "record");
+    // An artwork that fails the read check is the tile, which the shop does not use.
+    let e = effective_with_settings(
+        Some(&[("name", s("MOHV")), ("logo_svg", s("<svg><script/></svg>"))]),
+        json!({}),
+    );
+    is(&e, "favicon", "tile", "default");
+
+    // The theme's accent is the shop's accent, with a source of its own.
+    let e = effective_with_settings(Some(row), json!({"theme": {"accent": "#c2410c"}}));
+    is(&e, "site.accent", "#c2410c", "theme");
+    // The default violet is no accent, as for the tile.
+    let e = effective_with_settings(Some(row), json!({"theme": {"accent": "#6d3fd0"}}));
+    is(&e, "site.accent", "#495670", "default");
+
+    // Every explicit key wins over the record and over the theme, and says so.
+    let e = effective_with_settings(
+        Some(row),
+        json!({
+            "theme": {"accent": "#c2410c"},
+            "site": {"title": "Café Nord", "logo_url": "/brand/logo.svg", "accent": "#E11D48"},
+        }),
+    );
+    is(&e, "site.title", "Café Nord", "site");
+    is(&e, "site.logo_url", "/brand/logo.svg", "site");
+    is(&e, "site.accent", "#e11d48", "site");
+    // An explicit key does not change the tab icon: the shop has no key for it.
+    is(&e, "favicon", "tile", "default");
+    // One explicit key does not take the others with it.
+    let e = effective_with_settings(Some(row), json!({"site": {"title": "Café Nord"}}));
+    is(&e, "site.title", "Café Nord", "site");
+    is(&e, "site.accent", "#495670", "default");
+    assert_eq!(entry(&e, "site.logo_url").1, "record");
+
+    // With no brand the explicit keys are still reported, as `site`, and the rest is today's.
+    let e = effective_with_settings(
+        None,
+        json!({"site": {"title": "Café Nord", "accent": "#e11d48"}}),
+    );
+    is(&e, "site.title", "Café Nord", "site");
+    is(&e, "site.accent", "#e11d48", "site");
+    is(&e, "site.logo_url", "", "default");
+    is(&e, "favicon", "tile", "default");
+}
+
+/// A `site.*` key that the shop would not use is no explicit key: the entry says what the shop
+/// really shows, so the answer of `get` cannot say `site` for a value the shop ignores.
+#[test]
+fn a_site_key_the_shop_would_not_use_is_not_reported_as_the_one_in_force() {
+    let row: &[(&str, J)] = &[("name", s("MOHV"))];
+    for bad in [json!(""), json!("   "), json!(7), json!(null), json!(["x"])] {
+        let e = effective_with_settings(Some(row), json!({"site": {"title": bad.clone()}}));
+        is(&e, "site.title", "MOHV", "record");
+        let e = effective_with_settings(None, json!({"site": {"title": bad}}));
+        is(&e, "site.title", "My Shop", "default");
+    }
+    for bad in ["red", "#abcd", "#12345g", "javascript:alert(1)", ""] {
+        let e = effective_with_settings(Some(row), json!({"site": {"accent": bad}}));
+        is(&e, "site.accent", "#495670", "default");
+        let e = effective_with_settings(None, json!({"site": {"accent": bad}}));
+        is(&e, "site.accent", "#0f766e", "default");
+    }
+    // What the shop does read: the short form and a colour without the hash, normalised.
+    for (written, shown) in [
+        ("#abc", "#aabbcc"),
+        ("e11d48", "#e11d48"),
+        (" #E11D48 ", "#e11d48"),
+    ] {
+        let e = effective_with_settings(Some(row), json!({"site": {"accent": written}}));
+        is(&e, "site.accent", shown, "site");
+    }
+    for bad in [
+        "javascript:x",
+        "//evil.test/l.png",
+        "http://x.test/l.png",
+        "/a b",
+    ] {
+        let e = effective_with_settings(Some(row), json!({"site": {"logo_url": bad}}));
+        assert_eq!(entry(&e, "site.logo_url").1, "record", "{bad}");
+        let e = effective_with_settings(None, json!({"site": {"logo_url": bad}}));
+        is(&e, "site.logo_url", "", "default");
+    }
+}
+
+/// The settings the entries are decided from are the ones the same read gave the theme: a settings
+/// text that does not parse, or has no `site` object, gives the defaults and no failure.
+#[test]
+fn settings_that_cannot_be_read_give_the_defaults_for_the_shop_entries() {
+    let spy = Spy::memory();
+    put_row(&*spy, &[("name", s("MOHV"))]);
+    spy.apply_checked(&[Op::Put {
+        model: SETTING_MODEL.into(),
+        id: SETTING_ID.into(),
+        fields: fields(&[("value", s("{not json"))]),
+    }])
+    .unwrap();
+    let (r, _) = reader(&spy, LONG);
+    let e: J = serde_json::from_str(&r.fresh().unwrap().effective_json()).unwrap();
+    is(&e, "site.title", "MOHV", "record");
+    is(&e, "site.accent", "#495670", "default");
+    // A `site` that is not an object, and a settings text that is not text.
+    for settings in [json!({"site": "x"}), json!({"site": [1]}), json!(5)] {
+        let e = effective_with_settings(Some(&[("name", s("MOHV"))]), settings);
+        is(&e, "site.title", "MOHV", "record");
+    }
 }
