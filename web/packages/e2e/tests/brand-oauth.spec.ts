@@ -103,6 +103,13 @@ test.describe("the OAuth pages of an instance with a brand", () => {
   test("the sign-in page shows the logo, the name and the message, and the browser reports no violation", async ({
     page,
   }, info: TestInfo) => {
+    // Every request the page makes for the logo route, from before the first byte. The poll below
+    // needs one before this test asks for an image of that address itself, so that what it waits
+    // for is the browser's own request for the tab icon.
+    const iconRequests: string[] = [];
+    page.on("request", (r) => {
+      if (new URL(r.url()).pathname === "/api/brand/logo.svg") iconRequests.push(r.resourceType());
+    });
     await watchPolicy(page);
     const res = await page.goto(authorizeUrl(client));
     expect(res!.status()).toBe(200);
@@ -138,6 +145,9 @@ test.describe("the OAuth pages of an instance with a brand", () => {
     await expect(icon).toHaveCount(1);
     const href = (await icon.getAttribute("href"))!;
     expect(href).toMatch(/^\/api\/brand\/logo\.svg\?v=[0-9a-f]{16}$/);
+    await expect
+      .poll(() => iconRequests.length, { message: "the browser asks for the tab icon by itself" })
+      .toBeGreaterThan(0);
     const loaded = await page.evaluate(
       (src) =>
         new Promise<boolean>((done) => {
@@ -164,9 +174,9 @@ test.describe("the OAuth pages of an instance with a brand", () => {
     });
     expect(share).toBeGreaterThan(0.5);
 
-    // The browser asks for the tab icon by itself after the load, and the negative case below shows
-    // that a refused request is reported; so none reported here, after a moment, is the icon allowed.
-    await page.waitForTimeout(500);
+    // The browser asked for the tab icon by itself (the poll above waited for that request before
+    // this test asked for the image), and the negative case below shows that a refused request is
+    // reported; so none reported here is the icon allowed.
     expect(await violations(page)).toEqual([]);
   });
 

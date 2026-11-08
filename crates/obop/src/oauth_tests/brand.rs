@@ -457,6 +457,52 @@ async fn a_client_registered_under_the_name_of_the_instance_gets_the_sentence() 
     assert!(!html.contains(&esc(t("en", "consent.same_name"))));
 }
 
+/// The third way a client's name can be the instance's (spec section 10): its slug. The name of the
+/// brand here is `Zed Co`, whose slug (`zed-co`) differs from the folded name (`zedco`), so only the
+/// slug can make these match. Through the real registration and the real pages: the slug in another
+/// case, in fullwidth letters, with an invisible character in it, or with white space around its hyphen
+/// gets the fixed sentence; a name that only contains it, or that is not it, does not. Once the row
+/// stores another slug, that one is the effective slug and the one derived from the name is not.
+#[tokio::test]
+async fn a_client_registered_under_the_slug_of_the_instance_gets_the_sentence() {
+    let rig = rig();
+    let r = &rig.r;
+    configure(&rig.app, &[("name", "Zed Co")]);
+    let gets_it = |name: String, lang: &'static str, want: bool| {
+        let router = r.clone();
+        async move {
+            let c = client_named(&router, &name).await;
+            let html = consent_of(&router, &c, lang).await.text();
+            let sentence = format!("<p>{}</p></div>", esc(t(lang, "consent.same_name")));
+            assert_eq!(html.contains(&sentence), want, "{name:?} in {lang}: {html}");
+        }
+    };
+    for (name, lang) in [
+        ("zed-co", "en"),
+        ("ZED-CO", "de"),
+        ("Zed-Co", "sv"),
+        ("ＺＥＤ-ＣＯ", "en"),
+        ("z\u{200D}ed-co", "fr"),
+        ("Zed - Co", "en"),
+        ("zed\u{00A0}-\u{00A0}co", "es"),
+        // The name itself still matches (the fold ignores the space), as before.
+        ("Zed Co", "en"),
+    ] {
+        gets_it(name.to_string(), lang, true).await;
+    }
+    for name in ["zed-co2", "co-zed", "zed.co", "zed_co", "Zed", "Zed Coop"] {
+        gets_it(name.to_string(), "en", false).await;
+    }
+    // A slug the row stores is the effective one: the slug derived from the name no longer is.
+    configure(&rig.app, &[("slug", "zed-shop")]);
+    gets_it("zed-shop".into(), "en", true).await;
+    gets_it("ZED-SHOP".into(), "sv", true).await;
+    gets_it("zed-co".into(), "en", false).await;
+    // With no brand the sentence never appears.
+    clear(&rig.app);
+    gets_it("zed-shop".into(), "en", false).await;
+}
+
 /// The three classes of client through the real registration and the real router: the consent page
 /// of a brand names the application twice in the claim and shows where the result goes.
 #[tokio::test]
