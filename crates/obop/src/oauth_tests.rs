@@ -17,6 +17,7 @@ use std::sync::Arc;
 use tower::ServiceExt;
 
 mod address;
+mod brand;
 mod mobile;
 
 const HOST: &str = "inst.test";
