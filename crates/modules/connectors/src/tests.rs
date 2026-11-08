@@ -3150,3 +3150,130 @@ fn an_unreadable_policy_is_never_shown_or_stored_as_the_closed_default() {
     assert_eq!(saved["flows_enabled"], true, "{saved}");
     assert_eq!(saved["eu_only"], false, "{saved}");
 }
+
+// ---- The Slack message names the instance (docs/spec/branding.md, S3, OT-16) ---------------------------
+
+/// An environment whose generic webhook encodes a message the way Slack's incoming webhook does (the
+/// body format of the `slack_webhook` provider, whose address must be on Slack's host), so that a
+/// receiver on loopback gets the text Slack would get.
+fn slack_env() -> Env {
+    let s = Store::new();
+    let d = Arc::new(Dispatcher::new());
+    base::register(&d, &s);
+    crm::register(&d, &s);
+    invoicing::register(&d, &s);
+    let mut all = providers();
+    all.iter_mut()
+        .find(|p| p.id == "webhook_out")
+        .expect("the generic webhook")
+        .body_format = "slack";
+    let rt = Runtime::with_providers(
+        s.backend(),
+        d.clone(),
+        SecretBox::for_tests(),
+        Config {
+            allow_loopback: true,
+            public_url: Some("http://127.0.0.1:8080".into()),
+        },
+        all,
+        None,
+    );
+    register(&d, &s, &rt);
+    Env { d, s, rt }
+}
+
+/// Sends the records of the connection once and returns the `text` the receiver got.
+fn slack_text(e: &Env, r: &Receiver, conn: &str) -> String {
+    let before = r.count();
+    ok(e, &admin(), "connection.sync", json!({"id": conn}));
+    assert!(r.wait(before + 1), "the receiver got nothing");
+    r.body()["text"].as_str().expect("a Slack text").to_string()
+}
+
+fn slack_connection(e: &Env, r: &Receiver) -> String {
+    seed_party(e);
+    enable(e, "webhook_out", false);
+    let id = make_connection(e, &admin(), r, json!({"party": ["name"]}));
+    give_basis(e, &admin(), &id);
+    ok(e, &admin(), "connection.connect", json!({"id": id}));
+    id
+}
+
+/// The first line of a Slack message names who sends it: `obop` when no brand is set, as it always
+/// did, and the name of the instance when one is. A change of the brand shows in the next message,
+/// and `clear` takes it back. The rest of the line, the event and the model, is as it was.
+#[test]
+fn the_slack_message_is_signed_with_the_name_of_the_instance() {
+    use obop_commands::brand::{Action, apply};
+    let e = slack_env();
+    let r = Receiver::new(200);
+    let id = slack_connection(&e, &r);
+    let backend = e.s.backend();
+    let reader = e.d.install_brand(backend.clone());
+
+    // No row: the message is the one the instance has always sent.
+    let plain = slack_text(&e, &r, &id);
+    assert!(plain.starts_with("obop: obop.manual (party)\n"), "{plain}");
+
+    // A brand: the name signs the message; the event and the model are as they were.
+    let set = |fields: &[(&str, &str)]| {
+        let action = Action::Configure(
+            fields
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
+        );
+        apply(&*backend, Some(&reader), "operator", &action, false).unwrap()
+    };
+    set(&[("name", "MOHV")]);
+    let branded = slack_text(&e, &r, &id);
+    assert_eq!(
+        branded.split_once('\n').map(|(first, _)| first),
+        Some("MOHV: obop.manual (party)"),
+        "{branded}"
+    );
+    assert_eq!(
+        branded.split_once('\n').map(|(_, rest)| rest),
+        plain.split_once('\n').map(|(_, rest)| rest),
+        "the lines after the first are the same"
+    );
+
+    // A change of the name shows in the next message, and `clear` takes it back.
+    set(&[("name", "Zed Co")]);
+    assert!(slack_text(&e, &r, &id).starts_with("Zed Co: "));
+    apply(&*backend, Some(&reader), "operator", &Action::Clear, false).unwrap();
+    assert!(slack_text(&e, &r, &id).starts_with("obop: "));
+}
+
+/// A name that a row written around the command can hold (a quote, a backslash, braces) is text in a
+/// JSON string of the body, and the body is still the one message with the one `text` member.
+#[test]
+fn a_hostile_name_stays_text_in_the_slack_body() {
+    use obop_storage::Op;
+    let e = slack_env();
+    let r = Receiver::new(200);
+    let id = slack_connection(&e, &r);
+    let hostile = r#"A"}],"text":"x\y"#;
+    let row = json!({"name": hostile, "logo_svg": ""});
+    e.s.backend()
+        .apply(&[Op::Put {
+            model: "instance_brand".into(),
+            id: "instance".into(),
+            fields: row.as_object().unwrap().clone(),
+        }])
+        .unwrap();
+    // The reader is made after the row was written, so its first read sees it.
+    e.d.install_brand(e.s.backend());
+    let text = slack_text(&e, &r, &id);
+    assert!(
+        text.starts_with(&format!("{hostile}: obop.manual (party)\n")),
+        "{text}"
+    );
+    let body = r.body();
+    assert_eq!(
+        body.as_object()
+            .map(|o| o.keys().cloned().collect::<Vec<_>>()),
+        Some(vec!["text".to_string()]),
+        "the body is the one message: {body}"
+    );
+}

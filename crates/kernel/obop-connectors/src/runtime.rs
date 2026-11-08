@@ -529,7 +529,12 @@ impl Runtime {
                 })
                 .collect(),
             "slack" => {
-                let mut text = format!("obop: {event} ({model})");
+                // The message is signed with the name of the instance, which the brand gives and
+                // which is `obop` when none is set (docs/spec/branding.md, OT-16): the reader is
+                // asked once per message, here and nowhere else, and the prefix is fixed in the
+                // body, so a retry of the delivery sends the text it was made with.
+                let shown = self.dispatcher.brand().current();
+                let mut text = format!("{}: {event} ({model})", shown.brand().name());
                 for r in prepared.iter().take(10) {
                     let line = r
                         .iter()
