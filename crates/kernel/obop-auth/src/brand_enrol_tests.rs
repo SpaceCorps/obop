@@ -136,6 +136,7 @@ fn a_name_that_needs_escaping_is_escaped_in_both_places() {
         got_uri,
         "otpauth://totp/Ex%C3%A4mple%20%26%20S%C3%B6ns:ada?secret=SECRET&issuer=Ex%C3%A4mple%20%26%20S%C3%B6ns&algorithm=SHA1&digits=6&period=30"
     );
+    crate::totp::uri_check::assert_sound(&got_uri, "Exämple & Söns", "ada");
 }
 
 /// `AuthConfig` has the variable and nothing else: with it unset the config holds none, and the
@@ -383,4 +384,142 @@ fn an_administrator_who_must_enrol_is_refused_as_anyone_is() {
         Err(MfaError::Unavailable(m)) if m.starts_with(UNREADABLE)
     ));
     assert_eq!(left_behind(&r, "root"), (false, 0));
+}
+
+/// Names with the characters that matter for a URI, stored around the command (a restore, an import
+/// or a direct edit: `configure` refuses these as punctuation, the read check of the display does
+/// not): `%` that starts an escape, `?` and `#` that start a query and a fragment, `&` and `=` of the
+/// query, a double quote. In the label and in `issuer=` each is written as one escape, the label has
+/// the one colon between its two parts, and the query has exactly its five keys, whatever the name
+/// says; percent-decoding either place gives the name back.
+#[test]
+fn a_stored_name_with_uri_characters_is_escaped_in_both_places() {
+    for name in [
+        "100%",
+        "a%3Ab",
+        "q?x=1",
+        "h#frag",
+        "say \"hi\"",
+        "a&secret=EVIL",
+        "&issuer=evil&",
+        "a=b",
+        "a;b",
+        "[x]{y}|z^`",
+        "it's",
+        "a+b",
+    ] {
+        let r = rig();
+        user_with(&r.a, "ada", &["base.user"]);
+        put_row(&*r.b, &[("name", json!(name))]);
+        let (got_uri, got_issuer) = begun(&r, "ada").unwrap();
+        assert_eq!(got_issuer, name, "the field is the name as it is");
+        crate::totp::uri_check::assert_sound(&got_uri, name, "ada");
+    }
+}
+
+/// The variable is operator-controlled text that is used as it is, with no rule of the brand
+/// record: it may hold a colon, a slash or a backslash, and the URI stays one URI all the same.
+#[test]
+fn a_variable_with_uri_characters_is_escaped_in_both_places() {
+    for name in [
+        "Acme: Corp",
+        "a:b",
+        "a/b",
+        "a\\b",
+        "a%b",
+        "a?b#c",
+        "Acme & Sons",
+        "a=b&c",
+    ] {
+        let r = rig_with(AuthConfig {
+            issuer: Some(name.into()),
+            ..AuthConfig::insecure_dev()
+        });
+        user_with(&r.a, "ada", &["base.user"]);
+        let (got_uri, got_issuer) = begun(&r, "ada").unwrap();
+        assert_eq!(got_issuer, name);
+        crate::totp::uri_check::assert_sound(&got_uri, name, "ada");
+    }
+}
+
+/// A name that passes the read check of the display and that `configure` refuses (a link character,
+/// or only white space) can only be in the row if it was written around the command. In a label the
+/// colon is where an app splits the decoded text, so it would show another issuer than `issuer=`
+/// says (`javascript:alert(1)` would read as the issuer `javascript`), and a name of spaces is a
+/// blank issuer. The enrolment refuses them as it refuses a name that cannot be shown, with the
+/// same fixed message, and writes nothing; with the variable set the row is not looked at.
+#[test]
+fn a_stored_name_that_configure_refuses_for_a_link_or_for_being_blank_refuses_the_enrolment() {
+    for bad in [
+        "a:b",
+        "a/b",
+        "a\\b",
+        "a@b",
+        "http://evil.test/x",
+        "javascript:alert(1)",
+        " ",
+        "  ",
+    ] {
+        // It really is a name `configure` would not write.
+        let r = rig();
+        user_with(&r.a, "ada", &["base.user"]);
+        assert!(
+            brand::apply(
+                &*r.b,
+                None,
+                "operator",
+                &Action::Configure(vec![("name".into(), bad.into())]),
+                false,
+            )
+            .is_err(),
+            "{bad:?} is writable by configure, so the case proves nothing"
+        );
+        put_row(&*r.b, &[("name", json!(bad))]);
+        let Err(MfaError::Unavailable(m)) = begun(&r, "ada") else {
+            panic!("the enrolment went on with a name that cannot go into a label: {bad:?}")
+        };
+        assert!(m.starts_with(UNREADABLE), "{bad:?}: {m}");
+        assert!(
+            bad.trim().is_empty() || !m.contains(bad.trim()),
+            "nothing of the stored text: {m}"
+        );
+        assert_eq!(left_behind(&r, "ada"), (false, 0), "{bad:?}");
+        // The variable does not read the row.
+        let r = rig_with(AuthConfig {
+            issuer: Some("Acme".into()),
+            ..AuthConfig::insecure_dev()
+        });
+        user_with(&r.a, "ada", &["base.user"]);
+        put_row(&*r.b, &[("name", json!(bad))]);
+        assert_eq!(begun(&r, "ada").unwrap().1, "Acme");
+    }
+}
+
+/// A person whose second factor is already on is told so, whatever the name holds: that answer needs
+/// no name, and it is the one `begin` gave before it read the name at all. The order is held in both
+/// directions of the fault: a stored name that cannot be shown, and a store that cannot be read.
+#[test]
+fn a_person_whose_two_factor_is_on_is_told_so_before_the_name_is_read() {
+    let (flaky, r) = flaky_rig(AuthConfig::insecure_dev());
+    user_with(&r.a, "ada", &["base.user"]);
+    // A session opened before the second factor is on: once it is, a sign-in asks for the code.
+    let (_, p) = session(&r.a, "ada");
+    enrol(&r.a, "ada");
+    let on = |answer: Result<J, MfaError>, what: &str| match answer {
+        Err(MfaError::Invalid(m)) => assert!(m.contains("already on"), "{what}: {m}"),
+        other => panic!("{what}: not the answer of a person whose two-factor is on: {other:?}"),
+    };
+    put_row(&*r.b, &[("name", json!("a<b"))]);
+    on(begin_with(&r, &p), "a name that cannot be shown");
+    flaky.fail_gets_of(brand::MODEL, "a read error that is not transient");
+    on(begin_with(&r, &p), "a read error");
+    flaky.refuse_model(brand::MODEL, Mode::Reads);
+    on(begin_with(&r, &p), "a transient fault");
+    // A person who has not enrolled meets the wall, as before.
+    flaky.allow_models();
+    user_with(&r.a, "bob", &["base.user"]);
+    assert!(matches!(
+        begun(&r, "bob"),
+        Err(MfaError::Unavailable(m)) if m.starts_with(UNREADABLE)
+    ));
 }

@@ -806,6 +806,17 @@ impl MfaApi for Auth {
     fn begin(&self, p: &Principal) -> Result<J, MfaError> {
         let name = person(p)?;
         let ring = self.ring()?;
+        let already_on = || {
+            MfaError::Invalid(
+                "two-factor is already on; turn it off first to enrol a new device".into(),
+            )
+        };
+        // A person whose second factor is on is told so first: that answer needs no name, and a
+        // name that cannot be read must not hide it (it is the answer this call gave before the
+        // name was read at all). The check is made again under the guard below, where it counts.
+        if self.user_record(name)?["mfa_enabled"].as_bool() == Some(true) {
+            return Err(already_on());
+        }
         // The label is written into the person's device and cannot be corrected afterwards, so it
         // is read before anything is stored, and a name that cannot be read refuses the enrolment
         // (docs/spec/branding.md, section 4). The read takes no lock: it needs no `mfa_guard`.
@@ -813,9 +824,7 @@ impl MfaApi for Auth {
         let _g = self.mfa_guard()?;
         let u = self.user_record(name)?;
         if u["mfa_enabled"].as_bool() == Some(true) {
-            return Err(MfaError::Invalid(
-                "two-factor is already on; turn it off first to enrol a new device".into(),
-            ));
+            return Err(already_on());
         }
         let secret = random_bytes::<{ totp::SECRET_LEN }>();
         let b32 = totp::base32_encode(&secret);
