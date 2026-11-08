@@ -80,6 +80,8 @@ mod public_site_tests;
 mod recorded_tables_tests;
 #[cfg(test)]
 mod settings_cmd_tests;
+#[cfg(test)]
+mod shell_pin_tests;
 mod sie;
 #[cfg(test)]
 mod sie_tests;
