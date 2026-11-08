@@ -70,7 +70,7 @@ enum Limit {
 
 /// Where the brand is read or written: the path from `crates/` (a prefix when it ends with `/`),
 /// why, and what the file may do.
-const ALLOWED: [(&str, &str, Limit); 7] = [
+const ALLOWED: [(&str, &str, Limit); 8] = [
     (
         "kernel/obop-commands/src/brand/",
         "the module itself: the reader, `strict()`, `apply` and the read of `get`",
@@ -115,6 +115,16 @@ const ALLOWED: [(&str, &str, Limit); 7] = [
         "obop/src/brand_cmd.rs",
         "`obop admin brand`, which acts on the database as the operator (spec, section 3)",
         Limit::Any,
+    ),
+    (
+        "kernel/obop-commands/src/public.rs",
+        "`PublicApi::site_settings`, the one door the public site and shop read their settings by: it hands the reader of the dispatcher to `brand::site_settings`, which does the read and the fill (spec, sections 4 and 5, row OT-04); it asks nothing of the reader itself",
+        Limit::Reads {
+            calls: 1,
+            reads: 0,
+            paths: &["site_settings"],
+            types: &[],
+        },
     ),
 ];
 
@@ -540,6 +550,10 @@ fn the_scan_sees_the_ways_a_file_can_read_the_row_and_leaves_the_allowed_files_a
             "kernel/obop-http/src/lib.rs",
             "fn f() { let _ = brand::routes(g); }",
         ),
+        (
+            "kernel/obop-commands/src/public.rs",
+            "fn f(&self) { crate::brand::site_settings(&*self.store.backend, &self.d.brand()) }",
+        ),
     ]);
     let (found, stale) = scan(&files);
     assert!(found.is_empty(), "{found:?}");
@@ -809,7 +823,8 @@ fn a_row_with_limits_lets_its_file_ask_the_reader_as_the_row_says_and_nothing_el
     assert!(found.is_empty(), "{found:?}");
 }
 
-/// The rows with limits are the two files of the logo route and no others: loosening one of them to
+/// The rows with limits are the two files of the logo route and, since slice S1f, the settings door
+/// of the public site (`PublicApi::site_settings`), and no others: loosening one of them to
 /// `Limit::Any` is a change of this test, and so a decision that shows in the diff.
 #[test]
 fn the_rows_with_limits_are_the_two_files_of_the_logo_route() {
@@ -822,7 +837,8 @@ fn the_rows_with_limits_are_the_two_files_of_the_logo_route() {
         limited,
         [
             "kernel/obop-http/src/brand.rs",
-            "kernel/obop-http/src/lib.rs"
+            "kernel/obop-http/src/lib.rs",
+            "kernel/obop-commands/src/public.rs"
         ]
     );
 }

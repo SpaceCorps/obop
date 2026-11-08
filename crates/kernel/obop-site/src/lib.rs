@@ -558,6 +558,8 @@ impl Site {
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod tests_brand;
+#[cfg(test)]
 mod tests_media;
 #[cfg(test)]
 mod tests_shop;

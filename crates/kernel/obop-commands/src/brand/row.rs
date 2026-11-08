@@ -163,6 +163,24 @@ pub(crate) fn accent_of(setting: Option<&Fields>) -> Option<String> {
     tile::valid_accent(v.get("theme")?.get("accent")?.as_str()?)
 }
 
+/// The `site` object of the instance settings (the keys of the public site), when the settings
+/// parse and hold one; empty otherwise. Read with the theme, from the same row of settings, so that
+/// `get` reports on the `site.*` keys the public site is told about, and by the one door the public
+/// site reads its settings by (`site::site_settings`), where it is the read that door always made,
+/// with the same result for the same text. Total.
+pub(crate) fn site_of(setting: Option<&Fields>) -> serde_json::Map<String, J> {
+    let parsed = setting
+        .and_then(|s| s.get("value")?.as_str())
+        .and_then(|t| serde_json::from_str::<J>(t).ok());
+    match parsed {
+        Some(v) => match v.get("site") {
+            Some(J::Object(o)) => o.clone(),
+            _ => serde_json::Map::new(),
+        },
+        None => serde_json::Map::new(),
+    }
+}
+
 /// The text fields of a row as a [`Brand`], each checked by the safety subset, and the fields that
 /// fell back. The brand is set: the row exists. Does not read the artwork.
 pub(crate) fn read_text(row: &Fields) -> (Brand, Vec<Fallback>) {

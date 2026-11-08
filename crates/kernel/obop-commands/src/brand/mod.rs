@@ -21,6 +21,7 @@ mod apply;
 mod effective;
 mod reader;
 mod row;
+mod site;
 
 pub use apply::{
     Action, Applied, Changed, Failure, Refused, apply, change_line, changes_json, printable,
@@ -28,6 +29,7 @@ pub use apply::{
 };
 pub use reader::{Fresh, Reader, Sink, strict};
 pub use row::{Fallback, Shown, fallbacks_json};
+pub use site::{DEFAULT_TITLE, FAVICON_KEY, fill_site, site_settings};
 
 use crate::Dispatcher;
 pub use obop_brand::LANGS;
@@ -103,4 +105,4 @@ impl Dispatcher {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

@@ -545,3 +545,194 @@ fn a_visitor_cannot_send_a_number_or_a_decimal_past_its_bound() {
     api.submit_batch("n2", vec![ok]).unwrap();
     assert_eq!(s.count("msg"), 1);
 }
+
+/// The instance brand reaches the public site through this door and no other (docs/spec/branding.md,
+/// section 4 and 5, row OT-04): `site_settings` reads the reader of the dispatcher, fills the keys
+/// the stored object leaves unset, and hands the artwork over through one reserved key that it
+/// strips from the stored object first.
+mod brand_door {
+    use super::*;
+    use crate::brand::Reader;
+    use crate::brand::tests::{M_ARTWORK, Spy, put_row, put_settings};
+    use serde_json::json;
+    use std::time::Duration;
+
+    struct Rig {
+        api: PublicApi,
+        spy: Arc<Spy>,
+    }
+
+    /// A door over a store behind the counting double, with a reader of this bound on the
+    /// dispatcher (a zero bound makes every call a flight, so the reads count the calls).
+    fn rig(bound: Duration) -> Rig {
+        let spy = Spy::memory();
+        let store = Store::over(spy.clone());
+        let d = Arc::new(Dispatcher::new());
+        let reader = Arc::new(Reader::with_bound(spy.clone(), bound));
+        assert!(d.brand.set(reader).is_ok(), "the dispatcher had no reader");
+        Rig {
+            api: PublicApi::new(d, store),
+            spy,
+        }
+    }
+
+    /// The brand row: the name MOHV and the given other text fields.
+    fn put(spy: &Arc<Spy>, extra: &[(&str, &str)]) {
+        let mut pairs: Vec<(&str, J)> = vec![("name", J::String("MOHV".into()))];
+        pairs.extend(extra.iter().map(|(k, v)| (*k, J::String(v.to_string()))));
+        put_row(&**spy, &pairs);
+    }
+
+    #[test]
+    fn with_no_brand_the_door_answers_what_is_stored_and_nothing_else() {
+        let r = rig(Duration::ZERO);
+        assert!(r.api.site_settings().is_empty());
+        let site = json!({"title": "Café Nord", "accent": "red", "n": 3});
+        put_settings(
+            &*r.spy,
+            json!({"theme": {"accent": "#c2410c"}, "site": site}),
+        );
+        assert_eq!(
+            J::Object(r.api.site_settings()),
+            site,
+            "the theme is not the shop's, and nothing is filled"
+        );
+        // A dispatcher that never ran `register_admin` has an inert reader: the same answer.
+        let (api, s) = api();
+        assert!(api.site_settings().is_empty());
+        s.backend
+            .insert(
+                "obop_setting",
+                "instance",
+                &[(
+                    "value".to_string(),
+                    J::String(json!({ "site": site }).to_string()),
+                )]
+                .into_iter()
+                .collect(),
+            )
+            .unwrap();
+        assert_eq!(J::Object(api.site_settings()), site);
+    }
+
+    #[test]
+    fn with_a_brand_the_door_fills_the_unset_keys_and_hands_over_the_artwork() {
+        let r = rig(Duration::ZERO);
+        put(&r.spy, &[("logo_svg", M_ARTWORK)]);
+        let site = r.api.site_settings();
+        let v = site[crate::SITE_FAVICON_KEY]["v"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        assert_eq!(v.len(), 16);
+        assert_eq!(site["title"], "MOHV");
+        assert_eq!(site["logo_url"], format!("/api/brand/logo.svg?v={v}"));
+        assert_eq!(site["accent"], "#495670");
+        assert_eq!(site[crate::SITE_FAVICON_KEY]["svg"], M_ARTWORK);
+        // The theme's accent is the shop's accent; an explicit key wins over both.
+        put_settings(
+            &*r.spy,
+            json!({"theme": {"accent": "#c2410c"}, "site": {"title": "Café Nord"}}),
+        );
+        let site = r.api.site_settings();
+        assert_eq!(site["title"], "Café Nord");
+        assert_eq!(site["accent"], "#c2410c");
+        put_settings(&*r.spy, json!({"site": {"accent": "#e11d48"}}));
+        assert_eq!(r.api.site_settings()["accent"], "#e11d48");
+    }
+
+    #[test]
+    fn a_key_with_the_reserved_name_written_to_the_settings_reaches_nothing() {
+        let hostile = json!({"svg": "<svg onload=\"x\"></svg>", "v": "0123456789abcdef"});
+        let stored = json!({"site": {crate::SITE_FAVICON_KEY: hostile, "title": "Café Nord"}});
+        // No brand.
+        let r = rig(Duration::ZERO);
+        put_settings(&*r.spy, stored.clone());
+        let site = r.api.site_settings();
+        assert!(!site.contains_key(crate::SITE_FAVICON_KEY), "{site:?}");
+        assert_eq!(site["title"], "Café Nord");
+        // A brand with no artwork: the shop keeps its own tile, so there is no key at all.
+        put(&r.spy, &[]);
+        let site = r.api.site_settings();
+        assert!(!site.contains_key(crate::SITE_FAVICON_KEY), "{site:?}");
+        // A brand with an artwork: the key is the reader's, never the stored one.
+        put(&r.spy, &[("logo_svg", M_ARTWORK)]);
+        let site = r.api.site_settings();
+        assert_eq!(site[crate::SITE_FAVICON_KEY]["svg"], M_ARTWORK);
+        assert_ne!(site[crate::SITE_FAVICON_KEY]["v"], "0123456789abcdef");
+        assert!(!J::Object(site).to_string().contains("onload"));
+    }
+
+    #[test]
+    fn one_call_asks_the_reader_once() {
+        let r = rig(Duration::ZERO);
+        put(&r.spy, &[]);
+        for calls in 1..=3 {
+            r.api.site_settings();
+            // A reader of zero bound reads on every call, so its reads are its calls: the row once,
+            // and the theme setting once (the door's own read of the setting is one more).
+            assert_eq!(r.spy.gets("instance_brand"), calls, "{calls} calls");
+            assert_eq!(r.spy.gets("obop_setting"), 2 * calls, "{calls} calls");
+        }
+        // With the reader's bound the calls within it share one flight.
+        let r = rig(Duration::from_secs(3600));
+        put(&r.spy, &[]);
+        for _ in 0..5 {
+            r.api.site_settings();
+        }
+        assert_eq!(r.spy.gets("instance_brand"), 1);
+    }
+
+    /// D74 shape (section 4, "The display read and D74"): a reader that cannot read serves the last
+    /// good brand, and the default only in a process that never had a good read; a failed refill is
+    /// not kept; the door never fails, panics or blocks on it.
+    #[test]
+    fn a_failing_read_serves_the_last_good_brand_and_in_a_new_process_the_default() {
+        let r = rig(Duration::ZERO);
+        put(&r.spy, &[("logo_svg", M_ARTWORK)]);
+        let good = r.api.site_settings();
+        assert_eq!(good["title"], "MOHV");
+
+        r.spy.fail("instance_brand", "storage_busy");
+        for _ in 0..2 {
+            let during = r.api.site_settings();
+            assert_eq!(during, good, "the last good brand, of any age");
+        }
+        r.spy.heal();
+        put_row(&*r.spy, &[("name", J::String("Other".into()))]);
+        assert_eq!(
+            r.api.site_settings()["title"],
+            "Other",
+            "the next call reads again: the failure was not kept"
+        );
+
+        // The theme setting failing fails the refill as a whole, and is served the same way.
+        r.spy.fail("obop_setting", "storage_busy");
+        let during = r.api.site_settings();
+        assert_eq!(during["title"], "Other");
+        r.spy.heal();
+
+        // A process that never had a good read: the default, which is today's shop.
+        let fresh = rig(Duration::ZERO);
+        put_settings(&*fresh.spy, json!({"site": {"tagline": "Tea"}}));
+        put(&fresh.spy, &[]);
+        fresh.spy.fail("instance_brand", "storage_busy");
+        let during = fresh.api.site_settings();
+        assert_eq!(during.get("tagline"), Some(&json!("Tea")));
+        assert!(!during.contains_key("title"), "{during:?}");
+        assert!(!during.contains_key("logo_url") && !during.contains_key("accent"));
+        assert!(!during.contains_key(crate::SITE_FAVICON_KEY));
+        // Nothing was pinned: when the store answers, the brand is there.
+        fresh.spy.heal();
+        assert_eq!(fresh.api.site_settings()["title"], "MOHV");
+    }
+
+    #[test]
+    fn the_door_without_a_reader_never_asks_the_store_for_the_row() {
+        let spy = Spy::memory();
+        let api = PublicApi::new(Arc::new(Dispatcher::new()), Store::over(spy.clone()));
+        put(&spy, &[]);
+        assert!(api.site_settings().is_empty());
+        assert_eq!(spy.gets("instance_brand"), 0);
+    }
+}

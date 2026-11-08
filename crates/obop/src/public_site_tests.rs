@@ -534,20 +534,22 @@ async fn shown(r: &axum::Router, path: &str) -> String {
     format!("{status}\n{}\n\n{body}", lines.join("\n"))
 }
 
-/// S1a: the brand row is in the store and no surface reads it yet. The shop's files and pages go
-/// through `PublicApi::site_settings` on every request here (the fixture's cache lives zero
-/// seconds), the one door the site reads settings by, and the back office index is the file of the
-/// build; with a row written through `brand::apply` every one of them answers the bytes it
-/// answered without one, headers included.
+/// The brand row is in the store. The shop's files and pages go through `PublicApi::site_settings`
+/// on every request here (the fixture's cache lives zero seconds), the one door the site reads
+/// settings by, and the back office index is the file of the build. Since slice S1f the door fills
+/// what the seeded settings leave unset (the logo address, the tab icon), so the home page and the
+/// tab icon move with a row (`with_a_brand_row_the_shop_shows_the_logo_and_the_artwork`), and every
+/// file that nothing of the brand feeds answers the bytes it answered without a row, headers
+/// included: the stylesheet (the seed sets the accent, and an explicit key wins), the robots and
+/// sitemap documents and the back office. The back office, with the public site alone, is not read
+/// by anything yet.
 #[tokio::test]
-async fn with_a_brand_row_the_shop_files_and_the_back_office_index_are_what_they_were() {
+async fn with_a_brand_row_the_shop_files_the_brand_does_not_feed_and_the_back_office_index_are_what_they_were()
+ {
     for (public, paths) in [
         (
             true,
             vec![
-                "/favicon.svg",
-                "/favicon.ico",
-                "/",
                 "/assets/site.css",
                 "/robots.txt",
                 "/sitemap.xml",
@@ -576,5 +578,280 @@ async fn with_a_brand_row_the_shop_files_and_the_back_office_index_are_what_they
                 "{p} (public site: {public}) moved when a brand row was written"
             );
         }
+    }
+}
+
+// ---- The shop falls back to the brand (S1f of the branding work) -------------------------------
+
+use crate::brand_row_tests::FIELDS;
+use obop_brand::logo::{LOGO_CACHE_CONTROL, LOGO_CONTENT_TYPE, LOGO_CSP, LOGO_NOSNIFF};
+use obop_storage::testing::{Flaky, Mode};
+
+/// The headers of the logo route that the shop's tab icon must carry, by name.
+const LOGO_HEADER_NAMES: [&str; 5] = [
+    "content-type",
+    "x-content-type-options",
+    "content-security-policy",
+    "cache-control",
+    "etag",
+];
+
+/// Remove the artwork of the brand that `set_brand` wrote, through the command: the brand keeps its
+/// name and the logo is the generated tile.
+fn drop_the_artwork(app: &crate::app::App) {
+    let reader = app.dispatcher.brand();
+    obop_commands::brand::apply(
+        &*app.store.backend(),
+        Some(&reader),
+        "operator",
+        &obop_commands::brand::Action::Configure(vec![("logo_svg".into(), String::new())]),
+        false,
+    )
+    .unwrap();
+}
+
+/// With a brand row the seeded shop (it sets a title, a tagline, an accent and a footer, and no
+/// logo address) keeps what it set, takes the logo route for its logo and shows the artwork on the
+/// tab icon address, with the bytes and the headers of the logo route itself.
+#[tokio::test]
+async fn with_a_brand_row_the_shop_shows_the_logo_and_the_artwork() {
+    let f = fixture(true).await;
+    let (_, home_before, _) = get(&f.router, "/").await;
+    assert!(!home_before.contains("/api/brand/logo.svg"));
+    crate::brand_row_tests::set_brand(&f.app);
+    let (s, logo, logo_headers) = get(&f.router, "/api/brand/logo.svg").await;
+    assert_eq!(s, 200);
+    let v = logo_headers["etag"]
+        .to_str()
+        .unwrap()
+        .trim_matches('"')
+        .to_string();
+
+    let (s, home, _) = get(&f.router, "/").await;
+    assert_eq!(s, 200);
+    // The owner's title wins over the name; the logo address was unset, so the record's is there.
+    assert!(
+        home.contains("Fernhill Goods") && !home.contains("MOHV"),
+        "{home}"
+    );
+    assert!(
+        home.contains(&format!(
+            "<img src=\"/api/brand/logo.svg?v={v}\" alt=\"\" height=\"34\">"
+        )),
+        "{home}"
+    );
+    // The tab icon is the artwork, answered as the logo route answers it.
+    for path in ["/favicon.svg", "/favicon.ico"] {
+        let (s, body, h) = get(&f.router, path).await;
+        assert_eq!(s, 200, "{path}");
+        assert_eq!(body, logo, "{path}: the bytes of the logo route");
+        for name in LOGO_HEADER_NAMES {
+            assert_eq!(h[name], logo_headers[name], "{path}: {name}");
+        }
+        assert_eq!(h["content-type"], LOGO_CONTENT_TYPE);
+        assert_eq!(h["x-content-type-options"], LOGO_NOSNIFF);
+        assert_eq!(h["content-security-policy"], LOGO_CSP);
+        assert_eq!(h["cache-control"], LOGO_CACHE_CONTROL);
+        assert!(h.get("set-cookie").is_none() && h.get("x-frame-options").is_none());
+    }
+    // A matching validator is a 304 on the tab icon, as on the logo route.
+    let tag = format!("\"{v}\"");
+    let (s, body, h) = ask(&f.router, "GET", "/favicon.svg", &[("if-none-match", &tag)]).await;
+    assert_eq!((s, body.as_str()), (304, ""));
+    assert_eq!(h["etag"], tag.as_str());
+    assert!(h.get("content-type").is_none());
+
+    // A brand with no artwork: the shop keeps its own tile (the tile of the brand is not its tab icon).
+    drop_the_artwork(&f.app);
+    let (_, icon, h) = get(&f.router, "/favicon.svg").await;
+    assert!(icon.contains("<text"), "the shop's own tile: {icon}");
+    assert_ne!(h["content-security-policy"], LOGO_CSP);
+}
+
+/// `setting.update` writes any key of the `site` object. A key with the reserved name that an
+/// administrator writes through the real command reaches no page and not the tab icon, with a brand
+/// that has an artwork, with one that has none, and with none.
+#[tokio::test]
+async fn a_reserved_key_written_through_setting_update_reaches_no_page_and_not_the_tab_icon() {
+    let hostile = r#"<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"><rect width="9" height="9"/></svg>"#;
+    let write = |key: bool| {
+        let mut site = json!({"title": "Fernhill Goods", "accent": "#2d6a4f"});
+        if key {
+            site[obop_commands::SITE_FAVICON_KEY] =
+                json!({"svg": hostile, "v": "0123456789abcdef"});
+        }
+        json!({"value": json!({"site": site}).to_string()})
+    };
+    let files = |f: &Fixture| {
+        let router = f.router.clone();
+        async move {
+            let mut out = Vec::new();
+            for p in [
+                "/",
+                "/favicon.svg",
+                "/favicon.ico",
+                "/assets/site.css",
+                "/feed.xml",
+            ] {
+                out.push(shown(&router, p).await);
+            }
+            out.join("\n====\n")
+        }
+    };
+    let post = |f: &Fixture, body: J| {
+        let router = f.router.clone();
+        let token = f.token.clone();
+        async move {
+            let (s, b, _) = send(
+                &router,
+                Request::post("/api/setting/update")
+                    .header("authorization", format!("Bearer {token}"))
+                    .header("content-type", "application/json")
+                    .body(Body::from(body.to_string()))
+                    .unwrap(),
+            )
+            .await;
+            assert_eq!(s, 200, "{b}");
+        }
+    };
+
+    // No brand.
+    let f = fixture(true).await;
+    post(&f, write(false)).await;
+    let clean = files(&f).await;
+    post(&f, write(true)).await;
+    assert_eq!(files(&f).await, clean, "no brand: the key changes nothing");
+    assert!(!clean.contains("onload"));
+
+    // A brand with an artwork: the tab icon is the logo route's answer, never the stored object.
+    crate::brand_row_tests::set_brand(&f.app);
+    let (_, logo, _) = get(&f.router, "/api/brand/logo.svg").await;
+    for p in ["/favicon.svg", "/favicon.ico"] {
+        let (s, body, _) = get(&f.router, p).await;
+        assert_eq!((s, body.as_str()), (200, logo.as_str()), "{p}");
+    }
+    assert!(!files(&f).await.contains("onload"));
+    post(&f, write(false)).await;
+    let (_, without, _) = get(&f.router, "/favicon.svg").await;
+    assert_eq!(without, logo);
+    post(&f, write(true)).await;
+
+    // A brand with no artwork: the shop's own tile, with the key or without it.
+    drop_the_artwork(&f.app);
+    let with_key = files(&f).await;
+    post(&f, write(false)).await;
+    assert_eq!(files(&f).await, with_key);
+    assert!(with_key.contains("<text") && !with_key.contains("onload"));
+    let _ = FIELDS;
+}
+
+// ---- A store that fails under the shop (D74) --------------------------------------------------------
+
+/// The seeded shop over a store behind a double that refuses reads of a model on demand, with the
+/// site's own cache lived zero seconds so that every request asks the door.
+async fn flaky_shop() -> (Arc<Flaky>, crate::app::App, axum::Router) {
+    let (flaky, backend) = Flaky::memory();
+    let app = crate::app::App::with_store(obop_commands::Store::over(backend));
+    for id in ["website", "ecommerce"] {
+        app.installer
+            .install(&Bundled.fetch(id).unwrap(), "marketplace", "test")
+            .unwrap();
+    }
+    obop_site::seed::seed(&app.store, &app.dispatcher).unwrap();
+    let auth = Arc::new(Auth::with_test_params(app.store.backend()));
+    let state = obop_http::HttpState::new(app.dispatcher.clone(), auth);
+    let site = Arc::new(obop_site::Site::new(
+        obop_commands::PublicApi::new(app.dispatcher.clone(), app.store.clone()),
+        obop_site::Config {
+            settings_ttl: std::time::Duration::ZERO,
+            ..obop_site::Config::default()
+        },
+    ));
+    let router = obop_http::public::router(
+        state,
+        None,
+        site,
+        obop_http::public::PublicConfig::default(),
+    );
+    (flaky, app, router)
+}
+
+/// The bound of the reader's cell (`brand/reader.rs`, two seconds), as the tests of the logo route
+/// hold it: the dispatcher's reader has this bound and a test of this crate cannot shorten it.
+const READER_BOUND: std::time::Duration = std::time::Duration::from_secs(2);
+
+fn wait_until_stale(filled: std::time::Instant) {
+    let stale = READER_BOUND + std::time::Duration::from_millis(50);
+    while filled.elapsed() <= stale {
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+}
+
+/// After a good read, a store that then fails: once the reader's cell has run out, the request that
+/// runs the refill meets the fault and is answered by D74, 503 with `Retry-After`, and never by a
+/// shop page that has lost its brand; nothing is kept, so the next request reads again; when the
+/// store answers, the brand is back. (The reader serves the last good brand to a caller that does not
+/// run the refill, `public/tests.rs` in `obop-commands`; the layer above refuses the request that
+/// met the fault whatever the page would have been.)
+#[tokio::test]
+async fn after_a_good_read_a_failing_store_answers_the_shop_request_that_runs_the_refill_with_a_503()
+ {
+    let (flaky, app, router) = flaky_shop().await;
+    crate::brand_row_tests::set_brand(&app);
+    let (s, good, _) = get(&router, "/favicon.svg").await;
+    assert_eq!(s, 200);
+    assert!(good.contains("<svg"));
+    let (_, home, _) = get(&router, "/").await;
+    assert!(home.contains("/api/brand/logo.svg?v="), "{home}");
+    let filled = std::time::Instant::now();
+
+    flaky.refuse_model("instance_brand", Mode::Reads);
+    wait_until_stale(filled);
+    for _ in 0..2 {
+        let before = flaky.refused();
+        let (s, body, h) = get(&router, "/").await;
+        assert_eq!(s, 503, "{body}");
+        assert_eq!(h["retry-after"], "1");
+        assert!(!body.contains("Fernhill Goods"), "not a shop page: {body}");
+        assert!(
+            flaky.refused() > before,
+            "a failed refill is not kept: it read again"
+        );
+    }
+    let (s, body, _) = get(&router, "/favicon.svg").await;
+    assert_eq!(s, 503, "{body}");
+
+    flaky.allow_models();
+    let (s, home, _) = get(&router, "/").await;
+    assert_eq!(s, 200);
+    assert!(
+        home.contains("/api/brand/logo.svg?v="),
+        "the brand is back: {home}"
+    );
+    let (s, icon, _) = get(&router, "/favicon.svg").await;
+    assert_eq!((s, icon.as_str()), (200, good.as_str()));
+}
+
+/// A process that never had a good read: the request that runs the first refill meets the fault and
+/// is answered by D74. Nothing is pinned, neither the failure nor the default: when the store answers
+/// the shop is what the store holds (here no row: the shop as it always was).
+#[tokio::test]
+async fn a_shop_that_never_had_a_good_read_is_answered_by_d74_and_pins_nothing() {
+    // The shop's own tile, as another process that reads the store well sends it.
+    let (_, _app, router) = flaky_shop().await;
+    let (_, plain, _) = get(&router, "/favicon.svg").await;
+    for model in ["instance_brand", "obop_setting"] {
+        // A new process: its reader has read nothing yet.
+        let (flaky, _app, router) = flaky_shop().await;
+        flaky.refuse_model(model, Mode::Reads);
+        let (s, body, h) = get(&router, "/").await;
+        assert_eq!(s, 503, "{model}: {body}");
+        assert_eq!(h["retry-after"], "1", "{model}");
+        flaky.allow_models();
+        let (s, home, _) = get(&router, "/").await;
+        assert_eq!(s, 200, "{model}");
+        assert!(home.contains("Fernhill Goods") && !home.contains("/api/brand/logo.svg"));
+        let (_, icon, _) = get(&router, "/favicon.svg").await;
+        assert_eq!(icon, plain, "{model}: the shop's own tile, as before");
     }
 }
