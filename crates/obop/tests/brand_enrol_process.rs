@@ -82,13 +82,24 @@ fn cli(url: &str, args: &[&str], stdin: Option<&str>) {
 struct Server {
     child: Child,
     port: u16,
-    /// What the server wrote to its standard error, kept for the message of a failure.
+    /// What the server wrote to its standard error, kept for the message of a failure. A server
+    /// whose standard error is a pipe nobody reads ([`serve_with_closed_stderr`]) has no file.
     log: PathBuf,
 }
 
 impl Server {
     fn log(&self) -> String {
         std::fs::read_to_string(&self.log).unwrap_or_default()
+    }
+
+    /// What a server that already exited wrote to a standard error that is a pipe, for the message
+    /// of a failure to start. Only for a child that is gone: the read ends at the end of the pipe.
+    fn log_of_the_dead(&mut self) -> String {
+        let mut text = self.log();
+        if let Some(mut pipe) = self.child.stderr.take() {
+            let _ = pipe.read_to_string(&mut text);
+        }
+        text
     }
 }
 
@@ -124,6 +135,18 @@ fn get_status(port: u16, path: &str) -> u16 {
 /// still be running after that (a child that could not bind exits at once). A child that died is
 /// reported with what it wrote to its standard error.
 fn serve(url: &str, env: &[(&str, &str)]) -> Server {
+    serve_with(url, env, false)
+}
+
+/// The same server, but its standard error is a pipe whose read end this test closes as soon as the
+/// server answers: from then on every write of the server to its standard error fails, as it does
+/// when a log collector goes away. A line written with `eprintln!` then panics, and the panic of a
+/// handler is a dropped connection instead of the answer the line is about.
+fn serve_with_closed_stderr(url: &str, env: &[(&str, &str)]) -> Server {
+    serve_with(url, env, true)
+}
+
+fn serve_with(url: &str, env: &[(&str, &str)], closed_stderr: bool) -> Server {
     let port = TcpListener::bind("127.0.0.1:0")
         .unwrap()
         .local_addr()
@@ -133,22 +156,24 @@ fn serve(url: &str, env: &[(&str, &str)]) -> Server {
         "obop-brand-enrol-serve-{}-{port}.log",
         std::process::id()
     ));
-    let stderr = std::fs::File::create(&log).unwrap();
-    let child = obop(
+    let mut command = obop(
         &["serve", "--addr", &format!("127.0.0.1:{port}"), "--db", url],
         env,
-    )
-    .stdout(Stdio::null())
-    .stderr(Stdio::from(stderr))
-    .spawn()
-    .expect("spawn obop serve");
+    );
+    command.stdout(Stdio::null());
+    if closed_stderr {
+        command.stderr(Stdio::piped());
+    } else {
+        command.stderr(Stdio::from(std::fs::File::create(&log).unwrap()));
+    }
+    let child = command.spawn().expect("spawn obop serve");
     let mut s = Server { child, port, log };
     let deadline = Instant::now() + Duration::from_secs(60);
     loop {
         if let Some(status) = s.child.try_wait().unwrap() {
             panic!(
                 "obop serve exited ({status}) before it came up:\n{}",
-                s.log()
+                s.log_of_the_dead()
             );
         }
         if get_status(port, "/healthz") == 200 {
@@ -164,9 +189,12 @@ fn serve(url: &str, env: &[(&str, &str)]) -> Server {
     if let Some(status) = s.child.try_wait().unwrap() {
         panic!(
             "something else answered on port {port}; obop serve exited ({status}):\n{}",
-            s.log()
+            s.log_of_the_dead()
         );
     }
+    // Close the read end: what the server wrote while it started sits in the pipe and is thrown
+    // away with it.
+    drop(s.child.stderr.take());
     s
 }
 
@@ -259,6 +287,36 @@ fn is_brand_unavailable(a: &Answer, what: &str) {
     );
 }
 
+/// The row of the brand holds a name that cannot be shown (written around the command: a restore,
+/// an import, a direct edit).
+fn store_a_name_that_cannot_be_shown(url: &str) {
+    let backend = obop_storage::open(url).unwrap();
+    let mut row = obop_storage::Fields::new();
+    row.insert("name".into(), json!("a<b"));
+    backend
+        .apply_checked(&[obop_storage::Op::Put {
+            model: "instance_brand".into(),
+            id: "instance".into(),
+            fields: row,
+        }])
+        .unwrap();
+}
+
+/// The row of the brand is there and cannot be decoded (a store that is up and cannot answer this
+/// read; here a row that holds a number where a record belongs). Written around the store: a write
+/// through it reads the row first.
+fn store_a_row_that_cannot_be_decoded(dir: &Dir) {
+    let conn = rusqlite::Connection::open(dir.0.join("enrol.sqlite")).unwrap();
+    conn.busy_timeout(Duration::from_secs(10)).unwrap();
+    let changed = conn
+        .execute(
+            "UPDATE obop_record SET data = '5' WHERE model = 'instance_brand' AND id = 'instance'",
+            (),
+        )
+        .unwrap();
+    assert_eq!(changed, 1);
+}
+
 #[test]
 fn the_running_server_writes_the_name_of_the_record_and_refuses_when_it_cannot_read_it() {
     let dir = Dir::new("flow");
@@ -321,18 +379,7 @@ fn the_running_server_writes_the_name_of_the_record_and_refuses_when_it_cannot_r
 
     // A stored name that cannot be shown (written around the command): both enrolments are
     // refused, with the answer of the branding and no Retry-After; sign-in is not affected.
-    {
-        let backend = obop_storage::open(&url).unwrap();
-        let mut row = obop_storage::Fields::new();
-        row.insert("name".into(), json!("a<b"));
-        backend
-            .apply_checked(&[obop_storage::Op::Put {
-                model: "instance_brand".into(),
-                id: "instance".into(),
-                fields: row,
-            }])
-            .unwrap();
-    }
+    store_a_name_that_cannot_be_shown(&url);
     is_brand_unavailable(&begin(server.port, &token), "begin");
     is_brand_unavailable(&options(server.port, &token), "options");
     assert!(!login(server.port).is_empty(), "sign-in still works");
@@ -348,17 +395,7 @@ fn the_running_server_writes_the_name_of_the_record_and_refuses_when_it_cannot_r
     // The other cause: the row is there and cannot be decoded (a store that is up and cannot answer
     // this read; here a row that holds a number where a record belongs). The answer is the same and
     // says nothing of the store; the log has the store's own text under the cause `store read`.
-    {
-        let conn = rusqlite::Connection::open(dir.0.join("enrol.sqlite")).unwrap();
-        conn.busy_timeout(Duration::from_secs(10)).unwrap();
-        let changed = conn
-            .execute(
-                "UPDATE obop_record SET data = '5' WHERE model = 'instance_brand' AND id = 'instance'",
-                (),
-            )
-            .unwrap();
-        assert_eq!(changed, 1);
-    }
+    store_a_row_that_cannot_be_decoded(&dir);
     let a = begin(server.port, &token);
     is_brand_unavailable(&a, "begin with a row that cannot be decoded");
     assert!(
@@ -482,4 +519,75 @@ fn the_running_server_writes_the_name_of_the_record_and_refuses_when_it_cannot_r
         "{}",
         server.log()
     );
+    // A value with spaces around it is used as it is: nothing between the environment and the
+    // address trims it (the spaces are escaped in the label and in issuer=, as any character is).
+    drop(server);
+    let server = serve(&url, &[("OBOP_MFA_ISSUER", " Acme ")]);
+    let token = login(server.port);
+    let a = begin(server.port, &token);
+    assert_eq!(a.status, 200, "{}", a.body);
+    assert_eq!(a.body["issuer"], json!(" Acme "));
+    let uri = a.body["uri"].as_str().unwrap();
+    assert!(
+        uri.starts_with("otpauth://totp/%20Acme%20:ada?secret="),
+        "{uri}"
+    );
+    assert!(uri.contains("&issuer=%20Acme%20&"), "{uri}");
+}
+
+/// The log lines of a refused enrolment must not turn the 503 into a dropped connection when the
+/// standard error of the server cannot be written. `eprintln!` panics then, the panic of a handler
+/// is "handler panicked" in the server's `blocking`, and the person gets no answer at all: so the
+/// lines are written with `writeln!` and the result ignored (`obop-http` `log_line`, `enrolment_error`
+/// in `obop-commands`). The standard error here is a pipe whose read end is closed once the server
+/// is up. Each of the two causes has its own line, and the test holds both.
+#[test]
+fn a_refused_enrolment_is_answered_when_the_standard_error_of_the_server_cannot_be_written() {
+    let dir = Dir::new("closed-stderr");
+    let url = dir.url();
+    cli(
+        &url,
+        &["admin", "create", "ada", "--all-groups"],
+        Some(&format!("{PW}\n")),
+    );
+    let mut server = serve_with_closed_stderr(&url, &[]);
+    let token = login(server.port);
+    // The enrolment that is not refused works with such a standard error as well.
+    let a = begin(server.port, &token);
+    assert_eq!(a.status, 200, "{}", a.body);
+
+    let alive = |server: &mut Server, what: &str| {
+        assert_eq!(get_status(server.port, "/healthz"), 200, "{what}");
+        assert!(
+            server.child.try_wait().unwrap().is_none(),
+            "the server is still running: {what}"
+        );
+    };
+
+    // The cause the answer states for itself: a stored name that cannot be shown. The route writes
+    // its line (`obop-http` `log_line`).
+    store_a_name_that_cannot_be_shown(&url);
+    is_brand_unavailable(&begin(server.port, &token), "begin, name");
+    is_brand_unavailable(&options(server.port, &token), "options, name");
+    alive(&mut server, "after a stored name that cannot be shown");
+
+    // The other cause: a row that cannot be decoded. `enrolment_error` writes the store's own text
+    // and the route a second line.
+    store_a_row_that_cannot_be_decoded(&dir);
+    let a = begin(server.port, &token);
+    is_brand_unavailable(&a, "begin, row");
+    assert!(
+        a.body["error"]
+            .as_str()
+            .unwrap()
+            .ends_with("the store could not be read"),
+        "{}",
+        a.body
+    );
+    is_brand_unavailable(&options(server.port, &token), "options, row");
+    alive(&mut server, "after a row that cannot be decoded");
+
+    // The refusals did not stop it from answering: sign-in and a second refusal.
+    assert!(!login(server.port).is_empty(), "sign-in still works");
+    is_brand_unavailable(&begin(server.port, &token), "begin, row, again");
 }
