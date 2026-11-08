@@ -2816,3 +2816,165 @@ async fn phone_the_return_address_counts_the_sign_in_window_by_the_one_rule() {
     }
     assert!(spent, "an address in the header got a bucket of its own");
 }
+
+// ---- the refusals of the link, with a brand (review of S1c) -------------------------------------------
+
+/// What the page of the flow must be with a brand set, the question of the OAuth tests
+/// (`oauth_tests::brand::unbranded_page`) asked of an answer of this file's router.
+fn unbranded(r: &Raw) -> Option<String> {
+    let policy = r
+        .all("content-security-policy")
+        .first()
+        .copied()
+        .unwrap_or("");
+    crate::oauth_tests::brand::unbranded_page(&r.body, policy)
+}
+
+/// The link on the sign-in page of an app, tapped when the instance cannot send the person to
+/// Microsoft, for each of the three reasons that need a provider to exist: it is switched off, its
+/// row cannot be used (no client secret is stored), the provider does not answer. Each ends on the
+/// sign-in page with the fixed text, and with a brand set the page shows the brand: these are the
+/// arms of `microsoft_blocking` that `oauth_tests::brand` cannot reach, because that rig has no
+/// provider.
+#[tokio::test]
+async fn phone_the_refusals_of_the_microsoft_link_show_the_brand() {
+    let w = world(true).await;
+    crate::brand_row_tests::set_brand(&w.app);
+    let mut phone = Phone::new(&w).await;
+    let page = phone.open().await;
+
+    // The page itself, with the link, shows the brand: the link is offered.
+    assert!(page.html.contains("/oauth/authorize/microsoft"));
+    assert!(page.html.contains("MOHV"), "{}", page.html);
+
+    let refused = |r: &Raw, why: &str| {
+        assert!(
+            login_page(r) && r.body.contains(UNAVAILABLE),
+            "{why}: {}",
+            r.body
+        );
+        assert_eq!(unbranded(r), None, "{why}");
+    };
+
+    // Switched off: the stored provider says it is not enabled.
+    w.auth
+        .operator_sso_configure(TENANT, CLIENT, None, Some(false))
+        .unwrap();
+    let r = phone.tap(&page.flow).await;
+    refused(&r, "switched off");
+    w.auth
+        .operator_sso_configure(TENANT, CLIENT, None, Some(true))
+        .unwrap();
+
+    // A row that cannot be used: enabled, and no client secret is stored (a row written by a hand
+    // that skipped the commands). The log says so, and the person is told the fixed text.
+    let b = w.app.store.backend();
+    let mut row = b.get("auth_sso_provider", "provider").unwrap().unwrap();
+    let kept = row.remove("client_secret").expect("a sealed secret");
+    b.apply_checked(&[obop_storage::Op::Put {
+        model: "auth_sso_provider".into(),
+        id: "provider".into(),
+        fields: row.clone(),
+    }])
+    .unwrap();
+    let r = phone.tap(&page.flow).await;
+    refused(&r, "no client secret");
+    assert!(
+        w.events("oidc_error")
+            .iter()
+            .any(|l| l.contains("start (app)") && l.contains("no client secret")),
+        "{:?}",
+        w.events("oidc_error")
+    );
+    row.insert("client_secret".into(), kept);
+    b.apply_checked(&[obop_storage::Op::Put {
+        model: "auth_sso_provider".into(),
+        id: "provider".into(),
+        fields: row,
+    }])
+    .unwrap();
+
+    // A provider that does not answer the discovery request.
+    w.forget_throttle();
+    w.idp.stop();
+    let r = phone.tap(&page.flow).await;
+    refused(&r, "no discovery");
+    assert!(
+        w.events("oidc_error")
+            .iter()
+            .any(|l| l.contains("discovery document")),
+        "{:?}",
+        w.events("oidc_error")
+    );
+    assert!(w.sso_rows().is_empty(), "no round trip was begun");
+}
+
+/// The last refusal of the link: the store does not take the row of the round trip. A refusal of
+/// the store is never a page of the flow, whichever call of the request it meets, because the pool
+/// has noted the fault on the request and D74 answers with the 503 whatever the handler sends. So the
+/// arm of `microsoft_blocking` that answers "unavailable" when `begin_flow` is refused cannot be
+/// seen on a page and no test can tell it from a page of the unbranded kind: this test holds what
+/// can be held, that every refused call, at each position in turn, ends as the redirect (the call
+/// was optional) or as the 503 with nothing of the brand or the product on it, and never as the
+/// sign-in page.
+#[tokio::test]
+async fn phone_a_store_that_refuses_the_row_of_a_round_trip_is_a_503_and_never_a_page_of_the_flow()
+{
+    use obop_storage::testing::Flaky;
+    let (flaky, backend) = Flaky::memory();
+    let app = App::with_store(obop_commands::Store::over(backend));
+    let w = world_on(app, true, AuthConfig::insecure_dev(), None).await;
+    crate::brand_row_tests::set_brand(&w.app);
+    w.keep_throttle();
+    let mut phone = Phone::new(&w).await;
+    let (mut as_503, mut as_redirect, mut clean) = (0, 0, 0);
+    for skip in 0..80 {
+        phone.ip = Some(format!("10.9.{}.{}", skip / 200, skip % 200 + 1));
+        let page = phone.open().await;
+        let before = flaky.refused();
+        flaky.refuse_call_after(skip);
+        let tap = phone.tap(&page.flow).await;
+        let refused = flaky.refused() - before;
+        flaky.allow_models();
+        if refused == 0 {
+            // Past the last call of the request: the redirect to the provider.
+            assert_eq!(tap.status, 303, "{skip}: {}", tap.body);
+            clean += 1;
+            if clean == 2 {
+                break;
+            }
+            continue;
+        }
+        match tap.status {
+            503 => {
+                // The answer of D74: a page or the JSON, by what the handler had started to send.
+                assert!(
+                    !tap.all("retry-after").is_empty()
+                        && tap.all("x-obop-applied").len() == 1
+                        && !tap.body.contains("class=\"brand\"")
+                        && !tap.body.to_lowercase().contains("obop"),
+                    "{skip}: {}",
+                    tap.body
+                );
+                as_503 += 1;
+            }
+            303 => {
+                assert!(
+                    tap.location().contains("authorize?"),
+                    "{skip}: {}",
+                    tap.location()
+                );
+                as_redirect += 1;
+            }
+            other => panic!("{skip}: a refused call ended as a {other}: {}", tap.body),
+        }
+    }
+    assert!(
+        as_503 >= 1,
+        "{as_503} refusals ended as a 503 ({as_redirect} as a redirect)"
+    );
+    assert!(
+        clean >= 1,
+        "the sweep never got past the last call of the request"
+    );
+}

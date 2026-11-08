@@ -12,7 +12,9 @@ use obop_auth::{Auth, AuthConfig};
 use obop_commands::brand::{self, Action};
 use obop_commands::{Authenticator, Store};
 use obop_oauth::page::{LANGS, esc, t};
+use obop_storage::Backend;
 use obop_storage::testing::{Flaky, Mode};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 struct Rig {
     r: axum::Router,
@@ -605,6 +607,14 @@ fn begun_as(
     )
 }
 
+/// The registration of a mobile app that has one private-use redirect (`Mileage`), as the tests of
+/// the Microsoft step make it.
+fn mobile_registration() -> serde_json::Value {
+    json!({"client_name": "Mileage", "obop_client_class": "mobile",
+           "redirect_uris": ["se.mohv.app:/oauth"], "scope": "base.user",
+           "token_endpoint_auth_method": "none"})
+}
+
 /// The answer of D74 to a request that met a store fault, in the shape a browser gets (a page; an
 /// API client gets JSON): 503 with `Retry-After` and the word that nothing was applied.
 fn assert_d74_503(resp: &Resp) {
@@ -880,19 +890,24 @@ async fn the_two_requests_of_the_microsoft_step_show_the_brand_and_read_it_first
 /// the name above the card, the tab icon and the policy that allows it, and nothing that names the
 /// product. Returns what is wrong with the page, so a test can list every arm that fails.
 fn unbranded(resp: &Resp) -> Option<String> {
-    let html = resp.text();
+    unbranded_page(&resp.text(), &policy(resp))
+}
+
+/// [`unbranded`] for a page and its policy header, so that a test with a router of its own (the
+/// Microsoft step is held in `sso_tests`, which has the stand-in provider) asks the same question.
+pub(crate) fn unbranded_page(html: &str, policy: &str) -> Option<String> {
     if !html.contains("<p class=\"brand\">") {
         return Some("no brand line".into());
     }
-    let line = brand_line(&html);
+    let line = brand_line(html);
     if !(line.contains("<svg") && line.contains("MOHV")) {
         return Some(format!("the brand line is {line}"));
     }
     if html.to_lowercase().contains("obop") {
         return Some("the page names the product".into());
     }
-    if !policy(resp).ends_with("; img-src 'self'") {
-        return Some(format!("the policy is {}", policy(resp)));
+    if !policy.ends_with("; img-src 'self'") {
+        return Some(format!("the policy is {policy}"));
     }
     if !html.contains("rel=\"icon\"") {
         return Some("no tab icon".into());
@@ -915,13 +930,20 @@ fn failures_of(arms: Vec<(&str, u16, Resp)>) -> Vec<String> {
     failures
 }
 
-/// Every arm of the handlers that answers with a page, with a brand set: the error pages of the
-/// start (a parameter twice, the 429 of the address), of a form post (a wrong token, a body that is
-/// no form, a junk decision, the 429 of the sign-in), of the Microsoft step (a flow that does not
-/// exist, on the link and on the return), of the passkey post that has no origin to work with; and
-/// the pages that follow a refused decision and the "Not you?" button. Each shows the logo and the
-/// name and names no product. A handler that falls back to the page of an instance with no brand
-/// fails here by name.
+/// The arms of the handlers that answer with a page and that a request can reach on its own, with a
+/// brand set: the error pages of the start (a parameter twice, the 429 of the address), of a form
+/// post (a wrong token, a body that is no form, a junk decision, the 429 of the sign-in), of the
+/// decision (a wrong token, a flow nobody is signed in on, a flow that is gone, a second answer to
+/// a flow that was answered; each for allow, deny and "Not you?"), of the Microsoft step (a flow
+/// that does not exist, on the link and on the return, and the link past its window), of the
+/// passkey post that has no origin to work with; and the pages that follow a refused decision and
+/// the "Not you?" button. Each shows the logo and the name and names no product. A handler that
+/// falls back to the page of an instance with no brand fails here by name.
+///
+/// What this list does not reach is held by the two tests after it and by `sso_tests`: a flow that
+/// is lost between two reads of one request (`a_flow_lost_between_two_reads...`), and the arms of
+/// the Microsoft link that need a provider (`phone_the_refusals_of_the_microsoft_link...`). One arm
+/// is not held by any test, because no test can see it (`phone_a_store_that_refuses_the_row...`).
 #[tokio::test]
 async fn every_page_a_refusal_makes_shows_the_brand() {
     let rig = rig();
@@ -1018,6 +1040,95 @@ async fn every_page_a_refusal_makes_shows_the_brand() {
     assert!(switched.text().contains("name=\"username\""));
     arms.push(("switch", 200, switched));
 
+    // A decision that cannot be taken, for each of the three answers: a token that is not the
+    // flow's, a flow that is gone, and (allow and deny) a flow nobody has signed in on. "Not you?"
+    // needs no one signed in, so it has no third arm.
+    let (w, _) = begun(&o);
+    let gone = "0".repeat(32);
+    for (d, wrong_csrf, flow_gone, nobody_in) in [
+        (
+            "allow",
+            "allow, wrong csrf",
+            "allow, flow gone",
+            Some("allow, nobody signed in"),
+        ),
+        (
+            "deny",
+            "deny, wrong csrf",
+            "deny, flow gone",
+            Some("deny, nobody signed in"),
+        ),
+        ("switch", "switch, wrong csrf", "switch, flow gone", None),
+    ] {
+        let post =
+            |flow: &str, csrf: &str| Some(form(&[("flow", flow), ("csrf", csrf), ("decision", d)]));
+        let path = "/oauth/authorize/decision";
+        arms.push((
+            wrong_csrf,
+            403,
+            call(
+                r,
+                "POST",
+                path,
+                &w.headers(),
+                post(&w.flow, "not-the-token"),
+            )
+            .await,
+        ));
+        arms.push((
+            flow_gone,
+            410,
+            call(r, "POST", path, &w.headers(), post(&gone, "whatever")).await,
+        ));
+        if let Some(name) = nobody_in {
+            arms.push((
+                name,
+                403,
+                call(r, "POST", path, &w.headers(), post(&w.flow, &w.csrf)).await,
+            ));
+        }
+    }
+    // A second allow after the first one was taken: the flow is finished, the page says so.
+    let (dbl, dbl_binder) = begun(&o);
+    assert_eq!(
+        o.login(&dbl.flow, &dbl_binder, &dbl.csrf, &dbl.ip, "ada", PW)
+            .unwrap(),
+        obop_oauth::LoginOut::Consent
+    );
+    let allow = [
+        ("decision", "allow"),
+        ("days", "30"),
+        ("group", "base.user"),
+    ];
+    let first = dbl.post(r, "/oauth/authorize/decision", &allow).await;
+    assert_eq!(first.status, 303, "{}", first.text());
+    arms.push((
+        "allow, the second time",
+        410,
+        dbl.post(r, "/oauth/authorize/decision", &allow).await,
+    ));
+
+    // The link of the Microsoft step past its window of 30 a minute from one address: the sign-in
+    // page again, with the word. (This instance has no provider, and the window is asked first.)
+    let (m, _) = begun_as(
+        &o,
+        &mobile_registration(),
+        "se.mohv.app:/oauth",
+        "http://inst.test/api",
+    );
+    let link = format!("/oauth/authorize/microsoft?flow={}", m.flow);
+    let mut over = None;
+    for _ in 0..31 {
+        over = Some(call(r, "GET", &link, &m.headers(), None).await);
+    }
+    let over = over.unwrap();
+    assert!(
+        over.text().contains(&esc(t("en", "err.ms_busy"))),
+        "the word of the 31st: {}",
+        over.text()
+    );
+    arms.push(("microsoft link, 31st from one address", 200, over));
+
     // The 31st sign-in from one address in ten minutes: a flow of its own for each.
     let ip = fresh_address();
     let mut last = None;
@@ -1085,6 +1196,156 @@ async fn every_page_a_refusal_makes_shows_the_brand() {
         "pages of the flow that do not show the brand:\n{}",
         failures.join("\n")
     );
+}
+
+/// Lose every flow right before the `nth` read of a flow (counting from 0) that the next request
+/// makes: another request finishing the flow, or its time running out, between two reads of one
+/// request. The answer says whether the request made that many reads. The hook is re-armed from
+/// inside itself `nth` times, so no read has to be counted by hand.
+fn lose_the_flow_at(flaky: &Arc<Flaky>, nth: usize) -> Arc<AtomicBool> {
+    fn arm(flaky: Arc<Flaky>, lost: Arc<AtomicBool>, left: usize) {
+        let again = flaky.clone();
+        let flag = lost.clone();
+        flaky.before_the_next_kv_get_of(
+            "oauth:flow:",
+            Box::new(move |b: &dyn Backend| {
+                if left == 0 {
+                    for (key, _) in b.kv_scan("oauth:flow:").unwrap() {
+                        let _ = b.kv_delete(&key);
+                    }
+                    flag.store(true, Ordering::SeqCst);
+                } else {
+                    arm(again, flag, left - 1);
+                }
+            }),
+        );
+    }
+    let lost = Arc::new(AtomicBool::new(false));
+    arm(flaky.clone(), lost.clone(), nth);
+    lost
+}
+
+/// The requests that read a flow more than once, and what each does when the flow is gone at each
+/// of its reads in turn: the start, the password step, the three answers of the consent page (the
+/// refused allow among them), and the two requests of the Microsoft step. Whatever page comes back
+/// shows the brand. This reaches the arms that name a flow that was there a moment ago: the pages
+/// after a step (`finish_login`, the consent page again, the sign-in page after "Not you?" and the
+/// one with a word of the Microsoft step), which no request on its own reaches.
+#[tokio::test]
+async fn a_flow_lost_between_two_reads_of_a_request_still_shows_the_brand() {
+    let (flaky, rig) = flaky_rig();
+    let (r, o) = (&rig.r, server_of(&rig));
+    configure(&rig.app, &FIELDS);
+    let c = client(r).await;
+    let kinds = [
+        "start",
+        "password",
+        "allow, no group",
+        "allow",
+        "deny",
+        "switch",
+        "microsoft link",
+        "microsoft return",
+    ];
+    let mut pages: Vec<(String, Resp)> = Vec::new();
+    for kind in kinds {
+        let mut reached = 0;
+        for nth in 0..6 {
+            let mobile = kind.starts_with("microsoft");
+            let (b, binder) = if mobile {
+                begun_as(
+                    &o,
+                    &mobile_registration(),
+                    "se.mohv.app:/oauth",
+                    "http://inst.test/api",
+                )
+            } else {
+                begun(&o)
+            };
+            if ["allow, no group", "allow", "deny", "switch"].contains(&kind) {
+                assert_eq!(
+                    o.login(&b.flow, &binder, &b.csrf, &b.ip, "ada", PW)
+                        .unwrap(),
+                    obop_oauth::LoginOut::Consent
+                );
+            }
+            let lost = lose_the_flow_at(&flaky, nth);
+            let decision = "/oauth/authorize/decision";
+            let resp = match kind {
+                "start" => {
+                    let ip = fresh_address();
+                    let url = authorize_url(&c, REDIRECT, &[]);
+                    call(r, "GET", &url, &[("x-forwarded-for", &ip)], None).await
+                }
+                "password" => {
+                    let who = [("username", "ada"), ("password", PW)];
+                    b.post(r, "/oauth/authorize/login", &who).await
+                }
+                "allow, no group" => {
+                    b.post(r, decision, &[("decision", "allow"), ("days", "30")])
+                        .await
+                }
+                "allow" => {
+                    let all = [
+                        ("decision", "allow"),
+                        ("days", "30"),
+                        ("group", "base.user"),
+                    ];
+                    b.post(r, decision, &all).await
+                }
+                "deny" => b.post(r, decision, &[("decision", "deny")]).await,
+                "switch" => b.post(r, decision, &[("decision", "switch")]).await,
+                "microsoft link" => {
+                    let link = format!("/oauth/authorize/microsoft?flow={}", b.flow);
+                    call(r, "GET", &link, &b.headers(), None).await
+                }
+                _ => {
+                    let back = format!("/oauth/authorize/return?flow={}", b.flow);
+                    call(r, "GET", &back, &b.headers(), None).await
+                }
+            };
+            // Whatever the hook has not used is not left for the next request.
+            flaky.before_the_next_kv_get_of("oauth:flow:", Box::new(|_| {}));
+            if !lost.load(Ordering::SeqCst) {
+                break;
+            }
+            reached += 1;
+            pages.push((format!("{kind}, flow lost at read {nth}"), resp));
+        }
+        assert!(reached >= 1, "{kind}: the request never read a flow");
+    }
+    let mut failures = Vec::new();
+    for (name, resp) in &pages {
+        // An answer that redirects has no page of ours.
+        if resp.status != 303
+            && let Some(why) = unbranded(resp)
+        {
+            failures.push(format!("{name}: status {}: {why}", resp.status));
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "pages of the flow that do not show the brand:
+{}",
+        failures.join(
+            "
+"
+        )
+    );
+    // Not vacuous: a request whose flow was lost ended in a page that says so, for each kind.
+    for kind in kinds {
+        assert!(
+            pages
+                .iter()
+                .any(|(n, p)| n.starts_with(kind) && matches!(p.status, 403 | 410)),
+            "{kind}: no read of the flow ended in an error page; {:?}",
+            pages
+                .iter()
+                .filter(|(n, _)| n.starts_with(kind))
+                .map(|(n, p)| (n.clone(), p.status))
+                .collect::<Vec<_>>()
+        );
+    }
 }
 
 /// The probe above is not vacuous: the same arms with no brand are the pages of an instance that
