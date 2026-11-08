@@ -100,7 +100,9 @@ pub(crate) struct View {
 
 /// The text of a `site` key as the site reads it: control characters other than the line feed
 /// dropped, trimmed, at most `max` characters, and nothing for an empty text or a value that is not
-/// text.
+/// text. A copy of `text` in `obop_site::settings`, held to it by the test
+/// `the_door_and_the_settings_agree_on_which_keys_are_set_and_on_their_values` in `obop-site`, which
+/// has rows at every limit and at the order of the steps: a change there is a change here.
 fn site_text(site: &Map<String, J>, key: &str, max: usize) -> Option<String> {
     let s: String = site
         .get(key)?
@@ -112,7 +114,8 @@ fn site_text(site: &Map<String, J>, key: &str, max: usize) -> Option<String> {
     (!s.is_empty()).then(|| s.chars().take(max).collect())
 }
 
-/// A URL that is safe to put into an attribute: no whitespace, quotes or angle brackets.
+/// A URL that is safe to put into an attribute: no whitespace, quotes or angle brackets. A copy of
+/// `clean_url` in `obop_site::settings`, held to it by the same test (500 bytes, not characters).
 fn clean_url(u: &str) -> bool {
     !u.is_empty()
         && u.len() <= 500

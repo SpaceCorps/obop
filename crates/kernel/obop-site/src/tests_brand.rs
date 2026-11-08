@@ -294,7 +294,28 @@ fn a_matching_validator_on_the_tab_icon_is_a_304_without_a_body_or_a_content_typ
         assert_eq!(header(&r, "x-content-type-options"), LOGO_NOSNIFF);
         assert_eq!(header(&r, "content-security-policy"), LOGO_CSP);
         assert!(r.get_header("content-type").is_none(), "{matching}");
+        // The length of the 200, as the logo route's 304 carries it: the server layer would send
+        // `Content-Length: 0` with a `HEAD` 304 that has none, which says the 200 is empty.
+        assert_eq!(
+            header(&r, "content-length"),
+            ARTWORK.len().to_string(),
+            "{matching}"
+        );
+        // A `HEAD` is answered the same way, the body and all.
+        let mut head = req("HEAD", "/favicon.ico");
+        head = head.with_header("if-none-match", &matching);
+        let h = s.site.handle(&head);
+        assert_eq!(h.status, 304, "{matching}");
+        assert!(h.body.is_empty());
+        assert_eq!(header(&h, "content-length"), ARTWORK.len().to_string());
+        assert_eq!(header(&h, "etag"), tag);
     }
+    // The 200 of a `HEAD` carries the artwork's headers as the `GET` does.
+    let head = s.site.handle(&req("HEAD", "/favicon.svg"));
+    assert_eq!(head.status, 200);
+    assert_eq!(header(&head, "content-type"), LOGO_CONTENT_TYPE);
+    assert_eq!(header(&head, "etag"), tag);
+    assert_eq!(head.body_str(), ARTWORK);
     for other in ["\"0000000000000000\"", "", "x"] {
         let r = get_h(&s, "/favicon.ico", &[("if-none-match", other)]);
         assert_eq!(r.status, 200, "{other:?}");
@@ -394,6 +415,12 @@ fn a_value_that_is_not_an_artwork_under_the_reserved_name_is_not_one() {
         json!({"svg": "<svg/>", "v": ""}),
         json!({"svg": "<svg/>", "v": "not hex!"}),
         json!({"svg": "<svg/>", "v": "0123456789ABCDEF"}),
+        // Hex digits only: a lower-case letter past `f` is no digit, at the end, at the start and in
+        // a version made of nothing else.
+        json!({"svg": "<svg/>", "v": "0123456789abcdeg"}),
+        json!({"svg": "<svg/>", "v": "0123456789abcdez"}),
+        json!({"svg": "<svg/>", "v": "g123456789abcdef"}),
+        json!({"svg": "<svg/>", "v": "ghijklmnopqrstuv"}),
         json!({"svg": "<svg/>", "v": "a\"b"}),
         json!({"svg": "<svg/>", "v": "0".repeat(65)}),
         json!({"svg": 5, "v": "0123456789abcdef"}),
@@ -611,6 +638,79 @@ fn a_brand_that_could_not_be_read_at_first_is_not_kept_by_the_sites_cache() {
     assert_eq!(flaky.reads().gets, 0, "the good answer is cached");
 }
 
+// ---- With a brand, no obop -----------------------------------------------------------------------------
+
+/// The visible text of a page: the comments, the scripts, the style sheets and the tags removed (the
+/// attributes go with their tags, and so do the hidden inputs). What is left is what a person reads,
+/// the text of the `<title>` included.
+fn visible(html: &str) -> String {
+    let mut out = String::new();
+    let mut rest = html;
+    while let Some(at) = rest.find('<') {
+        out.push_str(&rest[..at]);
+        rest = &rest[at..];
+        let skip_to = |rest: &str, end: &str| rest.find(end).map_or(rest.len(), |i| i + end.len());
+        let lower: String = rest
+            .chars()
+            .take(8)
+            .collect::<String>()
+            .to_ascii_lowercase();
+        let n = if rest.starts_with("<!--") {
+            skip_to(rest, "-->")
+        } else if lower.starts_with("<script") {
+            skip_to(&rest.to_ascii_lowercase(), "</script>")
+        } else if lower.starts_with("<style") {
+            skip_to(&rest.to_ascii_lowercase(), "</style>")
+        } else {
+            skip_to(rest, ">")
+        };
+        out.push(' ');
+        rest = &rest[n..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// Docs/spec/branding.md section 13, "With a brand, no obop": with the name `MOHV` and an artwork the
+/// visible text of the shop's pages contains no `obop` in any of the seven languages, and the name
+/// and the logo are there. (The structured data and the stylesheet are checked as text by the other
+/// tests of this file; a page that carried the product's name in a script would not show here.)
+#[test]
+fn with_a_brand_the_visible_text_of_the_shop_has_no_obop_in_any_language() {
+    let s = bare();
+    set_brand(&s, &[("name", "MOHV"), ("logo_svg", ARTWORK)]);
+    let (v, _) = logo_of(&s);
+    let img = format!("<img src=\"/api/brand/logo.svg?v={v}\"");
+    let mut pages = 0;
+    for lang in i18n::Lang::ALL {
+        for path in ["/", "/shop", "/blog", "/contact", "/cart", "/no-such-page"] {
+            let r = get(&s, &format!("{path}?lang={}", lang.code()));
+            let html = r.body_str();
+            let seen = visible(&html);
+            let what = format!("{path} in {}: {}", lang.code(), r.status);
+            assert!(
+                matches!(r.status, 200 | 404),
+                "{what}: not a page of the shop: {html}"
+            );
+            assert!(
+                !seen.to_lowercase().contains("obop"),
+                "{what}: the product's name in the visible text: {seen}"
+            );
+            assert!(seen.contains("MOHV"), "{what}: the name: {seen}");
+            assert!(html.contains(&img), "{what}: the logo");
+            pages += 1;
+        }
+    }
+    assert_eq!(pages, 42);
+    // The check can see: without a brand the same pages say `My Shop`, and a page that did say the
+    // product's name would fail it.
+    assert!(visible("<p>Powered by <b>obop</b></p><script>obop</script>").contains("obop"));
+    assert!(
+        !visible("<p>x</p><!-- obop --><script>obop</script><style>.obop{}</style>")
+            .contains("obop")
+    );
+}
+
 // ---- The lengths ------------------------------------------------------------------------------------
 
 #[test]
@@ -630,36 +730,67 @@ fn the_longest_name_arrives_whole_as_the_title_and_the_text_logo() {
 
 // ---- The door and the settings agree on what is set -----------------------------------------------------
 
-/// `site_settings` decides which keys are unset with its own copy of the rules of
-/// `Settings::from_map`, because `obop-commands` cannot call this crate. This holds the two to each
-/// other over a table: a value the shop uses is kept and shows as itself, one it would refuse is
-/// replaced by the record's value.
+/// `site_settings` decides which keys are unset, and `get` reports their values, with its own copy of
+/// the rules of `Settings::from_map` (`brand/site.rs`: `site_text`, `clean_url`, `explicit_title`,
+/// `explicit_logo_url`, `explicit_accent`), because `obop-commands` cannot call this crate. This holds
+/// the two to each other over a table, for what the shop does with a stored value and for what the
+/// door makes of it: a value the shop uses is kept, shows as itself and is reported as the source
+/// `site` with the value the shop shows (the limits included: 80 characters of a title, 500 of an
+/// address, 9 of an accent, in characters for the text and in bytes for the address); one the shop
+/// would refuse is replaced by the record's value. The rows at the limits and at the places where
+/// the order of the steps matters (trim, then cut; control characters dropped, the line feed kept)
+/// are there because a copy that is off by one, or that does the steps in another order, would still
+/// agree on every row of a short table.
 #[test]
-fn the_door_and_the_settings_agree_on_which_keys_are_set() {
+fn the_door_and_the_settings_agree_on_which_keys_are_set_and_on_their_values() {
     let s = bare();
     set_brand(&s, &[("name", "MOHV")]);
     let (v, _) = logo_of(&s);
     let route = format!("/api/brand/logo.svg?v={v}");
 
+    let some = |t: &str| Some(t.to_string());
+    let rep = |c: &str, n: usize| c.repeat(n);
+    let path = |n: usize| format!("/{}", rep("a", n));
     // (key, stored value, what the shop shows for it when it uses it: None when it does not).
-    type Case = (&'static str, serde_json::Value, Option<&'static str>);
+    type Case = (&'static str, serde_json::Value, Option<String>);
     let cases: Vec<Case> = vec![
-        ("title", json!("Shop X"), Some("Shop X")),
-        ("title", json!("  Shop X\n"), Some("Shop X")),
-        ("title", json!("My Shop"), Some("My Shop")),
-        ("title", json!("a\u{7}b"), Some("ab")),
+        ("title", json!("Shop X"), some("Shop X")),
+        ("title", json!("  Shop X\n"), some("Shop X")),
+        ("title", json!("My Shop"), some("My Shop")),
+        ("title", json!("a\u{7}b"), some("ab")),
         ("title", json!(""), None),
         ("title", json!("  \t "), None),
         ("title", json!("\u{7}"), None),
         ("title", json!(7), None),
         ("title", json!(null), None),
         ("title", json!(["x"]), None),
-        ("accent", json!("#e11d48"), Some("#e11d48")),
-        ("accent", json!("#E11D48"), Some("#e11d48")),
-        ("accent", json!("e11d48"), Some("#e11d48")),
-        ("accent", json!("#abc"), Some("#aabbcc")),
-        ("accent", json!(" #e11d48 "), Some("#e11d48")),
-        ("accent", json!("#0f766e"), Some("#0f766e")),
+        // The limit is 80 characters, cut after the trim, and the cut text is the title.
+        ("title", json!(rep("a", 79)), some(&rep("a", 79))),
+        ("title", json!(rep("a", 80)), some(&rep("a", 80))),
+        ("title", json!(rep("a", 81)), some(&rep("a", 80))),
+        ("title", json!(rep("é", 80)), some(&rep("é", 80))),
+        ("title", json!(rep("é", 81)), some(&rep("é", 80))),
+        (
+            "title",
+            json!(format!("{}Shop", rep(" ", 100))),
+            some("Shop"),
+        ),
+        (
+            "title",
+            json!(format!("{}{}", rep(" ", 90), rep("a", 85))),
+            some(&rep("a", 80)),
+        ),
+        // A line feed inside the text stays, any other control character goes.
+        ("title", json!("Shop\nX"), some("Shop\nX")),
+        ("title", json!("Shop\tX"), some("ShopX")),
+        ("title", json!("Shop\r\nX"), some("Shop\nX")),
+        ("title", json!("\n\n"), None),
+        ("accent", json!("#e11d48"), some("#e11d48")),
+        ("accent", json!("#E11D48"), some("#e11d48")),
+        ("accent", json!("e11d48"), some("#e11d48")),
+        ("accent", json!("#abc"), some("#aabbcc")),
+        ("accent", json!(" #e11d48 "), some("#e11d48")),
+        ("accent", json!("#0f766e"), some("#0f766e")),
         ("accent", json!("red"), None),
         ("accent", json!("#abcd"), None),
         ("accent", json!("#12345g"), None),
@@ -667,17 +798,34 @@ fn the_door_and_the_settings_agree_on_which_keys_are_set() {
         ("accent", json!("javascript:alert(1)"), None),
         ("accent", json!(5), None),
         ("accent", json!(""), None),
-        ("logo_url", json!("/brand/l.svg"), Some("/brand/l.svg")),
+        // Nine characters are read: a ninth that makes it no colour is no colour, and so is a tenth
+        // that would have made it one if the text were read whole.
+        ("accent", json!("#e11d48aa"), None),
+        ("accent", json!("#e11d48aaa"), None),
+        ("accent", json!("##e11d48"), some("#e11d48")),
+        (
+            "accent",
+            json!(format!("{}#e11d48", rep(" ", 6))),
+            some("#e11d48"),
+        ),
+        (
+            "accent",
+            json!(format!("{}#e11d48{}", rep(" ", 20), rep(" ", 20))),
+            some("#e11d48"),
+        ),
+        ("logo_url", json!("/brand/l.svg"), some("/brand/l.svg")),
         (
             "logo_url",
             json!("https://cdn.example/l.png"),
-            Some("https://cdn.example/l.png"),
+            some("https://cdn.example/l.png"),
         ),
+        ("logo_url", json!("  /brand/l.svg "), some("/brand/l.svg")),
         ("logo_url", json!("javascript:x"), None),
         ("logo_url", json!("//evil.test/l.png"), None),
         ("logo_url", json!("http://cdn.example/l.png"), None),
         ("logo_url", json!("https://user@cdn.example/l.png"), None),
         ("logo_url", json!("/a b"), None),
+        ("logo_url", json!("/a\nb"), None),
         ("logo_url", json!("/a\"b"), None),
         ("logo_url", json!("/a'b"), None),
         ("logo_url", json!("/a<b"), None),
@@ -685,6 +833,35 @@ fn the_door_and_the_settings_agree_on_which_keys_are_set() {
         ("logo_url", json!("x".repeat(600)), None),
         ("logo_url", json!(1), None),
         ("logo_url", json!(""), None),
+        // The address is read to 500 characters and must then be at most 500 bytes: a path of 500
+        // is used whole, one of 501 or 600 is cut to 500 and used, and a path of two-byte letters
+        // is judged by its bytes, so 249 of them (499 bytes) pass and 250 (501) do not.
+        ("logo_url", json!(path(498)), some(&path(498))),
+        ("logo_url", json!(path(499)), some(&path(499))),
+        ("logo_url", json!(path(500)), some(&path(499))),
+        ("logo_url", json!(path(599)), some(&path(499))),
+        // The same for an address with a scheme: "https://cdn.example/" is 20 characters.
+        (
+            "logo_url",
+            json!(format!("https://cdn.example/{}", rep("a", 480))),
+            some(&format!("https://cdn.example/{}", rep("a", 480))),
+        ),
+        (
+            "logo_url",
+            json!(format!("https://cdn.example/{}", rep("a", 481))),
+            some(&format!("https://cdn.example/{}", rep("a", 480))),
+        ),
+        (
+            "logo_url",
+            json!(format!("/{}", rep("é", 249))),
+            some(&format!("/{}", rep("é", 249))),
+        ),
+        ("logo_url", json!(format!("/{}", rep("é", 250))), None),
+        (
+            "logo_url",
+            json!(format!("{}/l.svg", rep(" ", 600))),
+            some("/l.svg"),
+        ),
     ];
     let brand_value = |key: &str| match key {
         "title" => "MOHV".to_string(),
@@ -692,6 +869,11 @@ fn the_door_and_the_settings_agree_on_which_keys_are_set() {
         _ => route.clone(),
     };
     for (key, stored, shown) in cases {
+        let label = {
+            let t = stored.to_string();
+            let cut: String = t.chars().take(60).collect();
+            format!("{key}={cut} ({} characters)", t.chars().count())
+        };
         let one = |m: serde_json::Value| settings::Settings::from_map(m.as_object().unwrap());
         let pick = |st: &settings::Settings| match key {
             "title" => st.title.clone(),
@@ -701,14 +883,47 @@ fn the_door_and_the_settings_agree_on_which_keys_are_set() {
         // What the shop does with the key on its own.
         let alone = pick(&one(json!({ key: stored.clone() })));
         let default = pick(&one(json!({})));
-        match shown {
-            Some(want) => assert_eq!(alone, want, "{key}={stored}: the shop uses it"),
-            None => assert_eq!(alone, default, "{key}={stored}: the shop ignores it"),
+        match &shown {
+            Some(want) => assert_eq!(&alone, want, "{label}: the shop uses it"),
+            None => assert_eq!(alone, default, "{label}: the shop ignores it"),
         }
         // What the door makes of the same settings, read by the shop.
         set_settings(&s, json!({"site": { key: stored.clone() }}));
         let through_the_door = pick(&settings::Settings::from_map(&s.site.api().site_settings()));
-        let want = shown.map_or_else(|| brand_value(key), str::to_string);
-        assert_eq!(through_the_door, want, "{key}={stored}");
+        let want = shown.clone().unwrap_or_else(|| brand_value(key));
+        assert_eq!(through_the_door, want, "{label}: through the door");
+
+        // What `get` reports for it: the source `site` and the value the shop shows, when the shop
+        // uses the key, and not the source `site` otherwise.
+        let fresh = s.d.brand().fresh().expect("the store answers");
+        let effective: serde_json::Value = serde_json::from_str(&fresh.effective_json()).unwrap();
+        let entry = &effective[format!("site.{key}")];
+        match &shown {
+            Some(want) => {
+                assert_eq!(entry["source"], "site", "{label}: get names the source");
+                assert_eq!(
+                    entry["value"],
+                    json!(want),
+                    "{label}: get reports the shop's value"
+                );
+            }
+            None => {
+                assert_ne!(
+                    entry["source"], "site",
+                    "{label}: get names a source that won"
+                );
+                assert_eq!(entry["value"], json!(brand_value(key)), "{label}: get");
+            }
+        }
     }
+}
+
+/// The two bounds that the documentation adds up to say how late a changed name reaches a page ("up
+/// to about seven seconds": docs/DEPLOY.md, docs/STOREFRONT.md): the site keeps its settings for 5
+/// seconds and the reader keeps its answer for 2. A change of either number is a change of that
+/// sentence, and fails here.
+#[test]
+fn the_seven_seconds_of_the_documentation_are_the_site_cache_and_the_readers_bound() {
+    assert_eq!(Config::default().settings_ttl, Duration::from_secs(5));
+    assert_eq!(obop_commands::brand::DEFAULT_BOUND, Duration::from_secs(2));
 }

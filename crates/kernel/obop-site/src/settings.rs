@@ -126,6 +126,13 @@ impl Default for Settings {
     }
 }
 
+/// The text of a key as the shop reads it. `title`, `logo_url` and `accent` are also read by a copy of
+/// this function, of `clean_url` and of the rules of `Settings::from_map` in `obop-commands`
+/// (`brand/site.rs`: `site_text`, `clean_url`, `explicit_*`), which decides which keys the brand
+/// fills and what `obop admin brand status` reports, because that crate cannot call this one. A
+/// change to a limit or a step here is a change there, and
+/// `tests_brand::the_door_and_the_settings_agree_on_which_keys_are_set_and_on_their_values` fails
+/// until it is made.
 fn text(m: &Map<String, J>, k: &str, max: usize) -> Option<String> {
     let s = m.get(k)?.as_str()?;
     let s: String = s
@@ -148,7 +155,8 @@ fn flag(m: &Map<String, J>, k: &str) -> Option<bool> {
     }
 }
 
-/// A URL that is safe to put into an attribute: no whitespace, quotes or angle brackets.
+/// A URL that is safe to put into an attribute: no whitespace, quotes or angle brackets. (Copied in
+/// `obop-commands`, `brand/site.rs`, for `logo_url`: see `text`.)
 fn clean_url(u: &str) -> bool {
     !u.is_empty()
         && u.len() <= 500
