@@ -164,7 +164,10 @@ pub(crate) fn mfa_error(e: MfaError) -> Response {
             // The cause is in the message (a stored name, a store that could not be read, a server
             // with no reader), and an operator who sees the code in an answer finds it here. The
             // store's own text, when there is one, was written by `enrolment_error`.
-            eprintln!("obop: an enrolment was refused: {}", super::log_safe(&m));
+            super::log_line(&format!(
+                "obop: an enrolment was refused: {}",
+                super::log_safe(&m)
+            ));
             api_error(
                 StatusCode::SERVICE_UNAVAILABLE,
                 &m,

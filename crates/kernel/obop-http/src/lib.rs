@@ -701,7 +701,7 @@ fn approve_blocking(
 /// its code word is a storage fault and answers as one (`errors::of_storage_text`); anything else
 /// is a lock that was not granted in time.
 fn unavailable(why: &str) -> Response {
-    eprintln!("shared state unavailable: {why}");
+    log_line(&format!("shared state unavailable: {why}"));
     if let Some(c) = errors::of_storage_text(why) {
         return classified(c);
     }
@@ -719,12 +719,28 @@ fn unavailable(why: &str) -> Response {
     r
 }
 
-/// A text for one line of the log: no control characters, no more than 300 characters.
+/// A text for one line of the log: no control characters (the line and paragraph separators U+2028
+/// and U+2029 are not control characters and are blanked too), no more than 300 characters.
 fn log_safe(text: &str) -> String {
     text.chars()
-        .map(|c| if c.is_control() { ' ' } else { c })
+        .map(|c| {
+            if c.is_control() || matches!(c, '\u{2028}' | '\u{2029}') {
+                ' '
+            } else {
+                c
+            }
+        })
         .take(300)
         .collect()
+}
+
+/// One line to the log of the server. Not `eprintln!`, which panics when stderr cannot be written
+/// (a closed pipe to a log collector): the panic of a handler becomes "handler panicked" in
+/// `blocking` and the caller would get a dropped connection instead of the answer the line is
+/// about.
+pub(crate) fn log_line(line: &str) {
+    use std::io::Write;
+    let _ = writeln!(std::io::stderr(), "{line}");
 }
 
 fn respond(r: Result<obop_commands::Response, CallError>) -> Response {
@@ -742,7 +758,7 @@ fn respond(r: Result<obop_commands::Response, CallError>) -> Response {
                     &e,
                     CallError::Handler(m) if obop_storage::fault::Fault::of_message(m).is_some()
                 );
-                eprintln!(
+                log_line(&format!(
                     "storage fault on a call: {} {}",
                     c.code,
                     if genuine {
@@ -750,7 +766,7 @@ fn respond(r: Result<obop_commands::Response, CallError>) -> Response {
                     } else {
                         String::new()
                     }
-                );
+                ));
             }
             classified(c)
         }
@@ -1127,6 +1143,13 @@ mod log_tests {
         assert_eq!(
             log_safe("a\nstorage fault on a call: forged\r\tb"),
             "a storage fault on a call: forged  b"
+        );
+        // The line and paragraph separators are not control characters and start a line in a
+        // viewer that follows the Unicode rule: blanked as well.
+        assert_eq!(
+            log_safe("a\u{2028}forged\u{2029}b\u{85}c"),
+            "a forged b c",
+            "U+2028, U+2029 and the next-line control"
         );
         assert_eq!(log_safe(&"x".repeat(1000)).chars().count(), 300);
         assert_eq!(
