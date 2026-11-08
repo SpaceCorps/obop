@@ -15,8 +15,10 @@
 //!   `obop_commands::brand::apply`; not `obop_brand::`, the leaf crate of the rules, which has no
 //!   store);
 //! - a call `.brand()` or `::brand(` (the reader of the dispatcher), the same name used as a value
-//!   (`.map(Dispatcher::brand)`, `use obop_commands::brand;`) and the identifier `install_brand`
-//!   (what creates it).
+//!   (`.map(Dispatcher::brand)`, `use obop_commands::brand;`), the module imported inside a group
+//!   or under another name (`use obop_commands::{brand as bb, Dispatcher};`: a `brand` in a `use`
+//!   that no `::` follows, so a later `bb::strict(b)`, which names no `brand`, is found at the
+//!   import) and the identifier `install_brand` (what creates it).
 //!
 //! **A row of [`ALLOWED`] is the decision that a file may read or write the brand.** It names the
 //! file and the reason, and it must match something: a row that no longer matches is a failure, so
@@ -30,8 +32,10 @@
 //! and name the types the row lists as types only, and nothing else. A type "as a type only" is
 //! never reached by `::` (`Reader::new`, `Reader::with_bound`, `Reader::inert`, `<Reader>::inert`
 //! or any other function, which would build a second reader or reach round the one the file was
-//! handed), never given a second name (`use ...::Reader as Rd;`, `type Rd = Reader;`) and never
-//! implemented for (`impl Tr for Reader`, `impl Reader`). So the reason of such a row ("it reads
+//! handed; the closers of the type are looked past, so `<(Reader)>::inert` and `<Reader<>>::inert`
+//! are the same as `<Reader>::inert`), never given a second name (`use ...::Reader as Rd;`,
+//! `type Rd = Reader;`, `type Rd = (Reader);`) and never implemented for (`impl Tr for Reader`,
+//! `impl Reader`, on one line or across several). So the reason of such a row ("it reads
 //! nothing", "the route asks the reader once and builds none") is held by the scan, and a second
 //! reader added to a large file such as `obop-http/src/lib.rs` is found.
 //!
@@ -39,11 +43,13 @@
 //! (`format!("{}_brand", "instance")`), the model reached through a constant of another crate that
 //! is not spelled in the file, a reader passed in as a trait object by a file that is on the list,
 //! a reader built through a trait without the name of its type (`Default::default()`; `Reader` has
-//! no `Default`, and a release that gives it one must extend the rules above), and Rust outside
-//! `crates/` are not seen. It makes a second reader visible; it does not stop one who works
-//! around it. The behaviour is held by `crates/obop/src/brand_row_tests.rs`: with a
-//! row, every output that is pinned is what it was without one (the logo path is the exception: it
-//! answers the artwork with a row, `crates/obop/src/brand_http_tests.rs`).
+//! no `Default`, and a release that gives it one must extend the rules above), a type named inside
+//! another (`type Rd = Arc<Reader>;` names the type and builds nothing; what `Rd::new` reaches
+//! is `Arc`'s), and Rust outside `crates/` are not seen. It makes a second reader visible; it
+//! does not stop one who works around it. The behaviour is held by
+//! `crates/obop/src/brand_row_tests.rs`: with a row, every output that is pinned is what it was
+//! without one (the logo path is the exception: it answers the artwork with a row,
+//! `crates/obop/src/brand_http_tests.rs`).
 
 use crate::src_scan::{Lexed, line_of, non_test, read_tree, tree, words};
 use std::collections::{BTreeMap, BTreeSet};
@@ -58,7 +64,8 @@ enum Limit {
     /// in all of `.current(`, `.fresh(` and `.strict(` (the three ways of asking a reader), and
     /// paths through the module `brand` only to the names in `paths`; a name in `types` may be
     /// written (it is in `paths` too) but nothing may be reached through it with `::`, and it may
-    /// be neither renamed (`as`, `type X =`) nor implemented for (`impl`, `for`). The model,
+    /// be neither renamed (`as`, `type X =`) nor implemented for (`impl`, `for`); this holds for
+    /// every name in `types`, not for the first. The model,
     /// `install_brand`, any other path and the accessor named without a call are not allowed.
     Reads {
         calls: usize,
@@ -203,15 +210,51 @@ fn word_before(code: &[u8], at: usize) -> &str {
     std::str::from_utf8(&code[start..end]).unwrap_or("")
 }
 
+/// The offset after what closes a type name that ends at `from` (white space already skipped): an
+/// empty `<>` (`Reader<>`), the `>` that closes a generic and the `)` that closes a parenthesised
+/// type, each with the white space after it. `<(Reader)>::inert` and `<Reader<>>::inert` reach the
+/// same function as `<Reader>::inert`, so the test for a `::` starts past all of them.
+fn past_closers(code: &[u8], from: usize) -> usize {
+    use crate::src_scan::skip_ws;
+    let mut tail = from;
+    loop {
+        match code.get(tail) {
+            Some(b'>' | b')') => tail = skip_ws(code, tail + 1),
+            Some(b'<') if code.get(skip_ws(code, tail + 1)) == Some(&b'>') => {
+                tail = skip_ws(code, skip_ws(code, tail + 1) + 1);
+            }
+            _ => return tail,
+        }
+    }
+}
+
+/// The spans of the `use` declarations of a file, from the keyword to the `;` that ends it (the end
+/// of the file when none does). `use<'a>`, the precise-capturing bound, is not a declaration.
+fn use_spans(code: &[u8]) -> Vec<(usize, usize)> {
+    use crate::src_scan::skip_ws;
+    words(code, "use")
+        .into_iter()
+        .filter(|at| code.get(skip_ws(code, at + "use".len())) != Some(&b'<'))
+        .map(|at| {
+            let end = code[at..]
+                .iter()
+                .position(|c| *c == b';')
+                .map_or(code.len(), |p| at + p);
+            (at, end)
+        })
+        .collect()
+}
+
 /// What a file with a row of [`Limit::Reads`] does with a reader once it has one: a call of
 /// `.current(`, `.fresh(` or `.strict(` (a method call: the word follows a `.` and a `(` follows it),
 /// a function reached through one of `types` (`Reader::new`, `Reader::with_bound`,
-/// `Reader::inert`, `<Reader>::inert`: the word is followed by `::`, past the `>` that closes a
-/// generic), and a type given a second name or an implementation, which is a way round the first
-/// rule (`use ...::Reader as Rd;`, `type Rd = Reader;`, `impl Tr for Reader`: the word is followed
-/// by `as`, follows an `=`, or follows `impl` or `for`). They are looked for only in the files of
-/// such a row, where they are the whole of what the file may do with the reader: elsewhere a method
-/// called `current` is no business of this scan.
+/// `Reader::inert`, `<Reader>::inert`: the word is followed by `::`, past what closes the type, see
+/// [`past_closers`]), and a type given a second name or an implementation, which is a way round the
+/// first rule (`use ...::Reader as Rd;`, `type Rd = Reader;`, `type Rd = (Reader);`,
+/// `impl Tr for Reader`: the word is followed by `as`, follows an `=` (past any `(`), or follows
+/// `impl` or `for`). They are looked for only in the files of such a row, where they are the whole
+/// of what the file may do with the reader: elsewhere a method called `current` is no business of
+/// this scan.
 fn uses(l: &Lexed, types: &[&str]) -> Vec<Hit> {
     use crate::src_scan::{skip_ws, word_at};
     let code = &l.code;
@@ -235,16 +278,13 @@ fn uses(l: &Lexed, types: &[&str]) -> Vec<Hit> {
     for name in types {
         for at in words(code, name) {
             let after = skip_ws(code, at + name.len());
-            let mut tail = after;
-            while code.get(tail) == Some(&b'>') {
-                tail = skip_ws(code, tail + 1);
-            }
+            let tail = past_closers(code, after);
             let what = if code[tail..].starts_with(b"::") {
                 THROUGH
             } else if word_at(code, after) == "as"
                 || code[..at]
                     .iter()
-                    .rposition(|c| !c.is_ascii_whitespace())
+                    .rposition(|c| !c.is_ascii_whitespace() && *c != b'(')
                     .is_some_and(|p| code[p] == b'=')
                 || matches!(word_before(code, at), "impl" | "for")
             {
@@ -289,6 +329,7 @@ fn readers(l: &Lexed) -> Vec<Hit> {
     for at in words(code, "install_brand") {
         hit(at, INSTALL, vec![]);
     }
+    let imports = use_spans(code);
     for at in words(code, "brand") {
         let after = crate::src_scan::skip_ws(code, at + "brand".len());
         let before = code[..at]
@@ -301,8 +342,11 @@ fn readers(l: &Lexed) -> Vec<Hit> {
             hit(at, PATH, targets(code, after + 2));
         } else if code.get(after) == Some(&b'(') && (dot || colons) {
             hit(at, CALL, vec![]);
-        } else if colons {
-            // `Dispatcher::brand` handed on (`.map(Dispatcher::brand)`), or `use x::brand;`.
+        } else if colons || imports.iter().any(|(from, to)| (*from..*to).contains(&at)) {
+            // `Dispatcher::brand` handed on (`.map(Dispatcher::brand)`), or `use x::brand;`, or
+            // the module in a group or under another name (`use x::{brand as bb, Y};`, where the
+            // later `bb::strict` names no `brand`): in a `use`, a `brand` that no `::` follows is
+            // the module imported.
             hit(at, VALUE, vec![]);
         }
     }
@@ -464,7 +508,7 @@ fn the_scan_sees_the_ways_a_file_can_read_the_row_and_leaves_the_allowed_files_a
             "a path through the module `brand`",
         ),
         (
-            "use obop_commands::{brand, Dispatcher}; fn f() { brand::strict(b); }",
+            "use obop_commands::Dispatcher; fn f() { obop_commands::brand::strict(b); }",
             "a path through the module `brand`",
         ),
         (
@@ -499,6 +543,51 @@ fn the_scan_sees_the_ways_a_file_can_read_the_row_and_leaves_the_allowed_files_a
         assert_eq!(found.len(), 1, "{src}: {found:?}");
         assert!(found[0].contains(what), "{src}: {found:?}");
     }
+    // The module imported inside a group, or under another name. The name after `as` is not
+    // `brand`, so the uses of the alias (`bb::strict`) are not seen; the import is the one place
+    // where the file names the module, and it is found there: one hit for the import (the module
+    // named without a call), and the path that follows it, where there is one, is found as well.
+    for (src, whats) in [
+        (
+            "use obop_commands::{brand, Dispatcher}; fn f() { brand::strict(b); }",
+            vec![VALUE, PATH],
+        ),
+        (
+            "use obop_commands::{brand as bb, Dispatcher}; fn f() { bb::strict(b); }",
+            vec![VALUE],
+        ),
+        (
+            "use obop_commands::{Dispatcher, brand as bb}; fn f() { bb::strict(b); }",
+            vec![VALUE],
+        ),
+        ("use obop_commands::{Dispatcher, brand};", vec![VALUE]),
+        (
+            "use obop_commands::{\n    Dispatcher,\n    brand\n        as bb,\n};",
+            vec![VALUE],
+        ),
+        (
+            "use obop_commands::{self, nested::{brand as bb}};",
+            vec![VALUE],
+        ),
+        ("pub use obop_commands::{brand as bb};", vec![VALUE]),
+        (
+            "fn f() { use obop_commands::{brand as bb, Dispatcher}; }",
+            vec![VALUE],
+        ),
+        // The module of the crate itself.
+        ("use brand as bb; fn f() { bb::strict(b); }", vec![VALUE]),
+        // Two imports, and a use that comes after one that is not about the module.
+        (
+            "use std::fmt; use obop_commands::{brand as bb, Dispatcher}; use std::io;",
+            vec![VALUE],
+        ),
+    ] {
+        let (found, _) = scan(&tree(&[("kernel/obop-site/src/lib.rs", src)]));
+        assert_eq!(found.len(), whats.len(), "{src}: {found:?}");
+        for (f, what) in found.iter().zip(&whats) {
+            assert!(f.contains(what), "{src}: {found:?}");
+        }
+    }
     // What is not a reader of the row: the leaf crate of the rules, a local called `brand`, a
     // comment, a doc comment, a name that only ends in the word, and test code.
     for src in [
@@ -509,6 +598,14 @@ fn the_scan_sees_the_ways_a_file_can_read_the_row_and_leaves_the_allowed_files_a
         "/// reads instance_brand through brand::strict\nfn f() {}",
         "fn f() { let _ = other_brand(); let _ = x.my_brand(); }",
         "struct S { brand: Brand } fn f(s: &S) -> &Brand { &s.brand }",
+        // A local called `brand` next to a comma, a brace, a cast or an `as`, outside any `use`: the
+        // import rule is for the declarations only, and it ends at their `;`.
+        "fn f(brand: u8) -> u8 { brand as u8 }",
+        "fn f(a: u8, brand: u8) -> S { S { a, brand } }",
+        "fn f(a: u8, brand: u8) -> (u8, u8) { (a, brand) }",
+        "use std::fmt; use std::io::{Read, Write}; fn f(brand: u8) -> u8 { brand as u8 }",
+        "use std::fmt::{Brand, brand_name, my_brand}; fn f() {}",
+        "fn f<'a>() -> impl Tr + use<'a> { let brand = 1; (brand, 2) }",
         "#[cfg(test)]\nmod tests { fn t(d: &Dispatcher) { d.brand(); b.get(\"instance_brand\", \"instance\"); } }",
     ] {
         let (found, _) = scan(&tree(&[("kernel/obop-site/src/lib.rs", src)]));
@@ -606,6 +703,16 @@ fn a_row_with_limits_lets_its_file_ask_the_reader_as_the_row_says_and_nothing_el
         (
             route,
             "use obop_commands::brand::{Reader, Shown}; fn f<T: Into<Arc<Reader>>>(x: T) -> Option<Arc<Shown>> where T: Send { let r: Arc<Reader> = x.into(); Some(r.current()) }",
+        ),
+        // The `)` and `>` that close a type are looked past only to find a `::`: a type in a tuple
+        // or in a parenthesised generic, followed by anything else, is a type.
+        (
+            route,
+            "use obop_commands::brand::{Reader, Shown}; fn f(r: (Arc<Reader>, Arc<Shown>)) -> Option<(Arc<Reader>)> { None } fn g(r: &Reader) -> Foo { Foo::new() }",
+        ),
+        (
+            route,
+            "use obop_commands::brand::{Reader, Shown}; fn f(r: &Reader, s: (&Shown)) { let _t: (Arc<Reader>,) = (todo(),); match x { A(Reader) => 1, B(Shown) => 2 } }",
         ),
     ] {
         let (found, _) = scan(&tree(&[(path, src)]));
@@ -705,6 +812,122 @@ fn a_row_with_limits_lets_its_file_ask_the_reader_as_the_row_says_and_nothing_el
             "use obop_commands::brand::Reader; impl Reader { fn make() {} }",
             RENAMED,
         ),
+        // `rustfmt` may put the type on the next line, and a source may use more than one space:
+        // the word before the type is the keyword whatever white space lies between.
+        (
+            route,
+            "use obop_commands::brand::Reader; impl Make for\n    Reader { fn make() {} }",
+            RENAMED,
+        ),
+        (
+            route,
+            "use obop_commands::brand::Reader; impl  Reader { fn make() {} }",
+            RENAMED,
+        ),
+        (
+            route,
+            "use obop_commands::brand::Reader; impl<T> Make<T> for\n\t\n  Reader { fn make() {} }",
+            RENAMED,
+        ),
+        // The closers of a type are looked past before the `::`: a parenthesised type, an empty
+        // generic list and the two together reach the same function as `<Reader>::inert`, and a
+        // parenthesised type given a second name is a second name.
+        (
+            route,
+            "use obop_commands::brand::Reader; fn f() { let _other = <(Reader)>::inert(); }",
+            THROUGH,
+        ),
+        (
+            route,
+            "use obop_commands::brand::Reader; fn f() { let _other = <Reader<>>::inert(); }",
+            THROUGH,
+        ),
+        (
+            route,
+            "use obop_commands::brand::Reader; fn f() { let _other = < ( Reader ) < > > :: inert(); }",
+            THROUGH,
+        ),
+        (
+            route,
+            "use obop_commands::brand::Reader; fn f() { let _other = <((Reader))>::inert(); }",
+            THROUGH,
+        ),
+        (
+            route,
+            "use obop_commands::brand::Reader; type Rd = (Reader); fn f() { let _other = <Rd>::inert(); }",
+            RENAMED,
+        ),
+        (
+            route,
+            "use obop_commands::brand::Reader; type Rd = ( ( Reader ) );",
+            RENAMED,
+        ),
+        // The other type of the row, `Shown`: the rules hold for every name in `types`, not for the
+        // first (a scan that looks at `Reader` alone passes every case above).
+        (
+            route,
+            "use obop_commands::brand::Shown; fn f() { let _ = Shown::not_set(None); }",
+            THROUGH,
+        ),
+        (
+            route,
+            "use obop_commands::brand::Shown; fn f() { let _ = <Shown>::not_set(None); }",
+            THROUGH,
+        ),
+        (
+            route,
+            "use obop_commands::brand::Shown; fn f() { let _ = <(Shown)>::not_set(None); }",
+            THROUGH,
+        ),
+        (
+            route,
+            "use obop_commands::brand::Shown as S; fn f() { let _ = S::not_set(None); }",
+            RENAMED,
+        ),
+        (
+            route,
+            "use obop_commands::brand::{Reader, Shown as S};",
+            RENAMED,
+        ),
+        (
+            route,
+            "use obop_commands::brand::Shown; type S = Shown;",
+            RENAMED,
+        ),
+        (
+            route,
+            "use obop_commands::brand::Shown; type S =\n    (Shown);",
+            RENAMED,
+        ),
+        (
+            route,
+            "use obop_commands::brand::Shown; impl Make for Shown { fn make() {} }",
+            RENAMED,
+        ),
+        (
+            route,
+            "use obop_commands::brand::Shown; impl Make for\n    Shown { fn make() {} }",
+            RENAMED,
+        ),
+        (
+            route,
+            "use obop_commands::brand::Shown; impl Shown { fn make() {} }",
+            RENAMED,
+        ),
+        // The module imported under another name, in the file that registers the route and in the
+        // route file: the import is found, because the alias names no `brand` and its uses are not.
+        (
+            lib,
+            "use obop_commands::{brand as bb, Dispatcher}; fn f() { bb::strict(b); }",
+            VALUE,
+        ),
+        (
+            route,
+            "use obop_commands::{brand as bb, Dispatcher}; fn f() { bb::strict(b); }",
+            VALUE,
+        ),
+        (lib, "use obop_commands::{Dispatcher, brand};", VALUE),
+        (route, "use obop_commands::{Dispatcher, brand};", VALUE),
         (
             route,
             "use obop_commands::brand::Reader; fn f(b: Arc<dyn Backend>) { let _ = Reader::new(b); }",
