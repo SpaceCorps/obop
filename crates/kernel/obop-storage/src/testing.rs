@@ -139,6 +139,9 @@ pub struct Flaky {
     /// Inserts into the model fail with this server error (no fault noted: it is not a refusal of
     /// the pool but a statement that failed, such as a full disk) until `allow_models`.
     insert_error: std::sync::Mutex<Option<(String, String)>>,
+    /// Reads (`get`) of the model fail with this error (no fault noted either) until
+    /// `allow_models`.
+    get_error: std::sync::Mutex<Option<(String, String)>>,
     /// The batches that reached `apply_tracked`: see [`Flaky::seen_writes`].
     seen: std::sync::Mutex<Vec<SeenWrite>>,
     /// See [`Flaky::reads`].
@@ -210,6 +213,7 @@ impl Flaky {
             after_insert: std::sync::Mutex::new(None),
             after_get: std::sync::Mutex::new(None),
             insert_error: std::sync::Mutex::new(None),
+            get_error: std::sync::Mutex::new(None),
             seen: std::sync::Mutex::new(Vec::new()),
             reads: std::sync::Mutex::new(Reads::default()),
             asked: std::sync::Mutex::new(BTreeSet::new()),
@@ -296,6 +300,7 @@ impl Flaky {
         *self.target.lock().unwrap() = None;
         *self.after_get.lock().unwrap() = None;
         *self.insert_error.lock().unwrap() = None;
+        *self.get_error.lock().unwrap() = None;
         self.after_write.store(0, SeqCst);
         self.after_budget.store(0, SeqCst);
         self.next.store(0, SeqCst);
@@ -346,6 +351,15 @@ impl Flaky {
     /// nor a refusal of the pool (`could not extend file: No space left on device`).
     pub fn fail_inserts_into(&self, model: &str, message: &str) {
         *self.insert_error.lock().unwrap() = Some((model.to_string(), message.to_string()));
+    }
+
+    /// Fail every `get` of `model` with `message`, a read error that is neither a refusal of the
+    /// pool nor noted as a fault on the thread: the store is up and cannot answer this read (a
+    /// statement that failed, a row that cannot be decoded). The text decides how the layers above
+    /// take it, so a test passes one that starts with no code word of D74 to make it a non-transient
+    /// error.
+    pub fn fail_gets_of(&self, model: &str, message: &str) {
+        *self.get_error.lock().unwrap() = Some((model.to_string(), message.to_string()));
     }
 
     /// Let `skip` successful `get`s of `model` through, then run `then` right after the next one,
@@ -551,6 +565,11 @@ impl Backend for Flaky {
     fn get(&self, model: &str, id: &str) -> Result<Option<Fields>> {
         self.gate_m(false, model)?;
         self.reads.lock().unwrap().gets += 1;
+        if let Some((m, message)) = &*self.get_error.lock().unwrap()
+            && m == model
+        {
+            return Err(message.clone());
+        }
         let found = self.inner.get(model, id)?;
         let hook = {
             let mut g = self.after_get.lock().unwrap();
