@@ -45,7 +45,10 @@
 //! no `Default`, and a release that gives it one must extend the rules above), and Rust outside
 //! `crates/` are not seen. A surface that shows the brand through a helper of another file has none
 //! of the words above in its own text: the one helper that exists, `rp_name(`, is looked for by
-//! name (`HELPER`), so that the OAuth pages' passkey step needs a row of its own; a second helper
+//! name (`HELPER`; the same name written as a path with no call, as in `.map(passkeys::rp_name)`,
+//! or imported, or renamed on import, is `HELPER_VALUE` and no row lets a file do it), so that the
+//! OAuth pages' passkey step needs a row of its own; the bare name imported by a glob or a group
+//! and then handed on is not seen, and a second helper
 //! of that kind is not seen until it is added to `readers`. It makes a second reader visible; it does not stop one who works
 //! around it. The behaviour is held by `crates/obop/src/brand_row_tests.rs`: with a
 //! row, every output that is pinned is what it was without one (the logo path is the exception: it
@@ -190,6 +193,7 @@ const CALL: &str = "a call of the reader accessor `brand()`";
 const READ: &str = "a call of `.current(`, `.fresh(` or `.strict(`";
 const HELPER: &str =
     "a call of `rp_name(`, the helper of the passkey routes that makes one display read";
+const HELPER_VALUE: &str = "the helper `rp_name` named by a path without a call, or renamed (passed on, bound to a name, imported)";
 const THROUGH: &str = "a function reached through a type the row lets the file name as a type only";
 const RENAMED: &str = "a type the row lets the file name as a type only, renamed or implemented";
 const VALUE: &str = "the module `brand` or the reader accessor `brand` named without a call";
@@ -367,10 +371,26 @@ fn readers(l: &Lexed) -> Vec<Hit> {
         // A call, not the definition (`fn rp_name(`) and not the field of a struct (`rp_name:`).
         if code.get(after) == Some(&b'(') && word_before(code, at) != "fn" {
             hit(at, HELPER, vec![]);
+        } else if word_before(code, at) != "fn"
+            && (path_before(code, at) || crate::src_scan::word_at(code, after) == "as")
+        {
+            // The helper as a value, which is a read that nothing counts: `let f =
+            // crate::passkeys::rp_name;`, `.map(crate::passkeys::rp_name)`, `use ...::rp_name;`
+            // and `use ...::rp_name as other;` (a name that is only a path, or has another name
+            // after it). A bare `rp_name` is a local or a field and is not looked at.
+            hit(at, HELPER_VALUE, vec![]);
         }
     }
     out.sort_by_key(|h| h.at);
     out
+}
+
+/// Whether the word at `at` is the last segment of a path: `::` just before it, white space aside.
+fn path_before(code: &[u8], at: usize) -> bool {
+    code[..at]
+        .iter()
+        .rposition(|c| !c.is_ascii_whitespace())
+        .is_some_and(|p| code[p] == b':' && p > 0 && code[p - 1] == b':')
 }
 
 /// Whether the `brand(` at `at` is called on the answer of a call of `current()`: `).` before it,
@@ -1022,6 +1042,28 @@ fn the_enrolment_files_may_name_what_their_rows_list_and_nothing_else() {
             "fn f(s: &S) { let _ = super::passkeys::rp_name(s); let _ = super::passkeys::rp_name(s); }",
             HELPER,
         ),
+        // The helper handed on, bound to a name or imported under another is a read that no count
+        // sees: found in a file that has the row, whatever the way.
+        (
+            oauth,
+            "fn f(s: &S) { let g = super::passkeys::rp_name; let _ = g(s); }",
+            HELPER_VALUE,
+        ),
+        (
+            oauth,
+            "fn f(v: Vec<&S>) { let _: Vec<String> = v.into_iter().map(super::passkeys::rp_name).collect(); }",
+            HELPER_VALUE,
+        ),
+        (
+            oauth,
+            "use super::passkeys::rp_name as other; fn f(s: &S) { let _ = other(s); }",
+            HELPER_VALUE,
+        ),
+        (
+            oauth,
+            "use super::passkeys::{rp_name as other}; fn f(s: &S) { let _ = other(s); }",
+            HELPER_VALUE,
+        ),
         (oauth, "fn f(d: &Dispatcher) { let _ = d.brand(); }", CALL),
         (
             oauth,
@@ -1050,11 +1092,61 @@ fn the_enrolment_files_may_name_what_their_rows_list_and_nothing_else() {
     }
 }
 
+/// The names the module `brand` makes public in its own file (`pub use` items, `pub const` and
+/// `pub fn`), by a plain reading of the text: the last name of a `pub use` path, the names inside
+/// its braces, and the name after an `as`.
+fn public_names_of_the_brand_module() -> Vec<String> {
+    let file = Path::new(env!("CARGO_MANIFEST_DIR")).join("../obop-commands/src/brand/mod.rs");
+    let text = std::fs::read_to_string(&file).unwrap();
+    let (mut names, mut statement) = (BTreeSet::new(), None::<String>);
+    for raw in text.lines() {
+        let line = raw.trim();
+        if line.starts_with("//") {
+            continue;
+        }
+        // Only at the start of a line: an indented `pub fn` is a method of a type, such as
+        // `Dispatcher::brand`, and is no name in the module.
+        if let Some(rest) = raw.strip_prefix("pub const ") {
+            names.insert(rest.split([':', ' ']).next().unwrap().to_string());
+        } else if let Some(rest) = raw.strip_prefix("pub fn ") {
+            names.insert(rest.split('(').next().unwrap().to_string());
+        }
+        if line.starts_with("pub use ") {
+            statement = Some(String::new());
+        }
+        if let Some(text) = statement.as_mut() {
+            text.push_str(line);
+            text.push(' ');
+            if line.ends_with(';') {
+                let full = statement.take().unwrap();
+                let list = full
+                    .trim_start_matches("pub use ")
+                    .trim_end_matches(|c: char| c == ';' || c.is_whitespace());
+                let items: Vec<&str> = match list.split_once('{') {
+                    Some((_, inside)) => inside.trim_end_matches('}').split(',').collect(),
+                    None => vec![list.rsplit("::").next().unwrap()],
+                };
+                for item in items {
+                    let item = item.trim();
+                    // `MAX_BYTES as ARTWORK_MAX_BYTES` is known as the second name.
+                    let name = item.rsplit(" as ").next().unwrap().trim();
+                    if !name.is_empty() {
+                        names.insert(name.to_string());
+                    }
+                }
+            }
+        }
+    }
+    names.into_iter().collect()
+}
+
 /// The limits of the rows of the enrolment texts, exactly as their reasons say: the calls of the
 /// accessor, the reads, the paths and the types. The probes above show that the scan enforces a
 /// limit; this one shows that no limit was loosened. A path added to a row (to let a file call
 /// `brand::apply`, say) is a change of this table, and so a decision that shows in the diff. And for
-/// each of these rows every path of the module that the row does not list is found.
+/// each of these rows every public name of the module that the row does not list is found as a
+/// path (the names are read from `brand/mod.rs`, so a name added to the module later is probed
+/// without a list to keep).
 #[test]
 fn the_limits_of_the_enrolment_rows_are_exactly_what_their_reasons_say() {
     type Want = (&'static str, usize, usize, &'static [&'static str]);
@@ -1074,21 +1166,29 @@ fn the_limits_of_the_enrolment_rows_are_exactly_what_their_reasons_say() {
         ),
         ("kernel/obop-http/src/oauth.rs", 0, 1, &[]),
     ];
-    let every_name = [
+    // Every public name of the module, read from its own file, so that a name added to `brand` is
+    // probed here without anyone remembering to add it to a list.
+    let every_name = public_names_of_the_brand_module();
+    // One of each way the file spells a public name: a function and a type of a `pub use` list, a
+    // constant of a list, a constant of its own, a function of its own, and a name given with
+    // `as`. And the method `brand` of `Dispatcher`, which is indented in the file, is no name.
+    for needed in [
         "apply",
-        "clear",
-        "Action",
         "Reader",
-        "Shown",
-        "Fresh",
-        "strict",
-        "env_issuer",
-        "enrolment_error",
-        "no_reader_error",
         "UNREADABLE",
-        "ISSUER_VAR",
         "MODEL",
-    ];
+        "writable_fields",
+        "ARTWORK_MAX_BYTES",
+    ] {
+        assert!(
+            every_name.iter().any(|n| n == needed),
+            "the names read from brand/mod.rs miss {needed}: {every_name:?}"
+        );
+    }
+    assert!(
+        !every_name.iter().any(|n| n == "brand" || n == "MAX_BYTES"),
+        "{every_name:?}"
+    );
     for (path, calls, reads, paths) in want {
         let i = allowed(path).unwrap_or_else(|| panic!("{path} has no row"));
         let Limit::Reads {
@@ -1103,7 +1203,7 @@ fn the_limits_of_the_enrolment_rows_are_exactly_what_their_reasons_say() {
         assert_eq!((c, r, p), (calls, reads, paths), "{path}");
         assert!(t.is_empty(), "{path} may name a type: {t:?}");
         // Every other path through the module is found, once.
-        for name in every_name.iter().filter(|n| !paths.contains(n)) {
+        for name in every_name.iter().filter(|n| !paths.contains(&n.as_str())) {
             let src = format!("fn f() {{ let _ = obop_commands::brand::{name}; }}");
             let (found, _) = scan(&tree(&[(path, &src)]));
             assert_eq!(found.len(), 1, "{path}: {name}: {found:?}");
@@ -1141,6 +1241,18 @@ fn a_call_of_the_helper_is_found_in_a_file_with_no_row_and_the_brand_of_a_shown_
     ] {
         let (found, _) = scan(&tree(&[(site, src)]));
         assert!(found.is_empty(), "{src}: {found:?}");
+    }
+    // The helper as a value is found as well, in a file with no row: handed on, bound to a name,
+    // imported, and imported under another name (a call of the other name has no `rp_name(`).
+    for src in [
+        "fn f(s: &S) { let g = crate::passkeys::rp_name; let _ = g(s); }",
+        "fn f(v: Vec<&S>) { let _ = v.iter().map(|s| s).map(crate::passkeys::rp_name); }",
+        "use crate::passkeys::rp_name as other; fn f(s: &S) { let _ = other(s); }",
+        "use crate::passkeys::rp_name; fn f(s: &S) { let g = rp_name; let _ = g(s); }",
+    ] {
+        let (found, _) = scan(&tree(&[(site, src)]));
+        assert_eq!(found.len(), 1, "{src}: {found:?}");
+        assert!(found[0].contains(HELPER_VALUE), "{src}: {found:?}");
     }
     // The accessor is found, and the `brand()` after `.current()` is not a second one.
     let (found, _) = scan(&tree(&[(
