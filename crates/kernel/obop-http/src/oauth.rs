@@ -1000,13 +1000,14 @@ mod tests {
         assert_eq!(ctx.origin, "https://inst.test");
         assert_eq!(ctx.ip, "198.51.100.7");
     }
+
     /// The ceremony site of the OAuth pages' passkey steps (S1e), over a dispatcher whose reader is
     /// installed over `backend`.
     fn site_over(backend: &Arc<dyn obop_storage::Backend>) -> String {
         let d = Arc::new(obop_commands::Dispatcher::new());
         d.install_brand(backend.clone());
         let state = crate::HttpState::with_mcp(
-            d.clone(),
+            d,
             Arc::new(Idp),
             crate::mcp::McpConfig {
                 public_url: Some("https://inst.test".into()),
