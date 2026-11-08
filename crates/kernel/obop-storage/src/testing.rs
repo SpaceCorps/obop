@@ -8,7 +8,7 @@ use crate::{
     HistoryStats, J, LockGuard, Op, PartitionEnsured, Result, Row, RowSink, Sealer, Swap, Track,
     Tracking, WriteCtx, guarded,
 };
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU8, Ordering::SeqCst};
 
@@ -148,6 +148,8 @@ pub struct Flaky {
     reads: std::sync::Mutex<Reads>,
     /// See [`Flaky::models_asked`].
     asked: std::sync::Mutex<BTreeSet<String>>,
+    /// See [`Flaky::gets_of`].
+    got: std::sync::Mutex<BTreeMap<String, u64>>,
     /// Run once, right before the next atomic batch is applied.
     before_apply: std::sync::Mutex<Option<AfterInsert>>,
     /// Run once, right before the next compare-and-set of a short-lived value is tried.
@@ -217,6 +219,7 @@ impl Flaky {
             seen: std::sync::Mutex::new(Vec::new()),
             reads: std::sync::Mutex::new(Reads::default()),
             asked: std::sync::Mutex::new(BTreeSet::new()),
+            got: std::sync::Mutex::new(BTreeMap::new()),
             before_apply: std::sync::Mutex::new(None),
             before_kv_swap: std::sync::Mutex::new(None),
             before_kv_get: std::sync::Mutex::new(None),
@@ -271,6 +274,13 @@ impl Flaky {
     /// `total` are not asked for by model.
     pub fn models_asked(&self) -> BTreeSet<String> {
         self.asked.lock().unwrap().clone()
+    }
+
+    /// How many times `get` was called for `model` through this backend since it was made, calls
+    /// that were refused included (a refused read is still a read that was asked for): the count
+    /// of the reads of one record, for the test that holds a caller to "once" or "at most once".
+    pub fn gets_of(&self, model: &str) -> u64 {
+        self.got.lock().unwrap().get(model).copied().unwrap_or(0)
     }
 
     fn ask(&self, model: &str) {
@@ -563,6 +573,12 @@ impl Backend for Flaky {
         Ok(())
     }
     fn get(&self, model: &str, id: &str) -> Result<Option<Fields>> {
+        *self
+            .got
+            .lock()
+            .unwrap()
+            .entry(model.to_string())
+            .or_default() += 1;
         self.gate_m(false, model)?;
         self.reads.lock().unwrap().gets += 1;
         if let Some((m, message)) = &*self.get_error.lock().unwrap()

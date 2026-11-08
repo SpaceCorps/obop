@@ -17,7 +17,7 @@ use crate::mfa_tests::{
 use obop_commands::ADMIN_GROUP;
 use obop_commands::brand::{self, Action, UNREADABLE};
 use obop_storage::fault::Fault;
-use obop_storage::testing::{Flaky, Mode};
+use obop_storage::testing::{Flaky, Mode, time_budget};
 use obop_storage::{Fields, Op};
 
 /// The URI of an enrolment with the random secret blanked, as `otpauth_uri` builds it.
@@ -335,10 +335,24 @@ fn a_failing_theme_read_does_not_refuse_the_enrolment() {
     assert_eq!(flaky.refused(), 0, "the setting was not even asked for");
 }
 
+/// Waits for `done` to be true, up to the time budget of a test, and says whether it was. A condition
+/// with a bound, not a pause: it returns as soon as the condition holds.
+fn wait_for(secs: u64, mut done: impl FnMut() -> bool) -> bool {
+    let limit = std::time::Instant::now() + time_budget(secs);
+    while !done() {
+        if std::time::Instant::now() >= limit {
+            return false;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    true
+}
+
 /// The read takes no lock and comes before the one `begin` takes: with the lock `auth.mfa` held by
 /// someone else (here: by this thread, and the store's lock is not re-entrant), an enrolment that
-/// cannot read the name answers at once, where one that read it under the lock would wait the sixty
-/// seconds the store gives a lock.
+/// cannot read the name answers at once, where one that read it under the lock would be parked at it
+/// for the sixty seconds the store gives a lock. The answer is awaited as a condition (the thread of
+/// `begin` has finished), with a bound, not as a measured time.
 #[test]
 fn the_read_of_the_name_needs_no_lock() {
     let (flaky, r) = flaky_rig(AuthConfig::insecure_dev());
@@ -346,18 +360,92 @@ fn the_read_of_the_name_needs_no_lock() {
     let (_, p) = session(&r.a, "ada");
     flaky.fail_gets_of(brand::MODEL, "a read error that is not transient");
     let held = r.b.lock("auth.mfa").unwrap();
-    let started = std::time::Instant::now();
-    let answer = begin_with(&r, &p);
-    let waited = started.elapsed();
-    drop(held);
+    let (answered, answer) = std::thread::scope(|s| {
+        let parked = s.spawn(|| begin_with(&r, &p));
+        let answered = wait_for(10, || parked.is_finished());
+        // Let it go either way, so that a begin that waits for the lock ends too.
+        drop(held);
+        (answered, parked.join().unwrap())
+    });
+    assert!(
+        answered,
+        "the enrolment waited for the lock before it read the name"
+    );
     assert!(
         matches!(&answer, Err(MfaError::Unavailable(m)) if m.starts_with(UNREADABLE)),
         "{answer:?}"
     );
-    assert!(
-        waited < std::time::Duration::from_secs(20),
-        "the enrolment waited for the lock before it read the name: {waited:?}"
+}
+
+/// A name that can be read is read once, and before the lock: the count is of the reads of the row
+/// (`Flaky::gets_of`), so a second read (under the lock, after it, or a repeat before it) shows as a
+/// two. The lock is held by this thread while `begin` runs on another, so the read that the answer
+/// reports was made while the lock was out of its reach.
+#[test]
+fn a_readable_name_is_read_once_and_before_the_lock() {
+    let (flaky, r) = flaky_rig(AuthConfig::insecure_dev());
+    user_with(&r.a, "ada", &["base.user"]);
+    set_name(&*r.b, "MOHV");
+    let (_, p) = session(&r.a, "ada");
+    let base = flaky.gets_of(brand::MODEL);
+    let held = r.b.lock("auth.mfa").unwrap();
+    let (read_while_held, answer) = std::thread::scope(|s| {
+        let parked = s.spawn(|| begin_with(&r, &p));
+        // The first read is made with the lock held by someone else; a begin that takes the lock
+        // first never makes it, and the wait ends at the bound.
+        let seen = wait_for(10, || flaky.gets_of(brand::MODEL) > base);
+        drop(held);
+        (seen, parked.join().unwrap())
+    });
+    assert!(read_while_held, "the name was not read before the lock");
+    assert_eq!(answer.unwrap()["issuer"], json!("MOHV"));
+    assert_eq!(
+        flaky.gets_of(brand::MODEL) - base,
+        1,
+        "the row was read more than once for one enrolment"
     );
+}
+
+/// With the variable set the lock and the read are as before: nothing of the brand is asked for, so
+/// the count of the reads of the row does not move (the same count as above, from the other side).
+#[test]
+fn with_the_variable_set_the_row_is_read_no_times() {
+    let (flaky, r) = flaky_rig(AuthConfig {
+        issuer: Some("Acme".into()),
+        ..AuthConfig::insecure_dev()
+    });
+    user_with(&r.a, "ada", &["base.user"]);
+    set_name(&*r.b, "MOHV");
+    let (_, p) = session(&r.a, "ada");
+    let base = flaky.gets_of(brand::MODEL);
+    assert_eq!(begin_with(&r, &p).unwrap()["issuer"], json!("Acme"));
+    assert_eq!(flaky.gets_of(brand::MODEL), base);
+}
+
+/// The server key is asked for before the name is read: with no key ring and a stored name that
+/// cannot be shown, the answer is the missing key, not the branding, so that an administrator is not
+/// sent to repair a name only to meet the key next. (With a key ring the same row is refused as the
+/// branding: the order is of the two errors, not a rule about the name.)
+#[test]
+fn a_missing_server_key_is_reported_before_a_name_that_cannot_be_read() {
+    let r = rig_with(AuthConfig {
+        keys: obop_keys::KeyRing::default(),
+        ..AuthConfig::insecure_dev()
+    });
+    user_with(&r.a, "ada", &["base.user"]);
+    put_row(&*r.b, &[("name", json!("a<b"))]);
+    let Err(MfaError::Unavailable(m)) = begun(&r, "ada") else {
+        panic!("the enrolment went on without a key")
+    };
+    assert!(
+        !m.starts_with(UNREADABLE) && m.contains("OBOP_SECRET_KEY"),
+        "the missing key comes first: {m}"
+    );
+    // The control: with a key the same row is the branding's error.
+    let r = rig();
+    user_with(&r.a, "ada", &["base.user"]);
+    put_row(&*r.b, &[("name", json!("a<b"))]);
+    assert!(matches!(begun(&r, "ada"), Err(MfaError::Unavailable(m)) if m.starts_with(UNREADABLE)));
 }
 
 /// An administrator under the policy who must still enrol (D53) hits the same wall: the limited
@@ -525,25 +613,25 @@ fn a_person_whose_two_factor_is_on_is_told_so_before_the_name_is_read() {
 }
 
 /// The look under the guard still counts: a second factor that another request turned on after
-/// `begin` made its first look and while it waits for the lock is refused, and nothing is stored.
-/// (The lock is held by this thread, so `begin` is parked at the guard when the factor is turned on.
-/// If `begin` is slower than the pause and has not looked yet, it finds the factor on at its first
-/// look and the test still passes, without proving the second one; the pause is long for that.)
+/// `begin` made its first look and before it holds the guard is refused, and nothing is stored. The
+/// other request runs right after the read of the name, which is the step between the two looks
+/// (`after_the_get_of`, a hook of the double: no thread, no pause, so it holds on a loaded machine
+/// as on an idle one).
 #[test]
-fn a_second_factor_turned_on_while_begin_waits_for_the_guard_is_still_refused() {
-    let r = rig();
+fn a_second_factor_turned_on_between_the_first_look_and_the_guard_is_still_refused() {
+    let (flaky, r) = flaky_rig(AuthConfig::insecure_dev());
     user_with(&r.a, "ada", &["base.user"]);
     let (_, p) = session(&r.a, "ada");
-    let held = r.b.lock("auth.mfa").unwrap();
-    let answer = std::thread::scope(|s| {
-        let parked = s.spawn(|| r.a.begin(&p));
-        std::thread::sleep(std::time::Duration::from_millis(500));
-        let mut turned_on = Fields::new();
-        turned_on.insert("mfa_enabled".into(), json!(true));
-        r.a.put("ada", &turned_on).unwrap();
-        drop(held);
-        parked.join().unwrap()
-    });
+    flaky.after_the_get_of(
+        brand::MODEL,
+        0,
+        Box::new(|inner| {
+            let mut turned_on = Fields::new();
+            turned_on.insert("mfa_enabled".into(), json!(true));
+            assert!(inner.update("auth_user", "ada", &turned_on).unwrap());
+        }),
+    );
+    let answer = begin_with(&r, &p);
     assert!(
         matches!(&answer, Err(MfaError::Invalid(m)) if m.contains("already on")),
         "{answer:?}"
