@@ -611,15 +611,11 @@ mod tests {
         // With an address: once each.
         put_name(&backend, J::from("MOHV"));
         let state = state_at(&backend, "https://inst.test");
-        let c = ctx_named(&state, &parts, registration_name)
-            .ok()
-            .expect("a site");
+        let c = ctx_named(&state, &parts, registration_name).expect("a site");
         assert_eq!(c.rp_name, "MOHV");
         assert_eq!(flaky.gets_of("instance_brand") - row, 1, "the registration");
         assert_eq!(flaky.gets_of("obop_setting") - theme, 0, "no display read");
-        let c = ctx_named(&state, &parts, display_name)
-            .ok()
-            .expect("a site");
+        let c = ctx_named(&state, &parts, display_name).expect("a site");
         assert_eq!(c.rp_name, "MOHV");
         assert_eq!(flaky.gets_of("instance_brand") - row, 2, "the display unit");
         assert_eq!(flaky.gets_of("obop_setting") - theme, 1, "the display unit");
@@ -641,9 +637,7 @@ mod tests {
         // no trace in it.
         obop_storage::fault::begin_request(obop_storage::fault::Outcome::default());
         flaky.refuse_model("obop_setting", obop_storage::testing::Mode::Reads);
-        let c = ctx(&state, &parts)
-            .ok()
-            .expect("a site is built all the same");
+        let c = ctx(&state, &parts).expect("a site is built all the same");
         assert_eq!(
             c.rp_name, "obop",
             "no last good value in this process: the default"
