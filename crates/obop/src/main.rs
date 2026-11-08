@@ -150,9 +150,10 @@ const USAGE: &str = "usage: obop <command>
   admin sso only USER on|off                    make USER sign in with Microsoft only (needs a binding, one sign-in with the button
                                                 after it, and two other administrators who keep a password
                                                 and a second factor), or turn that off
-  admin brand status                            the instance branding (name, slug, logo, a title and a message per language): what is
-                                                in force and where each value comes from, the titles and messages that are stored,
-                                                and any stored field that fell back
+  admin brand status                            the instance branding (name, slug, logo, a title and a message per language, and the
+                                                title, logo address, accent and tab icon of the public shop): what is in force and
+                                                where each value comes from, the titles and messages that are stored, and any
+                                                stored field that fell back
   admin brand configure [--name N] [--slug S] [--title LANG=TEXT]... [--message LANG=TEXT]...
                         [--logo-file FILE.svg | --clear-logo] [--from FILE.toml] [--dry-run]
                                                 set the fields given and keep the others (the first call needs --name); an empty text

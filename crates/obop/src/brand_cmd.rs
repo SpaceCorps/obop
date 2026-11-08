@@ -505,10 +505,17 @@ pub fn render_status(fresh: &Fresh) -> String {
     let shown = fresh.shown();
     let effective: J = serde_json::from_str(&fresh.effective_json()).unwrap_or(J::Null);
     let mut out = String::new();
-    out.push_str(if fresh.set() {
-        "brand: set\n"
-    } else {
-        "brand: not set (no record; every value is the default)\n"
+    // With no record every value is the default, except what an explicit `site.*` key of the shop
+    // sets: that entry has the source `site` and the lines under the header say so.
+    let site_key_set = effective
+        .as_object()
+        .is_some_and(|entries| entries.values().any(|entry| entry["source"] == "site"));
+    out.push_str(match (fresh.set(), site_key_set) {
+        (true, _) => "brand: set\n",
+        (false, false) => "brand: not set (no record; every value is the default)\n",
+        (false, true) => {
+            "brand: not set (no record; every value is the default, except what a site.* key sets)\n"
+        }
     });
     let mut line = |key: &str, raw: bool| {
         let entry = &effective[key];

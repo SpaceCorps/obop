@@ -369,6 +369,60 @@ fn status_of_an_instance_with_no_brand_says_so_and_shows_the_defaults() {
     );
 }
 
+/// Write the instance settings (the theme and the `site` keys together) around the command.
+fn put_settings(backend: &std::sync::Arc<dyn Backend>, settings: serde_json::Value) {
+    let mut fields = Fields::new();
+    fields.insert("value".into(), json!(settings.to_string()));
+    backend
+        .apply_checked(&[Op::Put {
+            model: "obop_setting".into(),
+            id: "instance".into(),
+            fields,
+        }])
+        .unwrap();
+}
+
+/// With no record, the header says that every value is the default: true until the owner sets a
+/// `site.*` key of the shop, whose entry then has the source `site`. The header says so, so that it
+/// does not contradict the lines under it. A theme alone, or a `site.*` key the shop would not use,
+/// leaves the header as it was.
+#[test]
+fn status_with_no_record_and_an_explicit_site_key_says_which_values_are_not_the_default() {
+    let (_store, backend) = memory();
+    put_settings(
+        &backend,
+        json!({"site": {"title": "Fernhill Goods", "accent": "#2d6a4f"}}),
+    );
+    assert_eq!(
+        status_of(&backend),
+        "brand: not set (no record; every value is the default, except what a site.* key sets)\n\
+         name: \"obop\" (default)\n\
+         slug: \"obop\" (default)\n\
+         logo: none (default)\n\
+         tile_accent: \"#495670\" (default)\n\
+         favicon: \"tile\" (default)\n\
+         site.accent: \"#2d6a4f\" (site)\n\
+         site.logo_url: \"\" (default)\n\
+         site.title: \"Fernhill Goods\" (site)\n\
+         fallbacks: none\n"
+    );
+    // A theme is no `site.*` key, and a key the shop does not use is not one in force.
+    for settings in [
+        json!({"theme": {"accent": "#c2410c"}}),
+        json!({"site": {"title": "   ", "accent": "red", "logo_url": "http://x.test/l.png"}}),
+        json!({"site": {}}),
+    ] {
+        let (_store, backend) = memory();
+        put_settings(&backend, settings.clone());
+        let text = status_of(&backend);
+        assert!(
+            text.starts_with("brand: not set (no record; every value is the default)\n"),
+            "{settings}: {text}"
+        );
+        assert!(!text.contains("(site)"), "{settings}: {text}");
+    }
+}
+
 #[test]
 fn status_shows_the_values_in_force_the_titles_and_messages_that_are_set_and_the_logo_version() {
     let (_store, backend) = memory();
