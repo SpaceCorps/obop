@@ -827,7 +827,7 @@ fn a_row_with_limits_lets_its_file_ask_the_reader_as_the_row_says_and_nothing_el
 /// of the public site (`PublicApi::site_settings`), and no others: loosening one of them to
 /// `Limit::Any` is a change of this test, and so a decision that shows in the diff.
 #[test]
-fn the_rows_with_limits_are_the_two_files_of_the_logo_route() {
+fn the_rows_with_limits_are_the_logo_route_files_and_the_settings_door() {
     let limited: Vec<&str> = ALLOWED
         .iter()
         .filter(|(_, _, l)| matches!(l, Limit::Reads { .. }))
@@ -841,4 +841,59 @@ fn the_rows_with_limits_are_the_two_files_of_the_logo_route() {
             "kernel/obop-commands/src/public.rs"
         ]
     );
+}
+
+/// What each of those rows lets its file do, literally: how many `brand()` calls, how many reads of
+/// the reader, which paths through the module `brand` and which types as types only. The test above
+/// holds which files have limits; this holds the limits, so that a row loosened by a number or a name
+/// (a second call, a read, `apply` among the paths) is a change of this test, and so a decision that
+/// shows in the diff. A row that another slice adds with limits is held by that slice's own line here.
+#[test]
+fn the_limits_of_the_rows_with_limits_are_the_ones_decided() {
+    type Want = (
+        &'static str,
+        usize,
+        usize,
+        &'static [&'static str],
+        &'static [&'static str],
+    );
+    let decided: [Want; 3] = [
+        (
+            "kernel/obop-http/src/brand.rs",
+            1,
+            1,
+            &["Reader", "Shown"],
+            &["Reader", "Shown"],
+        ),
+        (
+            "kernel/obop-http/src/lib.rs",
+            0,
+            0,
+            &["routes", "NotFound"],
+            &[],
+        ),
+        (
+            "kernel/obop-commands/src/public.rs",
+            1,
+            0,
+            &["site_settings"],
+            &[],
+        ),
+    ];
+    for (file, calls, reads, paths, types) in decided {
+        let Some((
+            _,
+            _,
+            Limit::Reads {
+                calls: c,
+                reads: r,
+                paths: p,
+                types: t,
+            },
+        )) = ALLOWED.iter().find(|(f, _, _)| *f == file)
+        else {
+            panic!("{file} has no row with limits");
+        };
+        assert_eq!((*c, *r, *p, *t), (calls, reads, paths, types), "{file}");
+    }
 }

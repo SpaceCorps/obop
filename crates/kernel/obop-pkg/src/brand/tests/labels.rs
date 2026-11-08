@@ -399,14 +399,35 @@ fn the_text_of_effective_lists_the_keys_and_the_sources_of_the_answer_of_get() {
         .filter(|k| !k.is_empty())
         .collect();
     assert_eq!(listed, keys, "the keys the English text lists");
+    // The sources are words of the text, not pieces of another word: the source `site` is not found
+    // in the key `site.title`. A word is a run of letters, digits, `_` and `.`, so `site.title,` is
+    // the word `site.title` and `record, site, theme` has the word `site`.
+    let words = |t: &str| -> BTreeSet<String> {
+        t.split(|c: char| !(c.is_alphanumeric() || c == '_' || c == '.'))
+            .filter(|w| !w.is_empty())
+            .map(str::to_string)
+            .collect()
+    };
+    let english = words(&slot.english);
     for source in &sources {
-        assert!(slot.english.contains(source.as_str()), "{source}");
+        assert!(
+            english.contains(source),
+            "the source {source} as a word of the English text: {}",
+            slot.english
+        );
     }
     for lang in TRANSLATED {
         let cell = text(&module, &slot, lang);
-        for word in listed.iter().chain(&sources) {
-            let word = in_translation(word);
-            assert!(cell.contains(word.as_str()), "({lang}) {word}: {cell:?}");
+        for key in &listed {
+            let key = in_translation(key);
+            assert!(cell.contains(key.as_str()), "({lang}) {key}: {cell:?}");
+        }
+        let in_cell = words(&cell);
+        for source in &sources {
+            assert!(
+                in_cell.contains(source),
+                "({lang}) the source {source} as a word: {cell:?}"
+            );
         }
     }
 }
