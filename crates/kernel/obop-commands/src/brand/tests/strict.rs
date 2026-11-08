@@ -4,6 +4,7 @@
 use super::*;
 use crate::Dispatcher;
 use crate::brand::{UNREADABLE, strict};
+use obop_storage::fault::Fault;
 
 fn spy_with(pairs: &[(&str, J)]) -> Arc<Spy> {
     let spy = Spy::memory();
@@ -48,6 +49,38 @@ fn a_name_that_fails_the_safety_subset_is_a_failure_with_a_fixed_message() {
     // A row with no name at all: the same.
     let spy = spy_with(&[("title_en", s("Hello"))]);
     assert!(strict(&*spy).unwrap_err().starts_with(UNREADABLE));
+}
+
+/// A name that passes the read check but that `configure` refuses for a link character, or that is
+/// only white space, was written around the command; it cannot go into a device's label either (the
+/// label would split at the colon into another issuer than `issuer=` says). The message is fixed and
+/// holds none of the text.
+#[test]
+fn a_name_that_cannot_go_into_a_label_is_a_failure_with_a_fixed_message() {
+    for bad in [
+        "a:b",
+        "a/b",
+        "a\\b",
+        "a@b",
+        "http://evil.test/x",
+        "javascript:alert(1)",
+        " ",
+        "  ",
+    ] {
+        let spy = spy_with(&[("name", s(bad))]);
+        let e = strict(&*spy).unwrap_err();
+        assert!(e.starts_with(UNREADABLE), "{bad:?}: {e}");
+        assert!(!Fault::is_transient(&e), "{e}");
+        assert!(
+            !e.contains(bad.trim()) || bad.trim().is_empty(),
+            "nothing of the stored text: {e}"
+        );
+    }
+    // The ordinary punctuation of a name is no reason.
+    for good in ["Acme, Inc.", "O'Neil & Sons", "Müller (DE)", "a-b_c+d!"] {
+        let spy = spy_with(&[("name", s(good))]);
+        assert_eq!(strict(&*spy).unwrap().name(), good);
+    }
 }
 
 #[test]

@@ -78,7 +78,8 @@ fn the_object_holds_exactly_the_entries_of_the_surfaces_that_exist() {
     want.sort();
     assert_eq!(keys, want.iter().map(String::as_str).collect::<Vec<_>>());
     assert_eq!(keys.len(), 5 + 14);
-    // Every entry is exactly a value and a source, and the source is one of the four.
+    // Every entry is exactly a value and a source, and the source is one of the four a good row
+    // gives (the fifth, `unreadable`, is the issuer of a name an enrolment would refuse, below).
     for (k, v) in e.as_object().unwrap() {
         assert_eq!(v.as_object().unwrap().len(), 2, "{k}");
         assert!(
@@ -298,14 +299,60 @@ fn the_authenticator_issuer_names_the_source_that_won_in_each_case() {
     is(&e, "name", "MOHV", "record");
 }
 
+/// The entry is `null` from the source `unreadable`, and says no value.
+fn is_unreadable(e: &J, what: &str) {
+    assert_eq!(
+        e["authenticator_issuer"],
+        json!({"value": null, "source": "unreadable"}),
+        "{what}"
+    );
+}
+
+/// Where an enrolment is refused there is no issuer in force, and `get` says so instead of the
+/// default that the enrolment would not write: `null` from the source `unreadable`, while `name`
+/// still shows the default as it does for any stored name that failed the read check.
 #[test]
-fn a_stored_name_that_failed_the_read_check_shows_the_default_as_the_name_does() {
-    let e = effective_with_variable(Some(&[("name", s("<script>"))]), None);
-    is(&e, "name", "obop", "default");
-    is(&e, "authenticator_issuer", "obop", "default");
-    // The variable does not care about the row at all.
-    let e = effective_with_variable(Some(&[("name", s("<script>"))]), Some("Acme"));
-    is(&e, "authenticator_issuer", "Acme", "env");
+fn a_stored_name_that_failed_the_read_check_has_no_issuer_in_force() {
+    for bad in [
+        s("<script>"),
+        s(""),
+        s("a\u{200b}b"),
+        s(&"x".repeat(41)),
+        J::from(5),
+    ] {
+        let e = effective_with_variable(Some(&[("name", bad.clone())]), None);
+        is(&e, "name", "obop", "default");
+        is_unreadable(&e, &bad.to_string());
+        // The variable does not care about the row at all.
+        let e = effective_with_variable(Some(&[("name", bad.clone())]), Some("Acme"));
+        is(&e, "authenticator_issuer", "Acme", "env");
+    }
+    // A row with no name at all is the same case.
+    let e = effective_with_variable(Some(&[("title_en", s("Hello"))]), None);
+    is_unreadable(&e, "no name");
+}
+
+/// A name that passes the read check and still cannot go into a label (a link character, or only
+/// white space) is refused by `strict` and so has no issuer in force either; `name` shows it as it
+/// is, because the display accepts it.
+#[test]
+fn a_stored_name_that_cannot_go_into_a_label_has_no_issuer_in_force() {
+    for bad in ["a:b", "a/b", "a\\b", "a@b", "http://evil.test/x", "  "] {
+        let e = effective_with_variable(Some(&[("name", s(bad))]), None);
+        is_unreadable(&e, bad);
+        assert_eq!(
+            e["name"]["source"],
+            json!("record"),
+            "the display shows the name that passed the read check: {bad:?}"
+        );
+        let e = effective_with_variable(Some(&[("name", s(bad))]), Some("Acme"));
+        is(&e, "authenticator_issuer", "Acme", "env");
+    }
+    // The ordinary punctuation of a name is no reason.
+    for good in ["Acme, Inc.", "O'Neil & Sons", "Müller (DE)", "a-b_c+d!"] {
+        let e = effective_with_variable(Some(&[("name", s(good))]), None);
+        is(&e, "authenticator_issuer", good, "record");
+    }
 }
 
 #[test]

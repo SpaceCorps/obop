@@ -5,7 +5,7 @@
 
 use super::super::enrol::issuer_from;
 use crate::MfaError;
-use crate::brand::{ISSUER_VAR, UNREADABLE, enrolment_error, env_issuer};
+use crate::brand::{ISSUER_VAR, UNREADABLE, enrolment_error, env_issuer, no_reader_error};
 use obop_storage::fault::Fault;
 
 #[test]
@@ -32,6 +32,15 @@ fn a_value_is_kept_as_it_is_and_nothing_or_white_space_is_no_value() {
 }
 
 /// `env_issuer` is that rule on the environment of the process, and nothing else.
+///
+/// This restates the function, and says so: it holds the rule, not the wiring. That `AuthConfig::from_env`
+/// and the `effective_json` of `get` both call `env_issuer` (so that the two cannot differ) needs a
+/// process whose environment holds the variable, and the workspace forbids `unsafe`, which
+/// `std::env::set_var` is. The wiring is therefore held by the two tests that start the real
+/// program with the variable set: `crates/obop/tests/brand_enrol_process.rs` (the server's
+/// `AuthConfig`, mutation: `from_env` giving `None`) and `crates/obop/tests/brand_cli.rs`,
+/// `status_and_get_name_the_authenticator_issuer_and_the_source_that_won` (`effective_json`,
+/// mutation: it passing `None`). Both are in the default `cargo test -p obop` and in CI.
 #[test]
 fn env_issuer_reads_the_variable_of_the_process() {
     assert_eq!(
@@ -63,6 +72,17 @@ fn a_transient_fault_and_the_unreadable_name_are_kept_as_they_are() {
     }
     let unreadable = format!("{UNREADABLE}: the stored name cannot be shown");
     assert_eq!(unavailable(enrolment_error(unreadable.clone())), unreadable);
+}
+
+/// A dispatcher with no reader is refused with the message of the unreadable name, which the route
+/// answers as `brand_unavailable`: it starts with the words the route matches, is not a transient
+/// fault and is kept as it is by `enrolment_error`.
+#[test]
+fn a_server_with_no_reader_gets_the_message_of_the_unreadable_name() {
+    let m = unavailable(no_reader_error());
+    assert!(m.starts_with(UNREADABLE), "{m}");
+    assert!(!Fault::is_transient(&m), "{m}");
+    assert_eq!(unavailable(enrolment_error(m.clone())), m);
 }
 
 /// Any other store error becomes the fixed message, which starts with the words the route matches,

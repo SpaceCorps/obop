@@ -1803,8 +1803,8 @@ fn status_and_get_name_the_authenticator_issuer_and_the_source_that_won() {
 
 /// The repair the answer `brand_unavailable` points to: a stored name that cannot be shown is listed
 /// by `status` (which prints nothing of its value), and `configure` at the terminal, which needs no
-/// session, replaces it. Until then `authenticator_issuer` shows the default as `name` does, and
-/// `fallbacks` says why.
+/// session, replaces it. Until then `authenticator_issuer` has no value (`null`, source
+/// `unreadable`: the enrolment is refused) while `name` shows the default, and `fallbacks` says why.
 #[test]
 fn a_stored_name_that_cannot_be_shown_is_listed_by_status_and_repaired_at_the_terminal() {
     let dir = Dir::started("repair");
@@ -1827,6 +1827,13 @@ fn a_stored_name_that_cannot_be_shown_is_listed_by_status_and_repaired_at_the_te
         "{s}"
     );
     assert!(!s.contains("a<b"), "{s}");
+    // No issuer is in force: an enrolment is refused for as long as this is so, and `status` says
+    // so instead of the default that the enrolment would not write.
+    assert!(
+        s.contains("authenticator_issuer: null (unreadable)\n"),
+        "{s}"
+    );
+    assert!(s.contains("name: \"obop\" (default)\n"), "{s}");
     ok(obop(
         &url,
         &["admin", "brand", "configure", "--name", "MOHV"],
@@ -1834,6 +1841,44 @@ fn a_stored_name_that_cannot_be_shown_is_listed_by_status_and_repaired_at_the_te
     ));
     let s = status(&url);
     assert!(s.contains("fallbacks: none\n"), "{s}");
+    assert!(
+        s.contains("authenticator_issuer: \"MOHV\" (record)\n"),
+        "{s}"
+    );
+}
+
+/// A name that the display accepts and `configure` refuses (a colon: it would make a link) can only
+/// be in the row if it was written around the command. It shows as the name, `fallbacks` lists
+/// nothing, and the enrolment is refused all the same: `status` says so with the issuer `null`.
+#[test]
+fn a_stored_name_with_a_colon_has_no_issuer_in_force_and_is_repaired_at_the_terminal() {
+    let dir = Dir::started("colon");
+    let url = dir.url();
+    {
+        let backend = obop_storage::open(&url).unwrap();
+        let mut row = obop_storage::Fields::new();
+        row.insert("name".into(), serde_json::json!("a:b"));
+        backend
+            .apply_checked(&[obop_storage::Op::Put {
+                model: "instance_brand".into(),
+                id: "instance".into(),
+                fields: row,
+            }])
+            .unwrap();
+    }
+    let s = status(&url);
+    assert!(s.contains("name: \"a:b\" (record)\n"), "{s}");
+    assert!(s.contains("fallbacks: none\n"), "{s}");
+    assert!(
+        s.contains("authenticator_issuer: null (unreadable)\n"),
+        "{s}"
+    );
+    ok(obop(
+        &url,
+        &["admin", "brand", "configure", "--name", "MOHV"],
+        None,
+    ));
+    let s = status(&url);
     assert!(
         s.contains("authenticator_issuer: \"MOHV\" (record)\n"),
         "{s}"

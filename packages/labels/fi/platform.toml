@@ -812,7 +812,7 @@ description = "Komentojen get ja configure vastaus: logon versio (16 heksadesima
 
 [labels.fi.model.instance_brand.field.effective]
 label = "Voimassa olevat"
-description = "Komennon get vastaus: JSON-objekti, jossa jokaisen voimassa olevan arvon (name, slug, logo, tile_accent, authenticator_issuer, title_XX ja message_XX; XX on kielikoodi: en, de, fr, pl, fi, sv, es) arvo ja voittanut lähde: record, env, theme tai default"
+description = "Komennon get vastaus: JSON-objekti, jossa jokaisen voimassa olevan arvon (name, slug, logo, tile_accent, authenticator_issuer, title_XX ja message_XX; XX on kielikoodi: en, de, fr, pl, fi, sv, es) arvo ja voittanut lähde: record, env, theme, unreadable tai default"
 
 [labels.fi.model.instance_brand.field.fallbacks]
 label = "Varaarvot"

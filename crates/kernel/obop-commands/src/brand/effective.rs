@@ -15,14 +15,15 @@
 //! English title or to the name); `env` for the issuer when `OBOP_MFA_ISSUER` is set, which wins over
 //! the record (read by [`env_issuer`], the function the authenticator's configuration reads it with,
 //! so the two cannot differ); `theme` for the accent the theme stores; `default` when it is the
-//! built-in default (the name `obop`, no message, no logo). A stored name that failed the read check
-//! shows the default name here as it does for `name`, and `fallbacks` lists it; an enrolment is
-//! refused for as long as the name is in that list (docs/DEPLOY.md), which this entry does not say.
-//! The artwork is never part of the answer:
+//! built-in default (the name `obop`, no message, no logo); `unreadable` for the authenticator issuer
+//! alone, when an enrolment is refused because the stored name failed the read check or cannot go
+//! into a label (a link character, or only white space), with the value `null`: there is no issuer in
+//! force, and `name` shows the default as it always does for such a row, with `fallbacks` listing the
+//! first case (docs/DEPLOY.md). The artwork is never part of the answer:
 //! it is served by the logo route, and `get` says only whether the logo in force is the artwork
 //! (`artwork`), the generated tile (`tile`) or none (`none`, with no brand set).
 
-use super::enrol::env_issuer;
+use super::enrol::{env_issuer, unfit_for_a_label};
 use super::reader::Fresh;
 use obop_brand::{LANGS, tile};
 use serde_json::{Map, Value as J, json};
@@ -31,6 +32,7 @@ const RECORD: &str = "record";
 const ENV: &str = "env";
 const THEME: &str = "theme";
 const DEFAULT: &str = "default";
+const UNREADABLE_SOURCE: &str = "unreadable";
 
 fn entry(value: impl Into<J>, source: &str) -> J {
     json!({"value": value.into(), "source": source})
@@ -56,7 +58,10 @@ impl Fresh {
         let brand = shown.brand();
         // A brand whose name passed the read check: the name, and everything derived from it, comes
         // from the record. A row whose name failed it shows the default name.
-        let name_stored = self.set() && !shown.fallbacks().iter().any(|f| f.field == "name");
+        let name_failed = self.set() && shown.fallbacks().iter().any(|f| f.field == "name");
+        let name_stored = self.set() && !name_failed;
+        // What an enrolment does with it: refused, for the two reasons `strict` refuses a row.
+        let enrolment_refused = name_failed || (name_stored && unfit_for_a_label(brand.name()));
         let mut out = Map::new();
         out.insert("name".into(), entry(brand.name(), source(name_stored)));
         out.insert(
@@ -67,11 +72,16 @@ impl Fresh {
             ),
         );
         // The label and `issuer=` of a new authenticator entry: the variable, else the stored name,
-        // else `obop` (spec, section 5). `Auth` makes the same choice at each enrolment.
+        // else `obop` (spec, section 5). `Auth` makes the same choice at each enrolment, with one
+        // difference that this entry states instead of hiding: where the enrolment is refused (the
+        // stored name failed the read check or cannot go into a label) there is no value in force,
+        // so the entry is `null` from the source `unreadable`, and `name` shows the default as it
+        // always does.
         out.insert(
             "authenticator_issuer".into(),
             match issuer_variable {
                 Some(value) => entry(value, ENV),
+                None if enrolment_refused => entry(J::Null, UNREADABLE_SOURCE),
                 None => entry(brand.name(), source(name_stored)),
             },
         );

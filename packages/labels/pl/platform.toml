@@ -812,7 +812,7 @@ description = "Odpowiedź get i configure: wersja logo (16 cyfr szesnastkowych),
 
 [labels.pl.model.instance_brand.field.effective]
 label = "Obowiązujące"
-description = "Odpowiedź get: obiekt JSON z wartością i zwycięskim źródłem (record, env, theme lub default) dla każdej obowiązującej wartości (name, slug, logo, tile_accent, authenticator_issuer, title_XX i message_XX; XX to kod języka: en, de, fr, pl, fi, sv, es)"
+description = "Odpowiedź get: obiekt JSON z wartością i zwycięskim źródłem (record, env, theme, unreadable lub default) dla każdej obowiązującej wartości (name, slug, logo, tile_accent, authenticator_issuer, title_XX i message_XX; XX to kod języka: en, de, fr, pl, fi, sv, es)"
 
 [labels.pl.model.instance_brand.field.fallbacks]
 label = "Wartości zastępcze"

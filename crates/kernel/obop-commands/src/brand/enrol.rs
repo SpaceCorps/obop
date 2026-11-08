@@ -44,3 +44,25 @@ pub fn enrolment_error(e: String) -> MfaError {
         MfaError::Unavailable(format!("{UNREADABLE}: the store could not be read"))
     }
 }
+
+/// What an enrolment answers when the dispatcher it runs under has no reader of the brand (one that
+/// never ran `register_admin`; the shipped composition always does). Such a reader answers the
+/// default brand, which is the answer of a reader with nothing to read and not of a row that was
+/// read, and a default is the one thing an enrolment never writes into a person's device. The same
+/// fixed message, so the route answers it as it answers any name that cannot be read.
+pub fn no_reader_error() -> MfaError {
+    MfaError::Unavailable(format!("{UNREADABLE}: this server has no branding reader"))
+}
+
+/// Whether a stored name that passed the read check still cannot go into the label of an
+/// authenticator entry or the name of a passkey: it holds a character of a link or an address
+/// (`:` `/` `\` `@`, which `configure` refuses as `link_character`) or it is only white space.
+/// The read check of the display is the safety subset and accepts these, so a row written around the
+/// command (a restore, an import, a direct edit) can hold one. In a label the colon is the one
+/// character an app splits the decoded text at, so a name with a colon in it would show another
+/// issuer than `issuer=` says; and a name of spaces is a blank issuer. The enrolment fails closed on
+/// them as it does on a name that cannot be shown, so that a row `configure` would not write is not
+/// written into a person's device either. Only [`strict`](super::strict) and `get` ask this.
+pub(super) fn unfit_for_a_label(name: &str) -> bool {
+    name.trim().is_empty() || name.chars().any(|c| matches!(c, ':' | '/' | '\\' | '@'))
+}
