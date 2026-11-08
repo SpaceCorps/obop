@@ -19,6 +19,7 @@ pub mod redirect;
 pub mod token;
 pub mod util;
 
+use obop_brand::Brand;
 use obop_commands::{Authenticator, OAuthTokens};
 use obop_storage::Backend;
 use serde_json::{Value as J, json};
@@ -211,9 +212,13 @@ pub fn api_resource(base: &str) -> String {
     format!("{base}/api")
 }
 
-/// RFC 8414 metadata of the authorization server of the instance at `base`.
-pub fn authorization_server_metadata(base: &str) -> J {
-    json!({
+/// RFC 8414 metadata of the authorization server of the instance at `base`. The metadata names no
+/// product but points to the documentation of the software (`service_documentation`, optional in
+/// RFC 8414): with a brand set (docs/spec/branding.md, section 6, OT-10) that link is left out,
+/// because the instance is the customer's own and the software's page is not theirs to send people
+/// to. With no brand the document is what it has always been, byte for byte.
+pub fn authorization_server_metadata(base: &str, brand: &Brand) -> J {
+    let mut doc = json!({
         "issuer": base,
         "authorization_endpoint": format!("{base}/oauth/authorize"),
         "token_endpoint": format!("{base}/oauth/token"),
@@ -229,8 +234,11 @@ pub fn authorization_server_metadata(base: &str) -> J {
         // A client says which it is when it registers (`obop_client_class`): an MCP client by
         // default, or a mobile app, whose access token is for /api (docs/DEPLOY.md "Mobile apps").
         "obop_client_classes_supported": ["mcp", "mobile"],
-        "service_documentation": "https://obop.dev/docs/agents/mcp/",
-    })
+    });
+    if !brand.is_set() {
+        doc["service_documentation"] = J::from("https://obop.dev/docs/agents/mcp/");
+    }
+    doc
 }
 
 #[cfg(test)]

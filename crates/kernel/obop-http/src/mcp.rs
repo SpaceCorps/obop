@@ -14,6 +14,7 @@ use axum::{
     http::{HeaderMap, HeaderValue, Method, StatusCode, header},
     response::{IntoResponse, Response},
 };
+use obop_brand::Brand;
 use obop_commands::Principal;
 use obop_mcp::{Reply, Session};
 use serde_json::{Value as J, json};
@@ -746,19 +747,74 @@ pub(crate) fn public_json(content_type: &'static str, doc: &J) -> Response {
     r
 }
 
+/// The brand for an anonymous document (the discovery documents and the OpenAPI document): the
+/// handler asks it first and once, through the blocking pool (docs/spec/branding.md, sections 4
+/// and 9), and builds the whole document from that one value. A store that cannot be read is the
+/// fault the request met, answered 503 by D74 whatever the handler would have sent; the reader gives
+/// a request that finds a refill running the last good brand. The brand is handed out by value: a
+/// document is built from one `Brand`, and a copy of a few short strings is nothing next to it.
+pub(crate) async fn document_brand(s: &HttpState) -> Brand {
+    super::brand::current(s.dispatcher.brand())
+        .await
+        .brand()
+        .clone()
+}
+
+/// The three human-readable texts of the discovery documents (docs/spec/branding.md, section 6,
+/// OT-09 and OT-10): the name of the MCP server of the resource document, and the title and the
+/// description of the server card. With no brand set they are the texts these documents have always
+/// carried, byte for byte; with one each takes the name of the instance in place of "obop instance".
+/// They are English only, as the documents are, so a name may stand inside the sentence. Only the
+/// name is used: nothing else of the record is put in a document that anybody can read.
+struct Words {
+    resource_name: String,
+    title: String,
+    description: String,
+}
+
+fn words(brand: &Brand) -> Words {
+    if brand.is_set() {
+        let name = brand.name();
+        Words {
+            resource_name: format!("{name} MCP server"),
+            title: name.to_string(),
+            // At most 100 characters for a name of up to 40, the length the card's description is
+            // held to (a test pins it for the longest name): this is why the sentence is shorter
+            // than the one an instance with no brand sends.
+            description: format!(
+                "Business data and actions of {name}, with masking and approvals."
+            ),
+        }
+    } else {
+        Words {
+            resource_name: "obop instance MCP server".to_string(),
+            title: "obop instance".to_string(),
+            description: "Business data and actions of this obop instance as MCP tools, with masking and approvals.".to_string(),
+        }
+    }
+}
+
+/// The page about the software that the discovery documents send a client to (optional in RFC 9728
+/// and RFC 8414). With a brand set the link is left out of the document: the instance is the
+/// customer's own.
+pub(crate) const DOCUMENTATION: &str = "https://obop.dev/docs/agents/mcp/";
+
 /// RFC 9728 metadata. `authorization_servers` is named only when this instance runs the
-/// authorization server (D64); with `--dev-auth` it is left out rather than faked.
-pub(crate) fn protected_resource(base: &str, resource: &str, oauth: bool) -> J {
+/// authorization server (D64); with `--dev-auth` it is left out rather than faked. The brand is the
+/// one the handler read for this request.
+pub(crate) fn protected_resource(base: &str, resource: &str, oauth: bool, brand: &Brand) -> J {
     let mut doc = json!({
         "resource": resource,
-        "resource_name": "obop instance MCP server",
+        "resource_name": words(brand).resource_name,
         "bearer_methods_supported": ["header"],
-        "resource_documentation": "https://obop.dev/docs/agents/mcp/",
         "x-obop-token-endpoints": {
             "login": format!("{base}/api/auth/login"),
             "agent_token": format!("{base}/api/auth/agent-token"),
         },
     });
+    if !brand.is_set() {
+        doc["resource_documentation"] = J::from(DOCUMENTATION);
+    }
     if oauth {
         doc["authorization_servers"] = json!([base]);
     } else {
@@ -773,10 +829,12 @@ pub(crate) async fn oauth_protected_resource(
     State(s): State<Arc<HttpState>>,
     h: HeaderMap,
 ) -> Response {
+    // The brand is asked first and once (docs/spec/branding.md, section 4).
+    let brand = document_brand(&s).await;
     let base = s.mcp.base_url(&h);
     public_json(
         "application/json",
-        &protected_resource(&base, &base, s.oauth.is_some()),
+        &protected_resource(&base, &base, s.oauth.is_some(), &brand),
     )
 }
 
@@ -784,10 +842,11 @@ pub(crate) async fn oauth_protected_resource_mcp(
     State(s): State<Arc<HttpState>>,
     h: HeaderMap,
 ) -> Response {
+    let brand = document_brand(&s).await;
     let base = s.mcp.base_url(&h);
     public_json(
         "application/json",
-        &protected_resource(&base, &format!("{base}/mcp"), s.oauth.is_some()),
+        &protected_resource(&base, &format!("{base}/mcp"), s.oauth.is_some(), &brand),
     )
 }
 
@@ -812,17 +871,20 @@ fn card_namespace(base: &str) -> String {
 }
 
 /// The MCP server card (SEP-2127, an extension still in incubation) plus the plain fields the
-/// earlier draft and some scanners look for. Public and identical for every caller.
-pub fn server_card(base: &str) -> J {
+/// earlier draft and some scanners look for. Public and identical for every caller of one instance:
+/// what differs between instances is the host and the brand, which is read once for the request and
+/// handed in. The identifiers of the card (`name`, `dev.obop/auth`) are wire names and stay.
+pub fn server_card(base: &str, brand: &Brand) -> J {
     let url = format!("{base}/mcp");
     let versions = obop_mcp::SUPPORTED_VERSIONS;
+    let words = words(brand);
     json!({
         "$schema": "https://static.modelcontextprotocol.io/schemas/v1/server-card.schema.json",
         "$comment": "MCP Server Cards are an extension under incubation (SEP-2127, experimental-ext-server-card); the shape may still change. Fields after _meta are plain convenience fields (serverInfo, transport, endpoint, capabilities, authentication) from the earlier SEP-1649 draft, kept for scanners that read them.",
         "name": format!("{}/obop", card_namespace(base)),
         "version": obop_types::CORE_VERSION,
-        "title": "obop instance",
-        "description": "Business data and actions of this obop instance as MCP tools, with masking and approvals.",
+        "title": words.title,
+        "description": words.description,
         "websiteUrl": base,
         "remotes": [{
             "type": "streamable-http",
@@ -847,7 +909,7 @@ pub fn server_card(base: &str) -> J {
                 },
             },
         },
-        "serverInfo": {"name": "obop", "version": obop_types::CORE_VERSION},
+        "serverInfo": obop_mcp::server_info(brand, false),
         "transport": {"type": "streamable-http", "endpoint": url},
         "endpoint": url,
         "capabilities": {"tools": {"listChanged": false}},
@@ -875,10 +937,11 @@ pub(crate) fn with_oauth(mut card: J, base: &str, oauth: bool) -> J {
 }
 
 pub(crate) async fn server_card_json(State(s): State<Arc<HttpState>>, h: HeaderMap) -> Response {
+    let brand = document_brand(&s).await;
     let base = s.mcp.base_url(&h);
     public_json(
         "application/json",
-        &with_oauth(server_card(&base), &base, s.oauth.is_some()),
+        &with_oauth(server_card(&base, &brand), &base, s.oauth.is_some()),
     )
 }
 
@@ -886,10 +949,11 @@ pub(crate) async fn server_card_canonical(
     State(s): State<Arc<HttpState>>,
     h: HeaderMap,
 ) -> Response {
+    let brand = document_brand(&s).await;
     let base = s.mcp.base_url(&h);
     public_json(
         "application/mcp-server-card+json",
-        &with_oauth(server_card(&base), &base, s.oauth.is_some()),
+        &with_oauth(server_card(&base, &brand), &base, s.oauth.is_some()),
     )
 }
 
@@ -1053,10 +1117,33 @@ mod tests {
 
     #[test]
     fn the_card_name_follows_the_schema_pattern() {
-        let c = server_card("https://acme-1.sliplane.app");
+        let none = Brand::default();
+        let c = server_card("https://acme-1.sliplane.app", &none);
         assert_eq!(c["name"], "acme-1.sliplane.app/obop");
         assert_eq!(c["remotes"][0]["url"], "https://acme-1.sliplane.app/mcp");
         assert!(c["description"].as_str().unwrap().len() <= 100);
-        assert_eq!(server_card("http://[::1]:8080")["name"], "--1/obop");
+        assert_eq!(server_card("http://[::1]:8080", &none)["name"], "--1/obop");
+    }
+
+    /// The card's identifier is a wire name: a brand changes the human texts and leaves `name`
+    /// (`<host>/obop`) alone (docs/spec/branding.md, section 11).
+    #[test]
+    fn a_brand_leaves_the_identifier_of_the_card_alone() {
+        let c = server_card("https://acme-1.sliplane.app", &Brand::new("MOHV"));
+        assert_eq!(c["name"], "acme-1.sliplane.app/obop");
+        assert_eq!(c["title"], "MOHV");
+    }
+
+    /// The description of a card is held to 100 characters (a code point is one, as in JSON
+    /// Schema's `maxLength`, not a byte): the longest name a stored row can hold (40 code points)
+    /// still fits, in Latin and in Han, where a character is three bytes.
+    #[test]
+    fn the_description_of_a_branded_card_fits_for_the_longest_name() {
+        for name in ["M".repeat(40), "\u{682a}".repeat(40)] {
+            let c = server_card("https://x.test", &Brand::new(name.clone()));
+            let d = c["description"].as_str().unwrap();
+            assert!(d.contains(&name));
+            assert!(d.chars().count() <= 100, "{} characters", d.chars().count());
+        }
     }
 }
