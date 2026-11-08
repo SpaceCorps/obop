@@ -422,7 +422,7 @@ fn the_text_of_effective_lists_the_keys_and_the_sources_of_the_answer_of_get() {
             let key = in_translation(key);
             assert!(cell.contains(key.as_str()), "({lang}) {key}: {cell:?}");
         }
-        let in_cell = words(&cell);
+        let in_cell = words(cell);
         for source in &sources {
             assert!(
                 in_cell.contains(source),
