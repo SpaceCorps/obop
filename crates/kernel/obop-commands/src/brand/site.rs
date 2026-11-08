@@ -145,18 +145,52 @@ pub(crate) fn explicit_accent(site: &Map<String, J>) -> Option<String> {
     site_text(site, "accent", 9).and_then(|a| theme::parse_hex(&a).map(theme::to_hex))
 }
 
+/// Whether a brand is set and its name is the stored one: a row exists and the name passed the read
+/// check. A row whose name failed it is still a brand, but its name is the default `obop`, and so is
+/// everything derived from that name (the slug, a title, the tile of the logo, the shop's title): the
+/// source of such a value is `default`, not `record`. The one place this is decided, for `view` and
+/// for the entries of `effective`.
+pub(crate) fn name_stored(shown: &Shown) -> bool {
+    shown.is_set() && !shown.fallbacks().iter().any(|f| f.field == "name")
+}
+
 /// The decision for one `site` object and one brand. Without a brand (no row) it is today's:
 /// the explicit keys, else the defaults; nothing comes from the record.
 pub(crate) fn view(site: &Map<String, J>, shown: &Shown) -> View {
     let branded = shown.is_set();
+    let name_stored = name_stored(shown);
+    // The generated tile is no artwork: the shop keeps its own tile (drawn from its logo text and
+    // its accent) when the record has none.
+    let artwork = shown
+        .logo()
+        .filter(|l| !l.is_tile())
+        .map(|l| (l.served().to_string(), l.v().to_string()));
     let title = match explicit_title(site) {
         Some(t) => Chosen::new(t, Source::Site),
-        None if branded => Chosen::new(shown.brand().name(), Source::Record),
+        // The shop is still the brand's when the name fell back, and its title is then `obop`: the
+        // default name, so the source is the default (the module documentation of `effective`).
+        None if branded => Chosen::new(
+            shown.brand().name(),
+            if name_stored {
+                Source::Record
+            } else {
+                Source::Default
+            },
+        ),
         None => Chosen::new(DEFAULT_TITLE, Source::Default),
     };
+    // The logo route serves the logo, and its source is the logo's: the artwork is the record's, and
+    // the generated tile is drawn from the name, so it is the record's only when the name is.
     let logo_url = match explicit_logo_url(site) {
         Some(u) => Chosen::new(u, Source::Site),
-        None if branded => Chosen::new(logo::logo_url(shown.v()), Source::Record),
+        None if branded => Chosen::new(
+            logo::logo_url(shown.v()),
+            if artwork.is_some() || name_stored {
+                Source::Record
+            } else {
+                Source::Default
+            },
+        ),
         None => Chosen::new("", Source::Default),
     };
     let accent = match explicit_accent(site) {
@@ -172,12 +206,6 @@ pub(crate) fn view(site: &Map<String, J>, shown: &Shown) -> View {
         }
         None => Chosen::new(theme::DEFAULT_ACCENT, Source::Default),
     };
-    // The generated tile is no artwork: the shop keeps its own tile (drawn from its logo text and
-    // its accent) when the record has none.
-    let artwork = shown
-        .logo()
-        .filter(|l| !l.is_tile())
-        .map(|l| (l.served().to_string(), l.v().to_string()));
     let favicon = match artwork {
         Some(_) => Chosen::new("artwork", Source::Record),
         None => Chosen::new("tile", Source::Default),

@@ -287,6 +287,13 @@ fn a_name_that_fell_back_is_the_default_name_and_still_a_brand() {
     let m = filled(json!({}), &b);
     assert_eq!(m["title"], "obop");
     assert!(m.contains_key(FAVICON_KEY));
+    // The title is the default name, and the source says so; the artwork that passed is the record's.
+    let v = view(&site(json!({})), &b);
+    assert_eq!(
+        (v.title.value.as_str(), v.title.source),
+        ("obop", Source::Default)
+    );
+    assert_eq!(v.logo_url.source, Source::Record);
 }
 
 /// The spelling of the reserved key is listed in CONVENTIONS 9.1 and in spec 15.2, and a stored

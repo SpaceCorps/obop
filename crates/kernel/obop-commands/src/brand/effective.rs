@@ -17,7 +17,10 @@
 //! English title or to the name, the shop's title that falls back to the name); `site` for an
 //! explicit `site.*` key of the public site, which wins over the record; `theme` for the accent the
 //! theme stores; `default` when it is the built-in default (the name `obop`, no message, no logo,
-//! the shop's own title and teal). The artwork is never part of the answer: it is served by the logo
+//! the shop's own title and teal). A row whose name failed the read check is a brand with the
+//! default name: what is derived from the name alone (the slug, a title, the tile of the logo, the
+//! shop's title and the logo route that serves the tile) is `default` then, in `get` and in
+//! `obop admin brand status` alike (`site::name_stored` decides it). The artwork is never part of the answer: it is served by the logo
 //! route, and `get` says only whether the logo in force is the artwork (`artwork`), the generated
 //! tile (`tile`) or none (`none`, with no brand set); `favicon` says whether the shop's tab icon is
 //! the record's artwork (`artwork`) or the shop's own tile (`tile`).
@@ -47,7 +50,7 @@ impl Fresh {
         let brand = shown.brand();
         // A brand whose name passed the read check: the name, and everything derived from it, comes
         // from the record. A row whose name failed it shows the default name.
-        let name_stored = self.set() && !shown.fallbacks().iter().any(|f| f.field == "name");
+        let name_stored = site::name_stored(shown);
         let mut out = Map::new();
         out.insert("name".into(), entry(brand.name(), source(name_stored)));
         out.insert(

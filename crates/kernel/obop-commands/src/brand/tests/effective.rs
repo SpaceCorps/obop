@@ -338,6 +338,44 @@ fn the_shop_entries_name_the_source_that_won() {
     is(&e, "favicon", "tile", "default");
 }
 
+/// A row whose name fell back is a brand with the default name (spec section 2): the shop is the
+/// brand's, and its title is `obop`, but that is the default name and not a value the record holds,
+/// so `get` says `default` for it, as it does for `name`, and for the logo route when it serves the
+/// tile that is drawn from that name. An artwork that passed is the record's all the same, and an
+/// explicit key still wins.
+#[test]
+fn a_name_that_fell_back_makes_the_shop_title_the_default_and_not_the_record() {
+    let long = "x".repeat(80);
+    for bad in ["<b>x</b>", long.as_str(), "a\u{202e}b"] {
+        let e = effective_with_settings(Some(&[("name", s(bad))]), json!({}));
+        is(&e, "name", "obop", "default");
+        is(&e, "site.title", "obop", "default");
+        is(&e, "logo", "tile", "default");
+        let (url, source) = entry(&e, "site.logo_url");
+        assert!(url.starts_with("/api/brand/logo.svg?v="), "{url}");
+        assert_eq!(source, "default", "the tile of the default name: {bad:?}");
+        is(&e, "favicon", "tile", "default");
+
+        // An artwork that passed the read check is the record's, whatever the name did.
+        let e = effective_with_settings(
+            Some(&[("name", s(bad)), ("logo_svg", s(M_ARTWORK))]),
+            json!({}),
+        );
+        is(&e, "site.title", "obop", "default");
+        is(&e, "logo", "artwork", "record");
+        assert_eq!(entry(&e, "site.logo_url").1, "record", "{bad:?}");
+        is(&e, "favicon", "artwork", "record");
+
+        // An explicit key wins over the fallen-back name and says so.
+        let e = effective_with_settings(
+            Some(&[("name", s(bad))]),
+            json!({"site": {"title": "Café Nord", "logo_url": "/brand/logo.svg"}}),
+        );
+        is(&e, "site.title", "Café Nord", "site");
+        is(&e, "site.logo_url", "/brand/logo.svg", "site");
+    }
+}
+
 /// A `site.*` key that the shop would not use is no explicit key: the entry says what the shop
 /// really shows, so the answer of `get` cannot say `site` for a value the shop ignores.
 #[test]
