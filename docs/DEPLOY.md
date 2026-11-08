@@ -904,7 +904,7 @@ or `POST /api/user_account/bind_sso` with `{"id","oid"}` (a proposal when an age
 An instance that sets nothing is unchanged: no record means every surface says what it always said. To show your own name where an end user sees it, set the record, **one row**, `instance_brand`, with a name, a slug, a title and a message per language and one logo. It is changed by a person with `platform.admin` (never by an agent token, a scoped token or a phone app's token), over REST and MCP as `instance_brand.get|configure|clear` and at the terminal as `obop admin brand`. Every field is public by design (pages before sign-in show it), so it must hold no personal data; the log (`security_event`, kinds `brand_configured` and `brand_cleared`) records each change with the old and the new value.
 
 ```bash
-obop admin brand configure --name Acme --db postgres://...      # the first call needs a name; --dry-run checks and writes nothing
+obop admin brand configure --name "Example Shop" --db postgres://...      # the first call needs a name; --dry-run checks and writes nothing
 obop admin brand status --db postgres://...                      # what is in force, the source of each value, what fell back
 ```
 
