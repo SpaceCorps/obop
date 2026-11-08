@@ -128,7 +128,7 @@ const ALLOWED: [(&str, &str, Limit); 10] = [
     ),
     (
         "kernel/obop-oauth/src/page.rs",
-        "the pages of the authorization flow (S1c) show the `Shown` that the handler hands them through `FlowCtx.brand`, and read nothing: no reader here, only the four calls of the accessor `Shown::brand()` (the brand line, the neutral wording, the message and the comparison with the client's name) and `Shown::not_set` for the default page",
+        "the pages of the authorization flow (S1c) show the `Shown` that the handler hands them through `FlowCtx.brand`, and read nothing: no reader here, only the four calls of the accessor `Shown::brand()` (the brand line, the neutral wording, the message and the comparison with the client's name)",
         Limit::Reads {
             calls: 4,
             reads: 0,
@@ -138,7 +138,7 @@ const ALLOWED: [(&str, &str, Limit); 10] = [
     ),
     (
         "kernel/obop-oauth/src/flow.rs",
-        "`FlowCtx` carries the `Shown` that the handler read; `view` builds the page context of an instance with no brand set (`Shown::not_set`) and reads nothing",
+        "`FlowCtx` carries the `Shown` that the handler read; `view` takes it as an argument and puts it in the page context, so a context cannot be made without one, and this file reads nothing",
         Limit::Reads {
             calls: 0,
             reads: 0,
@@ -900,6 +900,10 @@ fn the_rows_with_limits_are_the_files_that_only_ask_the_reader() {
 // What it does not see is what the scan above does not see: text built at run time, text in a
 // dependency, a file that is not on the list, and a name inside a longer literal that is on the list
 // for another reason (a row with no literal lets every literal of its item through, up to its count).
+// It does read through the escapes of a literal (`\u{6f}`, `\x6f`, a line continuation), because the
+// text a person sees is the text after them, and it fails on `concat!` in a listed file, which would
+// put a name together out of parts that no literal holds. It does not see a name built by another
+// macro (`format!`, `stringify!`, a macro of the crate) or by `include_str!`.
 
 /// The closed list of files whose string literals are scanned. The slice that makes another page
 /// show the brand adds its file here in the commit that wires it, with a row for each literal that
@@ -992,6 +996,63 @@ fn item_of(code: &[u8], at: usize) -> String {
         .unwrap_or_default()
 }
 
+/// The text a (non-raw) literal stands for: `\u{..}` and `\x..` become the character, the one-letter
+/// escapes the character they name, and a backslash at the end of a line takes the line break and
+/// the white space after it with it (the continuation of a string). What is not an escape is left
+/// as it is, so a malformed one is read as written and is no way round the scan.
+fn unescaped(text: &str) -> String {
+    let (mut out, mut it) = (String::new(), text.chars().peekable());
+    while let Some(c) = it.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match it.next() {
+            Some('u') if it.peek() == Some(&'{') => {
+                it.next();
+                let hex: String = it.by_ref().take_while(|c| *c != '}').collect();
+                let digits: String = hex.chars().filter(|c| *c != '_').collect();
+                match u32::from_str_radix(&digits, 16)
+                    .ok()
+                    .and_then(char::from_u32)
+                {
+                    Some(c) => out.push(c),
+                    None => out.push_str(&format!("\\u{{{hex}}}")),
+                }
+            }
+            Some('x') => {
+                let hex: String = (0..2).filter_map(|_| it.next()).collect();
+                match u8::from_str_radix(&hex, 16) {
+                    Ok(b) => out.push(char::from(b)),
+                    Err(_) => out.push_str(&format!("\\x{hex}")),
+                }
+            }
+            Some('n') => out.push('\n'),
+            Some('r') => out.push('\r'),
+            Some('t') => out.push('\t'),
+            Some('0') => out.push('\0'),
+            Some(c @ ('\\' | '"' | '\'')) => out.push(c),
+            Some('\n') => {
+                while it.peek().is_some_and(|c| c.is_whitespace()) {
+                    it.next();
+                }
+            }
+            Some('\r') if it.peek() == Some(&'\n') => {
+                it.next();
+                while it.peek().is_some_and(|c| c.is_whitespace()) {
+                    it.next();
+                }
+            }
+            Some(other) => {
+                out.push('\\');
+                out.push(other);
+            }
+            None => out.push('\\'),
+        }
+    }
+    out
+}
+
 /// Every literal of the listed files that names obop, in the order of the files and of the source.
 /// A listed file that is not in the tree (or is all test code) is reported by [`literal_scan`].
 fn named_literals(files: &BTreeMap<String, String>) -> Vec<Named> {
@@ -1000,7 +1061,12 @@ fn named_literals(files: &BTreeMap<String, String>) -> Vec<Named> {
     for path in LITERAL_FILES {
         let Some(l) = lexed.get(path) else { continue };
         for (start, _, text) in &l.strings {
-            if text.to_lowercase().contains("obop") {
+            // A raw literal starts at its `r`; any other starts at its quote and has escapes.
+            let raw = files
+                .get(path)
+                .is_some_and(|src| src.as_bytes().get(*start) == Some(&b'r'));
+            let seen = if raw { text.clone() } else { unescaped(text) };
+            if seen.to_lowercase().contains("obop") {
                 out.push(Named {
                     path: path.to_string(),
                     item: item_of(&l.code, *start),
@@ -1043,6 +1109,19 @@ fn literal_scan(files: &BTreeMap<String, String>) -> (Vec<String>, Vec<String>) 
             found.push(format!(
                 "{path}: a file of LITERAL_FILES that is not in the tree (or is all test code)"
             ));
+        }
+    }
+    for path in LITERAL_FILES {
+        let Some(l) = lexed.get(path) else { continue };
+        for at in words(&l.code, "concat") {
+            let after = crate::src_scan::skip_ws(&l.code, at + "concat".len());
+            if l.code.get(after) == Some(&b'!') {
+                found.push(format!(
+                    "{path}:{}: `concat!` puts a text together out of parts that no scan of literals \
+                     can read; write the literal whole",
+                    line_of(&l.code, at)
+                ));
+            }
         }
     }
     for n in &named {
@@ -1222,6 +1301,55 @@ fn the_scan_for_literals_finds_a_row_that_matches_more_or_less_than_it_says() {
         drift.len() == 1 && drift[0].contains("cookie_name") && drift[0].contains("has 0"),
         "{drift:?}"
     );
+}
+
+/// A name written with an escape or put together with `concat!` is the same text for a person: the
+/// scan reads the escapes and refuses `concat!` in a listed file, and leaves a raw literal (which
+/// has no escapes) and the escapes that make no name alone.
+#[test]
+fn the_scan_for_literals_reads_escapes_and_finds_concat() {
+    let listed = |extra: &str| {
+        let page = format!("{}\n{extra}\n", page_with(35));
+        literal_scan(&tree(&[(PAGE_PATH, &page), (OAUTH_PATH, OAUTH_RS)]))
+    };
+    // The name written with escapes, and over a line break.
+    for (what, src) in [
+        (r"\u{..}", r#"fn f() { let _ = "ob\u{6f}p"; }"#),
+        (r"\u{..} in capitals", r#"fn f() { let _ = "\u{4F}BOP"; }"#),
+        (r"\x..", r#"fn f() { let _ = "ob\x6fp"; }"#),
+        ("a continuation", "fn f() { let _ = \"ob\\\n        op\"; }"),
+        ("a byte string", r#"fn f() { let _ = b"ob\x6fp"; }"#),
+    ] {
+        let (found, _) = listed(src);
+        assert_eq!(found.len(), 1, "{what}: {found:?}");
+        assert!(found[0].contains("names obop"), "{what}: {found:?}");
+    }
+    // `concat!`, with or without a space before the bang.
+    for src in [
+        r#"fn f() { let _ = concat!("ob", "op"); }"#,
+        r#"fn f() { let _ = concat ! ("ob", "op"); }"#,
+    ] {
+        let (found, _) = listed(src);
+        assert!(
+            found.iter().any(|f| f.contains("`concat!`")),
+            "{src}: {found:?}"
+        );
+    }
+    // What is not a name: a raw literal holds the characters it shows, an escape that makes no name,
+    // and a word that only starts like the macro.
+    for src in [
+        r##"fn f() { let _ = r#"ob\u{6f}p"#; }"##,
+        r#"fn f() { let _ = "line\nbreak \u{2026} \\ \u{zz}"; }"#,
+        r#"fn f() { let _ = concat_all("a"); }"#,
+    ] {
+        let (found, _) = listed(src);
+        assert!(found.is_empty(), "{src}: {found:?}");
+    }
+    // `unescaped` itself.
+    assert_eq!(unescaped(r"ob\u{6f}p"), "obop");
+    assert_eq!(unescaped(r"\x41\u{1F600}"), "A\u{1F600}");
+    assert_eq!(unescaped("a\\\n   b"), "ab");
+    assert_eq!(unescaped(r"a\qb\"), r"a\qb\");
 }
 
 #[test]
