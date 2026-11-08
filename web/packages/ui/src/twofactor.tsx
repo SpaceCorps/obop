@@ -89,8 +89,9 @@ export function twoFactorMessage(f: { status: number; code: string }): string {
       );
     case "brand_unavailable":
       // The branding record could not be read (docs/spec/branding.md, section 4), so the
-      // authenticator entry cannot be written into the person's device. Waiting does not repair a
-      // stored name, so the wording says that trying again will not help; the repair is an
+      // authenticator entry cannot be written into the person's device (and the passkey cannot be
+      // registered: `passkeyMessage` of the back office returns this same string). Waiting does not
+      // repair a stored name, so the wording says that trying again will not help; the repair is an
       // administrator's, at the terminal (`obop admin brand status`, docs/DEPLOY.md).
       return t(
         "The branding of this server could not be read, so nothing was set up. An administrator has to repair it; trying again will not help.",

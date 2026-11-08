@@ -4,8 +4,9 @@ import { twoFactorMessage } from "./twofactor.tsx";
 describe("the wording for a failed two-factor call", () => {
   test("a branding that cannot be read has its own sentence, and it says that trying again will not help", () => {
     // 503 `brand_unavailable`: the instance branding could not be read, so the authenticator entry
-    // (or the passkey) cannot be written into the person's device. Waiting does not repair a stored
-    // name, so the generic "Try again" would send the person round in circles.
+    // (or the passkey, whose message is held by `passkeyMessage.test.ts` of the back office) cannot
+    // be written into the person's device. Waiting does not repair a stored name, so the generic
+    // "Try again" would send the person round in circles.
     const message = twoFactorMessage({ status: 503, code: "brand_unavailable" });
     expect(message).toContain("branding");
     expect(message).toContain("administrator");
