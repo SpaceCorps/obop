@@ -48,7 +48,7 @@ async function watchPolicy(page: Page) {
     const seen: string[] = [];
     (window as any).__violations = seen;
     document.addEventListener("securitypolicyviolation", (e) =>
-      seen.push(`${e.violatedDirective}: ${e.blockedURI}`),
+      seen.push(`${e.effectiveDirective}: ${e.blockedURI}`),
     );
   });
 }
@@ -75,6 +75,21 @@ async function lineBoxes(page: Page) {
       text: { top: text.top, bottom: text.bottom, height: text.height },
     };
   });
+}
+
+/**
+ * How much of the text box of the line the logo box covers vertically, as a share of the text's
+ * height. No vertical-align rule was added to the style sheet, so this is what the browser does by
+ * itself; the spec's second constant style sheet is the fix if it is ever too small.
+ */
+async function overlapOfLine(page: Page, info: TestInfo, label: string) {
+  const { svg, text } = await lineBoxes(page);
+  const overlap = Math.min(svg.bottom, text.bottom) - Math.max(svg.top, text.top);
+  await info.attach(`line-boxes-${label}`, {
+    body: JSON.stringify({ svg, text, overlap }, null, 2),
+    contentType: "application/json",
+  });
+  return overlap / text.height;
 }
 
 test.describe("the OAuth pages of an instance with a brand", () => {
@@ -142,18 +157,16 @@ test.describe("the OAuth pages of an instance with a brand", () => {
     // The logo sits on the line of the text: the text box overlaps the logo box by most of its
     // height (no vertical-align rule was added to the style sheet; if this fails the fix is a
     // second constant style sheet with its own hash, which the spec says is not built here).
-    const { svg, text } = await lineBoxes(page);
-    const overlap = Math.min(svg.bottom, text.bottom) - Math.max(svg.top, text.top);
-    await info.attach("line-boxes", {
-      body: JSON.stringify({ svg, text, overlap }, null, 2),
-      contentType: "application/json",
-    });
+    const share = await overlapOfLine(page, info, "desktop");
     await info.attach("sign-in-brand-line", {
       body: await line.screenshot(),
       contentType: "image/png",
     });
-    expect(overlap / text.height).toBeGreaterThan(0.5);
+    expect(share).toBeGreaterThan(0.5);
 
+    // The browser asks for the tab icon by itself after the load, and the negative case below shows
+    // that a refused request is reported; so none reported here, after a moment, is the icon allowed.
+    await page.waitForTimeout(500);
     expect(await violations(page)).toEqual([]);
   });
 
@@ -181,7 +194,7 @@ test.describe("the OAuth pages of an instance with a brand", () => {
   }) => {
     const hostile = await request.post(`${brandUrl()}/oauth/register`, {
       data: {
-        client_name: `${brand.name.slice(0, 2)}‍${brand.name.slice(2).toLowerCase()}`,
+        client_name: `${brand.name.slice(0, 2)}\u200D${brand.name.slice(2).toLowerCase()}`,
         redirect_uris: [REDIRECT],
         token_endpoint_auth_method: "none",
       },
@@ -200,14 +213,68 @@ test.describe("the OAuth pages of an instance with a brand", () => {
     expect(await violations(page)).toEqual([]);
   });
 
+  test("without img-src the browser refuses the icon address, so the directive is what lets it load", async ({
+    page,
+    allowConsoleErrors,
+  }) => {
+    // Chrome logs a refused image as a console error: that is the point of this test.
+    allowConsoleErrors(/Content Security Policy/);
+    // The same page with the directive taken out of the policy on its way to the browser (the
+    // policy is otherwise unchanged): an image of the tab icon's address is refused and reported
+    // as an img-src violation (the effective directive; `default-src 'none'` is what applies).
+    // This is the negative case of the first test, in the same browser, so that the claim that the
+    // directive is needed is tried and not only that the page loads with it.
+    await page.route(
+      (url) => url.pathname === "/oauth/authorize",
+      async (route) => {
+        const upstream = await route.fetch();
+        const headers = upstream.headers();
+        headers["content-security-policy"] = headers["content-security-policy"]!.replace(
+          "; img-src 'self'",
+          "",
+        );
+        await route.fulfill({ response: upstream, headers });
+      },
+    );
+    await watchPolicy(page);
+    const res = await page.goto(authorizeUrl(client));
+    expect(res!.headers()["content-security-policy"]).not.toMatch(/img-src/);
+    const href = (await page.locator('link[rel="icon"]').getAttribute("href"))!;
+    const refused = `img-src: ${brandUrl()}${href}`;
+    // The browser asks for the tab icon by itself, after the page has loaded, and its request is
+    // held to the policy: the violation is reported with no script of ours having asked.
+    await expect
+      .poll(() => violations(page), { message: "the browser's own request for the tab icon" })
+      .toContain(refused);
+    const own = (await violations(page)).length;
+    const loaded = await page.evaluate(
+      (src) =>
+        new Promise<boolean>((done) => {
+          const img = new Image();
+          img.onload = () => done(true);
+          img.onerror = () => done(false);
+          img.src = src;
+        }),
+      href,
+    );
+    expect(loaded, "without img-src an image of the icon address is refused").toBe(false);
+    expect((await violations(page)).length).toBeGreaterThan(own);
+    // Nothing but the icon is refused: the rest of the page is the page of the first test.
+    expect((await violations(page)).filter((v) => v !== refused)).toEqual([]);
+  });
+
   test.describe("on a phone", () => {
     test.use({ viewport: { width: 375, height: 812 } });
 
-    test("the line and the card fit the width, and the logo is there", async ({ page }) => {
+    test("the line and the card fit the width, and the logo is there", async ({
+      page,
+    }, info: TestInfo) => {
       await watchPolicy(page);
       await page.goto(authorizeUrl(client));
       await expect(page.locator(".brand svg")).toBeVisible();
       await expect(page.locator(".brand")).toHaveText(new RegExp(`^\\s*${brand.name}\\s*$`));
+      // The logo sits on the line of the text at this width too.
+      expect(await overlapOfLine(page, info, "phone")).toBeGreaterThan(0.5);
       const sideways = await page.evaluate(
         () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
       );
