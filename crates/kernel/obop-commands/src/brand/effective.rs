@@ -18,8 +18,10 @@
 //! built-in default (the name `obop`, no message, no logo); `unreadable` for the authenticator issuer
 //! alone, when an enrolment is refused because the stored name failed the read check or cannot go
 //! into a label (a link character, or only white space), with the value `null`: there is no issuer in
-//! force, and `name` shows the default as it always does for such a row, with `fallbacks` listing the
-//! first case (docs/DEPLOY.md). The artwork is never part of the answer:
+//! force. `name` is not changed by that: for a stored name that failed the read check it shows the
+//! default, as it always does, with `fallbacks` listing the field; for one that passed the read check
+//! and only cannot go into a label it shows the stored name, because the display accepts it, with
+//! nothing under `fallbacks` (docs/DEPLOY.md). The artwork is never part of the answer:
 //! it is served by the logo route, and `get` says only whether the logo in force is the artwork
 //! (`artwork`), the generated tile (`tile`) or none (`none`, with no brand set).
 
@@ -75,8 +77,9 @@ impl Fresh {
         // else `obop` (spec, section 5). `Auth` makes the same choice at each enrolment, with one
         // difference that this entry states instead of hiding: where the enrolment is refused (the
         // stored name failed the read check or cannot go into a label) there is no value in force,
-        // so the entry is `null` from the source `unreadable`, and `name` shows the default as it
-        // always does.
+        // so the entry is `null` from the source `unreadable`. `name` is as it always was: the default
+        // for a name that failed the read check, the stored name for one that only cannot go into a
+        // label (the display accepts it).
         out.insert(
             "authenticator_issuer".into(),
             match issuer_variable {
