@@ -5,7 +5,10 @@
 //! the terminal applies to the very next one, with no wait and no restart), lets `OBOP_MFA_ISSUER`
 //! win for the authenticator entry only, and refuses both enrolments with a 503 `brand_unavailable`
 //! (no `Retry-After`) when the stored name cannot be shown, until it is repaired at the terminal.
-//! The same flow is done by hand with `curl` in the report of the slice.
+//!
+//! This is also the test that holds the wiring of `OBOP_MFA_ISSUER` into the server's
+//! `AuthConfig::from_env` (`brand::env_issuer`), which no unit test can: the workspace forbids
+//! `unsafe`, so no test can set a variable of its own process.
 
 use serde_json::{Value as J, json};
 use std::io::{Read, Write};
@@ -79,34 +82,90 @@ fn cli(url: &str, args: &[&str], stdin: Option<&str>) {
 struct Server {
     child: Child,
     port: u16,
+    /// What the server wrote to its standard error, kept for the message of a failure.
+    log: PathBuf,
+}
+
+impl Server {
+    fn log(&self) -> String {
+        std::fs::read_to_string(&self.log).unwrap_or_default()
+    }
 }
 
 impl Drop for Server {
     fn drop(&mut self) {
         let _ = self.child.kill();
         let _ = self.child.wait();
+        let _ = std::fs::remove_file(&self.log);
     }
 }
 
+/// The status line of `GET path` on this port, or 0 when nothing answered.
+fn get_status(port: u16, path: &str) -> u16 {
+    let Ok(mut s) = TcpStream::connect(("127.0.0.1", port)) else {
+        return 0;
+    };
+    let _ = s.set_read_timeout(Some(Duration::from_secs(10)));
+    let req = format!("GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n");
+    if s.write_all(req.as_bytes()).is_err() {
+        return 0;
+    }
+    let mut out = String::new();
+    let _ = s.read_to_string(&mut out);
+    out.split_whitespace()
+        .nth(1)
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0)
+}
+
+/// Starts `obop serve` on a free port and returns once it answers. The port is found by binding and
+/// dropping, so another process can take it in the gap; therefore a listener is not taken for the
+/// server: the child must still be running while it listens, it must answer `/healthz`, and it must
+/// still be running after that (a child that could not bind exits at once). A child that died is
+/// reported with what it wrote to its standard error.
 fn serve(url: &str, env: &[(&str, &str)]) -> Server {
     let port = TcpListener::bind("127.0.0.1:0")
         .unwrap()
         .local_addr()
         .unwrap()
         .port();
+    let log = std::env::temp_dir().join(format!(
+        "obop-brand-enrol-serve-{}-{port}.log",
+        std::process::id()
+    ));
+    let stderr = std::fs::File::create(&log).unwrap();
     let child = obop(
         &["serve", "--addr", &format!("127.0.0.1:{port}"), "--db", url],
         env,
     )
     .stdout(Stdio::null())
-    .stderr(Stdio::null())
+    .stderr(Stdio::from(stderr))
     .spawn()
     .expect("spawn obop serve");
-    let s = Server { child, port };
+    let mut s = Server { child, port, log };
     let deadline = Instant::now() + Duration::from_secs(60);
-    while TcpStream::connect(("127.0.0.1", port)).is_err() {
-        assert!(Instant::now() < deadline, "obop serve did not come up");
+    loop {
+        if let Some(status) = s.child.try_wait().unwrap() {
+            panic!(
+                "obop serve exited ({status}) before it came up:\n{}",
+                s.log()
+            );
+        }
+        if get_status(port, "/healthz") == 200 {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "obop serve did not come up:\n{}",
+            s.log()
+        );
         std::thread::sleep(Duration::from_millis(100));
+    }
+    if let Some(status) = s.child.try_wait().unwrap() {
+        panic!(
+            "something else answered on port {port}; obop serve exited ({status}):\n{}",
+            s.log()
+        );
     }
     s
 }
