@@ -70,7 +70,7 @@ enum Limit {
 
 /// Where the brand is read or written: the path from `crates/` (a prefix when it ends with `/`),
 /// why, and what the file may do.
-const ALLOWED: [(&str, &str, Limit); 7] = [
+const ALLOWED: [(&str, &str, Limit); 10] = [
     (
         "kernel/obop-commands/src/brand/",
         "the module itself: the reader, `strict()`, `apply` and the read of `get`",
@@ -115,6 +115,36 @@ const ALLOWED: [(&str, &str, Limit); 7] = [
         "obop/src/brand_cmd.rs",
         "`obop admin brand`, which acts on the database as the operator (spec, section 3)",
         Limit::Any,
+    ),
+    (
+        "kernel/obop-auth/src/mfa.rs",
+        "the authenticator enrolment (S1e): `AuthConfig::from_env` reads `OBOP_MFA_ISSUER` through `brand::env_issuer`, and `begin` reads the stored name with `brand::strict` (the row alone, every time) and turns a failure into the error of an enrolment with `brand::enrolment_error`; it holds no reader and calls no method of one (the one `.current(` the row lets it make is `KeyRing::current` in `from_env`, a method of the same name that the scan cannot tell from the reader's)",
+        Limit::Reads {
+            calls: 0,
+            reads: 1,
+            paths: &["env_issuer", "strict", "enrolment_error"],
+            types: &[],
+        },
+    ),
+    (
+        "kernel/obop-http/src/mfa.rs",
+        "`mfa_error` answers the 503 `brand_unavailable` for a message that starts with `brand::UNREADABLE` (S1e); it reads nothing",
+        Limit::Reads {
+            calls: 0,
+            reads: 0,
+            paths: &["UNREADABLE"],
+            types: &[],
+        },
+    ),
+    (
+        "kernel/obop-http/src/passkeys.rs",
+        "the passkey ceremony site (S1e): `rp_name` gets the reader of the dispatcher and asks it for display once (`current`), for every route and for the OAuth pages' site; the registration options get it once more and ask for the strict name (`strict`), and turn a failure into the error of an enrolment (`enrolment_error`); it names no type and builds no reader (of the three `brand()` calls the row lets it make, two are the dispatcher's and one is `Shown::brand()`, which gives the name; the scan cannot tell them apart)",
+        Limit::Reads {
+            calls: 3,
+            reads: 2,
+            paths: &["enrolment_error"],
+            types: &[],
+        },
     ),
 ];
 
@@ -540,6 +570,18 @@ fn the_scan_sees_the_ways_a_file_can_read_the_row_and_leaves_the_allowed_files_a
             "kernel/obop-http/src/lib.rs",
             "fn f() { let _ = brand::routes(g); }",
         ),
+        (
+            "kernel/obop-auth/src/mfa.rs",
+            "fn f(b: &dyn Backend) { let _ = obop_commands::brand::strict(b); }",
+        ),
+        (
+            "kernel/obop-http/src/mfa.rs",
+            "fn f(m: &str) -> bool { m.starts_with(obop_commands::brand::UNREADABLE) }",
+        ),
+        (
+            "kernel/obop-http/src/passkeys.rs",
+            "use obop_commands::brand::enrolment_error; fn f(s: &S) { let _ = s.dispatcher.brand().current(); let _ = s.dispatcher.brand().strict().map_err(enrolment_error); }",
+        ),
     ]);
     let (found, stale) = scan(&files);
     assert!(found.is_empty(), "{found:?}");
@@ -809,10 +851,11 @@ fn a_row_with_limits_lets_its_file_ask_the_reader_as_the_row_says_and_nothing_el
     assert!(found.is_empty(), "{found:?}");
 }
 
-/// The rows with limits are the two files of the logo route and no others: loosening one of them to
-/// `Limit::Any` is a change of this test, and so a decision that shows in the diff.
+/// The rows with limits are the files that only ask the reader: the two files of the logo route and
+/// the three of the enrolment texts. Loosening one of them to `Limit::Any` is a change of this test,
+/// and so a decision that shows in the diff.
 #[test]
-fn the_rows_with_limits_are_the_two_files_of_the_logo_route() {
+fn the_rows_with_limits_are_the_files_that_only_ask_the_reader() {
     let limited: Vec<&str> = ALLOWED
         .iter()
         .filter(|(_, _, l)| matches!(l, Limit::Reads { .. }))
@@ -822,7 +865,98 @@ fn the_rows_with_limits_are_the_two_files_of_the_logo_route() {
         limited,
         [
             "kernel/obop-http/src/brand.rs",
-            "kernel/obop-http/src/lib.rs"
+            "kernel/obop-http/src/lib.rs",
+            "kernel/obop-auth/src/mfa.rs",
+            "kernel/obop-http/src/mfa.rs",
+            "kernel/obop-http/src/passkeys.rs",
         ]
     );
+}
+
+/// The rows of the enrolment texts (S1e): each file may do what its row says and nothing else. The
+/// authenticator's configuration reads a path and holds no reader; the error mapper of the routes
+/// reads nothing; the passkey routes get the reader twice, ask it twice, and name no type.
+#[test]
+fn the_enrolment_files_may_name_what_their_rows_list_and_nothing_else() {
+    let auth = "kernel/obop-auth/src/mfa.rs";
+    let http_mfa = "kernel/obop-http/src/mfa.rs";
+    let passkeys = "kernel/obop-http/src/passkeys.rs";
+    for (path, src) in [
+        (
+            auth,
+            "fn f() { let _ = obop_commands::brand::env_issuer(); let _ = obop_commands::brand::strict(b).map_err(obop_commands::brand::enrolment_error); let _ = k.current(); }",
+        ),
+        (
+            http_mfa,
+            "fn f(m: &str) -> bool { m.starts_with(obop_commands::brand::UNREADABLE) }",
+        ),
+        (
+            passkeys,
+            "use obop_commands::brand::enrolment_error; fn a(s: &S) -> String { s.dispatcher.brand().current().brand().name().to_string() } fn b(s: &S) { let _ = s.dispatcher.brand().strict().map_err(enrolment_error); }",
+        ),
+    ] {
+        let (found, _) = scan(&tree(&[(path, src)]));
+        assert!(found.is_empty(), "{path}: {src}: {found:?}");
+    }
+    for (path, src, what) in [
+        // A reader asked for by the authenticator's configuration, or one built there.
+        (auth, "fn f(d: &Dispatcher) { let _ = d.brand(); }", CALL),
+        // The one `.current(` of the row is `KeyRing::current`; a second call, whichever method, is found.
+        (
+            auth,
+            "fn f(r: &Reader) { let _ = r.current(); let _ = r.strict(); }",
+            READ,
+        ),
+        (
+            auth,
+            "fn f() { let _ = obop_commands::brand::Reader::inert(); }",
+            PATH,
+        ),
+        (
+            auth,
+            "fn f() { let _ = obop_commands::brand::apply(); }",
+            PATH,
+        ),
+        (
+            auth,
+            "fn f() { let _ = \"instance_brand\"; }",
+            MODEL_LITERAL,
+        ),
+        // The error mapper of the routes reads nothing.
+        (
+            http_mfa,
+            "fn f(d: &Dispatcher) { let _ = d.brand(); }",
+            CALL,
+        ),
+        (
+            http_mfa,
+            "fn f(m: &str) { let _ = obop_commands::brand::strict(b); }",
+            PATH,
+        ),
+        // The passkey routes: a fourth call, a third read, a built reader, a path to anything else.
+        (
+            passkeys,
+            "fn a(s: &S) { s.dispatcher.brand(); s.dispatcher.brand(); s.dispatcher.brand(); s.dispatcher.brand(); }",
+            CALL,
+        ),
+        (
+            passkeys,
+            "fn a(r: &Reader) { r.current(); r.strict(); r.fresh(); }",
+            READ,
+        ),
+        (
+            passkeys,
+            "fn f() { let _ = obop_commands::brand::Reader::inert(); }",
+            PATH,
+        ),
+        (
+            passkeys,
+            "fn f() { let _ = obop_commands::brand::strict(b); }",
+            PATH,
+        ),
+    ] {
+        let (found, _) = scan(&tree(&[(path, src)]));
+        assert_eq!(found.len(), 1, "{path}: {src}: {found:?}");
+        assert!(found[0].contains(what), "{path}: {src}: {found:?}");
+    }
 }

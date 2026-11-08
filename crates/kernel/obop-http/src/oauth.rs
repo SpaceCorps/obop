@@ -810,7 +810,7 @@ fn webauthn_ctx(s: &HttpState, parts: &Parts, st: &Step) -> Option<obop_commands
     Some(obop_commands::WebauthnCtx {
         rp_id,
         origin,
-        rp_name: "obop".into(),
+        rp_name: super::passkeys::rp_name(s),
         ip: st.ip.clone(),
     })
 }
@@ -999,5 +999,73 @@ mod tests {
         assert_eq!(ctx.rp_id, "inst.test");
         assert_eq!(ctx.origin, "https://inst.test");
         assert_eq!(ctx.ip, "198.51.100.7");
+    }
+    /// The ceremony site of the OAuth pages' passkey steps (S1e), over a dispatcher whose reader is
+    /// installed over `backend`.
+    fn site_over(backend: &Arc<dyn obop_storage::Backend>) -> String {
+        let d = Arc::new(obop_commands::Dispatcher::new());
+        d.install_brand(backend.clone());
+        let state = crate::HttpState::with_mcp(
+            d.clone(),
+            Arc::new(Idp),
+            crate::mcp::McpConfig {
+                public_url: Some("https://inst.test".into()),
+                ..crate::mcp::McpConfig::default()
+            },
+        );
+        let st = Step {
+            o: state.oauth.clone().expect("the OAuth server exists"),
+            base: "https://inst.test".into(),
+            pairs: Vec::new(),
+            flow: String::new(),
+            csrf: String::new(),
+            binder: String::new(),
+            ip: "198.51.100.7".into(),
+            lang: "en",
+        };
+        let parts = axum::http::Request::builder()
+            .uri("/oauth/authorize/passkey/options")
+            .body(())
+            .unwrap()
+            .into_parts()
+            .0;
+        webauthn_ctx(&state, &parts, &st)
+            .expect("a ceremony site")
+            .rp_name
+    }
+
+    /// The relying party name of the OAuth pages' ceremony site is the instance brand's name as the
+    /// reader shows it, asserted directly: that builder serves the sign-in ceremony, which emits no
+    /// name, so the value is visible in no output. With no row, or with a stored name that cannot be
+    /// shown, it is `obop` (a bad stored name stops nothing here: only the registration options,
+    /// which use `strict()`, refuse it).
+    #[test]
+    fn the_oauth_pages_ceremony_site_carries_the_name_of_the_instance_brand() {
+        use obop_commands::brand::{Action, apply};
+        let backend = obop_storage::open("memory:").unwrap();
+        assert_eq!(site_over(&backend), "obop", "no row");
+
+        let backend = obop_storage::open("memory:").unwrap();
+        apply(
+            &*backend,
+            None,
+            "operator",
+            &Action::Configure(vec![("name".into(), "MOHV".into())]),
+            false,
+        )
+        .unwrap();
+        assert_eq!(site_over(&backend), "MOHV", "a brand");
+
+        let backend = obop_storage::open("memory:").unwrap();
+        let mut row = obop_storage::Fields::new();
+        row.insert("name".into(), json!("a<b"));
+        backend
+            .apply_checked(&[obop_storage::Op::Put {
+                model: "instance_brand".into(),
+                id: "instance".into(),
+                fields: row,
+            }])
+            .unwrap();
+        assert_eq!(site_over(&backend), "obop", "a name that cannot be shown");
     }
 }

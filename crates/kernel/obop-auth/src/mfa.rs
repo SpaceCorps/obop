@@ -62,14 +62,17 @@ pub struct AuthConfig {
     pub keys: KeyRing,
     /// The default of `security.require_mfa_for_admins` until an admin stores a value.
     pub default_require_admins: bool,
-    /// Shown in the authenticator app next to the account.
-    pub issuer: String,
+    /// Shown in the authenticator app next to the account, when `OBOP_MFA_ISSUER` is set. None:
+    /// an enrolment reads the name of the instance brand each time (`Auth::issuer`), so a change
+    /// of the record applies to the next entry, and an instance with no record says `obop`.
+    pub issuer: Option<String>,
 }
 
 impl AuthConfig {
     /// `OBOP_SECRET_KEY` (64 hex digits recommended), `OBOP_SECRET_KEY_PREVIOUS`, `OBOP_DEV_INSECURE_KEY=1` for an
     /// explicit, logged development fallback, `OBOP_REQUIRE_MFA_FOR_ADMINS=0` to change the
-    /// default of the admin policy, `OBOP_MFA_ISSUER`.
+    /// default of the admin policy, `OBOP_MFA_ISSUER` (read by `brand::env_issuer`, the function
+    /// `get` of the brand record reads it with, so the two cannot differ).
     pub fn from_env() -> Self {
         let flag = |n: &str| std::env::var(n).ok();
         let keys = match KeyRing::from_env() {
@@ -96,9 +99,7 @@ impl AuthConfig {
                     "0" | "false" | "no" | "off"
                 )
             }),
-            issuer: flag("OBOP_MFA_ISSUER")
-                .filter(|s| !s.trim().is_empty())
-                .unwrap_or_else(|| "obop".into()),
+            issuer: obop_commands::brand::env_issuer(),
         }
     }
 
@@ -107,7 +108,7 @@ impl AuthConfig {
         Self {
             keys: KeyRing::from_vars(None, None, true).unwrap_or_default(),
             default_require_admins: false,
-            issuer: "obop".into(),
+            issuer: None,
         }
     }
 }
@@ -753,6 +754,20 @@ impl Auth {
         Ok(())
     }
 
+    /// The issuer of a new authenticator entry: `OBOP_MFA_ISSUER` if it was set at start (no read
+    /// of the store), else the name of the instance brand, read by `brand::strict` from the row
+    /// alone, every time, else `obop` when there is no row. A store that cannot be read, or a
+    /// stored name that cannot be shown, is an error and never the default
+    /// (docs/spec/branding.md, section 5, and section 10, item 7).
+    fn issuer(&self) -> Result<String, MfaError> {
+        match &self.config.issuer {
+            Some(issuer) => Ok(issuer.clone()),
+            None => obop_commands::brand::strict(&*self.backend)
+                .map(|b| b.name().to_string())
+                .map_err(obop_commands::brand::enrolment_error),
+        }
+    }
+
     /// For tests: pretend it is `secs` seconds after the epoch.
     pub fn set_clock_for_test(&self, secs: u64) {
         self.fake_now
@@ -791,6 +806,10 @@ impl MfaApi for Auth {
     fn begin(&self, p: &Principal) -> Result<J, MfaError> {
         let name = person(p)?;
         let ring = self.ring()?;
+        // The label is written into the person's device and cannot be corrected afterwards, so it
+        // is read before anything is stored, and a name that cannot be read refuses the enrolment
+        // (docs/spec/branding.md, section 4). The read takes no lock: it needs no `mfa_guard`.
+        let issuer = self.issuer()?;
         let _g = self.mfa_guard()?;
         let u = self.user_record(name)?;
         if u["mfa_enabled"].as_bool() == Some(true) {
@@ -809,8 +828,8 @@ impl MfaApi for Auth {
         self.event(name, "enrol_begin", name, "secret issued, not active");
         Ok(json!({
             "secret": b32,
-            "uri": totp::otpauth_uri(&self.config.issuer, name, &b32),
-            "issuer": self.config.issuer,
+            "uri": totp::otpauth_uri(&issuer, name, &b32),
+            "issuer": issuer,
             "account": name,
             "digits": totp::DIGITS,
             "period": totp::PERIOD,

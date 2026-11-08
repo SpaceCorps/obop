@@ -14,6 +14,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post},
 };
+use obop_commands::brand::enrolment_error;
 use obop_commands::{PasskeyApi, Reauth, WebauthnCtx};
 use serde_json::{Value as J, json};
 use std::sync::Arc;
@@ -47,6 +48,15 @@ pub(crate) fn routes() -> Router<Arc<HttpState>> {
         .route("/api/auth/login/passkey", post(login).layer(limit))
 }
 
+/// The relying party name a ceremony site carries for every route but the registration options:
+/// the name of the instance brand as the reader shows it (the default when there is none, or when
+/// the stored name fails the read check). The sign-in ceremony emits no name, so a bad stored name
+/// does not stop a passkey or a two-factor sign-in. Asked on a blocking thread, as every handler of
+/// this crate asks the reader. The OAuth pages' ceremony site takes its name from here too.
+pub(crate) fn rp_name(s: &HttpState) -> String {
+    s.dispatcher.brand().current().brand().name().to_string()
+}
+
 /// The ceremony site of this request.
 #[allow(clippy::result_large_err)]
 fn ctx(s: &HttpState, parts: &Parts) -> Result<WebauthnCtx, Response> {
@@ -62,7 +72,7 @@ fn ctx(s: &HttpState, parts: &Parts) -> Result<WebauthnCtx, Response> {
     Ok(WebauthnCtx {
         rp_id,
         origin,
-        rp_name: "obop".into(),
+        rp_name: rp_name(s),
         ip: client_ip(s, parts),
     })
 }
@@ -121,9 +131,18 @@ async fn list(State(s): Shared, parts: Parts) -> Response {
 
 async fn register_options(State(s): Shared, parts: Parts, Json(b): Json<J>) -> Response {
     blocking(move || match setup(&s, &parts) {
-        Ok((p, _, c, api)) => api
-            .register_options(&p, &c, &reauth(&b))
-            .map_or_else(mfa_error, |j| no_store(Json(j).into_response())),
+        Ok((p, _, mut c, api)) => {
+            // The one route that writes the name: the registration options put it into the person's
+            // authenticator, where it cannot be corrected afterwards. So it is read from the row
+            // alone, every time, and a name that cannot be read refuses the registration: the name
+            // is never a default that a read error substituted (docs/spec/branding.md, section 4).
+            match s.dispatcher.brand().strict().map_err(enrolment_error) {
+                Ok(b) => c.rp_name = b.name().to_string(),
+                Err(e) => return mfa_error(e),
+            }
+            api.register_options(&p, &c, &reauth(&b))
+                .map_or_else(mfa_error, |j| no_store(Json(j).into_response()))
+        }
         Err(r) => r,
     })
     .await
