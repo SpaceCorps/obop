@@ -107,7 +107,10 @@ impl AuthConfig {
             // authentication in more than one place (the one it serves with and the count of
             // users it reports), and the warning said the same thing each time. `writeln!` and
             // not `eprintln!`, which panics when stderr cannot be written, and a panic inside
-            // `call_once` would poison it.
+            // `call_once` would poison it. Defensive only: the binary writes `database: ...`
+            // with `eprintln!` before it builds an authentication, so a process whose stderr
+            // cannot be written never reaches this line today, and the two `eprintln!` lines
+            // above have the same exposure; this line adds no way to fail.
             ISSUER_WARNED.call_once(|| {
                 let _ = writeln!(std::io::stderr(), "WARNING: {warning}");
             });

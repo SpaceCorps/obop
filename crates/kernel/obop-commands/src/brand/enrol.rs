@@ -52,9 +52,10 @@ pub fn issuer_warning(issuer: &str) -> Option<&'static str> {
 /// `brand_unavailable` (docs/spec/branding.md, section 4). Any other store error becomes a fixed
 /// message that starts with [`UNREADABLE`], so that it is never taken for a missing server key,
 /// and no text of the store reaches the answer. The text it leaves out of the answer is not lost to
-/// the operator: it is written to the log of the server, once per refusal, with the cause named
-/// ([`store_read_line`]); the other two cases carry their cause in the message itself, which the
-/// route logs when it answers.
+/// the operator: it is written to the log of the server at each refusal, as a line with the cause
+/// named ([`store_read_line`]); the route adds a second line when it answers, with the fixed
+/// message and none of the store's text. The other two cases carry their cause in the message
+/// itself, which the route logs when it answers.
 pub fn enrolment_error(e: String) -> MfaError {
     if Fault::is_transient(&e) || e.starts_with(UNREADABLE) {
         MfaError::Unavailable(e)
