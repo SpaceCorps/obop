@@ -638,6 +638,93 @@ fn a_brand_that_could_not_be_read_at_first_is_not_kept_by_the_sites_cache() {
     assert_eq!(flaky.reads().gets, 0, "the good answer is cached");
 }
 
+/// The menu is read with the settings and kept with them, and the empty menu of a read that failed
+/// is kept no more than they are: the request that met the fault is answered 503 by the layer above
+/// (D74), the next ones read again, and when the store answers the navigation is back at once, not
+/// after the cache time.
+#[test]
+fn a_menu_that_could_not_be_read_is_not_kept_by_the_sites_cache() {
+    use obop_storage::fault;
+    use obop_storage::testing::Mode;
+    let (s, flaky) = cached();
+    s.store
+        .insert(
+            "website_menu_item",
+            [
+                ("label".to_string(), Value::text("Journal")),
+                ("url".to_string(), Value::text("/blog")),
+                ("visible".to_string(), Value::Bool(true)),
+                ("sequence".to_string(), Value::Int(1)),
+            ]
+            .into(),
+        )
+        .unwrap();
+    flaky.refuse_model("website_menu_item", Mode::Reads);
+    let during = text(&get(&s, "/"));
+    assert!(
+        !during.contains(">Journal</a>"),
+        "no navigation, for this request: {during}"
+    );
+    assert!(fault::noted().is_some(), "the request met the fault");
+    // It was not kept: the next request reads again (and meets the fault again) ...
+    let refused = flaky.refused();
+    assert!(!text(&get(&s, "/")).contains(">Journal</a>"));
+    assert!(
+        flaky.refused() > refused,
+        "the empty menu of a failed read is not served from the cache"
+    );
+
+    // ... and when the store answers, the navigation is back at once.
+    flaky.allow_models();
+    fault::clear();
+    assert!(text(&get(&s, "/")).contains(">Journal</a>"));
+    // And that answer is kept, as every good one is: with the menu refused again, the next request
+    // does not ask for it, and still shows it.
+    flaky.refuse_model("website_menu_item", Mode::Reads);
+    let refused = flaky.refused();
+    assert!(text(&get(&s, "/")).contains(">Journal</a>"));
+    assert_eq!(
+        flaky.refused(),
+        refused,
+        "the good answer is cached, the menu with it"
+    );
+    flaky.allow_models();
+    fault::clear();
+}
+
+/// A shop that publishes no menu at all has an empty menu, and that is an answer like any other: the
+/// site keeps it for the cache time, as it always did.
+#[test]
+fn a_shop_without_a_menu_model_still_keeps_its_cache() {
+    let (flaky, backend) = obop_storage::testing::Flaky::memory();
+    let store = Store::over(backend);
+    let d = std::sync::Arc::new(obop_commands::Dispatcher::new());
+    base::register(&d, &store);
+    product::register(&d, &store);
+    let site = Site::new(
+        PublicApi::new(d.clone(), store.clone()),
+        Config {
+            settings_ttl: Duration::from_secs(3600),
+            ..Config::default()
+        },
+    );
+    assert!(!site.api().is_readable("website_menu_item"));
+    flaky.reset_reads();
+    site.settings_snapshot();
+    assert!(
+        flaky.reads().gets > 0,
+        "the first refresh read the settings"
+    );
+    flaky.reset_reads();
+    site.settings_snapshot();
+    let reads = flaky.reads();
+    assert_eq!(
+        (reads.gets, reads.lists),
+        (0, 0),
+        "an empty menu is no failed read: the second request is served from the cache"
+    );
+}
+
 // ---- With a brand, no obop -----------------------------------------------------------------------------
 
 /// The visible text of a page: the comments, the scripts, the style sheets and the tags removed (the
