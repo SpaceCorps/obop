@@ -77,7 +77,7 @@ enum Limit {
 
 /// Where the brand is read or written: the path from `crates/` (a prefix when it ends with `/`),
 /// why, and what the file may do.
-const ALLOWED: [(&str, &str, Limit); 10] = [
+const ALLOWED: [(&str, &str, Limit); 13] = [
     (
         "kernel/obop-commands/src/brand/",
         "the module itself: the reader, `strict()`, `apply` and the read of `get`",
@@ -150,6 +150,36 @@ const ALLOWED: [(&str, &str, Limit); 10] = [
             calls: 0,
             reads: 0,
             paths: &["Shown"],
+            types: &[],
+        },
+    ),
+    (
+        "kernel/obop-http/src/mcp.rs",
+        "the anonymous documents (S3): `document_brand` gets the reader of the dispatcher once and asks it through the blocking pool (`brand::current`), and hands the brand out by value; the handlers of the protected-resource documents and of the server card, the metadata of the authorization server and the OpenAPI document each ask it once, first, and build the whole document from that one value; it names no type of the module and builds no reader",
+        Limit::Reads {
+            calls: 2,
+            reads: 0,
+            paths: &["current"],
+            types: &[],
+        },
+    ),
+    (
+        "kernel/obop-mcp/src/lib.rs",
+        "`initialize` (S3) gets the reader of the dispatcher it was handed, asks it once for the brand and builds the `serverInfo` and the instructions from that one value; it reads nothing else and builds no reader",
+        Limit::Reads {
+            calls: 2,
+            reads: 1,
+            paths: &[],
+            types: &[],
+        },
+    ),
+    (
+        "kernel/obop-connectors/src/runtime.rs",
+        "the Slack message (S3): `encode` gets the reader of the dispatcher the runtime holds and asks it once per message, for the name that signs it; the prefix is fixed in the body, so a retry sends the text it was made with; it builds no reader",
+        Limit::Reads {
+            calls: 2,
+            reads: 1,
+            paths: &[],
             types: &[],
         },
     ),
@@ -679,6 +709,18 @@ fn the_scan_sees_the_ways_a_file_can_read_the_row_and_leaves_the_allowed_files_a
             "kernel/obop-oauth/src/flow.rs",
             "use obop_commands::brand::Shown; fn f() -> Arc<Shown> { Arc::new(Shown::not_set(None)) }",
         ),
+        (
+            "kernel/obop-http/src/mcp.rs",
+            "async fn f(s: &S) -> Brand { super::brand::current(s.dispatcher.brand()).await.brand().clone() }",
+        ),
+        (
+            "kernel/obop-mcp/src/lib.rs",
+            "fn f(d: &D) { let shown = d.brand().current(); let b = shown.brand(); }",
+        ),
+        (
+            "kernel/obop-connectors/src/runtime.rs",
+            "fn f(&self) { let shown = self.dispatcher.brand().current(); let n = shown.brand().name(); }",
+        ),
     ]);
     let (found, stale) = scan(&files);
     assert!(found.is_empty(), "{found:?}");
@@ -1091,7 +1133,10 @@ fn the_rows_with_limits_are_the_files_that_only_ask_the_reader() {
             "kernel/obop-http/src/lib.rs",
             "kernel/obop-http/src/oauth.rs",
             "kernel/obop-oauth/src/page.rs",
-            "kernel/obop-oauth/src/flow.rs"
+            "kernel/obop-oauth/src/flow.rs",
+            "kernel/obop-http/src/mcp.rs",
+            "kernel/obop-mcp/src/lib.rs",
+            "kernel/obop-connectors/src/runtime.rs"
         ]
     );
 }
@@ -1277,10 +1322,10 @@ fn unescaped(text: &str) -> String {
 
 /// Every literal of the listed files that names obop, in the order of the files and of the source.
 /// A listed file that is not in the tree (or is all test code) is reported by [`literal_scan`].
-fn named_literals(files: &BTreeMap<String, String>) -> Vec<Named> {
+fn named_literals(files: &BTreeMap<String, String>, list: &[&str]) -> Vec<Named> {
     let lexed = non_test(files);
     let mut out = Vec::new();
-    for path in LITERAL_FILES {
+    for path in list.iter().copied() {
         let Some(l) = lexed.get(path) else { continue };
         for (start, _, text) in &l.strings {
             // A raw literal starts at its `r`; any other starts at its quote and has escapes.
@@ -1302,12 +1347,10 @@ fn named_literals(files: &BTreeMap<String, String>) -> Vec<Named> {
 }
 
 /// The row that lets this literal stand, if any.
-fn literal_row(n: &Named) -> Option<usize> {
-    LITERAL_ALLOWED
-        .iter()
-        .position(|(file, item, lit, _, _, _)| {
-            *file == n.path && *item == n.item && lit.is_none_or(|l| l == n.text)
-        })
+fn literal_row(n: &Named, rows: &[LiteralRow]) -> Option<usize> {
+    rows.iter().position(|(file, item, lit, _, _, _)| {
+        *file == n.path && *item == n.item && lit.is_none_or(|l| l == n.text)
+    })
 }
 
 fn cut(s: &str) -> String {
@@ -1320,20 +1363,30 @@ fn cut(s: &str) -> String {
 }
 
 /// The literals that no row lets stand and the listed files that are missing (`found`), and the
-/// rows that match fewer or more literals than they say (`drift`).
+/// rows that match fewer or more literals than they say (`drift`), for the files and the rows of
+/// the first slice of this scan (the pages of the authorization flow, S1c).
 fn literal_scan(files: &BTreeMap<String, String>) -> (Vec<String>, Vec<String>) {
-    let named = named_literals(files);
+    literal_scan_of(files, &LITERAL_FILES, &LITERAL_ALLOWED)
+}
+
+/// As [`literal_scan`], for any list of files and any rows: a slice that makes more files show the
+/// brand keeps its own list (see `LITERAL_FILES_S3`), and the test of the whole tree reads them all.
+fn literal_scan_of(
+    files: &BTreeMap<String, String>,
+    list: &[&str],
+    rows: &[LiteralRow],
+) -> (Vec<String>, Vec<String>) {
+    let named = named_literals(files, list);
     let lexed = non_test(files);
     let mut found = Vec::new();
-    let mut seen = [0usize; LITERAL_ALLOWED.len()];
-    for path in LITERAL_FILES {
+    for path in list.iter().copied() {
         if !lexed.contains_key(path) {
             found.push(format!(
                 "{path}: a file of LITERAL_FILES that is not in the tree (or is all test code)"
             ));
         }
     }
-    for path in LITERAL_FILES {
+    for path in list.iter().copied() {
         let Some(l) = lexed.get(path) else { continue };
         for at in words(&l.code, "concat") {
             let after = crate::src_scan::skip_ws(&l.code, at + "concat".len());
@@ -1346,11 +1399,21 @@ fn literal_scan(files: &BTreeMap<String, String>) -> (Vec<String>, Vec<String>) 
             }
         }
     }
-    for n in &named {
-        match literal_row(n) {
+    let (unlisted, drift) = judge(&named, rows, "LITERAL_ALLOWED");
+    found.extend(unlisted);
+    (found, drift)
+}
+
+/// What the rows say of the literals found: those that no row lets stand, and the rows that match
+/// fewer or more literals than they say.
+fn judge(named: &[Named], rows: &[LiteralRow], table: &str) -> (Vec<String>, Vec<String>) {
+    let mut found = Vec::new();
+    let mut seen = vec![0usize; rows.len()];
+    for n in named {
+        match literal_row(n, rows) {
             Some(i) => seen[i] += 1,
             None => found.push(format!(
-                "{}:{}: a literal that names obop is not a row of LITERAL_ALLOWED (in `{}`): {:?}",
+                "{}:{}: a literal that names obop is not a row of {table} (in `{}`): {:?}",
                 n.path,
                 n.line,
                 n.item,
@@ -1358,7 +1421,7 @@ fn literal_scan(files: &BTreeMap<String, String>) -> (Vec<String>, Vec<String>) 
             )),
         }
     }
-    let drift = LITERAL_ALLOWED
+    let drift = rows
         .iter()
         .enumerate()
         .filter(|(i, (_, _, _, count, _, _))| seen[*i] != *count)
@@ -1378,7 +1441,7 @@ fn no_literal_that_names_obop_is_added_to_a_page_that_should_use_the_record() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let mut files = BTreeMap::new();
     read_tree(&root, &root, &mut files);
-    let (found, drift) = literal_scan(&files);
+    let (found, drift) = literal_scan_of(&files, &all_literal_files(), &all_literal_rows());
     assert!(
         found.is_empty(),
         "a page that shows the instance name has a literal that names obop (use the brand, or add a \
@@ -1396,9 +1459,9 @@ fn no_literal_that_names_obop_is_added_to_a_page_that_should_use_the_record() {
 
 #[test]
 fn every_row_of_the_literal_list_has_a_known_class_a_reason_and_a_file_of_the_list() {
-    for (file, item, lit, count, class, why) in LITERAL_ALLOWED {
+    for (file, item, lit, count, class, why) in all_literal_rows() {
         assert!(
-            LITERAL_FILES.contains(&file),
+            all_literal_files().contains(&file),
             "{file} is not in LITERAL_FILES"
         );
         assert!(
@@ -1416,9 +1479,9 @@ fn every_row_of_the_literal_list_has_a_known_class_a_reason_and_a_file_of_the_li
             );
         }
     }
-    for file in LITERAL_FILES {
+    for file in all_literal_files() {
         assert!(
-            LITERAL_ALLOWED.iter().any(|r| r.0 == file),
+            all_literal_rows().iter().any(|r| r.0 == file),
             "{file} is on the list and has no row, so it could never hold a name"
         );
     }
@@ -2012,5 +2075,688 @@ fn the_scan_of_the_page_context_sees_a_public_field_a_missing_one_and_two() {
     assert_eq!(
         flow_ctx_brand_visibility(&tree(&[("kernel/obop-oauth/src/page.rs", "")])),
         [format!("{FLOW_CTX_FILE}: not in the tree")]
+    );
+}
+
+// ---- The scan for literals, extended (slice S3) ------------------------------------------------------
+//
+// docs/spec/branding.md, section 13: "the list gains the files S3 changes, so no pending literal ever
+// sits on the list", and the word scan of the four crates that the phone's server text comes from. The
+// S3 files keep their own list and their own rows (`LITERAL_FILES_S3`, `LITERAL_ALLOWED_S3`) and are
+// read by the same scan as the files of the pages above; the test of the whole tree reads both lists.
+//
+// What the rows say, in the classes above: the six files hold the texts of the MCP server, the
+// discovery documents, the OpenAPI title, the Slack message and the Drive browser. The texts that must
+// stay byte for byte for an instance with no brand are `today` rows and name what a brand puts in their
+// place (the instructions of `initialize`, the three texts of the discovery documents, the two links
+// to the documentation, the title of the API); the Slack prefix and the Drive sentence have no row:
+// the first is the name of the brand, which is `obop` when none is set, and the second names no product
+// on any instance.
+
+/// The files S3 changes, whose string literals are scanned.
+const LITERAL_FILES_S3: [&str; 6] = [
+    "kernel/obop-http/src/mcp.rs",
+    "kernel/obop-http/src/openapi.rs",
+    "kernel/obop-mcp/src/lib.rs",
+    "kernel/obop-oauth/src/lib.rs",
+    "kernel/obop-connectors/src/runtime.rs",
+    "kernel/obop-blob-gdrive/src/browse.rs",
+];
+
+const MCP_HTTP: &str = "kernel/obop-http/src/mcp.rs";
+const OPENAPI: &str = "kernel/obop-http/src/openapi.rs";
+const MCP_CORE: &str = "kernel/obop-mcp/src/lib.rs";
+const OAUTH_CORE: &str = "kernel/obop-oauth/src/lib.rs";
+const RUNTIME: &str = "kernel/obop-connectors/src/runtime.rs";
+const BROWSE: &str = "kernel/obop-blob-gdrive/src/browse.rs";
+
+const LITERAL_ALLOWED_S3: [LiteralRow; 31] = [
+    (
+        MCP_HTTP,
+        "from_env",
+        None,
+        2,
+        "env",
+        "the names of the two environment variables that configure the endpoint (OBOP_PUBLIC_URL and \
+         OBOP_MCP_RATE_PER_MINUTE), read at start: an operator's words, never shown to a person who \
+         connects",
+    ),
+    (
+        MCP_HTTP,
+        "with_cors",
+        Some("Mcp-Session-Id, WWW-Authenticate, Retry-After, X-Obop-Applied"),
+        1,
+        "wire",
+        "the response headers a browser client may read from /mcp: header names on the wire, one of \
+         them the X-Obop-Applied of D74, never shown to a person",
+    ),
+    (
+        MCP_HTTP,
+        "words",
+        Some("obop instance MCP server"),
+        1,
+        "today",
+        "the name of the MCP server in the protected-resource documents (RFC 9728 resource_name), as an \
+         instance with no brand has always sent it. The branded counterpart is `{name} MCP server`, \
+         built in the same function and sent whenever a brand is set",
+    ),
+    (
+        MCP_HTTP,
+        "words",
+        Some("obop instance"),
+        1,
+        "today",
+        "the title of the MCP server card, as an instance with no brand has always sent it. The branded \
+         counterpart is the name of the brand, built in the same function and sent whenever a brand is set",
+    ),
+    (
+        MCP_HTTP,
+        "words",
+        Some(
+            "Business data and actions of this obop instance as MCP tools, with masking and approvals.",
+        ),
+        1,
+        "today",
+        "the description of the MCP server card, as an instance with no brand has always sent it. The \
+         branded counterpart is `Business data and actions of {name}, with masking and approvals.`, \
+         shorter so that it fits the 100 characters the card allows for a name of 40",
+    ),
+    (
+        MCP_HTTP,
+        "DOCUMENTATION",
+        Some("https://obop.dev/docs/agents/mcp/"),
+        1,
+        "today",
+        "the link to the documentation of the software in the protected-resource documents \
+         (resource_documentation, optional in RFC 9728). An instance with no brand sends it as it always \
+         has; the branded counterpart is that the member is left out whenever a brand is set",
+    ),
+    (
+        MCP_HTTP,
+        "protected_resource",
+        Some("x-obop-token-endpoints"),
+        1,
+        "wire",
+        "an extension member of the protected-resource document that names the two token endpoints: a \
+         name on the wire that clients read, never shown to a person",
+    ),
+    (
+        MCP_HTTP,
+        "server_card",
+        Some("{}/obop"),
+        1,
+        "identifier",
+        "the identifier of the server card, `<host>/obop` (the schema's namespace/name): a name on the \
+         wire that registries key on, which a brand does not change (spec, section 11)",
+    ),
+    (
+        MCP_HTTP,
+        "server_card",
+        Some("dev.obop/auth"),
+        1,
+        "wire",
+        "the key of the extension block of the card that names the authorization endpoints: a name on \
+         the wire, never shown to a person (spec, section 11)",
+    ),
+    (
+        MCP_HTTP,
+        "with_oauth",
+        Some("dev.obop/auth"),
+        2,
+        "wire",
+        "the same extension key, read twice to name the authorization server in the card: a name on the \
+         wire, never shown to a person",
+    ),
+    (
+        MCP_HTTP,
+        "ai_catalog",
+        Some("urn:air:obop:{}:mcp"),
+        1,
+        "identifier",
+        "the identifier of the catalogue entry (an AI Catalog urn): a name on the wire that scanners key \
+         on, which a brand does not change (spec, section 11)",
+    ),
+    (
+        OPENAPI,
+        "limit_keywords",
+        None,
+        2,
+        "wire",
+        "the extension keywords x-obop-minimum and x-obop-maximum of a decimal's bounds in the document: \
+         names on the wire that tools read, never shown to a person",
+    ),
+    (
+        OPENAPI,
+        "error_schema",
+        None,
+        2,
+        "wire",
+        "two descriptions of members of the error body that name the cookie obop_lang and the header \
+         X-Obop-Applied: wire names that a developer reads in the API description",
+    ),
+    (
+        OPENAPI,
+        "STORAGE_503",
+        None,
+        1,
+        "wire",
+        "the description of the 503 answer, which names the header X-Obop-Applied: a wire name that a \
+         developer reads in the API description",
+    ),
+    (
+        OPENAPI,
+        "error_responses",
+        Some("X-Obop-Applied"),
+        1,
+        "wire",
+        "the response header of the 503 answer, as the document describes it: a name on the wire",
+    ),
+    (
+        OPENAPI,
+        "platform",
+        Some("obop control plane API"),
+        1,
+        "admin",
+        "the title of the control plane's API, which is SpaceCorps' own service and not an instance's \
+         (spec, section 6, OT-12): it names the operator's product on purpose and no brand reaches it",
+    ),
+    (
+        OPENAPI,
+        "platform",
+        None,
+        1,
+        "admin",
+        "the description of the control plane's API (the other literal of the function, the title being \
+         the row above): it tells a developer how to create an instance and names the product the \
+         operator sells",
+    ),
+    (
+        OPENAPI,
+        "instance",
+        Some("The server has no OBOP_SECRET_KEY."),
+        1,
+        "env",
+        "the description of the 503 answer of the authenticator enrolment, which names the environment \
+         variable an operator must set: a developer's text, not an end user's",
+    ),
+    (
+        OPENAPI,
+        "instance",
+        Some(", except in bulk_create and obop import, which round with {r}"),
+        1,
+        "admin",
+        "the description of a decimal field, which names the command line `obop import`: a developer's \
+         text that names the software they run",
+    ),
+    (
+        OPENAPI,
+        "instance",
+        Some("obop instance API"),
+        1,
+        "today",
+        "the title of the instance's API, as an instance with no brand has always sent it and as \
+         `obop openapi` writes it (the committed document is the software's, never given a brand). The \
+         branded counterpart is `{name} API`, set by `describe_brand` on the document of a running \
+         instance whenever a brand is set",
+    ),
+    (
+        MCP_CORE,
+        "INSTRUCTIONS_LEAD",
+        None,
+        1,
+        "today",
+        "the first sentence of the instructions of `initialize`, as an instance with no brand has always \
+         sent it. The branded counterpart is INSTRUCTIONS_LEAD_BRANDED, `This is the {name} system: \
+         business data (...)`, which makes no claim about the software and is sent whenever a brand is set",
+    ),
+    (
+        MCP_CORE,
+        "INSTRUCTIONS_REST",
+        None,
+        1,
+        "wire",
+        "the rest of the instructions, the same on every instance: they name the tool obop__meta, which \
+         keeps its name (a wire name every client and prompt knows; Q71 item 3, answered)",
+    ),
+    (
+        OAUTH_CORE,
+        "authorization_server_metadata",
+        Some("obop_client_classes_supported"),
+        1,
+        "wire",
+        "the member of the metadata that names the client classes (mcp, mobile) a client may register \
+         as: a name on the wire, never shown to a person (spec, section 11)",
+    ),
+    (
+        OAUTH_CORE,
+        "authorization_server_metadata",
+        Some("https://obop.dev/docs/agents/mcp/"),
+        1,
+        "today",
+        "the link to the documentation of the software in the metadata (service_documentation, optional \
+         in RFC 8414). An instance with no brand sends it as it always has; the branded counterpart is \
+         that the member is left out whenever a brand is set",
+    ),
+    (
+        RUNTIME,
+        "from_vars",
+        Some("OBOP_PUBLIC_URL"),
+        1,
+        "env",
+        "the name of the environment variable that holds the public address of the instance, for the \
+         addresses of webhooks and of the OAuth redirect: an operator's words",
+    ),
+    (
+        RUNTIME,
+        "encode",
+        Some("metadata[obop_ref]"),
+        1,
+        "wire",
+        "the form field that carries the reference of a record to a receiver that encodes forms: a name \
+         on the wire, which the event that comes back is matched on",
+    ),
+    (
+        RUNTIME,
+        "send_all",
+        Some("obop.manual"),
+        1,
+        "wire",
+        "the event name of a manual send, as the receiver sees it in the type of the message: a name on \
+         the wire",
+    ),
+    (
+        RUNTIME,
+        "oauth_config",
+        Some(
+            "an administrator must first enter the OAuth client id and secret for this provider (obop ships none)",
+        ),
+        1,
+        "admin",
+        "the refusal an administrator reads in the connector wizard before the OAuth client of a \
+         provider is entered: it names the software they run, and is admin wording (spec, section 11)",
+    ),
+    (
+        RUNTIME,
+        "oauth_config",
+        Some("OBOP_PUBLIC_URL is not set, so there is no address for the OAuth redirect"),
+        1,
+        "env",
+        "the refusal an administrator reads when the public address is not set: it names the \
+         environment variable an operator must set",
+    ),
+    (
+        RUNTIME,
+        "test",
+        Some("obop.test"),
+        1,
+        "wire",
+        "the event name of the test message of a connection, as the receiver sees it in the type of the \
+         message: a name on the wire",
+    ),
+    (
+        BROWSE,
+        "from_env",
+        None,
+        6,
+        "env",
+        "the names of the environment variables that configure the Drive browser (the client, the \
+         refresh token, the API and token addresses of the tests): an operator's words",
+    ),
+];
+
+/// Every file of the scan for literals, S1c's and S3's.
+fn all_literal_files() -> Vec<&'static str> {
+    LITERAL_FILES
+        .iter()
+        .chain(LITERAL_FILES_S3.iter())
+        .copied()
+        .collect()
+}
+
+/// Every row of the scan for literals, S1c's and S3's.
+fn all_literal_rows() -> Vec<LiteralRow> {
+    LITERAL_ALLOWED
+        .iter()
+        .chain(LITERAL_ALLOWED_S3.iter())
+        .copied()
+        .collect()
+}
+
+/// The files of the S3 list as they are in the tree, and only those: the base of the self-tests
+/// below, which change one of them in memory and read what the scan says.
+fn s3_files_of_the_tree() -> BTreeMap<String, String> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut all = BTreeMap::new();
+    read_tree(&root, &root, &mut all);
+    LITERAL_FILES_S3
+        .iter()
+        .map(|f| {
+            let src = all
+                .get(*f)
+                .unwrap_or_else(|| panic!("{f} is not in the tree"));
+            (f.to_string(), src.clone())
+        })
+        .collect()
+}
+
+fn scan_s3(files: &BTreeMap<String, String>) -> (Vec<String>, Vec<String>) {
+    literal_scan_of(files, &LITERAL_FILES_S3, &LITERAL_ALLOWED_S3)
+}
+
+/// The scan reads the files of S3 as they are: every literal that names obop is a row, and every row
+/// is met as often as it says. (The test of the whole tree says the same; this one is the base of
+/// the changes that follow.)
+#[test]
+fn the_files_of_slice_s3_hold_the_literals_the_rows_say_and_no_other() {
+    let (found, drift) = scan_s3(&s3_files_of_the_tree());
+    assert!(found.is_empty() && drift.is_empty(), "{found:?} {drift:?}");
+}
+
+/// A literal `obop` added to any file of S3 is found, with the file, the line and the item; a
+/// different text in the item of a row with an exact literal is not let through; and a row that no
+/// longer matches what it says is a failure.
+#[test]
+fn the_scan_finds_a_new_literal_in_each_file_of_slice_s3_and_a_row_that_no_longer_matches() {
+    let base = s3_files_of_the_tree();
+    for file in LITERAL_FILES_S3 {
+        let mut files = base.clone();
+        files
+            .get_mut(file)
+            .unwrap()
+            .push_str("\nfn added_by_a_test() -> &'static str {\n    \"Welcome to Obop\"\n}\n");
+        let (found, drift) = scan_s3(&files);
+        assert_eq!(found.len(), 1, "{file}: {found:?}");
+        assert!(
+            found[0].starts_with(&format!("{file}:")) && found[0].contains("`added_by_a_test`"),
+            "{found:?}"
+        );
+        assert!(drift.is_empty(), "{file}: {drift:?}");
+    }
+    // The title of the API changed to another text that names the product: not the row's literal.
+    let mut files = base.clone();
+    let src = files.get_mut(OPENAPI).unwrap();
+    assert!(src.contains("\"obop instance API\""));
+    *src = src.replace("\"obop instance API\"", "\"an obop API\"");
+    let (found, drift) = scan_s3(&files);
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(found[0].contains("`instance`"), "{found:?}");
+    assert!(
+        drift
+            .iter()
+            .any(|d| d.contains("obop instance API") && d.contains("has 0")),
+        "{drift:?}"
+    );
+    // A row whose literal is gone from its file: the wire name of the card's extension block.
+    let mut files = base.clone();
+    let src = files.get_mut(MCP_HTTP).unwrap();
+    let before = src.matches("\"dev.obop/auth\"").count();
+    assert_eq!(before, 3, "the card names the block three times");
+    *src = src.replacen("\"dev.obop/auth\"", "\"dev.example/auth\"", 1);
+    let (found, drift) = scan_s3(&files);
+    assert!(found.is_empty(), "{found:?}");
+    assert_eq!(drift.len(), 1, "{drift:?}");
+    assert!(
+        drift[0].contains("server_card") && drift[0].contains("has 0"),
+        "{drift:?}"
+    );
+    // A file of the list that is gone from the tree is a failure, not a pass.
+    let mut files = base;
+    files.remove(MCP_CORE);
+    let (found, _) = scan_s3(&files);
+    assert!(found.iter().any(|f| f.starts_with(MCP_CORE)), "{found:?}");
+}
+
+/// The rows that say a text must stay for an instance with no brand name what a brand puts in its
+/// place; this holds that the branded text exists in the file of the row, so that a row cannot
+/// outlive the counterpart it names. (The documentation links' counterpart is an absence, held by
+/// the tests of the documents.)
+#[test]
+fn the_branded_counterpart_each_today_row_of_slice_s3_names_is_in_its_file() {
+    let files = s3_files_of_the_tree();
+    let lexed = non_test(&files);
+    for (file, text) in [
+        (MCP_HTTP, "{name} MCP server"),
+        (
+            MCP_HTTP,
+            "Business data and actions of {name}, with masking and approvals.",
+        ),
+        (OPENAPI, "{} API"),
+        (MCP_CORE, "This is the {name} system: business data"),
+    ] {
+        assert!(
+            lexed[file].strings.iter().any(|(_, _, t)| t.contains(text)),
+            "{file}: the branded counterpart {text:?} is not in the file"
+        );
+    }
+    // And each `today` row of the list says "counterpart" (the test of the rows requires it); this
+    // counts them, so a row added without its entry above makes the author look at this list.
+    let today = LITERAL_ALLOWED_S3.iter().filter(|r| r.4 == "today").count();
+    assert_eq!(
+        today, 7,
+        "the `today` rows of S3 and their counterparts above"
+    );
+}
+
+// ---- The word scan of the server text (slice S3) -----------------------------------------------------
+//
+// Spec section 6, HP-11, and section 13: the server texts that reach a phone come from `obop-commands`,
+// `obop-registry`, `obop-masking` and the mileage module, and none of them says "obop" as a word. The
+// scan reads the non-test code of the four and fails on any string literal in which `obop` stands as a
+// word followed by a space, a point or the end of the literal ("the obop CLI", "obop.dev",
+// "github.com/SpaceCorps/obop"), unless a row of [`WORD_ALLOWED`] lets it stand. The identifiers
+// (`obop_setting`, `x-obop-...`, `OBOP_...`) are not words and are not matched.
+
+/// The four crates, as path prefixes under `crates/`.
+const WORD_CRATES: [&str; 4] = [
+    "kernel/obop-commands/",
+    "kernel/obop-registry/",
+    "kernel/obop-masking/",
+    "modules/mileage/",
+];
+
+const WORD_ALLOWED: [LiteralRow; 2] = [
+    (
+        "kernel/obop-commands/src/brand/reader.rs",
+        "note",
+        None,
+        1,
+        "admin",
+        "the line the process writes to its own stderr, once for each stored field of the branding that fell back to its default; it names the command an operator runs (`obop admin brand status`). It is an operator's text, never sent to a person who uses the instance",
+    ),
+    (
+        "kernel/obop-registry/src/lib.rs",
+        "first_party",
+        Some("https://github.com/SpaceCorps/obop"),
+        2,
+        "admin",
+        "the homepage and the repository that a module declares when it names none: the address of the project on GitHub, metadata that an administrator reads in the module list (spec, section 11: module author, homepage and repository are admin wording)",
+    ),
+];
+
+/// Whether `obop` stands in the text as a word followed by a space, a point or the end of the text:
+/// not preceded by a letter, a digit or an underscore, and followed by a space, a `.` or nothing.
+fn names_obop_as_a_word(text: &str) -> bool {
+    let lower = text.to_lowercase();
+    let bytes = lower.as_bytes();
+    let mut from = 0;
+    while let Some(rel) = lower[from..].find("obop") {
+        let at = from + rel;
+        let end = at + "obop".len();
+        let before_ok =
+            at == 0 || !(bytes[at - 1].is_ascii_alphanumeric() || bytes[at - 1] == b'_');
+        let after_ok = end == bytes.len() || bytes[end] == b' ' || bytes[end] == b'.';
+        if before_ok && after_ok {
+            return true;
+        }
+        from = end;
+    }
+    false
+}
+
+/// Every string literal of the non-test code of the four crates in which `obop` is a word.
+fn word_literals(files: &BTreeMap<String, String>) -> Vec<Named> {
+    let lexed = non_test(files);
+    let mut out = Vec::new();
+    for (path, l) in &lexed {
+        if !WORD_CRATES.iter().any(|c| path.starts_with(c)) {
+            continue;
+        }
+        for (start, _, text) in &l.strings {
+            let raw = files
+                .get(path)
+                .is_some_and(|src| src.as_bytes().get(*start) == Some(&b'r'));
+            let seen = if raw { text.clone() } else { unescaped(text) };
+            if names_obop_as_a_word(&seen) {
+                out.push(Named {
+                    path: path.clone(),
+                    item: item_of(&l.code, *start),
+                    text: text.clone(),
+                    line: line_of(&l.code, *start),
+                });
+            }
+        }
+    }
+    out
+}
+
+/// The literals in which `obop` is a word that no row lets stand (`found`), and the rows that match
+/// fewer or more than they say (`drift`); a crate of the four with no file in the tree is a failure.
+fn word_scan(files: &BTreeMap<String, String>) -> (Vec<String>, Vec<String>) {
+    let lexed = non_test(files);
+    let mut found = Vec::new();
+    for c in WORD_CRATES {
+        if !lexed.keys().any(|p| p.starts_with(c)) {
+            found.push(format!(
+                "{c}: a crate of the word scan with no file in the tree (it was renamed or moved)"
+            ));
+        }
+    }
+    let (unlisted, drift) = judge(&word_literals(files), &WORD_ALLOWED, "WORD_ALLOWED");
+    found.extend(unlisted);
+    (found, drift)
+}
+
+#[test]
+fn no_text_of_the_server_that_reaches_a_phone_says_obop_as_a_word() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut files = BTreeMap::new();
+    read_tree(&root, &root, &mut files);
+    let (found, drift) = word_scan(&files);
+    assert!(
+        found.is_empty(),
+        "a text of obop-commands, obop-registry, obop-masking or the mileage module says `obop` as a \
+         word (a person who uses the instance, on a phone or not, would read it; leave the product out, \
+         or add a row to WORD_ALLOWED if only an administrator reads it):\n{}",
+        found.join("\n")
+    );
+    assert!(
+        drift.is_empty(),
+        "rows of WORD_ALLOWED that match fewer or more literals than they say:\n{}",
+        drift.join("\n")
+    );
+}
+
+#[test]
+fn the_word_is_told_from_an_identifier() {
+    for (text, yes) in [
+        ("obop", true),
+        ("OBOP", true),
+        ("the obop CLI", true),
+        ("see obop.dev for more", true),
+        ("https://github.com/SpaceCorps/obop", true),
+        ("(obop admin brand status lists it)", true),
+        ("obop: the stored name", false),
+        ("obop_setting", false),
+        ("OBOP_PUBLIC_URL", false),
+        ("x-obop-minimum", false),
+        ("dev.obop/auth", false),
+        ("metadata[obop_ref]", false),
+        ("myobop and notobop", false),
+        ("", false),
+        ("obo p", false),
+        ("an obopx and then obop.", true),
+    ] {
+        assert_eq!(names_obop_as_a_word(text), yes, "{text:?}");
+    }
+}
+
+#[test]
+fn the_word_scan_finds_a_new_text_in_each_of_the_four_crates_and_leaves_the_rest_alone() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut base = BTreeMap::new();
+    read_tree(&root, &root, &mut base);
+    let (found, drift) = word_scan(&base);
+    assert!(found.is_empty() && drift.is_empty(), "{found:?} {drift:?}");
+    let with = |path: &str, extra: &str| {
+        let mut f = base.clone();
+        f.entry(path.to_string())
+            .and_modify(|s| s.push_str(extra))
+            .or_insert_with(|| extra.to_string());
+        word_scan(&f)
+    };
+    for (path, extra, yes) in [
+        // A message a person could read, in each of the four crates (a file of each, new or old).
+        (
+            "kernel/obop-commands/src/engine/crud.rs",
+            "\nfn a() -> &'static str { \"obop cannot do that\" }\n",
+            true,
+        ),
+        (
+            "kernel/obop-registry/src/kinds_added_by_a_test.rs",
+            "\nfn a() -> &'static str { \"ask obop.\" }\n",
+            true,
+        ),
+        (
+            "kernel/obop-masking/src/lib.rs",
+            "\nfn a() -> &'static str { \"powered by obop\" }\n",
+            true,
+        ),
+        (
+            "modules/mileage/src/model.rs",
+            "\nfn a() -> &'static str { \"obop\" }\n",
+            true,
+        ),
+        // Identifiers are not words, and test code and other crates are not read.
+        (
+            "kernel/obop-commands/src/engine/crud.rs",
+            "\nfn a() -> &'static str { \"obop_record\" }\n",
+            false,
+        ),
+        (
+            "kernel/obop-commands/src/engine/crud.rs",
+            "\n#[cfg(test)]\nmod t { fn a() -> &'static str { \"obop cannot do that\" } }\n",
+            false,
+        ),
+        (
+            "kernel/obop-http/src/lib.rs",
+            "\nfn a() -> &'static str { \"obop cannot do that\" }\n",
+            false,
+        ),
+    ] {
+        let (found, drift) = with(path, extra);
+        assert_eq!(!found.is_empty(), yes, "{path}: {extra}: {found:?}");
+        assert!(drift.is_empty(), "{path}: {drift:?}");
+    }
+    // A row that matches less than it says is a failure too (the registry's address renamed).
+    let mut f = base.clone();
+    let src = f.get_mut("kernel/obop-registry/src/lib.rs").unwrap();
+    assert!(src.contains("https://github.com/SpaceCorps/obop"));
+    *src = src.replace(
+        "https://github.com/SpaceCorps/obop",
+        "https://github.com/SpaceCorps/other",
+    );
+    let (found, drift) = word_scan(&f);
+    assert!(found.is_empty(), "{found:?}");
+    assert!(
+        drift.iter().any(|d| d.contains("the row says 2")),
+        "{drift:?}"
+    );
+    // A crate that is not in the tree is a failure, not a pass.
+    let mut f = base;
+    f.retain(|p, _| !p.starts_with("modules/mileage/"));
+    let (found, _) = word_scan(&f);
+    assert!(
+        found.iter().any(|m| m.starts_with("modules/mileage/")),
+        "{found:?}"
     );
 }
