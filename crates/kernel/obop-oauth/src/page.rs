@@ -11,6 +11,8 @@
 use crate::flow::{DEFAULT_DAYS, EXPIRY_DAYS, FlowCtx, MAX_DAYS, is_admin_like};
 use crate::redirect::RedirectForm;
 use crate::util::b64std;
+use obop_brand::logo::logo_url;
+use obop_commands::brand::Shown;
 use sha2::{Digest, Sha256};
 
 pub const LANGS: [&str; 7] = ["en", "de", "fr", "pl", "fi", "sv", "es"];
@@ -149,7 +151,7 @@ fetch(f.dataset.options,{method:'POST',body:body,credentials:'same-origin',heade
 });
 })();"#;
 
-fn csp(form_action: &str, script: bool) -> String {
+fn csp(form_action: &str, script: bool, brand: &Shown) -> String {
     let hash = b64std(&Sha256::digest(CSS.as_bytes()));
     let scripts = if script {
         format!(
@@ -159,16 +161,95 @@ fn csp(form_action: &str, script: bool) -> String {
     } else {
         String::new()
     };
+    // With a brand set the page links the tab icon (below), and the policy then lets the page load
+    // an image from this origin and nothing else. No brand: the policy is the one it always was.
+    let img = if with_icon(brand) {
+        "; img-src 'self'"
+    } else {
+        ""
+    };
     format!(
-        "default-src 'none'; style-src 'sha256-{hash}'; {scripts}form-action 'self'{form_action}; frame-ancestors 'none'; base-uri 'none'"
+        "default-src 'none'; style-src 'sha256-{hash}'; {scripts}form-action 'self'{form_action}; frame-ancestors 'none'; base-uri 'none'{img}"
     )
 }
 
-fn shell(lang: &str, title: &str, body: &str, form_action: &str) -> Rendered {
-    shell_with(lang, title, body, form_action, false)
+/// The size, in pixels, that the template writes on the root of the inline logo (`width` and
+/// `height`; the stored artwork has neither, and the bytes of the logo route carry neither). A
+/// proposal of the spec (section 8): a constant of the template, not stored and not CSS.
+const LOGO_SIZE: u32 = 28;
+
+/// Whether the page links the tab icon, and so whether its policy allows an image from this origin:
+/// one predicate for both, so the link and the directive are never apart. A brand that is set
+/// always has a logo (the artwork or the generated tile) and so a version.
+fn with_icon(brand: &Shown) -> bool {
+    brand.is_set() && !brand.v().is_empty()
 }
 
-fn shell_with(lang: &str, title: &str, body: &str, form_action: &str, script: bool) -> Rendered {
+/// The tab icon: the logo route, with the version of the logo in the address so that a new logo is a
+/// new address. No brand: no link, and the browser asks for `/favicon.ico` as before.
+fn icon_link(brand: &Shown) -> String {
+    if with_icon(brand) {
+        format!(
+            "<link rel=\"icon\" href=\"{}\" type=\"image/svg+xml\">",
+            esc(&logo_url(brand.v()))
+        )
+    } else {
+        String::new()
+    }
+}
+
+/// The line above the card. With a brand: the inline logo (written by the server from the artwork
+/// the reader accepted, never from the stored text), then the title of the language or else the
+/// name, escaped. With none: the default name alone, as the page has always shown it. The logo is
+/// decoration, since the name follows it, so a screen reader skips it.
+fn brand_line(brand: &Shown, lang: &str) -> String {
+    let name = esc(brand.brand().title(lang));
+    match brand.logo() {
+        Some(logo) if brand.is_set() => format!(
+            "<p class=\"brand\"><span aria-hidden=\"true\">{}</span> {name}</p>",
+            logo.inline(LOGO_SIZE)
+        ),
+        _ => format!("<p class=\"brand\">{name}</p>"),
+    }
+}
+
+/// The five texts that name the product, and the neutral twin of each (spec section 7). A brand that
+/// is set takes the twin in every language: a name is never inserted into a sentence, because
+/// German, Finnish and Swedish attach it to compounds and case endings. No brand: the key itself.
+const TWINS: [(&str, &str); 5] = [
+    ("login.lead", "login.lead.neutral"),
+    ("consent.who_body", "consent.who_body.neutral"),
+    ("consent.f2", "consent.f2.neutral"),
+    ("consent.who_body_mobile", "consent.who_body_mobile.neutral"),
+    (
+        "consent.who_body_mobile_loopback",
+        "consent.who_body_mobile_loopback.neutral",
+    ),
+];
+
+/// The key to show for `key`: its neutral twin when a brand is set and the text names the product.
+fn wording(brand: &Shown, key: &'static str) -> &'static str {
+    if !brand.brand().neutral() {
+        return key;
+    }
+    TWINS
+        .iter()
+        .find(|(base, _)| *base == key)
+        .map_or(key, |(_, twin)| *twin)
+}
+
+fn shell(lang: &str, title: &str, body: &str, form_action: &str, brand: &Shown) -> Rendered {
+    shell_with(lang, title, body, form_action, false, brand)
+}
+
+fn shell_with(
+    lang: &str,
+    title: &str,
+    body: &str,
+    form_action: &str,
+    script: bool,
+    brand: &Shown,
+) -> Rendered {
     let script_tag = if script {
         format!("<script>{PASSKEY_JS}</script>")
     } else {
@@ -178,13 +259,15 @@ fn shell_with(lang: &str, title: &str, body: &str, form_action: &str, script: bo
         "<!doctype html>\n<html lang=\"{lang}\"><head><meta charset=\"utf-8\">\
 <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\
 <meta name=\"color-scheme\" content=\"light dark\"><meta name=\"referrer\" content=\"same-origin\">\
-<meta name=\"robots\" content=\"noindex,nofollow\"><title>{title}</title><style>{CSS}</style></head>\
-<body><main><p class=\"brand\">obop</p><div class=\"card\">{body}</div></main>{script_tag}</body></html>\n",
-        title = esc(title)
+<meta name=\"robots\" content=\"noindex,nofollow\"><title>{title}</title>{icon}<style>{CSS}</style></head>\
+<body><main>{line}<div class=\"card\">{body}</div></main>{script_tag}</body></html>\n",
+        title = esc(title),
+        icon = icon_link(brand),
+        line = brand_line(brand, lang),
     );
     Rendered {
         html,
-        csp: csp(form_action, script),
+        csp: csp(form_action, script, brand),
     }
 }
 
@@ -230,14 +313,20 @@ fn hidden(ctx: &FlowCtx) -> String {
     )
 }
 
-/// A page that ends the flow: the request cannot be continued.
+/// A page that ends the flow: the request cannot be continued. It is the page of an instance with
+/// no brand set; a handler that has read the brand uses [`error_page_with`].
 pub fn error_page(lang: &str, key: &str) -> Rendered {
+    error_page_with(&Shown::not_set(None), lang, key)
+}
+
+/// [`error_page`] for the brand that the handler read at the start of its request.
+pub fn error_page_with(brand: &Shown, lang: &str, key: &str) -> Rendered {
     let body = format!(
         "<h1>{}</h1><p>{}</p>",
         esc(t(lang, "err.title")),
         esc(t(lang, key))
     );
-    shell(lang, t(lang, "err.title"), &body, "")
+    shell(lang, t(lang, "err.title"), &body, "", brand)
 }
 
 pub fn login_page(ctx: &FlowCtx, error: Option<&str>) -> Rendered {
@@ -258,14 +347,23 @@ pub fn login_page(ctx: &FlowCtx, error: Option<&str>) -> Rendered {
     } else {
         String::new()
     };
+    // The operator's message under the lead: plain text, escaped, in the language of the page or
+    // else in English, and nothing at all when none is set.
+    let message = ctx.brand.brand().message(l).map_or_else(String::new, |m| {
+        format!("<p class=\"muted\">{}</p>", esc(m))
+    });
     let body = format!(
-        "<h1>{h1}</h1><p>{lead}</p>{err}{microsoft}\
+        "<h1>{h1}</h1><p>{lead}</p>{message}{err}{microsoft}\
 <form method=\"post\" action=\"/oauth/authorize/login\">{hidden}\
 <label for=\"u\">{user}</label><input id=\"u\" name=\"username\" type=\"text\" autocomplete=\"username\" autocapitalize=\"none\" spellcheck=\"false\" required autofocus>\
 <label for=\"p\">{pw}</label><input id=\"p\" name=\"password\" type=\"password\" autocomplete=\"current-password\" required>\
 <div class=\"row\"><button class=\"primary\" type=\"submit\">{submit}</button></div></form>{pk}",
         h1 = esc(t(l, "login.title")),
-        lead = tf(l, "login.lead", &[("app", &ctx.client_name)]),
+        lead = tf(
+            l,
+            wording(&ctx.brand, "login.lead"),
+            &[("app", &ctx.client_name)]
+        ),
         err = error_box(l, error),
         hidden = hidden(ctx),
         user = esc(t(l, "login.user")),
@@ -273,7 +371,7 @@ pub fn login_page(ctx: &FlowCtx, error: Option<&str>) -> Rendered {
         submit = esc(t(l, "login.submit")),
         pk = passkey_form(ctx, None, "login.passkey"),
     );
-    shell_with(l, t(l, "login.title"), &body, "", true)
+    shell_with(l, t(l, "login.title"), &body, "", true, &ctx.brand)
 }
 
 pub fn mfa_page(ctx: &FlowCtx, mfa_token: &str, error: Option<&str>, passkey: bool) -> Rendered {
@@ -296,7 +394,7 @@ pub fn mfa_page(ctx: &FlowCtx, mfa_token: &str, error: Option<&str>, passkey: bo
             String::new()
         },
     );
-    shell_with(l, t(l, "mfa.title"), &body, "", passkey)
+    shell_with(l, t(l, "mfa.title"), &body, "", passkey, &ctx.brand)
 }
 
 pub fn consent_page(ctx: &FlowCtx, error: Option<&str>) -> Rendered {
@@ -316,6 +414,18 @@ pub fn consent_page(ctx: &FlowCtx, error: Option<&str>) -> Rendered {
         )
     } else {
         ("consent.who_body", "consent.f1", "consent.f2", "consent.f3")
+    };
+    // With a brand set the sentences that name the product use their neutral twins. Every twin keeps
+    // the claim that this instance cannot verify who runs or made the application.
+    let (who_key, f2) = (wording(&ctx.brand, who_key), wording(&ctx.brand, f2));
+    // A client that registered under the name of this instance (its name, its slug or one of its
+    // titles, after the fold of the spec, section 10) gets one more fixed sentence in the box. The
+    // sentence is never read from the record, and nothing of the record is put in the sentence that
+    // names the client.
+    let same_name = if ctx.brand.brand().matches_client(&ctx.client_name) {
+        format!("<p>{}</p>", esc(t(l, "consent.same_name")))
+    } else {
+        String::new()
     };
     let mut groups = String::new();
     for g in &ctx.groups {
@@ -369,7 +479,7 @@ pub fn consent_page(ctx: &FlowCtx, error: Option<&str>) -> Rendered {
 <p class=\"muted\">{signed}</p>\
 <form method=\"post\" action=\"/oauth/authorize/decision\">{hidden}<button class=\"link\" type=\"submit\" name=\"decision\" value=\"switch\" formnovalidate>{switch}</button></form>\
 {err}\
-<div class=\"notice\"><strong>{who}</strong><p>{who_body}</p></div>\
+<div class=\"notice\"><strong>{who}</strong><p>{who_body}</p>{same_name}</div>\
 <form method=\"post\" action=\"/oauth/authorize/decision\">{hidden}\
 <fieldset><legend>{glegend}</legend><p class=\"muted\">{ghelp}</p>{groups}</fieldset>\
 <label for=\"days\">{expiry}</label><select id=\"days\" name=\"days\">{days}</select>{cap}\
@@ -387,6 +497,7 @@ pub fn consent_page(ctx: &FlowCtx, error: Option<&str>) -> Rendered {
             who_key,
             &[("app", &ctx.client_name), ("host", &ctx.redirect_host)]
         ),
+        same_name = same_name,
         glegend = esc(t(l, "consent.groups")),
         ghelp = esc(t(l, "consent.groups_help")),
         groups = groups,
@@ -410,6 +521,7 @@ pub fn consent_page(ctx: &FlowCtx, error: Option<&str>) -> Rendered {
         &tf_plain(l, "consent.title", &ctx.client_name),
         &body,
         &action,
+        &ctx.brand,
     )
 }
 
@@ -489,6 +601,23 @@ pub const CATALOGUE: &[(&str, [&str; 7])] = &[
     ("consent.mobile_none", ["This app asked for no permission groups that you hold, so it gets none. It can sign in and sign itself out, and nothing else.", "Diese App hat keine Berechtigungsgruppen angefordert, die Sie haben, deshalb erhält sie keine. Sie kann sich anmelden und selbst abmelden, sonst nichts.", "Cette application n'a demandé aucun groupe de permissions que vous détenez : elle n'en reçoit aucun. Elle peut se connecter et se déconnecter elle-même, rien d'autre.", "Ta aplikacja nie poprosiła o żadne grupy uprawnień, które masz, więc żadnej nie dostaje. Może się zalogować i samodzielnie wylogować, nic więcej.", "Tämä sovellus ei pyytänyt yhtään käyttöoikeusryhmää, jonka omistat, joten se ei saa mitään. Se voi kirjautua sisään ja ulos itse, ei muuta.", "Den här appen bad inte om några behörighetsgrupper som du har, så den får inga. Den kan logga in och logga ut sig själv, inget mer.", "Esta aplicación no pidió ningún grupo de permisos que usted tenga, así que no recibe ninguno. Puede iniciar y cerrar sesión por sí misma, y nada más."]),
     ("consent.allow", ["Allow", "Erlauben", "Autoriser", "Zezwól", "Salli", "Tillåt", "Permitir"]),
     ("consent.deny", ["Deny", "Ablehnen", "Refuser", "Odmów", "Kiellä", "Neka", "Denegar"]),
+    // ---- Instance branding (docs/spec/branding.md, sections 7 and 10) -------------------------
+    // The neutral twins of the five texts above that name the product, shown in every language
+    // whenever a brand is set (`TWINS`), and the one fixed sentence for a client that is named like
+    // the instance. A twin has the placeholders of its base text, none names a product (a test of
+    // `obop-http` scans them), and the three "who" twins name the application twice, as `{app}`,
+    // in the claim sentence too: a pronoun could be read as the instance.
+    // The English drafts are the spec's. The six translations of each of the six keys (36 cells)
+    // are MACHINE-DRAFTED, written from the existing translations of the base texts, and nobody who
+    // speaks the language has read them. They stay flagged for the release gate of the branding
+    // work: the owner and counsel confirm them before a real customer's people see them (spec
+    // section 7, Q71 item 2). They show only on an instance that has set a brand.
+    ("login.lead.neutral", ["{app} wants to connect to this instance. Sign in with your account to decide what it may do.", "{app} möchte sich mit dieser Instanz verbinden. Melden Sie sich mit Ihrem Konto an, um zu entscheiden, was die Anwendung darf.", "{app} souhaite se connecter à cette instance. Connectez-vous avec votre compte pour décider de ce qu'elle peut faire.", "{app} chce połączyć się z tą instancją. Zaloguj się na swoje konto, aby zdecydować, na co aplikacja może sobie pozwolić.", "{app} haluaa yhdistää tähän instanssiin. Kirjaudu tililläsi päättääksesi, mitä se saa tehdä.", "{app} vill ansluta till den här instansen. Logga in med ditt konto för att bestämma vad den får göra.", "{app} quiere conectarse a esta instancia. Inicie sesión con su cuenta para decidir qué puede hacer."]),
+    ("consent.who_body.neutral", ["{app} registered itself with this instance. This instance cannot verify who runs {app}. After you answer, your browser goes to {host}. Only continue if you started this connection yourself.", "{app} hat sich selbst bei dieser Instanz registriert. Diese Instanz kann nicht prüfen, wer {app} betreibt. Nach Ihrer Antwort wechselt Ihr Browser zu {host}. Fahren Sie nur fort, wenn Sie diese Verbindung selbst gestartet haben.", "{app} s'est enregistrée elle-même auprès de cette instance. Cette instance ne peut pas vérifier qui exploite {app}. Après votre réponse, votre navigateur ira vers {host}. Ne continuez que si vous avez lancé cette connexion vous-même.", "{app} sama zarejestrowała się w tej instancji. Ta instancja nie może sprawdzić, kto prowadzi {app}. Po Twojej odpowiedzi przeglądarka przejdzie do {host}. Kontynuuj tylko wtedy, gdy sam rozpocząłeś to połączenie.", "{app} on rekisteröitynyt itse tähän instanssiin. Tämä instanssi ei voi tarkistaa, kuka ylläpitää sovellusta {app}. Vastauksesi jälkeen selaimesi siirtyy osoitteeseen {host}. Jatka vain, jos aloitit tämän yhteyden itse.", "{app} har registrerat sig själv hos den här instansen. Den här instansen kan inte kontrollera vem som driver {app}. Efter ditt svar går webbläsaren till {host}. Fortsätt bara om du själv startade anslutningen.", "{app} se registró por sí misma en esta instancia. Esta instancia no puede comprobar quién gestiona {app}. Tras su respuesta, el navegador irá a {host}. Continúe solo si usted mismo inició esta conexión."]),
+    ("consent.f2.neutral", ["Steps that need approval still wait for a person to approve them in the back office. The application cannot approve its own proposals.", "Schritte, die eine Freigabe brauchen, warten weiterhin darauf, dass eine Person sie im Backoffice freigibt. Die Anwendung kann ihre eigenen Vorschläge nicht freigeben.", "Les étapes qui demandent une approbation attendent toujours qu'une personne les approuve dans le back-office. L'application ne peut pas approuver ses propres propositions.", "Kroki wymagające zatwierdzenia nadal czekają, aż człowiek zatwierdzi je w panelu. Aplikacja nie może zatwierdzać własnych propozycji.", "Hyväksyntää vaativat vaiheet odottavat edelleen, että ihminen hyväksyy ne taustajärjestelmässä. Sovellus ei voi hyväksyä omia ehdotuksiaan.", "Steg som kräver godkännande väntar fortfarande på att en person godkänner dem i administrationen. Programmet kan inte godkänna sina egna förslag.", "Los pasos que requieren aprobación siguen esperando a que una persona los apruebe en el back office. La aplicación no puede aprobar sus propias propuestas."]),
+    ("consent.who_body_mobile.neutral", ["{app} is a mobile app that registered itself with this instance. This instance cannot verify who made {app}. After you answer, your phone hands the result to the app on this phone that registered the scheme {host}; if another app registered the same scheme, it could receive it. Only continue if you started this sign-in yourself, on your own phone.", "{app} ist eine mobile App, die sich selbst bei dieser Instanz registriert hat. Diese Instanz kann nicht prüfen, wer {app} erstellt hat. Nach Ihrer Antwort übergibt Ihr Telefon das Ergebnis an die App auf diesem Telefon, die das Schema {host} registriert hat; hat eine andere App dasselbe Schema registriert, könnte sie es erhalten. Fahren Sie nur fort, wenn Sie diese Anmeldung selbst auf Ihrem eigenen Telefon gestartet haben.", "{app} est une application mobile qui s'est enregistrée elle-même auprès de cette instance. Cette instance ne peut pas vérifier qui a créé {app}. Après votre réponse, votre téléphone transmet le résultat à l'application de ce téléphone qui a enregistré le schéma {host} ; si une autre application a enregistré le même schéma, elle pourrait le recevoir. Ne continuez que si vous avez lancé cette connexion vous-même, sur votre propre téléphone.", "{app} to aplikacja mobilna, która sama zarejestrowała się w tej instancji. Ta instancja nie może sprawdzić, kto stworzył {app}. Po Twojej odpowiedzi telefon przekaże wynik aplikacji na tym telefonie, która zarejestrowała schemat {host}; jeśli inna aplikacja zarejestrowała ten sam schemat, mogłaby go otrzymać. Kontynuuj tylko wtedy, gdy sam rozpocząłeś to logowanie na własnym telefonie.", "{app} on mobiilisovellus, joka on rekisteröitynyt itse tähän instanssiin. Tämä instanssi ei voi tarkistaa, kuka on tehnyt sovelluksen {app}. Vastauksesi jälkeen puhelimesi antaa tuloksen tämän puhelimen sovellukselle, joka on rekisteröinyt skeeman {host}; jos toinen sovellus on rekisteröinyt saman skeeman, se voisi saada tuloksen. Jatka vain, jos aloitit tämän kirjautumisen itse omalla puhelimellasi.", "{app} är en mobilapp som har registrerat sig själv hos den här instansen. Den här instansen kan inte kontrollera vem som har gjort {app}. Efter ditt svar lämnar telefonen över resultatet till appen på den här telefonen som har registrerat schemat {host}; om en annan app har registrerat samma schema kan den få det. Fortsätt bara om du själv startade den här inloggningen, på din egen telefon.", "{app} es una aplicación móvil que se registró por sí misma en esta instancia. Esta instancia no puede comprobar quién creó {app}. Tras su respuesta, su teléfono entregará el resultado a la aplicación de este teléfono que registró el esquema {host}; si otra aplicación registró el mismo esquema, podría recibirlo. Continúe solo si usted mismo inició este acceso, en su propio teléfono."]),
+    ("consent.who_body_mobile_loopback.neutral", ["{app} says it is a mobile app that registered itself with this instance. It asks for the result to be sent to {host}, which is a program running on this computer, not an app on a phone. This instance cannot verify who made {app}. Only continue if you started this sign-in yourself, on this computer.", "{app} gibt sich als mobile App aus, die sich selbst bei dieser Instanz registriert hat. Sie verlangt, dass das Ergebnis an {host} gesendet wird, ein Programm auf diesem Computer, keine App auf einem Telefon. Diese Instanz kann nicht prüfen, wer {app} erstellt hat. Fahren Sie nur fort, wenn Sie diese Anmeldung selbst auf diesem Computer gestartet haben.", "{app} se présente comme une application mobile qui s'est enregistrée elle-même auprès de cette instance. Elle demande que le résultat soit envoyé à {host}, un programme exécuté sur cet ordinateur, et non une application sur un téléphone. Cette instance ne peut pas vérifier qui a créé {app}. Ne continuez que si vous avez lancé cette connexion vous-même, sur cet ordinateur.", "{app} podaje się za aplikację mobilną, która sama zarejestrowała się w tej instancji. Prosi o wysłanie wyniku na {host}, czyli do programu działającego na tym komputerze, a nie do aplikacji na telefonie. Ta instancja nie może sprawdzić, kto stworzył {app}. Kontynuuj tylko wtedy, gdy sam rozpocząłeś to logowanie na tym komputerze.", "{app} väittää olevansa mobiilisovellus, joka on rekisteröitynyt itse tähän instanssiin. Se pyytää tuloksen lähettämistä osoitteeseen {host}, eli tällä tietokoneella toimivalle ohjelmalle, ei puhelimen sovellukselle. Tämä instanssi ei voi tarkistaa, kuka on tehnyt sovelluksen {app}. Jatka vain, jos aloitit tämän kirjautumisen itse tällä tietokoneella.", "{app} säger sig vara en mobilapp som har registrerat sig själv hos den här instansen. Den ber om att resultatet skickas till {host}, ett program som körs på den här datorn, inte en app på en telefon. Den här instansen kan inte kontrollera vem som har gjort {app}. Fortsätt bara om du själv startade den här inloggningen, på den här datorn.", "{app} dice ser una aplicación móvil que se registró por sí misma en esta instancia. Pide que el resultado se envíe a {host}, un programa que se ejecuta en este ordenador, no una aplicación de un teléfono. Esta instancia no puede comprobar quién creó {app}. Continúe solo si usted mismo inició este acceso, en este ordenador."]),
+    ("consent.same_name", ["This name is the same as the name of this instance. That does not mean that the application belongs to this instance.", "Dieser Name ist derselbe wie der Name dieser Instanz. Das bedeutet nicht, dass die Anwendung zu dieser Instanz gehört.", "Ce nom est identique au nom de cette instance. Cela ne signifie pas que l'application appartient à cette instance.", "Ta nazwa jest taka sama jak nazwa tej instancji. Nie oznacza to, że aplikacja należy do tej instancji.", "Tämä nimi on sama kuin tämän instanssin nimi. Se ei tarkoita, että sovellus kuuluu tälle instanssille.", "Det här namnet är detsamma som namnet på den här instansen. Det betyder inte att programmet tillhör den här instansen.", "Este nombre es el mismo que el nombre de esta instancia. Eso no significa que la aplicación pertenezca a esta instancia."]),
 ];
 
 #[cfg(test)]
@@ -537,6 +666,7 @@ mod tests {
             preselected: vec![],
             microsoft: false,
             max_days: 90,
+            brand: std::sync::Arc::new(Shown::not_set(None)),
         };
         let r = consent_page(&ctx, None);
         assert!(!r.html.contains("<script>") && !r.html.contains("<b>"));
@@ -565,6 +695,7 @@ mod tests {
             preselected: vec![],
             microsoft: false,
             max_days: 90,
+            brand: std::sync::Arc::new(Shown::not_set(None)),
         };
         for r in [
             login_page(&ctx, None),
@@ -610,6 +741,7 @@ mod tests {
             preselected: vec![],
             microsoft: class.is_mobile(),
             max_days,
+            brand: std::sync::Arc::new(Shown::not_set(None)),
         }
     }
 

@@ -9,9 +9,11 @@ use crate::client::{Class, Client};
 use crate::redirect::RedirectForm;
 use crate::util::{clean_text, ct_eq, rand_hex, sha_hex};
 use crate::{OAuth, OAuthError, api_resource, mcp_resource, redirect};
+use obop_commands::brand::Shown;
 use obop_commands::devices::never_for_mobile;
 use obop_commands::{LoginOutcome, MfaError, SsoFlowSignIn};
 use serde_json::{Value as J, json};
+use std::sync::Arc;
 
 /// The parameters of `GET /oauth/authorize`.
 #[derive(Debug, Default, Clone)]
@@ -112,6 +114,12 @@ pub struct FlowCtx {
     /// The longest the person may hand over for, in days: the cap of a Microsoft-only account on
     /// a mobile app's flow once somebody is signed in on it, else the general maximum.
     pub max_days: u32,
+    /// The instance brand every page of this request shows: the one the handler read at the start
+    /// of the request (docs/spec/branding.md, section 4), so that the name and the logo of a page
+    /// come from one read. `view` cannot read it (this crate has no reader); it gives the page of an
+    /// instance with no brand set, and `obop-http` sets the brand it read after `view`, as it does
+    /// `microsoft`.
+    pub brand: Arc<Shown>,
 }
 
 /// Why a step of the flow was not accepted.
@@ -495,6 +503,7 @@ impl OAuth {
             preselected,
             microsoft: false,
             max_days: MAX_DAYS,
+            brand: Arc::new(Shown::not_set(None)),
         }
     }
 

@@ -70,7 +70,7 @@ enum Limit {
 
 /// Where the brand is read or written: the path from `crates/` (a prefix when it ends with `/`),
 /// why, and what the file may do.
-const ALLOWED: [(&str, &str, Limit); 7] = [
+const ALLOWED: [(&str, &str, Limit); 10] = [
     (
         "kernel/obop-commands/src/brand/",
         "the module itself: the reader, `strict()`, `apply` and the read of `get`",
@@ -115,6 +115,36 @@ const ALLOWED: [(&str, &str, Limit); 7] = [
         "obop/src/brand_cmd.rs",
         "`obop admin brand`, which acts on the database as the operator (spec, section 3)",
         Limit::Any,
+    ),
+    (
+        "kernel/obop-http/src/oauth.rs",
+        "the pages of the authorization flow (S1c): `read_brand` gets the reader of the dispatcher once and asks it once, on a blocking thread, and the four starts of a request (`authorize_blocking`, `step`, `microsoft_blocking`, `microsoft_return`) call it and hand that one value to every page they render; it names the type `Shown` as a type only (no function through it, no second name, no impl), so it builds no reader",
+        Limit::Reads {
+            calls: 1,
+            reads: 1,
+            paths: &["Shown"],
+            types: &["Shown"],
+        },
+    ),
+    (
+        "kernel/obop-oauth/src/page.rs",
+        "the pages of the authorization flow (S1c) show the `Shown` that the handler hands them through `FlowCtx.brand`, and read nothing: no reader here, only the four calls of the accessor `Shown::brand()` (the brand line, the neutral wording, the message and the comparison with the client's name) and `Shown::not_set` for the default page",
+        Limit::Reads {
+            calls: 4,
+            reads: 0,
+            paths: &["Shown"],
+            types: &[],
+        },
+    ),
+    (
+        "kernel/obop-oauth/src/flow.rs",
+        "`FlowCtx` carries the `Shown` that the handler read; `view` builds the page context of an instance with no brand set (`Shown::not_set`) and reads nothing",
+        Limit::Reads {
+            calls: 0,
+            reads: 0,
+            paths: &["Shown"],
+            types: &[],
+        },
     ),
 ];
 
@@ -540,6 +570,18 @@ fn the_scan_sees_the_ways_a_file_can_read_the_row_and_leaves_the_allowed_files_a
             "kernel/obop-http/src/lib.rs",
             "fn f() { let _ = brand::routes(g); }",
         ),
+        (
+            "kernel/obop-http/src/oauth.rs",
+            "use obop_commands::brand::Shown; fn read_brand(s: &S) -> Arc<Shown> { s.dispatcher.brand().current() }",
+        ),
+        (
+            "kernel/obop-oauth/src/page.rs",
+            "use obop_commands::brand::Shown; fn f(b: &Shown) -> &str { b.brand().name() } fn g() -> Shown { Shown::not_set(None) }",
+        ),
+        (
+            "kernel/obop-oauth/src/flow.rs",
+            "use obop_commands::brand::Shown; fn f() -> Arc<Shown> { Arc::new(Shown::not_set(None)) }",
+        ),
     ]);
     let (found, stale) = scan(&files);
     assert!(found.is_empty(), "{found:?}");
@@ -809,10 +851,11 @@ fn a_row_with_limits_lets_its_file_ask_the_reader_as_the_row_says_and_nothing_el
     assert!(found.is_empty(), "{found:?}");
 }
 
-/// The rows with limits are the two files of the logo route and no others: loosening one of them to
-/// `Limit::Any` is a change of this test, and so a decision that shows in the diff.
+/// The rows with limits are the two files of the logo route and the three files of the pages of the
+/// authorization flow, and no others: loosening one of them to `Limit::Any` is a change of this
+/// test, and so a decision that shows in the diff.
 #[test]
-fn the_rows_with_limits_are_the_two_files_of_the_logo_route() {
+fn the_rows_with_limits_are_the_files_that_only_ask_the_reader() {
     let limited: Vec<&str> = ALLOWED
         .iter()
         .filter(|(_, _, l)| matches!(l, Limit::Reads { .. }))
@@ -822,7 +865,502 @@ fn the_rows_with_limits_are_the_two_files_of_the_logo_route() {
         limited,
         [
             "kernel/obop-http/src/brand.rs",
-            "kernel/obop-http/src/lib.rs"
+            "kernel/obop-http/src/lib.rs",
+            "kernel/obop-http/src/oauth.rs",
+            "kernel/obop-oauth/src/page.rs",
+            "kernel/obop-oauth/src/flow.rs"
         ]
     );
+}
+
+// ---- The scan for literals (slice S1c) -------------------------------------------------------------
+//
+// docs/spec/branding.md, section 13: a test that fails when a literal `obop` is added to a page that
+// should use the record. It reads the non-test code of a closed list of files ([`LITERAL_FILES`],
+// the files of the pages that a slice has made show the brand), on the same reader as the scan
+// above (comments blanked, test-only code removed, literals kept apart from code), and fails on any
+// string literal that contains `obop`, case-insensitively, that is not a row of [`LITERAL_ALLOWED`].
+// A row names the file, the item that holds the literal (the function, or the constant when no
+// function encloses it), the literal (exactly; or every literal of the item that names obop), how
+// many there must be, a class and the reason. A row that matches fewer or more literals than it says
+// fails too, so the list cannot go stale and a sixth text that names the product cannot slip in
+// under the row of the five.
+//
+// A row is the decision that a text may name obop on every instance. It is reviewed against the
+// spec. The class says why:
+//
+// - `default`: the one place that spells the default name (`obop_brand::DEFAULT_NAME`);
+// - `wire`: a name on the wire (a header, a field, a scheme);
+// - `env`: the name of an environment variable;
+// - `identifier`: a name inside the program that a person does not read (a cookie, a key, a table);
+// - `admin`: a text only an administrator reads, which names obop on purpose;
+// - `today`: a text that must stay byte for byte for an instance with no brand; the reason names the
+//   branded counterpart, the text that a brand puts in its place.
+//
+// What it does not see is what the scan above does not see: text built at run time, text in a
+// dependency, a file that is not on the list, and a name inside a longer literal that is on the list
+// for another reason (a row with no literal lets every literal of its item through, up to its count).
+
+/// The closed list of files whose string literals are scanned. The slice that makes another page
+/// show the brand adds its file here in the commit that wires it, with a row for each literal that
+/// has to stay.
+const LITERAL_FILES: [&str; 2] = [
+    "kernel/obop-oauth/src/page.rs",
+    "kernel/obop-http/src/oauth.rs",
+];
+
+/// The classes of a row, in the words of the spec.
+const LITERAL_CLASSES: [&str; 6] = ["default", "wire", "env", "identifier", "admin", "today"];
+
+/// A row of [`LITERAL_ALLOWED`]: the file, the item, the literal (`None`: every literal of the item
+/// that names obop), the count, the class and the reason.
+type LiteralRow = (
+    &'static str,
+    &'static str,
+    Option<&'static str>,
+    usize,
+    &'static str,
+    &'static str,
+);
+
+const LITERAL_ALLOWED: [LiteralRow; 4] = [
+    (
+        "kernel/obop-oauth/src/page.rs",
+        "CATALOGUE",
+        None,
+        35,
+        "today",
+        "the 35 cells (five texts in seven languages) that name the product on an instance with no \
+         brand: login.lead, consent.who_body, consent.f2, consent.who_body_mobile and \
+         consent.who_body_mobile_loopback. They stay byte for byte (the golden pins of obop-oauth hold \
+         them). The branded counterpart of each is its `.neutral` twin in the same catalogue, shown \
+         whenever a brand is set; the second assertion below requires the twin to exist and to name \
+         no product",
+    ),
+    (
+        "kernel/obop-http/src/oauth.rs",
+        "cors",
+        Some("Retry-After, X-Obop-Applied"),
+        1,
+        "wire",
+        "the name of a response header that a browser client may read: a name on the wire, never shown \
+         to a person",
+    ),
+    (
+        "kernel/obop-http/src/oauth.rs",
+        "cookie_name",
+        Some("obop_oauth_{}"),
+        1,
+        "identifier",
+        "the name of the cookie that binds a browser to its flow: an identifier of the program that a \
+         person does not read; renaming it would end the flows in progress",
+    ),
+    (
+        "kernel/obop-http/src/oauth.rs",
+        "webauthn_ctx",
+        Some("obop"),
+        1,
+        "today",
+        "the relying-party name of the passkey ceremony site of the sign-in pages. It reaches an \
+         authenticator only through registration options, which the REST routes make, not these \
+         pages. The branded counterpart is the name from the record, which the enrolment slice (S1e) \
+         puts here and then removes this row",
+    ),
+];
+
+/// A string literal of a scanned file that names obop.
+struct Named {
+    path: String,
+    item: String,
+    text: String,
+    line: usize,
+}
+
+/// The name of the item that holds the offset: the innermost function whose body contains it, else
+/// the nearest `const` or `static` that starts before it (the literals of a table).
+fn item_of(code: &[u8], at: usize) -> String {
+    use crate::src_scan::{enclosing_fn, skip_ws, word_at};
+    if let Some(f) = enclosing_fn(code, at) {
+        return f;
+    }
+    ["const", "static"]
+        .iter()
+        .flat_map(|k| words(code, k).into_iter().map(move |p| (p, k.len())))
+        .filter(|(p, _)| *p < at)
+        .max_by_key(|(p, _)| *p)
+        .map(|(p, len)| word_at(code, skip_ws(code, p + len)).to_string())
+        .unwrap_or_default()
+}
+
+/// Every literal of the listed files that names obop, in the order of the files and of the source.
+/// A listed file that is not in the tree (or is all test code) is reported by [`literal_scan`].
+fn named_literals(files: &BTreeMap<String, String>) -> Vec<Named> {
+    let lexed = non_test(files);
+    let mut out = Vec::new();
+    for path in LITERAL_FILES {
+        let Some(l) = lexed.get(path) else { continue };
+        for (start, _, text) in &l.strings {
+            if text.to_lowercase().contains("obop") {
+                out.push(Named {
+                    path: path.to_string(),
+                    item: item_of(&l.code, *start),
+                    text: text.clone(),
+                    line: line_of(&l.code, *start),
+                });
+            }
+        }
+    }
+    out
+}
+
+/// The row that lets this literal stand, if any.
+fn literal_row(n: &Named) -> Option<usize> {
+    LITERAL_ALLOWED
+        .iter()
+        .position(|(file, item, lit, _, _, _)| {
+            *file == n.path && *item == n.item && lit.is_none_or(|l| l == n.text)
+        })
+}
+
+fn cut(s: &str) -> String {
+    let t: String = s.chars().take(60).collect();
+    if t.chars().count() < s.chars().count() {
+        format!("{t}...")
+    } else {
+        t
+    }
+}
+
+/// The literals that no row lets stand and the listed files that are missing (`found`), and the
+/// rows that match fewer or more literals than they say (`drift`).
+fn literal_scan(files: &BTreeMap<String, String>) -> (Vec<String>, Vec<String>) {
+    let named = named_literals(files);
+    let lexed = non_test(files);
+    let mut found = Vec::new();
+    let mut seen = [0usize; LITERAL_ALLOWED.len()];
+    for path in LITERAL_FILES {
+        if !lexed.contains_key(path) {
+            found.push(format!(
+                "{path}: a file of LITERAL_FILES that is not in the tree (or is all test code)"
+            ));
+        }
+    }
+    for n in &named {
+        match literal_row(n) {
+            Some(i) => seen[i] += 1,
+            None => found.push(format!(
+                "{}:{}: a literal that names obop is not a row of LITERAL_ALLOWED (in `{}`): {:?}",
+                n.path,
+                n.line,
+                n.item,
+                cut(&n.text)
+            )),
+        }
+    }
+    let drift = LITERAL_ALLOWED
+        .iter()
+        .enumerate()
+        .filter(|(i, (_, _, _, count, _, _))| seen[*i] != *count)
+        .map(|(i, (file, item, lit, count, _, _))| {
+            format!(
+                "{file} `{item}` {}: the row says {count}, the file has {}",
+                lit.map_or("(every literal)".to_string(), |l| format!("{l:?}")),
+                seen[i]
+            )
+        })
+        .collect();
+    (found, drift)
+}
+
+#[test]
+fn no_literal_that_names_obop_is_added_to_a_page_that_should_use_the_record() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut files = BTreeMap::new();
+    read_tree(&root, &root, &mut files);
+    let (found, drift) = literal_scan(&files);
+    assert!(
+        found.is_empty(),
+        "a page that shows the instance name has a literal that names obop (use the brand, or add a \
+         row to LITERAL_ALLOWED with its class and reason if the text may name obop on every \
+         instance):\n{}",
+        found.join("\n")
+    );
+    assert!(
+        drift.is_empty(),
+        "rows of LITERAL_ALLOWED that match fewer or more literals than they say (the row is stale, \
+         or a text that names obop was added under it):\n{}",
+        drift.join("\n")
+    );
+}
+
+#[test]
+fn every_row_of_the_literal_list_has_a_known_class_a_reason_and_a_file_of_the_list() {
+    for (file, item, lit, count, class, why) in LITERAL_ALLOWED {
+        assert!(
+            LITERAL_FILES.contains(&file),
+            "{file} is not in LITERAL_FILES"
+        );
+        assert!(
+            LITERAL_CLASSES.contains(&class),
+            "{file} {item}: class {class}"
+        );
+        assert!(count > 0, "{file} {item}: a row of no literals");
+        assert!(!item.is_empty() && lit.is_none_or(|l| !l.is_empty()));
+        assert!(why.len() > 40, "{file} {item}: say why in words");
+        // A text that stays for an instance with no brand must say what a brand puts in its place.
+        if class == "today" {
+            assert!(
+                why.contains("counterpart"),
+                "{file} {item}: a `today` row names the branded counterpart"
+            );
+        }
+    }
+    for file in LITERAL_FILES {
+        assert!(
+            LITERAL_ALLOWED.iter().any(|r| r.0 == file),
+            "{file} is on the list and has no row, so it could never hold a name"
+        );
+    }
+}
+
+/// A `page.rs` with a catalogue of `cells` cells that name obop.
+fn page_with(cells: usize) -> String {
+    let mut s = String::from("pub const CATALOGUE: &[(&str, [&str; 7])] = &[\n");
+    for i in 0..cells {
+        s.push_str(&format!("(\"k{i}\", [\"obop is here\"]),\n"));
+    }
+    s.push_str("];\n");
+    s
+}
+
+/// An `oauth.rs` with the three literals of the rows.
+const OAUTH_RS: &str = "fn cors() { let _ = \"Retry-After, X-Obop-Applied\"; }\n\
+     fn cookie_name() { let _ = format!(\"obop_oauth_{}\", 1); }\n\
+     fn webauthn_ctx() { let _ = \"obop\"; }\n";
+
+const PAGE_PATH: &str = "kernel/obop-oauth/src/page.rs";
+const OAUTH_PATH: &str = "kernel/obop-http/src/oauth.rs";
+
+#[test]
+fn the_scan_for_literals_finds_a_new_literal() {
+    let ok = tree(&[(PAGE_PATH, &page_with(35)), (OAUTH_PATH, OAUTH_RS)]);
+    let (found, drift) = literal_scan(&ok);
+    assert!(found.is_empty() && drift.is_empty(), "{found:?} {drift:?}");
+
+    // A literal `obop` added to a listed file is found, with the file, the line and the item.
+    let added = format!(
+        "{}\nfn brand_line() -> &'static str {{\n    \"obop\"\n}}\n",
+        page_with(35)
+    );
+    let (found, drift) = literal_scan(&tree(&[(PAGE_PATH, &added), (OAUTH_PATH, OAUTH_RS)]));
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(
+        found[0].starts_with(&format!("{PAGE_PATH}:40:")) && found[0].contains("`brand_line`"),
+        "{found:?}"
+    );
+    assert!(drift.is_empty(), "{drift:?}");
+
+    // The case of the name does not matter.
+    let loud = format!(
+        "{}\nfn f() {{ let _ = \"Welcome to OBOP\"; }}\n",
+        page_with(35)
+    );
+    let (found, _) = literal_scan(&tree(&[(PAGE_PATH, &loud), (OAUTH_PATH, OAUTH_RS)]));
+    assert_eq!(found.len(), 1, "{found:?}");
+
+    // The same text in another function is not the row's: the row names the item.
+    let moved = OAUTH_RS.replace("fn webauthn_ctx()", "fn other()");
+    let (found, drift) = literal_scan(&tree(&[(PAGE_PATH, &page_with(35)), (OAUTH_PATH, &moved)]));
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(found[0].contains("`other`"), "{found:?}");
+    assert!(
+        drift.iter().any(|d| d.contains("webauthn_ctx")),
+        "{drift:?}"
+    );
+
+    // A different literal in the item of a row with an exact literal is not let through.
+    let widened = OAUTH_RS.replace("\"obop\"", "\"obop shop\"");
+    let (found, _) = literal_scan(&tree(&[
+        (PAGE_PATH, &page_with(35)),
+        (OAUTH_PATH, &widened),
+    ]));
+    assert_eq!(found.len(), 1, "{found:?}");
+
+    // A file of the list that is missing from the tree is a failure, not a pass.
+    let (found, _) = literal_scan(&tree(&[(OAUTH_PATH, OAUTH_RS)]));
+    assert!(found.iter().any(|f| f.starts_with(PAGE_PATH)), "{found:?}");
+}
+
+#[test]
+fn the_scan_for_literals_finds_a_row_that_matches_more_or_less_than_it_says() {
+    // A sixth catalogue key that names obop sits under the row of the five and over its count.
+    let (found, drift) = literal_scan(&tree(&[
+        (PAGE_PATH, &page_with(36)),
+        (OAUTH_PATH, OAUTH_RS),
+    ]));
+    assert!(found.is_empty(), "{found:?}");
+    assert_eq!(drift.len(), 1, "{drift:?}");
+    assert!(
+        drift[0].contains("says 35") && drift[0].contains("has 36"),
+        "{drift:?}"
+    );
+
+    // A row that matches less than it says: a cell lost its name, or the literal was renamed.
+    let (found, drift) = literal_scan(&tree(&[
+        (PAGE_PATH, &page_with(34)),
+        (OAUTH_PATH, OAUTH_RS),
+    ]));
+    assert!(found.is_empty(), "{found:?}");
+    assert!(drift[0].contains("has 34"), "{drift:?}");
+    let renamed = OAUTH_RS.replace("obop_oauth_{}", "oauth_{}");
+    let (found, drift) = literal_scan(&tree(&[
+        (PAGE_PATH, &page_with(35)),
+        (OAUTH_PATH, &renamed),
+    ]));
+    assert!(found.is_empty(), "{found:?}");
+    assert!(
+        drift.len() == 1 && drift[0].contains("cookie_name") && drift[0].contains("has 0"),
+        "{drift:?}"
+    );
+}
+
+#[test]
+fn the_scan_for_literals_leaves_comments_test_code_and_files_off_the_list_alone() {
+    let noisy = format!(
+        "{}// a comment about obop\n/// a doc about obop\n\
+         #[cfg(test)]\nmod tests {{ fn t() {{ let _ = \"obop in a test\"; }} }}\n",
+        page_with(35)
+    );
+    let elsewhere = "fn f() { let _ = \"obop\"; }";
+    let (found, drift) = literal_scan(&tree(&[
+        (PAGE_PATH, &noisy),
+        (OAUTH_PATH, OAUTH_RS),
+        ("kernel/obop-http/src/sign_page.rs", elsewhere),
+        ("kernel/obop-oauth/src/tests/mobile.rs", elsewhere),
+    ]));
+    assert!(found.is_empty() && drift.is_empty(), "{found:?} {drift:?}");
+}
+
+/// The second assertion of the scan: the neutral twins and the fixed sentence name no product, in
+/// any language, and every text of the catalogue that names the product has a twin. The second part
+/// is what makes "a sixth key that names obop fails until it has a neutral twin" true.
+#[test]
+fn the_neutral_twins_and_the_same_name_sentence_name_no_product() {
+    use obop_oauth::page::{CATALOGUE, LANGS};
+    let twins = [
+        "login.lead.neutral",
+        "consent.who_body.neutral",
+        "consent.f2.neutral",
+        "consent.who_body_mobile.neutral",
+        "consent.who_body_mobile_loopback.neutral",
+        "consent.same_name",
+    ];
+    for key in twins {
+        let (_, cells) = CATALOGUE
+            .iter()
+            .find(|(k, _)| *k == key)
+            .unwrap_or_else(|| panic!("{key} is not in the catalogue"));
+        for (cell, lang) in cells.iter().zip(LANGS) {
+            assert!(
+                !cell.to_lowercase().contains("obop"),
+                "{key} names the product in {lang}: {cell}"
+            );
+        }
+    }
+    let mut naming = 0;
+    for (key, cells) in CATALOGUE {
+        if cells.iter().any(|c| c.to_lowercase().contains("obop")) {
+            naming += 1;
+            assert!(
+                CATALOGUE
+                    .iter()
+                    .any(|(k, _)| *k == format!("{key}.neutral")),
+                "{key} names the product and has no neutral twin, `{key}.neutral`"
+            );
+        }
+        if let Some(base) = key.strip_suffix(".neutral") {
+            assert!(
+                CATALOGUE.iter().any(|(k, _)| *k == base),
+                "{key} is a twin of a text that does not exist"
+            );
+        }
+    }
+    assert_eq!(naming, 5, "the five texts that name the product");
+}
+
+/// The three rows of the authorization flow's pages (S1c) let their files do what the row says and
+/// nothing else: the handlers get the reader of the dispatcher once and ask it once and build none;
+/// the page functions and the flow context only use the value they were handed.
+#[test]
+fn the_rows_of_the_pages_of_the_authorization_flow_hold_their_files_to_what_they_say() {
+    let route = "kernel/obop-http/src/oauth.rs";
+    let page = "kernel/obop-oauth/src/page.rs";
+    let flow = "kernel/obop-oauth/src/flow.rs";
+    // What the rows say is allowed.
+    for (path, src) in [
+        (
+            route,
+            "use obop_commands::brand::Shown; fn read_brand(s: &S) -> Arc<Shown> { s.dispatcher.brand().current() } fn f(b: &Shown) {}",
+        ),
+        (
+            page,
+            "use obop_commands::brand::Shown; fn f(b: &Shown) { b.brand(); b.brand(); b.brand(); b.brand(); } fn g() -> Shown { Shown::not_set(None) }",
+        ),
+        (
+            flow,
+            "use obop_commands::brand::Shown; fn f() -> Arc<Shown> { Arc::new(Shown::not_set(None)) }",
+        ),
+    ] {
+        let (found, _) = scan(&tree(&[(path, src)]));
+        assert!(found.is_empty(), "{path}: {src}: {found:?}");
+    }
+    // What they do not say is found, once, with the reason.
+    for (path, src, what) in [
+        // A second question to the dispatcher, and a second read, in the handlers.
+        (
+            route,
+            "fn f(s: &S) { let _ = s.dispatcher.brand(); let _ = s.dispatcher.brand(); }",
+            CALL,
+        ),
+        (
+            route,
+            "fn f(r: &Reader) { let _ = r.current(); let _ = r.fresh(); }",
+            READ,
+        ),
+        (
+            route,
+            "fn f(r: &Reader) { let _ = r.current(); let _ = r.strict(); }",
+            READ,
+        ),
+        // A function through the type the handlers may name as a type only.
+        (route, "fn f() { let _ = Shown::not_set(None); }", THROUGH),
+        (route, "use obop_commands::brand::Shown as S;", RENAMED),
+        (route, "use obop_commands::brand::Reader;", PATH),
+        (
+            route,
+            "fn f(d: &Dispatcher) { d.install_brand(b); }",
+            INSTALL,
+        ),
+        // A fifth accessor call in the page functions, or any read of a reader there.
+        (
+            page,
+            "fn f(b: &Shown) { b.brand(); b.brand(); b.brand(); b.brand(); b.brand(); }",
+            CALL,
+        ),
+        (page, "fn f(r: &Reader) { let _ = r.current(); }", READ),
+        (page, "use obop_commands::brand::Reader;", PATH),
+        (
+            page,
+            "fn f(d: &Dispatcher) { d.install_brand(b); }",
+            INSTALL,
+        ),
+        // The flow context holds the value and asks nothing.
+        (flow, "fn f(b: &Shown) { b.brand(); }", CALL),
+        (flow, "fn f(r: &Reader) { let _ = r.current(); }", READ),
+        (flow, "use obop_commands::brand::Reader;", PATH),
+    ] {
+        let (found, _) = scan(&tree(&[(path, src)]));
+        assert_eq!(found.len(), 1, "{path}: {src}: {found:?}");
+        assert!(found[0].contains(what), "{path}: {src}: {found:?}");
+    }
 }

@@ -49,6 +49,7 @@ use crate::page::{
     CATALOGUE, LANGS, Rendered, consent_page, error_page, login_page, mfa_page, t as text,
 };
 use crate::redirect::RedirectForm;
+use obop_commands::brand::Shown;
 use sha2::{Digest, Sha256};
 
 fn sha(s: &str) -> String {
@@ -137,6 +138,7 @@ impl Case {
             preselected: self.preselected.iter().map(|g| (*g).into()).collect(),
             microsoft: self.microsoft,
             max_days: self.max_days,
+            brand: std::sync::Arc::new(Shown::not_set(None)),
         }
     }
 }
@@ -233,6 +235,12 @@ fn pages() -> Vec<(&'static str, Render)> {
         ),
         ("err_busy", Box::new(|l| error_page(l, "err.busy"))),
     ]
+}
+
+/// The names of the kinds of page, in the order of the table, for the tests that render the same
+/// kinds with a brand (`brand_page_tests.rs`).
+pub(crate) fn kind_names() -> Vec<&'static str> {
+    pages().into_iter().map(|(kind, _)| kind).collect()
 }
 
 #[test]
