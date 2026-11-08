@@ -103,9 +103,11 @@ test.describe("the OAuth pages of an instance with a brand", () => {
   test("the sign-in page shows the logo, the name and the message, and the browser reports no violation", async ({
     page,
   }, info: TestInfo) => {
-    // Every request the page makes for the logo route, from before the first byte. The poll below
-    // needs one before this test asks for an image of that address itself, so that what it waits
-    // for is the browser's own request for the tab icon.
+    // Every request the page makes for the logo route, from before the first byte, so that the
+    // annotation below can say whether this browser asked for the tab icon by itself. (Chrome as a
+    // system browser does a moment after the document; Playwright's default headless shell, the
+    // browser of the CI job, is not known to. So nothing here waits for that request: the proof is
+    // the image request below, which every browser makes when asked.)
     const iconRequests: string[] = [];
     page.on("request", (r) => {
       if (new URL(r.url()).pathname === "/api/brand/logo.svg") iconRequests.push(r.resourceType());
@@ -145,9 +147,12 @@ test.describe("the OAuth pages of an instance with a brand", () => {
     await expect(icon).toHaveCount(1);
     const href = (await icon.getAttribute("href"))!;
     expect(href).toMatch(/^\/api\/brand\/logo\.svg\?v=[0-9a-f]{16}$/);
-    await expect
-      .poll(() => iconRequests.length, { message: "the browser asks for the tab icon by itself" })
-      .toBeGreaterThan(0);
+    info.annotations.push({
+      type: "tab-icon",
+      description: iconRequests.length
+        ? `the browser asked for the tab icon by itself (${iconRequests.join(", ")})`
+        : "this browser did not ask for the tab icon by itself",
+    });
     const loaded = await page.evaluate(
       (src) =>
         new Promise<boolean>((done) => {
@@ -174,9 +179,8 @@ test.describe("the OAuth pages of an instance with a brand", () => {
     });
     expect(share).toBeGreaterThan(0.5);
 
-    // The browser asked for the tab icon by itself (the poll above waited for that request before
-    // this test asked for the image), and the negative case below shows that a refused request is
-    // reported; so none reported here is the icon allowed.
+    // The negative case below shows that a refused image request is reported; so none reported here
+    // is the icon allowed, our request and, in a browser that makes one, its own.
     expect(await violations(page)).toEqual([]);
   });
 
@@ -233,7 +237,11 @@ test.describe("the OAuth pages of an instance with a brand", () => {
     // policy is otherwise unchanged): an image of the tab icon's address is refused and reported
     // as an img-src violation (the effective directive; `default-src 'none'` is what applies).
     // This is the negative case of the first test, in the same browser, so that the claim that the
-    // directive is needed is tried and not only that the page loads with it.
+    // directive is needed is tried and not only that the page loads with it. Two things are tried:
+    // the browser's own check of the tab icon, which is reported with no script of ours having
+    // asked (Chrome as a system browser and Playwright's headless shell, the browser of the CI job,
+    // both report it, although the shell makes no request for the icon that Playwright sees), and
+    // an image of that address that the test asks for, which every browser refuses the same way.
     await page.route(
       (url) => url.pathname === "/oauth/authorize",
       async (route) => {
@@ -251,10 +259,10 @@ test.describe("the OAuth pages of an instance with a brand", () => {
     expect(res!.headers()["content-security-policy"]).not.toMatch(/img-src/);
     const href = (await page.locator('link[rel="icon"]').getAttribute("href"))!;
     const refused = `img-src: ${brandUrl()}${href}`;
-    // The browser asks for the tab icon by itself, after the page has loaded, and its request is
-    // held to the policy: the violation is reported with no script of ours having asked.
+    // The browser's own check of the tab icon is held to the policy: the violation is reported with
+    // no script of ours having asked.
     await expect
-      .poll(() => violations(page), { message: "the browser's own request for the tab icon" })
+      .poll(() => violations(page), { message: "the browser's own check of the tab icon" })
       .toContain(refused);
     const own = (await violations(page)).length;
     const loaded = await page.evaluate(
@@ -268,7 +276,11 @@ test.describe("the OAuth pages of an instance with a brand", () => {
       href,
     );
     expect(loaded, "without img-src an image of the icon address is refused").toBe(false);
-    expect((await violations(page)).length).toBeGreaterThan(own);
+    await expect
+      .poll(async () => (await violations(page)).length, {
+        message: "the refusal of our image is reported as an img-src violation",
+      })
+      .toBeGreaterThan(own);
     // Nothing but the icon is refused: the rest of the page is the page of the first test.
     expect((await violations(page)).filter((v) => v !== refused)).toEqual([]);
   });
