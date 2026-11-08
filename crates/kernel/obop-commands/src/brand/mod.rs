@@ -30,7 +30,7 @@ pub use apply::{
     Action, Applied, Changed, Failure, Refused, apply, change_line, changes_json, printable,
     refusals_json, show_key,
 };
-pub use enrol::{ISSUER_VAR, enrolment_error, env_issuer, no_reader_error};
+pub use enrol::{ISSUER_VAR, enrolment_error, env_issuer, issuer_warning, no_reader_error};
 pub use reader::{Fresh, Reader, Sink, strict};
 pub use row::{Fallback, Shown, fallbacks_json};
 

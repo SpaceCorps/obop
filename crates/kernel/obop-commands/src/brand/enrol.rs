@@ -13,6 +13,7 @@
 use super::UNREADABLE;
 use crate::MfaError;
 use obop_storage::fault::Fault;
+use std::io::Write;
 
 /// The environment variable that names the issuer of an authenticator entry.
 pub const ISSUER_VAR: &str = "OBOP_MFA_ISSUER";
@@ -30,19 +31,51 @@ pub(super) fn issuer_from(value: Option<String>) -> Option<String> {
     value.filter(|s| !s.trim().is_empty())
 }
 
+/// The warning for an `OBOP_MFA_ISSUER` that holds a character a stored name may not (a colon, a
+/// slash, a backslash or an at sign), or `None`. The value is operator-controlled text and is used
+/// as it is, as it always was (it is percent-escaped in the label and in `issuer=`, so the address
+/// stays one address), so this is a warning and not a refusal: but an app splits the decoded label at
+/// its colon, so it may show another issuer than `issuer=` says, which is why `configure` refuses
+/// the same characters in a name. `AuthConfig::from_env` writes it once at start.
+pub fn issuer_warning(issuer: &str) -> Option<&'static str> {
+    unfit_for_a_label(issuer).then_some(
+        "OBOP_MFA_ISSUER holds a colon, a slash, a backslash or an at sign. It is used as it is, but an authenticator app splits the label at its colon and may show another issuer than the one in issuer=; a brand name may not hold these characters for that reason.",
+    )
+}
+
 /// What an enrolment answers when [`strict`](super::strict) failed, as the one error type of the
 /// enrolment routes. A transient fault of the store (its text starts with a code word of D74) and
 /// the fixed message about a stored name that cannot be shown are kept as they are, so that the
 /// transient one reaches the existing 503 with `Retry-After` and the other the 503
 /// `brand_unavailable` (docs/spec/branding.md, section 4). Any other store error becomes a fixed
 /// message that starts with [`UNREADABLE`], so that it is never taken for a missing server key,
-/// and no text of the store reaches the answer.
+/// and no text of the store reaches the answer. The text it leaves out of the answer is not lost to
+/// the operator: it is written to the log of the server, once per refusal, with the cause named
+/// ([`store_read_line`]); the other two cases carry their cause in the message itself, which the
+/// route logs when it answers.
 pub fn enrolment_error(e: String) -> MfaError {
     if Fault::is_transient(&e) || e.starts_with(UNREADABLE) {
         MfaError::Unavailable(e)
     } else {
+        // Not `eprintln!`, which panics when stderr cannot be written: a refusal does not depend on it.
+        let _ = writeln!(std::io::stderr(), "{}", store_read_line(&e));
         MfaError::Unavailable(format!("{UNREADABLE}: the store could not be read"))
     }
+}
+
+/// The line of the log for a store that could not be read for an enrolment: the cause (`store read`,
+/// as against `stored name`, which the answer states for itself), the command that shows the state
+/// of the branding, and the store's own text with its control characters blanked and cut at 300
+/// characters, so that a text with a line break in it cannot forge a line of the log.
+pub(super) fn store_read_line(text: &str) -> String {
+    let text: String = text
+        .chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .take(300)
+        .collect();
+    format!(
+        "obop: an enrolment was refused because the instance branding could not be read (cause: store read; obop admin brand status shows the state of the branding): {text}"
+    )
 }
 
 /// What an enrolment answers when the dispatcher it runs under has no reader of the brand (one that

@@ -160,12 +160,18 @@ pub(crate) fn mfa_error(e: MfaError) -> Response {
         // transient fault never reaches it, and before the generic one, whose hint names the wrong
         // cause. Waiting does not repair a stored name, so there is no `Retry-After`
         // (docs/spec/branding.md, section 4).
-        MfaError::Unavailable(m) if m.starts_with(obop_commands::brand::UNREADABLE) => api_error(
-            StatusCode::SERVICE_UNAVAILABLE,
-            &m,
-            "brand_unavailable",
-            "The instance branding could not be read, so nothing was enrolled. An administrator can see why with `obop admin brand status` at the terminal and repair it with `obop admin brand configure` or `obop admin brand clear` (docs/DEPLOY.md).",
-        ),
+        MfaError::Unavailable(m) if m.starts_with(obop_commands::brand::UNREADABLE) => {
+            // The cause is in the message (a stored name, a store that could not be read, a server
+            // with no reader), and an operator who sees the code in an answer finds it here. The
+            // store's own text, when there is one, was written by `enrolment_error`.
+            eprintln!("obop: an enrolment was refused: {}", super::log_safe(&m));
+            api_error(
+                StatusCode::SERVICE_UNAVAILABLE,
+                &m,
+                "brand_unavailable",
+                "The instance branding could not be read, so nothing was enrolled. An administrator can see why with `obop admin brand status` at the terminal and repair it with `obop admin brand configure` or `obop admin brand clear` (docs/DEPLOY.md).",
+            )
+        }
         MfaError::Unavailable(m) => api_error(
             StatusCode::SERVICE_UNAVAILABLE,
             &m,

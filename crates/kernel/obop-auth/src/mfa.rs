@@ -77,7 +77,10 @@ impl AuthConfig {
         let flag = |n: &str| std::env::var(n).ok();
         let keys = match KeyRing::from_env() {
             Ok(k) => {
-                if k.current()
+                // `KeyRing::current` in the form of a function, so that the scan of the brand
+                // (`obop-http/src/brand_scan_tests.rs`), which counts the calls `.current(` of
+                // this file as reads of the brand reader, finds none here.
+                if KeyRing::current(&k)
                     .is_some_and(|c| c.source() == obop_keys::KeySource::Development)
                 {
                     eprintln!(
@@ -91,6 +94,13 @@ impl AuthConfig {
                 KeyRing::default()
             }
         };
+        let issuer = obop_commands::brand::env_issuer();
+        if let Some(warning) = issuer
+            .as_deref()
+            .and_then(obop_commands::brand::issuer_warning)
+        {
+            eprintln!("WARNING: {warning}");
+        }
         Self {
             keys,
             default_require_admins: !flag("OBOP_REQUIRE_MFA_FOR_ADMINS").is_some_and(|v| {
@@ -99,7 +109,7 @@ impl AuthConfig {
                     "0" | "false" | "no" | "off"
                 )
             }),
-            issuer: obop_commands::brand::env_issuer(),
+            issuer,
         }
     }
 

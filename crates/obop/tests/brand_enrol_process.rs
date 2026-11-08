@@ -336,6 +336,60 @@ fn the_running_server_writes_the_name_of_the_record_and_refuses_when_it_cannot_r
     is_brand_unavailable(&begin(server.port, &token), "begin");
     is_brand_unavailable(&options(server.port, &token), "options");
     assert!(!login(server.port).is_empty(), "sign-in still works");
+    // The refusal is in the log of the server, with its cause named and none of the stored text: an
+    // operator who sees `brand_unavailable` in an answer finds out here which cause it was.
+    let log = server.log();
+    assert!(
+        log.contains("an enrolment was refused: the instance branding could not be read: the stored name cannot be shown"),
+        "{log}"
+    );
+    assert!(!log.contains("a<b"), "{log}");
+
+    // The other cause: the row is there and cannot be decoded (a store that is up and cannot answer
+    // this read; here a row that holds a number where a record belongs). The answer is the same and
+    // says nothing of the store; the log has the store's own text under the cause `store read`.
+    {
+        let conn = rusqlite::Connection::open(dir.0.join("enrol.sqlite")).unwrap();
+        conn.busy_timeout(Duration::from_secs(10)).unwrap();
+        let changed = conn
+            .execute(
+                "UPDATE obop_record SET data = '5' WHERE model = 'instance_brand' AND id = 'instance'",
+                (),
+            )
+            .unwrap();
+        assert_eq!(changed, 1);
+    }
+    let a = begin(server.port, &token);
+    is_brand_unavailable(&a, "begin with a row that cannot be decoded");
+    assert!(
+        a.body["error"]
+            .as_str()
+            .unwrap()
+            .ends_with("the store could not be read"),
+        "{}",
+        a.body
+    );
+    is_brand_unavailable(
+        &options(server.port, &token),
+        "options with a row that cannot be decoded",
+    );
+    let log = server.log();
+    assert!(log.contains("cause: store read"), "{log}");
+    assert!(log.contains("obop admin brand status"), "{log}");
+    // Back to the stored name that cannot be shown, for the rest of the flow.
+    // (Written around the store, as the row was spoiled: a write through it reads the row first.)
+    {
+        let conn = rusqlite::Connection::open(dir.0.join("enrol.sqlite")).unwrap();
+        conn.busy_timeout(Duration::from_secs(10)).unwrap();
+        let changed = conn
+            .execute(
+                "UPDATE obop_record SET data = ?1 WHERE model = 'instance_brand' AND id = 'instance'",
+                (json!({"name": "a<b"}).to_string(),),
+            )
+            .unwrap();
+        assert_eq!(changed, 1);
+    }
+    is_brand_unavailable(&begin(server.port, &token), "begin, name again");
 
     // OBOP_MFA_ISSUER: the authenticator entry needs no read and is made; the passkey still reads
     // the row and is refused.
@@ -381,6 +435,36 @@ fn the_running_server_writes_the_name_of_the_record_and_refuses_when_it_cannot_r
             .as_str()
             .unwrap()
             .starts_with("otpauth://totp/obop:ada?secret="),
+        "{}",
+        a.body
+    );
+    assert!(
+        !server.log().contains("WARNING: OBOP_MFA_ISSUER"),
+        "a plain value is no warning: {}",
+        server.log()
+    );
+    // A value with a link character is warned about once at start, and used as it is (it is
+    // escaped in the label and in issuer=): the warning does not change the output.
+    drop(server);
+    let server = serve(&url, &[("OBOP_MFA_ISSUER", "Acme: Corp")]);
+    let log = server.log();
+    assert!(
+        log.contains("WARNING: OBOP_MFA_ISSUER holds a colon"),
+        "{log}"
+    );
+    assert!(
+        !log.contains("Acme"),
+        "the warning does not repeat the value: {log}"
+    );
+    let token = login(server.port);
+    let a = begin(server.port, &token);
+    assert_eq!(a.status, 200, "{}", a.body);
+    assert_eq!(a.body["issuer"], json!("Acme: Corp"));
+    assert!(
+        a.body["uri"]
+            .as_str()
+            .unwrap()
+            .starts_with("otpauth://totp/Acme%3A%20Corp:ada?secret="),
         "{}",
         a.body
     );

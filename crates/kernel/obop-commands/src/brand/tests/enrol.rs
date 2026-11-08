@@ -3,9 +3,11 @@
 //! when it could not read the name. `Auth::begin` and the passkey route use them; the rest of what
 //! they are for is tested where they are used (`obop-auth`, and `crates/obop` over HTTP).
 
-use super::super::enrol::issuer_from;
+use super::super::enrol::{issuer_from, store_read_line};
 use crate::MfaError;
-use crate::brand::{ISSUER_VAR, UNREADABLE, enrolment_error, env_issuer, no_reader_error};
+use crate::brand::{
+    ISSUER_VAR, UNREADABLE, enrolment_error, env_issuer, issuer_warning, no_reader_error,
+};
 use obop_storage::fault::Fault;
 
 #[test]
@@ -95,6 +97,10 @@ fn any_other_store_error_becomes_the_fixed_message_and_nothing_of_the_store_is_r
         "could not decode the row of instance_brand/instance",
         "",
         "OBOP_SECRET_KEY is missing",
+        // The words of the fixed message in the middle of a text, or at its end, are not its start:
+        // an unrelated error that merely contains them must not be passed through as the message.
+        "relation x: the instance branding could not be read",
+        "x the instance branding could not be read: with more after it",
     ] {
         let m = unavailable(enrolment_error(text.to_string()));
         assert!(m.starts_with(UNREADABLE), "{text}: {m}");
@@ -112,4 +118,67 @@ fn any_other_store_error_becomes_the_fixed_message_and_nothing_of_the_store_is_r
     let a = unavailable(enrolment_error("one".into()));
     let b = unavailable(enrolment_error("two".into()));
     assert_eq!(a, b);
+}
+
+/// The text the answer leaves out is written to the log of the server, with the cause named: an
+/// operator who sees `brand_unavailable` finds out there whether the store failed or the stored name
+/// was bad. One line, whatever the store said, and bounded.
+#[test]
+fn the_line_of_the_log_names_the_cause_and_is_one_bounded_line() {
+    let line = store_read_line("relation \"record\" does not exist");
+    assert!(line.contains("cause: store read"), "{line}");
+    assert!(line.contains("obop admin brand status"), "{line}");
+    assert!(
+        line.ends_with("relation \"record\" does not exist"),
+        "{line}"
+    );
+    // A line break, a carriage return or an escape in the store's text is blanked, so it cannot
+    // start a line of its own or move a cursor.
+    let forged = store_read_line("first\nobop: a forged line\r\u{1b}[31mred");
+    assert_eq!(forged.lines().count(), 1, "{forged:?}");
+    assert!(
+        !forged.contains('\u{1b}') && !forged.contains('\r') && !forged.contains('\n'),
+        "{forged:?}"
+    );
+    // And it is cut: a store that answers with a page of text fills no more than a line of the log.
+    let long = store_read_line(&"x".repeat(5_000));
+    assert!(long.len() < 600, "{}", long.len());
+    assert!(
+        long.ends_with(&"x".repeat(300)),
+        "the text is cut at 300 characters"
+    );
+    assert!(!long.ends_with(&"x".repeat(301)));
+}
+
+/// A value of `OBOP_MFA_ISSUER` with a character a stored name may not hold is warned about, and
+/// nothing else is: the value is still used (`env_issuer` and `issuer_from` above keep it as it is).
+/// A plain name, one with spaces, an ampersand or non-ASCII letters has no warning.
+#[test]
+fn a_value_with_a_link_character_is_warned_about_and_a_plain_one_is_not() {
+    for plain in [
+        "MOHV",
+        "obop",
+        "Acme Corp",
+        "Exämple & Söns",
+        "a-b_c.d",
+        "100%",
+    ] {
+        assert_eq!(issuer_warning(plain), None, "{plain:?}");
+    }
+    for linked in ["Acme: Corp", "a:b", "a/b", "a@b", "http://evil.test/x"] {
+        let w = issuer_warning(linked).unwrap_or_else(|| panic!("{linked:?} was not warned about"));
+        assert!(w.contains(ISSUER_VAR), "{w}");
+        assert!(
+            !w.contains(linked),
+            "the warning does not repeat the value: {w}"
+        );
+    }
+    // The backslash, spelled so that this file has no escape in a literal to misread.
+    let backslash = format!("a{}b", char::from(92u8));
+    assert!(issuer_warning(&backslash).is_some(), "{backslash:?}");
+    // And the value is kept as it is.
+    assert_eq!(
+        issuer_from(Some("Acme: Corp".into())).as_deref(),
+        Some("Acme: Corp")
+    );
 }
