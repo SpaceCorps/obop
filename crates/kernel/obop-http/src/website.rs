@@ -481,31 +481,18 @@ mod tests {
         assert_eq!(post.status(), StatusCode::METHOD_NOT_ALLOWED);
     }
 
-    /// A tiny self-cleaning temp directory so the tests need no extra dependency.
+    /// A self-cleaning temp directory of one test's own: `TempPath` gives it a name no other run
+    /// used (a process id alone can be recycled), clears it when it is made and removes it when
+    /// it is dropped.
     mod tempfile_dir {
-        pub struct Dir(std::path::PathBuf);
+        pub struct Dir(obop_storage::testing::TempPath);
         impl Dir {
             pub fn new() -> Self {
-                let p = std::env::temp_dir().join(format!(
-                    "obop-site-test-{}-{}",
-                    std::process::id(),
-                    uuid_like()
-                ));
-                std::fs::create_dir_all(&p).unwrap();
-                Dir(p)
+                Dir(obop_storage::testing::TempPath::dir("obop-site-test"))
             }
             pub fn path(&self) -> &std::path::Path {
-                &self.0
+                self.0.path()
             }
-        }
-        impl Drop for Dir {
-            fn drop(&mut self) {
-                let _ = std::fs::remove_dir_all(&self.0);
-            }
-        }
-        fn uuid_like() -> u64 {
-            static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-            N.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
         }
     }
 }

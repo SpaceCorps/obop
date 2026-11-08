@@ -6,7 +6,8 @@
 //! the path, and failed ("the TLS test database did not start") on a machine where Docker was
 //! installed but not ready. Once asked for, they fail when Docker or the image is missing, so a
 //! CI job that asks for them cannot lose the coverage unseen. The CI job `rust` sets the variable
-//! (`.github/workflows/ci.yml`).
+//! (`.github/workflows/ci.yml`). The rule itself is tested without Docker, with a `docker` that
+//! does not exist put in its place for the thread (`Gate`, at the end of this file).
 
 use super::*;
 use crate::tls::{PgConnector, RootCert, SslMode, parse_url};
@@ -179,11 +180,55 @@ fn docker_tls_requested(value: Option<&str>) -> bool {
 thread_local! {
     /// How often this thread ran `docker`: the tests of the gate read it.
     static DOCKER_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// What the tests of the gate put in place of the machine: the value `TlsPg::start` reads for
+    /// [`DOCKER_TLS`] (the outer `Option` says whether it is replaced at all) and the name of the
+    /// `docker` binary. Per thread, so the tests that run beside them see the real ones.
+    static GATE_VALUE: std::cell::RefCell<Option<Option<String>>> =
+        const { std::cell::RefCell::new(None) };
+    static DOCKER_BIN: std::cell::RefCell<Option<String>> =
+        const { std::cell::RefCell::new(None) };
 }
+
+/// The value of [`DOCKER_TLS`] as `TlsPg::start` sees it.
+fn gate_value() -> Option<String> {
+    match GATE_VALUE.with(|v| v.borrow().clone()) {
+        Some(replaced) => replaced,
+        None => std::env::var(DOCKER_TLS).ok(),
+    }
+}
+
+/// The program `docker` stands for.
+fn docker_bin() -> String {
+    DOCKER_BIN
+        .with(|b| b.borrow().clone())
+        .unwrap_or_else(|| "docker".into())
+}
+
+/// Puts a value for [`DOCKER_TLS`] and a `docker` binary in place of the machine's for this
+/// thread, and puts them back when dropped.
+struct Gate;
+
+impl Gate {
+    fn with(value: Option<&str>, docker: &str) -> Gate {
+        GATE_VALUE.with(|v| *v.borrow_mut() = Some(value.map(str::to_string)));
+        DOCKER_BIN.with(|b| *b.borrow_mut() = Some(docker.to_string()));
+        Gate
+    }
+}
+
+impl Drop for Gate {
+    fn drop(&mut self) {
+        GATE_VALUE.with(|v| *v.borrow_mut() = None);
+        DOCKER_BIN.with(|b| *b.borrow_mut() = None);
+    }
+}
+
+/// A program that no machine has, for the tests that need Docker to be missing.
+const NO_SUCH_DOCKER: &str = "obop-no-such-docker-binary";
 
 fn docker(args: &[&str]) -> Option<String> {
     DOCKER_CALLS.with(|n| n.set(n.get() + 1));
-    let o = Command::new("docker").args(args).output().ok()?;
+    let o = Command::new(docker_bin()).args(args).output().ok()?;
     o.status
         .success()
         .then(|| String::from_utf8_lossy(&o.stdout).trim().to_string())
@@ -201,7 +246,7 @@ struct TlsPg {
 
 impl Drop for TlsPg {
     fn drop(&mut self) {
-        let _ = Command::new("docker")
+        let _ = Command::new(docker_bin())
             .args(["rm", "-f", "-v", &self.name])
             .output();
     }
@@ -219,9 +264,7 @@ impl TlsPg {
     /// None (after saying why) unless `OBOP_TEST_DOCKER_TLS=1` asks for the container tests;
     /// once asked for, a missing Docker or image is a failure.
     fn start() -> Option<Self> {
-        Self::start_if(docker_tls_requested(
-            std::env::var(DOCKER_TLS).ok().as_deref(),
-        ))
+        Self::start_if(docker_tls_requested(gate_value().as_deref()))
     }
 
     /// [`TlsPg::start`] with the answer of the gate given. `false` returns before anything calls
@@ -501,4 +544,47 @@ fn without_the_variable_the_container_tests_skip_and_never_call_docker() {
         before,
         "a skipped test must not run docker"
     );
+}
+
+// The rule the gate exists for: once the variable asks for the container tests, a machine
+// without Docker fails them instead of skipping them. These run everywhere, because they put a
+// missing `docker` in place of the machine's.
+
+#[test]
+#[should_panic(expected = "is set but Docker is not available")]
+fn once_asked_for_a_missing_docker_fails_the_container_tests() {
+    let _gate = Gate::with(Some("1"), NO_SUCH_DOCKER);
+    let _ = TlsPg::start_if(true);
+}
+
+#[test]
+#[should_panic(expected = "is set but Docker is not available")]
+fn start_follows_the_variable_and_fails_without_docker_once_it_is_set() {
+    let _gate = Gate::with(Some("1"), NO_SUCH_DOCKER);
+    let _ = TlsPg::start();
+}
+
+#[test]
+fn start_skips_without_calling_docker_when_the_variable_is_not_set_or_not_asking() {
+    let before = DOCKER_CALLS.with(|n| n.get());
+    for value in [None, Some(""), Some("0"), Some("no")] {
+        let _gate = Gate::with(value, NO_SUCH_DOCKER);
+        assert!(TlsPg::start().is_none(), "{value:?}");
+    }
+    assert_eq!(
+        DOCKER_CALLS.with(|n| n.get()),
+        before,
+        "a skipped test must not run docker"
+    );
+}
+
+#[test]
+fn the_gate_doubles_are_put_back_when_the_guard_is_dropped() {
+    {
+        let _gate = Gate::with(Some("1"), NO_SUCH_DOCKER);
+        assert_eq!(gate_value().as_deref(), Some("1"));
+        assert_eq!(docker_bin(), NO_SUCH_DOCKER);
+    }
+    assert_eq!(docker_bin(), "docker");
+    assert_eq!(gate_value(), std::env::var(DOCKER_TLS).ok());
 }

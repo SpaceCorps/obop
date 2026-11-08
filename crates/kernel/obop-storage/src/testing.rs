@@ -55,17 +55,9 @@ pub struct TempPath {
 impl TempPath {
     /// A path that does not exist yet, with a name of its own: `<tag>-<pid>-<n>-<millis>`.
     pub fn new(tag: &str) -> TempPath {
-        use std::sync::atomic::AtomicUsize;
-        static N: AtomicUsize = AtomicUsize::new(0);
-        let t = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |d| d.as_millis());
+        let name = fresh_name(tag);
         sweep_old(tag);
-        Self::named(&format!(
-            "{tag}-{}-{}-{t}",
-            std::process::id(),
-            N.fetch_add(1, SeqCst)
-        ))
+        Self::named(&name)
     }
 
     /// A directory with a name of its own, made.
@@ -76,10 +68,22 @@ impl TempPath {
     }
 
     /// The path for a fixed file name in the temporary directory, cleared of whatever an earlier
-    /// run left there. Prefer [`TempPath::new`]: a fixed name is for a test of this type.
+    /// run left there. Prefer [`TempPath::new`]: a fixed name is for a test of this type. The name
+    /// must be one plain file name (not empty, not `.` or `..`, no path separator): clearing the
+    /// path removes a whole directory, and an empty name would be the temporary directory itself.
     pub fn named(name: &str) -> TempPath {
+        Self::named_in(&std::env::temp_dir(), name)
+    }
+
+    /// [`TempPath::named`] under another base directory (the tests of the refusal use a private
+    /// one, so that a regression there costs them and not the machine's temporary directory).
+    fn named_in(base: &std::path::Path, name: &str) -> TempPath {
+        assert!(
+            is_plain_name(name),
+            "{name:?} is not a plain file name for a temporary path"
+        );
         let p = TempPath {
-            path: std::env::temp_dir().join(name),
+            path: base.join(name),
         };
         p.clear();
         p
@@ -123,6 +127,17 @@ impl Drop for TempPath {
     }
 }
 
+/// Is `name` one plain file name: something that joined to a directory stays inside it and
+/// names one entry (so not empty, not `.` or `..`, no slash or backslash, no drive prefix)?
+fn is_plain_name(name: &str) -> bool {
+    use std::path::Component;
+    !name.contains(['/', '\\'])
+        && matches!(
+            std::path::Path::new(name).components().collect::<Vec<_>>().as_slice(),
+            [Component::Normal(n)] if *n == std::ffi::OsStr::new(name)
+        )
+}
+
 /// Remove a file or a directory, if it can be removed.
 fn remove_any(p: &std::path::Path) {
     if p.is_dir() {
@@ -130,6 +145,21 @@ fn remove_any(p: &std::path::Path) {
     } else {
         let _ = std::fs::remove_file(p);
     }
+}
+
+/// A name that no other test, process or earlier run has used: `<tag>-<pid>-<n>-<millis>`, the
+/// process id, a counter of this process and the time. [`is_made_by`] is the other half of it.
+fn fresh_name(tag: &str) -> String {
+    use std::sync::atomic::AtomicUsize;
+    static N: AtomicUsize = AtomicUsize::new(0);
+    let t = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis());
+    format!(
+        "{tag}-{}-{}-{t}",
+        std::process::id(),
+        N.fetch_add(1, SeqCst)
+    )
 }
 
 /// How old a leftover of an earlier run must be before a new path of the same tag removes it.
@@ -1566,6 +1596,7 @@ mod temp_path_tests {
         assert!(!exists(&format!("{base}-wal")) && !exists(&format!("{base}-shm")));
 
         let dir = TempPath::dir("obop-tp-dir");
+        assert!(dir.path().is_dir(), "`dir` makes the directory");
         let inner = dir.path().join("deep/er");
         std::fs::create_dir_all(&inner).unwrap();
         std::fs::write(inner.join("f"), "x").unwrap();
@@ -1611,10 +1642,20 @@ mod temp_path_tests {
             }
             p
         };
+        // Names that `TempPath::new` itself made, not names written out by hand here: if `new`
+        // and `is_made_by` drift apart, the sweep matches nothing and this test says so. The
+        // owners stay alive to the end, so their drop is the last cleaning, as in a real test.
+        let (old_owner, young_owner) = (TempPath::new("obop-tpj"), TempPath::new("obop-tpj"));
+        let stale = old_owner.path().to_path_buf();
+        let stale_side = tmp.join(format!(
+            "{}-wal",
+            stale.file_name().unwrap().to_string_lossy()
+        ));
+        let young = young_owner.path().to_path_buf();
+        for (p, old) in [(&stale, true), (&stale_side, true), (&young, false)] {
+            make(&p.file_name().unwrap().to_string_lossy(), old);
+        }
         let pid = std::process::id();
-        let stale = make(&format!("obop-tpj-{pid}-7-1"), true);
-        let stale_side = make(&format!("obop-tpj-{pid}-7-1-wal"), true);
-        let young = make(&format!("obop-tpj-{pid}-8-2"), false);
         let other_tag = make(&format!("obop-tpjx-{pid}-7-1"), true);
         let odd_name = make(&format!("obop-tpj-{pid}-seven"), true);
 
@@ -1623,9 +1664,11 @@ mod temp_path_tests {
         assert!(young.exists(), "a leftover of the last hour stays");
         assert!(other_tag.exists() && odd_name.exists(), "other names stay");
         drop(fresh);
-        for p in [young, other_tag, odd_name] {
+        for p in [other_tag, odd_name] {
             std::fs::remove_file(p).unwrap();
         }
+        drop((old_owner, young_owner));
+        assert!(!young.exists(), "the owner's drop removes its own path");
     }
 
     #[test]
@@ -1634,11 +1677,96 @@ mod temp_path_tests {
         let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let d = TempPath::dir("obop-tp-panic");
             *path.lock().unwrap() = Some(d.path().to_path_buf());
+            // These come before the panic that is meant: if one of them fails, its own payload
+            // (a formatted string) is not the one the test waits for below.
+            assert!(d.path().is_dir(), "`dir` makes the directory");
             std::fs::write(d.path().join("f"), "x").unwrap();
             panic!("the test failed");
         }));
-        assert!(r.is_err());
+        let payload = r.expect_err("the closure must panic");
+        assert_eq!(
+            payload.downcast_ref::<&str>().copied(),
+            Some("the test failed"),
+            "it panicked, but not where the test meant it to"
+        );
         let p = path.lock().unwrap().clone().unwrap();
         assert!(!p.exists(), "{} was left behind", p.display());
+    }
+
+    #[test]
+    fn a_name_new_makes_is_the_one_the_sweep_recognises_and_it_carries_this_process_and_time() {
+        let millis = || {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis()
+        };
+        let before = millis();
+        let (a, b) = (TempPath::new("obop-tpn"), TempPath::new("obop-tpn"));
+        let after = millis();
+        let fields = |p: &TempPath| -> Vec<u128> {
+            let name = p.path().file_name().unwrap().to_string_lossy().to_string();
+            assert!(is_made_by("obop-tpn", &name), "{name}");
+            assert!(is_made_by("obop-tpn", &format!("{name}-wal")), "{name}");
+            let rest = name.strip_prefix("obop-tpn-").expect("the tag comes first");
+            let f: Vec<u128> = rest.split('-').map(|n| n.parse().unwrap()).collect();
+            assert_eq!(f.len(), 3, "process, counter, time: {name}");
+            f
+        };
+        let (fa, fb) = (fields(&a), fields(&b));
+        for f in [&fa, &fb] {
+            assert_eq!(f[0], u128::from(std::process::id()), "the process id");
+            assert!(
+                (before..=after).contains(&f[2]),
+                "the time in milliseconds: {f:?} not in {before}..={after}"
+            );
+        }
+        assert!(fb[1] > fa[1], "the counter goes up: {fa:?} then {fb:?}");
+    }
+
+    #[test]
+    fn names_made_at_the_same_moment_by_several_threads_all_differ() {
+        // `fresh_name` is the half of `new` that decides the name; `new` also walks the whole
+        // temporary directory, which on a crowded machine takes long enough to make this slow.
+        const THREADS: usize = 8;
+        const EACH: usize = 500;
+        let start = std::sync::Arc::new(std::sync::Barrier::new(THREADS));
+        let workers: Vec<_> = (0..THREADS)
+            .map(|_| {
+                let start = start.clone();
+                std::thread::spawn(move || {
+                    start.wait();
+                    (0..EACH)
+                        .map(|_| fresh_name("obop-tpm"))
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect();
+        let all: Vec<String> = workers
+            .into_iter()
+            .flat_map(|w| w.join().unwrap())
+            .collect();
+        let names: BTreeSet<_> = all.iter().collect();
+        assert_eq!(names.len(), THREADS * EACH, "two names were the same");
+    }
+
+    #[test]
+    fn a_name_that_is_not_one_plain_file_name_is_refused_before_anything_is_removed() {
+        assert!(is_plain_name("obop-tp-1-2-3.db"));
+        for no in [
+            "", ".", "..", "a/b", "a\\b", "/", "\\", "../x", "..\\x", "a/", "/abs", "C:\\x",
+        ] {
+            assert!(!is_plain_name(no), "{no:?}");
+        }
+        // The refusal must come before the clearing. The base is a private directory, so that a
+        // regression here costs this test its probe and not the machine its temporary directory.
+        let base = TempPath::dir("obop-tp-base");
+        let probe = base.path().join("probe");
+        std::fs::write(&probe, "x").unwrap();
+        for no in ["", ".", "a/b", "a\\b"] {
+            let r = std::panic::catch_unwind(|| TempPath::named_in(base.path(), no));
+            assert!(r.is_err(), "{no:?} was accepted");
+            assert!(probe.exists(), "{no:?} cleared the base directory");
+        }
     }
 }

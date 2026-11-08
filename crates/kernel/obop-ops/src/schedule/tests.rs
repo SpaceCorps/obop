@@ -38,6 +38,31 @@ impl Drop for Dir {
     }
 }
 
+/// A directory named relative to the working directory of the test (the crate directory), for the
+/// test of a relative backup directory: the temporary directory can be on another drive, which
+/// no relative path reaches. The name is cleared first, as `Dir`'s is, and the guard removes it
+/// when the test ends, a failing test included.
+struct RelDir(PathBuf);
+
+impl RelDir {
+    fn new(tag: &str) -> RelDir {
+        static N: AtomicU64 = AtomicU64::new(0);
+        let d = PathBuf::from(format!(
+            "obop-sched-{tag}-{}-{}",
+            std::process::id(),
+            N.fetch_add(1, Ordering::SeqCst)
+        ));
+        let _ = std::fs::remove_dir_all(&d);
+        RelDir(d)
+    }
+}
+
+impl Drop for RelDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
 fn keys() -> Keys {
     Keys::from_ring(KeyRing::from_secrets(KEY, &[]).unwrap())
 }
@@ -409,8 +434,8 @@ fn a_recorded_path_is_absolute_and_another_hosts_files_are_left_to_it() {
     let b = db();
     let clock = FakeClock::at(START);
     // A relative backup directory is recorded as the absolute path it meant.
-    let rel = PathBuf::from(format!("obop-sched-rel-{}", std::process::id()));
-    let mut s = Settings::new(rel.join("bk"), keys());
+    let rel = RelDir::new("rel");
+    let mut s = Settings::new(rel.0.join("bk"), keys());
     s.retention = Retention {
         daily: 1,
         weekly: 0,
@@ -419,7 +444,7 @@ fn a_recorded_path_is_absolute_and_another_hosts_files_are_left_to_it() {
     let r = take(&b, None, 2, &s, "scheduled", &clock).unwrap().backup;
     assert!(Path::new(&r.path).is_absolute(), "{}", r.path);
     assert!(Path::new(&r.path).exists());
-    let _ = std::fs::remove_dir_all(&rel);
+    let _ = std::fs::remove_dir_all(&rel.0);
     // A file under no directory this process was given is not removed by it.
     let mut other = settings(&d);
     other.retention = s.retention;
