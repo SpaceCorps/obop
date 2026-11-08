@@ -105,9 +105,14 @@ pub(crate) struct View {
 /// `the_door_and_the_settings_agree_on_which_keys_are_set_and_on_their_values` in `obop-site`, which
 /// has rows at every limit and at the order of the steps: a change there is a change here.
 fn site_text(site: &Map<String, J>, key: &str, max: usize) -> Option<String> {
-    let s: String = site
-        .get(key)?
-        .as_str()?
+    shop_text(site.get(key)?.as_str()?, max)
+}
+
+/// The steps of [`site_text`] on a text: what the shop makes of a title it is given. The title that
+/// comes from the record goes through it too (a name stored with a space at its start or end passes
+/// the read check, and the shop shows it without), so that `get` reports what the page shows.
+fn shop_text(text: &str, max: usize) -> Option<String> {
+    let s: String = text
         .chars()
         .filter(|c| !c.is_control() || *c == '\n')
         .collect();
@@ -155,6 +160,24 @@ pub(crate) fn name_stored(shown: &Shown) -> bool {
     shown.is_set() && !shown.fallbacks().iter().any(|f| f.field == "name")
 }
 
+/// The title of a shop that has a brand and no usable `site.title`: the name as the shop shows it
+/// (see [`shop_text`]). A name that leaves nothing after that is no title, and the shop keeps its
+/// own (the read check refuses such a name, so the reader never gives one; this is what the shop
+/// would show if it did).
+pub(crate) fn brand_title(name: &str, name_stored: bool) -> Chosen {
+    match shop_text(name, 80) {
+        Some(t) => Chosen::new(
+            t,
+            if name_stored {
+                Source::Record
+            } else {
+                Source::Default
+            },
+        ),
+        None => Chosen::new(DEFAULT_TITLE, Source::Default),
+    }
+}
+
 /// The decision for one `site` object and one brand. Without a brand (no row) it is today's:
 /// the explicit keys, else the defaults; nothing comes from the record.
 pub(crate) fn view(site: &Map<String, J>, shown: &Shown) -> View {
@@ -170,14 +193,7 @@ pub(crate) fn view(site: &Map<String, J>, shown: &Shown) -> View {
         Some(t) => Chosen::new(t, Source::Site),
         // The shop is still the brand's when the name fell back, and its title is then `obop`: the
         // default name, so the source is the default (the module documentation of `effective`).
-        None if branded => Chosen::new(
-            shown.brand().name(),
-            if name_stored {
-                Source::Record
-            } else {
-                Source::Default
-            },
-        ),
+        None if branded => brand_title(shown.brand().name(), name_stored),
         None => Chosen::new(DEFAULT_TITLE, Source::Default),
     };
     // The logo route serves the logo, and its source is the logo's: the artwork is the record's, and

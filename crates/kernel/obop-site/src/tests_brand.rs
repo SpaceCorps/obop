@@ -815,6 +815,80 @@ fn the_longest_name_arrives_whole_as_the_title_and_the_text_logo() {
     assert_eq!(get(&s, "/favicon.svg").body_str(), own_tile(SLATE, "Ä"));
 }
 
+/// A shop whose store holds this name in the brand row, written around the command (as a restore,
+/// an import or a direct edit would write it) into a store whose reader has not read yet.
+fn shop_named_around_the_command(name: &str) -> Shop {
+    let s = bare();
+    let backend = s.store.backend();
+    let mut row = obop_storage::Fields::new();
+    row.insert("name".into(), json!(name));
+    backend
+        .apply_checked(&[obop_storage::Op::Put {
+            model: "instance_brand".into(),
+            id: "instance".into(),
+            fields: row,
+        }])
+        .unwrap();
+    s.d.install_brand(backend);
+    s
+}
+
+/// What `get` says the shop's title is, and the source it names.
+fn title_get_reports(s: &Shop) -> (String, String) {
+    let fresh = s.d.brand().fresh().expect("the store answers");
+    let effective: serde_json::Value = serde_json::from_str(&fresh.effective_json()).unwrap();
+    let e = &effective["site.title"];
+    (
+        e["value"].as_str().unwrap().to_string(),
+        e["source"].as_str().unwrap().to_string(),
+    )
+}
+
+/// The text of the first `<title>` of a page.
+fn title_of(html: &str) -> &str {
+    html.split("<title>")
+        .nth(1)
+        .and_then(|rest| rest.split("</title>").next())
+        .unwrap_or_else(|| panic!("no title in {html}"))
+}
+
+/// `get` says what the shop shows, also for a name that only a row written around the command can
+/// hold: a name with a space at its start or end passes the read check, and the shop trims its
+/// title; a name of nothing but spaces fails it as empty, so the brand has the default name.
+#[test]
+fn what_get_reports_for_the_title_is_the_title_of_the_page_for_a_padded_or_a_blank_name() {
+    let forty_spaces = " ".repeat(40);
+    // (the stored name, the title the page must show, the source `get` must name)
+    let cases: [(&str, &str, &str); 12] = [
+        ("MOHV", "MOHV", "record"),
+        ("  MOHV  ", "MOHV", "record"),
+        ("MOHV ", "MOHV", "record"),
+        (" MOHV", "MOHV", "record"),
+        ("Zed  Goods", "Zed  Goods", "record"),
+        (" ", "obop", "default"),
+        ("    ", "obop", "default"),
+        (forty_spaces.as_str(), "obop", "default"),
+        ("<b>x</b>", "obop", "default"),
+        ("a\u{202e}b", "obop", "default"),
+        ("", "obop", "default"),
+        ("\t", "obop", "default"),
+    ];
+    for (stored, shown, source) in cases {
+        let s = shop_named_around_the_command(stored);
+        let home = text(&get(&s, "/"));
+        assert_eq!(title_of(&home), shown, "the page, for {stored:?}");
+        assert!(
+            home.contains(&format!("<span>{shown}</span>")),
+            "{stored:?}"
+        );
+        assert_eq!(
+            title_get_reports(&s),
+            (shown.to_string(), source.to_string()),
+            "get, for {stored:?}"
+        );
+    }
+}
+
 // ---- The door and the settings agree on what is set -----------------------------------------------------
 
 /// `site_settings` decides which keys are unset, and `get` reports their values, with its own copy of

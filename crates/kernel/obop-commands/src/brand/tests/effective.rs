@@ -376,6 +376,25 @@ fn a_name_that_fell_back_makes_the_shop_title_the_default_and_not_the_record() {
     }
 }
 
+/// A name stored with a space at its start or end passes the read check and is the shop's title
+/// without it (the shop trims its title), and a name of nothing but spaces fails the read check as
+/// empty, so it is the default name: `get` reports the title the page shows in both cases. (The
+/// test in `obop-site` holds `get` to the page itself.)
+#[test]
+fn a_padded_name_is_reported_as_the_title_the_shop_shows_and_a_blank_one_as_the_default_name() {
+    for padded in ["  MOHV  ", "MOHV ", " MOHV"] {
+        let e = effective_with_settings(Some(&[("name", s(padded))]), json!({}));
+        is(&e, "name", padded, "record");
+        is(&e, "site.title", "MOHV", "record");
+    }
+    for blank in [" ", "    ", &" ".repeat(obop_brand::policy::NAME_MAX)] {
+        let e = effective_with_settings(Some(&[("name", s(blank))]), json!({}));
+        is(&e, "name", "obop", "default");
+        is(&e, "site.title", "obop", "default");
+        is(&e, "slug", "obop", "default");
+    }
+}
+
 /// A `site.*` key that the shop would not use is no explicit key: the entry says what the shop
 /// really shows, so the answer of `get` cannot say `site` for a value the shop ignores.
 #[test]

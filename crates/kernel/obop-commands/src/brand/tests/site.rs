@@ -312,3 +312,57 @@ fn the_default_title_is_the_one_the_site_has_always_had() {
     let t = view(&site(json!({})), &shown(None, None)).title;
     assert_eq!((t.value.as_str(), t.source), ("My Shop", Source::Default));
 }
+
+/// The shop shows its title as the settings of the site make it (control characters dropped, the
+/// text trimmed, at most 80 characters), and the title that comes from the record is made the same
+/// way, so what `get` reports is what the page shows. A name with a space at its start or end passes
+/// the read check; a name that would leave nothing is no title (the reader never gives one, since
+/// the read check calls a name of spaces empty, so this is the answer for a `Shown` that did).
+#[test]
+fn the_title_of_the_record_is_the_name_as_the_shop_shows_it() {
+    use super::super::site::brand_title;
+    let cases: [(&str, bool, &str, Source); 9] = [
+        ("MOHV", true, "MOHV", Source::Record),
+        ("  MOHV  ", true, "MOHV", Source::Record),
+        (" MOHV", true, "MOHV", Source::Record),
+        ("MOHV ", true, "MOHV", Source::Record),
+        ("Zed  Goods", true, "Zed  Goods", Source::Record),
+        ("obop", false, "obop", Source::Default),
+        (" obop ", false, "obop", Source::Default),
+        ("    ", true, "My Shop", Source::Default),
+        ("", true, "My Shop", Source::Default),
+    ];
+    for (name, stored, want, source) in cases {
+        let t = brand_title(name, stored);
+        assert_eq!((t.value.as_str(), t.source), (want, source), "{name:?}");
+    }
+}
+
+/// Through the reader, for a row written around the command: a padded name is the shop's title
+/// without the padding, from the record, and a name of spaces is no name at all, so the brand has
+/// the default name and the title is `obop`, derived from no stored field.
+#[test]
+fn a_padded_name_is_the_title_without_the_padding_and_a_blank_name_falls_back() {
+    for padded in ["  MOHV  ", "MOHV ", " MOHV"] {
+        let b = shown(Some(&[("name", s(padded))]), None);
+        assert!(b.fallbacks().is_empty(), "{padded:?}: {:?}", b.fallbacks());
+        assert_eq!(b.brand().name(), padded, "the name is as stored");
+        let t = view(&site(json!({})), &b).title;
+        assert_eq!((t.value.as_str(), t.source), ("MOHV", Source::Record));
+        assert_eq!(filled(json!({}), &b)["title"], "MOHV", "{padded:?}");
+    }
+    for blank in [" ", "    ", &" ".repeat(NAME_MAX)] {
+        let b = shown(Some(&[("name", s(blank))]), None);
+        assert!(b.is_set(), "the row exists: still a brand");
+        let fell_back: Vec<_> = b
+            .fallbacks()
+            .iter()
+            .map(|f| (f.field.as_str(), f.code))
+            .collect();
+        assert_eq!(fell_back, [("name", "empty")], "{blank:?}");
+        assert_eq!(b.brand().name(), "obop");
+        let t = view(&site(json!({})), &b).title;
+        assert_eq!((t.value.as_str(), t.source), ("obop", Source::Default));
+        assert_eq!(filled(json!({}), &b)["title"], "obop", "{blank:?}");
+    }
+}

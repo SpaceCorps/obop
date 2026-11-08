@@ -398,11 +398,13 @@ fn check_one_script(text: &str) -> Result<(), Refusal> {
     ))
 }
 
-/// The read-side check: the safety subset. The length limit (and, for a name, not empty), and
-/// none of a control, format, private-use or surrogate code point, a default-ignorable one, a
-/// space other than U+0020, or `<` and `>`. Unassigned code points pass: whether one is assigned
-/// depends on the Unicode tables of the binary, and a value stored by a newer binary must not
-/// fall back on an older one. On failure the answer is one of the fixed words of [`reason`].
+/// The read-side check: the safety subset. The length limit (and, for a name, not empty: a name of
+/// nothing but U+0020 is empty, because no page could show it), and none of a control, format,
+/// private-use or surrogate code point, a default-ignorable one, a space other than U+0020, or `<`
+/// and `>`. Unassigned code points pass: whether one is assigned depends on the Unicode tables of
+/// the binary, and a value stored by a newer binary must not fall back on an older one. A space at
+/// the start or the end of a text passes (it is no danger on a page). On failure the answer is one
+/// of the fixed words of [`reason`].
 pub fn safe(kind: Kind, text: &str) -> Result<(), &'static str> {
     let max = kind.max_chars();
     let mut n = 0usize;
@@ -425,7 +427,7 @@ pub fn safe(kind: Kind, text: &str) -> Result<(), &'static str> {
             _ => {}
         }
     }
-    if n < kind.min_chars() {
+    if n < kind.min_chars() || (kind == Kind::Name && text.chars().all(|c| c == ' ')) {
         return Err(reason::EMPTY);
     }
     Ok(())

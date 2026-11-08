@@ -565,6 +565,27 @@ fn everything_clean_accepts_the_safety_subset_accepts() {
     );
 }
 
+/// A name of nothing but the space has nothing to show, so on the read side it is as empty as no
+/// name (it falls back to the default name in every page). A space at the start or the end of a
+/// name is no danger and passes, and an empty or blank title or message is unset, not a failure.
+#[test]
+fn a_name_of_nothing_but_spaces_is_empty_and_a_name_with_spaces_around_it_is_not() {
+    for blank in [" ", "  ", "    ", &" ".repeat(NAME_MAX)] {
+        assert_eq!(safe(NAME, blank), Err(reason::EMPTY), "{blank:?}");
+        // The write side never let such a name in.
+        assert!(clean(NAME, blank).is_err(), "{blank:?}");
+    }
+    // The length is checked first, and it is the larger fault.
+    assert_eq!(safe(NAME, &" ".repeat(NAME_MAX + 1)), Err(reason::TOO_LONG));
+    for padded in [" a", "a ", "  a  ", " . ", " 1 "] {
+        assert_eq!(safe(NAME, padded), Ok(()), "{padded:?}");
+    }
+    // Only a name is refused for being blank.
+    for kind in [TITLE, MESSAGE] {
+        assert_eq!(safe(kind, "   "), Ok(()), "{kind:?}");
+    }
+}
+
 // ---- Total: never panics --------------------------------------------------------------------------------
 
 #[test]
