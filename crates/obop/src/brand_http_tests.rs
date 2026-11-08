@@ -397,7 +397,7 @@ async fn with_a_brand_the_stored_artwork_is_served_with_the_fixed_headers_in_eve
         );
         assert_eq!(a.header("content-security-policy"), SPEC_CSP, "{}", l.name);
         assert_eq!(a.header("cache-control"), SPEC_CACHE_CONTROL, "{}", l.name);
-        // The constants that the shop favicon is to share (slice S1f, not built) say the same.
+        // The constants that the shop's tab icon shares (`obop-site`, `seo.rs`) say the same.
         assert_eq!(SPEC_CONTENT_TYPE, LOGO_CONTENT_TYPE);
         assert_eq!(SPEC_NOSNIFF, LOGO_NOSNIFF);
         assert_eq!(SPEC_CSP, LOGO_CSP);
@@ -1129,12 +1129,11 @@ async fn while_the_cell_is_fresh_a_failing_store_is_not_met() {
 }
 
 /// The bound of the reader's cell: the constant `DEFAULT_BOUND` of
-/// `crates/kernel/obop-commands/src/brand/reader.rs` (not exported, and pinned at two seconds by
+/// `crates/kernel/obop-commands/src/brand/reader.rs`, itself (pinned at two seconds by
 /// `brand/tests/cache.rs`). The dispatcher's reader has this bound, and a test in this crate cannot
-/// make it shorter or expire the cell by hand. If the constant changes, the tests below that wait
-/// for the cell to go stale fail loudly (the request they expect to be refused is answered 200, or
-/// the wait is far too long), not silently.
-const READER_BOUND: std::time::Duration = std::time::Duration::from_secs(2);
+/// make it shorter or expire the cell by hand. The tests below that wait for the cell to go stale
+/// wait for the bound the reader has, and not for a copy of it that could drift.
+const READER_BOUND: std::time::Duration = obop_commands::brand::DEFAULT_BOUND;
 
 /// A `GET /healthz` that the runtime's worker must poll, answered within `bound`, and the answer.
 /// The test body runs on the thread that drives the runtime (`block_on`), not on a worker, so a

@@ -722,7 +722,9 @@ mod brand_door {
         assert!(!during.contains_key("title"), "{during:?}");
         assert!(!during.contains_key("logo_url") && !during.contains_key("accent"));
         assert!(!during.contains_key(crate::SITE_FAVICON_KEY));
-        // Nothing was pinned: when the store answers, the brand is there.
+        // Nothing was pinned at the door: when the store answers, the brand is there. What the site
+        // keeps of such an answer is another matter, `site_settings_read` and the site's cache (the
+        // next test, and `tests_brand` in `obop-site`).
         fresh.spy.heal();
         assert_eq!(fresh.api.site_settings()["title"], "MOHV");
     }

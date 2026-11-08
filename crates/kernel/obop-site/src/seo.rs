@@ -84,7 +84,10 @@ pub fn favicon(ctx: &Ctx) -> Resp {
 /// (`obop_brand::logo`): the artwork the reader re-serialised, `image/svg+xml`, `nosniff`, the
 /// sandbox policy, `no-cache` and an `ETag` that is the reader's version `v`, so the shop hashes
 /// nothing. A matching `If-None-Match` is a 304 with the same headers but the content type, and no
-/// body. Nothing else of the shop's page headers is added: this is not a page.
+/// body; it carries the length of the 200 as the logo route's 304 does (RFC 9110 section 8.6 allows
+/// it there and no other value), because the server layer sends `Content-Length: 0` with a `HEAD`
+/// 304 that has none, which says the 200 is empty. Nothing else of the shop's page headers is added:
+/// this is not a page.
 fn brand_favicon(ctx: &Ctx, art: &Favicon) -> Resp {
     let etag = logo_etag(&art.v);
     let same = ctx.req.header("if-none-match").is_some_and(|h| {
@@ -102,6 +105,9 @@ fn brand_favicon(ctx: &Ctx, art: &Favicon) -> Resp {
         Resp::new(200, LOGO_CONTENT_TYPE, art.svg.clone())
     };
     r = r.header("etag", &etag);
+    if same {
+        r = r.header("content-length", &art.svg.len().to_string());
+    }
     for (name, value) in LOGO_HEADERS {
         // A 304 carries the validators and the headers a cache may update, not the content type.
         if !(same && name == "Content-Type") {

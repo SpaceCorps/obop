@@ -249,8 +249,8 @@ async fn rest_get_configure_and_clear_for_a_person_with_platform_admin() {
     assert_eq!(body["value"], json!({"cleared": false}));
 }
 
-/// The reader that the logo route asks (the pages ask it from slices S1c to S1f, not built) is the
-/// dispatcher's own, and `configure` and `clear` tell it of a change that committed: it shows at
+/// The reader that the logo route asks (the settings door of the public site has asked it since slice
+/// S1f; the pages of slices S1c to S1e are not built) is the dispatcher's own, and `configure` and `clear` tell it of a change that committed: it shows at
 /// once in the process that made it, whatever surface the call came by (docs/spec/branding.md,
 /// section 13, "Cache"). The cell is filled first, because a value in it is good for two seconds
 /// and a change that did not reach it would not show.
