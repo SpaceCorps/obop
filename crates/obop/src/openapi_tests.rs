@@ -227,15 +227,15 @@ async fn the_export_is_what_a_running_instance_serves_to_an_administrator() {
 
 #[test]
 fn out_writes_the_document_to_a_file_and_refuses_a_path_it_cannot_write() {
-    let dir = std::env::temp_dir().join(format!("obop-openapi-cmd-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    // A directory of this run's own, removed when the test ends (after the stores are closed).
+    let _guard = obop_storage::testing::TempPath::dir("obop-openapi-cmd");
+    let dir = _guard.path().to_path_buf();
     let file = dir.join("openapi.json");
     assert!(run(Some(file.to_str().unwrap())).is_ok());
     assert_eq!(std::fs::read_to_string(&file).unwrap(), document());
     // A directory that does not exist is a failure with a message, not a panic.
     let nowhere = dir.join("missing").join("openapi.json");
     assert!(run(Some(nowhere.to_str().unwrap())).is_err());
-    std::fs::remove_dir_all(&dir).unwrap();
 }
 
 /// The drift gate of the TypeScript client: `web/packages/client/openapi.json` is the input of

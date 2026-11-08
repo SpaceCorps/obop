@@ -2774,8 +2774,9 @@ mod tests {
     /// builds it: the new routes work and the platform API and static fallback are untouched.
     #[tokio::test]
     async fn community_and_status_do_not_shadow_the_platform_routes() {
-        let dir = std::env::temp_dir().join(format!("obop-site-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        // A directory of this run's own, removed when the test ends (after the stores are closed).
+        let _guard = obop_storage::testing::TempPath::dir("obop-site");
+        let dir = _guard.path().to_path_buf();
         std::fs::write(dir.join("index.html"), "<h1>static home</h1>").unwrap();
         let backend = obop_storage::open("memory:").unwrap();
         let auth = Arc::new(Auth::with_test_params(backend.clone()));
@@ -2949,8 +2950,9 @@ mod tests {
                 "{want}: {errors:?}"
             );
         }
-        let dir = std::env::temp_dir().join(format!("obop-check-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        // A directory of this run's own, removed when the test ends (after the stores are closed).
+        let _guard = obop_storage::testing::TempPath::dir("obop-check");
+        let dir = _guard.path().to_path_buf();
         let bad = dir.join("bad.toml");
         std::fs::write(&bad, fleet.replace("0.3.0", "2")).unwrap();
         let good = root.join("packages/fleet.toml");
@@ -2967,7 +2969,6 @@ mod tests {
             "one bad file fails the run"
         );
         assert!(modules_check_files(&["/no/such/file.toml"], false).is_err());
-        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
@@ -4371,7 +4372,9 @@ mod bundled_packages {
 
     #[test]
     fn label_checks_report_missing_wrong_and_english_entries() {
-        let dir = std::env::temp_dir().join(format!("obop-labels-{}", std::process::id()));
+        // A directory of this run's own, removed when the test ends (after the stores are closed).
+        let _guard = obop_storage::testing::TempPath::dir("obop-labels");
+        let dir = _guard.path().to_path_buf();
         let ldir = dir.join("labels").join("de");
         std::fs::create_dir_all(&ldir).unwrap();
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
@@ -4424,6 +4427,5 @@ mod bundled_packages {
         // Whole-file check through the CLI entry point reports a bad file as failure.
         std::fs::write(&file, typo).unwrap();
         assert!(modules_check_files(&[&path], false).is_err());
-        let _ = std::fs::remove_dir_all(dir);
     }
 }

@@ -149,10 +149,10 @@ write_group = "base.user"
   to = "user"
 "#;
 
-    fn tiny(tag: &str) -> (std::path::PathBuf, String) {
-        let dir = std::env::temp_dir().join(format!("obop-describe-{tag}-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let f = dir.join("tiny.toml");
+    /// The directory is removed when the returned guard is dropped.
+    fn tiny(tag: &str) -> (obop_storage::testing::TempPath, String) {
+        let dir = obop_storage::testing::TempPath::dir(&format!("obop-describe-{tag}"));
+        let f = dir.path().join("tiny.toml");
         std::fs::write(&f, SMALL).unwrap();
         let s = f.to_string_lossy().to_string();
         (dir, s)
@@ -160,9 +160,8 @@ write_group = "base.user"
 
     #[test]
     fn decimal_limits_ref_and_personal_data_are_reported() {
-        let (dir, f) = tiny("a");
+        let (_dir, f) = tiny("a");
         let out = render(&[&f], true);
-        let _ = std::fs::remove_dir_all(&dir);
         let v: Value = serde_json::from_str(&out.unwrap()).unwrap();
         let price = field(&v, "tiny_item", "price");
         assert_eq!(price["precision"], 12);
@@ -190,9 +189,8 @@ write_group = "base.user"
 
     #[test]
     fn json_matches_the_golden_snapshot() {
-        let (dir, f) = tiny("g");
+        let (_dir, f) = tiny("g");
         let out = render(&[&f], true).unwrap();
-        let _ = std::fs::remove_dir_all(&dir);
         let golden = root().join("crates/obop/tests/golden/describe_tiny.json");
         if std::env::var("OBOP_UPDATE_GOLDEN").is_ok() {
             std::fs::create_dir_all(golden.parent().unwrap()).unwrap();
@@ -204,12 +202,11 @@ write_group = "base.user"
 
     #[test]
     fn an_invalid_or_missing_file_is_an_error() {
-        let dir = std::env::temp_dir().join(format!("obop-describe-b-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let bad = dir.join("bad.toml");
+        // A directory of this run's own, removed when the test ends.
+        let _guard = obop_storage::testing::TempPath::dir("obop-describe-b");
+        let bad = _guard.path().join("bad.toml");
         std::fs::write(&bad, format!("{SMALL}\nbogus = 1")).unwrap();
         let e = render(&[bad.to_str().unwrap()], true).unwrap_err();
-        let _ = std::fs::remove_dir_all(&dir);
         assert!(e.contains("bad.toml"), "{e}");
         assert!(render(&["/no/such/file.toml"], false).is_err());
     }

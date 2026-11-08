@@ -24,7 +24,6 @@ use obop_storage::Op;
 use obop_storage::testing::{Flaky, Mode};
 use serde_json::{Value as J, json};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use tower::ServiceExt;
 
 const PATH: &str = "/api/brand/logo.svg";
@@ -53,30 +52,23 @@ impl Authenticator for Tokens {
 }
 
 /// A scratch directory with a back office build in it, removed when it is dropped.
-struct Build(std::path::PathBuf);
+struct Build(obop_storage::testing::TempPath);
 
 impl Build {
     fn new() -> Build {
-        static N: AtomicUsize = AtomicUsize::new(0);
-        let dir = std::env::temp_dir().join(format!(
-            "obop-brand-http-{}-{}",
-            std::process::id(),
-            N.fetch_add(1, Ordering::Relaxed)
-        ));
-        std::fs::create_dir_all(dir.join("assets")).unwrap();
-        std::fs::write(dir.join("index.html"), "<html>BACKOFFICE-SHELL</html>").unwrap();
-        std::fs::write(dir.join("assets/app.js"), "console.log('admin')").unwrap();
+        let dir = obop_storage::testing::TempPath::dir("obop-brand-http");
+        std::fs::create_dir_all(dir.path().join("assets")).unwrap();
+        std::fs::write(
+            dir.path().join("index.html"),
+            "<html>BACKOFFICE-SHELL</html>",
+        )
+        .unwrap();
+        std::fs::write(dir.path().join("assets/app.js"), "console.log('admin')").unwrap();
         Build(dir)
     }
 
     fn path(&self) -> &str {
-        self.0.to_str().unwrap()
-    }
-}
-
-impl Drop for Build {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
+        self.0.path().to_str().unwrap()
     }
 }
 
@@ -1564,37 +1556,6 @@ async fn the_store_is_read_on_a_blocking_thread_and_never_on_the_one_that_polls_
 
 // ---- The runtime of the server ----------------------------------------------------------------
 
-const SCRATCH_PREFIX: &str = "obop-brand-rt-";
-
-/// Removes the scratch directories that earlier runs of the test below left behind: those of
-/// another process that are more than ten minutes old, so a run in parallel keeps its own. Where the
-/// directory is still in use, the removal fails and the directory stays for the next run. (The same
-/// as `sweep_scratch` of `brand_commands_tests`, for this prefix.)
-fn sweep_scratch() {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let Ok(entries) = std::fs::read_dir(std::env::temp_dir()) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let name = entry.file_name().to_string_lossy().into_owned();
-        let Some((pid, nanos)) = name
-            .strip_prefix(SCRATCH_PREFIX)
-            .and_then(|rest| rest.split_once('-'))
-        else {
-            continue;
-        };
-        let (Ok(pid), Ok(nanos)) = (pid.parse::<u32>(), nanos.parse::<u128>()) else {
-            continue;
-        };
-        if pid != std::process::id() && now.saturating_sub(nanos) > 600_000_000_000 {
-            let _ = std::fs::remove_dir_all(entry.path());
-        }
-    }
-}
-
 /// The route on a multi-threaded runtime over every store the tests have (SQLite always, PostgreSQL
 /// when `OBOP_TEST_POSTGRES_URL` is set): the reader is asked through the blocking pool, because the
 /// PostgreSQL client panics on an async worker. With no PostgreSQL this proves the route works on
@@ -1602,35 +1563,23 @@ fn sweep_scratch() {
 /// runs where the variable is set.
 #[test]
 fn the_route_works_on_the_runtime_of_the_server_over_every_store() {
-    // Removes the directory when the test ends, by a failed assertion too. A name that no other run
-    // has: a process id is reused (often, on Windows), and a directory that an earlier run left
-    // behind holds its database, with the brand row the first assertion below says is not there.
-    // On Windows the removal can fail with a sharing violation while the process lives (the
-    // application keeps the database file open), so a run cannot always clean up after itself;
-    // `sweep_scratch` of the next run does.
-    struct Scratch(std::path::PathBuf);
-    impl Drop for Scratch {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_dir_all(&self.0);
-        }
-    }
-    sweep_scratch();
-    let dir = Scratch(std::env::temp_dir().join(format!(
-        "{SCRATCH_PREFIX}{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    )));
-    std::fs::create_dir_all(&dir.0).unwrap();
+    // A directory of this run's own (a process id is reused, often on Windows, and a directory that
+    // an earlier run left behind holds its database, with the brand row the first assertion below
+    // says is not there), removed when the test ends, by a failed assertion too. On Windows the
+    // removal can fail with a sharing violation while the process lives (the application keeps the
+    // database file open); `TempPath` of the next run removes what is more than an hour old.
+    let dir = obop_storage::testing::TempPath::dir("obop-brand-rt");
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .enable_all()
         .build()
         .unwrap();
     let mut stores = vec![(
-        Store::open(&format!("sqlite://{}", dir.0.join("brand.db").display())).unwrap(),
+        Store::open(&format!(
+            "sqlite://{}",
+            dir.path().join("brand.db").display()
+        ))
+        .unwrap(),
         None,
     )];
     if let Some(db) = obop_storage::testing::TestDb::new() {

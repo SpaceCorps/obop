@@ -1265,37 +1265,12 @@ async fn eight_signers_at_once_sign_the_request_once() {
 /// stores and their records are handled out here and the runtime is entered for the requests only.
 #[test]
 fn the_race_is_won_once_on_sqlite_and_on_postgres_too() {
-    // A directory of this run alone, under one parent for all runs. It is removed when the test
-    // ends, however it ends (declared before the runtime, so it goes last). On Windows an `App`
-    // that was dropped still holds its SQLite file open (the cleanup then fails quietly), so a run
-    // also removes what earlier runs left there more than an hour ago.
-    struct Scratch(std::path::PathBuf);
-    impl Drop for Scratch {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_dir_all(&self.0);
-        }
-    }
-    let parent = std::env::temp_dir().join("obop-sign-race");
-    std::fs::create_dir_all(&parent).unwrap();
-    for old in std::fs::read_dir(&parent).unwrap().flatten() {
-        let stale = old
-            .metadata()
-            .and_then(|m| m.modified())
-            .ok()
-            .and_then(|t| t.elapsed().ok())
-            .is_some_and(|age| age > std::time::Duration::from_secs(3600));
-        if stale {
-            let _ = std::fs::remove_dir_all(old.path());
-        }
-    }
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let scratch = Scratch(parent.join(format!("{}-{nanos}", std::process::id())));
-    let dir = scratch.0.clone();
-    // `create_dir`, not `create_dir_all`: a directory that already exists is not ours.
-    std::fs::create_dir(&dir).expect("a fresh scratch directory");
+    // A directory of this run alone, removed when the test ends, however it ends (declared before
+    // the runtime, so it goes last). On Windows an `App` that was dropped still holds its SQLite
+    // file open (the cleanup then fails quietly); `TempPath` of the next run removes what is more
+    // than an hour old.
+    let scratch = obop_storage::testing::TempPath::dir("obop-sign-race");
+    let dir = scratch.path().to_path_buf();
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(4)
         .enable_all()

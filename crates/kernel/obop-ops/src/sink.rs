@@ -307,16 +307,15 @@ mod tests {
     use super::fake::MemorySink;
     use super::*;
 
-    fn tmp(tag: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("obop-sink-{tag}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&d);
-        std::fs::create_dir_all(&d).unwrap();
-        d
+    /// A directory of this run's own, removed when the guard is dropped (a failing test included).
+    fn tmp(tag: &str) -> obop_storage::testing::TempPath {
+        obop_storage::testing::TempPath::dir(&format!("obop-sink-{tag}"))
     }
 
     #[test]
     fn a_copy_is_read_back_and_compared_before_it_counts() {
-        let d = tmp("copy");
+        let _guard = tmp("copy");
+        let d = _guard.path().to_path_buf();
         let src = d.join("backup.obbk");
         std::fs::write(&src, b"sealed bytes").unwrap();
         let sink = FsSink::new(d.join("offsite"));
@@ -333,12 +332,12 @@ mod tests {
         let back = d.join("back");
         sink.get("backup.obbk", &back).unwrap();
         assert_eq!(std::fs::read(back).unwrap(), b"sealed bytes");
-        let _ = std::fs::remove_dir_all(&d);
     }
 
     #[test]
     fn a_copy_that_does_not_read_back_identically_is_not_a_backup() {
-        let d = tmp("bad");
+        let _guard = tmp("bad");
+        let d = _guard.path().to_path_buf();
         let src = d.join("b");
         std::fs::write(&src, b"abc").unwrap();
         let sink = MemorySink::default();
@@ -351,14 +350,14 @@ mod tests {
                 .unwrap_err()
                 .contains("unreachable")
         );
-        let _ = std::fs::remove_dir_all(&d);
     }
 
     /// "Read back and hash-checked" proves a copy only if the copy is somewhere else: a sink in the
     /// directory of the backup (or reached by another name) would read back the file itself.
     #[test]
     fn a_sink_in_the_directory_of_the_backup_is_not_a_second_copy() {
-        let d = tmp("same");
+        let _guard = tmp("same");
+        let d = _guard.path().to_path_buf();
         let src = d.join("backup.obbk");
         std::fs::write(&src, b"sealed bytes").unwrap();
         // The same directory, spelled three ways.
@@ -384,14 +383,14 @@ mod tests {
         assert_eq!(a.name(), b.name());
         copy_verified(&a, "backup.obbk", &src).unwrap();
         assert_eq!(a.list().unwrap(), ["backup.obbk"]);
-        let _ = std::fs::remove_dir_all(&d);
     }
 
     /// Two writers of one object name with different content: exactly one object results, it is
     /// one of the two (never a mixture), and the loser is told, not told it succeeded.
     #[test]
     fn two_puts_of_one_name_never_mix_and_the_loser_is_refused() {
-        let d = tmp("race");
+        let _guard = tmp("race");
+        let d = _guard.path().to_path_buf();
         let (sa, sb) = (d.join("a"), d.join("b"));
         std::fs::write(&sa, vec![0xAAu8; 4 << 20]).unwrap();
         std::fs::write(&sb, vec![0xBBu8; 4 << 20]).unwrap();
@@ -431,14 +430,14 @@ mod tests {
             // No part file is left, and the object is still the winner's after a retry of it.
             assert_eq!(sink.list().unwrap(), ["same.obbk"]);
         }
-        let _ = std::fs::remove_dir_all(&d);
     }
 
     /// A copy that was killed leaves `<name>.<pid>-<n>.part` in the sink: the next put sweeps what
     /// has been idle for hours, leaves what may still be written, and `stray` names what is left.
     #[test]
     fn a_killed_copy_leaves_a_part_file_that_is_reported_and_swept_when_stale() {
-        let d = tmp("stray");
+        let _guard = tmp("stray");
+        let d = _guard.path().to_path_buf();
         let src = d.join("obop-backup-20260101T000000Z.obbk");
         std::fs::write(&src, b"sealed bytes").unwrap();
         let off = d.join("off");
@@ -467,12 +466,12 @@ mod tests {
             ["obop-backup-20250102T000000Z.obbk.77-1.part"]
         );
         assert_eq!(sink.list().unwrap(), ["obop-backup-20260101T000000Z.obbk"]);
-        let _ = std::fs::remove_dir_all(&d);
     }
 
     #[test]
     fn deleting_is_a_separate_permission_and_names_are_safe() {
-        let d = tmp("del");
+        let _guard = tmp("del");
+        let d = _guard.path().to_path_buf();
         let src = d.join("b");
         std::fs::write(&src, b"abc").unwrap();
         let sink = FsSink::new(d.join("o"));
@@ -492,6 +491,5 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
-        let _ = std::fs::remove_dir_all(&d);
     }
 }

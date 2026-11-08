@@ -342,9 +342,9 @@ fn a_loopback_server_without_a_token_serves_metrics_to_a_direct_caller_only() {
 /// was, and the message names the setting.
 #[test]
 fn bad_backup_schedule_settings_stop_the_start_before_anything_is_migrated() {
-    let dir = std::env::temp_dir().join(format!("obop-startup-sched-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    // A directory of this run's own, removed when the test ends, by a failed assertion too.
+    let guard = obop_storage::testing::TempPath::dir("obop-startup-sched");
+    let dir = guard.path().to_path_buf();
     let db = dir.join("old.db");
     let url = format!("sqlite://{}", db.display());
     {
@@ -406,7 +406,6 @@ fn bad_backup_schedule_settings_stop_the_start_before_anything_is_migrated() {
             "the database is as it was"
         );
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A back office build in a directory of its own, removed again when the guard is dropped.

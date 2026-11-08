@@ -830,27 +830,12 @@ fn a_bool_given_as_the_text_true_or_false_is_accepted_on_the_command_line_surfac
 
 #[test]
 fn obop_call_get_works_on_the_command_line_and_obop_import_of_the_model_is_refused() {
-    let dir = std::env::temp_dir().join(format!(
-        "obop-brand-cli-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    sweep_scratch();
-    std::fs::create_dir_all(&dir).unwrap();
-    // Removes the directory when the test ends, by a failed assertion too. On Windows the removal
-    // fails with a sharing violation while the process lives, even after every handle this test
-    // holds is dropped (the applications it opens keep the database file), so a run cannot always
-    // clean up after itself; `sweep_scratch` of the next run does.
-    struct Scratch(std::path::PathBuf);
-    impl Drop for Scratch {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_dir_all(&self.0);
-        }
-    }
-    let _scratch = Scratch(dir.clone());
+    // A directory of this run's own, removed when the test ends, by a failed assertion too. On
+    // Windows the removal fails with a sharing violation while the process lives, even after every
+    // handle this test holds is dropped (the applications it opens keep the database file);
+    // `TempPath` of the next run removes what is more than an hour old.
+    let scratch = obop_storage::testing::TempPath::dir("obop-brand-cli");
+    let dir = scratch.path().to_path_buf();
     let path = |n: &str| dir.join(n).to_str().unwrap().to_string();
     let db = format!("sqlite://{}", path("cli.db"));
     let o = crate::Opts {
@@ -931,33 +916,5 @@ fn obop_call_get_works_on_the_command_line_and_obop_import_of_the_model_is_refus
         0,
         "and nothing was stored"
     );
-    // The directory goes when `_scratch` is dropped, after the connection of `after`.
-}
-
-/// Removes the scratch directories that earlier runs of the test above left behind: those of
-/// another process that are more than ten minutes old, so a run in parallel keeps its own. Where
-/// the directory is still in use, the removal fails and the directory stays for the next run.
-fn sweep_scratch() {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let Ok(entries) = std::fs::read_dir(std::env::temp_dir()) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let name = entry.file_name().to_string_lossy().into_owned();
-        let Some((pid, nanos)) = name
-            .strip_prefix("obop-brand-cli-")
-            .and_then(|rest| rest.split_once('-'))
-        else {
-            continue;
-        };
-        let (Ok(pid), Ok(nanos)) = (pid.parse::<u32>(), nanos.parse::<u128>()) else {
-            continue;
-        };
-        if pid != std::process::id() && now.saturating_sub(nanos) > 600_000_000_000 {
-            let _ = std::fs::remove_dir_all(entry.path());
-        }
-    }
+    // The directory goes when `scratch` is dropped, after the connection of `after`.
 }

@@ -21,5 +21,9 @@ base64 = "0.22"
 fs4 = "1.1.0"
 postgres = "0.19"
 
+[dev-dependencies]
+# `testing::TempPath`: a directory of a test's own, removed again.
+obop-storage = { workspace = true, features = ["test-support"] }
+
 [lints]
 workspace = true
