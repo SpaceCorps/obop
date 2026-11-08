@@ -664,10 +664,10 @@ fn a_mobile_app_is_never_offered_or_given_an_administrative_group() {
         r.o.validate_authorize(BASE, &r.mobile_params(&c, APP))
             .unwrap();
     let (id, binder) = r.o.begin(&v, "10.0.0.2", "en").unwrap();
-    let csrf = r.o.view(&id, &binder).unwrap().csrf;
+    let csrf = r.o.view_plain(&id, &binder).unwrap().csrf;
     r.o.login(&id, &binder, &csrf, "10.0.0.2", "ada", PW)
         .unwrap();
-    let ctx = r.o.view(&id, &binder).unwrap();
+    let ctx = r.o.view_plain(&id, &binder).unwrap();
     assert!(ctx.class.is_mobile());
     assert_eq!(
         ctx.groups,
@@ -725,10 +725,10 @@ fn a_mobile_app_is_never_offered_or_given_an_administrative_group() {
         r.o.validate_authorize(BASE, &r.params(&m, REDIRECT))
             .unwrap();
     let (id, binder) = r.o.begin(&v, "10.0.0.2", "en").unwrap();
-    let csrf = r.o.view(&id, &binder).unwrap().csrf;
+    let csrf = r.o.view_plain(&id, &binder).unwrap().csrf;
     r.o.login(&id, &binder, &csrf, "10.0.0.2", "ada", PW)
         .unwrap();
-    let ctx = r.o.view(&id, &binder).unwrap();
+    let ctx = r.o.view_plain(&id, &binder).unwrap();
     assert!(ctx.groups.contains(&"platform.admin".to_string()));
     assert!(
         !crate::page::consent_page(&ctx, None)

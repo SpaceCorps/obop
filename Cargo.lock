@@ -1483,6 +1483,7 @@ version = "0.2.1"
 dependencies = [
  "getrandom 0.4.3",
  "obop-auth",
+ "obop-brand",
  "obop-commands",
  "obop-storage",
  "serde_json",
