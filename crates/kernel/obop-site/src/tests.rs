@@ -2107,9 +2107,10 @@ fn pins_the_shop_files_and_home_page_as_an_instance_with_no_brand_sends_them() {
 
 /// The same pins with the reader of the brand installed, as `register_admin` makes it on a running
 /// instance, and no brand row: the shop is what it was. The test before it runs the shop over an
-/// inert reader, which never reads the store.
+/// inert reader, which never reads the store. It is named `pins_*` like that one, so that every
+/// command of the pins (`cargo test -p obop-site pins`, `OBOP_PRINT_PINS=1 ...`) runs both.
 #[test]
-fn the_reader_of_the_brand_with_no_row_leaves_the_shop_files_as_they_were() {
+fn pins_the_shop_files_and_home_page_with_the_reader_of_the_brand_installed_and_no_row() {
     let s = shop();
     let reader = s.d.install_brand(s.store.backend());
     assert!(!reader.current().is_set(), "no row, no brand");
@@ -2118,8 +2119,9 @@ fn the_reader_of_the_brand_with_no_row_leaves_the_shop_files_as_they_were() {
 }
 
 /// The answers the pins hold, in the order of the table, for a shop whose settings are then written
-/// as the pins say. Besides the table, `/favicon.ico` is held to the answer at `/favicon.svg` (one
-/// handler, whose digests are pinned) in each of the three states, so the pinned digests cover it.
+/// as the pins say. `/favicon.ico` is held to the answer at `/favicon.svg` (one handler) in each of
+/// the three states, and its digest is a row of its own at the end of the table (`favicon_ico_*`:
+/// they equal the digests of the `favicon_*` rows, and a handler split in two moves one of them).
 fn shop_answers(s: Shop) -> Vec<(String, String)> {
     let explicit = serde_json::json!({
         "title": "Café Nord", "tagline": "Tea & cake", "accent": "#e11d48",
@@ -2127,17 +2129,22 @@ fn shop_answers(s: Shop) -> Vec<(String, String)> {
     });
     let accent_only = serde_json::json!({"accent": "#e11d48"});
     let mut now = Vec::new();
+    let mut ico = Vec::new();
     let mut add = |name: &str, s: &Shop, path: &str| {
         let text = answer_text(&get_with_cookie(s, path));
         if std::env::var("OBOP_SHOW_PINNED").is_ok_and(|v| v == "1") {
             println!("\n---- text of {name} ----\n{text}\n---- end ----");
         }
         if path == "/favicon.svg" {
+            let ico_text = answer_text(&get_with_cookie(s, "/favicon.ico"));
             assert_eq!(
-                answer_text(&get_with_cookie(s, "/favicon.ico")),
-                text,
+                ico_text, text,
                 "{name}: the tab icon at /favicon.ico is the one at /favicon.svg"
             );
+            ico.push((
+                name.replacen("favicon", "favicon_ico", 1),
+                util::sha256_hex(&ico_text),
+            ));
         }
         now.push((name.to_string(), util::sha256_hex(&text)));
     };
@@ -2150,6 +2157,7 @@ fn shop_answers(s: Shop) -> Vec<(String, String)> {
     set_site(&s, explicit);
     add("favicon_title_accent", &s, "/favicon.svg");
     add("home_explicit", &s, "/");
+    now.extend(ico);
     now
 }
 
@@ -2208,4 +2216,9 @@ const SHOP_PINS: &[(&str, &str)] = &[
     ("site_css_accent", "4e0555cc7ae158d8aa3e47316e2cb014749a022b5406e294df18f03d109b4221"),
     ("favicon_title_accent", "19b6994e4d16588648226c76460707ed5c915b227f012ba6aef211ef969b8c2d"),
     ("home_explicit", "18bfb5f0184487fd3e101280bc6a9a59e3359da0bb79090937ee4ce354db8b4d"),
+    // Added by slice S1f, printed on the branch: the rows of `/favicon.ico`, which is one handler with
+    // `/favicon.svg` and so has the digests of the `favicon_*` rows above, to the byte.
+    ("favicon_ico_default", "abec49b26ecaab1040953e882fbfd671ec4c876753b68c065c6d683715a499fc"),
+    ("favicon_ico_accent", "83fa337e9caa357899024a2efb3d97ce494eb18fc3845f1b506ea231e9f274a5"),
+    ("favicon_ico_title_accent", "19b6994e4d16588648226c76460707ed5c915b227f012ba6aef211ef969b8c2d"),
 ];
