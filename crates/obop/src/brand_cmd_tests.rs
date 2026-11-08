@@ -4,8 +4,8 @@
 //! the `--from` cases and the local smoke are in `tests/brand_cli.rs`.
 
 use crate::brand_cmd::{
-    Flags, Said, USAGE, VALUE_OPTIONS, clear_over, configure_over, render_status, status_over,
-    storage_said, take_flags,
+    Flags, Said, USAGE, VALUE_OPTIONS, clear_over, configure_over, render_status,
+    render_status_with, status_over, storage_said, take_flags,
 };
 use obop_commands::Store;
 use obop_commands::brand::{Action, Reader, apply};
@@ -336,8 +336,10 @@ fn memory() -> (Store, std::sync::Arc<dyn Backend>) {
     (store, backend)
 }
 
+/// The text of `status`, with no value for `OBOP_MFA_ISSUER`: these tests do not depend on the
+/// environment of the process (the cases with a value are `status_names_the_variable_*`).
 fn status_of(backend: &std::sync::Arc<dyn Backend>) -> String {
-    render_status(&Reader::new(backend.clone()).fresh().unwrap())
+    render_status_with(&Reader::new(backend.clone()).fresh().unwrap(), None)
 }
 
 fn configure(backend: &std::sync::Arc<dyn Backend>, fields: &[(&str, &str)]) {
@@ -361,6 +363,7 @@ fn status_of_an_instance_with_no_brand_says_so_and_shows_the_defaults() {
          slug: \"obop\" (default)\n\
          logo: none (default)\n\
          tile_accent: \"#495670\" (default)\n\
+         authenticator_issuer: \"obop\" (default)\n\
          fallbacks: none\n"
     );
 }
@@ -392,12 +395,35 @@ fn status_shows_the_values_in_force_the_titles_and_messages_that_are_set_and_the
              slug: \"mohv\" (record)\n\
              logo: tile (record)\n\
              tile_accent: \"#495670\" (default)\n\
+             authenticator_issuer: \"MOHV\" (record)\n\
              title_sv: \"Logga in\" (record)\n\
              message_en: \"Welcome\" (record)\n\
              logo version: {v}\n\
              fallbacks: none\n"
         )
     );
+}
+
+/// `status` names the authenticator issuer and the source that won; with the variable
+/// `OBOP_MFA_ISSUER` set (given here as a value, `render_status_with`) it is the variable, also when
+/// the variable says `obop` and the record says another name.
+#[test]
+fn status_names_the_variable_as_the_source_of_the_authenticator_issuer_when_it_wins() {
+    let (_store, backend) = memory();
+    configure(&backend, &[("name", "MOHV")]);
+    let fresh = Reader::new(backend.clone()).fresh().unwrap();
+    for (variable, line) in [
+        (None, "authenticator_issuer: \"MOHV\" (record)\n"),
+        (Some("Acme"), "authenticator_issuer: \"Acme\" (env)\n"),
+        (Some("obop"), "authenticator_issuer: \"obop\" (env)\n"),
+    ] {
+        let text = render_status_with(&fresh, variable.map(String::from));
+        assert!(text.contains(line), "{variable:?}: {text}");
+        assert!(
+            text.contains("name: \"MOHV\" (record)\n"),
+            "the name is the record's whatever the variable says: {text}"
+        );
+    }
 }
 
 #[test]

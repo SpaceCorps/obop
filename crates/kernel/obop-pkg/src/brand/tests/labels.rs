@@ -371,9 +371,22 @@ fn the_text_of_effective_lists_the_keys_and_the_sources_of_the_answer_of_get() {
         .unwrap();
     collect(&r.get());
     collect(&rig().get());
+    // The source `env` is the variable `OBOP_MFA_ISSUER`, which `get` reads from the environment of
+    // the process; the answer with a value for it is built from the same read, so that no test
+    // changes the environment.
+    let with_variable: J = serde_json::from_str(
+        &obop_commands::brand::Reader::new(r.store.backend())
+            .fresh()
+            .unwrap()
+            .effective_json_with(Some("Acme".into())),
+    )
+    .unwrap();
+    for v in with_variable.as_object().unwrap().values() {
+        sources.insert(v["source"].as_str().unwrap().to_string());
+    }
     assert_eq!(
         sources,
-        ["default", "record", "theme"]
+        ["default", "env", "record", "theme"]
             .map(String::from)
             .into_iter()
             .collect::<BTreeSet<_>>(),

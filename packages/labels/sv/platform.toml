@@ -812,7 +812,7 @@ description = "Svar från get och configure: logotypens version (16 hexadecimala
 
 [labels.sv.model.instance_brand.field.effective]
 label = "Gällande"
-description = "Svar från get: ett JSON-objekt med värdet och den vinnande källan (record, theme eller default) för varje gällande värde (name, slug, logo, tile_accent, title_XX och message_XX; XX är språkkoden: en, de, fr, pl, fi, sv, es)"
+description = "Svar från get: ett JSON-objekt med värdet och den vinnande källan (record, env, theme eller default) för varje gällande värde (name, slug, logo, tile_accent, authenticator_issuer, title_XX och message_XX; XX är språkkoden: en, de, fr, pl, fi, sv, es)"
 
 [labels.sv.model.instance_brand.field.fallbacks]
 label = "Reservvärden"

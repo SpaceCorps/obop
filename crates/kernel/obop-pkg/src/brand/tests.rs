@@ -479,6 +479,44 @@ fn get_with_no_row_answers_the_defaults_and_set_false_which_is_not_an_error() {
     assert!(r.events().is_empty(), "a read writes nothing");
 }
 
+/// `get` says what an enrolment would write into an authenticator and which source won: the
+/// variable `OBOP_MFA_ISSUER` (read with `brand::env_issuer`, the function the authenticator's
+/// configuration reads it with), else the stored name, else `obop`. The expectation is built from
+/// that same function, so the test holds in a run that sets the variable as well; the cases with a
+/// value for it are in `obop-commands` (`effective_json_with`) and in the binary's tests, which
+/// start the program with the variable in its environment.
+#[test]
+fn get_names_the_authenticator_issuer_and_the_source_that_won() {
+    let variable = brand::env_issuer();
+    let issuer = |record: Option<&str>| -> J {
+        match (&variable, record) {
+            (Some(v), _) => json!({"value": v, "source": "env"}),
+            (None, Some(name)) => json!({"value": name, "source": "record"}),
+            (None, None) => json!({"value": "obop", "source": "default"}),
+        }
+    };
+    let r = rig();
+    let g = r.get();
+    assert_eq!(
+        parsed(&g, "effective")["authenticator_issuer"],
+        issuer(None)
+    );
+    r.configure(&[("name", "MOHV")]).unwrap();
+    let g = r.get();
+    assert_eq!(
+        parsed(&g, "effective")["authenticator_issuer"],
+        issuer(Some("MOHV"))
+    );
+    // A change made through the command shows in the next `get`, with no wait: it reads the row
+    // itself.
+    r.configure(&[("name", "Other")]).unwrap();
+    let g = r.get();
+    assert_eq!(
+        parsed(&g, "effective")["authenticator_issuer"],
+        issuer(Some("Other"))
+    );
+}
+
 #[test]
 fn get_shows_the_stored_fields_as_stored_and_never_the_artwork() {
     let r = rig();
