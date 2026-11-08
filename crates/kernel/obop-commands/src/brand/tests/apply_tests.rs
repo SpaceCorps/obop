@@ -399,7 +399,7 @@ fn unknown_keys_are_refused_by_name_and_the_name_is_made_safe_to_repeat() {
         "set",
         "changes",
         "dry_run",
-        "hide_product_docs",
+        "future_switch",
         "frob",
     ] {
         let r = refusals(run(&spy, &cfg(&[("name", "MOHV"), (key, "x")])));
@@ -491,20 +491,22 @@ fn show_key_repeats_only_ascii_letters_digits_underscore_and_hyphen() {
 
 #[test]
 fn a_field_this_binary_does_not_know_survives_a_merge() {
-    // A newer binary stored a field (S2 adds hide_product_docs). An older binary that changes a
-    // title must not drop it by replacing the whole row.
+    // A newer binary stored a field this one does not know. An older binary that changes a title
+    // must not drop it by replacing the whole row.
     let spy = Spy::memory();
     put_row(
         &*spy,
         &[
             ("name", s("MOHV")),
             ("hide_product_docs", J::Bool(true)),
+            ("future_switch", J::Bool(true)),
             ("future_field", s("kept")),
         ],
     );
     ok(&spy, &[("title_sv", "Logga in")]);
     let row = stored(&spy).unwrap();
     assert_eq!(row.get("hide_product_docs"), Some(&J::Bool(true)));
+    assert_eq!(row.get("future_switch"), Some(&J::Bool(true)));
     assert_eq!(text(&row, "future_field"), "kept");
     assert_eq!(text(&row, "title_sv"), "Logga in");
 }

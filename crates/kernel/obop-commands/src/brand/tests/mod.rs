@@ -21,6 +21,7 @@ mod pins;
 mod race;
 mod rows;
 mod strict;
+mod switch;
 mod total;
 
 pub use double::{Spy, s};

@@ -798,6 +798,10 @@ description = "Meddelandet på spanska: en enkel text på högst 240 tecken, uta
 label = "Logotyp (SVG)"
 description = "Indata till configure: texten i en SVG-fil, högst 16 KiB, en strikt delmängd (former och banor i enfärgade nyanser; inget skript, ingen text, ingen bild, ingen länk). Det som sparas är den kanoniska text som servern skrev om, aldrig indata; get returnerar den inte. Tomt rensar den, och logotypen ritas då utifrån namnet"
 
+[labels.sv.model.instance_brand.field.hide_product_docs]
+label = "Dölj produktdokumentationen"
+description = "true eller false: dölj varumärkesmanualen och guiden i Anpassa, i kontomenyn och i kommandopaletten. Av tills ett booleskt true sparas. Visas inte före inloggningen; varje inloggad person kan läsa det"
+
 [labels.sv.model.instance_brand.field.dry_run]
 label = "Provkörning"
 description = "Indata till configure och clear: true eller false. Med true kontrolleras allt och inget skrivs eller loggas; svaret säger vad som skulle hända och returnerar dry_run"
@@ -832,7 +836,7 @@ description = "Svar från clear: om ett varumärke togs bort (med dry_run: om de
 
 [labels.sv.model.instance_brand.action.configure]
 label = "Konfigurera"
-description = "Ställ in instansens varumärke. Ange bara de fält som ska ändras (de andra behåller sitt värde); det första anropet kräver name. Fält: name, slug, title_XX, message_XX, logo_svg (SVG-text). En tom text rensar ett fält, utom name. dry_run (true eller false) skriver inget. Svarar med changes och v (med dry_run även refusals). Bara en person med platform.admin får köra det"
+description = "Ställ in varumärket. Ange bara fälten som ska ändras (de andra behåller sitt värde); det första anropet kräver name. Fält: name, slug, title_XX, message_XX, logo_svg (SVG-text), hide_product_docs (true eller false). En tom text rensar ett fält, utom name. dry_run (true eller false) skriver inget. Svarar changes och v (med dry_run även refusals). Bara en person med platform.admin får köra det"
 
 [labels.sv.model.instance_brand.action.clear]
 label = "Ta bort"

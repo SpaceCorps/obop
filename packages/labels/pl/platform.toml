@@ -798,6 +798,10 @@ description = "Komunikat w języku hiszpańskim: jeden zwykły tekst, najwyżej 
 label = "Logo (SVG)"
 description = "Dane wejściowe configure: tekst pliku SVG, najwyżej 16 KiB, ścisły podzbiór (kształty i ścieżki w jednolitych kolorach; bez skryptu, tekstu, obrazu i linku). Zapisywany jest tekst kanoniczny, który serwer przepisał, nigdy dane wejściowe; get go nie zwraca. Puste usuwa go, a logo jest wtedy rysowane z nazwy"
 
+[labels.pl.model.instance_brand.field.hide_product_docs]
+label = "Ukryj dokumentację produktu"
+description = "true lub false: ukryj księgę marki i przewodnik w Dostosuj, w menu konta i w palecie poleceń. Wyłączone, dopóki nie zapisano logicznego true. Nie jest pokazywane przed zalogowaniem; może je odczytać każda zalogowana osoba"
+
 [labels.pl.model.instance_brand.field.dry_run]
 label = "Tryb próbny"
 description = "Dane wejściowe configure i clear: true lub false. Z true wszystko jest sprawdzane, a nic nie jest zapisywane ani rejestrowane; odpowiedź mówi, co by się stało, i zwraca dry_run"
@@ -832,7 +836,7 @@ description = "Odpowiedź clear: czy marka została usunięta (z dry_run: czy zo
 
 [labels.pl.model.instance_brand.action.configure]
 label = "Konfiguruj"
-description = "Ustaw branding instancji. Podaj tylko pola do zmiany (pozostałe zachowują wartość); pierwsze wywołanie wymaga name. Pola: name, slug, title_XX, message_XX, logo_svg (tekst SVG). Pusty tekst czyści pole, poza name. dry_run (true lub false) niczego nie zapisuje. Zwraca changes i v (z dry_run także refusals). Uruchomić może to tylko osoba z uprawnieniem platform.admin"
+description = "Ustaw branding instancji. Podaj tylko pola do zmiany (pozostałe zachowują wartość); pierwsze wywołanie wymaga name. Pola: name, slug, title_XX, message_XX, logo_svg (tekst SVG), hide_product_docs (true lub false). Pusty tekst czyści pole, poza name. dry_run (true lub false) niczego nie zapisuje. Zwraca changes i v (z dry_run także refusals). Uruchomić może to tylko osoba z platform.admin"
 
 [labels.pl.model.instance_brand.action.clear]
 label = "Usuń"

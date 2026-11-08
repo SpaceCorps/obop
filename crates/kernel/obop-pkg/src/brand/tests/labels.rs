@@ -1,5 +1,5 @@
 //! The texts of the model `instance_brand` in six languages (docs/spec/branding.md, section 7: the
-//! admin labels are machine-drafted, "56 cells per language, 336 in six languages"). The D52 tests
+//! admin labels are machine-drafted, "58 cells per language, 348 in six languages" since S2). The D52 tests
 //! in the binary only ask that a cell exists and differs from the English one, so a wrong number, a
 //! wrong language name or an identifier that was translated would pass them. These tests tie each
 //! cell to the English text and the English text to the code:
@@ -187,7 +187,7 @@ fn limits_in(item: &str) -> Vec<u64> {
 fn the_numbers_in_the_english_texts_are_the_limits_of_the_code_and_every_translation_has_them() {
     let module = admin_module();
     let all = brand_slots(&module);
-    assert_eq!(all.len(), 56);
+    assert_eq!(all.len(), 58);
     let mut checked = 0;
     for slot in &all {
         let want = if slot.kind == SlotKind::FieldDescription {
@@ -211,7 +211,7 @@ fn the_numbers_in_the_english_texts_are_the_limits_of_the_code_and_every_transla
             checked += 1;
         }
     }
-    assert_eq!(checked, 336, "56 cells in each of six languages");
+    assert_eq!(checked, 348, "58 cells in each of six languages");
 }
 
 #[test]

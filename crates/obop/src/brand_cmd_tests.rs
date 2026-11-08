@@ -163,6 +163,8 @@ fn the_flags_of_the_area_are_pulled_out_and_the_rest_keeps_its_order() {
         "mohv",
         "--logo-file",
         "logo.svg",
+        "--hide-product-docs",
+        "on",
         "--from",
         "values.toml",
     ];
@@ -176,6 +178,7 @@ fn the_flags_of_the_area_are_pulled_out_and_the_rest_keeps_its_order() {
             messages: pairs(&[("fi", "Hei")]),
             logo_file: Some("logo.svg".into()),
             clear_logo: false,
+            hide_product_docs: Some(true),
         })
     );
     // The global options stay for the global handling, `--from` included.
@@ -731,4 +734,104 @@ fn the_events_of_the_command_line_are_written_by_the_operator() {
         assert_eq!(actor, "operator", "{detail}");
         assert_eq!(user, "(instance)", "{detail}");
     }
+}
+
+#[test]
+fn the_switch_flag_takes_on_or_off_once_and_nothing_else() {
+    for (word, want) in [("on", true), ("off", false)] {
+        let (flags, rest) = take_flags(vec![
+            "admin",
+            "brand",
+            "configure",
+            "--hide-product-docs",
+            word,
+        ])
+        .unwrap();
+        assert_eq!(flags.unwrap().hide_product_docs, Some(want), "{word}");
+        assert_eq!(rest, ["admin", "brand", "configure"]);
+    }
+    for (args, why) in [
+        (
+            vec!["admin", "brand", "configure", "--hide-product-docs"],
+            "no value",
+        ),
+        (
+            vec!["admin", "brand", "configure", "--hide-product-docs", "yes"],
+            "yes",
+        ),
+        (
+            vec!["admin", "brand", "configure", "--hide-product-docs", "true"],
+            "true",
+        ),
+        (
+            vec!["admin", "brand", "configure", "--hide-product-docs", "ON"],
+            "ON",
+        ),
+        (
+            vec![
+                "admin",
+                "brand",
+                "configure",
+                "--hide-product-docs",
+                "on",
+                "--hide-product-docs",
+                "off",
+            ],
+            "given twice",
+        ),
+    ] {
+        let e = take_flags(args).unwrap_err();
+        assert!(e.contains("--hide-product-docs"), "{why}: {e}");
+    }
+    // Another command line is not touched by the flag.
+    let (flags, rest) =
+        take_flags(vec!["status", "incident", "--hide-product-docs", "on"]).unwrap();
+    assert!(flags.is_none());
+    assert_eq!(rest, ["status", "incident", "--hide-product-docs", "on"]);
+}
+
+#[test]
+fn the_switch_is_set_and_shown_through_the_command_line() {
+    let backend = Store::new().backend();
+    let said = configure_over(
+        &*backend,
+        pairs(&[("name", "MOHV"), ("hide_product_docs", "true")]),
+        false,
+    );
+    assert_eq!(said.code, 0, "{said:?}");
+    assert!(
+        said.out.contains("hide_product_docs: false -> true"),
+        "{}",
+        said.out
+    );
+    let status = status_over(backend.clone());
+    assert!(
+        status.out.contains("hide_product_docs: on\n"),
+        "{}",
+        status.out
+    );
+    let said = configure_over(&*backend, pairs(&[("hide_product_docs", "false")]), false);
+    assert!(
+        said.out.contains("hide_product_docs: true -> false"),
+        "{}",
+        said.out
+    );
+    let status = status_over(backend.clone());
+    assert!(
+        !status.out.contains("hide_product_docs"),
+        "off is the default and prints nothing: {}",
+        status.out
+    );
+    // A bad value is refused by the field's name and nothing is stored.
+    let said = configure_over(&*backend, pairs(&[("hide_product_docs", "maybe")]), false);
+    assert_eq!(said.code, 1);
+    assert!(
+        said.err
+            .contains("hide_product_docs: must be true or false"),
+        "{}",
+        said.err
+    );
+    // With no brand, status says nothing of the switch.
+    let empty = Store::new().backend();
+    assert!(!status_over(empty).out.contains("hide_product_docs"));
 }
