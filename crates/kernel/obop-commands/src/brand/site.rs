@@ -1,6 +1,7 @@
 //! What the public site and shop take from the brand (docs/spec/branding.md, section 5 and the row
-//! OT-04 of section 6). The site reads its settings through one door, `PublicApi::site_settings`,
-//! and the brand reaches it there and nowhere else: [`fill_site`] puts the fallbacks of the record
+//! OT-04 of section 6). The site reads its settings through one door, `PublicApi::site_settings_read`
+//! (`site_settings` is the same call, answering the object alone), and the brand reaches it there
+//! and nowhere else: [`fill_site`] puts the fallbacks of the record
 //! into the `site` object that door returns, for the keys that object leaves unset, and hands the
 //! artwork over through one reserved key.
 //!

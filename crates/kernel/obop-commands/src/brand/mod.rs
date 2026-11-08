@@ -11,6 +11,12 @@
 //!   into a person's own device.
 //! - [`apply`]: the one function that writes the row (`configure` and `clear`, on every surface),
 //!   under the lock `brand.write`, with the audit events in the same atomic batch.
+//! - [`site_settings`] and [`fill_site`]: what the public site and shop take from the brand. The
+//!   shop reads the `site` object of the instance settings through one door,
+//!   `PublicApi::site_settings_read`, and the brand fills the keys that object leaves unset and
+//!   hands the artwork of the tab icon over through one reserved key; the same decision
+//!   (`site::view`) gives the `site.*` and `favicon` entries of `get`. A read that failed is
+//!   reported as `SiteRead::degraded`, so that the shop does not keep it.
 //! - [`Dispatcher::brand`]: the reader the dispatcher holds, created by `register_admin`.
 //!
 //! No code outside this module reads the model `instance_brand`: `brand_scan_tests` in `obop-http`

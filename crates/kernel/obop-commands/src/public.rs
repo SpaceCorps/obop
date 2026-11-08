@@ -743,8 +743,9 @@ impl PublicApi {
 
     /// The `site` object of the instance settings, with the instance brand filled in where the
     /// object leaves a key unset (docs/spec/branding.md, section 5): the only settings the public
-    /// side reads. This is the one door the public site and shop read their settings by, and the
-    /// one place the brand reaches them.
+    /// side reads. The public site and shop read them by [`PublicApi::site_settings_read`], which
+    /// is this call and also says whether the answer is a stand-in; this is the form that returns
+    /// the object alone. Either way it is the one door, and the one place the brand reaches them.
     ///
     /// With a brand set, an unset `title` is the name, an unset `logo_url` the logo route with its
     /// version, an unset `accent` the tile accent, and the record's artwork, when it has one, goes
