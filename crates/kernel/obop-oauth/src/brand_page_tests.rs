@@ -490,6 +490,194 @@ fn a_twin_has_the_placeholders_of_its_base_and_the_same_name_sentence_has_none()
     }
 }
 
+/// What the new texts say, in words, for the claims the page makes to a person who is about to
+/// hand over access: that this instance cannot verify who runs or made the application, that the
+/// person should go on only if they began the connection, that a step that needs approval still
+/// waits for a person and the application cannot approve its own proposals, and that a name equal to
+/// the instance's does not make the application the instance's. The golden pins
+/// (`pins_the_42_cells_of_the_six_texts_the_branding_work_adds`) make any edit of a cell a visible
+/// diff; this test says which sentences a reader of the diff must not see inverted or dropped, in
+/// each of the seven languages. The fragments are copied from the cells; when a cell is corrected by
+/// someone who speaks the language, the fragment moves with it in the same commit.
+#[test]
+fn the_new_texts_keep_the_claims_of_the_texts_they_stand_for() {
+    let cells = |key: &str| CATALOGUE.iter().find(|(k, _)| *k == key).unwrap().1;
+    let claims: [(&[&str], [&str; 7]); 7] = [
+        // The consent page of an MCP client: who runs the application cannot be verified.
+        (
+            &["consent.who_body.neutral"],
+            [
+                "cannot verify who runs {app}",
+                "kann nicht prüfen, wer {app} betreibt",
+                "ne peut pas vérifier qui exploite {app}",
+                "nie może sprawdzić, kto prowadzi {app}",
+                "ei voi tarkistaa, kuka ylläpitää sovellusta {app}",
+                "kan inte kontrollera vem som driver {app}",
+                "no puede comprobar quién gestiona {app}",
+            ],
+        ),
+        // The consent page of a mobile app, by scheme and by loopback address: who made it.
+        (
+            &[
+                "consent.who_body_mobile.neutral",
+                "consent.who_body_mobile_loopback.neutral",
+            ],
+            [
+                "cannot verify who made {app}",
+                "kann nicht prüfen, wer {app} erstellt hat",
+                "ne peut pas vérifier qui a créé {app}",
+                "nie może sprawdzić, kto stworzył {app}",
+                "ei voi tarkistaa, kuka on tehnyt sovelluksen {app}",
+                "kan inte kontrollera vem som har gjort {app}",
+                "no puede comprobar quién creó {app}",
+            ],
+        ),
+        // All three: go on only if you began it yourself.
+        (
+            &[
+                "consent.who_body.neutral",
+                "consent.who_body_mobile.neutral",
+                "consent.who_body_mobile_loopback.neutral",
+            ],
+            [
+                "Only continue if you started this",
+                "Fahren Sie nur fort, wenn Sie diese",
+                "Ne continuez que si vous avez lancé cette connexion vous-même",
+                "Kontynuuj tylko wtedy, gdy sam rozpocząłeś to",
+                "Jatka vain, jos aloitit tämän",
+                "Fortsätt bara om du själv startade",
+                "Continúe solo si usted mismo inició",
+            ],
+        ),
+        // Steps that need approval still wait for a person ...
+        (
+            &["consent.f2.neutral"],
+            [
+                "still wait for a person to approve them in the back office",
+                "warten weiterhin darauf, dass eine Person sie im Backoffice freigibt",
+                "attendent toujours qu'une personne les approuve",
+                "nadal czekają, aż człowiek zatwierdzi je",
+                "odottavat edelleen, että ihminen hyväksyy ne",
+                "väntar fortfarande på att en person godkänner dem",
+                "siguen esperando a que una persona los apruebe",
+            ],
+        ),
+        // ... and the application cannot approve its own proposals.
+        (
+            &["consent.f2.neutral"],
+            [
+                "The application cannot approve its own proposals.",
+                "Die Anwendung kann ihre eigenen Vorschläge nicht freigeben.",
+                "L'application ne peut pas approuver ses propres propositions.",
+                "Aplikacja nie może zatwierdzać własnych propozycji.",
+                "Sovellus ei voi hyväksyä omia ehdotuksiaan.",
+                "Programmet kan inte godkänna sina egna förslag.",
+                "La aplicación no puede aprobar sus propias propuestas.",
+            ],
+        ),
+        // A name equal to the instance's ...
+        (
+            &["consent.same_name"],
+            [
+                "This name is the same as the name of this instance.",
+                "Dieser Name ist derselbe wie der Name dieser Instanz.",
+                "Ce nom est identique au nom de cette instance.",
+                "Ta nazwa jest taka sama jak nazwa tej instancji.",
+                "Tämä nimi on sama kuin tämän instanssin nimi.",
+                "Det här namnet är detsamma som namnet på den här instansen.",
+                "Este nombre es el mismo que el nombre de esta instancia.",
+            ],
+        ),
+        // ... does not make the application the instance's.
+        (
+            &["consent.same_name"],
+            [
+                "does not mean that the application belongs to this instance",
+                "bedeutet nicht, dass die Anwendung zu dieser Instanz gehört",
+                "ne signifie pas que l'application appartient à cette instance",
+                "Nie oznacza to, że aplikacja należy do tej instancji",
+                "ei tarkoita, että sovellus kuuluu tälle instanssille",
+                "betyder inte att programmet tillhör den här instansen",
+                "no significa que la aplicación pertenezca a esta instancia",
+            ],
+        ),
+    ];
+    for (keys, fragments) in claims {
+        for key in keys {
+            for (i, fragment) in fragments.iter().enumerate() {
+                assert!(
+                    cells(key)[i].contains(fragment),
+                    "{key} in {} no longer says {fragment:?}: {}",
+                    LANGS[i],
+                    cells(key)[i]
+                );
+            }
+        }
+    }
+}
+
+/// The contract of [`OAuth::view`] that the pages rest on: the context it returns holds the brand it
+/// was handed, the very value (not a copy, and never the brand of an instance with no row), for a
+/// flow that nobody has signed in on and for one that somebody has. The handlers' tests in the `obop`
+/// crate reach the same thing through the real router; this test holds it in the crate that owns it.
+#[test]
+fn view_hands_the_brand_it_was_given_to_the_context_of_the_page() {
+    use crate::flow::{AuthorizeParams, LoginOut};
+    use crate::{OAuth, OAuthConfig};
+    const BASE: &str = "https://inst.test";
+    const PW: &str = "correct horse battery";
+    let backend = memory();
+    let auth = Arc::new(obop_auth::Auth::with_test_params(backend.clone()));
+    auth.create_user("ada", PW, &["base.user".to_string()])
+        .unwrap();
+    let o = OAuth::new(backend, auth, OAuthConfig::default()).unwrap();
+    let client = o
+        .register(
+            "10.0.0.1",
+            &json!({"client_name": "Claude",
+                    "redirect_uris": ["https://claude.ai/api/mcp/auth_callback"]}),
+        )
+        .unwrap()["client_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let verifier = "v".repeat(50);
+    let params = AuthorizeParams {
+        response_type: Some("code".into()),
+        client_id: Some(client),
+        redirect_uri: Some("https://claude.ai/api/mcp/auth_callback".into()),
+        state: Some("st".into()),
+        code_challenge: Some(crate::util::s256(&verifier)),
+        code_challenge_method: Some("S256".into()),
+        resources: vec![format!("{BASE}/mcp")],
+        ..Default::default()
+    };
+    let validated = o.validate_authorize(BASE, &params).unwrap();
+    let (id, binder) = o.begin(&validated, "10.0.0.2", "en").unwrap();
+    let (set, unset) = (mohv(), plain());
+    for step in ["nobody is signed in", "somebody is"] {
+        for (what, brand) in [("a brand", &set), ("no brand", &unset)] {
+            let ctx = o.view(&id, &binder, brand).unwrap();
+            assert!(
+                Arc::ptr_eq(&ctx.brand, brand),
+                "{step}, {what}: the context holds another value than the one it was handed"
+            );
+            assert_eq!(ctx.brand.is_set(), brand.is_set(), "{step}, {what}");
+        }
+        if step == "nobody is signed in" {
+            let csrf = o.view(&id, &binder, &set).unwrap().csrf;
+            assert_eq!(
+                o.login(&id, &binder, &csrf, "10.0.0.2", "ada", PW).unwrap(),
+                LoginOut::Consent
+            );
+        }
+    }
+    assert_eq!(
+        o.view(&id, &binder, &set).unwrap().user.as_deref(),
+        Some("ada")
+    );
+}
+
 // ---- A client named like the instance ----------------------------------------------------------------
 
 #[test]
@@ -581,7 +769,7 @@ fn the_sentence_is_added_to_the_box_and_nothing_else_moves() {
     }
 }
 
-/// SDD2-11 (docs/spec/branding.md section 10, item 2): "the comparison does not rely on the cleaning
+/// Section 10, item 2 of docs/spec/branding.md: "the comparison does not rely on the cleaning
 /// that registration does" holds for the classes the fold removes (default-ignorable and format
 /// characters, white space). Controls and U+2800 are kept by the fold and dropped by the registration
 /// (`devices::is_invisible`), and U+FE0F is kept by the registration and dropped by the fold. This

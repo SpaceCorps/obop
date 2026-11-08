@@ -117,8 +117,9 @@ pub struct FlowCtx {
     /// The instance brand every page of this request shows: the one the handler read at the start
     /// of the request (docs/spec/branding.md, section 4), so that the name and the logo of a page
     /// come from one read. This crate has no reader, so `view` takes the brand as an argument and
-    /// puts it here: a handler cannot get a page context without handing it one.
-    pub brand: Arc<Shown>,
+    /// puts it here: a handler cannot get a page context without handing it one. The field is
+    /// private to this crate, so no other crate can build a `FlowCtx` with a default brand in it.
+    pub(crate) brand: Arc<Shown>,
 }
 
 /// Why a step of the flow was not accepted.
@@ -507,8 +508,8 @@ impl OAuth {
     }
 
     /// The flow as the page shows it (no CSRF check: this is a read), with the brand that the
-    /// handler read at the start of its request. There is no form of `view` without a brand, so a
-    /// page of a request cannot be made from a context that forgot to take it.
+    /// handler read at the start of its request. In a non-test build there is no form of `view`
+    /// without a brand, so a page of a request cannot be made from a context that forgot to take it.
     pub fn view(&self, id: &str, binder: &str, brand: &Arc<Shown>) -> Result<FlowCtx, FlowError> {
         let rec = self.load(id, binder, None)?;
         let mut ctx = self.ctx(id, &rec, brand);
