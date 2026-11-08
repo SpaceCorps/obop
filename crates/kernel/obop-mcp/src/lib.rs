@@ -9,6 +9,7 @@
 
 pub mod schema;
 
+use obop_brand::{Brand, DEFAULT_NAME};
 use obop_commands::{CallError, Dispatcher, Principal, Surface, Value, Vault, errors, names};
 use serde_json::{Value as J, json};
 use std::io::{BufRead, Write};
@@ -18,13 +19,52 @@ pub const SUPPORTED_VERSIONS: [&str; 3] = ["2025-11-25", "2025-06-18", "2025-03-
 /// Tools per `tools/list` page; longer lists are paged with an opaque cursor.
 pub const PAGE_SIZE: usize = 200;
 
-pub const INSTRUCTIONS: &str = "This is an obop instance: an open-source business suite (contacts, CRM, sales, invoicing and installed modules) driven by typed commands. \
-Call obop__meta first to learn the models, fields and actions you may use. \
+/// The first sentence of the instructions of an instance with no brand: what the server is.
+const INSTRUCTIONS_LEAD: &str = "This is an obop instance: an open-source business suite (contacts, CRM, sales, invoicing and installed modules) driven by typed commands. ";
+
+/// The first sentence of the instructions when a brand is set (docs/spec/branding.md, section 6,
+/// OT-07): the instance's own name, and no "open-source" (a claim about the software, not about the
+/// business the client is connected to). The name is put in at `{name}`.
+const INSTRUCTIONS_LEAD_BRANDED: &str = "This is the {name} system: business data (contacts, CRM, sales, invoicing and installed modules) driven by typed commands. ";
+
+/// The rest of the instructions, the same for every instance: how to use the tools. It names the
+/// tool `obop__meta`, which keeps its name on every instance (a wire name; Q71 item 3, answered).
+const INSTRUCTIONS_REST: &str = "Call obop__meta first to learn the models, fields and actions you may use. \
 Every tool is named <model>__<command>: list, search, get, create, update, delete and model-specific actions. Prefer search with a small limit, filter and order over list. \
 Money is an integer in minor units (cents); dates are YYYY-MM-DD; a ref field takes the id of the target record. \
 Personal data comes back as mask tokens such as NAME_1; send the token back unchanged where you need that person or value, it is the same token for the whole session. \
 A result may list denied fields: you are not allowed to read them. \
 Irreversible or money-moving steps, and every delete, do not run for an agent: the result has status approval_required and a plan_id. Tell a human to approve that plan in the back office and do not retry the call. An agent can never approve its own plan.";
+
+/// What `initialize` tells a client about the server, for the brand it is given (the one reader
+/// read once for the request): with no brand set, the text this server has always sent, byte for
+/// byte; with one, the same instructions that name the instance by its own name and make no
+/// claim about the software.
+pub fn instructions(brand: &Brand) -> String {
+    let lead = if brand.is_set() {
+        INSTRUCTIONS_LEAD_BRANDED.replace("{name}", brand.name())
+    } else {
+        INSTRUCTIONS_LEAD.to_string()
+    };
+    format!("{lead}{INSTRUCTIONS_REST}")
+}
+
+/// The `serverInfo` object, the one place that builds it: `initialize` sends it with a `title`, and
+/// the MCP server card (`obop-http`) sends the same name and version without one, as it always
+/// has. With no brand set the name and the title are `obop`; with one the name is the effective slug
+/// of the brand and the title is its name (Q71 item 3, answered; docs/spec/branding.md, OT-07).
+pub fn server_info(brand: &Brand, titled: bool) -> J {
+    let name = if brand.is_set() {
+        brand.slug()
+    } else {
+        DEFAULT_NAME.to_string()
+    };
+    if titled {
+        json!({"name": name, "title": brand.name(), "version": obop_types::CORE_VERSION})
+    } else {
+        json!({"name": name, "version": obop_types::CORE_VERSION})
+    }
+}
 
 /// The newest revision whose name is `v`, if supported.
 fn supported(v: &str) -> Option<&'static str> {
@@ -213,7 +253,7 @@ fn handle_message(d: &Dispatcher, p: &Principal, s: &mut Session, msg: &J) -> Op
     }
     let params = obj.get("params").cloned().unwrap_or(J::Null);
     Some(match method {
-        "initialize" => initialize(id, s, &params),
+        "initialize" => initialize(d, id, s, &params),
         "ping" => ok(id, json!({})),
         "tools/list" => match list_tools(d, p, &params) {
             Ok(r) => ok(id, r),
@@ -235,10 +275,14 @@ fn notification(s: &mut Session, method: &str) {
     // every call finishes before the next one is read.
 }
 
-fn initialize(id: &J, s: &mut Session, params: &J) -> J {
+fn initialize(d: &Dispatcher, id: &J, s: &mut Session, params: &J) -> J {
     let Some(asked) = params.get("protocolVersion").and_then(J::as_str) else {
         return error(id, -32602, "initialize needs params.protocolVersion");
     };
+    // The brand of the instance, read once through the one reader (docs/spec/branding.md, section 4):
+    // a request that cannot read the store meets the fault, and the layer above answers it by D74.
+    let shown = d.brand().current();
+    let brand = shown.brand();
     // Lifecycle: answer the requested revision when supported, otherwise our newest.
     let version = supported(asked).unwrap_or(SUPPORTED_VERSIONS[0]);
     s.protocol = Some(version);
@@ -251,12 +295,8 @@ fn initialize(id: &J, s: &mut Session, params: &J) -> J {
         json!({
             "protocolVersion": version,
             "capabilities": {"tools": {"listChanged": false}},
-            "serverInfo": {
-                "name": "obop",
-                "title": "obop",
-                "version": obop_types::CORE_VERSION,
-            },
-            "instructions": INSTRUCTIONS,
+            "serverInfo": server_info(brand, true),
+            "instructions": instructions(brand),
         }),
     )
 }
@@ -596,6 +636,158 @@ mod tests {
         .unwrap();
         assert!(init.contains("\"protocolVersion\":\"2025-06-18\""));
         assert_eq!(s.protocol, Some("2025-06-18"));
+    }
+
+    // ---- the brand in `initialize` (docs/spec/branding.md, S3, OT-07) -----------------------------
+
+    /// With no brand set the instructions are the text the server has always sent: the lead that
+    /// names obop, then the rest. (The result as a whole is also held byte for byte by the golden
+    /// pin of `initialize` in `crates/obop/src/mcp_tests.rs`.)
+    #[test]
+    fn with_no_brand_the_instructions_are_what_the_server_has_always_sent() {
+        let text = instructions(&Brand::default());
+        assert!(
+            text.starts_with(
+                "This is an obop instance: an open-source business suite (contacts, CRM, sales, invoicing and installed modules) driven by typed commands. Call obop__meta first to learn the models, fields and actions you may use. Every tool is named <model>__<command>"
+            ),
+            "{text}"
+        );
+        assert!(text.ends_with("An agent can never approve its own plan."));
+        assert!(text.contains("approval_required"));
+    }
+
+    /// With a brand the lead names the instance by its own name and says nothing of the software
+    /// ("open-source" is a claim about the software, not about the business the client is
+    /// connected to); the rest, which tells the client how to use the tools, is the same text.
+    #[test]
+    fn with_a_brand_the_instructions_name_the_instance_and_the_rest_is_the_same() {
+        let plain = instructions(&Brand::default());
+        let text = instructions(&Brand::new("MOHV"));
+        assert!(
+            text.starts_with(
+                "This is the MOHV system: business data (contacts, CRM, sales, invoicing and installed modules) driven by typed commands. Call obop__meta first"
+            ),
+            "{text}"
+        );
+        assert!(!text.to_lowercase().contains("open-source"), "{text}");
+        assert!(!text.contains("obop instance"), "{text}");
+        assert_eq!(
+            text.split_once("Call obop__meta").map(|(_, rest)| rest),
+            plain.split_once("Call obop__meta").map(|(_, rest)| rest),
+            "everything after the lead is the same"
+        );
+        // The tool keeps its name on every instance (a wire name, Q71 item 3), so it is the one
+        // place the word is left; take it away and the text names no product.
+        assert!(
+            !text
+                .replace(schema::META_TOOL, "")
+                .to_lowercase()
+                .contains("obop"),
+            "{text}"
+        );
+        assert!(text.contains(schema::META_TOOL));
+    }
+
+    /// A brand whose name is `obop` is a brand: one predicate (section 2). It names the instance
+    /// as the row says, and drops the claim about the software like any other.
+    #[test]
+    fn a_brand_that_is_set_is_a_brand_whatever_its_name() {
+        let text = instructions(&Brand::new("obop"));
+        assert!(
+            text.starts_with("This is the obop system: business data"),
+            "{text}"
+        );
+        assert!(!text.contains("open-source"));
+    }
+
+    /// One function builds `serverInfo`: the name is the slug and the title the name when a brand
+    /// is set, `obop` for both when not, the version always the core's. The card sends the same
+    /// without a title.
+    #[test]
+    fn server_info_is_built_in_one_place_from_the_slug_and_the_name() {
+        let v = obop_types::CORE_VERSION;
+        assert_eq!(
+            server_info(&Brand::default(), true),
+            json!({"name": "obop", "title": "obop", "version": v})
+        );
+        assert_eq!(
+            server_info(&Brand::default(), false),
+            json!({"name": "obop", "version": v})
+        );
+        // The slug is derived from the name when none is stored ...
+        let derived = Brand::new("Ex\u{e4}mple & S\u{f6}ns");
+        assert_eq!(
+            server_info(&derived, true),
+            json!({"name": "example-sons", "title": "Ex\u{e4}mple & S\u{f6}ns", "version": v})
+        );
+        // ... the stored one wins ...
+        let stored = Brand::new("MOHV").with_slug("mohv-mileage");
+        assert_eq!(
+            server_info(&stored, false),
+            json!({"name": "mohv-mileage", "version": v})
+        );
+        // ... and a name with no Latin letter never falls back to `obop` (section 2).
+        let cyrillic = Brand::new("\u{41c}\u{43e}\u{441}\u{43a}\u{432}\u{430}");
+        assert_eq!(server_info(&cyrillic, true)["name"], "instance");
+    }
+
+    /// `initialize` over the line protocol reads the brand of the dispatcher it is given: with a
+    /// reader and a row it answers the name, with the inert reader of a rig that never registered
+    /// the admin module it answers what it always answered.
+    #[test]
+    fn initialize_answers_the_brand_of_its_dispatcher() {
+        use obop_commands::brand::{Action, apply};
+        let ask = |d: &Dispatcher| -> J {
+            let mut s = Session::new();
+            let line = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25"}}"#;
+            let out = handle(d, &Principal::user("u", &[]), &mut s, line).unwrap();
+            serde_json::from_str::<J>(&out).unwrap()["result"].clone()
+        };
+        let plain = ask(&Dispatcher::new());
+        assert_eq!(plain["serverInfo"]["name"], "obop");
+        assert_eq!(plain["serverInfo"]["title"], "obop");
+        assert!(
+            plain["instructions"]
+                .as_str()
+                .unwrap()
+                .contains("open-source")
+        );
+
+        let store = obop_commands::Store::new();
+        let d = Dispatcher::new();
+        let reader = d.install_brand(store.backend());
+        // No row yet: the reader answers the default.
+        assert_eq!(ask(&d)["serverInfo"]["name"], "obop");
+        apply(
+            &*store.backend(),
+            Some(&reader),
+            "operator",
+            &Action::Configure(vec![
+                ("name".to_string(), "MOHV".to_string()),
+                ("slug".to_string(), "mohv".to_string()),
+            ]),
+            false,
+        )
+        .unwrap();
+        let branded = ask(&d);
+        assert_eq!(branded["serverInfo"]["name"], "mohv");
+        assert_eq!(branded["serverInfo"]["title"], "MOHV");
+        assert!(
+            branded["instructions"]
+                .as_str()
+                .unwrap()
+                .starts_with("This is the MOHV system")
+        );
+        // A client that sent no protocol version is told so, and the brand is not what answers.
+        let mut s = Session::new();
+        let bad = handle(
+            &d,
+            &Principal::user("u", &[]),
+            &mut s,
+            r#"{"jsonrpc":"2.0","id":2,"method":"initialize","params":{}}"#,
+        )
+        .unwrap();
+        assert!(bad.contains("-32602"), "{bad}");
     }
 
     /// A request that met no storage fault.
