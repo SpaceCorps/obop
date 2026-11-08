@@ -523,3 +523,33 @@ fn a_person_whose_two_factor_is_on_is_told_so_before_the_name_is_read() {
         Err(MfaError::Unavailable(m)) if m.starts_with(UNREADABLE)
     ));
 }
+
+/// The look under the guard still counts: a second factor that another request turned on after
+/// `begin` made its first look and while it waits for the lock is refused, and nothing is stored.
+/// (The lock is held by this thread, so `begin` is parked at the guard when the factor is turned on.
+/// If `begin` is slower than the pause and has not looked yet, it finds the factor on at its first
+/// look and the test still passes, without proving the second one; the pause is long for that.)
+#[test]
+fn a_second_factor_turned_on_while_begin_waits_for_the_guard_is_still_refused() {
+    let r = rig();
+    user_with(&r.a, "ada", &["base.user"]);
+    let (_, p) = session(&r.a, "ada");
+    let held = r.b.lock("auth.mfa").unwrap();
+    let answer = std::thread::scope(|s| {
+        let parked = s.spawn(|| r.a.begin(&p));
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        let mut turned_on = Fields::new();
+        turned_on.insert("mfa_enabled".into(), json!(true));
+        r.a.put("ada", &turned_on).unwrap();
+        drop(held);
+        parked.join().unwrap()
+    });
+    assert!(
+        matches!(&answer, Err(MfaError::Invalid(m)) if m.contains("already on")),
+        "{answer:?}"
+    );
+    assert!(
+        !r.a.user_record("ada").unwrap()["totp_pending"].is_string(),
+        "no secret was stored"
+    );
+}
