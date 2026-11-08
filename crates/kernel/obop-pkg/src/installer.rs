@@ -111,6 +111,34 @@ pub struct Installer {
     store: Store,
     dispatcher: Weak<Dispatcher>,
     builtin: Vec<Module>,
+    /// The model names no package may declare: the models of the built-in modules given to
+    /// [`Installer::new`], every model the dispatcher already had when the installer was made (the
+    /// ones that were registered before any package), the names the registry reserves for the
+    /// platform ([`obop_registry::RESERVED_MODELS`], `device` among them) and the tables the
+    /// program's own crates read and write by name ([`obop_registry::INTERNAL_TABLES`]: the
+    /// accounts, the sessions, the package records ... which are not models of any module, so the
+    /// dispatcher does not know them). The install plan, the upgrade plan and `register`, which
+    /// every route registers a package through (install, upgrade, rollback, undo, the sync with
+    /// another process and the load at start), all ask this one set. (A model that a module
+    /// registers later is not in it; `register` asks the dispatcher who owns a model, too.)
+    reserved: BTreeSet<String>,
+    /// The module ids no package may take: the ids of the built-in modules given to
+    /// [`Installer::new`] and of every module the dispatcher already had **with a command** when the
+    /// installer was made (the binary registers some, such as the one for the SIE exchange, that it
+    /// does not hand to the installer as built-in; a module that has only an observer or a guard is
+    /// not in the dispatcher's list of modules, so it is not here: docs/ISSUES.md K58). A package
+    /// with one of these ids would be registered under the module's id, and removed together with
+    /// the module's commands by the next uninstall, upgrade or sync. (A module that something else
+    /// registers later is caught by `id_conflict`, which asks the dispatcher too.)
+    reserved_ids: BTreeSet<String>,
+    /// The ids of the modules this installer has registered, and only those. The installer removes
+    /// only what it registered, and lets a package register again the models of a module of its own
+    /// id only if the installer made that module: a module of the same id that anything else
+    /// registered is not the package's. The set is not reconciled with the dispatcher: a module of
+    /// the installer's that something else unregisters, and whose id a program module then takes, is
+    /// still believed to be ours (nothing but the installer unregisters a module in the binary
+    /// today, so that cannot happen there).
+    ours: Mutex<BTreeSet<String>>,
     market: Arc<dyn Marketplace>,
     /// Plans are applied one at a time.
     pub(crate) apply: Mutex<()>,
@@ -191,6 +219,76 @@ fn now() -> u64 {
         .map_or(0, |t| t.as_secs())
 }
 
+/// A model name that came from a stored record, as the message of a refusal may show it: ASCII
+/// letters, digits and `_` only (no line break, quote or look-alike letter), at most 40 of them.
+fn shown_name(model: &str) -> String {
+    model
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '_')
+        .take(40)
+        .collect()
+}
+
+/// What a refusal to register a package says to do. The first remedy is the one that works whatever
+/// the table holds: an update cannot remove a model that has records (they would be orphaned), and
+/// the table of a built-in model always has some.
+const REGISTER_REMEDY: &str = "Uninstall the package; its records stay where they are. A new version that renames the model is accepted only while the model holds no records";
+
+/// Why a package is not registered: it declares a model named like a built-in one, or a table of the
+/// program. `device` keeps its own text (the devices of mobile apps, the D64 amendment). Both name
+/// the model and the remedy, and say that nothing of the package is touched.
+fn reserved_model_refusal(model: &str) -> String {
+    if model == obop_commands::devices::MODEL {
+        return "it declares a model named `device`, which this version of obop keeps for the devices of mobile apps (a built-in model of Customize), so it is not registered. Its records are untouched. Rename the model in a new version of the package, or export its records and uninstall it"
+            .to_string();
+    }
+    format!(
+        "it declares a model named `{model}`, which this version of obop keeps for its own records (a built-in model or a table of the program), so it is not registered. Its records are untouched. {REGISTER_REMEDY}"
+    )
+}
+
+/// Why a package is not registered: it declares a model that another module has registered.
+fn owned_model_refusal(model: &str, owner: &str) -> String {
+    format!(
+        "it declares a model named `{model}`, which the module `{owner}` already has, so it is not registered. Its records are untouched. {REGISTER_REMEDY}"
+    )
+}
+
+/// Why a package is not registered: its id is the id of a module the program has (a built-in module,
+/// or one that the binary registers itself).
+fn builtin_id_refusal(id: &str) -> String {
+    format!(
+        "its id `{id}` is the id of a built-in module, so it is not registered. Its record is untouched; nothing of the built-in module was changed"
+    )
+}
+
+/// Why a package may not take a module id.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum IdConflict {
+    /// A built-in module, or one that the binary registered before the installer was made.
+    Program,
+    /// A module that something other than this installer registered since.
+    Registered,
+}
+
+/// Why a package is not registered: a module with its id is registered, and the installer did not
+/// register it.
+fn registered_id_refusal(id: &str) -> String {
+    format!(
+        "its id `{id}` is the id of a module that is registered and is not a package, so it is not registered. Its record is untouched; nothing of that module was changed"
+    )
+}
+
+/// Why a package is not registered: the record is kept under another id than the one its manifest
+/// declares. Both are shown the way a stored name is shown.
+fn key_mismatch_refusal(key: &str, id: &str) -> String {
+    format!(
+        "the record is kept under the id `{}`, but its manifest declares the id `{}`, so it is not registered. Its record is untouched",
+        shown_name(key),
+        shown_name(id)
+    )
+}
+
 impl Installer {
     pub fn new(
         store: Store,
@@ -198,11 +296,31 @@ impl Installer {
         builtin: Vec<Module>,
         market: Arc<dyn Marketplace>,
     ) -> Arc<Self> {
+        // Taken now, before the installer registers anything: what the dispatcher holds at this
+        // moment was put there by the program, never by a package. (The models of the built-in
+        // modules that are bound later, such as the accounts and the devices, are in `builtin`.)
+        // The tables of the program that no module registers are named by the registry, not
+        // learned here: the dispatcher cannot tell us about a table it never saw.
+        let reserved = builtin
+            .iter()
+            .flat_map(|m| m.models.iter().map(|x| x.name.to_string()))
+            .chain(dispatcher.model_names())
+            .chain(obop_registry::RESERVED_MODELS.map(String::from))
+            .chain(obop_registry::INTERNAL_TABLES.map(String::from))
+            .collect();
+        let reserved_ids = builtin
+            .iter()
+            .map(|m| m.id.clone())
+            .chain(dispatcher.module_ids())
+            .collect();
         Arc::new(Self {
             backend: store.backend(),
             store,
             dispatcher: Arc::downgrade(dispatcher),
             builtin,
+            reserved,
+            reserved_ids,
+            ours: Mutex::default(),
             market,
             apply: Mutex::new(()),
             registered: Mutex::default(),
@@ -388,14 +506,22 @@ impl Installer {
         self.backend.list(TABLE).unwrap_or_default()
     }
 
+    /// The manifest of a stored record that is the package it is kept as: it parses, and its id is
+    /// the record's key. A record whose two differ is not registered (`stored_manifest` refuses
+    /// it), so it is not an installed package: not listed, not counted by the resolver, and its
+    /// dependencies hold nothing back. (It can still be uninstalled by its key.)
+    fn installed_manifest(key: &str, stored: &Fields) -> Option<Manifest> {
+        stored
+            .get("manifest")
+            .and_then(J::as_str)
+            .and_then(|t| Manifest::parse_installed(t).ok())
+            .filter(|m| m.module.id == key)
+    }
+
     pub fn list(&self) -> Vec<PackageInfo> {
         let mut v: Vec<_> = self.builtin.iter().map(Self::builtin_info).collect();
-        for (_, f) in self.stored() {
-            if let Some(m) = f
-                .get("manifest")
-                .and_then(J::as_str)
-                .and_then(|t| Manifest::parse_installed(t).ok())
-            {
+        for (key, f) in self.stored() {
+            if let Some(m) = Self::installed_manifest(&key, &f) {
                 v.push(Self::info_stored(&m, &f));
             }
         }
@@ -406,12 +532,7 @@ impl Installer {
     pub fn installed_manifests(&self) -> BTreeMap<String, Manifest> {
         self.stored()
             .into_iter()
-            .filter_map(|(id, f)| {
-                f.get("manifest")
-                    .and_then(J::as_str)
-                    .and_then(|t| Manifest::parse_installed(t).ok())
-                    .map(|m| (id, m))
-            })
+            .filter_map(|(id, f)| Self::installed_manifest(&id, &f).map(|m| (id, m)))
             .collect()
     }
 
@@ -438,29 +559,114 @@ impl Installer {
         Ok(m)
     }
 
-    fn register(&self, m: &Manifest, module: &Module) -> Result<(), String> {
-        // The model `device` is the built-in model of the devices of mobile apps (the D64
-        // amendment), and a package's records of that name would live in the same table. So no
-        // package module is registered with one, by any route: install, upgrade, rollback, undo,
-        // the sync with another process and the load at start all come through here. (The
-        // install gate refuses the name for a new install; this also catches a package stored
-        // before the name was taken, and one that an older process stored.) Nothing of the
-        // package is touched, and the message says what to do.
-        if module.id != "platform"
-            && module
-                .models
-                .iter()
-                .any(|x| x.name == obop_commands::devices::MODEL)
-        {
-            return Err(
-                "it declares a model named `device`, which this version of obop keeps for the devices of mobile apps (a built-in model of Customize), so it is not registered. Its records are untouched. Rename the model in a new version of the package, or export its records and uninstall it"
-                    .to_string(),
-            );
+    /// Whether `id` is the id of a module the program had before any package: a built-in module,
+    /// or one the binary registers itself and does not give the installer.
+    pub(crate) fn reserves_id(&self, id: &str) -> bool {
+        self.reserved_ids.contains(id)
+    }
+
+    /// Whether this installer made the module `id`.
+    fn is_ours(&self, id: &str) -> bool {
+        self.ours
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .contains(id)
+    }
+
+    /// Why a package may not take the id, if it may not: a module of the program has it, or some
+    /// module that this installer did not make has been registered under it since (the dispatcher
+    /// knows). `d` is `None` when the dispatcher is gone: only the ids known at the start count.
+    fn id_conflict(&self, d: Option<&Dispatcher>, id: &str) -> Option<IdConflict> {
+        if self.reserves_id(id) {
+            return Some(IdConflict::Program);
         }
+        let registered = d.is_some_and(|d| d.module_ids().iter().any(|m| m == id));
+        (registered && !self.is_ours(id)).then_some(IdConflict::Registered)
+    }
+
+    /// Remove the commands of a package this installer registered. It does nothing for an id the
+    /// installer did not register: a record that carries the id of another module, however it got
+    /// there, can then not take that module's commands with it.
+    pub(crate) fn unregister(&self, d: &Dispatcher, id: &str) {
+        let removed = self
+            .ours
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(id);
+        if removed {
+            d.unregister_module(id);
+        }
+    }
+
+    /// The manifest of a stored record, with the bundled labels, held to the record's key: the
+    /// package is known by its key (the installed set, the sync, the uninstall) and registered
+    /// under the id its manifest declares, so a record whose two differ would be registered as one
+    /// thing and removed as another, or replace the models of the package that does have that id.
+    fn stored_manifest(key: &str, stored: &Fields) -> Result<Manifest, String> {
+        let source = stored.get("source").and_then(J::as_str).unwrap_or("upload");
+        let m = stored
+            .get("manifest")
+            .and_then(J::as_str)
+            .ok_or_else(|| "no manifest".to_string())
+            .and_then(|t| Self::with_bundled_labels(t, source))?;
+        if m.module.id != key {
+            return Err(key_mismatch_refusal(key, &m.module.id));
+        }
+        Ok(m)
+    }
+
+    fn register(&self, m: &Manifest, module: &Module) -> Result<(), String> {
+        // A model name that a model registered before any package already has (every built-in
+        // model: the branding, the log of security events, the settings, the accounts, the devices
+        // of mobile apps, the single sign-on provider ...), and the name of a table that the
+        // program reads and writes itself (the accounts and their sessions, the package records ...),
+        // is never given to a package. A package of that name would get the generated create,
+        // update and delete over the table of the built-in model, which skip the checks, the lock
+        // and the audit that its own commands make (nothing else may write the branding row or the
+        // security log), or over the table of the accounts. So no package module is registered
+        // with one, by any route: install, upgrade, rollback, undo, the sync with another process
+        // and the load at start all come through here. (The plan refuses the name for an install
+        // and an upgrade; this also catches a package stored before the name was taken, one that an
+        // older process stored, and the manifest a rollback goes back to.) Nothing of the package
+        // is touched, and the message says what to do. The id of the module is no exemption: a
+        // stored package can carry any id, that of a module of the program included (a built-in
+        // one, or one the binary registers itself such as the SIE exchange), and that is refused
+        // too (it would be registered under the module's id and unregistered with the module's
+        // commands at the next uninstall, upgrade or sync).
         let d = self.d()?;
+        match self.id_conflict(Some(&d), &module.id) {
+            Some(IdConflict::Program) => return Err(builtin_id_refusal(&module.id)),
+            Some(IdConflict::Registered) => return Err(registered_id_refusal(&module.id)),
+            None => {}
+        }
+        if let Some(x) = module
+            .models
+            .iter()
+            .find(|x| self.reserved.contains(x.name))
+        {
+            return Err(reserved_model_refusal(x.name));
+        }
+        // The set above was taken when the installer was made. The dispatcher knows the rest: a
+        // model that another module has registered since (a built-in one bound late, or another
+        // package) is that module's, and registering this package over it would replace its
+        // definition, its groups and its data classes. A package is let register its own models
+        // again (the load runs twice, a sync re-registers). That the module of its id is one this
+        // installer made, and not one that anything else registered under the same id, was
+        // settled above (`id_conflict`).
+        if let Some((x, owner)) = module.models.iter().find_map(|x| {
+            d.model_owner(x.name)
+                .filter(|owner| *owner != module.id)
+                .map(|owner| (x, owner))
+        }) {
+            return Err(owned_model_refusal(x.name, &owner));
+        }
         // Registers the generated commands and, from the transitions declared in the registry
         // metadata, the guards that govern state fields (D48).
         d.register_crud(module, &self.store);
+        self.ours
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(module.id.clone());
         for model in &m.model {
             for a in &model.action {
                 d.register_transition(module, intern(&model.name), &a.name, &self.store);
@@ -468,7 +674,7 @@ impl Installer {
         }
         // Public exposure (D50) takes effect only once the models exist; the gate runs again.
         if let Err(e) = d.register_public(&m.module.id, m.public_specs()?) {
-            d.unregister_module(&m.module.id);
+            self.unregister(&d, &m.module.id);
             return Err(e);
         }
         Ok(())
@@ -558,18 +764,35 @@ impl Installer {
             registered: &|m| self.d().is_ok_and(|d| d.has_model(m)),
         };
         let mut plan = resolve::plan_install(&world, &root, source);
-        // Models of the built-in modules and of other packages may not be taken.
-        let taken: BTreeSet<&str> = self
-            .builtin
-            .iter()
-            .flat_map(|m| m.models.iter().map(|x| x.name))
-            .collect();
+        // The ids of the modules of the program, the models of the built-in modules, every model
+        // registered before any package and the tables of the program may not be taken, nor may a
+        // model another module has registered (an installed package's, say), by an install or by
+        // an upgrade that adds one. A package may keep the models of the module it has itself
+        // (an upgrade); a module of its id that this installer did not make is blocked by its id.
+        let dispatcher = self.d().ok();
         for s in &plan.steps {
             if s.action == StepAction::Skip {
                 continue;
             }
+            match self.id_conflict(dispatcher.as_deref(), &s.id) {
+                Some(IdConflict::Program) => plan.blockers.push(resolve::Blocker {
+                    module: s.id.clone(),
+                    kind: "builtin",
+                    message: format!("{} is a built-in module and is part of the core", s.id),
+                }),
+                Some(IdConflict::Registered) => plan.blockers.push(resolve::Blocker {
+                    module: s.id.clone(),
+                    kind: "conflict",
+                    message: format!("a module with the id {} is already registered", s.id),
+                }),
+                None => {}
+            }
             for m in &s.manifest.model {
-                if taken.contains(m.name.as_str()) {
+                let held_by_another = dispatcher
+                    .as_ref()
+                    .and_then(|d| d.model_owner(m.name.as_str()))
+                    .is_some_and(|owner| owner != s.id);
+                if self.reserved.contains(m.name.as_str()) || held_by_another {
                     plan.blockers.push(resolve::Blocker {
                         module: s.id.clone(),
                         kind: "conflict",
@@ -918,7 +1141,7 @@ impl Installer {
         let manifest = &step.manifest;
         let module = manifest.to_module()?;
         let id = manifest.module.id.clone();
-        if self.builtin.iter().any(|b| b.id == id) {
+        if self.reserves_id(&id) {
             return Err(format!("{id} is a built-in module"));
         }
         let d = self.d()?;
@@ -996,13 +1219,13 @@ impl Installer {
         // The rules of the models (effects, computed fields, access) are checked against the
         // models they use, now that the dependencies are registered.
         let look = |n: &str| d.model_def(n).map(Arc::new);
-        let problems = obop_registry::check_module_in(&module, &look);
+        let mut problems: Vec<String> = obop_registry::check_module_in(&module, &look)
+            .iter()
+            .map(|v| format!("{}: {}", v.path, v.problem))
+            .collect();
+        problems.extend(effect_target_problems(&d, &module));
         if !problems.is_empty() {
-            return Err(problems
-                .iter()
-                .map(|v| format!("{}: {}", v.path, v.problem))
-                .collect::<Vec<_>>()
-                .join("; "));
+            return Err(problems.join("; "));
         }
         let at = now();
         let mut f = Fields::new();
@@ -1037,7 +1260,7 @@ impl Installer {
             );
         }
         if existing.is_some() {
-            d.unregister_module(&id);
+            self.unregister(&d, &id);
         }
         if let Err(e) = self.register(manifest, &module) {
             if let Some(old) = &existing {
@@ -1124,16 +1347,10 @@ impl Installer {
 
     /// Put the registration of a stored package back (after a failed upgrade or a rollback).
     pub(crate) fn reregister(&self, id: &str, stored: &Fields) {
-        let source = stored.get("source").and_then(J::as_str).unwrap_or("upload");
-        let r = stored
-            .get("manifest")
-            .and_then(J::as_str)
-            .ok_or_else(|| "no manifest".to_string())
-            .and_then(|t| Self::with_bundled_labels(t, source))
-            .and_then(|m| {
-                m.to_module_installed()
-                    .and_then(|module| self.register(&m, &module))
-            });
+        let r = Self::stored_manifest(id, stored).and_then(|m| {
+            m.to_module_installed()
+                .and_then(|module| self.register(&m, &module))
+        });
         if let Err(e) = r {
             eprintln!("could not restore module {id}: {e}");
         }
@@ -1143,7 +1360,7 @@ impl Installer {
     fn unwind(&self, done: Vec<Undo>) {
         for u in done.into_iter().rev() {
             if let Ok(d) = self.d() {
-                d.unregister_module(&u.id);
+                self.unregister(&d, &u.id);
             }
             if let Some(f) = u.previous {
                 self.reregister(&u.id, &f);
@@ -1241,6 +1458,19 @@ impl Installer {
     }
 
     fn try_rollback(&self, id: &str, by: &str) -> Result<PackageInfo, Failure> {
+        // A stored record can carry any id. Rolling back one with the id of a module of the program
+        // would unregister the commands of that module before the registration of the older version
+        // is refused (`register` does), and the module would stay without them.
+        let d = self.d().map_err(Failure::Refused)?;
+        match self.id_conflict(Some(&d), id) {
+            Some(IdConflict::Program) => {
+                return Err(Failure::Refused(format!("{id} is a built-in module")));
+            }
+            Some(IdConflict::Registered) => {
+                return Err(Failure::Refused(registered_id_refusal(id)));
+            }
+            None => {}
+        }
         let stored = self
             .backend
             .get(TABLE, id)
@@ -1263,9 +1493,36 @@ impl Installer {
             .map(|a| a.iter().filter_map(migrate::Step::from_json).collect())
             .unwrap_or_default();
         let prev = Self::with_bundled_labels(prev_text, &source).map_err(Failure::Refused)?;
+        if prev.module.id != id {
+            return Err(Failure::Refused(key_mismatch_refusal(id, &prev.module.id)));
+        }
+        // The way back is read from the stored record and replayed on whatever model it names, so
+        // it is held to what the update wrote: the manifest rule keeps a data step to the models
+        // the package declares, so a step on a model of neither version, or on a model that was
+        // there before any package, is not one this package made. It is refused before anything
+        // is touched; a stored record cannot make a rollback rewrite the branding row (or any
+        // other model that is not the package's).
+        let current = stored
+            .get("manifest")
+            .and_then(J::as_str)
+            .and_then(|t| Manifest::parse_installed(t).ok());
+        let declares = |model: &str| {
+            prev.model
+                .iter()
+                .chain(current.iter().flat_map(|c| c.model.iter()))
+                .any(|x| x.name == model)
+        };
+        if let Some(s) = inverse
+            .iter()
+            .find(|s| self.reserved.contains(&s.model) || !declares(&s.model))
+        {
+            return Err(Failure::Refused(format!(
+                "the way back stored for {id} has a data step on the model `{}`, which is not a model of {id}, so nothing was changed. The record was not written by this version of obop; restore the backup taken before the update instead",
+                shown_name(&s.model)
+            )));
+        }
         // The version being put back was installed once: it may have a name that is reserved now.
         let prev_module = prev.to_module_installed().map_err(Failure::Refused)?;
-        let d = self.d().map_err(Failure::Refused)?;
         let receipt = self
             .run_gate(
                 "module.rollback",
@@ -1295,7 +1552,7 @@ impl Installer {
         f.insert("installed_at".into(), J::from(at));
         f.insert("updated_at".into(), J::from(at));
         f.insert("rolled_back_from".into(), J::from(current_v));
-        d.unregister_module(id);
+        self.unregister(&d, id);
         if let Err(e) = self.register(&prev, &prev_module) {
             self.reregister(id, &stored);
             return Err(Failure::Refused(e));
@@ -1353,7 +1610,7 @@ impl Installer {
     /// refused is an error: read as "nothing is installed" it said that nothing depends on `id`,
     /// and the package was removed from under the ones that need it.
     pub fn try_uninstall_blocker(&self, id: &str) -> Result<Option<resolve::Blocker>, String> {
-        if self.builtin.iter().any(|b| b.id == id) {
+        if self.reserves_id(id) {
             return Ok(Some(resolve::Blocker {
                 module: id.into(),
                 kind: "builtin",
@@ -1364,12 +1621,7 @@ impl Installer {
             .backend
             .list(TABLE)?
             .into_iter()
-            .filter_map(|(id, f)| {
-                f.get("manifest")
-                    .and_then(J::as_str)
-                    .and_then(|t| Manifest::parse_installed(t).ok())
-                    .map(|m| (id, m))
-            })
+            .filter_map(|(id, f)| Self::installed_manifest(&id, &f).map(|m| (id, m)))
             .collect();
         Ok(resolve::uninstall_blocker(&installed, id))
     }
@@ -1382,13 +1634,32 @@ impl Installer {
 
     pub fn uninstall_as(&self, id: &str, by: &str) -> Result<(), String> {
         let _x = self.exclusive()?;
+        if self.reserves_id(id) {
+            // The id is a module of the program's. A record kept under it is not that module (the
+            // load refuses it and `register` never made it ours), only a leftover of a package
+            // stored before the id was taken or written around the installer: it can be removed,
+            // and nothing is unregistered (the module is not the record's). With no record there
+            // is only the module, and that is not for an uninstall.
+            if !self.backend.delete(TABLE, id)? {
+                return Err(format!("{id} is a built-in module"));
+            }
+            self.note_local_change(&[id.to_string()]);
+            self.audit(
+                by,
+                "module_uninstall",
+                id,
+                &format!("the record {id} removed; the built-in module {id} was not changed"),
+            );
+            return Ok(());
+        }
         if let Some(b) = self.try_uninstall_blocker(id)? {
             return Err(b.message);
         }
         if !self.backend.delete(TABLE, id)? {
             return Err(format!("{id} is not installed"));
         }
-        self.d()?.unregister_module(id);
+        let d = self.d()?;
+        self.unregister(&d, id);
         self.note_local_change(&[id.to_string()]);
         self.audit(
             by,
@@ -1458,16 +1729,10 @@ impl Installer {
     pub fn load_installed(&self) -> Vec<(String, String)> {
         let mut failed = Vec::new();
         for (id, f) in self.stored() {
-            let source = f.get("source").and_then(J::as_str).unwrap_or("upload");
-            let r = f
-                .get("manifest")
-                .and_then(J::as_str)
-                .ok_or_else(|| "no manifest".to_string())
-                .and_then(|t| Self::with_bundled_labels(t, source))
-                .and_then(|m| {
-                    m.to_module_installed()
-                        .and_then(|module| self.register(&m, &module))
-                });
+            let r = Self::stored_manifest(&id, &f).and_then(|m| {
+                m.to_module_installed()
+                    .and_then(|module| self.register(&m, &module))
+            });
             if let Err(e) = r {
                 failed.push((id, e));
             }
@@ -2103,6 +2368,35 @@ fn refuse_skipped_dependencies(i: &BTreeMap<String, Value>) -> Result<(), String
     Ok(())
 }
 
+/// What an action effect of `module` may not do: write a model that the module does not declare
+/// and that is changed by its own commands only (the branding, the single sign-on provider, the
+/// settings, the logs). An effect writes a record the way the generated `create` and `update` do,
+/// so it reaches only a model that has them; those other models have their own guards and their
+/// own audit, which an effect would skip. The engine refuses the same writes again when the effect
+/// runs, so a package stored before this check is held too.
+fn effect_target_problems(d: &Dispatcher, module: &Module) -> Vec<String> {
+    let own: BTreeSet<&str> = module.models.iter().map(|m| m.name).collect();
+    let mut out = Vec::new();
+    for model in &module.models {
+        for command in &model.commands {
+            for (n, e) in command.effects.iter().enumerate() {
+                let target = e.model();
+                if !own.contains(target) && d.has_model(target) && !d.effects_may_write(target) {
+                    out.push(format!(
+                        "{}.{}.{}: effect {} ({}) writes {target}, which is changed by its own commands only; an action effect can write only a model that has the generated create and update",
+                        module.id,
+                        model.name,
+                        command.name,
+                        n + 1,
+                        e.kind_name(),
+                    ));
+                }
+            }
+        }
+    }
+    out
+}
+
 /// Registry metadata of the admin commands. The models are virtual: they have no stored
 /// records of their own, only handlers.
 pub fn admin_module() -> Module {
@@ -2313,6 +2607,9 @@ pub fn admin_module() -> Module {
             },
             crate::accounts::user_account_model(),
             crate::sso::sso_provider_model(),
+            // The instance branding (docs/spec/branding.md): `get`, `configure` and `clear`, bound
+            // by `crate::brand::register`; no list, so it is not in `/api/meta`.
+            crate::brand::instance_brand_model(),
             ModelDef {
                 name: "marketplace_listing",
                 description: "A module offered by the marketplace",
@@ -2441,7 +2738,7 @@ pub fn admin_module() -> Module {
                     f("user", "The account the event is about"),
                     f(
                         "kind",
-                        "What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, device_limit, mileage_route_read, mileage_discard_stuck, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless, oidc_provider_configured, oidc_provider_cleared, oidc_bind, oidc_unbind, oidc_sso_only, oidc_start, oidc_login, oidc_refused, oidc_cancelled, oidc_error",
+                        "What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, device_limit, mileage_route_read, mileage_discard_stuck, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless, oidc_provider_configured, oidc_provider_cleared, oidc_bind, oidc_unbind, oidc_sso_only, oidc_start, oidc_login, oidc_refused, oidc_cancelled, oidc_error, sign_link_issued, sign_signed, sign_refused, plan_lost, user_create, user_groups, user_offboard, drive_connected, drive_connect_failed, drive_disconnected, drive_import, drive_import_failed, drive_create, drive_create_failed, drive_upload, drive_upload_failed, migration_run, migration_rollback, drill_recorded, storage_attested, brand_configured, brand_cleared",
                     ),
                     f(
                         "actor",
@@ -2456,6 +2753,9 @@ pub fn admin_module() -> Module {
             // Written by the OAuth server when a mobile app signs in (the D64 amendment); its
             // commands are bound by `register_devices`.
             crate::devices::device_model(),
+            // Written by bulk_create when a call gives a source key; get and search are bound by
+            // `register_admin`.
+            obop_commands::import_map::model_def(),
         ],
         network_destinations: vec![],
         description: String::new(),
@@ -2480,7 +2780,11 @@ pub fn admin_module() -> Module {
 
 /// Bind handlers for the admin commands. Called once at start-up.
 pub fn register_admin(d: &Dispatcher, inst: &Arc<Installer>) {
+    // The reader of the instance brand (docs/spec/branding.md, section 4): created here because this
+    // runs in every composition and has the store; `Dispatcher::brand` hands it to whoever asks.
+    d.install_brand(inst.backend.clone());
     let m = admin_module();
+    crate::brand::register(d, &inst.backend, &m);
     let i = inst.clone();
     d.register(&m, "module", "list", Box::new(move |_| Ok(i.module_rows())));
     let i = inst.clone();
@@ -2622,6 +2926,7 @@ pub fn register_admin(d: &Dispatcher, inst: &Arc<Installer>) {
         }),
     );
     d.register_read_only(&m, "security_event", &inst.store);
+    d.register_import_map(&m, &inst.store);
     let i = inst.clone();
     d.register(
         &m,
@@ -2703,6 +3008,45 @@ mod tests {
             },
             _ => panic!(),
         }
+    }
+
+    /// The reader of the instance brand (docs/spec/branding.md, section 4) is created by
+    /// `register_admin`, which runs in every composition; a dispatcher that never ran it gives an
+    /// inert one.
+    #[test]
+    fn register_admin_creates_the_reader_of_the_instance_brand() {
+        assert!(Dispatcher::new().brand().is_inert());
+        let store = Store::new();
+        let (d, _) = setup(&store);
+        let reader = d.brand();
+        assert!(!reader.is_inert());
+        assert!(
+            Arc::ptr_eq(&reader, &d.brand()),
+            "one reader for the dispatcher"
+        );
+        assert!(!reader.current().is_set(), "no row: the default brand");
+        assert_eq!(reader.current().brand().name(), "obop");
+    }
+
+    /// The accent that the settings writer stores is the one the reader of the brand reads (the
+    /// generated tile and the meta tag carry it): written through the writer's own path, read by
+    /// the reader of the dispatcher, not by a row put together in the brand's own tests.
+    #[test]
+    fn the_theme_accent_written_by_the_settings_is_read_by_the_brand() {
+        let store = Store::new();
+        let (d, inst) = setup(&store);
+        inst.set_settings(r##"{"theme":{"accent":"#c2410c"}}"##)
+            .unwrap();
+        // Through the uncached read, and through the cell of a reader that has not read yet.
+        assert_eq!(
+            d.brand().fresh().unwrap().shown().theme_accent(),
+            Some("#c2410c")
+        );
+        assert_eq!(d.brand().current().theme_accent(), Some("#c2410c"));
+        // A theme alone is no brand: the tile is drawn only once a row exists.
+        let shown = d.brand().current();
+        assert!(!shown.is_set());
+        assert_eq!(shown.v(), "");
     }
 
     /// B7: a change to the `security` settings is logged with who made it and what changed.
@@ -2995,8 +3339,8 @@ mod tests {
         ));
         assert_eq!(
             d.visible(Surface::Rest, &user),
-            ["setting.get"],
-            "only the settings everyone may read"
+            ["instance_brand.get", "setting.get"],
+            "only what everyone may read: the branding and the settings"
         );
     }
 
@@ -4164,6 +4508,55 @@ write_group = "fleetlog.manager"
             hook.sync_modules()
         }));
         assert!(visible(&db), "meta() syncs first");
+    }
+
+    /// B1, the throttle: a process looks at the shared counter at most once a second (docs/SIGN.md
+    /// "Upgrade runbook": a change made by another process is followed within about a second). A
+    /// look inside the second reads nothing and registers nothing; the first one after it does.
+    #[test]
+    fn a_process_looks_for_changed_modules_at_most_once_a_second() {
+        use std::sync::atomic::Ordering;
+        let store = Store::new();
+        let ((_da, a), (db, b)) = (setup(&store), setup(&store));
+        let manager = Principal::user("m", &["fleet.user", "fleet.manager"]);
+        let visible = || {
+            db.meta(Surface::Rest, &manager)
+                .iter()
+                .any(|m| m.id == "fleet")
+        };
+        let now = || {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64
+        };
+        a.install(&fleet_with_labels("0.3.0", FLEET_LABELS), "upload", "root")
+            .unwrap();
+        // B looked half a second ago: three looks now change nothing, and the time of the last
+        // look stays where it was (a look that did read would have stored the new time).
+        let looked = now() - 500;
+        b.last_check_ms.store(looked, Ordering::Release);
+        for _ in 0..3 {
+            b.sync_modules();
+        }
+        assert!(!visible(), "inside the second B reads nothing");
+        assert_eq!(b.last_check_ms.load(Ordering::Acquire), looked);
+        // B looked a little over a second ago: this one reads, registers and notes the time.
+        b.last_check_ms.store(now() - 1100, Ordering::Release);
+        b.sync_modules();
+        assert!(visible(), "after the second B follows");
+        let noted = b.last_check_ms.load(Ordering::Acquire);
+        assert!(
+            noted > looked,
+            "the time of the look is noted: {noted} after {looked}"
+        );
+        // And the counter is current now, so the next look after a second reads and finds nothing.
+        a.uninstall("fleet").unwrap();
+        b.sync_modules();
+        assert!(visible(), "inside the second again: still as it was");
+        b.last_check_ms.store(now() - 1100, Ordering::Release);
+        b.sync_modules();
+        assert!(!visible(), "a second later the removal is followed");
     }
 
     #[test]

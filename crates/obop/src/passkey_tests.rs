@@ -846,3 +846,127 @@ async fn the_page_endpoints_refuse_a_foreign_post_a_bad_csrf_and_garbage() {
     assert_eq!(resp.status, 200);
     assert!(resp.text().contains("class=\"error\""));
 }
+
+#[tokio::test]
+async fn the_passkey_limits_count_the_address_by_the_one_rule() {
+    // The ceremony options are limited per client address (60 in ten minutes). The address is
+    // the rule's: behind a trusted proxy the last entry of the line, the same address alone or
+    // with a port is the same bucket, and a fresh last entry has a count of its own; without a
+    // trusted proxy the header is ignored and every spelling shares the peer's bucket.
+    async fn options(r: &axum::Router, xff: &str) -> u16 {
+        call(
+            r,
+            "POST",
+            "/api/auth/login/passkey/options",
+            None,
+            &[("x-forwarded-for", xff)],
+            "application/json",
+            "{}".to_string(),
+        )
+        .await
+        .status
+    }
+    for trust in [true, false] {
+        let app = App::new();
+        app.seed_demo();
+        let auth = Arc::new(Auth::with_test_config(
+            app.store.backend(),
+            AuthConfig::insecure_dev(),
+        ));
+        // The defaults of the tests, not the settings of whoever runs them (`OBOP_PUBLIC_URL`).
+        let state = obop_http::HttpState::with_mcp(
+            app.dispatcher.clone(),
+            auth.clone(),
+            McpConfig::default(),
+        );
+        state.set_trust_proxy(trust);
+        let r = obop_http::router(state, None);
+        let mut spent = None;
+        for n in 0..200u32 {
+            let line = if trust {
+                format!("203.0.113.{}, 198.51.100.77", n % 200)
+            } else {
+                format!("198.51.100.{}", n % 200 + 1)
+            };
+            if options(&r, &line).await == 429 {
+                spent = Some(n);
+                break;
+            }
+        }
+        // The count of the ceremony options (`OPTIONS_PER_IP`, 60) is what ran out: the first 429
+        // is the 61st try, not some other cap.
+        assert_eq!(
+            spent,
+            Some(60),
+            "trust_proxy={trust}: the count did not run out at the address's limit (the line chose the bucket)"
+        );
+        if trust {
+            assert_eq!(options(&r, "198.51.100.77").await, 429, "alone");
+            assert_eq!(options(&r, "198.51.100.77:5000").await, 429, "with a port");
+            assert_eq!(
+                options(&r, "198.51.100.77, 198.51.100.78").await,
+                200,
+                "a fresh last entry has a count of its own"
+            );
+        }
+    }
+}
+
+// ---- Golden pin of the relying party name (S1a-0 of the branding work) ---------------------------
+
+/// The registration options name the relying party "obop", the name an authenticator shows next
+/// to the passkey: with no brand row that is what an instance sends, before and after the brand
+/// work. (The OAuth pages' ceremony site carries the same name; it is asserted in `obop-http`,
+/// where that function is visible.)
+#[tokio::test]
+async fn pins_the_relying_party_name_of_the_registration_options() {
+    let rig = rig(false);
+    let r = &rig.r;
+    let t = session(r, "ada").await;
+    let (s, opts) = post(
+        r,
+        Some(&t),
+        "/api/auth/passkeys/register/options",
+        json!({"password": PW}),
+    )
+    .await;
+    assert_eq!(s, 200, "{opts}");
+    assert_eq!(opts["publicKey"]["rp"]["name"], "obop", "{opts}");
+    assert_eq!(opts["publicKey"]["rp"]["id"], "inst.test", "{opts}");
+    assert_eq!(
+        opts["publicKey"]["rp"]
+            .as_object()
+            .map(|o| o.keys().cloned().collect::<Vec<_>>()),
+        Some(vec!["id".to_string(), "name".to_string()]),
+        "the relying party carries an id and a name and nothing else"
+    );
+}
+
+/// S1a: with a brand row in the store, the registration options and the TOTP enrolment of a real
+/// app still name the product "obop" (the relying party an authenticator shows next to the
+/// passkey, and the issuer of the authenticator entry): no enrolment reads the row yet. The slice
+/// that does moves these two assertions in its own commit.
+#[tokio::test]
+async fn with_a_brand_row_the_relying_party_name_and_the_authenticator_label_are_what_they_were() {
+    let acc = crate::accounts_tests::rig();
+    crate::brand_row_tests::set_brand(&acc.app);
+    let r = &acc.rig.r;
+    let t = session(r, "ada").await;
+    let (s, opts) = post(
+        r,
+        Some(&t),
+        "/api/auth/passkeys/register/options",
+        json!({"password": PW}),
+    )
+    .await;
+    assert_eq!(s, 200, "{opts}");
+    assert_eq!(opts["publicKey"]["rp"]["name"], "obop", "{opts}");
+    assert_eq!(opts["publicKey"]["rp"]["id"], "inst.test", "{opts}");
+    let (s, begun) = post(r, Some(&t), "/api/auth/mfa/begin", json!({})).await;
+    assert_eq!(s, 200, "{begun}");
+    let secret = begun["secret"].as_str().unwrap();
+    assert_eq!(
+        begun["uri"].as_str().unwrap().replace(secret, "SECRET"),
+        "otpauth://totp/obop:ada?secret=SECRET&issuer=obop&algorithm=SHA1&digits=6&period=30"
+    );
+}

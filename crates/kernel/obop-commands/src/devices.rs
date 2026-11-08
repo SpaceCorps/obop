@@ -340,6 +340,7 @@ pub const NEVER_FOR_MOBILE: &[&str] = &[
     // device is gone), import and export of the whole business.
     "connectors.user",
     "api.import_operator",
+    "api.import_map_read",
     "api.export_owner",
     "api.webhook_admin",
     "api.connection_admin",
@@ -366,7 +367,7 @@ pub fn never_for_mobile(group: &str) -> bool {
 
 /// The entries of [`NEVER_FOR_MOBILE`] that no pattern of [`never_for_mobile`] matches: the list
 /// is what excludes them.
-pub const ONLY_BY_NAME: [&str; 12] = [
+pub const ONLY_BY_NAME: [&str; 13] = [
     "audit.reader",
     "account.bookkeeper",
     "account.billing",
@@ -378,6 +379,7 @@ pub const ONLY_BY_NAME: [&str; 12] = [
     "recruitment.recruiter",
     "connectors.user",
     "api.import_operator",
+    "api.import_map_read",
     "website.editor",
 ];
 
@@ -778,6 +780,7 @@ mod tests {
             "hr.hrbp",
             "connectors.user",
             "api.import_operator",
+            "api.import_map_read",
             "api.export_owner",
             "approvals.designer",
             "website.publisher",

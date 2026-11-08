@@ -20,6 +20,10 @@ struct Fixture {
 }
 
 async fn fixture(public: bool) -> Fixture {
+    fixture_with(public, obop_http::public::PublicConfig::default()).await
+}
+
+async fn fixture_with(public: bool, cfg: obop_http::public::PublicConfig) -> Fixture {
     let app = App::new();
     for id in ["website", "ecommerce"] {
         app.installer
@@ -34,11 +38,11 @@ async fn fixture(public: bool) -> Fixture {
         &["platform.admin".into()],
     )
     .unwrap();
-    let guard = obop_storage::testing::TempPath::dir(if public {
-        "obop-admin-p"
-    } else {
-        "obop-admin-o"
-    });
+    let guard = obop_storage::testing::TempPath::dir(&format!(
+        "obop-admin-{}{}",
+        if public { "p" } else { "o" },
+        if cfg.trust_proxy { "t" } else { "" }
+    ));
     let dir = guard.path().to_path_buf();
     std::fs::create_dir_all(dir.join("assets")).unwrap();
     std::fs::write(dir.join("index.html"), "<html>BACKOFFICE-SHELL</html>").unwrap();
@@ -52,12 +56,7 @@ async fn fixture(public: bool) -> Fixture {
                 ..obop_site::Config::default()
             },
         ));
-        obop_http::public::router(
-            state,
-            dir.to_str(),
-            site,
-            obop_http::public::PublicConfig::default(),
-        )
+        obop_http::public::router(state, dir.to_str(), site, cfg)
     } else {
         obop_http::router(state, dir.to_str())
     };
@@ -371,5 +370,212 @@ async fn the_back_office_carries_the_default_language_where_it_is_mounted_and_no
         let (s, body, _) = get(&router, "/api/nothing").await;
         assert_eq!(s, 404);
         assert!(!body.contains("obop-default-language"));
+    }
+}
+
+/// How many times `GET /shop/pay/x` is answered before the site's per-address limit (60 in ten
+/// minutes) answers 429, for requests that carry the given `X-Forwarded-For` lines. A path with a
+/// token that cannot exist is counted under the address before it is looked up (a 404), so this
+/// reads which address the router handed to the site without any order.
+async fn hits_until_limited(f: &Fixture, lines: &[&str]) -> usize {
+    for n in 0..70 {
+        let mut b = Request::get("/shop/pay/x").header("host", "shop.test");
+        for l in lines {
+            b = b.header("x-forwarded-for", *l);
+        }
+        let (s, _, _) = send(&f.router, b.body(Body::empty()).unwrap()).await;
+        match s {
+            404 => {}
+            429 => return n,
+            other => panic!("unexpected {other}"),
+        }
+    }
+    panic!("no limit within 70 requests");
+}
+
+#[tokio::test]
+async fn the_public_router_hands_the_site_the_last_forwarded_address_only_behind_a_trusted_proxy() {
+    // Behind a trusted proxy the limit is per the proxy's entry, the last: a client that varies
+    // what it wrote before it (the first entry, or a first line) stays in one bucket, and one that
+    // is behind another address has its own.
+    let trusted = fixture_with(
+        true,
+        obop_http::public::PublicConfig {
+            trust_proxy: true,
+            ..Default::default()
+        },
+    )
+    .await;
+    assert_eq!(
+        hits_until_limited(&trusted, &["1.1.1.1, 9.9.9.9"]).await,
+        60,
+        "the first bucket takes its 60"
+    );
+    for lines in [
+        &["2.2.2.2, 9.9.9.9"][..],
+        &["3.3.3.3", "4.4.4.4, 9.9.9.9"][..],
+        &["9.9.9.9:51000"][..],
+    ] {
+        let (s, _, _) = send(
+            &trusted.router,
+            lines
+                .iter()
+                .fold(
+                    Request::get("/shop/pay/x").header("host", "shop.test"),
+                    |b, l| b.header("x-forwarded-for", *l),
+                )
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(
+            s, 429,
+            "{lines:?} is the same address as the proxy's entry 9.9.9.9"
+        );
+    }
+    assert_eq!(
+        hits_until_limited(&trusted, &["1.1.1.1, 8.8.8.8"]).await,
+        60,
+        "another proxy entry is another bucket, whatever the client wrote first"
+    );
+
+    // An entry that is not an address is the peer, as if there were no header: varying it does not
+    // give the client a bucket of its own (in the test rig there is no socket, so the peer is
+    // nothing; the point is that both spellings meet in one bucket).
+    let first = fixture_with(
+        true,
+        obop_http::public::PublicConfig {
+            trust_proxy: true,
+            ..Default::default()
+        },
+    )
+    .await;
+    assert_eq!(hits_until_limited(&first, &["not-an-address-a"]).await, 60);
+    assert_eq!(
+        hits_until_limited(&first, &["not-an-address-b"]).await,
+        0,
+        "a made-up entry does not choose the bucket"
+    );
+    assert_eq!(
+        hits_until_limited(&first, &["1.1.1.1,"]).await,
+        0,
+        "an empty last entry does not choose the bucket"
+    );
+
+    // Without a trusted proxy nothing the client wrote counts: one bucket for every spelling.
+    let plain = fixture(true).await;
+    assert_eq!(hits_until_limited(&plain, &["5.5.5.5"]).await, 60);
+    assert_eq!(
+        hits_until_limited(&plain, &["6.6.6.6"]).await,
+        0,
+        "the header is ignored unless the operator said the proxy is theirs"
+    );
+}
+
+// ---- Golden pins of the logo address (S1a-0 of the branding work) --------------------------------
+
+/// `/api/brand/logo.svg` with no brand row, in the two other layouts the router tests build: the
+/// back office build served next to the API (`static`) and the instance with the public site
+/// (`public`). Slice S1b added the route and moved these rows on purpose; the first commit of the
+/// work held the answers while no route owned the path (the generic command route matched it for a
+/// `POST` only):
+///
+/// - `GET` was a `405` with `Allow: POST` and no body (75580546...); it is now the answer of the
+///   layout to an unknown path of the API, since there is no brand row: the JSON with a code and a
+///   hint beside the back office (fd0f798e...), the short JSON of the public site's router
+///   (23fee73b...).
+/// - `POST` was a `401` without a token (31f8cb6f...) and the `404` of a command that does not
+///   exist with the owner's token (23fee73b...); it is now the `405` of the route that owns the
+///   path in both layouts, with `Allow: GET,HEAD` and no body (39252dd2...).
+///
+/// The layout with the API alone is pinned in `mcp_tests`.
+#[tokio::test]
+async fn pins_what_the_logo_address_answers_in_the_back_office_and_public_site_layouts() {
+    use crate::mfa_tests::pin;
+    let mut now = Vec::new();
+    for (layout, public) in [("static", false), ("public", true)] {
+        let f = fixture(public).await;
+        for (name, method, token) in [
+            ("get", "GET", None),
+            ("post", "POST", None),
+            ("post_with_token", "POST", Some(f.token.as_str())),
+        ] {
+            now.push((
+                format!("{layout}/{name}"),
+                pin::sha(&pin::exchange_as(&f.router, method, "/api/brand/logo.svg", token).await),
+            ));
+        }
+    }
+    pin::check("LOGO_ADDRESS_LAYOUT_PINS", LOGO_ADDRESS_LAYOUT_PINS, &now);
+}
+
+// Printed by `OBOP_PRINT_PINS=1` on origin/main 12a59a79 and pasted here; the six rows were printed
+// again on the branch of slice S1b (the route exists, no brand row), the digests they had are in the
+// comment above.
+#[rustfmt::skip]
+const LOGO_ADDRESS_LAYOUT_PINS: &[(&str, &str)] = &[
+    ("static/get", "fd0f798e1d7f498e3d2d38a0c65f7cfbf2875753e6387a380404fdc9f0ca69b4"),
+    ("static/post", "39252dd2a34eca81eb92a358f89d76949b1d25f4060f41e7ee88ab4477df73e1"),
+    ("static/post_with_token", "39252dd2a34eca81eb92a358f89d76949b1d25f4060f41e7ee88ab4477df73e1"),
+    ("public/get", "23fee73b6a79601cb87a949221e7445d2fd143719ef46f3cb185a6b15465c5c3"),
+    ("public/post", "39252dd2a34eca81eb92a358f89d76949b1d25f4060f41e7ee88ab4477df73e1"),
+    ("public/post_with_token", "39252dd2a34eca81eb92a358f89d76949b1d25f4060f41e7ee88ab4477df73e1"),
+];
+
+// ---- With a brand row (S1a of the branding work) --------------------------------------------------
+
+/// One answer as one text: the status, every header sorted by name, a blank line and the body.
+async fn shown(r: &axum::Router, path: &str) -> String {
+    let (status, body, headers) = get(r, path).await;
+    let mut lines: Vec<String> = headers
+        .iter()
+        .map(|(k, v)| format!("{k}: {}", String::from_utf8_lossy(v.as_bytes())))
+        .collect();
+    lines.sort();
+    format!("{status}\n{}\n\n{body}", lines.join("\n"))
+}
+
+/// S1a: the brand row is in the store and no surface reads it yet. The shop's files and pages go
+/// through `PublicApi::site_settings` on every request here (the fixture's cache lives zero
+/// seconds), the one door the site reads settings by, and the back office index is the file of the
+/// build; with a row written through `brand::apply` every one of them answers the bytes it
+/// answered without one, headers included.
+#[tokio::test]
+async fn with_a_brand_row_the_shop_files_and_the_back_office_index_are_what_they_were() {
+    for (public, paths) in [
+        (
+            true,
+            vec![
+                "/favicon.svg",
+                "/favicon.ico",
+                "/",
+                "/assets/site.css",
+                "/robots.txt",
+                "/sitemap.xml",
+                "/admin/",
+                "/admin/index.html",
+            ],
+        ),
+        (false, vec!["/", "/index.html", "/assets/app.js"]),
+    ] {
+        let f = fixture(public).await;
+        let mut was = Vec::new();
+        for p in &paths {
+            was.push(shown(&f.router, p).await);
+        }
+        assert!(
+            was[0].starts_with("200\n"),
+            "{}: the first file is served: {}",
+            paths[0],
+            was[0]
+        );
+        crate::brand_row_tests::set_brand(&f.app);
+        for (p, before) in paths.iter().zip(&was) {
+            assert_eq!(
+                &shown(&f.router, p).await,
+                before,
+                "{p} (public site: {public}) moved when a brand row was written"
+            );
+        }
     }
 }

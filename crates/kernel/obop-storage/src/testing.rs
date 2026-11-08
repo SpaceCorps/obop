@@ -8,6 +8,7 @@ use crate::{
     HistoryStats, J, LockGuard, Op, PartitionEnsured, Result, Row, RowSink, Sealer, Swap, Track,
     Tracking, WriteCtx, guarded,
 };
+use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU8, Ordering::SeqCst};
 
@@ -299,6 +300,8 @@ pub struct Flaky {
     seen: std::sync::Mutex<Vec<SeenWrite>>,
     /// See [`Flaky::reads`].
     reads: std::sync::Mutex<Reads>,
+    /// See [`Flaky::models_asked`].
+    asked: std::sync::Mutex<BTreeSet<String>>,
     /// Run once, right before the next atomic batch is applied.
     before_apply: std::sync::Mutex<Option<AfterInsert>>,
     /// Run once, right before the next compare-and-set of a short-lived value is tried.
@@ -332,6 +335,11 @@ pub struct Reads {
     /// returned.
     pub keyed: u64,
     pub keyed_rows: u64,
+    /// Calls of `count`.
+    pub counts: u64,
+    /// Calls that read a short-lived value or a counter (`kv_get`, `kv_scan`, `counter_get`,
+    /// `counter_ttl_ms`).
+    pub kv_reads: u64,
 }
 
 /// What [`Flaky::after_the_next_insert_into`] runs, with the wrapped backend.
@@ -361,6 +369,7 @@ impl Flaky {
             insert_error: std::sync::Mutex::new(None),
             seen: std::sync::Mutex::new(Vec::new()),
             reads: std::sync::Mutex::new(Reads::default()),
+            asked: std::sync::Mutex::new(BTreeSet::new()),
             before_apply: std::sync::Mutex::new(None),
             before_kv_swap: std::sync::Mutex::new(None),
             before_kv_get: std::sync::Mutex::new(None),
@@ -406,6 +415,27 @@ impl Flaky {
     /// Start the count of [`Flaky::reads`] again from zero.
     pub fn reset_reads(&self) {
         *self.reads.lock().unwrap() = Reads::default();
+    }
+
+    /// Every model a call through this backend has named, read or written, refused calls
+    /// included, since it was made: a record of the tables the program asks the storage for, for
+    /// the test that holds that list to what the installer reserves. Counters and short-lived
+    /// values (`counter_*`, `kv_*`) name no model and are not in it; the records of `export` and
+    /// `total` are not asked for by model.
+    pub fn models_asked(&self) -> BTreeSet<String> {
+        self.asked.lock().unwrap().clone()
+    }
+
+    fn ask(&self, model: &str) {
+        if !model.is_empty() {
+            self.asked.lock().unwrap().insert(model.to_string());
+        }
+    }
+
+    fn ask_ops(&self, ops: &[Op]) {
+        for op in ops {
+            self.ask(op.model());
+        }
     }
 
     /// How many calls were refused so far.
@@ -593,6 +623,7 @@ impl Flaky {
     }
 
     fn gate_m(&self, write: bool, model: &str) -> Result<()> {
+        self.ask(model);
         // `refuse_call_after`: let `n` calls through, then refuse the next one, once.
         let once = self.once.try_update(SeqCst, SeqCst, |n| match n {
             n if n > 0 => Some(n - 1),
@@ -736,6 +767,7 @@ impl Backend for Flaky {
     }
     fn count(&self, model: &str) -> Result<usize> {
         self.gate_m(false, model)?;
+        self.reads.lock().unwrap().counts += 1;
         self.inner.count(model)
     }
     fn delete(&self, model: &str, id: &str) -> Result<bool> {
@@ -743,20 +775,24 @@ impl Backend for Flaky {
         self.inner.delete(model, id)
     }
     fn insert_many(&self, rows: &[(String, String, Fields)]) -> Result<()> {
+        rows.iter().for_each(|(model, _, _)| self.ask(model));
         self.gate(true)?;
         self.inner.insert_many(rows)
     }
     fn apply(&self, ops: &[Op]) -> Result<()> {
+        self.ask_ops(ops);
         self.gate_apply()?;
         self.run_before_apply();
         self.inner.apply(ops)
     }
     fn apply_checked(&self, ops: &[Op]) -> std::result::Result<(), ApplyError> {
+        self.ask_ops(ops);
         self.gate_apply().map_err(ApplyError::Storage)?;
         self.run_before_apply();
         self.inner.apply_checked(ops)
     }
     fn apply_ctx(&self, ctx: &WriteCtx, ops: &[Op]) -> std::result::Result<(), ApplyError> {
+        self.ask_ops(ops);
         self.gate_apply().map_err(ApplyError::Storage)?;
         self.inner.apply_ctx(ctx, ops)
     }
@@ -766,6 +802,7 @@ impl Backend for Flaky {
         ops: &[Op],
         tracking: &Tracking,
     ) -> std::result::Result<(), ApplyError> {
+        self.ask_ops(ops);
         self.gate_apply().map_err(ApplyError::Storage)?;
         self.seen
             .lock()
@@ -818,6 +855,7 @@ impl Backend for Flaky {
         fallback_at: &str,
         batch: usize,
     ) -> Result<Backfilled> {
+        models.iter().for_each(|m| self.ask(m));
         self.gate(true)?;
         self.inner.backfill_sysfields(models, fallback_at, batch)
     }
@@ -843,6 +881,7 @@ impl Backend for Flaky {
         Ok(rows)
     }
     fn ensure_unique(&self, name: &str, model: &str, fields: &[&str]) -> Result<()> {
+        self.ask(model);
         self.gate(true)?;
         self.inner.ensure_unique(name, model, fields)
     }
@@ -858,10 +897,12 @@ impl Backend for Flaky {
     }
     fn counter_get(&self, key: &str) -> Result<u64> {
         self.gate(false)?;
+        self.reads.lock().unwrap().kv_reads += 1;
         self.inner.counter_get(key)
     }
     fn counter_ttl_ms(&self, key: &str) -> Result<Option<u64>> {
         self.gate(false)?;
+        self.reads.lock().unwrap().kv_reads += 1;
         self.inner.counter_ttl_ms(key)
     }
     fn counter_reset(&self, key: &str) -> Result<()> {
@@ -913,6 +954,7 @@ impl Backend for Flaky {
             let _ = self.inner.kv_delete(key);
         }
         self.gate(false)?;
+        self.reads.lock().unwrap().kv_reads += 1;
         self.inner.kv_get(key)
     }
     fn kv_delete(&self, key: &str) -> Result<bool> {
@@ -921,6 +963,7 @@ impl Backend for Flaky {
     }
     fn kv_scan(&self, prefix: &str) -> Result<Vec<(String, String)>> {
         self.gate(false)?;
+        self.reads.lock().unwrap().kv_reads += 1;
         self.inner.kv_scan(prefix)
     }
     fn purge_expired(&self) -> Result<usize> {
@@ -936,6 +979,7 @@ impl Backend for Flaky {
         self.inner.total()
     }
     fn swap_fields(&self, swaps: &[Swap]) -> Result<usize> {
+        swaps.iter().for_each(|s| self.ask(&s.model));
         self.gate(true)?;
         self.inner.swap_fields(swaps)
     }
@@ -953,7 +997,13 @@ impl Backend for Flaky {
         next: &mut dyn FnMut() -> Result<Option<Vec<Row>>>,
     ) -> Result<usize> {
         self.gate(true)?;
-        self.inner.import(wipe, next)
+        self.inner.import(wipe, &mut || {
+            let rows = next()?;
+            if let Some(rows) = &rows {
+                rows.iter().for_each(|(model, _, _)| self.ask(model));
+            }
+            Ok(rows)
+        })
     }
 }
 
@@ -1153,6 +1203,98 @@ mod tests {
 
     fn fields(v: serde_json::Value) -> Fields {
         v.as_object().cloned().unwrap()
+    }
+
+    /// The models a call names are noted for every way of naming one: a keyed call, a batch, a
+    /// refused call, a backfill, a unique rule and an import. Counters name none.
+    #[test]
+    fn the_models_a_call_names_are_noted_whatever_the_way_it_names_them() {
+        let (flaky, db) = Flaky::memory();
+        assert!(flaky.models_asked().is_empty());
+        db.insert("m_insert", "a", &Fields::new()).unwrap();
+        db.get("m_get", "a").unwrap();
+        db.list("m_list").unwrap();
+        db.scan("m_scan", &mut |_, _| Ok(true)).unwrap();
+        db.update("m_update", "a", &Fields::new()).unwrap();
+        db.count("m_count").unwrap();
+        db.delete("m_delete", "a").unwrap();
+        db.find("m_find", "f", &json!(1)).unwrap();
+        db.find_unique("m_unique", &["f"], &[json!(1)]).unwrap();
+        db.insert_many(&[("m_many".into(), "a".into(), Fields::new())])
+            .unwrap();
+        db.apply(&[Op::Insert {
+            model: "m_apply".into(),
+            id: "a".into(),
+            fields: Fields::new(),
+        }])
+        .unwrap();
+        db.apply_checked(&[Op::add("m_checked", "a", "n", 1).or_create(Fields::new())])
+            .unwrap();
+        db.apply_ctx(
+            &WriteCtx::system("test"),
+            &[Op::add("m_ctx", "a", "n", 1).or_create(Fields::new())],
+        )
+        .unwrap();
+        db.ensure_unique("u", "m_rule", &["f"]).unwrap();
+        db.backfill_sysfields(
+            &["m_backfill".to_string()],
+            "2026-01-01T00:00:00.000000Z",
+            10,
+        )
+        .unwrap();
+        db.swap_fields(&[Swap {
+            model: "m_swap".into(),
+            id: "a".into(),
+            field: "f".into(),
+            old: "x".into(),
+            new: "y".into(),
+        }])
+        .unwrap();
+        db.counter_add("not_a_model", 1000, false).unwrap();
+        db.kv_put("not_a_model_either", "v", None).unwrap();
+        // A refused call is asked for all the same.
+        flaky.refuse_next(1);
+        assert!(db.get("m_refused", "a").is_err());
+        let mut rows = Some(vec![(
+            "m_import".to_string(),
+            "a".to_string(),
+            Fields::new(),
+        )]);
+        db.import(false, &mut || Ok(rows.take())).unwrap();
+        let want: BTreeSet<String> = [
+            "m_insert",
+            "m_get",
+            "m_list",
+            "m_scan",
+            "m_update",
+            "m_count",
+            "m_delete",
+            "m_find",
+            "m_unique",
+            "m_many",
+            "m_apply",
+            "m_checked",
+            "m_ctx",
+            "m_rule",
+            "m_backfill",
+            "m_refused",
+            "m_swap",
+            "m_import",
+        ]
+        .map(String::from)
+        .into();
+        assert_eq!(flaky.models_asked(), want);
+
+        // A `Flaky` under a `Tracked` is reached by `apply_tracked`: the models of that batch count.
+        let below = Flaky::new(Arc::new(crate::memory::Memory::default()));
+        let above = crate::tracked::Tracked::new(below.clone());
+        above
+            .apply_ctx(
+                &WriteCtx::system("test"),
+                &[Op::add("m_tracked", "a", "n", 1).or_create(Fields::new())],
+            )
+            .unwrap();
+        assert!(below.models_asked().contains("m_tracked"));
     }
 
     #[test]

@@ -57,6 +57,201 @@ fn rig() -> Rig {
     rig_on(App::new())
 }
 
+#[tokio::test]
+async fn an_entry_of_the_proxy_that_is_not_an_address_does_not_choose_the_limit_bucket() {
+    // The limit is per address. A made-up entry (here a different one in every call) is not an
+    // address, so the peer is used and the made-up entries share one bucket; an address of its own
+    // has its own. Without the shared rule every spelling would be a bucket of its own.
+    let rig = rig();
+    let post = |xff: String| {
+        let r = rig.r.clone();
+        async move {
+            call(
+                &r,
+                "POST",
+                "/oauth/register",
+                &[("x-forwarded-for", &xff)],
+                Some((
+                    "application/json",
+                    json!({"client_name": "Claude", "redirect_uris": [REDIRECT],
+                           "token_endpoint_auth_method": "none"})
+                    .to_string(),
+                )),
+            )
+            .await
+            .status
+        }
+    };
+    let mut last = 0;
+    for n in 0..40 {
+        last = post(format!("203.0.113.9, client-{n}")).await;
+        if last == 429 {
+            break;
+        }
+    }
+    assert_eq!(last, 429, "made-up entries ran into one limit");
+    assert_ne!(
+        post("198.51.100.200".to_string()).await,
+        429,
+        "an address of its own has a count of its own"
+    );
+}
+
+#[tokio::test]
+async fn a_port_is_not_part_of_the_address_in_the_limit_bucket() {
+    // Once an address has used up its count, the same address with a port is that address (a
+    // port that changed with every connection would otherwise give a client a bucket of its own
+    // for each). A fresh rig: the entries that are not addresses share the peer's bucket and
+    // must not have used it up already.
+    let rig = rig();
+    let post = |xff: String| {
+        let r = rig.r.clone();
+        async move {
+            call(
+                &r,
+                "POST",
+                "/oauth/register",
+                &[("x-forwarded-for", &xff)],
+                Some((
+                    "application/json",
+                    json!({"client_name": "Claude", "redirect_uris": [REDIRECT],
+                           "token_endpoint_auth_method": "none"})
+                    .to_string(),
+                )),
+            )
+            .await
+            .status
+        }
+    };
+    let mut spent = 0;
+    for _ in 0..40 {
+        spent = post("198.51.100.201".to_string()).await;
+        if spent == 429 {
+            break;
+        }
+    }
+    assert_eq!(spent, 429, "the address ran into its limit");
+    assert_eq!(
+        post("198.51.100.201:5000".to_string()).await,
+        429,
+        "a port is not part of the address"
+    );
+    assert_eq!(
+        post("198.51.100.201:5001".to_string()).await,
+        429,
+        "nor is another port"
+    );
+    assert_ne!(
+        post("198.51.100.202:5000".to_string()).await,
+        429,
+        "another address is not held up"
+    );
+}
+
+#[tokio::test]
+async fn the_token_revoke_and_authorize_limits_read_the_address_by_the_same_rule() {
+    // The same two properties as for the registration, at the other endpoints that limit by
+    // address: made-up last entries share the peer's bucket (they do not each get their own), an
+    // address with a port is its address, and another address is not held up by either.
+    // (The callers of the same function are tried in `address.rs` next to this file, which also
+    // pins the number of tries each endpoint allows an address, in `passkey_tests.rs`,
+    // `sso_tests.rs` and `sso_tests/phone.rs`; docs/ISSUES.md O31 lists which are tried and
+    // which are held by the scan alone. The scan in `obop-http` `addr_scan_tests.rs` fails for
+    // any other Rust code under `crates/`, outside test items, that names a header on its list of
+    // client-address headers or a name starting `x-forwarded`, or reads the peer of a socket; it
+    // cannot see a header name built at run time or a platform header that is not on its list.)
+    for endpoint in ["token", "revoke", "authorize"] {
+        let rig = rig();
+        let client = {
+            let c = call(
+                &rig.r,
+                "POST",
+                "/oauth/register",
+                &[],
+                Some((
+                    "application/json",
+                    json!({"client_name": "Claude", "redirect_uris": [REDIRECT],
+                           "token_endpoint_auth_method": "none"})
+                    .to_string(),
+                )),
+            )
+            .await;
+            assert_eq!(c.status, 201, "{}", c.text());
+            c.json()["client_id"].as_str().unwrap().to_string()
+        };
+        let hit = |xff: String| {
+            let r = rig.r.clone();
+            let client = client.clone();
+            async move {
+                let h = [("x-forwarded-for", xff.as_str())];
+                match endpoint {
+                    "token" => {
+                        let form = format!(
+                            "grant_type=refresh_token&refresh_token=nothing&client_id={client}"
+                        );
+                        call(
+                            &r,
+                            "POST",
+                            "/oauth/token",
+                            &h,
+                            Some(("application/x-www-form-urlencoded", form)),
+                        )
+                        .await
+                        .status
+                    }
+                    "revoke" => {
+                        let form = format!("token=nothing&client_id={client}");
+                        call(
+                            &r,
+                            "POST",
+                            "/oauth/revoke",
+                            &h,
+                            Some(("application/x-www-form-urlencoded", form)),
+                        )
+                        .await
+                        .status
+                    }
+                    _ => {
+                        call(&r, "GET", &authorize_url(&client, REDIRECT, &[]), &h, None)
+                            .await
+                            .status
+                    }
+                }
+            }
+        };
+        // A port is not part of the address: an address that used up its count is still spent
+        // when it comes with a port. (First, while the peer's bucket is untouched: were the port
+        // taken for part of the address, the entry would fall to that bucket and not be spent.)
+        let mut spent = 0;
+        for _ in 0..200 {
+            spent = hit("198.51.100.211".to_string()).await;
+            if spent == 429 {
+                break;
+            }
+        }
+        assert_eq!(spent, 429, "{endpoint}: the address ran into its limit");
+        assert_eq!(
+            hit("198.51.100.211:5000".to_string()).await,
+            429,
+            "{endpoint}: a port is not part of the address"
+        );
+        // Entries that are not addresses all fall to the peer's bucket, and share it.
+        let mut last = 0;
+        for n in 0..200 {
+            last = hit(format!("203.0.113.9, client-{n}")).await;
+            if last == 429 {
+                break;
+            }
+        }
+        assert_eq!(last, 429, "{endpoint}: made-up entries ran into one limit");
+        assert_ne!(
+            hit("198.51.100.210".to_string()).await,
+            429,
+            "{endpoint}: an address of its own has a count of its own"
+        );
+    }
+}
+
 /// A mobile client that declares the groups it will ask for (the three of the demo that a person
 /// of the tests holds).
 async fn mobile_client(r: &axum::Router) -> String {

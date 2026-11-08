@@ -587,6 +587,7 @@ export function ListView(p: ViewProps) {
                                       it.row[f.name] as string,
                                       o,
                                       p.title,
+                                      it.row,
                                     );
                                     return {
                                       disabled: !m.allowed && !m.current,

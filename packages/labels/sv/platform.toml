@@ -725,3 +725,147 @@ description = "Ställ in den Microsoft Entra-klientorganisation som personer log
 [labels.sv.model.sso_provider.action.clear]
 label = "Ta bort"
 description = "Ta bort konfigurationen för Microsoft-inloggning. Kopplingarna finns kvar. Konton som bara loggar in med Microsoft kommer då bara in via de administratörer som behåller lösenord och en andra faktor. Nekas för agenter"
+
+[labels.sv.model.instance_brand]
+name = "Instansens varumärke"
+description = "Instansens varumärke: namn, kortnamn, logotyp samt en titel och ett meddelande per språk. En enda post, offentlig med avsikt, som endast ändras av en person med platform.admin och aldrig av en agent"
+
+[labels.sv.model.instance_brand.field.name]
+label = "Namn"
+description = "Produktens namn, 1 till 40 tecken (bokstäver, siffror, mellanslag och - . , & ' + _ ( ) !). Obligatoriskt: ett varumärke utan namn sparas inte. Offentligt med avsikt, så det innehåller inga personuppgifter"
+
+[labels.sv.model.instance_brand.field.slug]
+label = "Kortnamn"
+description = "En kort identifierare: a-z, 0-9 och -, börjar med en bokstav, slutar inte på -, högst 30 tecken. Tomt betyder härlett från namnet. Offentligt med avsikt, så det innehåller inga personuppgifter"
+
+[labels.sv.model.instance_brand.field.title_en]
+label = "Titel (engelska)"
+description = "Titeln på engelska: raden bredvid logotypen, högst 60 tecken. Tomt betyder namnet. Det är också titeln för varje språk som saknar en egen. Offentligt med avsikt, så det innehåller inga personuppgifter"
+
+[labels.sv.model.instance_brand.field.title_de]
+label = "Titel (tyska)"
+description = "Titeln på tyska: raden bredvid logotypen, högst 60 tecken. Tomt betyder den engelska titeln, därefter namnet. Offentligt med avsikt, så det innehåller inga personuppgifter"
+
+[labels.sv.model.instance_brand.field.title_fr]
+label = "Titel (franska)"
+description = "Titeln på franska: raden bredvid logotypen, högst 60 tecken. Tomt betyder den engelska titeln, därefter namnet. Offentligt med avsikt, så det innehåller inga personuppgifter"
+
+[labels.sv.model.instance_brand.field.title_pl]
+label = "Titel (polska)"
+description = "Titeln på polska: raden bredvid logotypen, högst 60 tecken. Tomt betyder den engelska titeln, därefter namnet. Offentligt med avsikt, så det innehåller inga personuppgifter"
+
+[labels.sv.model.instance_brand.field.title_fi]
+label = "Titel (finska)"
+description = "Titeln på finska: raden bredvid logotypen, högst 60 tecken. Tomt betyder den engelska titeln, därefter namnet. Offentligt med avsikt, så det innehåller inga personuppgifter"
+
+[labels.sv.model.instance_brand.field.title_sv]
+label = "Titel (svenska)"
+description = "Titeln på svenska: raden bredvid logotypen, högst 60 tecken. Tomt betyder den engelska titeln, därefter namnet. Offentligt med avsikt, så det innehåller inga personuppgifter"
+
+[labels.sv.model.instance_brand.field.title_es]
+label = "Titel (spanska)"
+description = "Titeln på spanska: raden bredvid logotypen, högst 60 tecken. Tomt betyder den engelska titeln, därefter namnet. Offentligt med avsikt, så det innehåller inga personuppgifter"
+
+[labels.sv.model.instance_brand.field.message_en]
+label = "Meddelande (engelska)"
+description = "Meddelandet på engelska: en enkel text på högst 240 tecken, utan länkar eller formatering. Tomt betyder inget. Det är också meddelandet för varje språk som saknar ett eget. Offentligt med avsikt, så det innehåller inga personuppgifter"
+
+[labels.sv.model.instance_brand.field.message_de]
+label = "Meddelande (tyska)"
+description = "Meddelandet på tyska: en enkel text på högst 240 tecken, utan länkar eller formatering. Tomt betyder det engelska meddelandet, därefter inget. Offentligt med avsikt, så det innehåller inga personuppgifter"
+
+[labels.sv.model.instance_brand.field.message_fr]
+label = "Meddelande (franska)"
+description = "Meddelandet på franska: en enkel text på högst 240 tecken, utan länkar eller formatering. Tomt betyder det engelska meddelandet, därefter inget. Offentligt med avsikt, så det innehåller inga personuppgifter"
+
+[labels.sv.model.instance_brand.field.message_pl]
+label = "Meddelande (polska)"
+description = "Meddelandet på polska: en enkel text på högst 240 tecken, utan länkar eller formatering. Tomt betyder det engelska meddelandet, därefter inget. Offentligt med avsikt, så det innehåller inga personuppgifter"
+
+[labels.sv.model.instance_brand.field.message_fi]
+label = "Meddelande (finska)"
+description = "Meddelandet på finska: en enkel text på högst 240 tecken, utan länkar eller formatering. Tomt betyder det engelska meddelandet, därefter inget. Offentligt med avsikt, så det innehåller inga personuppgifter"
+
+[labels.sv.model.instance_brand.field.message_sv]
+label = "Meddelande (svenska)"
+description = "Meddelandet på svenska: en enkel text på högst 240 tecken, utan länkar eller formatering. Tomt betyder det engelska meddelandet, därefter inget. Offentligt med avsikt, så det innehåller inga personuppgifter"
+
+[labels.sv.model.instance_brand.field.message_es]
+label = "Meddelande (spanska)"
+description = "Meddelandet på spanska: en enkel text på högst 240 tecken, utan länkar eller formatering. Tomt betyder det engelska meddelandet, därefter inget. Offentligt med avsikt, så det innehåller inga personuppgifter"
+
+[labels.sv.model.instance_brand.field.logo_svg]
+label = "Logotyp (SVG)"
+description = "Indata till configure: texten i en SVG-fil, högst 16 KiB, en strikt delmängd (former och banor i enfärgade nyanser; inget skript, ingen text, ingen bild, ingen länk). Det som sparas är den kanoniska text som servern skrev om, aldrig indata; get returnerar den inte. Tomt rensar den, och logotypen ritas då utifrån namnet"
+
+[labels.sv.model.instance_brand.field.dry_run]
+label = "Provkörning"
+description = "Indata till configure och clear: true eller false. Med true kontrolleras allt och inget skrivs eller loggas; svaret säger vad som skulle hända och returnerar dry_run"
+
+[labels.sv.model.instance_brand.field.set]
+label = "Angivet"
+description = "Svar från get: om ett varumärke är angivet, det vill säga om posten finns"
+
+[labels.sv.model.instance_brand.field.v]
+label = "Logotypversion"
+description = "Svar från get och configure: logotypens version (16 hexadecimala siffror), som ändras när logotypen ändras; tomt när inget varumärke är angivet"
+
+[labels.sv.model.instance_brand.field.effective]
+label = "Gällande"
+description = "Svar från get: ett JSON-objekt med värdet och den vinnande källan (record, theme eller default) för varje gällande värde (name, slug, logo, tile_accent, title_XX och message_XX; XX är språkkoden: en, de, fr, pl, fi, sv, es)"
+
+[labels.sv.model.instance_brand.field.fallbacks]
+label = "Reservvärden"
+description = "Svar från get: en JSON-lista över de sparade fält som inte klarade läskontrollen och föll tillbaka på ett standardvärde, vart och ett med fält och orsak"
+
+[labels.sv.model.instance_brand.field.changes]
+label = "Ändringar"
+description = "Svar från configure: en JSON-lista över fälten som ändrades (med dry_run: som skulle ändras), vart och ett med field, old och new; logotypen som gammal och ny version"
+
+[labels.sv.model.instance_brand.field.refusals]
+label = "Avslag"
+description = "Svar från configure med dry_run: en JSON-lista över vad ett riktigt anrop skulle avslå, vart och ett med field och rule"
+
+[labels.sv.model.instance_brand.field.cleared]
+label = "Borttaget"
+description = "Svar från clear: om ett varumärke togs bort (med dry_run: om det skulle tas bort)"
+
+[labels.sv.model.instance_brand.action.configure]
+label = "Konfigurera"
+description = "Ställ in instansens varumärke. Ange bara de fält som ska ändras (de andra behåller sitt värde); det första anropet kräver name. Fält: name, slug, title_XX, message_XX, logo_svg (SVG-text). En tom text rensar ett fält, utom name. dry_run (true eller false) skriver inget. Svarar med changes och v (med dry_run även refusals). Bara en person med platform.admin får köra det"
+
+[labels.sv.model.instance_brand.action.clear]
+label = "Ta bort"
+description = "Ta bort instansens varumärke: den enda posten raderas, så inget varumärke är angivet. dry_run (true eller false) kontrollerar bara och tar inte bort något. Svarar med cleared: true när ett varumärke togs bort (med dry_run: skulle tas bort), annars false, och då skrivs inget. Bara en person med platform.admin får köra det"
+
+[labels.sv.model.import_map]
+name = "Importkarta"
+description = "Varifrån en importerad post kommer: nyckeln (källsystem, källtabell, käll-id) för raden den skapades av. Slå upp en nyckel med search, en post med get."
+
+[labels.sv.model.import_map.field.model]
+label = "Modell"
+description = "Modellen för den importerade posten"
+
+[labels.sv.model.import_map.field.record]
+label = "Post"
+description = "Id för den importerade posten"
+
+[labels.sv.model.import_map.field.source_system]
+label = "Källsystem"
+description = "Det externa system som raden kom från, så som importen namngav det"
+
+[labels.sv.model.import_map.field.source_table]
+label = "Källtabell"
+description = "Tabellen, bladet eller filen i det systemet som raden kom från"
+
+[labels.sv.model.import_map.field.source_id]
+label = "Käll-id"
+description = "Radens id i den tabellen"
+
+[labels.sv.model.import_map.field.imported_at]
+label = "Importerad"
+description = "När posten importerades"
+
+[labels.sv.model.import_map.field.imported_by]
+label = "Importerad av"
+description = "Vem som importerade den"

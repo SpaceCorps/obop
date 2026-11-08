@@ -7,7 +7,7 @@
 use super::{HttpState, blocking};
 use axum::{
     body::Bytes,
-    extract::{ConnectInfo, Path, State},
+    extract::{Path, State},
     http::{HeaderMap, HeaderValue, StatusCode, header, request::Parts},
     response::{IntoResponse, Response},
 };
@@ -17,7 +17,6 @@ use obop_oauth::{
     AuthzError, DecideOut, FlowCtx, FlowError, Form, LoginOut, OAuth, OAuthError, microsoft_key,
 };
 use serde_json::{Value as J, json};
-use std::net::SocketAddr;
 use std::sync::Arc;
 
 type Shared = State<Arc<HttpState>>;
@@ -28,22 +27,15 @@ pub(crate) const MAX_BODY: usize = 16 * 1024;
 // ---- plumbing ------------------------------------------------------------------------------
 
 /// The address rate limits are keyed on: the peer, or behind a trusted proxy the nearest
-/// `X-Forwarded-For` entry (the same rule as the public site).
+/// `X-Forwarded-For` entry, which is the last element of the last header line (a proxy that adds
+/// its own line, or extends the one it got, puts its entry at the end; the entries before it are
+/// whatever the client sent). The same rule as the public site (`public.rs`) and the signer door.
 pub(crate) fn client_ip(s: &HttpState, parts: &Parts) -> String {
-    if s.trust_proxy.load(std::sync::atomic::Ordering::Relaxed)
-        && let Some(v) = parts
-            .headers
-            .get("x-forwarded-for")
-            .and_then(|v| v.to_str().ok())
-        && let Some(last) = v.rsplit(',').next()
-    {
-        return last.trim().chars().take(64).collect();
-    }
-    parts
-        .extensions
-        .get::<ConnectInfo<SocketAddr>>()
-        .map(|c| c.0.ip().to_string())
-        .unwrap_or_default()
+    super::addr::client_address(
+        s.trust_proxy.load(std::sync::atomic::Ordering::Relaxed),
+        &parts.headers,
+        &parts.extensions,
+    )
 }
 
 fn pct_decode(s: &str) -> Option<String> {
@@ -206,7 +198,7 @@ pub(crate) fn cookie_value(h: &HeaderMap, name: &str) -> Option<String> {
 /// A browser form post must come from this origin: `Origin` when it names one, else
 /// `Sec-Fetch-Site`. (A browser sends `Origin: null` for sandboxed or opaque origins and when the
 /// page's referrer policy is `no-referrer`; fetch metadata tells those cases apart.)
-fn same_origin(h: &HeaderMap, base: &str) -> bool {
+pub(crate) fn same_origin(h: &HeaderMap, base: &str) -> bool {
     match h.get(header::ORIGIN).and_then(|v| v.to_str().ok()) {
         Some(o) if o != "null" => o.trim_end_matches('/').eq_ignore_ascii_case(base),
         _ => h.get("sec-fetch-site").and_then(|v| v.to_str().ok()) == Some("same-origin"),
@@ -918,5 +910,94 @@ mod tests {
         assert!(!same_origin(&h, "https://a.test"));
         h.remove("sec-fetch-site");
         assert!(!same_origin(&h, "https://a.test"));
+    }
+
+    /// An identity provider that issues nothing and answers no one, only enough for the OAuth
+    /// server to exist (it needs the provider's `oauth()` port).
+    struct Idp;
+
+    impl obop_commands::OAuthTokens for Idp {
+        fn principal_of(&self, _: &str) -> Option<obop_commands::Principal> {
+            None
+        }
+        fn issue_oauth_access(
+            &self,
+            _: &str,
+            _: &[String],
+            _: &str,
+            _: u64,
+            _: &str,
+            _: &str,
+        ) -> Result<(String, String), String> {
+            Err("not in this test".into())
+        }
+        fn revoke_token_id(&self, _: &str) -> bool {
+            false
+        }
+        fn revoke_session(&self, _: &str) -> bool {
+            false
+        }
+        fn grant_of(&self, _: &str) -> Option<String> {
+            None
+        }
+        fn audit(&self, _: &str, _: &str, _: &str, _: &str) {}
+    }
+
+    impl obop_commands::Authenticator for Idp {
+        fn resolve(&self, _: &str) -> Option<obop_commands::Principal> {
+            None
+        }
+        fn login(&self, _: &str, _: &str) -> Result<String, String> {
+            Err("not in this test".into())
+        }
+        fn issue_agent_token(
+            &self,
+            _: &obop_commands::Principal,
+            _: &[String],
+            _: &str,
+        ) -> Result<String, String> {
+            Err("not in this test".into())
+        }
+        fn oauth(&self) -> Option<&dyn obop_commands::OAuthTokens> {
+            Some(self)
+        }
+    }
+
+    /// The passkey steps of the OAuth pages build the ceremony site with the relying party name
+    /// "obop" (S1a-0 of the branding work: with no brand row that is what an instance sends). The
+    /// name reaches an authenticator only through the registration options, which the REST
+    /// routes make (pinned in `passkey_tests` of the `obop` crate); this holds the same literal
+    /// here, where `webauthn_ctx` is visible, together with the site it builds.
+    #[test]
+    fn pins_the_relying_party_name_of_the_oauth_pages_ceremony_site() {
+        let state = crate::HttpState::with_mcp(
+            Arc::new(obop_commands::Dispatcher::new()),
+            Arc::new(Idp),
+            crate::mcp::McpConfig {
+                public_url: Some("https://inst.test".into()),
+                ..crate::mcp::McpConfig::default()
+            },
+        );
+        let st = Step {
+            o: state.oauth.clone().expect("the OAuth server exists"),
+            base: "https://inst.test".into(),
+            pairs: Vec::new(),
+            flow: String::new(),
+            csrf: String::new(),
+            binder: String::new(),
+            ip: "198.51.100.7".into(),
+            lang: "en",
+        };
+        let parts = axum::http::Request::builder()
+            .uri("/oauth/authorize/passkey/options")
+            .body(())
+            .unwrap()
+            .into_parts()
+            .0;
+        let ctx = webauthn_ctx(&state, &parts, &st).expect("a ceremony site");
+        assert_eq!(ctx.rp_name, "obop");
+        assert_eq!(ctx.rp_id, "inst.test");
+        assert_eq!(ctx.origin, "https://inst.test");
+        assert_eq!(ctx.ip, "198.51.100.7");
     }
 }

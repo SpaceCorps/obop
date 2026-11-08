@@ -1,7 +1,7 @@
 [labels.de.module]
 name = "Signatur"
-description = "Dokumentvorlagen und Signaturanfragen (Entwurf, gesendet, unterzeichnet, abgelehnt, abgelaufen). Eine Anfrage nennt den Unterzeichner (personenbezogene Daten) und hält Belege fest. Eine unterzeichnete Anfrage ist nur per Konvention unveränderlich; der Dokument-Hash hält fest, was unterzeichnet wurde. Senden und Unterzeichnen brauchen eine menschliche Genehmigung."
-summary = "Dokumentvorlagen und Signaturanfragen. Senden und Erfassen einer Unterschrift brauchen eine menschliche Genehmigung."
+description = "Dokumentvorlagen und Signaturanfragen. Eine Anfrage kann auf ein PDF in Dokumente zeigen: Beim Senden wird eine exakte Kopie festgehalten, und ein Manager erstellt einen Einmal-Link, den die unterzeichnende Person ohne Konto öffnet, um zu lesen, den vollen Namen einzugeben und zuzustimmen. Nur eine einfache elektronische Signatur: Der Link ist die einzige Prüfung. Agenten erstellen keine Links."
+summary = "Dokumentvorlagen und Signaturanfragen; ein PDF aus Dokumente lässt sich per Einmal-Link unterzeichnen. Einfache elektronische Signatur."
 
 [labels.de.model.sign_template]
 name = "Vorlage"
@@ -33,7 +33,11 @@ description = "Eine Aufforderung an eine Person, ein Dokument zu unterzeichnen"
 
 [labels.de.model.sign_request.field.template_id]
 label = "Vorlage"
-description = "Das zu unterzeichnende Dokument"
+description = "Die Dokumentvorlage zum Senden; leer bei einer Anfrage zu einem Dokument in Dokumente"
+
+[labels.de.model.sign_request.field.document_id]
+label = "Dokument"
+description = "Das PDF in Dokumente, das die unterzeichnende Person liest und unterzeichnet; beim Senden der Anfrage wird sein SHA-256 genommen und eine exakte Kopie festgehalten"
 
 [labels.de.model.sign_request.field.title]
 label = "Titel"
@@ -49,7 +53,7 @@ description = "Name der Person, die unterzeichnen muss"
 
 [labels.de.model.sign_request.field.signer_email]
 label = "E-Mail Unterzeichner"
-description = "E-Mail-Adresse, an die die Anfrage gesendet wird"
+description = "E-Mail-Adresse der unterzeichnenden Person; optional, obop versendet bei einer Anfrage zu einem Dokument keine E-Mail"
 
 [labels.de.model.sign_request.field.sent_on]
 label = "Gesendet am"
@@ -59,13 +63,17 @@ description = "Tag, an dem die Anfrage gesendet wurde (YYYY-MM-DD)"
 label = "Läuft ab am"
 description = "Letzter Tag, an dem die Anfrage unterzeichnet werden kann (YYYY-MM-DD)"
 
+[labels.de.model.sign_request.field.show_history]
+label = "Bisherige Unterschriften der unterzeichnenden Person zeigen"
+description = "Zeigt der unterzeichnenden Person, wer dieselbe Datei (gleiches Dokument, SHA-256) über eine Anfrage mit gesetztem Häkchen unterzeichnet hat: Name und Zeit. Vorher wird sie darauf hingewiesen, dass ihre eigenen auch gezeigt werden. Nur für eine Datei, die mehrere benannte Personen gemeinsam unterzeichnen, nie für Unbeteiligte. Vor dem Häkchen Unterzeichnetes wird nie gezeigt. Leer bedeutet aus"
+
 [labels.de.model.sign_request.field.signed_on]
 label = "Unterzeichnet am"
 description = "Tag, an dem das Dokument unterzeichnet wurde (YYYY-MM-DD)"
 
 [labels.de.model.sign_request.field.signer_ip]
 label = "IP-Adresse Unterzeichner"
-description = "IP-Adresse, von der die Unterschrift kam (Beleg)"
+description = "Adresse, von der die Unterschrift kam, wie die Proxy-Kette sie meldet (Beleg)"
 
 [labels.de.model.sign_request.field.signer_user_agent]
 label = "User-Agent Unterzeichner"
@@ -73,11 +81,27 @@ description = "Browser, mit dem unterzeichnet wurde (Beleg)"
 
 [labels.de.model.sign_request.field.signature_reference]
 label = "Signaturreferenz"
-description = "Wo das Signaturbild oder Zertifikat gespeichert ist"
+description = "Wo die Unterschrift gespeichert ist; typed:NAME bei einem über einen Link eingegebenen Namen"
 
 [labels.de.model.sign_request.field.document_hash]
 label = "Dokument-Hash"
-description = "SHA-256-Hash (hex) des unterzeichneten Dokuments, als Nachweis, dass es danach nicht verändert wurde"
+description = "SHA-256-Hash (hex) der Datei, die zur Unterzeichnung gesendet wurde; wird beim Senden einer Anfrage zu einem Dokument gesetzt. Der Eintrag ist nicht manipulationssicher: Eine Administratorin oder wer die Datenbank beschreiben kann, kann ihn ändern"
+
+[labels.de.model.sign_request.field.document_file]
+label = "Festgehaltene Kopie"
+description = "Die exakte Kopie des zur Unterzeichnung gesendeten PDF, damit ein Austausch der Datei in Dokumente nicht ändern kann, was unterzeichnet wurde; niemand hält die Gruppe, nur ein Administrator liest sie"
+
+[labels.de.model.sign_request.field.signed_at]
+label = "Unterzeichnet um"
+description = "Wann die unterzeichnende Person über den Link unterzeichnet hat (UTC, Serveruhr)"
+
+[labels.de.model.sign_request.field.signed_name]
+label = "Eingegebener Name"
+description = "Der vollständige Name, den die unterzeichnende Person eingegeben hat (Beleg); signer_name bleibt der Name, der angefragt wurde"
+
+[labels.de.model.sign_request.field.consent_version]
+label = "Version der Einwilligung"
+description = "Kennung des Einwilligungstexts: Version, die Sprache der Absendung (die lang des Formulars, wenn sie eine der sieben nennt; fehlt im Formular das Feld lang ganz, die der Adresse; sonst die des Browsers, die der Instanz, dann Englisch; kein Beweis für die gezeigte Seite), und die ersten 8 Hex-Zeichen eines Hashs der Texte dieser Sprache, zum Beispiel v1-draft/de/9ebff173"
 
 [labels.de.model.sign_request.field.state]
 label = "Status"
@@ -96,7 +120,10 @@ description = "Die Anfrage an den Unterzeichner senden"
 
 [labels.de.model.sign_request.action.sign]
 label = "Unterzeichnen"
-description = "Festhalten, dass der Unterzeichner unterzeichnet hat; der Datensatz ist danach per Konvention unveränderlich"
+description = "Von Hand festhalten, dass der Unterzeichner unterzeichnet hat; nur für eine Anfrage ohne Dokument, denn eine Anfrage zu einem Dokument unterzeichnet der Unterzeichner über den Link"
+
+[labels.de.model.sign_request.action.sign.assert.document_request]
+message = "Eine Anfrage zu einem Dokument unterzeichnet der Unterzeichner über den Link; sie kann nicht von Hand als unterzeichnet markiert werden"
 
 [labels.de.model.sign_request.action.decline]
 label = "Ablehnen"
@@ -104,4 +131,32 @@ description = "Festhalten, dass der Unterzeichner abgelehnt hat"
 
 [labels.de.model.sign_request.action.expire]
 label = "Ablaufen lassen"
-description = "Festhalten, dass die Anfrage unterzeichnet abgelaufen ist"
+description = "Festhalten, dass die Anfrage ohne Unterschrift abgelaufen ist"
+
+[labels.de.model.sign_request.action.send_document]
+label = "Dokument senden"
+description = "Eine Anfrage zu einem Dokument in Dokumente senden: nimmt den SHA-256 des PDF, hält eine exakte Kopie fest und setzt die Anfrage auf gesendet; danach den Unterschriftslink erstellen"
+
+[labels.de.model.sign_link]
+name = "Unterschriftslink"
+description = "Ein Einmal-Link, mit dem eine Person eine Anfrage unterzeichnen kann; nur ein Hash des Geheimnisses wird gespeichert, deshalb wird der Link beim Erstellen einmal angezeigt"
+
+[labels.de.model.sign_link.field.request_id]
+label = "Anfrage"
+description = "Die Signaturanfrage, die dieser Link öffnet"
+
+[labels.de.model.sign_link.field.expires_at]
+label = "Gültig bis"
+description = "Wann der Link nicht mehr funktioniert (UTC); höchstens 14 Tage nach dem Erstellen und nie nach dem letzten Tag der Anfrage"
+
+[labels.de.model.sign_link.field.used_at]
+label = "Verwendet am"
+description = "Wann der Link zum Unterzeichnen verwendet wurde (UTC); ein Link funktioniert nur einmal"
+
+[labels.de.model.sign_link.field.revoked_at]
+label = "Widerrufen am"
+description = "Wann der Link widerrufen wurde (UTC); setzen Sie den Wert, um den Link zu widerrufen"
+
+[labels.de.model.sign_link.field.link]
+label = "Link-Adresse"
+description = "Der Link selbst: nur in der Antwort von create, einmal angezeigt, nie gespeichert und nie von get, list oder search zurückgegeben"

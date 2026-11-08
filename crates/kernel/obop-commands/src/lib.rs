@@ -283,6 +283,12 @@ pub struct Dispatcher {
     /// Uploads and downloads of images and files, created with the first module registered
     /// against a store (D60).
     blob_service: std::sync::OnceLock<Arc<BlobService>>,
+    /// The wrappers of the `sign` package and the signer's door (D92), created with the first
+    /// module registered against a store.
+    sign_service: std::sync::OnceLock<Arc<sign::SignService>>,
+    /// The reader of the instance brand (`brand::Reader`), created by `register_admin`; a
+    /// dispatcher without one gives an inert reader (`Dispatcher::brand`).
+    brand: std::sync::OnceLock<Arc<brand::Reader>>,
     /// Wrappers around a command's handler, by command id (see `around`).
     around: std::sync::RwLock<HashMap<String, Arc<Around>>>,
     /// Models whose writes run under the transaction lock because a rule needs it: a unique
@@ -325,6 +331,12 @@ pub(crate) struct ModelMeta {
     pub(crate) fields: Vec<FieldDef>,
     module_description: String,
     translations: Arc<Translations>,
+    /// The generated `create` and `update` are bound for this model (`register_crud`). An action
+    /// effect writes a record the way those two commands do, for the caller, so it reaches only a
+    /// model that has them: a model whose commands are hand-registered (the branding, the single
+    /// sign-on provider, the settings, the logs) is changed by those commands alone, with their
+    /// guards and their audit, and never by an effect of a package.
+    pub(crate) generated_writes: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -470,6 +482,15 @@ impl Dispatcher {
         if let Some(h) = self.sync_hook.get() {
             h();
         }
+    }
+
+    /// Bring this process's modules in line with the installed packages if another process
+    /// changed them (the same look as `call`, `catalog` and `meta` make first): one counter read,
+    /// at most once a second. For the public door of `sign` (D92), which is not reached through
+    /// `call` and would otherwise follow a rollback or an update made by `obop modules ...` only
+    /// when an authenticated call arrived.
+    pub fn sync_installed_modules(&self) {
+        self.sync();
     }
 
     pub fn shared_backend(&self) -> Option<Arc<dyn obop_storage::Backend>> {
@@ -665,7 +686,7 @@ impl Dispatcher {
     /// Bind a handler to a command declared in `module`'s registry metadata. A handler for an
     /// undeclared command is a programming error: the surface is generated from the registry.
     pub fn register(&self, module: &Module, model: &str, command: &str, handler: Handler) {
-        self.register_inner(module, model, command, handler, false);
+        self.register_inner(module, model, command, handler, false, false);
     }
 
     /// Like `register`, for a handler that decides by the roles of the caller: the dispatcher
@@ -678,7 +699,7 @@ impl Dispatcher {
         command: &str,
         handler: Handler,
     ) {
-        self.register_inner(module, model, command, handler, true);
+        self.register_inner(module, model, command, handler, true, false);
     }
 
     /// Like `register`, for the generated handlers, which read the caller from their input.
@@ -689,7 +710,9 @@ impl Dispatcher {
         command: &str,
         handler: Handler,
     ) {
-        self.register_inner(module, model, command, handler, true);
+        // The generated `create` and `update` are what lets an effect write the model.
+        let writes = matches!(command, "create" | "update");
+        self.register_inner(module, model, command, handler, true, writes);
     }
 
     fn register_inner(
@@ -699,6 +722,7 @@ impl Dispatcher {
         command: &str,
         handler: Handler,
         actor: bool,
+        generated_write: bool,
     ) {
         let m = module
             .models
@@ -710,18 +734,27 @@ impl Dispatcher {
             .into_iter()
             .find(|c| c.name == command)
             .unwrap_or_else(|| panic!("{}.{model}: command {command} is not declared", module.id));
-        self.models.write().unwrap().insert(
-            m.name.to_string(),
-            ModelMeta {
-                def: Arc::new(m.clone()),
-                module: module.id.clone(),
-                module_name: module.name.clone(),
-                module_description: module.description.clone(),
-                translations: module.translations.clone(),
-                description: m.description,
-                fields: m.fields.clone(),
-            },
-        );
+        {
+            let mut models = self.models.write().unwrap();
+            // Each command registered replaces the entry, so the mark is carried over.
+            let generated_writes = generated_write
+                || models
+                    .get(m.name)
+                    .is_some_and(|before| before.generated_writes);
+            models.insert(
+                m.name.to_string(),
+                ModelMeta {
+                    def: Arc::new(m.clone()),
+                    module: module.id.clone(),
+                    module_name: module.name.clone(),
+                    module_description: module.description.clone(),
+                    translations: module.translations.clone(),
+                    description: m.description,
+                    fields: m.fields.clone(),
+                    generated_writes,
+                },
+            );
+        }
         {
             let mut order = self.order.write().unwrap();
             if !order.contains(&module.id) {
@@ -733,7 +766,9 @@ impl Dispatcher {
             Arc::new(Registered {
                 id: format!("{model}.{command}"),
                 module: module.id.clone(),
-                description: c.description,
+                description: crate::import_map::describe(m.name, command)
+                    .or_else(|| crate::brand::describe(m.name, command))
+                    .unwrap_or(c.description),
                 needs_approval: c.needs_approval,
                 model: m.name,
                 permission_group: c.permission_group,
@@ -943,6 +978,51 @@ impl Dispatcher {
             g.extend(from_model.filter(|x| *x != ANY_GROUP).map(String::from));
         }
         g.into_iter().collect()
+    }
+
+    /// Whether an action effect of a package may write `model`: it is registered and has the
+    /// generated `create` and `update`. A model with hand-registered commands only (the branding,
+    /// the single sign-on provider, the settings, the logs) is changed by those commands alone, so
+    /// no effect may reach it (the install gate asks this; the engine refuses it again when the
+    /// effect runs).
+    pub fn effects_may_write(&self, model: &str) -> bool {
+        self.models
+            .read()
+            .unwrap()
+            .get(model)
+            .is_some_and(|m| m.generated_writes)
+    }
+
+    /// The names of the models that have a command registered right now, sorted. The installer
+    /// takes them when it starts: every model that exists before any package is registered is a
+    /// built-in one, and no package may declare its name.
+    pub fn model_names(&self) -> Vec<String> {
+        let mut names: Vec<String> = self.models.read().unwrap().keys().cloned().collect();
+        names.sort();
+        names
+    }
+
+    /// The ids of the modules that have a command registered right now, sorted. The installer
+    /// takes them when it starts, beside [`Dispatcher::model_names`]: every module that exists
+    /// before any package is registered is the program's, and no package may take its id (a
+    /// package called `sie` would be unregistered together with the commands of the module `sie`).
+    /// It asks again when it registers a package, for a module that something else registered
+    /// since.
+    pub fn module_ids(&self) -> Vec<String> {
+        let mut ids = self.order.read().unwrap().clone();
+        ids.sort();
+        ids
+    }
+
+    /// The id of the module that registered `model` (the last one to register a command of it),
+    /// or `None` when no module has. The installer asks it before it registers a package: a
+    /// package may not take a model of another module, whichever route registers it.
+    pub fn model_owner(&self, model: &str) -> Option<String> {
+        self.models
+            .read()
+            .unwrap()
+            .get(model)
+            .map(|m| m.module.clone())
     }
 
     /// Whether any command of `model` is registered.
@@ -1712,17 +1792,21 @@ pub trait PasskeyApi: Send + Sync {
 pub mod accounts;
 pub mod aggregate;
 pub mod blobs;
+pub mod brand;
 pub mod collate;
 pub mod csv;
 pub mod devices;
 mod engine;
 pub mod errors;
 mod guards;
+pub mod import_map;
+pub mod inline_pdf;
 pub mod json;
 mod kinds;
 pub mod pay;
 pub mod public;
 pub mod query;
+pub mod sign;
 pub mod sso;
 pub mod store;
 
@@ -1730,11 +1814,13 @@ pub use accounts::{AccountsApi, NewUser};
 pub use blobs::{BlobError, BlobService, Served, clean_filename, disposition};
 pub use engine::bulk::has_stored_answer;
 pub use engine::{Actor, ClockFn};
+pub use inline_pdf::{INLINE_PDF_NAME, MAX_INLINE_PDF, inline_pdf};
 pub use pay::{FakeView, HookReply, PaymentHooks, PaymentPort, PaymentView, StartPayment, Started};
 pub use public::{
     Adjust, Lookup, PublicApi, PublicFilter, PublicRead, PublicReceipt, PublicRecord, PublicSpec,
     PublicSubmit, Receipt, Submission, SubmitError,
 };
+pub use sign::{Client as SignClient, DoorError, SignForm, SignService};
 pub use sso::{
     AnonGroup, AnonLine, SsoApi, SsoEndpoints, SsoError, SsoFlowSignIn, SsoIdentity, SsoLeg,
     SsoProvider,
@@ -1768,6 +1854,8 @@ pub mod names {
 mod assert_lang_tests;
 #[cfg(test)]
 mod engine_tests;
+#[cfg(test)]
+mod import_map_tests;
 #[cfg(test)]
 mod keyexpr_parity;
 #[cfg(test)]

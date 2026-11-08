@@ -431,6 +431,8 @@ fn cli_import_and_call_round_trip_decimals_and_instants() {
             mode: None,
             dry_run: false,
             key: None,
+            source: None,
+            on_existing: None,
         },
     )
     .unwrap();
@@ -456,6 +458,8 @@ fn cli_import_and_call_round_trip_decimals_and_instants() {
                 mode: None,
                 dry_run: false,
                 key: None,
+                source: None,
+                on_existing: None,
             },
         )
     };

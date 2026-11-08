@@ -10,6 +10,7 @@ repository.workspace = true
 [dependencies]
 obop-types.workspace = true
 obop-values.workspace = true
+obop-brand.workspace = true
 obop-registry.workspace = true
 obop-masking.workspace = true
 obop-storage.workspace = true
@@ -17,6 +18,7 @@ obop-blob-gdrive.workspace = true
 obop-keys.workspace = true
 obop-media.workspace = true
 
+getrandom = "0.4"
 serde_json = "1"
 sha2 = "0.11"
 uuid = { version = "1", features = ["v7"] }

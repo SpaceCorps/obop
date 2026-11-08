@@ -1256,6 +1256,7 @@ version = "0.2.1"
 dependencies = [
  "axum",
  "base",
+ "base64 0.22.1",
  "connectors",
  "crm",
  "http-body-util",
@@ -1263,6 +1264,7 @@ dependencies = [
  "mileage",
  "obop-auth",
  "obop-blob-gdrive",
+ "obop-brand",
  "obop-commands",
  "obop-community",
  "obop-connectors",
@@ -1278,6 +1280,7 @@ dependencies = [
  "obop-pkg",
  "obop-platform",
  "obop-registry",
+ "obop-sie",
  "obop-site",
  "obop-storage",
  "obop-types",
@@ -1285,8 +1288,10 @@ dependencies = [
  "obop-values",
  "postgres",
  "product",
+ "rusqlite",
  "sales",
  "serde_json",
+ "sha2",
  "tokio",
  "tower",
  "url",
@@ -1323,12 +1328,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "obop-brand"
+version = "0.2.1"
+dependencies = [
+ "icu_normalizer",
+ "icu_properties",
+ "sha2",
+]
+
+[[package]]
 name = "obop-commands"
 version = "0.2.1"
 dependencies = [
+ "getrandom 0.4.3",
  "icu_collator",
  "icu_locale",
  "obop-blob-gdrive",
+ "obop-brand",
  "obop-keys",
  "obop-masking",
  "obop-media",
@@ -1390,6 +1406,7 @@ dependencies = [
  "getrandom 0.4.3",
  "http-body-util",
  "mime_guess",
+ "obop-brand",
  "obop-commands",
  "obop-community",
  "obop-connectors",
@@ -1398,6 +1415,7 @@ dependencies = [
  "obop-migrate",
  "obop-oauth",
  "obop-ops",
+ "obop-registry",
  "obop-site",
  "obop-storage",
  "obop-types",
@@ -1553,6 +1571,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "obop-sie"
+version = "0.2.1"
+
+[[package]]
 name = "obop-site"
 version = "0.2.1"
 dependencies = [
@@ -1560,6 +1582,7 @@ dependencies = [
  "base",
  "form_urlencoded",
  "getrandom 0.4.3",
+ "obop-brand",
  "obop-commands",
  "obop-media",
  "obop-pkg",

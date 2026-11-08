@@ -578,6 +578,7 @@ fn robots_allows_crawlers_and_blocks_private_paths() {
         "/cart",
         "/shop/checkout",
         "/shop/order/",
+        "/sign/",
     ] {
         assert!(t.contains(&format!("Disallow: {p}\n")), "{p}");
     }
@@ -2015,3 +2016,168 @@ fn the_seed_never_overwrites_existing_site_settings() {
     assert_eq!(v["site"]["tagline"], "Small-batch tea, ceramics and gifts");
     assert_eq!(v["theme"]["accent"], "#123456");
 }
+
+// ---- Golden pins of the shop (S1a-0 of the branding work, docs/spec/branding.md) -----------------
+
+/// `text` with every record id (a UUID, `8-4-4-4-12` hexadecimal digits) written `<id>`. The shop
+/// puts the id of a product in its address, and the ids are made when the test seeds the shop, so
+/// they differ from one run to the next; nothing else of a page does.
+fn without_ids(text: &str) -> String {
+    let b = text.as_bytes();
+    let hex = |s: &[u8]| s.iter().all(u8::is_ascii_hexdigit);
+    let mut out = String::new();
+    let (mut i, mut from) = (0, 0);
+    while i + 36 <= b.len() {
+        let w = &b[i..i + 36];
+        let id = hex(&w[..8])
+            && w[8] == b'-'
+            && hex(&w[9..13])
+            && w[13] == b'-'
+            && hex(&w[14..18])
+            && w[18] == b'-'
+            && hex(&w[19..23])
+            && w[23] == b'-'
+            && hex(&w[24..]);
+        if id {
+            out.push_str(&text[from..i]);
+            out.push_str("<id>");
+            i += 36;
+            from = i;
+        } else {
+            i += 1;
+        }
+    }
+    out.push_str(&text[from..]);
+    out
+}
+
+/// The whole answer as one text: the status, every header (sorted by name; the `ETag` is the
+/// body's own hash, which the ids move, so its value is left out), a blank line and the body with
+/// the record ids written `<id>`. What a pin of a response hashes.
+fn answer_text(r: &Resp) -> String {
+    let mut headers: Vec<String> = r
+        .headers
+        .iter()
+        .map(|(k, v)| {
+            let k = k.to_ascii_lowercase();
+            let v = if k == "etag" { "<hash>" } else { v.as_str() };
+            format!("{k}: {v}")
+        })
+        .collect();
+    headers.sort();
+    without_ids(&format!(
+        "{}\n{}\n\n{}",
+        r.status,
+        headers.join("\n"),
+        r.body_str()
+    ))
+}
+
+#[test]
+fn the_shop_pins_leave_out_record_ids_and_nothing_else() {
+    assert_eq!(
+        without_ids("/shop/01a1ac38-a164-7268-91ae-80d2ff117746-tea and 01a1ac38-a164-7268-91ae"),
+        "/shop/<id>-tea and 01a1ac38-a164-7268-91ae"
+    );
+    assert_eq!(without_ids("no ids, só ünïcode"), "no ids, só ünïcode");
+    assert_eq!(without_ids(""), "");
+}
+
+/// `GET path` with the double-submit cookie the shop would set, so that the answer holds no token
+/// of its own.
+fn get_with_cookie(s: &Shop, path: &str) -> Resp {
+    get_h(s, path, &[("cookie", &format!("obop_csrf={CSRF}"))])
+}
+
+/// The pages and files the shop sends from its own settings today: the tab icon, the home page
+/// and the stylesheet, with the settings at their defaults and with the `site.*` keys and the
+/// accent written. They are what an instance with no brand row sends, and the branding work
+/// (slice S1f) must leave them as they are: a brand only fills what these keys leave empty.
+///
+/// To read the values again from the tree as it is, run
+/// `OBOP_PRINT_PINS=1 cargo test -p obop-site pins -- --nocapture --test-threads=1`.
+#[test]
+fn pins_the_shop_files_and_home_page_as_an_instance_with_no_brand_sends_them() {
+    let explicit = serde_json::json!({
+        "title": "Café Nord", "tagline": "Tea & cake", "accent": "#e11d48",
+        "footer_text": "Open on Saturdays",
+    });
+    let accent_only = serde_json::json!({"accent": "#e11d48"});
+    let mut now = Vec::new();
+    let mut add = |name: &str, s: &Shop, path: &str| {
+        let text = answer_text(&get_with_cookie(s, path));
+        if std::env::var("OBOP_SHOW_PINNED").is_ok_and(|v| v == "1") {
+            println!("\n---- text of {name} ----\n{text}\n---- end ----");
+        }
+        now.push((name.to_string(), util::sha256_hex(&text)));
+    };
+    let s = shop();
+    add("favicon_default", &s, "/favicon.svg");
+    add("home_default", &s, "/");
+    add("site_css_default", &s, "/assets/site.css");
+    set_site(&s, accent_only);
+    add("favicon_accent", &s, "/favicon.svg");
+    add("site_css_accent", &s, "/assets/site.css");
+    set_site(&s, explicit);
+    add("favicon_title_accent", &s, "/favicon.svg");
+    add("home_explicit", &s, "/");
+
+    check_pins("SHOP_PINS", SHOP_PINS, &now);
+}
+
+/// Print the table as source (`OBOP_PRINT_PINS=1`), or hold the answers to it: the same names in
+/// the same order, the same digests. A failure lists every pin that moved.
+fn check_pins(table: &str, pinned: &[(&str, &str)], now: &[(String, String)]) {
+    if std::env::var("OBOP_PRINT_PINS").is_ok_and(|v| v == "1") {
+        let mut out = format!("\n//@pins {table}\nconst {table}: &[(&str, &str)] = &[\n");
+        for (name, digest) in now {
+            out.push_str(&format!("    (\"{name}\", \"{digest}\"),\n"));
+        }
+        out.push_str(&format!("];\n//@end {table}\n"));
+        println!("{out}");
+        panic!(
+            "OBOP_PRINT_PINS=1 is print mode, not a check: this run printed the table and proved \
+             nothing. Unset it to run the pins."
+        );
+    }
+    assert!(
+        !pinned.is_empty(),
+        "{table} is empty: print it with OBOP_PRINT_PINS=1"
+    );
+    let mut moved = Vec::new();
+    for (i, (name, digest)) in now.iter().enumerate() {
+        match pinned.get(i) {
+            Some((n, d)) if n == name && d == digest => {}
+            Some((n, _)) if n != name => moved.push(format!("{name}: the table has {n} here")),
+            Some(_) => moved.push(format!("{name}: {digest}")),
+            None => moved.push(format!("{name}: not in the table")),
+        }
+    }
+    if pinned.len() > now.len() {
+        moved.push(format!(
+            "the table has {} entries, the test makes {}",
+            pinned.len(),
+            now.len()
+        ));
+    }
+    assert!(
+        moved.is_empty(),
+        "{table}: {} of {} pins moved (an output differs from what an instance with no brand \
+         row has always sent):\n{}",
+        moved.len(),
+        now.len(),
+        moved.join("\n")
+    );
+}
+
+// Printed by `OBOP_PRINT_PINS=1` on origin/main 12a59a79 and pasted here.
+#[rustfmt::skip]
+const SHOP_PINS: &[(&str, &str)] = &[
+    ("favicon_default", "abec49b26ecaab1040953e882fbfd671ec4c876753b68c065c6d683715a499fc"),
+    ("home_default", "f4131d46c886a4f12aa7f90a585c101475003ce123db1b019b787dc536647ac9"),
+    ("site_css_default", "b419c7e5e593f86370decfdccdb7d2aaa20daad607b1ee2b423c22cce88c0669"),
+    ("favicon_accent", "83fa337e9caa357899024a2efb3d97ce494eb18fc3845f1b506ea231e9f274a5"),
+    ("site_css_accent", "4e0555cc7ae158d8aa3e47316e2cb014749a022b5406e294df18f03d109b4221"),
+    ("favicon_title_accent", "19b6994e4d16588648226c76460707ed5c915b227f012ba6aef211ef969b8c2d"),
+    ("home_explicit", "18bfb5f0184487fd3e101280bc6a9a59e3359da0bb79090937ee4ce354db8b4d"),
+];

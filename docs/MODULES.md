@@ -30,7 +30,7 @@ Built-in modules (Rust crates, not removable): `base` (model `party`), `product`
 | `ecommerce` | base, product | Categories, listings and translations, shipping methods, discount codes, web orders and lines; public shop and checkout when the site is enabled; refunds need approval |
 | `website` | none | Pages, menu items, blog posts, form submissions and translations; served publicly when the site is enabled (docs/STOREFRONT.md) |
 | `email_marketing` | none | Lists, contacts with consent, campaigns with statistics; sending needs approval |
-| `sign` | none | Templates and signature requests |
+| `sign` | documents (from 0.2.1, D92) | Templates and signature requests; a request about a Document is signed through a link (docs/SIGN.md) |
 | `sign_docuseal` | sign | DocuSeal signing events next to the requests; needs the DocuSeal connector (docs/SIGN-DOCUSEAL.md) |
 | `dashboards` | none | Dashboards and widgets as data (schema in section 9) |
 | `knowledge` | none | Article tree |
@@ -385,6 +385,8 @@ A history entry whose `text` is `in_progress` and whose `kind` is `status` reads
 | `approval` | bool | `false` | Agents may only propose it (D18). |
 | `assert` | array | `[]` | Conditions that must hold before the action runs, each an expression (3.8) as a string, or `{ expr = "...", message = "..." }`, with an optional `key = "..."` that a label table can translate the message by (3.8). At most 8. |
 | `effect` | array of tables | `[]` | What the action does besides moving the state, `[[model.action.effect]]` (3.8). At most 12. |
+
+**Describing a package.** `obop modules describe [FILE...] [--json]` prints what a package declares, read from the same registry metadata the install gate builds (no database, no token): per package the id, version and `requires_core`; per model the description, read and write groups, the governed state field and its actions (with `from`, `to`, group and whether a human approves); per field the kind, select options, `ref` target (`to`), data class, personal-data flag, required, unique (and `unique_with`), decimal `precision`/`scale`/`round`, limits (`min_length`, `max_length`, `min`, `max`), the expression of a computed field and the sequence the engine assigns. With no FILE it describes every bundled package. `--json` prints `{"schema_version": 1, "packages": [...]}`; the shape is documented in the doc comment of `crates/kernel/obop-pkg/src/describe.rs`, keys are never removed or renamed within a version, and absent facts are `null` or `[]`. A file that does not parse or pass the gate is an error (exit status 1, message on stderr). Like `modules check FILE` it is an offline CLI command with no REST or MCP counterpart: it reads files, not records.
 
 ### 3.5 Validation errors you can hit
 

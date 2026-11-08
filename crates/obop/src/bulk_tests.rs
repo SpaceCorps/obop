@@ -272,6 +272,8 @@ fn cli_import_goes_through_bulk_create_with_every_mode() {
                 mode,
                 dry_run,
                 key,
+                source: None,
+                on_existing: None,
             },
         )
     };

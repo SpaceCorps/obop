@@ -234,4 +234,6 @@ pub fn authorization_server_metadata(base: &str) -> J {
 }
 
 #[cfg(test)]
+mod golden_tests;
+#[cfg(test)]
 mod tests;

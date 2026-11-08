@@ -725,3 +725,147 @@ description = "Ustaw dzierżawę Microsoft Entra, przez którą logują się oso
 [labels.pl.model.sso_provider.action.clear]
 label = "Usuń"
 description = "Usuń konfigurację logowania przez Microsoft. Powiązania pozostają. Konta logujące się wyłącznie przez Microsoft mogą wtedy wejść tylko przez administratorów, którzy zachowują hasło i drugi składnik. Odmowa dla agentów"
+
+[labels.pl.model.instance_brand]
+name = "Marka instancji"
+description = "Branding instancji: nazwa, krótki identyfikator, logo oraz tytuł i komunikat dla każdego języka. Jeden rekord, z założenia publiczny, zmieniany wyłącznie przez osobę z uprawnieniem platform.admin i nigdy przez agenta"
+
+[labels.pl.model.instance_brand.field.name]
+label = "Nazwa"
+description = "Nazwa produktu, od 1 do 40 znaków (litery, cyfry, spacje oraz - . , & ' + _ ( ) !). Wymagana: marka bez nazwy nie jest zapisywana. Z założenia publiczna, więc nie zawiera danych osobowych"
+
+[labels.pl.model.instance_brand.field.slug]
+label = "Krótki identyfikator"
+description = "Krótki identyfikator: a-z, 0-9 i -, zaczyna się od litery, nie kończy się na -, najwyżej 30 znaków. Puste oznacza: wyprowadzony z nazwy. Z założenia publiczny, więc nie zawiera danych osobowych"
+
+[labels.pl.model.instance_brand.field.title_en]
+label = "Tytuł (angielski)"
+description = "Tytuł w języku angielskim: wiersz obok logo, najwyżej 60 znaków. Puste oznacza: nazwa. Jest też tytułem każdego języka, który nie ma własnego. Z założenia publiczny, więc nie zawiera danych osobowych"
+
+[labels.pl.model.instance_brand.field.title_de]
+label = "Tytuł (niemiecki)"
+description = "Tytuł w języku niemieckim: wiersz obok logo, najwyżej 60 znaków. Puste oznacza: tytuł angielski, potem nazwa. Z założenia publiczny, więc nie zawiera danych osobowych"
+
+[labels.pl.model.instance_brand.field.title_fr]
+label = "Tytuł (francuski)"
+description = "Tytuł w języku francuskim: wiersz obok logo, najwyżej 60 znaków. Puste oznacza: tytuł angielski, potem nazwa. Z założenia publiczny, więc nie zawiera danych osobowych"
+
+[labels.pl.model.instance_brand.field.title_pl]
+label = "Tytuł (polski)"
+description = "Tytuł w języku polskim: wiersz obok logo, najwyżej 60 znaków. Puste oznacza: tytuł angielski, potem nazwa. Z założenia publiczny, więc nie zawiera danych osobowych"
+
+[labels.pl.model.instance_brand.field.title_fi]
+label = "Tytuł (fiński)"
+description = "Tytuł w języku fińskim: wiersz obok logo, najwyżej 60 znaków. Puste oznacza: tytuł angielski, potem nazwa. Z założenia publiczny, więc nie zawiera danych osobowych"
+
+[labels.pl.model.instance_brand.field.title_sv]
+label = "Tytuł (szwedzki)"
+description = "Tytuł w języku szwedzkim: wiersz obok logo, najwyżej 60 znaków. Puste oznacza: tytuł angielski, potem nazwa. Z założenia publiczny, więc nie zawiera danych osobowych"
+
+[labels.pl.model.instance_brand.field.title_es]
+label = "Tytuł (hiszpański)"
+description = "Tytuł w języku hiszpańskim: wiersz obok logo, najwyżej 60 znaków. Puste oznacza: tytuł angielski, potem nazwa. Z założenia publiczny, więc nie zawiera danych osobowych"
+
+[labels.pl.model.instance_brand.field.message_en]
+label = "Komunikat (angielski)"
+description = "Komunikat w języku angielskim: jeden zwykły tekst, najwyżej 240 znaków, bez linków i znaczników. Puste oznacza: brak. Jest też komunikatem każdego języka, który nie ma własnego. Z założenia publiczny, więc nie zawiera danych osobowych"
+
+[labels.pl.model.instance_brand.field.message_de]
+label = "Komunikat (niemiecki)"
+description = "Komunikat w języku niemieckim: jeden zwykły tekst, najwyżej 240 znaków, bez linków i znaczników. Puste oznacza: komunikat angielski, potem brak. Z założenia publiczny, więc nie zawiera danych osobowych"
+
+[labels.pl.model.instance_brand.field.message_fr]
+label = "Komunikat (francuski)"
+description = "Komunikat w języku francuskim: jeden zwykły tekst, najwyżej 240 znaków, bez linków i znaczników. Puste oznacza: komunikat angielski, potem brak. Z założenia publiczny, więc nie zawiera danych osobowych"
+
+[labels.pl.model.instance_brand.field.message_pl]
+label = "Komunikat (polski)"
+description = "Komunikat w języku polskim: jeden zwykły tekst, najwyżej 240 znaków, bez linków i znaczników. Puste oznacza: komunikat angielski, potem brak. Z założenia publiczny, więc nie zawiera danych osobowych"
+
+[labels.pl.model.instance_brand.field.message_fi]
+label = "Komunikat (fiński)"
+description = "Komunikat w języku fińskim: jeden zwykły tekst, najwyżej 240 znaków, bez linków i znaczników. Puste oznacza: komunikat angielski, potem brak. Z założenia publiczny, więc nie zawiera danych osobowych"
+
+[labels.pl.model.instance_brand.field.message_sv]
+label = "Komunikat (szwedzki)"
+description = "Komunikat w języku szwedzkim: jeden zwykły tekst, najwyżej 240 znaków, bez linków i znaczników. Puste oznacza: komunikat angielski, potem brak. Z założenia publiczny, więc nie zawiera danych osobowych"
+
+[labels.pl.model.instance_brand.field.message_es]
+label = "Komunikat (hiszpański)"
+description = "Komunikat w języku hiszpańskim: jeden zwykły tekst, najwyżej 240 znaków, bez linków i znaczników. Puste oznacza: komunikat angielski, potem brak. Z założenia publiczny, więc nie zawiera danych osobowych"
+
+[labels.pl.model.instance_brand.field.logo_svg]
+label = "Logo (SVG)"
+description = "Dane wejściowe configure: tekst pliku SVG, najwyżej 16 KiB, ścisły podzbiór (kształty i ścieżki w jednolitych kolorach; bez skryptu, tekstu, obrazu i linku). Zapisywany jest tekst kanoniczny, który serwer przepisał, nigdy dane wejściowe; get go nie zwraca. Puste usuwa go, a logo jest wtedy rysowane z nazwy"
+
+[labels.pl.model.instance_brand.field.dry_run]
+label = "Tryb próbny"
+description = "Dane wejściowe configure i clear: true lub false. Z true wszystko jest sprawdzane, a nic nie jest zapisywane ani rejestrowane; odpowiedź mówi, co by się stało, i zwraca dry_run"
+
+[labels.pl.model.instance_brand.field.set]
+label = "Ustawiona"
+description = "Odpowiedź get: czy marka jest ustawiona, czyli czy rekord istnieje"
+
+[labels.pl.model.instance_brand.field.v]
+label = "Wersja logo"
+description = "Odpowiedź get i configure: wersja logo (16 cyfr szesnastkowych), która zmienia się wraz z logo; puste, gdy marka nie jest ustawiona"
+
+[labels.pl.model.instance_brand.field.effective]
+label = "Obowiązujące"
+description = "Odpowiedź get: obiekt JSON z wartością i zwycięskim źródłem (record, theme lub default) dla każdej obowiązującej wartości (name, slug, logo, tile_accent, title_XX i message_XX; XX to kod języka: en, de, fr, pl, fi, sv, es)"
+
+[labels.pl.model.instance_brand.field.fallbacks]
+label = "Wartości zastępcze"
+description = "Odpowiedź get: lista JSON zapisanych pól, które nie przeszły sprawdzenia odczytu i wróciły do wartości domyślnej, każde z polem i powodem"
+
+[labels.pl.model.instance_brand.field.changes]
+label = "Zmiany"
+description = "Odpowiedź configure: lista JSON zmienionych pól (z dry_run: które by się zmieniły), każde z field, old i new; logo jako stara i nowa wersja"
+
+[labels.pl.model.instance_brand.field.refusals]
+label = "Odrzucenia"
+description = "Odpowiedź configure z dry_run: lista JSON tego, co prawdziwe wywołanie by odrzuciło, każde z field i rule"
+
+[labels.pl.model.instance_brand.field.cleared]
+label = "Usunięta"
+description = "Odpowiedź clear: czy marka została usunięta (z dry_run: czy zostałaby usunięta)"
+
+[labels.pl.model.instance_brand.action.configure]
+label = "Konfiguruj"
+description = "Ustaw branding instancji. Podaj tylko pola do zmiany (pozostałe zachowują wartość); pierwsze wywołanie wymaga name. Pola: name, slug, title_XX, message_XX, logo_svg (tekst SVG). Pusty tekst czyści pole, poza name. dry_run (true lub false) niczego nie zapisuje. Zwraca changes i v (z dry_run także refusals). Uruchomić może to tylko osoba z uprawnieniem platform.admin"
+
+[labels.pl.model.instance_brand.action.clear]
+label = "Usuń"
+description = "Usuń branding instancji: jedyny rekord zostaje skasowany, więc żadna marka nie jest ustawiona. dry_run (true lub false) tylko sprawdza i niczego nie usuwa. Zwraca pole cleared: true, gdy marka została usunięta (z dry_run: zostałaby), w przeciwnym razie false, i wtedy nic się nie zapisuje. Uruchomić może to tylko osoba z uprawnieniem platform.admin"
+
+[labels.pl.model.import_map]
+name = "Mapa importu"
+description = "Skąd pochodzi zaimportowany rekord: klucz (system źródłowy, tabela źródłowa, identyfikator źródłowy) wiersza, z którego powstał. Klucz wyszukasz poleceniem search, rekord poleceniem get."
+
+[labels.pl.model.import_map.field.model]
+label = "Model"
+description = "Model zaimportowanego rekordu"
+
+[labels.pl.model.import_map.field.record]
+label = "Rekord"
+description = "Identyfikator zaimportowanego rekordu"
+
+[labels.pl.model.import_map.field.source_system]
+label = "System źródłowy"
+description = "Obcy system, z którego pochodzi wiersz, tak jak nazwał go import"
+
+[labels.pl.model.import_map.field.source_table]
+label = "Tabela źródłowa"
+description = "Tabela, arkusz lub plik tego systemu, z którego pochodzi wiersz"
+
+[labels.pl.model.import_map.field.source_id]
+label = "Identyfikator źródłowy"
+description = "Identyfikator wiersza w tej tabeli"
+
+[labels.pl.model.import_map.field.imported_at]
+label = "Zaimportowano"
+description = "Kiedy rekord został zaimportowany"
+
+[labels.pl.model.import_map.field.imported_by]
+label = "Zaimportował"
+description = "Kto go zaimportował"

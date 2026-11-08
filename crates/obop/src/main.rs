@@ -5,12 +5,23 @@ mod accounts_cmd;
 mod accounts_tests;
 mod app;
 #[cfg(test)]
+mod app_ids_tests;
+#[cfg(test)]
 mod assert_lang_tests;
 mod backup_cli;
 #[cfg(test)]
 mod backup_gate_tests;
 #[cfg(test)]
 mod blobs_tests;
+mod brand_cmd;
+#[cfg(test)]
+mod brand_cmd_tests;
+#[cfg(test)]
+mod brand_commands_tests;
+#[cfg(test)]
+mod brand_http_tests;
+#[cfg(test)]
+mod brand_row_tests;
 mod build_commit;
 #[cfg(test)]
 mod build_commit_tests;
@@ -31,6 +42,13 @@ mod error_seam_tests;
 mod health_tests;
 mod import_cmd;
 #[cfg(test)]
+mod import_map_tests;
+mod import_oas;
+#[cfg(test)]
+mod import_oas_tests;
+#[cfg(test)]
+mod internal_tables_scan_tests;
+#[cfg(test)]
 mod kinds_tests;
 #[cfg(test)]
 mod limits_tests;
@@ -43,6 +61,7 @@ mod migrate_cli;
 mod mileage_tests;
 #[cfg(test)]
 mod model_tests;
+mod modules_describe;
 #[cfg(test)]
 mod modules_tests;
 #[cfg(test)]
@@ -58,7 +77,21 @@ mod payments_tests;
 #[cfg(test)]
 mod public_site_tests;
 #[cfg(test)]
+mod recorded_tables_tests;
+#[cfg(test)]
 mod settings_cmd_tests;
+mod sie;
+#[cfg(test)]
+mod sie_tests;
+#[cfg(test)]
+mod sign_tests;
+// The reader of the Rust source that the scans of obop-http use, compiled here too (it is a file of
+// that crate's tests and uses nothing of it): the scan of the tables the program names needs the
+// real `App`, which only this crate has. What this crate's scan does not use is left alone.
+#[cfg(test)]
+#[allow(dead_code)]
+#[path = "../../kernel/obop-http/src/src_scan.rs"]
+mod src_scan;
 #[cfg(test)]
 mod sso_tests;
 mod storage_cli;
@@ -82,6 +115,9 @@ const USAGE: &str = "usage: obop <command>
                                                 catalogue, core requirement. --catalog also demands what the bundled catalogue and
                                                 the marketplace require (a licence, requires_core); --complete demands every text
                                                 translated in each language present
+  modules describe [--json] [FILE...]           what package files (or every bundled package) declare: models, groups, fields (kind,
+                                                options, ref target, data class, limits, computed, numbered) and governed states (no
+                                                database; --json is versioned, schema_version 1)
   modules list                                  every module with version, licence, core requirement and source
   modules tree [ID]                             the dependency tree of a module (or of every installed package)
   modules plan FILE|ID                          what installing a file or marketplace package would do, without doing it
@@ -114,6 +150,17 @@ const USAGE: &str = "usage: obop <command>
   admin sso only USER on|off                    make USER sign in with Microsoft only (needs a binding, one sign-in with the button
                                                 after it, and two other administrators who keep a password
                                                 and a second factor), or turn that off
+  admin brand status                            the instance branding (name, slug, logo, a title and a message per language): what is
+                                                in force and where each value comes from, the titles and messages that are stored,
+                                                and any stored field that fell back
+  admin brand configure [--name N] [--slug S] [--title LANG=TEXT]... [--message LANG=TEXT]...
+                        [--logo-file FILE.svg | --clear-logo] [--from FILE.toml] [--dry-run]
+                                                set the fields given and keep the others (the first call needs --name); an empty text
+                                                clears a field (--title sv=); --from reads the [record] table of a values file;
+                                                --dry-run checks and writes nothing; every change is written to the security log
+  admin brand clear [--dry-run]                 remove the branding
+  admin brand check FILE.svg                    say whether FILE.svg is an artwork the branding accepts and its version, or every
+                                                reason it is refused (no database)
   admin reset-mfa USER --db URL                break-glass: remove USER's two-factor (app and passkeys) and sessions (needs database
                                                 access; writes an audit record); see docs/DEPLOY.md
   agent-token USER --scopes a,b [--label TEXT]  issue a scoped agent token (shown once)
@@ -245,11 +292,35 @@ const USAGE: &str = "usage: obop <command>
   site seed                                     fill an empty instance with an invented demo shop and blog
   site set KEY VALUE | site show                set or list the site settings (title, accent, default_lang ...)
   mcp [--token TOKEN]                           MCP server on stdio (token or OBOP_TOKEN)
+  import oas --from OAS.db [--documents DIR] [--dry-run] [--post] [--default-account-types | --account-types FILE]
+      [--allow-broken-chain] [--db URL] [--token TOKEN]
+                                                import an open-accounting-sweden SQLite file (docs/spec/accounting-se.md 5): company,
+                                                accounts, vouchers with entries (drafts, original series and number in `reference`),
+                                                customers and receipts (SHA-256 checked). --post then runs the real post action as you
+                                                (needs accounting.approver; an agent is refused) in OAS order and checks the trial
+                                                balance against OAS. --dry-run lists what would happen and every skipped table; a
+                                                re-run only adds what is missing. CLI-only operator command
+  sie export --year YYYY [--out FILE] [--db URL] [--token TOKEN]
+                                                write a SIE 4 file (CP437) of the posted moves of the fiscal year that starts in
+                                                YYYY (calendar year if there is none), with the company of accounting_se_company
+                                                when installed; needs accounting.user. The typed command is sie_exchange.export
+  sie import FILE [--dry-run] [--post] [--default-account-types | --account-types FILE] [--db URL] [--token TOKEN]
+                                                import a SIE 4 file: missing accounts (types UNVERIFIED, you confirm them), one journal
+                                                per series, draft moves with series and number in `reference`. --post runs the real
+                                                post action as you (accounting.approver; an agent is refused) in file order. Re-runs
+                                                create nothing new; the per account totals are checked against the file. --dry-run
+                                                writes nothing. The typed command is sie_exchange.import (no --post)
   import MODEL FILE.csv [--token TOKEN] [--mode partial] [--dry-run] [--key KEY]
                                                 create many records of MODEL from a CSV file (header = field names, references by id,
                                                 numbers, decimals and date-times as text, UTF-8, at most 1000 rows and 1 MiB) through bulk_create, with every
                                                 check of create. By default one bad row creates nothing; --mode partial keeps the good
                                                 rows; --dry-run only checks; --key makes a retry return the first answer
+                                                with --source-system S --source-table T --source-ids FILE (one source id per data row,
+                                                one per line) the records are also entered in the import map, so a re-run reports
+                                                `already imported` and creates nothing; --on-existing error refuses such rows instead
+  import-map search --source-system S --source-table T --source-id ID [--model M] [--token TOKEN]
+                                                the record a source key became (JSON; check `total`); needs api.import_map_read
+  import-map get MODEL ID [--token TOKEN]       the source keys of a record (JSON list; empty when none or not readable)
   commands [--token TOKEN]                      list the commands visible to a token
   openapi [--out FILE]                          the OpenAPI 3.1 document of an instance (the linked modules: every command of every
                                                 model that has a list command; a placeholder address), the same bytes on every run;
@@ -305,6 +376,13 @@ fn main() -> ExitCode {
     }
     let args = ops::take_migrate_flags(args);
     let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    // `obop admin brand` has repeatable `--title LANG=TEXT` and `--message LANG=TEXT`, where the
+    // global options of the same names take one value each for `status incident`: its flags are
+    // pulled out first, and only for that command.
+    let (brand_flags, args) = match brand_cmd::take_flags(args) {
+        Ok(taken) => taken,
+        Err(e) => return brand_cmd::misuse(&format!("error: {e}")),
+    };
     let (db, args) = take_opt(&args, "--db");
     let (token, args) = take_opt(&args, "--token");
     let (scopes, args) = take_opt(&args, "--scopes");
@@ -324,6 +402,16 @@ fn main() -> ExitCode {
     let (note, args) = take_opt(&args, "--note");
     let (mode, args) = take_opt(&args, "--mode");
     let (idem_key, args) = take_opt(&args, "--key");
+    let (src_system, args) = take_opt(&args, "--source-system");
+    let (src_table, args) = take_opt(&args, "--source-table");
+    let (src_ids, args) = take_opt(&args, "--source-ids");
+    let (on_existing, args) = take_opt(&args, "--on-existing");
+    let (map_model, args) = take_opt(&args, "--model");
+    let (map_id, args) = take_opt(&args, "--source-id");
+    let (oas_from, args) = take_opt(&args, "--from");
+    let (oas_documents, args) = take_opt(&args, "--documents");
+    let (oas_types, args) = take_opt(&args, "--account-types");
+    let (sie_year, args) = take_opt(&args, "--year");
     let (sso_tenant, args) = take_opt(&args, "--tenant");
     let (sso_client, args) = take_opt(&args, "--client-id");
     let (flags, args): (Vec<&str>, Vec<&str>) = args.into_iter().partition(|a| {
@@ -336,10 +424,14 @@ fn main() -> ExitCode {
                 | "--trust-proxy"
                 | "--complete"
                 | "--catalog"
+                | "--json"
                 | "--dry-run"
                 | "--secret-stdin"
                 | "--disabled"
                 | "--enabled"
+                | "--post"
+                | "--allow-broken-chain"
+                | "--default-account-types"
         )
     });
     let has = |f: &str| flags.contains(&f);
@@ -382,6 +474,18 @@ fn main() -> ExitCode {
         ["modules", "check"] => modules_check(),
         ["modules", "check", files @ ..] => {
             modules_check_files_with(files, has("--complete"), has("--catalog"))
+        }
+        ["modules", "describe", files @ ..] => {
+            match modules_describe::render(files, has("--json")) {
+                Ok(text) => {
+                    print!("{text}");
+                    Ok(())
+                }
+                Err(e) => {
+                    eprintln!("{e}");
+                    Err(ExitCode::FAILURE)
+                }
+            }
         }
         ["modules", "labels", target, lang] => {
             obop_pkg::files::template_for(target, lang, &App::new().modules)
@@ -426,6 +530,22 @@ fn main() -> ExitCode {
                 (false, false) => None,
             },
         ),
+        ["admin", "brand", words @ ..] => {
+            // A `--title` or `--message` that reached the global options was not given right after
+            // `admin brand`; ignoring it would drop a field of the call without a word.
+            if title.is_some() || message.is_some() {
+                return brand_cmd::misuse(
+                    "error: give --title and --message after `admin brand`, as LANG=TEXT, once for each language",
+                );
+            }
+            brand_cmd::run(
+                &opts,
+                words,
+                brand_flags.unwrap_or_default(),
+                oas_from,
+                has("--dry-run"),
+            )
+        }
         ["admin", "sso", "clear"] => accounts_cmd::sso_clear(&opts),
         ["admin", "sso", verb @ ("bind" | "unbind" | "only"), user] => {
             accounts_cmd::sso_account(&opts, verb, user, None)
@@ -461,6 +581,45 @@ fn main() -> ExitCode {
         ["site", "seed"] => site_seed(&opts),
         ["site", "show"] => site_show(&opts),
         ["site", "set", key, value] => site_set(&opts, key, value),
+        ["import", "oas"] => match oas_from {
+            Some(from) => import_oas::run_cli(
+                &opts,
+                &import_oas::Args {
+                    from,
+                    documents: oas_documents,
+                    dry_run: has("--dry-run"),
+                    post: has("--post"),
+                    allow_broken_chain: has("--allow-broken-chain"),
+                    default_account_types: has("--default-account-types"),
+                    account_types: oas_types,
+                },
+            ),
+            None => Err(fail(
+                "usage: obop import oas --from OAS.db [--documents DIR] [--dry-run] [--post]",
+            )),
+        },
+        ["sie", "export"] => match sie_year {
+            Some(year) => sie::export_cli(
+                &opts,
+                &sie::ExportArgs {
+                    year,
+                    out: out_file,
+                },
+            ),
+            None => Err(fail(
+                "usage: obop sie export --year YYYY [--out FILE] [--db URL] [--token TOKEN]",
+            )),
+        },
+        ["sie", "import", file] => sie::import_cli(
+            &opts,
+            &sie::ImportArgs {
+                file,
+                dry_run: has("--dry-run"),
+                post: has("--post"),
+                default_account_types: has("--default-account-types"),
+                account_types: oas_types,
+            },
+        ),
         ["import", model, file] => import_cmd::run(
             &opts,
             &import_cmd::Args {
@@ -469,7 +628,30 @@ fn main() -> ExitCode {
                 mode,
                 dry_run: has("--dry-run"),
                 key: idem_key,
+                source: match (src_system, src_table, src_ids) {
+                    (None, None, None) => None,
+                    (Some(system), Some(table), Some(ids_file)) => Some(import_cmd::Source {
+                        system,
+                        table,
+                        ids_file,
+                    }),
+                    _ => {
+                        return fail(
+                            "give --source-system, --source-table and --source-ids together",
+                        );
+                    }
+                },
+                on_existing,
             },
+        ),
+        ["import-map", "search"] => {
+            import_map_search(&opts, (src_system, src_table, map_id), map_model)
+        }
+        ["import-map", "get", model, id] => call(
+            &opts,
+            "import_map",
+            "get",
+            &[&format!("model={model}"), &format!("id={id}")],
         ),
         ["mcp"] => mcp(&opts),
         ["commands"] => commands(&opts),
@@ -527,6 +709,12 @@ fn csv(s: Option<&str>) -> Vec<String> {
 /// Open the configured database; default is a local SQLite file. Fake demo data goes into an
 /// empty SQLite database, or into any database when `--demo` is given.
 fn open_app(o: &Opts) -> Result<App, ExitCode> {
+    open_app_with(o, true)
+}
+
+/// `seed_allowed` false keeps the demo data out of a SQLite database that is about to receive
+/// real records (the importers).
+fn open_app_with(o: &Opts, seed_allowed: bool) -> Result<App, ExitCode> {
     let url = o.db.clone().unwrap_or_else(|| "sqlite://obop.db".into());
     let store = obop_commands::Store::open(&url)
         .map_err(|e| fail(&format!("cannot open database: {e}")))?;
@@ -534,7 +722,7 @@ fn open_app(o: &Opts) -> Result<App, ExitCode> {
     // that needs migration steps gets them (--auto-migrate) or the command to run them.
     ops::guard_database(&store.backend(), &url)?;
     eprintln!("database: {}", store.backend_kind());
-    let seed = o.demo || store.backend_kind() == "sqlite";
+    let seed = seed_allowed && (o.demo || store.backend_kind() == "sqlite");
     let app = App::with_store(store);
     app.set_zones_from_env()
         .map_err(|e| fail(&format!("error: {e}")))?;
@@ -947,6 +1135,30 @@ fn agent_token(o: &Opts, user: &str, scopes: Option<&str>, label: Option<&str>) 
     println!("{t}");
     eprintln!("shown once; store it like a password");
     Ok(())
+}
+
+/// `obop import-map search --source-system S --source-table T --source-id ID [--model M]`: the
+/// record(s) a source key became, as the JSON of `import_map.search`.
+fn import_map_search(
+    o: &Opts,
+    (system, table, id): (Option<&str>, Option<&str>, Option<&str>),
+    model: Option<&str>,
+) -> Exit {
+    let (Some(system), Some(table), Some(id)) = (system, table, id) else {
+        return Err(fail(
+            "usage: obop import-map search --source-system S --source-table T --source-id ID [--model M]",
+        ));
+    };
+    let mut kv = vec![
+        format!("source_system={system}"),
+        format!("source_table={table}"),
+        format!("source_id={id}"),
+    ];
+    if let Some(m) = model {
+        kv.push(format!("model={m}"));
+    }
+    let kv: Vec<&str> = kv.iter().map(String::as_str).collect();
+    call(o, "import_map", "search", &kv)
 }
 
 fn commands(o: &Opts) -> Exit {
@@ -3141,6 +3353,9 @@ mod bundled_packages {
         ("accounting_bank_statement_line", "reconciled"),
         ("accounting_fiscal_year", "closed"),
         ("accounting_move", "reversed"),
+        ("accounting_se_vat_box", "verified"),
+        ("accounting_se_vat_code", "verified"),
+        ("accounting_se_vat_report", "filed"),
         ("accounting_period", "closed"),
         ("ecommerce_order", "refunded"),
         ("ecommerce_payment", "failed"),
@@ -3231,6 +3446,24 @@ mod bundled_packages {
             .collect()
     }
 
+    /// The select field the actions of `model` move: the `field` of its first action, `state`
+    /// for a model without actions. Most packages call it `state`; `accounting_se` also has
+    /// `review`.
+    fn state_field(model: &str) -> String {
+        static FIELDS: std::sync::OnceLock<HashMap<String, String>> = std::sync::OnceLock::new();
+        FIELDS
+            .get_or_init(|| {
+                all_manifests()
+                    .iter()
+                    .flat_map(|m| m.model.iter())
+                    .filter_map(|x| Some((x.name.clone(), x.action.first()?.field.clone())))
+                    .collect()
+            })
+            .get(model)
+            .cloned()
+            .unwrap_or_else(|| "state".to_string())
+    }
+
     static UNIQUE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(1);
 
     /// Builds sample records from field metadata, creating referenced records first.
@@ -3256,9 +3489,21 @@ mod bundled_packages {
                     // A unique field gets a value no earlier record has.
                     "text" if f.unique => {
                         let n = UNIQUE.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                        Value::Text(format!("sample-{n}"))
+                        let s = format!("sample-{n}");
+                        match f.max_length {
+                            // A field with a short `max_length` (D90) gets the tail of the number.
+                            Some(max) if (max as usize) < s.chars().count() => {
+                                let d = n.to_string();
+                                let skip = d.chars().count().saturating_sub(max as usize);
+                                Value::Text(d.chars().skip(skip).collect())
+                            }
+                            _ => Value::Text(s),
+                        }
                     }
-                    "text" => Value::text("sample"),
+                    "text" => {
+                        let max = f.max_length.map_or(usize::MAX, |m| m as usize);
+                        Value::Text("sample".chars().take(max).collect())
+                    }
                     "longtext" => Value::text("a longer sample text"),
                     "number" => Value::Int(1),
                     "money" => Value::Int(12_345),
@@ -3269,8 +3514,8 @@ mod bundled_packages {
                         n => format!("1.{}", "5".repeat(usize::from(n))),
                     }),
                     "bool" => Value::Bool(true),
-                    "select" => match (f.name, state) {
-                        ("state", Some(s)) => Value::text(s),
+                    "select" => match state {
+                        Some(s) if f.name == state_field(model) => Value::text(s),
                         _ => Value::text(f.options[0]),
                     },
                     "ref" => {
@@ -3322,7 +3567,27 @@ mod bundled_packages {
         }
 
         fn create(&self, model: &str, input: Value) -> String {
-            let p = if self.pkg_models.contains(model) {
+            // A signing link is made by `sign_link.create`, which mints the secret and takes only
+            // the request: the sample (every field filled in) is written to the store instead.
+            if model == "sign_link" {
+                let Value::Map(mut fields) = input else {
+                    unreachable!()
+                };
+                // The store takes canonical text only (D72); `create` would have made it so.
+                for f in self.meta[model]
+                    .fields
+                    .iter()
+                    .filter(|f| f.kind == "datetime")
+                {
+                    if let Some(Value::Text(t)) = fields.get_mut(f.name) {
+                        *t = obop_values::datetime::canonical(t).unwrap();
+                    }
+                }
+                return self.app.store.insert(model, fields).unwrap();
+            }
+            // The evidence fields of a signature request belong to the signer door; only an
+            // administrator writes them by hand.
+            let p = if self.pkg_models.contains(model) && model != "sign_request" {
                 &self.pkg_user
             } else {
                 &self.admin
@@ -3336,15 +3601,22 @@ mod bundled_packages {
         /// directly: `create` only accepts the first state (D48).
         fn fresh(&mut self, model: &str, state: &str) -> String {
             let mut open = vec![model.to_string()];
-            let Value::Map(fields) = self.input(model, Some(state), &mut open) else {
+            let Value::Map(mut fields) = self.input(model, Some(state), &mut open) else {
                 unreachable!()
             };
+            // The action `sign` is for a request that is not about a Document (a request about
+            // one is signed at the door), and the actions are walked on these records: no
+            // Document and no held copy (the sample's hash is allowed: it has a template).
+            if model == "sign_request" {
+                fields.remove("document_id");
+                fields.remove("document_file");
+            }
             self.app.store.insert(model, fields).unwrap()
         }
     }
 
     fn state_of(app: &App, model: &str, id: &str) -> String {
-        match app.store.field(model, id, "state") {
+        match app.store.field(model, id, &state_field(model)) {
             Some(Value::Text(t)) => t,
             other => panic!("{model} {id} has no state: {other:?}"),
         }
@@ -3466,8 +3738,15 @@ mod bundled_packages {
                         unreachable!()
                     };
                     input.remove(&req.name);
-                    let e = call(&app, &user, &format!("{name}.create"), Value::Map(input))
-                        .unwrap_err();
+                    // The sample of a signature request carries the evidence fields, which only
+                    // an administrator may write by hand (D92): the check is of the other rules.
+                    let who = if name == "sign_request" {
+                        &admin
+                    } else {
+                        &user
+                    };
+                    let e =
+                        call(&app, who, &format!("{name}.create"), Value::Map(input)).unwrap_err();
                     assert!(
                         matches!(e, CallError::Handler(ref s) if s.contains("required")),
                         "{name}: {e:?}"
@@ -3480,8 +3759,13 @@ mod bundled_packages {
                 // Each action works from its `from` state and is refused out of order.
                 for a in &model.action {
                     let from = a.from.as_deref().unwrap();
-                    let rec = mk.fresh(name, from);
                     let cmd = format!("{name}.{}", a.name);
+                    // Needs a Document with a PDF behind `document_id`, which a sample record
+                    // here does not have; `sign_tests` runs it against real ones.
+                    if cmd == "sign_request.send_document" {
+                        continue;
+                    }
+                    let rec = mk.fresh(name, from);
                     call(&app, &user, &cmd, by_id(&rec)).unwrap();
                     assert_eq!(state_of(&app, name, &rec), a.to, "{cmd}");
                     assert!(call(&app, &user, &cmd, by_id(&rec)).is_err(), "{cmd} twice");
@@ -3501,7 +3785,8 @@ mod bundled_packages {
                 }
 
                 // The workflow, walked from its first state, ends where it should.
-                let states = model.field.iter().find(|f| f.name == "state").unwrap();
+                let sf = state_field(name);
+                let states = model.field.iter().find(|f| f.name == sf).unwrap();
                 let mut now = states.options[0].clone();
                 let rec = mk.fresh(name, &now);
                 let mut visited = BTreeSet::from([now.clone()]);
@@ -3539,7 +3824,7 @@ mod bundled_packages {
                         &format!("{name}.update"),
                         Value::map([
                             ("id", Value::text(&by_update)),
-                            ("state", Value::text(&a.to)),
+                            (sf.as_str(), Value::text(&a.to)),
                         ]),
                     )
                     .unwrap_or_else(|e| panic!("{name}: update to {} failed: {e:?}", a.to));
@@ -3557,9 +3842,14 @@ mod bundled_packages {
                     else {
                         unreachable!()
                     };
-                    input.insert("state".into(), Value::text(&late));
-                    let e = call(&app, &user, &format!("{name}.create"), Value::Map(input))
-                        .unwrap_err();
+                    input.insert(sf.clone(), Value::text(&late));
+                    let who = if name == "sign_request" {
+                        &admin
+                    } else {
+                        &user
+                    };
+                    let e =
+                        call(&app, who, &format!("{name}.create"), Value::Map(input)).unwrap_err();
                     assert!(
                         matches!(e, CallError::Handler(ref s) if s.contains("starts as")),
                         "{name}: {e:?}"
@@ -3581,7 +3871,7 @@ mod bundled_packages {
                         &app,
                         &user,
                         &format!("{name}.update"),
-                        Value::map([("id", Value::text(&rec)), ("state", Value::text(jump))]),
+                        Value::map([("id", Value::text(&rec)), (sf.as_str(), Value::text(jump))]),
                     )
                     .unwrap_err();
                     assert!(
@@ -4074,7 +4364,7 @@ mod bundled_packages {
                 }
             }
         }
-        assert_eq!(files.len(), 6 * 31);
+        assert_eq!(files.len(), 6 * 32);
         let refs: Vec<&str> = files.iter().map(String::as_str).collect();
         assert!(modules_check_files(&refs, true).is_ok());
     }

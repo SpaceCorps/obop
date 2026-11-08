@@ -1386,3 +1386,150 @@ async fn the_public_url_setting_wins_over_the_host_header() {
             .contains("https://acme.example.com/.well-known/oauth-protected-resource")
     );
 }
+
+// ---- Golden pins of the anonymous documents (S1a-0 of the branding work) -------------------------
+
+/// What an instance with no brand row sends to a client that has no token, and the answer to
+/// `initialize`: the protected-resource documents, the server card (at both of its addresses), the
+/// catalogue, the authorization server's metadata and the MCP `initialize` result, on an instance
+/// without an OAuth server (`dev`) and on one with it (`auth`). The host is `inst.test`, the
+/// protocol https, and the version of this build is written `<CORE_VERSION>` before hashing.
+#[tokio::test]
+async fn pins_the_anonymous_documents_and_initialize_as_an_instance_with_no_brand_sends_them() {
+    use crate::mfa_tests::pin;
+    let mut now = Vec::new();
+    for inst in pin::instances().await {
+        now.extend(document_table(&inst).await);
+    }
+    pin::check("DOCUMENT_PINS", DOCUMENT_PINS, &now);
+}
+
+/// The rows of `DOCUMENT_PINS` for one instance: the `initialize` result and the six anonymous
+/// documents. (The same builder is held to the same table with a brand row in the store, by
+/// `with_a_brand_row_the_anonymous_documents_and_initialize_are_what_they_were`.)
+pub(crate) async fn document_table(
+    inst: &crate::mfa_tests::pin::Instance,
+) -> Vec<(String, String)> {
+    use crate::mfa_tests::pin;
+    let mut now = Vec::new();
+    let (_, init) = initialize(&inst.router, &inst.token, "2025-11-25").await;
+    now.push((
+        format!("{}/initialize", inst.name),
+        pin::sha(&pin::unversioned(&init.to_string())),
+    ));
+    for (name, path) in [
+        (
+            "protected_resource",
+            "/.well-known/oauth-protected-resource",
+        ),
+        (
+            "protected_resource_mcp",
+            "/.well-known/oauth-protected-resource/mcp",
+        ),
+        (
+            "server_card_well_known",
+            "/.well-known/mcp/server-card.json",
+        ),
+        ("server_card", "/mcp/server-card"),
+        ("ai_catalog", "/.well-known/ai-catalog.json"),
+        (
+            "authorization_server",
+            "/.well-known/oauth-authorization-server",
+        ),
+    ] {
+        now.push((
+            format!("{}/{name}", inst.name),
+            pin::sha(&pin::document(&inst.router, path).await),
+        ));
+    }
+    now
+}
+
+/// S1a: the brand row is in the store and no surface reads it yet, so the documents are the ones
+/// an instance with no row sends, byte for byte. The reader of the dispatcher is told the row
+/// exists (`set_brand` checks that it answers the name), so a document that began to read it would
+/// move a digest here. The slice that makes a document show the name moves its pin in its own
+/// commit, with the reason.
+#[tokio::test]
+async fn with_a_brand_row_the_anonymous_documents_and_initialize_are_what_they_were() {
+    use crate::mfa_tests::pin;
+    let mut now = Vec::new();
+    for inst in pin::instances().await {
+        crate::brand_row_tests::set_brand(&inst.app);
+        now.extend(document_table(&inst).await);
+    }
+    pin::check("DOCUMENT_PINS", DOCUMENT_PINS, &now);
+}
+
+// Printed by `OBOP_PRINT_PINS=1` on origin/main 12a59a79 and pasted here.
+#[rustfmt::skip]
+pub(crate) const DOCUMENT_PINS: &[(&str, &str)] = &[
+    ("dev/initialize", "8a3f084efbe055ac106ace611ea479ac11fafeb26ad0b847e07e4f62bfb7d9fd"),
+    ("dev/protected_resource", "e3e57b571ff64b0181b39e754bfb08de13fd750617d8ddac25c5c27802695f7d"),
+    ("dev/protected_resource_mcp", "926657cda56f9be9a4b624ab9bac92342d9a517a269790fa85048c69d327091f"),
+    ("dev/server_card_well_known", "5250a8129ea0a45f48397d565a091ece41bfe9ef556f5d9c7e2c48657b1a40b6"),
+    ("dev/server_card", "c34818d586218d5ae34764d7051d44aea7290bf336d99840436a8921c0aa7772"),
+    ("dev/ai_catalog", "d109573687505810bfb7f85dec1a83df3468e2a893bf1fd8d926ccc23ee342d1"),
+    ("dev/authorization_server", "1a2b1763741896338d5e9c00d0d87022021e95588f0d6cb49fc954ba87f1acbf"),
+    ("auth/initialize", "8a3f084efbe055ac106ace611ea479ac11fafeb26ad0b847e07e4f62bfb7d9fd"),
+    ("auth/protected_resource", "d7db74c6cf3b25a26eea951a1be0e93df1327fec0702cc89fc6507e84a5b2e90"),
+    ("auth/protected_resource_mcp", "9691f5d13e591152c01115d55b42eeafd99f2ebec921ecb7498358d1f8c322e6"),
+    ("auth/server_card_well_known", "4d2e0e2a45e427581785d30b719aae7536949437a50f43049ebba18489f5e2fe"),
+    ("auth/server_card", "87f0718ee73335a3671a538d90717150a8fc963bc96e54139f72c0a6daaf5bc1"),
+    ("auth/ai_catalog", "d109573687505810bfb7f85dec1a83df3468e2a893bf1fd8d926ccc23ee342d1"),
+    ("auth/authorization_server", "10b2cd971816fd42215e16b9bdc96cf35b78e78e9c5f2adb79b8f04f5808ac55"),
+];
+
+/// `initialize` names the server `obop` (as its name and as its title), with the version of this
+/// build: the literals an instance with no brand row sends, read from the result. (The result as a
+/// whole, instructions included, is hashed in `pins_the_anonymous_documents_and_initialize_...`.)
+#[tokio::test]
+async fn pins_the_server_name_of_initialize() {
+    let r = router();
+    let (_, init) = initialize(&r, "dev-agent", "2025-11-25").await;
+    assert_eq!(
+        init["result"]["serverInfo"],
+        json!({"name": "obop", "title": "obop", "version": obop_types::CORE_VERSION}),
+        "the server is described by a name, a title and a version"
+    );
+}
+
+/// `/api/brand/logo.svg` with no brand row, in the layout with the API alone (the back office and
+/// public site layouts are pinned in `public_site_tests`). Slice S1b added the route, a literal
+/// `GET` route (`HEAD` comes with it), and moved these rows on purpose; the first commit of the work
+/// held the answers of the path while no route owned it:
+///
+/// - `GET`: the generic command route (`/api/{model}/{command}`) matches the path for a `POST` only,
+///   so a `GET` was refused with `405` and `Allow: POST` (digest 75580546...); it is now the `404`
+///   JSON of an unknown path of the API (digest fd0f798e...), since there is no brand row (a `200`
+///   with the logo when there is one, `brand_http_tests`).
+/// - `POST` with no token was a `401` (31f8cb6f...) and with a token the `404` of a command that
+///   does not exist (23fee73b...); both are now the `405` of the route that owns the path, with
+///   `Allow: GET,HEAD` and no body (39252dd2...). A `POST` no longer reaches the command route.
+#[tokio::test]
+async fn pins_what_the_logo_address_answers_with_no_brand_in_the_api_layout() {
+    use crate::mfa_tests::pin;
+    let r = router();
+    let mut now = Vec::new();
+    for (name, method, token) in [
+        ("api_only/get", "GET", None),
+        ("api_only/post", "POST", None),
+        ("api_only/post_with_token", "POST", Some("dev-admin")),
+    ] {
+        now.push((
+            name.to_string(),
+            pin::sha(&pin::exchange_as(&r, method, "/api/brand/logo.svg", token).await),
+        ));
+    }
+    pin::check("LOGO_ADDRESS_API_PINS", LOGO_ADDRESS_API_PINS, &now);
+}
+
+// Printed by `OBOP_PRINT_PINS=1` on origin/main 12a59a79 and pasted here; the three rows were
+// printed again on the branch of slice S1b (the route exists, no brand row), the digests they had are
+// in the comment above.
+#[rustfmt::skip]
+const LOGO_ADDRESS_API_PINS: &[(&str, &str)] = &[
+    ("api_only/get", "fd0f798e1d7f498e3d2d38a0c65f7cfbf2875753e6387a380404fdc9f0ca69b4"),
+    ("api_only/post", "39252dd2a34eca81eb92a358f89d76949b1d25f4060f41e7ee88ab4477df73e1"),
+    ("api_only/post_with_token", "39252dd2a34eca81eb92a358f89d76949b1d25f4060f41e7ee88ab4477df73e1"),
+];

@@ -10,12 +10,11 @@ use super::{HttpState, api_routes, blocking};
 use axum::{
     Router,
     body::{Body, to_bytes},
-    extract::{ConnectInfo, Request, State},
+    extract::{Request, State},
     http::{HeaderName, HeaderValue, StatusCode, header},
     response::Response,
 };
 use obop_site::{MAX_BODY, Site, http::Req};
-use std::net::SocketAddr;
 use std::sync::Arc;
 
 /// Request headers handed to the site (everything else is dropped).
@@ -64,6 +63,7 @@ pub fn admin_prefix_ok(p: &str) -> bool {
                 | "shop"
                 | "blog"
                 | "cart"
+                | "sign"
                 | "contact"
                 | "healthz"
                 | "readyz"
@@ -81,7 +81,7 @@ pub fn router(
     site: Arc<Site>,
     cfg: PublicConfig,
 ) -> Router {
-    let mut app = api_routes(state.clone());
+    let mut app = api_routes(state.clone(), json_404);
     if let Some(dir) = static_dir {
         let admin = super::shell::Shell::new(dir, state.default_language()).into_router();
         app = app.nest_service(&cfg.admin_prefix, admin);
@@ -142,22 +142,9 @@ async fn handle(State(shared): State<Shared>, req: Request) -> Response {
 }
 
 /// The address used to key rate limits: the socket peer, or behind a trusted proxy the last
-/// (nearest) entry of `X-Forwarded-For`.
+/// entry of the last `X-Forwarded-For` line (the one the proxy wrote).
 fn client_address(parts: &axum::http::request::Parts, trust_proxy: bool) -> String {
-    if trust_proxy
-        && let Some(v) = parts
-            .headers
-            .get("x-forwarded-for")
-            .and_then(|v| v.to_str().ok())
-        && let Some(last) = v.rsplit(',').next()
-    {
-        return last.trim().chars().take(64).collect();
-    }
-    parts
-        .extensions
-        .get::<ConnectInfo<SocketAddr>>()
-        .map(|c| c.0.ip().to_string())
-        .unwrap_or_default()
+    super::addr::client_address(trust_proxy, &parts.headers, &parts.extensions)
 }
 
 fn json_404() -> Response {
@@ -186,9 +173,33 @@ mod tests {
         assert!(admin_prefix_ok("/back-office_2"));
         for bad in [
             "admin", "/", "", "/a/b", "/Admin", "/api", "/shop", "/a b", "/..", "//x", "/healthz",
-            "/readyz", "/metrics",
+            "/readyz", "/metrics", "/sign",
         ] {
             assert!(!admin_prefix_ok(bad), "{bad}");
         }
+    }
+
+    #[test]
+    fn the_client_is_the_last_entry_of_the_last_forwarded_line_behind_a_trusted_proxy() {
+        let parts = |lines: &[&str]| {
+            let mut b = axum::http::Request::builder().uri("/");
+            for l in lines {
+                b = b.header("x-forwarded-for", *l);
+            }
+            b.body(()).unwrap().into_parts().0
+        };
+        // One line: the proxy's entry is the last.
+        assert_eq!(
+            client_address(&parts(&["203.0.113.9, 198.51.100.7"]), true),
+            "198.51.100.7"
+        );
+        // Two lines: what the client sent first is not believed over the proxy's own line.
+        assert_eq!(
+            client_address(&parts(&["192.0.2.1", "203.0.113.9, 198.51.100.8"]), true),
+            "198.51.100.8"
+        );
+        // Not behind a proxy that is trusted: the header says nothing (and with no socket in this
+        // test there is no peer either).
+        assert_eq!(client_address(&parts(&["203.0.113.9"]), false), "");
     }
 }

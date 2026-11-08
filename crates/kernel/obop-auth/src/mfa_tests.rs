@@ -717,3 +717,67 @@ fn the_whole_flow_works_on_postgres_when_available() {
         assert!(kinds.iter().any(|k| k == want), "{want} in {kinds:?}");
     }
 }
+
+// ---- Golden pins of the authenticator label (S1a-0 of the branding work) -------------------------
+
+/// What an authenticator app is given when a person enrols: the account is listed as `obop:ada`
+/// and the issuer is `obop`, both in the path and as the `issuer` parameter. With no brand row an
+/// instance sends exactly this; the brand work keeps it for every instance that has not set a name.
+#[test]
+fn pins_the_otpauth_label_and_issuer_of_an_enrolment() {
+    let r = rig();
+    user_with(&r.a, "ada", &["base.user"]);
+    let (_, p) = session(&r.a, "ada");
+    let begun = r.a.begin(&p).unwrap();
+    let secret = begun["secret"].as_str().unwrap();
+    // The whole URI, but for the secret, which is random.
+    assert_eq!(
+        begun["uri"].as_str().unwrap().replace(secret, "SECRET"),
+        "otpauth://totp/obop:ada?secret=SECRET&issuer=obop&algorithm=SHA1&digits=6&period=30"
+    );
+}
+
+/// The issuer a server starts with when `OBOP_MFA_ISSUER` is not set. The variable is read from
+/// the process environment, so a run that sets it does not hold the default: the test fails
+/// loudly with a message that says so, and never passes without having checked anything.
+#[test]
+fn pins_the_default_issuer_of_a_server() {
+    assert!(
+        std::env::var_os("OBOP_MFA_ISSUER").is_none(),
+        "OBOP_MFA_ISSUER is set in the environment of this run, so `AuthConfig::from_env` does not \
+         give the default issuer and this pin cannot check it. Unset the variable and run again."
+    );
+    assert_eq!(AuthConfig::from_env().issuer, "obop");
+    assert_eq!(AuthConfig::insecure_dev().issuer, "obop");
+}
+
+/// S1a: with a brand row in the store, an enrolment is still given the label `obop:ada` and the
+/// issuer `obop` (the pin above): `begin` does not read the row yet, and `OBOP_MFA_ISSUER` is not
+/// set. The slice that makes the authenticator entry show the name moves this assertion.
+#[test]
+fn with_a_brand_row_the_otpauth_label_and_issuer_of_an_enrolment_are_what_they_were() {
+    let r = rig();
+    user_with(&r.a, "ada", &["base.user"]);
+    obop_commands::brand::apply(
+        &*r.b,
+        None,
+        "operator",
+        &obop_commands::brand::Action::Configure(vec![
+            ("name".into(), "MOHV".into()),
+            ("slug".into(), "mohv".into()),
+        ]),
+        false,
+    )
+    .unwrap();
+    assert!(
+        r.b.get("instance_brand", "instance").unwrap().is_some(),
+        "the row is in the store"
+    );
+    let (_, p) = session(&r.a, "ada");
+    let begun = r.a.begin(&p).unwrap();
+    let secret = begun["secret"].as_str().unwrap();
+    assert_eq!(
+        begun["uri"].as_str().unwrap().replace(secret, "SECRET"),
+        "otpauth://totp/obop:ada?secret=SECRET&issuer=obop&algorithm=SHA1&digits=6&period=30"
+    );
+}

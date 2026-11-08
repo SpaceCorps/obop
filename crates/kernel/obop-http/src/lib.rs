@@ -15,7 +15,9 @@ use serde_json::{Value as J, json};
 use std::sync::Arc;
 
 mod accounts;
+mod addr;
 pub mod blobs;
+mod brand;
 pub mod community;
 pub mod connectors;
 pub mod cors;
@@ -30,11 +32,22 @@ pub mod payments;
 pub mod public;
 pub(crate) mod shared;
 pub mod shell;
+mod sign;
+mod sign_page;
+pub mod sign_text;
 pub(crate) mod sso;
 pub mod website;
 
 #[cfg(test)]
+mod addr_scan_tests;
+#[cfg(test)]
+mod audit_kind_tests;
+#[cfg(test)]
+mod brand_scan_tests;
+#[cfg(test)]
 mod error_tests;
+#[cfg(test)]
+mod src_scan;
 
 pub struct HttpState {
     dispatcher: Arc<Dispatcher>,
@@ -69,6 +82,8 @@ pub struct HttpState {
     /// back office's own address under a public site. Set by the composition root, never by a
     /// request.
     sso_return: std::sync::OnceLock<String>,
+    /// The log line about a post to the signer door that was refused for its origin (D92).
+    sign_origin_log: sign::OriginLog,
 }
 
 impl HttpState {
@@ -104,7 +119,20 @@ impl HttpState {
             default_language: std::sync::OnceLock::new(),
             sso: sso::Cache::default(),
             sso_return: std::sync::OnceLock::new(),
+            sign_origin_log: sign::OriginLog::default(),
         })
+    }
+
+    /// For tests: replace the clock (seconds) and the sink of the line this server writes about a
+    /// post to the signer door that was refused for its origin (at most one every sixty seconds
+    /// of that clock, D92). False when it was set before. The default is the time since the server
+    /// started on a monotonic clock, and standard error.
+    pub fn set_sign_origin_log(
+        &self,
+        clock: impl Fn() -> u64 + Send + Sync + 'static,
+        sink: impl Fn(&str) + Send + Sync + 'static,
+    ) -> bool {
+        self.sign_origin_log.set_hooks(clock, sink)
     }
 
     /// Why a limited session is refused: it owes a new password (an administrator reset it) or
@@ -288,8 +316,9 @@ async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> 
     out
 }
 
-/// The REST routes under `/api`, without any static or public fallback.
-pub(crate) fn api_routes(state: Arc<HttpState>) -> Router {
+/// The REST routes under `/api`, without any static or public fallback. `not_found` is what the
+/// layout answers a path of the API that is no route; the logo route sends it when no brand is set.
+pub(crate) fn api_routes(state: Arc<HttpState>, not_found: brand::NotFound) -> Router {
     Router::new()
         .route("/healthz", get(ops::healthz))
         .route("/readyz", get(ops::readyz))
@@ -333,6 +362,7 @@ pub(crate) fn api_routes(state: Arc<HttpState>) -> Router {
             "/api/drive/upload",
             post(drive::upload).layer(axum::extract::DefaultBodyLimit::disable()),
         )
+        .merge(brand::routes(not_found))
         .route("/api/{model}/{command}", post(call))
         .route("/mcp", any(mcp::endpoint))
         .route("/mcp/server-card", get(mcp::server_card_canonical))
@@ -371,6 +401,13 @@ pub(crate) fn api_routes(state: Arc<HttpState>) -> Router {
                 .options(oauth::preflight)
                 .layer(body_limit()),
         )
+        .route(
+            "/sign/{rid}/{token}",
+            get(sign::page)
+                .post(sign::submit)
+                .layer(axum::extract::DefaultBodyLimit::max(sign::MAX_BODY)),
+        )
+        .route("/sign/{rid}/{token}/document.pdf", get(sign::document))
         .route("/oauth/authorize", get(oauth::authorize))
         .route("/oauth/authorize/microsoft", get(oauth::microsoft))
         .route("/oauth/authorize/return", get(oauth::microsoft_return))
@@ -408,6 +445,11 @@ fn body_limit() -> axum::extract::DefaultBodyLimit {
 
 /// Unknown API paths answer JSON, never the HTML shell, so agents can parse the error.
 async fn api_not_found() -> Response {
+    api_not_found_response()
+}
+
+/// The answer of `api_not_found`, for the one route that sends it when it has nothing to serve.
+fn api_not_found_response() -> Response {
     api_error(
         StatusCode::NOT_FOUND,
         "not found",
@@ -449,7 +491,7 @@ fn instance_openapi_blocking(s: Arc<HttpState>, h: HeaderMap) -> Response {
 }
 
 pub fn router(state: Arc<HttpState>, static_dir: Option<&str>) -> Router {
-    let api = api_routes(state.clone());
+    let api = api_routes(state.clone(), api_not_found_response);
     let app = match static_dir {
         Some(dir) => api.fallback_service(spa_with_json_api_404(dir, state.default_language())),
         None => api.fallback(api_not_found),

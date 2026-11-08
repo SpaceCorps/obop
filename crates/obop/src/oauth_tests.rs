@@ -16,6 +16,7 @@ use serde_json::{Value as J, json};
 use std::sync::Arc;
 use tower::ServiceExt;
 
+mod address;
 mod mobile;
 
 const HOST: &str = "inst.test";
@@ -1557,4 +1558,65 @@ async fn a_code_that_says_900_days_gives_an_mcp_grant_of_90_days() {
         grants[0].1["expires_at"].as_u64().unwrap(),
     );
     assert_eq!(expires - created, 90 * 86_400);
+}
+
+/// The page with the values that differ from one flow to the next (the flow id and the CSRF
+/// token of every hidden input that carries them, the passkey form's included) written as
+/// `<masked>`.
+fn masked(html: &str) -> String {
+    let mut out = html.to_string();
+    for name in ["flow", "csrf"] {
+        let marker = format!("name=\"{name}\" value=\"");
+        let mut at = 0;
+        while let Some(i) = out[at..].find(&marker) {
+            let from = at + i + marker.len();
+            let to = from + out[from..].find('"').unwrap();
+            out.replace_range(from..to, "<masked>");
+            at = from + "<masked>".len();
+        }
+    }
+    out
+}
+
+/// The sign-in page and the consent page of the authorization flow in each of the seven languages,
+/// as the handlers render them.
+async fn flow_pages(r: &axum::Router) -> Vec<(String, String)> {
+    let c = client(r).await;
+    let mut out = Vec::new();
+    for lang in obop_oauth::page::LANGS {
+        let (resp, b) = start(r, &authorize_url(&c, REDIRECT, &[("lang", lang)])).await;
+        out.push((format!("{lang}/sign_in"), masked(&resp.text())));
+        let consent = b
+            .post(
+                r,
+                "/oauth/authorize/login",
+                &[("username", "ada"), ("password", PW)],
+            )
+            .await;
+        assert_eq!(consent.status, 200, "{}", consent.text());
+        out.push((format!("{lang}/consent"), masked(&consent.text())));
+    }
+    out
+}
+
+/// S1a: with a brand row in the store, the pages of the authorization flow, rendered by the
+/// handlers of a real app, are the pages of the same app without a row (the pages are rendered by
+/// pure functions that the golden pins of `obop-oauth` hold; this holds that the handlers hand
+/// them nothing from the row yet). The slice that makes a page show the name moves this.
+#[tokio::test]
+async fn with_a_brand_row_the_sign_in_and_consent_pages_are_what_they_were() {
+    let acc = crate::accounts_tests::rig();
+    let r = &acc.rig.r;
+    let was = flow_pages(r).await;
+    assert_eq!(was.len(), 14);
+    assert!(
+        was.iter().all(|(_, html)| html.contains("obop")),
+        "the pages are the ones that name the product today"
+    );
+    crate::brand_row_tests::set_brand(&acc.app);
+    let now = flow_pages(r).await;
+    for ((name, before), (_, after)) in was.iter().zip(&now) {
+        assert!(after == before, "{name} moved when a brand row was written");
+        assert!(!after.contains("MOHV"), "{name} shows the name already");
+    }
 }

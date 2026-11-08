@@ -63,6 +63,7 @@ impl App {
             ConnectorConfig::from_env(),
         );
         ::connectors::register(&d, &store, &connectors);
+        crate::sie::command::register(&d, &store);
         // The shop's payments reuse the connectors' hardened egress client and read the Stripe
         // keys from the instance's own sealed `stripe` connection.
         let payments = obop_payments::Payments::new(
@@ -148,6 +149,7 @@ pub fn dev_principal(token: &str) -> Option<Principal> {
         "mileage.driver",
         "mileage.reviewer",
         "mileage.admin",
+        "api.import_map_read",
     ];
     match token {
         "dev-admin" => Some(Principal::user("dev-admin", ALL)),
