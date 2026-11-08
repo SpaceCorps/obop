@@ -1083,6 +1083,40 @@ mod tests {
         v.as_object().cloned().unwrap()
     }
 
+    /// `gets_of` counts the `get`s of one model, and a `get` that was refused or failed is still
+    /// a read that was asked for: a caller held to "once" is held to the reads it asked for, not
+    /// to those that were answered. Other calls on the model are not gets.
+    #[test]
+    fn gets_of_counts_the_gets_of_one_model_refused_and_failed_ones_included() {
+        let (flaky, db) = Flaky::memory();
+        assert_eq!(flaky.gets_of("m"), 0);
+        db.get("m", "a").unwrap();
+        db.get("other", "a").unwrap();
+        assert_eq!((flaky.gets_of("m"), flaky.gets_of("other")), (1, 1));
+        // Not gets: a list, a count, a find and a write of the model.
+        db.list("m").unwrap();
+        db.count("m").unwrap();
+        db.find("m", "f", &json!(1)).unwrap();
+        db.insert("m", "a", &Fields::new()).unwrap();
+        assert_eq!(flaky.gets_of("m"), 1);
+        // A get the pool refuses.
+        flaky.refuse_model("m", Mode::Reads);
+        assert!(db.get("m", "a").is_err());
+        assert_eq!(flaky.refused(), 1, "the call was refused");
+        assert_eq!(flaky.gets_of("m"), 2, "and still counted");
+        assert_eq!(
+            flaky.gets_of("other"),
+            1,
+            "the refusal was of the other model"
+        );
+        // A get that fails with a plain error of the store.
+        flaky.allow_models();
+        flaky.fail_gets_of("m", "a read error that is not transient");
+        assert!(db.get("m", "a").is_err());
+        assert_eq!(flaky.gets_of("m"), 3, "a failed get is counted");
+        fault::clear();
+    }
+
     /// The models a call names are noted for every way of naming one: a keyed call, a batch, a
     /// refused call, a backfill, a unique rule and an import. Counters name none.
     #[test]
