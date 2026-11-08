@@ -12,6 +12,7 @@ use obop_keys::KeyRing;
 use obop_storage::Fields;
 use serde_json::{Value as J, json};
 use sha2::{Digest, Sha256};
+use std::io::Write;
 use std::time::Duration;
 
 /// How long the password step stays valid for the code step.
@@ -68,6 +69,9 @@ pub struct AuthConfig {
     pub issuer: Option<String>,
 }
 
+/// Whether the warning about the link characters in `OBOP_MFA_ISSUER` was written by this process.
+static ISSUER_WARNED: std::sync::Once = std::sync::Once::new();
+
 impl AuthConfig {
     /// `OBOP_SECRET_KEY` (64 hex digits recommended), `OBOP_SECRET_KEY_PREVIOUS`, `OBOP_DEV_INSECURE_KEY=1` for an
     /// explicit, logged development fallback, `OBOP_REQUIRE_MFA_FOR_ADMINS=0` to change the
@@ -99,7 +103,14 @@ impl AuthConfig {
             .as_deref()
             .and_then(obop_commands::brand::issuer_warning)
         {
-            eprintln!("WARNING: {warning}");
+            // Once for the process, not once for each configuration: `obop serve` builds its
+            // authentication in more than one place (the one it serves with and the count of
+            // users it reports), and the warning said the same thing each time. `writeln!` and
+            // not `eprintln!`, which panics when stderr cannot be written, and a panic inside
+            // `call_once` would poison it.
+            ISSUER_WARNED.call_once(|| {
+                let _ = writeln!(std::io::stderr(), "WARNING: {warning}");
+            });
         }
         Self {
             keys,

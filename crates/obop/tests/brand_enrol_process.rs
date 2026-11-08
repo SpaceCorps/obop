@@ -448,8 +448,12 @@ fn the_running_server_writes_the_name_of_the_record_and_refuses_when_it_cannot_r
     drop(server);
     let server = serve(&url, &[("OBOP_MFA_ISSUER", "Acme: Corp")]);
     let log = server.log();
-    assert!(
-        log.contains("WARNING: OBOP_MFA_ISSUER holds a colon"),
+    // Exactly one line: `obop serve` builds its authentication in more than one place (the one it
+    // serves with and the count of users it reports), and each used to write the warning.
+    assert_eq!(
+        log.matches("WARNING: OBOP_MFA_ISSUER holds a colon")
+            .count(),
+        1,
         "{log}"
     );
     assert!(
@@ -467,5 +471,15 @@ fn the_running_server_writes_the_name_of_the_record_and_refuses_when_it_cannot_r
             .starts_with("otpauth://totp/Acme%3A%20Corp:ada?secret="),
         "{}",
         a.body
+    );
+    // And a request does not write it again.
+    assert_eq!(
+        server
+            .log()
+            .matches("WARNING: OBOP_MFA_ISSUER holds a colon")
+            .count(),
+        1,
+        "{}",
+        server.log()
     );
 }
