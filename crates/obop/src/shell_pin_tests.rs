@@ -86,13 +86,18 @@ pub(crate) struct Mounted {
     pub(crate) app: App,
     /// Where the back office is: `""` for the root, `"/admin"` under the public site.
     pub(crate) prefix: &'static str,
+    #[allow(dead_code)]
     pub(crate) build: Build,
 }
 
 /// The back office beside the API (`--static`, prefix `""`) or under the public site (`/admin`),
 /// with the default language the sign-in screens start in, if any.
 pub(crate) fn mounted(public: bool, language: Option<&'static str>) -> Mounted {
-    let app = App::new();
+    mounted_over(App::new(), public, language)
+}
+
+/// As [`mounted`], over an app the caller made (a store that can be made to fail, for instance).
+pub(crate) fn mounted_over(app: App, public: bool, language: Option<&'static str>) -> Mounted {
     let prefix = if public { "/admin" } else { "" };
     let build = Build::new(&format!("{prefix}/"));
     let state = obop_http::HttpState::with_mcp(

@@ -82,6 +82,8 @@ mod recorded_tables_tests;
 mod settings_cmd_tests;
 #[cfg(test)]
 mod shell_pin_tests;
+#[cfg(test)]
+mod shell_tests;
 mod sie;
 #[cfg(test)]
 mod sie_tests;

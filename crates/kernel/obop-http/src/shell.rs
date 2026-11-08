@@ -1,15 +1,33 @@
-//! The back office shell (`index.html` of the Vite+ build) and the instance default language.
+//! The back office shell (`index.html` of the Vite+ build), the instance default language and the
+//! instance brand.
 //!
 //! The sign-in, two-factor, enrolment and forced-password screens are shown before anyone is
 //! signed in, so before the instance settings can be read. `OBOP_DEFAULT_LANGUAGE` names the
 //! language of the instance for them (D52 amendment). When it is set, the shell is served with
 //! `<meta name="obop-default-language" content="sv">` added to its `<head>` at request time, and
 //! the page reads it before its first render. The meta tag carries a language code and nothing
-//! else; no other setting is public.
+//! else.
+//!
+//! **The brand** (docs/spec/branding.md, section 4, D52 amendment of section 15.1). When the
+//! instance has a brand row, the shell is also rewritten with it: the first `<title>` becomes the
+//! name, every `<link rel="icon">` (whatever its `href`: the build prefixes the base, so under
+//! `/admin/` it reads `/admin/favicon.svg`) becomes the one link to the logo route with the logo's
+//! version, and `<meta name="obop-brand" content="…">` is added, one JSON object with the `name`,
+//! the effective `slug`, the non-empty `messages`, the logo's version `v` and the theme `accent`
+//! when it is a valid `#rrggbb`, and nothing else (no titles, no switch). These are public by
+//! design. The page reads the tag before its first render, as it reads the language.
+//!
+//! The brand comes from the reader of the dispatcher, asked through `blocking` (the PostgreSQL
+//! client panics on an async worker), and only when the answer is the HTML shell itself: a script,
+//! a style sheet or a picture never asks it. While the store cannot be read the request that ran
+//! the failing refill is answered 503 by D74 (`ops::storage_faults`), also for an instance with no
+//! row, where the index used to be served from the file; a request that arrives while a refill
+//! runs gets the last good brand. With no row and no default language the answer is the file
+//! service's answer, byte for byte.
 //!
 //! The shell is the one document that must never be reused without asking the server: its
-//! content depends on the build on disk and on this setting, so every HTML answer of the service
-//! says `Cache-Control: no-cache`.
+//! content depends on the build on disk, on this setting and on the brand row, so every HTML
+//! answer of the service says `Cache-Control: no-cache`.
 //!
 //! Only the shell is touched. A request is first answered exactly as `ServeDir` answers it, and an
 //! answer for a file that is not HTML (a script, a style sheet, a font, a picture, a PDF) goes out
@@ -21,6 +39,7 @@
 //! it without the tag. The answer is then a `200` with the tag and without `ETag` and
 //! `Last-Modified`.
 
+use super::{HttpState, blocking};
 use axum::{
     body::{Body, Bytes},
     extract::Request,
@@ -28,6 +47,10 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use http_body_util::{BodyExt, LengthLimitError, Limited};
+use obop_brand::logo::logo_url;
+use obop_commands::brand::{Reader, Shown};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tower::ServiceExt;
 use tower_http::services::{ServeDir, ServeFile};
 
@@ -173,6 +196,283 @@ pub fn inject(html: &[u8], language: &str) -> Option<Vec<u8>> {
     Some(out)
 }
 
+// ---- The brand ---------------------------------------------------------------------------------
+
+/// The name of the meta tag that carries the public subset of the brand.
+pub const BRAND_META_NAME: &str = "obop-brand";
+
+/// An opening or closing tag found in the head: where it starts, where it ends (after its `>`), its
+/// lower-case name and whether it is a closing tag.
+#[derive(Debug)]
+struct Tag {
+    start: usize,
+    end: usize,
+    name: String,
+    closing: bool,
+}
+
+/// The end of the tag whose name ends at `from`: just after the first `>` outside a quoted
+/// attribute value.
+fn tag_end(html: &[u8], from: usize) -> Option<usize> {
+    let mut quote: Option<u8> = None;
+    for (k, b) in html.get(from..)?.iter().enumerate() {
+        match (quote, *b) {
+            (None, b'"' | b'\'') => quote = Some(*b),
+            (Some(q), b) if b == q => quote = None,
+            (None, b'>') => return Some(from + k + 1),
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Where `needle` starts in `html[from..]`, ignoring ASCII case.
+fn find_ignore_case(html: &[u8], from: usize, needle: &[u8]) -> Option<usize> {
+    (from..html.len()).find(|i| starts_with_ignore_case(html, *i, needle))
+}
+
+/// The tags of `html[from..to]` in document order. Comments, declarations and the text of `script`,
+/// `style`, `textarea` and `title` (which is not markup) are skipped, so a `<link` or a `<title`
+/// inside them is not found. A tag that never ends stops the scan.
+fn scan_tags(html: &[u8], from: usize, to: usize) -> Vec<Tag> {
+    let html = &html[..to.min(html.len())];
+    let mut tags = Vec::new();
+    let mut i = from;
+    while let Some(off) = html
+        .get(i..)
+        .and_then(|h| h.iter().position(|b| *b == b'<'))
+    {
+        i += off;
+        if html[i..].starts_with(b"<!--") {
+            match html[i + 4..].windows(3).position(|w| w == b"-->") {
+                Some(end) => i += 4 + end + 3,
+                None => break,
+            }
+            continue;
+        }
+        let closing = html.get(i + 1) == Some(&b'/');
+        let name_start = i + 1 + usize::from(closing);
+        let name_len = html[name_start.min(html.len())..]
+            .iter()
+            .take_while(|b| b.is_ascii_alphanumeric() || **b == b'-')
+            .count();
+        if name_len == 0 || !html[name_start].is_ascii_alphabetic() {
+            // `<!doctype>`, `<?…>` or a stray `<`.
+            i += 1;
+            continue;
+        }
+        let name =
+            String::from_utf8_lossy(&html[name_start..name_start + name_len]).to_ascii_lowercase();
+        let Some(end) = tag_end(html, name_start + name_len) else {
+            break;
+        };
+        let raw_text =
+            !closing && matches!(name.as_str(), "script" | "style" | "textarea" | "title");
+        tags.push(Tag {
+            start: i,
+            end,
+            name: name.clone(),
+            closing,
+        });
+        i = end;
+        if raw_text {
+            let close = format!("</{name}");
+            i = find_ignore_case(html, i, close.as_bytes()).unwrap_or(html.len());
+        }
+    }
+    tags
+}
+
+/// The attributes of an opening tag as `(lower-case name, value)`, values unquoted and not
+/// unescaped (only `rel` is looked at, and a character reference in it names no icon).
+fn attributes(html: &[u8], tag: &Tag) -> Vec<(String, String)> {
+    let body = &html[tag.start + 1 + tag.name.len()..tag.end.saturating_sub(1)];
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < body.len() {
+        while i < body.len() && (body[i].is_ascii_whitespace() || body[i] == b'/') {
+            i += 1;
+        }
+        let from = i;
+        while i < body.len() && !body[i].is_ascii_whitespace() && body[i] != b'=' && body[i] != b'/'
+        {
+            i += 1;
+        }
+        if from == i {
+            break;
+        }
+        let name = String::from_utf8_lossy(&body[from..i]).to_ascii_lowercase();
+        while i < body.len() && body[i].is_ascii_whitespace() {
+            i += 1;
+        }
+        let mut value = String::new();
+        if body.get(i) == Some(&b'=') {
+            i += 1;
+            while i < body.len() && body[i].is_ascii_whitespace() {
+                i += 1;
+            }
+            match body.get(i) {
+                Some(&q) if q == b'"' || q == b'\'' => {
+                    let start = i + 1;
+                    let len = body[start..].iter().position(|b| *b == q);
+                    let end = len.map_or(body.len(), |l| start + l);
+                    value = String::from_utf8_lossy(&body[start..end]).into_owned();
+                    i = (end + 1).min(body.len());
+                }
+                _ => {
+                    let start = i;
+                    while i < body.len() && !body[i].is_ascii_whitespace() {
+                        i += 1;
+                    }
+                    value = String::from_utf8_lossy(&body[start..i]).into_owned();
+                }
+            }
+        }
+        out.push((name, value));
+    }
+    out
+}
+
+/// Whether a `<link>` is a tab icon: its `rel` has the token `icon` (`icon`, `shortcut icon`), in
+/// any case. `apple-touch-icon` and `mask-icon` are other tokens.
+fn is_icon_link(html: &[u8], tag: &Tag) -> bool {
+    tag.name == "link"
+        && !tag.closing
+        && attributes(html, tag).iter().any(|(k, v)| {
+            k == "rel"
+                && v.split_ascii_whitespace()
+                    .any(|t| t.eq_ignore_ascii_case("icon"))
+        })
+}
+
+/// A JSON string, as `serde_json` writes it.
+fn json_text(s: &str) -> String {
+    serde_json::to_string(s).unwrap_or_else(|_| "\"\"".into())
+}
+
+/// What a branded shell carries of the brand, and nothing else: the public subset of the record.
+struct Public {
+    name: String,
+    slug: String,
+    messages: Vec<(&'static str, String)>,
+    v: String,
+    accent: Option<String>,
+}
+
+impl Public {
+    fn of(shown: &Shown) -> Public {
+        let brand = shown.brand();
+        Public {
+            name: brand.name().to_string(),
+            slug: brand.slug(),
+            messages: brand
+                .messages()
+                .map(|(lang, text)| (lang, text.to_string()))
+                .collect(),
+            v: shown.v().to_string(),
+            accent: shown.theme_accent().map(str::to_string),
+        }
+    }
+
+    /// The value of the `obop-brand` tag: one JSON object with the `name`, the effective `slug`,
+    /// the non-empty `messages`, the logo's version `v` and, only when the theme stores a valid
+    /// `#rrggbb`, the `accent`. No titles, no switch and no other key.
+    fn json(&self) -> String {
+        let messages: Vec<String> = self
+            .messages
+            .iter()
+            .map(|(lang, text)| format!("{}:{}", json_text(lang), json_text(text)))
+            .collect();
+        let mut out = format!(
+            "{{\"name\":{},\"slug\":{},\"messages\":{{{}}},\"v\":{}",
+            json_text(&self.name),
+            json_text(&self.slug),
+            messages.join(","),
+            json_text(&self.v),
+        );
+        if let Some(accent) = &self.accent {
+            out.push_str(&format!(",\"accent\":{}", json_text(accent)));
+        }
+        out.push('}');
+        out
+    }
+
+    /// The meta tag of the brand, attribute-escaped.
+    fn meta_tag(&self) -> String {
+        format!(
+            "<meta name=\"{BRAND_META_NAME}\" content=\"{}\">",
+            attribute(&self.json())
+        )
+    }
+
+    /// The one icon link of a branded shell.
+    fn icon_link(&self) -> String {
+        format!(
+            "<link rel=\"icon\" href=\"{}\" type=\"image/svg+xml\">",
+            attribute(&logo_url(&self.v))
+        )
+    }
+}
+
+/// `html` with the brand: the first `<title>` replaced by the escaped name, every
+/// `<link rel="icon">` of the head replaced by the one link to the logo (the first in place, the
+/// others dropped) and the `obop-brand` tag as the first thing in the head. Nothing else is
+/// touched. `Err` names, in a fixed word, why the document cannot take it (no `<head>`, no
+/// `<title>`, no icon link, or it already has the tag); the caller then serves it as it is.
+fn brand_rewrite(html: &[u8], shown: &Shown) -> Result<Vec<u8>, &'static str> {
+    if contains_ignore_case(html, BRAND_META_NAME.as_bytes()) {
+        return Err("it already has an obop-brand tag");
+    }
+    let public = Public::of(shown);
+    let head = head_content_start(html).ok_or("it has no <head>")?;
+    let head_end = find_ignore_case(html, head, b"</head").unwrap_or(html.len());
+    let tags = scan_tags(html, head, head_end);
+    let title = tags
+        .iter()
+        .find(|t| t.name == "title" && !t.closing)
+        .ok_or("it has no <title>")?;
+    let title_close =
+        find_ignore_case(html, title.end, b"</title").ok_or("its <title> is not closed")?;
+    let title_end = tag_end(html, title_close + 7).ok_or("its <title> is not closed")?;
+    let icons: Vec<&Tag> = tags.iter().filter(|t| is_icon_link(html, t)).collect();
+    if icons.is_empty() {
+        return Err("it has no icon link");
+    }
+    // The edits, in document order: (from, to, what replaces html[from..to]).
+    let mut edits: Vec<(usize, usize, String)> = vec![
+        (head, head, public.meta_tag()),
+        (
+            title.start,
+            title_end,
+            format!("<title>{}</title>", attribute(&public.name)),
+        ),
+    ];
+    for (n, icon) in icons.iter().enumerate() {
+        edits.push((
+            icon.start,
+            icon.end,
+            if n == 0 {
+                public.icon_link()
+            } else {
+                String::new()
+            },
+        ));
+    }
+    edits.sort_by_key(|e| (e.0, e.1));
+    let mut out = Vec::with_capacity(html.len() + 512);
+    let mut at = 0;
+    for (from, to, text) in edits {
+        if from < at {
+            return Err("its head cannot be read");
+        }
+        out.extend_from_slice(&html[at..from]);
+        out.extend_from_slice(text.as_bytes());
+        at = to;
+    }
+    out.extend_from_slice(&html[at..]);
+    Ok(out)
+}
+
 fn is_html(h: &HeaderMap) -> bool {
     h.get(header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
@@ -263,19 +563,53 @@ fn for_method(resp: Response, asked: &Asked) -> Response {
     Response::from_parts(parts, Body::empty())
 }
 
+/// Where the one line about a shell that cannot take the brand is written. The default writes to
+/// standard error; a test injects a sink and counts the lines.
+pub type Sink = Arc<dyn Fn(&str) + Send + Sync>;
+
 /// Serves the files of a back office build, the shell for every path that is not a file, and the
-/// shell with the default language when there is one.
+/// shell with the default language and the instance brand when there are any.
 #[derive(Clone)]
 pub struct Shell {
     files: ServeDir<ServeFile>,
     language: Option<&'static str>,
     /// The largest document that is rewritten.
     limit: usize,
+    /// The reader of the instance brand. `None`: this shell has no store behind it (a test rig, or
+    /// a dispatcher that never ran `register_admin`), and no brand is ever applied.
+    brand: Option<Arc<Reader>>,
+    /// Whether the line about a shell that cannot take the brand was written (once per shell, and a
+    /// process has one).
+    noted: Arc<AtomicBool>,
+    sink: Sink,
 }
 
 impl Shell {
-    /// Files from `dir`; `language` (from [`parse`] or [`from_env`]) is added to the shell.
+    /// Files from `dir`; `language` (from [`parse`] or [`from_env`]) is added to the shell. This
+    /// shell reads no brand; the server builds its shell with `Shell::for_state`.
     pub fn new(dir: &str, language: Option<&'static str>) -> Self {
+        Self::build(dir, language, None)
+    }
+
+    /// As [`Shell::new`], with the reader of the instance brand: a shell that is rewritten with the
+    /// brand when a row exists. An inert reader (no store) is no reader.
+    pub fn with_brand(dir: &str, language: Option<&'static str>, reader: Arc<Reader>) -> Self {
+        Self::build(dir, language, Some(reader).filter(|r| !r.is_inert()))
+    }
+
+    /// The shell of a server: the default language of the state and the reader of its dispatcher,
+    /// so every place that mounts the back office reads the same brand.
+    pub(crate) fn for_state(dir: &str, state: &HttpState) -> Self {
+        Self::with_brand(dir, state.default_language(), state.dispatcher.brand())
+    }
+
+    /// The same shell writing its one line about a shell that cannot take the brand to `sink`.
+    pub fn with_sink(mut self, sink: Sink) -> Self {
+        self.sink = sink;
+        self
+    }
+
+    fn build(dir: &str, language: Option<&'static str>, brand: Option<Arc<Reader>>) -> Self {
         if language.is_some() {
             Self::check_shell(dir);
         }
@@ -283,6 +617,13 @@ impl Shell {
             files: ServeDir::new(dir).fallback(ServeFile::new(format!("{dir}/index.html"))),
             language,
             limit: MAX_SHELL_BYTES,
+            brand,
+            noted: Arc::new(AtomicBool::new(false)),
+            // Not `eprintln!`, which panics when standard error cannot be written.
+            sink: Arc::new(|line| {
+                use std::io::Write;
+                let _ = writeln!(std::io::stderr(), "{line}");
+            }),
         }
     }
 
@@ -321,11 +662,28 @@ impl Shell {
         }
     }
 
+    /// The brand for display, asked on a blocking thread: the cache-hit path of the reader takes a
+    /// standard mutex for a moment, and the one refill that reads the store runs where the store's
+    /// client may run. A store fault is noted on that thread and reaches the request (D74).
+    async fn shown(&self) -> Option<Arc<Shown>> {
+        let reader = self.brand.clone()?;
+        Some(blocking(move || reader.current()).await)
+    }
+
+    /// Writes the one line about a shell that cannot take a brand that is set, the first time.
+    fn cannot_take(&self, why: &str) {
+        if !self.noted.swap(true, Ordering::Relaxed) {
+            (self.sink)(&format!(
+                "obop: the back office shell cannot take the instance brand ({why}): the tab keeps the title and the icon it was built with (obop admin brand status shows the brand)"
+            ));
+        }
+    }
+
     /// The answer to one request.
     pub async fn serve(&self, req: Request) -> Response {
-        let Some(language) = self.language else {
+        if self.language.is_none() && self.brand.is_none() {
             return no_cache(self.ask(req).await);
-        };
+        }
         let asked = Asked::of(&req);
         let first = self.ask(req).await;
         // `304`, `412` and `416` carry no `Content-Type`: the file they speak of may be the shell.
@@ -357,6 +715,9 @@ impl Shell {
             // not to be HTML (a script that did not change) stays what it was.
             return match original {
                 Some(o) if empty && !is_html(doc.headers()) => o,
+                // Nothing to add and nothing asked of the store: the file service's own answer.
+                Some(o) if self.language.is_none() => no_cache(o),
+                None if self.language.is_none() => no_cache(doc),
                 _ => for_method(no_cache(doc), &asked),
             };
         }
@@ -373,6 +734,13 @@ impl Shell {
                 None => for_method(no_cache(doc), &asked),
             };
         }
+        // The shell. Whether a brand is set decides whether it is rewritten when no default
+        // language is: with no row and no language the answer is the file service's, as it was.
+        let shown = self.shown().await;
+        let branded = shown.as_deref().filter(|s| s.is_set());
+        if self.language.is_none() && branded.is_none() {
+            return no_cache(original.unwrap_or(doc));
+        }
         let (mut parts, body) = doc.into_parts();
         let bytes = match read_limited(body, self.limit).await {
             Ok(b) => b,
@@ -387,7 +755,14 @@ impl Shell {
                     .into_response();
             }
         };
-        let bytes = match inject(&bytes, language) {
+        let mut page: Option<Vec<u8>> = self.language.and_then(|l| inject(&bytes, l));
+        if let Some(shown) = branded {
+            match brand_rewrite(page.as_deref().unwrap_or(&bytes), shown) {
+                Ok(v) => page = Some(v),
+                Err(why) => self.cannot_take(why),
+            }
+        }
+        let bytes = match page {
             Some(v) => {
                 // The page is not the file any more: the file's validators do not describe it.
                 for name in [header::ETAG, header::LAST_MODIFIED, header::ACCEPT_RANGES] {
@@ -902,5 +1277,468 @@ mod tests {
             Err(Unread::TooLarge)
         ));
         assert_eq!(read_limited(body(0), 8).await.unwrap().len(), 0);
+    }
+
+    // ---- The brand (S2) ---------------------------------------------------------------------------
+
+    use obop_commands::brand::{Action, apply};
+    use obop_storage::testing::Flaky;
+    use obop_storage::{Backend, Op};
+    use std::time::Duration;
+
+    /// A shell as the Vite build writes it: an icon link whose `href` carries the base, a title, a
+    /// script and a style sheet.
+    const BUILT: &str = "<!doctype html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"UTF-8\" />\n    <link rel=\"icon\" href=\"/admin/favicon.svg\" type=\"image/svg+xml\" />\n    <title>obop</title>\n    <script type=\"module\" crossorigin src=\"/admin/assets/app.js\"></script>\n    <link rel=\"stylesheet\" crossorigin href=\"/admin/assets/app.css\">\n  </head>\n  <body><div id=\"root\"></div></body>\n</html>\n";
+
+    fn put_theme(backend: &dyn Backend, accent: &str) {
+        let value = serde_json::json!({"theme": {"accent": accent}}).to_string();
+        let fields = serde_json::json!({ "value": value });
+        backend
+            .apply(&[Op::Put {
+                model: "obop_setting".into(),
+                id: "instance".into(),
+                fields: fields.as_object().unwrap().clone(),
+            }])
+            .unwrap();
+    }
+
+    /// The brand a row with these fields shows, read through the real reader over a memory store.
+    fn shown_of(pairs: &[(&str, &str)], accent: Option<&str>) -> Arc<Shown> {
+        let (_flaky, backend) = Flaky::memory();
+        if let Some(a) = accent {
+            put_theme(&*backend, a);
+        }
+        let fields = pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+        apply(&*backend, None, "test", &Action::Configure(fields), false).unwrap();
+        Reader::with_bound(backend, Duration::ZERO).current()
+    }
+
+    fn rewritten(html: &str, shown: &Shown) -> Result<String, &'static str> {
+        brand_rewrite(html.as_bytes(), shown).map(|v| String::from_utf8(v).unwrap())
+    }
+
+    fn meta_of(out: &str) -> serde_json::Value {
+        let start = out
+            .find("<meta name=\"obop-brand\" content=\"")
+            .expect("the tag")
+            + "<meta name=\"obop-brand\" content=\"".len();
+        let end = start + out[start..].find("\">").unwrap();
+        let raw = out[start..end]
+            .replace("&quot;", "\"")
+            .replace("&#39;", "'")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&amp;", "&");
+        serde_json::from_str(&raw).unwrap_or_else(|e| panic!("{e}: {raw}"))
+    }
+
+    #[test]
+    fn a_branded_shell_has_the_name_the_one_icon_and_the_tag_and_nothing_else_changed() {
+        let shown = shown_of(&[("name", "MOHV")], None);
+        let out = rewritten(BUILT, &shown).unwrap();
+        let v = shown.v();
+        assert_eq!(v.len(), 16);
+        let tag = format!(
+            "<meta name=\"obop-brand\" content=\"{{&quot;name&quot;:&quot;MOHV&quot;,&quot;slug&quot;:&quot;mohv&quot;,&quot;messages&quot;:{{}},&quot;v&quot;:&quot;{v}&quot;}}\">"
+        );
+        let want = BUILT
+            .replace("<head>", &format!("<head>{tag}"))
+            .replace(
+                "<link rel=\"icon\" href=\"/admin/favicon.svg\" type=\"image/svg+xml\" />",
+                &format!(
+                    "<link rel=\"icon\" href=\"/api/brand/logo.svg?v={v}\" type=\"image/svg+xml\">"
+                ),
+            )
+            .replace("<title>obop</title>", "<title>MOHV</title>");
+        assert_eq!(out, want);
+        assert!(!out.contains("favicon.svg"), "the old icon is gone");
+        assert!(out.contains("assets/app.css"), "the style sheet is kept");
+        assert!(out.contains("<title>MOHV</title>"));
+    }
+
+    #[test]
+    fn every_icon_link_is_replaced_whatever_its_href_and_attribute_order() {
+        let shown = shown_of(&[("name", "MOHV")], None);
+        let link = format!(
+            "<link rel=\"icon\" href=\"/api/brand/logo.svg?v={}\" type=\"image/svg+xml\">",
+            shown.v()
+        );
+        for icon in [
+            "<link rel=\"icon\" href=\"/favicon.svg\" type=\"image/svg+xml\" />",
+            "<link rel=\"icon\" href=\"/admin/favicon.svg\" type=\"image/svg+xml\" />",
+            "<link href='/somewhere/else.png' rel='icon'>",
+            "<LINK REL=\"SHORTCUT ICON\" HREF=/x.ico>",
+            "<link rel=icon href=/x.ico>",
+            "<link\n  rel=\"icon\"\n  href=\"/a>b.svg\"\n  title=\"a > b\">",
+            "<link rel=\"icon\" href=\"/a.png\" sizes=\"32x32\"><link rel=\"icon\" href=\"/b.png\" sizes=\"16x16\">",
+        ] {
+            let page = format!("<html><head><title>obop</title>{icon}</head><body></body></html>");
+            let out = rewritten(&page, &shown).unwrap();
+            assert_eq!(out.matches("<link").count(), 1, "{icon}: {out}");
+            assert!(out.contains(&link), "{icon}: {out}");
+            assert!(
+                !out.contains("favicon") && !out.contains("x.ico"),
+                "{icon}: {out}"
+            );
+        }
+    }
+
+    #[test]
+    fn links_that_are_not_the_tab_icon_and_text_that_only_looks_like_a_tag_are_left_alone() {
+        let shown = shown_of(&[("name", "MOHV")], None);
+        let kept = [
+            "<link rel=\"stylesheet\" href=\"/a.css\">",
+            "<link rel=\"apple-touch-icon\" href=\"/touch.png\">",
+            "<link rel=\"mask-icon\" href=\"/mask.svg\">",
+            "<link rel=\"icons\" href=\"/not-an-icon.svg\">",
+            "<link rel=\"preload\" as=\"image\" href=\"/icon.svg\">",
+            "<!-- <link rel=\"icon\" href=\"/commented.svg\"> <title>commented</title> -->",
+            "<script>var s = '<link rel=\"icon\" href=\"/in-script.svg\"> <title>script</title>';</script>",
+            "<style>/* <link rel=\"icon\" href=\"/in-style.svg\"> */</style>",
+        ];
+        let page = format!(
+            "<html><head>{}<link rel=\"icon\" href=\"/real.svg\"><title>obop</title></head><body></body></html>",
+            kept.concat()
+        );
+        let out = rewritten(&page, &shown).unwrap();
+        for k in kept {
+            assert!(out.contains(k), "{k} was touched: {out}");
+        }
+        assert!(!out.contains("/real.svg"), "{out}");
+        assert!(out.contains("<title>MOHV</title>"));
+        assert!(!out.contains("<title>obop</title>"));
+        // The first `<title>` of the head is the one that changes; a later one (in the body, as an
+        // SVG has) is not.
+        let page = "<html><head><link rel=\"icon\" href=\"/x.svg\"><TITLE data-x=\"1\">obop</TITLE></head><body><svg><title>drawing</title></svg></body></html>";
+        let out = rewritten(page, &shown).unwrap();
+        assert!(out.contains("<title>MOHV</title>"), "{out}");
+        assert!(out.contains("<svg><title>drawing</title></svg>"), "{out}");
+        assert!(!out.contains("data-x"), "{out}");
+    }
+
+    #[test]
+    fn a_shell_that_cannot_take_the_brand_says_in_a_fixed_word_why() {
+        let shown = shown_of(&[("name", "MOHV")], None);
+        for (page, why) in [
+            (
+                "<html><body><title>obop</title></body></html>",
+                "it has no <head>",
+            ),
+            (
+                "<html><head><link rel=\"icon\" href=\"/x\"></head></html>",
+                "it has no <title>",
+            ),
+            (
+                "<html><head><title>obop</title></head></html>",
+                "it has no icon link",
+            ),
+            (
+                "<html><head><link rel=\"icon\" href=\"/x\"><title>obop</head></html>",
+                "its <title> is not closed",
+            ),
+            (
+                "<html><head><meta name=\"obop-brand\" content=\"{}\"><link rel=\"icon\" href=\"/x\"><title>obop</title></head></html>",
+                "it already has an obop-brand tag",
+            ),
+            ("", "it has no <head>"),
+            ("<head><title>obop", "its <title> is not closed"),
+        ] {
+            assert_eq!(rewritten(page, &shown), Err(why), "{page}");
+        }
+    }
+
+    #[test]
+    fn the_tag_has_the_name_the_slug_the_messages_that_are_set_the_version_and_a_valid_accent_only()
+    {
+        let shown = shown_of(
+            &[
+                ("name", "MOHV"),
+                ("slug", "mohv-app"),
+                ("title_sv", "Logga in till MOHV"),
+                ("title_en", "Welcome"),
+                ("message_en", "Welcome to MOHV"),
+                ("message_sv", "Välkommen"),
+                ("hide_product_docs", "true"),
+            ],
+            Some("#c2410c"),
+        );
+        let meta = meta_of(&rewritten(BUILT, &shown).unwrap());
+        let mut keys: Vec<&str> = meta
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect();
+        keys.sort_unstable();
+        assert_eq!(
+            keys,
+            ["accent", "messages", "name", "slug", "v"],
+            "no titles, no switch, nothing else"
+        );
+        assert_eq!(meta["name"], "MOHV");
+        assert_eq!(meta["slug"], "mohv-app");
+        assert_eq!(
+            meta["messages"],
+            serde_json::json!({"en": "Welcome to MOHV", "sv": "Välkommen"})
+        );
+        assert_eq!(meta["v"], shown.v());
+        assert_eq!(meta["accent"], "#c2410c");
+        // The order the page reads: name, slug, messages, v, accent.
+        let raw = Public::of(&shown).json();
+        let at = |k: &str| raw.find(&format!("\"{k}\":")).unwrap();
+        assert!(at("name") < at("slug") && at("slug") < at("messages"));
+        assert!(at("messages") < at("v") && at("v") < at("accent"));
+    }
+
+    #[test]
+    fn a_stored_accent_that_is_not_a_valid_hex_colour_is_left_out_of_the_tag() {
+        for bad in [
+            "red",
+            "#12345",
+            "#1234567",
+            "c2410c",
+            "#ggg000",
+            "",
+            "rgb(1,2,3)",
+        ] {
+            let shown = shown_of(&[("name", "MOHV")], Some(bad));
+            let meta = meta_of(&rewritten(BUILT, &shown).unwrap());
+            assert!(meta.get("accent").is_none(), "{bad:?}: {meta}");
+        }
+        // The theme stores none.
+        let shown = shown_of(&[("name", "MOHV")], None);
+        assert!(
+            meta_of(&rewritten(BUILT, &shown).unwrap())
+                .get("accent")
+                .is_none()
+        );
+        // A valid one is read in lower case.
+        let shown = shown_of(&[("name", "MOHV")], Some("#C2410C"));
+        let meta = meta_of(&rewritten(BUILT, &shown).unwrap());
+        assert_eq!(meta["accent"], "#c2410c");
+    }
+
+    #[test]
+    fn a_name_with_markup_characters_is_escaped_in_the_title_and_the_tag() {
+        // The characters the policy allows in a name and that HTML treats as markup.
+        let shown = shown_of(
+            &[
+                ("name", "Tom & Jerry's"),
+                ("message_en", "He said \"hi\" & left"),
+            ],
+            None,
+        );
+        let out = rewritten(BUILT, &shown).unwrap();
+        assert!(
+            out.contains("<title>Tom &amp; Jerry&#39;s</title>"),
+            "{out}"
+        );
+        assert!(!out.contains("Jerry's"), "no raw quote of the name: {out}");
+        let meta = meta_of(&out);
+        assert_eq!(meta["name"], "Tom & Jerry's");
+        assert_eq!(meta["messages"]["en"], "He said \"hi\" & left");
+        // The attribute never ends early: the one `">` after the content is the end of the tag.
+        let tag_start = out.find("<meta name=\"obop-brand\"").unwrap();
+        let tag = &out[tag_start..tag_start + out[tag_start..].find('>').unwrap() + 1];
+        assert_eq!(tag.matches('"').count(), 4, "{tag}");
+    }
+
+    #[test]
+    fn a_row_written_around_the_command_with_markup_shows_the_default_not_the_markup() {
+        let (_flaky, backend) = Flaky::memory();
+        let fields =
+            serde_json::json!({"name": "<script>alert(1)</script>", "message_en": "<b>x</b>"});
+        backend
+            .apply(&[Op::Put {
+                model: "instance_brand".into(),
+                id: "instance".into(),
+                fields: fields.as_object().unwrap().clone(),
+            }])
+            .unwrap();
+        let shown = Reader::with_bound(backend, Duration::ZERO)
+            .with_sink(Arc::new(|_| {}))
+            .current();
+        let out = rewritten(BUILT, &shown).unwrap();
+        assert!(out.contains("<title>obop</title>"), "{out}");
+        assert!(!out.contains("<script>alert"), "{out}");
+        assert!(meta_of(&out)["messages"].as_object().unwrap().is_empty());
+    }
+
+    /// A shell served over a memory store through the real reader.
+    fn branded_shell(
+        build: &Build,
+        language: Option<&'static str>,
+        pairs: &[(&str, &str)],
+    ) -> (Shell, Arc<Reader>) {
+        let (_flaky, backend) = Flaky::memory();
+        if !pairs.is_empty() {
+            let fields = pairs
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect();
+            apply(&*backend, None, "test", &Action::Configure(fields), false).unwrap();
+        }
+        let reader = Arc::new(Reader::with_bound(backend, Duration::ZERO));
+        (
+            Shell::with_brand(build.path(), language, reader.clone()),
+            reader,
+        )
+    }
+
+    #[tokio::test]
+    async fn a_shell_with_a_brand_is_a_200_without_validators_at_every_address_and_for_every_condition()
+     {
+        let build = Build::new("branded");
+        std::fs::write(build.0.join("index.html"), BUILT).unwrap();
+        let (shell, reader) = branded_shell(&build, None, &[("name", "MOHV")]);
+        let v = reader.current().v().to_string();
+        let modified = modified_of(build.path(), "/").await;
+        let (_, _, full) = get(&shell, "GET", "/", &[]).await;
+        let text = String::from_utf8(full.clone()).unwrap();
+        assert!(text.contains("<title>MOHV</title>") && text.contains(&format!("logo.svg?v={v}")));
+        for path in [
+            "/",
+            "/index.html",
+            "/customize",
+            "/crm/lead/42",
+            "/assets/gone.js",
+        ] {
+            for (what, headers) in conditions(&modified) {
+                let context = format!("{path} ({what})");
+                let (status, answer, body) = get(&shell, "GET", path, &headers).await;
+                assert_eq!(status, StatusCode::OK, "{context}");
+                assert_eq!(body, full, "{context}");
+                assert_eq!(answer[header::CACHE_CONTROL], "no-cache", "{context}");
+                for gone in [
+                    header::ETAG,
+                    header::LAST_MODIFIED,
+                    header::CONTENT_RANGE,
+                    header::ACCEPT_RANGES,
+                ] {
+                    assert!(answer.get(&gone).is_none(), "{context}: {gone}");
+                }
+                let (status, answer, body) = get(&shell, "HEAD", path, &headers).await;
+                assert_eq!(status, StatusCode::OK, "HEAD {context}");
+                assert!(body.is_empty(), "HEAD {context}");
+                assert_eq!(
+                    answer[header::CONTENT_LENGTH].to_str().unwrap(),
+                    full.len().to_string(),
+                    "HEAD {context}"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn the_language_tag_and_the_brand_tag_are_both_there_once() {
+        let build = Build::new("both");
+        std::fs::write(build.0.join("index.html"), BUILT).unwrap();
+        let (shell, _) = branded_shell(&build, Some("sv"), &[("name", "MOHV")]);
+        let (_, _, body) = get(&shell, "GET", "/", &[]).await;
+        let text = String::from_utf8(body).unwrap();
+        assert_eq!(
+            text.matches("name=\"obop-default-language\" content=\"sv\"")
+                .count(),
+            1
+        );
+        assert_eq!(text.matches("name=\"obop-brand\"").count(), 1);
+        assert_eq!(text.matches("<title>").count(), 1);
+        // A name that spells the other tag cannot take it away: the language tag goes in first.
+        let (shell, _) = branded_shell(&build, Some("sv"), &[("name", "obop-default-language")]);
+        let (_, _, body) = get(&shell, "GET", "/", &[]).await;
+        let text = String::from_utf8(body).unwrap();
+        assert_eq!(
+            text.matches("name=\"obop-default-language\" content=\"sv\"")
+                .count(),
+            1,
+            "{text}"
+        );
+    }
+
+    #[tokio::test]
+    async fn with_no_row_and_no_language_the_shell_is_the_file_and_asks_the_reader_only_for_the_document()
+     {
+        let build = Build::new("norow");
+        let (flaky, backend) = Flaky::memory();
+        let reader = Arc::new(Reader::with_bound(backend, Duration::from_secs(60)));
+        let plain = Shell::new(build.path(), None);
+        let shell = Shell::with_brand(build.path(), None, reader);
+        let modified = modified_of(build.path(), "/").await;
+        // Files that are not the shell cause no read.
+        flaky.reset_reads();
+        for path in ["/assets/app.js", "/assets/app.css", "/assets/doc.pdf"] {
+            for (_what, headers) in conditions(&modified) {
+                for method in ["GET", "HEAD"] {
+                    let a = get(&plain, method, path, &headers).await;
+                    let b = get(&shell, method, path, &headers).await;
+                    assert_eq!(
+                        (a.0, shown(&a.1), a.2),
+                        (b.0, shown(&b.1), b.2),
+                        "{method} {path}"
+                    );
+                }
+            }
+        }
+        assert_eq!(
+            flaky.reads().gets,
+            0,
+            "a script, a style sheet or a picture asks nobody"
+        );
+        // The shell is the file's answer, validators and ranges included, for every condition.
+        for path in ["/", "/index.html", "/customize", "/assets/gone.js"] {
+            for (what, headers) in conditions(&modified) {
+                for method in ["GET", "HEAD"] {
+                    let a = get(&plain, method, path, &headers).await;
+                    let b = get(&shell, method, path, &headers).await;
+                    let context = format!("{method} {path} ({what})");
+                    assert_eq!(a.0, b.0, "status of {context}");
+                    assert_eq!(shown(&a.1), shown(&b.1), "headers of {context}");
+                    assert_eq!(a.2, b.2, "body of {context}");
+                }
+            }
+        }
+        assert!(flaky.reads().gets > 0, "the document asked the reader");
+    }
+
+    #[tokio::test]
+    async fn a_shell_that_cannot_take_the_brand_is_served_as_it_is_with_one_line_on_stderr_once() {
+        let build = Build::new("cannot");
+        for (page, what) in [
+            ("<html><body>x</body></html>", "no head"),
+            (
+                "<html><head><link rel=\"icon\" href=\"/x\"></head><body></body></html>",
+                "no title",
+            ),
+            (
+                "<html><head><title>obop</title></head><body></body></html>",
+                "no icon link",
+            ),
+        ] {
+            std::fs::write(build.0.join("index.html"), page).unwrap();
+            let (shell, _) = branded_shell(&build, None, &[("name", "MOHV")]);
+            let lines = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+            let sink = lines.clone();
+            let shell =
+                shell.with_sink(Arc::new(move |l| sink.lock().unwrap().push(l.to_string())));
+            for path in ["/", "/customize", "/index.html"] {
+                let (status, headers, body) = get(&shell, "GET", path, &[]).await;
+                assert_eq!(status, StatusCode::OK, "{what}");
+                assert_eq!(body, page.as_bytes(), "{what}: served as it is");
+                assert_eq!(headers[header::CACHE_CONTROL], "no-cache", "{what}");
+            }
+            let lines = lines.lock().unwrap();
+            assert_eq!(lines.len(), 1, "{what}: one line, once: {lines:?}");
+            assert!(
+                lines[0].contains("cannot take the instance brand"),
+                "{lines:?}"
+            );
+            assert!(
+                !lines[0].contains("MOHV"),
+                "the line holds nothing of the brand: {lines:?}"
+            );
+        }
     }
 }

@@ -77,7 +77,7 @@ enum Limit {
 
 /// Where the brand is read or written: the path from `crates/` (a prefix when it ends with `/`),
 /// why, and what the file may do.
-const ALLOWED: [(&str, &str, Limit); 10] = [
+const ALLOWED: [(&str, &str, Limit); 11] = [
     (
         "kernel/obop-commands/src/brand/",
         "the module itself: the reader, `strict()`, `apply` and the read of `get`",
@@ -151,6 +151,16 @@ const ALLOWED: [(&str, &str, Limit); 10] = [
             reads: 0,
             paths: &["Shown"],
             types: &[],
+        },
+    ),
+    (
+        "kernel/obop-http/src/shell.rs",
+        "the back office shell (S2): `Shell::for_state` gets the reader of the dispatcher once, `shown()` asks it once, on a blocking thread, and only when the answer is the HTML document itself (never for a script, a style sheet or a picture); `Public::of` takes the public subset from the `Shown` with one call of the accessor `Shown::brand()`; it names the types `Reader` and `Shown` as types only (no function through them, no second name, no impl), so it builds no reader",
+        Limit::Reads {
+            calls: 2,
+            reads: 1,
+            paths: &["Reader", "Shown"],
+            types: &["Reader", "Shown"],
         },
     ),
 ];
@@ -679,6 +689,10 @@ fn the_scan_sees_the_ways_a_file_can_read_the_row_and_leaves_the_allowed_files_a
             "kernel/obop-oauth/src/flow.rs",
             "use obop_commands::brand::Shown; fn f() -> Arc<Shown> { Arc::new(Shown::not_set(None)) }",
         ),
+        (
+            "kernel/obop-http/src/shell.rs",
+            "use obop_commands::brand::{Reader, Shown}; fn f(s: &S) -> Arc<Reader> { s.dispatcher.brand() } fn g(r: Arc<Reader>) -> Arc<Shown> { r.current() } fn h(s: &Shown) -> &str { s.brand().name() }",
+        ),
     ]);
     let (found, stale) = scan(&files);
     assert!(found.is_empty(), "{found:?}");
@@ -1091,7 +1105,8 @@ fn the_rows_with_limits_are_the_files_that_only_ask_the_reader() {
             "kernel/obop-http/src/lib.rs",
             "kernel/obop-http/src/oauth.rs",
             "kernel/obop-oauth/src/page.rs",
-            "kernel/obop-oauth/src/flow.rs"
+            "kernel/obop-oauth/src/flow.rs",
+            "kernel/obop-http/src/shell.rs"
         ]
     );
 }
