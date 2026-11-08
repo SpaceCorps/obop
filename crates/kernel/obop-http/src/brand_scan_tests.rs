@@ -1364,3 +1364,96 @@ fn the_rows_of_the_pages_of_the_authorization_flow_hold_their_files_to_what_they
         assert!(found[0].contains(what), "{path}: {src}: {found:?}");
     }
 }
+
+// ---- One read for each request that makes a page (slice S1c) ----------------------------------------
+//
+// The scan for the one reader counts what a file asks of the reader, and the handlers ask it in one
+// helper, `read_brand`, so a second call of the helper in a handler is a second question that the
+// counts above cannot see. The pages of a request must come from one value (the reader answers from
+// its cell within two seconds, but a refill in between may change the answer, and a request that
+// shows the name twice should not show two names). So the calls of `read_brand` are pinned too:
+// exactly one in each of the four functions where a request of the flow begins, and none anywhere
+// else in the file.
+
+const ROUTE_FILE: &str = "kernel/obop-http/src/oauth.rs";
+
+/// The four functions where a request of the authorization flow begins: the page of the flow, the
+/// step of a form post, the link of the Microsoft step and its return address.
+const REQUEST_STARTS: [&str; 4] = [
+    "authorize_blocking",
+    "microsoft_blocking",
+    "microsoft_return",
+    "step",
+];
+
+/// The function that holds each call of `read_brand` in the non-test code of the route file, in
+/// source order. The definition of the helper is not a call.
+fn brand_read_sites(files: &BTreeMap<String, String>) -> Vec<String> {
+    use crate::src_scan::{enclosing_fn, skip_ws};
+    let lexed = non_test(files);
+    let Some(l) = lexed.get(ROUTE_FILE) else {
+        return vec!["(the route file is not in the tree)".to_string()];
+    };
+    let name = "read_brand";
+    words(&l.code, name)
+        .into_iter()
+        .filter(|&p| {
+            let before = String::from_utf8_lossy(&l.code[..p]);
+            let defines = before.trim_end().ends_with("fn");
+            let calls = l.code.get(skip_ws(&l.code, p + name.len())) == Some(&b'(');
+            calls && !defines
+        })
+        .map(|p| enclosing_fn(&l.code, p).unwrap_or_else(|| "(no function)".to_string()))
+        .collect()
+}
+
+#[test]
+fn each_request_that_makes_a_page_reads_the_brand_once_and_nothing_else_does() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut files = BTreeMap::new();
+    read_tree(&root, &root, &mut files);
+    let mut sites = brand_read_sites(&files);
+    sites.sort();
+    assert_eq!(
+        sites,
+        REQUEST_STARTS.to_vec(),
+        "`read_brand` is called once in each function where a request of the flow begins and \
+         nowhere else; a page handler takes the brand it is handed"
+    );
+}
+
+#[test]
+fn the_scan_of_the_calls_of_the_brand_helper_sees_a_second_call_a_missing_one_and_a_stray_one() {
+    let at = |src: &str| {
+        let mut sites = brand_read_sites(&tree(&[(ROUTE_FILE, src)]));
+        sites.sort();
+        sites
+    };
+    let helper = "fn read_brand(s: &S) -> Arc<Shown> { s.dispatcher.brand().current() }";
+    // The helper alone is no call; a call in each start is what the list says.
+    assert!(at(helper).is_empty());
+    assert_eq!(
+        at(&format!(
+            "{helper} fn authorize_blocking() {{ let b = read_brand(s); }} \
+             fn step() {{ let b = read_brand(s); }} \
+             fn microsoft_blocking() {{ let b = read_brand(s); }} \
+             async fn microsoft_return() {{ blocking(move || {{ let b = read_brand(&s); }}) }}"
+        )),
+        REQUEST_STARTS.to_vec()
+    );
+    // A second call in one of the starts, a call in another function, a start with none.
+    assert_eq!(
+        at("fn step() { let a = read_brand(s); let b = read_brand(s); }"),
+        ["step", "step"]
+    );
+    assert_eq!(
+        at("fn consent_or_gone() { read_brand(s); }"),
+        ["consent_or_gone"]
+    );
+    assert!(
+        !at("fn authorize_blocking() { let b = 1; }").contains(&"authorize_blocking".to_string())
+    );
+    // Comments and test code are not code of the route.
+    assert!(at("fn f() { /* read_brand(s) */ } // read_brand(s)\n").is_empty());
+    assert!(at("#[cfg(test)] mod t { fn x() { read_brand(s); } }").is_empty());
+}

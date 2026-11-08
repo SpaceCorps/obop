@@ -148,6 +148,28 @@ async fn client_named(r: &axum::Router, name: &str) -> String {
     c.json()["client_id"].as_str().unwrap().to_string()
 }
 
+/// A client of the mobile class (a scheme and a loopback address), registered through the real
+/// registration as `Mileage`.
+async fn mobile_client(r: &axum::Router) -> String {
+    let ip = fresh_address();
+    let c = call(
+        r,
+        "POST",
+        "/oauth/register",
+        &[("x-forwarded-for", &ip)],
+        Some((
+            "application/json",
+            json!({"client_name": "Mileage", "obop_client_class": "mobile",
+                   "redirect_uris": ["se.mohv.app:/oauth", "http://127.0.0.1/callback"],
+                   "scope": "base.user", "token_endpoint_auth_method": "none"})
+            .to_string(),
+        )),
+    )
+    .await;
+    assert_eq!(c.status, 201, "{}", c.text());
+    c.json()["client_id"].as_str().unwrap().to_string()
+}
+
 /// The consent page of `client`, in `lang`, for a person who signs in as `ada`.
 async fn consent_of(r: &axum::Router, client: &str, lang: &str) -> Resp {
     let (_, b) = start(r, &authorize_url(client, REDIRECT, &[("lang", lang)])).await;
@@ -443,25 +465,7 @@ async fn the_consent_page_of_each_class_of_client_keeps_the_claim_and_the_host_l
     // An MCP client, a mobile app that registered a scheme, and one that registered a loopback
     // address.
     let mcp = client_named(r, "Claude").await;
-    let mobile = {
-        let ip = fresh_address();
-        let c = call(
-            r,
-            "POST",
-            "/oauth/register",
-            &[("x-forwarded-for", &ip)],
-            Some((
-                "application/json",
-                json!({"client_name": "Mileage", "obop_client_class": "mobile",
-                       "redirect_uris": ["se.mohv.app:/oauth", "http://127.0.0.1/callback"],
-                       "scope": "base.user", "token_endpoint_auth_method": "none"})
-                .to_string(),
-            )),
-        )
-        .await;
-        assert_eq!(c.status, 201, "{}", c.text());
-        c.json()["client_id"].as_str().unwrap().to_string()
-    };
+    let mobile = mobile_client(r).await;
     let api = "http://inst.test/api";
     for lang in LANGS {
         for (client, redirect, resource, key, host, app) in [
@@ -540,25 +544,36 @@ fn server_of(rig: &Rig) -> Arc<obop_oauth::OAuth> {
 
 /// A flow begun without the HTTP layer: the browser's view of it, and its id and secret.
 fn begun(o: &obop_oauth::OAuth) -> (Browser, String) {
+    begun_as(
+        o,
+        &json!({"client_name": "Claude", "redirect_uris": [REDIRECT],
+                "token_endpoint_auth_method": "none"}),
+        REDIRECT,
+        "http://inst.test/mcp",
+    )
+}
+
+/// [`begun`] for a client that registers with `registration`, and the redirect and resource it
+/// asks for.
+fn begun_as(
+    o: &obop_oauth::OAuth,
+    registration: &serde_json::Value,
+    redirect: &str,
+    resource: &str,
+) -> (Browser, String) {
     let ip = fresh_address();
-    let client = o
-        .register(
-            &ip,
-            &json!({"client_name": "Claude", "redirect_uris": [REDIRECT],
-                    "token_endpoint_auth_method": "none"}),
-        )
-        .unwrap()["client_id"]
+    let client = o.register(&ip, registration).unwrap()["client_id"]
         .as_str()
         .unwrap()
         .to_string();
     let p = obop_oauth::flow::AuthorizeParams {
         response_type: Some("code".into()),
         client_id: Some(client),
-        redirect_uri: Some(REDIRECT.into()),
+        redirect_uri: Some(redirect.into()),
         state: Some("xyz".into()),
         code_challenge: Some(s256(VERIFIER)),
         code_challenge_method: Some("S256".into()),
-        resources: vec!["http://inst.test/mcp".into()],
+        resources: vec![resource.into()],
         ..Default::default()
     };
     let v = o.validate_authorize(BASE, &p).unwrap();
@@ -737,4 +752,60 @@ async fn a_change_of_the_brand_between_two_requests_of_a_flow_shows_in_the_next(
         brand_line(&html)
     );
     assert!(!html.contains("First"));
+}
+
+/// The Microsoft step of a mobile app's flow has two requests of its own that make a page: the link
+/// on the sign-in page and the return address. On an instance with no Microsoft provider the first
+/// answers with the sign-in page again (a word under the lead) and the second with the page for a
+/// flow that still waits. A failing first read of the brand is the 503 of D74 on either; once the
+/// store answers both are pages of the brand, made from the one read at the start of the request;
+/// with no row they are the pages they were.
+#[tokio::test]
+async fn the_two_requests_of_the_microsoft_step_show_the_brand_and_read_it_first() {
+    let (flaky, rig) = flaky_rig();
+    let r = &rig.r;
+    let o = server_of(&rig);
+    // The flow is begun without the HTTP layer, so that the reader of the app has not read the brand
+    // when the first request below arrives (a read within its bound would be served from its cell).
+    let (b, _) = begun_as(
+        &o,
+        &json!({"client_name": "Mileage", "obop_client_class": "mobile",
+                "redirect_uris": ["se.mohv.app:/oauth"], "scope": "base.user",
+                "token_endpoint_auth_method": "none"}),
+        "se.mohv.app:/oauth",
+        "http://inst.test/api",
+    );
+    let paths = [
+        format!("/oauth/authorize/microsoft?flow={}", b.flow),
+        format!("/oauth/authorize/return?flow={}", b.flow),
+    ];
+    flaky.refuse_model("instance_brand", Mode::Reads);
+    for path in &paths {
+        let refused = call(r, "GET", path, &b.headers(), None).await;
+        assert_d74_503(&refused);
+    }
+    flaky.allow_models();
+    configure(&rig.app, &FIELDS);
+    for path in &paths {
+        let resp = call(r, "GET", path, &b.headers(), None).await;
+        assert_eq!(resp.status, 200, "{path}: {}", resp.text());
+        let html = resp.text();
+        let line = brand_line(&html);
+        assert!(
+            line.contains("<svg") && line.contains("MOHV"),
+            "{path}: {line}"
+        );
+        assert!(!visible(&html).to_lowercase().contains("obop"), "{path}");
+        assert!(policy(&resp).ends_with("; img-src 'self'"), "{path}");
+        assert!(html.contains("rel=\"icon\""), "{path}");
+    }
+    clear(&rig.app);
+    for path in &paths {
+        let resp = call(r, "GET", path, &b.headers(), None).await;
+        assert_eq!(resp.status, 200, "{path}: {}", resp.text());
+        let html = resp.text();
+        assert!(html.contains("<p class=\"brand\">obop</p>"), "{path}");
+        assert!(!policy(&resp).contains("img-src"), "{path}");
+        assert!(!html.contains("rel=\"icon\""), "{path}");
+    }
 }
