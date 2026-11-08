@@ -967,8 +967,8 @@ const LITERAL_ALLOWED: [LiteralRow; 4] = [
         "today",
         "the relying-party name of the passkey ceremony site of the sign-in pages. It reaches an \
          authenticator only through registration options, which the REST routes make, not these \
-         pages. The branded counterpart is the name from the record, which the enrolment slice (S1e) \
-         puts here and then removes this row",
+         pages. Its branded counterpart does not exist in this tree yet: S1e is to replace this \
+         literal with the name from the record and then remove this row",
     ),
 ];
 
@@ -1584,4 +1584,102 @@ fn the_scan_of_the_calls_of_the_brand_helper_sees_a_second_call_a_missing_one_an
     // Comments and test code are not code of the route.
     assert!(at("fn f() { /* read_brand(s) */ } // read_brand(s)\n").is_empty());
     assert!(at("#[cfg(test)] mod t { fn x() { read_brand(s); } }").is_empty());
+}
+
+// ---- The two functions that make a page with the default brand are for tests only (slice S1c) ----------
+//
+// `error_page` (page.rs) and `OAuth::view_plain` (flow.rs) make a page, or a page context, for an
+// instance with no brand. They exist for the golden pins and the tests of the flow, and they are
+// compiled for the tests of `obop-oauth` only (`#[cfg(test)]`), so that a handler cannot call them:
+// the call would not compile. Nothing else held that gate: take the attribute off and every test,
+// scan and lint stays green, and the hole is open again. So the non-test code of the two files is
+// scanned for a function of either name. (`error_page_with` is another word and is the function the
+// handlers use.)
+
+/// The files that hold a function which must not exist outside a test, and its name.
+const TEST_ONLY: [(&str, &str); 2] = [
+    ("kernel/obop-oauth/src/page.rs", "error_page"),
+    ("kernel/obop-oauth/src/flow.rs", "view_plain"),
+];
+
+/// Where a function of `TEST_ONLY` is defined in code that a release build compiles.
+fn defined_outside_tests(files: &BTreeMap<String, String>) -> Vec<String> {
+    let lexed = non_test(files);
+    let mut found = Vec::new();
+    for (path, name) in TEST_ONLY {
+        let Some(l) = lexed.get(path) else {
+            found.push(format!("{path}: not in the tree"));
+            continue;
+        };
+        for at in words(&l.code, name) {
+            let before = String::from_utf8_lossy(&l.code[..at]);
+            if before.trim_end().ends_with("fn") {
+                found.push(format!(
+                    "{path}:{}: `fn {name}` is compiled outside the tests",
+                    line_of(&l.code, at)
+                ));
+            }
+        }
+    }
+    found
+}
+
+#[test]
+fn the_functions_that_make_a_page_with_the_default_brand_are_compiled_for_tests_only() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut files = BTreeMap::new();
+    read_tree(&root, &root, &mut files);
+    let found = defined_outside_tests(&files);
+    assert!(
+        found.is_empty(),
+        "a handler could call a page of an instance with no brand:\n{}",
+        found.join("\n")
+    );
+    // The scan reads the real files: both functions are in them, behind the attribute.
+    for (path, name) in TEST_ONLY {
+        let src = &files[path];
+        assert!(
+            src.contains(&format!("#[cfg(test)]\npub fn {name}"))
+                || src.contains(&format!("#[cfg(test)]\n    pub(crate) fn {name}")),
+            "{path}: `fn {name}` is not behind `#[cfg(test)]` where the test expects it"
+        );
+    }
+}
+
+#[test]
+fn the_scan_of_the_test_only_functions_sees_one_without_the_attribute_and_leaves_the_rest_alone() {
+    let (page, flow) = (TEST_ONLY[0].0, TEST_ONLY[1].0);
+    let at = |page_src: &str, flow_src: &str| {
+        defined_outside_tests(&tree(&[(page, page_src), (flow, flow_src)]))
+    };
+    // Behind the attribute: nothing. `error_page_with` is another function, and a call is no
+    // definition.
+    assert!(
+        at(
+            "#[cfg(test)]\npub fn error_page(l: &str) {}\npub fn error_page_with(b: &S) { error_page(l); }",
+            "impl O { #[cfg(test)] pub(crate) fn view_plain(&self) {} }"
+        )
+        .is_empty()
+    );
+    // Without it, in either file, public or private.
+    let found = at("pub fn error_page(l: &str) {}", "");
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(found[0].contains("page.rs:1") && found[0].contains("error_page"));
+    let found = at("", "impl O { pub(crate) fn view_plain(&self) {} }");
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(found[0].contains("flow.rs") && found[0].contains("view_plain"));
+    let found = at("fn error_page() {}", "fn view_plain() {}");
+    assert_eq!(found.len(), 2, "{found:?}");
+    // A comment or a string that says the name is no definition; a file that is gone is reported.
+    assert!(
+        at(
+            "// fn error_page() {}\nconst S: &str = \"fn error_page\";",
+            ""
+        )
+        .is_empty()
+    );
+    assert_eq!(
+        defined_outside_tests(&tree(&[(page, "")])),
+        [format!("{flow}: not in the tree")]
+    );
 }

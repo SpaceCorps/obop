@@ -1,5 +1,7 @@
 //! The logo route, `GET /api/brand/logo.svg` (docs/spec/branding.md, sections 4 and 9), and the
-//! one way a handler of this crate asks the reader of the instance brand.
+//! way an async handler of this crate asks the reader of the instance brand. (The handlers of the
+//! OAuth pages run on a blocking thread already and ask through `read_brand` in `oauth.rs`, once at
+//! the start of each request; the scan in `brand_scan_tests.rs` pins that one place.)
 //!
 //! **The route.** Public like `/api/openapi.json`; it takes no path or id and a query string is
 //! ignored, so it is not a file server. It answers the artwork as the reader re-serialised it, or
@@ -52,7 +54,8 @@ pub(crate) type NotFound = fn() -> Response;
 
 /// The brand for display, asked through the blocking pool: the reader's cache-hit path takes a
 /// standard mutex only, and the one refill that reads the store runs on a blocking thread, where
-/// the store's client may run. Every handler of this crate that shows the brand asks it this way.
+/// the store's client may run. Every async handler of this crate that shows the brand asks it this
+/// way; the OAuth handlers, which are on a blocking thread already, ask through `read_brand`.
 pub(crate) async fn current(reader: Arc<Reader>) -> Arc<Shown> {
     blocking(move || reader.current()).await
 }
