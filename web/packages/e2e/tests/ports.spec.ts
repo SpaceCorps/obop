@@ -1,4 +1,4 @@
-// The ports of a run: eight servers, eight different ports (support/ports.ts). A server that finds its
+// The ports of a run: one port for each server, all different (support/ports.ts). A server that finds its
 // port taken stops with "Address already in use" and Playwright reports that it could not start.
 import { createServer, type Server } from "node:net";
 import { expect, test } from "@playwright/test";
@@ -25,7 +25,7 @@ test.describe("the ports of a run", () => {
     expect(new Set(ports).size).toBe(COUNT);
   });
 
-  test("picking eight ports gives eight different ones, 200 times over", async () => {
+  test("picking the ports of a run gives different ones, 200 times over", async () => {
     for (let round = 0; round < 200; round++) {
       const ports = await freePorts(COUNT);
       expect(new Set(ports).size, `round ${round}: ${ports.join(", ")}`).toBe(COUNT);
