@@ -1004,6 +1004,12 @@ mod tests {
     /// The ceremony site of the OAuth pages' passkey steps (S1e), over a dispatcher whose reader is
     /// installed over `backend`.
     fn site_over(backend: &Arc<dyn obop_storage::Backend>) -> String {
+        sites_over(backend, 1).remove(0)
+    }
+
+    /// The ceremony sites of `calls` requests to the OAuth pages' passkey step, over one state: the
+    /// relying party name of each.
+    fn sites_over(backend: &Arc<dyn obop_storage::Backend>, calls: usize) -> Vec<String> {
         let d = Arc::new(obop_commands::Dispatcher::new());
         d.install_brand(backend.clone());
         let state = crate::HttpState::with_mcp(
@@ -1030,9 +1036,13 @@ mod tests {
             .unwrap()
             .into_parts()
             .0;
-        webauthn_ctx(&state, &parts, &st)
-            .expect("a ceremony site")
-            .rp_name
+        (0..calls)
+            .map(|_| {
+                webauthn_ctx(&state, &parts, &st)
+                    .expect("a ceremony site")
+                    .rp_name
+            })
+            .collect()
     }
 
     /// The relying party name of the OAuth pages' ceremony site is the instance brand's name as the
@@ -1068,5 +1078,82 @@ mod tests {
             }])
             .unwrap();
         assert_eq!(site_over(&backend), "obop", "a name that cannot be shown");
+
+        // A name the display accepts and `strict()` refuses (a colon): shown as it is, not replaced
+        // by `obop` as a site built on `strict()` with a fallback would.
+        let backend = obop_storage::open("memory:").unwrap();
+        let mut row = obop_storage::Fields::new();
+        row.insert("name".into(), json!("a:b"));
+        backend
+            .apply_checked(&[obop_storage::Op::Put {
+                model: "instance_brand".into(),
+                id: "instance".into(),
+                fields: row,
+            }])
+            .unwrap();
+        assert_eq!(
+            site_over(&backend),
+            "a:b",
+            "a name only the display accepts"
+        );
+    }
+
+    /// The cache of the reader applies to the OAuth pages' ceremony site as to the passkey routes
+    /// (the Cache bullet of the spec, section 13): a hundred calls cost the store one read of the row
+    /// and one of the theme, the unit of one refill. The bound of the cell is two seconds, so the
+    /// count allowed is one per two seconds the loop took, plus the first.
+    #[test]
+    fn a_hundred_oauth_sites_cost_the_store_one_read_of_the_row_and_one_of_the_theme() {
+        let (flaky, backend) = obop_storage::testing::Flaky::memory();
+        let mut row = obop_storage::Fields::new();
+        row.insert("name".into(), json!("MOHV"));
+        backend
+            .apply_checked(&[obop_storage::Op::Put {
+                model: "instance_brand".into(),
+                id: "instance".into(),
+                fields: row,
+            }])
+            .unwrap();
+        let (row_reads, theme_reads) = (
+            flaky.gets_of("instance_brand"),
+            flaky.gets_of("obop_setting"),
+        );
+        let started = std::time::Instant::now();
+        let names = sites_over(&backend, 100);
+        let refills = 1 + started.elapsed().as_millis() as u64 / 2000;
+        assert!(names.iter().all(|n| n == "MOHV"));
+        let (row_reads, theme_reads) = (
+            flaky.gets_of("instance_brand") - row_reads,
+            flaky.gets_of("obop_setting") - theme_reads,
+        );
+        assert!(
+            (1..=refills).contains(&row_reads),
+            "the row was read {row_reads} times"
+        );
+        assert!(
+            (1..=refills).contains(&theme_reads),
+            "the theme was read {theme_reads} times"
+        );
+    }
+
+    /// The display read of the OAuth pages' ceremony site is held against the request as any display
+    /// read is (docs/spec/branding.md, section 4, "The display read and D74"): the site is built, and
+    /// the fault the read met is noted on the thread, so the layer above answers 503 with
+    /// `Retry-After`. The page cannot do what it came for without the same store, so this is the
+    /// rule of the other pages too; `fault::detached` around the read is the named alternative
+    /// (15.3 (f)), and a change to it flips this test, which is its purpose.
+    #[test]
+    fn the_display_read_of_the_oauth_pages_site_meets_the_fault_of_the_store() {
+        let (flaky, backend) = obop_storage::testing::Flaky::memory();
+        // A request scope, as `blocking` opens one: a read run inside `fault::detached` would leave
+        // no trace in it.
+        obop_storage::fault::begin_request(obop_storage::fault::Outcome::default());
+        flaky.refuse_model("obop_setting", obop_storage::testing::Mode::Reads);
+        assert_eq!(sites_over(&backend, 1), ["obop"]);
+        let outcome = obop_storage::fault::end_request();
+        assert!(
+            outcome.fault.is_some(),
+            "the fault of the read was not noted in the request"
+        );
     }
 }

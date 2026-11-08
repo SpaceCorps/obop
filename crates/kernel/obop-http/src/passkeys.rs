@@ -51,8 +51,12 @@ pub(crate) fn routes() -> Router<Arc<HttpState>> {
 /// The relying party name a ceremony site carries for every route but the registration options:
 /// the name of the instance brand as the reader shows it (the default when there is none, or when
 /// the stored name fails the read check). The sign-in ceremony emits no name, so a bad stored name
-/// does not stop a passkey or a two-factor sign-in. Asked on a blocking thread, as every handler of
-/// this crate asks the reader. The OAuth pages' ceremony site takes its name from here too.
+/// does not stop a passkey or a two-factor sign-in. Asked on a blocking thread (every handler of
+/// this file is on one). The display read is the one every page makes, so a request that meets a
+/// fault of the store in it is answered with the 503 of D74, the sign-in routes included, which on
+/// the base (where the site carried the constant `obop` and read no store) they were not
+/// (docs/spec/branding.md, section 4, "The display read and D74"). The OAuth pages' ceremony site
+/// takes its name from here too.
 pub(crate) fn rp_name(s: &HttpState) -> String {
     s.dispatcher.brand().current().brand().name().to_string()
 }
@@ -422,6 +426,18 @@ mod tests {
             "obop",
             "a name that cannot be shown"
         );
+
+        // A name the display accepts and `strict()` refuses (it holds a colon): the display read
+        // shows it as it is. A site that took its name from `strict()` and fell back to `obop` on
+        // the refusal would say `obop` here. (A site that read the row on every call would say the
+        // same as this one: the count of the reads is `a_hundred_sites_cost_...`.)
+        let backend = obop_storage::open("memory:").unwrap();
+        put_name(&backend, J::from("a:b"));
+        assert_eq!(
+            rp_name_over(&backend),
+            "a:b",
+            "a name the display accepts and strict() refuses"
+        );
     }
 
     fn put_name(backend: &Arc<dyn obop_storage::Backend>, name: J) {
@@ -509,5 +525,133 @@ mod tests {
             "a failing theme read does not refuse the name"
         );
         assert_eq!(flaky.refused(), 0, "the setting was not asked for");
+    }
+
+    /// A state like `state_over`, with `public_url` as the address of the instance.
+    fn state_at(backend: &Arc<dyn obop_storage::Backend>, public_url: &str) -> Arc<HttpState> {
+        let d = Arc::new(obop_commands::Dispatcher::new());
+        d.install_brand(backend.clone());
+        HttpState::with_mcp(
+            d,
+            Arc::new(Nobody),
+            crate::mcp::McpConfig {
+                public_url: Some(public_url.into()),
+                ..crate::mcp::McpConfig::default()
+            },
+        )
+    }
+
+    /// The cache of the reader applies to the ceremony site of every route that is not the
+    /// registration (the Cache bullet of the spec, section 13, for this builder): a hundred calls
+    /// cost the store one read of the row and one of the theme, the unit of one refill, and not a
+    /// hundred. The bound of the cell is two seconds, so the count allowed is one per two seconds
+    /// the loop took, plus the first; on an idle machine that is one. A builder that reads the row
+    /// and the theme on every call (the uncached `fresh()`) or only the row on every call
+    /// (`strict()`) is a count of a hundred, or no read of the theme.
+    #[test]
+    fn a_hundred_sites_cost_the_store_one_read_of_the_row_and_one_of_the_theme() {
+        let (flaky, backend) = obop_storage::testing::Flaky::memory();
+        put_name(&backend, J::from("MOHV"));
+        let (row, theme) = (
+            flaky.gets_of("instance_brand"),
+            flaky.gets_of("obop_setting"),
+        );
+        let state = state_over(Some(&backend));
+        let parts = parts_of_a_passkey_route();
+        let started = std::time::Instant::now();
+        for _ in 0..100 {
+            assert!(ctx(&state, &parts).is_ok());
+        }
+        let refills = 1 + started.elapsed().as_millis() as u64 / 2000;
+        let (row, theme) = (
+            flaky.gets_of("instance_brand") - row,
+            flaky.gets_of("obop_setting") - theme,
+        );
+        assert!((1..=refills).contains(&row), "the row was read {row} times");
+        assert!(
+            (1..=refills).contains(&theme),
+            "the theme was read {theme} times"
+        );
+    }
+
+    /// The name of a site is asked for after the address of the instance is known, and only once.
+    /// With an address the request cannot give a site (the public URL is not an address), the
+    /// answer is `passkeys_unavailable` and the store is not asked for the row or the theme: not by
+    /// the display builder, and not by the registration, whose stored name here cannot be shown and
+    /// would be the answer of the branding if it were read first. With a usable address each builder
+    /// reads once: the registration the row alone, the display builder the unit of one refill.
+    #[tokio::test]
+    async fn the_name_is_read_after_the_address_is_known_and_once() {
+        let (flaky, backend) = obop_storage::testing::Flaky::memory();
+        put_name(&backend, J::from("a<b"));
+        let (row, theme) = (
+            flaky.gets_of("instance_brand"),
+            flaky.gets_of("obop_setting"),
+        );
+        let state = state_at(&backend, "nonsense");
+        let parts = parts_of_a_passkey_route();
+        for (what, name) in [
+            ("display", display_name as NameFor),
+            ("registration", registration_name as NameFor),
+        ] {
+            let Err(r) = ctx_named(&state, &parts, name) else {
+                panic!("{what}: a site was built with no address")
+            };
+            let (status, _, body) = refusal(r).await;
+            assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{what}");
+            assert_eq!(
+                body["code"],
+                json!("passkeys_unavailable"),
+                "{what}: {body}"
+            );
+        }
+        assert_eq!(flaky.gets_of("instance_brand"), row, "the row was read");
+        assert_eq!(flaky.gets_of("obop_setting"), theme, "the theme was read");
+
+        // With an address: once each.
+        put_name(&backend, J::from("MOHV"));
+        let state = state_at(&backend, "https://inst.test");
+        let c = ctx_named(&state, &parts, registration_name)
+            .ok()
+            .expect("a site");
+        assert_eq!(c.rp_name, "MOHV");
+        assert_eq!(flaky.gets_of("instance_brand") - row, 1, "the registration");
+        assert_eq!(flaky.gets_of("obop_setting") - theme, 0, "no display read");
+        let c = ctx_named(&state, &parts, display_name)
+            .ok()
+            .expect("a site");
+        assert_eq!(c.rp_name, "MOHV");
+        assert_eq!(flaky.gets_of("instance_brand") - row, 2, "the display unit");
+        assert_eq!(flaky.gets_of("obop_setting") - theme, 1, "the display unit");
+    }
+
+    /// The display read of the ceremony site is held against the request as any display read is
+    /// (docs/spec/branding.md, section 4, "The display read and D74"): the site is built, with the
+    /// last good name or the default, and the fault the read met is noted on the thread, which is
+    /// what makes the layer above answer 503 with `Retry-After`. That is the rule the spec chose for
+    /// every page, the passkey sign-in included; `fault::detached` around this read is the named
+    /// alternative (15.3 (f)), and a change to it flips this test, which is its purpose.
+    #[test]
+    fn the_display_read_of_a_site_meets_the_fault_of_the_store_like_any_display_read() {
+        let (flaky, backend) = obop_storage::testing::Flaky::memory();
+        put_name(&backend, J::from("MOHV"));
+        let state = state_over(Some(&backend));
+        let parts = parts_of_a_passkey_route();
+        // A request scope, as `blocking` opens one: a read run inside `fault::detached` would leave
+        // no trace in it.
+        obop_storage::fault::begin_request(obop_storage::fault::Outcome::default());
+        flaky.refuse_model("obop_setting", obop_storage::testing::Mode::Reads);
+        let c = ctx(&state, &parts)
+            .ok()
+            .expect("a site is built all the same");
+        assert_eq!(
+            c.rp_name, "obop",
+            "no last good value in this process: the default"
+        );
+        let outcome = obop_storage::fault::end_request();
+        assert!(
+            outcome.fault.is_some(),
+            "the fault of the read was not noted in the request"
+        );
     }
 }

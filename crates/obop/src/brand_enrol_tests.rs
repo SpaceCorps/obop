@@ -705,3 +705,27 @@ async fn a_failing_theme_read_does_not_refuse_the_passkey_registration() {
         "the registration did not ask for the theme"
     );
 }
+
+/// The passkey sign-in builds its ceremony site with the display read of the reader (it emits no
+/// name, but the site carries one), and a request that meets a fault of the store is answered as D74
+/// answers every request: 503 with `Retry-After`, whatever it came for. This is the rule the spec
+/// chose for every page that reads the brand, the sign-in included (docs/spec/branding.md, section
+/// 4, "The display read and D74", and 15.3 (f)); it is a change from the base, where the site carried
+/// a constant and read nothing, and the text of section 14 says so. `fault::detached` around the
+/// read is the alternative the spec names, and a change to it flips this test. Here the cell of the
+/// reader is empty (the row was written around it), the theme read is refused, and the sign-in
+/// options meet the refusal; when the store is back the same request is answered.
+#[tokio::test]
+async fn the_passkey_sign_in_options_meet_the_fault_of_the_display_read_like_any_request() {
+    let rig = rig(AuthConfig::insecure_dev());
+    write_row(&rig, &[("name", json!("MOHV"))]);
+    let path = "/api/auth/login/passkey/options";
+    rig.flaky.refuse_model("obop_setting", Mode::Reads);
+    let r = post(&rig.r, None, path, json!({})).await;
+    is_the_transient_503(&r, "the sign-in options with the theme read refused");
+    assert!(rig.flaky.refused() > 0);
+    rig.flaky.allow_models();
+    let r = post(&rig.r, None, path, json!({})).await;
+    assert_eq!(r.status, 200, "{}", r.json);
+    assert!(r.json["publicKey"]["challenge"].is_string(), "{}", r.json);
+}
