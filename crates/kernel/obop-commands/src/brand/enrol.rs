@@ -36,7 +36,9 @@ pub(super) fn issuer_from(value: Option<String>) -> Option<String> {
 /// as it is, as it always was (it is percent-escaped in the label and in `issuer=`, so the address
 /// stays one address), so this is a warning and not a refusal: but an app splits the decoded label at
 /// its colon, so it may show another issuer than `issuer=` says, which is why `configure` refuses
-/// the same characters in a name. `AuthConfig::from_env` writes it once at start.
+/// the same characters in a name. `AuthConfig::from_env` writes it once for the process (behind a
+/// `Once`): the first time the configuration is read, which for `obop serve` is at start, however
+/// many places in the process build their authentication.
 pub fn issuer_warning(issuer: &str) -> Option<&'static str> {
     unfit_for_a_label(issuer).then_some(
         "OBOP_MFA_ISSUER holds a colon, a slash, a backslash or an at sign. It is used as it is, but an authenticator app splits the label at its colon and may show another issuer than the one in issuer=; a brand name may not hold these characters for that reason.",
@@ -70,12 +72,20 @@ pub fn enrolment_error(e: String) -> MfaError {
 pub(super) fn store_read_line(text: &str) -> String {
     let text: String = text
         .chars()
-        .map(|c| if c.is_control() { ' ' } else { c })
+        .map(|c| if blanked_in_a_log(c) { ' ' } else { c })
         .take(300)
         .collect();
     format!(
         "obop: an enrolment was refused because the instance branding could not be read (cause: store read; obop admin brand status shows the state of the branding): {text}"
     )
+}
+
+/// Whether a character is blanked in a line of the log: a control character, and the line and
+/// paragraph separators U+2028 and U+2029, which are not control characters (their categories are
+/// `Zl` and `Zp`) and still start a line in a viewer that follows the Unicode rule. The same rule
+/// as `log_safe` in `obop-http`.
+fn blanked_in_a_log(c: char) -> bool {
+    c.is_control() || matches!(c, '\u{2028}' | '\u{2029}')
 }
 
 /// What an enrolment answers when the dispatcher it runs under has no reader of the brand (one that
@@ -89,13 +99,18 @@ pub fn no_reader_error() -> MfaError {
 
 /// Whether a stored name that passed the read check still cannot go into the label of an
 /// authenticator entry or the name of a passkey: it holds a character of a link or an address
-/// (`:` `/` `\` `@`, which `configure` refuses as `link_character`) or it is only white space.
+/// (`:` `/` `\` `@`, the four ASCII characters of those `configure` refuses as `link_character`) or
+/// it is only white space. The check is on the ASCII characters alone, on purpose: `configure` folds
+/// the text first (NFKC) and so refuses their fullwidth and small-form variants too, but an
+/// authenticator app splits the decoded label at the ASCII colon and at nothing else, and the label
+/// is percent-encoded, so a row written around the command that holds `U+FF1A` is enrolled with and
+/// cannot change the issuer an app shows.
 /// The read check of the display is the safety subset and accepts these, so a row written around the
 /// command (a restore, an import, a direct edit) can hold one. In a label the colon is the one
 /// character an app splits the decoded text at, so a name with a colon in it would show another
 /// issuer than `issuer=` says; and a name of spaces is a blank issuer. The enrolment fails closed on
-/// them as it does on a name that cannot be shown, so that a row `configure` would not write is not
-/// written into a person's device either. Only [`strict`](super::strict) and `get` ask this.
+/// them as it does on a name that cannot be shown, so that a row that could make an app show another
+/// issuer is not written into a person's device. Only [`strict`](super::strict) and `get` ask this.
 pub(super) fn unfit_for_a_label(name: &str) -> bool {
     name.trim().is_empty() || name.chars().any(|c| matches!(c, ':' | '/' | '\\' | '@'))
 }

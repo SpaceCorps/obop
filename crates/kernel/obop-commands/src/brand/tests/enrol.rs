@@ -3,7 +3,7 @@
 //! when it could not read the name. `Auth::begin` and the passkey route use them; the rest of what
 //! they are for is tested where they are used (`obop-auth`, and `crates/obop` over HTTP).
 
-use super::super::enrol::{issuer_from, store_read_line};
+use super::super::enrol::{issuer_from, store_read_line, unfit_for_a_label};
 use crate::MfaError;
 use crate::brand::{
     ISSUER_VAR, UNREADABLE, enrolment_error, env_issuer, issuer_warning, no_reader_error,
@@ -140,6 +140,17 @@ fn the_line_of_the_log_names_the_cause_and_is_one_bounded_line() {
         !forged.contains('\u{1b}') && !forged.contains('\r') && !forged.contains('\n'),
         "{forged:?}"
     );
+    // The line and paragraph separators are not control characters (their categories are Zl and
+    // Zp) and start a line in a viewer that follows the Unicode rule: blanked too.
+    let separated = store_read_line("one\u{2028}obop: forged\u{2029}two\u{85}three");
+    assert!(
+        !separated.contains(['\u{2028}', '\u{2029}', '\u{85}']),
+        "{separated:?}"
+    );
+    assert!(
+        separated.ends_with("one obop: forged two three"),
+        "{separated:?}"
+    );
     // And it is cut: a store that answers with a page of text fills no more than a line of the log.
     let long = store_read_line(&"x".repeat(5_000));
     assert!(long.len() < 600, "{}", long.len());
@@ -148,6 +159,31 @@ fn the_line_of_the_log_names_the_cause_and_is_one_bounded_line() {
         "the text is cut at 300 characters"
     );
     assert!(!long.ends_with(&"x".repeat(301)));
+}
+
+/// What cannot go into a label: the four ASCII characters of a link or an address, and a name of
+/// white space. The check is on the ASCII characters alone on purpose (`unfit_for_a_label`): an
+/// authenticator app splits the decoded label at the ASCII colon, so the fullwidth colon and the
+/// other forms that `configure` folds away (NFKC) cannot change the issuer an app shows, and a row
+/// written around the command that holds one is enrolled with.
+#[test]
+fn only_the_ascii_link_characters_and_white_space_are_unfit_for_a_label() {
+    for unfit in ["a:b", "a/b", "a@b", " ", "", "\t \n"] {
+        assert!(unfit_for_a_label(unfit), "{unfit:?}");
+    }
+    assert!(unfit_for_a_label(&format!("a{}b", char::from(92u8))));
+    for fit in [
+        "MOHV",
+        "Acme Corp",
+        "Exämple & Söns",
+        "a\u{ff1a}b",
+        "a\u{ff0f}b",
+        "a\u{ff20}b",
+        "a\u{fe55}b",
+        "a\u{29f8}b",
+    ] {
+        assert!(!unfit_for_a_label(fit), "{fit:?}");
+    }
 }
 
 /// A value of `OBOP_MFA_ISSUER` with a character a stored name may not hold is warned about, and
