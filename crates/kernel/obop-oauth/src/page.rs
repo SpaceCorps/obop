@@ -314,7 +314,10 @@ fn hidden(ctx: &FlowCtx) -> String {
 }
 
 /// A page that ends the flow: the request cannot be continued. It is the page of an instance with
-/// no brand set; a handler that has read the brand uses [`error_page_with`].
+/// no brand set, for the golden pins (`golden_tests.rs`) and no one else: it is compiled for this
+/// crate's tests only, so that a handler cannot fall back to it. A handler that has read the brand
+/// uses [`error_page_with`].
+#[cfg(test)]
 pub fn error_page(lang: &str, key: &str) -> Rendered {
     error_page_with(&Shown::not_set(None), lang, key)
 }

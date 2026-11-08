@@ -214,9 +214,13 @@ pub(crate) fn same_origin(h: &HeaderMap, base: &str) -> bool {
 ///
 /// When the refill meets a store fault, the pool has noted it on this request: `ops::storage_faults`
 /// answers the request with the 503 of D74 whatever the handler sends, and `fault::before_write`
-/// refuses the writes it would make. So a sign-in or a decision whose first brand read fails
-/// writes nothing and is answered 503; one whose read succeeds writes as it always did. The read is
-/// not run inside `fault::detached` to hide this: a request that cannot read the store cannot do
+/// refuses the writes it would make. So a sign-in or a decision whose first brand read fails makes
+/// no session and no token, issues no code, writes no entry of the security log and leaves the flow
+/// as it was, and is answered 503; one whose read succeeds writes as it always did. One thing still
+/// moves: the lockout counter of the account, which `Auth` keeps for itself, counts a wrong password
+/// of such a request as it counts every wrong guess (a test pins this:
+/// `a_wrong_password_under_a_failing_first_read_still_counts_toward_the_lockout`). The read is not
+/// run inside `fault::detached` to hide any of this: a request that cannot read the store cannot do
 /// what it came for either.
 fn read_brand(s: &HttpState) -> Arc<Shown> {
     s.dispatcher.brand().current()
@@ -478,9 +482,8 @@ fn flow_view(
     binder: &str,
     brand: &Arc<Shown>,
 ) -> Result<FlowCtx, FlowError> {
-    let mut ctx = o.view(id, binder)?;
+    let mut ctx = o.view(id, binder, brand)?;
     ctx.microsoft = ctx.class.is_mobile() && microsoft_offered(s);
-    ctx.brand = brand.clone();
     Ok(ctx)
 }
 
@@ -547,11 +550,8 @@ fn step(s: &HttpState, parts: &Parts, body: &Bytes) -> Result<Step, Box<Response
 }
 
 fn consent_or_gone(st: &Step, error: Option<&str>) -> Response {
-    match st.o.view(&st.flow, &st.binder) {
-        Ok(mut ctx) => {
-            ctx.brand = st.brand.clone();
-            html(StatusCode::OK, page::consent_page(&ctx, error), None)
-        }
+    match st.o.view(&st.flow, &st.binder, &st.brand) {
+        Ok(ctx) => html(StatusCode::OK, page::consent_page(&ctx, error), None),
         Err(e) => flow_failure(e, st.lang, &st.brand),
     }
 }

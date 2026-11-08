@@ -521,13 +521,17 @@ async fn the_consent_page_of_each_class_of_client_keeps_the_claim_and_the_host_l
 
 // ---- The first read of the request (D74) -------------------------------------------------------------
 
-/// What a sign-in leaves in the store: the sessions it made (a sign-in makes one and ends it) and the
-/// entries of the security log.
-fn footprint(app: &App) -> (usize, usize) {
+/// What a sign-in leaves in the store: the sessions it made (a sign-in makes one and ends it), the
+/// entries of the security log, and every short-lived value (the flows, the counters of the
+/// per-address limits, the lockout counters the store keeps).
+type Footprint = (usize, usize, Vec<(String, String)>);
+
+fn footprint(app: &App) -> Footprint {
     let b = app.store.backend();
     (
         b.list("auth_token").unwrap().len(),
         b.list("security_event").unwrap().len(),
+        b.kv_scan("").unwrap(),
     )
 }
 
@@ -540,6 +544,17 @@ fn server_of(rig: &Rig) -> Arc<obop_oauth::OAuth> {
         obop_oauth::OAuthConfig::default(),
     )
     .expect("the OAuth server")
+}
+
+/// The flow as a page would show it for an instance with no brand set: for the tests that look at
+/// who is signed in on a flow, which the brand does not change.
+fn peek(o: &obop_oauth::OAuth, flow: &str, binder: &str) -> obop_oauth::flow::FlowCtx {
+    o.view(
+        flow,
+        binder,
+        &Arc::new(obop_commands::brand::Shown::not_set(None)),
+    )
+    .unwrap()
 }
 
 /// A flow begun without the HTTP layer: the browser's view of it, and its id and secret.
@@ -578,7 +593,7 @@ fn begun_as(
     };
     let v = o.validate_authorize(BASE, &p).unwrap();
     let (flow, binder) = o.begin(&v, &ip, "en").unwrap();
-    let csrf = o.view(&flow, &binder).unwrap().csrf;
+    let csrf = peek(o, &flow, &binder).csrf;
     (
         Browser {
             cookie: format!("obop_oauth_{}={binder}", &flow[..12]),
@@ -608,16 +623,19 @@ fn assert_d74_503(resp: &Resp) {
     assert!(!page.to_lowercase().contains("obop"), "{page}");
 }
 
-/// A sign-in whose first brand read fails is answered by D74 and writes nothing: no session, no
-/// entry of the log, the flow still waits for a person. The same post, once the store answers, signs
+/// A sign-in whose first brand read fails is answered by D74 and leaves the store as it was: no
+/// session, no entry of the log, no record written, no short-lived value changed, and the flow still
+/// waits for a person. (The one thing that does move is the lockout counter of the account, which
+/// counts a wrong password: the test after this one.) The same post, once the store answers, signs
 /// in as it always did, and the page it answers shows the brand.
 #[tokio::test]
-async fn a_sign_in_whose_first_brand_read_fails_writes_nothing_and_is_a_503() {
+async fn a_sign_in_whose_first_brand_read_fails_leaves_the_store_as_it_was_and_is_a_503() {
     let (flaky, rig) = flaky_rig();
     let o = server_of(&rig);
     let (b, binder) = begun(&o);
     let before = footprint(&rig.app);
-    assert_eq!(o.view(&b.flow, &binder).unwrap().user, None);
+    let writes_before = flaky.seen_writes().len();
+    assert_eq!(peek(&o, &b.flow, &binder).user, None);
 
     flaky.refuse_model("instance_brand", Mode::Reads);
     let refused_before = flaky.refused();
@@ -635,11 +653,17 @@ async fn a_sign_in_whose_first_brand_read_fails_writes_nothing_and_is_a_503() {
     );
     assert_eq!(footprint(&rig.app), before, "nothing was written");
     assert_eq!(
-        o.view(&b.flow, &binder).unwrap().user,
+        flaky.seen_writes().len(),
+        writes_before,
+        "no batch reached the store"
+    );
+    assert_eq!(
+        peek(&o, &b.flow, &binder).user,
         None,
         "nobody is signed in on the flow"
     );
-    // A wrong password is no different: the 503 is the answer, not the page that says it is wrong.
+    // A wrong password is no different for the store: the 503 is the answer, not the page that says
+    // it is wrong, and the store is as it was.
     let wrong = b
         .post(
             &rig.r,
@@ -649,6 +673,7 @@ async fn a_sign_in_whose_first_brand_read_fails_writes_nothing_and_is_a_503() {
         .await;
     assert_d74_503(&wrong);
     assert_eq!(footprint(&rig.app), before);
+    assert_eq!(flaky.seen_writes().len(), writes_before);
 
     // The store answers: the post that read the brand writes as usual.
     flaky.allow_models();
@@ -664,10 +689,52 @@ async fn a_sign_in_whose_first_brand_read_fails_writes_nothing_and_is_a_503() {
     assert!(ok.text().contains("name=\"decision\""));
     assert!(brand_line(&ok.text()).contains("MOHV"));
     assert_ne!(footprint(&rig.app), before, "it wrote");
-    assert_eq!(
-        o.view(&b.flow, &binder).unwrap().user.as_deref(),
-        Some("ada")
+    assert_eq!(peek(&o, &b.flow, &binder).user.as_deref(), Some("ada"));
+}
+
+/// A wrong password under a failing first read is answered 503 and leaves the store as it was
+/// (the test above), but the lockout counter of the account is the one thing that moves: `Auth`
+/// keeps it for itself and counts a wrong guess whatever else the request meets. After four such
+/// guesses the right password still signs in; after five it meets the lockout (`err.locked`), as
+/// five wrong guesses on a healthy store would. The claim "writes nothing" is therefore not made for
+/// a wrong password; this test is what says what is true.
+#[tokio::test]
+async fn a_wrong_password_under_a_failing_first_read_still_counts_toward_the_lockout() {
+    async fn right_password_after(wrong: usize) -> Resp {
+        let (flaky, rig) = flaky_rig();
+        let o = server_of(&rig);
+        let (b, _) = begun(&o);
+        flaky.refuse_model("instance_brand", Mode::Reads);
+        for _ in 0..wrong {
+            let resp = b
+                .post(
+                    &rig.r,
+                    "/oauth/authorize/login",
+                    &[("username", "ada"), ("password", "nope")],
+                )
+                .await;
+            assert_d74_503(&resp);
+        }
+        flaky.allow_models();
+        configure(&rig.app, &FIELDS);
+        b.post(
+            &rig.r,
+            "/oauth/authorize/login",
+            &[("username", "ada"), ("password", PW)],
+        )
+        .await
+    }
+    let four = right_password_after(4).await;
+    assert_eq!(four.status, 200, "{}", four.text());
+    assert!(four.text().contains("name=\"decision\""), "signed in");
+    let five = right_password_after(5).await;
+    assert_eq!(five.status, 200, "{}", five.text());
+    assert!(
+        five.text().contains(&esc(t("en", "err.locked"))),
+        "locked out: {}",
+        five.text()
     );
+    assert!(!five.text().contains("name=\"decision\""));
 }
 
 /// The decision is the same: a failing first read of the brand leaves the flow where it was and no
@@ -695,10 +762,7 @@ async fn a_decision_whose_first_brand_read_fails_issues_nothing_and_is_a_503() {
         "no redirect, no code"
     );
     // The flow is still there, signed in, and was not consumed.
-    assert_eq!(
-        o.view(&b.flow, &binder).unwrap().user.as_deref(),
-        Some("ada")
-    );
+    assert_eq!(peek(&o, &b.flow, &binder).user.as_deref(), Some("ada"));
 
     flaky.allow_models();
     let done = b.post(&rig.r, "/oauth/authorize/decision", &allow).await;
@@ -808,4 +872,394 @@ async fn the_two_requests_of_the_microsoft_step_show_the_brand_and_read_it_first
         assert!(!policy(&resp).contains("img-src"), "{path}");
         assert!(!html.contains("rel=\"icon\""), "{path}");
     }
+}
+
+// ---- Every page a handler writes when it refuses (review of S1c) ------------------------------------
+
+/// What every page of the flow must be with a brand set, whichever handler wrote it: the logo and
+/// the name above the card, the tab icon and the policy that allows it, and nothing that names the
+/// product. Returns what is wrong with the page, so a test can list every arm that fails.
+fn unbranded(resp: &Resp) -> Option<String> {
+    let html = resp.text();
+    if !html.contains("<p class=\"brand\">") {
+        return Some("no brand line".into());
+    }
+    let line = brand_line(&html);
+    if !(line.contains("<svg") && line.contains("MOHV")) {
+        return Some(format!("the brand line is {line}"));
+    }
+    if html.to_lowercase().contains("obop") {
+        return Some("the page names the product".into());
+    }
+    if !policy(resp).ends_with("; img-src 'self'") {
+        return Some(format!("the policy is {}", policy(resp)));
+    }
+    if !html.contains("rel=\"icon\"") {
+        return Some("no tab icon".into());
+    }
+    None
+}
+
+/// Run `arms` (a name, the status the arm must answer and the response) and list the arms whose
+/// page does not show the brand, or whose status is not the one expected.
+fn failures_of(arms: Vec<(&str, u16, Resp)>) -> Vec<String> {
+    let mut failures = Vec::new();
+    for (name, status, resp) in arms {
+        if resp.status != status {
+            failures.push(format!("{name}: status {} (want {status})", resp.status));
+        }
+        if let Some(why) = unbranded(&resp) {
+            failures.push(format!("{name}: {why}"));
+        }
+    }
+    failures
+}
+
+/// Every arm of the handlers that answers with a page, with a brand set: the error pages of the
+/// start (a parameter twice, the 429 of the address), of a form post (a wrong token, a body that is
+/// no form, a junk decision, the 429 of the sign-in), of the Microsoft step (a flow that does not
+/// exist, on the link and on the return), of the passkey post that has no origin to work with; and
+/// the pages that follow a refused decision and the "Not you?" button. Each shows the logo and the
+/// name and names no product. A handler that falls back to the page of an instance with no brand
+/// fails here by name.
+#[tokio::test]
+async fn every_page_a_refusal_makes_shows_the_brand() {
+    let rig = rig();
+    let r = &rig.r;
+    configure(&rig.app, &FIELDS);
+    let c = client(r).await;
+    let url = authorize_url(&c, REDIRECT, &[]);
+    let o = server_of(&rig);
+    let mut arms: Vec<(&str, u16, Resp)> = Vec::new();
+
+    // The start: a parameter given twice, and the 61st start from one address in ten minutes.
+    let twice = format!("{url}&client_id={c}");
+    arms.push((
+        "client_id twice",
+        400,
+        call(
+            r,
+            "GET",
+            &twice,
+            &[("x-forwarded-for", &fresh_address())],
+            None,
+        )
+        .await,
+    ));
+    let busy_ip = fresh_address();
+    let mut busy = None;
+    for _ in 0..61 {
+        busy = Some(call(r, "GET", &url, &[("x-forwarded-for", &busy_ip)], None).await);
+    }
+    arms.push(("61st start from one address", 429, busy.unwrap()));
+
+    // Form posts of a browser that has a flow: a wrong token, a body that is no form, a decision
+    // that is none of the three.
+    let (b, binder) = begun(&o);
+    arms.push((
+        "wrong csrf",
+        403,
+        call(
+            r,
+            "POST",
+            "/oauth/authorize/login",
+            &b.headers(),
+            Some(form(&[
+                ("flow", &b.flow),
+                ("csrf", "not-the-token"),
+                ("username", "ada"),
+                ("password", PW),
+            ])),
+        )
+        .await,
+    ));
+    arms.push((
+        "a body that is no form",
+        400,
+        call(
+            r,
+            "POST",
+            "/oauth/authorize/login",
+            &b.headers(),
+            Some(("application/json", "{\"flow\":1}".into())),
+        )
+        .await,
+    ));
+    arms.push((
+        "decision=maybe",
+        400,
+        b.post(r, "/oauth/authorize/decision", &[("decision", "maybe")])
+            .await,
+    ));
+
+    // The pages that follow a refused decision and the "Not you?" button: signed in, allow with no
+    // group ticked (the consent page again, with the word), then switch (the sign-in page again).
+    assert_eq!(
+        o.login(&b.flow, &binder, &b.csrf, &b.ip, "ada", PW)
+            .unwrap(),
+        obop_oauth::LoginOut::Consent
+    );
+    let refused = b
+        .post(
+            r,
+            "/oauth/authorize/decision",
+            &[("decision", "allow"), ("days", "30")],
+        )
+        .await;
+    assert!(
+        refused.text().contains(&esc(t("en", "err.no_scope"))),
+        "the word: {}",
+        refused.text()
+    );
+    arms.push(("allow with no group", 200, refused));
+    let switched = b
+        .post(r, "/oauth/authorize/decision", &[("decision", "switch")])
+        .await;
+    assert!(switched.text().contains("name=\"username\""));
+    arms.push(("switch", 200, switched));
+
+    // The 31st sign-in from one address in ten minutes: a flow of its own for each.
+    let ip = fresh_address();
+    let mut last = None;
+    for _ in 0..31 {
+        let (mut f, _) = begun(&o);
+        f.ip = ip.clone();
+        last = Some(
+            f.post(
+                r,
+                "/oauth/authorize/login",
+                &[("username", "ada"), ("password", PW)],
+            )
+            .await,
+        );
+    }
+    arms.push(("31st sign-in from one address", 429, last.unwrap()));
+
+    // The Microsoft step for a flow that does not exist: the link and the return address.
+    let nobody = "0".repeat(32);
+    for (what, path) in [
+        ("microsoft link, no flow", "/oauth/authorize/microsoft"),
+        ("microsoft return, no flow", "/oauth/authorize/return"),
+    ] {
+        arms.push((
+            what,
+            410,
+            call(
+                r,
+                "GET",
+                &format!("{path}?flow={nobody}"),
+                &[("x-forwarded-for", &fresh_address())],
+                None,
+            )
+            .await,
+        ));
+    }
+
+    // The passkey post of a browser whose host names no relying party (`:80`): the 503 page.
+    let (p, _) = begun(&o);
+    arms.push((
+        "passkey, no origin",
+        503,
+        call(
+            r,
+            "POST",
+            "/oauth/authorize/passkey",
+            &[
+                ("host", ":80"),
+                ("origin", "http://:80"),
+                ("cookie", &p.cookie),
+                ("x-forwarded-for", &p.ip),
+            ],
+            Some(form(&[
+                ("flow", &p.flow),
+                ("csrf", &p.csrf),
+                ("credential", "{}"),
+            ])),
+        )
+        .await,
+    ));
+
+    let failures = failures_of(arms);
+    assert!(
+        failures.is_empty(),
+        "pages of the flow that do not show the brand:\n{}",
+        failures.join("\n")
+    );
+}
+
+/// The probe above is not vacuous: the same arms with no brand are the pages of an instance that
+/// sets nothing (`unbranded` finds each of them wanting).
+#[tokio::test]
+async fn the_probe_of_the_refusal_pages_sees_a_page_that_says_obop() {
+    let rig = rig();
+    let r = &rig.r;
+    let c = client(r).await;
+    let twice = format!("{}&client_id={c}", authorize_url(&c, REDIRECT, &[]));
+    let resp = call(
+        r,
+        "GET",
+        &twice,
+        &[("x-forwarded-for", &fresh_address())],
+        None,
+    )
+    .await;
+    assert_eq!(resp.status, 400);
+    let why = unbranded(&resp).expect("a page of an instance with no brand is not branded");
+    assert!(why.contains("brand line is"), "{why}");
+}
+
+// ---- After a good read (D74, review of S1c) ----------------------------------------------------------
+
+/// The reader of the app keeps a good read for two seconds (`DEFAULT_BOUND` in
+/// `obop-commands/src/brand/reader.rs`, which a test of this crate cannot shorten): wait until the
+/// cell that the read before `filled` made is stale. The loop is on the clock, so an early wake-up
+/// does not end it early. If the constant grows, the request that the test expects to be refused is
+/// answered 200 and the test fails loudly.
+fn wait_until_stale(filled: std::time::Instant) {
+    let stale = std::time::Duration::from_millis(2050);
+    while filled.elapsed() <= stale {
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+}
+
+/// After a good read, a store that then fails: once the cell has expired, the request that runs the
+/// refill meets the fault and is answered by D74 on a start, a sign-in and a decision alike, never
+/// with a page that says obop, with the store as it was and no code issued; the next request reads
+/// again (a failed refill is not kept) and is answered the same way; after the store recovers the
+/// pages are the brand's again.
+#[tokio::test]
+async fn after_a_good_read_a_failing_store_is_a_503_on_a_start_a_sign_in_and_a_decision() {
+    let (flaky, rig) = flaky_rig();
+    let (r, o) = (&rig.r, server_of(&rig));
+    configure(&rig.app, &FIELDS);
+    // A good read through the page itself, so that the cell holds the brand.
+    let c = client(r).await;
+    let url = authorize_url(&c, REDIRECT, &[]);
+    let (good, _) = start(r, &url).await;
+    assert_eq!(unbranded(&good), None);
+    let filled = std::time::Instant::now();
+    // Two flows made without the HTTP layer: one waits for a sign-in, one for a decision.
+    let (sign, sign_binder) = begun(&o);
+    let (decide, binder) = begun(&o);
+    assert_eq!(
+        o.login(&decide.flow, &binder, &decide.csrf, &decide.ip, "ada", PW)
+            .unwrap(),
+        obop_oauth::LoginOut::Consent
+    );
+    let before = footprint(&rig.app);
+    let writes = flaky.seen_writes().len();
+
+    flaky.refuse_model("instance_brand", Mode::Reads);
+    wait_until_stale(filled);
+    for round in 0..2 {
+        let refused_before = flaky.refused();
+        let started = call(
+            r,
+            "GET",
+            &url,
+            &[("x-forwarded-for", &fresh_address())],
+            None,
+        )
+        .await;
+        assert_d74_503(&started);
+        assert!(started.header("set-cookie").is_empty(), "no flow was begun");
+        assert!(
+            flaky.refused() > refused_before,
+            "round {round}: the refill read the store again"
+        );
+        let signed = sign
+            .post(
+                r,
+                "/oauth/authorize/login",
+                &[("username", "ada"), ("password", PW)],
+            )
+            .await;
+        assert_d74_503(&signed);
+        let decided = decide
+            .post(
+                r,
+                "/oauth/authorize/decision",
+                &[
+                    ("decision", "allow"),
+                    ("days", "30"),
+                    ("group", "base.user"),
+                ],
+            )
+            .await;
+        assert_d74_503(&decided);
+        assert!(decided.header("location").is_empty(), "no code was issued");
+    }
+    assert_eq!(footprint(&rig.app), before, "the store is as it was");
+    assert_eq!(flaky.seen_writes().len(), writes);
+    assert_eq!(peek(&o, &sign.flow, &sign_binder).user, None);
+    assert_eq!(peek(&o, &decide.flow, &binder).user.as_deref(), Some("ada"));
+
+    flaky.allow_models();
+    let (back, _) = start(r, &url).await;
+    assert_eq!(unbranded(&back), None);
+}
+
+/// While the refill of an expired cell is parked in the store, a page of the flow is answered at
+/// once with the last good brand (the caller does not wait for the owner of the refill, spec
+/// section 4), and the owner is answered with the brand when it is let go. Every wait is on a
+/// condition and has a bound.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn while_a_refill_is_parked_the_pages_of_the_flow_show_the_last_good_brand() {
+    let (flaky, rig) = flaky_rig();
+    let r = rig.r.clone();
+    configure(&rig.app, &FIELDS);
+    let c = client(&r).await;
+    let url = authorize_url(&c, REDIRECT, &[]);
+    let (good, _) = start(&r, &url).await;
+    assert_eq!(unbranded(&good), None);
+    let filled = std::time::Instant::now();
+    tokio::task::spawn_blocking(move || wait_until_stale(filled))
+        .await
+        .unwrap();
+
+    // The refill that the next request runs parks in the store after it has read the row.
+    let (parked_tx, parked_rx) = std::sync::mpsc::channel::<()>();
+    let (go_tx, go_rx) = std::sync::mpsc::channel::<()>();
+    flaky.after_the_get_of(
+        "instance_brand",
+        0,
+        Box::new(move |_| {
+            parked_tx.send(()).unwrap();
+            // Bounded, and let go at once when the test fails (the sender is dropped with it).
+            let _ = go_rx.recv_timeout(std::time::Duration::from_secs(30));
+        }),
+    );
+    let owner = {
+        let (r, url, ip) = (r.clone(), url.clone(), fresh_address());
+        tokio::spawn(async move { call(&r, "GET", &url, &[("x-forwarded-for", &ip)], None).await })
+    };
+    let parked = tokio::task::spawn_blocking(move || {
+        parked_rx.recv_timeout(std::time::Duration::from_secs(20))
+    })
+    .await
+    .unwrap();
+    assert!(
+        parked.is_ok(),
+        "the request never reached the store: the cell was not stale"
+    );
+
+    let bound = std::time::Duration::from_secs(20);
+    let started = std::time::Instant::now();
+    let (second, _) = start(&r, &url).await;
+    assert!(
+        started.elapsed() < bound,
+        "a page waited for the parked refill: {:?}",
+        started.elapsed()
+    );
+    assert_eq!(unbranded(&second), None, "the last good brand");
+    assert!(
+        brand_line(&second.text()).contains("MOHV"),
+        "the last good name"
+    );
+    assert!(!owner.is_finished(), "the owner is still in the store");
+
+    go_tx.send(()).unwrap();
+    let owner = owner.await.unwrap();
+    assert_eq!(owner.status, 200, "{}", owner.text());
+    assert_eq!(unbranded(&owner), None);
 }

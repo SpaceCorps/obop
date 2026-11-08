@@ -116,9 +116,8 @@ pub struct FlowCtx {
     pub max_days: u32,
     /// The instance brand every page of this request shows: the one the handler read at the start
     /// of the request (docs/spec/branding.md, section 4), so that the name and the logo of a page
-    /// come from one read. `view` cannot read it (this crate has no reader); it gives the page of an
-    /// instance with no brand set, and `obop-http` sets the brand it read after `view`, as it does
-    /// `microsoft`.
+    /// come from one read. This crate has no reader, so `view` takes the brand as an argument and
+    /// puts it here: a handler cannot get a page context without handing it one.
     pub brand: Arc<Shown>,
 }
 
@@ -441,7 +440,7 @@ impl OAuth {
         Ok(rec)
     }
 
-    fn ctx(&self, id: &str, rec: &J) -> FlowCtx {
+    fn ctx(&self, id: &str, rec: &J, brand: &Arc<Shown>) -> FlowCtx {
         let user = rec["user"].as_str().map(String::from);
         let class = Class::of_record(rec);
         let mut groups: Vec<String> = user
@@ -503,20 +502,30 @@ impl OAuth {
             preselected,
             microsoft: false,
             max_days: MAX_DAYS,
-            brand: Arc::new(Shown::not_set(None)),
+            brand: brand.clone(),
         }
     }
 
-    /// The flow as the page shows it (no CSRF check: this is a read).
-    pub fn view(&self, id: &str, binder: &str) -> Result<FlowCtx, FlowError> {
+    /// The flow as the page shows it (no CSRF check: this is a read), with the brand that the
+    /// handler read at the start of its request. There is no form of `view` without a brand, so a
+    /// page of a request cannot be made from a context that forgot to take it.
+    pub fn view(&self, id: &str, binder: &str, brand: &Arc<Shown>) -> Result<FlowCtx, FlowError> {
         let rec = self.load(id, binder, None)?;
-        let mut ctx = self.ctx(id, &rec);
+        let mut ctx = self.ctx(id, &rec, brand);
         if ctx.class.is_mobile()
             && let Some(user) = ctx.user.as_deref()
         {
             ctx.max_days = self.phone_cap(user)?;
         }
         Ok(ctx)
+    }
+
+    /// [`OAuth::view`] for an instance with no brand set, for the tests of the flow itself that look
+    /// at who is signed in and the like. Compiled for this crate's tests only: a handler has no way
+    /// to a page context without handing over the brand it read.
+    #[cfg(test)]
+    pub(crate) fn view_plain(&self, id: &str, binder: &str) -> Result<FlowCtx, FlowError> {
+        self.view(id, binder, &Arc::new(Shown::not_set(None)))
     }
 
     /// The longest a phone grant of `user` may last. A refused read is not "no cap": the page is
