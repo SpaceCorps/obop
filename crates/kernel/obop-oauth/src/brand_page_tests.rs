@@ -851,6 +851,70 @@ fn the_message_and_the_title_follow_the_fallback_chain_on_a_real_page() {
     }
 }
 
+/// The message is text: `&`, `"` and `'` are escaped on the page (a stored `&amp;` is the text
+/// "&amp;" and shows as such, not as an ampersand), and it sits under the lead and before the error
+/// box and the form, whether an error is shown or not.
+#[test]
+fn the_message_is_escaped_as_text_and_sits_between_the_lead_and_the_error_box() {
+    let raw = "A & B \"x\" 'y' &lt;i&gt;";
+    let brand = shown(&[("name", "MOHV"), ("message_en", raw)]);
+    assert_eq!(brand.brand().message("en"), Some(raw), "stored as typed");
+    let message = "<p class=\"muted\">A &amp; B &quot;x&quot; &#39;y&#39; &amp;lt;i&amp;gt;</p>";
+    let lead = format!(
+        "<p>{}</p>",
+        filled("en", "login.lead.neutral", "Claude", "")
+    );
+    let form = "<form method=\"post\" action=\"/oauth/authorize/login\">";
+    let c = ctx("login_mcp", "Claude", "en", &brand);
+    let plain_page = login_page(&c, None).html;
+    let error_page = login_page(&c, Some("err.login")).html;
+    let error_box = "<p class=\"error\" role=\"alert\">";
+    for (what, html) in [("no error", &plain_page), ("an error", &error_page)] {
+        assert_eq!(html.matches(message).count(), 1, "{what}: {html}");
+        assert!(
+            !html.contains("A & B") && !html.contains("&lt;i&gt;</p>"),
+            "{what}: raw"
+        );
+        let (l, m, f) = (
+            html.find(&lead).expect("the lead"),
+            html.find(message).expect("the message"),
+            html.find(form).expect("the form"),
+        );
+        assert!(l < m && m < f, "{what}: lead {l}, message {m}, form {f}");
+    }
+    assert!(!plain_page.contains(error_box));
+    let (m, e, f) = (
+        error_page.find(message).unwrap(),
+        error_page.find(error_box).expect("the error box"),
+        error_page.find(form).unwrap(),
+    );
+    assert!(m < e && e < f, "message {m}, error {e}, form {f}");
+}
+
+/// The page asks a `Shown` three things that must agree: whether it is set, whether it has a logo
+/// and what the version of the logo is (the tab icon and its policy are written when the brand is
+/// set and has a version; the inline logo when it is set and has a logo). The page's guards test the
+/// pair, not the one; this writes the invariant down: an unset brand has no logo and no version,
+/// a set brand has both, and its name is not neutral exactly when it is set.
+#[test]
+fn a_shown_that_is_set_has_a_logo_and_a_version_and_one_that_is_not_has_neither() {
+    let unset = plain();
+    assert!(!unset.is_set());
+    assert!(unset.logo().is_none());
+    assert!(unset.v().is_empty());
+    assert!(unset.brand().neutral() == unset.is_set());
+    for set in [
+        shown(&[("name", "MOHV")]),
+        shown(&[("name", "MOHV"), ("logo_svg", ARTWORK)]),
+        shown(&[("name", "obop")]),
+    ] {
+        assert!(set.is_set());
+        assert!(set.logo().is_some(), "a tile when no artwork is stored");
+        assert!(!set.v().is_empty());
+        assert!(set.brand().neutral() == set.is_set());
+    }
+}
+
 // ---- Rows written around the command --------------------------------------------------------------------
 
 fn brand_text(html: &str) -> String {
