@@ -520,6 +520,97 @@ fn within_the_sites_cache_nothing_is_read_and_a_refresh_asks_the_door_once() {
     }
 }
 
+/// What a store that fails does to the site's cache (D74): the request that meets the fault is
+/// answered 503 by the layer above, and what it computed from a read that failed is for that request
+/// alone. The cache must not keep it, or the shop shows the stand-in, with the owner's explicit keys
+/// missing, for the whole cache time after the store is back.
+#[test]
+fn a_settings_read_that_failed_is_not_kept_by_the_sites_cache() {
+    use obop_storage::fault;
+    use obop_storage::testing::Mode;
+    let (s, flaky) = cached();
+    set_brand(&s, &[("name", "MOHV")]);
+    set_settings(
+        &s,
+        json!({"site": {"title": "Corner Shop", "accent": "#e11d48"}}),
+    );
+    // A good refresh: the owner's keys, kept for the cache time.
+    let home = text(&get(&s, "/"));
+    assert!(home.contains("<span>Corner Shop</span>"), "{home}");
+    assert_eq!(css_of(&s), assets::css("#e11d48"));
+
+    // The cache runs out and the settings cannot be read (the reader's own cell is still fresh).
+    // This request gets the brand's values in the place of the owner's keys.
+    expire_site_cache(&s);
+    flaky.refuse_model("obop_setting", Mode::Reads);
+    let during = text(&get(&s, "/"));
+    assert!(
+        during.contains("<span>MOHV</span>") && !during.contains("Corner Shop"),
+        "the stand-in, for this request: {during}"
+    );
+    assert!(fault::noted().is_some(), "the request met the fault");
+    // It was not kept: the next request reads again (and meets the fault again) ...
+    let refused = flaky.refused();
+    assert!(text(&get(&s, "/")).contains("<span>MOHV</span>"));
+    assert!(
+        flaky.refused() > refused,
+        "a stand-in is not served from the cache"
+    );
+
+    // ... and when the store answers, the owner's keys are back at once, not after the cache time.
+    flaky.allow_models();
+    fault::clear();
+    let home = text(&get(&s, "/"));
+    assert!(
+        home.contains("<span>Corner Shop</span>") && !home.contains("MOHV"),
+        "{home}"
+    );
+    assert_eq!(css_of(&s), assets::css("#e11d48"));
+    // And that answer is kept, as every good one is.
+    flaky.reset_reads();
+    assert!(text(&get(&s, "/")).contains("<span>Corner Shop</span>"));
+    assert_eq!(flaky.reads().gets, 0, "the good answer is cached");
+}
+
+/// The same for the brand: a process that has not read it yet, whose first read fails, shows the
+/// default for the request that met the fault only (the reader keeps nothing of a failure, and the
+/// site must not keep what it computed from the default). When the store answers, the shop is the
+/// brand's, not after the cache time.
+#[test]
+fn a_brand_that_could_not_be_read_at_first_is_not_kept_by_the_sites_cache() {
+    use obop_storage::fault;
+    use obop_storage::testing::Mode;
+    let (s, flaky) = cached();
+    // Written through the command, in a process whose reader has read nothing yet.
+    set_brand(&s, &[("name", "MOHV"), ("logo_svg", ARTWORK)]);
+    flaky.refuse_model("instance_brand", Mode::Reads);
+    let during = text(&get(&s, "/"));
+    assert!(
+        during.contains("<span>My Shop</span>") && !during.contains("logo.svg"),
+        "the default, for this request: {during}"
+    );
+    assert!(fault::noted().is_some());
+    assert_eq!(get(&s, "/favicon.svg").status, 200);
+    let refused = flaky.refused();
+    assert!(text(&get(&s, "/")).contains("<span>My Shop</span>"));
+    assert!(
+        flaky.refused() > refused,
+        "the default is not served from the cache"
+    );
+
+    flaky.allow_models();
+    fault::clear();
+    let home = text(&get(&s, "/"));
+    assert!(
+        home.contains("<span>MOHV</span>") && home.contains("logo.svg?v="),
+        "{home}"
+    );
+    assert_eq!(text(&get(&s, "/favicon.svg")), ARTWORK);
+    flaky.reset_reads();
+    assert_eq!(text(&get(&s, "/favicon.svg")), ARTWORK);
+    assert_eq!(flaky.reads().gets, 0, "the good answer is cached");
+}
+
 // ---- The lengths ------------------------------------------------------------------------------------
 
 #[test]

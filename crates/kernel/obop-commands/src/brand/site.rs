@@ -212,15 +212,37 @@ pub fn fill_site(site: &mut Map<String, J>, shown: &Shown) {
     }
 }
 
+/// What the door read: the `site` object of the instance settings with the brand filled in, and
+/// whether it is the whole answer.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SiteRead {
+    /// The `site` object, filled by [`fill_site`].
+    pub site: Map<String, J>,
+    /// True when the object is a stand-in for what the store holds: the settings row could not be
+    /// read (its keys are missing, so the brand's values stand where the owner's explicit keys
+    /// are), or the reader had no brand to give (a process that never had a good read, the store
+    /// failing, so the default stands for a brand that may be set). A caller that keeps the object
+    /// for a while must not keep it: it would show the stand-in after the store is back.
+    pub degraded: bool,
+}
+
 /// The `site` object of the instance settings with the brand filled in: what `PublicApi::site_settings`
 /// answers, the one door the public site reads its settings by. The settings are read here, the
 /// reader is asked once (`current()`: the last good brand when its refill fails, the default in a
 /// process that never had a good read), and the object is filled by [`fill_site`]. A settings row
-/// that cannot be read gives an empty object, as the door always did; it is the request that met the
-/// fault, and not this call, that is answered 503 (D74).
-pub fn site_settings(backend: &dyn Backend, reader: &Reader) -> Map<String, J> {
-    let setting = backend.get(SETTING_MODEL, SETTING_ID).ok().flatten();
+/// that cannot be read gives an empty object, as the door always did, and a reader that had nothing
+/// to give is told by the unread default; both are reported in [`SiteRead::degraded`], and neither
+/// hides the fault from D74: it is the request that met it, and not this call, that is answered 503.
+pub fn site_settings(backend: &dyn Backend, reader: &Reader) -> SiteRead {
+    let (setting, read) = match backend.get(SETTING_MODEL, SETTING_ID) {
+        Ok(setting) => (setting, true),
+        Err(_) => (None, false),
+    };
     let mut site = row::site_of(setting.as_ref());
-    fill_site(&mut site, &reader.current());
-    site
+    let shown = reader.current();
+    fill_site(&mut site, &shown);
+    SiteRead {
+        site,
+        degraded: !read || shown.is_unread(),
+    }
 }

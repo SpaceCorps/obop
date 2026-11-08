@@ -753,8 +753,17 @@ impl PublicApi {
     /// that is stored in the settings is removed first: `setting.update` writes any key, and the
     /// artwork is the reader's to hand over. The reader is asked once per call, and the site keeps
     /// its answer for its own cache time, so a changed name reaches a page after that time and the
-    /// reader's own bound.
+    /// reader's own bound. A caller that keeps the answer asks [`PublicApi::site_settings_read`]
+    /// instead, which also says whether it may.
     pub fn site_settings(&self) -> serde_json::Map<String, J> {
+        self.site_settings_read().site
+    }
+
+    /// [`PublicApi::site_settings`] with what it does not say: whether the object is a stand-in
+    /// (`degraded`: the settings row could not be read, or the reader had no brand to give while the
+    /// store failed). A cache must not keep a degraded answer, or it would show the stand-in after the
+    /// store is back and the owner's explicit keys would be missing for as long as it kept it.
+    pub fn site_settings_read(&self) -> crate::SiteRead {
         crate::brand::site_settings(&*self.store.backend, &self.d.brand())
     }
 

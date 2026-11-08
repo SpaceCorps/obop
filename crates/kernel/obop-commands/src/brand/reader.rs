@@ -28,8 +28,9 @@
 //!   slot only if the number in it is newer.
 //!
 //! A failed refill is never kept: the cell stays as it was, the owner gets the last good value of the
-//! cell as it is when the read fails (the default if there is none), and the next caller starts a
-//! refill of its own. When `apply` changes the row in this process it bumps a counter and, once its
+//! cell as it is when the read fails (the default if there is none, marked [`Shown::is_unread`] so
+//! that a cache above the reader can tell it from the answer "no brand is set"), and the next caller
+//! starts a refill of its own. When `apply` changes the row in this process it bumps a counter and, once its
 //! batch has committed, replaces the brand part of the cell; a refill stores its outcome only if the
 //! counter is the one it started under, so a refill that read the old row before the change cannot
 //! put the replaced brand back. The cell is dated by the start of the read, not by its end, so a slow
@@ -217,7 +218,8 @@ impl Reader {
     }
 
     /// The brand for display: see the module documentation for the cache. Never fails: a store that
-    /// cannot be read gives the last good value, and the default in a process that never had one.
+    /// cannot be read gives the last good value, and the default in a process that never had one
+    /// (that default answers [`Shown::is_unread`]).
     pub fn current(&self) -> Arc<Shown> {
         let Some(backend) = &self.backend else {
             return self.inert.clone();
@@ -256,7 +258,7 @@ impl Reader {
                     Some(slot) if slot.epoch > seen && slot.generation == generation => slot
                         .outcome
                         .clone()
-                        .unwrap_or_else(|| Arc::new(Shown::not_set(None))),
+                        .unwrap_or_else(|| Arc::new(Shown::unread())),
                     // The flight left nothing (its owner panicked), or an `apply` committed while
                     // it ran (its outcome may be the row that was replaced), or the slot is of a
                     // flight that had finished before this caller arrived (the lock was held by
@@ -311,7 +313,7 @@ impl Reader {
                     generation: started,
                     epoch: self.finished.fetch_add(1, Ordering::AcqRel) + 1,
                 });
-                last_good.unwrap_or_else(|| Arc::new(Shown::not_set(None)))
+                last_good.unwrap_or_else(|| Arc::new(Shown::unread()))
             }
         }
     }

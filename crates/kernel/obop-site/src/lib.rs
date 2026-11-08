@@ -134,18 +134,25 @@ impl Site {
         {
             return (c.settings.clone(), c.menu.clone(), c.css.clone());
         }
-        let s = Arc::new(Settings::from_map(&self.api.site_settings()));
+        let read = self.api.site_settings_read();
+        let s = Arc::new(Settings::from_map(&read.site));
         let menu = self.load_menu();
         let css = assets::css(&s.accent);
         let version = layout::css_version(&css);
-        let c = Cached {
+        let css = Arc::new((css, version));
+        // A stand-in for what the store holds (the settings could not be read, or the brand could
+        // not and none had been read before) is for this request alone, and the request that met
+        // the fault is answered 503 above (D74): kept, it would show the stand-in, with the owner's
+        // explicit keys missing, for the whole of the cache time after the store is back.
+        if read.degraded {
+            return (s, menu, css);
+        }
+        *g = Some(Cached {
             at: Instant::now(),
             settings: s.clone(),
             menu: menu.clone(),
-            css: Arc::new((css, version)),
-        };
-        let css = c.css.clone();
-        *g = Some(c);
+            css: css.clone(),
+        });
         (s, menu, css)
     }
 

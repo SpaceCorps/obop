@@ -27,9 +27,9 @@ pub use apply::{
     Action, Applied, Changed, Failure, Refused, apply, change_line, changes_json, printable,
     refusals_json, show_key,
 };
-pub use reader::{Fresh, Reader, Sink, strict};
+pub use reader::{DEFAULT_BOUND, Fresh, Reader, Sink, strict};
 pub use row::{Fallback, Shown, fallbacks_json};
-pub use site::{DEFAULT_TITLE, FAVICON_KEY, fill_site, site_settings};
+pub use site::{DEFAULT_TITLE, FAVICON_KEY, SiteRead, fill_site, site_settings};
 
 use crate::Dispatcher;
 pub use obop_brand::LANGS;

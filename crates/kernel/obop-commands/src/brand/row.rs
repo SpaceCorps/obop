@@ -83,6 +83,8 @@ pub struct Shown {
     logo: Option<Logo>,
     theme_accent: Option<String>,
     fallbacks: Vec<Fallback>,
+    /// This is the default standing in for a brand that could not be read (see [`Shown::unread`]).
+    unread: bool,
 }
 
 impl std::fmt::Debug for Shown {
@@ -104,7 +106,26 @@ impl Shown {
             logo: None,
             theme_accent,
             fallbacks: Vec::new(),
+            unread: false,
         }
+    }
+
+    /// The default brand in the place of one that could not be read: what the reader hands out in a
+    /// process that never had a good read while the store fails. It looks like [`Shown::not_set`]
+    /// and is told apart from it by [`Shown::is_unread`], so that a cache above the reader does not
+    /// keep it as if the store had said "no brand".
+    pub(crate) fn unread() -> Shown {
+        Shown {
+            unread: true,
+            ..Shown::not_set(None)
+        }
+    }
+
+    /// Whether this is the stand-in of [`Shown::unread`]: the store could not be read and there was
+    /// no earlier good read to serve. False for a brand that was read, for the answer "no brand is
+    /// set" and for an inert reader.
+    pub fn is_unread(&self) -> bool {
+        self.unread
     }
 
     /// The brand: the default one when no row exists.
@@ -269,5 +290,6 @@ pub(crate) fn read_row(row: Option<&Fields>, theme_accent: Option<String>) -> Sh
         logo: Some(logo),
         theme_accent,
         fallbacks,
+        unread: false,
     }
 }

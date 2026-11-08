@@ -735,4 +735,83 @@ mod brand_door {
         assert!(api.site_settings().is_empty());
         assert_eq!(spy.gets("instance_brand"), 0);
     }
+
+    /// What a cache may keep (`site_settings_read`): the answer says when it is a stand-in. The
+    /// settings row that cannot be read is one (the owner's explicit keys are missing, so the brand's
+    /// values stand where they are); the default of a reader that never had a good read is the other.
+    /// The last good brand that a failing refill serves is a brand that was read, and an empty store
+    /// is the answer "no brand".
+    #[test]
+    fn the_read_says_when_it_is_a_stand_in_for_what_the_store_holds() {
+        let explicit = json!({"site": {"title": "Corner Shop", "accent": "#e11d48"}});
+
+        // Nothing wrong: no brand, a brand, an inert reader. Not degraded.
+        let nobody = rig(Duration::ZERO);
+        put_settings(&*nobody.spy, explicit.clone());
+        assert!(!nobody.api.site_settings_read().degraded);
+        let r = rig(Duration::from_secs(3600));
+        put_settings(&*r.spy, explicit.clone());
+        put(&r.spy, &[]);
+        let read = r.api.site_settings_read();
+        assert!(!read.degraded);
+        assert_eq!(read.site["title"], "Corner Shop", "an explicit key wins");
+        let (api, _) = api();
+        assert!(!api.site_settings_read().degraded);
+
+        // The settings row cannot be read (the reader's own cell is fresh and reads nothing): the
+        // object is the brand's values with no explicit key, and it says so.
+        r.spy.fail("obop_setting", "storage_busy");
+        let read = r.api.site_settings_read();
+        assert!(read.degraded);
+        assert_eq!(
+            read.site["title"], "MOHV",
+            "the stand-in, not the owner's key"
+        );
+        assert_eq!(read.site["accent"], "#495670");
+        assert_eq!(
+            r.api.site_settings(),
+            read.site,
+            "the plain door answers the same object"
+        );
+        r.spy.heal();
+        let read = r.api.site_settings_read();
+        assert!(!read.degraded);
+        assert_eq!(read.site["title"], "Corner Shop");
+        assert_eq!(read.site["accent"], "#e11d48");
+
+        // A process that never had a good read of the brand, the store failing: the default stands
+        // for a brand that may be set, and the object says so. The explicit keys are all there.
+        let fresh = rig(Duration::ZERO);
+        put_settings(&*fresh.spy, explicit.clone());
+        put(&fresh.spy, &[]);
+        fresh.spy.fail("instance_brand", "storage_busy");
+        let read = fresh.api.site_settings_read();
+        assert!(read.degraded);
+        assert_eq!(read.site["title"], "Corner Shop");
+        assert!(!read.site.contains_key("logo_url"));
+        fresh.spy.heal();
+        let read = fresh.api.site_settings_read();
+        assert!(!read.degraded);
+        assert!(read.site.contains_key("logo_url"), "the brand is back");
+
+        // A failing refill that has a last good brand to serve serves it: a brand that was read.
+        let last = rig(Duration::ZERO);
+        put_settings(&*last.spy, explicit);
+        put(&last.spy, &[("logo_svg", M_ARTWORK)]);
+        let good = last.api.site_settings_read();
+        assert!(!good.degraded);
+        last.spy.fail("instance_brand", "storage_busy");
+        let during = last.api.site_settings_read();
+        assert!(!during.degraded);
+        assert_eq!(during, good, "the last good brand, as before");
+
+        // No brand and a failing read of the row: the reader answers "no brand", not a stand-in; the
+        // settings row is what is wrong, and it is told whichever way the brand stands.
+        let none = rig(Duration::ZERO);
+        put_settings(&*none.spy, json!({"site": {"tagline": "Tea"}}));
+        let read = none.api.site_settings_read();
+        assert!(!read.degraded);
+        none.spy.fail("obop_setting", "storage_busy");
+        assert!(none.api.site_settings_read().degraded);
+    }
 }
