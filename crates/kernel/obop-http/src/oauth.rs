@@ -216,12 +216,24 @@ pub(crate) fn same_origin(h: &HeaderMap, base: &str) -> bool {
 /// answers the request with the 503 of D74 whatever the handler sends, and `fault::before_write`
 /// refuses the writes it would make. So a sign-in or a decision whose first brand read fails makes
 /// no session and no token, issues no code, writes no entry of the security log and leaves the flow
-/// as it was, and is answered 503; one whose read succeeds writes as it always did. One thing still
-/// moves: the lockout counter of the account, which `Auth` keeps for itself, counts a wrong password
-/// of such a request as it counts every wrong guess (a test pins this:
-/// `a_wrong_password_under_a_failing_first_read_still_counts_toward_the_lockout`). The read is not
+/// and the short-lived values of the store as they were, and is answered 503; one whose read
+/// succeeds writes as it always did.
+///
+/// The expiring counters are the exception, because `fault::before_write` does not guard
+/// `Backend::counter_add` (`obop-storage/src/guard.rs`) and the handler goes on to the steps that
+/// count: a request of this kind still spends one hit of the window of its address (`oauth:rl:authz`
+/// on a start, 60 in ten minutes; `oauth:rl:login` on a password step, a second step and a passkey,
+/// 30 in ten minutes; `rl:sso:oauth_start` on the Microsoft link, 30 in a minute; the housekeeping
+/// lease of the OAuth server), and a wrong password counts toward the lockout of the account, as
+/// every wrong guess does. The right password counts no failure. So while the store refuses, every
+/// retry of a person, a right password included, uses a hit of the window of their address, and the
+/// allowance is back when the window ends (the answer of a spent window is the 429 with
+/// `Retry-After`). Two tests pin the numbers:
+/// `a_sign_in_whose_first_brand_read_fails_leaves_the_store_as_it_was_and_is_a_503` and
+/// `a_wrong_password_under_a_failing_first_read_still_counts_toward_the_lockout`. The read is not
 /// run inside `fault::detached` to hide any of this: a request that cannot read the store cannot do
-/// what it came for either.
+/// what it came for either. (Putting the counters under `before_write` would make "writes nothing"
+/// literal; that is a change in `obop-storage` and outside this slice.)
 fn read_brand(s: &HttpState) -> Arc<Shown> {
     s.dispatcher.brand().current()
 }

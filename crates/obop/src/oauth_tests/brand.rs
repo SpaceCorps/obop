@@ -583,6 +583,38 @@ fn footprint(app: &App) -> Footprint {
     )
 }
 
+/// The expiring counters a request of the flow can move, which `footprint` cannot see (a counter is
+/// no record and no value of the key-value store): the hits of an address's window of the start,
+/// the hits of its window of the sign-in pages, and the failures that count toward the lockout of an
+/// account. A request whose first brand read fails writes none of the things `footprint` holds but
+/// still moves these: `fault::before_write` does not guard `counter_add` (see `read_brand` in
+/// `obop-http/src/oauth.rs`).
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+struct Counters {
+    /// `oauth:rl:authz:<address>`, spent by a start.
+    start: u64,
+    /// `oauth:rl:login:<address>`, spent by a password step, a second step and a passkey.
+    login: u64,
+    /// `auth.fail:<user>`, spent by a wrong password (`Auth::failure_key`, which is private).
+    failures: u64,
+}
+
+fn counters(app: &App, ip: &str, user: &str) -> Counters {
+    let b = app.store.backend();
+    let window = |kind: &str| {
+        b.counter_get(&format!(
+            "oauth:rl:{kind}:{}",
+            &obop_oauth::util::sha_hex(ip)[..24]
+        ))
+        .unwrap()
+    };
+    Counters {
+        start: window("authz"),
+        login: window("login"),
+        failures: b.counter_get(&format!("auth.fail:{user}")).unwrap(),
+    }
+}
+
 /// The OAuth server of the app, as a test uses it to put a flow in a state without the HTTP layer
 /// (so the handler under test has not read the brand yet).
 fn server_of(rig: &Rig) -> Arc<obop_oauth::OAuth> {
@@ -681,15 +713,19 @@ fn assert_d74_503(resp: &Resp) {
 
 /// A sign-in whose first brand read fails is answered by D74 and leaves the store as it was: no
 /// session, no entry of the log, no record written, no short-lived value changed, and the flow still
-/// waits for a person. (The one thing that does move is the lockout counter of the account, which
-/// counts a wrong password: the test after this one.) The same post, once the store answers, signs
-/// in as it always did, and the page it answers shows the brand.
+/// waits for a person. The expiring counters are the exception, and they are pinned in both
+/// directions: every such request spends exactly one hit of the sign-in window of its address (a
+/// right password too), and only a wrong password adds a failure toward the lockout of the account
+/// (the test after this one takes that to the lockout). The same post, once the store answers,
+/// signs in as it always did, and the page it answers shows the brand.
 #[tokio::test]
 async fn a_sign_in_whose_first_brand_read_fails_leaves_the_store_as_it_was_and_is_a_503() {
     let (flaky, rig) = flaky_rig();
     let o = server_of(&rig);
     let (b, binder) = begun(&o);
     let before = footprint(&rig.app);
+    let spent = counters(&rig.app, &b.ip, "ada");
+    assert_eq!(spent.start, 1, "the start spent a hit of its own window");
     let writes_before = flaky.seen_writes().len();
     assert_eq!(peek(&o, &b.flow, &binder).user, None);
 
@@ -707,7 +743,11 @@ async fn a_sign_in_whose_first_brand_read_fails_leaves_the_store_as_it_was_and_i
         flaky.refused() > refused_before,
         "the first read was the brand's"
     );
-    assert_eq!(footprint(&rig.app), before, "nothing was written");
+    assert_eq!(
+        footprint(&rig.app),
+        before,
+        "no session, entry, record or short-lived value was written"
+    );
     assert_eq!(
         flaky.seen_writes().len(),
         writes_before,
@@ -718,8 +758,19 @@ async fn a_sign_in_whose_first_brand_read_fails_leaves_the_store_as_it_was_and_i
         None,
         "nobody is signed in on the flow"
     );
+    // The counters are the exception: the right password spent one hit of the window of its
+    // address and no failure.
+    assert_eq!(
+        counters(&rig.app, &b.ip, "ada"),
+        Counters {
+            login: spent.login + 1,
+            ..spent
+        },
+        "a right password under a failing first read spends one hit of the sign-in window"
+    );
     // A wrong password is no different for the store: the 503 is the answer, not the page that says
-    // it is wrong, and the store is as it was.
+    // it is wrong, and the store is as it was. It spends a second hit of the window and counts one
+    // failure toward the lockout of the account.
     let wrong = b
         .post(
             &rig.r,
@@ -730,6 +781,15 @@ async fn a_sign_in_whose_first_brand_read_fails_leaves_the_store_as_it_was_and_i
     assert_d74_503(&wrong);
     assert_eq!(footprint(&rig.app), before);
     assert_eq!(flaky.seen_writes().len(), writes_before);
+    assert_eq!(
+        counters(&rig.app, &b.ip, "ada"),
+        Counters {
+            login: spent.login + 2,
+            failures: spent.failures + 1,
+            ..spent
+        },
+        "a wrong password spends a hit of the window and counts one failure"
+    );
 
     // The store answers: the post that read the brand writes as usual.
     flaky.allow_models();
@@ -748,12 +808,13 @@ async fn a_sign_in_whose_first_brand_read_fails_leaves_the_store_as_it_was_and_i
     assert_eq!(peek(&o, &b.flow, &binder).user.as_deref(), Some("ada"));
 }
 
-/// A wrong password under a failing first read is answered 503 and leaves the store as it was
-/// (the test above), but the lockout counter of the account is the one thing that moves: `Auth`
-/// keeps it for itself and counts a wrong guess whatever else the request meets. After four such
-/// guesses the right password still signs in; after five it meets the lockout (`err.locked`), as
-/// five wrong guesses on a healthy store would. The claim "writes nothing" is therefore not made for
-/// a wrong password; this test is what says what is true.
+/// A wrong password under a failing first read is answered 503 and leaves the records and the
+/// short-lived values as they were (the test above), but the counters move: the lockout counter of
+/// the account, which `Auth` keeps for itself and which counts a wrong guess whatever else the
+/// request meets, and the sign-in window of the address. After four such guesses the right password
+/// still signs in; after five it meets the lockout (`err.locked`), as five wrong guesses on a
+/// healthy store would. The claim "writes nothing" is therefore not made for the counters; this test
+/// and the one above are what say what is true.
 #[tokio::test]
 async fn a_wrong_password_under_a_failing_first_read_still_counts_toward_the_lockout() {
     async fn right_password_after(wrong: usize) -> Resp {
@@ -810,6 +871,7 @@ async fn a_decision_whose_first_brand_read_fails_issues_nothing_and_is_a_503() {
         ("days", "30"),
         ("group", "base.user"),
     ];
+    let counted = counters(&rig.app, &b.ip, "ada");
     flaky.refuse_model("instance_brand", Mode::Reads);
     let refused = b.post(&rig.r, "/oauth/authorize/decision", &allow).await;
     assert_d74_503(&refused);
@@ -819,6 +881,8 @@ async fn a_decision_whose_first_brand_read_fails_issues_nothing_and_is_a_503() {
     );
     // The flow is still there, signed in, and was not consumed.
     assert_eq!(peek(&o, &b.flow, &binder).user.as_deref(), Some("ada"));
+    // A decision counts in no window and no lockout: not even the counters move.
+    assert_eq!(counters(&rig.app, &b.ip, "ada"), counted);
 
     flaky.allow_models();
     let done = b.post(&rig.r, "/oauth/authorize/decision", &allow).await;
@@ -826,8 +890,9 @@ async fn a_decision_whose_first_brand_read_fails_issues_nothing_and_is_a_503() {
     assert!(loc.starts_with(&format!("{REDIRECT}?code=oac_")), "{loc}");
 }
 
-/// The start of a flow: a failing first read of the brand is a 503 and no page; the same request
-/// afterwards is the sign-in page of the brand.
+/// The start of a flow: a failing first read of the brand is a 503 and no page, no flow and no
+/// cookie (but one hit of the window of the address, a counter); the same request afterwards is the
+/// sign-in page of the brand.
 #[tokio::test]
 async fn the_start_of_a_flow_whose_first_brand_read_fails_is_a_503_and_never_a_page_that_says_obop()
 {
@@ -840,6 +905,17 @@ async fn the_start_of_a_flow_whose_first_brand_read_fails_is_a_503_and_never_a_p
     let refused = call(r, "GET", &url, &[("x-forwarded-for", &ip)], None).await;
     assert_d74_503(&refused);
     assert!(refused.header("set-cookie").is_empty(), "no flow was begun");
+    // The start counts before it writes the flow, and a counter is not guarded: the refused start
+    // spent one hit of the window of its address (60 in ten minutes), and nothing else moved.
+    assert_eq!(
+        counters(&rig.app, &ip, "ada"),
+        Counters {
+            start: 1,
+            login: 0,
+            failures: 0
+        },
+        "a refused start spends a hit of its window"
+    );
     flaky.allow_models();
     configure(&rig.app, &FIELDS);
     let (resp, _) = start(r, &url).await;
@@ -879,7 +955,9 @@ async fn a_change_of_the_brand_between_two_requests_of_a_flow_shows_in_the_next(
 /// answers with the sign-in page again (a word under the lead) and the second with the page for a
 /// flow that still waits. A failing first read of the brand is the 503 of D74 on either; once the
 /// store answers both are pages of the brand, made from the one read at the start of the request;
-/// with no row they are the pages they were.
+/// with no row they are the pages they were. (This flow has nothing pending, so the return writes
+/// nothing here whatever its order; that the return reads the brand before it writes anything is
+/// held by `sso_tests::phone`, on a flow with a pending second step.)
 #[tokio::test]
 async fn the_two_requests_of_the_microsoft_step_show_the_brand_and_read_it_first() {
     let (flaky, rig) = flaky_rig();
@@ -1244,6 +1322,115 @@ async fn every_page_a_refusal_makes_shows_the_brand() {
     );
 }
 
+/// The pages that follow a password step when the account has an authenticator app: the page that
+/// asks for the code (`LoginOut::Mfa`) and the page that asks again after a wrong one
+/// (`LoginOut::MfaRetry`), the two arms of `finish_login` that none of the lists above reaches.
+/// With a brand set each shows the logo and the name, the tab icon and the policy that allows it,
+/// in every language, and nothing that names the product; the right code then gives the consent
+/// page of the brand. A handler that builds either page from the context of an instance with no
+/// brand fails here by name.
+///
+/// The hidden field of the page holds the token the server minted, and a real token starts with the
+/// product's wire prefix (`obopmfa_`, `obop-auth/src/mfa.rs`): a secret nobody reads and the spec
+/// does not ask to rename (section 13 asks for no obop that a person sees). So the check takes the
+/// value out of the page first, and the test says that it was there.
+#[tokio::test]
+async fn the_second_factor_pages_of_the_flow_show_the_brand() {
+    let rig = rig();
+    let r = &rig.r;
+    rig.auth.set_clock_for_test(T0);
+    let (secret, _) = enrol(
+        &crate::mfa_tests::Rig {
+            r: rig.r.clone(),
+            auth: rig.auth.clone(),
+        },
+        "ada",
+    )
+    .await;
+    rig.auth.set_clock_for_test(T0 + 30);
+    configure(&rig.app, &FIELDS);
+    let c = client(r).await;
+    let mut arms: Vec<(String, u16, String, String)> = Vec::new();
+    let mut last = None;
+    for lang in LANGS {
+        let (_, b) = start(r, &authorize_url(&c, REDIRECT, &[("lang", lang)])).await;
+        let asks = b
+            .post(
+                r,
+                "/oauth/authorize/login",
+                &[("username", "ada"), ("password", PW)],
+            )
+            .await;
+        let html = asks.text();
+        assert!(html.contains("name=\"mfa_token\""), "{lang}: {html}");
+        assert!(
+            !html.contains("name=\"decision\""),
+            "{lang}: no consent yet"
+        );
+        let token = hidden(&html, "mfa_token");
+        assert!(token.starts_with("obopmfa_"), "{lang}: {token}");
+        arms.push((
+            format!("{lang}: the code is asked for"),
+            asks.status,
+            html.replace(&token, "TOKEN"),
+            policy(&asks),
+        ));
+        // A wrong code asks again, in two of the languages (the token allows five tries).
+        if ["en", "sv"].contains(&lang) {
+            let wrong = b
+                .post(
+                    r,
+                    "/oauth/authorize/mfa",
+                    &[("mfa_token", &token), ("code", "000000")],
+                )
+                .await;
+            let html = wrong.text();
+            assert!(
+                html.contains("name=\"mfa_token\"") && html.contains(&esc(t(lang, "err.code"))),
+                "{lang}: {html}"
+            );
+            arms.push((
+                format!("{lang}: the code was wrong"),
+                wrong.status,
+                html.replace(&token, "TOKEN"),
+                policy(&wrong),
+            ));
+        }
+        last = Some((b, token));
+    }
+    // The right code, on the last flow: the consent page of the brand.
+    let (b, token) = last.unwrap();
+    let good = b
+        .post(
+            r,
+            "/oauth/authorize/mfa",
+            &[("mfa_token", &token), ("code", &code(&secret, T0 + 30))],
+        )
+        .await;
+    assert!(good.text().contains("name=\"decision\""), "{}", good.text());
+    arms.push((
+        "the right code".into(),
+        good.status,
+        good.text(),
+        policy(&good),
+    ));
+    let mut failures = Vec::new();
+    for (name, status, html, policy) in &arms {
+        if *status != 200 {
+            failures.push(format!("{name}: status {status}"));
+        }
+        if let Some(why) = unbranded_page(html, policy) {
+            failures.push(format!("{name}: {why}"));
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "second-factor pages that do not show the brand:\n{}",
+        failures.join("\n")
+    );
+    assert_eq!(arms.len(), LANGS.len() + 2 + 1);
+}
+
 /// Lose every flow right before the `nth` read of a flow (counting from 0) that the next request
 /// makes: another request finishing the flow, or its time running out, between two reads of one
 /// request. The answer says whether the request made that many reads. The hook is re-armed from
@@ -1422,7 +1609,7 @@ async fn the_probe_of_the_refusal_pages_sees_a_page_that_says_obop() {
 /// cell that the read before `filled` made is stale. The loop is on the clock, so an early wake-up
 /// does not end it early. If the constant grows, the request that the test expects to be refused is
 /// answered 200 and the test fails loudly.
-fn wait_until_stale(filled: std::time::Instant) {
+pub(crate) fn wait_until_stale(filled: std::time::Instant) {
     let stale = std::time::Duration::from_millis(2050);
     while filled.elapsed() <= stale {
         std::thread::sleep(std::time::Duration::from_millis(10));

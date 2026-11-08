@@ -132,12 +132,17 @@ fn ctx(kind: &str, client: &str, lang: &str, brand: &Arc<Shown>) -> FlowCtx {
     }
 }
 
+/// The token of the second-factor pages as the server mints it: it starts with the product's wire
+/// prefix (`obopmfa_`, `obop-auth/src/mfa.rs`). It sits in a hidden field, is a secret and is never
+/// shown, so the spec does not ask to rename it (section 13: no obop that a person reads).
+const MFA_TOKEN: &str = "obopmfa_0001";
+
 fn render(kind: &str, client: &str, lang: &str, brand: &Arc<Shown>) -> Rendered {
     let c = ctx(kind, client, lang, brand);
     match kind {
         "login_mcp" | "login_mobile_ms" => login_page(&c, None),
-        "mfa_code" => mfa_page(&c, "mfa-token-0001", None, false),
-        "mfa_passkey" => mfa_page(&c, "mfa-token-0001", None, true),
+        "mfa_code" => mfa_page(&c, MFA_TOKEN, None, false),
+        "mfa_passkey" => mfa_page(&c, MFA_TOKEN, None, true),
         k if k.starts_with("consent") => consent_page(&c, None),
         k => error_page_with(brand, lang, &format!("err.{}", &k[4..])),
     }
@@ -242,10 +247,19 @@ fn with_a_brand_the_visible_text_of_every_page_holds_no_obop_in_seven_languages(
                 !text.to_lowercase().contains("obop"),
                 "{kind}/{lang} names the product: {text}"
             );
-            // Nor does anything else of the page: not an attribute, not the policy.
+            // Nor does anything else of the page that the page itself writes: not an attribute, not
+            // the policy. The one value that carries the product's prefix is the token in the hidden
+            // field of the second-factor pages (a secret the server minted, `MFA_TOKEN` here); it
+            // is taken out first, and the test says it was there.
+            let is_mfa = kind.starts_with("mfa");
+            assert_eq!(
+                page.html.contains(MFA_TOKEN),
+                is_mfa,
+                "{kind}/{lang}: the token stands on the second-factor pages only"
+            );
+            let html = page.html.replace(MFA_TOKEN, "TOKEN");
             assert!(
-                !page.html.to_lowercase().contains("obop")
-                    && !page.csp.to_lowercase().contains("obop"),
+                !html.to_lowercase().contains("obop") && !page.csp.to_lowercase().contains("obop"),
                 "{kind}/{lang} holds obop outside the visible text"
             );
             // The name and the logo are there: in the line above the card, the logo first.

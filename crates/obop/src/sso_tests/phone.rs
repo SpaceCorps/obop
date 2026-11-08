@@ -2978,3 +2978,71 @@ async fn phone_a_store_that_refuses_the_row_of_a_round_trip_is_a_503_and_never_a
         "the sweep never got past the last call of the request"
     );
 }
+
+/// The return address reads the brand before it does anything else (review of S1c). The case that
+/// can tell the order is a flow with a pending second step, where the request mints a token, so
+/// this is that case: the brand cell has gone stale, the store refuses the row of the brand, and the
+/// return address is asked for. The answer is the 503 of D74, no second-step token is minted, no
+/// line of the log is written, and the flow and the short-lived values are as they were. (If the
+/// handler read the brand after `OAuth::microsoft_return`, the token would be minted before the
+/// pool noted the fault, and the answer would be the page that asks for the code.) The one thing
+/// that moves is the counter of the sign-in window of the address, which `fault::before_write` does
+/// not guard (`read_brand` in `obop-http/src/oauth.rs`); the store answering again, the same
+/// address asks again and is given a token of its own.
+#[tokio::test]
+async fn phone_the_return_address_reads_the_brand_before_it_mints_a_token_for_a_pending_second_step()
+ {
+    use obop_storage::testing::{Flaky, Mode};
+    let (flaky, backend) = Flaky::memory();
+    let app = App::with_store(obop_commands::Store::over(backend));
+    let w = world_on(app, true, AuthConfig::insecure_dev(), None).await;
+    crate::brand_row_tests::set_brand(&w.app);
+    let (_secret, _) = enrol(&rig_of(&w), "ada").await;
+    let mut phone = Phone::new(&w).await;
+    let ip = "10.31.7.1".to_string();
+    phone.ip = Some(ip.clone());
+    let page = phone.open().await;
+    let r = phone.microsoft(&page.flow, ADA_OID).await;
+    assert!(asks_for_the_second_step(&r), "{}", r.body);
+    // The page just read the brand: two seconds from now the cell is stale and the next request
+    // reads the store again.
+    let filled = std::time::Instant::now();
+
+    let b = w.app.store.backend();
+    let tokens = || b.list("auth_mfa_token").unwrap().len();
+    let log = || b.list("security_event").unwrap().len();
+    let window = || {
+        b.counter_get(&format!(
+            "oauth:rl:login:{}",
+            &obop_oauth::util::sha_hex(&ip)[..24]
+        ))
+        .unwrap()
+    };
+    let flow = w.oauth_flow(&page.flow).unwrap();
+    assert!(flow["mfa_pending"].is_object(), "{flow}");
+    let (minted, logged, values, spent) = (tokens(), log(), b.kv_scan("").unwrap(), window());
+
+    flaky.refuse_model("instance_brand", Mode::Reads);
+    crate::oauth_tests::brand::wait_until_stale(filled);
+    let refused_before = flaky.refused();
+    let r = phone.back(&page.flow).await;
+    let read_failed = flaky.refused() > refused_before;
+    flaky.allow_models();
+    assert!(read_failed, "the row of the brand was the read that failed");
+    assert_eq!(r.status, 503, "{}", r.body);
+    assert_eq!(r.all("x-obop-applied"), ["none"], "{}", r.body);
+    assert!(
+        !r.body.contains("mfa_token"),
+        "no page that asks for a code"
+    );
+    assert_eq!(tokens(), minted, "a second-step token was minted");
+    assert_eq!(log(), logged, "a line of the log was written");
+    assert_eq!(b.kv_scan("").unwrap(), values, "a short-lived value moved");
+    assert_eq!(w.oauth_flow(&page.flow).unwrap(), flow, "the flow moved");
+    assert_eq!(window(), spent + 1, "the counter of the address's window");
+
+    // The store answers: the same address asks again, with a token of its own.
+    let r = phone.back(&page.flow).await;
+    assert!(asks_for_the_second_step(&r), "{}", r.body);
+    assert_eq!(tokens(), minted + 1);
+}

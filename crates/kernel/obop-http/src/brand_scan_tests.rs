@@ -45,7 +45,7 @@
 //! row, every output that is pinned is what it was without one (the logo path is the exception: it
 //! answers the artwork with a row, `crates/obop/src/brand_http_tests.rs`).
 
-use crate::src_scan::{Lexed, line_of, non_test, read_tree, tree, words};
+use crate::src_scan::{Lexed, after_brace, line_of, non_test, read_tree, tree, words};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
@@ -967,8 +967,7 @@ const LITERAL_ALLOWED: [LiteralRow; 4] = [
         "today",
         "the relying-party name of the passkey ceremony site of the sign-in pages. It reaches an \
          authenticator only through registration options, which the REST routes make, not these \
-         pages. Its branded counterpart does not exist in this tree yet: S1e is to replace this \
-         literal with the name from the record and then remove this row",
+         pages. Its branded counterpart does not exist in this tree",
     ),
 ];
 
@@ -1681,5 +1680,114 @@ fn the_scan_of_the_test_only_functions_sees_one_without_the_attribute_and_leaves
     assert_eq!(
         defined_outside_tests(&tree(&[(page, "")])),
         [format!("{flow}: not in the tree")]
+    );
+}
+
+// ---- The brand of a page context is private to its crate (slice S1c, review) --------------------------
+//
+// `FlowCtx.brand` is the one way a page gets its brand: `OAuth::view` takes the brand as an argument
+// and puts it there, so a handler cannot get a page context without handing one over. That holds only
+// while no other crate can build a `FlowCtx` by hand with a default brand in it, and the field is
+// `pub(crate)` for that: make it `pub` and every test, scan and lint stays green while the hole is
+// open. So the field's declaration is read.
+
+/// The file of the page context and its name.
+const FLOW_CTX_FILE: &str = "kernel/obop-oauth/src/flow.rs";
+
+/// What is wrong with the declaration of the field `brand` of `struct FlowCtx` in the non-test code
+/// of `FLOW_CTX_FILE`: it does not exist, it exists twice, or it is `pub` (visible to every crate).
+fn flow_ctx_brand_visibility(files: &BTreeMap<String, String>) -> Vec<String> {
+    let lexed = non_test(files);
+    let Some(l) = lexed.get(FLOW_CTX_FILE) else {
+        return vec![format!("{FLOW_CTX_FILE}: not in the tree")];
+    };
+    let code = &l.code;
+    let defs: Vec<usize> = words(code, "FlowCtx")
+        .into_iter()
+        .filter(|at| {
+            String::from_utf8_lossy(&code[..*at])
+                .trim_end()
+                .ends_with("struct")
+        })
+        .collect();
+    let [at] = defs[..] else {
+        return vec![format!(
+            "{FLOW_CTX_FILE}: `struct FlowCtx` is defined {} times",
+            defs.len()
+        )];
+    };
+    let Some(open) = code[at..].iter().position(|c| *c == b'{').map(|p| at + p) else {
+        return vec![format!("{FLOW_CTX_FILE}: `struct FlowCtx` has no body")];
+    };
+    let body = String::from_utf8_lossy(&code[open..after_brace(code, open)]).into_owned();
+    // The declarations of a field named `brand`: whatever stands before the name in its declaration
+    // (the text between two commas or braces) is its visibility.
+    let mut decls = Vec::new();
+    for line in body.split(['\n', ',', '{', '}']).map(str::trim) {
+        if let Some((vis, rest)) = line.split_once("brand")
+            && rest.trim_start().starts_with(':')
+            && (vis.is_empty() || vis.trim() == "pub" || vis.trim().starts_with("pub("))
+        {
+            decls.push(vis.trim().to_string());
+        }
+    }
+    match decls.as_slice() {
+        [vis] if vis == "pub" => vec![format!(
+            "{FLOW_CTX_FILE}: the field `FlowCtx.brand` is `pub`; it must be `pub(crate)`, so that no other crate can build a page context with a default brand"
+        )],
+        [_] => Vec::new(),
+        other => vec![format!(
+            "{FLOW_CTX_FILE}: `struct FlowCtx` has {} fields named `brand`, the scan expects one",
+            other.len()
+        )],
+    }
+}
+
+#[test]
+fn the_brand_of_a_page_context_is_not_visible_to_other_crates() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut files = BTreeMap::new();
+    read_tree(&root, &root, &mut files);
+    let found = flow_ctx_brand_visibility(&files);
+    assert!(found.is_empty(), "{}", found.join("\n"));
+    // The scan reads the real declaration: it is there, and it is the crate-private one.
+    assert!(
+        files[FLOW_CTX_FILE].contains("    pub(crate) brand: Arc<Shown>,"),
+        "{FLOW_CTX_FILE}: the declaration the scan reads is not where the test expects it"
+    );
+}
+
+#[test]
+fn the_scan_of_the_page_context_sees_a_public_field_a_missing_one_and_two() {
+    let at = |src: &str| flow_ctx_brand_visibility(&tree(&[(FLOW_CTX_FILE, src)]));
+    // The field as it is: nothing. A private field or one limited to the parent is no wider.
+    assert!(
+        at("pub struct FlowCtx { pub lang: String, pub(crate) brand: Arc<Shown>, }").is_empty()
+    );
+    assert!(at("pub struct FlowCtx { brand: Arc<Shown> }").is_empty());
+    assert!(at("pub struct FlowCtx { pub(super) brand: Arc<Shown> }").is_empty());
+    // Public: named. The same on one line or many, and a doc comment or a string that says the
+    // words is no declaration.
+    let found = at("pub struct FlowCtx {\n    pub lang: String,\n    pub brand: Arc<Shown>,\n}");
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(found[0].contains("`pub`"), "{found:?}");
+    assert!(
+        at("pub struct FlowCtx {\n    /// pub brand: the brand\n    pub(crate) brand: Arc<Shown>,\n    pub note: &'static str,\n}")
+            .is_empty()
+    );
+    // Missing, doubled, no struct, a second struct, a file that is gone.
+    assert_eq!(at("pub struct FlowCtx { pub lang: String }").len(), 1);
+    assert_eq!(
+        at("pub struct FlowCtx { pub(crate) brand: A,\n pub(crate) brand: B }").len(),
+        1
+    );
+    assert_eq!(at("fn f() {}").len(), 1);
+    assert_eq!(
+        at("pub struct FlowCtx { pub(crate) brand: A }\npub struct FlowCtx { }").len(),
+        1
+    );
+    assert_eq!(
+        flow_ctx_brand_visibility(&tree(&[("kernel/obop-oauth/src/page.rs", "")])),
+        [format!("{FLOW_CTX_FILE}: not in the tree")]
     );
 }
