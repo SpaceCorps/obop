@@ -120,6 +120,27 @@ fn the_label_and_the_issuer_follow_the_variable_then_the_record_then_obop() {
     }
 }
 
+/// The variable is used as it is, not trimmed, on the path that reaches the address of an entry
+/// (`Auth::issuer`): a value with spaces round it keeps them in the field and, percent-encoded, in
+/// the label and in `issuer=`. (`issuer_from` holds the rule on its own, in `obop-commands`; this
+/// holds that nothing between the config and the URI trims it again.)
+#[test]
+fn a_variable_with_spaces_round_it_is_used_as_it_is() {
+    let r = rig_with(AuthConfig {
+        issuer: Some(" Acme ".into()),
+        ..AuthConfig::insecure_dev()
+    });
+    user_with(&r.a, "ada", &["base.user"]);
+    // A record that would give another label changes nothing.
+    set_name(&*r.b, "MOHV");
+    let (got_uri, got_issuer) = begun(&r, "ada").unwrap();
+    assert_eq!(got_issuer, " Acme ", "the field is the value as it is");
+    assert_eq!(
+        got_uri,
+        "otpauth://totp/%20Acme%20:ada?secret=SECRET&issuer=%20Acme%20&algorithm=SHA1&digits=6&period=30"
+    );
+}
+
 /// A name with a space, an ampersand and non-ASCII letters is percent-encoded in the label and in
 /// `issuer=`, once each.
 #[test]
