@@ -198,7 +198,7 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
     );
     paths.insert(
         "/api/auth/mfa/begin".into(),
-        json!({"post": {"operationId": "mfaBegin", "summary": "Start enrolment: returns a base32 secret and an otpauth:// URI; nothing is active yet", "security": sec.clone(), "responses": {"200": {"description": "secret, uri."}, "503": {"description": "The server has no OBOP_SECRET_KEY."}}}}),
+        json!({"post": {"operationId": "mfaBegin", "summary": "Start enrolment: returns a base32 secret and an otpauth:// URI; nothing is active yet", "security": sec.clone(), "responses": {"200": {"description": "secret, uri."}, "503": {"description": "The server has no OBOP_SECRET_KEY, or the instance branding could not be read, so the label of the authenticator entry could not be written (error code brand_unavailable: the stored name cannot be shown, or a read of the store failed for a reason that is not a busy or unreachable store; there is no Retry-After, nothing was stored, and waiting does not repair it: an administrator repairs the branding at the terminal with obop admin brand status and obop admin brand configure)."}}}}),
     );
     paths.insert(
         "/api/auth/mfa/confirm".into(),
