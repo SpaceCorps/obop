@@ -312,7 +312,7 @@ const NEW_KEYS: [&str; 6] = [
 /// product. The pin makes any edit of one a visible diff, in the commit that explains why, so that a
 /// change of a word in a translation cannot invert a claim unseen; `the_new_texts_keep_the_claims_of_the_texts_they_stand_for`
 /// (`brand_page_tests.rs`) says in words which claims they are. The other columns are machine-drafted
-/// (docs/ISSUES.md BR-c1): a native speaker's correction moves the pin of that cell and nothing else.
+/// (docs/ISSUES.md P1): a native speaker's correction moves the pin of that cell and nothing else.
 #[test]
 fn pins_the_42_cells_of_the_six_texts_the_branding_work_adds() {
     let mut now = Vec::new();
