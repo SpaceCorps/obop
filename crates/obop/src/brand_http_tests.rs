@@ -1078,8 +1078,16 @@ async fn under_the_admin_prefix_the_route_is_still_at_the_root() {
         under.text()
     );
     assert!(!under.header("content-type").contains("svg"));
-    // The public site's own pages are not shadowed either.
-    assert_ne!(get(&l.router, "/favicon.svg").await.text(), artwork());
+    // The public site's own pages are not shadowed either: robots.txt is the shop's. Since slice S1f
+    // the shop's tab icon, `/favicon.svg`, is the record's artwork too, answered by the shop itself
+    // with the headers and the ETag of the logo route.
+    let robots = get(&l.router, "/robots.txt").await;
+    assert_eq!(robots.status, 200);
+    assert!(robots.text().contains("User-agent"), "{}", robots.text());
+    let tab = get(&l.router, "/favicon.svg").await;
+    assert_eq!(tab.status, 200);
+    assert_eq!(tab.text(), artwork());
+    assert_eq!(tab.header("etag"), at_root.header("etag"));
 }
 
 // ---- The store that fails (D74) -------------------------------------------------------------------

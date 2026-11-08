@@ -361,6 +361,10 @@ fn status_of_an_instance_with_no_brand_says_so_and_shows_the_defaults() {
          slug: \"obop\" (default)\n\
          logo: none (default)\n\
          tile_accent: \"#495670\" (default)\n\
+         favicon: \"tile\" (default)\n\
+         site.accent: \"#0f766e\" (default)\n\
+         site.logo_url: \"\" (default)\n\
+         site.title: \"My Shop\" (default)\n\
          fallbacks: none\n"
     );
 }
@@ -392,6 +396,10 @@ fn status_shows_the_values_in_force_the_titles_and_messages_that_are_set_and_the
              slug: \"mohv\" (record)\n\
              logo: tile (record)\n\
              tile_accent: \"#495670\" (default)\n\
+             favicon: \"tile\" (default)\n\
+             site.accent: \"#495670\" (default)\n\
+             site.logo_url: \"/api/brand/logo.svg?v={v}\" (record)\n\
+             site.title: \"MOHV\" (record)\n\
              title_sv: \"Logga in\" (record)\n\
              message_en: \"Welcome\" (record)\n\
              logo version: {v}\n\
