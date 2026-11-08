@@ -547,9 +547,9 @@ fn a_visitor_cannot_send_a_number_or_a_decimal_past_its_bound() {
 }
 
 /// The instance brand reaches the public site through this door and no other (docs/spec/branding.md,
-/// section 4 and 5, row OT-04): `site_settings` reads the reader of the dispatcher, fills the keys
-/// the stored object leaves unset, and hands the artwork over through one reserved key that it
-/// strips from the stored object first.
+/// section 4 and 5, row OT-04): `site_settings_read` (and `site_settings`, which answers its object
+/// alone) reads the reader of the dispatcher, fills the keys the stored object leaves unset, and
+/// hands the artwork over through one reserved key that it strips from the stored object first.
 mod brand_door {
     use super::*;
     use crate::brand::Reader;

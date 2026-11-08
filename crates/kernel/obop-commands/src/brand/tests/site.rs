@@ -1,6 +1,6 @@
 //! What the public site takes from the brand (docs/spec/branding.md, section 5 and the row OT-04 of
 //! section 6): `fill_site` puts the fallbacks of the record into the `site` object that
-//! `PublicApi::site_settings` returns, for the keys that object leaves unset, and hands the artwork
+//! `PublicApi::site_settings_read` returns, for the keys that object leaves unset, and hands the artwork
 //! over through the one reserved key. Section 13: "each fallback and each explicit `site.*` key
 //! winning; the accent order for the shop and for its favicon tile (`site.accent`, then the tile
 //! accent of section 2, then teal)", and "a `site.*` key with the name of the reserved key ...

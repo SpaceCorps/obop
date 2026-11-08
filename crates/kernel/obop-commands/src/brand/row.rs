@@ -187,8 +187,8 @@ pub(crate) fn accent_of(setting: Option<&Fields>) -> Option<String> {
 /// The `site` object of the instance settings (the keys of the public site), when the settings
 /// parse and hold one; empty otherwise. Read with the theme, from the same row of settings, so that
 /// `get` reports on the `site.*` keys the public site is told about, and by the one door the public
-/// site reads its settings by (`site::site_settings`), where it is the read that door always made,
-/// with the same result for the same text. Total.
+/// site reads its settings by (`PublicApi::site_settings_read`, which calls `site::site_settings`),
+/// where it is the read that door always made, with the same result for the same text. Total.
 pub(crate) fn site_of(setting: Option<&Fields>) -> serde_json::Map<String, J> {
     let parsed = setting
         .and_then(|s| s.get("value")?.as_str())

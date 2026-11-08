@@ -534,7 +534,7 @@ async fn shown(r: &axum::Router, path: &str) -> String {
     format!("{status}\n{}\n\n{body}", lines.join("\n"))
 }
 
-/// The brand row is in the store. The shop's files and pages go through `PublicApi::site_settings`
+/// The brand row is in the store. The shop's files and pages go through `PublicApi::site_settings_read`
 /// on every request here (the fixture's cache lives zero seconds), the one door the site reads
 /// settings by, and the back office index is the file of the build. Since slice S1f the door fills
 /// what the seeded settings leave unset (the logo address, the tab icon), so the home page and the

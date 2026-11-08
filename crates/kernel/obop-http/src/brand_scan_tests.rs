@@ -118,7 +118,7 @@ const ALLOWED: [(&str, &str, Limit); 8] = [
     ),
     (
         "kernel/obop-commands/src/public.rs",
-        "`PublicApi::site_settings`, the one door the public site and shop read their settings by: it hands the reader of the dispatcher to `brand::site_settings`, which does the read and the fill (spec, sections 4 and 5, row OT-04); it asks nothing of the reader itself",
+        "`PublicApi::site_settings_read` (`site_settings` is the same call answering the object alone), the one door the public site and shop read their settings by: it hands the reader of the dispatcher to `brand::site_settings`, which does the read and the fill (spec, sections 4 and 5, row OT-04); it asks nothing of the reader itself",
         Limit::Reads {
             calls: 1,
             reads: 0,
@@ -824,7 +824,7 @@ fn a_row_with_limits_lets_its_file_ask_the_reader_as_the_row_says_and_nothing_el
 }
 
 /// The rows with limits are the two files of the logo route and, since slice S1f, the settings door
-/// of the public site (`PublicApi::site_settings`), and no others: loosening one of them to
+/// of the public site (`PublicApi::site_settings_read`), and no others: loosening one of them to
 /// `Limit::Any` is a change of this test, and so a decision that shows in the diff.
 #[test]
 fn the_rows_with_limits_are_the_logo_route_files_and_the_settings_door() {

@@ -274,10 +274,11 @@ pub struct SiteRead {
     pub degraded: bool,
 }
 
-/// The `site` object of the instance settings with the brand filled in: what `PublicApi::site_settings`
-/// answers, the one door the public site reads its settings by. The settings are read here, the
-/// reader is asked once (`current()`: the last good brand when its refill fails, the default in a
-/// process that never had a good read), and the object is filled by [`fill_site`]. A settings row
+/// The `site` object of the instance settings with the brand filled in: what
+/// `PublicApi::site_settings_read` answers (`site_settings` answers its object alone), the one door
+/// the public site reads its settings by. The settings are read here, the reader is asked once
+/// (`current()`: the last good brand when its refill fails, the default in a process that never had
+/// a good read), and the object is filled by [`fill_site`]. A settings row
 /// that cannot be read gives an empty object, as the door always did, and a reader that had nothing
 /// to give is told by the unread default; both are reported in [`SiteRead::degraded`], and neither
 /// hides the fault from D74: it is the request that met it, and not this call, that is answered 503.
