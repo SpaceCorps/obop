@@ -256,7 +256,7 @@ web/packages/client/      @obop/client (working name): generated types, call hel
 web/packages/tokens/      DTCG JSON -> CSS variables for the web, plus a native target (tokens.native.ts)
 web/packages/trip-core/   pure TypeScript: fix filtering, distance, the outbox state machine; tested with vp test;
                           test vectors shared with the Rust validator so both sides agree
-web/apps/mileage-app/     the Expo app (development build, config plugins, no checked-in ios/ or android/); in the planned host design a module of the host (D93, Proposed; see mobile-host.md)
+web/apps/mileage-app/     the Expo app (development build, config plugins, no checked-in ios/ or android/); in the planned host design its code would be the Mileage module of the host, and where that code lives is not ruled (D93, Proposed; see mobile-host.md)
 packages/mileage.toml     the package; crates/modules/mileage (the geodesic helper) when needed
 ```
 
