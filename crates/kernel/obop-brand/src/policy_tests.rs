@@ -528,6 +528,17 @@ fn the_safety_subset_refuses_what_could_do_harm_on_a_page() {
         }
     }
     assert_eq!(safe(NAME, ""), Err(reason::EMPTY));
+    // A text of nothing but U+0020 is empty, whichever the kind: a name has none, a title would
+    // hide the name, a message would be a blank line. (The write check refuses them too.)
+    for blank in [" ", "   ", &" ".repeat(NAME_MAX)] {
+        for kind in [NAME, TITLE, MESSAGE] {
+            assert_eq!(safe(kind, blank), Err(reason::EMPTY), "{kind:?} {blank:?}");
+        }
+    }
+    // A space between or around letters is not blank, and a too long blank is too long.
+    assert_eq!(safe(NAME, "Zed Co"), Ok(()));
+    assert_eq!(safe(TITLE, " a"), Ok(()));
+    assert_eq!(safe(NAME, &" ".repeat(NAME_MAX + 1)), Err(reason::TOO_LONG));
     assert_eq!(safe(NAME, &"a".repeat(NAME_MAX + 1)), Err(reason::TOO_LONG));
     assert_eq!(
         safe(TITLE, &"a".repeat(TITLE_MAX + 1)),
