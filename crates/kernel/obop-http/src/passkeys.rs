@@ -283,3 +283,95 @@ async fn login(State(s): Shared, parts: Parts, Json(b): Json<J>) -> Response {
     })
     .await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use obop_commands::brand::{Action, apply};
+
+    /// An authenticator that knows no one: only enough for the state to exist.
+    struct Nobody;
+
+    impl obop_commands::Authenticator for Nobody {
+        fn resolve(&self, _: &str) -> Option<obop_commands::Principal> {
+            None
+        }
+        fn login(&self, _: &str, _: &str) -> Result<String, String> {
+            Err("not in this test".into())
+        }
+        fn issue_agent_token(
+            &self,
+            _: &obop_commands::Principal,
+            _: &[String],
+            _: &str,
+        ) -> Result<String, String> {
+            Err("not in this test".into())
+        }
+    }
+
+    /// The relying party name the REST builder gives a ceremony site, over a dispatcher whose reader
+    /// is installed over `backend`.
+    fn rp_name_over(backend: &Arc<dyn obop_storage::Backend>) -> String {
+        let d = Arc::new(obop_commands::Dispatcher::new());
+        d.install_brand(backend.clone());
+        let state = HttpState::with_mcp(
+            d,
+            Arc::new(Nobody),
+            crate::mcp::McpConfig {
+                public_url: Some("https://inst.test".into()),
+                ..crate::mcp::McpConfig::default()
+            },
+        );
+        let parts = axum::http::Request::builder()
+            .uri("/api/auth/login/passkey/options")
+            .body(())
+            .unwrap()
+            .into_parts()
+            .0;
+        match ctx(&state, &parts) {
+            Ok(c) => {
+                assert_eq!(c.rp_id, "inst.test");
+                assert_eq!(c.origin, "https://inst.test");
+                c.rp_name
+            }
+            Err(_) => panic!("a ceremony site"),
+        }
+    }
+
+    /// `ctx()` serves every passkey route, the sign-in ceremony included, and fills `rp_name` from
+    /// the reader's display value: the name of the record, `obop` with no row, and `obop` for a
+    /// stored name that cannot be shown (the sign-in emits no name, so it must not be stopped by
+    /// one; only the registration options, which call `strict()` themselves, refuse it).
+    #[test]
+    fn the_site_of_every_passkey_route_carries_the_display_name_of_the_instance_brand() {
+        let backend = obop_storage::open("memory:").unwrap();
+        assert_eq!(rp_name_over(&backend), "obop", "no row");
+
+        let backend = obop_storage::open("memory:").unwrap();
+        apply(
+            &*backend,
+            None,
+            "operator",
+            &Action::Configure(vec![("name".into(), "MOHV".into())]),
+            false,
+        )
+        .unwrap();
+        assert_eq!(rp_name_over(&backend), "MOHV", "a brand");
+
+        let backend = obop_storage::open("memory:").unwrap();
+        let mut row = obop_storage::Fields::new();
+        row.insert("name".into(), J::from("a<b"));
+        backend
+            .apply_checked(&[obop_storage::Op::Put {
+                model: "instance_brand".into(),
+                id: "instance".into(),
+                fields: row,
+            }])
+            .unwrap();
+        assert_eq!(
+            rp_name_over(&backend),
+            "obop",
+            "a name that cannot be shown"
+        );
+    }
+}
