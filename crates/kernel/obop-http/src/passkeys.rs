@@ -157,8 +157,8 @@ fn setup<'a>(s: &'a HttpState, parts: &Parts) -> Result<Setup<'a>, Response> {
 }
 
 /// As [`setup`], with the relying party name `name` gives. The person is authenticated first, so
-/// that a request that is not signed in is answered 401 whatever the store or the brand hold and
-/// costs no read of either.
+/// that a request that is not signed in is answered 401 whatever the brand holds and does not read
+/// the brand row (looking up the session is a read of the store, as for any request).
 #[allow(clippy::result_large_err)]
 fn setup_named<'a>(s: &'a HttpState, parts: &Parts, name: NameFor) -> Result<Setup<'a>, Response> {
     let (p, token, _) = human(&*s.auth, &parts.headers)?;
@@ -547,7 +547,10 @@ mod tests {
     /// hundred. The bound of the cell is two seconds, so the count allowed is one per two seconds
     /// the loop took, plus the first; on an idle machine that is one. A builder that reads the row
     /// and the theme on every call (the uncached `fresh()`) or only the row on every call
-    /// (`strict()`) is a count of a hundred, or no read of the theme.
+    /// (`strict()`) is a count of a hundred, or no read of the theme. (The allowance comes from the
+    /// clock, because the dispatcher builds its reader with the default bound and a test cannot give
+    /// it a longer one: a cache that broke only when the loop is slow would pass. That is the
+    /// leniency of this test, and it is the reason it asks for no time of its own.)
     #[test]
     fn a_hundred_sites_cost_the_store_one_read_of_the_row_and_one_of_the_theme() {
         let (flaky, backend) = obop_storage::testing::Flaky::memory();

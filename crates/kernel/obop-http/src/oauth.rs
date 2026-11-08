@@ -1101,7 +1101,9 @@ mod tests {
     /// The cache of the reader applies to the OAuth pages' ceremony site as to the passkey routes
     /// (the Cache bullet of the spec, section 13): a hundred calls cost the store one read of the row
     /// and one of the theme, the unit of one refill. The bound of the cell is two seconds, so the
-    /// count allowed is one per two seconds the loop took, plus the first.
+    /// count allowed is one per two seconds the loop took, plus the first. (The same leniency as
+    /// the test of the passkey routes: the dispatcher builds its reader with the default bound, so
+    /// the allowance comes from the clock and a cache that broke only in a slow loop would pass.)
     #[test]
     fn a_hundred_oauth_sites_cost_the_store_one_read_of_the_row_and_one_of_the_theme() {
         let (flaky, backend) = obop_storage::testing::Flaky::memory();
