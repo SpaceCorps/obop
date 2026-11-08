@@ -14,7 +14,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post},
 };
-use obop_commands::brand::enrolment_error;
+use obop_commands::brand::{enrolment_error, no_reader_error};
 use obop_commands::{PasskeyApi, Reauth, WebauthnCtx};
 use serde_json::{Value as J, json};
 use std::sync::Arc;
@@ -57,9 +57,46 @@ pub(crate) fn rp_name(s: &HttpState) -> String {
     s.dispatcher.brand().current().brand().name().to_string()
 }
 
-/// The ceremony site of this request.
+/// The relying party name the registration options write into the person's authenticator, where it
+/// cannot be corrected afterwards: read from the row alone, every time (the reader's `strict`), and
+/// a name that cannot be read is the error of an enrolment, never a default that a read error
+/// substituted (docs/spec/branding.md, section 4). Unlike [`rp_name`] it makes no display read, so
+/// the theme setting, which this name does not depend on, cannot refuse a registration.
+#[allow(clippy::result_large_err)]
+fn registration_name(s: &HttpState) -> Result<String, Response> {
+    let reader = s.dispatcher.brand();
+    // A dispatcher that never ran `register_admin` has a reader with no store, and its `strict`
+    // answers the default brand: that is no row that was read, and a default is what this route
+    // never writes into a device. The shipped composition always has a reader.
+    if reader.is_inert() {
+        return Err(mfa_error(no_reader_error()));
+    }
+    reader
+        .strict()
+        .map(|b| b.name().to_string())
+        .map_err(|e| mfa_error(enrolment_error(e)))
+}
+
+/// How a ceremony site gets its relying party name: [`display_name`] for every route but the
+/// registration options, [`registration_name`] for those.
+type NameFor = fn(&HttpState) -> Result<String, Response>;
+
+/// The name of a ceremony site that is not written into a device: the display read.
+#[allow(clippy::result_large_err)]
+fn display_name(s: &HttpState) -> Result<String, Response> {
+    Ok(rp_name(s))
+}
+
+/// The ceremony site of this request, with the name a display read gives.
 #[allow(clippy::result_large_err)]
 fn ctx(s: &HttpState, parts: &Parts) -> Result<WebauthnCtx, Response> {
+    ctx_named(s, parts, display_name)
+}
+
+/// The ceremony site of this request with the relying party name `name` gives. The name is asked for
+/// after the address of the instance is known and not before, and only once.
+#[allow(clippy::result_large_err)]
+fn ctx_named(s: &HttpState, parts: &Parts, name: NameFor) -> Result<WebauthnCtx, Response> {
     let trust = s.trust_proxy.load(std::sync::atomic::Ordering::Relaxed);
     let Some((origin, rp_id)) = s.mcp.webauthn_origin(&parts.headers, trust) else {
         return Err(super::api_error(
@@ -72,7 +109,7 @@ fn ctx(s: &HttpState, parts: &Parts) -> Result<WebauthnCtx, Response> {
     Ok(WebauthnCtx {
         rp_id,
         origin,
-        rp_name: rp_name(s),
+        rp_name: name(s)?,
         ip: client_ip(s, parts),
     })
 }
@@ -100,22 +137,28 @@ fn no_store(mut r: Response) -> Response {
     r
 }
 
+/// What `setup` hands its caller: the signed-in human, her session token, the ceremony site and the
+/// passkey service.
+type Setup<'a> = (
+    obop_commands::Principal,
+    String,
+    WebauthnCtx,
+    &'a dyn PasskeyApi,
+);
+
 /// The signed-in human, the ceremony site and the passkey service, or the response that says why not.
 #[allow(clippy::result_large_err)]
-fn setup<'a>(
-    s: &'a HttpState,
-    parts: &Parts,
-) -> Result<
-    (
-        obop_commands::Principal,
-        String,
-        WebauthnCtx,
-        &'a dyn PasskeyApi,
-    ),
-    Response,
-> {
+fn setup<'a>(s: &'a HttpState, parts: &Parts) -> Result<Setup<'a>, Response> {
+    setup_named(s, parts, display_name)
+}
+
+/// As [`setup`], with the relying party name `name` gives. The person is authenticated first, so
+/// that a request that is not signed in is answered 401 whatever the store or the brand hold and
+/// costs no read of either.
+#[allow(clippy::result_large_err)]
+fn setup_named<'a>(s: &'a HttpState, parts: &Parts, name: NameFor) -> Result<Setup<'a>, Response> {
     let (p, token, _) = human(&*s.auth, &parts.headers)?;
-    let c = ctx(s, parts)?;
+    let c = ctx_named(s, parts, name)?;
     Ok((p, token, c, api(s)?))
 }
 
@@ -130,19 +173,12 @@ async fn list(State(s): Shared, parts: Parts) -> Response {
 }
 
 async fn register_options(State(s): Shared, parts: Parts, Json(b): Json<J>) -> Response {
-    blocking(move || match setup(&s, &parts) {
-        Ok((p, _, mut c, api)) => {
-            // The one route that writes the name: the registration options put it into the person's
-            // authenticator, where it cannot be corrected afterwards. So it is read from the row
-            // alone, every time, and a name that cannot be read refuses the registration: the name
-            // is never a default that a read error substituted (docs/spec/branding.md, section 4).
-            match s.dispatcher.brand().strict().map_err(enrolment_error) {
-                Ok(b) => c.rp_name = b.name().to_string(),
-                Err(e) => return mfa_error(e),
-            }
-            api.register_options(&p, &c, &reauth(&b))
-                .map_or_else(mfa_error, |j| no_store(Json(j).into_response()))
-        }
+    // The one route that writes the name: the registration options put it into the person's
+    // authenticator, where it cannot be corrected afterwards (`registration_name`).
+    blocking(move || match setup_named(&s, &parts, registration_name) {
+        Ok((p, _, c, api)) => api
+            .register_options(&p, &c, &reauth(&b))
+            .map_or_else(mfa_error, |j| no_store(Json(j).into_response())),
         Err(r) => r,
     })
     .await
@@ -309,25 +345,37 @@ mod tests {
         }
     }
 
-    /// The relying party name the REST builder gives a ceremony site, over a dispatcher whose reader
-    /// is installed over `backend`.
-    fn rp_name_over(backend: &Arc<dyn obop_storage::Backend>) -> String {
+    /// A state whose dispatcher has a reader over `backend`, or none (a dispatcher that never ran
+    /// `register_admin`) when `backend` is `None`.
+    fn state_over(backend: Option<&Arc<dyn obop_storage::Backend>>) -> Arc<HttpState> {
         let d = Arc::new(obop_commands::Dispatcher::new());
-        d.install_brand(backend.clone());
-        let state = HttpState::with_mcp(
+        if let Some(backend) = backend {
+            d.install_brand(backend.clone());
+        }
+        HttpState::with_mcp(
             d,
             Arc::new(Nobody),
             crate::mcp::McpConfig {
                 public_url: Some("https://inst.test".into()),
                 ..crate::mcp::McpConfig::default()
             },
-        );
-        let parts = axum::http::Request::builder()
+        )
+    }
+
+    fn parts_of_a_passkey_route() -> Parts {
+        axum::http::Request::builder()
             .uri("/api/auth/login/passkey/options")
             .body(())
             .unwrap()
             .into_parts()
-            .0;
+            .0
+    }
+
+    /// The relying party name the REST builder gives a ceremony site, over a dispatcher whose reader
+    /// is installed over `backend`.
+    fn rp_name_over(backend: &Arc<dyn obop_storage::Backend>) -> String {
+        let state = state_over(Some(backend));
+        let parts = parts_of_a_passkey_route();
         match ctx(&state, &parts) {
             Ok(c) => {
                 assert_eq!(c.rp_id, "inst.test");
@@ -341,7 +389,8 @@ mod tests {
     /// `ctx()` serves every passkey route, the sign-in ceremony included, and fills `rp_name` from
     /// the reader's display value: the name of the record, `obop` with no row, and `obop` for a
     /// stored name that cannot be shown (the sign-in emits no name, so it must not be stopped by
-    /// one; only the registration options, which call `strict()` themselves, refuse it).
+    /// one; only the registration options, which build their site with `registration_name`, refuse
+    /// it).
     #[test]
     fn the_site_of_every_passkey_route_carries_the_display_name_of_the_instance_brand() {
         let backend = obop_storage::open("memory:").unwrap();
@@ -373,5 +422,92 @@ mod tests {
             "obop",
             "a name that cannot be shown"
         );
+    }
+
+    fn put_name(backend: &Arc<dyn obop_storage::Backend>, name: J) {
+        let mut row = obop_storage::Fields::new();
+        row.insert("name".into(), name);
+        backend
+            .apply_checked(&[obop_storage::Op::Put {
+                model: "instance_brand".into(),
+                id: "instance".into(),
+                fields: row,
+            }])
+            .unwrap();
+    }
+
+    /// The status, `Retry-After` and code of the response `registration_name` gives.
+    async fn refusal(r: Response) -> (StatusCode, bool, J) {
+        use http_body_util::BodyExt;
+        let (parts, body) = r.into_parts();
+        let bytes = body.collect().await.unwrap().to_bytes();
+        (
+            parts.status,
+            parts.headers.contains_key("retry-after"),
+            serde_json::from_slice(&bytes).unwrap_or(J::Null),
+        )
+    }
+
+    /// The name of the registration options is the stored name, read from the row alone: `obop`
+    /// with no row, and in every case the reader cannot answer for, the 503 `brand_unavailable` and
+    /// never a default. A reader with no store is such a case: it cannot say what the row holds.
+    #[tokio::test]
+    async fn the_registration_name_is_the_strict_name_and_fails_closed() {
+        let backend = obop_storage::open("memory:").unwrap();
+        assert_eq!(
+            registration_name(&state_over(Some(&backend)))
+                .ok()
+                .as_deref(),
+            Some("obop"),
+            "no row"
+        );
+        put_name(&backend, J::from("MOHV"));
+        assert_eq!(
+            registration_name(&state_over(Some(&backend)))
+                .ok()
+                .as_deref(),
+            Some("MOHV")
+        );
+        for bad in [
+            J::from("a<b"),
+            J::from(""),
+            J::from("a:b"),
+            J::from("a/b"),
+            J::from("a@b"),
+            J::from("   "),
+        ] {
+            let backend = obop_storage::open("memory:").unwrap();
+            put_name(&backend, bad.clone());
+            let Err(r) = registration_name(&state_over(Some(&backend))) else {
+                panic!("a name that cannot be written to a device was used: {bad}")
+            };
+            let (status, retry, body) = refusal(r).await;
+            assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{bad}");
+            assert!(!retry, "{bad}");
+            assert_eq!(body["code"], json!("brand_unavailable"), "{bad}: {body}");
+        }
+        let Err(r) = registration_name(&state_over(None)) else {
+            panic!("a reader with no store gave a name")
+        };
+        let (status, retry, body) = refusal(r).await;
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+        assert!(!retry);
+        assert_eq!(body["code"], json!("brand_unavailable"), "{body}");
+    }
+
+    /// The registration options make no display read: the theme setting, which the name does not
+    /// depend on, cannot refuse them. (The display read of `rp_name` is the one that asks it.)
+    #[test]
+    fn the_registration_name_makes_no_display_read() {
+        let (flaky, backend) = obop_storage::testing::Flaky::memory();
+        put_name(&backend, J::from("MOHV"));
+        let state = state_over(Some(&backend));
+        flaky.refuse_model("obop_setting", obop_storage::testing::Mode::Reads);
+        assert_eq!(
+            registration_name(&state).ok().as_deref(),
+            Some("MOHV"),
+            "a failing theme read does not refuse the name"
+        );
+        assert_eq!(flaky.refused(), 0, "the setting was not asked for");
     }
 }

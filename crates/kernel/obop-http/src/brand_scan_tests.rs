@@ -44,6 +44,10 @@
 //! around it. The behaviour is held by `crates/obop/src/brand_row_tests.rs`: with a
 //! row, every output that is pinned is what it was without one (the logo path is the exception: it
 //! answers the artwork with a row, `crates/obop/src/brand_http_tests.rs`).
+//! Since S1e there are two more exceptions: the enrolment texts. With a row the label and `issuer=`
+//! of an authenticator entry and the relying party name of a passkey are the name of the record, and
+//! the enrolment asks the reader for it (`crates/obop/src/brand_enrol_tests.rs`, and the
+//! `with_a_brand_row_*` tests of `mfa_tests` and `passkey_tests`).
 
 use crate::src_scan::{Lexed, line_of, non_test, read_tree, tree, words};
 use std::collections::{BTreeMap, BTreeSet};
@@ -138,11 +142,11 @@ const ALLOWED: [(&str, &str, Limit); 10] = [
     ),
     (
         "kernel/obop-http/src/passkeys.rs",
-        "the passkey ceremony site (S1e): `rp_name` gets the reader of the dispatcher and asks it for display once (`current`), for every route and for the OAuth pages' site; the registration options get it once more and ask for the strict name (`strict`), and turn a failure into the error of an enrolment (`enrolment_error`); it names no type and builds no reader (of the three `brand()` calls the row lets it make, two are the dispatcher's and one is `Shown::brand()`, which gives the name; the scan cannot tell them apart)",
+        "the passkey ceremony site (S1e): `rp_name` gets the reader of the dispatcher and asks it for display once (`current`), for every route but the registration options and for the OAuth pages' site; `registration_name`, the name of the registration options, gets it once more and asks for the strict name (`strict`) with no display read, turns a failure into the error of an enrolment (`enrolment_error`) and refuses a reader that has no store (`no_reader_error`); it names no type and builds no reader (of the three `brand()` calls the row lets it make, two are the dispatcher's and one is `Shown::brand()`, which gives the name; the scan cannot tell them apart)",
         Limit::Reads {
             calls: 3,
             reads: 2,
-            paths: &["enrolment_error"],
+            paths: &["enrolment_error", "no_reader_error"],
             types: &[],
         },
     ),

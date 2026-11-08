@@ -9,7 +9,14 @@
 //! `Retry-After`, and nothing is written in either case.
 //!
 //! What an instance with **no** row sends is held by the pins of `passkey_tests` and `mfa_tests`
-//! (`otpauth://totp/obop:...&issuer=obop`, `rp.name` `obop`), which did not move.
+//! (`otpauth://totp/obop:...&issuer=obop`, `rp.name` `obop`): those outputs did not move. Four
+//! assertions about such an instance moved, by design (docs/spec/branding.md, section 5 and 15.4,
+//! item 5), and are not hidden by that sentence: `mfa_tests::pins_the_default_issuer_of_a_server`
+//! held `AuthConfig::issuer` as the text `obop` and holds `None` (the enrolment output it pinned is
+//! asserted beside it, unchanged); the status text of an instance with no brand (`brand_cmd_tests`)
+//! gains the line `authenticator_issuer: "obop" (default)`; the answer of `get` with no row gains the
+//! entry `authenticator_issuer` (`obop-commands`, `brand/tests/effective.rs`, 4 + 14 keys became
+//! 5 + 14); and the two `with_a_brand_row_*` tests assert the name where they held `obop` with a row.
 
 use crate::app::App;
 use crate::brand_row_tests::set_brand;
@@ -154,13 +161,18 @@ fn write_row(rig: &Rig, pairs: &[(&str, J)]) {
         .unwrap();
 }
 
+/// The challenges of passkey ceremonies in the store (the prefix of `passkey.rs`).
+fn challenges(rig: &Rig) -> Vec<(String, String)> {
+    rig.app.store.backend().kv_scan("auth.wa:").unwrap()
+}
+
 /// What an enrolment must have left behind when it was refused: no pending secret for the person,
 /// no challenge of a ceremony in the store.
 async fn nothing_was_written(rig: &Rig, token: &str) {
     let st = call(&rig.r, "GET", "/api/auth/mfa", Some(token), J::Null).await;
     assert_eq!(st.status, 200, "{}", st.json);
     assert_eq!(st.json["pending"], json!(false), "{}", st.json);
-    let challenges = rig.app.store.backend().kv_scan("auth.wa:").unwrap();
+    let challenges = challenges(rig);
     assert!(challenges.is_empty(), "{challenges:?}");
 }
 
@@ -211,9 +223,13 @@ async fn the_enrolments_carry_the_name_of_the_record() {
     let rig = rig(AuthConfig::insecure_dev());
     let t = sign_in(&rig.r, "ada").await;
     // No row: what they always said.
+    assert!(challenges(&rig).is_empty());
     let none = post(&rig.r, Some(&t), OPTIONS, body_of(OPTIONS)).await;
     assert_eq!(none.status, 200, "{}", none.json);
     assert_eq!(none.json["publicKey"]["rp"]["name"], json!("obop"));
+    // The positive control of `nothing_was_written`: a registration that goes through does store
+    // the challenge of its ceremony, so an empty scan after a refusal means something.
+    assert_eq!(challenges(&rig).len(), 1, "{:?}", challenges(&rig));
     let cy = sign_in(&rig.r, "cy").await;
     let begun = post(&rig.r, Some(&cy), BEGIN, json!({})).await;
     assert_eq!(begun.status, 200, "{}", begun.json);
@@ -388,6 +404,93 @@ async fn a_stored_name_that_cannot_be_shown_is_brand_unavailable_and_nothing_is_
     }
 }
 
+/// A stored name that the display accepts and `configure` refuses (a link character, or only white
+/// space; it can only have been written around the command) cannot go into a device's label either:
+/// the same answer on both enrolments, nothing stored, and none of the stored text in the answer.
+#[tokio::test]
+async fn a_stored_name_with_a_link_character_or_only_spaces_is_brand_unavailable_too() {
+    for bad in [
+        "a:b",
+        "javascript:alert(1)",
+        "http://evil.test/x",
+        "a/b",
+        "a@b",
+        "   ",
+    ] {
+        for path in [BEGIN, OPTIONS] {
+            let rig = rig(AuthConfig::insecure_dev());
+            write_row(&rig, &[("name", json!(bad))]);
+            let t = sign_in(&rig.r, "ada").await;
+            let r = post(&rig.r, Some(&t), path, body_of(path)).await;
+            is_brand_unavailable(&r, &format!("{path} {bad:?}"));
+            assert!(
+                !r.json.to_string().contains("evil") && !r.json.to_string().contains("alert"),
+                "no stored text in the answer: {}",
+                r.json
+            );
+            nothing_was_written(&rig, &t).await;
+        }
+    }
+}
+
+/// A request that is not signed in is answered 401 before the name is read, whatever the name and
+/// the store hold: it cannot reach the 503 of the branding (and with it the text of the error), and
+/// it costs the store no read of the row. The passkey options authenticate first (`setup_named`),
+/// and so does `begin`.
+#[tokio::test]
+async fn a_request_that_is_not_signed_in_is_refused_before_the_name_is_read() {
+    for path in [BEGIN, OPTIONS] {
+        // A stored name that cannot be shown.
+        let bad = rig(AuthConfig::insecure_dev());
+        write_row(&bad, &[("name", json!("a<b"))]);
+        for token in [None, Some("not-a-session")] {
+            let r = post(&bad.r, token, path, body_of(path)).await;
+            assert_eq!(r.status, 401, "{path} {token:?}: {}", r.json);
+            assert_ne!(r.json["code"], json!("brand_unavailable"), "{path}");
+        }
+        // A store that cannot be read, in both ways: the model is not even asked for. (`models_asked`
+        // is cumulative, so no row is written through the double here.)
+        let down = rig(AuthConfig::insecure_dev());
+        down.flaky.refuse_model(brand::MODEL, Mode::Reads);
+        let r = post(&down.r, None, path, body_of(path)).await;
+        assert_eq!(r.status, 401, "{path}: {}", r.json);
+        down.flaky.allow_models();
+        down.flaky
+            .fail_gets_of(brand::MODEL, "a read error that is not transient");
+        let r = post(&down.r, None, path, body_of(path)).await;
+        assert_eq!(r.status, 401, "{path}: {}", r.json);
+        assert!(
+            !down.flaky.models_asked().contains(brand::MODEL),
+            "{path}: the row was read for a request that is not signed in: {:?}",
+            down.flaky.models_asked()
+        );
+        // The control: the same store, a person who is signed in, and now the row is asked for.
+        let t = sign_in(&down.r, "ada").await;
+        let r = post(&down.r, Some(&t), path, body_of(path)).await;
+        is_brand_unavailable(&r, path);
+        assert!(down.flaky.models_asked().contains(brand::MODEL));
+    }
+}
+
+/// A dispatcher that never ran `register_admin` has a reader with no store, whose `strict()` answers
+/// the default brand. That is no row that was read, and the registration options never write a
+/// default into a device: they are refused like a name that cannot be read. (The shipped
+/// composition always has a reader; `app.rs` is the one place that builds it.)
+#[tokio::test]
+async fn a_server_with_no_branding_reader_refuses_the_passkey_registration() {
+    let (_flaky, backend) = Flaky::memory();
+    let auth = Arc::new(Auth::with_test_config(backend, AuthConfig::insecure_dev()));
+    auth.set_clock_for_test(T0);
+    auth.create_user("ada", PW, &["base.user".to_string()])
+        .unwrap();
+    let dispatcher = Arc::new(obop_commands::Dispatcher::new());
+    assert!(dispatcher.brand().is_inert());
+    let r = obop_http::router(obop_http::HttpState::new(dispatcher, auth), None);
+    let t = sign_in(&r, "ada").await;
+    let opts = post(&r, Some(&t), OPTIONS, body_of(OPTIONS)).await;
+    is_brand_unavailable(&opts, "a dispatcher with no reader");
+}
+
 /// With `OBOP_MFA_ISSUER` set the authenticator needs no read of the brand: a store that refuses it
 /// and a row that cannot be shown change nothing for `begin`. The passkey name has no variable, so
 /// its registration is refused all the same.
@@ -412,8 +515,7 @@ async fn with_the_variable_set_begin_needs_no_brand_read_and_the_passkey_still_d
 }
 
 /// A theme read that fails does not refuse the TOTP enrolment: the name is read from the row alone.
-/// (The passkey routes also make the reader's display read for their ceremony site, which reads the
-/// theme too; a request that met a fault there is answered as D74 answers it, section 4 of the spec.)
+/// (The passkey registration is the same: `a_failing_theme_read_does_not_refuse_the_passkey_registration`.)
 #[tokio::test]
 async fn a_failing_theme_read_does_not_refuse_the_authenticator_enrolment() {
     let rig = rig(AuthConfig::insecure_dev());
@@ -575,24 +677,31 @@ async fn an_old_passkey_still_signs_in_and_a_bad_stored_name_stops_neither_sign_
     );
 }
 
-/// The passkey registration options also make the reader's display read for their ceremony site
-/// (`passkeys::ctx`, for every passkey route; spec section 4), and that read includes the theme
-/// setting, which `strict()` does not read. When the cell of the reader is empty (here: the row was
-/// written around the reader) and the theme read is refused, the request has met a fault and is
-/// answered by D74 as any request is: 503 with `Retry-After`, and nothing is written. The TOTP
-/// enrolment makes no display read and is not refused by it (the test above).
+/// The passkey registration options make no display read, so a theme read that fails does not
+/// refuse them, as it does not refuse the TOTP enrolment: the name is read from the row alone. The
+/// other passkey routes build their ceremony site from the reader's display read (`passkeys::ctx`),
+/// which includes the theme setting; the positive control is the list of passkeys, which meets the
+/// same refused theme read, with the cell of the reader empty (the row was written around the
+/// reader), and is answered as D74 answers any request that met a fault.
 #[tokio::test]
-async fn a_failing_theme_read_is_met_by_the_passkey_registration_through_the_display_read() {
+async fn a_failing_theme_read_does_not_refuse_the_passkey_registration() {
     let rig = rig(AuthConfig::insecure_dev());
     write_row(&rig, &[("name", json!("MOHV"))]);
     let t = sign_in(&rig.r, "ada").await;
     rig.flaky.refuse_model("obop_setting", Mode::Reads);
-    let opts = post(&rig.r, Some(&t), OPTIONS, body_of(OPTIONS)).await;
-    is_the_transient_503(&opts, "the passkey registration with the theme refused");
-    rig.flaky.allow_models();
-    nothing_was_written(&rig, &t).await;
-    // The store is back: the same call is made, with the name.
+    let list = call(&rig.r, "GET", "/api/auth/passkeys", Some(&t), J::Null).await;
+    is_the_transient_503(
+        &list,
+        "the control: the list of passkeys with the theme refused",
+    );
+    let refused = rig.flaky.refused();
+    assert!(refused > 0);
     let opts = post(&rig.r, Some(&t), OPTIONS, body_of(OPTIONS)).await;
     assert_eq!(opts.status, 200, "{}", opts.json);
     assert_eq!(opts.json["publicKey"]["rp"]["name"], json!("MOHV"));
+    assert_eq!(
+        rig.flaky.refused(),
+        refused,
+        "the registration did not ask for the theme"
+    );
 }
