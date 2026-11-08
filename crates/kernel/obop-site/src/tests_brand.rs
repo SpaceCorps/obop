@@ -798,11 +798,18 @@ fn the_door_and_the_settings_agree_on_which_keys_are_set_and_on_their_values() {
         ("accent", json!("javascript:alert(1)"), None),
         ("accent", json!(5), None),
         ("accent", json!(""), None),
-        // Nine characters are read: a ninth that makes it no colour is no colour, and so is a tenth
-        // that would have made it one if the text were read whole.
+        // Nine characters are read, and what is read is then taken as a colour. A ninth that makes
+        // it no colour is no colour. Leading hashes are all stripped, so `###e11d48` (nine) is a
+        // colour and `####e11d48` (ten) is none, because the tenth character is cut off before the
+        // colour is looked at; and `#e11d48  x` is a colour (the cut leaves `#e11d48` and two
+        // blanks) although the whole text is none. These rows tell a limit of 8, 9 and 10 apart.
         ("accent", json!("#e11d48aa"), None),
         ("accent", json!("#e11d48aaa"), None),
         ("accent", json!("##e11d48"), some("#e11d48")),
+        ("accent", json!("###e11d48"), some("#e11d48")),
+        ("accent", json!("####e11d48"), None),
+        ("accent", json!("#e11d48 x"), None),
+        ("accent", json!("#e11d48  x"), some("#e11d48")),
         (
             "accent",
             json!(format!("{}#e11d48", rep(" ", 6))),
@@ -829,7 +836,12 @@ fn the_door_and_the_settings_agree_on_which_keys_are_set_and_on_their_values() {
         ("logo_url", json!("/a\"b"), None),
         ("logo_url", json!("/a'b"), None),
         ("logo_url", json!("/a<b"), None),
+        ("logo_url", json!("/a>b"), None),
+        ("logo_url", json!("/a`b"), None),
         ("logo_url", json!("/a\\b"), None),
+        // White space of any kind is refused, not only the space and the line feed.
+        ("logo_url", json!("/a\u{a0}b"), None),
+        ("logo_url", json!("/a\u{2003}b"), None),
         ("logo_url", json!("x".repeat(600)), None),
         ("logo_url", json!(1), None),
         ("logo_url", json!(""), None),

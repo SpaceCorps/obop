@@ -289,6 +289,16 @@ fn a_name_that_fell_back_is_the_default_name_and_still_a_brand() {
     assert!(m.contains_key(FAVICON_KEY));
 }
 
+/// The spelling of the reserved key is listed in CONVENTIONS 9.1 and in spec 15.2, and a stored
+/// `site` object can hold a key of that name (it is removed first): a rename is a decision, and it
+/// fails here first. The shop imports the key as `SITE_FAVICON_KEY`.
+#[test]
+fn the_reserved_key_is_spelled_as_the_documents_list_it() {
+    assert_eq!(FAVICON_KEY, "_brand_favicon");
+    assert_eq!(crate::SITE_FAVICON_KEY, "_brand_favicon");
+    assert_eq!(crate::DEFAULT_SITE_TITLE, "My Shop");
+}
+
 #[test]
 fn the_default_title_is_the_one_the_site_has_always_had() {
     assert_eq!(DEFAULT_TITLE, "My Shop");
