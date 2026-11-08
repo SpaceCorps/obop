@@ -10,7 +10,7 @@
 
 ### 1.1 What this area is
 
-obop is a web product: the back office and the PWA are clients of the REST and MCP surface. A PWA cannot keep receiving location updates while the phone is locked (general knowledge), so one use case needs a native client: recording a trip for a mileage report. OR-34 allows React Native (Expo) apps as obop clients. D87 proposes to limit them to first-party apps and to cases a PWA cannot serve (Proposed), and names Mileage as the first. This document specifies that app and the `mileage` package behind it, plus the general rules a later native app would follow.
+obop is a web product: the back office and the PWA are clients of the REST and MCP surface. A PWA cannot keep receiving location updates while the phone is locked (general knowledge), so one use case needs a native client: recording a trip for a mileage report. OR-34 allows React Native (Expo) apps as obop clients. D87 proposes to limit them to first-party apps and to cases a PWA cannot serve (Proposed), and names Mileage as the first. This document specifies that app, in the planned host design a module of the host (D93, Proposed), and the `mileage` package behind it, plus the general rules a later native app would follow. The phone client is planned as one host app that holds modules, Mileage the first (Proposed: a direction relayed to the project and not yet confirmed by the owner; D93, [mobile-host.md](mobile-host.md)).
 
 An app is a client and nothing more. It has no private backdoor: it calls REST and the OpenAPI document, signs in through OAuth, and meets the checks of the one Dispatcher like every other client (D80). Business logic (distance, validation, state changes, permissions) lives on the server; the app captures, buffers and uploads.
 
@@ -256,7 +256,7 @@ web/packages/client/      @obop/client (working name): generated types, call hel
 web/packages/tokens/      DTCG JSON -> CSS variables for the web, plus a native target (tokens.native.ts)
 web/packages/trip-core/   pure TypeScript: fix filtering, distance, the outbox state machine; tested with vp test;
                           test vectors shared with the Rust validator so both sides agree
-web/apps/mileage-app/     the Expo app (development build, config plugins, no checked-in ios/ or android/)
+web/apps/mileage-app/     the Expo app (development build, config plugins, no checked-in ios/ or android/); in the planned host design a module of the host (D93, Proposed; see mobile-host.md)
 packages/mileage.toml     the package; crates/modules/mileage (the geodesic helper) when needed
 ```
 
@@ -466,7 +466,7 @@ The real-phone test is the part no agent can do alone.
 
 ## 11. Where obop deliberately differs from Odoo
 
-Odoo's mobile apps are Enterprise. obop has one edition under Apache-2.0 and no `ee` tree (OR-1, OR-2), so a mobile client is never a paid add-on. obop does not plan a suite of native apps: the PWA stays the default client, and D87 proposes that a native app exists only where a PWA cannot do the job (Proposed).
+Odoo's mobile apps are Enterprise. obop has one edition under Apache-2.0 and no `ee` tree (OR-1, OR-2), so a mobile client is never a paid add-on. obop does not plan a suite of native apps: the PWA stays the default client, and D87 proposes that a native app exists only where a PWA cannot do the job (Proposed). The phone client is planned as one host app that holds modules, Mileage the first (Proposed: a direction relayed to the project and not yet confirmed by the owner; D93, [mobile-host.md](mobile-host.md)).
 
 ## 12. Out of scope, non-goals and later
 
