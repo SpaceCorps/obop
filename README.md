@@ -82,6 +82,7 @@ Apache-2.0 for the whole project ([LICENSE](LICENSE), [NOTICE](NOTICE)), with no
 | [docs/spec/integrations.md](docs/spec/integrations.md) | API, connectors, portability |
 | [docs/spec/security-privacy.md](docs/spec/security-privacy.md) | Identity, audit, privacy |
 | [docs/spec/mobile.md](docs/spec/mobile.md) | React Native apps, background location, the mileage package |
+| [docs/spec/mobile-host.md](docs/spec/mobile-host.md) | The planned phone host app that holds modules, Mileage the first: what a host needs from Mileage and from the server (PROPOSED; D93) |
 | [docs/spec/branding.md](docs/spec/branding.md) | Instance branding: one record that names the product where an end user sees it (PROPOSED) |
 | [docs/research/](docs/research/README.md) | 28-file research corpus (predates the owner rulings; the rulings win) |
 | [docs/HANDOFF.md](docs/HANDOFF.md) | Handoff and operations guide for the next agent or a new machine |

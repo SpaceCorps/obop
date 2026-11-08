@@ -4,13 +4,15 @@
 >
 > Written against: `main` = origin/main at fe1b93a; `ios` = origin/feat/mileage-ios at 89c4e50 (PR 34, which contains PR 27); `sv` = origin/feat/mileage-sv at 5bdd17d (PR 45), read only for the Swedish items.
 >
+> Follow-up edit, 2026-11-09 (documentation only): the records of section 0 are entered in `docs/DECISIONS.md`, the rows of section 10 that carry the codes H, M and P are applied, and the table of section 10 says which rows are applied and which wait. Every row was found again by its text on origin/main at 9ba3afed, and the register lines named below were opened there; all other citations in this document still name the refs above. The sentences changed by that edit are the ones that said the records will be entered, the two statements that the direction is not recorded on main, the status of PR 51 (merged since), and the table of section 10.
+>
 > Citations: `main:path:line`, `ios:path:line`, `sv:path:line`. `app/` stands for `web/apps/mileage-app/`. Server paths omit the leading `crates/kernel/`; the Mileage module is `crates/modules/mileage/`. A path without a prefix under `docs/` or the server crates is on `main`; a path under `app/` or `web/` is on `ios` unless the text says `main`. A bare `web/packages/client/src/oauth.ts` is on `ios` only; it is not on main.
 >
 > Marks: "verified" means the line was opened on the named ref while this document was written and says what the sentence claims; nothing was run. "Not verified" means it was not opened, or cannot be opened from the repository. "Reported" means it comes from a build report given to the project and was not reproduced here.
 
 ## 0. Status and scope
 
-Owner direction of 2026-11-03, reported to the project and not yet entered in the decision register: the phone client is to be one app that holds obop's apps as modules, Mileage the first. This document reads that as a host app with the Mileage app inside it. The reading is PROPOSED. The host design is not ruled. The direction is not recorded on main: `main:docs/DECISIONS.md:1269` says that the design of the host app is a separate proposal and is not described there, and `main:docs/DECISIONS.md:233` and `:1646` say that Q63 is reserved for the host questions.
+Owner direction of 2026-11-03, reported to the project second-hand, through another session, and not confirmed by the owner; it is entered in the decision register only as a relayed item, not as a ruling (OR-39, in the list "Relayed, not yet confirmed by the owner"; see Records below): the phone client is to be one app that holds obop's apps as modules, Mileage the first. This document reads that as a host app with the Mileage app inside it. The reading is PROPOSED. The host design is not ruled. The direction was not recorded on main when this document was written: `main:docs/DECISIONS.md:1269` said that the design of the host app is a separate proposal and is not described there, and `main:docs/DECISIONS.md:233` and `:1646` said that Q63 is reserved for the host questions (at 9ba3afed, before the follow-up edit, those lines are 1276, 236 and 1672).
 
 Not ruled. All of this stays PROPOSED or open:
 
@@ -23,9 +25,11 @@ Not ruled. All of this stays PROPOSED or open:
 7. Whether the phone is outside the UI-parity rule (OR-16, D80). No obop record of it exists on main, and `CLAUDE.md` says nothing is exempt until the owner approves it.
 8. Every server change in section 6.
 
-Records. The direction will be entered as OR-39 and the host design as D93 (PROPOSED); the host questions use the reserved Q63. They are entered in `docs/DECISIONS.md` by the follow-up documentation change of section 10, because open pull requests edit the register lines. D92 is taken by draft PR 51 (`origin/feat/sign-signer:docs/DECISIONS.md:232`).
+Records. The direction is entered as OR-39 and the host design as D93 (PROPOSED); the host questions use the Q63 that was reserved for them (a provisional number). They are entered in `docs/DECISIONS.md` by the follow-up documentation change of section 10, because open pull requests edit the register lines. OR-39 stands only in the separate list "Relayed, not yet confirmed by the owner" and in none of the ratified lists: it is not a ruling, and it becomes one only on the owner's own word. D92 was taken by draft PR 51 (`origin/feat/sign-signer:docs/DECISIONS.md:232`) when this document was written; PR 51 is merged since (09861505), and D92 is on main at `docs/DECISIONS.md:232` (9ba3afed).
 
-What this document is not: it is not an implementation, nothing was run on a phone as a host, and there is no store submission. It adds one file and edits no existing line. PR 27, 34 and 45 are open drafts of the standalone Mileage app (Android, iOS, Swedish). They are stacked: 27 is an ancestor of 34, and 34 is an ancestor of 45 (checked with `git merge-base --is-ancestor`). PR 51 is an open draft of another feature (signing a document) that edits some of the same documents. This document does not collide with any of them. Section 10 lists the lines that go stale and why they are edited later.
+The one wording. Every document that mentions the direction uses this sentence, defined here once: "The phone client is planned as one host app that holds modules, Mileage the first (Proposed: a direction relayed to the project and not yet confirmed by the owner; D93, spec/mobile-host.md)." Only the form of the link changes with the document. No document says that the owner ratified, approved or decided the host direction or the wording of D87's limit.
+
+What this document is not: it is not an implementation, nothing was run on a phone as a host, and there is no store submission. It adds one file and edits no existing line. PR 27, 34 and 45 are open drafts of the standalone Mileage app (Android, iOS, Swedish). They are stacked: 27 is an ancestor of 34, and 34 is an ancestor of 45 (checked with `git merge-base --is-ancestor`). PR 51 was an open draft of another feature (signing a document) that edited some of the same documents; it is merged since (09861505). This document does not collide with any of them. Section 10 lists the lines that go stale and why they are edited later.
 
 ## 1. The split in one picture
 
@@ -369,15 +373,17 @@ It does not prove:
 
 ## 10. Documents on main that this direction makes stale
 
+State after the follow-up change of 2026-11-09 (branch `docs/host-direction`, based on main 9ba3afed). The codes H, M and P are applied in the rows that carry them. Code W is applied nowhere: the wording of D87's first-party limit is the owner's and is PROPOSED (Q63, question O2), and no ratified row is rewritten. A row whose only code is W is not touched, and in a row that carries W with other codes the W part waits. All 23 rows were found again by their text on main 9ba3afed; none had changed or gone. Six had moved, all in `docs/DECISIONS.md`: the Line column is that of main at fe1b93a, and the last column gives the new line where it differs. H is the one wording of section 0. M and P are done as their codes say, with one choice: "a module of the host" is added beside the words "the app" or "the mobile app", in the form "in the planned host design a module of the host", and does not replace them, because the standalone app is still what D87 and `docs/spec/mobile.md` specify. In the table below "applied" and "waits" refer to that change.
+
 Why none of them is edited by this document:
 
 - PR 27, 34 and 45 are stacked and edit the same lines. The old-line starts of `git diff -U0` between the merge-base 36fa622 and `feat/mileage-sv` are merge-base line numbers, not main's. By content, `DECISIONS.md` lines 227 and 239 are the same on main fe1b93a, and merge-base lines 1197 and 1217 are 1199 and 1219 on main; the other hunks are not mapped. The hunks are `CLAUDE.md` 42; `docs/DECISIONS.md` 89, 130, 135, 227, 239, 1197, 1217, 1617, 1622; `docs/DEPLOY.md` 361, 364, 384; `docs/ROADMAP.md` 187, 379; `docs/ENGINEERING.md` 180, 186; `docs/ISSUES.md` 259, 263, 281 (these two files are not in the table below); `docs/spec/mobile.md` in many places (28 hunks).
 - PR 51 edits some of the same files, but not the lines below. Its old-line starts, against its merge-base cff7076, are `CLAUDE.md:53`, `DECISIONS.md` 231, 590, 1280, 1387, 1389, 1581, 1646, `GLOSSARY.md:116`, `MODULES.md:33`, `PRODUCT.md:741`, `ROADMAP.md:520`, `ux.md:663`, `services.md:665`, `CONVENTIONS.md:52,246`. It also edits `ISSUES.md`, `SIGN-DOCUSEAL.md`, `spec/finance.md`, `spec/integrations.md` and `spec/security-privacy.md`, and adds `SIGN.md`; none of these is in the table. Line numbers shift on merge, so find each row again by its text.
-- The wording of D87's limit awaits the owner (`main:docs/DECISIONS.md:241`), and the direction is not recorded on main (section 0).
+- The wording of D87's limit awaits the owner (`main:docs/DECISIONS.md:241`), and the direction was not recorded on main when this document was written (section 0).
 
 Merge order that avoids conflicts, each merge on the owner's word:
 
-1. PR 27, then 34, then 45 (stacked). 2. PR 51 (independent of the lines below). 3. One docs-only PR from the new main with every row below, plus the entry for this file in the README document map and the entries OR-39, D93 and Q63 of section 0.
+1. PR 27, then 34, then 45 (stacked). 2. PR 51 (independent of the lines below; merged since, 09861505). 3. One docs-only PR from the new main with every row below, plus the entry for this file in the README document map and the entries OR-39, D93 and Q63 of section 0. Step 3 is the follow-up change of 2026-11-09, with the difference that the rows marked "waits" below are left for the owner; at that date PR 27, 34 and 45 are still not merged (none is an ancestor of main).
 
 Codes for the change column:
 
@@ -386,31 +392,31 @@ Codes for the change column:
 - M: say "a module of the host" where the text says "the app".
 - P: drop "planned at `web/apps/mileage-app` with `packages/mileage.toml`". The same bullet already says there is no `packages/mileage.toml`.
 
-| File | Line | Current text (cut to 160 characters) | Change |
-| --- | --- | --- | --- |
-| `CLAUDE.md` | 42 | the proposal limits them to first-party apps and to cases a PWA cannot serve (D87, Proposed). Expo SDK 57 for now; the app starts on SDK 58 if its packages | W, H, P |
-| `docs/ARCHITECTURE.md` | 809 | The proposal limits them to first-party apps and to cases a PWA cannot serve (recording a trip while the phone is locked is the first case) | W, H |
-| `docs/ARCHITECTURE.md` | 929 | mileage-app/        # React Native (Expo) app, the first native app (D87, Proposed; spec/mobile.md) | M |
-| `docs/ARCHITECTURE.md` | 933 | client  tokens  trip-core                # D87, Proposed: shared by the web and the mobile app (spec/mobile.md 8.1) | M |
-| `docs/DECISIONS.md` | 89 | D87 proposes to limit this to first-party apps and to cases a PWA cannot serve; that limit came with the proposal, is no | W (note, not a rewrite of the ratified row) |
-| `docs/DECISIONS.md` | 227 | the proposal limits them to first-party apps and to cases a PWA cannot serve (Proposed), keeps the PWA as the default and starts with Mileage | W, H |
-| `docs/DECISIONS.md` | 241 | Proposed and awaiting the owner: the scope limits of D87 (first-party apps only, only where a PWA cannot do the job, the PWA stays the default | W |
-| `docs/DECISIONS.md` | 1199 | The scope limits that came with the proposal (first-party apps only, only where a PWA cannot do the job, the PWA stays the default, Tauri mobile | W |
-| `docs/DECISIONS.md` | 1201 | The proposal limits them to first-party apps and to cases where a PWA cannot do the job, that is where a background capability is needed | W, H |
-| `docs/DECISIONS.md` | 1221 | A mileage report needs the route while the phone is in a pocket, which a PWA cannot promise (general knowledge), and a native client is the smallest th | H (the reason now includes the host app) |
-| `docs/DECISIONS.md` | 334 | A native app (D87) keeps its queued writes in a SQLite database on the device | M (the outbox contract is per module) |
-| `docs/DECISIONS.md` | 1541 | the limits to first-party apps and to cases a PWA cannot serve are Proposed (D87). Tauri mobile is still not pursued (Proposed), and the PWA stays | W |
-| `docs/GLOSSARY.md` | 194 | the proposal limits them to first-party apps and to cases a PWA cannot serve (D87, Proposed). The first is Mileage | W, H |
-| `docs/PRODUCT.md` | 380 | *Not planned*: a suite of native apps; the PWA stays the default client. *Ships* (Proposed, D87): one React Native (Expo) app, Mileage, which w | H |
-| `docs/PRODUCT.md` | 616 | (Proposed, D87: first-party apps only, and only where a PWA cannot serve; the first is Mileage | W |
-| `docs/ROADMAP.md` | 187 | The first native slice, "one background-recorded trip from a real phone" ([spec/mobile.md](spec/mobile.md) 9), is client work beside the waves | M |
-| `docs/spec/mobile.md` | 13 | D87 proposes to limit them to first-party apps and to cases a PWA cannot serve (Proposed), and names Mileage as the first. This document specifies that app | W, H, M |
-| `docs/spec/mobile.md` | 22 | The scope limits: first-party apps only, only where a PWA cannot do the job; the PWA stays the default; Tauri mobile is not pursued | W |
-| `docs/spec/mobile.md` | 259 | web/apps/mileage-app/     the Expo app (development build, config plugins, no checked-in ios/ or android/) | M (and a pointer to this file) |
-| `docs/spec/mobile.md` | 469 | obop does not plan a suite of native apps: the PWA stays the default client, and D87 proposes that a native app exists only where a PWA cannot do the job | W, H |
-| `docs/spec/people.md` | 351 | the proposal limits them to cases a PWA cannot serve (Proposed, D87, [mobile.md](mobile.md)); the first is Mileage, which is not a self-service page | W, H |
-| `docs/spec/people.md` | 590 | the limits to first-party apps and to cases a PWA cannot serve are Proposed, D87); employee self-service stays a PWA baseline | W |
-| `docs/spec/ux.md` | 629 | Proposed (D87): first-party apps only, only where a PWA cannot serve, the PWA stays the default client | W |
+| File | Line | Current text (cut to 160 characters) | Change | State on main 9ba3afed |
+| --- | --- | --- | --- | --- |
+| `CLAUDE.md` | 42 | the proposal limits them to first-party apps and to cases a PWA cannot serve (D87, Proposed). Expo SDK 57 for now; the app starts on SDK 58 if its packages | W, H, P | H and P applied; W waits |
+| `docs/ARCHITECTURE.md` | 809 | The proposal limits them to first-party apps and to cases a PWA cannot serve (recording a trip while the phone is locked is the first case) | W, H | H applied; W waits |
+| `docs/ARCHITECTURE.md` | 929 | mileage-app/        # React Native (Expo) app, the first native app (D87, Proposed; spec/mobile.md) | M | M applied |
+| `docs/ARCHITECTURE.md` | 933 | client  tokens  trip-core                # D87, Proposed: shared by the web and the mobile app (spec/mobile.md 8.1) | M | M applied |
+| `docs/DECISIONS.md` | 89 | D87 proposes to limit this to first-party apps and to cases a PWA cannot serve; that limit came with the proposal, is no | W (note, not a rewrite of the ratified row) | Waits (W): a ratified row, not touched |
+| `docs/DECISIONS.md` | 227 | the proposal limits them to first-party apps and to cases a PWA cannot serve (Proposed), keeps the PWA as the default and starts with Mileage | W, H | H applied; W waits |
+| `docs/DECISIONS.md` | 241 | Proposed and awaiting the owner: the scope limits of D87 (first-party apps only, only where a PWA cannot do the job, the PWA stays the default | W | Waits (W): not touched; now line 244 |
+| `docs/DECISIONS.md` | 1199 | The scope limits that came with the proposal (first-party apps only, only where a PWA cannot do the job, the PWA stays the default, Tauri mobile | W | Waits (W): not touched; now line 1206 |
+| `docs/DECISIONS.md` | 1201 | The proposal limits them to first-party apps and to cases where a PWA cannot do the job, that is where a background capability is needed | W, H | H applied; W waits; now line 1208 |
+| `docs/DECISIONS.md` | 1221 | A mileage report needs the route while the phone is in a pocket, which a PWA cannot promise (general knowledge), and a native client is the smallest th | H (the reason now includes the host app) | H applied; now line 1228 |
+| `docs/DECISIONS.md` | 334 | A native app (D87) keeps its queued writes in a SQLite database on the device | M (the outbox contract is per module) | M applied; now line 337 |
+| `docs/DECISIONS.md` | 1541 | the limits to first-party apps and to cases a PWA cannot serve are Proposed (D87). Tauri mobile is still not pursued (Proposed), and the PWA stays | W | Waits (W): not touched; now line 1567 |
+| `docs/GLOSSARY.md` | 194 | the proposal limits them to first-party apps and to cases a PWA cannot serve (D87, Proposed). The first is Mileage | W, H | H applied; W waits |
+| `docs/PRODUCT.md` | 380 | *Not planned*: a suite of native apps; the PWA stays the default client. *Ships* (Proposed, D87): one React Native (Expo) app, Mileage, which w | H | H applied |
+| `docs/PRODUCT.md` | 616 | (Proposed, D87: first-party apps only, and only where a PWA cannot serve; the first is Mileage | W | Waits (W): not touched |
+| `docs/ROADMAP.md` | 187 | The first native slice, "one background-recorded trip from a real phone" ([spec/mobile.md](spec/mobile.md) 9), is client work beside the waves | M | M applied |
+| `docs/spec/mobile.md` | 13 | D87 proposes to limit them to first-party apps and to cases a PWA cannot serve (Proposed), and names Mileage as the first. This document specifies that app | W, H, M | H and M applied; W waits |
+| `docs/spec/mobile.md` | 22 | The scope limits: first-party apps only, only where a PWA cannot do the job; the PWA stays the default; Tauri mobile is not pursued | W | Waits (W): not touched |
+| `docs/spec/mobile.md` | 259 | web/apps/mileage-app/     the Expo app (development build, config plugins, no checked-in ios/ or android/) | M (and a pointer to this file) | M applied, with the pointer to this file |
+| `docs/spec/mobile.md` | 469 | obop does not plan a suite of native apps: the PWA stays the default client, and D87 proposes that a native app exists only where a PWA cannot do the job | W, H | H applied; W waits |
+| `docs/spec/people.md` | 351 | the proposal limits them to cases a PWA cannot serve (Proposed, D87, [mobile.md](mobile.md)); the first is Mileage, which is not a self-service page | W, H | H applied; W waits |
+| `docs/spec/people.md` | 590 | the limits to first-party apps and to cases a PWA cannot serve are Proposed, D87); employee self-service stays a PWA baseline | W | Waits (W): not touched |
+| `docs/spec/ux.md` | 629 | Proposed (D87): first-party apps only, only where a PWA cannot serve, the PWA stays the default client | W | Waits (W): not touched |
 
 Not stale by this direction, and so not in the table: `docs/spec/mobile.md:439` (Android first; stale by OR-36), `docs/DEPLOY.md:361` and `docs/DECISIONS.md:725` (the example scheme `org.obop.mileage:/oauth` is only an example, the server does not require it), and the licence uses of "first-party app" in `BUSINESS.md`, `PRODUCT.md:148,535` and `DECISIONS.md:248,639,1502`.
 
@@ -423,5 +429,5 @@ Not stale by this direction, and so not in the table: `docs/spec/mobile.md:439` 
 - Whether a refresh extends a grant (an earlier pass found a fixed expiry; it was not traced).
 - The Android branch was not read separately (PR 27 is inside `ios`). `sv` was read through its file list, `sv:app/src/i18n/languages.ts`, the `app.config.ts` lines named above and the config diff; its tests and the completeness of the Swedish text were not checked.
 - `web/packages/ui-native` (theme tokens) was not re-read. Each route under `/api/auth/*` was not re-read; the refusal rests on the doc comment at `obop-http/src/lib.rs:193-196` and on `main:docs/DEPLOY.md:366`.
-- The Xcode 27.2 report: the line number 200 and the version numbers 58.0.23, 58.0.29 and 58.0.22, the local patch, and the build and gate result on the iPhone. Only the upstream issue and PR were checked, and the lockfile line that locks 58.0.23. The direction of section 0 is not recorded on main.
+- The Xcode 27.2 report: the line number 200 and the version numbers 58.0.23, 58.0.29 and 58.0.22, the local patch, and the build and gate result on the iPhone. Only the upstream issue and PR were checked, and the lockfile line that locks 58.0.23. The direction of section 0 was not recorded on main when this document was written.
 - Doc line numbers are for main at fe1b93a and will move when PR 27, 34, 45 and 51 merge.
