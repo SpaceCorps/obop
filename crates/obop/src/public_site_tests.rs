@@ -1090,3 +1090,84 @@ async fn a_settings_row_that_could_not_be_read_is_answered_by_d74_and_pins_nothi
         assert_eq!((s, flaky.refused()), (200, reads));
     }
 }
+
+/// A read error that is none of the fault classes of D74 (a table that is missing, say; its text has
+/// no code word) is not answered 503 and writes no `Retry-After`: the request that met it is served
+/// the stand-in, to that request alone, with the shop's usual `Cache-Control` on a shop page. The
+/// site keeps nothing of it (here it keeps what it computes for an hour), so the next request reads
+/// again, and when the store answers the shop is what the store holds at once. (`docs/DEPLOY.md`,
+/// "If the store cannot be read", and `docs/spec/branding.md`, section 5.)
+#[tokio::test]
+async fn a_read_error_that_is_not_a_d74_class_is_served_the_stand_in_to_that_request_alone() {
+    const USUAL: &str = "public, max-age=60, stale-while-revalidate=300";
+    // The seeded owner's title as the page header shows it (the lede of the home page names the shop
+    // too, which says nothing about the settings).
+    const OWNERS: &str = "<span>Fernhill Goods</span>";
+    // What a healthy shop sends with a page: the header the stand-in is sent with.
+    let (_, _app, plain_router) = flaky_shop().await;
+    let (s, _, h) = get(&plain_router, "/").await;
+    assert_eq!((s, h["cache-control"].to_str().unwrap()), (200, USUAL));
+
+    // (model that cannot be read, a brand is set, the reader has read it before the fault)
+    for (model, branded, warm) in [
+        ("obop_setting", false, false),
+        ("obop_setting", true, true),
+        ("instance_brand", true, false),
+    ] {
+        let case = format!("{model}, branded {branded}");
+        let (flaky, app, router) = flaky_shop_keeping(std::time::Duration::from_secs(3600)).await;
+        match (branded, warm) {
+            (true, true) => crate::brand_row_tests::set_brand(&app),
+            (true, false) => put_brand_around_the_reader(&app),
+            _ => {}
+        }
+        flaky.fail_gets_of(model, &format!("no such table: {model}"));
+        for round in 0..2 {
+            flaky.reset_reads();
+            let (s, home, h) = get(&router, "/").await;
+            assert_eq!(s, 200, "{case}, round {round}: {home}");
+            assert!(
+                h.get("retry-after").is_none(),
+                "{case}: waiting does not repair it"
+            );
+            assert_eq!(h["cache-control"], USUAL, "{case}");
+            assert!(
+                flaky.reads().gets > 0,
+                "{case}, round {round}: nothing was kept, the next request read again"
+            );
+            if model == "obop_setting" {
+                // The settings row is what is missing: the owner's explicit title is not in the
+                // stand-in, the brand's name (or the shop's own title) stands where it is.
+                let title = if branded { "MOHV" } else { "My Shop" };
+                assert!(
+                    home.contains(&format!("<span>{title}</span>")),
+                    "{case}: {home}"
+                );
+            } else {
+                // The brand is what is missing: the explicit keys are all there, the brand's
+                // artwork route is not.
+                assert!(home.contains(OWNERS), "{case}: {home}");
+                assert!(!home.contains("/api/brand/logo.svg"), "{case}: {home}");
+            }
+        }
+
+        flaky.allow_models();
+        let (s, home, h) = get(&router, "/").await;
+        assert_eq!(s, 200, "{case}");
+        assert_eq!(h["cache-control"], USUAL, "{case}");
+        assert!(
+            home.contains(OWNERS) && !home.contains("<span>My Shop</span>"),
+            "{case}: the owner's title is back at once: {home}"
+        );
+        assert_eq!(
+            home.contains("/api/brand/logo.svg?v="),
+            branded,
+            "{case}: the brand is back, or there never was one: {home}"
+        );
+        // And it is kept now, a good answer being cached: the model that fails again is not asked.
+        flaky.fail_gets_of(model, &format!("no such table: {model}"));
+        let (s, home, _) = get(&router, "/").await;
+        assert_eq!(s, 200, "{case}");
+        assert!(home.contains(OWNERS), "{case}: kept: {home}");
+    }
+}

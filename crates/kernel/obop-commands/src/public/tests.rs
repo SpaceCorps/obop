@@ -816,4 +816,48 @@ mod brand_door {
         none.spy.fail("obop_setting", "storage_busy");
         assert!(none.api.site_settings_read().degraded);
     }
+
+    /// A read error that is none of the fault classes of D74 (`docs/DEPLOY.md`, "If the store cannot
+    /// be read"; a table that is missing, say, whose text has no code word) is a stand-in for the
+    /// store all the same: the answer says `degraded`, so the site keeps none of it, but it notes no
+    /// fault, so the layer above answers the request with the stand-in and not with a 503. The
+    /// text with a code word is the control: the same double notes a fault for it.
+    #[test]
+    fn a_read_error_that_is_not_a_d74_class_is_a_stand_in_and_notes_no_fault() {
+        use obop_storage::fault::{self, Fault};
+        let explicit = json!({"site": {"title": "Corner Shop"}});
+        for model in ["obop_setting", "instance_brand"] {
+            // The reader has never read: both models are asked by the one call.
+            let r = rig(Duration::ZERO);
+            r.spy.note_faults();
+            put_settings(&*r.spy, explicit.clone());
+            put(&r.spy, &[]);
+
+            r.spy.fail(model, "storage_busy: the pool is full");
+            fault::clear();
+            let read = r.api.site_settings_read();
+            assert!(read.degraded, "{model}: a fault");
+            assert_eq!(fault::take(), Some(Fault::Busy), "{model}: the control");
+
+            r.spy.fail(model, &format!("no such table: {model}"));
+            fault::clear();
+            let read = r.api.site_settings_read();
+            assert!(read.degraded, "{model}: another error is a stand-in too");
+            assert_eq!(fault::take(), None, "{model}: and no fault is noted");
+            // The settings row is the owner's explicit keys: unread, they are not in the object.
+            // The brand is not: the explicit keys are all there.
+            assert_eq!(
+                read.site.get("title") == Some(&json!("Corner Shop")),
+                model == "instance_brand",
+                "{model}: {:?}",
+                read.site
+            );
+
+            r.spy.heal();
+            let read = r.api.site_settings_read();
+            assert!(!read.degraded, "{model}: healed");
+            assert_eq!(read.site["title"], "Corner Shop", "{model}");
+            assert_eq!(fault::take(), None, "{model}");
+        }
+    }
 }
