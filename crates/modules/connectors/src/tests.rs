@@ -3673,7 +3673,11 @@ fn a_manual_send_of_two_models_asks_for_the_name_once() {
         Box::new(move |_| flag.store(true, Ordering::SeqCst)),
     );
     ok(&e, &admin(), "connection.sync", json!({"id": id}));
-    assert!(r.wait(2), "the receiver got {} of the 2 messages", r.count());
+    assert!(
+        r.wait(2),
+        "the receiver got {} of the 2 messages",
+        r.count()
+    );
     assert!(
         !reached.load(Ordering::SeqCst),
         "a send of two models read the name more than once"
@@ -3691,4 +3695,41 @@ fn a_manual_send_of_two_models_asks_for_the_name_once() {
         reached.load(Ordering::SeqCst),
         "the probe is not live: the second send was not the second read of the name"
     );
+}
+
+/// A read of the name that fails for a reason that is no refusal of the pool (a statement that
+/// failed, a row that cannot be decoded) refuses the send too: the message is not signed with the
+/// default, and the text of the error, which may name a table or a path, is not echoed to the person
+/// who started the send. No fault is noted on the thread, since the store is up. The next message goes
+/// with the name once the read works.
+#[test]
+fn a_read_of_the_name_that_fails_for_another_reason_refuses_the_send_too() {
+    use obop_storage::testing::Flaky;
+    let (flaky, backend) = Flaky::memory();
+    let e = slack_env_on(Store::over(backend));
+    let r = Receiver::new(200);
+    let id = slack_connection(&e, &r);
+    brand_row_and_a_reader_that_has_never_read(&e, "MOHV");
+    flaky.fail_gets_of("instance_brand", "a read error that is not transient");
+    let before = r.count();
+    for (command, args) in [
+        ("connection.sync", json!({"id": id})),
+        ("connection.test", json!({"id": id})),
+    ] {
+        let m = err(&e, &admin(), command, args);
+        assert!(
+            m.contains("the name of the instance could not be read, so nothing was sent"),
+            "{command}: {m}"
+        );
+        assert!(
+            !m.contains("not transient"),
+            "{command}: the text of the error is echoed: {m}"
+        );
+        assert_eq!(obop_storage::fault::noted(), None, "{command}");
+    }
+    assert_eq!(r.count(), before, "nothing left, signed with any name");
+
+    flaky.allow_models();
+    let text = slack_text(&e, &r, &id);
+    assert!(text.starts_with("MOHV: obop.manual (party)"), "{text}");
 }

@@ -768,8 +768,7 @@ impl Runtime {
             );
         }
         let run = self.try_start_run(&c, "outbound", kind)?;
-        let (sent, failed) =
-            self.send_prepared(&c, &p, &run, event, model, &prepared.rows, signer);
+        let (sent, failed) = self.send_prepared(&c, &p, &run, event, model, &prepared.rows, signer);
         let status = if failed.is_empty() {
             "succeeded"
         } else if failed.contains("will retry") {
