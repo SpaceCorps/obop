@@ -21,6 +21,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use obop_connectors::runtime::HookError;
+use obop_oauth::page::esc;
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -108,14 +109,10 @@ fn hook_blocking(s: &HttpState, id: &str, headers: &HeaderMap, body: &[u8]) -> R
 
 /// The page the callback ends on. `name` is the name of the instance, put into the link text and
 /// escaped there; the sentence `text` is escaped whole, so a name that a caller put into it is
-/// escaped once. The refresh carries the path `back` only: the name is never in an address.
+/// escaped once. The refresh carries the path `back` only: the name is never in an address. The
+/// escape is the one of the OAuth pages, which also turns an apostrophe into `&#39;`, so a name
+/// stays safe if a later edit moves it into an attribute in single quotes.
 fn page(title: &str, text: &str, back: Option<&str>, name: &str) -> Response {
-    let esc = |s: &str| {
-        s.replace('&', "&amp;")
-            .replace('<', "&lt;")
-            .replace('>', "&gt;")
-            .replace('"', "&quot;")
-    };
     // `back` is a path of this instance (built by the server, never taken from the request).
     let (link, refresh) = match back {
         Some(b) => (

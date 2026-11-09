@@ -1052,7 +1052,7 @@ async fn pins_the_return_page_after_a_drive_sign_in() {
 }
 
 /// The address of `GET /oauth/callback` after a good Google sign-in on `r`: the administrator's steps
-/// up to the link, and the code the fake Google will take for it.
+/// up to the link, and the code the fake Google takes for it.
 async fn drive_return_uri(r: &Rig) -> String {
     let g = fake();
     let (_id, q) = r.start("product.manager").await;
@@ -1113,16 +1113,19 @@ async fn a_hostile_name_written_around_the_command_is_escaped_on_the_drive_retur
     let row = [("name", json!(name))];
     let page = drive_return_page(&rig_with(Some(Brand::Around(&row))).await).await;
     assert!(!page.contains(name), "the name raw: {page}");
-    assert!(!page.contains("&amp;amp;"), "escaped twice: {page}");
+    assert!(
+        !page.contains("&amp;amp;") && !page.contains("&amp;#39;"),
+        "escaped twice: {page}"
+    );
     assert!(
         page.contains(
-            "<p>The account is authorised. Taking you back to Acme &amp; &quot;Sons&quot; 'x'.</p>"
+            "<p>The account is authorised. Taking you back to Acme &amp; &quot;Sons&quot; &#39;x&#39;.</p>"
         ),
         "the sentence: {page}"
     );
     assert!(
         page.contains(
-            "<a href=\"/#/connectors/google_drive\">Back to Acme &amp; &quot;Sons&quot; 'x'</a>"
+            "<a href=\"/#/connectors/google_drive\">Back to Acme &amp; &quot;Sons&quot; &#39;x&#39;</a>"
         ),
         "the link: {page}"
     );

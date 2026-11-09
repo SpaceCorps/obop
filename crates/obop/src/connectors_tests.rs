@@ -1317,18 +1317,19 @@ async fn a_hostile_name_written_around_the_command_is_escaped_on_the_return_page
         let answer = answer_of(&r, &uri).await;
         assert!(!answer.contains(name), "{what}: the name raw: {answer}");
         assert!(
-            answer.contains("Back to Acme &amp; &quot;Sons&quot; 'x'</a>"),
+            answer.contains("Back to Acme &amp; &quot;Sons&quot; &#39;x&#39;</a>"),
             "{what}: {answer}"
         );
-        // Escaped once: a name that was escaped before it reached the page would show `&amp;amp;`.
+        // Escaped once: a name that was escaped before it reached the page would show `&amp;amp;`
+        // (and `&amp;#39;` for the apostrophe).
         assert!(
-            !answer.contains("&amp;amp;"),
+            !answer.contains("&amp;amp;") && !answer.contains("&amp;#39;"),
             "{what}: escaped twice: {answer}"
         );
         if what == "connected" {
             assert!(
                 answer.contains(
-                    "<p>The account is authorised. Taking you back to Acme &amp; &quot;Sons&quot; 'x'.</p>"
+                    "<p>The account is authorised. Taking you back to Acme &amp; &quot;Sons&quot; &#39;x&#39;.</p>"
                 ),
                 "{what}: the sentence: {answer}"
             );
@@ -1348,7 +1349,7 @@ async fn a_hostile_name_written_around_the_command_is_escaped_on_the_return_page
     let spent = answer_of(&r, &format!("/oauth/callback?state={state}&code=code-1")).await;
     assert!(spent.contains("Not connected"), "{spent}");
     assert!(
-        spent.contains("Back to Acme &amp; &quot;Sons&quot; 'x'</a>"),
+        spent.contains("Back to Acme &amp; &quot;Sons&quot; &#39;x&#39;</a>"),
         "{spent}"
     );
     // The bare address has no link and no sentence with a name: nothing of the row is on it.
