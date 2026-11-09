@@ -82,6 +82,7 @@
   line-height: 1.25;
 }
 .store-tag {
+  text-wrap: wrap;
   color: var(--text-muted);
   font-size: 0.9375rem;
   line-height: 1.35;
@@ -167,8 +168,13 @@
   padding: 0;
   list-style: none;
 }
+.store-rows > li {
+  display: flex;
+}
 .store-row {
   display: flex;
+  flex: 1;
+  min-inline-size: 0;
   align-items: center;
   gap: var(--space-4);
   min-block-size: 4.25rem;

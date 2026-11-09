@@ -20,6 +20,8 @@ const category = computed(
 );
 // The purpose text comes from data/apps.ts, in English: say so on translated pages.
 const en = computed(() => (locale.value === "en" ? undefined : "en"));
+// A path breaks after its slashes, not in the middle of a word.
+const pathParts = (path: string) => path.split(new RegExp("(?<=/)"));
 </script>
 
 <template>
@@ -83,7 +85,11 @@ const en = computed(() => (locale.value === "en" ? undefined : "en"));
         <div v-for="r in view.info" :key="r.label">
           <dt>{{ r.label }}</dt>
           <dd>
-            <a v-if="r.href" :class="{ mono: r.mono }" :href="r.href">{{ r.value }}</a>
+            <a v-if="r.href" :class="{ mono: r.mono }" :href="r.href"
+              ><template v-for="(part, i) in pathParts(r.value)" :key="i"
+                >{{ part }}<wbr v-if="i < pathParts(r.value).length - 1"
+              /></template>
+            </a>
             <span v-else :class="{ mono: r.mono }">{{ r.value }}</span>
             <span v-if="r.note" class="app-info-note"> {{ r.note }}</span>
           </dd>
