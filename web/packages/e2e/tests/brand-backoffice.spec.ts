@@ -225,7 +225,7 @@ for (const layout of LAYOUTS) {
       const stored = JSON.parse(before);
       const withAccent = JSON.stringify({
         ...stored,
-        theme: { ...(stored.theme ?? {}), accent: "#c2410c" },
+        theme: { ...stored.theme, accent: "#c2410c" },
       });
       const accentOf = () =>
         page.evaluate(() =>
