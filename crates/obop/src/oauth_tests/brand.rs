@@ -570,8 +570,9 @@ async fn the_consent_page_of_each_class_of_client_keeps_the_claim_and_the_host_l
 // ---- The first read of the request (D74) -------------------------------------------------------------
 
 /// What a sign-in leaves in the store: the sessions it made (a sign-in makes one and ends it), the
-/// entries of the security log, and every short-lived value (the flows, the counters of the
-/// per-address limits, the lockout counters the store keeps).
+/// entries of the security log, and every value of the key-value store (the flows, the vaults and
+/// the codes). The expiring counters (the per-address windows and the lockout counters) are no
+/// value of that store and are not in it: they are [`Counters`].
 type Footprint = (usize, usize, Vec<(String, String)>);
 
 fn footprint(app: &App) -> Footprint {
@@ -585,18 +586,27 @@ fn footprint(app: &App) -> Footprint {
 
 /// The expiring counters a request of the flow can move, which `footprint` cannot see (a counter is
 /// no record and no value of the key-value store): the hits of an address's window of the start,
-/// the hits of its window of the sign-in pages, and the failures that count toward the lockout of an
-/// account. A request whose first brand read fails writes none of the things `footprint` holds but
+/// the hits of its window of the sign-in pages, the two windows of the passkey routes, and the
+/// failures that count toward the lockout of an account. A request whose first brand read fails
+/// writes no session and no value of the key-value store, which `footprint` holds (it does write an
+/// entry of the security log for a wrong code or a wrong passkey answer at the second step: see
+/// `a_second_step_under_a_failing_first_read...` and `a_passkey_post_and_its_options...`), and it
 /// still moves these: `fault::before_write` does not guard `counter_add` (see `read_brand` in
 /// `obop-http/src/oauth.rs`).
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
 struct Counters {
     /// `oauth:rl:authz:<address>`, spent by a start.
     start: u64,
-    /// `oauth:rl:login:<address>`, spent by a password step, a second step and a passkey.
+    /// `oauth:rl:login:<address>`, spent by a password step, a second step and a passkey post (not
+    /// by the options request of a passkey).
     login: u64,
-    /// `auth.fail:<user>`, spent by a wrong password (`Auth::failure_key`, which is private).
+    /// `auth.fail:<user>`, spent by a wrong password or a wrong code (`Auth::failure_key`, which is
+    /// private).
     failures: u64,
+    /// `auth.pk:options:<address>`, spent by the options request of a passkey (60 in ten minutes).
+    pk_options: u64,
+    /// `auth.pk:verify:<address>`, spent by a passkey post (40 in ten minutes), on top of `login`.
+    pk_verify: u64,
 }
 
 fn counters(app: &App, ip: &str, user: &str) -> Counters {
@@ -608,10 +618,19 @@ fn counters(app: &App, ip: &str, user: &str) -> Counters {
         ))
         .unwrap()
     };
+    let passkey = |what: &str| {
+        b.counter_get(&format!(
+            "auth.pk:{what}:{}",
+            &obop_oauth::util::sha_hex(ip)[..24]
+        ))
+        .unwrap()
+    };
     Counters {
         start: window("authz"),
         login: window("login"),
         failures: b.counter_get(&format!("auth.fail:{user}")).unwrap(),
+        pk_options: passkey("options"),
+        pk_verify: passkey("verify"),
     }
 }
 
@@ -711,13 +730,15 @@ fn assert_d74_503(resp: &Resp) {
     assert!(!page.to_lowercase().contains("obop"), "{page}");
 }
 
-/// A sign-in whose first brand read fails is answered by D74 and leaves the store as it was: no
-/// session, no entry of the log, no record written, no short-lived value changed, and the flow still
-/// waits for a person. The expiring counters are the exception, and they are pinned in both
-/// directions: every such request spends exactly one hit of the sign-in window of its address (a
-/// right password too), and only a wrong password adds a failure toward the lockout of the account
-/// (the test after this one takes that to the lockout). The same post, once the store answers,
-/// signs in as it always did, and the page it answers shows the brand.
+/// A sign-in by password whose first brand read fails is answered by D74 and leaves the store as it
+/// was: no session, no entry of the log, no record written, no short-lived value changed, and the
+/// flow still waits for a person. The expiring counters are the exception, and they are pinned in
+/// both directions: every such request spends exactly one hit of the sign-in window of its address
+/// (a right password too), and only a wrong password adds a failure toward the lockout of the
+/// account (the test after this one takes that to the lockout). The same post, once the store
+/// answers, signs in as it always did, and the page it answers shows the brand. The second step and
+/// the passkey routes are held by the two tests that follow the lockout test; they differ in one
+/// thing, the entry of the log that a wrong code or a wrong passkey answer still writes.
 #[tokio::test]
 async fn a_sign_in_whose_first_brand_read_fails_leaves_the_store_as_it_was_and_is_a_503() {
     let (flaky, rig) = flaky_rig();
@@ -854,6 +875,308 @@ async fn a_wrong_password_under_a_failing_first_read_still_counts_toward_the_loc
     assert!(!five.text().contains("name=\"decision\""));
 }
 
+/// The headers of D74 on an answer it replaced, for a route whose own answer is JSON (the options
+/// request of a passkey): [`assert_d74_503`] looks for the page.
+fn assert_d74_503_json(resp: &Resp) {
+    assert_eq!(resp.status, 503, "{}", resp.text());
+    assert_eq!(resp.header("retry-after"), "1");
+    assert_eq!(resp.header("x-obop-applied"), "none");
+    assert!(
+        resp.header("content-type").starts_with("application/json"),
+        "{}",
+        resp.header("content-type")
+    );
+}
+
+/// A flow of `ada`, who has an authenticator app, taken through the password step without the HTTP
+/// layer (so that the reader of the app has not read the brand when the posts of the test arrive):
+/// the secret of the app, the browser, the secret of the flow and the token of the second step.
+async fn at_the_second_step(
+    rig: &Rig,
+    o: &obop_oauth::OAuth,
+) -> (Vec<u8>, Browser, String, String) {
+    rig.auth.set_clock_for_test(T0);
+    let (secret, _) = enrol(
+        &crate::mfa_tests::Rig {
+            r: rig.r.clone(),
+            auth: rig.auth.clone(),
+        },
+        "ada",
+    )
+    .await;
+    rig.auth.set_clock_for_test(T0 + 30);
+    let (b, binder) = begun(o);
+    let token = match o
+        .login(&b.flow, &binder, &b.csrf, &b.ip, "ada", PW)
+        .unwrap()
+    {
+        obop_oauth::LoginOut::Mfa(t) => t,
+        other => panic!("an account with an authenticator app is asked for a code: {other:?}"),
+    };
+    (secret, b, binder, token)
+}
+
+/// The second step of a sign-in is held to the same numbers as the first, and differs from it in
+/// one thing. Under a failing first read of the brand it is answered 503, leaves the sessions and
+/// the short-lived values as they were, spends exactly one hit of the sign-in window of its address
+/// (the right code too), and counts one failure toward the lockout of the account for a wrong code
+/// only; the right code is not used up (it signs in once the store answers). What differs: a wrong
+/// code also moves the counter that limits the entries `code_failed` of the security log, and the
+/// first wrong code of each ten seconds writes that entry, although the request is refused, because
+/// the guard of the store lets the log through whatever the request has met (`Guarded::insert`
+/// skips `before_write` for the model `security_event`: an entry about a change that committed must
+/// not be lost). So "writes no entry of the security log" holds for the password step and for the
+/// right code, and this test is what says it does not hold for a wrong code at the second step.
+/// (The answer of a passkey at the second step does the same, with the entry `passkey_failed`; it
+/// is held by the test after this one.)
+#[tokio::test]
+async fn a_second_step_under_a_failing_first_read_spends_a_hit_and_a_wrong_code_counts_a_failure() {
+    async fn step(b: &Browser, r: &axum::Router, token: &str, code: &str) -> Resp {
+        b.post(
+            r,
+            "/oauth/authorize/mfa",
+            &[("mfa_token", token), ("code", code)],
+        )
+        .await
+    }
+    let (flaky, rig) = flaky_rig();
+    let o = server_of(&rig);
+    let (secret, b, binder, token) = at_the_second_step(&rig, &o).await;
+    let right = code(&secret, T0 + 30);
+    // Six digits that the account does not accept now (this step, the one before and the one after).
+    let accepted: Vec<String> = [T0, T0 + 30, T0 + 60]
+        .iter()
+        .map(|at| code(&secret, *at))
+        .collect();
+    let wrong = (0..)
+        .map(|n| format!("{n:06}"))
+        .find(|c| !accepted.contains(c))
+        .unwrap();
+    let before = footprint(&rig.app);
+    let spent = counters(&rig.app, &b.ip, "ada");
+    assert_eq!(
+        spent,
+        Counters {
+            start: 1,
+            login: 1,
+            ..Counters::default()
+        },
+        "a start and a password step spent a hit each, and nothing failed"
+    );
+    let code_failed = |app: &App| app.store.backend().counter_get("auth.evt:code_failed:ada");
+    assert_eq!(code_failed(&rig.app).unwrap(), 0);
+
+    flaky.refuse_model("instance_brand", Mode::Reads);
+    let refused_before = flaky.refused();
+    // The right code: a hit of the window and no failure, no session, nothing written.
+    let ok = step(&b, &rig.r, &token, &right).await;
+    assert_d74_503(&ok);
+    assert!(
+        flaky.refused() > refused_before,
+        "the first read was the brand's"
+    );
+    assert_eq!(
+        footprint(&rig.app),
+        before,
+        "no session, entry or short-lived value"
+    );
+    assert_eq!(
+        counters(&rig.app, &b.ip, "ada"),
+        Counters {
+            login: spent.login + 1,
+            ..spent
+        },
+        "a right code spends one hit of the sign-in window and counts no failure"
+    );
+    assert_eq!(code_failed(&rig.app).unwrap(), 0);
+
+    // A wrong code: a second hit, one failure toward the lockout, the counter of the log entry, and
+    // that entry (the one write the guard lets through).
+    let bad = step(&b, &rig.r, &token, &wrong).await;
+    assert_d74_503(&bad);
+    let (tokens, events, values) = footprint(&rig.app);
+    assert_eq!(
+        (tokens, values),
+        (before.0, before.2.clone()),
+        "no session and no short-lived value"
+    );
+    assert_eq!(
+        events,
+        before.1 + 1,
+        "the entry `code_failed` of the first wrong code is written although the request is refused"
+    );
+    assert_eq!(
+        counters(&rig.app, &b.ip, "ada"),
+        Counters {
+            login: spent.login + 2,
+            failures: spent.failures + 1,
+            ..spent
+        },
+        "a wrong code spends a hit of the window and counts one failure"
+    );
+    assert_eq!(code_failed(&rig.app).unwrap(), 1);
+    // The next wrong code in the same ten seconds writes no second entry; it counts a failure.
+    let again = step(&b, &rig.r, &token, &wrong).await;
+    assert_d74_503(&again);
+    assert_eq!(footprint(&rig.app).1, before.1 + 1, "one entry per window");
+    assert_eq!(
+        counters(&rig.app, &b.ip, "ada").failures,
+        spent.failures + 2
+    );
+
+    // The store answers: the right code was not used up and signs in, under the brand.
+    flaky.allow_models();
+    configure(&rig.app, &FIELDS);
+    let done = step(&b, &rig.r, &token, &right).await;
+    assert_eq!(done.status, 200, "{}", done.text());
+    assert!(done.text().contains("name=\"decision\""), "{}", done.text());
+    assert!(brand_line(&done.text()).contains("MOHV"));
+    assert_eq!(peek(&o, &b.flow, &binder).user.as_deref(), Some("ada"));
+}
+
+/// A post of the passkey routes as a browser behind an https proxy makes it. `Browser::post` names
+/// the http origin of the other tests, and a passkey needs a secure one (`ceremony_site_ok`), so
+/// the windows of the passkey routes (`auth.pk:*`) are reached only through this.
+async fn passkey_post(b: &Browser, r: &axum::Router, path: &str, extra: &[(&str, &str)]) -> Resp {
+    let mut pairs = vec![("flow", b.flow.as_str()), ("csrf", b.csrf.as_str())];
+    pairs.extend_from_slice(extra);
+    call(
+        r,
+        "POST",
+        path,
+        &[
+            ("origin", "https://inst.test"),
+            ("x-forwarded-proto", "https"),
+            ("cookie", &b.cookie),
+            ("x-forwarded-for", &b.ip),
+        ],
+        Some(form(&pairs)),
+    )
+    .await
+}
+
+/// The passkey routes under a failing first read of the brand, and what they spend. The options
+/// request of a passkey spends the window `auth.pk:options` (60 in ten minutes) and not the sign-in
+/// window; a passkey post spends the sign-in window `oauth:rl:login` (30) and, on a secure site,
+/// `auth.pk:verify` (40) as well. Both are answered 503, the first as JSON, and leave the sessions
+/// and the short-lived values as they were (no challenge is kept). A credential that names nobody
+/// (the usernameless post) counts no failure and writes no entry. A wrong answer at the second step
+/// does what a wrong code does: it counts one failure toward the lockout of the account and writes
+/// the entry `passkey_failed` (the first of each ten seconds), which the guard lets through. Once the
+/// store answers, the same posts give the options and the pages of the brand.
+#[tokio::test]
+async fn a_passkey_post_and_its_options_under_a_failing_first_read_spend_the_windows_they_are_said_to()
+ {
+    let (flaky, rig) = flaky_rig();
+    let o = server_of(&rig);
+    let (_, b, binder, token) = at_the_second_step(&rig, &o).await;
+    let before = footprint(&rig.app);
+    let spent = counters(&rig.app, &b.ip, "ada");
+    assert_eq!(
+        spent,
+        Counters {
+            start: 1,
+            login: 1,
+            ..Counters::default()
+        },
+        "a start and a password step spent a hit each"
+    );
+    let passkey_failed = |app: &App| {
+        app.store
+            .backend()
+            .counter_get("auth.evt:passkey_failed:ada")
+    };
+    assert_eq!(passkey_failed(&rig.app).unwrap(), 0);
+
+    flaky.refuse_model("instance_brand", Mode::Reads);
+    let refused_before = flaky.refused();
+    let options = passkey_post(&b, &rig.r, "/oauth/authorize/passkey/options", &[]).await;
+    assert_d74_503_json(&options);
+    assert!(
+        flaky.refused() > refused_before,
+        "the first read was the brand's"
+    );
+    assert_eq!(footprint(&rig.app), before, "no challenge was kept");
+    assert_eq!(
+        counters(&rig.app, &b.ip, "ada"),
+        Counters {
+            pk_options: spent.pk_options + 1,
+            ..spent
+        },
+        "the options request spends a hit of the passkey window and none of the sign-in window"
+    );
+
+    // A credential that names nobody: a hit of each window, no failure, no entry.
+    let junk = [("credential", "{}")];
+    let post = passkey_post(&b, &rig.r, "/oauth/authorize/passkey", &junk).await;
+    assert_d74_503(&post);
+    assert_eq!(footprint(&rig.app), before);
+    assert_eq!(
+        counters(&rig.app, &b.ip, "ada"),
+        Counters {
+            login: spent.login + 1,
+            pk_options: spent.pk_options + 1,
+            pk_verify: spent.pk_verify + 1,
+            ..spent
+        },
+        "the post spends a hit of the sign-in window and a hit of the passkey verify window"
+    );
+    assert_eq!(peek(&o, &b.flow, &binder).user, None);
+
+    // A wrong answer at the second step: the same two hits, a failure, and the entry of the log.
+    let second = [("mfa_token", token.as_str()), ("credential", "{}")];
+    let post = passkey_post(&b, &rig.r, "/oauth/authorize/passkey", &second).await;
+    assert_d74_503(&post);
+    let (tokens, events, values) = footprint(&rig.app);
+    assert_eq!(
+        (tokens, values),
+        (before.0, before.2.clone()),
+        "no session and no short-lived value"
+    );
+    assert_eq!(
+        events,
+        before.1 + 1,
+        "the entry `passkey_failed` is written although the request is refused"
+    );
+    assert_eq!(
+        counters(&rig.app, &b.ip, "ada"),
+        Counters {
+            login: spent.login + 2,
+            failures: spent.failures + 1,
+            pk_options: spent.pk_options + 1,
+            pk_verify: spent.pk_verify + 2,
+            ..spent
+        },
+        "the answer spends two more hits and counts one failure"
+    );
+    assert_eq!(passkey_failed(&rig.app).unwrap(), 1);
+
+    // The store answers: the options are given, and an answer that is none is the page of the brand
+    // with the word (the sign-in page, or the page that asks for the code again).
+    flaky.allow_models();
+    configure(&rig.app, &FIELDS);
+    let options = passkey_post(&b, &rig.r, "/oauth/authorize/passkey/options", &[]).await;
+    assert_eq!(options.status, 200, "{}", options.text());
+    assert!(options.json()["publicKey"]["challenge"].is_string());
+    let post = passkey_post(&b, &rig.r, "/oauth/authorize/passkey", &junk).await;
+    assert_eq!(post.status, 200, "{}", post.text());
+    assert!(
+        post.text().contains(&esc(t("en", "err.passkey"))),
+        "{}",
+        post.text()
+    );
+    assert!(brand_line(&post.text()).contains("MOHV"));
+    let post = passkey_post(&b, &rig.r, "/oauth/authorize/passkey", &second).await;
+    assert_eq!(post.status, 200, "{}", post.text());
+    assert!(
+        post.text().contains("name=\"mfa_token\"")
+            && post.text().contains(&esc(t("en", "err.code"))),
+        "{}",
+        post.text()
+    );
+    assert!(brand_line(&post.text()).contains("MOHV"));
+}
+
 /// The decision is the same: a failing first read of the brand leaves the flow where it was and no
 /// code is issued; after the store recovers the same post redirects with a code.
 #[tokio::test]
@@ -911,8 +1234,7 @@ async fn the_start_of_a_flow_whose_first_brand_read_fails_is_a_503_and_never_a_p
         counters(&rig.app, &ip, "ada"),
         Counters {
             start: 1,
-            login: 0,
-            failures: 0
+            ..Counters::default()
         },
         "a refused start spends a hit of its window"
     );
