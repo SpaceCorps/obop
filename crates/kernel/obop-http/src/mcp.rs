@@ -778,9 +778,9 @@ fn words(brand: &Brand) -> Words {
         Words {
             resource_name: format!("{name} MCP server"),
             title: name.to_string(),
-            // At most 100 characters for a name of up to 40, the length the card's description is
-            // held to (a test pins it for the longest name): this is why the sentence is shorter
-            // than the one an instance with no brand sends.
+            // At most 100 characters for a name of up to `obop_brand::policy::NAME_MAX`, the length
+            // the card's description is held to (a test pins it for the longest name): this is why
+            // the sentence is shorter than the one an instance with no brand sends.
             description: format!(
                 "Business data and actions of {name}, with masking and approvals."
             ),
@@ -1135,11 +1135,13 @@ mod tests {
     }
 
     /// The description of a card is held to 100 characters (a code point is one, as in JSON
-    /// Schema's `maxLength`, not a byte): the longest name a stored row can hold (40 code points)
-    /// still fits, in Latin and in Han, where a character is three bytes.
+    /// Schema's `maxLength`, not a byte): the longest name a stored row can hold
+    /// (`obop_brand::policy::NAME_MAX` code points) still fits, in Latin and in Han, where a
+    /// character is three bytes. A rise of the limit fails here and not on a client.
     #[test]
     fn the_description_of_a_branded_card_fits_for_the_longest_name() {
-        for name in ["M".repeat(40), "\u{682a}".repeat(40)] {
+        use obop_brand::policy::NAME_MAX;
+        for name in ["M".repeat(NAME_MAX), "\u{682a}".repeat(NAME_MAX)] {
             let c = server_card("https://x.test", &Brand::new(name.clone()));
             let d = c["description"].as_str().unwrap();
             assert!(d.contains(&name));

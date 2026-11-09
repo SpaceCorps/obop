@@ -47,11 +47,13 @@
 //! another (`type Rd = Arc<Reader>;` names the type and builds nothing; what `Rd::new` reaches
 //! is `Arc`'s), and Rust outside `crates/` are not seen. It makes a second reader visible; it
 //! does not stop one who works around it. The behaviour is held by
-//! `crates/obop/src/brand_row_tests.rs`: with a row, every output that is pinned and that reads
-//! nothing of it is what it was without one (the logo path is the exception: it answers the
-//! artwork with a row, `crates/obop/src/brand_http_tests.rs`; so are, from S1c and S3, the OAuth
-//! pages, `initialize`, the discovery documents, the OpenAPI title and the Slack message, whose
-//! tests name the words that change, `crates/obop/src/brand_docs_tests.rs`).
+//! `crates/obop/src/brand_row_tests.rs`: with a row, every output that is pinned is what it was
+//! without one (the logo path is the exception: it answers the artwork with a row,
+//! `crates/obop/src/brand_http_tests.rs`).
+//!
+//! From S1c and S3 the exceptions are more: the OAuth pages, `initialize`, the discovery documents,
+//! the OpenAPI title and the Slack message read the row, and their tests name the words that change
+//! (`crates/obop/src/brand_docs_tests.rs`).
 
 use crate::src_scan::{Lexed, after_brace, line_of, non_test, read_tree, tree, words};
 use std::collections::{BTreeMap, BTreeSet};
@@ -112,7 +114,7 @@ const ALLOWED: [(&str, &str, Limit); 13] = [
     ),
     (
         "kernel/obop-http/src/lib.rs",
-        "`api_routes` registers the logo route (`brand::routes`) and passes it the answer of the layout to an unknown path; it reads nothing",
+        "`api_routes` registers the logo route (`brand::routes`) and passes it the answer of the layout to an unknown path; it reads nothing itself (the OpenAPI handler `instance_openapi` asks the reader through `mcp::document_brand`, a call the scan of this file does not see and `each_anonymous_document_asks_the_reader_once_and_first` holds)",
         Limit::Reads {
             calls: 0,
             reads: 0,
@@ -177,7 +179,7 @@ const ALLOWED: [(&str, &str, Limit); 13] = [
     ),
     (
         "kernel/obop-connectors/src/runtime.rs",
-        "the Slack message (S3): `signer` gets the reader of the dispatcher the runtime holds and asks it once for a send, for the name that signs the message, before the run is recorded or anything leaves (a read that met a fault of the store refuses the send); `encode` writes that name in the body, so a retry sends the text it was made with; it builds no reader. The two calls are `dispatcher.brand()` and the accessor `Shown::brand()`",
+        "the Slack message (S3): `signer` gets the reader of the dispatcher the runtime holds and asks it once for a send, for the name that signs the message, before the flow is logged, the run is recorded or anything leaves (a read that met a fault of the store refuses the send and leaves nothing behind); `encode` writes that name in the body, so a retry sends the text it was made with; it builds no reader. The two calls are `dispatcher.brand()` and the accessor `Shown::brand()`",
         Limit::Reads {
             calls: 2,
             reads: 1,
@@ -1118,9 +1120,10 @@ fn a_row_with_limits_lets_its_file_ask_the_reader_as_the_row_says_and_nothing_el
     assert!(found.is_empty(), "{found:?}");
 }
 
-/// The rows with limits are the two files of the logo route and the three files of the pages of the
-/// authorization flow, and no others: loosening one of them to `Limit::Any` is a change of this
-/// test, and so a decision that shows in the diff.
+/// The rows with limits are the files that only ask the reader, and no others: the files of the
+/// logo route, those of the pages of the authorization flow, and (S3) those of the anonymous
+/// documents, of `initialize` and of the Slack message. Loosening one of them to `Limit::Any` is a
+/// change of this test, and so a decision that shows in the diff.
 #[test]
 fn the_rows_with_limits_are_the_files_that_only_ask_the_reader() {
     let limited: Vec<&str> = ALLOWED

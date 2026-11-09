@@ -483,7 +483,8 @@ async fn a_hostile_name_stays_a_string_in_every_json_document() {
 }
 
 /// A name that fails the read check (markup) is never in a document: the default is read in its
-/// place, as for every surface (section 4), and the slug of the default.
+/// place, as for every surface (section 4). The row exists, so it is still a brand: the slug stored
+/// in it is used as it is (it passes its own check), and only the name falls back.
 #[tokio::test]
 async fn a_name_that_fails_the_read_check_is_never_in_a_document() {
     for inst in pin::instances().await {
@@ -817,6 +818,80 @@ async fn while_a_refill_is_parked_the_documents_are_served_with_the_last_good_na
     go_tx.send(()).unwrap();
     let owner = owner.await.unwrap();
     assert_eq!((owner.status, owner.body), (200, good.body));
+}
+
+/// A limit of S3, written down (docs/ISSUES.md PS3-9): in a process that never had a good read there
+/// is no last good name to give, so a request that finds the first refill running waits for it and
+/// shares its outcome (spec section 4). When that refill fails, the request that ran it is answered
+/// 503 by D74, because the pool noted the fault on its thread; the request that waited is answered 200
+/// with the default document, because nothing was noted on its thread, and the header of the
+/// document lets a shared cache keep it for five minutes. This test holds that as it is, so that a
+/// change of the reader that hands the waiter the failure fails it, and PS3-9 is closed with it.
+///
+/// A waiter that reaches the reader only after the refill has ended runs a refill of its own and is
+/// answered 503 too; that attempt says nothing and is made again, up to five times, and five misses
+/// fail the test (it never passes by skipping). The same five misses are what a reader that hands the
+/// waiter the failure gives, which is the point of the test.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn a_request_that_waits_behind_a_failed_first_flight_is_given_the_default_document() {
+    for attempt in 1..=5 {
+        let (flaky, app, router) = flaky_server();
+        // The row is written around the reader, so that the process has never had a good read; the
+        // theme setting is the second read of the flight, and the one that fails.
+        write_row(&app, json!({"name": "MOHV", "logo_svg": ""}));
+        flaky.refuse_model("obop_setting", Mode::Reads);
+        let (parked_tx, parked_rx) = std::sync::mpsc::channel::<()>();
+        let (go_tx, go_rx) = std::sync::mpsc::channel::<()>();
+        flaky.after_the_get_of(
+            "instance_brand",
+            0,
+            Box::new(move |_| {
+                parked_tx.send(()).unwrap();
+                let _ = go_rx.recv_timeout(std::time::Duration::from_secs(30));
+            }),
+        );
+        let owner = {
+            let r = router.clone();
+            tokio::spawn(async move { get(&r, "/mcp/server-card").await })
+        };
+        let parked = tokio::task::spawn_blocking(move || {
+            parked_rx.recv_timeout(std::time::Duration::from_secs(20))
+        })
+        .await
+        .unwrap();
+        assert!(parked.is_ok(), "the request never reached the store");
+        let waiter = {
+            let r = router.clone();
+            tokio::spawn(async move { get(&r, "/mcp/server-card").await })
+        };
+        // The waiter has no way to say that it waits; it is given the time to reach the reader.
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        assert!(!waiter.is_finished(), "the waiter waits for the flight");
+        go_tx.send(()).unwrap();
+        let (owner, waiter) = (owner.await.unwrap(), waiter.await.unwrap());
+
+        assert_eq!(owner.status, 503, "the request that ran the failed read");
+        assert_eq!(owner.header("retry-after"), "1");
+        if waiter.status == 503 {
+            eprintln!("attempt {attempt}: the waiter was answered 503 like its owner");
+            continue;
+        }
+        assert_eq!(waiter.status, 200, "the request that waited behind it");
+        assert_eq!(
+            waiter.header("cache-control"),
+            "public, max-age=300",
+            "the header of the document, as for every answer"
+        );
+        let card = waiter.json();
+        assert_eq!(card["title"], "obop instance", "the default, not the row");
+        assert!(!String::from_utf8_lossy(&waiter.body).contains("MOHV"));
+        return;
+    }
+    panic!(
+        "the waiter was answered 503 in each of five attempts: it ran a refill of its own each time, \
+         or the reader now hands a waiter the failure of the flight (then PS3-9 is closed: change \
+         this test and the spec with it)"
+    );
 }
 
 /// The window in which a cell filled at the start of a run is certain to be fresh: the bound less a
