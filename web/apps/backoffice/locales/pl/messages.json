@@ -2000,7 +2000,7 @@
   "Each code works once and lets you sign in if you lose your passkey. Keep them somewhere safe, apart from your password.": "Każdy kod działa tylko raz i pozwala się zalogować, jeśli stracisz klucz dostępu. Przechowuj je w bezpiecznym miejscu, osobno od hasła.",
   "I have saved these codes": "Te kody są zapisane",
   "Identity": "Tożsamość",
-  "Identity removed.": "Tożsamość usunięta.",
+  "Identity removed. The tab title and the logo in the top bar change when the page loads again.": "Tożsamość usunięta. Tytuł karty i logo na górnym pasku zmienią się po ponownym załadowaniu strony.",
   "Identity saved. The tab title and the logo in the top bar change when the page loads again.": "Tożsamość zapisana. Tytuł karty i logo na górnym pasku zmienią się po ponownym załadowaniu strony.",
   "It is your only second step, and your administrator requires one: add another passkey or an authenticator app first.": "To Twój jedyny drugi składnik, a administrator go wymaga: najpierw dodaj kolejny klucz dostępu lub aplikację uwierzytelniającą.",
   "Last used {date}": "Ostatnio użyto {date}",

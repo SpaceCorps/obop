@@ -2000,7 +2000,7 @@
   "Each code works once and lets you sign in if you lose your passkey. Keep them somewhere safe, apart from your password.": "Jokainen koodi toimii vain kerran ja päästää sinut sisään, jos menetät pääsyavaimesi. Säilytä ne turvallisessa paikassa erillään salasanasta.",
   "I have saved these codes": "Olen tallentanut nämä koodit",
   "Identity": "Identiteetti",
-  "Identity removed.": "Identiteetti poistettu.",
+  "Identity removed. The tab title and the logo in the top bar change when the page loads again.": "Identiteetti poistettu. Välilehden otsikko ja yläpalkin logo muuttuvat, kun sivu ladataan uudelleen.",
   "Identity saved. The tab title and the logo in the top bar change when the page loads again.": "Identiteetti tallennettu. Välilehden otsikko ja yläpalkin logo muuttuvat, kun sivu ladataan uudelleen.",
   "It is your only second step, and your administrator requires one: add another passkey or an authenticator app first.": "Se on ainoa toinen vaiheesi, ja ylläpitäjäsi vaatii sellaisen: lisää ensin toinen pääsyavain tai todennussovellus.",
   "Last used {date}": "Viimeksi käytetty {date}",

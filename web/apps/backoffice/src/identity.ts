@@ -26,6 +26,17 @@ export const LOGO_MAX_BYTES = 16 * 1024;
 /** The limits of the texts, in characters; the server counts them too and is the judge. */
 export const LIMITS = { name: 40, slug: 30, title: 60, message: 240 } as const;
 
+/**
+ * `text` cut after `max` characters, counted as the server counts them: Unicode code points, not
+ * the UTF-16 units that `String.length` and the `maxLength` of an input count (a letter outside the
+ * Basic Multilingual Plane is two units and one character, and a pair is never cut in half).
+ */
+export function clip(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const characters = Array.from(text);
+  return characters.length <= max ? text : characters.slice(0, max).join("");
+}
+
 /** The record as the page works with it. */
 export type Loaded = {
   form: Form;

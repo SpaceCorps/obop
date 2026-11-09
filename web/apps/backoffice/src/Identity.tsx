@@ -9,7 +9,7 @@ import {
   Select,
   Skeleton,
   Switch,
-  brandMessage,
+  brandMessageIn,
   getLang,
   t,
 } from "@obop/ui";
@@ -20,6 +20,7 @@ import {
   artworkProblem,
   blankForm,
   changes,
+  clip,
   loadBrand,
   previewBrand,
   type Form,
@@ -103,14 +104,21 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
   const needsName = !loaded.set && !form.name.trim();
   const preview = previewBrand(form, loaded.v);
   const hasLogo = logo.kind === "replace" || (logo.kind === "keep" && loaded.logo === "artwork");
-  // The card draws the saved logo, a file that was chosen, or nothing before the first save.
-  const cardSrc = logo.kind === "replace" ? pending : loaded.set ? undefined : BLANK;
+  const removing = logo.kind === "remove";
+  // The card draws the saved logo, a file that was chosen, or nothing: before the first save, and
+  // when the artwork is to be removed (the tile that takes its place is drawn by the server once
+  // the removal is saved).
+  const cardSrc = logo.kind === "replace" ? pending : removing || !loaded.set ? BLANK : undefined;
+  const cardMessage = brandMessageIn(preview, previewLang);
 
+  // The texts are cut at the limit in characters as the server counts them (code points). The
+  // `maxLength` of an input counts UTF-16 units and would cut a letter outside the Basic
+  // Multilingual Plane at half the length; the server stays the judge of anything else.
   const setText = (patch: Partial<Form>) => setForm((f) => ({ ...f, ...patch }));
   const setTitle = (l: Lang, v: string) =>
-    setForm((f) => ({ ...f, titles: { ...f.titles, [l]: v } }));
+    setForm((f) => ({ ...f, titles: { ...f.titles, [l]: clip(v, LIMITS.title) } }));
   const setMessage = (l: Lang, v: string) =>
-    setForm((f) => ({ ...f, messages: { ...f.messages, [l]: v } }));
+    setForm((f) => ({ ...f, messages: { ...f.messages, [l]: clip(v, LIMITS.message) } }));
 
   async function chosen(f: File | undefined) {
     setFileError("");
@@ -159,7 +167,11 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
       return;
     }
     setProductDocsHidden(false);
-    notify(t("Identity removed."));
+    notify(
+      t(
+        "Identity removed. The tab title and the logo in the top bar change when the page loads again.",
+      ),
+    );
     await load();
   }
 
@@ -196,10 +208,9 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
             label={t("Name")}
             hint={t("Shown in the tab, on the sign-in screens and in the top bar.")}
             value={form.name}
-            maxLength={LIMITS.name}
             required={!loaded.set}
             autoComplete="off"
-            onChange={(e) => setText({ name: e.target.value })}
+            onChange={(e) => setText({ name: clip(e.target.value, LIMITS.name) })}
           />
           <Input
             label={t("Short name")}
@@ -208,9 +219,8 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
               { slug: slugNow || "…" },
             )}
             value={form.slug}
-            maxLength={LIMITS.slug}
             autoComplete="off"
-            onChange={(e) => setText({ slug: e.target.value })}
+            onChange={(e) => setText({ slug: clip(e.target.value, LIMITS.slug) })}
           />
         </section>
         <section className="stack" aria-labelledby={`${ids}-logo`}>
@@ -281,7 +291,6 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
               label={native}
               lang={lang}
               value={form.messages[lang]}
-              maxLength={LIMITS.message}
               autoComplete="off"
               onChange={(e) => setMessage(lang, e.target.value)}
             />
@@ -302,7 +311,6 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
               label={native}
               lang={lang}
               value={form.titles[lang]}
-              maxLength={LIMITS.title}
               autoComplete="off"
               onChange={(e) => setTitle(lang, e.target.value)}
             />
@@ -384,15 +392,20 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
             <InstanceLogo brand={preview} src={cardSrc} variant="full" size={30} />
             <p className="identity-card-title">{t("Sign in")}</p>
             <p className="hint">{t("Sign in to your instance.")}</p>
-            {brandMessage(preview, previewLang) && (
-              <p className="hint">{brandMessage(preview, previewLang)}</p>
+            {cardMessage.text && (
+              <p
+                className="hint"
+                lang={cardMessage.lang === previewLang ? undefined : cardMessage.lang}
+              >
+                {cardMessage.text}
+              </p>
             )}
             <span className="btn primary large identity-card-button" aria-hidden="true">
               {t("Sign in")}
             </span>
           </div>
           <div className="identity-tile">
-            {loaded.set ? (
+            {loaded.set && !removing ? (
               <img
                 src={
                   logo.kind === "replace" && pending

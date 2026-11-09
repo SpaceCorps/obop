@@ -361,6 +361,11 @@ describe("the Identity tab", () => {
     ]);
     expect(productDocsVisible()).toBe(true);
     expect(container.querySelector("button.danger")).toBeNull(); // nothing left to remove
+    // The tab and the top bar keep the removed name until the page loads again: the toast says so,
+    // as the one of a save does.
+    expect(notify).toHaveBeenCalledWith(
+      "Identity removed. The tab title and the logo in the top bar change when the page loads again.",
+    );
   });
 
   it("needs a name the first time, and offers no removal before there is anything", async () => {
@@ -389,8 +394,67 @@ describe("the Identity tab", () => {
       select.value = "sv";
       select.dispatchEvent(new Event("change", { bubbles: true }));
     });
-    // Swedish has no message of its own: the English one stands in, as on the sign-in screen.
+    // Swedish has no message of its own: the English one stands in, as on the sign-in screen, and
+    // is marked as English for a screen reader.
     expect(container.querySelector(".identity-card")!.textContent).toContain("Welcome");
+    const message = [...container.querySelectorAll(".identity-card p.hint")].at(-1)!;
+    expect(message.textContent).toBe("Welcome");
+    expect(message.getAttribute("lang")).toBe("en");
+    await act(async () => {
+      select.value = "en";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(
+      [...container.querySelectorAll(".identity-card p.hint")].at(-1)!.hasAttribute("lang"),
+    ).toBe(false);
+  });
+
+  it("cuts a text at the limit in characters as the server counts them, not in UTF-16 units", async () => {
+    await mount();
+    // 25 letters outside the Basic Multilingual Plane are 25 characters and 50 units: all kept.
+    const han = (n: number) =>
+      Array.from({ length: n }, (_, i) => String.fromCodePoint(0x20000 + i)).join("");
+    await type(field("Name"), han(25));
+    expect(field("Name").value).toBe(han(25));
+    // 45 are 5 more than the 40 the name may have; 40 are kept, whole.
+    await type(field("Name"), han(45));
+    expect(Array.from(field("Name").value)).toEqual(Array.from(han(40)));
+    expect(field("Name").hasAttribute("maxlength")).toBe(false);
+    // The same for a message (240) and a title (60) and the short name (30).
+    await type(field("English"), "x".repeat(250));
+    expect(field("English").value.length).toBe(240);
+    await type(field("Short name"), "a".repeat(31));
+    expect(field("Short name").value.length).toBe(30);
+    const titles = [...container.querySelectorAll<HTMLInputElement>("input")].filter(
+      (i) => i.lang === "de",
+    );
+    await type(titles[1]!, han(61));
+    expect(Array.from(titles[1]!.value).length).toBe(60);
+  });
+
+  it("previews a logo that is to be removed as no logo, and an undo as the saved one", async () => {
+    store = row({
+      effective: JSON.stringify({
+        name: { value: "MOHV", source: "record" },
+        slug: { value: "mohv", source: "record" },
+        logo: { value: "artwork", source: "record" },
+      }),
+    });
+    await mount();
+    const saved = "/api/brand/logo.svg?v=0123456789abcdef";
+    expect(container.querySelector(".identity-card img")!.getAttribute("src")).toBe(saved);
+    expect(container.querySelector(".identity-tile img")!.getAttribute("src")).toBe(saved);
+    await click(button("Remove the logo"));
+    expect(container.textContent).toContain("The logo will be removed when you save.");
+    // What saving would give is not the saved artwork: neither the card nor the tile draws it.
+    expect(container.querySelector(".identity-card img")!.getAttribute("src")).toMatch(
+      /^data:image\/svg\+xml/,
+    );
+    expect(container.querySelector(".identity-tile img")).toBeNull();
+    expect(container.querySelector(".identity-tile-empty")).not.toBeNull();
+    await click(button("Undo"));
+    expect(container.querySelector(".identity-card img")!.getAttribute("src")).toBe(saved);
+    expect(container.querySelector(".identity-tile img")!.getAttribute("src")).toBe(saved);
   });
 
   it("says so when the record cannot be read", async () => {

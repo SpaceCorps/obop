@@ -2000,7 +2000,7 @@
   "Each code works once and lets you sign in if you lose your passkey. Keep them somewhere safe, apart from your password.": "Varje kod fungerar bara en gång och låter dig logga in om du tappar din passkey. Förvara dem på ett säkert ställe, skilt från lösenordet.",
   "I have saved these codes": "Jag har sparat de här koderna",
   "Identity": "Identitet",
-  "Identity removed.": "Identiteten har tagits bort.",
+  "Identity removed. The tab title and the logo in the top bar change when the page loads again.": "Identiteten har tagits bort. Flikens rubrik och logotypen i det övre fältet ändras när sidan laddas om.",
   "Identity saved. The tab title and the logo in the top bar change when the page loads again.": "Identiteten har sparats. Flikens rubrik och logotypen i det övre fältet ändras när sidan laddas om.",
   "It is your only second step, and your administrator requires one: add another passkey or an authenticator app first.": "Det är ditt enda andra steg och din administratör kräver ett: lägg först till en annan passkey eller en autentiseringsapp.",
   "Last used {date}": "Senast använd {date}",

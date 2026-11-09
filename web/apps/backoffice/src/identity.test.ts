@@ -6,6 +6,7 @@ import {
   artworkProblem,
   blankForm,
   changes,
+  clip,
   previewBrand,
   readBrand,
 } from "./identity.ts";
@@ -187,5 +188,34 @@ describe("changes and a stored switch that cannot be used", () => {
     expect(
       changes(same, { ...same, hideDocs: true }, { kind: "keep" }, ["hide_product_docs"]),
     ).toEqual({ hide_product_docs: true });
+  });
+});
+
+describe("clip", () => {
+  // U+20000 and the letters after it are outside the Basic Multilingual Plane: one character, two units.
+  const han = (n: number) =>
+    Array.from({ length: n }, (_, i) => String.fromCodePoint(0x20000 + i)).join("");
+
+  it("counts characters as the server does, not UTF-16 units", () => {
+    const text = han(25);
+    expect(text.length).toBe(50);
+    expect(clip(text, LIMITS.name)).toBe(text);
+    expect(Array.from(clip(han(45), LIMITS.name))).toEqual(Array.from(han(40)));
+    expect(clip(han(45), LIMITS.name).length).toBe(80);
+  });
+
+  it("never cuts a pair in half", () => {
+    // 3 characters kept of "a" + three astral letters: the third letter is whole or gone.
+    const kept = clip("a" + han(3), 3);
+    expect(Array.from(kept).length).toBe(3);
+    expect(kept.charCodeAt(kept.length - 1)).toBeGreaterThanOrEqual(0xdc00);
+    expect(kept.charCodeAt(kept.length - 1)).toBeLessThanOrEqual(0xdfff);
+  });
+
+  it("leaves a text of the limit or less as it is", () => {
+    expect(clip("", 5)).toBe("");
+    expect(clip("abcde", 5)).toBe("abcde");
+    expect(clip("abcdef", 5)).toBe("abcde");
+    expect(clip("åäö", 3)).toBe("åäö");
   });
 });

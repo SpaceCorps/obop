@@ -2000,7 +2000,7 @@
   "Each code works once and lets you sign in if you lose your passkey. Keep them somewhere safe, apart from your password.": "machine-drafted",
   "I have saved these codes": "machine-drafted",
   "Identity": "machine-drafted",
-  "Identity removed.": "machine-drafted",
+  "Identity removed. The tab title and the logo in the top bar change when the page loads again.": "machine-drafted",
   "Identity saved. The tab title and the logo in the top bar change when the page loads again.": "machine-drafted",
   "It is your only second step, and your administrator requires one: add another passkey or an authenticator app first.": "machine-drafted",
   "Last used {date}": "machine-drafted",
