@@ -1812,6 +1812,7 @@ pub mod store;
 
 pub use accounts::{AccountsApi, NewUser};
 pub use blobs::{BlobError, BlobService, Served, clean_filename, disposition};
+pub use brand::{DEFAULT_TITLE as DEFAULT_SITE_TITLE, FAVICON_KEY as SITE_FAVICON_KEY, SiteRead};
 pub use engine::bulk::has_stored_answer;
 pub use engine::{Actor, ClockFn};
 pub use inline_pdf::{INLINE_PDF_NAME, MAX_INLINE_PDF, inline_pdf};

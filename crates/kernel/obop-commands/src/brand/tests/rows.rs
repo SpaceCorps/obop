@@ -90,6 +90,7 @@ fn a_name_that_breaks_the_safety_subset_falls_back() {
     let long = "x".repeat(41);
     for (name, code) in [
         ("", "empty"),
+        ("   ", "empty"),
         ("a\u{200b}b", "unsafe_character"),
         ("a\u{202e}b", "unsafe_character"),
         ("a\u{00a0}b", "unsafe_character"),
@@ -416,6 +417,46 @@ fn the_fallback_chain_of_titles_and_messages() {
     ]);
     assert_eq!(shown.brand().title("sv"), "Acme English");
     assert_eq!(fields_of(&shown), ["title_sv"]);
+}
+
+/// A title or a message of nothing but spaces is a row written around the command (`configure`
+/// refuses it): it is as empty as a blank name, so it falls back to unset, the chain goes on to the
+/// English text, the name or no message, and `get` lists it as `empty`. An absent one is no failure,
+/// and one with spaces around a text is shown as stored.
+#[test]
+fn a_title_or_a_message_of_nothing_but_spaces_is_unset_and_listed() {
+    let (shown, _) = shown_of(&[
+        ("name", s("Acme")),
+        ("title_en", s("Acme English")),
+        ("title_sv", s("   ")),
+        ("title_de", s("")),
+        ("message_en", s("Welcome")),
+        ("message_sv", s(" ")),
+        ("message_de", s("  Hallo  ")),
+    ]);
+    assert_eq!(fields_of(&shown), ["title_sv", "message_sv"]);
+    assert!(shown.fallbacks().iter().all(|f| f.code == "empty"));
+    assert_eq!(shown.brand().stored_title("sv"), "");
+    assert_eq!(
+        shown.brand().title("sv"),
+        "Acme English",
+        "the chain goes on"
+    );
+    assert_eq!(shown.brand().message("sv"), Some("Welcome"));
+    assert_eq!(
+        shown.brand().message("de"),
+        Some("  Hallo  "),
+        "spaces around a text are no blank"
+    );
+    // With nothing else to fall back on: the name, and no message.
+    let (shown, _) = shown_of(&[
+        ("name", s("Acme")),
+        ("title_en", s("   ")),
+        ("message_en", s("  ")),
+    ]);
+    assert_eq!(fields_of(&shown), ["title_en", "message_en"]);
+    assert_eq!(shown.brand().title("en"), "Acme");
+    assert_eq!(shown.brand().message("en"), None);
 }
 
 /// The write check refuses a name or a title that starts with a space, so a text of nothing but

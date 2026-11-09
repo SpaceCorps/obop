@@ -16,10 +16,12 @@ mod cache;
 mod describe;
 mod double;
 mod effective;
+mod enrol;
 mod faults;
 mod pins;
 mod race;
 mod rows;
+mod site;
 mod strict;
 mod total;
 
@@ -53,6 +55,17 @@ pub fn put_theme(b: &dyn Backend, accent: &str) {
         model: SETTING_MODEL.into(),
         id: SETTING_ID.into(),
         fields: fields(&[("value", s(&value))]),
+    }])
+    .unwrap();
+}
+
+/// Puts the instance settings into the store as one JSON object, whatever it holds: the theme and
+/// the `site` keys of the public site together, as `setting.update` stores them.
+pub fn put_settings(b: &dyn Backend, settings: J) {
+    b.apply_checked(&[Op::Put {
+        model: SETTING_MODEL.into(),
+        id: SETTING_ID.into(),
+        fields: fields(&[("value", s(&settings.to_string()))]),
     }])
     .unwrap();
 }

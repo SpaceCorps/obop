@@ -612,7 +612,7 @@ pub const CATALOGUE: &[(&str, [&str; 7])] = &[
     // in the claim sentence too: a pronoun could be read as the instance.
     // The English drafts are the spec's. The six translations of each of the six keys (36 cells)
     // are MACHINE-DRAFTED, written from the existing translations of the base texts, and nobody who
-    // speaks the language has read them. They are flagged in docs/ISSUES.md P1 and in spec
+    // speaks the language has read them. They are flagged in docs/ISSUES.md BRN1 and in spec
     // section 7 (Q71 item 2): the owner and counsel confirm them before a real customer's people
     // see them. They show only on an instance that has set a brand.
     ("login.lead.neutral", ["{app} wants to connect to this instance. Sign in with your account to decide what it may do.", "{app} möchte sich mit dieser Instanz verbinden. Melden Sie sich mit Ihrem Konto an, um zu entscheiden, was die Anwendung darf.", "{app} souhaite se connecter à cette instance. Connectez-vous avec votre compte pour décider de ce qu'elle peut faire.", "{app} chce połączyć się z tą instancją. Zaloguj się na swoje konto, aby zdecydować, na co aplikacja może sobie pozwolić.", "{app} haluaa yhdistää tähän instanssiin. Kirjaudu tililläsi päättääksesi, mitä se saa tehdä.", "{app} vill ansluta till den här instansen. Logga in med ditt konto för att bestämma vad den får göra.", "{app} quiere conectarse a esta instancia. Inicie sesión con su cuenta para decidir qué puede hacer."]),

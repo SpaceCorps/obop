@@ -83,6 +83,8 @@ pub struct Shown {
     logo: Option<Logo>,
     theme_accent: Option<String>,
     fallbacks: Vec<Fallback>,
+    /// This is the default standing in for a brand that could not be read (see [`Shown::unread`]).
+    unread: bool,
 }
 
 impl std::fmt::Debug for Shown {
@@ -104,7 +106,26 @@ impl Shown {
             logo: None,
             theme_accent,
             fallbacks: Vec::new(),
+            unread: false,
         }
+    }
+
+    /// The default brand in the place of one that could not be read: what the reader hands out in a
+    /// process that never had a good read while the store fails. It looks like [`Shown::not_set`]
+    /// and is told apart from it by [`Shown::is_unread`], so that a cache above the reader does not
+    /// keep it as if the store had said "no brand".
+    pub(crate) fn unread() -> Shown {
+        Shown {
+            unread: true,
+            ..Shown::not_set(None)
+        }
+    }
+
+    /// Whether this is the stand-in of [`Shown::unread`]: the store could not be read and there was
+    /// no earlier good read to serve. False for a brand that was read, for the answer "no brand is
+    /// set" and for an inert reader.
+    pub fn is_unread(&self) -> bool {
+        self.unread
     }
 
     /// The brand: the default one when no row exists.
@@ -161,6 +182,24 @@ pub(crate) fn accent_of(setting: Option<&Fields>) -> Option<String> {
     }
     let v: J = serde_json::from_str(text).ok()?;
     tile::valid_accent(v.get("theme")?.get("accent")?.as_str()?)
+}
+
+/// The `site` object of the instance settings (the keys of the public site), when the settings
+/// parse and hold one; empty otherwise. Read with the theme, from the same row of settings, so that
+/// `get` reports on the `site.*` keys the public site is told about, and by the one door the public
+/// site reads its settings by (`PublicApi::site_settings_read`, which calls `site::site_settings`),
+/// where it is the read that door always made, with the same result for the same text. Total.
+pub(crate) fn site_of(setting: Option<&Fields>) -> serde_json::Map<String, J> {
+    let parsed = setting
+        .and_then(|s| s.get("value")?.as_str())
+        .and_then(|t| serde_json::from_str::<J>(t).ok());
+    match parsed {
+        Some(v) => match v.get("site") {
+            Some(J::Object(o)) => o.clone(),
+            _ => serde_json::Map::new(),
+        },
+        None => serde_json::Map::new(),
+    }
 }
 
 /// The text fields of a row as a [`Brand`], each checked by the safety subset, and the fields that
@@ -251,5 +290,6 @@ pub(crate) fn read_row(row: Option<&Fields>, theme_accent: Option<String>) -> Sh
         logo: Some(logo),
         theme_accent,
         fallbacks,
+        unread: false,
     }
 }

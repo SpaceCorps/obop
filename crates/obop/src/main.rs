@@ -21,6 +21,8 @@ mod brand_commands_tests;
 #[cfg(test)]
 mod brand_docs_tests;
 #[cfg(test)]
+mod brand_enrol_tests;
+#[cfg(test)]
 mod brand_http_tests;
 #[cfg(test)]
 mod brand_row_tests;
@@ -48,6 +50,7 @@ mod import_map_tests;
 mod import_oas;
 #[cfg(test)]
 mod import_oas_tests;
+mod import_timeline;
 #[cfg(test)]
 mod internal_tables_scan_tests;
 #[cfg(test)]
@@ -152,9 +155,10 @@ const USAGE: &str = "usage: obop <command>
   admin sso only USER on|off                    make USER sign in with Microsoft only (needs a binding, one sign-in with the button
                                                 after it, and two other administrators who keep a password
                                                 and a second factor), or turn that off
-  admin brand status                            the instance branding (name, slug, logo, a title and a message per language): what is
-                                                in force and where each value comes from, the titles and messages that are stored,
-                                                and any stored field that fell back
+  admin brand status                            the instance branding (name, slug, logo, a title and a message per language, and the
+                                                title, logo address, accent and tab icon of the public shop): what is in force and
+                                                where each value comes from, the titles and messages that are stored, and any
+                                                stored field that fell back
   admin brand configure [--name N] [--slug S] [--title LANG=TEXT]... [--message LANG=TEXT]...
                         [--logo-file FILE.svg | --clear-logo] [--from FILE.toml] [--dry-run]
                                                 set the fields given and keep the others (the first call needs --name); an empty text
@@ -306,6 +310,13 @@ const USAGE: &str = "usage: obop <command>
                                                 write a SIE 4 file (CP437) of the posted moves of the fiscal year that starts in
                                                 YYYY (calendar year if there is none), with the company of accounting_se_company
                                                 when installed; needs accounting.user. The typed command is sie_exchange.export
+  import timeline FILE [--vehicle V] [--since YYYY-MM-DD] [--dry-run] [--allow-straight-line] [--db URL] [--token TOKEN]
+                                                the drives in a Google Timeline export (Maps on the phone: Timeline, Export Timeline data)
+                                                become Mileage trips of the token's person, in state `ended`; you then set `purpose` on
+                                                the ones that were for work and submit them, and discard the rest. The server computes
+                                                the distance from the points. --dry-run lists the drives and writes nothing; a drive
+                                                with no recorded path (only its two ends) is skipped unless --allow-straight-line;
+                                                running it again on the same file creates nothing twice. Needs mileage.driver
   sie import FILE [--dry-run] [--post] [--default-account-types | --account-types FILE] [--db URL] [--token TOKEN]
                                                 import a SIE 4 file: missing accounts (types UNVERIFIED, you confirm them), one journal
                                                 per series, draft moves with series and number in `reference`. --post runs the real
@@ -413,6 +424,8 @@ fn main() -> ExitCode {
     let (oas_from, args) = take_opt(&args, "--from");
     let (oas_documents, args) = take_opt(&args, "--documents");
     let (oas_types, args) = take_opt(&args, "--account-types");
+    let (tl_vehicle, args) = take_opt(&args, "--vehicle");
+    let (tl_since, args) = take_opt(&args, "--since");
     let (sie_year, args) = take_opt(&args, "--year");
     let (sso_tenant, args) = take_opt(&args, "--tenant");
     let (sso_client, args) = take_opt(&args, "--client-id");
@@ -434,6 +447,7 @@ fn main() -> ExitCode {
                 | "--post"
                 | "--allow-broken-chain"
                 | "--default-account-types"
+                | "--allow-straight-line"
         )
     });
     let has = |f: &str| flags.contains(&f);
@@ -600,6 +614,16 @@ fn main() -> ExitCode {
                 "usage: obop import oas --from OAS.db [--documents DIR] [--dry-run] [--post]",
             )),
         },
+        ["import", "timeline", file] => import_timeline::run_cli(
+            &opts,
+            &import_timeline::Args {
+                file,
+                vehicle: tl_vehicle,
+                since: tl_since,
+                dry_run: has("--dry-run"),
+                allow_straight_line: has("--allow-straight-line"),
+            },
+        ),
         ["sie", "export"] => match sie_year {
             Some(year) => sie::export_cli(
                 &opts,

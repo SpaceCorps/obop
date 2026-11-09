@@ -134,26 +134,41 @@ impl Site {
         {
             return (c.settings.clone(), c.menu.clone(), c.css.clone());
         }
-        let s = Arc::new(Settings::from_map(&self.api.site_settings()));
-        let menu = self.load_menu();
+        let read = self.api.site_settings_read();
+        let s = Arc::new(Settings::from_map(&read.site));
+        let (menu, menu_read) = self.load_menu();
         let css = assets::css(&s.accent);
         let version = layout::css_version(&css);
-        let c = Cached {
+        let css = Arc::new((css, version));
+        // A stand-in for what the store holds (the settings could not be read, or the brand could
+        // not and none had been read before, or the menu could not be read and is empty) is for
+        // this request alone, and the request that met the fault is answered 503 above (D74): kept,
+        // it would show the stand-in, with the owner's explicit keys missing or no navigation, for
+        // the whole of the cache time after the store is back.
+        if read.degraded || !menu_read {
+            return (s, menu, css);
+        }
+        *g = Some(Cached {
             at: Instant::now(),
             settings: s.clone(),
             menu: menu.clone(),
-            css: Arc::new((css, version)),
-        };
-        let css = c.css.clone();
-        *g = Some(c);
+            css: css.clone(),
+        });
         (s, menu, css)
     }
 
-    fn load_menu(&self) -> Vec<MenuItem> {
+    /// The visible menu items, and whether the menu was read. A shop that publishes no menu has an
+    /// empty menu, and that is an answer (`true`); a menu that is published and could not be read
+    /// is empty too, and is not (`false`), so that [`Site::refresh`] does not keep it.
+    fn load_menu(&self) -> (Vec<MenuItem>, bool) {
+        if !self.api.is_readable("website_menu_item") {
+            return (Vec::new(), true);
+        }
         let Ok((rows, _)) = self.api.list("website_menu_item", &[], Some(50), 0) else {
-            return Vec::new();
+            return (Vec::new(), false);
         };
-        rows.iter()
+        let items: Vec<MenuItem> = rows
+            .iter()
             .filter_map(|r| {
                 let (label, url) = (r.text("label").trim(), r.text("url").trim());
                 let ok = md::safe_url(url) && !url.starts_with('#') && !url.starts_with("mailto:");
@@ -163,7 +178,8 @@ impl Site {
                     new_window: r.flag("new_window"),
                 })
             })
-            .collect()
+            .collect();
+        (items, true)
     }
 
     fn caps(&self) -> Caps {
@@ -557,6 +573,8 @@ impl Site {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_brand;
 #[cfg(test)]
 mod tests_media;
 #[cfg(test)]

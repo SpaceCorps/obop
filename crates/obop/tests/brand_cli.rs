@@ -1717,3 +1717,205 @@ fn the_command_the_stderr_hint_names_exists_and_lists_the_field() {
     );
     assert!(!shown.contains("a<b"), "{shown}");
 }
+
+// ---- the authenticator issuer (S1e) -------------------------------------------------------------------
+
+/// `status` and `get` say what an enrolment would write into an authenticator and which source won:
+/// the variable `OBOP_MFA_ISSUER` of the process that asks, else the stored name, else `obop`. The
+/// process of a test has an environment of its own (`run_with` clears it), so the variable is set or
+/// unset here and never leaks in from the machine that runs the test.
+#[test]
+fn status_and_get_name_the_authenticator_issuer_and_the_source_that_won() {
+    let dir = Dir::started("issuer");
+    let url = dir.url();
+    let s = status(&url);
+    assert!(
+        s.contains("authenticator_issuer: \"obop\" (default)\n"),
+        "{s}"
+    );
+    ok(obop(
+        &url,
+        &["admin", "brand", "configure", "--name", "MOHV"],
+        None,
+    ));
+    let s = status(&url);
+    assert!(
+        s.contains("authenticator_issuer: \"MOHV\" (record)\n"),
+        "{s}"
+    );
+    // The variable wins, also when it says `obop` and the record says another name; the name is
+    // the record's all the same.
+    for variable in ["Acme", "obop"] {
+        let o = run_with(
+            Some(&url),
+            &["admin", "brand", "status"],
+            None,
+            None,
+            &[("OBOP_MFA_ISSUER", variable)],
+        );
+        let s = ok(o);
+        assert!(
+            s.contains(&format!("authenticator_issuer: \"{variable}\" (env)\n")),
+            "{s}"
+        );
+        assert!(s.contains("name: \"MOHV\" (record)\n"), "{s}");
+    }
+    // A variable that is only white space is no value.
+    let s = ok(run_with(
+        Some(&url),
+        &["admin", "brand", "status"],
+        None,
+        None,
+        &[("OBOP_MFA_ISSUER", "  ")],
+    ));
+    assert!(
+        s.contains("authenticator_issuer: \"MOHV\" (record)\n"),
+        "{s}"
+    );
+    // `get` through the command line (the REST and MCP answer is the same function).
+    let token = out(&obop(
+        &url,
+        &["agent-token", "ada", "--scopes", "platform.admin"],
+        None,
+    ))
+    .trim()
+    .to_string();
+    let get = run_with(
+        Some(&url),
+        &["call", "--token", &token, "instance_brand", "get"],
+        None,
+        None,
+        &[("OBOP_MFA_ISSUER", "Acme")],
+    );
+    assert!(get.status.success(), "{}", text(&get));
+    let got: serde_json::Value = serde_json::from_slice(&get.stdout).unwrap();
+    let effective: serde_json::Value =
+        serde_json::from_str(got["effective"].as_str().unwrap()).unwrap();
+    assert_eq!(
+        effective["authenticator_issuer"],
+        serde_json::json!({"value": "Acme", "source": "env"})
+    );
+    assert_eq!(
+        effective["name"],
+        serde_json::json!({"value": "MOHV", "source": "record"})
+    );
+}
+
+/// With no record, a value of the variable of the process that asks is a value that is not the
+/// default, and the header of `status` says so (it says "every value is the default" only when none
+/// is); a variable of only white space is no value, so the header stays as it has been.
+#[test]
+fn status_with_no_record_heads_the_output_with_the_variable_when_the_variable_is_set() {
+    let dir = Dir::started("issuer-no-record");
+    let url = dir.url();
+    let with_variable = |variable: &str| {
+        ok(run_with(
+            Some(&url),
+            &["admin", "brand", "status"],
+            None,
+            None,
+            &[("OBOP_MFA_ISSUER", variable)],
+        ))
+    };
+    let s = with_variable("Acme");
+    assert!(
+        s.starts_with(
+            "brand: not set (no record; every value is the default, except what OBOP_MFA_ISSUER sets)\n"
+        ),
+        "{s}"
+    );
+    assert!(s.contains("authenticator_issuer: \"Acme\" (env)\n"), "{s}");
+    let s = with_variable("  ");
+    assert!(
+        s.starts_with("brand: not set (no record; every value is the default)\n"),
+        "{s}"
+    );
+    assert!(
+        s.contains("authenticator_issuer: \"obop\" (default)\n"),
+        "{s}"
+    );
+}
+
+/// The repair the answer `brand_unavailable` points to: a stored name that cannot be shown is listed
+/// by `status` (which prints nothing of its value), and `configure` at the terminal, which needs no
+/// session, replaces it. Until then `authenticator_issuer` has no value (`null`, source
+/// `unreadable`: the enrolment is refused) while `name` shows the default, and `fallbacks` says why.
+#[test]
+fn a_stored_name_that_cannot_be_shown_is_listed_by_status_and_repaired_at_the_terminal() {
+    let dir = Dir::started("repair");
+    let url = dir.url();
+    {
+        let backend = obop_storage::open(&url).unwrap();
+        let mut row = obop_storage::Fields::new();
+        row.insert("name".into(), serde_json::json!("a<b"));
+        backend
+            .apply_checked(&[obop_storage::Op::Put {
+                model: "instance_brand".into(),
+                id: "instance".into(),
+                fields: row,
+            }])
+            .unwrap();
+    }
+    let s = status(&url);
+    assert!(
+        s.contains("fallback: name is not used, the default is shown (unsafe_character)\n"),
+        "{s}"
+    );
+    assert!(!s.contains("a<b"), "{s}");
+    // No issuer is in force: an enrolment is refused for as long as this is so, and `status` says
+    // so instead of the default that the enrolment would not write.
+    assert!(
+        s.contains("authenticator_issuer: null (unreadable)\n"),
+        "{s}"
+    );
+    assert!(s.contains("name: \"obop\" (default)\n"), "{s}");
+    ok(obop(
+        &url,
+        &["admin", "brand", "configure", "--name", "MOHV"],
+        None,
+    ));
+    let s = status(&url);
+    assert!(s.contains("fallbacks: none\n"), "{s}");
+    assert!(
+        s.contains("authenticator_issuer: \"MOHV\" (record)\n"),
+        "{s}"
+    );
+}
+
+/// A name that the display accepts and `configure` refuses (a colon: it would make a link) can only
+/// be in the row if it was written around the command. It shows as the name, `fallbacks` lists
+/// nothing, and the enrolment is refused all the same: `status` says so with the issuer `null`.
+#[test]
+fn a_stored_name_with_a_colon_has_no_issuer_in_force_and_is_repaired_at_the_terminal() {
+    let dir = Dir::started("colon");
+    let url = dir.url();
+    {
+        let backend = obop_storage::open(&url).unwrap();
+        let mut row = obop_storage::Fields::new();
+        row.insert("name".into(), serde_json::json!("a:b"));
+        backend
+            .apply_checked(&[obop_storage::Op::Put {
+                model: "instance_brand".into(),
+                id: "instance".into(),
+                fields: row,
+            }])
+            .unwrap();
+    }
+    let s = status(&url);
+    assert!(s.contains("name: \"a:b\" (record)\n"), "{s}");
+    assert!(s.contains("fallbacks: none\n"), "{s}");
+    assert!(
+        s.contains("authenticator_issuer: null (unreadable)\n"),
+        "{s}"
+    );
+    ok(obop(
+        &url,
+        &["admin", "brand", "configure", "--name", "MOHV"],
+        None,
+    ));
+    let s = status(&url);
+    assert!(
+        s.contains("authenticator_issuer: \"MOHV\" (record)\n"),
+        "{s}"
+    );
+}

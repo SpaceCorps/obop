@@ -576,6 +576,45 @@ fn everything_clean_accepts_the_safety_subset_accepts() {
     );
 }
 
+/// A text of nothing but the space has nothing to show, so on the read side it is as empty as no
+/// text: a name falls back to the default name in every page, and a title or a message falls back
+/// to unset (the chain goes on to the English title, the name, or no message). A space at the start
+/// or the end of a text is no danger and passes. An absent title or message (the empty text) is
+/// unset, not a failure.
+#[test]
+fn a_text_of_nothing_but_spaces_is_empty_and_a_text_with_spaces_around_it_is_not() {
+    for blank in [" ", "  ", "    ", &" ".repeat(NAME_MAX)] {
+        assert_eq!(safe(NAME, blank), Err(reason::EMPTY), "{blank:?}");
+        // The write side never let such a name in.
+        assert!(clean(NAME, blank).is_err(), "{blank:?}");
+    }
+    // The length is checked first, and it is the larger fault.
+    assert_eq!(safe(NAME, &" ".repeat(NAME_MAX + 1)), Err(reason::TOO_LONG));
+    for padded in [" a", "a ", "  a  ", " . ", " 1 "] {
+        assert_eq!(safe(NAME, padded), Ok(()), "{padded:?}");
+    }
+    // A title and a message are the same when they are there: a blank one is empty, the empty one
+    // is not a failure (it is unset), the length is still the larger fault, and padding passes.
+    for (kind, max) in [(TITLE, TITLE_MAX), (MESSAGE, MESSAGE_MAX)] {
+        assert_eq!(safe(kind, ""), Ok(()), "{kind:?}: unset is no failure");
+        for blank in [" ", "   ", &" ".repeat(max)] {
+            assert_eq!(safe(kind, blank), Err(reason::EMPTY), "{kind:?} {blank:?}");
+            // The write side never let such a text in.
+            assert!(clean(kind, blank).is_err(), "{kind:?} {blank:?}");
+        }
+        assert_eq!(safe(kind, &" ".repeat(max + 1)), Err(reason::TOO_LONG));
+        for padded in [" a", "a ", "  a  ", " . ", " 1 "] {
+            assert_eq!(safe(kind, padded), Ok(()), "{kind:?} {padded:?}");
+        }
+        // Only the space makes a text blank: any other white space is refused as unsafe.
+        assert_eq!(
+            safe(kind, "\u{a0}"),
+            Err(reason::UNSAFE_CHARACTER),
+            "{kind:?}"
+        );
+    }
+}
+
 // ---- Total: never panics --------------------------------------------------------------------------------
 
 #[test]

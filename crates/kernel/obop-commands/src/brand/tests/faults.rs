@@ -387,3 +387,71 @@ fn a_sink_that_panics_cannot_lose_the_outcome_of_the_refill() {
         "the refill lock was not held across the sink"
     );
 }
+
+// ---- The default of a read that failed is told from "no brand" ------------------------------------------
+
+/// The reader hands out the default in a process that never had a good read while the store fails,
+/// and `Shown::is_unread` tells that default from the answer "no brand is set" (an empty store), from
+/// an inert reader and from the last good brand that a failing refill serves. A cache above the
+/// reader keeps the answers that are not unread and no other (the public site's cache, `obop-site`).
+#[test]
+fn the_default_of_a_failed_first_read_is_unread_and_no_other_answer_is() {
+    let spy = seeded();
+    let (r, _) = reader(&spy, LONG);
+    spy.fail(MODEL, "storage_busy");
+    let shown = r.current();
+    assert_eq!(shown.brand().name(), "obop");
+    assert!(shown.is_unread(), "the stand-in for a brand not read");
+    assert!(!shown.is_set());
+    // The theme setting failing fails the unit as a whole, and is the same.
+    spy.heal();
+    let (r2, _) = reader(&spy, LONG);
+    spy.fail(SETTING_MODEL, "storage_busy");
+    assert!(r2.current().is_unread());
+    // Not kept: when the store answers, the brand is there and is not unread.
+    spy.heal();
+    let shown = r2.current();
+    assert_eq!(shown.brand().name(), "Acme");
+    assert!(!shown.is_unread());
+
+    // An empty store says "no brand is set": an answer, not a stand-in.
+    let empty = Spy::memory();
+    let (r3, _) = reader(&empty, LONG);
+    let none = r3.current();
+    assert!(!none.is_set() && !none.is_unread());
+    // An inert reader reads nothing and has nothing to fail.
+    let inert = Reader::inert();
+    assert!(!inert.current().is_unread());
+    // A failing refill with a last good value serves that value, which is a brand that was read.
+    r2.expire();
+    spy.fail(MODEL, "storage_busy");
+    let served = r2.current();
+    assert_eq!(served.brand().name(), "Acme");
+    assert!(!served.is_unread());
+}
+
+/// The caller that waited behind a flight that failed gets the same stand-in as the owner, marked
+/// the same way: it did not meet the fault itself (the owner's thread noted it), so the mark is
+/// what tells it.
+#[test]
+fn the_waiters_of_a_failed_first_flight_get_the_unread_default_too() {
+    let spy = seeded();
+    spy.park_next(MODEL);
+    spy.fail(MODEL, "storage_timeout: waited 5s for the statement");
+    let (r, _) = reader(&spy, LONG);
+    let ask = |r: &Arc<Reader>| {
+        let r = r.clone();
+        thread::spawn(move || r.current().is_unread())
+    };
+    let owner = ask(&r);
+    spy.wait_parked(1);
+    let waiters: Vec<_> = (0..3).map(|_| ask(&r)).collect();
+    wait_waiting(&r, 3);
+    spy.release();
+    assert!(owner.join().unwrap(), "the owner");
+    for w in waiters {
+        assert!(w.join().unwrap(), "a waiter of the failed flight");
+    }
+    spy.heal();
+    assert!(!r.current().is_unread());
+}
