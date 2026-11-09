@@ -1,10 +1,10 @@
 // The public website (web/apps/site, served at the root of the control plane): static HTML that
 // must read and navigate without JavaScript, be well-formed for crawlers and agents, and be
 // localised. Runs against the built web/site directory.
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { messages } from "../../../apps/site/i18n/index.ts";
-import { platformUrl, repoRoot } from "../support/env.ts";
+import { platformUrl, repoRoot, siteDir } from "../support/env.ts";
 import { expect, test, unnamedControls } from "../support/fixtures.ts";
 
 const base = () => platformUrl();
@@ -19,6 +19,97 @@ const DE_FIELD_SERVICE = (() => {
 async function pagesOf(request: import("@playwright/test").APIRequestContext, locale: string) {
   const xml = await (await request.get(`${base()}/sitemap-${locale}.xml`)).text();
   return [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => new URL(m[1]!).pathname);
+}
+
+/**
+ * The contrast ratio of what is drawn. Colours are read back through a canvas, so tokens written as
+ * oklch() or color-mix() count too. The text is mixed with its background (every translucent layer
+ * up to the first opaque one) by the opacity of the element and of every ancestor, and a filter (the
+ * primary pill's hover is brightness(1.08)) scales the colours it covers, so what is measured is what
+ * is drawn and not only what the style sheet says. With a selector: that element. Without one: every
+ * text node of <main>, with every fold opened, so a style nobody listed cannot slip through.
+ */
+async function contrast(page: import("@playwright/test").Page, selector: string | null) {
+  return page.evaluate((sel) => {
+    const c = document.createElement("canvas");
+    c.width = c.height = 1;
+    const ctx = c.getContext("2d", { willReadFrequently: true })!;
+    const rgba = (color: string) => {
+      ctx.clearRect(0, 0, 1, 1);
+      ctx.fillStyle = "#000";
+      ctx.fillStyle = color;
+      ctx.fillRect(0, 0, 1, 1);
+      return [...ctx.getImageData(0, 0, 1, 1).data];
+    };
+    const lum = (d: number[]) => {
+      const f = (v: number) => {
+        const x = Math.min(255, v) / 255;
+        return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+      };
+      return 0.2126 * f(d[0]!) + 0.7152 * f(d[1]!) + 0.0722 * f(d[2]!);
+    };
+    const brightness = (n: Element | null) => {
+      let f = 1;
+      for (; n; n = n.parentElement) {
+        const m = /brightness\(([\d.]+)\)/.exec(getComputedStyle(n).filter);
+        if (m) f *= Number(m[1]);
+      }
+      return f;
+    };
+    const ratio = (el: Element) => {
+      // The background: translucent layers over the first opaque one (or the white of the page).
+      const layers: number[][] = [];
+      let bgNode: Element | null = null;
+      for (let n: Element | null = el; n; n = n.parentElement) {
+        const d = rgba(getComputedStyle(n).backgroundColor);
+        if (d[3]! > 0) layers.push(d);
+        if (d[3] === 255) {
+          bgNode = n;
+          break;
+        }
+      }
+      let bg = [255, 255, 255];
+      for (const d of layers.reverse()) {
+        const a = d[3]! / 255;
+        bg = [0, 1, 2].map((i) => a * d[i]! + (1 - a) * bg[i]!);
+      }
+      let opacity = 1;
+      for (let n: Element | null = el; n; n = n.parentElement)
+        opacity *= parseFloat(getComputedStyle(n).opacity);
+      const fg = rgba(getComputedStyle(el).color);
+      const a = (fg[3]! / 255) * opacity;
+      const mixed = [0, 1, 2].map((i) => a * fg[i]! + (1 - a) * bg[i]!);
+      const fgScale = brightness(el);
+      const bgScale = brightness(bgNode);
+      const [l1, l2] = [lum(mixed.map((v) => v * fgScale)), lum(bg.map((v) => v * bgScale))];
+      return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+    };
+    if (sel) {
+      const el = document.querySelector(sel);
+      return el ? { texts: 1, worst: [{ at: sel, ratio: ratio(el) }] } : null;
+    }
+    document
+      .querySelectorAll("main details")
+      .forEach((d) => ((d as HTMLDetailsElement).open = true));
+    const walker = document.createTreeWalker(document.querySelector("main")!, NodeFilter.SHOW_TEXT);
+    const seen = new Map<Element, string>();
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const el = n.parentElement;
+      // Text with no letter or digit (the zero-width space of a heading's permalink) draws nothing.
+      if (!el || !/[\p{L}\p{N}]/u.test(n.textContent ?? "") || el.closest("svg, script, style"))
+        continue;
+      const r = el.getBoundingClientRect();
+      if (r.width < 2 || r.height < 2) continue; // text for screen readers only
+      if (!el.checkVisibility({ visibilityProperty: true })) continue;
+      if (!seen.has(el)) seen.set(el, (n.textContent ?? "").trim().slice(0, 24));
+    }
+    const all = [...seen].map(([el, text]) => ({
+      at: `${el.tagName.toLowerCase()}${typeof el.className === "string" && el.className ? "." + el.className.split(" ")[0] : ""} "${text}"`,
+      ratio: ratio(el),
+    }));
+    all.sort((a, b) => a.ratio - b.ratio);
+    return { texts: all.length, worst: all.slice(0, 5) };
+  }, selector);
 }
 
 test.describe("website without JavaScript", () => {
@@ -135,12 +226,14 @@ test.describe("website without JavaScript", () => {
       s.worksWith,
       a.meta.license,
     ]);
+    // What it works with is a count (the names are the "Works with" section below the strip).
     await expect(page.locator(".app-facts dd")).toHaveText([
       "Stable",
       "0.2.1",
-      "Contacts, Sales",
+      "2 apps",
       "Apache-2.0",
     ]);
+    await expect(page.locator("#works-with ~ .app-icons a")).toHaveText(["Contacts", "Sales"]);
 
     // The sections, in order; a marketplace app has a "Get" section where a built-in app has none.
     await expect(page.locator("main > .wrap > section > h2")).toHaveText([
@@ -175,6 +268,11 @@ test.describe("website without JavaScript", () => {
       s.compatValue.replace("{version}", "0.2"),
     );
     await expect(page.locator(".app-info")).not.toContainText("^0.2");
+    // A built-in app's version moves with obop itself, said so without the word "core".
+    await expect(page.locator(".app-info")).toContainText(
+      s.sameAsObop.replace("{version}", "0.2.1"),
+    );
+    await expect(page.locator(".app-info")).not.toContainText(/core/i);
     await expect(page.locator(".app-info dt", { hasText: s.source })).toBeVisible();
     await expect(
       page.locator(".app-info a", { hasText: "crates/modules/invoicing" }),
@@ -213,13 +311,23 @@ test.describe("website without JavaScript", () => {
     await primary.click();
     await expect(page).toHaveURL(/\/apps\/helpdesk\/#get$/);
     await expect(page.getByRole("heading", { level: 2, name: s.get })).toBeInViewport();
-    // The box ends the jump with something to do: one plain sentence, a quiet pill that opens obop
+    // The box ends the jump with something to do: one plain sentence, the pill that opens obop
     // (where Customize and its Marketplace are), and the command line, shown, with what it needs.
     await expect(page.locator(".app-getbox > p").first()).toHaveText(s.getLead);
     const open = page.locator(".app-getbox a.app-pill");
     await expect(open).toHaveText(s.openObop);
     await expect(open).toHaveAttribute("href", "/app/");
-    await expect(page.locator("main .app-primary")).toHaveCount(1); // the hero's is the one filled pill
+    await expect(page.locator("main .app-primary")).toHaveCount(1); // the one button of the hero
+    // The jump lands on a filled pill, not a grey one: with the hero's button off screen it is the
+    // one filled pill of that screen, and the header's "Start free" is the plain button.
+    const fill = (sel: string) =>
+      page.locator(sel).evaluate((el) => {
+        const cs = getComputedStyle(el);
+        return { background: cs.backgroundColor, color: cs.color, border: cs.borderTopStyle };
+      });
+    expect(await fill(".app-getbox a.app-pill")).toEqual(await fill(".app-hero .app-primary"));
+    await expect(page.locator(".app-hero .app-primary")).not.toBeInViewport();
+    expect(await fill(".head-cta .btn.primary")).not.toEqual(await fill(".app-getbox a.app-pill"));
     await expect(page.locator(".app-getbox .app-or")).toHaveText(s.commandLine);
     await expect(page.locator(".app-getbox pre code")).toBeVisible();
     await expect(page.locator(".app-getbox pre code")).toHaveText(
@@ -295,8 +403,12 @@ test.describe("website without JavaScript", () => {
     await expect(page).toHaveTitle(/^Kundtjänst: /);
     await page.goto(`${base()}/de/apps/field-service/`);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(DE_FIELD_SERVICE);
-    // Who it works with, the related apps and the copy say the same names.
-    await expect(page.locator(".app-facts dd").nth(2)).toContainText("Kontakte");
+    // Who it works with, the related apps and the copy say the same names; the strip counts them.
+    const works = await page.locator("#works-with ~ .app-icons a").count();
+    expect(works).toBeGreaterThan(1);
+    await expect(page.locator(".app-facts dd").nth(2)).toHaveText(
+      messages.de.apps.store.worksCount.other.replace("{n}", String(works)),
+    );
     await expect(
       page.locator("#works-with ~ .app-icons a[href='/de/apps/contacts/']"),
     ).toContainText("Kontakte");
@@ -351,8 +463,18 @@ test.describe("website without JavaScript", () => {
       expect(dd[0]).toBe(cap(maturity));
       expect(dd[1]).toBe(version);
       expect(dd[2]).toBe(
-        deps.length ? deps.map((d) => names[d] ?? cap(d)).join(", ") : s.standalone,
+        deps.length
+          ? (deps.length === 1 ? s.worksCount.one : s.worksCount.other).replace(
+              "{n}",
+              String(deps.length),
+            )
+          : s.standalone,
       );
+      // The names of those apps are the icons of "Works with", in the manifest's order.
+      if (deps.length)
+        await expect(page.locator("#works-with ~ .app-icons a")).toHaveText(
+          deps.map((d) => names[d] ?? cap(d)),
+        );
       expect(dd[3]).toBe(license);
       // What you can do: one card per action, the approval mark exactly where the manifest says,
       // and the cards beyond the sixth folded with a label that counts and names them (a fold is
@@ -360,6 +482,17 @@ test.describe("website without JavaScript", () => {
       const can = page.locator("section", { has: page.locator("h2#can-do") });
       await expect(can.locator(".app-card")).toHaveCount(actionBlocks.length);
       await expect(can.locator(".app-card-note")).toHaveCount(approvals);
+      // The sentence is said once, on the first marked card; every other mark is the icon with the
+      // same words for screen readers, so the page does not repeat "agent" down its main path.
+      // (The last span of a note holds the words; the first holds the icon.)
+      const words = can.locator(".app-card-note > span:last-child");
+      await expect(words).toHaveText(Array(approvals).fill(s.needsApproval));
+      await expect(can.locator(".app-card-note > span:last-child:not(.app-sr)")).toHaveCount(
+        approvals ? 1 : 0,
+      );
+      // The one that is drawn is the first marked card's, whichever fold it sits in.
+      if (approvals)
+        expect((await words.first().getAttribute("class")) ?? "").not.toContain("app-sr");
       const folded = (n: number) => (n > 7 ? n - 6 : 0);
       const foldedActions = folded(actionBlocks.length);
       if (foldedActions)
@@ -451,8 +584,10 @@ test.describe("website without JavaScript", () => {
     for (const sel of [".app-card-text", ".app-card h3", ".app-facts dd", ".app-hero h1"])
       expect(await hyphens(sel), sel).toBe("manual");
     await page.goto(`${base()}/de/apps/ecommerce/`);
-    for (const sel of [".app-card-text", ".app-card h3", ".app-facts dd", ".app-hero h1"])
+    for (const sel of [".app-card-text", ".app-card h3", ".app-hero h1", ".app-icons a span"])
       expect(await hyphens(sel), `de ${sel}`).toBe("auto");
+    // A short value in the strip ("3 Apps", "Apache-2.0") is never split, in any language.
+    expect(await hyphens(".app-facts dd"), "de .app-facts dd").toBe("manual");
     await expect(page.locator(".app-purpose")).toHaveAttribute("lang", "en");
     expect(await hyphens(".app-purpose")).toBe("manual");
   });
@@ -740,6 +875,20 @@ test.describe("website behaviour with JavaScript", () => {
   }) => {
     const html = await (await request.get(`${base()}/apps/helpdesk/`)).text();
     expect(html).toMatch(/<button class="copy" type="button" aria-label="Copy">/);
+    // On every apps page, in every language, each copy button is named in the markup itself (the
+    // script that shows it must not be what gives it a name): the install box says "Copy" in the
+    // page language, the code blocks of the technical part carry a title.
+    for (const locale of Object.keys(messages) as (keyof typeof messages)[])
+      for (const url of (await pagesOf(request, locale)).filter((u) => /\/apps\/.+\/$/.test(u))) {
+        const page_ = await (await request.get(`${base()}${url}`)).text();
+        for (const tag of page_.match(/<button[^>]*\bclass="copy"[^>]*>/g) ?? [])
+          expect(tag, `${locale} ${url}`).toMatch(/aria-label="[^"]+"|title="[^"]+"/);
+        const box = page_.includes('class="app-getbox"');
+        if (box)
+          expect(page_, `${locale} ${url}`).toContain(
+            `<button class="copy" type="button" aria-label="${messages[locale].ui.copy}">`,
+          );
+      }
     // A script that is served but wires nothing (an aborted request would also log a console error).
     await page.route("**/site/site.js", (route) =>
       route.fulfill({ contentType: "text/javascript", body: "" }),
@@ -1025,18 +1174,46 @@ test.describe("accessibility", () => {
             if (sc.getAttribute("src") !== "/site/site.js")
               out.push(`script ${sc.getAttribute("src")}`);
           if (document.querySelector("script[type=module]")) out.push("module script");
+          // The English that a translated page carries is marked as English, on every page: the
+          // purpose (the lead and the rest), the package text and the descriptions in the field tables.
+          if (htmlLang !== "en" && document.querySelector(".app-page")) {
+            if (document.querySelector(".app-purpose")?.getAttribute("lang") !== "en")
+              out.push("the purpose is not marked lang=en");
+            for (const rest of document.querySelectorAll(".app-purpose-rest"))
+              if (rest.getAttribute("lang") !== "en")
+                out.push("the rest of the purpose is not marked lang=en");
+            const notes = document.querySelectorAll("#developers .en-note");
+            if (notes.length === 0) out.push("no English note in the technical part");
+            for (const n of notes)
+              if (n.getAttribute("lang") !== "en")
+                out.push("an English note is not marked lang=en");
+            for (const t of document.querySelectorAll("#developers table")) {
+              if (t.querySelectorAll("thead th").length !== 7) continue; // the field tables
+              for (const td of t.querySelectorAll("tbody tr td:last-child"))
+                if (td.querySelector(':scope > span[lang="en"]')?.textContent !== td.textContent)
+                  out.push(
+                    `a field description is not marked lang=en: ${td.textContent?.slice(0, 30)}`,
+                  );
+            }
+          }
           return out;
         }, messages[locale].htmlLang);
         expect(problems, `${locale} ${url}`).toEqual([]);
+        // Every control has a name, on every apps page (strict: text under aria-hidden is no name).
+        expect(
+          await unnamedControls(page, { strict: true }),
+          `${locale} ${url} unnamed controls`,
+        ).toEqual([]);
         checked++;
       }
     }
     expect(checked).toBe(7 * 29);
   });
 
-  test("the apps pages show a focus ring on every stop of a Tab walk, and the ring stays on screen", async ({
+  test("the apps pages show a focus ring on every stop of a Tab walk, forward and back, and the focused control is never under the header", async ({
     page,
   }) => {
+    test.setTimeout(240_000);
     for (const width of [1440, 375]) {
       await page.setViewportSize({ width, height: 900 });
       for (const [path, atLeast] of [
@@ -1044,35 +1221,59 @@ test.describe("accessibility", () => {
         ["/apps/helpdesk/", 8],
         ["/apps/accounting/", 11],
       ] as const) {
-        await page.goto(`${base()}${path}`);
-        let stops = 0;
-        for (let i = 0; i < 100; i++) {
-          await page.keyboard.press("Tab");
-          const stop = await page.evaluate(() => {
-            const el = document.activeElement as HTMLElement | null;
-            if (!el || !el.closest("main")) return null;
-            const cs = getComputedStyle(el);
-            const r = el.getBoundingClientRect();
-            // The ring is drawn outside the box by its offset and its width.
-            const reach = parseFloat(cs.outlineOffset) + parseFloat(cs.outlineWidth);
-            return {
-              what: `${el.tagName} ${(el.textContent ?? "").trim().slice(0, 30)}`,
-              style: cs.outlineStyle,
-              width: parseFloat(cs.outlineWidth),
-              left: r.left - reach,
-              right: r.right + reach,
-              screen: document.documentElement.clientWidth,
-            };
-          });
-          if (!stop) continue;
-          stops++;
-          const where = `${path} at ${width}px: ${stop.what}`;
-          expect(stop.style, where).not.toBe("none");
-          expect(stop.width, where).toBeGreaterThanOrEqual(2);
-          expect(stop.left, `${where} ring starts on screen`).toBeGreaterThanOrEqual(0);
-          expect(stop.right, `${where} ring ends on screen`).toBeLessThanOrEqual(stop.screen);
+        for (const key of ["Tab", "Shift+Tab"] as const) {
+          await page.goto(`${base()}${path}`);
+          let stops = 0;
+          for (let i = 0; i < 80; i++) {
+            await page.keyboard.press(key);
+            // The browser scrolls the focused control into view, smoothly where the page asks for it:
+            // measure where it comes to rest, not where it passes.
+            await page.evaluate(
+              () =>
+                new Promise<void>((done) => {
+                  let last = -1;
+                  let still = 0;
+                  const tick = () => {
+                    still = window.scrollY === last ? still + 1 : 0;
+                    last = window.scrollY;
+                    if (still >= 3) done();
+                    else requestAnimationFrame(tick);
+                  };
+                  tick();
+                }),
+            );
+            const stop = await page.evaluate(() => {
+              const el = document.activeElement as HTMLElement | null;
+              if (!el || !el.closest("main")) return null;
+              const cs = getComputedStyle(el);
+              const r = el.getBoundingClientRect();
+              // The ring is drawn outside the box by its offset and its width.
+              const reach = parseFloat(cs.outlineOffset) + parseFloat(cs.outlineWidth);
+              return {
+                what: `${el.tagName} ${(el.textContent ?? "").trim().slice(0, 30)}`,
+                style: cs.outlineStyle,
+                width: parseFloat(cs.outlineWidth),
+                left: r.left - reach,
+                right: r.right + reach,
+                top: r.top,
+                header: document.querySelector(".site-header")!.getBoundingClientRect().bottom,
+                screen: document.documentElement.clientWidth,
+              };
+            });
+            if (!stop) continue;
+            stops++;
+            const where = `${path} at ${width}px (${key}): ${stop.what}`;
+            expect(stop.style, where).not.toBe("none");
+            expect(stop.width, where).toBeGreaterThanOrEqual(2);
+            expect(stop.left, `${where} ring starts on screen`).toBeGreaterThanOrEqual(0);
+            expect(stop.right, `${where} ring ends on screen`).toBeLessThanOrEqual(stop.screen);
+            // Going back scrolls a control in from above: the sticky header must not cover it.
+            expect(stop.top, `${where} is under the header`).toBeGreaterThanOrEqual(
+              stop.header - 0.5,
+            );
+          }
+          expect(stops, `${path} stops in main (${key})`).toBeGreaterThanOrEqual(atLeast);
         }
-        expect(stops, `${path} stops in main`).toBeGreaterThanOrEqual(atLeast);
       }
     }
   });
@@ -1182,22 +1383,32 @@ test.describe("accessibility", () => {
     page,
     browser,
   }) => {
-    // 390 and 375 (and 360) are the phones that matter: the 96 px icon and a name of about 32 px.
+    // 390 and 375 (and 360) are the phones that matter: the 96 px icon with the name under it, at
+    // 2.25rem (36 px; a little less where the screen is narrower than 375 px).
     for (const width of [390, 375, 360]) {
       await page.setViewportSize({ width, height: 812 });
       await page.goto(`${base()}/apps/invoicing/`);
       const hero = await page.evaluate(() => {
         const icon = document.querySelector(".app-hero .app-icon")!.getBoundingClientRect();
+        const text = document.querySelector(".app-hero-text")!.getBoundingClientRect();
+        const pill = document.querySelector(".app-primary")!.getBoundingClientRect();
         return {
           icon: [icon.width, icon.height],
           h1: parseFloat(getComputedStyle(document.querySelector(".app-hero h1")!).fontSize),
           radius: getComputedStyle(document.querySelector(".app-hero .app-icon")!)
             .borderTopLeftRadius,
+          // The name has the whole column: the icon is above it, not beside it.
+          textBelowIcon: text.top >= icon.bottom - 0.5,
+          textWidth: text.width,
+          pillOnFirstScreen: pill.bottom <= window.innerHeight,
         };
       });
       expect(hero.icon, `icon at ${width}px`).toEqual([96, 96]);
-      expect(hero.h1, `name at ${width}px`).toBeGreaterThanOrEqual(30);
+      expect(hero.h1, `name at ${width}px`).toBeGreaterThanOrEqual(width >= 375 ? 36 : 34);
       expect(hero.radius).toBe("22.37%"); // the squircle
+      expect(hero.textBelowIcon, `the name is under the icon at ${width}px`).toBe(true);
+      expect(hero.textWidth, `the name has the column at ${width}px`).toBeGreaterThan(width - 40);
+      expect(hero.pillOnFirstScreen, `the button is on the first screen at ${width}px`).toBe(true);
     }
     await page.setViewportSize({ width: 320, height: 700 });
     await page.goto(`${base()}/apps/invoicing/`);
@@ -1210,6 +1421,7 @@ test.describe("accessibility", () => {
       [390, 28],
       [360, 28],
       [414, 32],
+      [320, 32],
     ] as const) {
       const context = await browser.newContext({ viewport: { width, height: 844 } });
       const p = await context.newPage();
@@ -1219,6 +1431,19 @@ test.describe("accessibility", () => {
       const paths = [
         "/apps/accounting/",
         "/apps/helpdesk/",
+        // The narrowest screen at 200 percent: the folds ("Technische Details anzeigen") and the icon
+        // labels of the languages with the longest words must wrap inside their pills, not leave the screen.
+        ...(font === 32 && width === 320
+          ? [
+              "/de/apps/accounting/",
+              "/fr/apps/accounting/",
+              "/pl/apps/accounting/",
+              "/fi/apps/email-marketing/",
+              "/fi/apps/website/",
+              "/pl/apps/projects/",
+              "/pl/apps/hr/",
+            ]
+          : []),
         ...(font === 32 && width === 390
           ? (Object.keys(messages) as (keyof typeof messages)[]).flatMap((l) =>
               ["field-service", "manufacturing", "hr"].map(
@@ -1233,164 +1458,141 @@ test.describe("accessibility", () => {
           // The page's own content (the shared header has its own limits at such sizes).
           const root = document.querySelector(".app-page") as HTMLElement;
           const screen = document.documentElement.clientWidth;
-          const pill = document.querySelector(".app-primary")!.getBoundingClientRect();
-          const h1 = document.querySelector(".app-hero h1")!;
+          // A missing button or name is a failed test with a message, not a script error.
+          const pillEl = document.querySelector(".app-primary");
+          const h1 = document.querySelector(".app-hero h1");
+          if (!pillEl || !h1) return null;
+          const pill = pillEl.getBoundingClientRect();
           const range = document.createRange();
           range.selectNodeContents(h1);
           const lines = new Set([...range.getClientRects()].map((r) => Math.round(r.top))).size;
           return {
             page: root.scrollWidth - root.clientWidth,
             pillEnd: Math.round(pill.right) - screen,
+            // Every fold and button of the page: "Show technical details" wraps inside its pill.
+            folds: [...document.querySelectorAll("main summary, main .app-pill")]
+              .filter((e) => e.getBoundingClientRect().right > screen + 0.5)
+              .map((e) => (e.textContent ?? "").trim().slice(0, 30)),
             pageEnd: root.scrollWidth - screen,
             words: (h1.textContent ?? "").trim().split(/\s+/).length,
             lines,
           };
         });
         const where = `${path} at ${width}px with ${font}px text`;
+        if (!over) throw new Error(`${where}: no hero name (h1) or no primary button`);
         expect(over.page, `${where}: the page's content scrolls sideways`).toBeLessThanOrEqual(0);
         expect(over.pageEnd, `${where}: the content runs past the screen`).toBeLessThanOrEqual(0);
         expect(over.pillEnd, `${where}: the button leaves the screen`).toBeLessThanOrEqual(0);
-        if (path === "/apps/accounting/")
+        expect(over.folds, `${where}: a fold or pill leaves the screen`).toEqual([]);
+        if (path === "/apps/accounting/" && width > 320)
           expect(over.lines, `${where}: the name breaks inside the word`).toBe(over.words);
       }
       await context.close();
     }
   });
 
-  test("the apps pages keep their text at 4.5:1 or better, in both colour schemes and when hovered", async ({
+  test("every text on the apps pages keeps 4.5:1 or better, in both colour schemes and when hovered", async ({
     page,
   }) => {
-    // Colours are read back through a canvas, so tokens written as oklch() or color-mix() count too.
-    // The text is mixed with its background by the opacity of the element and of every ancestor, and
-    // a filter (the primary pill's hover is brightness(1.08)) scales the colours it covers, so what is
-    // measured is what is drawn and not only what the style sheet says.
-    const measure = (selector: string) =>
-      page.evaluate((sel) => {
-        const el = document.querySelector(sel) as HTMLElement | null;
-        if (!el) return null;
-        const c = document.createElement("canvas");
-        c.width = c.height = 1;
-        const ctx = c.getContext("2d", { willReadFrequently: true })!;
-        const rgba = (color: string) => {
-          ctx.clearRect(0, 0, 1, 1);
-          ctx.fillStyle = "#000";
-          ctx.fillStyle = color;
-          ctx.fillRect(0, 0, 1, 1);
-          return [...ctx.getImageData(0, 0, 1, 1).data];
-        };
-        const lum = (d: number[]) => {
-          const f = (v: number) => {
-            const x = Math.min(255, v) / 255;
-            return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
-          };
-          return 0.2126 * f(d[0]!) + 0.7152 * f(d[1]!) + 0.0722 * f(d[2]!);
-        };
-        const brightness = (n: HTMLElement | null) => {
-          let f = 1;
-          for (; n; n = n.parentElement) {
-            const m = /brightness\(([\d.]+)\)/.exec(getComputedStyle(n).filter);
-            if (m) f *= Number(m[1]);
-          }
-          return f;
-        };
-        let bg = rgba("#ffffff");
-        let bgNode: HTMLElement | null = null;
-        for (let n: HTMLElement | null = el; n; n = n.parentElement) {
-          const d = rgba(getComputedStyle(n).backgroundColor);
-          if (d[3] === 255) {
-            bg = d;
-            bgNode = n;
-            break;
-          }
-        }
-        let opacity = 1;
-        for (let n: HTMLElement | null = el; n; n = n.parentElement)
-          opacity *= parseFloat(getComputedStyle(n).opacity);
-        const fg = rgba(getComputedStyle(el).color);
-        const a = (fg[3]! / 255) * opacity;
-        const mixed = [0, 1, 2].map((i) => a * fg[i]! + (1 - a) * bg[i]!);
-        const fgScale = brightness(el);
-        const bgScale = brightness(bgNode);
-        const [l1, l2] = [
-          lum(mixed.map((v) => v * fgScale)),
-          lum(bg.slice(0, 3).map((v) => v * bgScale)),
-        ];
-        return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
-      }, selector);
-    const pages: [string, string[]][] = [
-      [
-        "/apps/helpdesk/",
-        [
-          ".app-primary",
-          ".app-back a",
-          ".app-tagline",
-          ".app-facts dt",
-          ".app-facts dd",
-          ".app-purpose",
-          ".app-purpose-rest",
-          ".app-card-kicker",
-          ".app-card-text",
-          ".app-card-note",
-          ".app-info dt",
-          ".app-dev > summary",
-          ".app-getbox .fine",
-          ".app-getbox .app-or",
-          ".app-getbox .app-pill",
-          ".app-category",
-        ],
-      ],
-      ["/apps/accounting/", [".app-more > summary"]],
-      ["/apps/connectors/", [".app-read > summary"]],
-      ["/apps/", [".store-tag", ".store-name", ".store-lead", ".store-group h3"]],
-      ["/de/apps/helpdesk/", [".app-note"]],
+    const pages = [
+      "/apps/",
+      "/apps/helpdesk/",
+      "/apps/accounting/",
+      "/apps/connectors/",
+      "/de/apps/helpdesk/",
+      "/fi/apps/",
     ];
+    // The controls whose colours change on hover: the folds, the two pills and the "Read more" fold.
+    const hover = [
+      ".app-more > summary",
+      ".app-dev > summary",
+      ".app-read > summary",
+      ".app-primary",
+      ".app-getbox .app-pill",
+    ];
+    let walked = 0;
     for (const scheme of ["light", "dark"] as const) {
       await page.emulateMedia({ colorScheme: scheme });
-      for (const [path, selectors] of pages) {
+      for (const path of pages) {
         await page.goto(`${base()}${path}`);
-        for (const sel of selectors) {
-          const rest = await measure(sel);
-          expect(rest, `${scheme} ${path} ${sel} is on the page`).not.toBeNull();
-          expect(rest!, `${scheme} ${path} ${sel}`).toBeGreaterThanOrEqual(4.5);
-          // Hovered: the folds, the two pills and the rows change their colours or filter.
-          if (
-            [
-              ".app-more > summary",
-              ".app-dev > summary",
-              ".app-primary",
-              ".app-getbox .app-pill",
-            ].includes(sel)
-          ) {
-            await page.locator(sel).first().hover();
-            await page.waitForTimeout(250);
-            const hovered = await measure(sel);
-            expect(hovered!, `${scheme} ${path} ${sel} hovered`).toBeGreaterThanOrEqual(4.5);
-            await page.mouse.move(0, 0);
-          }
+        const all = (await contrast(page, null))!;
+        walked += all.texts;
+        // The page has real text to measure, so a walk that finds nothing cannot pass.
+        expect(all.texts, `${scheme} ${path} text nodes`).toBeGreaterThan(20);
+        expect(
+          all.worst[0]!.ratio,
+          `${scheme} ${path} lowest: ${JSON.stringify(all.worst)}`,
+        ).toBeGreaterThanOrEqual(4.5);
+        await page.reload();
+        for (const sel of hover) {
+          if (!(await page.locator(sel).count())) continue;
+          const rest = (await contrast(page, sel))!;
+          expect(rest.worst[0]!.ratio, `${scheme} ${path} ${sel}`).toBeGreaterThanOrEqual(4.5);
+          await page.locator(sel).first().hover();
+          await page.waitForTimeout(250);
+          const hovered = (await contrast(page, sel))!;
+          expect(
+            hovered.worst[0]!.ratio,
+            `${scheme} ${path} ${sel} hovered`,
+          ).toBeGreaterThanOrEqual(4.5);
+          await page.mouse.move(0, 0);
         }
       }
     }
+    expect(walked).toBeGreaterThan(2000);
+  });
+
+  test("the contrast walk finds a pale text that no list of selectors names", async ({ page }) => {
+    await page.goto(`${base()}/apps/helpdesk/`);
+    const before = (await contrast(page, null))!;
+    expect(before.worst[0]!.ratio).toBeGreaterThanOrEqual(4.5);
+    await page.reload();
+    // About 1.6:1 on white: the style of "Safe with AI agents" made pale.
+    await page.addStyleTag({ content: ".app-safe li { color: #c4c7cf !important; }" });
+    const after = (await contrast(page, null))!;
+    expect(after.worst[0]!.ratio).toBeLessThan(2);
+    expect(after.worst[0]!.at).toContain("li");
   });
 
   test("the pill buttons keep an edge in forced colours, and a printed page keeps the technical part", async ({
     page,
   }) => {
     await page.emulateMedia({ forcedColors: "active" });
-    await page.goto(`${base()}/apps/accounting/`);
-    for (const sel of [".app-primary", ".app-more > summary", ".app-dev > summary"]) {
-      const border = await page
-        .locator(sel)
-        .first()
-        .evaluate((el) => {
-          const cs = getComputedStyle(el);
-          return { style: cs.borderTopStyle, width: parseFloat(cs.borderTopWidth) };
-        });
-      expect(border, sel).toEqual({ style: "solid", width: 1 });
+    // Every pill the apps pages draw: the hero's button, the Get box's button, the folds.
+    for (const [path, selectors] of [
+      [
+        "/apps/accounting/",
+        [".app-primary", ".app-getbox .app-pill", ".app-more > summary", ".app-dev > summary"],
+      ],
+      ["/apps/connectors/", [".app-read > summary", ".app-primary"]],
+    ] as const) {
+      await page.goto(`${base()}${path}`);
+      for (const sel of selectors) {
+        const border = await page
+          .locator(sel)
+          .first()
+          .evaluate((el) => {
+            const cs = getComputedStyle(el);
+            return { style: cs.borderTopStyle, width: parseFloat(cs.borderTopWidth) };
+          });
+        expect(border, `${path} ${sel}`).toEqual({ style: "solid", width: 1 });
+      }
     }
+    // Printed (at the width of an A4 page): the folds print open, the tables fit the paper, and
+    // neither the hero's button nor the copy buttons are printed.
+    await page.setViewportSize({ width: 794, height: 1123 });
+    await page.goto(`${base()}/apps/accounting/`);
     await page.emulateMedia({ forcedColors: "none", media: "print" });
     await expect(page.locator(".app-primary")).toBeHidden();
+    await expect(page.locator("button.copy").first()).toBeHidden();
     await expect(page.locator("details#developers")).toHaveJSProperty("open", false);
     await expect(page.getByRole("heading", { level: 3, name: "Models" })).toBeVisible();
+    const cut = await page.evaluate(() =>
+      [...document.querySelectorAll("#developers table")]
+        .filter((t) => t.scrollWidth > t.clientWidth + 1)
+        .map((t) => `${t.scrollWidth}>${t.clientWidth}`),
+    );
+    expect(cut, "tables cut at the edge of the paper").toEqual([]);
   });
 
   test("the apps index does not overflow at a large text size on a narrow screen", async ({
@@ -1436,6 +1638,163 @@ test.describe("accessibility", () => {
         expect(overflow, `${path} at ${w}px`).toBeLessThanOrEqual(0);
       }
     }
+  });
+
+  test("no name, label or value is cut in the middle of a word on a phone, in any language", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(300_000);
+    let checked = 0;
+    for (const locale of Object.keys(messages)) {
+      const urls = (await pagesOf(request, locale)).filter((u) => /\/apps\/.+\/$/.test(u));
+      expect(urls.length, `${locale} app pages`).toBe(28);
+      for (const url of urls) {
+        await page.goto(`${base()}${url}`, { waitUntil: "domcontentloaded" });
+        // The safety nets (break-word, hyphens) are switched off: a word that does not fit its box
+        // then shows as overflow, instead of being broken in the middle by the browser.
+        await page.addStyleTag({
+          content:
+            "* { overflow-wrap: normal !important; hyphens: manual !important; word-break: normal !important; }",
+        });
+        for (const width of [320, 375, 768]) {
+          await page.setViewportSize({ width, height: 800 });
+          const cut = await page.evaluate(() =>
+            [
+              ...document.querySelectorAll(
+                ".app-hero h1, .app-icons a, .app-info dt, .app-facts dt, .app-facts dd",
+              ),
+            ]
+              .filter((e) => e.scrollWidth > e.clientWidth + 1)
+              .map((e) => `${e.tagName} "${(e.textContent ?? "").trim().slice(0, 30)}"`),
+          );
+          expect(cut, `${url} at ${width}px`).toEqual([]);
+        }
+        checked++;
+      }
+    }
+    expect(checked).toBe(7 * 28);
+  });
+
+  test("the Markdown copy of every app page says what the page says, in every language", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(300_000);
+    let checked = 0;
+    for (const locale of Object.keys(messages) as (keyof typeof messages)[]) {
+      const needsApproval = messages[locale].apps.store.needsApproval;
+      const urls = (await pagesOf(request, locale)).filter((u) => /\/apps\/.+\/$/.test(u));
+      for (const url of urls) {
+        await page.goto(`${base()}${url}`, { waitUntil: "domcontentloaded" });
+        const view = await page.evaluate(() => {
+          const t = (e: Element | null) => (e?.textContent ?? "").replace(/\s+/g, " ").trim();
+          const cards = (heading: string) =>
+            [
+              ...document.querySelectorAll(
+                `${heading} ~ ul.app-cards > li.app-card, ${heading} ~ .app-more li.app-card`,
+              ),
+            ].map((c) => ({
+              kicker: t(c.querySelector(".app-card-kicker")),
+              title: t(c.querySelector(".app-card-title")),
+              text: t(c.querySelector(".app-card-text")),
+              approval: !!c.querySelector(".app-card-note"),
+            }));
+          const icons = (section: Element | undefined) =>
+            [...(section?.querySelectorAll(".app-icons a") ?? [])].map((a) => ({
+              name: t(a),
+              href: a.getAttribute("href"),
+            }));
+          const sections = [...document.querySelectorAll(".app-page > section")];
+          return {
+            facts: [...document.querySelectorAll(".app-facts > div")].map((d) => ({
+              label: t(d.querySelector("dt")),
+              value: t(d.querySelector("dd")),
+            })),
+            actions: cards("#can-do"),
+            models: cards("#keeps"),
+            safe: [...document.querySelectorAll(".app-safe li")].map((li) => t(li)),
+            works: icons(sections.find((s) => s.querySelector("#works-with"))),
+            related: icons(
+              sections.find(
+                (s) => s.querySelector(".app-icons") && !s.querySelector("#works-with"),
+              ),
+            ),
+            info: [...document.querySelectorAll(".app-info > div")].map((d) => ({
+              label: t(d.querySelector("dt")),
+              value: t(d.querySelector("dd")),
+            })),
+          };
+        });
+        // A no-break space (French puts one before a semicolon) reads as a space on the page.
+        const md = (
+          await (await request.get(`${base()}${url.replace(/\/$/, "")}.md`)).text()
+        ).replace(/[  ]/g, " ");
+        const lines = md.split("\n");
+        const where = `${locale} ${url}`;
+        // The strip is the first list of the copy, line for line (the Information list repeats some of
+        // its labels and values further down, so a line that is merely contained would not do).
+        const first = lines.findIndex((l) => l.startsWith("- **"));
+        const strip: string[] = [];
+        for (let i = first; first >= 0 && lines[i]?.startsWith("- **"); i++) strip.push(lines[i]!);
+        expect(strip, `${where} facts`).toEqual(
+          view.facts.map((f) => `- **${f.label}:** ${f.value}`),
+        );
+        for (const c of view.actions)
+          expect(
+            lines.some(
+              (l) =>
+                l.startsWith(`- **${c.kicker}: `) &&
+                l.toLowerCase().includes(c.title.toLowerCase()) &&
+                l.endsWith(`: ${c.text}`) &&
+                l.includes(needsApproval) === c.approval,
+            ),
+            `${where} action ${c.kicker} ${c.title}`,
+          ).toBe(true);
+        for (const c of view.models)
+          expect(lines, `${where} keeps`).toContain(`- **${c.title}**: ${c.text}`);
+        for (const line of view.safe) expect(lines, `${where} safe`).toContain(`- ${line}`);
+        for (const a of [...view.works, ...view.related])
+          expect(md, `${where} link`).toContain(`[${a.name}](${a.href})`);
+        // The lists are as long as the page's, not only contained in it.
+        const section = (heading: string) => {
+          const at = lines.indexOf(heading);
+          if (at < 0) return [];
+          const list: string[] = [];
+          for (let i = at + 2; i < lines.length && lines[i]!.startsWith("- "); i++)
+            list.push(lines[i]!);
+          return list;
+        };
+        const listed = (heading: string) => section(heading).length;
+        expect(listed(`## ${messages[locale].apps.store.worksWith}`), `${where} works with`).toBe(
+          view.works.length,
+        );
+        expect(listed(`## ${messages[locale].apps.h.related}`), `${where} related`).toBe(
+          view.related.length,
+        );
+        expect(listed(`## ${messages[locale].apps.store.info}`), `${where} information`).toBe(
+          view.info.length,
+        );
+        for (const r of view.info) {
+          // The row of the Information section (the strip above repeats some labels).
+          const line = section(`## ${messages[locale].apps.store.info}`).find((l) =>
+            l.startsWith(`- **${r.label}:**`),
+          );
+          expect(line, `${where} information ${r.label}`).toBeDefined();
+          expect(line, `${where} information ${r.label}`).toContain(r.value);
+        }
+        checked++;
+      }
+    }
+    expect(checked).toBe(7 * 28);
+  });
+
+  test("no VitePress runtime is left in the files that are deployed", async () => {
+    // transformHtml takes the framework script out of every page; postbuild takes the files out of
+    // the output, so nothing dead is served (the pages load /site/site.js and nothing from here).
+    const assets = join(siteDir, "assets");
+    expect(readdirSync(assets).filter((f) => f.endsWith(".js"))).toEqual([]);
+    expect(existsSync(join(assets, "chunks"))).toBe(false);
   });
 
   test("pages are usable with the keyboard: skip link first, then the header", async ({ page }) => {

@@ -64,6 +64,13 @@ export async function postbuild(records: PageRecord[]): Promise<void> {
   rmSync(join(DIST, "hashmap.json"), { force: true });
   const assets = join(DIST, "assets");
   for (const f of readdirSync(assets)) if (f.endsWith(".js")) rmSync(join(assets, f));
+  // The runtime chunks VitePress puts beside them (framework, theme, metadata) are requested by no
+  // page either: they would only be dead weight on the server.
+  const chunks = join(assets, "chunks");
+  if (existsSync(chunks)) {
+    for (const f of readdirSync(chunks)) if (f.endsWith(".js")) rmSync(join(chunks, f));
+    if (readdirSync(chunks).length === 0) rmSync(chunks, { recursive: true });
+  }
   for (const r of records) {
     const file = join(DIST, r.url === "/" ? "index.html" : `${r.url.slice(1)}index.html`);
     let html = readFileSync(file, "utf8");
