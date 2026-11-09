@@ -39,6 +39,29 @@ fn clear(app: &App) {
     .unwrap_or_else(|e| panic!("the brand was not cleared: {e}"));
 }
 
+/// Every header of an answer but those named, as (name, value) pairs in name order.
+fn headers_but(r: &Resp, skip: &[&str]) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = r
+        .headers
+        .iter()
+        .filter(|(k, _)| !skip.contains(&k.as_str()))
+        .map(|(k, v)| {
+            (
+                k.to_string(),
+                String::from_utf8_lossy(v.as_bytes()).into_owned(),
+            )
+        })
+        .collect();
+    out.sort();
+    out
+}
+
+/// Every header of a page but the two that a brand moves: the policy (it gains the image source) and
+/// the length of the body (the tests compare the body whole).
+fn other_headers(r: &Resp) -> Vec<(String, String)> {
+    headers_but(r, &["content-security-policy", "content-length"])
+}
+
 /// A page of the door with a brand set: the line of the language and the tab icon, a policy that
 /// ends with the image source and is the policy it was otherwise, one brand line and one icon, and
 /// nothing that names the product, in the text or in the markup.
@@ -171,17 +194,17 @@ async fn with_a_brand_row_the_signer_page_shows_it_and_clear_restores_the_page()
             format!("{}; img-src 'self'", before.h("content-security-policy")),
             "{name}"
         );
-        // The other headers are the ones it had.
-        for h in [
-            "cache-control",
-            "x-frame-options",
-            "x-content-type-options",
-            "referrer-policy",
-            "x-robots-tag",
-            "content-type",
-        ] {
-            assert_eq!(after.h(h), before.h(h), "{name}: {h}");
-        }
+        // Every other header is the one it had, by name and value, and none was added: a brand
+        // moves the policy and nothing else, and the page is still no cookie.
+        assert_eq!(
+            other_headers(after),
+            other_headers(before),
+            "{name}: more than the policy moved"
+        );
+        assert!(
+            after.headers.get("set-cookie").is_none() && before.headers.get("set-cookie").is_none(),
+            "{name}: the page sets a cookie"
+        );
     }
     // The title of the language, the English title, and the name (FIELDS has three titles).
     let page = |name: &str| now.iter().find(|(n, _)| n == name).unwrap().1.text();
@@ -635,6 +658,9 @@ fn assert_d74(r: &Resp, what: &str) {
 /// signs, and the page after it shows the brand. The expiring counters are the exception, as for
 /// the OAuth sign-in (the guard of the store does not cover them): the refused post spent one hit
 /// of the link's hourly window of posts, which is pinned below by how many more the link takes.
+/// This post is one the door would accept, so it could never be refused with a line in the log
+/// either way; the requests that the door does log a refusal for are held by
+/// `a_request_the_door_would_log_a_refusal_for_logs_none_when_its_first_brand_read_fails`.
 #[tokio::test]
 async fn a_post_whose_first_brand_read_fails_signs_nothing_logs_nothing_and_is_a_503() {
     let (flaky, f, path) = flaky_sent().await;
@@ -768,4 +794,236 @@ async fn the_form_and_the_post_after_it_show_the_same_brand() {
         h[a..a + h[a..].find("</p>").unwrap()].to_string()
     };
     assert_eq!(line(&first), line(&again));
+}
+
+/// What a brand moves in the answers that are not a page of refusal or a form: the post that signs,
+/// the PDF and the page after signing. The 303 goes to the address it always went to (the path of the
+/// link and the language, no name in it), the PDF has the bytes and every header it had (its own
+/// policy included), the other two have every header but the policy, and none of the three sets a
+/// cookie.
+#[tokio::test]
+async fn the_post_the_pdf_and_the_page_after_signing_are_what_they_were_but_for_the_policy() {
+    let mut seen = Vec::new();
+    for branded in [false, true] {
+        let (f, _, path, _) = sent().await;
+        if branded {
+            set_brand(&f.app);
+        }
+        let pdf_answer = f.get(&format!("{path}/document.pdf"), &ip(170)).await;
+        assert_eq!(pdf_answer.status, 200, "branded {branded}");
+        assert_eq!(pdf_answer.body, pdf(1));
+        let post = f.post(&path, &ip(171), &form(&f, "Jane Test", "en")).await;
+        assert_eq!(post.status, 303, "branded {branded}: {}", post.text());
+        assert_eq!(
+            post.h("location"),
+            format!("{path}?lang=en"),
+            "branded {branded}: where the post sends the browser"
+        );
+        let done = f.get(&format!("{path}?lang=en"), &ip(172)).await;
+        assert_eq!(done.status, 200, "branded {branded}");
+        assert_eq!(
+            done.h("content-security-policy")
+                .ends_with("; img-src 'self'"),
+            branded,
+            "branded {branded}: the policy of the page after signing"
+        );
+        for (what, r) in [("pdf", &pdf_answer), ("post", &post), ("done", &done)] {
+            assert!(
+                r.headers.get("set-cookie").is_none(),
+                "branded {branded}/{what}: a cookie"
+            );
+        }
+        // The link holds a secret that differs from one fixture to the next: name it, compare the rest.
+        let norm = |r: &Resp, skip: &[&str]| {
+            headers_but(r, skip)
+                .into_iter()
+                .map(|(k, v)| (k, v.replace(&path, "<link>")))
+                .collect::<Vec<_>>()
+        };
+        seen.push((
+            norm(&pdf_answer, &[]),
+            pdf_answer.body.clone(),
+            norm(&post, &[]),
+            post.body.clone(),
+            norm(&done, &["content-security-policy", "content-length"]),
+        ));
+    }
+    assert!(
+        seen[0] == seen[1],
+        "a brand moved a header, an address or the bytes of the PDF:\n{:?}\n{:?}",
+        seen[0],
+        seen[1]
+    );
+}
+
+/// A row written around the command with an artwork that the strict reader refuses (a script, a link,
+/// an event handler, a file over 16 KiB, a byte order mark) is in no page of the door: the page shows
+/// the generated tile in its place, with the tab icon link and the policy of a page with a brand, and
+/// not a byte of the stored text.
+#[tokio::test]
+async fn an_artwork_the_reader_refuses_is_the_tile_on_the_pages_of_the_door() {
+    let head = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\"";
+    let rect = "<rect width=\"64\" height=\"64\"/>";
+    let big = format!("{head}>{rect}<!-- {} --></svg>", "PLANTED ".repeat(2200));
+    assert!(big.len() > 16 * 1024);
+    let good = crate::brand_row_tests::FIELDS
+        .iter()
+        .find(|(k, _)| *k == "logo_svg")
+        .unwrap()
+        .1;
+    let cases = [
+        ("a script", format!("{head}><script>PLANTED</script></svg>")),
+        (
+            "a link",
+            format!("{head}><a href=\"javascript:PLANTED\">{rect}</a></svg>"),
+        ),
+        (
+            "an event handler",
+            format!("{head} onload=\"PLANTED\">{rect}</svg>"),
+        ),
+        ("a file over 16 KiB", big),
+        ("a byte order mark", format!("\u{FEFF}{good}")),
+    ];
+    for (what, artwork) in cases {
+        let (f, _, path, _) = sent().await;
+        f.app
+            .store
+            .backend()
+            .apply_checked(&[obop_storage::Op::Put {
+                model: brand::MODEL.into(),
+                id: brand::ROW_ID.into(),
+                fields: [("name", json!("MOHV")), ("logo_svg", json!(artwork))]
+                    .into_iter()
+                    .map(|(k, v)| (k.to_string(), v))
+                    .collect(),
+            }])
+            .unwrap();
+        let wrong = wrong_link(&path);
+        for (state, r) in [
+            ("form", f.get(&format!("{path}?lang=en"), &ip(190)).await),
+            (
+                "unknown",
+                f.get(&format!("{wrong}?lang=en"), &ip(191)).await,
+            ),
+        ] {
+            let html = r.text();
+            let now = shown(&f);
+            assert!(
+                now.logo().is_some_and(|l| l.is_tile()),
+                "{what}/{state}: the reader kept the artwork"
+            );
+            assert!(
+                !html.contains("PLANTED") && !html.to_lowercase().contains("<script"),
+                "{what}/{state}: stored text on the page: {html}"
+            );
+            assert!(
+                html.contains(&brand_line(&now, "en")),
+                "{what}/{state}: no brand line"
+            );
+            assert!(html.contains(&icon(&f)), "{what}/{state}: no tab icon");
+            assert_eq!(html.matches("<svg").count(), 1, "{what}/{state}");
+            assert!(
+                r.h("content-security-policy").ends_with("; img-src 'self'"),
+                "{what}/{state}"
+            );
+        }
+    }
+}
+
+/// A request the door answers with a line in the security log, and a short-lived key that keeps it to
+/// one in ten minutes, when the first read of the brand is good: the page of a request whose
+/// Document changed, the PDF whose held copy was altered, and the post to a link that was revoked.
+/// When that read is refused each one is the 503 of D74 and writes neither (the guard of the store
+/// refuses the key, and without the key the door writes no entry); the same request once the store
+/// answers is refused by the door and writes both. So the brand is read before the door decides, in
+/// all three handlers, and the assertion that nothing is logged can fail.
+#[tokio::test]
+async fn a_request_the_door_would_log_a_refusal_for_logs_none_when_its_first_brand_read_fails() {
+    use super::hardening::fields;
+    use obop_storage::blob::BlobBytes;
+    for (what, status, reason) in [
+        ("page", 409, "changed"),
+        ("pdf", 409, "tampered"),
+        ("post", 410, "gone_post"),
+    ] {
+        let (flaky, f, path) = flaky_sent().await;
+        let link = match what {
+            "page" => {
+                f.app
+                    .store
+                    .backend()
+                    .update(
+                        "documents_document",
+                        &f.doc,
+                        &fields(json!({"attachment": "0".repeat(64)})),
+                    )
+                    .unwrap();
+                path
+            }
+            "pdf" => {
+                f.bytes
+                    .as_ref()
+                    .unwrap()
+                    .put(&f.file, b"%PDF-1.4\n% somebody wrote here\n")
+                    .unwrap();
+                path
+            }
+            _ => {
+                let (id, second) = f.mint("mia", &f.req.clone()).await;
+                let (s, v) = f
+                    .api(
+                        "mia",
+                        "/api/sign_link/update",
+                        json!({"id": id, "revoked_at": "2026-01-01T00:00:00Z"}),
+                    )
+                    .await;
+                assert_eq!(s, 200, "{v}");
+                second
+            }
+        };
+        let ask = |from: String| {
+            let (f, link) = (&f, link.clone());
+            async move {
+                match what {
+                    "page" => f.get(&format!("{link}?lang=en"), &from).await,
+                    "pdf" => f.get(&format!("{link}/document.pdf"), &from).await,
+                    _ => f.post(&link, &from, &form(f, "Jane Test", "en")).await,
+                }
+            }
+        };
+        let logged = || {
+            (
+                f.events_of("sign_refused").len(),
+                f.app
+                    .store
+                    .backend()
+                    .kv_scan("sign:refused:")
+                    .unwrap()
+                    .len(),
+            )
+        };
+        assert_eq!(logged(), (0, 0), "{what}: before");
+
+        flaky.refuse_model(brand::MODEL, Mode::Reads);
+        let r = ask(ip(180)).await;
+        assert_d74(&r, what);
+        assert_eq!(
+            logged(),
+            (0, 0),
+            "{what}: a refusal was logged for a request that met the fault"
+        );
+
+        flaky.allow_models();
+        let r = ask(ip(181)).await;
+        assert_eq!(r.status, status, "{what}: {}", r.text());
+        assert_eq!(logged(), (1, 1), "{what}: the door's own refusal is logged");
+        let entry = f.events_of("sign_refused");
+        assert!(
+            entry[0]["detail"]
+                .as_str()
+                .unwrap()
+                .contains(&format!("reason {reason};")),
+            "{what}: {entry:?}"
+        );
+    }
 }
