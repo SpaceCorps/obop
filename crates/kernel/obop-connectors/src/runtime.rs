@@ -464,7 +464,37 @@ impl Runtime {
         }
     }
 
-    /// Encode prepared rows for the provider: one body per request.
+    /// The name that signs a Slack message: the name of the instance, which is `obop` when no brand
+    /// is set (docs/spec/branding.md, OT-16). A message that has left cannot be taken back, so the
+    /// name is asked for here, once for a send and before anything is recorded or sent (section 4: a
+    /// handler asks the reader first), and a read that met a fault of the store refuses the send with
+    /// that fault: the person who started it is told to try again, an event is tried again, and
+    /// nothing leaves signed with a name the instance did not choose. A refill that runs elsewhere
+    /// gives the last good name and meets nothing. The other providers sign nothing and ask nothing.
+    fn signer(&self, p: &Provider) -> Result<String, String> {
+        if p.body_format != "slack" {
+            return Ok(String::new());
+        }
+        // The fault this read meets is told from the ones the thread noted before it, which are put
+        // back so that the first of them stays the first.
+        let earlier = obop_storage::fault::take();
+        let shown = self.dispatcher.brand().current();
+        let met = obop_storage::fault::take();
+        if let Some(f) = earlier {
+            obop_storage::fault::note(f);
+        }
+        if let Some(f) = met {
+            obop_storage::fault::note(f);
+            return Err(
+                f.message("the name of the instance could not be read, so nothing was sent")
+            );
+        }
+        Ok(shown.brand().name().to_string())
+    }
+
+    /// Encode prepared rows for the provider: one body per request. `signer` is the name that signs
+    /// a Slack message (see [`Runtime::signer`]); the other formats do not use it.
+    #[allow(clippy::too_many_arguments)]
     fn encode(
         &self,
         c: &Connection,
@@ -473,6 +503,7 @@ impl Runtime {
         id: &str,
         prepared: &[Map<String, J>],
         model: &str,
+        signer: &str,
     ) -> Vec<(String, Vec<u8>)> {
         match p.body_format {
             // One DocuSeal submission per record. The reference travels as the submitter's
@@ -529,12 +560,10 @@ impl Runtime {
                 })
                 .collect(),
             "slack" => {
-                // The message is signed with the name of the instance, which the brand gives and
-                // which is `obop` when none is set (docs/spec/branding.md, OT-16): the reader is
-                // asked once per message, here and nowhere else, and the prefix is fixed in the
-                // body, so a retry of the delivery sends the text it was made with.
-                let shown = self.dispatcher.brand().current();
-                let mut text = format!("{}: {event} ({model})", shown.brand().name());
+                // The message is signed with the name of the instance (`signer`, asked for before
+                // the run was recorded): the prefix is fixed in the body, so a retry of the delivery
+                // sends the text it was made with.
+                let mut text = format!("{signer}: {event} ({model})");
                 for r in prepared.iter().take(10) {
                     let line = r
                         .iter()
@@ -603,7 +632,9 @@ impl Runtime {
         status == 408 || status == 425 || status == 429 || status >= 500
     }
 
-    /// Send prepared rows through the provider's engine. Records the outcome in `run`.
+    /// Send prepared rows through the provider's engine. Records the outcome in `run`. `signer` is
+    /// the name that signs a Slack message ([`Runtime::signer`], asked for before the run began).
+    #[allow(clippy::too_many_arguments)]
     fn send_prepared(
         &self,
         c: &Connection,
@@ -612,9 +643,10 @@ impl Runtime {
         event: &str,
         model: &str,
         prepared: &[Map<String, J>],
+        signer: &str,
     ) -> (usize, String) {
         let id = format!("msg_{}", random_hex(12));
-        let bodies = self.encode(c, p, event, &id, prepared, model);
+        let bodies = self.encode(c, p, event, &id, prepared, model, signer);
         let mut failed = String::new();
         let mut sent = 0;
         let n = bodies.len();
@@ -700,8 +732,11 @@ impl Runtime {
                 json!({"filename": format!("{}.csv", sanitize_name(name)), "csv": csv, "records": prepared.report.record_count}),
             );
         }
+        // The name that signs a Slack message is asked for before the run is recorded (section 4).
+        let signer = self.signer(&p)?;
         let run = self.try_start_run(&c, "outbound", kind)?;
-        let (sent, failed) = self.send_prepared(&c, &p, &run, event, model, &prepared.rows);
+        let (sent, failed) =
+            self.send_prepared(&c, &p, &run, event, model, &prepared.rows, &signer);
         let status = if failed.is_empty() {
             "succeeded"
         } else if failed.contains("will retry") {
@@ -1302,8 +1337,10 @@ impl Runtime {
                     notes.push("no test request is sent: this service takes records only".into());
                 } else if p.engine == Engine::WebhookOut {
                     // A test event carries no record and no personal data.
+                    let signer = self.signer(&p)?;
                     let run = self.start_run(&c, "outbound", "test");
-                    let (sent, failed) = self.send_prepared(&c, &p, &run, "obop.test", "", &[]);
+                    let (sent, failed) =
+                        self.send_prepared(&c, &p, &run, "obop.test", "", &[], &signer);
                     let (status, why) = if failed.is_empty() && sent > 0 {
                         ("succeeded", String::new())
                     } else {

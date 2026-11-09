@@ -3157,7 +3157,11 @@ fn an_unreadable_policy_is_never_shown_or_stored_as_the_closed_default() {
 /// body format of the `slack_webhook` provider, whose address must be on Slack's host), so that a
 /// receiver on loopback gets the text Slack would get.
 fn slack_env() -> Env {
-    let s = Store::new();
+    slack_env_on(Store::new())
+}
+
+/// As [`slack_env`], over the store given (a store that can be made to fail, for a test of D74).
+fn slack_env_on(s: Store) -> Env {
     let d = Arc::new(Dispatcher::new());
     base::register(&d, &s);
     crm::register(&d, &s);
@@ -3276,4 +3280,87 @@ fn a_hostile_name_stays_text_in_the_slack_body() {
         Some(vec!["text".to_string()]),
         "the body is the one message: {body}"
     );
+}
+
+/// The row of a brand written straight to the store, as a restore or an import would, and a reader
+/// made afterwards, so that the process has never had a good read of it.
+fn brand_row_and_a_reader_that_has_never_read(e: &Env, name: &str) {
+    use obop_storage::Op;
+    let row = json!({"name": name, "logo_svg": ""});
+    e.s.backend()
+        .apply(&[Op::Put {
+            model: "instance_brand".into(),
+            id: "instance".into(),
+            fields: row.as_object().unwrap().clone(),
+        }])
+        .unwrap();
+    e.d.install_brand(e.s.backend());
+}
+
+/// A name that cannot be read is never replaced by a guess (docs/spec/branding.md, section 4, the
+/// display read and D74): a message that has left cannot be taken back, so a send whose read of the
+/// name met a fault of the store is refused with that fault, before a run is recorded and before
+/// anything leaves, for a manual send, and for the test message of a connection; when the store
+/// answers again the next message goes with the name. The process here has never had a good read,
+/// the case in which the reader has no last good name to give.
+#[test]
+fn a_slack_message_is_not_sent_when_the_name_of_the_instance_cannot_be_read() {
+    use obop_storage::testing::{Flaky, Mode};
+    let (flaky, backend) = Flaky::memory();
+    let e = slack_env_on(Store::over(backend));
+    let r = Receiver::new(200);
+    let id = slack_connection(&e, &r);
+    brand_row_and_a_reader_that_has_never_read(&e, "MOHV");
+    let runs = || {
+        e.s.backend()
+            .list(obop_connectors::model::SYNC_RUN)
+            .unwrap()
+            .len()
+    };
+    let (sent, recorded) = (r.count(), runs());
+
+    flaky.refuse_model("instance_brand", Mode::Reads);
+    let m = err(&e, &admin(), "connection.sync", json!({"id": id}));
+    assert!(
+        m.starts_with("storage_busy:") && m.contains("nothing was sent"),
+        "{m}"
+    );
+    assert_eq!(
+        obop_storage::fault::noted(),
+        Some(obop_storage::fault::Fault::Busy),
+        "the request is told it met a fault, so that the layer above answers it by D74"
+    );
+    obop_storage::fault::clear();
+    let m = err(&e, &admin(), "connection.test", json!({"id": id}));
+    assert!(m.starts_with("storage_busy:"), "{m}");
+    obop_storage::fault::clear();
+    assert_eq!(r.count(), sent, "nothing left");
+    assert_eq!(runs(), recorded, "and no run was recorded for it");
+
+    // The store answers: the next message goes, with the name.
+    flaky.allow_models();
+    let text = slack_text(&e, &r, &id);
+    assert!(text.starts_with("MOHV: obop.manual (party)\n"), "{text}");
+}
+
+/// Only a Slack message is signed: a connection of another format neither asks for the name nor is
+/// refused for the want of it.
+#[test]
+fn a_connection_that_is_not_slack_never_asks_for_the_name() {
+    use obop_storage::testing::{Flaky, Mode};
+    let (flaky, backend) = Flaky::memory();
+    let e = env_on(Store::over(backend));
+    let r = Receiver::new(200);
+    seed_party(&e);
+    enable(&e, "webhook_out", false);
+    let id = make_connection(&e, &admin(), &r, json!({"party": ["name"]}));
+    give_basis(&e, &admin(), &id);
+    ok(&e, &admin(), "connection.connect", json!({"id": id}));
+    brand_row_and_a_reader_that_has_never_read(&e, "MOHV");
+    flaky.refuse_model("instance_brand", Mode::Reads);
+    let before = flaky.refused();
+    ok(&e, &admin(), "connection.sync", json!({"id": id}));
+    assert!(r.wait(1), "the receiver got nothing");
+    assert_eq!(flaky.refused(), before, "the name was not asked for");
+    assert_eq!(obop_storage::fault::noted(), None);
 }
