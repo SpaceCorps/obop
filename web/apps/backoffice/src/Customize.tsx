@@ -5,6 +5,7 @@ import { DetailPanel } from "./modules/DetailPanel.tsx";
 import { ModulesPage } from "./modules/ModulesPage.tsx";
 import type { ModulesRoute } from "./modules/types.ts";
 import { useModulesView } from "./modules/view.ts";
+import { IdentityTab } from "./Identity.tsx";
 import { BuildTab } from "./ModuleBuilder.tsx";
 import { SecurityTab } from "./Security.tsx";
 import { UpdatesPage } from "./updates/UpdatesPage.tsx";
@@ -69,6 +70,7 @@ type Props = {
 const TABS = [
   { id: "theme", label: msg("Theme"), icon: "sun" },
   { id: "apps", label: msg("Apps"), icon: "grid" },
+  { id: "identity", label: msg("Identity"), icon: "star" },
   { id: "modules", label: msg("Modules"), icon: "plug" },
   { id: "updates", label: msg("Updates"), icon: "arrow-up" },
   { id: "build", label: msg("Build a module"), icon: "edit" },
@@ -120,6 +122,7 @@ export function Customize(p: Props) {
         >
           {tab === "theme" && <ThemeTab {...p} />}
           {tab === "apps" && <AppsTab {...p} />}
+          {tab === "identity" && <IdentityTab token={p.token} notify={p.notify} />}
           {tab === "modules" && (
             <ModulesPage view={view} guideHref={GUIDE_LINK} goBuild={() => p.go("build")} />
           )}
