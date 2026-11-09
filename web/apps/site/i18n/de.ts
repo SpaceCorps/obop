@@ -434,6 +434,7 @@ export const de: Messages = {
         "Agenten können das Löschen von Datensätzen nur vorschlagen. Eine Person gibt es frei.",
       appMeta: "Eine App für obop, die Open-Source-Plattform für Unternehmen.",
       developersShow: "Technische Details anzeigen",
+      developersHide: "Technische Details ausblenden",
       purposeEnglish: "Die Beschreibung ist auf Englisch.",
       readMore: "Weiterlesen",
     },

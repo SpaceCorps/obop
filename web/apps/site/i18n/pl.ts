@@ -431,6 +431,7 @@ export const pl: Messages = {
       safeApproveNone: "Agenci mogą tylko zaproponować usunięcie rekordów. Zatwierdza je osoba.",
       appMeta: "Aplikacja dla obop, otwartoźródłowej platformy dla firm.",
       developersShow: "Pokaż szczegóły techniczne",
+      developersHide: "Ukryj szczegóły techniczne",
       purposeEnglish: "Opis jest po angielsku.",
       readMore: "Czytaj dalej",
     },

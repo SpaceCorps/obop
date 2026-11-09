@@ -163,10 +163,21 @@
   }
 }
 
-/* The facts strip: small label over a big value, hairline dividers, nothing but manifest data. */
+/*
+ * The facts strip: small label over a big value, hairline dividers, nothing but manifest data. The
+ * layout follows the room the strip has (a container query, in rem, so a larger text size asks for
+ * more room too): one column when two cells would not fit side by side, two by two from 17.5rem, and
+ * a single row of four only from 52rem, where the longest value word of every language (Polish
+ * "Eksperymentalny" at 22 px is 176 px) still fits its cell whole. Between, the cells stay wide and
+ * no value is cut in the middle of a word; break-word is only the last resort for a word wider than
+ * the screen.
+ */
+.app-facts-box {
+  container-type: inline-size;
+}
 .app-facts {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   margin: 0;
   border-block: var(--st-hair);
 }
@@ -179,14 +190,11 @@
   padding: var(--space-5) var(--space-2);
   text-align: center;
 }
-.app-facts > div:nth-child(even) {
-  border-inline-start: var(--st-hair);
-}
-.app-facts > div:nth-child(n + 3) {
+.app-facts > div + div {
   border-block-start: var(--st-hair);
 }
 .app-facts dt {
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   color: var(--text-muted);
   font-size: 0.75rem;
   font-weight: var(--weight-semibold);
@@ -199,10 +207,24 @@
   font-weight: var(--weight-semibold);
   letter-spacing: -0.02em;
   line-height: 1.2;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   text-wrap: balance;
 }
-@media (min-width: 40rem) {
+@container (min-width: 17.5rem) {
+  .app-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .app-facts > div + div {
+    border-block-start: 0;
+  }
+  .app-facts > div:nth-child(even) {
+    border-inline-start: var(--st-hair);
+  }
+  .app-facts > div:nth-child(n + 3) {
+    border-block-start: var(--st-hair);
+  }
+}
+@container (min-width: 52rem) {
   .app-facts {
     grid-auto-flow: column;
     grid-template-columns: none;
@@ -217,6 +239,8 @@
   .app-facts > div + div {
     border-inline-start: var(--st-hair);
   }
+}
+@media (min-width: 40rem) {
   .app-facts dd {
     font-size: 1.375rem;
   }
@@ -399,6 +423,11 @@
 .app-dev[open] > summary::after {
   transform: translateY(2px) rotate(-135deg);
 }
+/* The button says what it does: "Show ..." while the part is folded, "Hide ..." while it is open. */
+.app-dev:not([open]) .app-hide,
+.app-dev[open] .app-show {
+  display: none;
+}
 
 /* Safe with AI agents: up to three short lines. */
 .app-safe {
@@ -579,16 +608,28 @@
   margin-block-start: var(--space-5);
   border-block-start: var(--st-hair);
 }
+/*
+ * The rule above a heading is drawn by ::before, outside the heading's own box, so the focus ring that
+ * a link to the heading draws (VitePress gives it tabindex -1) hugs the heading's text instead of a
+ * box with 24 px of empty padding above it.
+ */
 .app-dev .prose h3 {
-  margin: var(--space-12) 0 var(--space-3);
-  padding-block-start: var(--space-6);
-  border-block-start: var(--st-hair);
+  position: relative;
+  margin: calc(var(--space-12) + var(--space-6) + 1px) 0 var(--space-3);
   font-size: var(--text-2xl);
+}
+.app-dev .prose h3::before {
+  content: "";
+  position: absolute;
+  inset-block-start: calc(var(--space-6) * -1 - 1px);
+  inset-inline: 0;
+  border-block-start: var(--st-hair);
 }
 .app-dev .prose h3:first-of-type {
   margin-block-start: 0;
-  padding-block-start: 0;
-  border-block-start: 0;
+}
+.app-dev .prose h3:first-of-type::before {
+  display: none;
 }
 .app-dev .prose h4 {
   font-size: var(--text-xl);
@@ -599,24 +640,39 @@
   .app-page button.copy {
     display: none;
   }
-  /* The technical tables print whole, at the width of the paper, instead of being cut at its edge. */
+  /*
+   * The technical tables print whole, at the width of the paper, instead of being cut at its edge or
+   * shrunk by the browser to fit a wider table (7 pt text): the table is as wide as the paper, the
+   * columns share it by their content, and a cell may break a long token where it must (break-word
+   * would leave the table as wide as its longest word; anywhere lets it shrink to the paper).
+   */
   .app-dev .prose table {
     display: table;
+    inline-size: 100%;
     overflow: visible;
     font-size: 0.8em;
+  }
+  .app-dev .prose th,
+  .app-dev .prose td {
+    padding: 0.25rem 0.4rem;
   }
   .app-dev .prose th,
   .app-dev .prose td,
   .app-dev .prose td code {
     white-space: normal;
-    overflow-wrap: break-word;
+    overflow-wrap: anywhere;
   }
-  /* A printed page keeps the technical part: the folds print open. */
+  /* A printed page keeps the technical part: the folds print open, so their buttons are not printed. */
   @supports selector(::details-content) {
     .app-dev:not([open])::details-content,
     .app-more:not([open])::details-content,
     .app-read:not([open])::details-content {
       content-visibility: visible;
+    }
+    .app-dev > summary,
+    .app-more > summary,
+    .app-read > summary {
+      display: none;
     }
   }
 }

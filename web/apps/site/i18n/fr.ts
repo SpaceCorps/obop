@@ -440,6 +440,7 @@ export const fr: Messages = {
         "Les agents ne peuvent que proposer la suppression d'enregistrements. Une personne l'approuve.",
       appMeta: "Une application pour obop, la plateforme open source pour les entreprises.",
       developersShow: "Afficher les détails techniques",
+      developersHide: "Masquer les détails techniques",
       purposeEnglish: "La description est en anglais.",
       readMore: "En savoir plus",
     },

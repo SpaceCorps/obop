@@ -45,7 +45,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Invoicing",
     tagline: "Bill your customers",
     purpose:
-      "Prepare customer invoices as drafts and post them to give each one its gapless legal number. Posting is the one step in the built-in apps that always needs a person: an agent can prepare the draft and propose the posting, and a human with the right permission approves it.",
+      "Prepare customer invoices as drafts and post them to give each one its gapless legal number. Posting an invoice always needs a person: an agent can prepare the draft and propose the posting, and a human with the right permission approves it.",
   },
   {
     id: "product",

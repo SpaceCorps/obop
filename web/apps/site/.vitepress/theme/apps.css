@@ -117,6 +117,8 @@
 }
 .store-tile {
   display: flex;
+  /* At a very large text size the icon grows with it: the text drops under the icon instead of being squeezed beside it. */
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-4);
   min-block-size: 6.5rem;
@@ -128,6 +130,9 @@
   transition:
     background-color var(--dur-2) var(--ease-out),
     border-color var(--dur-2) var(--ease-out);
+}
+.store-tile .store-text {
+  flex: 1 1 10rem;
 }
 .store-tile .store-name {
   font-size: 1.25rem;
@@ -157,6 +162,7 @@
     padding: var(--space-8);
   }
   .store-tile .store-text {
+    flex: 0 1 auto;
     gap: 0.25rem;
     margin-block-start: auto;
   }

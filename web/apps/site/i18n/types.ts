@@ -249,6 +249,8 @@ export interface Messages {
       appMeta: string;
       /** The label that opens the folded technical part under "For developers". */
       developersShow: string;
+      /** The label of the same button while the part is open. */
+      developersHide: string;
       /** Said under the purpose on a translated page, where the text is English. */
       purposeEnglish: string;
       /** The label that opens a long second paragraph under "What it is for". */

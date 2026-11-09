@@ -112,6 +112,57 @@ async function contrast(page: import("@playwright/test").Page, selector: string 
   }, selector);
 }
 
+/**
+ * The words of the elements that match `selector` which the browser has drawn on two lines, as the
+ * visitor's page is drawn: nothing is switched off, so the test sees what the safety nets
+ * (overflow-wrap, hyphens) really do. A word is a run of letters and digits up to a hyphen
+ * ("Apache-2.0" may break after its hyphen). `wide` counts the words that are wider than the box
+ * holding them: nothing can keep those whole, so with `allowWide` they may break (and are only
+ * counted); every other word that is broken is returned in `cut`.
+ */
+async function brokenWords(
+  page: import("@playwright/test").Page,
+  selector: string,
+  allowWide = false,
+) {
+  return page.evaluate(
+    ({ sel, allowWide }) => {
+      const cut: string[] = [];
+      let wide = 0;
+      for (const el of document.querySelectorAll(sel)) {
+        const own = getComputedStyle(el);
+        const room =
+          (el as HTMLElement).clientWidth -
+          parseFloat(own.paddingInlineStart) -
+          parseFloat(own.paddingInlineEnd);
+        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+        for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+          const re = /[^\s­-]+-?/g;
+          for (let m = re.exec(n.textContent ?? ""); m; m = re.exec(n.textContent ?? "")) {
+            const r = document.createRange();
+            r.setStart(n, m.index);
+            r.setEnd(n, m.index + m[0].length);
+            const tops = [...r.getClientRects()].filter((x) => x.width > 0).map((x) => x.top);
+            if (tops.length < 2 || Math.max(...tops) - Math.min(...tops) <= 3) continue;
+            // Two lines: is the word wider than the box it sits in?
+            const probe = document.createElement("span");
+            probe.style.cssText =
+              "position:absolute;visibility:hidden;white-space:nowrap;hyphens:manual;overflow-wrap:normal;word-break:normal";
+            probe.textContent = m[0];
+            n.parentElement!.appendChild(probe);
+            const natural = probe.getBoundingClientRect().width;
+            probe.remove();
+            if (allowWide && natural > room + 0.5) wide++;
+            else cut.push(`${m[0]} (${Math.round(natural)} px in ${Math.round(room)} px)`);
+          }
+        }
+      }
+      return { cut, wide };
+    },
+    { sel: selector, allowWide },
+  );
+}
+
 test.describe("website without JavaScript", () => {
   test.use({ javaScriptEnabled: false });
 
@@ -250,7 +301,9 @@ test.describe("website without JavaScript", () => {
     await expect(page.locator(".app-purpose")).toHaveText(
       "Prepare customer invoices as drafts and post them to give each one its gapless legal number.",
     );
-    await expect(page.locator(".app-purpose-rest")).toContainText("Posting is the one step");
+    await expect(page.locator(".app-purpose-rest")).toContainText(
+      "Posting an invoice always needs a person",
+    );
     // What you can do: one card per workflow action, with the approval mark where it is needed.
     // The thing it works on is part of the heading, so a list of headings tells the cards apart.
     const post = page.locator(".app-card", { hasText: "Post a draft invoice" });
@@ -286,10 +339,12 @@ test.describe("website without JavaScript", () => {
     await expect(page.locator("h2#for-developers")).toHaveText(s.developers);
     const dev = page.locator("details#developers");
     await expect(dev).toHaveJSProperty("open", false);
-    await expect(dev.locator("summary")).toHaveText(s.developersShow);
+    await expect(dev.locator("summary")).toHaveText(s.developersShow, { useInnerText: true });
     await expect(page.getByRole("heading", { level: 3, name: "Models" })).toBeHidden();
     await dev.locator("summary").click();
     await expect(dev).toHaveJSProperty("open", true);
+    // The button says what it does now: Hide while the part is open.
+    await expect(dev.locator("summary")).toHaveText(s.developersHide, { useInnerText: true });
     await expect(page.getByRole("heading", { level: 3, name: "Models" })).toBeVisible();
     await expect(page.getByRole("cell", { name: "total_minor" })).toBeVisible();
     await expect(page.getByRole("cell", { name: "invoice.post" })).toBeVisible();
@@ -365,7 +420,9 @@ test.describe("website without JavaScript", () => {
     await expect(page.locator(".app-card .app-card-title").first()).toHaveText("Übernehmen");
     await expect(page.locator(".app-card [lang]")).toHaveCount(0);
     await expect(page.locator("h2#for-developers")).toHaveText(s.developers);
-    await expect(page.locator("details#developers > summary")).toHaveText(s.developersShow);
+    await expect(page.locator("details#developers > summary")).toHaveText(s.developersShow, {
+      useInnerText: true,
+    });
     // Field descriptions in the technical tables are English and say so.
     await expect(page.locator("details#developers td span[lang=en]").first()).toBeAttached();
     // The note that says so comes right under the heading, before the English it explains.
@@ -846,6 +903,18 @@ test.describe("website behaviour with JavaScript", () => {
     await page.goto(`${base()}/apps/invoicing/#models`);
     await expect(page.locator("details#developers")).toHaveJSProperty("open", true);
     await expect(page.locator("#models")).toBeInViewport();
+    // The ring that the link puts on the heading hugs its text: the heading has no padding of its
+    // own (the rule above it is drawn outside its box), so the ring is one line high, not 60 px.
+    await expect(page.locator("#models")).toBeFocused();
+    const ring = await page.locator("#models").evaluate((el) => ({
+      height: el.getBoundingClientRect().height,
+      line: parseFloat(getComputedStyle(el).lineHeight),
+      padding: getComputedStyle(el).paddingBlockStart,
+      rule: getComputedStyle(el, "::before").borderBlockStartStyle,
+    }));
+    expect(ring.padding).toBe("0px");
+    expect(ring.height).toBeLessThan(ring.line * 1.5);
+    expect(ring.rule, "the rule above the heading is still drawn").toBe("solid");
     await page.goto(`${base()}/apps/invoicing/`);
     await expect(page.locator("details#developers")).toHaveJSProperty("open", false);
   });
@@ -1224,7 +1293,16 @@ test.describe("accessibility", () => {
         for (const key of ["Tab", "Shift+Tab"] as const) {
           await page.goto(`${base()}${path}`);
           let stops = 0;
-          for (let i = 0; i < 80; i++) {
+          // The walk ends when every control of main has had its turn (plus the header's and the
+          // footer's on the way), not after a fixed number of presses: this is the slowest test of
+          // the file, and a slower runner has more room that way.
+          const expected = await page.evaluate(
+            () =>
+              [...document.querySelectorAll("main a[href], main summary, main button")].filter(
+                (el) => el.getClientRects().length > 0 && el.checkVisibility(),
+              ).length,
+          );
+          for (let i = 0; i < 120 && stops < expected; i++) {
             await page.keyboard.press(key);
             // The browser scrolls the focused control into view, smoothly where the page asks for it:
             // measure where it comes to rest, not where it passes.
@@ -1374,6 +1452,15 @@ test.describe("accessibility", () => {
           return out;
         }, path)),
       );
+    }
+    // There is no hover to reveal the copy button of the install box: it is drawn, not transparent.
+    for (const path of ["/apps/helpdesk/", "/sv/apps/sign/"]) {
+      await page.goto(`${base()}${path}`);
+      const copy = await page.locator(".app-getbox button.copy").evaluate((el) => ({
+        opacity: getComputedStyle(el).opacity,
+        hover: matchMedia("(hover: none)").matches,
+      }));
+      expect(copy, `${path} copy button on a touch screen`).toEqual({ opacity: "1", hover: true });
     }
     await context.close();
     expect(small).toEqual([]);
@@ -1578,8 +1665,9 @@ test.describe("accessibility", () => {
         expect(border, `${path} ${sel}`).toEqual({ style: "solid", width: 1 });
       }
     }
-    // Printed (at the width of an A4 page): the folds print open, the tables fit the paper, and
-    // neither the hero's button nor the copy buttons are printed.
+    // Printed (at the width of an A4 page): the folds print open and their buttons are not printed
+    // (the content they would open is already there), and neither the hero's button nor the copy
+    // buttons are printed.
     await page.setViewportSize({ width: 794, height: 1123 });
     await page.goto(`${base()}/apps/accounting/`);
     await page.emulateMedia({ forcedColors: "none", media: "print" });
@@ -1587,12 +1675,47 @@ test.describe("accessibility", () => {
     await expect(page.locator("button.copy").first()).toBeHidden();
     await expect(page.locator("details#developers")).toHaveJSProperty("open", false);
     await expect(page.getByRole("heading", { level: 3, name: "Models" })).toBeVisible();
-    const cut = await page.evaluate(() =>
-      [...document.querySelectorAll("#developers table")]
-        .filter((t) => t.scrollWidth > t.clientWidth + 1)
-        .map((t) => `${t.scrollWidth}>${t.clientWidth}`),
-    );
-    expect(cut, "tables cut at the edge of the paper").toEqual([]);
+    await expect(page.locator(".app-dev > summary")).toBeHidden();
+    await expect(page.locator(".app-more > summary").first()).toBeHidden();
+    await page.goto(`${base()}/apps/connectors/`);
+    await expect(page.locator(".app-read > summary")).toBeHidden();
+    // The folds still open on screen: the button is only gone from the printed page.
+    await page.emulateMedia({ media: "screen" });
+    await expect(page.locator(".app-read > summary")).toBeVisible();
+  });
+
+  test("a printed app page is as wide as the paper: no table is wider than the sheet, so none is shrunk", async ({
+    page,
+  }) => {
+    // A table wider than A4 (794 px) is scaled down by the browser to about 7 pt; the technical
+    // tables must instead share the width of the paper. Measured as the page's own scroll width in
+    // print, in the languages with the longest words, on the pages with the widest tables.
+    await page.setViewportSize({ width: 794, height: 1123 });
+    await page.emulateMedia({ media: "print" });
+    for (const path of [
+      "/apps/connectors/",
+      "/apps/hr/",
+      "/apps/ecommerce/",
+      "/apps/accounting/",
+      "/apps/sign/",
+      "/de/apps/ecommerce/",
+      "/de/apps/hr/",
+      "/de/apps/accounting/",
+      "/de/apps/email-marketing/",
+    ]) {
+      await page.goto(`${base()}${path}`);
+      const m = await page.evaluate(() => ({
+        page: document.documentElement.scrollWidth,
+        paper: window.innerWidth,
+        tables: [...document.querySelectorAll("#developers table")].filter(
+          (t) => t.getBoundingClientRect().right > window.innerWidth + 0.5,
+        ).length,
+      }));
+      expect(m.page, `${path}: the printed page is wider than the sheet`).toBeLessThanOrEqual(
+        m.paper,
+      );
+      expect(m.tables, `${path}: tables that run past the sheet`).toBe(0);
+    }
   });
 
   test("the apps index does not overflow at a large text size on a narrow screen", async ({
@@ -1620,6 +1743,61 @@ test.describe("accessibility", () => {
     }
   });
 
+  test("the header button is the plain one on the apps index too, 'Read more' has air above it, and a right-to-left page mirrors the chevrons", async ({
+    page,
+  }) => {
+    // One filled pill per screen: on the apps pages (the index has none of its own) the header's
+    // "Start free" is the plain button, and on the home page it stays the filled one.
+    const header = () =>
+      page.locator(".head-cta .btn.primary").evaluate((el) => {
+        const cs = getComputedStyle(el);
+        return { background: cs.backgroundColor, color: cs.color, border: cs.borderTopColor };
+      });
+    await page.goto(`${base()}/apps/`);
+    const onIndex = await header();
+    await page.goto(`${base()}/apps/helpdesk/`);
+    const onApp = await header();
+    await page.goto(`${base()}/`);
+    const onHome = await header();
+    expect(onIndex, "the header button on /apps/ and on an app page").toEqual(onApp);
+    expect(onIndex, "the header button on /apps/ and on the home page").not.toEqual(onHome);
+
+    // The fold under a long purpose does not touch the sentence above it.
+    for (const width of [375, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`${base()}/apps/connectors/`);
+      const gap = await page.evaluate(
+        () =>
+          document.querySelector(".app-read > summary")!.getBoundingClientRect().top -
+          document.querySelector(".app-purpose")!.getBoundingClientRect().bottom,
+      );
+      expect(gap, `space above "Read more" at ${width}px`).toBeGreaterThanOrEqual(12);
+    }
+
+    // Right-to-left is not offered, but the back and row chevrons already point the other way.
+    for (const [path, chevron] of [
+      ["/apps/crm/", ".app-back svg"],
+      ["/apps/", ".store-chev svg"],
+    ] as const) {
+      await page.goto(`${base()}${path}`);
+      // The built style sheet turns :dir(rtl) into the list of right-to-left languages (:lang(ar),
+      // ...), for browsers that lack :dir(), so a right-to-left page is one with both set.
+      const turn = (dir: string, lang: string) =>
+        page.evaluate(
+          ([d, l, sel]) => {
+            document.documentElement.dir = d!;
+            document.documentElement.lang = l!;
+            return getComputedStyle(document.querySelector(sel!)!).transform;
+          },
+          [dir, lang, chevron],
+        );
+      expect(await turn("ltr", "en"), `${path} chevron, left to right`).toBe("none");
+      expect(await turn("rtl", "ar"), `${path} chevron, right to left`).toBe(
+        "matrix(-1, 0, 0, 1, 0, 0)",
+      );
+    }
+  });
+
   test("no horizontal scroll at 390px and 320px", async ({ page }) => {
     for (const w of [390, 320]) {
       await page.setViewportSize({ width: w, height: 800 });
@@ -1640,10 +1818,12 @@ test.describe("accessibility", () => {
     }
   });
 
-  test("no name, label or value is cut in the middle of a word on a phone, in any language", async ({
+  test("no name or label is cut in the middle of a word on a phone, in any language", async ({
     page,
     request,
   }) => {
+    // The hero's name, the icon names and the information labels (the facts strip and the cards have
+    // tests of their own below: this one cannot see a box that grows past its cell).
     test.setTimeout(300_000);
     let checked = 0;
     for (const locale of Object.keys(messages)) {
@@ -1660,11 +1840,7 @@ test.describe("accessibility", () => {
         for (const width of [320, 375, 768]) {
           await page.setViewportSize({ width, height: 800 });
           const cut = await page.evaluate(() =>
-            [
-              ...document.querySelectorAll(
-                ".app-hero h1, .app-icons a, .app-info dt, .app-facts dt, .app-facts dd",
-              ),
-            ]
+            [...document.querySelectorAll(".app-hero h1, .app-icons a, .app-info dt")]
               .filter((e) => e.scrollWidth > e.clientWidth + 1)
               .map((e) => `${e.tagName} "${(e.textContent ?? "").trim().slice(0, 30)}"`),
           );
@@ -1674,6 +1850,99 @@ test.describe("accessibility", () => {
       }
     }
     expect(checked).toBe(7 * 28);
+  });
+
+  test("the facts strip keeps every word whole at every width, in every language, as the page is drawn", async ({
+    page,
+    request,
+  }) => {
+    // Measured with nothing switched off: each word of each label and value is asked how many lines
+    // it was drawn on. (The strip once cut "Experimental" into "Experiment" and "al" between 640 and
+    // 810 px, and "Eksperymentalny" up to 800 px, while a test that first switched the safety nets
+    // off passed: the cell had shrunk below the word, which that state hid.) Every maturity word and
+    // the "no other apps" line of every language is tried, at the widths where the layout changes,
+    // and at a large text size.
+    test.setTimeout(300_000);
+    const widths = [320, 360, 375, 414, 480, 600, 640, 700, 768, 800, 860, 900, 1024, 1280];
+    for (const locale of Object.keys(messages) as (keyof typeof messages)[]) {
+      const urls = (await pagesOf(request, locale)).filter((u) => /\/apps\/.+\/$/.test(u));
+      const seen = new Set<string>();
+      const maturities = new Set<string>();
+      let standalone = 0;
+      for (const url of urls) {
+        await page.goto(`${base()}${url}`, { waitUntil: "domcontentloaded" });
+        const values = await page.locator(".app-facts dd").allTextContents();
+        const key = `${values[0]}|${values[2] === messages[locale].apps.store.standalone}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        maturities.add(values[0]!);
+        if (values[2] === messages[locale].apps.store.standalone) standalone++;
+        for (const width of widths) {
+          await page.setViewportSize({ width, height: 900 });
+          const { cut } = await brokenWords(page, ".app-facts dt, .app-facts dd");
+          expect(cut, `${locale} ${url} at ${width}px`).toEqual([]);
+        }
+        // A text size of 150 and 200 percent: the strip asks for more room and stacks.
+        for (const [width, percent] of [
+          [320, 200],
+          [375, 150],
+          [640, 200],
+        ] as const) {
+          await page.setViewportSize({ width, height: 900 });
+          await page.addStyleTag({ content: `html { font-size: ${percent}% !important; }` });
+          const { cut } = await brokenWords(page, ".app-facts dt, .app-facts dd");
+          expect(cut, `${locale} ${url} at ${width}px, ${percent}% text`).toEqual([]);
+        }
+      }
+      // Not vacuous: every maturity word the language has, and the line for an app that needs no
+      // other app, was on a page that was measured.
+      expect([...maturities].sort(), `${locale} maturity words measured`).toEqual(
+        Object.values(messages[locale].apps.meta.maturities).sort(),
+      );
+      expect(standalone, `${locale} pages with no other app measured`).toBeGreaterThan(0);
+    }
+  });
+
+  test("the cards keep every word that fits whole, and nothing leaves its card", async ({
+    page,
+    request,
+  }) => {
+    // The limit, stated: a word wider than its card (Swedish "Integritetsförhandsgranskning" in a
+    // card 15 rem wide) cannot be kept whole by any rule, so it breaks at the card's edge; the
+    // browser hyphenates it only where it has a dictionary (hyphens: auto), and it is switched off
+    // here so that the result is the same on every browser. Every other word stays whole, and no
+    // text leaves its card.
+    test.setTimeout(300_000);
+    let wide = 0;
+    let cards = 0;
+    for (const locale of ["de", "sv", "fi", "pl"] as const) {
+      const urls = (await pagesOf(request, locale)).filter((u) => /\/apps\/.+\/$/.test(u));
+      for (const url of urls) {
+        await page.goto(`${base()}${url}`, { waitUntil: "domcontentloaded" });
+        await page.addStyleTag({ content: "* { hyphens: manual !important; }" });
+        await page.evaluate(() =>
+          document
+            .querySelectorAll("main details")
+            .forEach((d) => ((d as HTMLDetailsElement).open = true)),
+        );
+        for (const width of [320, 375, 768, 1024, 1280]) {
+          await page.setViewportSize({ width, height: 900 });
+          const r = await brokenWords(page, ".app-card h3, .app-card-text", true);
+          expect(r.cut, `${url} at ${width}px`).toEqual([]);
+          wide += r.wide;
+          const out = await page.evaluate(() =>
+            [...document.querySelectorAll(".app-card")]
+              .filter((c) => c.scrollWidth > c.clientWidth + 1)
+              .map((c) => (c.querySelector("h3")?.textContent ?? "").trim().slice(0, 30)),
+          );
+          expect(out, `${url} at ${width}px: text leaves its card`).toEqual([]);
+          cards += await page.locator(".app-card").count();
+        }
+      }
+    }
+    // Not vacuous: there are cards, and some word really is wider than its card.
+    expect(cards).toBeGreaterThan(1000);
+    expect(wide, "words wider than their card, which the test allows to break").toBeGreaterThan(0);
   });
 
   test("the Markdown copy of every app page says what the page says, in every language", async ({

@@ -426,6 +426,7 @@ export const sv: Messages = {
       safeApproveNone: "Agenter kan bara föreslå att poster tas bort. En person godkänner det.",
       appMeta: "En app för obop, plattformen med öppen källkod för företag.",
       developersShow: "Visa tekniska detaljer",
+      developersHide: "Dölj tekniska detaljer",
       purposeEnglish: "Beskrivningen är på engelska.",
       readMore: "Läs mer",
     },

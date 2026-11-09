@@ -420,6 +420,7 @@ export const en: Messages = {
       safeApproveNone: "Agents can only propose deleting records. A person approves it.",
       appMeta: "An app for obop, the open-source platform for business.",
       developersShow: "Show technical details",
+      developersHide: "Hide technical details",
       purposeEnglish: "The description is in English.",
       readMore: "Read more",
     },

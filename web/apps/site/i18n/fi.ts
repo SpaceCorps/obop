@@ -436,6 +436,7 @@ export const fi: Messages = {
       safeApproveNone: "Agentit voivat vain ehdottaa tietueiden poistamista. Henkilö hyväksyy sen.",
       appMeta: "Sovellus obopille, avoimen lähdekoodin yritysalustalle.",
       developersShow: "Näytä tekniset tiedot",
+      developersHide: "Piilota tekniset tiedot",
       purposeEnglish: "Kuvaus on englanniksi.",
       readMore: "Lue lisää",
     },

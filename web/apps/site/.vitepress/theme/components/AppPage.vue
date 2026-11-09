@@ -47,12 +47,14 @@ const pathParts = (path: string) => path.split(new RegExp("(?<=/)"));
       </div>
     </header>
 
-    <dl class="app-facts">
-      <div v-for="f in view.facts" :key="f.label">
-        <dt>{{ f.label }}</dt>
-        <dd>{{ f.value }}</dd>
-      </div>
-    </dl>
+    <div class="app-facts-box">
+      <dl class="app-facts">
+        <div v-for="f in view.facts" :key="f.label">
+          <dt>{{ f.label }}</dt>
+          <dd>{{ f.value }}</dd>
+        </div>
+      </dl>
+    </div>
 
     <section class="app-sec">
       <h2 :id="String(fm['purposeId'])">{{ m.apps.h.purpose }}</h2>
@@ -128,7 +130,10 @@ const pathParts = (path: string) => path.split(new RegExp("(?<=/)"));
     <section class="app-sec">
       <h2 id="for-developers">{{ s.developers }}</h2>
       <details id="developers" class="app-dev">
-        <summary>{{ s.developersShow }}</summary>
+        <summary>
+          <span class="app-show">{{ s.developersShow }}</span
+          ><span class="app-hide">{{ s.developersHide }}</span>
+        </summary>
         <div class="prose">
           <Content />
         </div>

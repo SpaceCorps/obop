@@ -432,6 +432,7 @@ export const es: Messages = {
         "Los agentes solo pueden proponer eliminar registros. Una persona lo aprueba.",
       appMeta: "Una aplicación para obop, la plataforma de código abierto para empresas.",
       developersShow: "Mostrar detalles técnicos",
+      developersHide: "Ocultar detalles técnicos",
       purposeEnglish: "La descripción está en inglés.",
       readMore: "Leer más",
     },
