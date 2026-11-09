@@ -262,10 +262,18 @@ fn the_descriptions_name_the_input_keys_and_say_nothing_of_pages() {
         assert!(clear.description.contains(key), "clear: {key}");
     }
     // What the record holds, not which pages show it: no page is built yet to show it.
-    let mut texts = vec![m.description.to_string()];
-    texts.extend(m.fields.iter().map(|f| f.description.to_string()));
-    texts.extend(m.commands.iter().map(|c| c.description.to_string()));
-    for t in texts {
+    let mut texts = vec![("the model".to_string(), m.description.to_string())];
+    texts.extend(
+        m.fields
+            .iter()
+            .map(|f| (f.name.to_string(), f.description.to_string())),
+    );
+    texts.extend(
+        m.commands
+            .iter()
+            .map(|c| (c.name.to_string(), c.description.to_string())),
+    );
+    for (item, t) in texts {
         let low = t.to_lowercase();
         for word in [
             "oauth",
@@ -277,7 +285,12 @@ fn the_descriptions_name_the_input_keys_and_say_nothing_of_pages() {
             "tab icon",
             "consent",
         ] {
-            assert!(!low.contains(word), "{word:?} in {t:?}");
+            // `favicon` is a key of the answer `effective` since the shop reads the record: the
+            // name of an entry, listed in the description of that one field, and not a page.
+            if word == "favicon" && item == "effective" {
+                continue;
+            }
+            assert!(!low.contains(word), "{word:?} in {item}: {t:?}");
         }
     }
 }

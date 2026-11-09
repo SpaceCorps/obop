@@ -81,6 +81,7 @@ Found by the independent check of PR 36 (the language-switch fix, merged as 9047
 | E5 | `www.obop.dev` has no record | open (needs DNS) |
 | E6 | Google and Microsoft connector adapters are definition-only; other adapters were tested only against local stand-ins | open |
 | E7 | WebAuthn / passkeys; MCP spec 2026-07-28 | passkeys done with limits (D65; exact limits below; not tried on real authenticators); MCP 2026-07-28 open |
+| E8 | The six translations of the admin labels of the `instance_brand` model and of the description of its answer field `effective` (which names the entry `authenticator_issuer` and the sources `env` and `unreadable` since slice S1e, and the shop's entries and the source `site` since slice S1f) are machine-drafted (docs/spec/branding.md, section 7) | open (D7; the owner and counsel confirm them before a real customer's users see them, Q71 item 2) |
 
 ### E1 in detail: the OAuth sign-in for MCP clients (D64)
 

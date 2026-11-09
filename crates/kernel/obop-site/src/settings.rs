@@ -4,7 +4,39 @@
 
 use crate::i18n::Lang;
 use crate::theme;
+use obop_commands::{DEFAULT_SITE_TITLE, SITE_FAVICON_KEY};
 use serde_json::{Map, Value as J};
+
+/// The artwork of the instance brand, as the reader of the brand handed it over (docs/spec/branding.md,
+/// section 5): the SVG it re-serialised and its version `v`, which is the `ETag` of the shop's tab
+/// icon. It reaches the shop through one reserved key of the settings, which `PublicApi` fills and
+/// which a stored setting cannot reach.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Favicon {
+    pub svg: String,
+    pub v: String,
+}
+
+impl Favicon {
+    /// The reserved key's value, `{"svg": ..., "v": ...}`: both must be text, the artwork not
+    /// empty and within the largest artwork the brand allows, the version hex digits (it becomes an
+    /// `ETag`). Anything else is no artwork, and the shop keeps its own tile.
+    fn from_value(v: &J) -> Option<Favicon> {
+        let svg = v.get("svg")?.as_str()?;
+        let version = v.get("v")?.as_str()?;
+        let ok = !svg.is_empty()
+            && svg.len() <= obop_brand::svg::MAX_BYTES
+            && !version.is_empty()
+            && version.len() <= 64
+            && version
+                .bytes()
+                .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'));
+        ok.then(|| Favicon {
+            svg: svg.to_string(),
+            v: version.to_string(),
+        })
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Settings {
@@ -40,6 +72,9 @@ pub struct Settings {
     pub default_country: String,
     /// Days an order paid by bank transfer holds its stock before it is cancelled.
     pub payment_hold_days: u32,
+    /// The artwork of the instance brand, when it has one: what `/favicon.svg` and `/favicon.ico`
+    /// answer instead of the shop's own tile. Not a `site.*` key an owner can set.
+    pub favicon: Option<Favicon>,
 }
 
 /// The payment methods a site can list.
@@ -68,7 +103,7 @@ impl Default for Settings {
     fn default() -> Self {
         Settings {
             enabled: true,
-            title: "My Shop".into(),
+            title: DEFAULT_SITE_TITLE.into(),
             tagline: String::new(),
             logo_text: String::new(),
             logo_url: None,
@@ -86,10 +121,18 @@ impl Default for Settings {
             payment_instructions: String::new(),
             default_country: String::new(),
             payment_hold_days: 7,
+            favicon: None,
         }
     }
 }
 
+/// The text of a key as the shop reads it. `title`, `logo_url` and `accent` are also read by a copy of
+/// this function, of `clean_url` and of the rules of `Settings::from_map` in `obop-commands`
+/// (`brand/site.rs`: `site_text`, `clean_url`, `explicit_*`), which decides which keys the brand
+/// fills and what `obop admin brand status` reports, because that crate cannot call this one. A
+/// change to a limit or a step here is a change there, and
+/// `tests_brand::the_door_and_the_settings_agree_on_which_keys_are_set_and_on_their_values` fails
+/// until it is made.
 fn text(m: &Map<String, J>, k: &str, max: usize) -> Option<String> {
     let s = m.get(k)?.as_str()?;
     let s: String = s
@@ -112,7 +155,8 @@ fn flag(m: &Map<String, J>, k: &str) -> Option<bool> {
     }
 }
 
-/// A URL that is safe to put into an attribute: no whitespace, quotes or angle brackets.
+/// A URL that is safe to put into an attribute: no whitespace, quotes or angle brackets. (Copied in
+/// `obop-commands`, `brand/site.rs`, for `logo_url`: see `text`.)
 fn clean_url(u: &str) -> bool {
     !u.is_empty()
         && u.len() <= 500
@@ -217,6 +261,7 @@ impl Settings {
                 .get("payment_hold_days")
                 .and_then(|v| v.as_u64().or_else(|| v.as_str()?.parse().ok()))
                 .map_or(d.payment_hold_days, |n| n.clamp(1, 60) as u32),
+            favicon: m.get(SITE_FAVICON_KEY).and_then(Favicon::from_value),
             title,
         }
     }

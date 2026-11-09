@@ -365,9 +365,10 @@ impl Flaky {
 
     /// Fail every `get` of `model` with `message`, a read error that is neither a refusal of the
     /// pool nor noted as a fault on the thread: the store is up and cannot answer this read (a
-    /// statement that failed, a row that cannot be decoded). The text decides how the layers above
-    /// take it, so a test passes one that starts with no code word of D74 to make it a non-transient
-    /// error.
+    /// statement that failed, a row that cannot be decoded, `no such table: obop_setting`). The text
+    /// decides how the layers above take it, so a test passes one that starts with no code word of D74
+    /// to make it a non-transient error. The call is counted in [`Flaky::reads`] and in
+    /// [`Flaky::gets_of`]. Until [`Flaky::allow_models`].
     pub fn fail_gets_of(&self, model: &str, message: &str) {
         *self.get_error.lock().unwrap() = Some((model.to_string(), message.to_string()));
     }

@@ -11,6 +11,12 @@
 //!   into a person's own device.
 //! - [`apply`]: the one function that writes the row (`configure` and `clear`, on every surface),
 //!   under the lock `brand.write`, with the audit events in the same atomic batch.
+//! - [`site_settings`] and [`fill_site`]: what the public site and shop take from the brand. The
+//!   shop reads the `site` object of the instance settings through one door,
+//!   `PublicApi::site_settings_read`, and the brand fills the keys that object leaves unset and
+//!   hands the artwork of the tab icon over through one reserved key; the same decision
+//!   (`site::view`) gives the `site.*` and `favicon` entries of `get`. A read that failed is
+//!   reported as `SiteRead::degraded`, so that the shop does not keep it.
 //! - [`Dispatcher::brand`]: the reader the dispatcher holds, created by `register_admin`.
 //! - [`env_issuer`] and [`enrolment_error`]: what the enrolment of an authenticator or a passkey
 //!   needs besides [`strict`] (the one reading of `OBOP_MFA_ISSUER`, and the error of an enrolment
@@ -25,14 +31,16 @@ mod effective;
 mod enrol;
 mod reader;
 mod row;
+mod site;
 
 pub use apply::{
     Action, Applied, Changed, Failure, Refused, apply, change_line, changes_json, printable,
     refusals_json, show_key,
 };
 pub use enrol::{ISSUER_VAR, enrolment_error, env_issuer, issuer_warning, no_reader_error};
-pub use reader::{Fresh, Reader, Sink, strict};
+pub use reader::{DEFAULT_BOUND, Fresh, Reader, Sink, strict};
 pub use row::{Fallback, Shown, fallbacks_json};
+pub use site::{DEFAULT_TITLE, FAVICON_KEY, SiteRead, fill_site, site_settings};
 
 use crate::Dispatcher;
 pub use obop_brand::LANGS;
@@ -108,4 +116,4 @@ impl Dispatcher {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

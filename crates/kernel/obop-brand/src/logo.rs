@@ -1,7 +1,8 @@
 //! The logo route's fixed answer: the path, and the headers that never change (docs/spec/branding.md,
-//! section 4, "The logo route"). The route lives in `obop-http` (`src/brand.rs`); the shop's favicon,
-//! which is to share these constants and lives in `obop-site`, is not built yet (slice S1f). Neither
-//! crate can depend on the other, so the constants live here. No route is added by this crate.
+//! section 4, "The logo route"). The route lives in `obop-http` (`src/brand.rs`); the shop's tab icon
+//! (`/favicon.svg` and `/favicon.ico`, `obop-site`, `src/seo.rs`), which answers the brand's artwork
+//! with the same headers, shares these constants. Neither crate can depend on the other, so the
+//! constants live here. No route is added by this crate.
 
 use crate::refusal::Refusal;
 use crate::svg::{self, Svg};

@@ -364,7 +364,124 @@ fn status_of_an_instance_with_no_brand_says_so_and_shows_the_defaults() {
          logo: none (default)\n\
          tile_accent: \"#495670\" (default)\n\
          authenticator_issuer: \"obop\" (default)\n\
+         favicon: \"tile\" (default)\n\
+         site.accent: \"#0f766e\" (default)\n\
+         site.logo_url: \"\" (default)\n\
+         site.title: \"My Shop\" (default)\n\
          fallbacks: none\n"
+    );
+}
+
+/// Write the instance settings (the theme and the `site` keys together) around the command.
+fn put_settings(backend: &std::sync::Arc<dyn Backend>, settings: serde_json::Value) {
+    let mut fields = Fields::new();
+    fields.insert("value".into(), json!(settings.to_string()));
+    backend
+        .apply_checked(&[Op::Put {
+            model: "obop_setting".into(),
+            id: "instance".into(),
+            fields,
+        }])
+        .unwrap();
+}
+
+/// With no record, the header says that every value is the default, and when the owner has set a
+/// `site.*` key of the shop (its entry then has the source `site`) it says "except what a site.* key
+/// sets". A theme alone, or a `site.*` key the shop would not use, leaves the header as it was: the
+/// theme's accent is not named by the header (its own line says `(theme)`), because the outputs of
+/// an instance with no record are held as they have been since S1a.
+#[test]
+fn status_with_no_record_and_an_explicit_site_key_says_which_values_are_not_the_default() {
+    let (_store, backend) = memory();
+    put_settings(
+        &backend,
+        json!({"site": {"title": "Fernhill Goods", "accent": "#2d6a4f"}}),
+    );
+    assert_eq!(
+        status_of(&backend),
+        "brand: not set (no record; every value is the default, except what a site.* key sets)\n\
+         name: \"obop\" (default)\n\
+         slug: \"obop\" (default)\n\
+         logo: none (default)\n\
+         tile_accent: \"#495670\" (default)\n\
+         authenticator_issuer: \"obop\" (default)\n\
+         favicon: \"tile\" (default)\n\
+         site.accent: \"#2d6a4f\" (site)\n\
+         site.logo_url: \"\" (default)\n\
+         site.title: \"Fernhill Goods\" (site)\n\
+         fallbacks: none\n"
+    );
+    // A theme is no `site.*` key, and a key the shop does not use is not one in force.
+    for settings in [
+        json!({"theme": {"accent": "#c2410c"}}),
+        json!({"site": {"title": "   ", "accent": "red", "logo_url": "http://x.test/l.png"}}),
+        json!({"site": {}}),
+    ] {
+        let (_store, backend) = memory();
+        put_settings(&backend, settings.clone());
+        let text = status_of(&backend);
+        assert!(
+            text.starts_with("brand: not set (no record; every value is the default)\n"),
+            "{settings}: {text}"
+        );
+        assert!(!text.contains("(site)"), "{settings}: {text}");
+    }
+}
+
+/// The same for `OBOP_MFA_ISSUER` (slice S1e): with no record a value of the variable is a value that
+/// is not the default (its entry has the source `env`), so the header may not say that every value
+/// is, and it names the variable, alone or beside a `site.*` key when both are in force. With a
+/// record the header is `brand: set` whatever the variable says.
+#[test]
+fn status_with_no_record_and_the_issuer_variable_says_which_values_are_not_the_default() {
+    let (_store, backend) = memory();
+    let fresh = Reader::new(backend.clone()).fresh().unwrap();
+    let text = render_status_with(&fresh, Some("Acme".into()));
+    assert_eq!(
+        text,
+        "brand: not set (no record; every value is the default, except what OBOP_MFA_ISSUER sets)\n\
+         name: \"obop\" (default)\n\
+         slug: \"obop\" (default)\n\
+         logo: none (default)\n\
+         tile_accent: \"#495670\" (default)\n\
+         authenticator_issuer: \"Acme\" (env)\n\
+         favicon: \"tile\" (default)\n\
+         site.accent: \"#0f766e\" (default)\n\
+         site.logo_url: \"\" (default)\n\
+         site.title: \"My Shop\" (default)\n\
+         fallbacks: none\n"
+    );
+    // With no variable the header is the plain one, as the test above holds.
+    assert!(
+        render_status_with(&fresh, None)
+            .starts_with("brand: not set (no record; every value is the default)\n")
+    );
+    // Both in force: both are named.
+    put_settings(&backend, json!({"site": {"title": "Fernhill Goods"}}));
+    let fresh = Reader::new(backend.clone()).fresh().unwrap();
+    let text = render_status_with(&fresh, Some("Acme".into()));
+    assert!(
+        text.starts_with(
+            "brand: not set (no record; every value is the default, except what a site.* key or OBOP_MFA_ISSUER sets)\n"
+        ),
+        "{text}"
+    );
+    assert!(
+        text.contains("authenticator_issuer: \"Acme\" (env)\n"),
+        "{text}"
+    );
+    assert!(
+        text.contains("site.title: \"Fernhill Goods\" (site)\n"),
+        "{text}"
+    );
+    // A record: the header is the short one, the variable's entry is as before.
+    configure(&backend, &[("name", "MOHV")]);
+    let fresh = Reader::new(backend.clone()).fresh().unwrap();
+    let text = render_status_with(&fresh, Some("Acme".into()));
+    assert!(text.starts_with("brand: set\n"), "{text}");
+    assert!(
+        text.contains("authenticator_issuer: \"Acme\" (env)\n"),
+        "{text}"
     );
 }
 
@@ -396,6 +513,10 @@ fn status_shows_the_values_in_force_the_titles_and_messages_that_are_set_and_the
              logo: tile (record)\n\
              tile_accent: \"#495670\" (default)\n\
              authenticator_issuer: \"MOHV\" (record)\n\
+             favicon: \"tile\" (default)\n\
+             site.accent: \"#495670\" (default)\n\
+             site.logo_url: \"/api/brand/logo.svg?v={v}\" (record)\n\
+             site.title: \"MOHV\" (record)\n\
              title_sv: \"Logga in\" (record)\n\
              message_en: \"Welcome\" (record)\n\
              logo version: {v}\n\
@@ -465,6 +586,36 @@ fn status_names_a_stored_field_that_fell_back_and_prints_nothing_of_its_value() 
     // Only the stored fields that passed are listed under their own name.
     assert!(!text.contains("title_de: "), "{text}");
     assert!(!text.contains("message_pl: "), "{text}");
+}
+
+/// A title or a message of nothing but spaces, written around the command (`configure` refuses it),
+/// is as empty as a blank name: `status` lists it as a fallback and not as a value in force.
+#[test]
+fn status_lists_a_blank_title_and_message_as_fallbacks_and_not_as_values_in_force() {
+    let (_store, backend) = memory();
+    let mut row = Fields::new();
+    for (k, v) in [("name", "MOHV"), ("title_en", "   "), ("message_en", "  ")] {
+        row.insert(k.into(), json!(v));
+    }
+    backend
+        .apply_checked(&[Op::Put {
+            model: "instance_brand".into(),
+            id: "instance".into(),
+            fields: row,
+        }])
+        .unwrap();
+    let text = status_of(&backend);
+    assert!(text.contains("name: \"MOHV\" (record)\n"), "{text}");
+    for field in ["title_en", "message_en"] {
+        assert!(
+            text.contains(&format!(
+                "fallback: {field} is not used, the default is shown (empty)\n"
+            )),
+            "{field}: {text}"
+        );
+        assert!(!text.contains(&format!("{field}: \"")), "{field}: {text}");
+    }
+    assert!(!text.contains("fallbacks: none"), "{text}");
 }
 
 // ---- a store that fails ---------------------------------------------------------------------------------

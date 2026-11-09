@@ -90,7 +90,7 @@ enum Limit {
 
 /// Where the brand is read or written: the path from `crates/` (a prefix when it ends with `/`),
 /// why, and what the file may do.
-const ALLOWED: [(&str, &str, Limit); 13] = [
+const ALLOWED: [(&str, &str, Limit); 14] = [
     (
         "kernel/obop-commands/src/brand/",
         "the module itself: the reader, `strict()`, `apply` and the read of `get`",
@@ -135,6 +135,16 @@ const ALLOWED: [(&str, &str, Limit); 13] = [
         "obop/src/brand_cmd.rs",
         "`obop admin brand`, which acts on the database as the operator (spec, section 3)",
         Limit::Any,
+    ),
+    (
+        "kernel/obop-commands/src/public.rs",
+        "`PublicApi::site_settings_read` (`site_settings` is the same call answering the object alone), the one door the public site and shop read their settings by: it hands the reader of the dispatcher to `brand::site_settings`, which does the read and the fill (spec, sections 4 and 5, row OT-04); it asks nothing of the reader itself",
+        Limit::Reads {
+            calls: 1,
+            reads: 0,
+            paths: &["site_settings"],
+            types: &[],
+        },
     ),
     (
         "kernel/obop-auth/src/mfa.rs",
@@ -757,6 +767,10 @@ fn the_scan_sees_the_ways_a_file_can_read_the_row_and_leaves_the_allowed_files_a
             "fn f() { let _ = brand::routes(g); }",
         ),
         (
+            "kernel/obop-commands/src/public.rs",
+            "fn f(&self) { crate::brand::site_settings(&*self.store.backend, &self.d.brand()) }",
+        ),
+        (
             "kernel/obop-auth/src/mfa.rs",
             "fn f(b: &dyn Backend) { let _ = obop_commands::brand::strict(b); }",
         ),
@@ -1175,11 +1189,12 @@ fn a_row_with_limits_lets_its_file_ask_the_reader_as_the_row_says_and_nothing_el
     assert!(found.is_empty(), "{found:?}");
 }
 
-/// The rows with limits are the two files of the logo route, the three files of the pages of the
-/// authorization flow and the four files of the enrolment texts (the authenticator's configuration,
-/// the error mapper of the routes, the passkey routes and the OAuth pages' route file, which has one
-/// row for both), and no others: loosening one of them to `Limit::Any` is a change of this test, and
-/// so a decision that shows in the diff.
+/// The rows with limits are the two files of the logo route, the settings door of the public site
+/// (`PublicApi::site_settings_read`, since slice S1f), the four files of the enrolment texts (since
+/// slice S1e: the authenticator's configuration, the error mapper of the routes, the passkey routes
+/// and the OAuth pages' route file, which has one row for both) and the three files of the pages of
+/// the authorization flow (since slice S1c), and no others: loosening one of them to `Limit::Any` is a
+/// change of this test, and so a decision that shows in the diff.
 #[test]
 fn the_rows_with_limits_are_the_files_that_only_ask_the_reader() {
     let limited: Vec<&str> = ALLOWED
@@ -1192,6 +1207,7 @@ fn the_rows_with_limits_are_the_files_that_only_ask_the_reader() {
         [
             "kernel/obop-http/src/brand.rs",
             "kernel/obop-http/src/lib.rs",
+            "kernel/obop-commands/src/public.rs",
             "kernel/obop-auth/src/mfa.rs",
             "kernel/obop-http/src/mfa.rs",
             "kernel/obop-http/src/passkeys.rs",
@@ -1200,6 +1216,85 @@ fn the_rows_with_limits_are_the_files_that_only_ask_the_reader() {
             "kernel/obop-oauth/src/flow.rs"
         ]
     );
+}
+
+/// What each of those rows lets its file do, literally: how many `brand()` calls, how many reads of
+/// the reader, which paths through the module `brand` and which types as types only. The test above
+/// holds which files have limits; this holds the limits, so that a row loosened by a number or a name
+/// (a second call, a read, `apply` among the paths) is a change of this test, and so a decision that
+/// shows in the diff. Every row with limits has its own line here.
+#[test]
+fn the_limits_of_the_rows_with_limits_are_the_ones_decided() {
+    type Want = (
+        &'static str,
+        usize,
+        usize,
+        &'static [&'static str],
+        &'static [&'static str],
+    );
+    let decided: [Want; 9] = [
+        (
+            "kernel/obop-http/src/brand.rs",
+            1,
+            1,
+            &["Reader", "Shown"],
+            &["Reader", "Shown"],
+        ),
+        (
+            "kernel/obop-http/src/lib.rs",
+            0,
+            0,
+            &["routes", "NotFound"],
+            &[],
+        ),
+        (
+            "kernel/obop-commands/src/public.rs",
+            1,
+            0,
+            &["site_settings"],
+            &[],
+        ),
+        (
+            "kernel/obop-auth/src/mfa.rs",
+            0,
+            0,
+            &["env_issuer", "issuer_warning", "strict", "enrolment_error"],
+            &[],
+        ),
+        ("kernel/obop-http/src/mfa.rs", 0, 0, &["UNREADABLE"], &[]),
+        (
+            "kernel/obop-http/src/passkeys.rs",
+            2,
+            3,
+            &["enrolment_error", "no_reader_error"],
+            &[],
+        ),
+        (
+            "kernel/obop-http/src/oauth.rs",
+            1,
+            2,
+            &["Shown"],
+            &["Shown"],
+        ),
+        ("kernel/obop-oauth/src/page.rs", 4, 0, &["Shown"], &[]),
+        ("kernel/obop-oauth/src/flow.rs", 0, 0, &["Shown"], &[]),
+    ];
+    for (file, calls, reads, paths, types) in decided {
+        let Some((
+            _,
+            _,
+            Limit::Reads {
+                calls: c,
+                reads: r,
+                paths: p,
+                types: t,
+            },
+        )) = ALLOWED.iter().find(|(f, _, _)| *f == file)
+        else {
+            panic!("{file} has no row with limits");
+        };
+        assert_eq!((*c, *r, *p, *t), (calls, reads, paths, types), "{file}");
+    }
 }
 
 /// The rows of the enrolment texts (S1e): each file may do what its row says and nothing else. The

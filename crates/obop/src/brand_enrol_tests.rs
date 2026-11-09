@@ -15,8 +15,9 @@
 //! held `AuthConfig::issuer` as the text `obop` and holds `None` (the enrolment output it pinned is
 //! asserted beside it, unchanged); the status text of an instance with no brand (`brand_cmd_tests`)
 //! gains the line `authenticator_issuer: "obop" (default)`; the answer of `get` with no row gains the
-//! entry `authenticator_issuer` (`obop-commands`, `brand/tests/effective.rs`, 4 + 14 keys became
-//! 5 + 14); and the two `with_a_brand_row_*` tests assert the name where they held `obop` with a row.
+//! entry `authenticator_issuer` (`obop-commands`, `brand/tests/effective.rs`: 4 + 14 keys became
+//! 5 + 14 on this slice's own branch, and 8 + 14 became 9 + 14 in a tree that has S1f too); and the
+//! two `with_a_brand_row_*` tests assert the name where they held `obop` with a row.
 
 use crate::app::App;
 use crate::brand_row_tests::set_brand;
