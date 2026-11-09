@@ -414,11 +414,46 @@ impl Public {
     }
 }
 
+/// Whether a `<meta>` declares the character encoding of the document: a `charset` attribute, or
+/// `http-equiv="content-type"`.
+fn is_charset_meta(html: &[u8], tag: &Tag) -> bool {
+    tag.name == "meta"
+        && !tag.closing
+        && attributes(html, tag).iter().any(|(k, v)| {
+            k == "charset" || (k == "http-equiv" && v.trim().eq_ignore_ascii_case("content-type"))
+        })
+}
+
+/// `html` with `edits` made: each is `(from, to, what replaces html[from..to])`, in any order but
+/// not overlapping (an insertion has `from == to`). `Err` for edits that overlap, which the scan
+/// of a head that is read correctly never makes.
+fn apply_edits(
+    html: &[u8],
+    mut edits: Vec<(usize, usize, String)>,
+) -> Result<Vec<u8>, &'static str> {
+    edits.sort_by_key(|e| (e.0, e.1));
+    let mut out = Vec::with_capacity(html.len() + 512);
+    let mut at = 0;
+    for (from, to, text) in edits {
+        if from < at {
+            return Err("its head cannot be read");
+        }
+        out.extend_from_slice(&html[at..from]);
+        out.extend_from_slice(text.as_bytes());
+        at = to;
+    }
+    out.extend_from_slice(&html[at..]);
+    Ok(out)
+}
+
 /// `html` with the brand: the first `<title>` replaced by the escaped name, every
 /// `<link rel="icon">` of the head replaced by the one link to the logo (the first in place, the
-/// others dropped) and the `obop-brand` tag as the first thing in the head. Nothing else is
-/// touched. `Err` names, in a fixed word, why the document cannot take it (no `<head>`, no
-/// `<title>`, no icon link, or it already has the tag); the caller then serves it as it is.
+/// others dropped) and the `obop-brand` tag added to the head, right after the tag that declares
+/// the character encoding (so that this declaration stays within the first 1024 bytes of the
+/// document whatever the brand holds; as the first thing in the head when there is none). Only
+/// the head is read and nothing else is touched. `Err` names, in a fixed word, why the document
+/// cannot take it (no `<head>`, no `<title>`, no icon link, or it already has the tag); the
+/// caller then serves it as it is.
 fn brand_rewrite(html: &[u8], shown: &Shown) -> Result<Vec<u8>, &'static str> {
     if contains_ignore_case(html, BRAND_META_NAME.as_bytes()) {
         return Err("it already has an obop-brand tag");
@@ -438,9 +473,14 @@ fn brand_rewrite(html: &[u8], shown: &Shown) -> Result<Vec<u8>, &'static str> {
     if icons.is_empty() {
         return Err("it has no icon link");
     }
-    // The edits, in document order: (from, to, what replaces html[from..to]).
+    // After the declaration of the encoding when the head has one, else first in the head.
+    let tag_at = tags
+        .iter()
+        .find(|t| is_charset_meta(html, t))
+        .map_or(head, |t| t.end);
+    // The edits: (from, to, what replaces html[from..to]).
     let mut edits: Vec<(usize, usize, String)> = vec![
-        (head, head, public.meta_tag()),
+        (tag_at, tag_at, public.meta_tag()),
         (
             title.start,
             title_end,
@@ -458,19 +498,7 @@ fn brand_rewrite(html: &[u8], shown: &Shown) -> Result<Vec<u8>, &'static str> {
             },
         ));
     }
-    edits.sort_by_key(|e| (e.0, e.1));
-    let mut out = Vec::with_capacity(html.len() + 512);
-    let mut at = 0;
-    for (from, to, text) in edits {
-        if from < at {
-            return Err("its head cannot be read");
-        }
-        out.extend_from_slice(&html[at..from]);
-        out.extend_from_slice(text.as_bytes());
-        at = to;
-    }
-    out.extend_from_slice(&html[at..]);
-    Ok(out)
+    apply_edits(html, edits)
 }
 
 fn is_html(h: &HeaderMap) -> bool {
@@ -716,8 +744,9 @@ impl Shell {
             return match original {
                 Some(o) if empty && !is_html(doc.headers()) => o,
                 // Nothing to add and nothing asked of the store: the file service's own answer.
+                // Only a file that changes between the two asks, or one that carries a
+                // `Content-Encoding` (the file service here sends none), gets here with a `Some`.
                 Some(o) if self.language.is_none() => no_cache(o),
-                None if self.language.is_none() => no_cache(doc),
                 _ => for_method(no_cache(doc), &asked),
             };
         }
@@ -1345,7 +1374,10 @@ mod tests {
             "<meta name=\"obop-brand\" content=\"{{&quot;name&quot;:&quot;MOHV&quot;,&quot;slug&quot;:&quot;mohv&quot;,&quot;messages&quot;:{{}},&quot;v&quot;:&quot;{v}&quot;}}\">"
         );
         let want = BUILT
-            .replace("<head>", &format!("<head>{tag}"))
+            .replace(
+                "<meta charset=\"UTF-8\" />",
+                &format!("<meta charset=\"UTF-8\" />{tag}"),
+            )
             .replace(
                 "<link rel=\"icon\" href=\"/admin/favicon.svg\" type=\"image/svg+xml\" />",
                 &format!(
@@ -1372,6 +1404,8 @@ mod tests {
             "<link href='/somewhere/else.png' rel='icon'>",
             "<LINK REL=\"SHORTCUT ICON\" HREF=/x.ico>",
             "<link rel=icon href=/x.ico>",
+            // `rel` is the last attribute and unquoted: the value ends at the `>` of the tag.
+            "<link href=/x.ico rel=icon>",
             "<link\n  rel=\"icon\"\n  href=\"/a>b.svg\"\n  title=\"a > b\">",
             "<link rel=\"icon\" href=\"/a.png\" sizes=\"32x32\"><link rel=\"icon\" href=\"/b.png\" sizes=\"16x16\">",
         ] {
@@ -1398,6 +1432,7 @@ mod tests {
             "<!-- <link rel=\"icon\" href=\"/commented.svg\"> <title>commented</title> -->",
             "<script>var s = '<link rel=\"icon\" href=\"/in-script.svg\"> <title>script</title>';</script>",
             "<style>/* <link rel=\"icon\" href=\"/in-style.svg\"> */</style>",
+            "<textarea><link rel=\"icon\" href=\"/in-textarea.svg\"></textarea>",
         ];
         let page = format!(
             "<html><head>{}<link rel=\"icon\" href=\"/real.svg\"><title>obop</title></head><body></body></html>",
@@ -1417,6 +1452,111 @@ mod tests {
         assert!(out.contains("<title>MOHV</title>"), "{out}");
         assert!(out.contains("<svg><title>drawing</title></svg>"), "{out}");
         assert!(!out.contains("data-x"), "{out}");
+    }
+
+    #[test]
+    fn only_the_head_is_read_so_an_icon_link_or_a_title_of_the_body_is_never_the_one() {
+        let shown = shown_of(&[("name", "MOHV")], None);
+        // An icon link in the body stays; the one of the head is replaced.
+        let page = "<html><head><title>obop</title><link rel=\"icon\" href=\"/a.ico\"></head><body><link rel=\"icon\" href=\"/b.ico\"><svg><title>drawing</title></svg></body></html>";
+        let out = rewritten(page, &shown).unwrap();
+        assert!(out.contains("<link rel=\"icon\" href=\"/b.ico\">"), "{out}");
+        assert!(out.contains("<svg><title>drawing</title></svg>"), "{out}");
+        assert!(!out.contains("/a.ico"), "{out}");
+        assert_eq!(out.matches("<link").count(), 2, "{out}");
+        // A head without a title has none, whatever the body has.
+        let page = "<html><head><link rel=\"icon\" href=\"/x\"></head><body><svg><title>d</title></svg></body></html>";
+        assert_eq!(rewritten(page, &shown), Err("it has no <title>"));
+        // A head without an icon link has none, whatever the body has.
+        let page = "<html><head><title>obop</title></head><body><link rel=\"icon\" href=\"/b.ico\"></body></html>";
+        assert_eq!(rewritten(page, &shown), Err("it has no icon link"));
+    }
+
+    #[test]
+    fn the_text_of_a_title_is_not_markup_so_a_link_inside_it_is_no_icon() {
+        let shown = shown_of(&[("name", "MOHV")], None);
+        let page = "<html><head><link rel=\"icon\" href=\"/real.ico\"><title>obop <link rel=\"icon\" href=\"/t.ico\"> x</title></head><body></body></html>";
+        let out = rewritten(page, &shown).unwrap();
+        assert!(out.contains("<title>MOHV</title>"), "{out}");
+        assert!(!out.contains("/t.ico") && !out.contains("/real.ico"), "{out}");
+        assert_eq!(out.matches("<link rel=\"icon\"").count(), 1, "{out}");
+    }
+
+    #[test]
+    fn the_tag_follows_the_declaration_of_the_encoding_so_that_it_stays_near_the_top() {
+        let shown = shown_of(&[("name", "MOHV")], None);
+        let tag = "<meta name=\"obop-brand\"";
+        let page = |meta: &str| {
+            format!(
+                "<html><head>{meta}<title>obop</title><link rel=\"icon\" href=\"/x\"></head></html>"
+            )
+        };
+        // Wherever the declaration is in the head, the tag comes right after it.
+        for meta in [
+            "<meta charset=\"UTF-8\" />",
+            "<META CHARSET=utf-8>",
+            "<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">",
+            "<meta  http-equiv='content-type' content='text/html'>",
+        ] {
+            let out = rewritten(&page(meta), &shown).unwrap();
+            assert!(out.contains(&format!("<head>{meta}{tag}")), "{meta}: {out}");
+        }
+        let out = rewritten(
+            &format!(
+                "<html><head><meta name=\"viewport\" content=\"x\">{}<title>obop</title><link rel=\"icon\" href=\"/x\"></head></html>",
+                "<meta charset=\"UTF-8\">"
+            ),
+            &shown,
+        )
+        .unwrap();
+        assert!(
+            out.contains(&format!(
+                "<meta name=\"viewport\" content=\"x\"><meta charset=\"UTF-8\">{tag}"
+            )),
+            "{out}"
+        );
+        // A head with no declaration (or only other meta tags) gets the tag first.
+        for meta in ["", "<meta name=\"viewport\" content=\"width=1\">"] {
+            let out = rewritten(&page(meta), &shown).unwrap();
+            assert!(out.contains(&format!("<head>{tag}")), "{meta}: {out}");
+        }
+        // Long non-ASCII messages do not push the declaration out of the first 1024 bytes.
+        let long = "Välkommen åt alla ÅÄÖ ".repeat(10).trim_end().to_string();
+        let pairs: Vec<(String, String)> = LANGS
+            .iter()
+            .map(|l| (format!("message_{l}"), long.clone()))
+            .collect();
+        let mut fields: Vec<(&str, &str)> = vec![("name", "Åkerblom Öst")];
+        fields.extend(pairs.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+        let big = shown_of(&fields, None);
+        let out = rewritten(BUILT, &big).unwrap();
+        let charset = out.find("<meta charset").expect("the declaration");
+        assert!(charset < 1024, "the declaration starts at byte {charset}");
+        assert!(out.len() > 2048, "the tag is long: {}", out.len());
+    }
+
+    #[test]
+    fn edits_that_overlap_are_refused_and_the_rest_are_made_in_document_order() {
+        let html = b"0123456789";
+        let edits = vec![
+            (6, 8, "-".to_string()),
+            (2, 2, "<>".to_string()),
+            (0, 1, String::new()),
+        ];
+        assert_eq!(
+            apply_edits(html, edits).map(|v| String::from_utf8(v).unwrap()),
+            Ok("1<>2345-89".to_string())
+        );
+        // A second edit that starts inside the first.
+        assert_eq!(
+            apply_edits(html, vec![(2, 6, "x".into()), (4, 5, "y".into())]),
+            Err("its head cannot be read")
+        );
+        // One that starts where the first ends is no overlap.
+        assert_eq!(
+            apply_edits(html, vec![(2, 4, "x".into()), (4, 5, "y".into())]),
+            Ok(b"01xy56789".to_vec())
+        );
     }
 
     #[test]
@@ -1706,15 +1846,17 @@ mod tests {
     #[tokio::test]
     async fn a_shell_that_cannot_take_the_brand_is_served_as_it_is_with_one_line_on_stderr_once() {
         let build = Build::new("cannot");
-        for (page, what) in [
-            ("<html><body>x</body></html>", "no head"),
+        for (page, what, why) in [
+            ("<html><body>x</body></html>", "no head", "it has no <head>"),
             (
                 "<html><head><link rel=\"icon\" href=\"/x\"></head><body></body></html>",
                 "no title",
+                "it has no <title>",
             ),
             (
                 "<html><head><title>obop</title></head><body></body></html>",
                 "no icon link",
+                "it has no icon link",
             ),
         ] {
             std::fs::write(build.0.join("index.html"), page).unwrap();
@@ -1736,9 +1878,52 @@ mod tests {
                 "{lines:?}"
             );
             assert!(
+                lines[0].contains(&format!("({why})")),
+                "{what}: the line says why: {lines:?}"
+            );
+            assert!(
                 !lines[0].contains("MOHV"),
                 "the line holds nothing of the brand: {lines:?}"
             );
         }
+    }
+
+    /// The default language is not lost when the brand cannot be applied: the shell is the file
+    /// with the language tag and nothing of the brand.
+    #[tokio::test]
+    async fn a_shell_that_cannot_take_the_brand_still_carries_the_default_language() {
+        let build = Build::new("cannot-language");
+        for page in [
+            "<html><head><meta charset=\"utf-8\"><link rel=\"icon\" href=\"/x\"></head><body></body></html>",
+            "<html><head><title>obop</title></head><body></body></html>",
+        ] {
+            std::fs::write(build.0.join("index.html"), page).unwrap();
+            let (shell, _) = branded_shell(&build, Some("sv"), &[("name", "MOHV")]);
+            let shell = shell.with_sink(Arc::new(|_| {}));
+            for path in ["/", "/customize"] {
+                let (status, _, body) = get(&shell, "GET", path, &[]).await;
+                assert_eq!(status, StatusCode::OK);
+                let text = String::from_utf8(body).unwrap();
+                assert_eq!(
+                    text,
+                    inject(page.as_bytes(), "sv")
+                        .map(|v| String::from_utf8(v).unwrap())
+                        .unwrap(),
+                    "{page}: the file with the language tag only"
+                );
+                assert!(!text.contains("obop-brand") && !text.contains("MOHV"));
+            }
+        }
+    }
+
+    /// A reader with no store has only the default brand to give: the shell keeps no reader for
+    /// it, so no request of the document takes the hop to a blocking thread for nothing.
+    #[test]
+    fn a_reader_with_no_store_is_no_reader_and_one_with_a_store_is() {
+        let build = Build::new("inert");
+        let inert = Shell::with_brand(build.path(), None, Arc::new(Reader::inert()));
+        assert!(inert.brand.is_none());
+        let (with_store, _) = branded_shell(&build, None, &[]);
+        assert!(with_store.brand.is_some());
     }
 }

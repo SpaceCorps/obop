@@ -377,8 +377,8 @@ async fn with_the_store_failing_the_index_is_a_503_also_for_an_instance_with_no_
     }
 }
 
-/// The wait that a refill needs for the cell to be stale.
-const READER_BOUND: std::time::Duration = std::time::Duration::from_secs(2);
+/// The wait that a refill needs for the cell to be stale: the bound of the reader the server builds.
+const READER_BOUND: std::time::Duration = obop_commands::brand::DEFAULT_BOUND;
 
 fn wait_until_stale(filled: std::time::Instant) {
     let stale = READER_BOUND + std::time::Duration::from_millis(50);

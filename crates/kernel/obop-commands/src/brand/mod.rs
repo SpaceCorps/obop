@@ -26,7 +26,7 @@ pub use apply::{
     Action, Applied, Changed, Failure, Refused, apply, change_line, changes_json, printable,
     refusals_json, show_key,
 };
-pub use reader::{Fresh, Reader, Sink, strict};
+pub use reader::{DEFAULT_BOUND, Fresh, Reader, Sink, strict};
 pub use row::{Fallback, SWITCH, Shown, fallbacks_json};
 
 use crate::Dispatcher;
