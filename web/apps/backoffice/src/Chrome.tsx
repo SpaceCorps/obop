@@ -129,7 +129,7 @@ export function TopBar(props: {
           onClick={props.onMenu}
         />
       )}
-      <a className="brand" href="#/">
+      <a className="brand" href="#/" title={current ? undefined : pageBrand()?.name}>
         {current ? (
           <>
             <InstanceLogo variant="mark" size={22} title="" />

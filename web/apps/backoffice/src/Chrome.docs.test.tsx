@@ -121,6 +121,7 @@ describe("the name of the top bar link", () => {
   it("is the product's own name while the page has no brand, as text a check can read", async () => {
     await act(async () => root.render(bar()));
     expect(name()).toBe("obop");
+    expect(container.querySelector("a.brand")?.hasAttribute("title")).toBe(false);
   });
 
   it("is the name of the brand, once, and never obop, while the page has one", async () => {
@@ -128,5 +129,12 @@ describe("the name of the top bar link", () => {
     await act(async () => root.render(bar()));
     expect(name()).toBe("MOHV");
     expect(container.querySelector("a.brand")?.innerHTML.toLowerCase()).not.toContain("obop");
+  });
+
+  it("carries the whole name as its title, because the bar cuts a long name at its width", async () => {
+    const long = "Example Trading and Holding Company Ltd."; // 40 characters, the most a name may have
+    setBrand({ name: long, slug: "example", messages: {}, v: "0123456789abcdef" });
+    await act(async () => root.render(bar()));
+    expect(container.querySelector("a.brand")?.getAttribute("title")).toBe(long);
   });
 });

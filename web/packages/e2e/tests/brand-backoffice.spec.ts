@@ -331,6 +331,44 @@ for (const layout of LAYOUTS) {
         });
       }
     });
+
+    // The last of the serial tests: it changes the name, and puts it back.
+    test("a name of the longest size stays on one line inside the top bar, at phone widths", async ({
+      page,
+      request,
+    }) => {
+      test.setTimeout(60_000);
+      const long = "Example Trading and Holding Company Ltd."; // 40 characters, the most a name may have
+      expect(Array.from(long)).toHaveLength(40);
+      const set = (name: string) =>
+        call(request, layout.base(), admin, "instance_brand.configure", { name });
+      try {
+        const sam = await addPerson(request, layout.base(), admin, `longname${Date.now()}`, false);
+        const token = await tokenOf(request, layout.base(), sam);
+        expect((await set(long)).status).toBe(200);
+        // The shell is read through the reader, which keeps its answer for two seconds.
+        await expect(async () => {
+          await openAs(page, url(), token, sam.name);
+          await expect(page).toHaveTitle(long, { timeout: 1000 });
+        }).toPass({ timeout: 15_000 });
+        for (const width of [320, 375, 414]) {
+          await page.setViewportSize({ width, height: 800 });
+          const name = page.locator(".topbar .instance-logo-name");
+          await expect(name).toHaveText(long);
+          await expect(page.locator(".topbar a.brand")).toHaveAttribute("title", long);
+          const bar = (await page.locator(".topbar").boundingBox())!;
+          const box = (await name.boundingBox())!;
+          // The name is one line, and the whole box of it lies inside the bar.
+          expect(box.height, `${width} px: one line`).toBeLessThan(30);
+          expect(box.y, `${width} px: top`).toBeGreaterThanOrEqual(bar.y);
+          expect(box.y + box.height, `${width} px: bottom`).toBeLessThanOrEqual(bar.y + bar.height);
+          expect(box.x + box.width, `${width} px: right`).toBeLessThanOrEqual(width);
+          expect(await layoutProblems(page), `${width} px`).toEqual([]);
+        }
+      } finally {
+        await set(brand.name);
+      }
+    });
   });
 }
 
