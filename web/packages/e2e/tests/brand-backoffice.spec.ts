@@ -216,6 +216,45 @@ for (const layout of LAYOUTS) {
         expect(await layoutProblems(page)).toEqual([]);
       });
 
+    test("the sign-in screen takes the accent that the theme stores, before anyone has signed in", async ({
+      page,
+      request,
+    }) => {
+      const before = (await call(request, layout.base(), admin, "setting.get", { id: "instance" }))
+        .json.value.value as string;
+      const stored = JSON.parse(before);
+      const withAccent = JSON.stringify({
+        ...stored,
+        theme: { ...(stored.theme ?? {}), accent: "#c2410c" },
+      });
+      const accentOf = () =>
+        page.evaluate(() =>
+          getComputedStyle(document.documentElement).getPropertyValue("--accent").trim(),
+        );
+      try {
+        // Without a stored accent the sign-in screen has the stock one.
+        await page.goto(url());
+        await expect(page.getByRole("heading", { name: "Sign in", level: 2 })).toBeVisible();
+        const stock = await accentOf();
+        expect(stock).not.toBe("#c2410c");
+        await call(request, layout.base(), admin, "setting.update", {
+          id: "instance",
+          value: withAccent,
+        });
+        // The shell is read through the reader, which keeps its answer for two seconds.
+        await expect(async () => {
+          await page.goto(url());
+          await expect(page.getByRole("heading", { name: "Sign in", level: 2 })).toBeVisible();
+          expect(await accentOf()).toBe("#c2410c");
+        }).toPass({ timeout: 15_000 });
+      } finally {
+        await call(request, layout.base(), admin, "setting.update", {
+          id: "instance",
+          value: before,
+        });
+      }
+    });
+
     test("after sign-in the tab still carries the name, and so does the top bar", async ({
       page,
       request,
@@ -306,6 +345,8 @@ test.describe("the sign-in screen in another language", () => {
       // Swedish: the page speaks it; the message was written in English only.
       await expect(page.getByRole("heading", { name: "Logga in", level: 2 })).toBeVisible();
       await expect(page.getByText(brand.message, { exact: true })).toBeVisible();
+      // It is English text on a Swedish page: a screen reader is told so.
+      await expect(page.getByText(brand.message, { exact: true })).toHaveAttribute("lang", "en");
       await expect(page).toHaveTitle(brand.name);
       await expectNoProductName(page);
     });
