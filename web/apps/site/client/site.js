@@ -70,7 +70,7 @@
     btn.addEventListener("click", function () {
       var code = btn.parentElement && btn.parentElement.querySelector("pre code");
       if (!code || !navigator.clipboard) return;
-      navigator.clipboard.writeText(code.innerText).then(function () {
+      void navigator.clipboard.writeText(code.innerText).then(function () {
         btn.classList.add("copied");
         btn.setAttribute("aria-label", strings.copied || "Copied");
         setTimeout(function () {

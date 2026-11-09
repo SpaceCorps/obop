@@ -58,7 +58,7 @@ export function jsonLd(c: Ctx): object[] {
   const lang = m.htmlLang;
   const out: object[] = [];
   const ctx = "https://schema.org";
-  const section = String(c.fm["section"] ?? "");
+  const section = typeof c.fm["section"] === "string" ? c.fm["section"] : "";
 
   if (c.path === "/") {
     out.push({ "@context": ctx, ...ORG });
