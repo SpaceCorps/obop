@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useId, useState } from "react";
-import { Badge, Button, Input, Notice, Table, createTwoFactorApi, fmt, t } from "@obop/ui";
-import { Icon, Logo } from "./ui.tsx";
+import {
+  Badge,
+  Button,
+  InstanceLogo,
+  Input,
+  Notice,
+  Table,
+  createTwoFactorApi,
+  fmt,
+  t,
+} from "@obop/ui";
+import { Icon } from "./ui.tsx";
 import { passkeyMessage } from "./Passkeys.tsx";
 import { proveWithPasskey } from "./passkeys.ts";
 import { call, search, type Row } from "./api.ts";
@@ -676,7 +686,7 @@ export function PasswordGate({
     <main className="gate">
       <div className="gate-card panel">
         <header className="gate-head">
-          <Logo variant="full" size={26} title="obop" />
+          <InstanceLogo variant="full" size={26} />
           <span className="hint">{user}</span>
         </header>
         <Notice tone="warning" title={t("Choose a new password to continue")}>

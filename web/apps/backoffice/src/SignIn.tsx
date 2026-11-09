@@ -1,5 +1,15 @@
 import { useEffect, useState } from "react";
-import { LanguageSelect, TwoFactorStep, t, twoFactorMessage, useI18n, type Factor } from "@obop/ui";
+import {
+  InstanceLogo,
+  LanguageSelect,
+  TwoFactorStep,
+  brandMessage,
+  pageBrand,
+  t,
+  twoFactorMessage,
+  useI18n,
+  type Factor,
+} from "@obop/ui";
 import {
   SSO_START,
   forgetPlace,
@@ -14,7 +24,7 @@ import {
 import { passkeyMessage } from "./Passkeys.tsx";
 import { passkeysSupported, signInWithPasskey } from "./passkeys.ts";
 import { storageFaultMessage } from "./serverMessage.ts";
-import { Button, Icon, Input, Logo, Notice } from "./ui.tsx";
+import { Button, Icon, Input, Notice } from "./ui.tsx";
 
 /**
  * What the person is told when the sign-in with Microsoft did not go through (D91). Four words
@@ -59,6 +69,10 @@ export function SignIn({
   // begin a second sign-in.
   const [leaving, setLeaving] = useState(false);
   const i18n = useI18n();
+  // The brand of the instance, from the page (docs/spec/branding.md): with one, the logo and the
+  // name stand in the aside instead of the product's own copy, and its message sits under the hint.
+  const brand = pageBrand();
+  const message = brandMessage(brand, i18n.lang);
 
   // The Back button of the browser restores this page as it was left, from its back/forward cache
   // (`persisted`), with the button still waiting: it must be usable again.
@@ -183,27 +197,32 @@ export function SignIn({
     <main className="signin-wrap">
       <aside className="signin-brand">
         <h1 className="signin-logo-lg">
-          <Logo variant="full" size={28} title="obop" />
+          <InstanceLogo variant="full" size={brand ? 40 : 28} />
         </h1>
-        <p className="signin-claim">{t("One business, one platform.")}</p>
-        <ul>
-          <li>
-            <Icon name="users" size={18} /> {t("Every app shares one set of contacts and products")}
-          </li>
-          <li>
-            <Icon name="shield-check" size={18} />{" "}
-            {t("Personal data is masked unless you may see it")}
-          </li>
-          <li>
-            <Icon name="sparkle" size={18} />{" "}
-            {t("Agents can do what you can, and ask before they act")}
-          </li>
-        </ul>
+        {!brand && (
+          <>
+            <p className="signin-claim">{t("One business, one platform.")}</p>
+            <ul>
+              <li>
+                <Icon name="users" size={18} />{" "}
+                {t("Every app shares one set of contacts and products")}
+              </li>
+              <li>
+                <Icon name="shield-check" size={18} />{" "}
+                {t("Personal data is masked unless you may see it")}
+              </li>
+              <li>
+                <Icon name="sparkle" size={18} />{" "}
+                {t("Agents can do what you can, and ask before they act")}
+              </li>
+            </ul>
+          </>
+        )}
       </aside>
       {step ? (
         <div className="signin">
           <h1 className="signin-logo">
-            <Logo variant="full" size={30} title="obop" />
+            <InstanceLogo variant="full" size={30} />
           </h1>
           <TwoFactorStep
             key={step.mfaToken}
@@ -220,11 +239,12 @@ export function SignIn({
       ) : (
         <form className="signin" onSubmit={(e) => void password(e)}>
           <h1 className="signin-logo">
-            <Logo variant="full" size={30} title="obop" />
+            <InstanceLogo variant="full" size={30} />
           </h1>
           <div className="signin-head">
             <h2>{t("Sign in")}</h2>
             <p className="hint">{t("Sign in to your instance.")}</p>
+            {message && <p className="hint signin-message">{message}</p>}
           </div>
           <Input label={t("Username")} name="username" autoComplete="username" required autoFocus />
           <Input
