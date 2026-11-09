@@ -1,0 +1,215 @@
+/*
+ * The apps pages: the index (.store) and every app page (.app-page).
+ *
+ * The feel is borrowed from how Apple builds its store pages, as a reference for restraint and
+ * structure only: one idea per screen, one accent colour (the primary pill and links), large type
+ * with a strong hierarchy, long calm vertical rhythm, soft rounded surfaces with hairline edges,
+ * touch targets of at least 44 px, and nothing that decorates without meaning. Written mobile
+ * first; the colours, fonts and radii are the @obop/ui tokens, so light and dark come for free.
+ */
+.store,
+.app-page {
+  --st-gap: var(--space-16);
+  --st-radius: 1.25rem;
+  --st-hair: 1px solid var(--border);
+  font-size: 1.0625rem;
+  line-height: 1.5;
+}
+@media (min-width: 48rem) {
+  .store,
+  .app-page {
+    --st-gap: var(--space-24);
+  }
+}
+
+/* Squircle app icons (about 22 percent): the shared tile helper sets 28 percent inline. */
+.store .app-icon,
+.app-page .app-icon {
+  border-radius: 22.37% !important;
+}
+
+.store a,
+.app-page a.app-link {
+  text-decoration: none;
+}
+.store a:focus-visible,
+.app-page a:focus-visible,
+.app-page summary:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+
+/* ---------- Index ---------- */
+.store {
+  padding-block: var(--space-12) var(--space-20);
+}
+.store-head {
+  margin-block-end: var(--st-gap);
+}
+.store-head h1 {
+  margin: 0;
+  font-size: 2.25rem;
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+}
+.store-lead {
+  max-inline-size: 36rem;
+  margin: var(--space-3) 0 0;
+  color: var(--text-muted);
+  font-size: 1.25rem;
+  line-height: 1.4;
+  text-wrap: balance;
+}
+.store-sec + .store-sec {
+  margin-block-start: var(--st-gap);
+}
+.store-sec > h2 {
+  margin: 0 0 var(--space-5);
+  font-size: 1.75rem;
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+.store-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-inline-size: 0;
+}
+.store-name {
+  font-weight: var(--weight-semibold);
+  line-height: 1.25;
+}
+.store-tag {
+  color: var(--text-muted);
+  font-size: 0.9375rem;
+  line-height: 1.35;
+}
+
+/* The six built-in apps: large friendly tiles, one column on a phone. */
+.store-tiles {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.store-tile {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-block-size: 6.5rem;
+  padding: var(--space-4);
+  border: var(--st-hair);
+  border-radius: var(--st-radius);
+  background: var(--surface);
+  color: var(--text);
+  transition:
+    background-color var(--dur-2) var(--ease-out),
+    border-color var(--dur-2) var(--ease-out);
+}
+.store-tile .store-name {
+  font-size: 1.25rem;
+  letter-spacing: -0.015em;
+}
+.store-tile:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+}
+@media (min-width: 40rem) {
+  .store-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-4);
+  }
+}
+@media (min-width: 64rem) {
+  .store-tiles {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .store-tile {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-6);
+    min-block-size: 14rem;
+    padding: var(--space-8);
+  }
+  .store-tile .store-text {
+    gap: 0.25rem;
+    margin-block-start: auto;
+  }
+  .store-tile .store-name {
+    font-size: 1.5rem;
+  }
+  .store-tile .store-tag {
+    font-size: 1.0625rem;
+  }
+}
+
+/* The marketplace apps: rows grouped by category, hairline dividers, a small "Get" pill. */
+.store-group + .store-group {
+  margin-block-start: var(--space-10);
+}
+.store-group h3 {
+  margin: 0;
+  padding-block-end: var(--space-2);
+  border-block-end: var(--st-hair);
+  font-size: 1.25rem;
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.02em;
+}
+.store-rows {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  column-gap: var(--space-12);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.store-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-block-size: 4.25rem;
+  padding-block: var(--space-3);
+  border-block-end: var(--st-hair);
+  color: var(--text);
+}
+.store-row .store-text {
+  flex: 1;
+}
+.store-get {
+  flex: none;
+  padding: 0.3rem 1.125rem;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: 0.9375rem;
+  font-weight: var(--weight-semibold);
+  transition: background-color var(--dur-2) var(--ease-out);
+}
+.store-row:hover .store-get {
+  background: var(--accent-soft-strong);
+}
+@media (min-width: 48rem) {
+  .store-rows {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 72rem) {
+  .store-rows {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (min-width: 48rem) {
+  .store-head h1 {
+    font-size: 3.5rem;
+  }
+  .store-lead {
+    font-size: 1.5rem;
+  }
+  .store-sec > h2 {
+    font-size: 2rem;
+  }
+}
