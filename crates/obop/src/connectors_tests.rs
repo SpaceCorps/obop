@@ -1369,25 +1369,38 @@ async fn a_hostile_name_written_around_the_command_is_escaped_on_the_return_page
     assert!(denied.contains("Back to obop</a>"), "{denied}");
 }
 
-/// A name the policy accepts may end in a full stop (`e.V.`, `Inc.`): the sentence of a good
-/// connection then ends in that one, not in two, and the link says the name whole.
+/// A name the policy accepts may end in a mark that ends a sentence (`e.V.`, `Inc.`, `Yahoo!`): the
+/// sentence of a good connection then ends in that one, not in two (`e.V..`, `Yahoo!.`), and the link
+/// says the name whole. A name that ends in another punctuation mark the policy accepts, `)`, still
+/// gets the full stop.
 #[tokio::test]
-async fn a_name_that_ends_in_a_full_stop_ends_the_sentence_of_a_good_connection_once() {
-    let (fake, end) = fake_oauth();
-    let name = "Example Club e.V.";
-    let r = rig_with_brand(vec![fake], Some(BrandRow::Configured(&[("name", name)])));
-    let state = start_fake_connection(&r, end.port).await;
-    let answer = answer_of(&r, &format!("/oauth/callback?state={state}&code=code-1")).await;
-    assert!(answer.starts_with("200\n"), "{answer}");
-    assert!(
-        answer.contains("<p>The account is authorised. Taking you back to Example Club e.V.</p>"),
-        "{answer}"
-    );
-    assert!(!answer.contains("e.V.."), "two full stops: {answer}");
-    assert!(
-        answer.contains("<a href=\"/#/connectors/connection\">Back to Example Club e.V.</a>"),
-        "{answer}"
-    );
+async fn a_name_that_ends_in_a_stop_mark_ends_the_sentence_of_a_good_connection_once() {
+    for (name, sentence) in [
+        ("Example Club e.V.", "Example Club e.V."),
+        ("Yahoo!", "Yahoo!"),
+        ("Example (Sweden)", "Example (Sweden)."),
+    ] {
+        let (fake, end) = fake_oauth();
+        let r = rig_with_brand(vec![fake], Some(BrandRow::Configured(&[("name", name)])));
+        let state = start_fake_connection(&r, end.port).await;
+        let answer = answer_of(&r, &format!("/oauth/callback?state={state}&code=code-1")).await;
+        assert!(answer.starts_with("200\n"), "{name}: {answer}");
+        assert!(
+            answer.contains(&format!(
+                "<p>The account is authorised. Taking you back to {sentence}</p>"
+            )),
+            "{name}: {answer}"
+        );
+        for twice in ["e.V..", "Yahoo!.", "!.", "..</p>"] {
+            assert!(!answer.contains(twice), "{name}: two marks: {answer}");
+        }
+        assert!(
+            answer.contains(&format!(
+                "<a href=\"/#/connectors/connection\">Back to {name}</a>"
+            )),
+            "{name}: {answer}"
+        );
+    }
 }
 
 /// A read of the brand that fails in none of the classes of D74 (the store is up and cannot answer: a
@@ -1442,6 +1455,60 @@ async fn a_first_brand_read_that_fails_in_no_class_of_d74_shows_the_stand_in_and
     // The store answers: the state is spent, and the page of that failure is the brand's.
     flaky.allow_models();
     let spent = answer_of(&r, &uri).await;
+    assert!(spent.contains("Not connected"), "{spent}");
+    assert!(spent.contains("Back to MOHV</a>"), "{spent}");
+}
+
+/// After a good read the same failure shows the brand of the last good read, not the stand-in:
+/// `docs/CONNECTORS.md` says the page names `obop` only in a process that has had no good read. The
+/// callback goes on as it always did, with status 200 and no word of D74, and no 503 follows however
+/// long the store cannot answer; the name is MOHV in the link and in the sentence.
+#[tokio::test]
+async fn after_a_good_brand_read_a_read_that_fails_in_no_class_of_d74_names_the_last_good_brand() {
+    use obop_storage::testing::Flaky;
+    let (fake, end) = fake_oauth();
+    let (flaky, backend) = Flaky::memory();
+    let row = [("name", json!("MOHV"))];
+    let r = rig_over(
+        Store::over(backend),
+        vec![fake],
+        Some(BrandRow::Around(&row)),
+    );
+    let state = start_fake_connection(&r, end.port).await;
+    // A good read, through a call that spends nothing: the cell holds MOHV.
+    let good = answer_of(&r, "/oauth/callback?error=access_denied").await;
+    assert!(good.contains("Back to MOHV</a>"), "{good}");
+    let filled = std::time::Instant::now();
+    // The cell is stale, so the next call asks the store, which cannot answer.
+    crate::oauth_tests::brand::wait_until_stale(filled);
+    flaky.fail_gets_of(
+        obop_commands::brand::MODEL,
+        "relation \"record\" does not exist",
+    );
+    let asked = flaky.gets_of(obop_commands::brand::MODEL);
+    let uri = format!("/oauth/callback?state={state}&code=code-1");
+    let answer = answer_of(&r, &uri).await;
+    assert!(
+        flaky.gets_of(obop_commands::brand::MODEL) > asked,
+        "the store was asked and could not answer"
+    );
+    assert!(answer.starts_with("200\n"), "{answer}");
+    assert!(
+        !answer.to_lowercase().contains("retry-after"),
+        "no word of D74: {answer}"
+    );
+    assert!(
+        answer.contains("The account is authorised. Taking you back to MOHV."),
+        "{answer}"
+    );
+    assert!(answer.contains("Back to MOHV</a>"), "{answer}");
+    assert!(
+        !answer.to_lowercase().contains("obop"),
+        "the stand-in is for a process with no good read: {answer}"
+    );
+    // The next call is the same, and the page of a spent state names MOHV too.
+    let spent = answer_of(&r, &uri).await;
+    assert!(spent.starts_with("200\n"), "{spent}");
     assert!(spent.contains("Not connected"), "{spent}");
     assert!(spent.contains("Back to MOHV</a>"), "{spent}");
 }

@@ -107,10 +107,17 @@ fn hook_blocking(s: &HttpState, id: &str, headers: &HeaderMap, body: &[u8]) -> R
     }
 }
 
-/// The sentence of a good connection. The name is followed by a full stop unless it ends in one
-/// already: the name policy accepts `Example Club e.V.`, and the sentence must not end in two.
+/// The sentence of a good connection. The name is followed by a full stop unless it ends in a mark
+/// that ends a sentence already (`.`, `!` or `?`): the name policy accepts `Example Club e.V.` and
+/// `Yahoo!`, and the sentence must not end in `.` twice or in `!.`. A name that ends in any other
+/// punctuation the policy lets through (`-`, `,`, `&`, `'`, `+`, `_`, `)`) still gets the stop, so
+/// `Example (Sweden)` reads `Taking you back to Example (Sweden).`
 fn taking_you_back(name: &str) -> String {
-    let stop = if name.ends_with('.') { "" } else { "." };
+    let stop = if name.ends_with(['.', '!', '?']) {
+        ""
+    } else {
+        "."
+    };
     format!("The account is authorised. Taking you back to {name}{stop}")
 }
 
@@ -202,10 +209,12 @@ pub async fn oauth_callback(
 mod tests {
     use super::*;
 
-    /// The sentence ends in one full stop whatever the name ends with (the name policy accepts
-    /// `e.V.`, `Inc.` and `S.A.`), and is the sentence it always was for a name that ends in a letter.
+    /// The sentence ends in one mark whatever the name ends with: the name policy accepts `e.V.`,
+    /// `Inc.`, `S.A.` and `Yahoo!`, which end the sentence themselves and get no second one, and
+    /// `Example (Sweden)` and `Acme +`, which get the full stop. It is the sentence it always was for
+    /// a name that ends in a letter.
     #[test]
-    fn the_sentence_of_a_good_connection_ends_in_one_full_stop_whatever_the_name_ends_with() {
+    fn the_sentence_of_a_good_connection_ends_in_one_mark_whatever_the_name_ends_with() {
         for (name, want) in [
             (
                 "MOHV",
@@ -223,6 +232,22 @@ mod tests {
                 "Example S.A",
                 "The account is authorised. Taking you back to Example S.A.",
             ),
+            (
+                "Yahoo!",
+                "The account is authorised. Taking you back to Yahoo!",
+            ),
+            (
+                "Example (Sweden)",
+                "The account is authorised. Taking you back to Example (Sweden).",
+            ),
+            (
+                "Acme +",
+                "The account is authorised. Taking you back to Acme +.",
+            ),
+            (
+                "Acme, Inc!",
+                "The account is authorised. Taking you back to Acme, Inc!",
+            ),
         ] {
             assert_eq!(taking_you_back(name), want);
         }
@@ -230,8 +255,11 @@ mod tests {
 
     /// Every value the page is made of is escaped where it is put: the title in the head and in the
     /// heading, the sentence, the name in the link and the way back in the link and in the refresh
-    /// (it is a path of this instance and built by the server, but an operator's `--admin-prefix`
-    /// is the one place a character that HTML needs escaped could come from).
+    /// (it is a path of this instance and built by the server: the base is `/` or the one-segment
+    /// `--admin-prefix` of the public site, which the server refuses to start with unless it is
+    /// lowercase letters, digits, `-` and `_`, so no character that HTML needs escaped can reach it
+    /// today). The escape of the way back is defence in depth, and this test feeds a hostile path
+    /// straight to `page_html`, which no request can do.
     #[test]
     fn the_title_the_sentence_the_name_and_the_way_back_are_escaped_where_they_are_put() {
         let html = page_html(

@@ -487,11 +487,15 @@ mod tests {
         );
     }
 
-    /// Every refusal of the door has its status and says its own words, in every language: the key
-    /// of the catalogue is written out here, and the page that `refusal` makes must hold that key's
-    /// text (so that a handler which hands the page another key is found by name).
+    /// Every refusal of the door has its status and says the words of its key, in every language:
+    /// the key of the catalogue is written out here, and the page that `refusal` makes must hold that
+    /// key's text (so that a handler which hands the page another key is found by name). The keys are
+    /// not all different: the three `Invalid` variants share `err_name` (the form is shown again by
+    /// the caller, so this is only the fallback), and `Refused` shares `gone_revoked` with
+    /// `Gone::Revoked`; the table says so, and it pins each variant to the key it has.
     #[tokio::test]
-    async fn every_refusal_of_the_door_has_its_status_and_says_its_own_words_in_every_language() {
+    async fn every_refusal_of_the_door_has_its_status_and_says_the_words_of_its_key_in_every_language()
+     {
         use http_body_util::BodyExt;
         let brand = Shown::not_set(None);
         let table = [

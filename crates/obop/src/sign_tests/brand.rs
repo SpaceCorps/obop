@@ -1143,6 +1143,56 @@ async fn the_door_shows_the_title_of_the_pages_own_language_in_all_seven() {
 
 // ---- After a good read, and a read that fails in no class of D74 (D74) -----------------------------
 
+/// The half "inside the bound" of the test below, which is a race with the clock: the cell of the
+/// reader is good for two seconds (`DEFAULT_BOUND` in `obop-commands/src/brand/reader.rs`, which a
+/// test of this crate cannot shorten), and a request that comes later than that is a refill, which
+/// the store refuses. The brand is set (which fills the cell), a good page is asked for, the store is
+/// made to refuse, and the next request must be answered from the cell: 200, the brand, and the
+/// store not asked. The time is taken before the cell was filled, so a request that is counted as
+/// inside the bound is. When a loaded machine made a request late, its answer is not looked at, the
+/// cell is waited out and the three steps are made again; the test fails if six rounds in a row were
+/// late, so the half is never skipped without a word. Returns the instant after the good page, for
+/// waiting the cell out.
+async fn the_cell_serves_a_refusing_store_inside_the_bound(
+    flaky: &Flaky,
+    f: &Fx,
+    path: &str,
+) -> std::time::Instant {
+    let page = format!("{path}?lang=en");
+    let mut stale_after: Option<std::time::Instant> = None;
+    for round in 0..6u8 {
+        flaky.allow_models();
+        if let Some(at) = stale_after {
+            crate::oauth_tests::brand::wait_until_stale(at);
+        }
+        let started = std::time::Instant::now();
+        if stale_after.is_none() {
+            // Writes the row and asks the reader, which fills the cell.
+            set_brand(&f.app);
+        }
+        let from = 220 + 3 * round;
+        let good = f.get(&page, &ip(from)).await;
+        assert_eq!(good.status, 200, "round {round}: {}", good.text());
+        assert_branded(f, &good, "en", "a good read");
+        let filled = std::time::Instant::now();
+
+        flaky.refuse_model(brand::MODEL, Mode::Reads);
+        let refused_before = flaky.refused();
+        let r = f.get(&page, &ip(from + 1)).await;
+        if started.elapsed() < std::time::Duration::from_millis(1500) {
+            assert_eq!(r.status, 200, "{}", r.text());
+            assert_branded(f, &r, "en", "inside the bound");
+            assert_eq!(flaky.refused(), refused_before, "the store was not asked");
+            return filled;
+        }
+        stale_after = Some(filled);
+    }
+    panic!(
+        "six rounds in a row took more than 1.5 s from the read to the next request: \
+         the machine is too loaded to hold the cell's two seconds"
+    );
+}
+
 /// A brand read once is kept for two seconds: a request inside the bound is served from it whatever
 /// the store does, so a signer whose page loaded is not made to wait on a store that blinks. Once the
 /// bound is over, the request that runs the refill and meets the fault is the 503 of D74, never a page
@@ -1151,21 +1201,8 @@ async fn the_door_shows_the_title_of_the_pages_own_language_in_all_seven() {
 #[tokio::test]
 async fn after_a_good_read_a_failing_store_is_served_from_the_cell_and_then_a_503() {
     let (flaky, f, path) = flaky_sent().await;
-    set_brand(&f.app);
-    let good = f.get(&format!("{path}?lang=en"), &ip(220)).await;
-    assert_eq!(good.status, 200, "{}", good.text());
-    assert_branded(&f, &good, "en", "a good read");
-    let filled = std::time::Instant::now();
-
-    flaky.refuse_model(brand::MODEL, Mode::Reads);
-    // Inside the bound: the brand of the cell, and the store is not asked.
-    let refused_before = flaky.refused();
-    let r = f.get(&format!("{path}?lang=en"), &ip(221)).await;
-    if filled.elapsed() < std::time::Duration::from_millis(1500) {
-        assert_eq!(r.status, 200, "{}", r.text());
-        assert_branded(&f, &r, "en", "inside the bound");
-        assert_eq!(flaky.refused(), refused_before, "the store was not asked");
-    }
+    // Inside the bound: the brand of the cell, and the store is not asked (never skipped).
+    let filled = the_cell_serves_a_refusing_store_inside_the_bound(&flaky, &f, &path).await;
 
     // The bound is over: the request that refills meets the fault; so does the next.
     crate::oauth_tests::brand::wait_until_stale(filled);
@@ -1246,4 +1283,51 @@ async fn a_first_brand_read_that_fails_in_no_class_of_d74_shows_the_stand_in_and
     let r = f.get(&format!("{path}?lang=en"), &ip(232)).await;
     assert_eq!(r.status, 200, "{}", r.text());
     assert_branded(&f, &r, "en", "the store answers");
+}
+
+/// After a good read the same failure (a read that fails in no class of D74) shows the brand of the
+/// last good read, not the stand-in: `docs/SIGN.md` says the page names `obop` only in a process that
+/// has had no good read. The store is asked again by each request (a failed refill is not kept) and
+/// cannot answer, and no 503 follows however long that lasts, because the fault is none the layer
+/// above knows; the page is served with status 200 and no word of D74, a post goes on and signs with
+/// the id it always records, and the page after signing shows the brand too. A store that is merely
+/// unreadable is therefore never noticed at the door for as long as the failure lasts.
+#[tokio::test]
+async fn after_a_good_read_a_store_that_cannot_answer_shows_the_last_good_brand_and_never_a_503() {
+    let (flaky, f, path) = flaky_sent().await;
+    set_brand(&f.app);
+    let good = f.get(&format!("{path}?lang=en"), &ip(240)).await;
+    assert_eq!(good.status, 200, "{}", good.text());
+    assert_branded(&f, &good, "en", "a good read");
+    // The cell is stale: from here every request asks the store, which cannot answer.
+    crate::oauth_tests::brand::wait_until_stale(std::time::Instant::now());
+    flaky.fail_gets_of(brand::MODEL, "relation \"record\" does not exist");
+
+    for (round, from) in [ip(241), ip(242), ip(243)].into_iter().enumerate() {
+        let asked = flaky.gets_of(brand::MODEL);
+        let r = f.get(&format!("{path}?lang=en"), &from).await;
+        assert!(
+            flaky.gets_of(brand::MODEL) > asked,
+            "round {round}: the store was asked and could not answer"
+        );
+        assert_eq!(r.status, 200, "round {round}: {}", r.text());
+        assert_branded(&f, &r, "en", &format!("round {round}: the last good brand"));
+        assert!(
+            r.headers.get("retry-after").is_none() && r.headers.get("x-obop-applied").is_none(),
+            "round {round}: no word of D74"
+        );
+    }
+
+    // The post goes on and signs, with the id it always records, and the page after it is the brand's.
+    let r = f.post(&path, &ip(244), &form(&f, "Jane Test", "en")).await;
+    assert_eq!(r.status, 303, "{}", r.text());
+    assert_eq!(f.record("sign_request", &f.req)["state"], "signed");
+    assert_eq!(f.events_of("sign_signed").len(), 1);
+    assert_eq!(
+        f.record("sign_request", &f.req)["consent_version"],
+        obop_http::sign_text::consent_version_for("en")
+    );
+    let r = f.get(&format!("{path}?lang=en"), &ip(245)).await;
+    assert_eq!(r.status, 200, "{}", r.text());
+    assert_branded(&f, &r, "en", "the page after signing");
 }
