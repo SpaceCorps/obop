@@ -70,6 +70,7 @@
   "Text on the accent fill": "machine-drafted",
   "That code is not valid. Check the time on your device and try again.": "machine-drafted",
   "That password is not right.": "machine-drafted",
+  "The branding of this server could not be read, so nothing was set up. An administrator has to repair it; trying again will not help.": "machine-drafted",
   "They are shown only now": "machine-drafted",
   "This sign-in has expired. Start again.": "machine-drafted",
   "Time-based, 6 digits, account {account}.": "machine-drafted",

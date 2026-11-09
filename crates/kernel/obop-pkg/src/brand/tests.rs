@@ -274,10 +274,18 @@ fn the_descriptions_name_the_input_keys_and_say_nothing_of_pages() {
         assert!(clear.description.contains(key), "clear: {key}");
     }
     // What the record holds, not which pages show it: no page is built yet to show it.
-    let mut texts = vec![m.description.to_string()];
-    texts.extend(m.fields.iter().map(|f| f.description.to_string()));
-    texts.extend(m.commands.iter().map(|c| c.description.to_string()));
-    for t in texts {
+    let mut texts = vec![("the model".to_string(), m.description.to_string())];
+    texts.extend(
+        m.fields
+            .iter()
+            .map(|f| (f.name.to_string(), f.description.to_string())),
+    );
+    texts.extend(
+        m.commands
+            .iter()
+            .map(|c| (c.name.to_string(), c.description.to_string())),
+    );
+    for (item, t) in texts {
         let low = t.to_lowercase();
         for word in [
             "oauth",
@@ -289,7 +297,12 @@ fn the_descriptions_name_the_input_keys_and_say_nothing_of_pages() {
             "tab icon",
             "consent",
         ] {
-            assert!(!low.contains(word), "{word:?} in {t:?}");
+            // `favicon` is a key of the answer `effective` since the shop reads the record: the
+            // name of an entry, listed in the description of that one field, and not a page.
+            if word == "favicon" && item == "effective" {
+                continue;
+            }
+            assert!(!low.contains(word), "{word:?} in {item}: {t:?}");
         }
     }
 }
@@ -489,6 +502,44 @@ fn get_with_no_row_answers_the_defaults_and_set_false_which_is_not_an_error() {
     want.sort();
     assert_eq!(keys, want.iter().map(String::as_str).collect::<Vec<_>>());
     assert!(r.events().is_empty(), "a read writes nothing");
+}
+
+/// `get` says what an enrolment would write into an authenticator and which source won: the
+/// variable `OBOP_MFA_ISSUER` (read with `brand::env_issuer`, the function the authenticator's
+/// configuration reads it with), else the stored name, else `obop`. The expectation is built from
+/// that same function, so the test holds in a run that sets the variable as well; the cases with a
+/// value for it are in `obop-commands` (`effective_json_with`) and in the binary's tests, which
+/// start the program with the variable in its environment.
+#[test]
+fn get_names_the_authenticator_issuer_and_the_source_that_won() {
+    let variable = brand::env_issuer();
+    let issuer = |record: Option<&str>| -> J {
+        match (&variable, record) {
+            (Some(v), _) => json!({"value": v, "source": "env"}),
+            (None, Some(name)) => json!({"value": name, "source": "record"}),
+            (None, None) => json!({"value": "obop", "source": "default"}),
+        }
+    };
+    let r = rig();
+    let g = r.get();
+    assert_eq!(
+        parsed(&g, "effective")["authenticator_issuer"],
+        issuer(None)
+    );
+    r.configure(&[("name", "MOHV")]).unwrap();
+    let g = r.get();
+    assert_eq!(
+        parsed(&g, "effective")["authenticator_issuer"],
+        issuer(Some("MOHV"))
+    );
+    // A change made through the command shows in the next `get`, with no wait: it reads the row
+    // itself.
+    r.configure(&[("name", "Other")]).unwrap();
+    let g = r.get();
+    assert_eq!(
+        parsed(&g, "effective")["authenticator_issuer"],
+        issuer(Some("Other"))
+    );
 }
 
 #[test]

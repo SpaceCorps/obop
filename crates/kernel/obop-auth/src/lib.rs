@@ -550,6 +550,8 @@ impl Authenticator for Auth {
 #[cfg(test)]
 mod admin_tests;
 #[cfg(test)]
+mod brand_enrol_tests;
+#[cfg(test)]
 mod device_tests;
 #[cfg(test)]
 mod epoch_tests;

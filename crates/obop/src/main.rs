@@ -19,6 +19,8 @@ mod brand_cmd_tests;
 #[cfg(test)]
 mod brand_commands_tests;
 #[cfg(test)]
+mod brand_enrol_tests;
+#[cfg(test)]
 mod brand_http_tests;
 #[cfg(test)]
 mod brand_row_tests;
@@ -154,9 +156,10 @@ const USAGE: &str = "usage: obop <command>
   admin sso only USER on|off                    make USER sign in with Microsoft only (needs a binding, one sign-in with the button
                                                 after it, and two other administrators who keep a password
                                                 and a second factor), or turn that off
-  admin brand status                            the instance branding (name, slug, logo, a title and a message per language): what is
-                                                in force and where each value comes from, the titles and messages that are stored,
-                                                and any stored field that fell back
+  admin brand status                            the instance branding (name, slug, logo, a title and a message per language, and the
+                                                title, logo address, accent and tab icon of the public shop): what is in force and
+                                                where each value comes from, the titles and messages that are stored, and any
+                                                stored field that fell back
   admin brand configure [--name N] [--slug S] [--title LANG=TEXT]... [--message LANG=TEXT]...
                         [--logo-file FILE.svg | --clear-logo] [--hide-product-docs on|off]
                         [--from FILE.toml] [--dry-run]

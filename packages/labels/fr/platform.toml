@@ -816,7 +816,7 @@ description = "Réponse de get et configure : la version du logo (16 chiffres he
 
 [labels.fr.model.instance_brand.field.effective]
 label = "En vigueur"
-description = "Réponse de get : un objet JSON qui donne, pour chaque valeur en vigueur (name, slug, logo, tile_accent, accent, title_XX et message_XX; XX est le code de la langue : en, de, fr, pl, fi, sv, es), sa valeur et la source retenue : record, theme ou default"
+description = "Réponse de get : un objet JSON qui donne, pour chaque valeur en vigueur (name, slug, logo, tile_accent, accent, authenticator_issuer, site.title, site.logo_url, site.accent, favicon, title_XX et message_XX; XX est le code de la langue : en, de, fr, pl, fi, sv, es), sa valeur et la source retenue : record, env, site, theme, unreadable ou default"
 
 [labels.fr.model.instance_brand.field.fallbacks]
 label = "Valeurs de repli"

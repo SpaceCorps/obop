@@ -942,12 +942,14 @@ async fn pins_the_relying_party_name_of_the_registration_options() {
     );
 }
 
-/// S1a: with a brand row in the store, the registration options and the TOTP enrolment of a real
-/// app still name the product "obop" (the relying party an authenticator shows next to the
-/// passkey, and the issuer of the authenticator entry): no enrolment reads the row yet. The slice
-/// that does moves these two assertions in its own commit.
+/// With a brand row in the store, the registration options and the TOTP enrolment of a real app
+/// carry the name of the row (the relying party an authenticator shows next to the passkey, and the
+/// issuer of the authenticator entry): S1e of the branding work. In S1a this test held `obop` with a
+/// row present, because no enrolment read the row; the two assertions moved with the slice that
+/// makes it do. The pins above hold what an instance with no row sends, and did not move. (The rest
+/// of the enrolment cases, with the faults, are in `brand_enrol_tests`.)
 #[tokio::test]
-async fn with_a_brand_row_the_relying_party_name_and_the_authenticator_label_are_what_they_were() {
+async fn with_a_brand_row_the_relying_party_name_and_the_authenticator_label_are_the_name() {
     let acc = crate::accounts_tests::rig();
     crate::brand_row_tests::set_brand(&acc.app);
     let r = &acc.rig.r;
@@ -960,13 +962,13 @@ async fn with_a_brand_row_the_relying_party_name_and_the_authenticator_label_are
     )
     .await;
     assert_eq!(s, 200, "{opts}");
-    assert_eq!(opts["publicKey"]["rp"]["name"], "obop", "{opts}");
+    assert_eq!(opts["publicKey"]["rp"]["name"], "MOHV", "{opts}");
     assert_eq!(opts["publicKey"]["rp"]["id"], "inst.test", "{opts}");
     let (s, begun) = post(r, Some(&t), "/api/auth/mfa/begin", json!({})).await;
     assert_eq!(s, 200, "{begun}");
     let secret = begun["secret"].as_str().unwrap();
     assert_eq!(
         begun["uri"].as_str().unwrap().replace(secret, "SECRET"),
-        "otpauth://totp/obop:ada?secret=SECRET&issuer=obop&algorithm=SHA1&digits=6&period=30"
+        "otpauth://totp/MOHV:ada?secret=SECRET&issuer=MOHV&algorithm=SHA1&digits=6&period=30"
     );
 }

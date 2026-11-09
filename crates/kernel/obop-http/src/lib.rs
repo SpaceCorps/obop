@@ -701,7 +701,9 @@ fn approve_blocking(
 /// its code word is a storage fault and answers as one (`errors::of_storage_text`); anything else
 /// is a lock that was not granted in time.
 fn unavailable(why: &str) -> Response {
-    eprintln!("shared state unavailable: {why}");
+    // `log_safe`, as in the lines below: `why` is normally the store's own text, but a handler
+    // error that starts with a code word of the store reaches here through `err` as it was.
+    log_line(&format!("shared state unavailable: {}", log_safe(why)));
     if let Some(c) = errors::of_storage_text(why) {
         return classified(c);
     }
@@ -719,12 +721,76 @@ fn unavailable(why: &str) -> Response {
     r
 }
 
-/// A text for one line of the log: no control characters, no more than 300 characters.
+/// A text for one line of the log: no control characters (the line and paragraph separators U+2028
+/// and U+2029 are not control characters and are blanked too), no more than 300 characters.
 fn log_safe(text: &str) -> String {
     text.chars()
-        .map(|c| if c.is_control() { ' ' } else { c })
+        .map(|c| {
+            if c.is_control() || matches!(c, '\u{2028}' | '\u{2029}') {
+                ' '
+            } else {
+                c
+            }
+        })
         .take(300)
         .collect()
+}
+
+/// One line to the log of the server. Not `eprintln!`, which panics when stderr cannot be written
+/// (a closed pipe to a log collector): the panic of a handler becomes "handler panicked" in
+/// `blocking` and the caller would get a dropped connection instead of the answer the line is
+/// about.
+pub(crate) fn log_line(line: &str) {
+    use std::io::Write;
+    // A test that asks to see the lines (`captured`) gets them and the real stderr stays quiet;
+    // everything else writes. The write itself is held by the process test `brand_enrol_process`
+    // of the binary, which runs a server whose stderr is closed.
+    if taken_by_a_test(line) {
+        return;
+    }
+    let _ = writeln!(std::io::stderr(), "{line}");
+}
+
+/// Whether a test that collects the lines of this thread took this one. Written as two functions
+/// and not as a `#[cfg(test)]` on a statement, which the scan of `addr_scan_tests` lists.
+#[cfg(test)]
+fn taken_by_a_test(line: &str) -> bool {
+    log_capture::take(line)
+}
+
+#[cfg(not(test))]
+fn taken_by_a_test(_line: &str) -> bool {
+    false
+}
+
+/// The lines `log_line` is given on a thread while a test collects them. A module, because the
+/// scan of `addr_scan_tests` lists a `#[cfg(test)]` on anything that is not an item or a module.
+#[cfg(test)]
+mod log_capture {
+    use std::cell::RefCell;
+
+    thread_local! {
+        static LOGGED: RefCell<Option<Vec<String>>> = const { RefCell::new(None) };
+    }
+
+    /// Keeps the line when this thread collects, and says so.
+    pub(super) fn take(line: &str) -> bool {
+        LOGGED.with(|l| match l.borrow_mut().as_mut() {
+            Some(lines) => {
+                lines.push(line.to_string());
+                true
+            }
+            None => false,
+        })
+    }
+
+    /// Runs `f` and returns, with its result, the lines it gave to `log_line` on this thread.
+    pub(crate) fn captured<T>(f: impl FnOnce() -> T) -> (T, Vec<String>) {
+        LOGGED.with(|l| *l.borrow_mut() = Some(Vec::new()));
+        let out = f();
+        let lines = LOGGED.with(|l| l.borrow_mut().take().unwrap_or_default());
+        (out, lines)
+    }
 }
 
 fn respond(r: Result<obop_commands::Response, CallError>) -> Response {
@@ -742,7 +808,7 @@ fn respond(r: Result<obop_commands::Response, CallError>) -> Response {
                     &e,
                     CallError::Handler(m) if obop_storage::fault::Fault::of_message(m).is_some()
                 );
-                eprintln!(
+                log_line(&format!(
                     "storage fault on a call: {} {}",
                     c.code,
                     if genuine {
@@ -750,7 +816,7 @@ fn respond(r: Result<obop_commands::Response, CallError>) -> Response {
                     } else {
                         String::new()
                     }
-                );
+                ));
             }
             classified(c)
         }
@@ -1120,7 +1186,8 @@ mod fault_answers {
 
 #[cfg(test)]
 mod log_tests {
-    use super::log_safe;
+    use super::log_capture::captured;
+    use super::{CallError, StatusCode, log_safe, respond, unavailable};
 
     #[test]
     fn a_line_of_the_log_has_no_control_characters_and_a_bound() {
@@ -1128,10 +1195,84 @@ mod log_tests {
             log_safe("a\nstorage fault on a call: forged\r\tb"),
             "a storage fault on a call: forged  b"
         );
+        // The line and paragraph separators are not control characters and start a line in a
+        // viewer that follows the Unicode rule: blanked as well.
+        assert_eq!(
+            log_safe("a\u{2028}forged\u{2029}b\u{85}c"),
+            "a forged b c",
+            "U+2028, U+2029 and the next-line control"
+        );
         assert_eq!(log_safe(&"x".repeat(1000)).chars().count(), 300);
         assert_eq!(
             log_safe("all database connections are in use"),
             "all database connections are in use"
         );
+    }
+
+    #[test]
+    fn a_shared_state_that_is_unavailable_writes_one_line_that_cannot_forge_another() {
+        // A lock that was not granted: the 503 with a time to wait, and its line.
+        let (r, lines) = captured(|| unavailable("lock wait expired for marker-lock"));
+        assert_eq!(r.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert!(r.headers().contains_key(axum::http::header::RETRY_AFTER));
+        assert_eq!(
+            lines,
+            vec!["shared state unavailable: lock wait expired for marker-lock".to_string()]
+        );
+        // A text that starts with a code word of the store and holds line breaks (it reaches
+        // `unavailable` through `err` as it came): one line, the breaks blanked, the answer as before.
+        let (r, lines) = captured(|| {
+            unavailable("storage_busy: every connection is in use\nobop: forged\u{2028}line")
+        });
+        assert_eq!(r.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(
+            lines,
+            vec![
+                "shared state unavailable: storage_busy: every connection is in use obop: forged line"
+                    .to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn a_storage_fault_on_a_call_writes_a_line_with_the_stores_text_and_never_the_callers() {
+        use obop_storage::fault::{self, Fault};
+        // The store's own refusal: its text is the operator's, with the breaks blanked.
+        fault::clear();
+        fault::note(Fault::Busy);
+        let (r, lines) = captured(|| {
+            respond(Err(CallError::Handler(
+                "storage_busy: every connection is in use\nobop: forged".into(),
+            )))
+        });
+        fault::clear();
+        assert_eq!(r.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(lines.len(), 1, "{lines:?}");
+        assert!(
+            lines[0].starts_with("storage fault on a call: storage_busy"),
+            "{lines:?}"
+        );
+        assert!(
+            lines[0].ends_with("every connection is in use obop: forged"),
+            "{lines:?}"
+        );
+        // A call that failed of its own after a fault was noted: the line has the code and none of
+        // what the caller sent.
+        fault::note(Fault::Busy);
+        let (r, lines) = captured(|| {
+            respond(Err(CallError::Handler(
+                "name Ada Lovelace is taken\nobop: forged".into(),
+            )))
+        });
+        fault::clear();
+        assert_eq!(r.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(
+            lines,
+            vec!["storage fault on a call: storage_busy ".to_string()]
+        );
+        // No fault, no line.
+        let (r, lines) = captured(|| respond(Err(CallError::Handler("name is required".into()))));
+        assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+        assert!(lines.is_empty(), "{lines:?}");
     }
 }
