@@ -9,7 +9,7 @@ import {
   splitPurpose,
   wordCount,
 } from "./app-view.ts";
-import { appName, loadApps } from "./apps.ts";
+import { appName, loadApps, type Action, type App, type Field } from "./apps.ts";
 
 const apps = loadApps();
 
@@ -253,5 +253,189 @@ describe("the site's own grouping of the apps is pinned", () => {
       appointments: "customers",
       expenses: "finance",
     });
+  });
+});
+
+// Small apps made from a real one, so that one rule of the view is tried at a time.
+const crm = apps.find((a) => a.id === "crm")!;
+const field = (over: Partial<Field>): Field => ({
+  name: "f",
+  description: "A field",
+  class: "none",
+  personal_data: false,
+  group: "crm.user",
+  kind: "text",
+  required: false,
+  ...over,
+});
+const action = (over: Partial<Action>): Action => ({
+  name: "close",
+  description: "Close it",
+  group: "crm.user",
+  approval: false,
+  ...over,
+});
+const made = (over: Partial<App>): App => ({ ...crm, ...over });
+const view = (app: App, locale: (typeof LOCALES)[number] = "en") =>
+  appView(app, messages[locale], apps, locale);
+
+describe("the lines under 'Safe with AI agents' follow the fields and actions of the app", () => {
+  const s = messages.en.apps.store;
+  const model = (fields: Field[], actions: Action[]) =>
+    made({ models: [{ ...crm.models[0]!, fields, actions }] });
+
+  test("personal data is masked, sensitive classes are withheld, and each line has its own words", () => {
+    const needsPerson = [action({ approval: true })];
+    expect(view(model([field({})], needsPerson)).safe).toEqual([s.safeApprove]);
+    expect(view(model([field({ personal_data: true })], needsPerson)).safe).toEqual([
+      s.safeMasked,
+      s.safeApprove,
+    ]);
+    expect(view(model([field({ class: "financial" })], needsPerson)).safe).toEqual([
+      s.safeWithheld,
+      s.safeApprove,
+    ]);
+    expect(
+      view(model([field({ personal_data: true }), field({ class: "secret" })], needsPerson)).safe,
+    ).toEqual([s.safeMasked, s.safeWithheld, s.safeApprove]);
+    // Personal data of a sensitive class is withheld, not only masked.
+    expect(
+      view(model([field({ class: "confidential_hr", personal_data: true })], needsPerson)).safe,
+    ).toEqual([s.safeWithheld, s.safeApprove]);
+    // The two lines are different sentences, in every language.
+    for (const locale of LOCALES) {
+      const t = messages[locale].apps.store;
+      expect(t.safeMasked, locale).not.toBe(t.safeWithheld);
+      expect(t.safeApprove, locale).not.toBe(t.safeApproveNone);
+    }
+  });
+
+  test("the last line says whether a person approves anything", () => {
+    expect(view(model([field({})], [action({ approval: true })])).safe).toEqual([s.safeApprove]);
+    expect(view(model([field({})], [action({ approval: false })])).safe).toEqual([
+      s.safeApproveNone,
+    ]);
+    expect(view(model([field({})], [])).safe).toEqual([s.safeApproveNone]);
+  });
+});
+
+describe("the related apps are the others of the same category, six at most", () => {
+  const sameCategory = (n: number) =>
+    Array.from({ length: n }, (_, i) =>
+      made({ id: `x${i}`, slug: `x${i}`, name: `X${i}`, category: "finance" }),
+    );
+
+  test("an app never lists itself, and the list stops at six", () => {
+    const group = sameCategory(9);
+    const v = appView(group[3]!, messages.en, [...group, crm], "en");
+    expect(v.related).toHaveLength(6);
+    expect(v.related.map((r) => r.id)).not.toContain("x3");
+    // The first six others, in the order of the list; another category is left out.
+    expect(v.related.map((r) => r.id)).toEqual(["x0", "x1", "x2", "x4", "x5", "x6"]);
+    // Fewer than six others: all of them.
+    const few = sameCategory(4);
+    expect(appView(few[0]!, messages.en, few, "en").related.map((r) => r.id)).toEqual([
+      "x1",
+      "x2",
+      "x3",
+    ]);
+  });
+
+  test("in the real data: never itself, same category, at most six, and Operations has six", () => {
+    for (const app of apps) {
+      const v = view(app);
+      expect(
+        v.related.map((r) => r.id),
+        app.id,
+      ).not.toContain(app.id);
+      expect(v.related.length, app.id).toBeLessThanOrEqual(6);
+      for (const r of v.related)
+        expect(apps.find((a) => a.id === r.id)!.category, app.id).toBe(app.category);
+    }
+    expect(view(apps.find((a) => a.id === "fleet")!).related).toHaveLength(6);
+  });
+});
+
+describe("a long rest of the purpose folds after forty words, and not before", () => {
+  const purpose = (restWords: number) =>
+    `One short sentence. ${["Word", ...Array(restWords - 1).fill("word")].join(" ")}.`;
+  test("forty words stay open, forty-one fold", () => {
+    expect(FOLD_WORDS).toBe(40);
+    const fold = (n: number) => view(made({ purpose: purpose(n) })).purposeFold;
+    expect(fold(1)).toBe(false);
+    expect(fold(40)).toBe(false);
+    expect(fold(41)).toBe(true);
+    expect(fold(120)).toBe(true);
+  });
+});
+
+describe("the information list", () => {
+  const row = (app: App, label: string, locale: (typeof LOCALES)[number] = "en") =>
+    view(app, locale).info.find((r) => r.label === label);
+  const m = messages.en.apps;
+  const builtin = apps.find((a) => a.builtin)!;
+  const marketplace = apps.find((a) => !a.builtin)!;
+  const licence = (license: string) =>
+    row(made({ meta: { ...crm.meta, license } }), m.meta.license)?.href;
+
+  test("the licence links to its SPDX page, unless it is an expression", () => {
+    expect(licence("Apache-2.0")).toBe("https://spdx.org/licenses/Apache-2.0.html");
+    expect(licence("MIT")).toBe("https://spdx.org/licenses/MIT.html");
+    expect(licence("Apache-2.0 OR MIT")).toBeUndefined();
+    expect(licence("(MIT)")).toBeUndefined();
+  });
+
+  test("a built-in app's version says it moves with obop, a marketplace app's is its own", () => {
+    expect(row(builtin, m.meta.version)?.value).toBe(
+      m.store.sameAsObop.replace("{version}", builtin.version),
+    );
+    expect(row(marketplace, m.meta.version)?.value).toBe(marketplace.version);
+    // The two are told apart in every language.
+    for (const locale of LOCALES)
+      expect(row(builtin, messages[locale].apps.meta.version, locale)?.value, locale).not.toBe(
+        builtin.version,
+      );
+  });
+
+  test("the install command is for a marketplace app only, and the source link follows the kind", () => {
+    expect(view(marketplace).command).toBe(`obop modules install-from ${marketplace.id}`);
+    expect(view(builtin).command).toBeNull();
+    expect(row(builtin, m.store.source)?.href).toContain("/tree/main/");
+    expect(row(marketplace, m.store.manifest)?.href).toContain("/blob/main/");
+  });
+});
+
+describe("the title of an action card is its name in words, with a capital", () => {
+  test("snake case becomes words, the first letter is a capital, acronyms keep theirs", () => {
+    const app = made({
+      models: [
+        {
+          ...crm.models[0]!,
+          actions: [
+            action({ name: "reset_to_draft" }),
+            action({ name: "oauth_start" }),
+            action({ name: "bom_explode" }),
+            action({ name: "close" }),
+          ],
+        },
+      ],
+    });
+    expect(view(app).actions.map((c) => c.title)).toEqual([
+      "Reset to draft",
+      "OAuth start",
+      "BOM explode",
+      "Close",
+    ]);
+  });
+});
+
+describe("a sentence ends before a capital, a digit, a quote or a bracket", () => {
+  test("splitPurpose", () => {
+    expect(splitPurpose("First. 2nd follows.")).toEqual({ lead: "First.", rest: "2nd follows." });
+    expect(splitPurpose('First. "Quoted" follows.').lead).toBe("First.");
+    expect(splitPurpose("First. (Aside) follows.").lead).toBe("First.");
+    // A lower-case word after the full stop is the same sentence.
+    expect(splitPurpose("It costs 3.5 euro. Next.").lead).toBe("It costs 3.5 euro.");
+    expect(splitPurpose("See e.g. this one. Next.").lead).toBe("See e.g. this one.");
   });
 });
