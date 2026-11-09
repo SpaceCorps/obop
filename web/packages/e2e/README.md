@@ -33,7 +33,7 @@ HTML report goes to `playwright-report/`. `OBOP_E2E_KEEP=1` keeps the temp direc
   creates the accounts with the CLI (`obop admin create`, password on stdin) and then starts the server:
   `obop serve --static web/apps/backoffice/dist` with admin `root` (group `platform.admin`) and restricted
   user `sam` (`base.user,crm.user,sales.user,product.user`), and `obop platform serve --provisioner fake --static web/site` for the control plane.
-- Ports and shutdown: `support/ports.ts` picks the eight ports of a run together (every probe socket stays open
+- Ports and shutdown: `support/ports.ts` picks the ports of a run (one for each server) together (every probe socket stays open
   until all are chosen, so no two servers can be given the same port; `tests/ports.spec.ts` checks it). Playwright
   stops its web servers only after `globalTeardown`, so the teardown (`support/shutdown.ts`) first asks each
   launcher (`serve.ts`) to stop its server, waits until all have exited, and only then removes the temp directory.

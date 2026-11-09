@@ -106,12 +106,16 @@ pub fn no_reader_error() -> MfaError {
 /// authenticator app splits the decoded label at the ASCII colon and at nothing else, and the label
 /// is percent-encoded, so a row written around the command that holds `U+FF1A` is enrolled with and
 /// cannot change the issuer an app shows.
-/// The read check of the display is the safety subset and accepts these, so a row written around the
-/// command (a restore, an import, a direct edit) can hold one. In a label the colon is the one
-/// character an app splits the decoded text at, so a name with a colon in it would show another
-/// issuer than `issuer=` says; and a name of spaces is a blank issuer. The enrolment fails closed on
-/// them as it does on a name that cannot be shown, so that a row that could make an app show another
-/// issuer is not written into a person's device. Only [`strict`](super::strict) and `get` ask this.
+/// The read check of the display is the safety subset and accepts the link characters, so a row
+/// written around the command (a restore, an import, a direct edit) can hold one. In a label the
+/// colon is the one character an app splits the decoded text at, so a name with a colon in it would
+/// show another issuer than `issuer=` says; and a name of spaces is a blank issuer. The enrolment
+/// fails closed on them as it does on a name that cannot be shown, so that a row that could make an
+/// app show another issuer is not written into a person's device. Only [`strict`](super::strict) and
+/// `get` ask this. (Since S1c the safety subset itself calls a name of nothing but U+0020 empty, and
+/// it refuses every other white space as it always did, so a stored name of white space only is
+/// refused as a name that cannot be shown before this check is reached; the second arm is a second
+/// line of defence that no stored name reaches.)
 pub(super) fn unfit_for_a_label(name: &str) -> bool {
     name.trim().is_empty() || name.chars().any(|c| matches!(c, ':' | '/' | '\\' | '@'))
 }

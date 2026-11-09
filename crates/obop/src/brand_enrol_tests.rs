@@ -404,9 +404,11 @@ async fn a_stored_name_that_cannot_be_shown_is_brand_unavailable_and_nothing_is_
     }
 }
 
-/// A stored name that the display accepts and `configure` refuses (a link character, or only white
-/// space; it can only have been written around the command) cannot go into a device's label either:
-/// the same answer on both enrolments, nothing stored, and none of the stored text in the answer.
+/// A stored name that `configure` refuses (a link character, or only white space; it can only have
+/// been written around the command) cannot go into a device's label either: the same answer on both
+/// enrolments, nothing stored, and none of the stored text in the answer. (The link characters pass
+/// the read check of the display and are refused by the label check; a name of only spaces is refused
+/// by the read check itself since S1c, which is the next test.)
 #[tokio::test]
 async fn a_stored_name_with_a_link_character_or_only_spaces_is_brand_unavailable_too() {
     for bad in [
@@ -430,6 +432,63 @@ async fn a_stored_name_with_a_link_character_or_only_spaces_is_brand_unavailable
             );
             nothing_was_written(&rig, &t).await;
         }
+    }
+}
+
+/// A stored name of nothing but spaces is empty for the read check since S1c (the write check never
+/// lets one in; it comes from a restore, an import, a direct edit or an older binary), and both
+/// sides of the combination hold, over the real router: the display falls back to the default
+/// (`get` shows `obop` from the source `default`, lists the `name` as `empty`, and has no issuer in
+/// force), and both enrolments refuse it as a name that cannot be shown, with the fixed message of
+/// that case and not the message of the label check, writing nothing. A name with a space between
+/// letters is the text, and the enrolments go on.
+#[tokio::test]
+async fn a_name_of_only_spaces_is_empty_for_the_display_and_refused_by_both_enrolments() {
+    for blank in [" ", "   ", &" ".repeat(40)] {
+        for path in [BEGIN, OPTIONS] {
+            let rig = rig(AuthConfig::insecure_dev());
+            write_row(&rig, &[("name", json!(blank))]);
+            let t = sign_in(&rig.r, "ada").await;
+            let r = post(&rig.r, Some(&t), path, body_of(path)).await;
+            is_brand_unavailable(&r, &format!("{path} {blank:?}"));
+            assert_eq!(
+                r.json["error"],
+                json!(format!("{UNREADABLE}: the stored name cannot be shown")),
+                "{path} {blank:?}"
+            );
+            nothing_was_written(&rig, &t).await;
+        }
+        // The display of the same row, as an administrator reads it.
+        let rig = rig(AuthConfig::insecure_dev());
+        write_row(&rig, &[("name", json!(blank))]);
+        let root = sign_in(&rig.r, "root").await;
+        let g = post(&rig.r, Some(&root), "/api/instance_brand/get", json!({})).await;
+        assert_eq!(g.status, 200, "{}", g.json);
+        let effective: J = serde_json::from_str(g.json["value"]["effective"].as_str().unwrap())
+            .expect("effective is a JSON text");
+        assert_eq!(
+            effective["name"],
+            json!({"value": "obop", "source": "default"}),
+            "{blank:?}"
+        );
+        assert_eq!(
+            effective["authenticator_issuer"],
+            json!({"value": null, "source": "unreadable"}),
+            "{blank:?}"
+        );
+        let fallbacks: J =
+            serde_json::from_str(g.json["value"]["fallbacks"].as_str().unwrap()).unwrap();
+        assert_eq!(fallbacks[0]["field"], json!("name"), "{fallbacks}");
+        assert_eq!(fallbacks[0]["reason"], json!("empty"), "{fallbacks}");
+        assert_eq!(fallbacks.as_array().unwrap().len(), 1, "{fallbacks}");
+    }
+    // Spaces between letters are the text: the same row shape, and the enrolments go on.
+    for path in [BEGIN, OPTIONS] {
+        let rig = rig(AuthConfig::insecure_dev());
+        write_row(&rig, &[("name", json!("Acme Co"))]);
+        let t = sign_in(&rig.r, "ada").await;
+        let r = post(&rig.r, Some(&t), path, body_of(path)).await;
+        assert_eq!(r.status, 200, "{path}: {}", r.json);
     }
 }
 

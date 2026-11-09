@@ -17,11 +17,12 @@
 //! so the two cannot differ); `theme` for the accent the theme stores; `default` when it is the
 //! built-in default (the name `obop`, no message, no logo); `unreadable` for the authenticator issuer
 //! alone, when an enrolment is refused because the stored name failed the read check or cannot go
-//! into a label (a link character, or only white space), with the value `null`: there is no issuer in
-//! force. `name` is not changed by that: for a stored name that failed the read check it shows the
-//! default, as it always does, with `fallbacks` listing the field; for one that passed the read check
-//! and only cannot go into a label it shows the stored name, because the display accepts it, with
-//! nothing under `fallbacks` (docs/DEPLOY.md). The artwork is never part of the answer:
+//! into a label (a link character), with the value `null`: there is no issuer in force. `name` is not
+//! changed by that: for a stored name that failed the read check it shows the default, as it always
+//! does, with `fallbacks` listing the field (a name of nothing but spaces is one of these since S1c:
+//! the read check calls it empty); for one that passed the read check and only cannot go into a
+//! label it shows the stored name, because the display accepts it, with nothing under `fallbacks`
+//! (docs/DEPLOY.md). The artwork is never part of the answer:
 //! it is served by the logo route, and `get` says only whether the logo in force is the artwork
 //! (`artwork`), the generated tile (`tile`) or none (`none`, with no brand set).
 

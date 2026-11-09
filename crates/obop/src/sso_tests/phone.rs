@@ -2816,3 +2816,233 @@ async fn phone_the_return_address_counts_the_sign_in_window_by_the_one_rule() {
     }
     assert!(spent, "an address in the header got a bucket of its own");
 }
+
+// ---- the refusals of the link, with a brand (review of S1c) -------------------------------------------
+
+/// What the page of the flow must be with a brand set, the question of the OAuth tests
+/// (`oauth_tests::brand::unbranded_page`) asked of an answer of this file's router.
+fn unbranded(r: &Raw) -> Option<String> {
+    let policy = r
+        .all("content-security-policy")
+        .first()
+        .copied()
+        .unwrap_or("");
+    crate::oauth_tests::brand::unbranded_page(&r.body, policy)
+}
+
+/// The link on the sign-in page of an app, tapped when the instance cannot send the person to
+/// Microsoft, for each of the three reasons that need a provider to exist: it is switched off, its
+/// row cannot be used (no client secret is stored), the provider does not answer. Each ends on the
+/// sign-in page with the fixed text, and with a brand set the page shows the brand: these are the
+/// arms of `microsoft_blocking` that `oauth_tests::brand` cannot reach, because that rig has no
+/// provider.
+#[tokio::test]
+async fn phone_the_refusals_of_the_microsoft_link_show_the_brand() {
+    let w = world(true).await;
+    crate::brand_row_tests::set_brand(&w.app);
+    let mut phone = Phone::new(&w).await;
+    let page = phone.open().await;
+
+    // The page itself, with the link, shows the brand: the link is offered.
+    assert!(page.html.contains("/oauth/authorize/microsoft"));
+    assert!(page.html.contains("MOHV"), "{}", page.html);
+
+    let refused = |r: &Raw, why: &str| {
+        assert!(
+            login_page(r) && r.body.contains(UNAVAILABLE),
+            "{why}: {}",
+            r.body
+        );
+        assert_eq!(unbranded(r), None, "{why}");
+    };
+
+    // Switched off: the stored provider says it is not enabled.
+    w.auth
+        .operator_sso_configure(TENANT, CLIENT, None, Some(false))
+        .unwrap();
+    let r = phone.tap(&page.flow).await;
+    refused(&r, "switched off");
+    w.auth
+        .operator_sso_configure(TENANT, CLIENT, None, Some(true))
+        .unwrap();
+
+    // A row that cannot be used: enabled, and no client secret is stored (a row written by a hand
+    // that skipped the commands). The log says so, and the person is told the fixed text.
+    let b = w.app.store.backend();
+    let mut row = b.get("auth_sso_provider", "provider").unwrap().unwrap();
+    let kept = row.remove("client_secret").expect("a sealed secret");
+    b.apply_checked(&[obop_storage::Op::Put {
+        model: "auth_sso_provider".into(),
+        id: "provider".into(),
+        fields: row.clone(),
+    }])
+    .unwrap();
+    let r = phone.tap(&page.flow).await;
+    refused(&r, "no client secret");
+    assert!(
+        w.events("oidc_error")
+            .iter()
+            .any(|l| l.contains("start (app)") && l.contains("no client secret")),
+        "{:?}",
+        w.events("oidc_error")
+    );
+    row.insert("client_secret".into(), kept);
+    b.apply_checked(&[obop_storage::Op::Put {
+        model: "auth_sso_provider".into(),
+        id: "provider".into(),
+        fields: row,
+    }])
+    .unwrap();
+
+    // A provider that does not answer the discovery request.
+    w.forget_throttle();
+    w.idp.stop();
+    let r = phone.tap(&page.flow).await;
+    refused(&r, "no discovery");
+    assert!(
+        w.events("oidc_error")
+            .iter()
+            .any(|l| l.contains("discovery document")),
+        "{:?}",
+        w.events("oidc_error")
+    );
+    assert!(w.sso_rows().is_empty(), "no round trip was begun");
+}
+
+/// The last refusal of the link: the store does not take the row of the round trip. A refusal of
+/// the store is never a page of the flow, whichever call of the request it meets, because the pool
+/// has noted the fault on the request and D74 answers with the 503 whatever the handler sends. So the
+/// arm of `microsoft_blocking` that answers "unavailable" when `begin_flow` is refused cannot be
+/// seen on a page and no test can tell it from a page of the unbranded kind: this test holds what
+/// can be held, that every refused call, at each position in turn, ends as the redirect (the call
+/// was optional) or as the 503 with nothing of the brand or the product on it, and never as the
+/// sign-in page.
+#[tokio::test]
+async fn phone_a_store_that_refuses_the_row_of_a_round_trip_is_a_503_and_never_a_page_of_the_flow()
+{
+    use obop_storage::testing::Flaky;
+    let (flaky, backend) = Flaky::memory();
+    let app = App::with_store(obop_commands::Store::over(backend));
+    let w = world_on(app, true, AuthConfig::insecure_dev(), None).await;
+    crate::brand_row_tests::set_brand(&w.app);
+    w.keep_throttle();
+    let mut phone = Phone::new(&w).await;
+    let (mut as_503, mut as_redirect, mut clean) = (0, 0, 0);
+    for skip in 0..80 {
+        phone.ip = Some(format!("10.9.{}.{}", skip / 200, skip % 200 + 1));
+        let page = phone.open().await;
+        let before = flaky.refused();
+        flaky.refuse_call_after(skip);
+        let tap = phone.tap(&page.flow).await;
+        let refused = flaky.refused() - before;
+        flaky.allow_models();
+        if refused == 0 {
+            // Past the last call of the request: the redirect to the provider.
+            assert_eq!(tap.status, 303, "{skip}: {}", tap.body);
+            clean += 1;
+            if clean == 2 {
+                break;
+            }
+            continue;
+        }
+        match tap.status {
+            503 => {
+                // The answer of D74: a page or the JSON, by what the handler had started to send.
+                assert!(
+                    !tap.all("retry-after").is_empty()
+                        && tap.all("x-obop-applied").len() == 1
+                        && !tap.body.contains("class=\"brand\"")
+                        && !tap.body.to_lowercase().contains("obop"),
+                    "{skip}: {}",
+                    tap.body
+                );
+                as_503 += 1;
+            }
+            303 => {
+                assert!(
+                    tap.location().contains("authorize?"),
+                    "{skip}: {}",
+                    tap.location()
+                );
+                as_redirect += 1;
+            }
+            other => panic!("{skip}: a refused call ended as a {other}: {}", tap.body),
+        }
+    }
+    assert!(
+        as_503 >= 1,
+        "{as_503} refusals ended as a 503 ({as_redirect} as a redirect)"
+    );
+    assert!(
+        clean >= 1,
+        "the sweep never got past the last call of the request"
+    );
+}
+
+/// The return address reads the brand before it does anything else (review of S1c). The case that
+/// can tell the order is a flow with a pending second step, where the request mints a token, so
+/// this is that case: the brand cell has gone stale, the store refuses the row of the brand, and the
+/// return address is asked for. The answer is the 503 of D74, no second-step token is minted, no
+/// line of the log is written, and the flow and the short-lived values are as they were. (If the
+/// handler read the brand after `OAuth::microsoft_return`, the token would be minted before the
+/// pool noted the fault, and the answer would be the page that asks for the code.) The one thing
+/// that moves is the counter of the sign-in window of the address, which `fault::before_write` does
+/// not guard (`read_brand` in `obop-http/src/oauth.rs`); the store answering again, the same
+/// address asks again and is given a token of its own.
+#[tokio::test]
+async fn phone_the_return_address_reads_the_brand_before_it_mints_a_token_for_a_pending_second_step()
+ {
+    use obop_storage::testing::{Flaky, Mode};
+    let (flaky, backend) = Flaky::memory();
+    let app = App::with_store(obop_commands::Store::over(backend));
+    let w = world_on(app, true, AuthConfig::insecure_dev(), None).await;
+    crate::brand_row_tests::set_brand(&w.app);
+    let (_secret, _) = enrol(&rig_of(&w), "ada").await;
+    let mut phone = Phone::new(&w).await;
+    let ip = "10.31.7.1".to_string();
+    phone.ip = Some(ip.clone());
+    let page = phone.open().await;
+    let r = phone.microsoft(&page.flow, ADA_OID).await;
+    assert!(asks_for_the_second_step(&r), "{}", r.body);
+    // The page just read the brand: two seconds from now the cell is stale and the next request
+    // reads the store again.
+    let filled = std::time::Instant::now();
+
+    let b = w.app.store.backend();
+    let tokens = || b.list("auth_mfa_token").unwrap().len();
+    let log = || b.list("security_event").unwrap().len();
+    let window = || {
+        b.counter_get(&format!(
+            "oauth:rl:login:{}",
+            &obop_oauth::util::sha_hex(&ip)[..24]
+        ))
+        .unwrap()
+    };
+    let flow = w.oauth_flow(&page.flow).unwrap();
+    assert!(flow["mfa_pending"].is_object(), "{flow}");
+    let (minted, logged, values, spent) = (tokens(), log(), b.kv_scan("").unwrap(), window());
+
+    flaky.refuse_model("instance_brand", Mode::Reads);
+    crate::oauth_tests::brand::wait_until_stale(filled);
+    let refused_before = flaky.refused();
+    let r = phone.back(&page.flow).await;
+    let read_failed = flaky.refused() > refused_before;
+    flaky.allow_models();
+    assert!(read_failed, "the row of the brand was the read that failed");
+    assert_eq!(r.status, 503, "{}", r.body);
+    assert_eq!(r.all("x-obop-applied"), ["none"], "{}", r.body);
+    assert!(
+        !r.body.contains("mfa_token"),
+        "no page that asks for a code"
+    );
+    assert_eq!(tokens(), minted, "a second-step token was minted");
+    assert_eq!(log(), logged, "a line of the log was written");
+    assert_eq!(b.kv_scan("").unwrap(), values, "a short-lived value moved");
+    assert_eq!(w.oauth_flow(&page.flow).unwrap(), flow, "the flow moved");
+    assert_eq!(window(), spent + 1, "the counter of the address's window");
+
+    // The store answers: the same address asks again, with a token of its own.
+    let r = phone.back(&page.flow).await;
+    assert!(asks_for_the_second_step(&r), "{}", r.body);
+    assert_eq!(tokens(), minted + 1);
+}

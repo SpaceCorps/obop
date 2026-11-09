@@ -418,6 +418,41 @@ fn the_fallback_chain_of_titles_and_messages() {
     assert_eq!(fields_of(&shown), ["title_sv"]);
 }
 
+/// The write check refuses a name or a title that starts with a space, so a text of nothing but
+/// spaces is a row written around the command (a restore, an import, a direct edit, an older
+/// binary). The read check calls it empty: the name falls back to `obop`, a title to the name, a
+/// message to none, so no page shows a blank brand line next to the logo, and a blank title does not
+/// hide the name.
+#[test]
+fn a_text_of_nothing_but_spaces_is_empty_and_falls_back_like_an_empty_one() {
+    let (shown, _) = shown_of(&[
+        ("name", s("   ")),
+        ("title_en", s("   ")),
+        ("title_sv", s(" ")),
+        ("message_en", s("  ")),
+    ]);
+    assert!(shown.is_set());
+    assert_eq!(shown.brand().name(), "obop", "the name fell back");
+    for lang in ["en", "sv", "de"] {
+        assert_eq!(shown.brand().title(lang), "obop", "{lang}");
+    }
+    assert_eq!(shown.brand().message("en"), None);
+    assert_eq!(
+        fields_of(&shown),
+        ["name", "title_en", "title_sv", "message_en"]
+    );
+    assert!(shown.fallbacks().iter().all(|f| f.code == "empty"));
+    // With a name that is good, a blank title is the name; nothing else falls back.
+    let (shown, _) = shown_of(&[("name", s("Acme")), ("title_en", s("   "))]);
+    assert_eq!(shown.brand().name(), "Acme");
+    assert_eq!(shown.brand().title("en"), "Acme");
+    assert_eq!(fields_of(&shown), ["title_en"]);
+    // Spaces between words are the text.
+    let (shown, _) = shown_of(&[("name", s("Acme Co")), ("title_en", s("Acme Co Mileage"))]);
+    assert_eq!(shown.brand().title("en"), "Acme Co Mileage");
+    assert!(shown.fallbacks().is_empty());
+}
+
 #[test]
 fn the_stderr_line_is_written_once_per_field_names_the_field_and_holds_nothing_of_the_value() {
     let spy = Spy::memory();

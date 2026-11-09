@@ -448,8 +448,9 @@ impl Reader {
 /// the text that is written into the person's own device and cannot be corrected afterwards (the
 /// authenticator label, the passkey relying-party name). It fails when the store read fails (the
 /// storage error text, unchanged, so that a D74 code word reaches the layer above) or when the
-/// stored `name` fails the safety subset, or passes it and still cannot go into a label (a link
-/// character, or only white space; see `enrol::unfit_for_a_label`): a fixed message that starts
+/// stored `name` fails the safety subset (a name of nothing but spaces does, since S1c), or passes it
+/// and still cannot go into a label (a link character; see `enrol::unfit_for_a_label`, which also
+/// keeps an arm for white space only that no stored name reaches since S1c): a fixed message that starts
 /// with [`UNREADABLE`]. No row at all is not a failure: the default is the answer.
 pub fn strict(backend: &dyn Backend) -> Result<Brand, String> {
     let Some(stored) = backend.get(MODEL, ROW_ID)? else {

@@ -86,6 +86,17 @@ export default defineConfig({
       timeout: 60_000,
     },
     {
+      // An instance with a brand set (name, message and logo), for the OAuth pages: the logo,
+      // the tab icon and the content security policy that has to allow them.
+      command: "node support/serve.ts brand",
+      url: `http://127.0.0.1:${process.env.OBOP_E2E_BRAND_PORT}/`,
+      reuseExistingServer: false,
+      gracefulShutdown: { signal: "SIGTERM", timeout: 5_000 },
+      stdout: "pipe",
+      stderr: "pipe",
+      timeout: 60_000,
+    },
+    {
       // A stand-in for Microsoft Entra (discovery, keys, a page to pick who signs in, the token
       // endpoint) and an instance that trusts it as its Microsoft authority (D91).
       command: "node support/serve.ts idp",

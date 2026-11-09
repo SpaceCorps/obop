@@ -316,6 +316,11 @@ fn a_stored_name_that_failed_the_read_check_has_no_issuer_in_force() {
     for bad in [
         s("<script>"),
         s(""),
+        // Nothing but U+0020 is empty for the read check since S1c: the display shows `obop` for it
+        // and the enrolment is refused as for any name that cannot be shown.
+        s(" "),
+        s("  "),
+        s(&" ".repeat(40)),
         s("a\u{200b}b"),
         s(&"x".repeat(41)),
         J::from(5),
@@ -332,12 +337,13 @@ fn a_stored_name_that_failed_the_read_check_has_no_issuer_in_force() {
     is_unreadable(&e, "no name");
 }
 
-/// A name that passes the read check and still cannot go into a label (a link character, or only
-/// white space) is refused by `strict` and so has no issuer in force either; `name` shows it as it
-/// is, because the display accepts it.
+/// A name that passes the read check and still cannot go into a label (a link character) is
+/// refused by `strict` and so has no issuer in force either; `name` shows it as it is, because the
+/// display accepts it. (A name of only spaces is not of this kind since S1c: the read check calls
+/// it empty, see the test above.)
 #[test]
 fn a_stored_name_that_cannot_go_into_a_label_has_no_issuer_in_force() {
-    for bad in ["a:b", "a/b", "a\\b", "a@b", "http://evil.test/x", "  "] {
+    for bad in ["a:b", "a/b", "a\\b", "a@b", "http://evil.test/x"] {
         let e = effective_with_variable(Some(&[("name", s(bad))]), None);
         is_unreadable(&e, bad);
         assert_eq!(
