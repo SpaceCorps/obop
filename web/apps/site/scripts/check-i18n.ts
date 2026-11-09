@@ -48,8 +48,9 @@ function walk(dir: string): string[] {
     return statSync(p).isDirectory() ? walk(p) : p.endsWith(".md") ? [p] : [];
   });
 }
+// The page a link goes to, not the heading in it: headings are translated, so their ids differ.
 const links = (s: string) =>
-  [...s.matchAll(/\]\((\/[^)\s]*)\)/g)]
+  [...s.matchAll(/\]\((\/[^)\s#]*)[^)\s]*\)/g)]
     .map((m) => m[1])
     .sort()
     .join(" ");
