@@ -236,16 +236,22 @@
 }
 
 /*
- * One primary action per screen: an app page has its own filled pill (Open or Get), so the header's
- * "Start free" steps back to the plain button there.
+ * One primary action per screen: an app page has its own filled pill (Open or Get), and the index
+ * is a list of links with none, so the header's "Start free" is the plain button on both, and the
+ * header does not change style between the two pages of one flow.
  */
-:root:has(.app-page) .head-cta .btn.primary {
+:root:has(.app-page, .store) .head-cta .btn.primary {
   background: var(--surface);
   border-color: var(--border-strong);
   color: var(--text);
   box-shadow: var(--shadow-1);
 }
-:root:has(.app-page) .head-cta .btn.primary:hover:not(:disabled) {
+:root:has(.app-page, .store) .head-cta .btn.primary:hover:not(:disabled) {
   background: var(--surface-2);
   border-color: var(--text-subtle);
+}
+
+/* Right-to-left (not offered yet): the row chevron points the other way. */
+:dir(rtl) .store-chev svg {
+  transform: scaleX(-1);
 }

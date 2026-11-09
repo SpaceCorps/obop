@@ -18,6 +18,13 @@ const view = computed(() => fm.value["view"] as AppView);
 const builtin = computed(() => fm.value["builtin"] === true);
 // The purpose text comes from data/apps.ts, in English: say so on translated pages.
 const en = computed(() => (locale.value === "en" ? undefined : "en"));
+// A long name (a word of 16 letters or more: Rechnungsstellung, Sähköpostimarkkinointi) is set a
+// little smaller on a phone, so it fits the line whole whether or not the browser can hyphenate.
+const longName = computed(() =>
+  String(fm.value["title"])
+    .split(/[\s-]+/)
+    .some((w) => w.length >= 16),
+);
 // A path breaks after its slashes, not in the middle of a word.
 const pathParts = (path: string) => path.split(new RegExp("(?<=/)"));
 </script>
@@ -31,7 +38,7 @@ const pathParts = (path: string) => path.split(new RegExp("(?<=/)"));
     <header class="app-hero">
       <Tile fluid :id="String(fm['appId'])" :name="String(fm['appId'])" :size="120" />
       <div class="app-hero-text">
-        <h1>{{ fm["title"] }}</h1>
+        <h1 :class="{ 'app-long': longName }">{{ fm["title"] }}</h1>
         <p class="app-tagline">{{ fm["tagline"] }}</p>
         <p class="app-category">{{ view.category }}</p>
         <a class="app-primary" :href="builtin ? href('/app/') : '#get'">{{
