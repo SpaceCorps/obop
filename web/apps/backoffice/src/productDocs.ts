@@ -6,8 +6,10 @@
 // `productDocsVisible()` is the one predicate. Seven places of the app ask it and nothing else:
 // the tab filter of Customize, `personalCustomize` in App, the account-menu item, the command
 // palette entry, the notice and button of the Theme tab, the link on the Modules page and the link
-// on the Build tab (`productDocs.test.tsx` lists them). The value is read once after sign-in, with
-// the metadata, so the screens do not show a link and then take it away.
+// on the Build tab (held by `productDocs.test.ts`, `Chrome.docs.test.tsx` and
+// `Customize.docs.test.tsx`). The value is read once after sign-in, with the metadata, so the
+// screens do not show a link and then take it away; `App` puts it back to "shown" at sign-out, and a
+// read that fails changes nothing (`App.productDocs.test.tsx`).
 
 import { useSyncExternalStore } from "react";
 import { call } from "./api.ts";
