@@ -851,8 +851,11 @@ async fn the_logo_route_has_the_cross_origin_headers_of_the_layer_and_none_of_it
             assert!(!logo.has("access-control-allow-credentials"), "{what}");
             assert_ne!(logo.header("access-control-allow-origin"), "*", "{what}");
             if origin == LISTED {
-                // Accepted: 204, the listed origin echoed (never `*`) with `Vary: Origin`, the
-                // methods of the layer, and no credentials.
+                // Accepted: 204, the listed origin echoed (never `*`) with `Vary: Origin`, a
+                // list of methods that includes `GET`, and no credentials. The list is the
+                // layer's, not the route's (the `Allow` below is the route's): that it is the
+                // same as for the other route is the comparison of the `access-control-*` headers
+                // above, and its wording is pinned by `cors_tests.rs`, not here.
                 assert_eq!(logo.status, 204, "{what}");
                 assert_eq!(logo.header("access-control-allow-origin"), LISTED, "{what}");
                 assert!(logo.header("access-control-allow-methods").contains("GET"));
@@ -1510,6 +1513,10 @@ async fn a_first_read_that_times_out_in_the_store_is_answered_503_with_retry_aft
             f.refuse_next(1);
         }),
     );
+    // What the store has been asked for (and what it refused) before the first request: the
+    // refill's reads are counted from here.
+    let gets_before = flaky.reads().gets;
+    let refused_before = flaky.refused();
     let first = {
         let r = router.clone();
         tokio::spawn(async move { get(&r, PATH).await })
@@ -1537,13 +1544,33 @@ async fn a_first_read_that_times_out_in_the_store_is_answered_503_with_retry_aft
     let body: J = serde_json::from_slice(&first.body).unwrap();
     assert_eq!(body["code"], "storage_timeout", "{body}");
     assert!(!first.text().contains("<svg"), "not the logo");
+    // The noted timeout alone would give this answer, so the refusal is observed on its own: the
+    // refill read the row (one `get`, the one that was held), its next read, the theme setting, was
+    // refused by the double before it was counted, and nothing else was refused.
+    assert_eq!(
+        flaky.refused() - refused_before,
+        1,
+        "the refill's second read was refused"
+    );
+    assert_eq!(
+        flaky.reads().gets - gets_before,
+        1,
+        "the refill read the row and met the refusal at the theme setting"
+    );
 
     // Nothing was kept: the store answers, and so does the route (no row: the unknown-path 404).
+    // A refill that had ended well, with no row, would be kept for the bound and the request below
+    // would read nothing; a failed one is read again, the row and the theme setting, two more `get`s.
     flaky.allow_models();
     let unknown = get(&router, "/api/nothing").await;
     let healed = get(&router, PATH).await;
     assert_eq!(healed.status, 404);
     assert_eq!(healed.body, unknown.body);
+    assert_eq!(
+        flaky.reads().gets - gets_before,
+        3,
+        "the failed refill was not kept: the next request read the row and the theme setting again"
+    );
 }
 
 /// The store is never read on the thread that polls the request: the PostgreSQL client panics on an

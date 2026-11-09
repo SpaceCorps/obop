@@ -145,6 +145,18 @@ export const appUrl = () => `http://127.0.0.1:${process.env.OBOP_E2E_APP_PORT}`;
 export const shopUrl = () => `http://127.0.0.1:${process.env.OBOP_E2E_SHOP_PORT}`;
 /** The instance with `OBOP_DEFAULT_LANGUAGE=sv` (tests/default-language.spec.ts). */
 export const languageUrl = () => `http://127.0.0.1:${process.env.OBOP_E2E_LANGUAGE_PORT}`;
+/**
+ * The instance with a brand (tests/brand-oauth.spec.ts, docs/spec/branding.md): the name MOHV, a
+ * message under the lead of the sign-in page and the placeholder "M" as its logo, set with
+ * `obop admin brand configure` before the server starts.
+ */
+export const brand = {
+  name: "MOHV",
+  message: "Welcome to the team",
+  artwork:
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#495670"/><path d="M 16 48 L 16 16 L 24 16 L 32 30 L 40 16 L 48 16 L 48 48 L 41 48 L 41 29 L 32 44 L 23 29 L 23 48 Z" fill="#ffffff"/></svg>',
+} as const;
+export const brandUrl = () => `http://127.0.0.1:${process.env.OBOP_E2E_BRAND_PORT}`;
 export const platformUrl = () => `http://127.0.0.1:${process.env.OBOP_E2E_PLATFORM_PORT}`;
 /** A small marketplace the specs fill (D63): packages the app instance can update to. */
 export const marketUrl = () => `http://127.0.0.1:${process.env.OBOP_E2E_MARKET_PORT}`;

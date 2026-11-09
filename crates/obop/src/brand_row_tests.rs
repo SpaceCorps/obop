@@ -1,8 +1,9 @@
 //! With a brand row in the store, an instance sends what it sent without one (docs/spec/branding.md,
 //! slice S1a): the record exists, the reader of the dispatcher answers it, and no surface but the
-//! logo route (`brand_http_tests`) and, since slice S1f, the settings door of the public site
-//! (`PublicApi::site_settings_read`, `public_site_tests`) asks the reader. The golden pins of the first
-//! commit of the slice (`pins_*`) hold what an instance with **no** row sends; the tests named
+//! logo route (`brand_http_tests`), from slice S1c the pages of the OAuth authorization flow
+//! (`oauth_tests/brand.rs`) and, since slice S1f, the settings door of the public site
+//! (`PublicApi::site_settings_read`, `public_site_tests`) asks the reader. The golden pins of the
+//! first commit of the slice (`pins_*`) hold what an instance with **no** row sends; the tests named
 //! `with_a_brand_row_*`, next to each pin, build the same outputs after [`set_brand`] has written a
 //! row through `brand::apply` and hold them to the same digests (or, where the output carries a
 //! token that changes from run to run, to the same output without the row). A page, a document or

@@ -17,6 +17,7 @@ use std::sync::Arc;
 use tower::ServiceExt;
 
 mod address;
+pub(crate) mod brand;
 mod mobile;
 
 const HOST: &str = "inst.test";
@@ -1597,26 +1598,4 @@ async fn flow_pages(r: &axum::Router) -> Vec<(String, String)> {
         out.push((format!("{lang}/consent"), masked(&consent.text())));
     }
     out
-}
-
-/// S1a: with a brand row in the store, the pages of the authorization flow, rendered by the
-/// handlers of a real app, are the pages of the same app without a row (the pages are rendered by
-/// pure functions that the golden pins of `obop-oauth` hold; this holds that the handlers hand
-/// them nothing from the row yet). The slice that makes a page show the name moves this.
-#[tokio::test]
-async fn with_a_brand_row_the_sign_in_and_consent_pages_are_what_they_were() {
-    let acc = crate::accounts_tests::rig();
-    let r = &acc.rig.r;
-    let was = flow_pages(r).await;
-    assert_eq!(was.len(), 14);
-    assert!(
-        was.iter().all(|(_, html)| html.contains("obop")),
-        "the pages are the ones that name the product today"
-    );
-    crate::brand_row_tests::set_brand(&acc.app);
-    let now = flow_pages(r).await;
-    for ((name, before), (_, after)) in was.iter().zip(&now) {
-        assert!(after == before, "{name} moved when a brand row was written");
-        assert!(!after.contains("MOHV"), "{name} shows the name already");
-    }
 }

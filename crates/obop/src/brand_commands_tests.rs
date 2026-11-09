@@ -249,9 +249,11 @@ async fn rest_get_configure_and_clear_for_a_person_with_platform_admin() {
     assert_eq!(body["value"], json!({"cleared": false}));
 }
 
-/// The reader that the logo route asks (and the settings door of the public site, and any page that
-/// reads the brand) is the dispatcher's own, and `configure` and `clear` tell it of a change that
-/// committed: it shows at once in the process that made it, whatever surface the call came by
+/// The reader that the logo route, the OAuth pages (slice S1c) and the settings door of the public
+/// site (slice S1f) ask is the dispatcher's own (the signer page, the connector pages, the enrolment
+/// texts and the shop pages, slices S1d and S1e, do not ask it yet), and `configure` and `clear` tell
+/// it of a change that committed: it shows at once in the process that made it, whatever surface the
+/// call came by
 /// (docs/spec/branding.md, section 13, "Cache"). The cell is filled first, because a value in it is
 /// good for two seconds and a change that did not reach it would not show.
 #[tokio::test]
