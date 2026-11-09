@@ -1543,19 +1543,17 @@ fn the_enrolment_files_may_name_what_their_rows_list_and_nothing_else() {
 /// The closed list of files whose string literals are scanned. The slice that makes another page
 /// show the brand adds its file here in the commit that wires it, with a row for each literal that
 /// has to stay.
-const LITERAL_FILES: [&str; 5] = [
+const LITERAL_FILES: [&str; 2] = [
     "kernel/obop-oauth/src/page.rs",
     "kernel/obop-http/src/oauth.rs",
-    "kernel/obop-http/src/sign_page.rs",
-    "kernel/obop-http/src/sign.rs",
-    "kernel/obop-http/src/connectors.rs",
 ];
 
-/// The files of [`LITERAL_FILES`] that hold no literal that names obop and so have no row in
-/// [`LITERAL_ALLOWED`] (S1d): the signer's pages and door take the name from the brand, which for an
-/// instance with no brand is the default name of `obop-brand`, and the return page of the connectors
-/// writes `Back to {name}` and `Taking you back to {name}.` from it. A file here is closed all the
-/// same: a literal that names obop added to it is found and has no row to stand under.
+/// The files that hold no literal that names obop and so have no row in [`LITERAL_ALLOWED`] and are
+/// not on [`LITERAL_FILES`] (S1d): the signer's pages and door take the name from the brand, which
+/// for an instance with no brand is the default name of `obop-brand`, and the return page of the
+/// connectors writes `Back to {name}` and `Taking you back to {name}.` from it. They are scanned
+/// like the files of the list, with no row to stand under: a literal that names obop added to one of
+/// them is found.
 const CLEAN_LITERAL_FILES: [&str; 3] = [
     "kernel/obop-http/src/sign_page.rs",
     "kernel/obop-http/src/sign.rs",
@@ -1691,12 +1689,17 @@ fn unescaped(text: &str) -> String {
     out
 }
 
+/// The files whose literals and `concat!` are read: the listed ones, then the clean ones (S1d).
+fn scanned_files() -> impl Iterator<Item = &'static str> {
+    LITERAL_FILES.into_iter().chain(CLEAN_LITERAL_FILES)
+}
+
 /// Every literal of the listed files that names obop, in the order of the files and of the source.
 /// A listed file that is not in the tree (or is all test code) is reported by [`literal_scan`].
 fn named_literals(files: &BTreeMap<String, String>) -> Vec<Named> {
     let lexed = non_test(files);
     let mut out = Vec::new();
-    for path in LITERAL_FILES {
+    for path in scanned_files() {
         let Some(l) = lexed.get(path) else { continue };
         for (start, _, text) in &l.strings {
             // A raw literal starts at its `r`; any other starts at its quote and has escapes.
@@ -1749,7 +1752,7 @@ fn literal_scan(files: &BTreeMap<String, String>) -> (Vec<String>, Vec<String>) 
             ));
         }
     }
-    for path in LITERAL_FILES {
+    for path in scanned_files() {
         let Some(l) = lexed.get(path) else { continue };
         for at in words(&l.code, "concat") {
             let after = crate::src_scan::skip_ws(&l.code, at + "concat".len());
@@ -1833,18 +1836,9 @@ fn every_row_of_the_literal_list_has_a_known_class_a_reason_and_a_file_of_the_li
         }
     }
     for file in LITERAL_FILES {
-        // A file with no row holds no literal that names obop: it is on `CLEAN_LITERAL_FILES`,
-        // which says so, and no row may name it (a row for it would let a literal stand).
-        let has_row = LITERAL_ALLOWED.iter().any(|r| r.0 == file);
-        let clean = CLEAN_LITERAL_FILES.contains(&file);
         assert!(
-            has_row != clean,
-            "{file} is on the list and {}",
-            if clean {
-                "is declared clean but has a row"
-            } else {
-                "has no row and is not declared clean, so it could never hold a name"
-            }
+            LITERAL_ALLOWED.iter().any(|r| r.0 == file),
+            "{file} is on the list and has no row, so it could never hold a name"
         );
     }
 }
@@ -1868,20 +1862,9 @@ const OAUTH_RS: &str = "fn cors() { let _ = \"Retry-After, X-Obop-Applied\"; }\n
 const PAGE_PATH: &str = "kernel/obop-oauth/src/page.rs";
 const OAUTH_PATH: &str = "kernel/obop-http/src/oauth.rs";
 
-/// `files` and the files of [`CLEAN_LITERAL_FILES`] with nothing in them that names obop (unless
-/// `files` has them), so that a tree of the two pages with rows is a whole tree of the list.
-fn literal_tree(files: &[(&str, &str)]) -> BTreeMap<String, String> {
-    let mut all = tree(files);
-    for clean in CLEAN_LITERAL_FILES {
-        all.entry(clean.to_string())
-            .or_insert_with(|| "fn quiet() { let _ = \"nothing here\"; }".to_string());
-    }
-    all
-}
-
 #[test]
 fn the_scan_for_literals_finds_a_new_literal() {
-    let ok = literal_tree(&[(PAGE_PATH, &page_with(35)), (OAUTH_PATH, OAUTH_RS)]);
+    let ok = tree(&[(PAGE_PATH, &page_with(35)), (OAUTH_PATH, OAUTH_RS)]);
     let (found, drift) = literal_scan(&ok);
     assert!(found.is_empty() && drift.is_empty(), "{found:?} {drift:?}");
 
@@ -1890,10 +1873,7 @@ fn the_scan_for_literals_finds_a_new_literal() {
         "{}\nfn brand_line() -> &'static str {{\n    \"obop\"\n}}\n",
         page_with(35)
     );
-    let (found, drift) = literal_scan(&literal_tree(&[
-        (PAGE_PATH, &added),
-        (OAUTH_PATH, OAUTH_RS),
-    ]));
+    let (found, drift) = literal_scan(&tree(&[(PAGE_PATH, &added), (OAUTH_PATH, OAUTH_RS)]));
     assert_eq!(found.len(), 1, "{found:?}");
     assert!(
         found[0].starts_with(&format!("{PAGE_PATH}:40:")) && found[0].contains("`brand_line`"),
@@ -1906,15 +1886,12 @@ fn the_scan_for_literals_finds_a_new_literal() {
         "{}\nfn f() {{ let _ = \"Welcome to OBOP\"; }}\n",
         page_with(35)
     );
-    let (found, _) = literal_scan(&literal_tree(&[(PAGE_PATH, &loud), (OAUTH_PATH, OAUTH_RS)]));
+    let (found, _) = literal_scan(&tree(&[(PAGE_PATH, &loud), (OAUTH_PATH, OAUTH_RS)]));
     assert_eq!(found.len(), 1, "{found:?}");
 
     // The same text in another function is not the row's: the row names the item.
     let moved = OAUTH_RS.replace("fn cookie_name()", "fn other()");
-    let (found, drift) = literal_scan(&literal_tree(&[
-        (PAGE_PATH, &page_with(35)),
-        (OAUTH_PATH, &moved),
-    ]));
+    let (found, drift) = literal_scan(&tree(&[(PAGE_PATH, &page_with(35)), (OAUTH_PATH, &moved)]));
     assert_eq!(found.len(), 1, "{found:?}");
     assert!(found[0].contains("`other`"), "{found:?}");
     assert!(drift.iter().any(|d| d.contains("cookie_name")), "{drift:?}");
@@ -1922,37 +1899,28 @@ fn the_scan_for_literals_finds_a_new_literal() {
     // The relying-party name of the passkey step is no longer a row (S1e takes it from the reader):
     // the literal `"obop"` back in `webauthn_ctx` is found, with the item, and no row is left over.
     let back = format!("{OAUTH_RS}fn webauthn_ctx() {{ let _ = \"obop\"; }}\n");
-    let (found, drift) = literal_scan(&literal_tree(&[
-        (PAGE_PATH, &page_with(35)),
-        (OAUTH_PATH, &back),
-    ]));
+    let (found, drift) = literal_scan(&tree(&[(PAGE_PATH, &page_with(35)), (OAUTH_PATH, &back)]));
     assert_eq!(found.len(), 1, "{found:?}");
     assert!(found[0].contains("`webauthn_ctx`"), "{found:?}");
     assert!(drift.is_empty(), "{drift:?}");
 
     // A different literal in the item of a row with an exact literal is not let through.
     let widened = OAUTH_RS.replace("obop_oauth_{}", "obop_oauth_{} shop");
-    let (found, _) = literal_scan(&literal_tree(&[
+    let (found, _) = literal_scan(&tree(&[
         (PAGE_PATH, &page_with(35)),
         (OAUTH_PATH, &widened),
     ]));
     assert_eq!(found.len(), 1, "{found:?}");
 
-    // A file of the list that is missing from the tree is a failure, not a pass; so is a clean one.
+    // A file of the list that is missing from the tree is a failure, not a pass.
     let (found, _) = literal_scan(&tree(&[(OAUTH_PATH, OAUTH_RS)]));
     assert!(found.iter().any(|f| f.starts_with(PAGE_PATH)), "{found:?}");
-    for clean in CLEAN_LITERAL_FILES {
-        assert!(
-            found.iter().any(|f| f.starts_with(clean)),
-            "{clean}: {found:?}"
-        );
-    }
 }
 
 #[test]
 fn the_scan_for_literals_finds_a_row_that_matches_more_or_less_than_it_says() {
     // A sixth catalogue key that names obop sits under the row of the five and over its count.
-    let (found, drift) = literal_scan(&literal_tree(&[
+    let (found, drift) = literal_scan(&tree(&[
         (PAGE_PATH, &page_with(36)),
         (OAUTH_PATH, OAUTH_RS),
     ]));
@@ -1964,14 +1932,14 @@ fn the_scan_for_literals_finds_a_row_that_matches_more_or_less_than_it_says() {
     );
 
     // A row that matches less than it says: a cell lost its name, or the literal was renamed.
-    let (found, drift) = literal_scan(&literal_tree(&[
+    let (found, drift) = literal_scan(&tree(&[
         (PAGE_PATH, &page_with(34)),
         (OAUTH_PATH, OAUTH_RS),
     ]));
     assert!(found.is_empty(), "{found:?}");
     assert!(drift[0].contains("has 34"), "{drift:?}");
     let renamed = OAUTH_RS.replace("obop_oauth_{}", "oauth_{}");
-    let (found, drift) = literal_scan(&literal_tree(&[
+    let (found, drift) = literal_scan(&tree(&[
         (PAGE_PATH, &page_with(35)),
         (OAUTH_PATH, &renamed),
     ]));
@@ -1989,7 +1957,7 @@ fn the_scan_for_literals_finds_a_row_that_matches_more_or_less_than_it_says() {
 fn the_scan_for_literals_reads_escapes_and_finds_concat() {
     let listed = |extra: &str| {
         let page = format!("{}\n{extra}\n", page_with(35));
-        literal_scan(&literal_tree(&[(PAGE_PATH, &page), (OAUTH_PATH, OAUTH_RS)]))
+        literal_scan(&tree(&[(PAGE_PATH, &page), (OAUTH_PATH, OAUTH_RS)]))
     };
     // The name written with escapes, and over a line break.
     for (what, src) in [
@@ -2039,7 +2007,7 @@ fn the_scan_for_literals_leaves_comments_test_code_and_files_off_the_list_alone(
         page_with(35)
     );
     let elsewhere = "fn f() { let _ = \"obop\"; }";
-    let (found, drift) = literal_scan(&literal_tree(&[
+    let (found, drift) = literal_scan(&tree(&[
         (PAGE_PATH, &noisy),
         (OAUTH_PATH, OAUTH_RS),
         ("kernel/obop-http/src/mfa.rs", elsewhere),
@@ -2064,7 +2032,7 @@ fn the_clean_files_are_closed_to_a_literal_that_names_obop() {
             ),
             ("an escape", "fn text() { let _ = \"ob\\u{6f}p\"; }"),
         ] {
-            let (found, drift) = literal_scan(&literal_tree(&[
+            let (found, drift) = literal_scan(&tree(&[
                 (PAGE_PATH, &page_with(35)),
                 (OAUTH_PATH, OAUTH_RS),
                 (clean, added),
@@ -2077,14 +2045,14 @@ fn the_clean_files_are_closed_to_a_literal_that_names_obop() {
             assert!(drift.is_empty(), "{clean}: {what}: {drift:?}");
         }
         // `concat!` is found there too, as in the other listed files.
-        let (found, _) = literal_scan(&literal_tree(&[
+        let (found, _) = literal_scan(&tree(&[
             (PAGE_PATH, &page_with(35)),
             (OAUTH_PATH, OAUTH_RS),
             (clean, "fn f() { let _ = concat!(\"ob\", \"op\"); }"),
         ]));
         assert!(found.iter().any(|f| f.contains("`concat!`")), "{found:?}");
         // Comments and test code are not code of the file.
-        let (found, drift) = literal_scan(&literal_tree(&[
+        let (found, drift) = literal_scan(&tree(&[
             (PAGE_PATH, &page_with(35)),
             (OAUTH_PATH, OAUTH_RS),
             (
@@ -2095,6 +2063,26 @@ fn the_clean_files_are_closed_to_a_literal_that_names_obop() {
         assert!(
             found.is_empty() && drift.is_empty(),
             "{clean}: {found:?} {drift:?}"
+        );
+    }
+}
+
+/// A clean file is in the tree (a file renamed or moved would otherwise be scanned for nothing), and
+/// has no row and no place on the list of files with rows: a row would let a literal stand.
+#[test]
+fn the_clean_files_are_in_the_tree_and_have_no_row() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut files = BTreeMap::new();
+    read_tree(&root, &root, &mut files);
+    let lexed = non_test(&files);
+    for clean in CLEAN_LITERAL_FILES {
+        assert!(
+            lexed.contains_key(clean),
+            "{clean} is not in the tree (or is all test code), so nothing of it is scanned"
+        );
+        assert!(
+            !LITERAL_FILES.contains(&clean) && !LITERAL_ALLOWED.iter().any(|r| r.0 == clean),
+            "{clean} is declared clean and has a row"
         );
     }
 }
@@ -2436,31 +2424,25 @@ const REQUEST_STARTS: [&str; 4] = [
     "step",
 ];
 
-/// The function that holds each call of `read_brand` in `code`, in source order. The definition of
-/// the helper is not a call.
-fn read_brand_sites_of(code: &[u8]) -> Vec<String> {
-    use crate::src_scan::{enclosing_fn, skip_ws};
-    let name = "read_brand";
-    words(code, name)
-        .into_iter()
-        .filter(|&p| {
-            let before = String::from_utf8_lossy(&code[..p]);
-            let defines = before.trim_end().ends_with("fn");
-            let calls = code.get(skip_ws(code, p + name.len())) == Some(&b'(');
-            calls && !defines
-        })
-        .map(|p| enclosing_fn(code, p).unwrap_or_else(|| "(no function)".to_string()))
-        .collect()
-}
-
 /// The function that holds each call of `read_brand` in the non-test code of the route file, in
 /// source order. The definition of the helper is not a call.
 fn brand_read_sites(files: &BTreeMap<String, String>) -> Vec<String> {
+    use crate::src_scan::{enclosing_fn, skip_ws};
     let lexed = non_test(files);
     let Some(l) = lexed.get(ROUTE_FILE) else {
         return vec!["(the route file is not in the tree)".to_string()];
     };
-    read_brand_sites_of(&l.code)
+    let name = "read_brand";
+    words(&l.code, name)
+        .into_iter()
+        .filter(|&p| {
+            let before = String::from_utf8_lossy(&l.code[..p]);
+            let defines = before.trim_end().ends_with("fn");
+            let calls = l.code.get(skip_ws(&l.code, p + name.len())) == Some(&b'(');
+            calls && !defines
+        })
+        .map(|p| enclosing_fn(&l.code, p).unwrap_or_else(|| "(no function)".to_string()))
+        .collect()
 }
 
 #[test]
@@ -2537,14 +2519,23 @@ const OTHER_PAGE_STARTS: [(&str, &str); 4] = [
 /// Every call of `read_brand` in the non-test code of the files of `obop-http/src` other than the
 /// route file of the flow (which `brand_read_sites` holds), as (file, function), sorted.
 fn other_brand_read_sites(files: &BTreeMap<String, String>) -> Vec<(String, String)> {
+    use crate::src_scan::{enclosing_fn, skip_ws};
     let lexed = non_test(files);
+    let name = "read_brand";
     let mut out = Vec::new();
     for (path, l) in &lexed {
         if !path.starts_with("kernel/obop-http/src/") || path == ROUTE_FILE {
             continue;
         }
-        for f in read_brand_sites_of(&l.code) {
-            out.push((path.clone(), f));
+        // The same reading as `brand_read_sites`, for the other files of the crate: a call, not
+        // the definition of the helper.
+        for p in words(&l.code, name) {
+            let before = String::from_utf8_lossy(&l.code[..p]);
+            let calls = l.code.get(skip_ws(&l.code, p + name.len())) == Some(&b'(');
+            if calls && !before.trim_end().ends_with("fn") {
+                let f = enclosing_fn(&l.code, p).unwrap_or_else(|| "(no function)".to_string());
+                out.push((path.clone(), f));
+            }
         }
     }
     out.sort();
