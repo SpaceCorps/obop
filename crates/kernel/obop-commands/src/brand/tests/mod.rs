@@ -16,6 +16,7 @@ mod cache;
 mod describe;
 mod double;
 mod effective;
+mod enrol;
 mod faults;
 mod pins;
 mod race;

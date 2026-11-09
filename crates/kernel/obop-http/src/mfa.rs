@@ -154,6 +154,27 @@ pub(crate) fn mfa_error(e: MfaError) -> Response {
         MfaError::Unavailable(m) if obop_storage::fault::Fault::is_transient(&m) => {
             crate::unavailable(&m)
         }
+        // The enrolment could not read the instance branding (a read error that is not a transient
+        // fault, or a stored name that cannot be shown), so it would have written a default into the
+        // person's own device: refused, and nothing is stored. After the transient arm, so that a
+        // transient fault never reaches it, and before the generic one, whose hint names the wrong
+        // cause. Waiting does not repair a stored name, so there is no `Retry-After`
+        // (docs/spec/branding.md, section 4).
+        MfaError::Unavailable(m) if m.starts_with(obop_commands::brand::UNREADABLE) => {
+            // The cause is in the message (a stored name, a store that could not be read, a server
+            // with no reader), and an operator who sees the code in an answer finds it here. The
+            // store's own text, when there is one, was written by `enrolment_error`.
+            super::log_line(&format!(
+                "obop: an enrolment was refused: {}",
+                super::log_safe(&m)
+            ));
+            api_error(
+                StatusCode::SERVICE_UNAVAILABLE,
+                &m,
+                "brand_unavailable",
+                "The instance branding could not be read, so nothing was enrolled. An administrator can see why with `obop admin brand status` at the terminal and repair it with `obop admin brand configure` or `obop admin brand clear` (docs/DEPLOY.md).",
+            )
+        }
         MfaError::Unavailable(m) => api_error(
             StatusCode::SERVICE_UNAVAILABLE,
             &m,
@@ -376,4 +397,73 @@ async fn reset_password(
         Err(r) => r,
     })
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use http_body_util::BodyExt;
+
+    /// The status, the headers and the JSON body of an answer.
+    async fn answer(r: Response) -> (StatusCode, HeaderMap, J) {
+        let (parts, body) = r.into_parts();
+        let bytes = body.collect().await.unwrap().to_bytes();
+        (
+            parts.status,
+            parts.headers,
+            serde_json::from_slice(&bytes).unwrap_or(J::Null),
+        )
+    }
+
+    /// The three 503 answers of `MfaError::Unavailable`, told apart by the message, in the order the
+    /// arms are tried (docs/spec/branding.md, section 4): a transient fault of the store first (503
+    /// with `Retry-After`), then the branding that could not be read (503 `brand_unavailable`, no
+    /// `Retry-After`, a hint that names the branding), then the generic one (the server key).
+    #[tokio::test]
+    async fn the_arms_of_unavailable_are_told_apart_by_the_message() {
+        // A transient fault: D74's 503 with a time to wait, and never the answer of the branding.
+        for text in [
+            "storage_busy: all database connections are in use, try again",
+            "storage_unavailable: the connection broke",
+            "storage_timeout: waited 5s",
+        ] {
+            let (status, headers, body) =
+                answer(mfa_error(MfaError::Unavailable(text.into()))).await;
+            assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{text}");
+            assert!(headers.contains_key("retry-after"), "{text}");
+            assert_ne!(body["code"], json!("brand_unavailable"), "{text}");
+            assert_ne!(body["code"], json!("mfa_unavailable"), "{text}");
+        }
+        // The branding that could not be read.
+        let message = format!(
+            "{}: the stored name cannot be shown",
+            obop_commands::brand::UNREADABLE
+        );
+        let (status, headers, body) =
+            answer(mfa_error(MfaError::Unavailable(message.clone()))).await;
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+        assert!(!headers.contains_key("retry-after"));
+        assert_eq!(body["code"], json!("brand_unavailable"));
+        assert_eq!(body["error"], json!(message));
+        let hint = body["hint"].as_str().unwrap();
+        assert!(hint.contains("obop admin brand status"), "{hint}");
+        assert!(!hint.contains("OBOP_SECRET_KEY"), "{hint}");
+        // Any other message is the generic one, with its own hint, as before.
+        for text in [
+            "two-factor needs OBOP_SECRET_KEY",
+            "something else",
+            // The words in the middle of a message are not the prefix.
+            "the store said: the instance branding could not be read",
+        ] {
+            let (status, headers, body) =
+                answer(mfa_error(MfaError::Unavailable(text.into()))).await;
+            assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{text}");
+            assert!(!headers.contains_key("retry-after"), "{text}");
+            assert_eq!(body["code"], json!("mfa_unavailable"), "{text}");
+            assert!(
+                body["hint"].as_str().unwrap().contains("OBOP_SECRET_KEY"),
+                "{text}"
+            );
+        }
+    }
 }

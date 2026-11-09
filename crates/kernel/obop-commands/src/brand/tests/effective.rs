@@ -1,10 +1,12 @@
 //! The `effective` answer of `get` (docs/spec/branding.md, section 3, "What `get` shows", and section
 //! 13, "Commands"): each value in force with the source that won, one case per value and source. The
 //! object is staged by slice, so these tests also pin what it does not hold yet: the entries of the
-//! surfaces that are not built (`authenticator_issuer` and `accent`) are not there, because an entry
-//! whose precedence involves a surface that is not wired would be untrue. The entries of the public
-//! site (`site.title`, `site.logo_url`, `site.accent` and `favicon`) arrived with the slice that
-//! wires the shop to the record.
+//! surfaces that are not built (`accent`) are not there, because an entry whose precedence involves a
+//! surface that is not wired would be untrue. `authenticator_issuer` is there since the slice that
+//! reads the record for the enrolment texts (S1e); its cases, with the variable `OBOP_MFA_ISSUER`
+//! given as a value, are the last in this file. The entries of the public site (`site.title`,
+//! `site.logo_url`, `site.accent` and `favicon`) arrived with the slice that wires the shop to the
+//! record (S1f); their cases come before those of the issuer.
 
 use super::*;
 use obop_brand::LANGS;
@@ -20,7 +22,8 @@ fn effective(row: Option<&[(&str, J)]>, theme: Option<&str>) -> J {
         put_theme(&*spy, accent);
     }
     let (r, _) = reader(&spy, LONG);
-    let text = r.fresh().unwrap().effective_json();
+    // The variable `OBOP_MFA_ISSUER` of this process is not an input of these tests.
+    let text = r.fresh().unwrap().effective_json_with(None);
     serde_json::from_str(&text).unwrap()
 }
 
@@ -60,6 +63,7 @@ fn with_no_row_every_value_is_the_default() {
     is(&e, "slug", "obop", "default");
     is(&e, "logo", "none", "default");
     is(&e, "tile_accent", "#495670", "default");
+    is(&e, "authenticator_issuer", "obop", "default");
     for lang in LANGS {
         is(&e, &format!("title_{lang}"), "obop", "default");
         is(&e, &format!("message_{lang}"), "", "default");
@@ -85,6 +89,7 @@ fn the_object_holds_exactly_the_entries_of_the_surfaces_that_exist() {
         "site.logo_url",
         "site.accent",
         "favicon",
+        "authenticator_issuer",
     ]
     .iter()
     .map(|k| k.to_string())
@@ -95,18 +100,17 @@ fn the_object_holds_exactly_the_entries_of_the_surfaces_that_exist() {
     }
     want.sort();
     assert_eq!(keys, want.iter().map(String::as_str).collect::<Vec<_>>());
-    assert_eq!(keys.len(), 8 + 14);
-    // Every entry is exactly a value and a source, and the source is one of the four.
+    assert_eq!(keys.len(), 9 + 14);
+    // Every entry is exactly a value and a source, and the source is one of the five a good row
+    // gives (a sixth, `unreadable`, is the issuer of a name an enrolment would refuse, below).
     for (k, v) in e.as_object().unwrap() {
         assert_eq!(v.as_object().unwrap().len(), 2, "{k}");
         assert!(
-            ["record", "site", "theme", "default"].contains(&v["source"].as_str().unwrap()),
+            ["record", "site", "env", "theme", "default"].contains(&v["source"].as_str().unwrap()),
             "{k}"
         );
     }
-    for later in ["authenticator_issuer", "accent"] {
-        assert!(e.get(later).is_none(), "{later} arrives with its surface");
-    }
+    assert!(e.get("accent").is_none(), "accent arrives with its surface");
 }
 
 #[test]
@@ -455,4 +459,121 @@ fn settings_that_cannot_be_read_give_the_defaults_for_the_shop_entries() {
         let e = effective_with_settings(Some(&[("name", s("MOHV"))]), settings);
         is(&e, "site.title", "MOHV", "record");
     }
+}
+
+// ---- authenticator_issuer (S1e) -----------------------------------------------------------------------
+//
+// The label and `issuer=` of a new authenticator entry: the variable `OBOP_MFA_ISSUER` if it is set,
+// else the stored name, else `obop`. `Auth::begin` makes the same choice at each enrolment (its
+// tests are in `obop-auth`); this is what `get` says about it. The variable is a parameter of
+// `effective_json_with`, so no test changes the environment of the process.
+
+/// As `effective`, with a value for the variable.
+fn effective_with_variable(row: Option<&[(&str, J)]>, variable: Option<&str>) -> J {
+    let spy = Spy::memory();
+    if let Some(row) = row {
+        put_row(&*spy, row);
+    }
+    let (r, _) = reader(&spy, LONG);
+    let text = r
+        .fresh()
+        .unwrap()
+        .effective_json_with(variable.map(String::from));
+    serde_json::from_str(&text).unwrap()
+}
+
+#[test]
+fn the_authenticator_issuer_names_the_source_that_won_in_each_case() {
+    // Neither: the default.
+    let e = effective_with_variable(None, None);
+    is(&e, "authenticator_issuer", "obop", "default");
+    // The record only.
+    let e = effective_with_variable(Some(&[("name", s("MOHV"))]), None);
+    is(&e, "authenticator_issuer", "MOHV", "record");
+    // The variable only.
+    let e = effective_with_variable(None, Some("Acme"));
+    is(&e, "authenticator_issuer", "Acme", "env");
+    // The variable over the record.
+    let e = effective_with_variable(Some(&[("name", s("MOHV"))]), Some("Acme"));
+    is(&e, "authenticator_issuer", "Acme", "env");
+    // The variable that says `obop` beats a record that says MOHV, and `get` says it is the
+    // variable that won: a value, not the absence of one.
+    let e = effective_with_variable(Some(&[("name", s("MOHV"))]), Some("obop"));
+    is(&e, "authenticator_issuer", "obop", "env");
+    is(&e, "name", "MOHV", "record");
+}
+
+/// The entry is `null` from the source `unreadable`, and says no value.
+fn is_unreadable(e: &J, what: &str) {
+    assert_eq!(
+        e["authenticator_issuer"],
+        json!({"value": null, "source": "unreadable"}),
+        "{what}"
+    );
+}
+
+/// Where an enrolment is refused there is no issuer in force, and `get` says so instead of the
+/// default that the enrolment would not write: `null` from the source `unreadable`, while `name`
+/// still shows the default as it does for any stored name that failed the read check.
+#[test]
+fn a_stored_name_that_failed_the_read_check_has_no_issuer_in_force() {
+    for bad in [
+        s("<script>"),
+        s(""),
+        // Nothing but U+0020 is empty for the read check since S1c: the display shows `obop` for it
+        // and the enrolment is refused as for any name that cannot be shown.
+        s(" "),
+        s("  "),
+        s(&" ".repeat(40)),
+        s("a\u{200b}b"),
+        s(&"x".repeat(41)),
+        J::from(5),
+    ] {
+        let e = effective_with_variable(Some(&[("name", bad.clone())]), None);
+        is(&e, "name", "obop", "default");
+        is_unreadable(&e, &bad.to_string());
+        // The variable does not care about the row at all.
+        let e = effective_with_variable(Some(&[("name", bad.clone())]), Some("Acme"));
+        is(&e, "authenticator_issuer", "Acme", "env");
+    }
+    // A row with no name at all is the same case.
+    let e = effective_with_variable(Some(&[("title_en", s("Hello"))]), None);
+    is_unreadable(&e, "no name");
+}
+
+/// A name that passes the read check and still cannot go into a label (a link character) is
+/// refused by `strict` and so has no issuer in force either; `name` shows it as it is, because the
+/// display accepts it. (A name of only spaces is not of this kind since S1c: the read check calls
+/// it empty, see the test above.)
+#[test]
+fn a_stored_name_that_cannot_go_into_a_label_has_no_issuer_in_force() {
+    for bad in ["a:b", "a/b", "a\\b", "a@b", "http://evil.test/x"] {
+        let e = effective_with_variable(Some(&[("name", s(bad))]), None);
+        is_unreadable(&e, bad);
+        assert_eq!(
+            e["name"]["source"],
+            json!("record"),
+            "the display shows the name that passed the read check: {bad:?}"
+        );
+        let e = effective_with_variable(Some(&[("name", s(bad))]), Some("Acme"));
+        is(&e, "authenticator_issuer", "Acme", "env");
+    }
+    // The ordinary punctuation of a name is no reason.
+    for good in ["Acme, Inc.", "O'Neil & Sons", "Müller (DE)", "a-b_c+d!"] {
+        let e = effective_with_variable(Some(&[("name", s(good))]), None);
+        is(&e, "authenticator_issuer", good, "record");
+    }
+}
+
+#[test]
+fn the_issuer_follows_the_name_and_not_the_title_or_the_slug() {
+    let e = effective_with_variable(
+        Some(&[
+            ("name", s("MOHV")),
+            ("slug", s("mo-hv")),
+            ("title_en", s("MOHV Mileage")),
+        ]),
+        None,
+    );
+    is(&e, "authenticator_issuer", "MOHV", "record");
 }

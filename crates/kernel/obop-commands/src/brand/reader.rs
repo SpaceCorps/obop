@@ -45,6 +45,7 @@
 //! that cannot be written. It does not hide a store failure from D74: the read is not run inside
 //! `fault::detached`, so the request that met the fault is answered with the 503 by the layer above.
 
+use super::enrol::unfit_for_a_label;
 use super::row::{self, Fallback, Shown};
 use super::{MODEL, ROW_ID, SETTING_ID, SETTING_MODEL, UNREADABLE};
 use obop_brand::Brand;
@@ -353,7 +354,10 @@ impl Reader {
     }
 
     /// As the free function [`strict`] over this reader's store; an inert reader answers the
-    /// default brand.
+    /// default brand. A caller that writes the name into a device and may be handed an inert reader
+    /// (the passkey registration) must ask [`Reader::is_inert`] first and refuse with
+    /// [`no_reader_error`](super::no_reader_error): the default here is the answer of a reader with
+    /// nothing to read, not of a row that was read.
     pub fn strict(&self) -> Result<Brand, String> {
         match &self.backend {
             Some(b) => strict(&**b),
@@ -458,12 +462,10 @@ impl Reader {
 /// the text that is written into the person's own device and cannot be corrected afterwards (the
 /// authenticator label, the passkey relying-party name). It fails when the store read fails (the
 /// storage error text, unchanged, so that a D74 code word reaches the layer above) or when the
-/// stored `name` fails the safety subset (a fixed message that starts with [`UNREADABLE`]; a name of
-/// nothing but spaces fails it as empty). No row at all is not a failure: the default is the answer.
-///
-/// Only tests call it on this tree. The enrolment routes that are to call it (spec section 4) are
-/// not built, so no label or relying-party name is read through it yet; the rule that a device is
-/// never given a blank name holds from the slice that makes those calls.
+/// stored `name` fails the safety subset (a name of nothing but spaces does, since S1c), or passes it
+/// and still cannot go into a label (a link character; see `enrol::unfit_for_a_label`, which also
+/// keeps an arm for white space only that no stored name reaches since S1c): a fixed message that starts
+/// with [`UNREADABLE`]. No row at all is not a failure: the default is the answer.
 pub fn strict(backend: &dyn Backend) -> Result<Brand, String> {
     let Some(stored) = backend.get(MODEL, ROW_ID)? else {
         return Ok(Brand::default());
@@ -471,6 +473,11 @@ pub fn strict(backend: &dyn Backend) -> Result<Brand, String> {
     let (brand, fallbacks) = row::read_text(&stored);
     if fallbacks.iter().any(|f| f.field == "name") {
         return Err(format!("{UNREADABLE}: the stored name cannot be shown"));
+    }
+    if unfit_for_a_label(brand.name()) {
+        return Err(format!(
+            "{UNREADABLE}: the stored name cannot be used in a label"
+        ));
     }
     Ok(brand)
 }
