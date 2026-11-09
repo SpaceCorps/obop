@@ -147,10 +147,15 @@ const BUNDLED_MODELS: [&str; 26] = [
 /// storage's `Tracking::get(model)` has too, so the scan cannot tell them apart. The other six are
 /// the tables of an imported accounting file (the Open Accounting Schema import keeps a ledger of what
 /// it has imported, by its own table and the id in the file: `cx.done("voucher", ..)`, with a
-/// parameter called `table`); they are no table of the database. Adding a name here says it is no
-/// table; a name that the scan no longer finds is a failure, like the other lists. `hide_product_docs`
-/// is the switch of the instance's brand, a field of its row, read with `row.get(SWITCH)` (S2).
-const NOT_TABLES: [&str; 8] = [
+/// parameter called `table`); they are no table of the database. `swap` is the label that the
+/// guard of the store gives to `swap_fields` (`done(.., "swap")`, whose parameter is called `model`):
+/// that call spans no model. The scan did not see it while the signer's page had a function `done`
+/// of the same arity (the name was ambiguous, so its literals were not read); it does now, since that
+/// function takes the brand as a fourth argument (slice S1d of the branding work). `hide_product_docs`
+/// is the switch of the instance's brand, a field of its row, read with `row.get(SWITCH)` (S2). Adding
+/// a name here says it is no table; a name that the scan no longer finds is a failure, like the other
+/// lists.
+const NOT_TABLES: [&str; 9] = [
     "account",
     "company",
     "customer",
@@ -158,6 +163,7 @@ const NOT_TABLES: [&str; 8] = [
     "hide_product_docs",
     "journal",
     "show_history",
+    "swap",
     "voucher",
 ];
 
