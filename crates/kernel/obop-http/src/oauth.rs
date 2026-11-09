@@ -219,25 +219,42 @@ pub(crate) fn same_origin(h: &HeaderMap, base: &str) -> bool {
 /// When the refill meets a store fault, the pool has noted it on this request: `ops::storage_faults`
 /// answers the request with the 503 of D74 whatever the handler sends, and `fault::before_write`
 /// refuses the writes it would make. So a sign-in or a decision whose first brand read fails makes
-/// no session and no token, issues no code, writes no entry of the security log and leaves the flow
-/// and the short-lived values of the store as they were, and is answered 503; one whose read
-/// succeeds writes as it always did.
+/// no session and no token, issues no code and leaves the flow and the short-lived values of the
+/// store as they were, and is answered 503; one whose read succeeds writes as it always did.
 ///
-/// The expiring counters are the exception, because `fault::before_write` does not guard
-/// `Backend::counter_add` (`obop-storage/src/guard.rs`) and the handler goes on to the steps that
-/// count: a request of this kind still spends one hit of the window of its address (`oauth:rl:authz`
-/// on a start, 60 in ten minutes; `oauth:rl:login` on a password step, a second step and a passkey,
-/// 30 in ten minutes; `rl:sso:oauth_start` on the Microsoft link, 30 in a minute; the housekeeping
-/// lease of the OAuth server), and a wrong password counts toward the lockout of the account, as
-/// every wrong guess does. The right password counts no failure. So while the store refuses, every
-/// retry of a person, a right password included, uses a hit of the window of their address, and the
-/// allowance is back when the window ends (the answer of a spent window is the 429 with
-/// `Retry-After`). Two tests pin the numbers:
+/// Two kinds of write are the exception, because the guard of the store does not cover them
+/// (`obop-storage/src/guard.rs`).
+///
+/// The expiring counters, because `Backend::counter_add` has no `before_write` and the handler goes
+/// on to the steps that count: a request of this kind still spends one hit of the window of its
+/// address. A start spends `oauth:rl:authz` (60 in ten minutes); a password step, a second step and
+/// a passkey post spend `oauth:rl:login` (30 in ten minutes); on a secure site (`ceremony_site_ok`)
+/// a passkey post also spends `auth.pk:verify` (40 in ten minutes), and the options request of a
+/// passkey spends `auth.pk:options` (60 in ten minutes) and no `oauth:rl:login`; the Microsoft link
+/// spends `rl:sso:oauth_start` (30 in a minute); and there is the housekeeping lease of the OAuth
+/// server. A wrong password, a wrong code or a wrong passkey answer at the second step counts toward
+/// the lockout of the account, as every wrong guess does; the right password and the right code
+/// count no failure. So while the store refuses, every retry of a person, a right password
+/// included, uses a hit of the window of their address, and the allowance is back when the window
+/// ends (the answer of a spent window is the 429 with `Retry-After`).
+///
+/// And the security log, because `Guarded::insert` lets the model `security_event` through (an
+/// entry about a change that committed must not be lost). The password step writes no entry, but a
+/// wrong code at the second step writes `code_failed` and a wrong passkey answer there writes
+/// `passkey_failed`, the first of each ten seconds for the account, although the request is
+/// refused; the guess that reaches the lockout writes `lockout` as well (`Auth::check_second_factor`
+/// and `login_second`; no test reaches that one here).
+///
+/// Four tests pin this, in both directions:
 /// `a_sign_in_whose_first_brand_read_fails_leaves_the_store_as_it_was_and_is_a_503` and
-/// `a_wrong_password_under_a_failing_first_read_still_counts_toward_the_lockout`. The read is not
-/// run inside `fault::detached` to hide any of this: a request that cannot read the store cannot do
-/// what it came for either. (Putting the counters under `before_write` would make "writes nothing"
-/// literal; that is a change in `obop-storage` and outside this slice.)
+/// `a_wrong_password_under_a_failing_first_read_still_counts_toward_the_lockout` (the password step),
+/// `a_second_step_under_a_failing_first_read_spends_a_hit_and_a_wrong_code_counts_a_failure` and
+/// `a_passkey_post_and_its_options_under_a_failing_first_read_spend_the_windows_they_are_said_to`
+/// (the second step, the passkey post and the options request of a passkey). The read is not run
+/// inside `fault::detached` to hide any of this: a request that cannot read the store cannot do what
+/// it came for either. (Putting the counters under `before_write` would make "writes nothing"
+/// literal for them; that is a change in `obop-storage` and outside this slice. The log is let
+/// through on purpose and stays so.)
 fn read_brand(s: &HttpState) -> Arc<Shown> {
     s.dispatcher.brand().current()
 }
