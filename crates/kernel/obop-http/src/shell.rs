@@ -1478,7 +1478,10 @@ mod tests {
         let page = "<html><head><link rel=\"icon\" href=\"/real.ico\"><title>obop <link rel=\"icon\" href=\"/t.ico\"> x</title></head><body></body></html>";
         let out = rewritten(page, &shown).unwrap();
         assert!(out.contains("<title>MOHV</title>"), "{out}");
-        assert!(!out.contains("/t.ico") && !out.contains("/real.ico"), "{out}");
+        assert!(
+            !out.contains("/t.ico") && !out.contains("/real.ico"),
+            "{out}"
+        );
         assert_eq!(out.matches("<link rel=\"icon\"").count(), 1, "{out}");
     }
 

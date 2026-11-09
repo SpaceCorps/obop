@@ -210,7 +210,10 @@ fn the_help_of_the_binary_names_every_flag_of_the_usage_of_the_area() {
         .filter(|w| w.starts_with("--") && w.len() > 2)
         .collect();
     for known in ["--name", "--hide-product-docs", "--dry-run", "--from"] {
-        assert!(flags.contains(known), "{known} is not in the usage:\n{area}");
+        assert!(
+            flags.contains(known),
+            "{known} is not in the usage:\n{area}"
+        );
     }
     for flag in flags {
         assert!(help.contains(flag), "{flag} is not in the help:\n{help}");
@@ -253,7 +256,10 @@ fn hide_product_docs_on_and_off_reach_the_row_the_status_and_the_log_and_a_value
         .get("instance_brand", "instance")
         .unwrap()
         .expect("the row");
-    assert_eq!(stored.get("hide_product_docs"), Some(&serde_json::json!(true)));
+    assert_eq!(
+        stored.get("hide_product_docs"),
+        Some(&serde_json::json!(true))
+    );
 
     // The same value again changes nothing; a dry run with `off` says what it would do and writes
     // nothing.
@@ -275,7 +281,10 @@ fn hide_product_docs_on_and_off_reach_the_row_the_status_and_the_log_and_a_value
         ],
         None,
     ));
-    assert!(dry.contains("  hide_product_docs: true -> false\n"), "{dry}");
+    assert!(
+        dry.contains("  hide_product_docs: true -> false\n"),
+        "{dry}"
+    );
     assert!(status(&url).contains("hide_product_docs: on\n"));
     assert_eq!(events(&url).len(), 2);
 

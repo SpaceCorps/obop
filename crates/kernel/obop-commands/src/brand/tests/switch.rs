@@ -201,8 +201,15 @@ fn clear_accounts_for_the_switch_and_writes_down_only_a_boolean() {
     let spy = Spy::memory();
     ok(&spy, &[("name", "MOHV"), (SWITCH, "true")]);
     let a = apply(&*spy, None, "ada", &Action::Clear, false).unwrap();
-    let c = a.changes.iter().find(|c| c.field == SWITCH).expect("the switch");
-    assert_eq!((c.old.as_str(), c.new.as_str(), c.withheld), ("true", "", false));
+    let c = a
+        .changes
+        .iter()
+        .find(|c| c.field == SWITCH)
+        .expect("the switch");
+    assert_eq!(
+        (c.old.as_str(), c.new.as_str(), c.withheld),
+        ("true", "", false)
+    );
     assert!(details(&spy).contains(&"hide_product_docs: true -> removed".to_string()));
 
     // A value that is not a boolean is not written down: the marker, and `withheld` for the
@@ -210,8 +217,15 @@ fn clear_accounts_for_the_switch_and_writes_down_only_a_boolean() {
     let spy = Spy::memory();
     put_row(&*spy, &[("name", s("MOHV")), (SWITCH, s("yes"))]);
     let a = apply(&*spy, None, "ada", &Action::Clear, false).unwrap();
-    let c = a.changes.iter().find(|c| c.field == SWITCH).expect("the switch");
-    assert_eq!((c.old.as_str(), c.new.as_str(), c.withheld), ("<not boolean>", "", true));
+    let c = a
+        .changes
+        .iter()
+        .find(|c| c.field == SWITCH)
+        .expect("the switch");
+    assert_eq!(
+        (c.old.as_str(), c.new.as_str(), c.withheld),
+        ("<not boolean>", "", true)
+    );
     assert!(
         details(&spy).iter().all(|d| !d.contains("yes")),
         "the value is in no line: {:?}",

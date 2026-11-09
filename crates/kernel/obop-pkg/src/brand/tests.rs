@@ -257,9 +257,15 @@ fn the_descriptions_name_the_input_keys_and_say_nothing_of_pages() {
     ] {
         assert!(configure.description.contains(key), "configure: {key}");
     }
-    let switch = m.fields.iter().find(|f| f.name == "hide_product_docs").unwrap();
+    let switch = m
+        .fields
+        .iter()
+        .find(|f| f.name == "hide_product_docs")
+        .unwrap();
     assert!(
-        switch.description.starts_with("true or false: hide the Brand book and the Guide"),
+        switch
+            .description
+            .starts_with("true or false: hide the Brand book and the Guide"),
         "{}",
         switch.description
     );
