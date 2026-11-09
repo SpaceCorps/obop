@@ -60,7 +60,11 @@ fn rig_with(extra: Vec<obop_connectors::Provider>) -> Rig {
 }
 
 fn rig_with_brand(extra: Vec<obop_connectors::Provider>, row: Option<BrandRow<'_>>) -> Rig {
-    let store = Store::new();
+    rig_over(Store::new(), extra, row)
+}
+
+/// The rig over a store the caller made (one whose reads can be refused, say).
+fn rig_over(store: Store, extra: Vec<obop_connectors::Provider>, row: Option<BrandRow<'_>>) -> Rig {
     let d = Arc::new(Dispatcher::new());
     if let Some(row) = row {
         let reader = d.install_brand(store.backend());
@@ -1206,6 +1210,67 @@ async fn with_a_brand_four_of_the_five_outputs_of_the_oauth_callback_say_the_nam
         }
     }
     assert_eq!(seen_sentence, 1);
+}
+
+/// The callback writes (it spends the single-use state and stores the tokens), so it reads the brand
+/// before it does anything. With the first read refused it is the 503 of D74, the state is not spent
+/// and nothing is stored; once the store answers, the same address connects the account and the page
+/// says the name.
+#[tokio::test]
+async fn a_callback_whose_first_brand_read_fails_spends_no_state_and_is_a_503() {
+    use obop_storage::testing::{Flaky, Mode};
+    let (fake, end) = fake_oauth();
+    let (flaky, backend) = Flaky::memory();
+    // The row is put into the store before anything has asked the reader, so that the reader has no
+    // cell yet and the first page request has to read the store.
+    let row = [("name", json!("MOHV"))];
+    let r = rig_over(
+        Store::over(backend),
+        vec![fake],
+        Some(BrandRow::Around(&row)),
+    );
+    let state = start_fake_connection(&r, end.port).await;
+    let stored = |r: &Rig| {
+        let b = r.store.backend();
+        (
+            b.list("connection").unwrap(),
+            b.list("connector_oauth_state").unwrap(),
+            b.list("connector_vault").unwrap(),
+        )
+    };
+    let before = stored(&r);
+    let writes = flaky.seen_writes().len();
+    let uri = format!("/oauth/callback?state={state}&code=code-1");
+
+    flaky.refuse_model(obop_commands::brand::MODEL, Mode::Reads);
+    let refused_before = flaky.refused();
+    let answer = answer_of(&r, &uri).await;
+    assert!(answer.starts_with("503\n"), "{answer}");
+    assert!(answer.to_lowercase().contains("retry-after: 1"), "{answer}");
+    assert!(
+        !answer.contains("Connected") && !answer.contains("Back to"),
+        "not a page of the callback: {answer}"
+    );
+    assert!(
+        flaky.refused() > refused_before,
+        "the brand's read was refused"
+    );
+    assert_eq!(stored(&r), before, "nothing was stored or spent");
+    assert_eq!(
+        flaky.seen_writes().len(),
+        writes,
+        "no batch reached the store"
+    );
+
+    // The store answers: the same address, the same state, connects the account.
+    flaky.allow_models();
+    let answer = answer_of(&r, &uri).await;
+    assert!(answer.starts_with("200\n"), "{answer}");
+    assert!(
+        answer.contains("The account is authorised. Taking you back to MOHV."),
+        "{answer}"
+    );
+    assert_ne!(stored(&r), before, "it stored the tokens");
 }
 
 /// A row written around the command: a name with every character that HTML needs escaped and that the
