@@ -1,8 +1,10 @@
 // The public website (web/apps/site, served at the root of the control plane): static HTML that
 // must read and navigate without JavaScript, be well-formed for crawlers and agents, and be
 // localised. Runs against the built web/site directory.
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { messages } from "../../../apps/site/i18n/index.ts";
-import { platformUrl } from "../support/env.ts";
+import { platformUrl, repoRoot } from "../support/env.ts";
 import { expect, test, unnamedControls } from "../support/fixtures.ts";
 
 const base = () => platformUrl();
@@ -61,7 +63,18 @@ test.describe("website without JavaScript", () => {
     await expect(page.locator("main .store-row")).toHaveCount(22);
     await expect(page.locator("main a[href^='/apps/']")).toHaveCount(28);
     await expect(page.locator("main .store-tile").first()).toHaveAttribute("href", "/apps/crm/");
-    await expect(page.locator("main .store-row .store-get").first()).toHaveText(s.get);
+    // The six tile taglines are plain words, not a list of nouns from the manifests.
+    await expect(page.locator("main .store-tile .store-tag")).toHaveText([
+      messages.en.apps.taglines["crm"]!,
+      messages.en.apps.taglines["sales"]!,
+      messages.en.apps.taglines["invoicing"]!,
+      messages.en.apps.taglines["product"]!,
+      messages.en.apps.taglines["base"]!,
+      messages.en.apps.taglines["connectors"]!,
+    ]);
+    // A row opens a page, so it ends in a chevron, not in a "Get" pill that would promise an install.
+    await expect(page.locator("main .store-row .store-chev")).toHaveCount(22);
+    await expect(page.locator("main .store-get")).toHaveCount(0);
     expect(await page.locator("main h3").allTextContents()).toEqual(
       Object.values(messages.en.apps.categories).filter((c) => c !== "Foundation"),
     );
@@ -99,36 +112,47 @@ test.describe("website without JavaScript", () => {
     await page.goto(`${base()}/apps/invoicing/`);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Invoicing");
 
-    // The hero: the name, one line, and one primary button; a built-in app is opened.
-    await expect(page.locator(".app-tagline")).toHaveText("Drafts, posting, numbering");
+    // The hero: the name, one line, and one primary button; a built-in app is opened. The category
+    // is in the strip, not repeated under the tagline.
+    await expect(page.locator(".app-tagline")).toHaveText(messages.en.apps.taglines["invoicing"]!);
+    await expect(page.locator(".app-category")).toHaveCount(0);
     const primary = page.locator(".app-hero .app-primary");
     await expect(primary).toHaveText(s.open);
     await expect(primary).toHaveAttribute("href", "/app/");
     await expect(page.locator("main .app-primary")).toHaveCount(1);
 
-    // The facts strip: four cells, from the manifest only.
-    const facts = page.locator(".app-facts > div");
-    await expect(facts).toHaveCount(4);
-    await expect(page.locator(".app-facts")).toContainText("Stable");
-    await expect(page.locator(".app-facts")).toContainText("Finance");
-    await expect(page.locator(".app-facts")).toContainText("SpaceCorps");
-    await expect(page.locator(".app-facts")).toContainText("Apache-2.0");
-
-    // The sections, in order.
+    // The facts strip: four cells that differ from app to app, from the manifest only.
     const a = messages.en.apps;
-    await expect(
-      page.locator("main > .wrap > section > h2, main > .wrap > details > summary > h2"),
-    ).toHaveText([
+    await expect(page.locator(".app-facts dt")).toHaveText([
+      a.meta.maturity,
+      a.meta.version,
+      s.worksWith,
+      s.category,
+    ]);
+    await expect(page.locator(".app-facts dd")).toHaveText([
+      "Stable",
+      "0.2.1",
+      "Contacts, Sales",
+      "Finance",
+    ]);
+
+    // The sections, in order; a built-in app has "Included" where a marketplace app has "Get".
+    await expect(page.locator("main > .wrap > section > h2")).toHaveText([
       a.h.purpose,
       s.canDo,
       s.keeps,
       s.safe,
       s.worksWith,
       s.info,
-      s.get,
+      s.includedTitle,
       s.developers,
       a.h.related,
     ]);
+    // What it is for: the first sentence large, the rest small and quiet.
+    await expect(page.locator(".app-purpose")).toHaveText(
+      "Prepare customer invoices as drafts and post them to give each one its gapless legal number.",
+    );
+    await expect(page.locator(".app-purpose-rest")).toContainText("Posting is the one step");
     // What you can do: one card per workflow action, with the approval mark where it is needed.
     const post = page.locator(".app-card", { hasText: "Post a draft invoice" });
     await expect(post.locator("h3")).toHaveText("Post");
@@ -138,15 +162,28 @@ test.describe("website without JavaScript", () => {
     ).not.toContainText(s.needsApproval);
     await expect(page.locator(".app-safe li")).toHaveCount(1);
     await expect(page.locator(".app-info")).toContainText("SpaceCorps");
+    // The information list speaks plainly: a version of obop, not a semver range; a built-in app
+    // links to its module, not to the site's snapshot of the manifest.
+    await expect(page.locator(".app-info")).toContainText(
+      s.compatValue.replace("{version}", "0.2"),
+    );
+    await expect(page.locator(".app-info")).not.toContainText("^0.2");
+    await expect(page.locator(".app-info dt", { hasText: s.source })).toBeVisible();
+    await expect(
+      page.locator(".app-info a", { hasText: "crates/modules/invoicing" }),
+    ).toHaveAttribute("href", /\/tree\/main\/crates\/modules\/invoicing$/);
     await expect(page.locator(".app-getbox")).toHaveText(s.included);
 
-    // For developers: present and closed, and everything technical is inside it.
+    // For developers: a heading, then a fold that is present and closed, with everything technical
+    // inside it, one heading level below the heading.
+    await expect(page.locator("h2#for-developers")).toHaveText(s.developers);
     const dev = page.locator("details#developers");
     await expect(dev).toHaveJSProperty("open", false);
-    await expect(page.getByRole("heading", { level: 2, name: "Models" })).toBeHidden();
+    await expect(dev.locator("summary")).toHaveText(s.developersShow);
+    await expect(page.getByRole("heading", { level: 3, name: "Models" })).toBeHidden();
     await dev.locator("summary").click();
     await expect(dev).toHaveJSProperty("open", true);
-    await expect(page.getByRole("heading", { level: 2, name: "Models" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 3, name: "Models" })).toBeVisible();
     await expect(page.getByRole("cell", { name: "total_minor" })).toBeVisible();
     await expect(page.getByRole("cell", { name: "invoice.post" })).toBeVisible();
     await expect(
@@ -158,7 +195,7 @@ test.describe("website without JavaScript", () => {
       await expect(page.locator(`#${id}`)).toHaveCount(1);
   });
 
-  test("a marketplace app page gets: the button jumps to the install box", async ({ page }) => {
+  test("a marketplace app page gets: the button jumps to a plain install box", async ({ page }) => {
     const s = messages.en.apps.store;
     await page.goto(`${base()}/apps/helpdesk/`);
     const primary = page.locator(".app-hero .app-primary");
@@ -167,9 +204,16 @@ test.describe("website without JavaScript", () => {
     await primary.click();
     await expect(page).toHaveURL(/\/apps\/helpdesk\/#get$/);
     await expect(page.getByRole("heading", { level: 2, name: s.get })).toBeInViewport();
+    // One plain sentence first; the command line is folded away, and still in the page.
+    await expect(page.locator(".app-getbox > p").first()).toHaveText(s.getLead);
+    const cmd = page.locator(".app-getbox details.app-cmd");
+    await expect(cmd).toHaveJSProperty("open", false);
+    await expect(cmd.locator("summary")).toHaveText(s.commandLine);
     await expect(page.locator(".app-getbox pre code")).toHaveText(
       "obop modules install-from helpdesk",
     );
+    await cmd.locator("summary").click();
+    await expect(page.locator(".app-getbox pre code")).toBeVisible();
     await expect(page.locator("details#developers")).toHaveJSProperty("open", false);
     await page.locator("details#developers summary").click();
     await expect(page.getByRole("cell", { name: "requester_email" })).toBeVisible();
@@ -193,13 +237,103 @@ test.describe("website without JavaScript", () => {
     await expect(page.locator(".app-hero .app-primary")).toHaveText(s.get);
     await expect(page.locator(".app-tagline")).toHaveText(messages.de.apps.taglines["helpdesk"]!);
     await expect(page.getByRole("heading", { level: 2, name: s.canDo })).toBeVisible();
+    // The cards use the labels the product itself has in German; only the purpose is English,
+    // marked as such, with one quiet line that says so.
     await expect(page.locator(".app-purpose")).toHaveAttribute("lang", "en");
-    await expect(page.locator(".app-card h3").first()).toHaveAttribute("lang", "en");
-    await expect(page.locator("details#developers > summary h2")).toHaveText(s.developers);
+    await expect(page.locator(".app-note")).toHaveText(s.purposeEnglish);
+    await expect(page.locator(".app-card h3").first()).toHaveText("Übernehmen");
+    await expect(page.locator(".app-card [lang]")).toHaveCount(0);
+    await expect(page.locator("h2#for-developers")).toHaveText(s.developers);
+    await expect(page.locator("details#developers > summary")).toHaveText(s.developersShow);
+    // Field descriptions in the technical tables are English and say so.
+    await expect(page.locator("details#developers td span[lang=en]").first()).toBeAttached();
     await page.goto(`${base()}/de/apps/crm/`);
     await expect(page.locator(".app-hero .app-primary")).toHaveText(s.open);
     await expect(page.locator(".app-hero .app-primary")).toHaveAttribute("href", "/app/");
   });
+
+  // What the page shows is checked against the manifest read straight from the TOML file, not
+  // through the site's own loader: the cards, the folds, the facts, the safe lines, the icons.
+  for (const app of [
+    { slug: "accounting", file: "packages/accounting.toml", builtin: false },
+    { slug: "connectors", file: "web/apps/site/data/builtin/connectors.toml", builtin: true },
+  ]) {
+    test(`the ${app.slug} page shows what its manifest says`, async ({ page }) => {
+      const s = messages.en.apps.store;
+      const toml = readFileSync(join(repoRoot, app.file), "utf8");
+      const actionBlocks = toml
+        .split(/^\s*\[\[model\.action\]\]/m)
+        .slice(1)
+        .map((b) => b.split(/\n\s*\[/)[0]!);
+      const fieldBlocks = toml
+        .split(/^\s*\[\[model\.field\]\]/m)
+        .slice(1)
+        .map((b) => b.split(/\n\s*\[/)[0]!);
+      const models = (toml.match(/^\[\[model\]\]/gm) ?? []).length;
+      const approvals = actionBlocks.filter((b) => /^\s*approval\s*=\s*true/m.test(b)).length;
+      const withheldClass =
+        /^\s*class\s*=\s*"(financial|confidential_hr|special_category|secret)"/m;
+      const masked = fieldBlocks.some(
+        (b) => /^\s*personal_data\s*=\s*true/m.test(b) && !withheldClass.test(b),
+      );
+      const withheld = fieldBlocks.some((b) => withheldClass.test(b));
+      const version = /^version\s*=\s*"([^"]+)"/m.exec(toml)![1]!;
+      const maturity = /^maturity\s*=\s*"([^"]+)"/m.exec(toml)![1]!;
+      const deps = [
+        ...(/^depends\s*=\s*\[([^\]]*)\]/m.exec(toml)?.[1] ?? "").matchAll(/"([^"]+)"/g),
+      ].map((m) => m[1]!);
+      for (const m of /\[module\.dependencies\]\n((?:[a-z_]+\s*=.*\n?)*)/
+        .exec(toml)?.[1]
+        ?.matchAll(/^([a-z_]+)\s*=/gm) ?? [])
+        deps.push(m[1]!);
+      const names: Record<string, string> = { base: "Contacts" };
+
+      await page.goto(`${base()}/apps/${app.slug}/`);
+      // Facts: maturity, version, who it works with, category.
+      const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+      const dd = await page.locator(".app-facts dd").allTextContents();
+      expect(dd[0]).toBe(cap(maturity));
+      expect(dd[1]).toBe(version);
+      expect(dd[2]).toBe(
+        deps.length ? deps.map((d) => names[d] ?? cap(d)).join(", ") : s.standalone,
+      );
+      // What you can do: one card per action, the approval mark exactly where the manifest says,
+      // and the cards beyond the sixth folded with a label that counts and names them.
+      const can = page.locator("section", { has: page.locator("h2#can-do") });
+      await expect(can.locator(".app-card")).toHaveCount(actionBlocks.length);
+      await expect(can.locator(".app-card-note")).toHaveCount(approvals);
+      const foldedActions = Math.max(0, actionBlocks.length - 6);
+      if (foldedActions)
+        await expect(can.locator(".app-more > summary")).toHaveText(
+          s.showMoreActions.replace("{n}", String(foldedActions)),
+        );
+      else await expect(can.locator(".app-more")).toHaveCount(0);
+      // What it keeps: one card per model, the same way.
+      const keeps = page.locator("section", { has: page.locator("h2#keeps") });
+      await expect(keeps.locator(".app-card")).toHaveCount(models);
+      const foldedModels = Math.max(0, models - 6);
+      if (foldedModels)
+        await expect(keeps.locator(".app-more > summary")).toHaveText(
+          s.showMoreKeeps.replace("{n}", String(foldedModels)),
+        );
+      // Safe with AI agents: exactly the lines the manifest earns.
+      const lines = [
+        ...(masked ? [s.safeMasked] : []),
+        ...(withheld ? [s.safeWithheld] : []),
+        approvals ? s.safeApprove : s.safeApproveNone,
+      ];
+      await expect(page.locator(".app-safe li")).toHaveText(lines);
+      // Works with: a link for each dependency that is an app of its own.
+      if (deps.includes("base"))
+        await expect(
+          page.locator("#works-with ~ .app-icons a[href='/apps/contacts/']"),
+        ).toHaveCount(1);
+      await expect(page.locator("main .app-primary")).toHaveAttribute(
+        "href",
+        app.builtin ? "/app/" : "#get",
+      );
+    });
+  }
 
   test("docs: sidebar, breadcrumb, previous and next, edit link, table of contents", async ({
     page,
@@ -394,6 +528,7 @@ test.describe("website behaviour with JavaScript", () => {
   test("the install box of a marketplace app has the copy button", async ({ page, context }) => {
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     await page.goto(`${base()}/apps/helpdesk/`);
+    await page.locator(".app-getbox details.app-cmd summary").click();
     const block = page.locator('.app-getbox div[class*="language-"]');
     await block.hover();
     await block.getByRole("button", { name: "Copy" }).click();
@@ -409,6 +544,35 @@ test.describe("website behaviour with JavaScript", () => {
     await expect(page.locator("#models")).toBeInViewport();
     await page.goto(`${base()}/apps/invoicing/`);
     await expect(page.locator("details#developers")).toHaveJSProperty("open", false);
+  });
+
+  test("site.js alone opens the folded part for a link to a heading in it", async ({ page }) => {
+    // Chrome opens a closed <details> for a fragment link by itself, so this test closes it again
+    // and sends a synthetic hashchange, which no browser answers natively: only the script does.
+    await page.goto(`${base()}/apps/invoicing/#models`);
+    const dev = page.locator("details#developers");
+    await page.evaluate(() => {
+      (document.querySelector("details#developers") as HTMLDetailsElement).open = false;
+      window.scrollTo(0, 0);
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+    await expect(dev).toHaveJSProperty("open", true);
+    await expect(page.locator("#models")).toBeInViewport();
+  });
+
+  test("the copy button shows only once site.js has wired it, and has a name in the markup", async ({
+    page,
+    request,
+  }) => {
+    const html = await (await request.get(`${base()}/apps/helpdesk/`)).text();
+    expect(html).toMatch(/<button class="copy" type="button" aria-label="Copy">/);
+    // A script that is served but wires nothing (an aborted request would also log a console error).
+    await page.route("**/site/site.js", (route) =>
+      route.fulfill({ contentType: "text/javascript", body: "" }),
+    );
+    await page.goto(`${base()}/apps/helpdesk/`);
+    await page.locator(".app-getbox details.app-cmd summary").click();
+    await expect(page.locator(".app-getbox button.copy")).toBeHidden();
   });
 });
 
@@ -503,8 +667,10 @@ test.describe("crawlers and agents", () => {
     for (const h of [s.canDo, s.keeps, s.safe, s.info, s.get, s.developers])
       expect(app, h).toContain(`## ${h}`);
     expect(app).toContain("- **Ticket: close** (" + s.needsApproval + ")");
+    expect(app).toContain(s.getLead);
     expect(app).toContain("obop modules install-from helpdesk");
     expect(app).toContain("### Models");
+    expect(app).toContain(`- **${messages.en.apps.meta.version}:** 0.4.0`);
   });
 
   test("security.txt and humans.txt", async ({ request }) => {
@@ -594,6 +760,8 @@ test.describe("accessibility", () => {
     "/de/",
     "/fi/apps/",
     "/sv/apps/invoicing/",
+    "/apps/accounting/",
+    "/pl/apps/manufacturing/",
     "/marketplace/",
   ];
 
@@ -602,7 +770,7 @@ test.describe("accessibility", () => {
   }) => {
     for (const path of samples) {
       await page.goto(`${base()}${path}`);
-      expect(await unnamedControls(page), `${path} controls`).toEqual([]);
+      expect(await unnamedControls(page, { strict: true }), `${path} controls`).toEqual([]);
       const problems = await page.evaluate(() => {
         const out: string[] = [];
         if (!document.documentElement.lang) out.push("no lang");
@@ -631,6 +799,216 @@ test.describe("accessibility", () => {
         return out;
       });
       expect(problems, path).toEqual([]);
+    }
+  });
+
+  test("every apps page has the same sound structure, in its own language, with one small script", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(240_000);
+    let checked = 0;
+    for (const locale of Object.keys(messages) as (keyof typeof messages)[]) {
+      const urls = (await pagesOf(request, locale)).filter((u) => /\/apps\/(.+\/)?$/.test(u));
+      expect(urls.length, `${locale} apps pages`).toBe(29);
+      for (const url of urls) {
+        await page.goto(`${base()}${url}`, { waitUntil: "domcontentloaded" });
+        const problems = await page.evaluate((htmlLang) => {
+          const out: string[] = [];
+          if (document.documentElement.lang !== htmlLang)
+            out.push(`html lang ${document.documentElement.lang}, not ${htmlLang}`);
+          const heads = [...document.querySelectorAll("h1,h2,h3,h4,h5,h6")].map((h) =>
+            Number(h.tagName[1]),
+          );
+          if (heads.filter((h) => h === 1).length !== 1) out.push("not exactly one h1");
+          if (heads[0] !== 1) out.push(`first heading is h${heads[0]}`);
+          for (let i = 1; i < heads.length; i++)
+            if (heads[i]! - heads[i - 1]! > 1)
+              out.push(`heading jumps h${heads[i - 1]} to h${heads[i]}`);
+          const ids = new Map<string, number>();
+          document.querySelectorAll("[id]").forEach((e) => ids.set(e.id, (ids.get(e.id) ?? 0) + 1));
+          for (const [id, n] of ids) if (n > 1) out.push(`duplicate id ${id}`);
+          for (const n of document.querySelectorAll("nav"))
+            if (!n.getAttribute("aria-label") && !n.getAttribute("aria-labelledby"))
+              out.push("nav without a label");
+          const control = "a[href], button, input, select, textarea, summary";
+          for (const el of document.querySelectorAll(control))
+            if (el.parentElement?.closest("a[href], button"))
+              out.push(`nested control ${el.outerHTML.slice(0, 60)}`);
+          for (const el of document.querySelectorAll("main [lang]"))
+            if (el.getAttribute("lang") !== "en")
+              out.push(`unexpected lang ${el.getAttribute("lang")} on ${el.tagName}`);
+          for (const sc of document.querySelectorAll("script[src]"))
+            if (sc.getAttribute("src") !== "/site/site.js")
+              out.push(`script ${sc.getAttribute("src")}`);
+          if (document.querySelector("script[type=module]")) out.push("module script");
+          return out;
+        }, messages[locale].htmlLang);
+        expect(problems, `${locale} ${url}`).toEqual([]);
+        checked++;
+      }
+    }
+    expect(checked).toBe(7 * 29);
+  });
+
+  test("the apps pages show a focus ring on every stop of a Tab walk", async ({ page }) => {
+    for (const [path, atLeast] of [
+      ["/apps/", 28],
+      ["/apps/helpdesk/", 8],
+      ["/apps/accounting/", 12],
+    ] as const) {
+      await page.goto(`${base()}${path}`);
+      let stops = 0;
+      for (let i = 0; i < 100; i++) {
+        await page.keyboard.press("Tab");
+        const stop = await page.evaluate(() => {
+          const el = document.activeElement as HTMLElement | null;
+          if (!el || !el.closest("main")) return null;
+          const cs = getComputedStyle(el);
+          return {
+            what: `${el.tagName} ${(el.textContent ?? "").trim().slice(0, 30)}`,
+            style: cs.outlineStyle,
+            width: parseFloat(cs.outlineWidth),
+          };
+        });
+        if (!stop) continue;
+        stops++;
+        expect(stop.style, `${path}: ${stop.what}`).not.toBe("none");
+        expect(stop.width, `${path}: ${stop.what}`).toBeGreaterThanOrEqual(2);
+      }
+      expect(stops, `${path} stops in main`).toBeGreaterThanOrEqual(atLeast);
+    }
+  });
+
+  test("the apps pages keep their text at 4.5:1 or better, in both colour schemes and when hovered", async ({
+    page,
+  }) => {
+    // Colours are read back through a canvas, so tokens written as oklch() or color-mix() count too.
+    const measure = (selector: string, hover: boolean) =>
+      page.evaluate(
+        ([sel, hover]) => {
+          const el = document.querySelector(sel as string) as HTMLElement | null;
+          if (!el) return null;
+          const c = document.createElement("canvas");
+          c.width = c.height = 1;
+          const ctx = c.getContext("2d", { willReadFrequently: true })!;
+          const rgba = (color: string) => {
+            ctx.clearRect(0, 0, 1, 1);
+            ctx.fillStyle = "#000";
+            ctx.fillStyle = color;
+            ctx.fillRect(0, 0, 1, 1);
+            return ctx.getImageData(0, 0, 1, 1).data;
+          };
+          const lum = (d: Uint8ClampedArray) => {
+            const f = (v: number) => {
+              const x = v / 255;
+              return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+            };
+            return 0.2126 * f(d[0]!) + 0.7152 * f(d[1]!) + 0.0722 * f(d[2]!);
+          };
+          let bg: Uint8ClampedArray = rgba("#ffffff");
+          for (let n: HTMLElement | null = el; n; n = n.parentElement) {
+            const d = rgba(getComputedStyle(n).backgroundColor);
+            if (d[3] === 255) {
+              bg = d;
+              break;
+            }
+          }
+          const fg = rgba(getComputedStyle(el).color);
+          const [a, b] = [lum(fg), lum(bg)];
+          void hover;
+          return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+        },
+        [selector, hover] as const,
+      );
+    const pages: [string, string[]][] = [
+      [
+        "/apps/helpdesk/",
+        [
+          ".app-primary",
+          ".app-back a",
+          ".app-tagline",
+          ".app-facts dt",
+          ".app-facts dd",
+          ".app-purpose",
+          ".app-purpose-rest",
+          ".app-card-kicker",
+          ".app-card-text",
+          ".app-card-note",
+          ".app-info dt",
+          ".app-cmd > summary",
+          ".app-dev > summary",
+          ".app-getbox .fine",
+        ],
+      ],
+      ["/apps/accounting/", [".app-more > summary"]],
+      ["/apps/", [".store-tag", ".store-name", ".store-lead", ".store-group h3"]],
+      ["/de/apps/helpdesk/", [".app-note"]],
+    ];
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      for (const [path, selectors] of pages) {
+        await page.goto(`${base()}${path}`);
+        for (const sel of selectors) {
+          const rest = await measure(sel, false);
+          expect(rest, `${scheme} ${path} ${sel} is on the page`).not.toBeNull();
+          expect(rest!, `${scheme} ${path} ${sel}`).toBeGreaterThanOrEqual(4.5);
+          // Hovered: the two folds and the primary pill change their colours.
+          if ([".app-more > summary", ".app-dev > summary", ".app-primary"].includes(sel)) {
+            await page.locator(sel).first().hover();
+            await page.waitForTimeout(250);
+            const hovered = await measure(sel, true);
+            expect(hovered!, `${scheme} ${path} ${sel} hovered`).toBeGreaterThanOrEqual(4.5);
+            await page.mouse.move(0, 0);
+          }
+        }
+      }
+    }
+  });
+
+  test("the pill buttons keep an edge in forced colours, and a printed page keeps the technical part", async ({
+    page,
+  }) => {
+    await page.emulateMedia({ forcedColors: "active" });
+    await page.goto(`${base()}/apps/accounting/`);
+    for (const sel of [".app-primary", ".app-more > summary", ".app-dev > summary"]) {
+      const border = await page
+        .locator(sel)
+        .first()
+        .evaluate((el) => {
+          const cs = getComputedStyle(el);
+          return { style: cs.borderTopStyle, width: parseFloat(cs.borderTopWidth) };
+        });
+      expect(border, sel).toEqual({ style: "solid", width: 1 });
+    }
+    await page.emulateMedia({ forcedColors: "none", media: "print" });
+    await expect(page.locator(".app-primary")).toBeHidden();
+    await expect(page.locator("details#developers")).toHaveJSProperty("open", false);
+    await expect(page.getByRole("heading", { level: 3, name: "Models" })).toBeVisible();
+  });
+
+  test("the apps index does not overflow at a large text size on a narrow screen", async ({
+    page,
+  }) => {
+    for (const [width, size] of [
+      [640, 32],
+      [700, 32],
+      [390, 24],
+    ] as const) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const path of ["/apps/", "/de/apps/", "/fi/apps/"]) {
+        await page.goto(`${base()}${path}`);
+        await page.addStyleTag({ content: `html { font-size: ${size}px !important; }` });
+        // The page's own content (the shared header has its own limits at such sizes).
+        const over = await page.evaluate(() => {
+          const store = document.querySelector(".store") as HTMLElement;
+          const clipped = [...document.querySelectorAll(".store-text")].filter(
+            (e) => e.scrollWidth > e.clientWidth + 1,
+          ).length;
+          return { page: store.scrollWidth - store.clientWidth, clipped };
+        });
+        expect(over, `${path} at ${width}px with ${size}px text`).toEqual({ page: 0, clipped: 0 });
+      }
     }
   });
 
