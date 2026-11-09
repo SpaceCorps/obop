@@ -393,10 +393,19 @@ impl Reader {
     }
 
     /// Makes the cell stale without touching the last good value, as two seconds going by would.
-    /// For tests.
-    #[cfg(test)]
-    pub(crate) fn expire(&self) {
+    /// For tests, also those of other crates (the feature `test-support`): they hold a request to
+    /// the bound of the cell without waiting for the clock.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn expire(&self) {
         recover(&self.cell).at = None;
+    }
+
+    /// Makes the cell fresh for an hour, whatever its age, and keeps its value: the counterpart of
+    /// [`Reader::expire`]. For tests of other crates (the feature `test-support`) that hold what a
+    /// request costs while the cell is fresh, without a window of the clock to stay inside.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn hold_fresh(&self) {
+        recover(&self.cell).at = Some(Instant::now() + Duration::from_secs(3600));
     }
 
     /// Makes the value in the cell `by` older than it is. For tests.
@@ -426,9 +435,11 @@ impl Reader {
         recover(&self.refill).slot.is_none()
     }
 
-    /// How many callers have found a flight running with no last good value to serve. For tests.
-    #[cfg(test)]
-    pub(crate) fn waiting(&self) -> usize {
+    /// How many callers have found a flight running with no last good value to serve: a rendezvous
+    /// that is a condition and not a time. For tests, also those of other crates (the feature
+    /// `test-support`).
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn waiting(&self) -> usize {
         self.probe.waiting()
     }
 
@@ -459,10 +470,11 @@ pub fn strict(backend: &dyn Backend) -> Result<Brand, String> {
 
 /// What the tests need to see and to hold still inside the reader: a count of the callers that are
 /// about to block behind a flight (a rendezvous that is a condition and not a time) and a hook that
-/// runs inside `applied`. Outside a test build the probe has no state and no cost. It is a module
+/// runs inside `applied`. Outside a test build (and a build with the feature `test-support`, which
+/// the tests of other crates ask for) the probe has no state and no cost. It is a module
 /// with a `#[cfg]` on it, and not fields and statements with one, so that the scan of `obop-http`
 /// that lists every `#[cfg(test)]` on a construct of the code stays as it is.
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-support")))]
 mod probe {
     pub(super) struct Probe;
 
@@ -479,7 +491,7 @@ mod probe {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 mod probe {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
@@ -516,6 +528,8 @@ mod probe {
             }
         }
 
+        // Only the tests of this crate set a hook; a build for the tests of another crate has none.
+        #[allow(dead_code)]
         pub(super) fn set_gap(&self, hook: Hook) {
             *self.gap.lock().unwrap_or_else(|e| e.into_inner()) = Some(hook);
         }
