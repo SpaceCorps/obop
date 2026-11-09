@@ -3203,6 +3203,33 @@ fn slack_connection(e: &Env, r: &Receiver) -> String {
     id
 }
 
+/// Runs the test message of the connection once and returns the `text` the receiver got.
+fn slack_test_text(e: &Env, r: &Receiver, conn: &str) -> String {
+    let before = r.count();
+    ok(e, &admin(), "connection.test", json!({"id": conn}));
+    assert!(r.wait(before + 1), "the receiver got nothing");
+    r.body()["text"].as_str().expect("a Slack text").to_string()
+}
+
+/// A Slack connection that is sent the event `party.update`, and the record it is about.
+fn slack_event_connection(e: &Env, r: &Receiver) -> (String, String) {
+    let party = seed_party(e);
+    enable(e, "webhook_out", false);
+    let c = ok(
+        e,
+        &admin(),
+        "connection.create",
+        json!({"name": "Party hook", "provider": "webhook_out",
+               "config": json!({"url": r.url(), "events": "party.update"}).to_string(),
+               "credentials": json!({"signing_secret": SECRET}).to_string(),
+               "field_allowlist": json!({"party": ["name"]}).to_string()}),
+    );
+    let id = c["id"].as_str().unwrap().to_string();
+    give_basis(e, &admin(), &id);
+    ok(e, &admin(), "connection.connect", json!({"id": id}));
+    (id, party)
+}
+
 /// The first line of a Slack message names who sends it: `obop` when no brand is set, as it always
 /// did, and the name of the instance when one is. A change of the brand shows in the next message,
 /// and `clear` takes it back. The rest of the line, the event and the model, is as it was.
@@ -3218,6 +3245,8 @@ fn the_slack_message_is_signed_with_the_name_of_the_instance() {
     // No row: the message is the one the instance has always sent.
     let plain = slack_text(&e, &r, &id);
     assert!(plain.starts_with("obop: obop.manual (party)\n"), "{plain}");
+    // The test message of the connection carries no record and is signed in the same way.
+    assert_eq!(slack_test_text(&e, &r, &id), "obop: obop.test ()");
 
     // A brand: the name signs the message; the event and the model are as they were.
     let set = |fields: &[(&str, &str)]| {
@@ -3230,6 +3259,7 @@ fn the_slack_message_is_signed_with_the_name_of_the_instance() {
         apply(&*backend, Some(&reader), "operator", &action, false).unwrap()
     };
     set(&[("name", "MOHV")]);
+    assert_eq!(slack_test_text(&e, &r, &id), "MOHV: obop.test ()");
     let branded = slack_text(&e, &r, &id);
     assert_eq!(
         branded.split_once('\n').map(|(first, _)| first),
@@ -3302,7 +3332,9 @@ fn brand_row_and_a_reader_that_has_never_read(e: &Env, name: &str) {
 /// name met a fault of the store is refused with that fault, before a run is recorded and before
 /// anything leaves, for a manual send, and for the test message of a connection; when the store
 /// answers again the next message goes with the name. The process here has never had a good read,
-/// the case in which the reader has no last good name to give.
+/// the case in which the reader has no last good name to give. Nothing is recorded for a message
+/// that never left: no run, no flow in the flow log (which counts against the caps of the
+/// connection) and no entry in the pseudonym map.
 #[test]
 fn a_slack_message_is_not_sent_when_the_name_of_the_instance_cannot_be_read() {
     use obop_storage::testing::{Flaky, Mode};
@@ -3311,13 +3343,11 @@ fn a_slack_message_is_not_sent_when_the_name_of_the_instance_cannot_be_read() {
     let r = Receiver::new(200);
     let id = slack_connection(&e, &r);
     brand_row_and_a_reader_that_has_never_read(&e, "MOHV");
-    let runs = || {
-        e.s.backend()
-            .list(obop_connectors::model::SYNC_RUN)
-            .unwrap()
-            .len()
-    };
-    let (sent, recorded) = (r.count(), runs());
+    let count = |model: &str| e.s.backend().list(model).unwrap().len();
+    let runs = || count(obop_connectors::model::SYNC_RUN);
+    let flows = || count(obop_connectors::model::FLOW_LOG);
+    let pseudonyms = || count(obop_connectors::model::PSEUDONYMS);
+    let (sent, recorded, logged, mapped) = (r.count(), runs(), flows(), pseudonyms());
 
     flaky.refuse_model("instance_brand", Mode::Reads);
     let m = err(&e, &admin(), "connection.sync", json!({"id": id}));
@@ -3336,11 +3366,111 @@ fn a_slack_message_is_not_sent_when_the_name_of_the_instance_cannot_be_read() {
     obop_storage::fault::clear();
     assert_eq!(r.count(), sent, "nothing left");
     assert_eq!(runs(), recorded, "and no run was recorded for it");
+    assert_eq!(flows(), logged, "and no flow was logged as released");
+    assert_eq!(pseudonyms(), mapped, "and no pseudonym was mapped");
 
     // The store answers: the next message goes, with the name.
     flaky.allow_models();
     let text = slack_text(&e, &r, &id);
     assert!(text.starts_with("MOHV: obop.manual (party)\n"), "{text}");
+    assert_eq!(flows(), logged + 1, "the flow that left is logged once");
+}
+
+/// The same for the event of a command, which is tried again and reported when it cannot go: the
+/// four tries leave no flow, no pseudonym and no run behind, so a short fault of the store does not
+/// use up the hourly and daily caps of the connection; when the store answers, the event goes once,
+/// with the name.
+#[test]
+fn an_event_is_not_sent_or_recorded_when_the_name_of_the_instance_cannot_be_read() {
+    use obop_storage::testing::{Flaky, Mode};
+    let (flaky, backend) = Flaky::memory();
+    let e = slack_env_on(Store::over(backend));
+    let r = Receiver::new(200);
+    let (_, party) = slack_event_connection(&e, &r);
+    brand_row_and_a_reader_that_has_never_read(&e, "MOHV");
+    let count = |model: &str| e.s.backend().list(model).unwrap().len();
+    let (sent, recorded, logged, mapped) = (
+        r.count(),
+        count(obop_connectors::model::SYNC_RUN),
+        count(obop_connectors::model::FLOW_LOG),
+        count(obop_connectors::model::PSEUDONYMS),
+    );
+
+    flaky.refuse_model("instance_brand", Mode::Reads);
+    e.rt.handle_event("party.update", &party);
+    assert_eq!(
+        obop_storage::fault::noted(),
+        Some(obop_storage::fault::Fault::Busy),
+        "the refusal was the fault of the store, not a refusal of the flow"
+    );
+    obop_storage::fault::clear();
+    assert_eq!(r.count(), sent, "nothing left");
+    assert_eq!(count(obop_connectors::model::SYNC_RUN), recorded, "no run");
+    assert_eq!(count(obop_connectors::model::FLOW_LOG), logged, "no flow");
+    assert_eq!(
+        count(obop_connectors::model::PSEUDONYMS),
+        mapped,
+        "no pseudonym"
+    );
+
+    flaky.allow_models();
+    e.rt.handle_event("party.update", &party);
+    assert!(r.wait(sent + 1), "the event was not delivered");
+    assert_eq!(r.count(), sent + 1, "once");
+    let text = r.body()["text"].as_str().unwrap().to_string();
+    assert!(text.starts_with("MOHV: party.update (party)\n"), "{text}");
+    assert_eq!(
+        count(obop_connectors::model::FLOW_LOG),
+        logged + 1,
+        "the flow that left is logged once"
+    );
+}
+
+/// A fault the thread noted before the name was asked for (a read of the same request that was
+/// swallowed) is the first fault of the request and stays the first: it decides the answer of the
+/// layer above (D74), so a good read of the name must not wipe it, and a read that meets another
+/// fault must not replace it. Mutants that take the earlier fault and do not put it back, or that
+/// look at the thread's fault instead of taking it, are caught here.
+#[test]
+fn an_earlier_fault_of_the_request_stays_the_first_when_the_name_is_asked_for() {
+    use obop_storage::fault::{self, Fault};
+    use obop_storage::testing::{Flaky, Mode};
+    // A reader keeps the first store it is given, so each half has an environment of its own, whose
+    // reader has never had a good read.
+    let fresh = || {
+        let (flaky, backend) = Flaky::memory();
+        let e = slack_env_on(Store::over(backend));
+        let r = Receiver::new(200);
+        let id = slack_connection(&e, &r);
+        brand_row_and_a_reader_that_has_never_read(&e, "MOHV");
+        (flaky, e, r, id)
+    };
+
+    // A good read of the name after an earlier fault: the message goes, the fault is still noted.
+    let (_, e, r, id) = fresh();
+    fault::note(Fault::Timeout);
+    let text = slack_text(&e, &r, &id);
+    assert!(text.starts_with("MOHV: obop.manual (party)\n"), "{text}");
+    assert_eq!(fault::noted(), Some(Fault::Timeout), "a good read wiped it");
+    fault::clear();
+
+    // A read that meets a fault of its own after an earlier one: the send is refused with the fault
+    // the read met, and the earlier fault is still the one the request carries.
+    let (flaky, e, r, id) = fresh();
+    fault::note(Fault::Timeout);
+    flaky.refuse_model("instance_brand", Mode::Reads);
+    let m = err(&e, &admin(), "connection.sync", json!({"id": id}));
+    assert!(
+        m.starts_with("storage_busy:") && m.contains("nothing was sent"),
+        "{m}"
+    );
+    assert_eq!(
+        fault::noted(),
+        Some(Fault::Timeout),
+        "the first fault stays the first"
+    );
+    fault::clear();
+    assert_eq!(r.count(), 0, "nothing left");
 }
 
 /// Only a Slack message is signed: a connection of another format neither asks for the name nor is

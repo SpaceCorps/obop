@@ -466,11 +466,14 @@ impl Runtime {
 
     /// The name that signs a Slack message: the name of the instance, which is `obop` when no brand
     /// is set (docs/spec/branding.md, OT-16). A message that has left cannot be taken back, so the
-    /// name is asked for here, once for a send and before anything is recorded or sent (section 4: a
-    /// handler asks the reader first), and a read that met a fault of the store refuses the send with
-    /// that fault: the person who started it is told to try again, an event is tried again, and
-    /// nothing leaves signed with a name the instance did not choose. A refill that runs elsewhere
-    /// gives the last good name and meets nothing. The other providers sign nothing and ask nothing.
+    /// name is asked for here, once for a send and before anything is recorded or sent: before the
+    /// flow is written to the flow log (which counts against the caps of the connection), before the
+    /// pseudonym map and before the run (section 4: a handler asks the reader first). A read that
+    /// met a fault of the store refuses the send with that fault: the person who started it is told
+    /// to try again, an event is tried again, nothing leaves signed with a name the instance did
+    /// not choose, and nothing is recorded for a message that never left. A refill that runs
+    /// elsewhere gives the last good name and meets nothing. The other providers sign nothing and
+    /// ask nothing.
     fn signer(&self, p: &Provider) -> Result<String, String> {
         if p.body_format != "slack" {
             return Ok(String::new());
@@ -561,8 +564,8 @@ impl Runtime {
                 .collect(),
             "slack" => {
                 // The message is signed with the name of the instance (`signer`, asked for before
-                // the run was recorded): the prefix is fixed in the body, so a retry of the delivery
-                // sends the text it was made with.
+                // anything was recorded or sent): the prefix is fixed in the body, so a retry of the
+                // delivery sends the text it was made with.
                 let mut text = format!("{signer}: {event} ({model})");
                 for r in prepared.iter().take(10) {
                     let line = r
@@ -714,6 +717,10 @@ impl Runtime {
         if !matches!(p.engine, Engine::WebhookOut | Engine::CsvExport) {
             return Err(format!("{} does not send records", p.name));
         }
+        // The name that signs a Slack message is asked for first (section 4): `prepare` writes the
+        // flow to the log, and the flow of a message that never left would count against the caps
+        // of the connection. The other providers ask nothing.
+        let signer = self.signer(&p)?;
         let rows = self.read_rows(&c, model, ids)?;
         let prepared = self
             .egress
@@ -732,8 +739,6 @@ impl Runtime {
                 json!({"filename": format!("{}.csv", sanitize_name(name)), "csv": csv, "records": prepared.report.record_count}),
             );
         }
-        // The name that signs a Slack message is asked for before the run is recorded (section 4).
-        let signer = self.signer(&p)?;
         let run = self.try_start_run(&c, "outbound", kind)?;
         let (sent, failed) =
             self.send_prepared(&c, &p, &run, event, model, &prepared.rows, &signer);
