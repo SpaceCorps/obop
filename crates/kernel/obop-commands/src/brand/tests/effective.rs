@@ -260,6 +260,11 @@ fn the_accent_of_the_sign_in_screens_is_the_themes_else_the_stock_violet() {
     let row: &[(&str, J)] = &[("name", s("MOHV"))];
     is(&effective(Some(row), None), "accent", "#6d3fd0", "default");
     is(&effective(None, None), "accent", "#6d3fd0", "default");
+    // With no row the page has no tag, so the screens show the stock violet whatever the theme
+    // stores; `tile_accent` still says what a tile would be drawn with.
+    let e = effective(None, Some("#c2410c"));
+    is(&e, "accent", "#6d3fd0", "default");
+    is(&e, "tile_accent", "#c2410c", "theme");
     is(
         &effective(Some(row), Some("#c2410c")),
         "accent",

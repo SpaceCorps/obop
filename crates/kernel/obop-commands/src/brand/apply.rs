@@ -37,8 +37,9 @@
 //!                                   old value
 //! name: <not text> -> removed       a field whose stored value is not text: no value
 //! hide_product_docs: false -> true     the switch is a boolean, written as the words true and false
-//!                                      (not quoted); a stored value that is not a boolean is the
-//!                                      word not_boolean, and a `clear` writes it as <not boolean>
+//!                                      (not quoted); a stored null reads as off and is false; any
+//!                                      other value that is not a boolean is the word not_boolean,
+//!                                      and a `clear` writes it as <not boolean>
 //! future_field: <unknown> -> removed   a key this binary does not know: no value
 //! ```
 //!
@@ -411,14 +412,17 @@ fn plan_clear(backend: &dyn Backend) -> Result<Plan, Failure> {
             continue;
         }
         if field == SWITCH {
-            changes.push(match row.get(field) {
-                Some(J::Bool(b)) => Changed {
+            // As the read side reads it: a stored `null` is off, like a missing key, and is
+            // written down as `false`; only a value that is neither a boolean nor `null` is the
+            // marker with no value.
+            changes.push(match switch_of(&row) {
+                (on, None) => Changed {
                     field: field.clone(),
-                    old: b.to_string(),
+                    old: on.to_string(),
                     new: String::new(),
                     withheld: false,
                 },
-                _ => Changed {
+                (_, Some(_)) => Changed {
                     field: field.clone(),
                     old: LOG_NOT_BOOLEAN.to_string(),
                     new: String::new(),

@@ -232,4 +232,20 @@ fn clear_accounts_for_the_switch_and_writes_down_only_a_boolean() {
         details(&spy)
     );
     assert!(details(&spy).contains(&"hide_product_docs: <not boolean> -> removed".to_string()));
+
+    // A stored `null` is what the read side calls off, with no fallback: written down as `false`,
+    // as a null text is written down as the empty text.
+    let spy = Spy::memory();
+    put_row(&*spy, &[("name", s("MOHV")), (SWITCH, J::Null)]);
+    let a = apply(&*spy, None, "ada", &Action::Clear, false).unwrap();
+    let c = a
+        .changes
+        .iter()
+        .find(|c| c.field == SWITCH)
+        .expect("the switch");
+    assert_eq!(
+        (c.old.as_str(), c.new.as_str(), c.withheld),
+        ("false", "", false)
+    );
+    assert!(details(&spy).contains(&"hide_product_docs: false -> removed".to_string()));
 }
