@@ -1032,12 +1032,40 @@ fn events_are_recorded_without_secrets() {
 
 #[test]
 fn metadata_documents_name_the_endpoints_and_s256_only() {
-    let m = authorization_server_metadata(BASE);
+    let m = authorization_server_metadata(BASE, &obop_brand::Brand::default());
     assert_eq!(m["issuer"], BASE);
     assert_eq!(m["token_endpoint"], "https://inst.test/oauth/token");
     assert_eq!(m["code_challenge_methods_supported"], json!(["S256"]));
     assert_eq!(m["token_endpoint_auth_methods_supported"], json!(["none"]));
     assert_eq!(m["authorization_response_iss_parameter_supported"], true);
+}
+
+/// S3 (docs/spec/branding.md, OT-10): the one link of the metadata that sends a client to the
+/// software's own documentation is optional in RFC 8414 and is left out when a brand is set; every
+/// other member is the same with and without a brand, and the document names no product: the
+/// instance's name is not in it.
+#[test]
+fn the_documentation_link_is_left_out_when_a_brand_is_set_and_nothing_else_moves() {
+    let plain = authorization_server_metadata(BASE, &obop_brand::Brand::default());
+    assert_eq!(
+        plain["service_documentation"],
+        "https://obop.dev/docs/agents/mcp/"
+    );
+    // A brand that is set, whatever its name (even `obop` itself: one predicate, section 2).
+    for name in ["MOHV", "obop"] {
+        let branded = authorization_server_metadata(BASE, &obop_brand::Brand::new(name));
+        assert!(
+            branded.get("service_documentation").is_none(),
+            "{name}: {branded}"
+        );
+        let mut without = plain.clone();
+        without
+            .as_object_mut()
+            .unwrap()
+            .remove("service_documentation");
+        assert_eq!(branded, without, "{name}: only the link differs");
+        assert!(!branded.to_string().contains("MOHV"), "{branded}");
+    }
 }
 
 #[test]

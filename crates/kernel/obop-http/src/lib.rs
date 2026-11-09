@@ -467,12 +467,20 @@ fn api_error(status: StatusCode, message: &str, code: &str, hint: &str) -> Respo
 }
 
 async fn instance_openapi(State(s): Shared, h: HeaderMap) -> Response {
-    blocking(move || instance_openapi_blocking(s, h)).await
+    // The brand is asked first and once (docs/spec/branding.md, section 4), also for a caller with
+    // no token: the title of the document is the instance's own.
+    let brand = mcp::document_brand(&s).await;
+    blocking(move || instance_openapi_blocking(s, h, brand)).await
 }
 
 /// The instance's OpenAPI document for the caller: with a valid token it lists the commands that
-/// token may use; without one it lists only sign-in and the discovery endpoints.
-fn instance_openapi_blocking(s: Arc<HttpState>, h: HeaderMap) -> Response {
+/// token may use; without one it lists only sign-in and the discovery endpoints. `brand` is the
+/// one the handler read for this request.
+fn instance_openapi_blocking(
+    s: Arc<HttpState>,
+    h: HeaderMap,
+    brand: obop_brand::Brand,
+) -> Response {
     let base = s.mcp.base_url(&h);
     let modules = match s.auth_api(&h) {
         Ok((p, _)) => s.dispatcher.meta(Surface::Rest, &p),
@@ -482,6 +490,7 @@ fn instance_openapi_blocking(s: Arc<HttpState>, h: HeaderMap) -> Response {
     if s.oauth.is_some() {
         openapi::describe_oauth(&mut doc, &base);
     }
+    openapi::describe_brand(&mut doc, &brand);
     let mut r = Json(doc).into_response();
     r.headers_mut().insert(
         axum::http::header::VARY,

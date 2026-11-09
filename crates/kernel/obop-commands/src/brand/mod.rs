@@ -6,9 +6,11 @@
 //! - [`Reader`]: what a page reads. [`Reader::current`] answers from a cell that lives two seconds
 //!   (one unit of the row and the theme setting, single flight, the last good value of any age, the
 //!   default only in a process that never had a good read); [`Reader::fresh`] is the uncached read
-//!   of the row and the theme that `get` makes, and returns a store failure as an error, never as a
-//!   brand that is not set; [`strict`] reads the row alone, every time, for the text that is written
-//!   into a person's own device.
+//!   of the row and the theme that `get`, `obop admin brand status` and the signer of a Slack
+//!   message make (a message that has left cannot be taken back, so it does not take the default
+//!   `current()` gives behind a failed first refill), and returns a store failure as an error,
+//!   never as a brand that is not set; [`strict`] reads the row alone, every time, for the text
+//!   that is written into a person's own device.
 //! - [`apply`]: the one function that writes the row (`configure` and `clear`, on every surface),
 //!   under the lock `brand.write`, with the audit events in the same atomic batch.
 //! - [`site_settings`] and [`fill_site`]: what the public site and shop take from the brand. The
