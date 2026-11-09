@@ -2560,7 +2560,7 @@ fn begins_with_the_brand_read(
     path: &str,
     name: &str,
 ) -> Result<(), String> {
-    use crate::src_scan::{skip_ws, word_at};
+    use crate::src_scan::{after_brace, skip_ws, word_at};
     let lexed = non_test(files);
     let Some(l) = lexed.get(path) else {
         return Err(format!("{path} is not in the tree"));
@@ -2572,8 +2572,19 @@ fn begins_with_the_brand_read(
     else {
         return Err(format!("{path}: no function {name}"));
     };
-    let Some(call) = words(code, "blocking").into_iter().find(|&p| p > def) else {
-        return Err(format!("{path}: {name} has no `blocking(` closure"));
+    // The closure must be the function's own: between the `{` that opens its body and the `}` that
+    // closes it. The first `blocking(` anywhere after the name could be a later function's.
+    let Some(body) = code[def..].iter().position(|c| *c == b'{').map(|i| def + i) else {
+        return Err(format!("{path}: {name} has no body"));
+    };
+    let end = after_brace(code, body);
+    let Some(call) = words(code, "blocking")
+        .into_iter()
+        .find(|&p| p > body && p < end)
+    else {
+        return Err(format!(
+            "{path}: {name} has no `blocking(` closure of its own"
+        ));
     };
     let Some(bars) = code[call..].windows(2).position(|w| w == b"||") else {
         return Err(format!("{path}: {name}: the closure has no `||`"));
@@ -2661,9 +2672,20 @@ fn the_scan_of_the_other_pages_sees_a_second_call_a_late_one_a_missing_one_and_a
         "fn page() { blocking(move || { let brand = other(&s); }) }",
         "fn page() { let brand = read_brand(&s); }",
         "fn other() { blocking(move || { let brand = read_brand(&s); }) }",
+        // A function with no closure of its own, followed by one whose closure does begin with the
+        // read: the first `blocking(` after the name is not the function's.
+        "fn page() { let brand = read_brand(&s); } fn other() { blocking(move || { let brand = read_brand(&s); }) }",
+        "fn page() { } fn other() { blocking(move || { let brand = read_brand(&s); }) }",
     ] {
         assert!(begins(late).is_err(), "{late}");
     }
+    // The function after the one asked about does not matter when the one asked about is right.
+    assert!(
+        begins(&format!(
+            "{GOOD} fn other() {{ blocking(move || {{ let x = 1; }}) }}"
+        ))
+        .is_ok()
+    );
 }
 
 // ---- The two functions that make a page with the default brand are for tests only (slice S1c) ----------
