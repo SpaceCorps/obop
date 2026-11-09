@@ -446,6 +446,23 @@ test.describe("the pages that document the product", () => {
   });
 });
 
+/**
+ * Saves the Identity form (with the button, or with Enter in the field that has the focus) and
+ * waits until the form was read again. The toast of an earlier save may still be on screen, so a
+ * toast proves nothing about this one; the read that follows a save is what puts the form back to
+ * the record, and a field filled in before it arrives would be lost.
+ */
+async function saveIdentity(page: Page, how: "button" | "enter" = "button") {
+  const reread = page.waitForResponse(
+    (r) =>
+      new URL(r.url()).pathname === "/api/instance_brand/get" && r.request().method() === "POST",
+  );
+  if (how === "enter") await page.keyboard.press("Enter");
+  else await page.getByRole("button", { name: "Save" }).click();
+  await reread;
+  await expect(page.getByRole("button", { name: "Save" })).toBeDisabled();
+}
+
 test.describe("the Identity tab", () => {
   test.describe.configure({ mode: "serial" });
   const base = brandUrl();
@@ -475,7 +492,7 @@ test.describe("the Identity tab", () => {
     }
   });
 
-  test("an administrator reads and changes the record, and only the three commands are called", async ({
+  test("an administrator reads and changes the record, and only get and configure are called", async ({
     page,
     request,
     allowHttpErrors,
@@ -492,7 +509,7 @@ test.describe("the Identity tab", () => {
     // The notice that the text is public, the form as stored, and the preview of the card.
     await expect(page.getByText("Shown before anyone signs in")).toBeVisible();
     await expect(page.getByText(/can be read by anyone who opens the sign-in page/)).toBeVisible();
-    const messages = page.getByRole("region", { name: "Message on the sign-in screen" });
+    const messages = page.getByRole("group", { name: "Message on the sign-in screen" });
     await expect(page.getByRole("textbox", { name: "Name", exact: true })).toHaveValue(brand.name);
     await expect(messages.getByLabel("English")).toHaveValue(brand.message);
     const card = page.getByRole("group", { name: "Preview of the sign-in screen" });
@@ -505,7 +522,7 @@ test.describe("the Identity tab", () => {
     const message = `${brand.message}, and welcome back`;
     await messages.getByLabel("English").fill(message);
     await expect(card).toContainText(message);
-    await page.getByRole("button", { name: "Save" }).click();
+    await saveIdentity(page, "enter"); // Enter in the field saves, as the button does
     await expect(page.getByText(/^Identity saved\./).last()).toBeVisible();
     const got = (await call(request, base, admin, "instance_brand.get")).json.value;
     expect(got.message_en).toBe(message);
@@ -517,8 +534,7 @@ test.describe("the Identity tab", () => {
       .getByLabel("SVG file")
       .setInputFiles({ name: "logo.svg", mimeType: "image/svg+xml", buffer: Buffer.from(logo) });
     await expect(page.getByText("logo.svg will replace the logo when you save.")).toBeVisible();
-    await page.getByRole("button", { name: "Save" }).click();
-    await expect(page.getByText(/^Identity saved\./).last()).toBeVisible();
+    await saveIdentity(page);
     await expect
       .poll(async () => (await call(request, base, admin, "instance_brand.get")).json.value.v)
       .not.toBe(original);
@@ -531,18 +547,24 @@ test.describe("the Identity tab", () => {
     });
     await hideLabel.click();
     await expect(hide).toBeChecked();
-    await page.getByRole("button", { name: "Save" }).click();
-    await expect(page.getByText(/^Identity saved\./).last()).toBeVisible();
+    await saveIdentity(page);
     await expect
       .poll(
         async () =>
           (await call(request, base, admin, "instance_brand.get")).json.value.hide_product_docs,
       )
       .toBe(true);
+    // The page that saved it hides the documents at once: the account menu has no Brand book.
+    await page.locator("button.avatar-btn").click();
+    await expect(page.getByRole("menuitem", { name: "Security" })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "Brand book" })).toHaveCount(0);
+    await page.keyboard.press("Escape");
     await hideLabel.click();
     await expect(hide).not.toBeChecked();
-    await page.getByRole("button", { name: "Save" }).click();
-    await expect(page.getByText(/^Identity saved\./).last()).toBeVisible();
+    await saveIdentity(page);
+    await page.locator("button.avatar-btn").click();
+    await expect(page.getByRole("menuitem", { name: "Brand book" })).toBeVisible();
+    await page.keyboard.press("Escape");
 
     // A refusal is shown as the server words it, and nothing is saved.
     await page.getByLabel("Short name").fill("9 not a slug");
@@ -556,9 +578,12 @@ test.describe("the Identity tab", () => {
     await page.goto(`${base}/#/customize/security?tab=security`);
     const log = page.getByRole("table", { name: "Security log" });
     await expect(
-      log.getByRole("row").filter({ hasText: "Name and logo of the instance changed" }).first(),
+      log.getByRole("row").filter({ hasText: "The identity of the instance changed" }).first(),
     ).toBeVisible();
 
+    // `clear` is held by the unit test of the tab (Identity.test.tsx), not called here: once the
+    // record is gone the logo route answers 404 for the logo the page was loaded with, and the
+    // console guard of this suite reports a request for it.
     expect(new Set(brandCalls)).toEqual(new Set(["get", "configure"]));
   });
 });

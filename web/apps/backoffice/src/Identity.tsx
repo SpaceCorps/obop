@@ -46,7 +46,7 @@ function startLang(): Lang {
 /**
  * Customize, Identity (administrators). The name, the logo and the texts that an instance shows
  * instead of the product's own, on the sign-in screens, in the tab, in the top bar and on the pages
- * of connected apps and signing links. A form over `instance_brand.get`, `configure` and `clear`
+ * of connected apps. A form over `instance_brand.get`, `configure` and `clear`
  * and nothing else, with a preview of the sign-in card and of the tile.
  */
 export function IdentityTab({ token, notify }: { token: string; notify: Notify }) {
@@ -62,12 +62,15 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
   const [previewLang, setPreviewLang] = useState<Lang>(startLang);
   const file = useRef<HTMLInputElement>(null);
 
-  async function load() {
+  // `sent` is the form and the logo choice a save has just sent. A person who went on typing while
+  // the save ran keeps what was typed: the form is replaced by the record only when it is still
+  // what was sent.
+  async function load(sent?: { form: Form; logo: LogoChange }) {
     const next = await loadBrand(token);
     setLoaded(next);
     if (next) {
-      setForm(next.form);
-      setLogo({ kind: "keep" });
+      setForm((now) => (sent === undefined || now === sent.form ? next.form : now));
+      setLogo((now) => (sent === undefined || now === sent.logo ? { kind: "keep" } : now));
     }
   }
   useEffect(() => {
@@ -90,7 +93,12 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
       </Notice>
     );
 
-  const input = changes(loaded.form, form, logo);
+  const input = changes(
+    loaded.form,
+    form,
+    logo,
+    loaded.fallbacks.map((f) => f.field),
+  );
   const dirty = Object.keys(input).length > 0;
   const needsName = !loaded.set && !form.name.trim();
   const preview = previewBrand(form, loaded.v);
@@ -117,6 +125,7 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
   async function save() {
     setBusy(true);
     setError("");
+    const sent = { form, logo };
     const r = await call(token, "instance_brand.configure", input);
     setBusy(false);
     if (r.kind !== "ok") {
@@ -129,7 +138,7 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
         "Identity saved. The tab title and the logo in the top bar change when the page loads again.",
       ),
     );
-    await load();
+    await load(sent);
   }
 
   async function remove() {
@@ -157,11 +166,19 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
   const slugNow = form.slug || loaded.slug;
 
   return (
-    <div className="two identity-tab">
+    <form
+      className="two identity-tab"
+      noValidate
+      onSubmit={(e) => {
+        // Enter in a field saves, as the Save button does, and only when Save is on.
+        e.preventDefault();
+        if (dirty && !needsName && !busy) void save();
+      }}
+    >
       <div className="stack gap-lg">
         <Notice tone="info" title={t("Shown before anyone signs in")}>
           {t(
-            "The name, the logo, the messages and the titles can be read by anyone who opens the sign-in page or a signing link, with no account. Do not put anything private in them.",
+            "The name, the logo, the messages and the titles can be read by anyone who opens the sign-in page, with no account. Do not put anything private in them.",
           )}
         </Notice>
         {loaded.fallbacks.length > 0 && (
@@ -212,6 +229,7 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
               accept=".svg,image/svg+xml"
               className="sr-only"
               tabIndex={-1}
+              aria-hidden="true"
               aria-label={t("SVG file")}
               onChange={(e) => {
                 void chosen(e.target.files?.[0]);
@@ -248,7 +266,7 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
             </p>
           )}
         </section>
-        <section className="stack" aria-labelledby={`${ids}-msg`}>
+        <div className="stack" role="group" aria-labelledby={`${ids}-msg`}>
           <h3 id={`${ids}-msg`} className="overline">
             {t("Message on the sign-in screen")}
           </h3>
@@ -268,14 +286,14 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
               onChange={(e) => setMessage(lang, e.target.value)}
             />
           ))}
-        </section>
-        <section className="stack" aria-labelledby={`${ids}-title`}>
+        </div>
+        <div className="stack" role="group" aria-labelledby={`${ids}-title`}>
           <h3 id={`${ids}-title`} className="overline">
-            {t("Titles on the pages of connected apps and signing links")}
+            {t("Titles on the pages of connected apps")}
           </h3>
           <p className="hint">
             {t(
-              "Shown beside the logo where an app asks to connect and where someone signs a document. A language without one shows the English title, then the name.",
+              "Shown beside the logo where an app asks to connect. A language without one shows the English title, then the name.",
             )}
           </p>
           {NAMES.map(({ lang, native }) => (
@@ -289,7 +307,7 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
               onChange={(e) => setTitle(lang, e.target.value)}
             />
           ))}
-        </section>
+        </div>
         <section className="stack" aria-labelledby={`${ids}-docs`}>
           <h3 id={`${ids}-docs`} className="overline">
             {t("Product pages")}
@@ -313,9 +331,9 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
         <div className="actionrow">
           <Button
             variant="primary"
+            type="submit"
             loading={busy}
             disabled={!dirty || needsName || busy}
-            onClick={() => void save()}
           >
             {t("Save")}
           </Button>
@@ -396,6 +414,6 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
           </div>
         </section>
       </div>
-    </div>
+    </form>
   );
 }

@@ -101,9 +101,16 @@ export async function loadBrand(token: string): Promise<Loaded | null> {
  * The input of `configure` for what changed. Only the fields that differ are sent: a field that is
  * sent is checked by the whole policy even when it equals the stored one, and a stored value that an
  * older policy let in would then be refused for nothing. An empty text clears a field, the artwork
- * is cleared by `""`, and the switch is sent as a boolean.
+ * is cleared by `""`, and the switch is sent as a boolean. The switch alone cannot be typed over: a
+ * stored value that is not a boolean reads as off, and the person has nothing to change, so it is
+ * sent whenever the record lists it among the `unusable` fields, and saving puts a boolean there.
  */
-export function changes(base: Form, now: Form, logo: LogoChange): Record<string, string | boolean> {
+export function changes(
+  base: Form,
+  now: Form,
+  logo: LogoChange,
+  unusable: readonly string[] = [],
+): Record<string, string | boolean> {
   const out: Record<string, string | boolean> = {};
   if (now.name !== base.name) out.name = now.name;
   if (now.slug !== base.slug) out.slug = now.slug;
@@ -113,13 +120,15 @@ export function changes(base: Form, now: Form, logo: LogoChange): Record<string,
   }
   if (logo.kind === "replace") out.logo_svg = logo.text;
   else if (logo.kind === "remove") out.logo_svg = "";
-  if (now.hideDocs !== base.hideDocs) out.hide_product_docs = now.hideDocs;
+  if (now.hideDocs !== base.hideDocs || unusable.includes("hide_product_docs"))
+    out.hide_product_docs = now.hideDocs;
   return out;
 }
 
 /** The brand the sign-in card preview draws from the form, with the address of the logo. */
 export function previewBrand(form: Form, v: string): PageBrand {
-  const messages: PageBrand["messages"] = {};
+  // `PageBrand["messages"]` is read-only, so the object is built as a writable one first.
+  const messages: Partial<Record<Lang, string>> = {};
   for (const l of LANGS) if (form.messages[l].trim()) messages[l] = form.messages[l];
   return {
     name: form.name.trim() || "…",

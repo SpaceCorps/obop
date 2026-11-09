@@ -18,6 +18,8 @@ let calls: { command: string; body: Record<string, unknown> }[];
 let store: Record<string, unknown>;
 let refuse: string | null;
 let confirmed: boolean;
+// While set, the answer to `configure` waits for it: a save that is still running.
+let hold: Promise<void> | null;
 const notify = vi.fn();
 
 const row = (extra: Record<string, unknown> = {}) => ({
@@ -49,6 +51,7 @@ beforeEach(() => {
   store = row();
   refuse = null;
   confirmed = true;
+  hold = null;
   notify.mockClear();
   vi.stubGlobal(
     "fetch",
@@ -61,6 +64,7 @@ beforeEach(() => {
         new Response(JSON.stringify(json), { status });
       if (command === "instance_brand.get") return reply(200, { value: store, denied: [] });
       if (command === "instance_brand.configure") {
+        if (hold) await hold;
         if (refuse) return reply(400, { error: refuse });
         store = { ...store, set: true, ...body, v: store.v || "aaaaaaaaaaaaaaaa" };
         return reply(200, { value: { changes: "[]", v: store.v }, denied: [] });
@@ -175,6 +179,160 @@ describe("the Identity tab", () => {
     });
     expect(productDocsVisible()).toBe(false);
     expect(container.querySelector<HTMLInputElement>('input[role="switch"]')!.checked).toBe(true);
+  });
+
+  it("switches the documents back on when the identity is removed", async () => {
+    store = row({ hide_product_docs: true });
+    await mount();
+    setProductDocsHidden(true); // the page had read the switch at sign-in
+    expect(container.querySelector<HTMLInputElement>('input[role="switch"]')!.checked).toBe(true);
+    await click(button("Remove the identity"));
+    expect(calls.map((c) => c.command)).toContain("instance_brand.clear");
+    expect(productDocsVisible()).toBe(true);
+  });
+
+  it("keeps what is typed while a save is still running, and replaces the form when it is not", async () => {
+    await mount();
+    await type(field("Name"), "MOHV AB");
+    let release!: () => void;
+    hold = new Promise<void>((resolve) => (release = resolve));
+    await click(button("Save")); // waits for the answer
+    expect(button("Save").disabled).toBe(true);
+    await type(field("English"), "Welcome back");
+    release();
+    await act(async () => {});
+    // The name was saved and is the record's; what was typed since is still in the form and still
+    // to be saved.
+    expect(calls.find((c) => c.command === "instance_brand.configure")!.body).toEqual({
+      name: "MOHV AB",
+    });
+    expect(field("Name").value).toBe("MOHV AB");
+    expect(field("English").value).toBe("Welcome back");
+    expect(button("Save").disabled).toBe(false);
+    await click(button("Save"));
+    expect(calls.filter((c) => c.command === "instance_brand.configure").at(-1)!.body).toEqual({
+      message_en: "Welcome back",
+    });
+    expect(button("Save").disabled).toBe(true);
+  });
+
+  it("refuses a file that is too large or not an SVG, previews a good one and lets it go again", async () => {
+    const created: string[] = [];
+    const revoked: string[] = [];
+    vi.stubGlobal("URL", {
+      createObjectURL: () => {
+        created.push(`blob:logo-${created.length}`);
+        return created.at(-1)!;
+      },
+      revokeObjectURL: (u: string) => void revoked.push(u),
+    });
+    await mount();
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
+    const choose = (file: File) =>
+      act(async () => {
+        Object.defineProperty(input, "files", { value: [file], configurable: true });
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+    await choose(new File(["x".repeat(16 * 1024 + 1)], "big.svg", { type: "image/svg+xml" }));
+    expect(container.querySelector('[role="alert"]')!.textContent).toContain(
+      "The file is larger than 16 KiB",
+    );
+    await choose(new File(["x"], "logo.png", { type: "image/png" }));
+    expect(container.querySelector('[role="alert"]')!.textContent).toContain("Choose an SVG file.");
+    expect(button("Save").disabled).toBe(true);
+    // A file of exactly 16 KiB is accepted: the limit is on what is more.
+    await choose(new File(["x".repeat(16 * 1024)], "edge.SVG", { type: "" }));
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    expect(container.textContent).toContain("edge.SVG will replace the logo when you save.");
+    expect(button("Save").disabled).toBe(false);
+    expect(container.querySelector(".identity-card img")!.getAttribute("src")).toBe(created[0]);
+    await click(button("Undo"));
+    expect(revoked).toEqual([created[0]]);
+    expect(container.querySelector(".identity-card img")!.getAttribute("src")).toBe(
+      "/api/brand/logo.svg?v=0123456789abcdef",
+    );
+  });
+
+  it("draws a blank card before the first save, with no logo of the product's own", async () => {
+    store = none();
+    await mount();
+    const src = container.querySelector(".identity-card img")!.getAttribute("src")!;
+    expect(src).toMatch(/^data:image\/svg\+xml/);
+    expect(src).not.toContain("/api/brand/logo.svg");
+  });
+
+  it("keeps a choice about the logo that is made while a save is still running", async () => {
+    store = row({
+      effective: JSON.stringify({
+        name: { value: "MOHV", source: "record" },
+        slug: { value: "mohv", source: "record" },
+        logo: { value: "artwork", source: "record" },
+      }),
+    });
+    await mount();
+    await type(field("Name"), "MOHV AB");
+    let release!: () => void;
+    hold = new Promise<void>((resolve) => (release = resolve));
+    await click(button("Save"));
+    await click(button("Remove the logo"));
+    release();
+    await act(async () => {});
+    expect(container.textContent).toContain("The logo will be removed when you save.");
+    expect(button("Save").disabled).toBe(false);
+    await click(button("Save"));
+    expect(calls.filter((c) => c.command === "instance_brand.configure").at(-1)!.body).toEqual({
+      logo_svg: "",
+    });
+  });
+
+  it("saves on Enter in a field, as Save does, and only when there is something to save", async () => {
+    await mount();
+    const form = container.querySelector("form")!;
+    const submit = () => act(async () => form.requestSubmit());
+    await submit(); // nothing changed
+    expect(calls.map((c) => c.command)).toEqual(["instance_brand.get"]);
+    await type(field("Name"), "MOHV AB");
+    await submit();
+    expect(calls.filter((c) => c.command === "instance_brand.configure")).toHaveLength(1);
+    // A first save with no name is not sent either.
+    store = none();
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    calls = [];
+    await mount();
+    await click(container.querySelector<HTMLInputElement>('input[role="switch"]')!);
+    await act(async () => container.querySelector("form")!.requestSubmit());
+    expect(calls.map((c) => c.command)).toEqual(["instance_brand.get"]);
+  });
+
+  it("puts the language inputs in groups named by their heading and hides the file input", async () => {
+    await mount();
+    const groups = [...container.querySelectorAll<HTMLElement>('[role="group"][aria-labelledby]')];
+    const named = (name: string) =>
+      groups.find(
+        (g) => document.getElementById(g.getAttribute("aria-labelledby")!)?.textContent === name,
+      );
+    for (const name of ["Message on the sign-in screen", "Titles on the pages of connected apps"]) {
+      const g = named(name);
+      expect(g, name).toBeDefined();
+      expect(g!.querySelectorAll("input")).toHaveLength(7);
+    }
+    const file = container.querySelector<HTMLInputElement>('input[type="file"]')!;
+    expect(file.getAttribute("aria-hidden")).toBe("true");
+    expect(file.tabIndex).toBe(-1);
+  });
+
+  it("lets a switch that is stored as something else than a boolean be put right by saving", async () => {
+    store = row({
+      fallbacks: JSON.stringify([{ field: "hide_product_docs", reason: "not_boolean" }]),
+    });
+    await mount();
+    expect(container.textContent).toContain("The default is shown instead of: hide_product_docs.");
+    expect(button("Save").disabled).toBe(false);
+    await click(button("Save"));
+    expect(calls.find((c) => c.command === "instance_brand.configure")!.body).toEqual({
+      hide_product_docs: false,
+    });
   });
 
   it("shows the refusal of the server and keeps what was typed", async () => {

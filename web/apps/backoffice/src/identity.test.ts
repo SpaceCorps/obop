@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
+import fixtures from "../../../packages/ui/src/brand.fixtures.json";
 import {
+  LIMITS,
   LOGO_MAX_BYTES,
   artworkProblem,
   blankForm,
@@ -159,5 +161,31 @@ describe("artworkProblem", () => {
   it("refuses a larger file and a file of another kind", () => {
     expect(artworkProblem({ name: "logo.svg", size: LOGO_MAX_BYTES + 1 })).toBe("big");
     expect(artworkProblem({ name: "logo.png", size: 10, type: "image/png" })).toBe("kind");
+  });
+});
+
+describe("the limits of the form", () => {
+  it("are those of the policy of the record, which the Rust test reads from the same file", () => {
+    expect(LIMITS).toEqual({
+      name: fixtures.limits.name,
+      slug: fixtures.limits.slug,
+      title: fixtures.limits.title,
+      message: fixtures.limits.message,
+    });
+    expect(LOGO_MAX_BYTES).toBe(fixtures.limits.logo_bytes);
+  });
+});
+
+describe("changes and a stored switch that cannot be used", () => {
+  const same = blankForm();
+  it("sends the switch as it stands when the record lists it among the unusable fields", () => {
+    expect(changes(same, same, { kind: "keep" })).toEqual({});
+    expect(changes(same, same, { kind: "keep" }, ["title_sv"])).toEqual({});
+    expect(changes(same, same, { kind: "keep" }, ["hide_product_docs"])).toEqual({
+      hide_product_docs: false,
+    });
+    expect(
+      changes(same, { ...same, hideDocs: true }, { kind: "keep" }, ["hide_product_docs"]),
+    ).toEqual({ hide_product_docs: true });
   });
 });

@@ -459,6 +459,23 @@ fn the_page_script_and_the_server_choose_the_same_message() {
     }
 }
 
+/// The Identity tab counts the characters of each text against the longest the policy allows
+/// (`LIMITS` in `web/apps/backoffice/src/identity.ts`, tested against the same file by
+/// `identity.test.ts`); the server is the judge, so a number that drifts is a form that stops a text
+/// the server would take, or one that lets through a text it refuses.
+#[test]
+fn the_longest_texts_of_the_form_are_those_of_the_policy() {
+    const FIXTURES: &str =
+        include_str!("../../../../../../web/packages/ui/src/brand.fixtures.json");
+    let all: serde_json::Value = serde_json::from_str(FIXTURES).unwrap();
+    let limits = &all["limits"];
+    assert_eq!(limits["name"], crate::brand::NAME_MAX);
+    assert_eq!(limits["slug"], crate::brand::SLUG_MAX);
+    assert_eq!(limits["title"], crate::brand::TITLE_MAX);
+    assert_eq!(limits["message"], crate::brand::MESSAGE_MAX);
+    assert_eq!(limits["logo_bytes"], crate::brand::ARTWORK_MAX_BYTES);
+}
+
 /// The write check refuses a name or a title that starts with a space, so a text of nothing but
 /// spaces is a row written around the command (a restore, an import, a direct edit, an older
 /// binary). The read check calls it empty: the name falls back to `obop`, a title to the name, a
