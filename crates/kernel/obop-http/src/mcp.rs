@@ -797,7 +797,7 @@ fn words(brand: &Brand) -> Words {
 /// The page about the software that the discovery documents send a client to (optional in RFC 9728
 /// and RFC 8414). With a brand set the link is left out of the document: the instance is the
 /// customer's own.
-pub(crate) const DOCUMENTATION: &str = "https://obop.dev/docs/agents/mcp/";
+const DOCUMENTATION: &str = "https://obop.dev/docs/agents/mcp/";
 
 /// RFC 9728 metadata. `authorization_servers` is named only when this instance runs the
 /// authorization server (D64); with `--dev-auth` it is left out rather than faked. The brand is the

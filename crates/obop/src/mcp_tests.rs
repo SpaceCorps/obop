@@ -1405,8 +1405,10 @@ async fn pins_the_anonymous_documents_and_initialize_as_an_instance_with_no_bran
 }
 
 /// The rows of `DOCUMENT_PINS` for one instance: the `initialize` result and the six anonymous
-/// documents. (The same builder is held to the same table with a brand row in the store, by
-/// `with_a_brand_row_the_anonymous_documents_and_initialize_are_what_they_were`.)
+/// documents. (With a brand row in the store the documents that name nothing are held to the same
+/// table by `with_a_brand_row_the_documents_that_name_nothing_are_what_they_were`; `initialize` and
+/// the documents that name the instance read the row from slice S3 on and are held to the branded
+/// words, member by member, in `brand_docs_tests.rs`.)
 pub(crate) async fn document_table(
     inst: &crate::mfa_tests::pin::Instance,
 ) -> Vec<(String, String)> {

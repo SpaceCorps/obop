@@ -497,7 +497,8 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
 
 /// What an instance that runs the OAuth authorization server (D64) adds to the `x-mcp` block of its
 /// document. `GET /api/openapi.json` and `obop openapi` both go through here, so the exported
-/// document is the one a running instance serves.
+/// document is the one a running instance serves, for an instance with no brand: a brand changes
+/// the title of the running instance's document (`describe_brand`), and `obop openapi` has none.
 pub fn describe_oauth(doc: &mut J, base: &str) {
     doc["x-mcp"]["authorization"] = J::from("oauth2 or bearer");
     doc["x-mcp"]["authorizationServerMetadata"] =

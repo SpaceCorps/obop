@@ -279,8 +279,11 @@ fn initialize(d: &Dispatcher, id: &J, s: &mut Session, params: &J) -> J {
     let Some(asked) = params.get("protocolVersion").and_then(J::as_str) else {
         return error(id, -32602, "initialize needs params.protocolVersion");
     };
-    // The brand of the instance, read once through the one reader (docs/spec/branding.md, section 4):
-    // a request that cannot read the store meets the fault, and the layer above answers it by D74.
+    // The brand of the instance, read once through the one reader (docs/spec/branding.md, section 4).
+    // A request that cannot read the store meets the fault. Over HTTP the layer above answers it by
+    // D74 (a 503, and no session is opened). The stdio server has no such layer: each message is a
+    // request of its own and its outcome is dropped, so there the client is told the last good
+    // name, or the default in a process that has never had a good read.
     let shown = d.brand().current();
     let brand = shown.brand();
     // Lifecycle: answer the requested revision when supported, otherwise our newest.
