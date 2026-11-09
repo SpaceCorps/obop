@@ -2,11 +2,13 @@
 import { computed } from "vue";
 import apps from "../../../.generated/apps.json";
 import { useSite } from "../composables.ts";
+import Icon from "./Icon.vue";
 import Tile from "./Tile.vue";
 
 // The apps index reads like an app store: the six built-in apps as large tiles, the marketplace
 // apps as list rows grouped by category. No filters, counts or status pills; every tile and row is
-// one link, so the page works and reads the same without JavaScript.
+// one link (a row ends in a chevron, because it opens the app's page), so the page works and reads
+// the same without JavaScript.
 const { m, href } = useSite();
 const ready = apps.filter((a) => a.builtin);
 const cats = Object.keys(m.value.apps.categories) as (keyof typeof m.value.apps.categories)[];
@@ -34,7 +36,7 @@ const tagline = (id: string, fallback: string) => m.value.apps.taglines[id] ?? f
       <ul class="store-tiles">
         <li v-for="a in ready" :key="a.id">
           <a class="store-tile" :href="href(`/apps/${a.slug}/`)">
-            <Tile :id="a.id" :name="a.name" :size="72" />
+            <Tile :id="a.id" :name="a.name" :size="96" />
             <span class="store-text">
               <span class="store-name">{{ a.name }}</span>
               <span class="store-tag">{{ tagline(a.id, a.tagline) }}</span>
@@ -56,7 +58,9 @@ const tagline = (id: string, fallback: string) => m.value.apps.taglines[id] ?? f
                 <span class="store-name">{{ a.name }}</span>
                 <span class="store-tag">{{ tagline(a.id, a.tagline) }}</span>
               </span>
-              <span class="store-get" aria-hidden="true">{{ m.apps.store.get }}</span>
+              <span class="store-chev" aria-hidden="true"
+                ><Icon name="chevron-right" :size="20"
+              /></span>
             </a>
           </li>
         </ul>

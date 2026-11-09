@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "smol-toml";
 import { APP_COPY, BUILTIN_IDS, type Category } from "../../data/apps.ts";
@@ -66,6 +66,8 @@ export interface App {
   dependencies: Dependency[];
   tagline: string;
   purpose: string;
+  /** Plain English names for the models that need one (see `AppCopy.modelNames`). */
+  modelNames: Record<string, string>;
   models: Model[];
   /** Repository path of the manifest (or the built-in snapshot). */
   source: string;
@@ -148,6 +150,7 @@ function toApp(raw: Raw, builtin: boolean, source: string): App {
     dependencies: dependenciesOf(mod),
     tagline: copy.tagline,
     purpose: copy.purpose,
+    modelNames: copy.modelNames ?? {},
     models,
     source,
   };
@@ -177,6 +180,44 @@ export function loadApps(): App[] {
   const order = new Map(APP_COPY.map((a, i) => [a.id, i]));
   apps.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
   return apps;
+}
+
+/**
+ * The translated words of one app in one language, from `packages/labels/<locale>/<id>.toml`
+ * (D52): the name and description of each model, the label and description of each action. These
+ * are the texts the product itself shows in that language, so the cards of a translated app page
+ * can use them instead of the English manifest. Empty for English and for a missing file.
+ */
+export interface Labels {
+  models: Record<string, { name?: string; description?: string }>;
+  actions: Record<string, { label?: string; description?: string }>;
+}
+const labelCache = new Map<string, Labels>();
+export function loadLabels(locale: string, id: string): Labels {
+  const key = `${locale}/${id}`;
+  const hit = labelCache.get(key);
+  if (hit) return hit;
+  const out: Labels = { models: {}, actions: {} };
+  const file = join(REPO_ROOT, "packages", "labels", locale, `${id}.toml`);
+  // English has no label file; a missing file means the cards fall back to the English manifest.
+  if (locale !== "en" && existsSync(file)) {
+    const doc = load(file);
+    const models =
+      ((doc["labels"] as Raw | undefined)?.[locale] as Raw | undefined)?.["model"] ?? {};
+    for (const [model, raw] of Object.entries(models as Record<string, Raw>)) {
+      out.models[model] = {
+        name: raw["name"] as string | undefined,
+        description: raw["description"] as string | undefined,
+      };
+      for (const [action, a] of Object.entries((raw["action"] as Record<string, Raw>) ?? {}))
+        out.actions[`${model}.${action}`] = {
+          label: a["label"] as string | undefined,
+          description: a["description"] as string | undefined,
+        };
+    }
+  }
+  labelCache.set(key, out);
+  return out;
 }
 
 export type AgentView = "clear" | "masked" | "withheld";

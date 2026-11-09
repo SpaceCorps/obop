@@ -4,7 +4,8 @@
  * The feel is borrowed from how Apple builds its store pages, as a reference for restraint and
  * structure only: one idea per screen, one accent colour (the primary pill and links), large type
  * with a strong hierarchy, long calm vertical rhythm, soft rounded surfaces with hairline edges,
- * touch targets of at least 44 px, and nothing that decorates without meaning. Written mobile
+ * touch targets of at least 44 px for the controls it adds, and nothing that decorates
+ * without meaning. Written mobile
  * first; the colours, fonts and radii are the @obop/ui tokens, so light and dark come for free.
  */
 .store,
@@ -80,22 +81,36 @@
 .store-name {
   font-weight: var(--weight-semibold);
   line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 .store-tag {
+  overflow-wrap: anywhere;
   text-wrap: wrap;
   color: var(--text-muted);
   font-size: 0.9375rem;
   line-height: 1.35;
 }
 
-/* The six built-in apps: large friendly tiles, one column on a phone. */
+/* The six built-in apps: large friendly tiles, one column on a phone. The icon is 72 px, 96 px on a wide screen. */
 .store-tiles {
+  --store-icon: 4.5rem;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
   margin: 0;
   padding: 0;
   list-style: none;
+}
+.store-tile .tile-wrap {
+  flex: none;
+}
+.store-tile .app-icon {
+  inline-size: var(--store-icon) !important;
+  block-size: var(--store-icon) !important;
+}
+.store-tile .app-icon svg {
+  inline-size: 58%;
+  block-size: 58%;
 }
 .store-tile {
   display: flex;
@@ -119,21 +134,23 @@
   border-color: var(--border-strong);
   background: var(--surface-2);
 }
+/* The columns follow the room (and the reader's text size), so a large font never overflows a tile. */
 @media (min-width: 40rem) {
   .store-tiles {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
     gap: var(--space-4);
   }
 }
 @media (min-width: 64rem) {
   .store-tiles {
+    --store-icon: 6rem;
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   .store-tile {
     flex-direction: column;
     align-items: flex-start;
     gap: var(--space-6);
-    min-block-size: 14rem;
+    min-block-size: 15rem;
     padding: var(--space-8);
   }
   .store-tile .store-text {
@@ -185,27 +202,18 @@
 .store-row .store-text {
   flex: 1;
 }
-.store-get {
+.store-chev {
+  display: inline-flex;
   flex: none;
-  padding: 0.3rem 1.125rem;
-  border-radius: var(--radius-pill);
-  background: var(--accent-soft);
-  color: var(--accent-ink);
-  font-size: 0.9375rem;
-  font-weight: var(--weight-semibold);
-  transition: background-color var(--dur-2) var(--ease-out);
+  color: var(--text-subtle);
+  transition: color var(--dur-2) var(--ease-out);
 }
-.store-row:hover .store-get {
-  background: var(--accent-soft-strong);
+.store-row:hover .store-chev {
+  color: var(--text);
 }
 @media (min-width: 48rem) {
   .store-rows {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-@media (min-width: 72rem) {
-  .store-rows {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
   }
 }
 @media (min-width: 48rem) {
@@ -218,4 +226,19 @@
   .store-sec > h2 {
     font-size: 2rem;
   }
+}
+
+/*
+ * One primary action per screen: an app page has its own filled pill (Open or Get), so the header's
+ * "Start free" steps back to the plain button there.
+ */
+:root:has(.app-page) .head-cta .btn.primary {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--text);
+  box-shadow: var(--shadow-1);
+}
+:root:has(.app-page) .head-cta .btn.primary:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: var(--text-subtle);
 }

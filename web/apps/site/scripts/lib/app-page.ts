@@ -19,9 +19,9 @@ export function english(text: string, locale: string, m: Messages): string {
  * text, module details, models with their field tables, workflows, permission groups, approval steps,
  * the agent view, dependencies, install and the link to the module guide. No H1 and no purpose (the
  * layout draws the plain-words layer above it). Heading texts, and so their ids, are those the
- * whole page had before it was split, so links to them keep working. `mirror` produces the
- * plain-Markdown variant for the .md copy and llms-full.txt, one heading level deeper because there
- * it sits under a "For developers" heading.
+ * whole page had before it was split, so links to them keep working. The headings are one level
+ * below the page's "For developers" heading (h3, h4), on the page and in the Markdown copy alike.
+ * `mirror` produces the plain-Markdown variant for the .md copy and llms-full.txt.
  */
 export function developerBody(
   app: App,
@@ -34,8 +34,11 @@ export function developerBody(
   const a = m.apps;
   const eng = (t: string) => (mirror ? t : english(t, locale, m));
   const out: string[] = [];
-  const h2 = mirror ? "###" : "##";
-  const h3 = mirror ? "####" : "###";
+  const h2 = "###";
+  const h3 = "####";
+  // A field description is English, from the manifest: on a translated page it is marked as such.
+  const desc = (t: string) =>
+    mirror || locale === "en" ? esc(t) : `<span lang="en">${esc(t)}</span>`;
 
   out.push(`${h2} ${a.h.package}`, "", eng(app.description), "");
 
@@ -85,7 +88,7 @@ export function developerBody(
             : f.kind;
       const view = agentView(f);
       out.push(
-        `| ${code(f.name)} | ${esc(kind)} | ${code(f.class)} | ${f.personal_data ? a.yes : a.no} | ${code(f.group)} | ${a[view]} | ${esc(f.description)} |`,
+        `| ${code(f.name)} | ${esc(kind)} | ${code(f.class)} | ${f.personal_data ? a.yes : a.no} | ${code(f.group)} | ${a[view]} | ${desc(f.description)} |`,
       );
     }
     out.push("");
@@ -199,7 +202,7 @@ export function appMirror(
 ): string {
   const a = m.apps;
   const s = a.store;
-  const v = appView(app, m, all);
+  const v = appView(app, m, all, locale);
   const out: string[] = [a.taglines[app.id] ?? app.tagline, ""];
   for (const f of v.facts) out.push(`- **${f.label}:** ${f.value}`);
   out.push("");
@@ -212,7 +215,8 @@ export function appMirror(
   else {
     for (const c of v.actions) {
       const note = c.approval ? ` (${s.needsApproval})` : "";
-      out.push(`- **${c.kicker}: ${lowerFirst(c.title)}**${note}: ${c.text}`);
+      const title = locale === "en" ? lowerFirst(c.title) : c.title;
+      out.push(`- **${c.kicker}: ${title}**${note}: ${c.text}`);
     }
     out.push("");
   }
@@ -238,9 +242,21 @@ export function appMirror(
   }
   out.push("");
 
-  out.push(`## ${s.get}`, "");
+  out.push(`## ${v.command === null ? s.includedTitle : s.get}`, "");
   if (v.command === null) out.push(s.included, "");
-  else out.push(a.installPackage, "", "```bash", v.command, "```", "", a.installNote, "");
+  else
+    out.push(
+      s.getLead,
+      "",
+      `${s.commandLine}:`,
+      "",
+      "```bash",
+      v.command,
+      "```",
+      "",
+      a.installNote,
+      "",
+    );
 
   out.push(`## ${s.developers}`, "", developerBody(app, locale, m, true, prefix, all));
 

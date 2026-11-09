@@ -13,6 +13,11 @@ export interface AppCopy {
   name: string;
   tagline: string;
   purpose: string;
+  /**
+   * Plain names for the few models whose technical name reads oddly on a card, by model name
+   * (`accounting_move` is "Journal entry"). The others are the model name in words.
+   */
+  modelNames?: Record<string, string>;
 }
 
 export const BUILTIN_IDS = ["base", "product", "crm", "sales", "invoicing", "connectors"] as const;
@@ -22,7 +27,7 @@ export const APP_COPY: AppCopy[] = [
     id: "crm",
     category: "customers",
     name: "CRM",
-    tagline: "Leads and pipeline",
+    tagline: "Follow your sales leads",
     purpose:
       "Keep track of prospective deals from first contact to won or lost. A lead has a title, a contact, an expected revenue and a stage, and moving it along the pipeline is a named action that the team and its agents can both run.",
   },
@@ -38,7 +43,7 @@ export const APP_COPY: AppCopy[] = [
     id: "invoicing",
     category: "finance",
     name: "Invoicing",
-    tagline: "Drafts, posting, numbering",
+    tagline: "Bill your customers",
     purpose:
       "Prepare customer invoices as drafts and post them to give each one its gapless legal number. Posting is the one step in the built-in apps that always needs a person: an agent can prepare the draft and propose the posting, and a human with the right permission approves it.",
   },
@@ -46,7 +51,7 @@ export const APP_COPY: AppCopy[] = [
     id: "product",
     category: "foundation",
     name: "Products",
-    tagline: "Prices, SKUs, cost",
+    tagline: "Your products and prices",
     purpose:
       "The catalogue of what you sell: name, SKU, list price and unit cost. Cost is visible only to people in the cost viewer group, so a sales assistant or an agent can quote without seeing margins.",
   },
@@ -57,14 +62,22 @@ export const APP_COPY: AppCopy[] = [
     tagline: "People and companies",
     purpose:
       "One record for every person and organisation you deal with, shared by all other apps. Names and emails are personal data and are masked for agents; the tax identifier is withheld from them entirely. A dedicated, approval-gated erase action anonymises a contact in place.",
+    modelNames: {
+      party: "Contact",
+    },
   },
   {
     id: "connectors",
     category: "foundation",
     name: "Connectors",
-    tagline: "Connect systems, with GDPR controls",
+    tagline: "Connect your other tools",
     purpose:
       "Connect other systems to the instance and let people connect their own accounts, with the controls that support GDPR compliance built in. Nothing leaves or enters without a recorded legal basis and a field allowlist; personal data goes out as keyed pseudonyms unless you decide otherwise, the sensitive classes stay withheld, every flow is logged without its payload, and withdrawing consent disconnects the service and purges its credentials. A processing register for Article 30 is generated from the connections. It provides technical controls; it is not legal advice or a certification, and the catalogue says for every service how much of it is implemented.",
+    modelNames: {
+      connector_provider: "Service",
+      provider_policy: "Service settings",
+      egress_policy: "Data sharing settings",
+    },
   },
   {
     id: "projects",
@@ -97,6 +110,9 @@ export const APP_COPY: AppCopy[] = [
     tagline: "Stock and warehouses",
     purpose:
       "Describe warehouses and locations, record stock levels and log stock moves. Quantities are entered by people, so it works as a ledger of what was counted and moved rather than an automatic stock engine.",
+    modelNames: {
+      inventory_move: "Stock move",
+    },
   },
   {
     id: "purchase",
@@ -113,6 +129,10 @@ export const APP_COPY: AppCopy[] = [
     tagline: "Bills of materials",
     purpose:
       "Define what a product is made of and plan manufacturing orders through draft, confirmed, in progress and done. Component stock is not consumed automatically.",
+    modelNames: {
+      manufacturing_bom: "Bill of materials",
+      manufacturing_bom_line: "Component",
+    },
   },
   {
     id: "hr",
@@ -153,6 +173,9 @@ export const APP_COPY: AppCopy[] = [
     tagline: "Retail and restaurants",
     purpose:
       "Model a shop till: configuration, cash-controlled sessions, orders with lines and payment lines per method. It records what happened at the till; it is not a payment terminal integration, and card numbers must never be stored.",
+    modelNames: {
+      pos_config: "Point of sale",
+    },
   },
   {
     id: "ecommerce",
@@ -193,6 +216,9 @@ export const APP_COPY: AppCopy[] = [
     tagline: "E-signatures",
     purpose:
       "Manage templates and signature requests through draft, sent, signed, declined and expired, and record the document hash that was signed. The platform cannot yet lock a record, so a signed request is immutable by convention only.",
+    modelNames: {
+      sign_request: "Signature request",
+    },
   },
   {
     id: "subscriptions",
@@ -217,6 +243,10 @@ export const APP_COPY: AppCopy[] = [
     tagline: "Ledger and reports",
     purpose:
       "A chart of accounts, journals, tax rates, journal entries with debit and credit lines, fiscal periods and bank statement lines. Nothing is computed for you: balancing and tax amounts are the responsibility of whoever enters them. Posting and closing need approval.",
+    modelNames: {
+      accounting_move: "Journal entry",
+      accounting_move_line: "Journal entry line",
+    },
   },
   {
     id: "knowledge",

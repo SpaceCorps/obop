@@ -15,9 +15,6 @@ const { fm, m, href, locale } = useSite();
 const s = computed(() => m.value.apps.store);
 const view = computed(() => fm.value["view"] as AppView);
 const builtin = computed(() => fm.value["builtin"] === true);
-const category = computed(
-  () => m.value.apps.categories[fm.value["category"] as keyof typeof m.value.apps.categories],
-);
 // The purpose text comes from data/apps.ts, in English: say so on translated pages.
 const en = computed(() => (locale.value === "en" ? undefined : "en"));
 // A path breaks after its slashes, not in the middle of a word.
@@ -26,16 +23,15 @@ const pathParts = (path: string) => path.split(new RegExp("(?<=/)"));
 
 <template>
   <div class="wrap app-page">
-    <nav class="app-back" :aria-label="m.ui.breadcrumb">
+    <p class="app-back">
       <a :href="href('/apps/')"><Icon name="chevron-left" :size="20" />{{ m.apps.title }}</a>
-    </nav>
+    </p>
 
     <header class="app-hero">
       <Tile :id="String(fm['appId'])" :name="String(fm['title'])" :size="120" />
       <div class="app-hero-text">
         <h1>{{ fm["title"] }}</h1>
         <p class="app-tagline">{{ fm["tagline"] }}</p>
-        <p class="app-category">{{ category }}</p>
         <a class="app-primary" :href="builtin ? href('/app/') : '#get'">{{
           builtin ? s.open : s.get
         }}</a>
@@ -51,18 +47,20 @@ const pathParts = (path: string) => path.split(new RegExp("(?<=/)"));
 
     <section class="app-sec">
       <h2 :id="String(fm['purposeId'])">{{ m.apps.h.purpose }}</h2>
-      <p class="app-purpose" :lang="en">{{ fm["purpose"] }}</p>
+      <p class="app-purpose" :lang="en">{{ view.purposeLead }}</p>
+      <p v-if="view.purposeRest" class="app-purpose-rest" :lang="en">{{ view.purposeRest }}</p>
+      <p v-if="en" class="app-note">{{ s.purposeEnglish }}</p>
     </section>
 
     <section class="app-sec">
       <h2 id="can-do">{{ s.canDo }}</h2>
-      <AppCards v-if="view.actions.length" :cards="view.actions" />
+      <AppCards v-if="view.actions.length" :cards="view.actions" :more="s.showMoreActions" />
       <p v-else class="app-card app-direct">{{ s.directEdit }}</p>
     </section>
 
     <section class="app-sec">
       <h2 id="keeps">{{ s.keeps }}</h2>
-      <AppCards :cards="view.models" />
+      <AppCards :cards="view.models" :more="s.showMoreKeeps" />
     </section>
 
     <section class="app-sec">
@@ -98,29 +96,32 @@ const pathParts = (path: string) => path.split(new RegExp("(?<=/)"));
     </section>
 
     <section class="app-sec">
-      <h2 id="get">{{ s.get }}</h2>
+      <h2 :id="view.command ? 'get' : 'included'">{{ view.command ? s.get : s.includedTitle }}</h2>
       <div class="app-getbox">
         <template v-if="view.command">
-          <p>{{ m.apps.installPackage }}</p>
-          <div class="language-bash">
-            <button class="copy" type="button"></button>
-            <span class="lang">bash</span>
-            <pre><code>{{ view.command }}</code></pre>
-          </div>
+          <p>{{ s.getLead }}</p>
+          <details class="app-cmd">
+            <summary>{{ s.commandLine }}</summary>
+            <div class="language-bash">
+              <button class="copy" type="button" :aria-label="m.ui.copy"></button>
+              <pre><code>{{ view.command }}</code></pre>
+            </div>
+          </details>
           <p class="fine">{{ m.apps.installNote }}</p>
         </template>
         <p v-else>{{ s.included }}</p>
       </div>
     </section>
 
-    <details id="developers" class="app-dev">
-      <summary>
-        <h2>{{ s.developers }}</h2>
-      </summary>
-      <div class="prose">
-        <Content />
-      </div>
-    </details>
+    <section class="app-sec">
+      <h2 id="for-developers">{{ s.developers }}</h2>
+      <details id="developers" class="app-dev">
+        <summary>{{ s.developersShow }}</summary>
+        <div class="prose">
+          <Content />
+        </div>
+      </details>
+    </section>
 
     <section v-if="view.related.length" class="app-sec">
       <h2>{{ m.apps.h.related }}</h2>

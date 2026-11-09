@@ -81,6 +81,10 @@
     });
   });
 
+  // The copy buttons show only once they are wired (the CSS hides them without this class), so a
+  // script that fails to load never leaves a button that does nothing.
+  root.classList.add("js-ready");
+
   // ---- Language hint: a dismissible bubble, never a redirect ----
   if (banner && storage("get", "obop-lang-dismissed") !== "1") {
     var prefs =

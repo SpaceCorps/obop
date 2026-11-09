@@ -128,7 +128,6 @@ export interface Messages {
     marketplace: string;
     categories: Record<Category, string>;
     status: { available: string; marketplace: string };
-    countLine: string;
     h: {
       purpose: string;
       package: string;
@@ -195,7 +194,6 @@ export interface Messages {
     agentsNone: string;
     approvalsLead: string;
     permissionsLead: string;
-    versionLabel: string;
     /**
      * The plain-words layer of the apps pages (the index and the top of every app page): short
      * labels, no jargon. The technical layer above (`h`, `th`, `meta`, ...) sits under "For developers".
@@ -213,12 +211,24 @@ export interface Messages {
       developers: string;
       category: string;
       developer: string;
-      requires: string;
+      /** The row that says which obop versions an app works with, and its value (uses {version}). */
+      compat: string;
+      compatValue: string;
       manifest: string;
+      /** Where a built-in app's code lives (its manifest row is a snapshot, not the real manifest). */
+      source: string;
+      /** The fact for an app that needs no other app. */
+      standalone: string;
       directEdit: string;
       needsApproval: string;
-      /** Uses {n}. */
-      showMore: string;
+      /** Uses {n}: the folded rest of the action cards and of the cards for what it keeps. */
+      showMoreActions: string;
+      showMoreKeeps: string;
+      /** The Get box: one plain sentence, then the label of the folded command line. */
+      getLead: string;
+      commandLine: string;
+      /** Built-in apps: the heading of the Get box and the line under it. */
+      includedTitle: string;
       included: string;
       safeMasked: string;
       safeWithheld: string;
@@ -226,6 +236,10 @@ export interface Messages {
       safeApproveNone: string;
       /** The tail of the meta description of an app page in a language other than English. */
       appMeta: string;
+      /** The label that opens the folded technical part under "For developers". */
+      developersShow: string;
+      /** Said under the purpose on a translated page, where the text is English. */
+      purposeEnglish: string;
     };
     /** One-line taglines by module id. */
     taglines: Record<string, string>;

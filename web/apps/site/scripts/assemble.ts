@@ -329,7 +329,7 @@ export function assemble(): PageRecord[] {
           lead: tagline,
           purpose: app.purpose,
           purposeId: slugify(m.apps.h.purpose),
-          view: appView(app, m, apps),
+          view: appView(app, m, apps, locale),
         },
       });
     }

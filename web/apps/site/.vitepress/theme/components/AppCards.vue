@@ -8,37 +8,40 @@ interface Card {
   title: string;
   text: string;
   approval?: boolean;
+  /** "en" when the words are English on a translated page: they are marked for screen readers. */
+  lang?: string;
 }
 
 // Calm cards for what an app can do and what it keeps. The first few are shown; the rest sit in a
 // <details>, so nothing is hidden from reading or search and it works without JavaScript.
-const props = withDefaults(defineProps<{ cards: Card[]; limit?: number }>(), { limit: 6 });
-const { m, locale } = useSite();
+// `more` is the label of the fold, with {n}: it names what is folded, so two folds on a page differ.
+const props = withDefaults(defineProps<{ cards: Card[]; more: string; limit?: number }>(), {
+  limit: 6,
+});
+const { m } = useSite();
 const first = computed(() => props.cards.slice(0, props.limit));
 const rest = computed(() => props.cards.slice(props.limit));
-const more = computed(() => m.value.apps.store.showMore.replace("{n}", String(rest.value.length)));
-// The words on the cards come from the manifests, which are English: say so on translated pages.
-const en = computed(() => (locale.value === "en" ? undefined : "en"));
+const moreLabel = computed(() => props.more.replace("{n}", String(rest.value.length)));
 </script>
 
 <template>
   <ul class="app-cards">
     <li v-for="(c, i) in first" :key="i" class="app-card">
-      <p v-if="c.kicker" class="app-card-kicker" :lang="en">{{ c.kicker }}</p>
-      <h3 :lang="en">{{ c.title }}</h3>
-      <p class="app-card-text" :lang="en">{{ c.text }}</p>
+      <p v-if="c.kicker" class="app-card-kicker" :lang="c.lang">{{ c.kicker }}</p>
+      <h3 :lang="c.lang">{{ c.title }}</h3>
+      <p class="app-card-text" :lang="c.lang">{{ c.text }}</p>
       <p v-if="c.approval" class="app-card-note">
         <Icon name="user" :size="14" />{{ m.apps.store.needsApproval }}
       </p>
     </li>
   </ul>
   <details v-if="rest.length" class="app-more">
-    <summary>{{ more }}</summary>
+    <summary>{{ moreLabel }}</summary>
     <ul class="app-cards">
       <li v-for="(c, i) in rest" :key="i" class="app-card">
-        <p v-if="c.kicker" class="app-card-kicker" :lang="en">{{ c.kicker }}</p>
-        <h3 :lang="en">{{ c.title }}</h3>
-        <p class="app-card-text" :lang="en">{{ c.text }}</p>
+        <p v-if="c.kicker" class="app-card-kicker" :lang="c.lang">{{ c.kicker }}</p>
+        <h3 :lang="c.lang">{{ c.title }}</h3>
+        <p class="app-card-text" :lang="c.lang">{{ c.text }}</p>
         <p v-if="c.approval" class="app-card-note">
           <Icon name="user" :size="14" />{{ m.apps.store.needsApproval }}
         </p>

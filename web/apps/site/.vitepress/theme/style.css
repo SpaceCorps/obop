@@ -2013,7 +2013,7 @@ div[class*="language-"] button.copy {
   opacity: 0;
   cursor: pointer;
 }
-html:not(.js) div[class*="language-"] button.copy {
+html:not(.js-ready) div[class*="language-"] button.copy {
   display: none;
 }
 div[class*="language-"]:hover button.copy,
