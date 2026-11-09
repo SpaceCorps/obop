@@ -54,16 +54,32 @@ export function requireBuilt(): void {
   if (problem) throw new Error(`${backofficeAdminDist}/index.html ${problem}`);
 }
 
+/** The `attribute` values of the `element` tags of `html`, in the order they are written. */
+function references(html: string, element: "script" | "link", attribute: "src" | "href"): string[] {
+  return [...html.matchAll(new RegExp(String.raw`<${element}\b[^>]*>`, "gi"))].flatMap(([tag]) =>
+    [...tag.matchAll(new RegExp(String.raw`\b${attribute}="([^"]*)"`, "gi"))].map(([, url]) => url),
+  );
+}
+
 /**
  * Why the document of the /admin/ build is not one, or `null`. Git Bash on Windows rewrites an
  * argument or a variable that looks like a path, so `OBOP_ADMIN_BASE=/admin/ vp build` writes
  * `/Program Files/Git/admin/assets/...` into the page: a blank screen, and one failing test that
  * hides the six after it. `MSYS_NO_PATHCONV=1` in front of the command stops the rewriting.
+ *
+ * The page is right when it has a script from /admin/assets/ and every `src` of a `<script>` and
+ * every `href` of a `<link>` that points into `assets/` starts with /admin/assets/: one good
+ * reference beside a wrong one, or the string in a piece of text, does not make it so.
  */
 export function adminBuildProblem(html: string): string | null {
-  if (/(?:src|href)="\/admin\/assets\//.test(html)) return null;
+  const scripts = references(html, "script", "src");
+  const wrong = [...scripts, ...references(html, "link", "href")].filter(
+    (url) => url.includes("assets/") && !url.startsWith("/admin/assets/"),
+  );
+  if (wrong.length === 0 && scripts.some((url) => url.startsWith("/admin/assets/"))) return null;
   return (
-    "does not load its files from /admin/assets/ (built without OBOP_ADMIN_BASE=/admin/? " +
+    (wrong.length > 0 ? `loads ${wrong[0]}` : "has no script from /admin/assets/") +
+    ", and does not load its files from /admin/assets/ (built without OBOP_ADMIN_BASE=/admin/? " +
     "In Git Bash on Windows put MSYS_NO_PATHCONV=1 in front of the command)"
   );
 }

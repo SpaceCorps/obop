@@ -268,11 +268,16 @@ for (const layout of LAYOUTS) {
       await expectNoProductName(page);
       // The link carries its name as a tooltip (the bar cuts a long name); the accessibility tree
       // of the browser must read the name once, not again as the description of the link.
+      // The session is detached at the end, whether the checks pass or not.
       const cdp = await page.context().newCDPSession(page);
-      const { nodes } = await cdp.send("Accessibility.getFullAXTree");
-      const links = nodes.filter((n) => n.role?.value === "link" && n.name?.value === brand.name);
-      expect(links).toHaveLength(1);
-      expect(links[0]!.description?.value ?? "").toBe("");
+      try {
+        const { nodes } = await cdp.send("Accessibility.getFullAXTree");
+        const links = nodes.filter((n) => n.role?.value === "link" && n.name?.value === brand.name);
+        expect(links).toHaveLength(1);
+        expect(links[0]!.description?.value ?? "").toBe("");
+      } finally {
+        await cdp.detach();
+      }
     });
 
     test("a person who must choose a password first meets the brand there too", async ({

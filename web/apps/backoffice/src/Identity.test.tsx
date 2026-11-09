@@ -119,6 +119,12 @@ async function type(el: HTMLInputElement, value: string) {
   });
 }
 const click = (el: HTMLElement) => act(async () => el.click());
+// A click with a pointer behind it has a detail of 1 or more; `click()` is one from the keyboard,
+// which has none.
+const pointer = (el: HTMLElement) =>
+  act(async () => {
+    el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 }));
+  });
 
 describe("the Identity tab", () => {
   it("reads the record with get and fills the form", async () => {
@@ -556,11 +562,6 @@ describe("the Identity tab", () => {
   });
 
   it("leaves the focus alone after a save or a discard with the mouse, which a jump to the first field would scroll away from", async () => {
-    // A click with a pointer behind it has a detail of 1 or more; one from the keyboard has none.
-    const pointer = (el: HTMLElement) =>
-      act(async () => {
-        el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 }));
-      });
     await mount();
     await type(field("English"), "Welcome back");
     button("Discard changes").focus();
@@ -573,6 +574,36 @@ describe("the Identity tab", () => {
     await act(async () => {});
     expect(calls.filter((c) => c.command === "instance_brand.configure")).toHaveLength(1);
     expect(button("Save").disabled).toBe(true);
+    expect(document.activeElement).not.toBe(field("Name"));
+  });
+
+  it("leaves the focus alone after a save with the mouse that is the first thing done on the tab", async () => {
+    // No keyboard action came before: the tab starts out as if the last one was from the keyboard, so
+    // only Save itself can say that this click was a pointer's.
+    await mount();
+    await type(field("English"), "Welcome back");
+    button("Save").focus();
+    await pointer(button("Save"));
+    await act(async () => {});
+    expect(calls.filter((c) => c.command === "instance_brand.configure")).toHaveLength(1);
+    expect(button("Save").disabled).toBe(true);
+    expect(document.activeElement).not.toBe(field("Name"));
+  });
+
+  it("leaves the focus alone when the identity is removed with the mouse after a keyboard action", async () => {
+    // Discard changes by the keyboard comes first and leaves the tab as "last used by the keyboard";
+    // the click on Remove must say that the next change was started with a pointer.
+    await mount();
+    await type(field("English"), "Welcome back");
+    button("Discard changes").focus();
+    await click(button("Discard changes"));
+    expect(document.activeElement).toBe(field("Name"));
+    // A mouse puts the focus on the button it clicks; the button goes with the identity.
+    button("Remove the identity").focus();
+    await pointer(button("Remove the identity"));
+    await act(async () => {});
+    expect(calls.map((c) => c.command)).toContain("instance_brand.clear");
+    expect(button("Remove the identity")).toBeUndefined();
     expect(document.activeElement).not.toBe(field("Name"));
   });
 

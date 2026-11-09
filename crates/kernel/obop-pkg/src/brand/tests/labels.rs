@@ -455,11 +455,16 @@ fn the_text_of_effective_lists_the_keys_and_the_sources_of_the_answer_of_get() {
     }
     for lang in TRANSLATED {
         let cell = text(&module, &slot, lang);
+        // The keys are whole words of the cell too, like the sources: the key `accent` is not found
+        // in `tile_accent` or in `site.accent`, so dropping it from a translation fails here.
+        let in_cell = words(cell);
         for key in &listed {
             let key = in_translation(key);
-            assert!(cell.contains(key.as_str()), "({lang}) {key}: {cell:?}");
+            assert!(
+                in_cell.contains(key.as_str()),
+                "({lang}) the key {key} as a word: {cell:?}"
+            );
         }
-        let in_cell = words(cell);
         for source in &sources {
             assert!(
                 in_cell.contains(source),

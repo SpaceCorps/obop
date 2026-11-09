@@ -1331,7 +1331,8 @@ fn the_rows_with_limits_are_the_files_that_only_ask_the_reader() {
 /// the reader, which paths through the module `brand` and which types as types only. The test above
 /// holds which files have limits; this holds the limits, so that a row loosened by a number or a name
 /// (a second call, a read, `apply` among the paths) is a change of this test, and so a decision that
-/// shows in the diff. Every row with limits has its own line here.
+/// shows in the diff. Every row of the slices before S3 has its own line here; the rows of S3 are
+/// held by `the_limits_of_the_rows_of_slice_s3_are_the_ones_decided`.
 #[test]
 fn the_limits_of_the_rows_with_limits_are_the_ones_decided() {
     type Want = (
