@@ -104,6 +104,26 @@ describe("the switch in the app", () => {
     expect(productDocsVisible()).toBe(true);
   });
 
+  it("sends an address of the Brand book or the Guide to Theme, and the address says so, while they are hidden", async () => {
+    for (const tab of ["guide", "brand"]) {
+      read = "on";
+      history.replaceState(null, "", `/#/customize/${tab}?tab=${tab}`);
+      await open();
+      expect(productDocsVisible(), tab).toBe(false);
+      expect(location.hash, tab).toBe("#/customize/theme?tab=theme");
+      act(() => root.unmount());
+      root = createRoot(container);
+      setProductDocsHidden(false);
+    }
+  });
+
+  it("leaves that address as it is while they are shown", async () => {
+    history.replaceState(null, "", "/#/customize/guide?tab=guide");
+    await open();
+    expect(productDocsVisible()).toBe(true);
+    expect(location.hash).toBe("#/customize/guide?tab=guide");
+  });
+
   it("is not changed by a read that fails: shown stays shown, hidden stays hidden", async () => {
     read = "fails";
     await open();

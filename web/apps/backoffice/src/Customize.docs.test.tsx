@@ -103,3 +103,31 @@ describe("the Build tab", () => {
     expect(text).toContain("Describe a model and install it as a module");
   });
 });
+
+describe("the address of a tab that is not shown", () => {
+  /** The tabs drawn and the one that is open, as a person sees them. */
+  const seen = () => ({
+    tabs: [...container.querySelectorAll('[role="tab"]')].map((el) => el.textContent),
+    open: container.querySelector(".crumbs strong")?.textContent,
+  });
+
+  it("opens the first tab that is shown, and the two documents are not among them", async () => {
+    setProductDocsHidden(true);
+    for (const asked of ["guide", "brand", "nothing-of-the-kind"]) {
+      await open(asked);
+      const { tabs, open: now } = seen();
+      expect(now, asked).toBe("Theme");
+      expect(tabs, asked).not.toContain("Guide");
+      expect(tabs, asked).not.toContain("Brand book");
+      expect(tabs, asked).toContain("Identity");
+    }
+  });
+
+  it("opens the document that was asked for while they are shown", async () => {
+    await open("brand");
+    expect(seen().open).toBe("Brand book");
+    expect(seen().tabs).toEqual(expect.arrayContaining(["Brand book", "Guide"]));
+    await open("guide");
+    expect(seen().open).toBe("Guide");
+  });
+});

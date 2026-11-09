@@ -105,6 +105,29 @@ describe("changes", () => {
     });
   });
 
+  it("sends the short name when it is typed, and the empty text when it is emptied", () => {
+    // The short name is one of the fields the record keeps apart from the name: it is sent under its
+    // own key, and a short name that was typed and then emptied clears the stored one.
+    expect(
+      changes(
+        base,
+        edit((f) => (f.slug = "acme")),
+        { kind: "keep" },
+      ),
+    ).toEqual({
+      slug: "acme",
+    });
+    const stored = edit((f) => (f.slug = "mohv-app"));
+    expect(
+      changes(
+        stored,
+        edit((f) => (f.slug = "")),
+        { kind: "keep" },
+      ),
+    ).toEqual({ slug: "" });
+    expect(changes(stored, structuredClone(stored), { kind: "keep" })).toEqual({});
+  });
+
   it("clears a text with the empty text and the artwork with the empty artwork", () => {
     const now = edit((f) => (f.messages.sv = ""));
     expect(changes(base, now, { kind: "remove" })).toEqual({ message_sv: "", logo_svg: "" });
