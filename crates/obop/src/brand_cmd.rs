@@ -505,8 +505,10 @@ pub fn render_status(fresh: &Fresh) -> String {
     let shown = fresh.shown();
     let effective: J = serde_json::from_str(&fresh.effective_json()).unwrap_or(J::Null);
     let mut out = String::new();
-    // With no record every value is the default, except what an explicit `site.*` key of the shop
-    // sets: that entry has the source `site` and the lines under the header say so.
+    // With no record the header says every value is the default, except what an explicit `site.*`
+    // key of the shop sets (that entry has the source `site`). The theme's accent is not named: with
+    // a theme alone the header reads as it has since S1a, which the no-record outputs hold, and the
+    // entry says `(theme)` on its own line.
     let site_key_set = effective
         .as_object()
         .is_some_and(|entries| entries.values().any(|entry| entry["source"] == "site"));

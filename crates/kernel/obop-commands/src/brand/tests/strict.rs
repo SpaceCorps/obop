@@ -35,7 +35,8 @@ fn a_name_that_fails_the_safety_subset_is_a_failure_with_a_fixed_message() {
         s("a\u{200b}b"),
         s("a\u{202e}b"),
         s(&"x".repeat(41)),
-        // A name of nothing but spaces is empty (it would be written on a device as a blank label).
+        // A name of nothing but spaces is empty (once the enrolment calls `strict()`, a device is
+        // not given a blank label).
         s(" "),
         s("    "),
         J::from(5),

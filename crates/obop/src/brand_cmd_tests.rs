@@ -382,10 +382,11 @@ fn put_settings(backend: &std::sync::Arc<dyn Backend>, settings: serde_json::Val
         .unwrap();
 }
 
-/// With no record, the header says that every value is the default: true until the owner sets a
-/// `site.*` key of the shop, whose entry then has the source `site`. The header says so, so that it
-/// does not contradict the lines under it. A theme alone, or a `site.*` key the shop would not use,
-/// leaves the header as it was.
+/// With no record, the header says that every value is the default, and when the owner has set a
+/// `site.*` key of the shop (its entry then has the source `site`) it says "except what a site.* key
+/// sets". A theme alone, or a `site.*` key the shop would not use, leaves the header as it was: the
+/// theme's accent is not named by the header (its own line says `(theme)`), because the outputs of
+/// an instance with no record are held as they have been since S1a.
 #[test]
 fn status_with_no_record_and_an_explicit_site_key_says_which_values_are_not_the_default() {
     let (_store, backend) = memory();
