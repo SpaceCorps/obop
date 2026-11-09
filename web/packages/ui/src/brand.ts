@@ -90,11 +90,27 @@ export function pageBrand(
  * (`brand.fixtures.json` is read by both tests).
  */
 export function brandMessage(brand: PageBrand | null, lang: string): string {
-  if (!brand) return "";
+  return brandMessageIn(brand, lang).text;
+}
+
+/**
+ * As [`brandMessage`], with the language the text is in: the language asked for when the brand has a
+ * message in it, English when the text is the English one that stands in for it. A screen sets `lang`
+ * on the paragraph when this differs from the page's, so that a screen reader reads the text with
+ * the voice of its language (WCAG 3.1.2). With no message the text is empty and `lang` is the one
+ * asked for.
+ */
+export function brandMessageIn(
+  brand: PageBrand | null,
+  lang: string,
+): { text: string; lang: string } {
+  if (!brand) return { text: "", lang };
   const own = (LANGS as readonly string[]).includes(lang)
     ? brand.messages[lang as (typeof LANGS)[number]]
     : undefined;
-  return own || brand.messages.en || "";
+  if (own) return { text: own, lang };
+  if (brand.messages.en) return { text: brand.messages.en, lang: "en" };
+  return { text: "", lang };
 }
 
 /** The address of the logo route; `v` makes a new logo a new address. The route is the same in every layout. */

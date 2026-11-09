@@ -3,7 +3,7 @@ import {
   InstanceLogo,
   LanguageSelect,
   TwoFactorStep,
-  brandMessage,
+  brandMessageIn,
   pageBrand,
   t,
   twoFactorMessage,
@@ -72,7 +72,7 @@ export function SignIn({
   // The brand of the instance, from the page (docs/spec/branding.md): with one, the logo and the
   // name stand in the aside instead of the product's own copy, and its message sits under the hint.
   const brand = pageBrand();
-  const message = brandMessage(brand, i18n.lang);
+  const message = brandMessageIn(brand, i18n.lang);
 
   // The Back button of the browser restores this page as it was left, from its back/forward cache
   // (`persisted`), with the button still waiting: it must be usable again.
@@ -244,7 +244,14 @@ export function SignIn({
           <div className="signin-head">
             <h2>{t("Sign in")}</h2>
             <p className="hint">{t("Sign in to your instance.")}</p>
-            {message && <p className="hint signin-message">{message}</p>}
+            {message.text && (
+              <p
+                className="hint signin-message"
+                lang={message.lang === i18n.lang ? undefined : message.lang}
+              >
+                {message.text}
+              </p>
+            )}
           </div>
           <Input label={t("Username")} name="username" autoComplete="username" required autoFocus />
           <Input

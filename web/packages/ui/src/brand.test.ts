@@ -3,6 +3,7 @@ import {
   BRAND_META,
   brandLogoUrl,
   brandMessage,
+  brandMessageIn,
   pageBrand,
   parseBrand,
   recoveryFileName,
@@ -140,6 +141,21 @@ describe("brandMessage", () => {
 
   it("shows nothing with no brand", () => {
     expect(brandMessage(null, "en")).toBe("");
+  });
+
+  it("says which language the text is in: its own, or English when English stands in", () => {
+    const both = parseBrand(tag({ name: "X", slug: "x", messages: { en: "Hi", sv: "Hej" } }));
+    expect(brandMessageIn(both, "sv")).toEqual({ text: "Hej", lang: "sv" });
+    expect(brandMessageIn(both, "en")).toEqual({ text: "Hi", lang: "en" });
+    // No Swedish, no Finnish, nor a language we do not ship: the English text, marked English.
+    const english = parseBrand(tag({ name: "X", slug: "x", messages: { en: "Hi" } }));
+    expect(brandMessageIn(english, "sv")).toEqual({ text: "Hi", lang: "en" });
+    expect(brandMessageIn(english, "xx")).toEqual({ text: "Hi", lang: "en" });
+    // Only a Swedish message: an English screen has none, whatever Swedish says.
+    const swedish = parseBrand(tag({ name: "X", slug: "x", messages: { sv: "Hej" } }));
+    expect(brandMessageIn(swedish, "en")).toEqual({ text: "", lang: "en" });
+    expect(brandMessageIn(swedish, "de")).toEqual({ text: "", lang: "de" });
+    expect(brandMessageIn(null, "fi")).toEqual({ text: "", lang: "fi" });
   });
 
   it("covers a message of every language, each in its own language and in none else", () => {

@@ -100,6 +100,21 @@ describe("with a brand", () => {
     );
   });
 
+  it("marks the English message on a screen in another language as English, and only then", async () => {
+    setBrand(BRAND);
+    await show("sv");
+    const english = container.querySelector(".signin-message")!;
+    expect(english.textContent).toBe("Welcome to the team");
+    expect(english.getAttribute("lang")).toBe("en");
+    // On an English screen it is the language of the page and needs no mark of its own.
+    await show("en");
+    expect(container.querySelector(".signin-message")!.hasAttribute("lang")).toBe(false);
+    // A message in the language of the screen needs none either.
+    setBrand({ ...BRAND, messages: { en: "Welcome to the team", sv: "Välkommen till laget" } });
+    await show("sv");
+    expect(container.querySelector(".signin-message")!.hasAttribute("lang")).toBe(false);
+  });
+
   it("shows the message of the language when there is one", async () => {
     setBrand({ ...BRAND, messages: { en: "Welcome to the team", sv: "Välkommen till laget" } });
     await show("sv");
