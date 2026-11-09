@@ -9,8 +9,11 @@ import { Logo } from "./logo.tsx";
  * `mark` is the artwork alone and carries the name as text for a screen reader. The accessible
  * name is the name of the brand either way, so no screen of an instance with a brand says `obop`.
  *
- * It is the only component of the apps that draws `Logo` (a scan in the back office tests holds
- * the other files to that); the Brand book documents obop's own mark and keeps `Logo`.
+ * Apart from the Brand book, which documents obop's own mark and keeps `Logo`, it is the only
+ * component of the back office and of this package that draws `Logo` (a scan in the back office
+ * tests holds the other files of both to that). The control-plane app (`web/apps/platform`) is not
+ * read by the scan and draws `Logo` itself, on purpose: it is the product's own sign-up, and has
+ * no brand (docs/spec/branding.md, section 6).
  */
 export type InstanceLogoProps = {
   /** `full` is the artwork and the name, `mark` the artwork alone. */
