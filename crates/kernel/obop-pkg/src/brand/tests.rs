@@ -272,7 +272,8 @@ fn the_descriptions_name_the_input_keys_and_say_nothing_of_pages() {
     for key in ["dry_run", "cleared"] {
         assert!(clear.description.contains(key), "clear: {key}");
     }
-    // What the record holds, not which pages show it: no page is built yet to show it.
+    // What the record holds, not which pages show it: no description uses a word below, which names
+    // a page or a screen (the switch says where it hides the two documents, in the words of the menus).
     let mut texts = vec![("the model".to_string(), m.description.to_string())];
     texts.extend(
         m.fields

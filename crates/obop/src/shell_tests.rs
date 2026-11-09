@@ -567,6 +567,69 @@ async fn the_store_is_read_on_a_blocking_thread_and_never_on_the_one_that_polls_
     assert_ne!(reader, polling, "the refill ran on the polling thread");
 }
 
+/// Removes the entries of `dir` whose name starts with `prefix` and that were last changed more than
+/// `older_than` ago: the directories that earlier runs of a test left (their processes are long
+/// gone). The name is tested first and the age only for the entries that have it, because a
+/// temporary directory can hold hundreds of entries of other programs and the age of each would be
+/// one more call of the system.
+fn sweep(dir: &std::path::Path, prefix: &str, older_than: std::time::Duration) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        if !entry.file_name().to_string_lossy().starts_with(prefix) {
+            continue;
+        }
+        let age = entry
+            .metadata()
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.elapsed().ok());
+        if age.is_some_and(|a| a > older_than) {
+            let _ = std::fs::remove_dir_all(entry.path());
+        }
+    }
+}
+
+#[test]
+fn the_sweep_removes_what_has_the_prefix_and_is_old_enough_and_nothing_else() {
+    let root = std::env::temp_dir().join(format!(
+        "obop-shell-sweep-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    for dir in ["obop-shell-rt-a", "obop-shell-rt-b", "other-c"] {
+        std::fs::create_dir_all(root.join(dir)).unwrap();
+        std::fs::write(root.join(dir).join("shell.db"), b"x").unwrap();
+    }
+    let exists = |name: &str| root.join(name).exists();
+    // Nothing here is an hour old: nothing is removed, the prefix or not.
+    sweep(
+        &root,
+        "obop-shell-rt-",
+        std::time::Duration::from_secs(60 * 60),
+    );
+    assert!(exists("obop-shell-rt-a") && exists("obop-shell-rt-b") && exists("other-c"));
+    // Everything here is older than no time at all: what has the prefix is removed, the rest stays.
+    std::thread::sleep(std::time::Duration::from_millis(50));
+    sweep(&root, "obop-shell-rt-", std::time::Duration::ZERO);
+    assert!(!exists("obop-shell-rt-a") && !exists("obop-shell-rt-b"));
+    assert!(
+        exists("other-c"),
+        "an entry without the prefix is never touched"
+    );
+    // A directory that is not there is no error.
+    sweep(
+        &root.join("missing"),
+        "obop-shell-rt-",
+        std::time::Duration::ZERO,
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 /// The index on the runtime of the server over every store the tests have: SQLite always, and
 /// PostgreSQL when `OBOP_TEST_POSTGRES_URL` is set (that leg runs in CI only; it is not run on a
 /// machine without the variable). The PostgreSQL client panics on an async worker, so that leg is the
@@ -595,26 +658,11 @@ fn the_index_works_on_the_runtime_of_the_server_over_every_store() {
             let _ = std::fs::remove_dir_all(&self.0);
         }
     }
-    /// The directories of this test that are more than a day old: their processes are long gone.
-    fn sweep(prefix: &str) {
-        let day = std::time::Duration::from_secs(24 * 60 * 60);
-        let Ok(entries) = std::fs::read_dir(std::env::temp_dir()) else {
-            return;
-        };
-        for entry in entries.flatten() {
-            let age = entry
-                .metadata()
-                .and_then(|m| m.modified())
-                .ok()
-                .and_then(|t| t.elapsed().ok());
-            if age.is_some_and(|a| a > day)
-                && entry.file_name().to_string_lossy().starts_with(prefix)
-            {
-                let _ = std::fs::remove_dir_all(entry.path());
-            }
-        }
-    }
-    sweep("obop-shell-rt-");
+    sweep(
+        &std::env::temp_dir(),
+        "obop-shell-rt-",
+        std::time::Duration::from_secs(24 * 60 * 60),
+    );
     let _scratch = Scratch(dir.clone());
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)

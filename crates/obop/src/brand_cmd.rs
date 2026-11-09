@@ -169,11 +169,11 @@ pub const VALUE_OPTIONS: [&str; 33] = [
     "--from",
     "--documents",
     "--account-types",
+    "--vehicle",
+    "--since",
     "--tenant",
     "--client-id",
     "--year",
-    "--vehicle",
-    "--since",
 ];
 
 /// Where the words `admin brand` stand: at the start of the command line, past any leading global

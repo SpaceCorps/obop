@@ -48,6 +48,24 @@ export function requireBuilt(): void {
   ] as const)
     if (!existsSync(resolve(dir, "index.html")))
       throw new Error(`${dir} is missing; run ${how} first`);
+  const problem = adminBuildProblem(
+    readFileSync(resolve(backofficeAdminDist, "index.html"), "utf8"),
+  );
+  if (problem) throw new Error(`${backofficeAdminDist}/index.html ${problem}`);
+}
+
+/**
+ * Why the document of the /admin/ build is not one, or `null`. Git Bash on Windows rewrites an
+ * argument or a variable that looks like a path, so `OBOP_ADMIN_BASE=/admin/ vp build` writes
+ * `/Program Files/Git/admin/assets/...` into the page: a blank screen, and one failing test that
+ * hides the six after it. `MSYS_NO_PATHCONV=1` in front of the command stops the rewriting.
+ */
+export function adminBuildProblem(html: string): string | null {
+  if (/(?:src|href)="\/admin\/assets\//.test(html)) return null;
+  return (
+    "does not load its files from /admin/assets/ (built without OBOP_ADMIN_BASE=/admin/? " +
+    "In Git Bash on Windows put MSYS_NO_PATHCONV=1 in front of the command)"
+  );
 }
 
 /** Test accounts, created with the CLI before the instance starts. Test values only. */

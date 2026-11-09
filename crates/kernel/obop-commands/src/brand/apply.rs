@@ -90,8 +90,8 @@ pub struct Refused {
 /// value that was written around the command whole, where the log line is cut (`LOG_CUT`).
 ///
 /// `withheld` is set only for a key that `clear` removed and whose value is not written down: a
-/// value that is not text, or a key this binary does not know (a newer binary's field, a switch of
-/// a later slice). `old` is then the marker (`<not text>` or `<unknown>`), `field` is the key as
+/// value that is not text, or a key this binary does not know (a field that a newer binary
+/// added). `old` is then the marker (`<not text>` or `<unknown>`), `field` is the key as
 /// [`show_key`] shows it, and the log line is `key: <marker> -> removed`, with no value.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Changed {

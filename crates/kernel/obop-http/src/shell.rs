@@ -463,9 +463,10 @@ fn apply_edits(
 /// others dropped) and the `obop-brand` tag added to the head, right after the tag that declares
 /// the character encoding (so that this declaration stays within the first 1024 bytes of the
 /// document whatever the brand holds; as the first thing in the head when there is none). Only
-/// the head is read and nothing else is touched. `Err` names, in a fixed word, why the document
-/// cannot take it (no `<head>`, no `<title>`, no icon link, or its head already has a `<meta>`
-/// named `obop-brand`); the caller then serves it as it is.
+/// the head is read and nothing else is touched. `Err` names, in a fixed phrase, why the document
+/// cannot take it (no `<head>`, no `<title>`, a `<title>` that is not closed, no icon link, a head
+/// that already has a `<meta>` named `obop-brand`, or a head that cannot be read); the caller then
+/// serves it as it is.
 fn brand_rewrite(html: &[u8], shown: &Shown) -> Result<Vec<u8>, &'static str> {
     let public = Public::of(shown);
     let head = head_content_start(html).ok_or("it has no <head>")?;
@@ -1861,6 +1862,8 @@ mod tests {
             "<style>/* obop-brand */</style>",
             "<meta name=\"description\" content=\"obop-brand\">",
             "<meta name=\"obop-brand-x\" content=\"x\">",
+            // An element that is not a `<meta>` and has the name is not the tag either.
+            "<link rel=\"stylesheet\" name=\"obop-brand\" href=\"/x.css\">",
             // A closing tag is no tag.
             "</meta name=\"obop-brand\">",
         ];

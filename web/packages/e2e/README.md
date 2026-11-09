@@ -10,9 +10,14 @@ From the repository root, build what is under test once, then run the suite:
 ```sh
 cargo build                              # target/debug/obop (or point OBOP_BIN at another binary)
 (cd web/apps/backoffice && vp build)     # web/apps/backoffice/dist
+(cd web/apps/backoffice && OBOP_ADMIN_BASE=/admin/ vp build --outDir dist-admin)  # the same for /admin/ (the shop and brand specs)
 deploy/build-site.sh                     # web/site: the website + sign-up app
 cd web/packages/e2e && vp run e2e        # the suite (vp run e2e:ui for Playwright's UI mode)
 ```
+
+In Git Bash on Windows put `MSYS_NO_PATHCONV=1` in front of the `dist-admin` build: the shell otherwise
+rewrites `/admin/` into a path of the Git installation, the page loads nothing, and `requireBuilt`
+refuses the build.
 
 Pass Playwright arguments after the script name, for example `vp run e2e tests/kanban.spec.ts -g drag`
 or `vp run e2e --repeat-each=5`. Failed tests keep a trace and screenshot in `test-results/`; in CI the
