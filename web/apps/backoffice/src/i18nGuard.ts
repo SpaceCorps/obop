@@ -33,13 +33,31 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join, posix } from "node:path";
 
+/** What a stretch that `code` blanks is. */
+export type TextKind = "comment" | "string" | "template" | "regex";
+
 /** `src` with comments, the text of strings and templates and regular expressions blanked (same length). */
 export function code(src: string): string {
   const out = src.split("");
+  scan(src, (from, to) => {
+    for (let k = from; k < to && k < out.length; k++) if (out[k] !== "\n") out[k] = " ";
+  });
+  return out.join("");
+}
+
+/**
+ * The stretches `code` blanks, in order, with what each is: the text of a string (between its
+ * quotes) or of a template (between its backtick and the next `${` or backtick), a regular
+ * expression's body, or a whole comment. `brandLiterals.test.ts` reads the strings and templates.
+ */
+export function texts(src: string): { from: number; to: number; kind: TextKind }[] {
+  const out: { from: number; to: number; kind: TextKind }[] = [];
+  scan(src, (from, to, kind) => void out.push({ from, to: Math.min(to, src.length), kind }));
+  return out;
+}
+
+function scan(src: string, blank: (from: number, to: number, kind: TextKind) => void): void {
   const n = src.length;
-  const blank = (from: number, to: number) => {
-    for (let k = from; k < to && k < n; k++) if (out[k] !== "\n") out[k] = " ";
-  };
   const templates: number[] = []; // the brace depth at which each open `${` was entered
   let depth = 0;
   let prev = ""; // the last character of code, to tell a division from a regular expression
@@ -52,19 +70,19 @@ export function code(src: string): string {
       const c = src[i]!;
       if (c === "\\") i += 2;
       else if (c === "`") {
-        blank(from, i);
+        blank(from, i, "template");
         i++;
         prev = "`";
         return;
       } else if (c === "$" && src[i + 1] === "{") {
-        blank(from, i);
+        blank(from, i, "template");
         templates.push(depth);
         i += 2;
         prev = "{";
         return;
       } else i++;
     }
-    blank(from, n);
+    blank(from, n, "template");
   };
   while (i < n) {
     const c = src[i]!;
@@ -72,17 +90,17 @@ export function code(src: string): string {
     if (c === "/" && d === "/") {
       const e = src.indexOf("\n", i);
       const end = e < 0 ? n : e;
-      blank(i, end);
+      blank(i, end, "comment");
       i = end;
     } else if (c === "/" && d === "*") {
       const e = src.indexOf("*/", i + 2);
       const end = e < 0 ? n : e + 2;
-      blank(i, end);
+      blank(i, end, "comment");
       i = end;
     } else if (c === '"' || c === "'") {
       let j = i + 1;
       while (j < n && src[j] !== c && src[j] !== "\n") j += src[j] === "\\" ? 2 : 1;
-      blank(i + 1, j);
+      blank(i + 1, j, "string");
       i = src[j] === c ? j + 1 : j;
       prev = c;
     } else if (c === "`") {
@@ -106,7 +124,7 @@ export function code(src: string): string {
         j++;
       }
       if (src[j] === "/") {
-        blank(i + 1, j);
+        blank(i + 1, j, "regex");
         i = j + 1;
         prev = "/";
       } else i++;
@@ -128,7 +146,6 @@ export function code(src: string): string {
       i++;
     }
   }
-  return out.join("");
 }
 
 /* ---------------------------------------------------------------------------------------------- */
