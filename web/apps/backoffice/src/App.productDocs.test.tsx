@@ -108,9 +108,13 @@ describe("the switch in the app", () => {
     for (const tab of ["guide", "brand"]) {
       read = "on";
       history.replaceState(null, "", `/#/customize/${tab}?tab=${tab}`);
+      const entries = history.length;
       await open();
       expect(productDocsVisible(), tab).toBe(false);
       expect(location.hash, tab).toBe("#/customize/theme?tab=theme");
+      // The address is replaced and no entry is added: Back does not return to the hidden address,
+      // which would send the person to Theme again.
+      expect(history.length, tab).toBe(entries);
       act(() => root.unmount());
       root = createRoot(container);
       setProductDocsHidden(false);

@@ -80,6 +80,12 @@ describe("parseBrand", () => {
       expect(parseBrand(bad as string), String(bad)).toBeNull();
   });
 
+  it("takes a version of at most 64 hexadecimal digits", () => {
+    expect(parseBrand(tag({ name: "A", slug: "a", v: "f".repeat(64) }))?.v).toBe("f".repeat(64));
+    expect(parseBrand(tag({ name: "A", slug: "a", v: "f".repeat(65) }))).toBeNull();
+    expect(parseBrand(tag({ name: "A", slug: "a", v: "0123456789abcdeg" }))).toBeNull();
+  });
+
   it("accepts the shortest and the longest slug", () => {
     expect(parseBrand(tag({ name: "A", slug: "a" }))?.slug).toBe("a");
     expect(parseBrand(tag({ name: "A", slug: "a".repeat(30) }))?.slug).toBe("a".repeat(30));

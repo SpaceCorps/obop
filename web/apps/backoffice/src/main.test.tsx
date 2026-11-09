@@ -5,6 +5,12 @@
 // entry, so a `main.tsx` that stops calling it is a failing test.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
+// The entry is imported afresh by each test, and that transforms the whole graph of the app, which
+// takes a few hundred milliseconds alone and several seconds on a machine that is running the other
+// test files too: the default five seconds is not enough there, and a test that timed out leaves
+// its import running, which renders into the next test.
+const SLOW = 60_000;
+
 const render = vi.fn();
 vi.mock("react-dom/client", () => ({ createRoot: () => ({ render }) }));
 vi.mock("./App.tsx", () => ({ App: () => null }));
@@ -29,7 +35,7 @@ afterEach(() => {
   document.head.querySelectorAll('meta[name="obop-brand"]').forEach((m) => m.remove());
 });
 
-describe("the entry of the back office", () => {
+describe("the entry of the back office", { timeout: SLOW }, () => {
   it("puts the name and the stored accent on the page before the first render", async () => {
     document.head.insertAdjacentHTML("beforeend", TAG({ accent: "#c2410c" }));
     document.title = "obop";
