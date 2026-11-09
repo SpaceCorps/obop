@@ -257,6 +257,12 @@ fn the_descriptions_name_the_input_keys_and_say_nothing_of_pages() {
     ] {
         assert!(configure.description.contains(key), "configure: {key}");
     }
+    let switch = m.fields.iter().find(|f| f.name == "hide_product_docs").unwrap();
+    assert!(
+        switch.description.starts_with("true or false: hide the Brand book and the Guide"),
+        "{}",
+        switch.description
+    );
     let clear = m.commands.iter().find(|c| c.name == "clear").unwrap();
     for key in ["dry_run", "cleared"] {
         assert!(clear.description.contains(key), "clear: {key}");
@@ -1221,6 +1227,10 @@ fn a_values_file_refuses_another_table_a_key_outside_a_table_and_a_value_that_is
     assert!(
         r[0].contains("the key phone is not a field of the brand"),
         "{r:?}"
+    );
+    assert!(
+        r[0].ends_with("title_<lang>, message_<lang>, logo_svg and hide_product_docs"),
+        "the values file names the switch among the fields: {r:?}"
     );
     let r = file_err("phone = 3\n[record]\nname = \"MOHV\"\n");
     assert!(r[0].contains("[phone] must be a table"), "{r:?}");

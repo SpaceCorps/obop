@@ -194,3 +194,28 @@ fn a_dry_run_reports_the_switch_and_writes_nothing() {
     assert_eq!(a.refusals.len(), 1);
     assert_eq!(a.refusals[0].field, SWITCH);
 }
+
+#[test]
+fn clear_accounts_for_the_switch_and_writes_down_only_a_boolean() {
+    // A boolean is written down as the word it is.
+    let spy = Spy::memory();
+    ok(&spy, &[("name", "MOHV"), (SWITCH, "true")]);
+    let a = apply(&*spy, None, "ada", &Action::Clear, false).unwrap();
+    let c = a.changes.iter().find(|c| c.field == SWITCH).expect("the switch");
+    assert_eq!((c.old.as_str(), c.new.as_str(), c.withheld), ("true", "", false));
+    assert!(details(&spy).contains(&"hide_product_docs: true -> removed".to_string()));
+
+    // A value that is not a boolean is not written down: the marker, and `withheld` for the
+    // answer and the command line.
+    let spy = Spy::memory();
+    put_row(&*spy, &[("name", s("MOHV")), (SWITCH, s("yes"))]);
+    let a = apply(&*spy, None, "ada", &Action::Clear, false).unwrap();
+    let c = a.changes.iter().find(|c| c.field == SWITCH).expect("the switch");
+    assert_eq!((c.old.as_str(), c.new.as_str(), c.withheld), ("<not boolean>", "", true));
+    assert!(
+        details(&spy).iter().all(|d| !d.contains("yes")),
+        "the value is in no line: {:?}",
+        details(&spy)
+    );
+    assert!(details(&spy).contains(&"hide_product_docs: <not boolean> -> removed".to_string()));
+}

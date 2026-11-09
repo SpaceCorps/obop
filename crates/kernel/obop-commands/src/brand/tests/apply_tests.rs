@@ -406,6 +406,12 @@ fn unknown_keys_are_refused_by_name_and_the_name_is_made_safe_to_repeat() {
         assert_eq!(r.len(), 1, "{key}");
         assert_eq!(r[0].0, key);
         assert!(r[0].1.contains("not a field"), "{}", r[0].1);
+        assert!(
+            r[0].1
+                .ends_with("title_<lang>, message_<lang>, logo_svg and hide_product_docs"),
+            "the refusal lists the fields, the switch included: {}",
+            r[0].1
+        );
         assert!(stored(&spy).is_none());
     }
     let r = refusals(run(&spy, &cfg(&[("name", "MOHV"), ("a\nb\u{202e}c", "x")])));
