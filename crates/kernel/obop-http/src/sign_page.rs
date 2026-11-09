@@ -1122,6 +1122,63 @@ fn late() { txt::html(lang, \"late_key\"); }
         assert!(html.contains("</span> MOHV</p>"), "{html}");
     }
 
+    /// The text of the line beside the logo on a page.
+    fn line_text(html: &str) -> String {
+        let a = html.find("<p class=\"brand\">").unwrap();
+        let end = html[a..].find("</p>").unwrap() + a;
+        let line = &html[a..end];
+        line[line.rfind("</span> ").unwrap() + "</span> ".len()..].to_string()
+    }
+
+    /// A brand with a title of its own in each of the seven languages shows that title, and no other,
+    /// on every kind of page in that language: the message pages (the refusals), the page after
+    /// signing and the form, with and without the list of the signatures so far. (A brand with the
+    /// titles of three languages cannot tell the language of a page from the English fallback in the
+    /// other four.)
+    #[test]
+    fn every_language_shows_its_own_title_on_the_message_the_done_and_the_form_page() {
+        let titles: Vec<(String, String)> = LANGS
+            .iter()
+            .map(|l| {
+                (
+                    format!("title_{l}"),
+                    format!("MOHV Title {}", l.to_uppercase()),
+                )
+            })
+            .collect();
+        let mut pairs: Vec<(&str, &str)> = vec![("name", "MOHV")];
+        pairs.extend(titles.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+        let brand = branded(&pairs);
+        assert!(brand.fallbacks().is_empty(), "{:?}", brand.fallbacks());
+        let history = pinned_history();
+        let mut seen = 0;
+        for lang in LANGS {
+            let want = format!("MOHV Title {}", lang.to_uppercase());
+            for (kind, page) in [
+                ("message", message(lang, "closed", &brand)),
+                (
+                    "done",
+                    done(lang, "2026-11-03T10:00:00.000000Z", None, &brand),
+                ),
+                (
+                    "done_history",
+                    done(lang, "2026-11-03T10:00:00.000000Z", Some(&history), &brand),
+                ),
+                ("form", form_in(lang, None, &brand)),
+                ("form_history", form_in(lang, Some(&history), &brand)),
+            ] {
+                assert_eq!(line_text(&page.html), want, "{lang}/{kind}");
+                seen += 1;
+            }
+        }
+        assert_eq!(seen, 5 * 7);
+        // An unknown language is shown in English, on the page and in the line alike.
+        assert_eq!(
+            line_text(&message("zz", "closed", &brand).html),
+            "MOHV Title EN"
+        );
+    }
+
     /// A row written around the command: a name with every character that HTML needs escaped (the
     /// read check lets `&`, `"` and `'` through, and refuses `<` and `>`), a title with a tag in it
     /// (which falls back to the name). Neither reaches a page raw, in any state.

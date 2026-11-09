@@ -487,6 +487,93 @@ mod tests {
         );
     }
 
+    /// Every refusal of the door has its status and says its own words, in every language: the key
+    /// of the catalogue is written out here, and the page that `refusal` makes must hold that key's
+    /// text (so that a handler which hands the page another key is found by name).
+    #[tokio::test]
+    async fn every_refusal_of_the_door_has_its_status_and_says_its_own_words_in_every_language() {
+        use http_body_util::BodyExt;
+        let brand = Shown::not_set(None);
+        let table = [
+            (DoorError::NotFound, StatusCode::NOT_FOUND, "unknown"),
+            (
+                DoorError::Gone(Gone::Expired),
+                StatusCode::GONE,
+                "gone_expired",
+            ),
+            (
+                DoorError::Gone(Gone::Revoked),
+                StatusCode::GONE,
+                "gone_revoked",
+            ),
+            (DoorError::Gone(Gone::Closed), StatusCode::GONE, "closed"),
+            (DoorError::Changed, StatusCode::CONFLICT, "changed"),
+            (DoorError::Busy(7), StatusCode::TOO_MANY_REQUESTS, "busy"),
+            (
+                DoorError::Unavailable,
+                StatusCode::SERVICE_UNAVAILABLE,
+                "unavailable",
+            ),
+            (
+                DoorError::Invalid(Invalid::Name),
+                StatusCode::BAD_REQUEST,
+                "err_name",
+            ),
+            (
+                DoorError::Invalid(Invalid::Agree),
+                StatusCode::BAD_REQUEST,
+                "err_name",
+            ),
+            (
+                DoorError::Invalid(Invalid::History),
+                StatusCode::BAD_REQUEST,
+                "err_name",
+            ),
+            (DoorError::Refused, StatusCode::CONFLICT, "gone_revoked"),
+        ];
+        for (e, status, key) in table {
+            assert_eq!(refusal_parts(&e), (status, key), "{e:?}");
+            for lang in LANGS {
+                let r = refusal(&e, lang, &brand);
+                assert_eq!(r.status(), status, "{lang}/{e:?}");
+                let body = r.into_body().collect().await.unwrap().to_bytes();
+                let html = String::from_utf8_lossy(&body);
+                let want = format!("<p>{}</p>", txt::html(lang, key, &[]));
+                assert!(html.contains(&want), "{lang}/{e:?}: not the words of {key}");
+            }
+        }
+    }
+
+    /// `Retry-After` is said by the two refusals that can be tried again, with the number each one
+    /// means (the seconds the door counted for `Busy`, thirty for a store that refused), and by no
+    /// other: a link that is gone or unknown does not come back by waiting.
+    #[test]
+    fn only_a_busy_door_and_an_unavailable_store_say_how_long_to_wait_and_say_it_exactly() {
+        let brand = Shown::not_set(None);
+        let wait = |e: DoorError| {
+            refusal(&e, "en", &brand)
+                .headers()
+                .get(header::RETRY_AFTER)
+                .map(|v| v.to_str().unwrap().to_string())
+        };
+        assert_eq!(wait(DoorError::Busy(7)).as_deref(), Some("7"));
+        assert_eq!(wait(DoorError::Busy(3600)).as_deref(), Some("3600"));
+        assert_eq!(wait(DoorError::Unavailable).as_deref(), Some("30"));
+        for e in [
+            DoorError::NotFound,
+            DoorError::Gone(Gone::Expired),
+            DoorError::Gone(Gone::Revoked),
+            DoorError::Gone(Gone::Closed),
+            DoorError::Changed,
+            DoorError::Invalid(Invalid::Name),
+            DoorError::Invalid(Invalid::Agree),
+            DoorError::Invalid(Invalid::History),
+            DoorError::Refused,
+        ] {
+            assert_eq!(wait(e.clone()), None, "{e:?}");
+        }
+    }
+
     /// What a sink kept: each line with the second of the clock it was written at.
     type Lines = Arc<std::sync::Mutex<Vec<(u64, String)>>>;
 

@@ -99,6 +99,17 @@ fn assert_plain(r: &Resp, what: &str) {
     );
 }
 
+/// A page of the door says the words of the catalogue key in `lang`, in its paragraph: the handler
+/// handed `message` that key (the pages of two refusals differ in nothing else).
+fn assert_says(r: &Resp, lang: &str, key: &str, what: &str) {
+    let want = format!("<p>{}</p>", obop_http::sign_text::html(lang, key, &[]));
+    assert!(
+        r.text().contains(&want),
+        "{what}: the page does not say the words of {key}: {}",
+        r.text()
+    );
+}
+
 /// A form that signs, in `lang`.
 fn form<'a>(f: &'a Fx, name: &'a str, lang: &'a str) -> Vec<(&'a str, &'a str)> {
     vec![
@@ -257,16 +268,20 @@ async fn every_arm_of_the_door_that_makes_a_page_shows_the_brand_in_seven_langua
         let r = f.get(&at(&wrong), &from).await;
         assert_eq!(r.status, 404);
         assert_branded(&f, &r, lang, &format!("{lang}/unknown"));
+        assert_says(&r, lang, "unknown", &format!("{lang}/unknown"));
         let r = f.get(&at(&second), &from).await;
         assert_eq!(r.status, 410);
         assert_branded(&f, &r, lang, &format!("{lang}/revoked"));
+        assert_says(&r, lang, "gone_revoked", &format!("{lang}/revoked"));
         // GET of the PDF: a wrong link and a revoked one are pages of the door too.
         let r = f.get(&at(&format!("{wrong}/document.pdf")), &from).await;
         assert_eq!(r.status, 404);
         assert_branded(&f, &r, lang, &format!("{lang}/pdf unknown"));
+        assert_says(&r, lang, "unknown", &format!("{lang}/pdf unknown"));
         let r = f.get(&at(&format!("{second}/document.pdf")), &from).await;
         assert_eq!(r.status, 410);
         assert_branded(&f, &r, lang, &format!("{lang}/pdf revoked"));
+        assert_says(&r, lang, "gone_revoked", &format!("{lang}/pdf revoked"));
         // POST: from another site, a body that is not a form, a form that is not acceptable.
         let r = f
             .post_with(
@@ -278,9 +293,11 @@ async fn every_arm_of_the_door_that_makes_a_page_shows_the_brand_in_seven_langua
             .await;
         assert_eq!(r.status, 403);
         assert_branded(&f, &r, lang, &format!("{lang}/forbidden"));
+        assert_says(&r, lang, "forbidden", &format!("{lang}/forbidden"));
         let r = post_text(&f, &at(&path), &from).await;
         assert_eq!(r.status, 400);
         assert_branded(&f, &r, lang, &format!("{lang}/not a form"));
+        assert_says(&r, lang, "err_name", &format!("{lang}/not a form"));
         let r = f.post(&path, &from, &form(&f, "", lang)).await;
         assert_eq!(r.status, 400);
         assert!(r.text().contains("<form"), "the form is shown again");
@@ -290,6 +307,7 @@ async fn every_arm_of_the_door_that_makes_a_page_shows_the_brand_in_seven_langua
         let r = f.post(&second, &from, &form(&f, "Jane Test", lang)).await;
         assert_eq!(r.status, 410);
         assert_branded(&f, &r, lang, &format!("{lang}/post revoked"));
+        assert_says(&r, lang, "gone_revoked", &format!("{lang}/post revoked"));
         arms += 9;
     }
     assert_eq!(arms, 63);
@@ -502,71 +520,102 @@ async fn the_door_of_a_dispatcher_without_a_signer_service_shows_the_brand_on_it
 
 /// The consent id is hashed from the texts the signer relied on, and a brand has no word in them:
 /// the id a signature records is the same on an instance with a brand, with and without the history
-/// of the file, and it is the id the texts give.
+/// of the file, in every one of the seven languages, and it is the id the texts give.
 #[tokio::test]
 async fn a_signature_made_with_a_brand_records_the_same_consent_id() {
-    // Without a brand and with one, the same request in two languages.
+    // Without a brand and with one, the same request in each language. A fresh instance for each
+    // signature (a request is signed once), so the address can be the same.
     let mut ids = Vec::new();
-    for (branded, lang) in [(false, "en"), (true, "en"), (false, "de"), (true, "de")] {
-        let (f, _, path, _) = sent().await;
-        if branded {
-            set_brand(&f.app);
-        }
-        let r = f.post(&path, &ip(100), &form(&f, "Jane Test", lang)).await;
-        assert_eq!(r.status, 303, "{}", r.text());
-        let id = f.record("sign_request", &f.req)["consent_version"]
-            .as_str()
-            .unwrap()
-            .to_string();
-        assert_eq!(id, obop_http::sign_text::consent_version_for(lang));
-        ids.push((branded, lang, id));
-    }
-    assert_eq!(ids[0].2, ids[1].2, "English: a brand moved the consent id");
-    assert_eq!(ids[2].2, ids[3].2, "German: a brand moved the consent id");
-    assert_ne!(ids[0].2, ids[2].2, "the languages have ids of their own");
-    // The ids written out (the unit test of `sign_text.rs` pins the same literals).
-    assert_eq!(ids[1].2, "v1-draft/en/a05c68c3");
-    assert_eq!(ids[3].2, "v1-draft/de/9ebff173");
-
-    // The request that shows the history: the id with the mark, with a brand as without.
-    let mut with_history = Vec::new();
-    for branded in [false, true] {
-        let (f, _, _, _) = sent().await;
-        if branded {
-            set_brand(&f.app);
-        }
-        let (s, v) = f
-            .api(
-                "mia",
-                "/api/sign_request/create",
-                json!({"title": "History", "signer_name": "Alice Example", "document_id": f.doc,
-                       "show_history": true}),
-            )
-            .await;
-        assert_eq!(s, 200, "{v}");
-        let id = v["value"]["id"].as_str().unwrap().to_string();
-        let (s, v) = f
-            .api("mia", "/api/sign_request/send_document", json!({"id": id}))
-            .await;
-        assert_eq!(s, 200, "{v}");
-        let (_, link) = f.mint("mia", &id).await;
-        let mut pairs = form(&f, "Alice Example", "en");
-        pairs.push(("hist", "1"));
-        let r = f.post(&link, &ip(101), &pairs).await;
-        assert_eq!(r.status, 303, "{}", r.text());
-        with_history.push(
-            f.record("sign_request", &id)["consent_version"]
+    for lang in LANGS {
+        let mut pair = Vec::new();
+        for branded in [false, true] {
+            let (f, _, path, _) = sent().await;
+            if branded {
+                set_brand(&f.app);
+            }
+            let r = f.post(&path, &ip(100), &form(&f, "Jane Test", lang)).await;
+            assert_eq!(r.status, 303, "{lang} branded {branded}: {}", r.text());
+            let id = f.record("sign_request", &f.req)["consent_version"]
                 .as_str()
                 .unwrap()
-                .to_string(),
-        );
+                .to_string();
+            assert_eq!(
+                id,
+                obop_http::sign_text::consent_version_for(lang),
+                "{lang} branded {branded}"
+            );
+            pair.push(id);
+        }
+        assert_eq!(pair[0], pair[1], "{lang}: a brand moved the consent id");
+        ids.push((lang, pair.remove(1)));
     }
-    assert_eq!(with_history[0], with_history[1]);
-    assert_eq!(with_history[1], "v1-draft/en/e2880db0/history");
-    assert_eq!(
-        with_history[1],
-        obop_http::sign_text::consent_version_with_history_for("en")
-    );
+    // The languages have ids of their own.
+    let mut all: Vec<&String> = ids.iter().map(|(_, id)| id).collect();
+    all.sort();
+    all.dedup();
+    assert_eq!(all.len(), LANGS.len(), "seven languages, seven ids");
+    // The ids written out (the unit test of `sign_text.rs` pins all seven).
+    let id_of = |lang: &str| ids.iter().find(|(l, _)| *l == lang).unwrap().1.as_str();
+    assert_eq!(id_of("en"), "v1-draft/en/a05c68c3");
+    assert_eq!(id_of("de"), "v1-draft/de/9ebff173");
+
+    // The request that shows the history: the id with the mark, with a brand as without, in every
+    // language (the form carries the language and the box that says the page held the sentence).
+    let mut with_history = Vec::new();
+    for lang in LANGS {
+        let mut pair = Vec::new();
+        for branded in [false, true] {
+            let (f, _, _, _) = sent().await;
+            if branded {
+                set_brand(&f.app);
+            }
+            let (s, v) = f
+                .api(
+                    "mia",
+                    "/api/sign_request/create",
+                    json!({"title": "History", "signer_name": "Alice Example", "document_id": f.doc,
+                           "show_history": true}),
+                )
+                .await;
+            assert_eq!(s, 200, "{v}");
+            let id = v["value"]["id"].as_str().unwrap().to_string();
+            let (s, v) = f
+                .api("mia", "/api/sign_request/send_document", json!({"id": id}))
+                .await;
+            assert_eq!(s, 200, "{v}");
+            let (_, link) = f.mint("mia", &id).await;
+            let mut pairs = form(&f, "Alice Example", lang);
+            pairs.push(("hist", "1"));
+            let r = f.post(&link, &ip(101), &pairs).await;
+            assert_eq!(r.status, 303, "{lang} branded {branded}: {}", r.text());
+            pair.push(
+                f.record("sign_request", &id)["consent_version"]
+                    .as_str()
+                    .unwrap()
+                    .to_string(),
+            );
+        }
+        assert_eq!(
+            pair[0], pair[1],
+            "{lang}: a brand moved the id with history"
+        );
+        assert_eq!(
+            pair[1],
+            obop_http::sign_text::consent_version_with_history_for(lang),
+            "{lang}"
+        );
+        assert!(pair[1].ends_with("/history"), "{lang}: {}", pair[1]);
+        with_history.push(pair.remove(1));
+    }
+    assert_eq!(with_history[0], "v1-draft/en/e2880db0/history");
+    let mut all = with_history.clone();
+    all.sort();
+    all.dedup();
+    assert_eq!(all.len(), LANGS.len(), "seven languages, seven ids");
+    // The id of a request that shows the history is not the id of one that does not.
+    for ((_, plain), with) in ids.iter().zip(&with_history) {
+        assert_ne!(plain, with);
+    }
 }
 
 /// A row written around the command: a name with every character that HTML needs escaped and that
@@ -1026,4 +1075,175 @@ async fn a_request_the_door_would_log_a_refusal_for_logs_none_when_its_first_bra
             "{what}: {entry:?}"
         );
     }
+}
+
+// ---- A title of its own in every language ---------------------------------------------------------
+
+/// A brand with a title in each of the seven languages (the shared `FIELDS` has three, so on the
+/// other four the page cannot tell its own language from the English fallback).
+fn set_titled_brand(app: &App) {
+    let mut supplied = vec![("name".to_string(), "MOHV".to_string())];
+    for lang in LANGS {
+        supplied.push((
+            format!("title_{lang}"),
+            format!("MOHV Title {}", lang.to_uppercase()),
+        ));
+    }
+    brand::apply(
+        &*app.store.backend(),
+        Some(&app.dispatcher.brand()),
+        "operator",
+        &Action::Configure(supplied),
+        false,
+    )
+    .unwrap_or_else(|e| panic!("the brand row was refused: {e}"));
+}
+
+/// The text of the line beside the logo on a page of the door.
+fn line_text(r: &Resp) -> String {
+    let html = r.text();
+    let a = html.find("<p class=\"brand\">").unwrap();
+    let end = html[a..].find("</p>").unwrap() + a;
+    let line = &html[a..end];
+    line[line.rfind("</span> ").unwrap() + "</span> ".len()..].to_string()
+}
+
+/// The line of a page is the title of the page's own language, in all seven (Finnish, Polish, French
+/// and Spanish too, which `FIELDS` sets no title for): on the form, the refusal of a wrong link and
+/// the page after signing.
+#[tokio::test]
+async fn the_door_shows_the_title_of_the_pages_own_language_in_all_seven() {
+    let (f, _, path, _) = sent().await;
+    set_titled_brand(&f.app);
+    let wrong = wrong_link(&path);
+    for (i, lang) in LANGS.into_iter().enumerate() {
+        let want = format!("MOHV Title {}", lang.to_uppercase());
+        let from = ip(200 + i as u8);
+        let r = f.get(&format!("{path}?lang={lang}"), &from).await;
+        assert_eq!(r.status, 200, "{lang}: {}", r.text());
+        assert_eq!(line_text(&r), want, "{lang}/form");
+        let r = f.get(&format!("{wrong}?lang={lang}"), &from).await;
+        assert_eq!(r.status, 404, "{lang}");
+        assert_eq!(line_text(&r), want, "{lang}/unknown");
+    }
+    let r = f.post(&path, &ip(210), &form(&f, "Jane Test", "en")).await;
+    assert_eq!(r.status, 303, "{}", r.text());
+    for (i, lang) in LANGS.into_iter().enumerate() {
+        let r = f
+            .get(&format!("{path}?lang={lang}"), &ip(211 + i as u8))
+            .await;
+        assert_eq!(r.status, 200, "{lang}: {}", r.text());
+        assert_eq!(
+            line_text(&r),
+            format!("MOHV Title {}", lang.to_uppercase()),
+            "{lang}/done"
+        );
+    }
+}
+
+// ---- After a good read, and a read that fails in no class of D74 (D74) -----------------------------
+
+/// A brand read once is kept for two seconds: a request inside the bound is served from it whatever
+/// the store does, so a signer whose page loaded is not made to wait on a store that blinks. Once the
+/// bound is over, the request that runs the refill and meets the fault is the 503 of D74, never a page
+/// of the stand-in, and so is the one after it (a failed refill is not kept); a post under it signs
+/// nothing; and once the store answers, the pages are the brand's again and the post signs.
+#[tokio::test]
+async fn after_a_good_read_a_failing_store_is_served_from_the_cell_and_then_a_503() {
+    let (flaky, f, path) = flaky_sent().await;
+    set_brand(&f.app);
+    let good = f.get(&format!("{path}?lang=en"), &ip(220)).await;
+    assert_eq!(good.status, 200, "{}", good.text());
+    assert_branded(&f, &good, "en", "a good read");
+    let filled = std::time::Instant::now();
+
+    flaky.refuse_model(brand::MODEL, Mode::Reads);
+    // Inside the bound: the brand of the cell, and the store is not asked.
+    let refused_before = flaky.refused();
+    let r = f.get(&format!("{path}?lang=en"), &ip(221)).await;
+    if filled.elapsed() < std::time::Duration::from_millis(1500) {
+        assert_eq!(r.status, 200, "{}", r.text());
+        assert_branded(&f, &r, "en", "inside the bound");
+        assert_eq!(flaky.refused(), refused_before, "the store was not asked");
+    }
+
+    // The bound is over: the request that refills meets the fault; so does the next.
+    crate::oauth_tests::brand::wait_until_stale(filled);
+    let before = f.everything_stored();
+    for (round, from) in [ip(222), ip(223)].into_iter().enumerate() {
+        let refused_before = flaky.refused();
+        let r = f.get(&format!("{path}?lang=en"), &from).await;
+        assert_d74(&r, &format!("round {round}: the page"));
+        assert!(
+            flaky.refused() > refused_before,
+            "round {round}: read again"
+        );
+    }
+    let r = f.post(&path, &ip(224), &form(&f, "Jane Test", "en")).await;
+    assert_d74(&r, "the post");
+    assert_eq!(f.record("sign_request", &f.req)["state"], "sent");
+    assert_eq!(f.events_of("sign_signed").len(), 0);
+    assert_eq!(
+        f.everything_stored(),
+        before,
+        "nothing was written but the counters, which the store keeps apart"
+    );
+
+    flaky.allow_models();
+    let r = f.get(&format!("{path}?lang=en"), &ip(225)).await;
+    assert_eq!(r.status, 200, "{}", r.text());
+    assert_branded(&f, &r, "en", "the store answers");
+    let r = f.post(&path, &ip(226), &form(&f, "Jane Test", "en")).await;
+    assert_eq!(r.status, 303, "{}", r.text());
+    assert_eq!(f.record("sign_request", &f.req)["state"], "signed");
+}
+
+/// A read of the brand that fails in none of the classes of D74 (the store is up and cannot answer:
+/// a missing table, a row that cannot be decoded) is no fault the layer above knows. In a process that
+/// has never had a good read the door shows the stand-in, the name of an instance with no brand, with
+/// status 200 and no word of D74, and goes on: this is the case `docs/SIGN.md` says is not refused.
+/// The words and the consent id do not depend on the brand, and once the store answers the pages are
+/// the brand's.
+#[tokio::test]
+async fn a_first_brand_read_that_fails_in_no_class_of_d74_shows_the_stand_in_and_goes_on() {
+    let (flaky, f, path) = flaky_sent().await;
+    // The row is written around the reader (`set_brand` asks the reader, which would then have had a
+    // good read), so that the first read of this process is the one that fails.
+    f.app
+        .store
+        .backend()
+        .apply_checked(&[obop_storage::Op::Put {
+            model: brand::MODEL.into(),
+            id: brand::ROW_ID.into(),
+            fields: [("name", json!("MOHV"))]
+                .into_iter()
+                .map(|(k, v)| (k.to_string(), v))
+                .collect(),
+        }])
+        .unwrap();
+    flaky.fail_gets_of(brand::MODEL, "relation \"record\" does not exist");
+    let gets = flaky.gets_of(brand::MODEL);
+
+    let r = f.get(&format!("{path}?lang=en"), &ip(230)).await;
+    assert!(
+        flaky.gets_of(brand::MODEL) > gets,
+        "the read was asked and failed"
+    );
+    assert_eq!(r.status, 200, "{}", r.text());
+    assert_plain(&r, "a read that failed in no class of D74");
+    assert!(r.headers.get("retry-after").is_none() && r.headers.get("x-obop-applied").is_none());
+
+    // The post goes on and signs, with the id it always records.
+    let r = f.post(&path, &ip(231), &form(&f, "Jane Test", "en")).await;
+    assert_eq!(r.status, 303, "{}", r.text());
+    assert_eq!(
+        f.record("sign_request", &f.req)["consent_version"],
+        obop_http::sign_text::consent_version_for("en")
+    );
+
+    // The store answers: the failed read was not kept, and the page is the brand's.
+    flaky.allow_models();
+    let r = f.get(&format!("{path}?lang=en"), &ip(232)).await;
+    assert_eq!(r.status, 200, "{}", r.text());
+    assert_branded(&f, &r, "en", "the store answers");
 }
