@@ -196,6 +196,37 @@ export interface Messages {
     approvalsLead: string;
     permissionsLead: string;
     versionLabel: string;
+    /**
+     * The plain-words layer of the apps pages (the index and the top of every app page): short
+     * labels, no jargon. The technical layer above (`h`, `th`, `meta`, ...) sits under "For developers".
+     */
+    store: {
+      ready: string;
+      more: string;
+      open: string;
+      get: string;
+      canDo: string;
+      keeps: string;
+      safe: string;
+      worksWith: string;
+      info: string;
+      developers: string;
+      category: string;
+      developer: string;
+      requires: string;
+      manifest: string;
+      directEdit: string;
+      needsApproval: string;
+      /** Uses {n}. */
+      showMore: string;
+      included: string;
+      safeMasked: string;
+      safeWithheld: string;
+      safeApprove: string;
+      safeApproveNone: string;
+      /** The tail of the meta description of an app page in a language other than English. */
+      appMeta: string;
+    };
     /** One-line taglines by module id. */
     taglines: Record<string, string>;
   };
