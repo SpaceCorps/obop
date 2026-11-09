@@ -3350,6 +3350,7 @@ fn a_slack_message_is_not_sent_when_the_name_of_the_instance_cannot_be_read() {
     let (sent, recorded, logged, mapped) = (r.count(), runs(), flows(), pseudonyms());
 
     flaky.refuse_model("instance_brand", Mode::Reads);
+    flaky.reset_reads();
     let m = err(&e, &admin(), "connection.sync", json!({"id": id}));
     assert!(
         m.starts_with("storage_busy:") && m.contains("nothing was sent"),
@@ -3361,6 +3362,14 @@ fn a_slack_message_is_not_sent_when_the_name_of_the_instance_cannot_be_read() {
         "the request is told it met a fault, so that the layer above answers it by D74"
     );
     obop_storage::fault::clear();
+    // The name is asked for before the rows are read: a send that read the rows of the model first
+    // would have listed, scanned or searched it before it met the fault.
+    let read = flaky.reads();
+    assert_eq!(
+        (read.lists, read.scans, read.finds, read.keyed, read.counts),
+        (0, 0, 0, 0, 0),
+        "the rows were read before the name: {read:?}"
+    );
     let m = err(&e, &admin(), "connection.test", json!({"id": id}));
     assert!(m.starts_with("storage_busy:"), "{m}");
     obop_storage::fault::clear();
@@ -3429,8 +3438,7 @@ fn an_event_is_not_sent_or_recorded_when_the_name_of_the_instance_cannot_be_read
 /// A fault the thread noted before the name was asked for (a read of the same request that was
 /// swallowed) is the first fault of the request and stays the first: it decides the answer of the
 /// layer above (D74), so a good read of the name must not wipe it, and a read that meets another
-/// fault must not replace it. Mutants that take the earlier fault and do not put it back, or that
-/// look at the thread's fault instead of taking it, are caught here.
+/// fault must not replace it. A read that wipes or replaces the earlier fault is caught here.
 #[test]
 fn an_earlier_fault_of_the_request_stays_the_first_when_the_name_is_asked_for() {
     use obop_storage::fault::{self, Fault};
@@ -3493,4 +3501,194 @@ fn a_connection_that_is_not_slack_never_asks_for_the_name() {
     assert!(r.wait(1), "the receiver got nothing");
     assert_eq!(flaky.refused(), before, "the name was not asked for");
     assert_eq!(obop_storage::fault::noted(), None);
+}
+
+/// The longest name a row can hold (`NAME_MAX` code points, in Latin and in Han, where a character is
+/// three bytes) signs the message whole: the prefix is the name as the reader gives it, never a cut of
+/// it, for the message of a send and for the test message of a connection.
+#[test]
+fn the_longest_name_signs_a_slack_message_whole() {
+    use obop_commands::brand::{Action, NAME_MAX, apply};
+    let e = slack_env();
+    let r = Receiver::new(200);
+    let id = slack_connection(&e, &r);
+    let backend = e.s.backend();
+    let reader = e.d.install_brand(backend.clone());
+    let latin: String = (0..NAME_MAX)
+        .map(|i| char::from(b'A' + (i % 26) as u8))
+        .collect();
+    let han: String = (0..NAME_MAX as u32)
+        .map(|i| char::from_u32(0x682a + i).unwrap())
+        .collect();
+    for name in [latin, han] {
+        assert_eq!(name.chars().count(), NAME_MAX);
+        let action = Action::Configure(
+            [("name", name.as_str())]
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
+        );
+        apply(&*backend, Some(&reader), "operator", &action, false).unwrap();
+        let text = slack_text(&e, &r, &id);
+        assert!(
+            text.starts_with(&format!(
+                "{name}: obop.manual (party)
+"
+            )),
+            "{text}"
+        );
+        assert_eq!(
+            slack_test_text(&e, &r, &id),
+            format!("{name}: obop.test ()")
+        );
+    }
+}
+
+/// A send does not depend on a refill that another request is running. The first refill of the
+/// process, which has no last good name to give, is parked in the store after its read of the row
+/// and fails on the read of the theme; a send that starts meanwhile reads the name for itself, meets
+/// the same fault and is refused with it, at once: it is not made to wait for the other request and
+/// then given the default, which would sign the message `obop` on an instance whose row says
+/// otherwise, and a message cannot be taken back (docs/ISSUES.md PS3-9 is the same window for the
+/// documents, where the default is a page that can be shown; a message cannot). Nothing leaves. The
+/// bound of five seconds on the parked request is only how long a send that does wait may take to
+/// fail the test.
+#[test]
+fn a_send_does_not_wait_for_the_refill_another_request_runs_and_is_not_given_the_default() {
+    use obop_storage::testing::{Flaky, Mode};
+    let (flaky, backend) = Flaky::memory();
+    let e = slack_env_on(Store::over(backend));
+    let r = Receiver::new(200);
+    let id = slack_connection(&e, &r);
+    brand_row_and_a_reader_that_has_never_read(&e, "MOHV");
+    flaky.refuse_model("obop_setting", Mode::Reads);
+    let (parked_tx, parked_rx) = std::sync::mpsc::channel::<()>();
+    let (go_tx, go_rx) = std::sync::mpsc::channel::<()>();
+    flaky.after_the_get_of(
+        "instance_brand",
+        0,
+        Box::new(move |_| {
+            parked_tx.send(()).unwrap();
+            let _ = go_rx.recv_timeout(std::time::Duration::from_secs(5));
+        }),
+    );
+    let reader = e.d.brand();
+    let owner = std::thread::spawn(move || {
+        let shown = reader.current();
+        obop_storage::fault::clear();
+        shown.is_set()
+    });
+    parked_rx
+        .recv_timeout(std::time::Duration::from_secs(20))
+        .expect("the refill never reached the store");
+
+    let sent = r.count();
+    let m = err(&e, &admin(), "connection.sync", json!({"id": id}));
+    assert!(
+        m.starts_with("storage_busy:") && m.contains("nothing was sent"),
+        "{m}"
+    );
+    obop_storage::fault::clear();
+    assert_eq!(r.count(), sent, "nothing left, signed with any name");
+
+    go_tx.send(()).unwrap();
+    assert!(
+        !owner.join().unwrap(),
+        "the refill that failed gave the default"
+    );
+
+    // The store answers: the next message goes, with the name the row holds.
+    flaky.allow_models();
+    let text = slack_text(&e, &r, &id);
+    assert!(
+        text.starts_with(
+            "MOHV: obop.manual (party)
+"
+        ),
+        "{text}"
+    );
+}
+
+/// The name is asked for once for a send (the doc of `Runtime::signer`): the store is read for the
+/// row once for a manual send and once for a test message, and a send that asked twice would read it
+/// twice. The probe runs a hook after the third read of the row, and the hook has not run after a
+/// send and a test, and has run after the third message, so each message is one read.
+#[test]
+fn the_name_is_asked_for_once_for_a_send() {
+    use obop_storage::testing::Flaky;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let (flaky, backend) = Flaky::memory();
+    let e = slack_env_on(Store::over(backend));
+    let r = Receiver::new(200);
+    let id = slack_connection(&e, &r);
+    brand_row_and_a_reader_that_has_never_read(&e, "MOHV");
+    let reached = Arc::new(AtomicBool::new(false));
+    let flag = reached.clone();
+    flaky.after_the_get_of(
+        "instance_brand",
+        2,
+        Box::new(move |_| flag.store(true, Ordering::SeqCst)),
+    );
+    slack_text(&e, &r, &id);
+    slack_test_text(&e, &r, &id);
+    assert!(
+        !reached.load(Ordering::SeqCst),
+        "a send read the name more than once"
+    );
+    slack_text(&e, &r, &id);
+    assert!(
+        reached.load(Ordering::SeqCst),
+        "the probe is not live: the third message was not the third read of the name"
+    );
+}
+
+/// A manual send of several models asks for the name once, before the first message leaves. A read per
+/// model could be refused after the first message had gone, and the send would then report "nothing
+/// was sent" for a send of which part had been made, and a retry would send that part again. The
+/// probe runs a hook after the second read of the row; it has not run after a send of two models,
+/// and it has run after the next send, so the probe is live and a send is one read.
+#[test]
+fn a_manual_send_of_two_models_asks_for_the_name_once() {
+    use obop_storage::testing::Flaky;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let (flaky, backend) = Flaky::memory();
+    let e = slack_env_on(Store::over(backend));
+    let r = Receiver::new(200);
+    seed_party(&e);
+    enable(&e, "webhook_out", false);
+    let id = make_connection(
+        &e,
+        &admin(),
+        &r,
+        json!({"party": ["name"], "lead": ["title"]}),
+    );
+    give_basis(&e, &admin(), &id);
+    ok(&e, &admin(), "connection.connect", json!({"id": id}));
+    brand_row_and_a_reader_that_has_never_read(&e, "MOHV");
+    let reached = Arc::new(AtomicBool::new(false));
+    let flag = reached.clone();
+    flaky.after_the_get_of(
+        "instance_brand",
+        1,
+        Box::new(move |_| flag.store(true, Ordering::SeqCst)),
+    );
+    ok(&e, &admin(), "connection.sync", json!({"id": id}));
+    assert!(r.wait(2), "the receiver got {} of the 2 messages", r.count());
+    assert!(
+        !reached.load(Ordering::SeqCst),
+        "a send of two models read the name more than once"
+    );
+    let got = r.got.lock().unwrap().clone();
+    for raw in got {
+        let body: J = serde_json::from_str(raw.split("\r\n\r\n").nth(1).unwrap()).unwrap();
+        assert!(
+            body["text"].as_str().unwrap_or("").starts_with("MOHV: "),
+            "{body}"
+        );
+    }
+    ok(&e, &admin(), "connection.sync", json!({"id": id}));
+    assert!(
+        reached.load(Ordering::SeqCst),
+        "the probe is not live: the second send was not the second read of the name"
+    );
 }

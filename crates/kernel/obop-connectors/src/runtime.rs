@@ -466,33 +466,37 @@ impl Runtime {
 
     /// The name that signs a Slack message: the name of the instance, which is `obop` when no brand
     /// is set (docs/spec/branding.md, OT-16). A message that has left cannot be taken back, so the
-    /// name is asked for here, once for a send and before anything is recorded or sent: before the
+    /// name is asked for here, once for a send (once for a manual send of several models too, in
+    /// `send_all`) and before anything is recorded or sent: before the
     /// flow is written to the flow log (which counts against the caps of the connection), before the
-    /// pseudonym map and before the run (section 4: a handler asks the reader first). A read that
-    /// met a fault of the store refuses the send with that fault: the person who started it is told
-    /// to try again, an event is tried again, nothing leaves signed with a name the instance did
-    /// not choose, and nothing is recorded for a message that never left. A refill that runs
-    /// elsewhere gives the last good name and meets nothing. The other providers sign nothing and
+    /// pseudonym map and before the run (section 4: a handler asks the reader first).
+    ///
+    /// The read is the uncached one (`Reader::fresh`), not the cell of `current()`. A caller of
+    /// `current()` that finds the first refill of a process running, and has no last good name, waits
+    /// for that refill and is given the default when it failed, with no fault noted on its thread
+    /// (docs/ISSUES.md PS3-9): a page can show that default, a message that has left cannot be taken
+    /// back. `fresh()` answers a store that cannot be read with the error, so the send is refused
+    /// with the fault (`storage_busy: ...`): the person who started it is told to try again, an event
+    /// is tried again, nothing leaves signed with a name the instance did not choose, and nothing is
+    /// recorded for a message that never left. A stored name that fails the read check is read as the
+    /// default, by the one rule of section 4 for every surface. The other providers sign nothing and
     /// ask nothing.
     fn signer(&self, p: &Provider) -> Result<String, String> {
         if p.body_format != "slack" {
             return Ok(String::new());
         }
-        // The fault this read meets is told from the ones the thread noted before it, which are put
-        // back so that the first of them stays the first.
-        let earlier = obop_storage::fault::take();
-        let shown = self.dispatcher.brand().current();
-        let met = obop_storage::fault::take();
-        if let Some(f) = earlier {
-            obop_storage::fault::note(f);
+        const REFUSED: &str = "the name of the instance could not be read, so nothing was sent";
+        match self.dispatcher.brand().fresh() {
+            Ok(read) => Ok(read.shown().brand().name().to_string()),
+            // The pool has noted the fault on this thread, so the layer above answers a request by
+            // D74 and an earlier fault of the request stays the first; the text keeps the code word
+            // of the fault. An error that is not a fault of the store has no code word, and its text
+            // is not echoed.
+            Err(e) => Err(match obop_storage::fault::Fault::of_message(&e) {
+                Some(fault) => fault.message(REFUSED),
+                None => REFUSED.to_string(),
+            }),
         }
-        if let Some(f) = met {
-            obop_storage::fault::note(f);
-            return Err(
-                f.message("the name of the instance could not be read, so nothing was sent")
-            );
-        }
-        Ok(shown.brand().name().to_string())
     }
 
     /// Encode prepared rows for the provider: one body per request. `signer` is the name that signs
@@ -713,6 +717,23 @@ impl Runtime {
         event: &str,
         kind: &str,
     ) -> Result<J, String> {
+        self.send_signed(connection, model, ids, event, kind, None)
+    }
+
+    /// [`Runtime::send`] with the name that signs a Slack message already asked for (`Some`), as the
+    /// manual send of several models does, or asked for here (`None`). A send that asked again for
+    /// each model could meet a fault of the store after the first message had left, and would then
+    /// report "nothing was sent" for a send of which part had been (and a retry would send that part
+    /// again).
+    fn send_signed(
+        &self,
+        connection: &str,
+        model: &str,
+        ids: Option<&[String]>,
+        event: &str,
+        kind: &str,
+        asked: Option<&str>,
+    ) -> Result<J, String> {
         let (c, p) = self.connection(connection)?;
         if !matches!(p.engine, Engine::WebhookOut | Engine::CsvExport) {
             return Err(format!("{} does not send records", p.name));
@@ -720,7 +741,14 @@ impl Runtime {
         // The name that signs a Slack message is asked for first (section 4): `prepare` writes the
         // flow to the log, and the flow of a message that never left would count against the caps
         // of the connection. The other providers ask nothing.
-        let signer = self.signer(&p)?;
+        let own;
+        let signer = match asked {
+            Some(name) => name,
+            None => {
+                own = self.signer(&p)?;
+                own.as_str()
+            }
+        };
         let rows = self.read_rows(&c, model, ids)?;
         let prepared = self
             .egress
@@ -741,7 +769,7 @@ impl Runtime {
         }
         let run = self.try_start_run(&c, "outbound", kind)?;
         let (sent, failed) =
-            self.send_prepared(&c, &p, &run, event, model, &prepared.rows, &signer);
+            self.send_prepared(&c, &p, &run, event, model, &prepared.rows, signer);
         let status = if failed.is_empty() {
             "succeeded"
         } else if failed.contains("will retry") {
@@ -787,11 +815,26 @@ impl Runtime {
         } else {
             ""
         };
-        for model in c.allowlist.keys().filter(|m| m.as_str() != receives) {
-            results.push(self.send(connection, model, None, "obop.manual", "manual")?);
-        }
-        if results.is_empty() {
+        let models: Vec<&String> = c
+            .allowlist
+            .keys()
+            .filter(|m| m.as_str() != receives)
+            .collect();
+        if models.is_empty() {
             return Err("there is nothing on the allowlist to send".into());
+        }
+        // The name that signs a Slack message is asked for once for the whole send, before the first
+        // message leaves: a read per model could be refused after the first message had gone.
+        let signer = self.signer(&p)?;
+        for model in models {
+            results.push(self.send_signed(
+                connection,
+                model,
+                None,
+                "obop.manual",
+                "manual",
+                Some(&signer),
+            )?);
         }
         if results.len() == 1 {
             return Ok(results.remove(0));
