@@ -3236,7 +3236,7 @@ const WORD_CRATES: [&str; 4] = [
     "modules/mileage/",
 ];
 
-const WORD_ALLOWED: [LiteralRow; 2] = [
+const WORD_ALLOWED: [LiteralRow; 3] = [
     (
         "kernel/obop-commands/src/brand/reader.rs",
         "note",
@@ -3252,6 +3252,14 @@ const WORD_ALLOWED: [LiteralRow; 2] = [
         2,
         "admin",
         "the homepage and the repository that a module declares when it names none: the address of the project on GitHub, metadata that an administrator reads in the module list (spec, section 11: module author, homepage and repository are admin wording)",
+    ),
+    (
+        "kernel/obop-commands/src/brand/enrol.rs",
+        "store_read_line",
+        None,
+        1,
+        "admin",
+        "the line the process writes to its own stderr (S1e) when an enrolment was refused because the store could not be read for the branding; it names the command an operator runs (`obop admin brand status`) and carries the store's text with its control characters blanked. It is an operator's text: the person who enrols is answered with the fixed message of `UNREADABLE`, which names no product",
     ),
 ];
 
