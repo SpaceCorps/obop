@@ -1247,7 +1247,7 @@ fn the_limits_of_the_rows_with_limits_are_the_ones_decided() {
         &'static [&'static str],
         &'static [&'static str],
     );
-    let decided: [Want; 9] = [
+    let decided: [Want; 10] = [
         (
             "kernel/obop-http/src/brand.rs",
             1,
@@ -1293,6 +1293,13 @@ fn the_limits_of_the_rows_with_limits_are_the_ones_decided() {
         ),
         ("kernel/obop-oauth/src/page.rs", 4, 0, &["Shown"], &[]),
         ("kernel/obop-oauth/src/flow.rs", 0, 0, &["Shown"], &[]),
+        (
+            "kernel/obop-http/src/shell.rs",
+            2,
+            1,
+            &["Reader", "Shown"],
+            &["Reader", "Shown"],
+        ),
     ];
     for (file, calls, reads, paths, types) in decided {
         let Some((
@@ -2574,4 +2581,58 @@ fn the_scan_of_the_page_context_sees_a_public_field_a_missing_one_and_two() {
         flow_ctx_brand_visibility(&tree(&[("kernel/obop-oauth/src/page.rs", "")])),
         [format!("{FLOW_CTX_FILE}: not in the tree")]
     );
+}
+
+// ---- The limits of a row are what its file does (S2 review F5) ---------------------------------
+
+/// A limit that is higher than what the file does is room for a second read that nothing counts, and
+/// a `types` list shorter than what the reason says is a way round the rule that the file names the
+/// type only. So each row of [`Limit::Reads`] is held to the file: the calls of `brand()` and the
+/// reads it makes are exactly the numbers of the row (the same count `beyond` makes against a limit,
+/// here against equality), and a row that says in its reason that it names types "as a type only"
+/// lists exactly those names in `types`.
+#[test]
+fn the_limits_of_a_row_are_what_its_file_does_and_a_type_only_row_lists_its_types() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut files = BTreeMap::new();
+    read_tree(&root, &root, &mut files);
+    let lexed = non_test(&files);
+    let mut loose = Vec::new();
+    for (path, why, limit) in &ALLOWED {
+        let Limit::Reads {
+            calls,
+            reads,
+            paths,
+            types,
+        } = limit
+        else {
+            continue;
+        };
+        let Some(l) = lexed.get(*path) else {
+            loose.push(format!("{path}: not in the tree"));
+            continue;
+        };
+        let mut hits = readers(l);
+        hits.extend(uses(l, types));
+        let asked = hits.iter().filter(|h| h.what == CALL).count();
+        let read = hits
+            .iter()
+            .filter(|h| h.what == READ || h.what == HELPER)
+            .count();
+        if (asked, read) != (*calls, *reads) {
+            loose.push(format!(
+                "{path}: the row says {calls} calls of `brand()` and {reads} reads, the file makes \
+                 {asked} and {read}"
+            ));
+        }
+        if (why.contains("type only") || why.contains("types only"))
+            && (types.is_empty() || types != paths)
+        {
+            loose.push(format!(
+                "{path}: the reason says the file names types only, so `types` must list what \
+                 `paths` lists ({paths:?}), not {types:?}"
+            ));
+        }
+    }
+    assert!(loose.is_empty(), "{}", loose.join("\n"));
 }
