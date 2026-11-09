@@ -29,6 +29,30 @@
     });
   }
 
+  // ---- A link to a heading inside a folded <details> (the "For developers" part of an app page)
+  // opens the details and scrolls to the heading. Without this, a link to such an id lands on
+  // nothing in browsers that do not open the details themselves. ----
+  function openTarget() {
+    var id = "";
+    try {
+      id = decodeURIComponent(location.hash.slice(1));
+    } catch {
+      return;
+    }
+    var target = id ? doc.getElementById(id) : null;
+    if (!target) return;
+    var opened = false;
+    for (var el = target; el; el = el.parentElement) {
+      if (el.tagName === "DETAILS" && !el.open) {
+        el.open = true;
+        opened = true;
+      }
+    }
+    if (opened) target.scrollIntoView();
+  }
+  openTarget();
+  addEventListener("hashchange", openTarget);
+
   // ---- Strings for the page language (copy buttons, language hint) ----
   var hints = {};
   var banner = doc.querySelector(".lang-banner");

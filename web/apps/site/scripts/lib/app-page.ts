@@ -1,5 +1,6 @@
 import type { Messages } from "../../i18n/types.ts";
 import { agentView, type App } from "./apps.ts";
+import { appView, lowerFirst } from "./app-view.ts";
 import { CORE_VERSION } from "./paths.ts";
 
 const esc = (s: string) => s.replace(/\|/g, "\\|");
@@ -14,10 +15,15 @@ export function english(text: string, locale: string, m: Messages): string {
 }
 
 /**
- * The Markdown body of one app page (no H1; the layout draws the title). `mirror` produces the
- * plain-Markdown variant for the .md copy and llms-full.txt.
+ * The technical Markdown of one app page, which the page shows under "For developers": the package
+ * text, module details, models with their field tables, workflows, permission groups, approval steps,
+ * the agent view, dependencies, install and the link to the module guide. No H1 and no purpose (the
+ * layout draws the plain-words layer above it). Heading texts, and so their ids, are those the
+ * whole page had before it was split, so links to them keep working. `mirror` produces the
+ * plain-Markdown variant for the .md copy and llms-full.txt, one heading level deeper because there
+ * it sits under a "For developers" heading.
  */
-export function appBody(
+export function developerBody(
   app: App,
   locale: string,
   m: Messages,
@@ -28,9 +34,10 @@ export function appBody(
   const a = m.apps;
   const eng = (t: string) => (mirror ? t : english(t, locale, m));
   const out: string[] = [];
+  const h2 = mirror ? "###" : "##";
+  const h3 = mirror ? "####" : "###";
 
-  out.push(`## ${a.h.purpose}`, "", eng(app.purpose), "");
-  out.push(`## ${a.h.package}`, "", eng(app.description), "");
+  out.push(`${h2} ${a.h.package}`, "", eng(app.description), "");
 
   // Version, author, licence, core requirement, maturity: what the manifest declares (D55).
   const meta = app.meta;
@@ -54,13 +61,13 @@ export function appBody(
     ],
     [a.meta.categories, meta.categories.map((c) => a.meta.categoryNames[c] ?? c).join(", ")],
   ].filter((r): r is [string, string] => !!r[1]);
-  out.push(`## ${a.h.details}`, "");
+  out.push(`${h2} ${a.h.details}`, "");
   for (const [k, v] of rows) out.push(`- **${k}:** ${v}`);
   out.push("");
 
-  out.push(`## ${a.h.models}`, "");
+  out.push(`${h2} ${a.h.models}`, "");
   for (const model of app.models) {
-    out.push(`### ${code(model.name)}`, "", eng(model.description), "");
+    out.push(`${h3} ${code(model.name)}`, "", eng(model.description), "");
     out.push(
       `${a.th.readGroup}: ${code(model.read_group)}. ${a.th.writeGroup}: ${code(model.write_group)}.`,
       "",
@@ -84,11 +91,11 @@ export function appBody(
     out.push("");
   }
 
-  out.push(`## ${a.h.workflows}`, "");
+  out.push(`${h2} ${a.h.workflows}`, "");
   const withActions = app.models.filter((x) => x.actions.length > 0);
   if (withActions.length === 0) out.push(a.noWorkflow, "");
   for (const model of withActions) {
-    out.push(`### ${code(model.name)}`, "");
+    out.push(`${h3} ${code(model.name)}`, "");
     out.push(
       `| ${a.th.action} | ${a.th.moves} | ${a.th.who} | ${a.th.approval} |`,
       "|---|---|---|---|",
@@ -109,14 +116,14 @@ export function appBody(
     for (const f of model.fields) groups.add(f.group);
     for (const act of model.actions) groups.add(act.group);
   }
-  out.push(`## ${a.h.permissions}`, "", a.permissionsLead, "");
+  out.push(`${h2} ${a.h.permissions}`, "", a.permissionsLead, "");
   for (const g of [...groups].sort()) out.push(`- ${code(g)}`);
   out.push("");
 
   const approvals = app.models.flatMap((model) =>
     model.actions.filter((x) => x.approval).map((x) => `${model.name}.${x.name}`),
   );
-  out.push(`## ${a.h.approvals}`, "");
+  out.push(`${h2} ${a.h.approvals}`, "");
   if (approvals.length === 0) out.push(a.noApproval, "");
   else {
     out.push(a.approvalsLead, "");
@@ -134,13 +141,13 @@ export function appBody(
       .filter((f) => agentView(f) === "withheld")
       .map((f) => code(`${model.name}.${f.name}`)),
   );
-  out.push(`## ${a.h.agents}`, "", a.agentsCan, "");
+  out.push(`${h2} ${a.h.agents}`, "", a.agentsCan, "");
   const propose = [...approvals.map(code), ...app.models.map((x) => code(`${x.name}.delete`))];
   out.push(fill(a.agentsPropose, { list: propose.join(", ") }), "");
   if (masked.length) out.push(fill(a.agentsMasked, { list: masked.join(", ") }), "");
   if (withheld.length) out.push(fill(a.agentsWithheld, { list: withheld.join(", ") }), "");
 
-  out.push(`## ${a.h.dependencies}`, "");
+  out.push(`${h2} ${a.h.dependencies}`, "");
   if (app.dependencies.length === 0) out.push(a.noDependencies, "");
   else {
     out.push(a.depLead, "");
@@ -155,7 +162,7 @@ export function appBody(
     if (!app.builtin) out.push(a.depInstalled, "");
   }
 
-  out.push(`## ${a.h.install}`, "");
+  out.push(`${h2} ${a.h.install}`, "");
   if (app.builtin) out.push(a.installBuiltin, "");
   else {
     out.push(
@@ -170,10 +177,77 @@ export function appBody(
     );
   }
   out.push(
-    `## ${a.h.guide}`,
+    `${h2} ${a.h.guide}`,
     "",
     `[${a.guideLink}](${prefix}/docs/reference/module-manifest/)`,
     "",
   );
+  return out.join("\n");
+}
+
+/**
+ * The plain-Markdown copy of an app page (the .md mirror, llms-full.txt and the search index): the
+ * same sections in the same order as the page, from the same view model, then the technical part
+ * under "For developers".
+ */
+export function appMirror(
+  app: App,
+  locale: string,
+  m: Messages,
+  prefix: string,
+  all: App[],
+): string {
+  const a = m.apps;
+  const s = a.store;
+  const v = appView(app, m, all);
+  const out: string[] = [a.taglines[app.id] ?? app.tagline, ""];
+  for (const f of v.facts) out.push(`- **${f.label}:** ${f.value}`);
+  out.push("");
+  if (app.builtin) out.push(`[${s.open}](/app/)`, "");
+
+  out.push(`## ${a.h.purpose}`, "", app.purpose, "");
+
+  out.push(`## ${s.canDo}`, "");
+  if (v.actions.length === 0) out.push(s.directEdit, "");
+  else {
+    for (const c of v.actions) {
+      const note = c.approval ? ` (${s.needsApproval})` : "";
+      out.push(`- **${c.kicker}: ${lowerFirst(c.title)}**${note}: ${c.text}`);
+    }
+    out.push("");
+  }
+
+  out.push(`## ${s.keeps}`, "");
+  for (const c of v.models) out.push(`- **${c.title}**: ${c.text}`);
+  out.push("");
+
+  out.push(`## ${s.safe}`, "");
+  for (const line of v.safe) out.push(`- ${line}`);
+  out.push("");
+
+  if (v.worksWith.length > 0) {
+    out.push(`## ${s.worksWith}`, "");
+    for (const d of v.worksWith) out.push(`- [${d.name}](${prefix}/apps/${d.slug}/)`);
+    out.push("");
+  }
+
+  out.push(`## ${s.info}`, "");
+  for (const r of v.info) {
+    const value = r.href ? `[${r.value}](${r.href})` : r.mono ? code(r.value) : r.value;
+    out.push(`- **${r.label}:** ${value}${r.note ? ` ${r.note}` : ""}`);
+  }
+  out.push("");
+
+  out.push(`## ${s.get}`, "");
+  if (v.command === null) out.push(s.included, "");
+  else out.push(a.installPackage, "", "```bash", v.command, "```", "", a.installNote, "");
+
+  out.push(`## ${s.developers}`, "", developerBody(app, locale, m, true, prefix, all));
+
+  if (v.related.length > 0) {
+    out.push(`## ${a.h.related}`, "");
+    for (const d of v.related) out.push(`- [${d.name}](${prefix}/apps/${d.slug}/)`);
+    out.push("");
+  }
   return out.join("\n");
 }

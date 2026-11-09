@@ -15,11 +15,13 @@ import { dirname, join, relative } from "node:path";
 import { logoSvg } from "@obop/ui/static";
 import { DOCS_NAV } from "../data/docs-nav.ts";
 import { DEFAULT_LOCALE, LOCALES, messages, type Locale, type Messages } from "../i18n/index.ts";
-import { appBody } from "./lib/app-page.ts";
+import { appMirror, developerBody } from "./lib/app-page.ts";
+import { appView } from "./lib/app-view.ts";
 import { loadApps, type App } from "./lib/apps.ts";
 import { changelogMarkdown, loadChangelog } from "./lib/changelog.ts";
 import { appsIndexMirror, homeMirror, pricingMirror } from "./lib/mirror.ts";
 import { CORE_VERSION, GEN, GITHUB, REPO_ROOT, SITE_ROOT, SITE_URL, SRC } from "./lib/paths.ts";
+import { slugify } from "./lib/slug.ts";
 
 export interface PageRecord {
   locale: Locale;
@@ -309,11 +311,11 @@ export function assemble(): PageRecord[] {
         description:
           locale === "en"
             ? `${tagline}. ${app.purpose.split(". ")[0]!.replace(/\.$/, "")}.`
-            : `${tagline}. ${m.apps.lead.split(". ")[0]!.replace(/\.$/, "")}.`,
+            : `${tagline}. ${m.apps.store.appMeta}`,
         layout: "app",
         section: "apps",
-        body: appBody(app, locale, m, false, prefix, apps),
-        mirror: appBody(app, locale, m, true, prefix, apps),
+        body: developerBody(app, locale, m, false, prefix, apps),
+        mirror: appMirror(app, locale, m, prefix, apps),
         editPath: app.builtin ? `web/apps/site/data/builtin/${app.id}.toml` : app.source,
         extra: {
           appId: app.id,
@@ -325,6 +327,9 @@ export function assemble(): PageRecord[] {
           requiresCore: app.meta.requiresCore,
           tagline,
           lead: tagline,
+          purpose: app.purpose,
+          purposeId: slugify(m.apps.h.purpose),
+          view: appView(app, m, apps),
         },
       });
     }
