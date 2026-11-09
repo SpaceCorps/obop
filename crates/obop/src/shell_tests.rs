@@ -279,52 +279,53 @@ async fn the_tag_carries_the_accent_of_the_theme_and_the_name_is_escaped() {
 
 // ---- The cost ----------------------------------------------------------------------------------------
 
-/// A hundred requests for the index within the bound of the reader's cell cost one read of the row and
-/// one of the theme setting, and a hundred requests for a script or a style sheet cost none. The
-/// count holds only while the cell stays fresh, so a pass that took more than 1.5 seconds on a slow
-/// machine starts again, and five slow tries fail the test.
+/// A hundred requests for the index cost one flight of the reader, which is one read of the row and
+/// one of the theme setting, and a hundred requests for a script or a style sheet cost none. The cell
+/// of the reader stays fresh for its bound, so on a machine so slow that the burst outlasts the bound
+/// a second flight is right: what holds is that there is at least one and at most one more for each
+/// bound that went by (`1 + elapsed / bound`), and exactly one when the burst took less than the
+/// bound. That is a count against the clock the burst itself measured, so there is no time budget and
+/// no second try.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_hundred_shell_requests_cost_one_read_of_the_row_and_one_of_the_theme_and_a_file_costs_none()
  {
     for row in [true, false] {
-        let mut counted = false;
-        for _try in 0..5 {
-            // A server process that has not read yet, over a store that holds the row or not.
-            let (flaky, backend) = Flaky::memory();
-            if row {
-                let seed = App::with_store(Store::over(backend.clone()));
-                set_brand(&seed);
-            }
-            let m = mounted_over(App::with_store(Store::over(backend)), false, None);
-            flaky.reset_reads();
-            let started = std::time::Instant::now();
-            let mut set = tokio::task::JoinSet::new();
-            for _ in 0..100 {
-                let r = m.router.clone();
-                set.spawn(async move { ask(&r, "GET", "/", &[]).await.status });
-            }
-            while let Some(s) = set.join_next().await {
-                assert_eq!(s.unwrap(), 200);
-            }
-            if started.elapsed() >= std::time::Duration::from_millis(1500) {
-                continue;
-            }
-            assert_eq!(flaky.reads().gets, 2, "row={row}: one flight, two reads");
-            // Static files ask nobody.
-            let gets = flaky.reads().gets;
-            for path in ["/assets/app.js", "/assets/app.css", "/favicon.svg"] {
-                for _ in 0..100 {
-                    assert_eq!(ask(&m.router, "GET", path, &[]).await.status, 200, "{path}");
-                }
-            }
-            assert_eq!(flaky.reads().gets, gets, "row={row}: files cause no read");
-            counted = true;
-            break;
+        // A server process that has not read yet, over a store that holds the row or not.
+        let (flaky, backend) = Flaky::memory();
+        if row {
+            let seed = App::with_store(Store::over(backend.clone()));
+            set_brand(&seed);
         }
+        let m = mounted_over(App::with_store(Store::over(backend)), false, None);
+        flaky.reset_reads();
+        let started = std::time::Instant::now();
+        let mut set = tokio::task::JoinSet::new();
+        for _ in 0..100 {
+            let r = m.router.clone();
+            set.spawn(async move { ask(&r, "GET", "/", &[]).await.status });
+        }
+        while let Some(s) = set.join_next().await {
+            assert_eq!(s.unwrap(), 200);
+        }
+        let elapsed = started.elapsed();
+        let gets = flaky.reads().gets;
+        assert_eq!(gets % 2, 0, "row={row}: a flight is two reads, not {gets}");
+        let flights = (gets / 2) as u128;
+        let most = 1 + elapsed.as_millis() / READER_BOUND.as_millis();
         assert!(
-            counted,
-            "row={row}: five passes were each slower than 1.5 s"
+            (1..=most).contains(&flights),
+            "row={row}: {flights} flights for a burst of {elapsed:?}, at most {most} may run"
         );
+        if elapsed < READER_BOUND {
+            assert_eq!(flights, 1, "row={row}: one flight, two reads");
+        }
+        // Static files ask nobody.
+        for path in ["/assets/app.js", "/assets/app.css", "/favicon.svg"] {
+            for _ in 0..100 {
+                assert_eq!(ask(&m.router, "GET", path, &[]).await.status, 200, "{path}");
+            }
+        }
+        assert_eq!(flaky.reads().gets, gets, "row={row}: files cause no read");
     }
 }
 
@@ -380,6 +381,9 @@ async fn with_the_store_failing_the_index_is_a_503_also_for_an_instance_with_no_
 /// The wait that a refill needs for the cell to be stale: the bound of the reader the server builds.
 const READER_BOUND: std::time::Duration = obop_commands::brand::DEFAULT_BOUND;
 
+/// Waits until the cell, which was filled before `filled` was taken, is stale. A lower bound and no
+/// budget: no test passes or fails on how long this takes, and the cell cannot be made older from
+/// here (`Reader::back_date` is for the tests of its own crate), so the two seconds are waited.
 fn wait_until_stale(filled: std::time::Instant) {
     let stale = READER_BOUND + std::time::Duration::from_millis(50);
     while filled.elapsed() <= stale {
@@ -565,8 +569,10 @@ async fn the_store_is_read_on_a_blocking_thread_and_never_on_the_one_that_polls_
 
 /// The index on the runtime of the server over every store the tests have: SQLite always, and
 /// PostgreSQL when `OBOP_TEST_POSTGRES_URL` is set (that leg runs in CI only; it is not run on a
-/// machine without the variable). The PostgreSQL client panics on an async worker, so this is the
-/// proof that the shell asks the reader through the blocking pool.
+/// machine without the variable). The PostgreSQL client panics on an async worker, so that leg is the
+/// proof, against the real client, that the shell asks the reader through the blocking pool. Without
+/// PostgreSQL the proof is the test above: the thread that reads the row is not the one that polls
+/// the request.
 #[test]
 fn the_index_works_on_the_runtime_of_the_server_over_every_store() {
     let dir = std::env::temp_dir().join(format!(
