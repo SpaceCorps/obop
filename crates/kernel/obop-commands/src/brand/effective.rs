@@ -5,11 +5,12 @@
 //! The object is staged by the slice that wires the surface an entry describes, because an entry
 //! whose precedence involves a surface that is not built yet would be untrue at the merge. It holds,
 //! from this slice: `name`, `slug`, `logo`, `tile_accent`, `title_<lang>` and `message_<lang>`
-//! (seven languages each). `authenticator_issuer` arrives with the slice that reads the record for the
+//! (seven languages each) and, since the back office page reads the record (S2), `accent`: the
+//! accent the sign-in screens use, the theme's stored one (source `theme`) else the stock violet
+//! (source `default`). `authenticator_issuer` arrives with the slice that reads the record for the
 //! authenticator entry, the `site.*` entries and the favicon with the one that reads it for the public
-//! site (both are in S1 of the spec, section 12, and not in this part of it), and `accent` with the
-//! one that reads it for the back office (S2). Each of those adds its entries here and its cases to
-//! the tests.
+//! site (both are in S1 of the spec, section 12, and not in this part of it). Each of those adds its
+//! entries here and its cases to the tests.
 //!
 //! **The source.** `record` when the value is the stored value of a field that passed the read check,
 //! or is derived from one (the effective slug from a stored name, a title that falls back to the
@@ -62,6 +63,14 @@ impl Fresh {
         out.insert(
             "tile_accent".into(),
             entry(accent.hex, if accent.from_theme { THEME } else { DEFAULT }),
+        );
+        // The accent of the sign-in screens: the theme's, else the stock violet of the back office.
+        out.insert(
+            "accent".into(),
+            match shown.theme_accent() {
+                Some(a) => entry(a, THEME),
+                None => entry(tile::DEFAULT_VIOLET, DEFAULT),
+            },
         );
         for lang in LANGS {
             let from_record = self.set()

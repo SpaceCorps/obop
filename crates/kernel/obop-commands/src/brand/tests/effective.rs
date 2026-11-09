@@ -58,7 +58,7 @@ fn the_object_holds_exactly_the_entries_of_the_surfaces_that_exist() {
     let e = effective(Some(&[("name", s("MOHV"))]), None);
     let mut keys: Vec<&str> = e.as_object().unwrap().keys().map(String::as_str).collect();
     keys.sort_unstable();
-    let mut want: Vec<String> = ["name", "slug", "logo", "tile_accent"]
+    let mut want: Vec<String> = ["name", "slug", "logo", "tile_accent", "accent"]
         .iter()
         .map(|k| k.to_string())
         .collect();
@@ -68,7 +68,7 @@ fn the_object_holds_exactly_the_entries_of_the_surfaces_that_exist() {
     }
     want.sort();
     assert_eq!(keys, want.iter().map(String::as_str).collect::<Vec<_>>());
-    assert_eq!(keys.len(), 4 + 14);
+    assert_eq!(keys.len(), 5 + 14);
     // Every entry is exactly a value and a source, and the source is one of the three.
     for (k, v) in e.as_object().unwrap() {
         assert_eq!(v.as_object().unwrap().len(), 2, "{k}");
@@ -79,7 +79,6 @@ fn the_object_holds_exactly_the_entries_of_the_surfaces_that_exist() {
     }
     for later in [
         "authenticator_issuer",
-        "accent",
         "site.title",
         "site.logo_url",
         "site.accent",
@@ -228,6 +227,48 @@ fn the_tile_accent_is_the_themes_unless_it_is_missing_invalid_or_the_default_vio
         "#c2410c",
         "theme",
     );
+}
+
+/// The accent of the sign-in screens (S2): the theme's stored accent, else the stock violet.
+#[test]
+fn the_accent_of_the_sign_in_screens_is_the_themes_else_the_stock_violet() {
+    let row: &[(&str, J)] = &[("name", s("MOHV"))];
+    is(&effective(Some(row), None), "accent", "#6d3fd0", "default");
+    is(&effective(None, None), "accent", "#6d3fd0", "default");
+    is(
+        &effective(Some(row), Some("#c2410c")),
+        "accent",
+        "#c2410c",
+        "theme",
+    );
+    is(
+        &effective(Some(row), Some("#C2410C")),
+        "accent",
+        "#c2410c",
+        "theme",
+    );
+    // A theme that stores exactly the stock violet stores it: the screens show that violet, and the
+    // tile stays slate (spec section 2).
+    is(
+        &effective(Some(row), Some("#6d3fd0")),
+        "accent",
+        "#6d3fd0",
+        "theme",
+    );
+    is(
+        &effective(Some(row), Some("#6d3fd0")),
+        "tile_accent",
+        "#495670",
+        "default",
+    );
+    for bad in ["red", "#abc", "#12345g", "c2410c"] {
+        is(
+            &effective(Some(row), Some(bad)),
+            "accent",
+            "#6d3fd0",
+            "default",
+        );
+    }
 }
 
 #[test]

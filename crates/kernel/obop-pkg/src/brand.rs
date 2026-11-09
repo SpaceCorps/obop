@@ -145,7 +145,7 @@ pub fn instance_brand_model() -> ModelDef {
         ),
         f(
             "effective",
-            "Answer of get: a JSON object with, for each value in force (name, slug, logo, tile_accent, title_<lang> and message_<lang>), its value and the source that won: record, theme or default",
+            "Answer of get: a JSON object with, for each value in force (name, slug, logo, tile_accent, accent, title_<lang> and message_<lang>), its value and the source that won: record, theme or default",
         ),
         f(
             "fallbacks",

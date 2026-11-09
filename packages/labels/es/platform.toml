@@ -816,7 +816,7 @@ description = "Respuesta de get y configure: la versión del logotipo (16 dígit
 
 [labels.es.model.instance_brand.field.effective]
 label = "En vigor"
-description = "Respuesta de get: un objeto JSON con, para cada valor en vigor (name, slug, logo, tile_accent, title_XX y message_XX; XX es el código del idioma: en, de, fr, pl, fi, sv, es), su valor y la fuente que ganó: record, theme o default"
+description = "Respuesta de get: un objeto JSON con, para cada valor en vigor (name, slug, logo, tile_accent, accent, title_XX y message_XX; XX es el código del idioma: en, de, fr, pl, fi, sv, es), su valor y la fuente que ganó: record, theme o default"
 
 [labels.es.model.instance_brand.field.fallbacks]
 label = "Valores de respaldo"
