@@ -310,8 +310,9 @@ pub(crate) async fn page(
 ) -> Response {
     blocking(move || {
         // The brand every page of this request shows, asked once and first (before the door can
-        // count a try or write a refusal), so that the name and the logo of a page come from one
-        // read and a failed read is the 503 of D74 with nothing written by this request.
+        // write a refusal), so that the name and the logo of a page come from one read and a failed
+        // read is the 503 of D74: the request then writes no record and no entry, but the door
+        // still counts its try (docs/ISSUES.md, BRN-SD1).
         let brand = read_brand(&s);
         let lang = lang_for(&s, &parts, None);
         // The door follows the installed package: a rollback or an update made by another
@@ -346,8 +347,9 @@ pub(crate) async fn submit(
     blocking(move || {
         // The brand every page of this request shows, asked once and first: this is the request
         // that signs, so it reads before it writes anything. A failed read is the 503 of D74, and
-        // then nothing is signed and nothing is logged (`fault::before_write` refuses the writes
-        // of a request that met a fault); one whose read succeeds signs as it always did.
+        // then nothing is signed and no entry is logged (`fault::before_write` refuses the writes
+        // of a request that met a fault; the counters of the door are not among them, see
+        // docs/ISSUES.md, BRN-SD1); one whose read succeeds signs as it always did.
         let brand = read_brand(&s);
         let mut lang = lang_for(&s, &parts, None);
         // The door follows the installed package: a rollback or an update made by another
@@ -438,8 +440,8 @@ pub(crate) async fn document(
 ) -> Response {
     blocking(move || {
         // The PDF is no page, but a refusal of it is (the same pages as the door's), and the door
-        // can count a try and write a refusal while it decides, so the brand is asked first here
-        // too and the refusal page shows the brand of this read.
+        // can write a refusal while it decides, so the brand is asked first here too: a failed read
+        // is the 503 of D74 with no entry written, and the refusal page shows the brand of this read.
         let brand = read_brand(&s);
         let lang = lang_for(&s, &parts, None);
         // The door follows the installed package: a rollback or an update made by another
