@@ -140,7 +140,7 @@ impl Flags {
 /// The global options that take a value: the ones `main` takes with `take_opt`, before it looks
 /// at the command. Here to find the words of the area past any of them; a test reads `main.rs` and
 /// holds this list to the `take_opt` calls in it, so a global option added there is added here.
-pub const VALUE_OPTIONS: [&str; 31] = [
+pub const VALUE_OPTIONS: [&str; 33] = [
     "--db",
     "--token",
     "--scopes",
@@ -172,6 +172,8 @@ pub const VALUE_OPTIONS: [&str; 31] = [
     "--tenant",
     "--client-id",
     "--year",
+    "--vehicle",
+    "--since",
 ];
 
 /// Where the words `admin brand` stand: at the start of the command line, past any leading global
