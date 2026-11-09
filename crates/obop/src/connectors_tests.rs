@@ -42,9 +42,57 @@ impl Resp {
     }
 }
 
+/// The brand an instance of the rig has (docs/spec/branding.md, slice S1d). The rig of the plain
+/// tests builds its dispatcher with no `register_admin`, so its reader is inert and could never see a
+/// row; the rig of the brand tests installs a real one and writes the row the way it is written.
+#[derive(Clone)]
+enum BrandRow<'a> {
+    /// A reader over the store and no row: an instance that sets nothing.
+    NoRow,
+    /// The row `instance_brand.configure` writes for these fields.
+    Configured(&'a [(&'a str, &'a str)]),
+    /// A row put into the store as it is, whatever it holds: written around the command.
+    Around(&'a [(&'a str, J)]),
+}
+
 fn rig_with(extra: Vec<obop_connectors::Provider>) -> Rig {
+    rig_with_brand(extra, None)
+}
+
+fn rig_with_brand(extra: Vec<obop_connectors::Provider>, row: Option<BrandRow<'_>>) -> Rig {
     let store = Store::new();
     let d = Arc::new(Dispatcher::new());
+    if let Some(row) = row {
+        let reader = d.install_brand(store.backend());
+        match row {
+            BrandRow::NoRow => {}
+            BrandRow::Configured(fields) => {
+                let supplied = fields
+                    .iter()
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect();
+                obop_commands::brand::apply(
+                    &*store.backend(),
+                    Some(&reader),
+                    "operator",
+                    &obop_commands::brand::Action::Configure(supplied),
+                    false,
+                )
+                .unwrap_or_else(|e| panic!("the brand was refused: {e}"));
+            }
+            BrandRow::Around(fields) => store
+                .backend()
+                .apply_checked(&[obop_storage::Op::Put {
+                    model: obop_commands::brand::MODEL.into(),
+                    id: obop_commands::brand::ROW_ID.into(),
+                    fields: fields
+                        .iter()
+                        .map(|(k, v)| (k.to_string(), v.clone()))
+                        .collect(),
+                }])
+                .unwrap(),
+        }
+    }
     base::register(&d, &store);
     crm::register(&d, &store);
     let mut all = providers();
@@ -853,15 +901,28 @@ async fn answer_of(r: &Rig, uri: &str) -> String {
     pin::answer(r.router.clone().oneshot(req).await.unwrap()).await
 }
 
-/// `GET /oauth/callback` answers with one page in five ways (`page()` in `obop-http`'s
-/// `connectors.rs`): the provider said no, the account is connected (to Google Drive or to any
-/// other connection), the answer could not be completed, and the bare address. This pins four of
-/// them, each with its status, headers and body; the Drive one is pinned in `drive_admin_tests`,
-/// which has the fake Google it needs. They are what an instance with no brand sends today.
-#[tokio::test]
-async fn pins_the_return_page_of_the_oauth_callback_as_an_instance_with_no_brand_sends_it() {
-    // A provider on loopback whose token endpoint hands tokens to any code: the page does not
-    // depend on them, only on whether the exchange worked.
+/// A provider on loopback whose token endpoint hands tokens to any code: the return page does not
+/// depend on them, only on whether the exchange worked.
+struct FakeOauth {
+    stop: Arc<std::sync::atomic::AtomicBool>,
+    port: u16,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+
+/// Ends the listener thread when the test ends, by a pass or by a failed pin alike: it sets the
+/// flag, wakes the blocked `accept` with one connection and joins the thread.
+impl Drop for FakeOauth {
+    fn drop(&mut self) {
+        self.stop.store(true, std::sync::atomic::Ordering::SeqCst);
+        let _ = std::net::TcpStream::connect(("127.0.0.1", self.port));
+        if let Some(t) = self.thread.take() {
+            let _ = t.join();
+        }
+    }
+}
+
+/// The catalogue entry of the fake provider, and the guard of its listener.
+fn fake_oauth() -> (obop_connectors::Provider, FakeOauth) {
     let l = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = l.local_addr().unwrap().port();
     let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -905,27 +966,6 @@ async fn pins_the_return_page_of_the_oauth_callback_as_an_instance_with_no_brand
             );
         }
     });
-    // Ends the listener thread when the test ends, by a pass or by a failed pin alike: it sets the
-    // flag, wakes the blocked `accept` with one connection and joins the thread.
-    struct EndListener {
-        stop: Arc<std::sync::atomic::AtomicBool>,
-        port: u16,
-        thread: Option<std::thread::JoinHandle<()>>,
-    }
-    impl Drop for EndListener {
-        fn drop(&mut self) {
-            self.stop.store(true, std::sync::atomic::Ordering::SeqCst);
-            let _ = std::net::TcpStream::connect(("127.0.0.1", self.port));
-            if let Some(t) = self.thread.take() {
-                let _ = t.join();
-            }
-        }
-    }
-    let _end_listener = EndListener {
-        stop,
-        port,
-        thread: Some(listener),
-    };
     let mut fake = obop_connectors::catalog::provider("rest_api_pull").unwrap();
     fake.id = "fake_oauth";
     fake.name = "Fake OAuth provider";
@@ -937,7 +977,20 @@ async fn pins_the_return_page_of_the_oauth_callback_as_an_instance_with_no_brand
         scopes: "read",
         extra: &[],
     });
-    let r = rig_with(vec![fake]);
+    (
+        fake,
+        FakeOauth {
+            stop,
+            port,
+            thread: Some(listener),
+        },
+    )
+}
+
+/// The administrator's steps up to the provider's link on the rig: a policy with a client, a
+/// connection, the start of the authorization. Returns the `state` of the link, which a callback
+/// with any code turns into "Connected".
+async fn start_fake_connection(r: &Rig, port: u16) -> String {
     r.ok(
         "dev-admin",
         "provider_policy.create",
@@ -959,7 +1012,19 @@ async fn pins_the_return_page_of_the_oauth_callback_as_an_instance_with_no_brand
             .unwrap(),
     )
     .unwrap();
-    let state = url_pairs(url.query().unwrap())["state"].clone();
+    url_pairs(url.query().unwrap())["state"].clone()
+}
+
+/// `GET /oauth/callback` answers with one page in five ways (`page()` in `obop-http`'s
+/// `connectors.rs`): the provider said no, the account is connected (to Google Drive or to any
+/// other connection), the answer could not be completed, and the bare address. This pins four of
+/// them, each with its status, headers and body; the Drive one is pinned in `drive_admin_tests`,
+/// which has the fake Google it needs. They are what an instance with no brand sends today.
+#[tokio::test]
+async fn pins_the_return_page_of_the_oauth_callback_as_an_instance_with_no_brand_sends_it() {
+    let (fake, end) = fake_oauth();
+    let r = rig_with(vec![fake]);
+    let state = start_fake_connection(&r, end.port).await;
 
     let mut now = Vec::new();
     let mut add = |name: &str, answer: String| now.push((name.to_string(), pin::sha(&answer)));
@@ -992,31 +1057,210 @@ const CONNECTOR_RETURN_PINS: &[(&str, &str)] = &[
     ("connected_other", "90e66d9567052d7ed8008da5fa6fd2877dc088374e15014f9c785b3b77124f8c"),
 ];
 
-/// S1a: with a brand row in the store, the return pages that need no provider are the ones an
-/// instance with no row sends, byte for byte, held to their rows of `CONNECTOR_RETURN_PINS`. The
-/// router is the one of a real app (the rig of the pins above has no administrator module, so its
-/// dispatcher has an inert reader that could never see a row).
+/// S1d: the three return pages that need no provider, on a real app, with no brand and with one. With a
+/// brand the link says `Back to MOHV` where it said `Back to obop`, and nothing else of the page moves
+/// (the address the browser is taken back to has no name in it); the page of the bare address has no
+/// name and is the pin of an instance with no row, byte for byte. Once the brand is cleared the
+/// pages are the pins again. (The router is the one of a real app: the rig of the pins has no
+/// administrator module, so its dispatcher has an inert reader that could never see a row.)
 #[tokio::test]
-async fn with_a_brand_row_the_return_pages_of_the_oauth_callback_are_what_they_were() {
+async fn with_a_brand_row_the_return_pages_of_the_oauth_callback_say_the_name_of_the_instance() {
     let app = crate::app::App::new();
-    crate::brand_row_tests::set_brand(&app);
     let state = obop_http::HttpState::new(app.dispatcher.clone(), Arc::new(DevAuth));
     state.set_connectors(app.connectors.clone());
     let router = obop_http::router(state, None);
-    for (name, uri) in [
-        (
-            "denied",
-            "/oauth/callback?error=access_denied&error_description=%3Cscript%3E",
-        ),
-        ("failed", "/oauth/callback?state=guess&code=code-1"),
-        ("bare", "/oauth/callback"),
-    ] {
-        let req = Request::builder().uri(uri).body(Body::empty()).unwrap();
-        let page = pin::answer(router.clone().oneshot(req).await.unwrap()).await;
+    let pages = |router: axum::Router| async move {
+        let mut out = Vec::new();
+        for (name, uri) in [
+            (
+                "denied",
+                "/oauth/callback?error=access_denied&error_description=%3Cscript%3E",
+            ),
+            ("failed", "/oauth/callback?state=guess&code=code-1"),
+            ("bare", "/oauth/callback"),
+        ] {
+            let req = Request::builder().uri(uri).body(Body::empty()).unwrap();
+            out.push((
+                name,
+                pin::answer(router.clone().oneshot(req).await.unwrap()).await,
+            ));
+        }
+        out
+    };
+    let was = pages(router.clone()).await;
+    for (name, answer) in &was {
+        let (_, pinned) = CONNECTOR_RETURN_PINS
+            .iter()
+            .find(|(n, _)| n == name)
+            .unwrap();
+        assert_eq!(pin::sha(answer), *pinned, "{name}: the pin of no brand");
+    }
+
+    crate::brand_row_tests::set_brand(&app);
+    let now = pages(router.clone()).await;
+    for ((name, before), (_, after)) in was.iter().zip(&now) {
+        let expected = before.replace("Back to obop", "Back to MOHV");
+        assert_eq!(after, &expected, "{name}");
+        assert!(
+            *name == "bare" || after.contains("<a href=\"/#/connectors/catalog\">Back to MOHV</a>"),
+            "{name}: {after}"
+        );
+        assert!(
+            !after.to_lowercase().contains("obop"),
+            "{name} names the product: {after}"
+        );
+    }
+    // The bare address says nothing of the instance and is the pin of no brand.
+    let (_, bare) = now.iter().find(|(n, _)| *n == "bare").unwrap();
+    let (_, pinned) = CONNECTOR_RETURN_PINS
+        .iter()
+        .find(|(n, _)| *n == "bare")
+        .unwrap();
+    assert_eq!(pin::sha(bare), *pinned);
+
+    // Cleared, the pages are the pins again.
+    obop_commands::brand::apply(
+        &*app.store.backend(),
+        Some(&app.dispatcher.brand()),
+        "operator",
+        &obop_commands::brand::Action::Clear,
+        false,
+    )
+    .unwrap();
+    let after = pages(router).await;
+    for ((name, before), (_, again)) in was.iter().zip(&after) {
+        assert_eq!(again, before, "{name} after the brand was cleared");
+    }
+}
+
+/// S1d: four of the five outputs of the callback, with a brand and with none, on a rig that has a real
+/// reader of the brand. The four that the pins hold are asked of the rig with no row and of the rig with a
+/// brand; the one for Google Drive is held in `drive_admin_tests.rs`, which has the fake Google it
+/// needs. With a brand each says `MOHV` in the link and in the sentence of a good connection, in
+/// English, and is otherwise the page of the instance with no row; the page of a refused or failed
+/// connection and the bare address carry no sentence with the name.
+#[tokio::test]
+async fn with_a_brand_four_of_the_five_outputs_of_the_oauth_callback_say_the_name() {
+    let (fake, end) = fake_oauth();
+    let plain = rig_with_brand(vec![fake.clone()], Some(BrandRow::NoRow));
+    let branded = rig_with_brand(
+        vec![fake],
+        Some(BrandRow::Configured(&crate::brand_row_tests::FIELDS)),
+    );
+    let plain_state = start_fake_connection(&plain, end.port).await;
+    let branded_state = start_fake_connection(&branded, end.port).await;
+    let cases = |state: String| {
+        vec![
+            (
+                "denied",
+                "/oauth/callback?error=access_denied&error_description=%3Cscript%3E".to_string(),
+            ),
+            (
+                "failed",
+                "/oauth/callback?state=guess&code=code-1".to_string(),
+            ),
+            ("bare", "/oauth/callback".to_string()),
+            (
+                "connected_other",
+                format!("/oauth/callback?state={state}&code=code-1"),
+            ),
+        ]
+    };
+    let mut seen_sentence = 0;
+    for ((name, plain_uri), (_, branded_uri)) in
+        cases(plain_state).into_iter().zip(cases(branded_state))
+    {
+        let before = answer_of(&plain, &plain_uri).await;
+        let after = answer_of(&branded, &branded_uri).await;
+        // No brand: the rig with a reader and no row sends what the pins hold, which says the
+        // product (the four pins are asserted in the test above, for the rig with no reader).
         let (_, pinned) = CONNECTOR_RETURN_PINS
             .iter()
             .find(|(n, _)| *n == name)
             .unwrap();
-        assert_eq!(pin::sha(&page), *pinned, "{name}");
+        assert_eq!(pin::sha(&before), *pinned, "{name}: no brand");
+        let expected = before
+            .replace("Back to obop", "Back to MOHV")
+            .replace("Taking you back to obop.", "Taking you back to MOHV.");
+        assert_eq!(after, expected, "{name}: with a brand");
+        assert!(
+            !after.to_lowercase().contains("obop"),
+            "{name} names the product: {after}"
+        );
+        if name == "connected_other" {
+            assert!(
+                after.contains("The account is authorised. Taking you back to MOHV."),
+                "{after}"
+            );
+            assert!(
+                after.contains("<a href=\"/#/connectors/connection\">Back to MOHV</a>"),
+                "{after}"
+            );
+            seen_sentence += 1;
+        }
+        if name != "bare" {
+            assert!(after.contains("Back to MOHV"), "{name}: {after}");
+            // The address of the way back, in the link and in the refresh, carries no name.
+            assert!(after.contains("content=\"3;url=/#/connectors/"), "{name}");
+            assert!(!after.contains("MOHV/"), "{name}");
+        }
     }
+    assert_eq!(seen_sentence, 1);
+}
+
+/// A row written around the command: a name with every character that HTML needs escaped and that the
+/// read check lets through. It reaches the link and the sentence of the callback escaped, and
+/// the address of the refresh not at all. A name that fails the read check (a tag) is the default
+/// name, never the tag.
+#[tokio::test]
+async fn a_hostile_name_written_around_the_command_is_escaped_on_the_return_page() {
+    let (fake, end) = fake_oauth();
+    let name = "Acme & \"Sons\" 'x'";
+    let row = [("name", json!(name))];
+    let r = rig_with_brand(vec![fake], Some(BrandRow::Around(&row)));
+    let state = start_fake_connection(&r, end.port).await;
+    for (what, uri) in [
+        ("denied", "/oauth/callback?error=access_denied".to_string()),
+        (
+            "failed",
+            "/oauth/callback?state=guess&code=code-1".to_string(),
+        ),
+        (
+            "connected",
+            format!("/oauth/callback?state={state}&code=code-1"),
+        ),
+    ] {
+        let answer = answer_of(&r, &uri).await;
+        assert!(!answer.contains(name), "{what}: the name raw: {answer}");
+        assert!(
+            answer.contains("Back to Acme &amp; &quot;Sons&quot; 'x'</a>"),
+            "{what}: {answer}"
+        );
+        // The refresh holds the path of the way back and nothing else.
+        assert!(
+            answer.contains("content=\"3;url=/#/connectors/"),
+            "{what}: {answer}"
+        );
+        assert!(
+            !answer.contains("Acme/") && !answer.contains("url=Acme"),
+            "{what}"
+        );
+    }
+    // The state was spent by the third answer: the same address is a failed authorization now, and
+    // its page names the instance the same way.
+    let spent = answer_of(&r, &format!("/oauth/callback?state={state}&code=code-1")).await;
+    assert!(spent.contains("Not connected"), "{spent}");
+    assert!(
+        spent.contains("Back to Acme &amp; &quot;Sons&quot; 'x'</a>"),
+        "{spent}"
+    );
+
+    let tag = [("name", json!("<b>Bold</b>"))];
+    let r = rig_with_brand(vec![], Some(BrandRow::Around(&tag)));
+    let denied = answer_of(&r, "/oauth/callback?error=access_denied").await;
+    assert!(
+        !denied.contains("<b>") && !denied.contains("&lt;b&gt;"),
+        "{denied}"
+    );
+    assert!(denied.contains("Back to obop</a>"), "{denied}");
 }

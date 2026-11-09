@@ -401,6 +401,14 @@ impl Rig {
 }
 
 async fn rig() -> Rig {
+    rig_with(None).await
+}
+
+/// The rig, on a dispatcher that has a real reader of the instance brand and, when `brand` is given,
+/// the row that `instance_brand.configure` writes for those fields (docs/spec/branding.md, S1d). The
+/// plain rig builds its dispatcher with no `register_admin`, so its reader is inert and could never
+/// see a row.
+async fn rig_with(brand: Option<&[(&str, &str)]>) -> Rig {
     let f = fake();
     {
         let mut g = f.state.lock().unwrap();
@@ -413,6 +421,21 @@ async fn rig() -> Rig {
     let d = Arc::new(Dispatcher::new());
     let ring = obop_keys::KeyRing::for_backend(&store.backend()).unwrap();
     d.set_shared(store.backend(), ring);
+    if let Some(fields) = brand {
+        let reader = d.install_brand(store.backend());
+        let supplied = fields
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+        obop_commands::brand::apply(
+            &*store.backend(),
+            Some(&reader),
+            "operator",
+            &obop_commands::brand::Action::Configure(supplied),
+            false,
+        )
+        .unwrap_or_else(|e| panic!("the brand was refused: {e}"));
+    }
     base::register(&d, &store);
     product::register(&d, &store);
     let rt = Runtime::with_providers(
@@ -495,6 +518,7 @@ async fn the_google_drive_page_end_to_end_against_a_fake_google() {
     a_sign_in_that_did_not_grant_writing_cannot_create_and_says_how_to_fix_it().await;
     // A pin: `cargo test --locked -p obop -- pins the_google_drive_page_end_to_end` selects this test.
     pins_the_return_page_after_a_drive_sign_in().await;
+    with_a_brand_the_return_page_after_a_drive_sign_in_says_the_name().await;
     the_google_addresses_cannot_be_pointed_anywhere_but_loopback();
 }
 
@@ -984,7 +1008,21 @@ fn the_google_addresses_cannot_be_pointed_anywhere_but_loopback() {
 /// above, which shares that fake. It is what an instance with no brand sends today.
 async fn pins_the_return_page_after_a_drive_sign_in() {
     use crate::mfa_tests::pin;
-    let r = rig().await;
+    let answer = drive_return_page(&rig().await).await;
+    assert!(
+        answer.contains("Connected") && answer.contains("href=\"/#/connectors/google_drive\""),
+        "{answer}"
+    );
+    pin::check(
+        "CONNECTOR_DRIVE_PINS",
+        CONNECTOR_DRIVE_PINS,
+        &[("connected_drive".to_string(), pin::sha(&answer))],
+    );
+}
+
+/// The whole answer of `GET /oauth/callback` after a good Google sign-in on `r`, as the pin holds it.
+async fn drive_return_page(r: &Rig) -> String {
+    use crate::mfa_tests::pin;
     let g = fake();
     let (_id, q) = r.start("product.manager").await;
     g.state
@@ -998,16 +1036,30 @@ async fn pins_the_return_page_after_a_drive_sign_in() {
     ))
     .body(Body::empty())
     .unwrap();
-    let answer = pin::answer(r.router.clone().oneshot(req).await.unwrap()).await;
+    pin::answer(r.router.clone().oneshot(req).await.unwrap()).await
+}
+
+/// S1d, the fifth output of the callback: with a brand the page after a Google sign-in says `MOHV` in
+/// the sentence and in the link, in English, and is otherwise the page of an instance with no
+/// brand; the address it takes the browser back to has no name in it.
+async fn with_a_brand_the_return_page_after_a_drive_sign_in_says_the_name() {
+    let plain = drive_return_page(&rig().await).await;
+    let branded = drive_return_page(&rig_with(Some(&crate::brand_row_tests::FIELDS)).await).await;
+    assert!(plain.contains("Taking you back to obop."), "{plain}");
+    assert_eq!(
+        branded,
+        plain
+            .replace("Back to obop", "Back to MOHV")
+            .replace("Taking you back to obop.", "Taking you back to MOHV."),
+        "more than the name moved"
+    );
     assert!(
-        answer.contains("Connected") && answer.contains("href=\"/#/connectors/google_drive\""),
-        "{answer}"
+        branded.contains("The account is authorised. Taking you back to MOHV.")
+            && branded.contains("<a href=\"/#/connectors/google_drive\">Back to MOHV</a>")
+            && branded.contains("content=\"3;url=/#/connectors/google_drive\""),
+        "{branded}"
     );
-    pin::check(
-        "CONNECTOR_DRIVE_PINS",
-        CONNECTOR_DRIVE_PINS,
-        &[("connected_drive".to_string(), pin::sha(&answer))],
-    );
+    assert!(!branded.to_lowercase().contains("obop"), "{branded}");
 }
 
 // Printed by `OBOP_PRINT_PINS=1` on origin/main 12a59a79 and pasted here.
