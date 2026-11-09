@@ -751,7 +751,8 @@ pub(crate) fn public_json(content_type: &'static str, doc: &J) -> Response {
 /// handler asks it first and once, through the blocking pool (docs/spec/branding.md, sections 4
 /// and 9), and builds the whole document from that one value. A store that cannot be read is the
 /// fault the request met, answered 503 by D74 whatever the handler would have sent; the reader gives
-/// a request that finds a refill running the last good brand. The brand is handed out by value: a
+/// a request that finds a refill running the last good brand, unless the process never had a good
+/// read, when it gives the default (docs/ISSUES.md PS3-9). The brand is handed out by value: a
 /// document is built from one `Brand`, and a copy of a few short strings is nothing next to it.
 pub(crate) async fn document_brand(s: &HttpState) -> Brand {
     super::brand::current(s.dispatcher.brand())
@@ -780,7 +781,9 @@ fn words(brand: &Brand) -> Words {
             title: name.to_string(),
             // At most 100 characters for a name of up to `obop_brand::policy::NAME_MAX`, the length
             // the card's description is held to (a test pins it for the longest name): this is why
-            // the sentence is shorter than the one an instance with no brand sends.
+            // the template is shorter than the one an instance with no brand sends. The sentence it
+            // gives is shorter than that one for a name of 30 code points or fewer and longer for
+            // 32 or more (98 for 40), and stays within the 100.
             description: format!(
                 "Business data and actions of {name}, with masking and approvals."
             ),

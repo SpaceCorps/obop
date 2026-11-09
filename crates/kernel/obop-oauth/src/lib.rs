@@ -212,8 +212,9 @@ pub fn api_resource(base: &str) -> String {
     format!("{base}/api")
 }
 
-/// RFC 8414 metadata of the authorization server of the instance at `base`. The metadata names no
-/// product but points to the documentation of the software (`service_documentation`, optional in
+/// RFC 8414 metadata of the authorization server of the instance at `base`. The metadata carries no
+/// name of the instance (its one member that has the word, `obop_client_classes_supported`, is a wire
+/// name) but points to the documentation of the software (`service_documentation`, optional in
 /// RFC 8414): with a brand set (docs/spec/branding.md, section 6, OT-10) that link is left out,
 /// because the instance is the customer's own and the software's page is not theirs to send people
 /// to. With no brand the document is what it has always been, byte for byte.
