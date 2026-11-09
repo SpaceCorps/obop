@@ -161,13 +161,7 @@ fn csp(form_action: &str, script: bool, brand: &Shown) -> String {
     } else {
         String::new()
     };
-    // With a brand set the page links the tab icon (below), and the policy then lets the page load
-    // an image from this origin and nothing else. No brand: the policy is the one it always was.
-    let img = if with_icon(brand) {
-        "; img-src 'self'"
-    } else {
-        ""
-    };
+    let img = img_src(brand);
     format!(
         "default-src 'none'; style-src 'sha256-{hash}'; {scripts}form-action 'self'{form_action}; frame-ancestors 'none'; base-uri 'none'{img}"
     )
@@ -185,9 +179,22 @@ fn with_icon(brand: &Shown) -> bool {
     brand.is_set() && !brand.v().is_empty()
 }
 
+/// The directive that ends the policy of a page that links the tab icon: an image from this origin
+/// and nothing else, with the `; ` that joins it to the directive before it. With no brand it is the
+/// empty text, and the policy is the one it always was. The signer's page (`obop-http`, `sign_page`)
+/// ends its own policy with this too, so that the two pages follow one predicate (spec section 8).
+pub fn img_src(brand: &Shown) -> &'static str {
+    if with_icon(brand) {
+        "; img-src 'self'"
+    } else {
+        ""
+    }
+}
+
 /// The tab icon: the logo route, with the version of the logo in the address so that a new logo is a
-/// new address. No brand: no link, and the browser asks for `/favicon.ico` as before.
-fn icon_link(brand: &Shown) -> String {
+/// new address. No brand: no link, and the browser asks for `/favicon.ico` as before. Shared with the
+/// signer's page.
+pub fn icon_link(brand: &Shown) -> String {
     if with_icon(brand) {
         format!(
             "<link rel=\"icon\" href=\"{}\" type=\"image/svg+xml\">",
@@ -201,8 +208,9 @@ fn icon_link(brand: &Shown) -> String {
 /// The line above the card. With a brand: the inline logo (written by the server from the artwork
 /// the reader accepted, never from the stored text), then the title of the language or else the
 /// name, escaped. With none: the default name alone, as the page has always shown it. The logo is
-/// decoration, since the name follows it, so a screen reader skips it.
-fn brand_line(brand: &Shown, lang: &str) -> String {
+/// decoration, since the name follows it, so a screen reader skips it. Shared with the signer's
+/// page, which shows the same line in every state (spec section 6, OT-01).
+pub fn brand_line(brand: &Shown, lang: &str) -> String {
     let name = esc(brand.brand().title(lang));
     match brand.logo() {
         Some(logo) if brand.is_set() => format!(
