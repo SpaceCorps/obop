@@ -1,7 +1,9 @@
 //! With a brand row in the store, an instance sends what it sent without one (docs/spec/branding.md,
 //! slice S1a): the record exists, the reader of the dispatcher answers it, and no surface but the
-//! logo route (`brand_http_tests`) and, from slice S1c, the pages of the OAuth authorization flow
-//! (`oauth_tests/brand.rs`) asks the reader. The golden pins of the first commit of the
+//! logo route (`brand_http_tests`), from slice S1c the pages of the OAuth authorization flow
+//! (`oauth_tests/brand.rs`) and, from slice S3, `initialize`, the discovery documents, the title
+//! of the OpenAPI document and the Slack message (`brand_docs_tests`) asks the reader; the
+//! tests here hold what none of them reads. The golden pins of the first commit of the
 //! slice (`pins_*`) hold what an instance with **no** row sends; the tests named
 //! `with_a_brand_row_*`, next to each pin, build the same outputs after [`set_brand`] has written a
 //! row through `brand::apply` and hold them to the same digests (or, where the output carries a
@@ -18,7 +20,7 @@ use crate::app::App;
 use obop_commands::brand::{self, Action};
 
 /// The artwork of the placeholder logo (a plain "M"), in the canonical form the writer prints.
-const ARTWORK: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\"><rect width=\"64\" height=\"64\" rx=\"14\" fill=\"#495670\"/><path d=\"M 16 48 L 16 16 L 24 16 L 32 30 L 40 16 L 48 16 L 48 48 L 41 48 L 41 29 L 32 44 L 23 29 L 23 48 Z\" fill=\"#ffffff\"/></svg>";
+pub(crate) const ARTWORK: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\"><rect width=\"64\" height=\"64\" rx=\"14\" fill=\"#495670\"/><path d=\"M 16 48 L 16 16 L 24 16 L 32 30 L 40 16 L 48 16 L 48 48 L 41 48 L 41 29 L 32 44 L 23 29 L 23 48 Z\" fill=\"#ffffff\"/></svg>";
 
 /// The values of a customer who has set a brand: a name, a slug, a title in three languages, a
 /// message in two and the artwork. Every field a page could show.

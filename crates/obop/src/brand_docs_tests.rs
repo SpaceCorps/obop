@@ -201,14 +201,42 @@ async fn the_documents_publish_the_name_and_the_slug_and_no_other_field_of_the_r
         let (_, init) = crate::mcp_tests::initialize(&inst.router, &inst.token, "2025-11-25").await;
         let mut all: Vec<String> = seen.values().map(|d| d.body.to_string()).collect();
         all.push(init.to_string());
+        // A document is searched as the JSON text it is, so a value is searched as that text writes
+        // it: the artwork holds double quotes, which the text writes with a backslash.
+        let as_json = |value: &str| {
+            let quoted = serde_json::to_string(value).unwrap();
+            quoted[1..quoted.len() - 1].to_string()
+        };
+        assert_ne!(
+            as_json(crate::brand_row_tests::ARTWORK),
+            crate::brand_row_tests::ARTWORK,
+            "the artwork is written differently in a JSON text, so the search below must escape it"
+        );
+        let version = inst.app.dispatcher.brand().current().v().to_string();
+        assert!(!version.is_empty(), "the logo has a version");
         for (field, value) in crate::brand_row_tests::FIELDS {
             if matches!(field, "name" | "slug") {
                 continue;
             }
             for text in &all {
                 assert!(
-                    !text.contains(value),
+                    !text.contains(value) && !text.contains(&as_json(value)),
                     "{}: the value of `{field}` is in a document: {text}",
+                    inst.name
+                );
+            }
+        }
+        // The version of the logo and the markup of the artwork are not there in any form either.
+        for text in &all {
+            assert!(
+                !text.contains(&version),
+                "{}: the version of the logo is in a document: {text}",
+                inst.name
+            );
+            for fragment in ["<svg", "viewBox", "<path"] {
+                assert!(
+                    !text.contains(fragment),
+                    "{}: artwork ({fragment}) in a document: {text}",
                     inst.name
                 );
             }
@@ -476,6 +504,8 @@ async fn a_name_that_fails_the_read_check_is_never_in_a_document() {
         assert_eq!(docs["initialize"]["serverInfo"]["name"], "ok-slug");
         assert_eq!(docs["initialize"]["serverInfo"]["title"], "obop");
         assert_eq!(docs["openapi"]["info"]["title"], "obop API");
+        // And it is a brand in the discovery documents too, in the words of one named `obop`.
+        assert_a_brand_named_obop(&inst, "(a name that failed the read check)").await;
     }
 }
 
@@ -585,11 +615,17 @@ fn wait_until_stale(filled: std::time::Instant) {
     }
 }
 
-/// The documents that ask the reader, in the order the test below visits them.
-const ASKING: [(&str, &str); 4] = [
+/// The documents that ask the reader of an instance with no authorization server, in the order the
+/// test below visits them. (The metadata of the authorization server is the sixth; it needs an
+/// instance that has one and is held below.)
+const ASKING: [(&str, &str); 5] = [
     (
         "protected_resource",
         "/.well-known/oauth-protected-resource",
+    ),
+    (
+        "protected_resource_mcp",
+        "/.well-known/oauth-protected-resource/mcp",
     ),
     ("server_card", "/mcp/server-card"),
     (
@@ -620,8 +656,9 @@ async fn after_a_good_read_a_failing_store_answers_an_anonymous_document_with_a_
         }
         v
     };
+    let card = good.iter().find(|(n, _)| n == "server_card").unwrap();
     assert!(
-        String::from_utf8_lossy(&good[1].1).contains("MOHV"),
+        String::from_utf8_lossy(&card.1).contains("MOHV"),
         "the cell holds the brand"
     );
     // Taken after the read that filled the cell: the cell is at least as old as this instant.
@@ -710,8 +747,8 @@ async fn a_process_that_never_had_a_good_read_serves_the_default_documents_once_
 /// A request that arrives while a refill is parked in the store does not wait for it and is given
 /// the last good name; the runtime has one worker, so a read on the thread that polls the requests
 /// would stop everything below. The owner's refill is let go at the end and is answered with the
-/// card. The counts are the reader's: a hundred requests read nothing, and the owner read the row
-/// and the theme.
+/// card. The counts are the reader's: a hundred requests read nothing, and the owner is parked in the
+/// store after the first of its two reads (the row).
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn while_a_refill_is_parked_the_documents_are_served_with_the_last_good_name() {
     let (flaky, app, router) = flaky_server();
@@ -782,54 +819,218 @@ async fn while_a_refill_is_parked_the_documents_are_served_with_the_last_good_na
     assert_eq!((owner.status, owner.body), (200, good.body));
 }
 
+/// The window in which a cell filled at the start of a run is certain to be fresh: the bound less a
+/// margin for the clock. A run that took longer has nothing to say about the cost of a fresh cell.
+const WINDOW: std::time::Duration = std::time::Duration::from_millis(1900);
+
 /// The cost, while the store answers (section 9): the first request for a document costs the
 /// reader's one flight, the row and the theme setting; the documents that follow within the bound
 /// read nothing, whichever they are; the catalogue, which has no human field, never asks.
+///
+/// The assertions about the documents that follow hold only while the cell is fresh, so each part
+/// is timed from before the cell was filled and is run again, up to five times, when the machine
+/// was too slow to stay inside the window; five misses fail the test (it never passes by skipping).
 #[tokio::test]
 async fn a_document_costs_the_reader_one_flight_and_the_catalogue_none() {
-    let (flaky, app, router) = flaky_server();
-    set_brand(&app);
-    flaky.reset_reads();
-    // `set_brand` filled the cell moments ago: the documents are served from it.
-    let started = std::time::Instant::now();
-    for (_, path) in ASKING {
-        assert_eq!(get(&router, path).await.status, 200);
+    let mut checked = false;
+    for _ in 0..5 {
+        let (flaky, app, router) = flaky_server();
+        let started = std::time::Instant::now();
+        set_brand(&app);
+        flaky.reset_reads();
+        // `set_brand` filled the cell: the documents are served from it.
+        for (_, path) in ASKING {
+            assert_eq!(get(&router, path).await.status, 200);
+        }
+        assert_eq!(
+            get(&router, "/.well-known/ai-catalog.json").await.status,
+            200
+        );
+        if started.elapsed() < WINDOW {
+            assert_eq!(
+                flaky.reads().gets,
+                0,
+                "the cell was fresh: no document read the store"
+            );
+            checked = true;
+            break;
+        }
     }
-    assert_eq!(
-        get(&router, "/.well-known/ai-catalog.json").await.status,
-        200
-    );
-    if started.elapsed() < std::time::Duration::from_millis(1500) {
+    assert!(checked, "five runs in a row were slower than the window");
+
+    // A cold reader: the first document costs one flight of two reads, the rest nothing.
+    let mut checked = false;
+    for _ in 0..5 {
+        let (flaky, app, router) = flaky_server();
+        write_row(&app, json!({"name": "Zed", "logo_svg": ""}));
+        flaky.reset_reads();
+        assert_eq!(
+            get(&router, "/.well-known/ai-catalog.json").await.status,
+            200
+        );
         assert_eq!(
             flaky.reads().gets,
             0,
-            "the cell was fresh: no document read the store"
+            "the catalogue asks the reader nothing"
         );
+        let started = std::time::Instant::now();
+        assert_eq!(get(&router, "/mcp/server-card").await.status, 200);
+        assert_eq!(flaky.reads().gets, 2, "the row and the theme: one flight");
+        for (_, path) in ASKING {
+            assert_eq!(get(&router, path).await.status, 200);
+        }
+        if started.elapsed() < WINDOW {
+            assert_eq!(
+                flaky.reads().gets,
+                2,
+                "the documents that follow read nothing"
+            );
+            checked = true;
+            break;
+        }
     }
-    // A cold reader: the first document costs one flight of two reads, the rest nothing.
-    let (flaky, app, router) = flaky_server();
-    write_row(&app, json!({"name": "Zed", "logo_svg": ""}));
-    flaky.reset_reads();
-    assert_eq!(
-        get(&router, "/.well-known/ai-catalog.json").await.status,
-        200
+    assert!(checked, "five runs in a row were slower than the window");
+}
+
+// ---- The metadata of the authorization server (D74) ------------------------------------------------
+
+/// The metadata of the authorization server is an anonymous document like the others, and a sixth
+/// that asks the reader, but only on an instance that has a server: the refusal of one that has none
+/// comes first and reads nothing, so a store that cannot be read does not turn it into a 503.
+const AUTH_SERVER: &str = "/.well-known/oauth-authorization-server";
+
+/// As [`flaky_server`], over the real authenticator, which has an authorization server.
+fn flaky_server_with_oauth() -> (Arc<Flaky>, App, axum::Router) {
+    let (flaky, backend) = Flaky::memory();
+    let app = App::with_store(Store::over(backend));
+    let auth = Arc::new(obop_auth::Auth::with_test_config(
+        app.store.backend(),
+        obop_auth::AuthConfig::insecure_dev(),
+    ));
+    let router = obop_http::router(
+        obop_http::HttpState::with_mcp(app.dispatcher.clone(), auth, McpConfig::default()),
+        None,
     );
-    assert_eq!(
-        flaky.reads().gets,
-        0,
-        "the catalogue asks the reader nothing"
+    (flaky, app, router)
+}
+
+/// With a server, the metadata follows the other documents: the link to the software's documentation
+/// is left out with a brand set; once the reader's cell has expired the request that runs a refill
+/// that fails is answered 503 with `Retry-After` and no metadata, and nothing is kept; when the store
+/// recovers the document is back, byte for byte.
+#[tokio::test]
+async fn the_metadata_of_the_authorization_server_follows_d74_like_the_other_documents() {
+    let (flaky, app, router) = flaky_server_with_oauth();
+    let plain = get(&router, AUTH_SERVER).await;
+    assert_eq!(plain.status, 200);
+    assert!(
+        plain.json().get("service_documentation").is_some(),
+        "an instance with no brand sends the link"
     );
-    let started = std::time::Instant::now();
-    assert_eq!(get(&router, "/mcp/server-card").await.status, 200);
-    assert_eq!(flaky.reads().gets, 2, "the row and the theme: one flight");
-    for (_, path) in ASKING {
-        assert_eq!(get(&router, path).await.status, 200);
+    set_brand(&app);
+    let good = get(&router, AUTH_SERVER).await;
+    assert_eq!(good.status, 200);
+    assert!(
+        good.json().get("service_documentation").is_none(),
+        "a brand takes the link out: {}",
+        String::from_utf8_lossy(&good.body)
+    );
+    let filled = std::time::Instant::now();
+    flaky.refuse_model("instance_brand", Mode::Reads);
+    tokio::task::spawn_blocking(move || wait_until_stale(filled))
+        .await
+        .unwrap();
+    for _ in 0..2 {
+        let before = flaky.refused();
+        let a = get(&router, AUTH_SERVER).await;
+        assert_eq!(a.status, 503, "{}", String::from_utf8_lossy(&a.body));
+        assert_eq!(a.header("retry-after"), "1");
+        assert_eq!(a.header("x-obop-applied"), "none");
+        assert_eq!(fault_code(&a.json()), "storage_busy");
+        assert!(a.json().get("issuer").is_none(), "not a document");
+        assert!(flaky.refused() > before, "the refill read the store");
     }
-    if started.elapsed() < std::time::Duration::from_millis(1500) {
+    flaky.allow_models();
+    let again = get(&router, AUTH_SERVER).await;
+    assert_eq!((again.status, again.body), (200, good.body));
+}
+
+/// An instance with no authorization server answers its refusal before it asks the reader, so a
+/// store that cannot be read, in a process that has never read it, still gets the 404 it always
+/// got, and the reader is not asked (the order matters: asked first, the refusal would be a 503).
+#[tokio::test]
+async fn an_instance_with_no_authorization_server_refuses_before_it_asks_for_the_name() {
+    let (flaky, _app, router) = flaky_server();
+    flaky.refuse_model("instance_brand", Mode::Reads);
+    let a = get(&router, AUTH_SERVER).await;
+    assert_eq!(a.status, 404, "{}", String::from_utf8_lossy(&a.body));
+    assert_eq!(a.json()["error"], "not_found");
+    assert_eq!(a.header("retry-after"), "");
+    assert_eq!(flaky.refused(), 0, "the reader was not asked");
+    // The same instance answers the other documents with the fault, which is what a failing store
+    // makes of a request that needs the name.
+    let card = get(&router, "/mcp/server-card").await;
+    assert_eq!(card.status, 503);
+}
+
+// ---- A set brand whose name is `obop` ----------------------------------------------------------------
+
+/// What an instance that has a brand sends, whatever the brand's name is (the name here is `obop`):
+/// the texts of the discovery documents are the branded sentences with the name in them, the links
+/// to the software's documentation are left out, and `initialize` and the OpenAPI title follow. A set
+/// brand is a brand by one predicate (`Brand::is_set`), not by the look of its name, so a name that
+/// happens to be the software's own (or that a failed read check fell back to) is not the instance
+/// with no row.
+async fn assert_a_brand_named_obop(inst: &pin::Instance, note: &str) {
+    let n = inst.name;
+    let docs = documents(&inst.router).await;
+    let b = |name: &str| docs[name].body.clone();
+    for name in ["protected_resource", "protected_resource_mcp"] {
         assert_eq!(
-            flaky.reads().gets,
-            2,
-            "the documents that follow read nothing"
+            b(name)["resource_name"],
+            "obop MCP server",
+            "{n}/{name} {note}"
         );
+        assert!(
+            b(name).get("resource_documentation").is_none(),
+            "{n}/{name} {note}: the link is left out with a brand: {}",
+            b(name)
+        );
+    }
+    for name in ["server_card", "server_card_well_known"] {
+        assert_eq!(b(name)["title"], "obop", "{n}/{name} {note}");
+        assert_eq!(
+            b(name)["description"],
+            "Business data and actions of obop, with masking and approvals.",
+            "{n}/{name} {note}"
+        );
+    }
+    if n == "auth" {
+        assert!(
+            b("authorization_server")
+                .get("service_documentation")
+                .is_none(),
+            "{n} {note}: {}",
+            b("authorization_server")
+        );
+    }
+    let api = split(&pin::document(&inst.router, "/api/openapi.json").await);
+    assert_eq!(api.body["info"]["title"], "obop API", "{n} {note}");
+    let (_, init) = crate::mcp_tests::initialize(&inst.router, &inst.token, "2025-11-25").await;
+    let text = init["result"]["instructions"].as_str().unwrap();
+    assert!(
+        text.starts_with("This is the obop system: business data"),
+        "{n} {note}: {text}"
+    );
+}
+
+#[tokio::test]
+async fn a_row_named_obop_is_a_brand_in_every_document_all_the_same() {
+    for inst in pin::instances().await {
+        write_row(
+            &inst.app,
+            json!({"name": "obop", "slug": "obop", "logo_svg": ""}),
+        );
+        assert_a_brand_named_obop(&inst, "(a row named obop)").await;
     }
 }
