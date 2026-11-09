@@ -71,7 +71,7 @@
   "An update is checked against every module that depends on this one before it runs, and it runs as one operation: it either completes or changes nothing. Rolling back is possible while the update has not deleted data.": "machine-drafted",
   "Another card": "machine-drafted",
   "Another module already has a model named {model}": "machine-drafted",
-  "Anyone who has this link can sign for {name}. It cannot be shown again. If you lose it, create another link for this request. obop sends no email, so give the link to the signer yourself.": "machine-drafted",
+  "Anyone who has this link can sign for {name}. It cannot be shown again. If you lose it, create another link for this request. No email is sent, so give the link to the signer yourself.": "machine-drafted",
   "App": "machine-drafted",
   "Applies the next time someone signs in. A person without two-factor can then only set it up, until they have. Agent tokens are not affected.": "machine-drafted",
   "Approval needed.": "machine-drafted",

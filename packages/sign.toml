@@ -1,6 +1,6 @@
 [module]
 id = "sign"
-version = "0.2.2"
+version = "0.2.3"
 name = "Sign"
 description = "Document templates and signature requests with a draft, sent, signed, declined, expired flow. A request names the signer (personal data) and keeps the signature evidence. A request can point at a PDF in Documents: sending it takes the SHA-256 of the file and keeps an exact copy, and a person with the manager role creates a one-time signing link that the signer opens without an account to read that copy, type their full name and agree. This is a simple electronic signature only: a typed name does not prove who typed it, the time is the server clock, and the address is the one the proxy chain reports. At signing the evidence is stored on the request and an entry is written to the security log (the log has only read commands, so no caller can write or change an entry through a command; the server writes the entries, and the database does not stop someone who can write it). A manager can switch on a history for files that several named people sign together: the signer then sees the typed names and the times of the others who signed the same file. A signed request can be changed or deleted only by an administrator, who can still change any record. Sending and recording a signature need a human approval for agents, and agents cannot create signing links."
 author = "SpaceCorps"
@@ -92,7 +92,7 @@ write_group = "sign.user"
 
   [[model.field]]
   name = "signer_email"
-  description = "Email address of the signer; optional, obop sends no email for a request about a document"
+  description = "Email address of the signer; optional, no email is sent for a request about a document"
   class = "internal"
   personal_data = true
 

@@ -1741,7 +1741,7 @@ async fn the_door_follows_an_update_and_a_rollback_of_the_package_for_the_switch
         .installer
         .install(&Bundled.fetch("sign").unwrap(), "marketplace", "test")
         .unwrap();
-    assert_eq!(installed_sign(&f), "0.2.2");
+    assert_eq!(installed_sign(&f), "0.2.3");
     tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
     flaky.reset_reads();
     let html = page_of(&f, &path, 171).await;
@@ -1854,7 +1854,7 @@ async fn the_upgrade_from_the_package_before_the_history_adds_one_optional_field
     let new = obop_pkg::Manifest::parse(&new_text).unwrap();
     assert_eq!(
         (old.module.version.as_str(), new.module.version.as_str()),
-        ("0.2.1", "0.2.2")
+        ("0.2.1", "0.2.3")
     );
     let changes = obop_pkg::migrate::diff(&old, &new);
     assert_eq!(changes.len(), 1, "{changes:?}");
@@ -1900,7 +1900,7 @@ async fn the_upgrade_from_the_package_before_the_history_adds_one_optional_field
         .installer
         .install_outcome(&new_text, "marketplace", "test")
         .unwrap();
-    assert_eq!(out.root.version, "0.2.2");
+    assert_eq!(out.root.version, "0.2.3");
     // Not a record was rewritten.
     let after: Vec<_> = ids.iter().map(|id| f.record("sign_request", id)).collect();
     assert_eq!(after, before);

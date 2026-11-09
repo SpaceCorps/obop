@@ -286,7 +286,7 @@
   "and {count} more": "and {count} more",
   "Another card": "Another card",
   "Another module already has a model named {model}": "Another module already has a model named {model}",
-  "Anyone who has this link can sign for {name}. It cannot be shown again. If you lose it, create another link for this request. obop sends no email, so give the link to the signer yourself.": "Anyone who has this link can sign for {name}. It cannot be shown again. If you lose it, create another link for this request. obop sends no email, so give the link to the signer yourself.",
+  "Anyone who has this link can sign for {name}. It cannot be shown again. If you lose it, create another link for this request. No email is sent, so give the link to the signer yourself.": "Anyone who has this link can sign for {name}. It cannot be shown again. If you lose it, create another link for this request. No email is sent, so give the link to the signer yourself.",
   "App": "App",
   "App access ended": "App access ended",
   "App access ended: a code was used twice": "App access ended: a code was used twice",
