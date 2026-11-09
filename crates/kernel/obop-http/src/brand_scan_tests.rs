@@ -90,7 +90,7 @@ enum Limit {
 
 /// Where the brand is read or written: the path from `crates/` (a prefix when it ends with `/`),
 /// why, and what the file may do.
-const ALLOWED: [(&str, &str, Limit); 14] = [
+const ALLOWED: [(&str, &str, Limit); 17] = [
     (
         "kernel/obop-commands/src/brand/",
         "the module itself: the reader, `strict()`, `apply` and the read of `get`",
@@ -203,6 +203,36 @@ const ALLOWED: [(&str, &str, Limit); 14] = [
             calls: 0,
             reads: 0,
             paths: &["Shown"],
+            types: &[],
+        },
+    ),
+    (
+        "kernel/obop-http/src/sign_page.rs",
+        "the signer's pages (S1d) show the `Shown` that the handler hands them, in every state, through the `brand_line`, `icon_link` and `img_src` of `obop-oauth` (the same functions as the OAuth pages, so the two follow one predicate); this file reads nothing and calls no accessor, and names the type `Shown` as a type only (no function through it, no second name, no impl), so a page cannot be made with a default brand of its own",
+        Limit::Reads {
+            calls: 0,
+            reads: 0,
+            paths: &["Shown"],
+            types: &["Shown"],
+        },
+    ),
+    (
+        "kernel/obop-http/src/sign.rs",
+        "the signer's door (S1d): the page, the post that signs and the PDF each call `oauth::read_brand` once, first, and hand that one `Shown` to every page they render (the calls are pinned by `the_handlers_that_make_a_page_outside_the_flow_read_the_brand_once_and_first`); this file asks no reader itself, and names the type `Shown` as a type only (no function through it, no second name, no impl), so a refusal page cannot be made with a default brand of its own",
+        Limit::Reads {
+            calls: 0,
+            reads: 0,
+            paths: &["Shown"],
+            types: &["Shown"],
+        },
+    ),
+    (
+        "kernel/obop-http/src/connectors.rs",
+        "the return page of the OAuth callback of the connectors (S1d, row SP-11): `oauth_callback` calls `oauth::read_brand` once, first, before the callback consumes its state and stores the tokens, and takes the name of the instance from the `Shown` with one call of the accessor `Shown::brand()`; it names no type, asks no reader and builds none",
+        Limit::Reads {
+            calls: 1,
+            reads: 0,
+            paths: &[],
             types: &[],
         },
     ),
@@ -794,6 +824,18 @@ fn the_scan_sees_the_ways_a_file_can_read_the_row_and_leaves_the_allowed_files_a
             "kernel/obop-oauth/src/flow.rs",
             "use obop_commands::brand::Shown; fn f() -> Arc<Shown> { Arc::new(Shown::not_set(None)) }",
         ),
+        (
+            "kernel/obop-http/src/sign_page.rs",
+            "use obop_commands::brand::Shown; fn shell(b: &Shown) -> String { icon_link(b) }",
+        ),
+        (
+            "kernel/obop-http/src/sign.rs",
+            "use obop_commands::brand::Shown; fn refusal(b: &Shown) {} fn page(s: &S) { let b = read_brand(s); refusal(&b); }",
+        ),
+        (
+            "kernel/obop-http/src/connectors.rs",
+            "fn page(s: &S) { let brand = read_brand(s); let _ = brand.brand().name(); }",
+        ),
     ]);
     let (found, stale) = scan(&files);
     assert!(found.is_empty(), "{found:?}");
@@ -1213,7 +1255,10 @@ fn the_rows_with_limits_are_the_files_that_only_ask_the_reader() {
             "kernel/obop-http/src/passkeys.rs",
             "kernel/obop-http/src/oauth.rs",
             "kernel/obop-oauth/src/page.rs",
-            "kernel/obop-oauth/src/flow.rs"
+            "kernel/obop-oauth/src/flow.rs",
+            "kernel/obop-http/src/sign_page.rs",
+            "kernel/obop-http/src/sign.rs",
+            "kernel/obop-http/src/connectors.rs"
         ]
     );
 }
@@ -1232,7 +1277,7 @@ fn the_limits_of_the_rows_with_limits_are_the_ones_decided() {
         &'static [&'static str],
         &'static [&'static str],
     );
-    let decided: [Want; 9] = [
+    let decided: [Want; 12] = [
         (
             "kernel/obop-http/src/brand.rs",
             1,
@@ -1278,6 +1323,15 @@ fn the_limits_of_the_rows_with_limits_are_the_ones_decided() {
         ),
         ("kernel/obop-oauth/src/page.rs", 4, 0, &["Shown"], &[]),
         ("kernel/obop-oauth/src/flow.rs", 0, 0, &["Shown"], &[]),
+        (
+            "kernel/obop-http/src/sign_page.rs",
+            0,
+            0,
+            &["Shown"],
+            &["Shown"],
+        ),
+        ("kernel/obop-http/src/sign.rs", 0, 0, &["Shown"], &["Shown"]),
+        ("kernel/obop-http/src/connectors.rs", 1, 0, &[], &[]),
     ];
     for (file, calls, reads, paths, types) in decided {
         let Some((
@@ -1489,9 +1543,23 @@ fn the_enrolment_files_may_name_what_their_rows_list_and_nothing_else() {
 /// The closed list of files whose string literals are scanned. The slice that makes another page
 /// show the brand adds its file here in the commit that wires it, with a row for each literal that
 /// has to stay.
-const LITERAL_FILES: [&str; 2] = [
+const LITERAL_FILES: [&str; 5] = [
     "kernel/obop-oauth/src/page.rs",
     "kernel/obop-http/src/oauth.rs",
+    "kernel/obop-http/src/sign_page.rs",
+    "kernel/obop-http/src/sign.rs",
+    "kernel/obop-http/src/connectors.rs",
+];
+
+/// The files of [`LITERAL_FILES`] that hold no literal that names obop and so have no row in
+/// [`LITERAL_ALLOWED`] (S1d): the signer's pages and door take the name from the brand, which for an
+/// instance with no brand is the default name of `obop-brand`, and the return page of the connectors
+/// writes `Back to {name}` and `Taking you back to {name}.` from it. A file here is closed all the
+/// same: a literal that names obop added to it is found and has no row to stand under.
+const CLEAN_LITERAL_FILES: [&str; 3] = [
+    "kernel/obop-http/src/sign_page.rs",
+    "kernel/obop-http/src/sign.rs",
+    "kernel/obop-http/src/connectors.rs",
 ];
 
 /// The classes of a row, in the words of the spec.
@@ -1765,9 +1833,18 @@ fn every_row_of_the_literal_list_has_a_known_class_a_reason_and_a_file_of_the_li
         }
     }
     for file in LITERAL_FILES {
+        // A file with no row holds no literal that names obop: it is on `CLEAN_LITERAL_FILES`,
+        // which says so, and no row may name it (a row for it would let a literal stand).
+        let has_row = LITERAL_ALLOWED.iter().any(|r| r.0 == file);
+        let clean = CLEAN_LITERAL_FILES.contains(&file);
         assert!(
-            LITERAL_ALLOWED.iter().any(|r| r.0 == file),
-            "{file} is on the list and has no row, so it could never hold a name"
+            has_row != clean,
+            "{file} is on the list and {}",
+            if clean {
+                "is declared clean but has a row"
+            } else {
+                "has no row and is not declared clean, so it could never hold a name"
+            }
         );
     }
 }
@@ -1791,9 +1868,20 @@ const OAUTH_RS: &str = "fn cors() { let _ = \"Retry-After, X-Obop-Applied\"; }\n
 const PAGE_PATH: &str = "kernel/obop-oauth/src/page.rs";
 const OAUTH_PATH: &str = "kernel/obop-http/src/oauth.rs";
 
+/// `files` and the files of [`CLEAN_LITERAL_FILES`] with nothing in them that names obop (unless
+/// `files` has them), so that a tree of the two pages with rows is a whole tree of the list.
+fn literal_tree(files: &[(&str, &str)]) -> BTreeMap<String, String> {
+    let mut all = tree(files);
+    for clean in CLEAN_LITERAL_FILES {
+        all.entry(clean.to_string())
+            .or_insert_with(|| "fn quiet() { let _ = \"nothing here\"; }".to_string());
+    }
+    all
+}
+
 #[test]
 fn the_scan_for_literals_finds_a_new_literal() {
-    let ok = tree(&[(PAGE_PATH, &page_with(35)), (OAUTH_PATH, OAUTH_RS)]);
+    let ok = literal_tree(&[(PAGE_PATH, &page_with(35)), (OAUTH_PATH, OAUTH_RS)]);
     let (found, drift) = literal_scan(&ok);
     assert!(found.is_empty() && drift.is_empty(), "{found:?} {drift:?}");
 
@@ -1802,7 +1890,10 @@ fn the_scan_for_literals_finds_a_new_literal() {
         "{}\nfn brand_line() -> &'static str {{\n    \"obop\"\n}}\n",
         page_with(35)
     );
-    let (found, drift) = literal_scan(&tree(&[(PAGE_PATH, &added), (OAUTH_PATH, OAUTH_RS)]));
+    let (found, drift) = literal_scan(&literal_tree(&[
+        (PAGE_PATH, &added),
+        (OAUTH_PATH, OAUTH_RS),
+    ]));
     assert_eq!(found.len(), 1, "{found:?}");
     assert!(
         found[0].starts_with(&format!("{PAGE_PATH}:40:")) && found[0].contains("`brand_line`"),
@@ -1815,12 +1906,15 @@ fn the_scan_for_literals_finds_a_new_literal() {
         "{}\nfn f() {{ let _ = \"Welcome to OBOP\"; }}\n",
         page_with(35)
     );
-    let (found, _) = literal_scan(&tree(&[(PAGE_PATH, &loud), (OAUTH_PATH, OAUTH_RS)]));
+    let (found, _) = literal_scan(&literal_tree(&[(PAGE_PATH, &loud), (OAUTH_PATH, OAUTH_RS)]));
     assert_eq!(found.len(), 1, "{found:?}");
 
     // The same text in another function is not the row's: the row names the item.
     let moved = OAUTH_RS.replace("fn cookie_name()", "fn other()");
-    let (found, drift) = literal_scan(&tree(&[(PAGE_PATH, &page_with(35)), (OAUTH_PATH, &moved)]));
+    let (found, drift) = literal_scan(&literal_tree(&[
+        (PAGE_PATH, &page_with(35)),
+        (OAUTH_PATH, &moved),
+    ]));
     assert_eq!(found.len(), 1, "{found:?}");
     assert!(found[0].contains("`other`"), "{found:?}");
     assert!(drift.iter().any(|d| d.contains("cookie_name")), "{drift:?}");
@@ -1828,28 +1922,37 @@ fn the_scan_for_literals_finds_a_new_literal() {
     // The relying-party name of the passkey step is no longer a row (S1e takes it from the reader):
     // the literal `"obop"` back in `webauthn_ctx` is found, with the item, and no row is left over.
     let back = format!("{OAUTH_RS}fn webauthn_ctx() {{ let _ = \"obop\"; }}\n");
-    let (found, drift) = literal_scan(&tree(&[(PAGE_PATH, &page_with(35)), (OAUTH_PATH, &back)]));
+    let (found, drift) = literal_scan(&literal_tree(&[
+        (PAGE_PATH, &page_with(35)),
+        (OAUTH_PATH, &back),
+    ]));
     assert_eq!(found.len(), 1, "{found:?}");
     assert!(found[0].contains("`webauthn_ctx`"), "{found:?}");
     assert!(drift.is_empty(), "{drift:?}");
 
     // A different literal in the item of a row with an exact literal is not let through.
     let widened = OAUTH_RS.replace("obop_oauth_{}", "obop_oauth_{} shop");
-    let (found, _) = literal_scan(&tree(&[
+    let (found, _) = literal_scan(&literal_tree(&[
         (PAGE_PATH, &page_with(35)),
         (OAUTH_PATH, &widened),
     ]));
     assert_eq!(found.len(), 1, "{found:?}");
 
-    // A file of the list that is missing from the tree is a failure, not a pass.
+    // A file of the list that is missing from the tree is a failure, not a pass; so is a clean one.
     let (found, _) = literal_scan(&tree(&[(OAUTH_PATH, OAUTH_RS)]));
     assert!(found.iter().any(|f| f.starts_with(PAGE_PATH)), "{found:?}");
+    for clean in CLEAN_LITERAL_FILES {
+        assert!(
+            found.iter().any(|f| f.starts_with(clean)),
+            "{clean}: {found:?}"
+        );
+    }
 }
 
 #[test]
 fn the_scan_for_literals_finds_a_row_that_matches_more_or_less_than_it_says() {
     // A sixth catalogue key that names obop sits under the row of the five and over its count.
-    let (found, drift) = literal_scan(&tree(&[
+    let (found, drift) = literal_scan(&literal_tree(&[
         (PAGE_PATH, &page_with(36)),
         (OAUTH_PATH, OAUTH_RS),
     ]));
@@ -1861,14 +1964,14 @@ fn the_scan_for_literals_finds_a_row_that_matches_more_or_less_than_it_says() {
     );
 
     // A row that matches less than it says: a cell lost its name, or the literal was renamed.
-    let (found, drift) = literal_scan(&tree(&[
+    let (found, drift) = literal_scan(&literal_tree(&[
         (PAGE_PATH, &page_with(34)),
         (OAUTH_PATH, OAUTH_RS),
     ]));
     assert!(found.is_empty(), "{found:?}");
     assert!(drift[0].contains("has 34"), "{drift:?}");
     let renamed = OAUTH_RS.replace("obop_oauth_{}", "oauth_{}");
-    let (found, drift) = literal_scan(&tree(&[
+    let (found, drift) = literal_scan(&literal_tree(&[
         (PAGE_PATH, &page_with(35)),
         (OAUTH_PATH, &renamed),
     ]));
@@ -1886,7 +1989,7 @@ fn the_scan_for_literals_finds_a_row_that_matches_more_or_less_than_it_says() {
 fn the_scan_for_literals_reads_escapes_and_finds_concat() {
     let listed = |extra: &str| {
         let page = format!("{}\n{extra}\n", page_with(35));
-        literal_scan(&tree(&[(PAGE_PATH, &page), (OAUTH_PATH, OAUTH_RS)]))
+        literal_scan(&literal_tree(&[(PAGE_PATH, &page), (OAUTH_PATH, OAUTH_RS)]))
     };
     // The name written with escapes, and over a line break.
     for (what, src) in [
@@ -1936,13 +2039,64 @@ fn the_scan_for_literals_leaves_comments_test_code_and_files_off_the_list_alone(
         page_with(35)
     );
     let elsewhere = "fn f() { let _ = \"obop\"; }";
-    let (found, drift) = literal_scan(&tree(&[
+    let (found, drift) = literal_scan(&literal_tree(&[
         (PAGE_PATH, &noisy),
         (OAUTH_PATH, OAUTH_RS),
-        ("kernel/obop-http/src/sign_page.rs", elsewhere),
+        ("kernel/obop-http/src/mfa.rs", elsewhere),
         ("kernel/obop-oauth/src/tests/mobile.rs", elsewhere),
     ]));
     assert!(found.is_empty() && drift.is_empty(), "{found:?} {drift:?}");
+}
+
+/// The signer's pages and door and the connectors' return page hold no literal that names obop, and
+/// are closed to one (S1d): the name comes from the brand. A literal added to any of them is found,
+/// with the file and the item, whatever its case, and no row stands under it; the text the page had
+/// before the brand (`Back to obop`) is such a literal.
+#[test]
+fn the_clean_files_are_closed_to_a_literal_that_names_obop() {
+    for clean in CLEAN_LITERAL_FILES {
+        for (what, added) in [
+            ("a name", "fn brand_line() -> &'static str { \"obop\" }"),
+            ("a sentence", "fn text() { let _ = \"Back to obop\"; }"),
+            (
+                "capitals",
+                "fn text() { let _ = \"Taking you back to OBOP.\"; }",
+            ),
+            ("an escape", "fn text() { let _ = \"ob\\u{6f}p\"; }"),
+        ] {
+            let (found, drift) = literal_scan(&literal_tree(&[
+                (PAGE_PATH, &page_with(35)),
+                (OAUTH_PATH, OAUTH_RS),
+                (clean, added),
+            ]));
+            assert_eq!(found.len(), 1, "{clean}: {what}: {found:?}");
+            assert!(
+                found[0].starts_with(&format!("{clean}:")),
+                "{clean}: {what}: {found:?}"
+            );
+            assert!(drift.is_empty(), "{clean}: {what}: {drift:?}");
+        }
+        // `concat!` is found there too, as in the other listed files.
+        let (found, _) = literal_scan(&literal_tree(&[
+            (PAGE_PATH, &page_with(35)),
+            (OAUTH_PATH, OAUTH_RS),
+            (clean, "fn f() { let _ = concat!(\"ob\", \"op\"); }"),
+        ]));
+        assert!(found.iter().any(|f| f.contains("`concat!`")), "{found:?}");
+        // Comments and test code are not code of the file.
+        let (found, drift) = literal_scan(&literal_tree(&[
+            (PAGE_PATH, &page_with(35)),
+            (OAUTH_PATH, OAUTH_RS),
+            (
+                clean,
+                "// Back to obop\n#[cfg(test)]\nmod tests { fn t() { let _ = \"obop\"; } }\n",
+            ),
+        ]));
+        assert!(
+            found.is_empty() && drift.is_empty(),
+            "{clean}: {found:?} {drift:?}"
+        );
+    }
 }
 
 /// The second assertion of the scan: the neutral twins and the fixed sentence name no product, in
@@ -2282,25 +2436,31 @@ const REQUEST_STARTS: [&str; 4] = [
     "step",
 ];
 
+/// The function that holds each call of `read_brand` in `code`, in source order. The definition of
+/// the helper is not a call.
+fn read_brand_sites_of(code: &[u8]) -> Vec<String> {
+    use crate::src_scan::{enclosing_fn, skip_ws};
+    let name = "read_brand";
+    words(code, name)
+        .into_iter()
+        .filter(|&p| {
+            let before = String::from_utf8_lossy(&code[..p]);
+            let defines = before.trim_end().ends_with("fn");
+            let calls = code.get(skip_ws(code, p + name.len())) == Some(&b'(');
+            calls && !defines
+        })
+        .map(|p| enclosing_fn(code, p).unwrap_or_else(|| "(no function)".to_string()))
+        .collect()
+}
+
 /// The function that holds each call of `read_brand` in the non-test code of the route file, in
 /// source order. The definition of the helper is not a call.
 fn brand_read_sites(files: &BTreeMap<String, String>) -> Vec<String> {
-    use crate::src_scan::{enclosing_fn, skip_ws};
     let lexed = non_test(files);
     let Some(l) = lexed.get(ROUTE_FILE) else {
         return vec!["(the route file is not in the tree)".to_string()];
     };
-    let name = "read_brand";
-    words(&l.code, name)
-        .into_iter()
-        .filter(|&p| {
-            let before = String::from_utf8_lossy(&l.code[..p]);
-            let defines = before.trim_end().ends_with("fn");
-            let calls = l.code.get(skip_ws(&l.code, p + name.len())) == Some(&b'(');
-            calls && !defines
-        })
-        .map(|p| enclosing_fn(&l.code, p).unwrap_or_else(|| "(no function)".to_string()))
-        .collect()
+    read_brand_sites_of(&l.code)
 }
 
 #[test]
@@ -2352,6 +2512,156 @@ fn the_scan_of_the_calls_of_the_brand_helper_sees_a_second_call_a_missing_one_an
     // Comments and test code are not code of the route.
     assert!(at("fn f() { /* read_brand(s) */ } // read_brand(s)\n").is_empty());
     assert!(at("#[cfg(test)] mod t { fn x() { read_brand(s); } }").is_empty());
+}
+
+// ---- The other pages that read the brand: the signer's door and the connectors' return page (S1d) -------
+//
+// The door of the signer and the OAuth callback of the connectors make pages too, on a blocking
+// thread, and a request of theirs writes (the door counts a try and logs a refusal, the callback
+// consumes its state and stores the tokens). They ask the reader through the same helper as the
+// pages of the flow, `read_brand` of `oauth.rs` (a second implementation of the read would be a
+// second way to get it wrong), once and first. Three things are held: each of the four starts calls
+// it exactly once; no other function of `obop-http` outside the route file calls it; and the call is
+// the first statement of the closure that runs on the blocking thread, so that nothing the request
+// does can come before it.
+
+/// The functions outside the route file of the flow where a request that makes a page begins: the
+/// file and the function, sorted.
+const OTHER_PAGE_STARTS: [(&str, &str); 4] = [
+    ("kernel/obop-http/src/connectors.rs", "oauth_callback"),
+    ("kernel/obop-http/src/sign.rs", "document"),
+    ("kernel/obop-http/src/sign.rs", "page"),
+    ("kernel/obop-http/src/sign.rs", "submit"),
+];
+
+/// Every call of `read_brand` in the non-test code of the files of `obop-http/src` other than the
+/// route file of the flow (which `brand_read_sites` holds), as (file, function), sorted.
+fn other_brand_read_sites(files: &BTreeMap<String, String>) -> Vec<(String, String)> {
+    let lexed = non_test(files);
+    let mut out = Vec::new();
+    for (path, l) in &lexed {
+        if !path.starts_with("kernel/obop-http/src/") || path == ROUTE_FILE {
+            continue;
+        }
+        for f in read_brand_sites_of(&l.code) {
+            out.push((path.clone(), f));
+        }
+    }
+    out.sort();
+    out
+}
+
+/// Whether the closure that `blocking(` runs in the function `name` of `path` begins with
+/// `let brand = read_brand(`. `Err` says what was found instead.
+fn begins_with_the_brand_read(
+    files: &BTreeMap<String, String>,
+    path: &str,
+    name: &str,
+) -> Result<(), String> {
+    use crate::src_scan::{skip_ws, word_at};
+    let lexed = non_test(files);
+    let Some(l) = lexed.get(path) else {
+        return Err(format!("{path} is not in the tree"));
+    };
+    let code = &l.code;
+    let Some(def) = words(code, "fn")
+        .into_iter()
+        .find(|&p| word_at(code, skip_ws(code, p + 2)) == name)
+    else {
+        return Err(format!("{path}: no function {name}"));
+    };
+    let Some(call) = words(code, "blocking").into_iter().find(|&p| p > def) else {
+        return Err(format!("{path}: {name} has no `blocking(` closure"));
+    };
+    let Some(bars) = code[call..].windows(2).position(|w| w == b"||") else {
+        return Err(format!("{path}: {name}: the closure has no `||`"));
+    };
+    let Some(open) = code[call + bars..].iter().position(|c| *c == b'{') else {
+        return Err(format!("{path}: {name}: the closure has no body"));
+    };
+    let first = skip_ws(code, call + bars + open + 1);
+    let want = b"let brand = read_brand(";
+    if code[first..].starts_with(want) {
+        Ok(())
+    } else {
+        let seen: String = String::from_utf8_lossy(&code[first..])
+            .chars()
+            .take(40)
+            .collect();
+        Err(format!(
+            "{path}: {name}: the closure begins with {seen:?}, not with the brand read"
+        ))
+    }
+}
+
+#[test]
+fn the_handlers_that_make_a_page_outside_the_flow_read_the_brand_once_and_first() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut files = BTreeMap::new();
+    read_tree(&root, &root, &mut files);
+    let want: Vec<(String, String)> = OTHER_PAGE_STARTS
+        .iter()
+        .map(|(p, f)| (p.to_string(), f.to_string()))
+        .collect();
+    assert_eq!(
+        other_brand_read_sites(&files),
+        want,
+        "`read_brand` is called once in each function where the signer's door and the connectors' \
+         return page begin a request and nowhere else outside the route file of the flow"
+    );
+    for (path, name) in OTHER_PAGE_STARTS {
+        if let Err(why) = begins_with_the_brand_read(&files, path, name) {
+            panic!("the brand is not read first: {why}");
+        }
+    }
+}
+
+#[test]
+fn the_scan_of_the_other_pages_sees_a_second_call_a_late_one_a_missing_one_and_a_stray_one() {
+    const GOOD: &str = "fn page() { blocking(move || { let brand = read_brand(&s); let x = 1; }) }";
+    let sites = |files: &[(&str, &str)]| other_brand_read_sites(&tree(files));
+    let sign = "kernel/obop-http/src/sign.rs";
+    let one = |f: &str| (sign.to_string(), f.to_string());
+    // One call in a start is what the list says; the route file of the flow is the other test's.
+    assert_eq!(sites(&[(sign, GOOD)]), [one("page")]);
+    assert!(sites(&[(ROUTE_FILE, GOOD)]).is_empty());
+    // A second call, a call in another function, a call in another file, a start with none.
+    assert_eq!(
+        sites(&[(
+            sign,
+            "fn page() { read_brand(s); read_brand(s); } fn helper() { read_brand(s); }"
+        )]),
+        [one("helper"), one("page"), one("page")]
+    );
+    assert_eq!(
+        sites(&[("kernel/obop-http/src/lib.rs", "fn f() { read_brand(s); }")]),
+        [("kernel/obop-http/src/lib.rs".to_string(), "f".to_string())]
+    );
+    assert!(sites(&[(sign, "fn page() { let b = 1; }")]).is_empty());
+    // The helper alone is no call, a comment and test code are not code of the file.
+    assert!(sites(&[(sign, "pub(crate) fn read_brand(s: &S) -> B { b() }")]).is_empty());
+    assert!(sites(&[(sign, "fn f() { /* read_brand(s) */ } // read_brand(s)\n")]).is_empty());
+    assert!(sites(&[(sign, "#[cfg(test)] mod t { fn x() { read_brand(s); } }")]).is_empty());
+    // First: the read opens the closure; a statement before it, or a read that is not the first
+    // statement, is found, and so is a function with no closure.
+    let begins = |src: &str| begins_with_the_brand_read(&tree(&[(sign, src)]), sign, "page");
+    assert!(begins(GOOD).is_ok());
+    assert!(
+        begins(
+            "fn page() { blocking(move || {\n    // note\n    let brand = read_brand(&s);\n}) }"
+        )
+        .is_ok()
+    );
+    for late in [
+        "fn page() { blocking(move || { let lang = lang_for(&s); let brand = read_brand(&s); }) }",
+        "fn page() { blocking(move || { s.dispatcher.sync_installed_modules(); let brand = read_brand(&s); }) }",
+        "fn page() { blocking(move || { let b = read_brand(&s); }) }",
+        "fn page() { blocking(move || { let brand = other(&s); }) }",
+        "fn page() { let brand = read_brand(&s); }",
+        "fn other() { blocking(move || { let brand = read_brand(&s); }) }",
+    ] {
+        assert!(begins(late).is_err(), "{late}");
+    }
 }
 
 // ---- The two functions that make a page with the default brand are for tests only (slice S1c) ----------

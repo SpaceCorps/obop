@@ -4,7 +4,15 @@
 //! timestamp and the replay guard, before the body is read as JSON) and answers every failure of
 //! that check alike. The OAuth callback proves itself with the single-use `state` it was started
 //! with. Everything else about connectors is the generated command API.
+//!
+//! The return page of the OAuth callback names the instance (docs/spec/branding.md, row SP-11, slice
+//! S1d): "Back to {name}" and "Taking you back to {name}." with the name of the instance brand, in
+//! English only, because it is the administrator's own return page and English carries a name with
+//! no case ending to get wrong. The callback reads the brand once and first, before it writes (it
+//! consumes the single-use state and stores the tokens), and an instance with no brand has the
+//! default name, so the page is what it always was, byte for byte.
 
+use super::oauth::read_brand;
 use super::{HttpState, blocking};
 use axum::{
     body::Bytes,
@@ -98,7 +106,10 @@ fn hook_blocking(s: &HttpState, id: &str, headers: &HeaderMap, body: &[u8]) -> R
     }
 }
 
-fn page(title: &str, text: &str, back: Option<&str>) -> Response {
+/// The page the callback ends on. `name` is the name of the instance, put into the link text and
+/// escaped there; the sentence `text` is escaped whole, so a name that a caller put into it is
+/// escaped once. The refresh carries the path `back` only: the name is never in an address.
+fn page(title: &str, text: &str, back: Option<&str>, name: &str) -> Response {
     let esc = |s: &str| {
         s.replace('&', "&amp;")
             .replace('<', "&lt;")
@@ -108,7 +119,11 @@ fn page(title: &str, text: &str, back: Option<&str>) -> Response {
     // `back` is a path of this instance (built by the server, never taken from the request).
     let (link, refresh) = match back {
         Some(b) => (
-            format!("<p><a href=\"{b}\">Back to obop</a></p>", b = esc(b)),
+            format!(
+                "<p><a href=\"{b}\">Back to {n}</a></p>",
+                b = esc(b),
+                n = esc(name)
+            ),
             format!(
                 "<meta http-equiv=\"refresh\" content=\"3;url={b}\">",
                 b = esc(b)
@@ -139,6 +154,11 @@ pub async fn oauth_callback(
     Query(q): Query<HashMap<String, String>>,
 ) -> Response {
     blocking(move || {
+        // The brand this page shows, asked once and first: the callback writes (the state is
+        // consumed and the tokens are stored), so it reads before it does anything. A failed read
+        // is the 503 of D74 and the state is left as it was.
+        let brand = read_brand(&s);
+        let name = brand.brand().name();
         let Some(rt) = s.connectors.get() else {
             return json_response(StatusCode::NOT_FOUND, json!({"error": "not found"}));
         };
@@ -146,7 +166,7 @@ pub async fn oauth_callback(
         let back_page = |app: &str| format!("{base}/#/connectors/{app}");
         if q.contains_key("error") {
             // The person said no, or the provider failed. Say so without echoing its text.
-            return page("Not connected", "The provider did not authorise the connection. You can close this window and try again.", Some(&back_page("catalog")));
+            return page("Not connected", "The provider did not authorise the connection. You can close this window and try again.", Some(&back_page("catalog")), name);
         }
         match (q.get("state"), q.get("code")) {
             (Some(state), Some(code)) => match rt.oauth_callback(state, code) {
@@ -159,11 +179,11 @@ pub async fn oauth_callback(
                     } else {
                         back_page("connection")
                     };
-                    page("Connected", "The account is authorised. Taking you back to obop.", Some(&to))
+                    page("Connected", &format!("The account is authorised. Taking you back to {name}."), Some(&to), name)
                 }
-                Err(_) => page("Not connected", "The authorization could not be completed: the link is invalid or has expired, or the provider refused. Start again from the connection; its page shows the last error.", Some(&back_page("catalog"))),
+                Err(_) => page("Not connected", "The authorization could not be completed: the link is invalid or has expired, or the provider refused. Start again from the connection; its page shows the last error.", Some(&back_page("catalog")), name),
             },
-            _ => page("Not connected", "This address is the return point of an authorization and needs the answer of the provider.", None),
+            _ => page("Not connected", "This address is the return point of an authorization and needs the answer of the provider.", None, name),
         }
     })
     .await

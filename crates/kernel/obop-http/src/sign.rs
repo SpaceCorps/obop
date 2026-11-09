@@ -19,7 +19,7 @@
 //! and the `X-Forwarded-For` lines the request carried, read lossily, cleaned and cut to their
 //! last 200 characters (`forwarded_lines`), which are not the raw header.
 
-use super::oauth::{client_ip, harden, pair, parse_pairs, same_origin, see_other};
+use super::oauth::{client_ip, harden, pair, parse_pairs, read_brand, same_origin, see_other};
 use super::sign_page::{self, Page};
 use super::sign_text as txt;
 use super::{HttpState, blocking};
@@ -29,6 +29,7 @@ use axum::{
     http::{HeaderName, HeaderValue, StatusCode, header, request::Parts},
     response::{IntoResponse, Response},
 };
+use obop_commands::brand::Shown;
 use obop_commands::sign::{Client, Done, DoorError, Gone, Invalid, SignForm, View, ViewData};
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -236,9 +237,9 @@ fn refusal_parts(e: &DoorError) -> (StatusCode, &'static str) {
 }
 
 /// The answer for everything the door refuses.
-fn refusal(e: &DoorError, lang: &str) -> Response {
+fn refusal(e: &DoorError, lang: &str, brand: &Shown) -> Response {
     let (status, key) = refusal_parts(e);
-    let mut r = page_response(status, sign_page::message(lang, key));
+    let mut r = page_response(status, sign_page::message(lang, key, brand));
     let wait = match e {
         DoorError::Busy(n) => Some(*n),
         DoorError::Unavailable => Some(30),
@@ -252,35 +253,53 @@ fn refusal(e: &DoorError, lang: &str) -> Response {
     r
 }
 
-struct FormView<'a> {
+/// How the page of a link is made: for which brand (the one this request read, first), language
+/// and link and, when it answers a post that was refused, what was typed and what was wrong.
+struct Ctx<'a> {
+    brand: &'a Shown,
     lang: &'a str,
     rid: &'a str,
     tok: &'a str,
-    data: &'a ViewData,
     typed: &'a str,
     error: Option<&'a str>,
     status: StatusCode,
 }
 
-fn form_page(v: &FormView<'_>) -> Response {
+fn form_page(c: &Ctx<'_>, data: &ViewData) -> Response {
     page_response(
-        v.status,
+        c.status,
         sign_page::form(
-            v.lang,
+            c.lang,
             &sign_page::Form {
-                rid: v.rid,
-                token: v.tok,
-                title: &v.data.title,
-                message: &v.data.message,
-                signer_name: &v.data.signer_name,
-                document_title: &v.data.document_title,
-                document_hash: &v.data.document_hash,
-                typed: v.typed,
-                error: v.error,
-                history: v.data.history.as_ref(),
+                rid: c.rid,
+                token: c.tok,
+                title: &data.title,
+                message: &data.message,
+                signer_name: &data.signer_name,
+                document_title: &data.document_title,
+                document_hash: &data.document_hash,
+                typed: c.typed,
+                error: c.error,
+                history: data.history.as_ref(),
             },
+            c.brand,
         ),
     )
+}
+
+/// The page for what the door answered about a link: the form, the page after signing or the
+/// refusal. The one place that makes them for a `GET` and for a post that was refused alike (that
+/// post shows the form again with what was typed and what was wrong, or, when the request was signed
+/// meanwhile, the page after signing), so that the brand reaches each of them from one hand.
+fn view_page(answer: Result<View, DoorError>, c: &Ctx<'_>) -> Response {
+    match answer {
+        Ok(View::Form(d)) => form_page(c, &d),
+        Ok(View::Signed { at, history }) => page_response(
+            StatusCode::OK,
+            sign_page::done(c.lang, &at, history.as_ref(), c.brand),
+        ),
+        Err(e) => refusal(&e, c.lang, c.brand),
+    }
 }
 
 /// `GET /sign/{request}/{token}`.
@@ -290,28 +309,29 @@ pub(crate) async fn page(
     parts: Parts,
 ) -> Response {
     blocking(move || {
+        // The brand every page of this request shows, asked once and first (before the door can
+        // count a try or write a refusal), so that the name and the logo of a page come from one
+        // read and a failed read is the 503 of D74 with nothing written by this request.
+        let brand = read_brand(&s);
         let lang = lang_for(&s, &parts, None);
         // The door follows the installed package: a rollback or an update made by another
         // process (`obop modules rollback sign`) is seen here without an authenticated call.
         s.dispatcher.sync_installed_modules();
         let Some(svc) = s.dispatcher.sign_service() else {
-            return refusal(&DoorError::NotFound, lang);
+            return refusal(&DoorError::NotFound, lang, &brand);
         };
-        match svc.view(&rid, &tok, &client(&s, &parts)) {
-            Ok(View::Form(d)) => form_page(&FormView {
+        view_page(
+            svc.view(&rid, &tok, &client(&s, &parts)),
+            &Ctx {
+                brand: &brand,
                 lang,
                 rid: &rid,
                 tok: &tok,
-                data: &d,
                 typed: "",
                 error: None,
                 status: StatusCode::OK,
-            }),
-            Ok(View::Signed { at, history }) => {
-                page_response(StatusCode::OK, sign_page::done(lang, &at, history.as_ref()))
-            }
-            Err(e) => refusal(&e, lang),
-        }
+            },
+        )
     })
     .await
 }
@@ -324,12 +344,17 @@ pub(crate) async fn submit(
     body: Bytes,
 ) -> Response {
     blocking(move || {
+        // The brand every page of this request shows, asked once and first: this is the request
+        // that signs, so it reads before it writes anything. A failed read is the 503 of D74, and
+        // then nothing is signed and nothing is logged (`fault::before_write` refuses the writes
+        // of a request that met a fault); one whose read succeeds signs as it always did.
+        let brand = read_brand(&s);
         let mut lang = lang_for(&s, &parts, None);
         // The door follows the installed package: a rollback or an update made by another
         // process (`obop modules rollback sign`) is seen here without an authenticated call.
         s.dispatcher.sync_installed_modules();
         let Some(svc) = s.dispatcher.sign_service() else {
-            return refusal(&DoorError::NotFound, lang);
+            return refusal(&DoorError::NotFound, lang, &brand);
         };
         let base = s.mcp.base_url(&parts.headers);
         if !same_origin(&parts.headers, &base) {
@@ -338,7 +363,10 @@ pub(crate) async fn submit(
             // a minute: anybody can cause this without a link, and the refusal is made before
             // any limit of the door.
             s.sign_origin_log.note(&base);
-            return page_response(StatusCode::FORBIDDEN, sign_page::message(lang, "forbidden"));
+            return page_response(
+                StatusCode::FORBIDDEN,
+                sign_page::message(lang, "forbidden", &brand),
+            );
         }
         let ct = parts
             .headers
@@ -354,7 +382,7 @@ pub(crate) async fn submit(
         let Some(pairs) = pairs else {
             return page_response(
                 StatusCode::BAD_REQUEST,
-                sign_page::message(lang, "err_name"),
+                sign_page::message(lang, "err_name", &brand),
             );
         };
         lang = lang_for(&s, &parts, pair(&pairs, "lang"));
@@ -378,29 +406,24 @@ pub(crate) async fn submit(
             // English whatever their browser asks for; the bare link, visited later, is in the
             // browser's language again.
             Ok(Done { .. }) => noindex(see_other(&format!("/sign/{rid}/{tok}?lang={lang}"))),
-            Err(DoorError::Invalid(why)) => {
-                // The form again, with what was typed and what is wrong.
-                match svc.view(&rid, &tok, &c) {
-                    Ok(View::Form(d)) => form_page(&FormView {
-                        lang,
-                        rid: &rid,
-                        tok: &tok,
-                        data: &d,
-                        typed: &name,
-                        error: Some(match why {
-                            Invalid::Name => "err_name",
-                            Invalid::Agree => "err_agree",
-                            Invalid::History => "err_history",
-                        }),
-                        status: StatusCode::BAD_REQUEST,
+            // The form again, with what was typed and what is wrong.
+            Err(DoorError::Invalid(why)) => view_page(
+                svc.view(&rid, &tok, &c),
+                &Ctx {
+                    brand: &brand,
+                    lang,
+                    rid: &rid,
+                    tok: &tok,
+                    typed: &name,
+                    error: Some(match why {
+                        Invalid::Name => "err_name",
+                        Invalid::Agree => "err_agree",
+                        Invalid::History => "err_history",
                     }),
-                    Ok(View::Signed { at, history }) => {
-                        page_response(StatusCode::OK, sign_page::done(lang, &at, history.as_ref()))
-                    }
-                    Err(e) => refusal(&e, lang),
-                }
-            }
-            Err(e) => refusal(&e, lang),
+                    status: StatusCode::BAD_REQUEST,
+                },
+            ),
+            Err(e) => refusal(&e, lang, &brand),
         }
     })
     .await
@@ -414,12 +437,16 @@ pub(crate) async fn document(
     parts: Parts,
 ) -> Response {
     blocking(move || {
+        // The PDF is no page, but a refusal of it is (the same pages as the door's), and the door
+        // can count a try and write a refusal while it decides, so the brand is asked first here
+        // too and the refusal page shows the brand of this read.
+        let brand = read_brand(&s);
         let lang = lang_for(&s, &parts, None);
         // The door follows the installed package: a rollback or an update made by another
         // process (`obop modules rollback sign`) is seen here without an authenticated call.
         s.dispatcher.sync_installed_modules();
         let Some(svc) = s.dispatcher.sign_service() else {
-            return refusal(&DoorError::NotFound, lang);
+            return refusal(&DoorError::NotFound, lang, &brand);
         };
         match svc.pdf(&rid, &tok, &client(&s, &parts)) {
             Ok(served) => noindex(super::blobs::inline_pdf_response(
@@ -427,7 +454,7 @@ pub(crate) async fn document(
                 &parts.headers,
                 "private, no-store",
             )),
-            Err(e) => refusal(&e, lang),
+            Err(e) => refusal(&e, lang, &brand),
         }
     })
     .await
