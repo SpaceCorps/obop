@@ -404,6 +404,7 @@ fn status_with_no_record_and_an_explicit_site_key_says_which_values_are_not_the_
          slug: \"obop\" (default)\n\
          logo: none (default)\n\
          tile_accent: \"#495670\" (default)\n\
+         authenticator_issuer: \"obop\" (default)\n\
          favicon: \"tile\" (default)\n\
          site.accent: \"#2d6a4f\" (site)\n\
          site.logo_url: \"\" (default)\n\

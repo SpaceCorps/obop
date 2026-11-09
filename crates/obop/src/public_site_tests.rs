@@ -1171,3 +1171,92 @@ async fn a_read_error_that_is_not_a_d74_class_is_served_the_stand_in_to_that_req
         assert!(home.contains(OWNERS), "{case}: kept: {home}");
     }
 }
+
+// ---- The shop and the enrolment read one row, and agree on a name that is only spaces -----------
+
+/// A stored name of nothing but spaces, on one instance, seen by the two slices that read it. The
+/// write check never lets such a name in, so it comes from a restore, an import or a direct edit;
+/// the read check calls it empty (S1c). The shop falls back to the default name (S1f): its header and
+/// the title that `get` reports are `obop`, from the source `default`. Both the authenticator
+/// enrolment and the answer of `get` say that the name cannot be shown (S1e): the enrolment is
+/// refused with the 503 `brand_unavailable`, and `get` has no issuer in force. The two halves are
+/// held apart in `obop-site` (`tests_brand.rs`) and in `brand_enrol_tests`; this holds them to one
+/// another over one row, through the real routers of the public site and of the API.
+#[tokio::test]
+async fn a_stored_name_of_only_spaces_is_the_default_in_the_shop_and_refused_by_the_enrolment() {
+    for blank in [" ", "    ", &" ".repeat(40)] {
+        let f = fixture(true).await;
+        // The shop has no explicit title: what it shows is the brand's.
+        let mut settings = obop_storage::Fields::new();
+        settings.insert("value".into(), J::String("{}".into()));
+        let mut row = obop_storage::Fields::new();
+        row.insert("name".into(), J::String(blank.to_string()));
+        f.app
+            .store
+            .backend()
+            .apply_checked(&[
+                obop_storage::Op::Put {
+                    model: "obop_setting".into(),
+                    id: "instance".into(),
+                    fields: settings,
+                },
+                obop_storage::Op::Put {
+                    model: "instance_brand".into(),
+                    id: "instance".into(),
+                    fields: row,
+                },
+            ])
+            .unwrap();
+
+        // The shop: the default name, and no header made of spaces.
+        let (s, home, _) = get(&f.router, "/").await;
+        assert_eq!(s, 200, "{blank:?}");
+        assert!(home.contains("<span>obop</span>"), "{blank:?}: {home}");
+        assert!(
+            !home.contains(&format!("<span>{blank}</span>")),
+            "{blank:?}: {home}"
+        );
+
+        // `get`: the name, the shop's title and the issuer, from the one row.
+        let authed = |req: axum::http::request::Builder| {
+            req.header("host", "shop.test")
+                .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {}", f.token))
+        };
+        let (s, body, _) = send(
+            &f.router,
+            authed(Request::post("/api/instance_brand/get"))
+                .body(Body::from("{}"))
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(s, 200, "{blank:?}: {body}");
+        let answer: J = serde_json::from_str(&body).unwrap();
+        let effective: J =
+            serde_json::from_str(answer["value"]["effective"].as_str().unwrap()).unwrap();
+        for (key, value, source) in [
+            ("name", J::from("obop"), "default"),
+            ("site.title", J::from("obop"), "default"),
+            ("authenticator_issuer", J::Null, "unreadable"),
+        ] {
+            assert_eq!(
+                effective[key],
+                json!({"value": value, "source": source}),
+                "{blank:?}: {key}"
+            );
+        }
+
+        // The enrolment: refused as a name that cannot be shown, and waiting does not repair it.
+        let (s, body, headers) = send(
+            &f.router,
+            authed(Request::post("/api/auth/mfa/begin"))
+                .body(Body::from("{}"))
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(s, 503, "{blank:?}: {body}");
+        let refused: J = serde_json::from_str(&body).unwrap();
+        assert_eq!(refused["code"], json!("brand_unavailable"), "{blank:?}");
+        assert!(headers.get("retry-after").is_none(), "{blank:?}");
+    }
+}
