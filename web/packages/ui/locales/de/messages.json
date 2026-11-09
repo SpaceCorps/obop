@@ -70,6 +70,7 @@
   "Text on the accent fill": "Text auf der Akzentfläche",
   "That code is not valid. Check the time on your device and try again.": "Dieser Code ist ungültig. Die Uhrzeit des Geräts prüfen und erneut versuchen.",
   "That password is not right.": "Das Passwort ist nicht korrekt.",
+  "The branding of this server could not be read, so nothing was set up. An administrator has to repair it; trying again will not help.": "Das Branding dieses Servers konnte nicht gelesen werden, daher wurde nichts eingerichtet. Ein Administrator muss das beheben; ein erneuter Versuch hilft nicht.",
   "They are shown only now": "Sie werden nur jetzt angezeigt",
   "This sign-in has expired. Start again.": "Diese Anmeldung ist abgelaufen. Bitte neu beginnen.",
   "Time-based, 6 digits, account {account}.": "Zeitbasiert, 6 Stellen, Konto {account}.",

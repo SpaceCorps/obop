@@ -500,10 +500,18 @@ pub fn status_over(backend: Arc<dyn Backend>) -> Said {
 /// (the entries of the `effective` answer of `get`, so an entry a later slice adds shows here
 /// without a change), the titles and messages that are stored (a language that shows another
 /// language's title or the name through the fallback chain has no line of its own), and the stored
-/// fields that fell back to a default.
+/// fields that fell back to a default. At a terminal the authenticator issuer is read from the
+/// environment of the terminal's own process, which may not be the server's (spec, section 3).
 pub fn render_status(fresh: &Fresh) -> String {
+    render_status_with(fresh, brand::env_issuer())
+}
+
+/// As [`render_status`] with the value of `OBOP_MFA_ISSUER` given, so that a test does not depend on
+/// the environment of the process.
+pub fn render_status_with(fresh: &Fresh, issuer_variable: Option<String>) -> String {
     let shown = fresh.shown();
-    let effective: J = serde_json::from_str(&fresh.effective_json()).unwrap_or(J::Null);
+    let effective: J =
+        serde_json::from_str(&fresh.effective_json_with(issuer_variable)).unwrap_or(J::Null);
     let mut out = String::new();
     out.push_str(if fresh.set() {
         "brand: set\n"

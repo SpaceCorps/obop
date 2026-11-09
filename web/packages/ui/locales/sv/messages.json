@@ -70,6 +70,7 @@
   "Text on the accent fill": "Text på accentfyllningen",
   "That code is not valid. Check the time on your device and try again.": "Koden är inte giltig. Kontrollera klockan på enheten och försök igen.",
   "That password is not right.": "Lösenordet stämmer inte.",
+  "The branding of this server could not be read, so nothing was set up. An administrator has to repair it; trying again will not help.": "Varumärket för den här servern kunde inte läsas, så ingenting konfigurerades. En administratör måste åtgärda det; att försöka igen hjälper inte.",
   "They are shown only now": "De visas bara nu",
   "This sign-in has expired. Start again.": "Inloggningen har gått ut. Börja om.",
   "Time-based, 6 digits, account {account}.": "Tidsbaserad, 6 siffror, konto {account}.",

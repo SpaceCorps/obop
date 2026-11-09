@@ -8,7 +8,7 @@ use crate::{
     HistoryStats, J, LockGuard, Op, PartitionEnsured, Result, Row, RowSink, Sealer, Swap, Track,
     Tracking, WriteCtx, guarded,
 };
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU8, Ordering::SeqCst};
 
@@ -139,12 +139,17 @@ pub struct Flaky {
     /// Inserts into the model fail with this server error (no fault noted: it is not a refusal of
     /// the pool but a statement that failed, such as a full disk) until `allow_models`.
     insert_error: std::sync::Mutex<Option<(String, String)>>,
+    /// Reads (`get`) of the model fail with this error (no fault noted either) until
+    /// `allow_models`.
+    get_error: std::sync::Mutex<Option<(String, String)>>,
     /// The batches that reached `apply_tracked`: see [`Flaky::seen_writes`].
     seen: std::sync::Mutex<Vec<SeenWrite>>,
     /// See [`Flaky::reads`].
     reads: std::sync::Mutex<Reads>,
     /// See [`Flaky::models_asked`].
     asked: std::sync::Mutex<BTreeSet<String>>,
+    /// See [`Flaky::gets_of`].
+    got: std::sync::Mutex<BTreeMap<String, u64>>,
     /// Run once, right before the next atomic batch is applied.
     before_apply: std::sync::Mutex<Option<AfterInsert>>,
     /// Run once, right before the next compare-and-set of a short-lived value is tried.
@@ -210,9 +215,11 @@ impl Flaky {
             after_insert: std::sync::Mutex::new(None),
             after_get: std::sync::Mutex::new(None),
             insert_error: std::sync::Mutex::new(None),
+            get_error: std::sync::Mutex::new(None),
             seen: std::sync::Mutex::new(Vec::new()),
             reads: std::sync::Mutex::new(Reads::default()),
             asked: std::sync::Mutex::new(BTreeSet::new()),
+            got: std::sync::Mutex::new(BTreeMap::new()),
             before_apply: std::sync::Mutex::new(None),
             before_kv_swap: std::sync::Mutex::new(None),
             before_kv_get: std::sync::Mutex::new(None),
@@ -269,6 +276,13 @@ impl Flaky {
         self.asked.lock().unwrap().clone()
     }
 
+    /// How many times `get` was called for `model` through this backend since it was made, calls
+    /// that were refused included (a refused read is still a read that was asked for): the count
+    /// of the reads of one record, for the test that holds a caller to "once" or "at most once".
+    pub fn gets_of(&self, model: &str) -> u64 {
+        self.got.lock().unwrap().get(model).copied().unwrap_or(0)
+    }
+
     fn ask(&self, model: &str) {
         if !model.is_empty() {
             self.asked.lock().unwrap().insert(model.to_string());
@@ -296,6 +310,7 @@ impl Flaky {
         *self.target.lock().unwrap() = None;
         *self.after_get.lock().unwrap() = None;
         *self.insert_error.lock().unwrap() = None;
+        *self.get_error.lock().unwrap() = None;
         self.after_write.store(0, SeqCst);
         self.after_budget.store(0, SeqCst);
         self.next.store(0, SeqCst);
@@ -346,6 +361,15 @@ impl Flaky {
     /// nor a refusal of the pool (`could not extend file: No space left on device`).
     pub fn fail_inserts_into(&self, model: &str, message: &str) {
         *self.insert_error.lock().unwrap() = Some((model.to_string(), message.to_string()));
+    }
+
+    /// Fail every `get` of `model` with `message`, a read error that is neither a refusal of the
+    /// pool nor noted as a fault on the thread: the store is up and cannot answer this read (a
+    /// statement that failed, a row that cannot be decoded). The text decides how the layers above
+    /// take it, so a test passes one that starts with no code word of D74 to make it a non-transient
+    /// error.
+    pub fn fail_gets_of(&self, model: &str, message: &str) {
+        *self.get_error.lock().unwrap() = Some((model.to_string(), message.to_string()));
     }
 
     /// Let `skip` successful `get`s of `model` through, then run `then` right after the next one,
@@ -549,8 +573,19 @@ impl Backend for Flaky {
         Ok(())
     }
     fn get(&self, model: &str, id: &str) -> Result<Option<Fields>> {
+        *self
+            .got
+            .lock()
+            .unwrap()
+            .entry(model.to_string())
+            .or_default() += 1;
         self.gate_m(false, model)?;
         self.reads.lock().unwrap().gets += 1;
+        if let Some((m, message)) = &*self.get_error.lock().unwrap()
+            && m == model
+        {
+            return Err(message.clone());
+        }
         let found = self.inner.get(model, id)?;
         let hook = {
             let mut g = self.after_get.lock().unwrap();
@@ -1046,6 +1081,40 @@ mod tests {
 
     fn fields(v: serde_json::Value) -> Fields {
         v.as_object().cloned().unwrap()
+    }
+
+    /// `gets_of` counts the `get`s of one model, and a `get` that was refused or failed is still
+    /// a read that was asked for: a caller held to "once" is held to the reads it asked for, not
+    /// to those that were answered. Other calls on the model are not gets.
+    #[test]
+    fn gets_of_counts_the_gets_of_one_model_refused_and_failed_ones_included() {
+        let (flaky, db) = Flaky::memory();
+        assert_eq!(flaky.gets_of("m"), 0);
+        db.get("m", "a").unwrap();
+        db.get("other", "a").unwrap();
+        assert_eq!((flaky.gets_of("m"), flaky.gets_of("other")), (1, 1));
+        // Not gets: a list, a count, a find and a write of the model.
+        db.list("m").unwrap();
+        db.count("m").unwrap();
+        db.find("m", "f", &json!(1)).unwrap();
+        db.insert("m", "a", &Fields::new()).unwrap();
+        assert_eq!(flaky.gets_of("m"), 1);
+        // A get the pool refuses.
+        flaky.refuse_model("m", Mode::Reads);
+        assert!(db.get("m", "a").is_err());
+        assert_eq!(flaky.refused(), 1, "the call was refused");
+        assert_eq!(flaky.gets_of("m"), 2, "and still counted");
+        assert_eq!(
+            flaky.gets_of("other"),
+            1,
+            "the refusal was of the other model"
+        );
+        // A get that fails with a plain error of the store.
+        flaky.allow_models();
+        flaky.fail_gets_of("m", "a read error that is not transient");
+        assert!(db.get("m", "a").is_err());
+        assert_eq!(flaky.gets_of("m"), 3, "a failed get is counted");
+        fault::clear();
     }
 
     /// The models a call names are noted for every way of naming one: a keyed call, a batch, a

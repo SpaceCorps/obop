@@ -4,6 +4,7 @@
 use super::*;
 use crate::Dispatcher;
 use crate::brand::{UNREADABLE, strict};
+use obop_storage::fault::Fault;
 
 fn spy_with(pairs: &[(&str, J)]) -> Arc<Spy> {
     let spy = Spy::memory();
@@ -48,6 +49,76 @@ fn a_name_that_fails_the_safety_subset_is_a_failure_with_a_fixed_message() {
     // A row with no name at all: the same.
     let spy = spy_with(&[("title_en", s("Hello"))]);
     assert!(strict(&*spy).unwrap_err().starts_with(UNREADABLE));
+}
+
+/// A name that passes the read check but that `configure` refuses for a link character was written
+/// around the command; it cannot go into a device's label either (the label would split at the
+/// colon into another issuer than `issuer=` says). The message is fixed, says it is the label, and
+/// holds none of the text.
+#[test]
+fn a_name_that_cannot_go_into_a_label_is_a_failure_with_a_fixed_message() {
+    for bad in [
+        "a:b",
+        "a/b",
+        "a\\b",
+        "a@b",
+        "http://evil.test/x",
+        "javascript:alert(1)",
+    ] {
+        let spy = spy_with(&[("name", s(bad))]);
+        let e = strict(&*spy).unwrap_err();
+        assert!(e.starts_with(UNREADABLE), "{bad:?}: {e}");
+        assert!(!Fault::is_transient(&e), "{e}");
+        assert_eq!(
+            e,
+            format!("{UNREADABLE}: the stored name cannot be used in a label"),
+            "{bad:?}"
+        );
+        assert!(!e.contains(bad), "nothing of the stored text: {e}");
+    }
+    // The ordinary punctuation of a name is no reason.
+    for good in ["Acme, Inc.", "O'Neil & Sons", "Müller (DE)", "a-b_c+d!"] {
+        let spy = spy_with(&[("name", s(good))]);
+        assert_eq!(strict(&*spy).unwrap().name(), good);
+    }
+}
+
+/// A stored name of nothing but U+0020 (a row written around the command: the write check refuses
+/// it) is empty for the read check since S1c, in the display and in `strict()` alike. The display
+/// falls back to `obop` and lists the field (`empty`); `strict()` refuses it as a name that cannot
+/// be shown, and so does the enrolment that asks it, which writes nothing into a device. The stored
+/// name does not get as far as the check of the label, whose message is the other one. A name with
+/// a space between letters is the text.
+#[test]
+fn a_name_of_only_spaces_is_empty_for_the_display_and_refused_by_strict_as_not_shown() {
+    for blank in [" ", "  ", &" ".repeat(40)] {
+        let spy = spy_with(&[("name", s(blank))]);
+        let e = strict(&*spy).unwrap_err();
+        assert_eq!(
+            e,
+            format!("{UNREADABLE}: the stored name cannot be shown"),
+            "{blank:?}"
+        );
+        assert!(!Fault::is_transient(&e), "{e}");
+        // The display of the same row: the default name, and the field listed as empty.
+        let (r, _) = reader(&spy, LONG);
+        let shown = r.current();
+        assert!(shown.is_set());
+        assert_eq!(shown.brand().name(), "obop", "{blank:?}");
+        let listed: Vec<(&str, &str)> = shown
+            .fallbacks()
+            .iter()
+            .map(|f| (f.field.as_str(), f.code))
+            .collect();
+        assert_eq!(listed, [("name", "empty")], "{blank:?}");
+        // The reader's own `strict` is the same answer.
+        assert_eq!(r.strict().unwrap_err(), e, "{blank:?}");
+    }
+    // A space between letters, or around them, is not blank.
+    for good in ["Acme Co", " Acme"] {
+        let spy = spy_with(&[("name", s(good))]);
+        assert_eq!(strict(&*spy).unwrap().name(), good);
+    }
 }
 
 #[test]

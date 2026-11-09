@@ -12,6 +12,9 @@
 //! - [`apply`]: the one function that writes the row (`configure` and `clear`, on every surface),
 //!   under the lock `brand.write`, with the audit events in the same atomic batch.
 //! - [`Dispatcher::brand`]: the reader the dispatcher holds, created by `register_admin`.
+//! - [`env_issuer`] and [`enrolment_error`]: what the enrolment of an authenticator or a passkey
+//!   needs besides [`strict`] (the one reading of `OBOP_MFA_ISSUER`, and the error of an enrolment
+//!   that could not read the name).
 //!
 //! No code outside this module reads the model `instance_brand`: `brand_scan_tests` in `obop-http`
 //! lists the few files that name it or the reader, with the reason of each, and fails on any other.
@@ -19,6 +22,7 @@
 
 mod apply;
 mod effective;
+mod enrol;
 mod reader;
 mod row;
 
@@ -26,6 +30,7 @@ pub use apply::{
     Action, Applied, Changed, Failure, Refused, apply, change_line, changes_json, printable,
     refusals_json, show_key,
 };
+pub use enrol::{ISSUER_VAR, enrolment_error, env_issuer, issuer_warning, no_reader_error};
 pub use reader::{Fresh, Reader, Sink, strict};
 pub use row::{Fallback, Shown, fallbacks_json};
 

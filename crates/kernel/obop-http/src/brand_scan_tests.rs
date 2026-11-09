@@ -28,8 +28,11 @@
 //! **A row carries a [`Limit`].** The files of the module, the model and the command line may do
 //! anything ([`Limit::Any`]). A file of a surface that only asks the reader ([`Limit::Reads`]) may
 //! call `brand()` as many times as the row says, name the paths through the module `brand` that
-//! the row lists, call `.current(`, `.fresh(` and `.strict(` as many times in all as the row says,
-//! and name the types the row lists as types only, and nothing else. A type "as a type only" is
+//! the row lists, call `.current(`, `.fresh(` and `.strict(` and the helper `rp_name(` of
+//! `obop-http/src/passkeys.rs` (which does one display read for a ceremony site) as many times in
+//! all as the row says, and name the types the row lists as types only, and nothing else. A call
+//! of `brand()` on the answer of a `.current()` is the `brand()` of a `Shown`, not the accessor of
+//! the dispatcher, and is not counted as one (the `.current(` before it is counted as a read). A type "as a type only" is
 //! never reached by `::` (`Reader::new`, `Reader::with_bound`, `Reader::inert`, `<Reader>::inert`
 //! or any other function, which would build a second reader or reach round the one the file was
 //! handed; the closers of the type are looked past, so `<(Reader)>::inert` and `<Reader<>>::inert`
@@ -45,11 +48,21 @@
 //! a reader built through a trait without the name of its type (`Default::default()`; `Reader` has
 //! no `Default`, and a release that gives it one must extend the rules above), a type named inside
 //! another (`type Rd = Arc<Reader>;` names the type and builds nothing; what `Rd::new` reaches
-//! is `Arc`'s), and Rust outside `crates/` are not seen. It makes a second reader visible; it
-//! does not stop one who works around it. The behaviour is held by
-//! `crates/obop/src/brand_row_tests.rs`: with a row, every output that is pinned is what it was
-//! without one (the logo path is the exception: it answers the artwork with a row,
-//! `crates/obop/src/brand_http_tests.rs`).
+//! is `Arc`'s), and Rust outside `crates/` are not seen. A surface that shows the brand through a
+//! helper of another file has none of the words above in its own text: the one helper that exists,
+//! `rp_name(`, is looked for by name (`HELPER`; the same name written as a path with no call, as in
+//! `.map(passkeys::rp_name)`, or imported, or renamed on import, is `HELPER_VALUE` and no row lets a
+//! file do it), so that the OAuth pages' passkey step needs a row of its own; the bare name imported
+//! by a glob or a group and then handed on is not seen, and a second helper of that kind is not seen
+//! until it is added to `readers`. It makes a second reader visible; it does not stop one who works
+//! around it. The behaviour is held by `crates/obop/src/brand_row_tests.rs`: with a
+//! row, every output that is pinned is what it was without one (the logo path is the exception: it
+//! answers the artwork with a row, `crates/obop/src/brand_http_tests.rs`).
+//! Since S1c the pages of the OAuth authorization flow are the next exception (`oauth_tests/brand.rs`),
+//! and since S1e there are two more: the enrolment texts. With a row the label and `issuer=` of an
+//! authenticator entry and the relying party name of a passkey are the name of the record, and the
+//! enrolment asks the reader for it (`crates/obop/src/brand_enrol_tests.rs`, and the
+//! `with_a_brand_row_*` tests of `mfa_tests` and `passkey_tests`).
 
 use crate::src_scan::{Lexed, after_brace, line_of, non_test, read_tree, tree, words};
 use std::collections::{BTreeMap, BTreeSet};
@@ -77,7 +90,7 @@ enum Limit {
 
 /// Where the brand is read or written: the path from `crates/` (a prefix when it ends with `/`),
 /// why, and what the file may do.
-const ALLOWED: [(&str, &str, Limit); 10] = [
+const ALLOWED: [(&str, &str, Limit); 13] = [
     (
         "kernel/obop-commands/src/brand/",
         "the module itself: the reader, `strict()`, `apply` and the read of `get`",
@@ -124,11 +137,41 @@ const ALLOWED: [(&str, &str, Limit); 10] = [
         Limit::Any,
     ),
     (
+        "kernel/obop-auth/src/mfa.rs",
+        "the authenticator enrolment (S1e): `AuthConfig::from_env` reads `OBOP_MFA_ISSUER` through `brand::env_issuer`, and writes a warning for a value with a link character (`brand::issuer_warning`), and `begin` reads the stored name with `brand::strict` (the row alone, every time) and turns a failure into the error of an enrolment with `brand::enrolment_error`; it holds no reader and calls no method of one (`from_env` calls `KeyRing::current` in the form of a function, so that the scan, which cannot tell that method from the reader's, finds no `.current(` here)",
+        Limit::Reads {
+            calls: 0,
+            reads: 0,
+            paths: &["env_issuer", "issuer_warning", "strict", "enrolment_error"],
+            types: &[],
+        },
+    ),
+    (
+        "kernel/obop-http/src/mfa.rs",
+        "`mfa_error` answers the 503 `brand_unavailable` for a message that starts with `brand::UNREADABLE` (S1e); it reads nothing",
+        Limit::Reads {
+            calls: 0,
+            reads: 0,
+            paths: &["UNREADABLE"],
+            types: &[],
+        },
+    ),
+    (
+        "kernel/obop-http/src/passkeys.rs",
+        "the passkey ceremony site (S1e): `rp_name` gets the reader of the dispatcher and asks it for display once (`current`), for every route but the registration options and for the OAuth pages' site; `registration_name`, the name of the registration options, gets it once more and asks for the strict name (`strict`) with no display read, turns a failure into the error of an enrolment (`enrolment_error`) and refuses a reader that has no store (`no_reader_error`); it names no type and builds no reader (the two `brand()` calls the row lets it make are the dispatcher's, one in `rp_name` and one in `registration_name`; the `brand()` of a `Shown` after `.current()` is not counted; the three reads are `.current(`, `.strict(` and the one call of `rp_name(` in `display_name`)",
+        Limit::Reads {
+            calls: 2,
+            reads: 3,
+            paths: &["enrolment_error", "no_reader_error"],
+            types: &[],
+        },
+    ),
+    (
         "kernel/obop-http/src/oauth.rs",
-        "the pages of the authorization flow (S1c): `read_brand` gets the reader of the dispatcher once and asks it once, on a blocking thread, and the four starts of a request (`authorize_blocking`, `step`, `microsoft_blocking`, `microsoft_return`) call it and hand that one value to every page they render; it names the type `Shown` as a type only (no function through it, no second name, no impl), so it builds no reader",
+        "the pages of the authorization flow (S1c) and the ceremony site of the passkey step (S1e): `read_brand` gets the reader of the dispatcher once and asks it once, on a blocking thread, and the four starts of a request (`authorize_blocking`, `step`, `microsoft_blocking`, `microsoft_return`) call it and hand that one value to every page they render; it names the type `Shown` as a type only (no function through it, no second name, no impl), so it builds no reader; `webauthn_ctx` takes the relying party name of the passkey step from `passkeys::rp_name`, the display read of the passkey routes, and calls it once, so a passkey route of the flow makes a second display read after the one of its start (a hit of the cache within two seconds) for a name that no sign-in emits, and a second call of the helper is a third read that this row does not allow (the two reads the row lets the file make are the `.current(` of `read_brand` and the one call of `rp_name(`)",
         Limit::Reads {
             calls: 1,
-            reads: 1,
+            reads: 2,
             paths: &["Shown"],
             types: &["Shown"],
         },
@@ -175,6 +218,9 @@ const INSTALL: &str = "`install_brand`";
 const PATH: &str = "a path through the module `brand`";
 const CALL: &str = "a call of the reader accessor `brand()`";
 const READ: &str = "a call of `.current(`, `.fresh(` or `.strict(`";
+const HELPER: &str =
+    "a call of `rp_name(`, the helper of the passkey routes that makes one display read";
+const HELPER_VALUE: &str = "the helper `rp_name` named by a path without a call, or renamed (passed on, bound to a name, imported)";
 const THROUGH: &str = "a function reached through a type the row lets the file name as a type only";
 const RENAMED: &str = "a type the row lets the file name as a type only, renamed or implemented";
 const VALUE: &str = "the module `brand` or the reader accessor `brand` named without a call";
@@ -371,7 +417,11 @@ fn readers(l: &Lexed) -> Vec<Hit> {
         if code[after..].starts_with(b"::") {
             hit(at, PATH, targets(code, after + 2));
         } else if code.get(after) == Some(&b'(') && (dot || colons) {
-            hit(at, CALL, vec![]);
+            // The brand of a `Shown` (`reader.current().brand()`) is not the accessor of the
+            // dispatcher; its `.current(` is counted as a read.
+            if !on_a_current_answer(code, at) {
+                hit(at, CALL, vec![]);
+            }
         } else if colons || imports.iter().any(|(from, to)| (*from..*to).contains(&at)) {
             // `Dispatcher::brand` handed on (`.map(Dispatcher::brand)`), or `use x::brand;`, or
             // the module in a group or under another name (`use x::{brand as bb, Y};`, where the
@@ -380,8 +430,47 @@ fn readers(l: &Lexed) -> Vec<Hit> {
             hit(at, VALUE, vec![]);
         }
     }
+    for at in words(code, "rp_name") {
+        let after = crate::src_scan::skip_ws(code, at + "rp_name".len());
+        // A call, not the definition (`fn rp_name(`) and not the field of a struct (`rp_name:`).
+        if code.get(after) == Some(&b'(') && word_before(code, at) != "fn" {
+            hit(at, HELPER, vec![]);
+        } else if word_before(code, at) != "fn"
+            && (path_before(code, at) || crate::src_scan::word_at(code, after) == "as")
+        {
+            // The helper as a value, which is a read that nothing counts: `let f =
+            // crate::passkeys::rp_name;`, `.map(crate::passkeys::rp_name)`, `use ...::rp_name;`
+            // and `use ...::rp_name as other;` (a name that is only a path, or has another name
+            // after it). A bare `rp_name` is a local or a field and is not looked at.
+            hit(at, HELPER_VALUE, vec![]);
+        }
+    }
     out.sort_by_key(|h| h.at);
     out
+}
+
+/// Whether the word at `at` is the last segment of a path: `::` just before it, white space aside.
+fn path_before(code: &[u8], at: usize) -> bool {
+    code[..at]
+        .iter()
+        .rposition(|c| !c.is_ascii_whitespace())
+        .is_some_and(|p| code[p] == b':' && p > 0 && code[p - 1] == b':')
+}
+
+/// Whether the `brand(` at `at` is called on the answer of a call of `current()`: `).` before it,
+/// then `(`, then the word `current` (`s.dispatcher.brand().current().brand()`).
+fn on_a_current_answer(code: &[u8], at: usize) -> bool {
+    let last = |end: usize| code[..end].iter().rposition(|c| !c.is_ascii_whitespace());
+    let Some(dot) = last(at).filter(|p| code[*p] == b'.') else {
+        return false;
+    };
+    let Some(close) = last(dot).filter(|p| code[*p] == b')') else {
+        return false;
+    };
+    let Some(open) = last(close).filter(|p| code[*p] == b'(') else {
+        return false;
+    };
+    word_before(code, open) == "current"
 }
 
 /// The hits that the row `limit` does not let its file make, with what the row allows in words.
@@ -412,7 +501,7 @@ fn beyond(limit: Limit, hits: &[Hit]) -> Vec<(&Hit, String)> {
                 asked += 1;
                 (asked > calls).then(|| format!("call number {asked}, the row lets it ask {calls}"))
             }
-            READ => {
+            READ | HELPER => {
                 read += 1;
                 (read > reads).then(|| format!("call number {read}, the row lets it ask {reads}"))
             }
@@ -668,8 +757,20 @@ fn the_scan_sees_the_ways_a_file_can_read_the_row_and_leaves_the_allowed_files_a
             "fn f() { let _ = brand::routes(g); }",
         ),
         (
+            "kernel/obop-auth/src/mfa.rs",
+            "fn f(b: &dyn Backend) { let _ = obop_commands::brand::strict(b); }",
+        ),
+        (
+            "kernel/obop-http/src/mfa.rs",
+            "fn f(m: &str) -> bool { m.starts_with(obop_commands::brand::UNREADABLE) }",
+        ),
+        (
+            "kernel/obop-http/src/passkeys.rs",
+            "use obop_commands::brand::enrolment_error; fn f(s: &S) { let _ = s.dispatcher.brand().current(); let _ = s.dispatcher.brand().strict().map_err(enrolment_error); }",
+        ),
+        (
             "kernel/obop-http/src/oauth.rs",
-            "use obop_commands::brand::Shown; fn read_brand(s: &S) -> Arc<Shown> { s.dispatcher.brand().current() }",
+            "use obop_commands::brand::Shown; fn read_brand(s: &S) -> Arc<Shown> { s.dispatcher.brand().current() } fn site(s: &S) -> String { super::passkeys::rp_name(s) }",
         ),
         (
             "kernel/obop-oauth/src/page.rs",
@@ -1074,9 +1175,11 @@ fn a_row_with_limits_lets_its_file_ask_the_reader_as_the_row_says_and_nothing_el
     assert!(found.is_empty(), "{found:?}");
 }
 
-/// The rows with limits are the two files of the logo route and the three files of the pages of the
-/// authorization flow, and no others: loosening one of them to `Limit::Any` is a change of this
-/// test, and so a decision that shows in the diff.
+/// The rows with limits are the two files of the logo route, the three files of the pages of the
+/// authorization flow and the four files of the enrolment texts (the authenticator's configuration,
+/// the error mapper of the routes, the passkey routes and the OAuth pages' route file, which has one
+/// row for both), and no others: loosening one of them to `Limit::Any` is a change of this test, and
+/// so a decision that shows in the diff.
 #[test]
 fn the_rows_with_limits_are_the_files_that_only_ask_the_reader() {
     let limited: Vec<&str> = ALLOWED
@@ -1089,11 +1192,171 @@ fn the_rows_with_limits_are_the_files_that_only_ask_the_reader() {
         [
             "kernel/obop-http/src/brand.rs",
             "kernel/obop-http/src/lib.rs",
+            "kernel/obop-auth/src/mfa.rs",
+            "kernel/obop-http/src/mfa.rs",
+            "kernel/obop-http/src/passkeys.rs",
             "kernel/obop-http/src/oauth.rs",
             "kernel/obop-oauth/src/page.rs",
             "kernel/obop-oauth/src/flow.rs"
         ]
     );
+}
+
+/// The rows of the enrolment texts (S1e): each file may do what its row says and nothing else. The
+/// authenticator's configuration reads a path and holds no reader; the error mapper of the routes
+/// reads nothing; the passkey routes get the reader twice, ask it twice, and name no type.
+#[test]
+fn the_enrolment_files_may_name_what_their_rows_list_and_nothing_else() {
+    let auth = "kernel/obop-auth/src/mfa.rs";
+    let http_mfa = "kernel/obop-http/src/mfa.rs";
+    let passkeys = "kernel/obop-http/src/passkeys.rs";
+    let oauth = "kernel/obop-http/src/oauth.rs";
+    for (path, src) in [
+        (
+            auth,
+            "fn f() { let _ = obop_commands::brand::env_issuer(); let _ = obop_commands::brand::strict(b).map_err(obop_commands::brand::enrolment_error); let _ = KeyRing::current(&k); }",
+        ),
+        (
+            http_mfa,
+            "fn f(m: &str) -> bool { m.starts_with(obop_commands::brand::UNREADABLE) }",
+        ),
+        (
+            passkeys,
+            "use obop_commands::brand::enrolment_error; fn a(s: &S) -> String { s.dispatcher.brand().current().brand().name().to_string() } fn b(s: &S) { let _ = s.dispatcher.brand().strict().map_err(enrolment_error); }",
+        ),
+        // The helper is defined, called once, and named as a field, in the file that owns it.
+        (
+            passkeys,
+            "fn rp_name(s: &S) -> String { s.dispatcher.brand().current().brand().name().to_string() } fn d(s: &S) -> Result<String, R> { Ok(rp_name(s)) } fn c(s: &S) -> Ctx { Ctx { rp_name: String::new() } }",
+        ),
+        // The route file of the OAuth pages asks the reader once in `read_brand` (S1c) and its
+        // passkey step calls the helper once, as the value of a field (S1e): two reads, and the row
+        // lets the file make two.
+        (
+            oauth,
+            "fn read_brand(s: &S) -> Arc<Shown> { s.dispatcher.brand().current() } fn f(s: &S) -> Ctx { Ctx { rp_name: super::passkeys::rp_name(s) } }",
+        ),
+    ] {
+        let (found, _) = scan(&tree(&[(path, src)]));
+        assert!(found.is_empty(), "{path}: {src}: {found:?}");
+    }
+    for (path, src, what) in [
+        // A reader asked for by the authenticator's configuration, or one built there.
+        (auth, "fn f(d: &Dispatcher) { let _ = d.brand(); }", CALL),
+        // The row lets the file ask the reader nothing: `KeyRing::current` is called as a function,
+        // and a `.current(` or `.strict(` method call is found, whichever reader it is on.
+        (auth, "fn f(k: &KeyRing) { let _ = k.current(); }", READ),
+        (auth, "fn f(r: &Reader) { let _ = r.strict(); }", READ),
+        (
+            auth,
+            "fn f() { let _ = obop_commands::brand::Reader::inert(); }",
+            PATH,
+        ),
+        (
+            auth,
+            "fn f() { let _ = obop_commands::brand::apply(); }",
+            PATH,
+        ),
+        (
+            auth,
+            "fn f() { let _ = \"instance_brand\"; }",
+            MODEL_LITERAL,
+        ),
+        // The error mapper of the routes reads nothing.
+        (
+            http_mfa,
+            "fn f(d: &Dispatcher) { let _ = d.brand(); }",
+            CALL,
+        ),
+        (
+            http_mfa,
+            "fn f(m: &str) { let _ = obop_commands::brand::strict(b); }",
+            PATH,
+        ),
+        // The passkey routes: a third call of the accessor (the `brand()` of a `Shown` after a
+        // `.current()` is not one), a fourth read, a second call of the helper, a built reader, a
+        // path to anything else.
+        (
+            passkeys,
+            "fn a(s: &S) { s.dispatcher.brand(); s.dispatcher.brand(); s.dispatcher.brand(); }",
+            CALL,
+        ),
+        (
+            passkeys,
+            "fn a(r: &Reader) { r.current(); r.strict(); r.fresh(); r.current(); }",
+            READ,
+        ),
+        (
+            passkeys,
+            "fn a(r: &Reader, s: &S) { r.current(); r.strict(); let _ = rp_name(s); let _ = rp_name(s); }",
+            HELPER,
+        ),
+        // The OAuth pages' site: the file's two reads are the `.current(` of `read_brand` and one call
+        // of the helper, so a second call of the helper is a third read; a reader asked for in the
+        // file beyond them is found; so is any path through the module.
+        (
+            oauth,
+            "fn read_brand(s: &S) -> Arc<Shown> { s.dispatcher.brand().current() } fn f(s: &S) { let _ = super::passkeys::rp_name(s); let _ = super::passkeys::rp_name(s); }",
+            HELPER,
+        ),
+        // The helper handed on, bound to a name or imported under another is a read that no count
+        // sees: found in a file that has the row, whatever the way.
+        (
+            oauth,
+            "fn f(s: &S) { let g = super::passkeys::rp_name; let _ = g(s); }",
+            HELPER_VALUE,
+        ),
+        (
+            oauth,
+            "fn f(v: Vec<&S>) { let _: Vec<String> = v.into_iter().map(super::passkeys::rp_name).collect(); }",
+            HELPER_VALUE,
+        ),
+        (
+            oauth,
+            "use super::passkeys::rp_name as other; fn f(s: &S) { let _ = other(s); }",
+            HELPER_VALUE,
+        ),
+        (
+            oauth,
+            "use super::passkeys::{rp_name as other}; fn f(s: &S) { let _ = other(s); }",
+            HELPER_VALUE,
+        ),
+        (
+            oauth,
+            "fn f(d: &Dispatcher) { let _ = d.brand(); let _ = d.brand(); }",
+            CALL,
+        ),
+        (
+            oauth,
+            "fn f(r: &Reader) { let _ = r.current(); let _ = r.current(); let _ = r.current(); }",
+            READ,
+        ),
+        // The helper called once and the reader asked twice: the third read is the second `.current(`.
+        (
+            oauth,
+            "fn f(r: &Reader, s: &S) { let _ = r.current(); let _ = super::passkeys::rp_name(s); let _ = r.current(); }",
+            READ,
+        ),
+        (
+            oauth,
+            "fn f() { let _ = obop_commands::brand::strict(b); }",
+            PATH,
+        ),
+        (
+            passkeys,
+            "fn f() { let _ = obop_commands::brand::Reader::inert(); }",
+            PATH,
+        ),
+        (
+            passkeys,
+            "fn f() { let _ = obop_commands::brand::strict(b); }",
+            PATH,
+        ),
+    ] {
+        let (found, _) = scan(&tree(&[(path, src)]));
+        assert_eq!(found.len(), 1, "{path}: {src}: {found:?}");
+        assert!(found[0].contains(what), "{path}: {src}: {found:?}");
+    }
 }
 
 // ---- The scan for literals (slice S1c) -------------------------------------------------------------
@@ -1150,7 +1413,7 @@ type LiteralRow = (
     &'static str,
 );
 
-const LITERAL_ALLOWED: [LiteralRow; 4] = [
+const LITERAL_ALLOWED: [LiteralRow; 3] = [
     (
         "kernel/obop-oauth/src/page.rs",
         "CATALOGUE",
@@ -1181,16 +1444,6 @@ const LITERAL_ALLOWED: [LiteralRow; 4] = [
         "identifier",
         "the name of the cookie that binds a browser to its flow: an identifier of the program that a \
          person does not read; renaming it would end the flows in progress",
-    ),
-    (
-        "kernel/obop-http/src/oauth.rs",
-        "webauthn_ctx",
-        Some("obop"),
-        1,
-        "today",
-        "the relying-party name of the passkey ceremony site of the sign-in pages. It reaches an \
-         authenticator only through registration options, which the REST routes make, not these \
-         pages. Its branded counterpart does not exist in this tree",
     ),
 ];
 
@@ -1434,10 +1687,11 @@ fn page_with(cells: usize) -> String {
     s
 }
 
-/// An `oauth.rs` with the three literals of the rows.
+/// An `oauth.rs` with the two literals of the rows. (The literal `"obop"` of `webauthn_ctx`, the
+/// relying-party name of the passkey step, had a fourth row, `today`, that the enrolment slice
+/// removes: since S1e the function takes the name from the reader.)
 const OAUTH_RS: &str = "fn cors() { let _ = \"Retry-After, X-Obop-Applied\"; }\n\
-     fn cookie_name() { let _ = format!(\"obop_oauth_{}\", 1); }\n\
-     fn webauthn_ctx() { let _ = \"obop\"; }\n";
+     fn cookie_name() { let _ = format!(\"obop_oauth_{}\", 1); }\n";
 
 const PAGE_PATH: &str = "kernel/obop-oauth/src/page.rs";
 const OAUTH_PATH: &str = "kernel/obop-http/src/oauth.rs";
@@ -1470,17 +1724,22 @@ fn the_scan_for_literals_finds_a_new_literal() {
     assert_eq!(found.len(), 1, "{found:?}");
 
     // The same text in another function is not the row's: the row names the item.
-    let moved = OAUTH_RS.replace("fn webauthn_ctx()", "fn other()");
+    let moved = OAUTH_RS.replace("fn cookie_name()", "fn other()");
     let (found, drift) = literal_scan(&tree(&[(PAGE_PATH, &page_with(35)), (OAUTH_PATH, &moved)]));
     assert_eq!(found.len(), 1, "{found:?}");
     assert!(found[0].contains("`other`"), "{found:?}");
-    assert!(
-        drift.iter().any(|d| d.contains("webauthn_ctx")),
-        "{drift:?}"
-    );
+    assert!(drift.iter().any(|d| d.contains("cookie_name")), "{drift:?}");
+
+    // The relying-party name of the passkey step is no longer a row (S1e takes it from the reader):
+    // the literal `"obop"` back in `webauthn_ctx` is found, with the item, and no row is left over.
+    let back = format!("{OAUTH_RS}fn webauthn_ctx() {{ let _ = \"obop\"; }}\n");
+    let (found, drift) = literal_scan(&tree(&[(PAGE_PATH, &page_with(35)), (OAUTH_PATH, &back)]));
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(found[0].contains("`webauthn_ctx`"), "{found:?}");
+    assert!(drift.is_empty(), "{drift:?}");
 
     // A different literal in the item of a row with an exact literal is not let through.
-    let widened = OAUTH_RS.replace("\"obop\"", "\"obop shop\"");
+    let widened = OAUTH_RS.replace("obop_oauth_{}", "obop_oauth_{} shop");
     let (found, _) = literal_scan(&tree(&[
         (PAGE_PATH, &page_with(35)),
         (OAUTH_PATH, &widened),
@@ -1639,8 +1898,9 @@ fn the_neutral_twins_and_the_same_name_sentence_name_no_product() {
 }
 
 /// The three rows of the authorization flow's pages (S1c) let their files do what the row says and
-/// nothing else: the handlers get the reader of the dispatcher once and ask it once and build none;
-/// the page functions and the flow context only use the value they were handed.
+/// nothing else: the handlers get the reader of the dispatcher once and ask it once (the passkey
+/// step of the same file makes one more display read, through the helper of the passkey routes,
+/// S1e) and build none; the page functions and the flow context only use the value they were handed.
 #[test]
 fn the_rows_of_the_pages_of_the_authorization_flow_hold_their_files_to_what_they_say() {
     let route = "kernel/obop-http/src/oauth.rs";
@@ -1666,7 +1926,8 @@ fn the_rows_of_the_pages_of_the_authorization_flow_hold_their_files_to_what_they
     }
     // What they do not say is found, once, with the reason.
     for (path, src, what) in [
-        // A second question to the dispatcher, and a second read, in the handlers.
+        // A second question to the dispatcher, and a third read (the row lets the file make two: the
+        // `.current(` of `read_brand` and the helper of the passkey step, S1e), in the handlers.
         (
             route,
             "fn f(s: &S) { let _ = s.dispatcher.brand(); let _ = s.dispatcher.brand(); }",
@@ -1674,12 +1935,12 @@ fn the_rows_of_the_pages_of_the_authorization_flow_hold_their_files_to_what_they
         ),
         (
             route,
-            "fn f(r: &Reader) { let _ = r.current(); let _ = r.fresh(); }",
+            "fn f(r: &Reader) { let _ = r.current(); let _ = r.current(); let _ = r.fresh(); }",
             READ,
         ),
         (
             route,
-            "fn f(r: &Reader) { let _ = r.current(); let _ = r.strict(); }",
+            "fn f(r: &Reader) { let _ = r.current(); let _ = r.current(); let _ = r.strict(); }",
             READ,
         ),
         // A function through the type the handlers may name as a type only.
@@ -1715,6 +1976,194 @@ fn the_rows_of_the_pages_of_the_authorization_flow_hold_their_files_to_what_they
     }
 }
 
+/// The names the module `brand` makes public in its own file (`pub use` items, `pub const` and
+/// `pub fn`), by a plain reading of the text: the last name of a `pub use` path, the names inside
+/// its braces, and the name after an `as`.
+fn public_names_of_the_brand_module() -> Vec<String> {
+    let file = Path::new(env!("CARGO_MANIFEST_DIR")).join("../obop-commands/src/brand/mod.rs");
+    let text = std::fs::read_to_string(&file).unwrap();
+    let (mut names, mut statement) = (BTreeSet::new(), None::<String>);
+    for raw in text.lines() {
+        let line = raw.trim();
+        if line.starts_with("//") {
+            continue;
+        }
+        // Only at the start of a line: an indented `pub fn` is a method of a type, such as
+        // `Dispatcher::brand`, and is no name in the module.
+        if let Some(rest) = raw.strip_prefix("pub const ") {
+            names.insert(rest.split([':', ' ']).next().unwrap().to_string());
+        } else if let Some(rest) = raw.strip_prefix("pub fn ") {
+            names.insert(rest.split('(').next().unwrap().to_string());
+        }
+        if line.starts_with("pub use ") {
+            statement = Some(String::new());
+        }
+        if let Some(text) = statement.as_mut() {
+            text.push_str(line);
+            text.push(' ');
+            if line.ends_with(';') {
+                let full = statement.take().unwrap();
+                let list = full
+                    .trim_start_matches("pub use ")
+                    .trim_end_matches(|c: char| c == ';' || c.is_whitespace());
+                let items: Vec<&str> = match list.split_once('{') {
+                    Some((_, inside)) => inside.trim_end_matches('}').split(',').collect(),
+                    None => vec![list.rsplit("::").next().unwrap()],
+                };
+                for item in items {
+                    let item = item.trim();
+                    // `MAX_BYTES as ARTWORK_MAX_BYTES` is known as the second name.
+                    let name = item.rsplit(" as ").next().unwrap().trim();
+                    if !name.is_empty() {
+                        names.insert(name.to_string());
+                    }
+                }
+            }
+        }
+    }
+    names.into_iter().collect()
+}
+
+/// The limits of the rows of the enrolment texts, exactly as their reasons say: the calls of the
+/// accessor, the reads, the paths and the types. The probes above show that the scan enforces a
+/// limit; this one shows that no limit was loosened. A path added to a row (to let a file call
+/// `brand::apply`, say) is a change of this table, and so a decision that shows in the diff. And for
+/// each of these rows every public name of the module that the row does not list is found as a
+/// path (the names are read from `brand/mod.rs`, so a name added to the module later is probed
+/// without a list to keep).
+#[test]
+fn the_limits_of_the_enrolment_rows_are_exactly_what_their_reasons_say() {
+    // The file, the calls of the accessor, the reads, the paths and the types the row lists.
+    type Want = (
+        &'static str,
+        usize,
+        usize,
+        &'static [&'static str],
+        &'static [&'static str],
+    );
+    let want: [Want; 4] = [
+        (
+            "kernel/obop-auth/src/mfa.rs",
+            0,
+            0,
+            &["env_issuer", "issuer_warning", "strict", "enrolment_error"],
+            &[],
+        ),
+        ("kernel/obop-http/src/mfa.rs", 0, 0, &["UNREADABLE"], &[]),
+        (
+            "kernel/obop-http/src/passkeys.rs",
+            2,
+            3,
+            &["enrolment_error", "no_reader_error"],
+            &[],
+        ),
+        // One row for the pages of the authorization flow (S1c: one `read_brand`, one value of the
+        // type `Shown`) and the ceremony site of its passkey step (S1e: one call of the helper): two
+        // reads.
+        (
+            "kernel/obop-http/src/oauth.rs",
+            1,
+            2,
+            &["Shown"],
+            &["Shown"],
+        ),
+    ];
+    // Every public name of the module, read from its own file, so that a name added to `brand` is
+    // probed here without anyone remembering to add it to a list.
+    let every_name = public_names_of_the_brand_module();
+    // One of each way the file spells a public name: a function and a type of a `pub use` list, a
+    // constant of a list, a constant of its own, a function of its own, and a name given with
+    // `as`. And the method `brand` of `Dispatcher`, which is indented in the file, is no name.
+    for needed in [
+        "apply",
+        "Reader",
+        "UNREADABLE",
+        "MODEL",
+        "writable_fields",
+        "ARTWORK_MAX_BYTES",
+    ] {
+        assert!(
+            every_name.iter().any(|n| n == needed),
+            "the names read from brand/mod.rs miss {needed}: {every_name:?}"
+        );
+    }
+    assert!(
+        !every_name.iter().any(|n| n == "brand" || n == "MAX_BYTES"),
+        "{every_name:?}"
+    );
+    for (path, calls, reads, paths, types) in want {
+        let i = allowed(path).unwrap_or_else(|| panic!("{path} has no row"));
+        let Limit::Reads {
+            calls: c,
+            reads: r,
+            paths: p,
+            types: t,
+        } = ALLOWED[i].2
+        else {
+            panic!("{path} has a row that lets it do anything")
+        };
+        assert_eq!((c, r, p, t), (calls, reads, paths, types), "{path}");
+        // Every other path through the module is found, once.
+        for name in every_name.iter().filter(|n| !paths.contains(&n.as_str())) {
+            let src = format!("fn f() {{ let _ = obop_commands::brand::{name}; }}");
+            let (found, _) = scan(&tree(&[(path, &src)]));
+            assert_eq!(found.len(), 1, "{path}: {name}: {found:?}");
+            assert!(found[0].contains(PATH), "{path}: {name}: {found:?}");
+        }
+        // And every listed one is not.
+        for name in paths {
+            let src = format!("fn f() {{ let _ = obop_commands::brand::{name}; }}");
+            let (found, _) = scan(&tree(&[(path, &src)]));
+            assert!(found.is_empty(), "{path}: {name}: {found:?}");
+        }
+    }
+}
+
+/// The helper `rp_name(` is a read of the brand in whatever file calls it, and a file with no row
+/// that calls it is found (the OAuth pages' passkey step had none, and a second or third call there
+/// would have passed). The brand of a `Shown` after a `.current()` is not the accessor, and the
+/// accessor before it is still counted.
+#[test]
+fn a_call_of_the_helper_is_found_in_a_file_with_no_row_and_the_brand_of_a_shown_is_not_the_accessor()
+ {
+    let site = "kernel/obop-site/src/lib.rs";
+    let (found, _) = scan(&tree(&[(
+        site,
+        "fn f(s: &S) { let _ = passkeys::rp_name(s); }",
+    )]));
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(found[0].contains(HELPER), "{found:?}");
+    // Not calls: the definition, a field, a local, and the name inside a longer one.
+    for src in [
+        "fn rp_name(s: &S) -> String { String::new() }",
+        "fn f() -> Ctx { Ctx { rp_name: String::new() } }",
+        "fn f(c: &Ctx) -> &str { &c.rp_name }",
+        "fn f() { let rp_name = 1; let _ = rp_name + 1; let _ = rp_name_over(); }",
+    ] {
+        let (found, _) = scan(&tree(&[(site, src)]));
+        assert!(found.is_empty(), "{src}: {found:?}");
+    }
+    // The helper as a value is found as well, in a file with no row: handed on, bound to a name,
+    // imported, and imported under another name (a call of the other name has no `rp_name(`).
+    for src in [
+        "fn f(s: &S) { let g = crate::passkeys::rp_name; let _ = g(s); }",
+        "fn f(v: Vec<&S>) { let _ = v.iter().map(|s| s).map(crate::passkeys::rp_name); }",
+        "use crate::passkeys::rp_name as other; fn f(s: &S) { let _ = other(s); }",
+        "use crate::passkeys::rp_name; fn f(s: &S) { let g = rp_name; let _ = g(s); }",
+    ] {
+        let (found, _) = scan(&tree(&[(site, src)]));
+        assert_eq!(found.len(), 1, "{src}: {found:?}");
+        assert!(found[0].contains(HELPER_VALUE), "{src}: {found:?}");
+    }
+    // The accessor is found, and the `brand()` after `.current()` is not a second one.
+    let (found, _) = scan(&tree(&[(
+        site,
+        "fn f(d: &Dispatcher) { let _ = d.brand().current().brand().name(); }",
+    )]));
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(found[0].contains(CALL), "{found:?}");
+}
+
 // ---- One read for each request that makes a page (slice S1c) ----------------------------------------
 //
 // The scan for the one reader counts what a file asks of the reader, and the handlers ask it in one
@@ -1723,7 +2172,9 @@ fn the_rows_of_the_pages_of_the_authorization_flow_hold_their_files_to_what_they
 // its cell within two seconds, but a refill in between may change the answer, and a request that
 // shows the name twice should not show two names). So the calls of `read_brand` are pinned too:
 // exactly one in each of the four functions where a request of the flow begins, and none anywhere
-// else in the file.
+// else in the file. (The two passkey routes of the flow also ask the reader for the display name of
+// their ceremony site, S1e, through the helper `rp_name(`: that is the second of the two reads the
+// row of the file lets it make, a hit of the reader's cell, and no page shows what it returns.)
 
 const ROUTE_FILE: &str = "kernel/obop-http/src/oauth.rs";
 
