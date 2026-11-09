@@ -148,12 +148,14 @@ const BUNDLED_MODELS: [&str; 26] = [
 /// the tables of an imported accounting file (the Open Accounting Schema import keeps a ledger of what
 /// it has imported, by its own table and the id in the file: `cx.done("voucher", ..)`, with a
 /// parameter called `table`); they are no table of the database. Adding a name here says it is no
-/// table; a name that the scan no longer finds is a failure, like the other lists.
-const NOT_TABLES: [&str; 7] = [
+/// table; a name that the scan no longer finds is a failure, like the other lists. `hide_product_docs`
+/// is the switch of the instance's brand, a field of its row, read with `row.get(SWITCH)` (S2).
+const NOT_TABLES: [&str; 8] = [
     "account",
     "company",
     "customer",
     "document",
+    "hide_product_docs",
     "journal",
     "show_history",
     "voucher",
