@@ -33,7 +33,8 @@
 //! answer for a file that is not HTML (a script, a style sheet, a font, a picture, a PDF) goes out
 //! byte for byte: `304`, `206`, `HEAD` and `Last-Modified` as they are, with or without a default
 //! language. Only when the answer is HTML, or is one of the empty answers that cannot be told from
-//! it (`304`, `412` and `416` carry no `Content-Type`), the document itself is asked for again
+//! it (`304` and `412` carry no `Content-Type`; a `416` of the file service carries the one of the
+//! file, so it is told by it like any other answer), the document itself is asked for again
 //! without the request's validators and range. That is what keeps a browser from holding on to a
 //! copy of the page from before the setting existed: a `304` or a `206` for the shell would keep
 //! it without the tag. The answer is then a `200` with the tag and without `ETag` and
@@ -425,6 +426,16 @@ fn is_charset_meta(html: &[u8], tag: &Tag) -> bool {
         })
 }
 
+/// Whether a `<meta>` is the tag of the brand: its `name` is `obop-brand`, in any case (the page
+/// reads it in lower case only, so refusing the other cases is the safe side).
+fn is_brand_meta(html: &[u8], tag: &Tag) -> bool {
+    tag.name == "meta"
+        && !tag.closing
+        && attributes(html, tag)
+            .iter()
+            .any(|(k, v)| k == "name" && v.eq_ignore_ascii_case(BRAND_META_NAME))
+}
+
 /// `html` with `edits` made: each is `(from, to, what replaces html[from..to])`, in any order but
 /// not overlapping (an insertion has `from == to`). `Err` for edits that overlap, which the scan
 /// of a head that is read correctly never makes.
@@ -453,16 +464,18 @@ fn apply_edits(
 /// the character encoding (so that this declaration stays within the first 1024 bytes of the
 /// document whatever the brand holds; as the first thing in the head when there is none). Only
 /// the head is read and nothing else is touched. `Err` names, in a fixed word, why the document
-/// cannot take it (no `<head>`, no `<title>`, no icon link, or it already has the tag); the
-/// caller then serves it as it is.
+/// cannot take it (no `<head>`, no `<title>`, no icon link, or its head already has a `<meta>`
+/// named `obop-brand`); the caller then serves it as it is.
 fn brand_rewrite(html: &[u8], shown: &Shown) -> Result<Vec<u8>, &'static str> {
-    if contains_ignore_case(html, BRAND_META_NAME.as_bytes()) {
-        return Err("it already has an obop-brand tag");
-    }
     let public = Public::of(shown);
     let head = head_content_start(html).ok_or("it has no <head>")?;
     let head_end = find_ignore_case(html, head, b"</head").unwrap_or(html.len());
     let tags = scan_tags(html, head, head_end);
+    // A tag that is there already, not the words: a comment or a script that mentions the name
+    // (a build that inlines the app has the literal in it) is not one.
+    if tags.iter().any(|t| is_brand_meta(html, t)) {
+        return Err("it already has an obop-brand tag");
+    }
     let title = tags
         .iter()
         .find(|t| t.name == "title" && !t.closing)
@@ -727,12 +740,11 @@ impl Shell {
         }
         let asked = Asked::of(&req);
         let first = self.ask(req).await;
-        // `304`, `412` and `416` carry no `Content-Type`: the file they speak of may be the shell.
+        // `304` and `412` carry no `Content-Type`: the file they speak of may be the shell. (A `416`
+        // does, the file's own, so it is told from a script by it and needs no arm here.)
         let empty = matches!(
             first.status(),
-            StatusCode::NOT_MODIFIED
-                | StatusCode::PRECONDITION_FAILED
-                | StatusCode::RANGE_NOT_SATISFIABLE
+            StatusCode::NOT_MODIFIED | StatusCode::PRECONDITION_FAILED
         );
         if !empty && !is_html(first.headers()) {
             // A file: exactly the answer of the file service (`304`, `206`, `HEAD` and all).
@@ -1320,6 +1332,32 @@ mod tests {
         assert_eq!(read_limited(body(0), 8).await.unwrap().len(), 0);
     }
 
+    #[tokio::test]
+    async fn a_document_of_exactly_the_limit_is_rewritten_and_one_byte_more_is_not() {
+        let build = Build::new("edge");
+        let (head, tail) = (
+            "<html><head><title>obop</title></head><body>",
+            "</body></html>",
+        );
+        let page = |n: usize| format!("{head}{}{tail}", "x".repeat(n - head.len() - tail.len()));
+        let mut shell = Shell::new(build.path(), Some("sv"));
+        shell.limit = 1000;
+        for (n, tagged) in [(999, true), (1000, true), (1001, false)] {
+            std::fs::write(build.0.join("index.html"), page(n)).unwrap();
+            let (status, _, body) = get(&shell, "GET", "/", &[]).await;
+            assert_eq!(status, StatusCode::OK, "{n} bytes");
+            let text = String::from_utf8(body).unwrap();
+            assert_eq!(
+                text.contains("obop-default-language"),
+                tagged,
+                "{n} bytes: rewritten or not"
+            );
+            if !tagged {
+                assert_eq!(text, page(n), "{n} bytes: the file as it is");
+            }
+        }
+    }
+
     // ---- The brand (S2) ---------------------------------------------------------------------------
 
     use obop_commands::brand::{Action, apply};
@@ -1418,6 +1456,8 @@ mod tests {
             "<link rel=icon href=/x.ico>",
             // `rel` is the last attribute and unquoted: the value ends at the `>` of the tag.
             "<link href=/x.ico rel=icon>",
+            // A `/` separates attributes as a space does.
+            "<link/rel=icon href=/x.ico>",
             "<link\n  rel=\"icon\"\n  href=\"/a>b.svg\"\n  title=\"a > b\">",
             // A `>` inside a value ends no tag, in either kind of quote.
             "<link rel='icon' href='/a>b.svg'>",
@@ -1465,6 +1505,8 @@ mod tests {
             "<script>var s = '<link rel=\"icon\" href=\"/in-script.svg\"> <title>script</title>';</script>",
             "<style>/* <link rel=\"icon\" href=\"/in-style.svg\"> */</style>",
             "<textarea><link rel=\"icon\" href=\"/in-textarea.svg\"></textarea>",
+            // A closing tag names no icon, whatever it holds.
+            "</link rel=\"icon\" href=\"/closing.svg\">",
         ];
         let page = format!(
             "<html><head>{}<link rel=\"icon\" href=\"/real.svg\"><title>obop</title></head><body></body></html>",
@@ -1502,6 +1544,24 @@ mod tests {
         // A head without an icon link has none, whatever the body has.
         let page = "<html><head><title>obop</title></head><body><link rel=\"icon\" href=\"/b.ico\"></body></html>";
         assert_eq!(rewritten(page, &shown), Err("it has no icon link"));
+    }
+
+    #[test]
+    fn a_closing_title_before_the_title_is_not_the_title() {
+        let shown = shown_of(&[("name", "MOHV")], None);
+        let link = format!(
+            "<link rel=\"icon\" href=\"/api/brand/logo.svg?v={}\" type=\"image/svg+xml\">",
+            shown.v()
+        );
+        // The stray `</title>` stays where it is; the `<title>` that opens one is the one replaced.
+        let page = "<html><head></title><link rel=\"icon\" href=\"/x.svg\"><title>obop</title></head><body></body></html>";
+        let out = rewritten(page, &shown).unwrap();
+        assert!(
+            out.ends_with(&format!(
+                "</title>{link}<title>MOHV</title></head><body></body></html>"
+            )),
+            "{out}"
+        );
     }
 
     #[test]
@@ -1570,6 +1630,8 @@ mod tests {
             "<meta name=\"viewport\" content=\"width=1\">",
             "<meta http-equiv=\" content-type \" content=\"text/html\">",
             "<meta http-equiv=\"refresh\" content=\"9\">",
+            // A closing tag declares nothing, whatever it holds.
+            "</meta charset=\"UTF-8\">",
         ] {
             let out = rewritten(&page(meta), &shown).unwrap();
             assert!(out.contains(&format!("<head>{tag}")), "{meta}: {out}");
@@ -1771,10 +1833,49 @@ mod tests {
                 "<html><head><meta name=\"obop-brand\" content=\"{}\"><link rel=\"icon\" href=\"/x\"><title>obop</title></head></html>",
                 "it already has an obop-brand tag",
             ),
+            // The tag as the HTML reader finds it: any case, any quoting, any order.
+            (
+                "<html><head><META NAME=OBOP-BRAND content=x><link rel=\"icon\" href=\"/x\"><title>obop</title></head></html>",
+                "it already has an obop-brand tag",
+            ),
+            (
+                "<html><head><link rel=\"icon\" href=\"/x\"><title>obop</title><meta content=x name='obop-brand'/></head></html>",
+                "it already has an obop-brand tag",
+            ),
             ("", "it has no <head>"),
             ("<head><title>obop", "its <title> is not closed"),
         ] {
             assert_eq!(rewritten(page, &shown), Err(why), "{page}");
+        }
+    }
+
+    #[test]
+    fn words_that_mention_the_tag_are_not_the_tag() {
+        let shown = shown_of(&[("name", "MOHV")], None);
+        // A comment, a script or a style sheet that says `obop-brand` (a build that inlines the app
+        // has the name in it), a `<meta>` that has it as a value or under another name, in the head
+        // or in the body, is not a tag of the brand: the shell is branded and keeps all of them.
+        let mentions = [
+            "<!-- obop-brand -->",
+            "<script>var m = 'meta[name=\"obop-brand\"]';</script>",
+            "<style>/* obop-brand */</style>",
+            "<meta name=\"description\" content=\"obop-brand\">",
+            "<meta name=\"obop-brand-x\" content=\"x\">",
+            // A closing tag is no tag.
+            "</meta name=\"obop-brand\">",
+        ];
+        for mention in mentions {
+            let page = format!(
+                "<html><head>{mention}<link rel=\"icon\" href=\"/x\"><title>obop</title></head><body>{mention}</body></html>"
+            );
+            let out = rewritten(&page, &shown).unwrap_or_else(|why| panic!("{mention}: {why}"));
+            assert_eq!(out.matches(mention).count(), 2, "{mention}: kept: {out}");
+            assert_eq!(
+                out.matches("<meta name=\"obop-brand\" content=\"").count(),
+                1,
+                "{mention}: {out}"
+            );
+            assert!(out.contains("<title>MOHV</title>"), "{mention}: {out}");
         }
     }
 
@@ -2076,18 +2177,14 @@ mod tests {
                 assert_eq!(headers[header::CACHE_CONTROL], "no-cache", "{what}");
             }
             let lines = lines.lock().unwrap();
-            assert_eq!(lines.len(), 1, "{what}: one line, once: {lines:?}");
-            assert!(
-                lines[0].contains("cannot take the instance brand"),
-                "{lines:?}"
-            );
-            assert!(
-                lines[0].contains(&format!("({why})")),
-                "{what}: the line says why: {lines:?}"
-            );
-            assert!(
-                !lines[0].contains("MOHV"),
-                "the line holds nothing of the brand: {lines:?}"
+            // The whole line, as an operator reads it: what is wrong, why, what the tab does
+            // instead and where to look. It holds nothing of the brand.
+            assert_eq!(
+                *lines,
+                [format!(
+                    "obop: the back office shell cannot take the instance brand ({why}): the tab keeps the title and the icon it was built with (obop admin brand status shows the brand)"
+                )],
+                "{what}: one line, once"
             );
         }
     }
@@ -2118,6 +2215,40 @@ mod tests {
                 assert!(!text.contains("obop-brand") && !text.contains("MOHV"));
             }
         }
+    }
+
+    /// The shell of a server takes both settings of its state: the default language of the state and
+    /// the reader of its dispatcher.
+    #[tokio::test]
+    async fn the_shell_of_a_state_has_its_default_language_and_the_brand_of_its_dispatcher() {
+        let build = Build::new("for-state");
+        std::fs::write(build.0.join("index.html"), BUILT).unwrap();
+        let (_flaky, backend) = Flaky::memory();
+        let fields = [("name".to_string(), "MOHV".to_string())]
+            .into_iter()
+            .collect();
+        apply(&*backend, None, "test", &Action::Configure(fields), false).unwrap();
+        let state_of = |language: Option<&'static str>| {
+            let dispatcher = Arc::new(obop_commands::Dispatcher::new());
+            dispatcher.install_brand(backend.clone());
+            let state = HttpState::with_mcp(
+                dispatcher,
+                Arc::new(crate::passkeys::tests::Nobody),
+                crate::mcp::McpConfig::default(),
+            );
+            state.set_default_language(language);
+            state
+        };
+        let page = |state: &HttpState| {
+            let shell = Shell::for_state(build.path(), state).with_sink(Arc::new(|_| {}));
+            async move { String::from_utf8(get(&shell, "GET", "/", &[]).await.2).unwrap() }
+        };
+        let with = page(&state_of(Some("sv"))).await;
+        assert!(with.contains("<meta name=\"obop-default-language\" content=\"sv\">"));
+        assert!(with.contains("<title>MOHV</title>"), "{with}");
+        let without = page(&state_of(None)).await;
+        assert!(!without.contains("obop-default-language"), "{without}");
+        assert!(without.contains("<title>MOHV</title>"), "{without}");
     }
 
     /// A reader with no store has only the default brand to give: the shell keeps no reader for
