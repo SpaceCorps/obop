@@ -50,10 +50,6 @@
 //! `crates/obop/src/brand_row_tests.rs`: with a row, every output that is pinned is what it was
 //! without one (the logo path is the exception: it answers the artwork with a row,
 //! `crates/obop/src/brand_http_tests.rs`).
-//!
-//! From S1c and S3 the exceptions are more: the OAuth pages, `initialize`, the discovery documents,
-//! the OpenAPI title and the Slack message read the row, and their tests name the words that change
-//! (`crates/obop/src/brand_docs_tests.rs`).
 
 use crate::src_scan::{Lexed, after_brace, line_of, non_test, read_tree, tree, words};
 use std::collections::{BTreeMap, BTreeSet};
@@ -114,7 +110,7 @@ const ALLOWED: [(&str, &str, Limit); 13] = [
     ),
     (
         "kernel/obop-http/src/lib.rs",
-        "`api_routes` registers the logo route (`brand::routes`) and passes it the answer of the layout to an unknown path; it reads nothing itself (the OpenAPI handler `instance_openapi` asks the reader through `mcp::document_brand`, a call the scan of this file does not see and `each_anonymous_document_asks_the_reader_once_and_first` holds)",
+        "`api_routes` registers the logo route (`brand::routes`) and passes it the answer of the layout to an unknown path; it reads nothing",
         Limit::Reads {
             calls: 0,
             reads: 0,
@@ -179,7 +175,7 @@ const ALLOWED: [(&str, &str, Limit); 13] = [
     ),
     (
         "kernel/obop-connectors/src/runtime.rs",
-        "the Slack message (S3): `signer` gets the reader of the dispatcher the runtime holds and asks it once for a send, for the name that signs the message, before the flow is logged, the run is recorded or anything leaves (a read that met a fault of the store refuses the send and leaves nothing behind); `encode` writes that name in the body, so a retry sends the text it was made with; it builds no reader. The two calls are `dispatcher.brand()` and the accessor `Shown::brand()`",
+        "the Slack message (S3): `signer` gets the reader of the dispatcher the runtime holds and reads the name for itself, uncached (`fresh`, so that a refill another request runs cannot hand it the default), once for a send, for the name that signs the message, before the flow is logged, the run is recorded or anything leaves (a read that met a fault of the store refuses the send and leaves nothing behind); `encode` writes that name in the body, so a retry sends the text it was made with; it builds no reader. The two calls are `dispatcher.brand()` and the accessor `Shown::brand()`; the one `.fresh(` is the one ask",
         Limit::Reads {
             calls: 2,
             reads: 1,
@@ -723,7 +719,7 @@ fn the_scan_sees_the_ways_a_file_can_read_the_row_and_leaves_the_allowed_files_a
         ),
         (
             "kernel/obop-connectors/src/runtime.rs",
-            "fn f(&self) { let shown = self.dispatcher.brand().current(); let n = shown.brand().name(); }",
+            "fn f(&self) { let read = self.dispatcher.brand().fresh(); let n = read.unwrap().shown().brand().name(); }",
         ),
     ]);
     let (found, stale) = scan(&files);
@@ -1120,10 +1116,9 @@ fn a_row_with_limits_lets_its_file_ask_the_reader_as_the_row_says_and_nothing_el
     assert!(found.is_empty(), "{found:?}");
 }
 
-/// The rows with limits are the files that only ask the reader, and no others: the files of the
-/// logo route, those of the pages of the authorization flow, and (S3) those of the anonymous
-/// documents, of `initialize` and of the Slack message. Loosening one of them to `Limit::Any` is a
-/// change of this test, and so a decision that shows in the diff.
+/// The rows with limits are the two files of the logo route and the three files of the pages of the
+/// authorization flow, and no others: loosening one of them to `Limit::Any` is a change of this
+/// test, and so a decision that shows in the diff.
 #[test]
 fn the_rows_with_limits_are_the_files_that_only_ask_the_reader() {
     let limited: Vec<&str> = ALLOWED
@@ -1139,6 +1134,7 @@ fn the_rows_with_limits_are_the_files_that_only_ask_the_reader() {
             "kernel/obop-http/src/oauth.rs",
             "kernel/obop-oauth/src/page.rs",
             "kernel/obop-oauth/src/flow.rs",
+            // S3: the anonymous documents, `initialize` and the Slack message only ask the reader.
             "kernel/obop-http/src/mcp.rs",
             "kernel/obop-mcp/src/lib.rs",
             "kernel/obop-connectors/src/runtime.rs"
@@ -2067,6 +2063,14 @@ fn the_scan_of_the_page_context_sees_a_public_field_a_missing_one_and_two() {
 
 // ---- The scan for literals, extended (slice S3) ------------------------------------------------------
 //
+// From S3 `initialize`, the discovery documents and the title of the OpenAPI document read the row (their
+// tests name the words that change: `crates/obop/src/brand_docs_tests.rs`), and so does the Slack message
+// (`crates/modules/connectors/src/tests.rs`), besides the OAuth pages of S1c; the module doc above is
+// the first slice's and is left as it was. The row of `kernel/obop-http/src/lib.rs` in `ALLOWED` says
+// that `api_routes` reads nothing, and that stays true of the scan of that file; the OpenAPI handler
+// there asks the reader through `mcp::document_brand`, a call that scan does not see, and
+// `each_anonymous_document_asks_the_reader_once_and_first` below holds it.
+//
 // docs/spec/branding.md, section 13: "the list gains the files S3 changes, so no pending literal ever
 // sits on the list", and the word scan of the four crates that the phone's server text comes from. The
 // S3 files keep their own list and their own rows (`LITERAL_FILES_S3`, `LITERAL_ALLOWED_S3`) and are
@@ -2672,7 +2676,9 @@ fn the_branded_counterpart_each_today_row_of_slice_s3_names_is_in_its_file() {
 // "github.com/SpaceCorps/obop"), unless a row of [`WORD_ALLOWED`] lets it stand. An identifier is not a
 // word and is not matched: `obop` with a letter, a digit, `_` or `-` on either side (`obop_setting`,
 // `x-obop-minimum`, `OBOP_PUBLIC_URL`, `myobop`), and the dotted name that goes on as a path
-// (`dev.obop/auth`). The spec's own sentence (section 6, HP-11: "a space, a point or the end of the
+// (`dev.obop/auth`). The hyphen is the price of that: a compound in prose (`an obop-style message`)
+// is not found, since a text cannot be told from the name of a header by its look (accepted, and
+// held as it is by `the_word_is_told_from_an_identifier`). The spec's own sentence (section 6, HP-11: "a space, a point or the end of the
 // literal") is narrower than its purpose, that no prose `obop` reaches a phone; the scan keeps the
 // purpose, since a name followed by a comma, a colon, an apostrophe or a bracket is as much prose.
 
@@ -2767,6 +2773,22 @@ fn word_scan(files: &BTreeMap<String, String>) -> (Vec<String>, Vec<String>) {
             ));
         }
     }
+    // A text put together out of parts is read by no scan of literals, as in the scan of the S3 files.
+    for (path, l) in &lexed {
+        if !WORD_CRATES.iter().any(|c| path.starts_with(c)) {
+            continue;
+        }
+        for at in words(&l.code, "concat") {
+            let after = crate::src_scan::skip_ws(&l.code, at + "concat".len());
+            if l.code.get(after) == Some(&b'!') {
+                found.push(format!(
+                    "{path}:{}: `concat!` puts a text together out of parts that no scan of literals \
+                     can read; write the literal whole",
+                    line_of(&l.code, at)
+                ));
+            }
+        }
+    }
     let (unlisted, drift) = judge(&word_literals(files), &WORD_ALLOWED, "WORD_ALLOWED");
     found.extend(unlisted);
     (found, drift)
@@ -2821,6 +2843,15 @@ fn the_word_is_told_from_an_identifier() {
         ("dev.obop/auth", false),
         ("metadata[obop_ref]", false),
         ("myobop and notobop", false),
+        // A digit beside the name, or a letter of any script, makes an identifier too.
+        ("obop2 and then", false),
+        ("v2obop and then", false),
+        ("\u{e9}obop and then", false),
+        ("obop\u{e9} and then", false),
+        ("\u{682a}obop and then", false),
+        // The hyphen is the price of telling `x-obop-minimum` from prose (see the header of this
+        // section): a compound in prose is not found. Held as it is.
+        ("an obop-style message", false),
         ("", false),
         ("obo p", false),
         ("an obopx and then obop.", true),
@@ -2863,6 +2894,28 @@ fn the_word_scan_finds_a_new_text_in_each_of_the_four_crates_and_leaves_the_rest
         (
             "modules/mileage/src/model.rs",
             "\nfn a() -> &'static str { \"obop\" }\n",
+            true,
+        ),
+        // A name written with an escape is read as what it stands for (`\u{6f}` is an `o`), but a raw
+        // literal has no escapes, and a text put together by `concat!` is refused whole.
+        (
+            "kernel/obop-commands/src/engine/crud.rs",
+            "\nfn a() -> &'static str { \"\\u{6f}bop cannot do that\" }\n",
+            true,
+        ),
+        (
+            "kernel/obop-commands/src/engine/crud.rs",
+            "\nfn a() -> &'static str { \"\\x6fbop cannot do that\" }\n",
+            true,
+        ),
+        (
+            "kernel/obop-commands/src/engine/crud.rs",
+            "\nfn a() -> &'static str { r\"\\u{6f}bop is a raw text\" }\n",
+            false,
+        ),
+        (
+            "kernel/obop-commands/src/engine/crud.rs",
+            "\nfn a() -> &'static str { concat!(\"ob\", \"op cannot do that\") }\n",
             true,
         ),
         // Identifiers are not words, and test code and other crates are not read.
@@ -3068,4 +3121,24 @@ fn the_scan_of_the_asks_sees_a_second_one_a_missing_one_a_stray_one_and_a_late_o
     );
     assert_eq!(late.len(), 1, "{late:?}");
     assert!(late[0].contains("`.await` before it asks"), "{late:?}");
+    // An ask that comes after a read of the caller's token, and after a call of the blocking pool
+    // with no `.await` before it: each is found by its own word, so a rule that listed fewer words
+    // would let one of them through.
+    let token = changed(
+        "kernel/obop-http/src/lib.rs",
+        "let brand = mcp::document_brand(&s).await;",
+        "let _t = s.auth_api(&h);\n    let brand = mcp::document_brand(&s).await;",
+    );
+    assert_eq!(token.len(), 1, "{token:?}");
+    assert!(token[0].contains("`auth_api(` before it asks"), "{token:?}");
+    let pooled = changed(
+        "kernel/obop-http/src/lib.rs",
+        "let brand = mcp::document_brand(&s).await;",
+        "let _b = blocking(|| ());\n    let brand = mcp::document_brand(&s).await;",
+    );
+    assert_eq!(pooled.len(), 1, "{pooled:?}");
+    assert!(
+        pooled[0].contains("`blocking(` before it asks"),
+        "{pooled:?}"
+    );
 }
