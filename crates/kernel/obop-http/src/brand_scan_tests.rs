@@ -2583,7 +2583,7 @@ fn the_scan_of_the_page_context_sees_a_public_field_a_missing_one_and_two() {
     );
 }
 
-// ---- The limits of a row are what its file does (S2 review F5) ---------------------------------
+// ---- The limits of a row are what its file does -------------------------------------------------
 
 /// A limit that is higher than what the file does is room for a second read that nothing counts, and
 /// a `types` list shorter than what the reason says is a way round the rule that the file names the

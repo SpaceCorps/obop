@@ -1,10 +1,10 @@
-//! Golden pins of the back office shell for an instance with no brand row (S2-0 of the branding
-//! work, docs/spec/branding.md, section 13, "No row, same bytes"). They were printed on origin/main
-//! e6a0ad0d (S1c merged, nothing of S2 yet) by `OBOP_PRINT_PINS=1` and are the answers the shell
-//! gave before the reader reached it: the index document at every address that serves it, with and
-//! without `OBOP_DEFAULT_LANGUAGE`, the answers to the validators and ranges of a browser (304, 412,
-//! 206, 416, `HEAD`), the favicon request, a script and a style sheet of the build, and a path that
-//! is a file that does not exist (the shell again).
+//! Golden pins of the back office shell for an instance with no brand row (slice S2 of the branding
+//! work, docs/spec/branding.md, section 13, "No row, same bytes"; taken before the shell was
+//! changed). They were printed on origin/main e6a0ad0d (S1c merged, nothing of S2 yet) by
+//! `OBOP_PRINT_PINS=1` and are the answers the shell gave before the reader reached it: the index
+//! document at every address that serves it, with and without `OBOP_DEFAULT_LANGUAGE`, the answers to
+//! the validators and ranges of a browser (304, 412, 206, 416, `HEAD`), the favicon request, a script
+//! and a style sheet of the build, and a path that is a file that does not exist (the shell again).
 //!
 //! The one deliberate change of S2 that the table does not hold is the 503 of D74 while the store
 //! cannot be read (spec section 14); `shell_tests.rs` holds that. With the store answering and no row

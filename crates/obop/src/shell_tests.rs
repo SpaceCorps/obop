@@ -587,9 +587,34 @@ fn the_index_works_on_the_runtime_of_the_server_over_every_store() {
     struct Scratch(std::path::PathBuf);
     impl Drop for Scratch {
         fn drop(&mut self) {
+            // Best effort. On Windows the files of a SQLite database that this process still has
+            // open cannot be removed, and the store of an `App` stays open until the process
+            // ends (measured: the removal still fails two seconds after the runtime and the
+            // router are gone), so this run's directory may stay; `sweep` removes the ones that
+            // earlier runs left.
             let _ = std::fs::remove_dir_all(&self.0);
         }
     }
+    /// The directories of this test that are more than a day old: their processes are long gone.
+    fn sweep(prefix: &str) {
+        let day = std::time::Duration::from_secs(24 * 60 * 60);
+        let Ok(entries) = std::fs::read_dir(std::env::temp_dir()) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let age = entry
+                .metadata()
+                .and_then(|m| m.modified())
+                .ok()
+                .and_then(|t| t.elapsed().ok());
+            if age.is_some_and(|a| a > day)
+                && entry.file_name().to_string_lossy().starts_with(prefix)
+            {
+                let _ = std::fs::remove_dir_all(entry.path());
+            }
+        }
+    }
+    sweep("obop-shell-rt-");
     let _scratch = Scratch(dir.clone());
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
