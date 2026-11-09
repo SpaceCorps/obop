@@ -1242,19 +1242,38 @@ async fn a_callback_whose_first_brand_read_fails_spends_no_state_and_is_a_503() 
     let writes = flaky.seen_writes().len();
     let uri = format!("/oauth/callback?state={state}&code=code-1");
 
+    // Every output of the callback that makes a page reads the brand first, so each is the 503 of
+    // D74 and none spends the state that sits beside the answer of the provider in the first.
+    let arms = [
+        (
+            "denied",
+            format!("/oauth/callback?error=access_denied&state={state}"),
+        ),
+        (
+            "failed",
+            "/oauth/callback?state=guess&code=code-1".to_string(),
+        ),
+        ("bare", "/oauth/callback".to_string()),
+        ("connected", uri.clone()),
+    ];
     flaky.refuse_model(obop_commands::brand::MODEL, Mode::Reads);
-    let refused_before = flaky.refused();
-    let answer = answer_of(&r, &uri).await;
-    assert!(answer.starts_with("503\n"), "{answer}");
-    assert!(answer.to_lowercase().contains("retry-after: 1"), "{answer}");
-    assert!(
-        !answer.contains("Connected") && !answer.contains("Back to"),
-        "not a page of the callback: {answer}"
-    );
-    assert!(
-        flaky.refused() > refused_before,
-        "the brand's read was refused"
-    );
+    for (what, arm) in &arms {
+        let refused_before = flaky.refused();
+        let answer = answer_of(&r, arm).await;
+        assert!(answer.starts_with("503\n"), "{what}: {answer}");
+        assert!(
+            answer.to_lowercase().contains("retry-after: 1"),
+            "{what}: {answer}"
+        );
+        assert!(
+            !answer.to_lowercase().contains("connected") && !answer.contains("Back to"),
+            "{what}: not a page of the callback: {answer}"
+        );
+        assert!(
+            flaky.refused() > refused_before,
+            "{what}: the brand's read was refused"
+        );
+    }
     assert_eq!(stored(&r), before, "nothing was stored or spent");
     assert_eq!(
         flaky.seen_writes().len(),
@@ -1301,6 +1320,19 @@ async fn a_hostile_name_written_around_the_command_is_escaped_on_the_return_page
             answer.contains("Back to Acme &amp; &quot;Sons&quot; 'x'</a>"),
             "{what}: {answer}"
         );
+        // Escaped once: a name that was escaped before it reached the page would show `&amp;amp;`.
+        assert!(
+            !answer.contains("&amp;amp;"),
+            "{what}: escaped twice: {answer}"
+        );
+        if what == "connected" {
+            assert!(
+                answer.contains(
+                    "<p>The account is authorised. Taking you back to Acme &amp; &quot;Sons&quot; 'x'.</p>"
+                ),
+                "{what}: the sentence: {answer}"
+            );
+        }
         // The refresh holds the path of the way back and nothing else.
         assert!(
             answer.contains("content=\"3;url=/#/connectors/"),
@@ -1318,6 +1350,12 @@ async fn a_hostile_name_written_around_the_command_is_escaped_on_the_return_page
     assert!(
         spent.contains("Back to Acme &amp; &quot;Sons&quot; 'x'</a>"),
         "{spent}"
+    );
+    // The bare address has no link and no sentence with a name: nothing of the row is on it.
+    let bare = answer_of(&r, "/oauth/callback").await;
+    assert!(
+        !bare.contains("Acme") && !bare.contains("Back to"),
+        "the bare address names the instance: {bare}"
     );
 
     let tag = [("name", json!("<b>Bold</b>"))];
