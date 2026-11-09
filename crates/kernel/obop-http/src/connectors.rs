@@ -107,12 +107,19 @@ fn hook_blocking(s: &HttpState, id: &str, headers: &HeaderMap, body: &[u8]) -> R
     }
 }
 
-/// The page the callback ends on. `name` is the name of the instance, put into the link text and
-/// escaped there; the sentence `text` is escaped whole, so a name that a caller put into it is
-/// escaped once. The refresh carries the path `back` only: the name is never in an address. The
+/// The sentence of a good connection. The name is followed by a full stop unless it ends in one
+/// already: the name policy accepts `Example Club e.V.`, and the sentence must not end in two.
+fn taking_you_back(name: &str) -> String {
+    let stop = if name.ends_with('.') { "" } else { "." };
+    format!("The account is authorised. Taking you back to {name}{stop}")
+}
+
+/// The HTML of the page the callback ends on. `name` is the name of the instance, put into the link
+/// text and escaped there; the sentence `text` is escaped whole, so a name that a caller put into it
+/// is escaped once. The refresh carries the path `back` only: the name is never in an address. The
 /// escape is the one of the OAuth pages, which also turns an apostrophe into `&#39;`, so a name
 /// stays safe if a later edit moves it into an attribute in single quotes.
-fn page(title: &str, text: &str, back: Option<&str>, name: &str) -> Response {
+fn page_html(title: &str, text: &str, back: Option<&str>, name: &str) -> String {
     // `back` is a path of this instance (built by the server, never taken from the request).
     let (link, refresh) = match back {
         Some(b) => (
@@ -128,11 +135,16 @@ fn page(title: &str, text: &str, back: Option<&str>, name: &str) -> Response {
         ),
         None => (String::new(), String::new()),
     };
-    let html = format!(
+    format!(
         "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">{refresh}<title>{t}</title><style>body{{font:16px system-ui,sans-serif;max-width:32rem;margin:15vh auto;padding:0 1rem;line-height:1.5}}</style></head><body><h1>{t}</h1><p>{p}</p>{link}</body></html>",
         t = esc(title),
         p = esc(text)
-    );
+    )
+}
+
+/// The page the callback ends on (see [`page_html`]).
+fn page(title: &str, text: &str, back: Option<&str>, name: &str) -> Response {
+    let html = page_html(title, text, back, name);
     (
         StatusCode::OK,
         [
@@ -176,7 +188,7 @@ pub async fn oauth_callback(
                     } else {
                         back_page("connection")
                     };
-                    page("Connected", &format!("The account is authorised. Taking you back to {name}."), Some(&to), name)
+                    page("Connected", &taking_you_back(name), Some(&to), name)
                 }
                 Err(_) => page("Not connected", "The authorization could not be completed: the link is invalid or has expired, or the provider refused. Start again from the connection; its page shows the last error.", Some(&back_page("catalog")), name),
             },
@@ -184,4 +196,85 @@ pub async fn oauth_callback(
         }
     })
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The sentence ends in one full stop whatever the name ends with (the name policy accepts
+    /// `e.V.`, `Inc.` and `S.A.`), and is the sentence it always was for a name that ends in a letter.
+    #[test]
+    fn the_sentence_of_a_good_connection_ends_in_one_full_stop_whatever_the_name_ends_with() {
+        for (name, want) in [
+            (
+                "MOHV",
+                "The account is authorised. Taking you back to MOHV.",
+            ),
+            (
+                "Example Club e.V.",
+                "The account is authorised. Taking you back to Example Club e.V.",
+            ),
+            (
+                "Example Inc.",
+                "The account is authorised. Taking you back to Example Inc.",
+            ),
+            (
+                "Example S.A",
+                "The account is authorised. Taking you back to Example S.A.",
+            ),
+        ] {
+            assert_eq!(taking_you_back(name), want);
+        }
+    }
+
+    /// Every value the page is made of is escaped where it is put: the title in the head and in the
+    /// heading, the sentence, the name in the link and the way back in the link and in the refresh
+    /// (it is a path of this instance and built by the server, but an operator's `--admin-prefix`
+    /// is the one place a character that HTML needs escaped could come from).
+    #[test]
+    fn the_title_the_sentence_the_name_and_the_way_back_are_escaped_where_they_are_put() {
+        let html = page_html(
+            "T<i>&\"'",
+            "Sentence <b>&\"'",
+            Some("/a\"b&c'd/#/connectors/catalog"),
+            "Acme & \"Sons\" 'x'",
+        );
+        assert!(!html.contains("<i>") && !html.contains("<b>"), "{html}");
+        let title = "T&lt;i&gt;&amp;&quot;&#39;";
+        assert!(html.contains(&format!("<title>{title}</title>")), "{html}");
+        assert!(html.contains(&format!("<h1>{title}</h1>")), "{html}");
+        assert!(
+            html.contains("<p>Sentence &lt;b&gt;&amp;&quot;&#39;</p>"),
+            "{html}"
+        );
+        let way = "/a&quot;b&amp;c&#39;d/#/connectors/catalog";
+        assert!(
+            html.contains(&format!(
+                "<a href=\"{way}\">Back to Acme &amp; &quot;Sons&quot; &#39;x&#39;</a>"
+            )),
+            "{html}"
+        );
+        assert!(
+            html.contains(&format!(
+                "<meta http-equiv=\"refresh\" content=\"3;url={way}\">"
+            )),
+            "{html}"
+        );
+        // Escaped once, and the name is in no address.
+        assert!(
+            !html.contains("&amp;amp;") && !html.contains("&amp;#39;"),
+            "{html}"
+        );
+        assert!(
+            !html.contains("url=Acme") && !html.contains("Acme/"),
+            "{html}"
+        );
+        // A page with no way back has no link and no refresh, and so no name.
+        let bare = page_html("T", "S", None, "Acme");
+        assert!(
+            !bare.contains("<a ") && !bare.contains("http-equiv") && !bare.contains("Acme"),
+            "{bare}"
+        );
+    }
 }

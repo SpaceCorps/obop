@@ -1368,3 +1368,80 @@ async fn a_hostile_name_written_around_the_command_is_escaped_on_the_return_page
     );
     assert!(denied.contains("Back to obop</a>"), "{denied}");
 }
+
+/// A name the policy accepts may end in a full stop (`e.V.`, `Inc.`): the sentence of a good
+/// connection then ends in that one, not in two, and the link says the name whole.
+#[tokio::test]
+async fn a_name_that_ends_in_a_full_stop_ends_the_sentence_of_a_good_connection_once() {
+    let (fake, end) = fake_oauth();
+    let name = "Example Club e.V.";
+    let r = rig_with_brand(vec![fake], Some(BrandRow::Configured(&[("name", name)])));
+    let state = start_fake_connection(&r, end.port).await;
+    let answer = answer_of(&r, &format!("/oauth/callback?state={state}&code=code-1")).await;
+    assert!(answer.starts_with("200\n"), "{answer}");
+    assert!(
+        answer.contains("<p>The account is authorised. Taking you back to Example Club e.V.</p>"),
+        "{answer}"
+    );
+    assert!(!answer.contains("e.V.."), "two full stops: {answer}");
+    assert!(
+        answer.contains("<a href=\"/#/connectors/connection\">Back to Example Club e.V.</a>"),
+        "{answer}"
+    );
+}
+
+/// A read of the brand that fails in none of the classes of D74 (the store is up and cannot answer: a
+/// missing table, a row that cannot be decoded) is no fault the layer above knows. In a process that
+/// has never had a good read the callback shows the stand-in, the name of an instance with no brand,
+/// with status 200 and no word of D74, and goes on: it spends the state and stores the tokens, as
+/// `docs/CONNECTORS.md` says. Once the store answers, the page is the brand's.
+#[tokio::test]
+async fn a_first_brand_read_that_fails_in_no_class_of_d74_shows_the_stand_in_and_the_callback_goes_on()
+ {
+    use obop_storage::testing::Flaky;
+    let (fake, end) = fake_oauth();
+    let (flaky, backend) = Flaky::memory();
+    let row = [("name", json!("MOHV"))];
+    let r = rig_over(
+        Store::over(backend),
+        vec![fake],
+        Some(BrandRow::Around(&row)),
+    );
+    let state = start_fake_connection(&r, end.port).await;
+    let stored = |r: &Rig| {
+        let b = r.store.backend();
+        (
+            b.list("connection").unwrap(),
+            b.list("connector_oauth_state").unwrap(),
+            b.list("connector_vault").unwrap(),
+        )
+    };
+    let before = stored(&r);
+    flaky.fail_gets_of(
+        obop_commands::brand::MODEL,
+        "relation \"record\" does not exist",
+    );
+    let uri = format!("/oauth/callback?state={state}&code=code-1");
+    let answer = answer_of(&r, &uri).await;
+    assert!(answer.starts_with("200\n"), "{answer}");
+    assert!(
+        !answer.to_lowercase().contains("retry-after"),
+        "no word of D74: {answer}"
+    );
+    assert!(
+        answer.contains("The account is authorised. Taking you back to obop."),
+        "{answer}"
+    );
+    assert!(answer.contains("Back to obop</a>"), "{answer}");
+    assert_ne!(
+        stored(&r),
+        before,
+        "it went on: the state was spent and the tokens stored"
+    );
+
+    // The store answers: the state is spent, and the page of that failure is the brand's.
+    flaky.allow_models();
+    let spent = answer_of(&r, &uri).await;
+    assert!(spent.contains("Not connected"), "{spent}");
+    assert!(spent.contains("Back to MOHV</a>"), "{spent}");
+}
