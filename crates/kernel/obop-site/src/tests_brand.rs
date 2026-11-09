@@ -529,9 +529,13 @@ fn within_the_sites_cache_nothing_is_read_and_a_refresh_asks_the_door_once() {
         "the cache answers: no read of the settings, no read of the brand"
     );
 
-    // One refresh reads the settings once through the door; the reader is asked once, and it reads
-    // the row and the theme (two reads) only if its own cell has run out, so a refresh is one read
-    // or three, never two refreshes' worth (2) or more.
+    // One refresh asks the door once, and the door reads the settings once (one store read); the
+    // reader behind it adds the row and the theme (two reads) only if its own cell has run out. This
+    // counts reads of the store, not calls of the reader: a second call of the reader in the same
+    // refresh would find its cell warm and read nothing, so it would pass here. That the door asks
+    // the reader once per call is held by `one_call_asks_the_reader_once` in `obop-commands`
+    // (`public/tests.rs`), which counts the reads of a reader whose cell never holds. Here a refresh
+    // is one read or three, never two refreshes' worth (2) or more.
     for _ in 0..4 {
         flaky.reset_reads();
         expire_site_cache(&s);

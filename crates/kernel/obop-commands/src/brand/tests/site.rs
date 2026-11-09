@@ -214,6 +214,72 @@ fn a_key_the_site_would_not_use_is_unset() {
     }
 }
 
+/// The limits of the copy of the site's text rules, held here as well as by the test of `obop-site`
+/// that compares the two copies: a title is cut to 80 characters (after the trim), a logo address to
+/// 500 characters (and must then be at most 500 bytes), an accent to 9 characters (and must then be a
+/// colour). A copy that is off by one is not seen by a table of short values.
+#[test]
+fn the_shops_text_rules_are_held_at_their_limits_by_the_copy_here() {
+    use super::super::site::{brand_title, explicit_accent, explicit_logo_url, explicit_title};
+    let one = |key: &str, value: String| site(json!({ key: value }));
+    let path = |n: usize| format!("/{}", "a".repeat(n));
+
+    // The title: 79, 80 and 81 characters, a two-byte letter, and a cut that comes after the trim.
+    for (stored, want) in [
+        ("a".repeat(79), "a".repeat(79)),
+        ("a".repeat(80), "a".repeat(80)),
+        ("a".repeat(81), "a".repeat(80)),
+        ("\u{e9}".repeat(81), "\u{e9}".repeat(80)),
+        (
+            format!("{}{}", " ".repeat(90), "a".repeat(85)),
+            "a".repeat(80),
+        ),
+    ] {
+        let got = explicit_title(&one("title", stored.clone()));
+        assert_eq!(
+            got.as_deref(),
+            Some(want.as_str()),
+            "{} characters",
+            stored.chars().count()
+        );
+    }
+    // The title that comes from the record is made the same way (a name is at most 40 by the policy,
+    // so this is the answer for a `Shown` that held more).
+    let t = brand_title(&"a".repeat(81), true);
+    assert_eq!(t.value, "a".repeat(80));
+
+    // The address: read to 500 characters, then at most 500 bytes.
+    for (stored, want) in [
+        (path(498), Some(path(498))),
+        (path(499), Some(path(499))),
+        (path(500), Some(path(499))),
+        (path(599), Some(path(499))),
+        // Two-byte letters are judged by their bytes: 249 of them pass (499 bytes), 250 do not.
+        (
+            format!("/{}", "\u{e9}".repeat(249)),
+            Some(format!("/{}", "\u{e9}".repeat(249))),
+        ),
+        (format!("/{}", "\u{e9}".repeat(250)), None),
+    ] {
+        let got = explicit_logo_url(&one("logo_url", stored.clone()));
+        assert_eq!(got, want, "{} characters", stored.chars().count());
+    }
+
+    // The accent: nine characters are read, and what is read must then be a colour. `###e11d48` is
+    // nine and a colour; `####e11d48` is ten, and the tenth is cut off before the colour is looked
+    // at, so it is none; `#e11d48  x` is a colour after the cut although the whole text is none.
+    for (stored, want) in [
+        ("###e11d48", Some("#e11d48")),
+        ("####e11d48", None),
+        ("#e11d48aa", None),
+        ("#e11d48  x", Some("#e11d48")),
+        ("#e11d48 x", None),
+    ] {
+        let got = explicit_accent(&one("accent", stored.to_string()));
+        assert_eq!(got.as_deref(), want, "{stored:?}");
+    }
+}
+
 /// The accent of the shop and of its tile: `site.accent`, then with a brand the tile accent of
 /// section 2 (the theme's accent unless it is missing, invalid or the default violet, else the
 /// slate), then teal as today.
