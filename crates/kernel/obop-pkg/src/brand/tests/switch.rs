@@ -105,16 +105,14 @@ fn every_signed_in_principal_reads_the_switch_with_get_and_none_may_write_it() {
     let v = out.value.to_json();
     assert_eq!(v["hide_product_docs"], true, "{v}");
     // The commands that change it stay with a person who holds platform.admin.
-    for who in [someone_else()] {
-        assert!(
-            r.call(
-                &who,
-                "instance_brand.configure",
-                &text_input(&[("hide_product_docs", "false")]),
-            )
-            .is_err()
-        );
-    }
+    assert!(
+        r.call(
+            &someone_else(),
+            "instance_brand.configure",
+            &text_input(&[("hide_product_docs", "false")]),
+        )
+        .is_err()
+    );
     for who in [agent(), scoped(), mobile()] {
         let e = handler_text(
             r.call(
