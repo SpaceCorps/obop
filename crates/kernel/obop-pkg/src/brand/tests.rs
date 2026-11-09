@@ -262,12 +262,11 @@ fn the_descriptions_name_the_input_keys_and_say_nothing_of_pages() {
         .iter()
         .find(|f| f.name == "hide_product_docs")
         .unwrap();
-    assert!(
-        switch
-            .description
-            .starts_with("true or false: hide the Brand book and the Guide"),
-        "{}",
-        switch.description
+    // The whole text: what it hides, where, when it is on, and that it is not secret from the people
+    // who are signed in (it is the one value of the record that is not public).
+    assert_eq!(
+        switch.description,
+        "true or false: hide the Brand book and the Guide in Customize, the account menu and the command palette. Off unless a boolean true is stored. Not shown before sign-in; any signed-in person can read it"
     );
     let clear = m.commands.iter().find(|c| c.name == "clear").unwrap();
     for key in ["dry_run", "cleared"] {
