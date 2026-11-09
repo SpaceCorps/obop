@@ -415,12 +415,13 @@ impl Public {
 }
 
 /// Whether a `<meta>` declares the character encoding of the document: a `charset` attribute, or
-/// `http-equiv="content-type"`.
+/// `http-equiv="content-type"` (an ASCII case-insensitive match of the whole value, as the HTML
+/// standard has it: a value with a space around it declares nothing).
 fn is_charset_meta(html: &[u8], tag: &Tag) -> bool {
     tag.name == "meta"
         && !tag.closing
         && attributes(html, tag).iter().any(|(k, v)| {
-            k == "charset" || (k == "http-equiv" && v.trim().eq_ignore_ascii_case("content-type"))
+            k == "charset" || (k == "http-equiv" && v.eq_ignore_ascii_case("content-type"))
         })
 }
 
@@ -582,6 +583,18 @@ fn no_cache(mut resp: Response) -> Response {
     resp
 }
 
+/// The headers of a file that stop describing the answer once the document in it is rewritten.
+/// The file service sends `Last-Modified` and `Accept-Ranges` and no `ETag` today; the three are
+/// named so that one that starts to send an `ETag` cannot make a cached copy of the old page valid.
+const FILE_VALIDATORS: [header::HeaderName; 3] =
+    [header::ETAG, header::LAST_MODIFIED, header::ACCEPT_RANGES];
+
+fn forget_file_validators(headers: &mut HeaderMap) {
+    for name in FILE_VALIDATORS {
+        headers.remove(name);
+    }
+}
+
 /// A `HEAD` request gets the headers of the answer to the `GET` and no body.
 fn for_method(resp: Response, asked: &Asked) -> Response {
     if !asked.is_head() {
@@ -740,13 +753,14 @@ impl Shell {
             || doc.headers().contains_key(header::CONTENT_ENCODING)
         {
             // Not a document that can be rewritten. An empty answer about a file that turns out
-            // not to be HTML (a script that did not change) stays what it was.
+            // not to be HTML (a script that did not change) stays what it was; anything else is
+            // the answer of the second ask, shaped for the method that was asked. (A document that
+            // is not a `200` HTML answer the second time, though the first said it might be one,
+            // is a file that changed between the two asks or one with a `Content-Encoding`, which
+            // the file service here does not send: no test can reach it without a race, so it has
+            // no arm of its own.)
             return match original {
                 Some(o) if empty && !is_html(doc.headers()) => o,
-                // Nothing to add and nothing asked of the store: the file service's own answer.
-                // Only a file that changes between the two asks, or one that carries a
-                // `Content-Encoding` (the file service here sends none), gets here with a `Some`.
-                Some(o) if self.language.is_none() => no_cache(o),
                 _ => for_method(no_cache(doc), &asked),
             };
         }
@@ -794,9 +808,7 @@ impl Shell {
         let bytes = match page {
             Some(v) => {
                 // The page is not the file any more: the file's validators do not describe it.
-                for name in [header::ETAG, header::LAST_MODIFIED, header::ACCEPT_RANGES] {
-                    parts.headers.remove(name);
-                }
+                forget_file_validators(&mut parts.headers);
                 Bytes::from(v)
             }
             None => bytes,
@@ -1407,6 +1419,9 @@ mod tests {
             // `rel` is the last attribute and unquoted: the value ends at the `>` of the tag.
             "<link href=/x.ico rel=icon>",
             "<link\n  rel=\"icon\"\n  href=\"/a>b.svg\"\n  title=\"a > b\">",
+            // A `>` inside a value ends no tag, in either kind of quote.
+            "<link rel='icon' href='/a>b.svg'>",
+            "<link href='/a>b.svg' title='a > b' rel=\"icon\">",
             "<link rel=\"icon\" href=\"/a.png\" sizes=\"32x32\"><link rel=\"icon\" href=\"/b.png\" sizes=\"16x16\">",
         ] {
             let page = format!("<html><head><title>obop</title>{icon}</head><body></body></html>");
@@ -1414,10 +1429,21 @@ mod tests {
             assert_eq!(out.matches("<link").count(), 1, "{icon}: {out}");
             assert!(out.contains(&link), "{icon}: {out}");
             assert!(
-                !out.contains("favicon") && !out.contains("x.ico"),
+                !out.contains("favicon") && !out.contains("x.ico") && !out.contains("b.svg"),
                 "{icon}: {out}"
             );
         }
+        // The first icon link is the one that stays, in its place; the others are dropped from
+        // theirs, whatever stands between them.
+        let page = "<html><head><title>obop</title><link rel=\"icon\" href=\"/a.png\"><link rel=\"stylesheet\" href=\"/s.css\"><link rel=\"icon\" href=\"/b.png\"></head></html>";
+        let out = rewritten(page, &shown).unwrap();
+        assert!(
+            out.contains(&format!(
+                "{link}<link rel=\"stylesheet\" href=\"/s.css\"></head>"
+            )),
+            "{out}"
+        );
+        assert!(!out.contains(".png"), "{out}");
     }
 
     #[test]
@@ -1429,6 +1455,12 @@ mod tests {
             "<link rel=\"mask-icon\" href=\"/mask.svg\">",
             "<link rel=\"icons\" href=\"/not-an-icon.svg\">",
             "<link rel=\"preload\" as=\"image\" href=\"/icon.svg\">",
+            // Only a `<link>` has a tab icon, and only through its `rel`.
+            "<meta rel=\"icon\" content=\"x\">",
+            "<link title=\"icon\" rel=\"stylesheet\" href=\"/s.css\">",
+            // A tag inside the quoted value of an attribute is no tag, in either kind of quote.
+            "<meta name='x' content='a><link rel=\"icon\" href=\"/in-value.svg\">'>",
+            "<meta name=\"x\" content=\"a><link rel='icon' href='/in-value2.svg'>\">",
             "<!-- <link rel=\"icon\" href=\"/commented.svg\"> <title>commented</title> -->",
             "<script>var s = '<link rel=\"icon\" href=\"/in-script.svg\"> <title>script</title>';</script>",
             "<style>/* <link rel=\"icon\" href=\"/in-style.svg\"> */</style>",
@@ -1518,8 +1550,27 @@ mod tests {
             )),
             "{out}"
         );
-        // A head with no declaration (or only other meta tags) gets the tag first.
-        for meta in ["", "<meta name=\"viewport\" content=\"width=1\">"] {
+        // With two declarations the tag follows the first one, the one a browser reads.
+        let out = rewritten(
+            &page(
+                "<meta charset=\"UTF-8\"><meta http-equiv=\"content-type\" content=\"text/html\">",
+            ),
+            &shown,
+        )
+        .unwrap();
+        assert!(
+            out.contains(&format!("<head><meta charset=\"UTF-8\">{tag}")),
+            "{out}"
+        );
+        // A head with no declaration (or only other meta tags) gets the tag first. A value of
+        // `http-equiv` with a space around it declares nothing (the standard matches the whole
+        // value), and neither does another `http-equiv`.
+        for meta in [
+            "",
+            "<meta name=\"viewport\" content=\"width=1\">",
+            "<meta http-equiv=\" content-type \" content=\"text/html\">",
+            "<meta http-equiv=\"refresh\" content=\"9\">",
+        ] {
             let out = rewritten(&page(meta), &shown).unwrap();
             assert!(out.contains(&format!("<head>{tag}")), "{meta}: {out}");
         }
@@ -1560,6 +1611,140 @@ mod tests {
             apply_edits(html, vec![(2, 4, "x".into()), (4, 5, "y".into())]),
             Ok(b"01xy56789".to_vec())
         );
+    }
+
+    #[test]
+    fn an_insertion_and_a_replacement_at_the_same_place_are_made_insertion_first() {
+        let html = b"0123456789";
+        // The same place, the replacement listed first: the insertion still goes in before it.
+        assert_eq!(
+            apply_edits(html, vec![(2, 4, "x".into()), (2, 2, "<>".into())]),
+            Ok(b"01<>x456789".to_vec())
+        );
+        // Two insertions at one place keep the order they were listed in.
+        assert_eq!(
+            apply_edits(html, vec![(5, 5, "a".into()), (5, 5, "b".into())]),
+            Ok(b"01234ab56789".to_vec())
+        );
+    }
+
+    #[test]
+    fn a_less_than_sign_before_a_digit_or_at_the_end_is_no_tag() {
+        let shown = shown_of(&[("name", "MOHV")], None);
+        // `<3` opens no tag: it must not swallow the icon link that follows it.
+        let page = "<html><head>a <3 b <link rel=\"icon\" href=\"/x.ico\"><title>obop</title></head></html>";
+        let out = rewritten(page, &shown).unwrap();
+        assert!(
+            out.contains("a <3 b <link rel=\"icon\" href=\"/api/brand/logo.svg?v="),
+            "{out}"
+        );
+        assert!(!out.contains("/x.ico"), "{out}");
+        // A document that ends in the middle of a tag name is read to its end without a panic.
+        for end in ["<", "</", "<li", "<link rel"] {
+            let page = format!("<head><title>obop</title><link rel=\"icon\" href=\"/x\">{end}");
+            let out = rewritten(&page, &shown).unwrap();
+            assert!(out.contains("<title>MOHV</title>"), "{out}");
+        }
+    }
+
+    /// Documents made of the pieces that make a head hard to read (quotes, comments, half tags,
+    /// bytes that are not text) never panic, and a document that is branded has the tag once.
+    #[test]
+    fn whatever_the_head_holds_it_is_read_without_a_panic_and_gets_one_tag() {
+        const PIECES: [&[u8]; 28] = [
+            b"<head>",
+            b"</head>",
+            b"<head ",
+            b"<title>",
+            b"</title>",
+            b"<title",
+            b"<link rel=\"icon\" href=\"/x\">",
+            b"<link rel=icon href=x>",
+            b"<link rel='icon' href='a>b'>",
+            b"<meta charset=utf-8>",
+            b"<meta http-equiv=content-type>",
+            b"<!--",
+            b"-->",
+            b"<script>",
+            b"</script>",
+            b"<textarea>",
+            b"</textarea>",
+            b"\"",
+            b"'",
+            b">",
+            b"<",
+            b"</",
+            b"<3",
+            b"=",
+            b" ",
+            b"\n",
+            b"\xff\xfe",
+            b"text",
+        ];
+        let shown = shown_of(&[("name", "MOHV")], None);
+        let mut seed: u64 = 0x2545_f491_4f6c_dd1d;
+        let mut next = move || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed
+        };
+        let (mut branded, mut refused) = (0, 0);
+        for _ in 0..20_000 {
+            let mut doc: Vec<u8> = Vec::new();
+            for _ in 0..(next() % 24) {
+                doc.extend_from_slice(PIECES[(next() % PIECES.len() as u64) as usize]);
+            }
+            match brand_rewrite(&doc, &shown) {
+                Ok(out) => {
+                    branded += 1;
+                    let text = String::from_utf8_lossy(&out);
+                    assert_eq!(
+                        text.matches("<meta name=\"obop-brand\" content=\"").count(),
+                        1,
+                        "{}",
+                        String::from_utf8_lossy(&doc)
+                    );
+                    assert!(text.contains("<title>MOHV</title>"), "{text}");
+                }
+                Err(why) => {
+                    refused += 1;
+                    assert!(
+                        [
+                            "it has no <head>",
+                            "it has no <title>",
+                            "its <title> is not closed",
+                            "it has no icon link",
+                            "its head cannot be read",
+                        ]
+                        .contains(&why),
+                        "{why}"
+                    );
+                }
+            }
+        }
+        assert!(
+            branded > 100 && refused > 100,
+            "{branded} branded, {refused} refused"
+        );
+    }
+
+    #[test]
+    fn the_headers_that_describe_the_file_are_all_dropped_and_the_others_kept() {
+        let mut headers = HeaderMap::new();
+        for (name, value) in [
+            (header::ETAG, "\"abc\""),
+            (header::LAST_MODIFIED, "Mon, 01 Jan 2026 00:00:00 GMT"),
+            (header::ACCEPT_RANGES, "bytes"),
+            (header::CONTENT_TYPE, "text/html"),
+            (header::VARY, "accept-encoding"),
+        ] {
+            headers.insert(name, HeaderValue::from_static(value));
+        }
+        forget_file_validators(&mut headers);
+        let mut left: Vec<&str> = headers.keys().map(|k| k.as_str()).collect();
+        left.sort_unstable();
+        assert_eq!(left, ["content-type", "vary"]);
     }
 
     #[test]
@@ -1629,6 +1814,22 @@ mod tests {
         );
         assert_eq!(meta["v"], shown.v());
         assert_eq!(meta["accent"], "#c2410c");
+        // The bytes of a tag with two messages: a comma and no space between the entries.
+        let two = shown_of(
+            &[
+                ("name", "MOHV"),
+                ("message_en", "Hi"),
+                ("message_sv", "Hej"),
+            ],
+            None,
+        );
+        assert_eq!(
+            Public::of(&two).json(),
+            format!(
+                "{{\"name\":\"MOHV\",\"slug\":\"mohv\",\"messages\":{{\"en\":\"Hi\",\"sv\":\"Hej\"}},\"v\":\"{}\"}}",
+                two.v()
+            )
+        );
         // The order the page reads: name, slug, messages, v, accent.
         let raw = Public::of(&shown).json();
         let at = |k: &str| raw.find(&format!("\"{k}\":")).unwrap();
