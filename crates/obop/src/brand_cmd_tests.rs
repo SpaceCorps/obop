@@ -503,6 +503,36 @@ fn status_names_a_stored_field_that_fell_back_and_prints_nothing_of_its_value() 
     assert!(!text.contains("message_pl: "), "{text}");
 }
 
+/// A title or a message of nothing but spaces, written around the command (`configure` refuses it),
+/// is as empty as a blank name: `status` lists it as a fallback and not as a value in force.
+#[test]
+fn status_lists_a_blank_title_and_message_as_fallbacks_and_not_as_values_in_force() {
+    let (_store, backend) = memory();
+    let mut row = Fields::new();
+    for (k, v) in [("name", "MOHV"), ("title_en", "   "), ("message_en", "  ")] {
+        row.insert(k.into(), json!(v));
+    }
+    backend
+        .apply_checked(&[Op::Put {
+            model: "instance_brand".into(),
+            id: "instance".into(),
+            fields: row,
+        }])
+        .unwrap();
+    let text = status_of(&backend);
+    assert!(text.contains("name: \"MOHV\" (record)\n"), "{text}");
+    for field in ["title_en", "message_en"] {
+        assert!(
+            text.contains(&format!(
+                "fallback: {field} is not used, the default is shown (empty)\n"
+            )),
+            "{field}: {text}"
+        );
+        assert!(!text.contains(&format!("{field}: \"")), "{field}: {text}");
+    }
+    assert!(!text.contains("fallbacks: none"), "{text}");
+}
+
 // ---- a store that fails ---------------------------------------------------------------------------------
 //
 // The branches of the command line that a healthy store never takes: a store that cannot be read is
