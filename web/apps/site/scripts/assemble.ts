@@ -17,7 +17,7 @@ import { DOCS_NAV } from "../data/docs-nav.ts";
 import { DEFAULT_LOCALE, LOCALES, messages, type Locale, type Messages } from "../i18n/index.ts";
 import { appMirror, developerBody } from "./lib/app-page.ts";
 import { appView } from "./lib/app-view.ts";
-import { loadApps, type App } from "./lib/apps.ts";
+import { appName, loadApps, type App } from "./lib/apps.ts";
 import { changelogMarkdown, loadChangelog } from "./lib/changelog.ts";
 import { appsIndexMirror, homeMirror, pricingMirror } from "./lib/mirror.ts";
 import { CORE_VERSION, GEN, GITHUB, REPO_ROOT, SITE_ROOT, SITE_URL, SRC } from "./lib/paths.ts";
@@ -218,6 +218,8 @@ export function assemble(): PageRecord[] {
       section: string;
       body: string;
       mirror?: string;
+      /** The text the search index keeps; the start of the mirror when not given. */
+      searchText?: string;
       fallback?: boolean;
       extra?: Record<string, unknown>;
       editPath: string;
@@ -238,7 +240,7 @@ export function assemble(): PageRecord[] {
       fallback: p.fallback ?? false,
       alternates: [],
       headings: headingsOf(mirrorBody),
-      text: plain(mirrorBody).slice(0, 4000),
+      text: p.searchText ?? plain(mirrorBody).slice(0, 4000),
     };
     records.push(rec);
     out.push({
@@ -282,7 +284,7 @@ export function assemble(): PageRecord[] {
       layout: "apps-index",
       section: "apps",
       body: "",
-      mirror: appsIndexMirror(m, prefix, apps),
+      mirror: appsIndexMirror(m, prefix, apps, locale),
       editPath: `web/apps/site/i18n/${locale}.ts`,
     });
     add(locale, "/pricing/", {
@@ -305,9 +307,18 @@ export function assemble(): PageRecord[] {
     });
     for (const app of apps) {
       const tagline = m.apps.taglines[app.id] ?? app.tagline;
+      const name = appName(app, locale);
+      const mirror = appMirror(app, locale, m, prefix, apps);
+      // Search keeps the start of the plain layer and the start of the technical part, so a word
+      // that only the technical tables use (a field, a group) still finds the app.
+      const cut = mirror.indexOf(`
+## ${m.apps.store.developers}
+`);
+      if (cut < 0)
+        throw new Error(`${locale} /apps/${app.slug}/: the copy has no "For developers" part`);
       add(locale, `/apps/${app.slug}/`, {
-        title: app.name,
-        seoTitle: `${app.name}: ${tagline}`,
+        title: name,
+        seoTitle: `${name}: ${tagline}`,
         description:
           locale === "en"
             ? `${tagline}. ${app.purpose.split(". ")[0]!.replace(/\.$/, "")}.`
@@ -315,7 +326,8 @@ export function assemble(): PageRecord[] {
         layout: "app",
         section: "apps",
         body: developerBody(app, locale, m, false, prefix, apps),
-        mirror: appMirror(app, locale, m, prefix, apps),
+        mirror,
+        searchText: `${plain(mirror.slice(0, cut)).slice(0, 2500)} ${plain(mirror.slice(cut)).slice(0, 2500)}`,
         editPath: app.builtin ? `web/apps/site/data/builtin/${app.id}.toml` : app.source,
         extra: {
           appId: app.id,
@@ -422,6 +434,13 @@ export function assemble(): PageRecord[] {
         id: a.id,
         slug: a.slug,
         name: a.name,
+        // The name each translated page uses, where it differs from the English one.
+        names: Object.fromEntries(
+          LOCALES.flatMap((l) => {
+            const n = appName(a, l);
+            return n === a.name ? [] : [[l, n]];
+          }),
+        ),
         category: a.category,
         builtin: a.builtin,
         tagline: a.tagline,

@@ -7,6 +7,8 @@
 .app-page.wrap {
   max-inline-size: 58rem;
   padding-block: var(--space-4) var(--space-20);
+  /* A word longer than its line (a compound at a large text size) breaks instead of overflowing. */
+  overflow-wrap: break-word;
 }
 .app-page > section {
   margin-block-start: var(--st-gap);
@@ -18,6 +20,7 @@
   letter-spacing: -0.03em;
   line-height: 1.15;
   text-align: start;
+  overflow-wrap: break-word;
 }
 @media (min-width: 48rem) {
   .app-page h2 {
@@ -42,36 +45,37 @@
   text-underline-offset: 0.2em;
 }
 
-/* Hero: the icon beside the name, one line, one button. The icon is 96 px on a phone, 120 px above. */
+/*
+ * Hero: the icon beside the name, the tagline, the category and one button. The icon is 96 px on a
+ * phone and 120 px above. The row wraps, so at a very large text size (or a very narrow screen) the
+ * icon sits above the text instead of pushing the button off the screen.
+ */
 .app-hero {
-  --hero-icon: 6rem;
+  --icon-size: 6rem;
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
-  gap: var(--space-5);
+  gap: var(--space-4) var(--space-5);
   margin-block: var(--space-3) var(--space-10);
 }
 .app-hero .tile-wrap {
   flex: none;
-}
-.app-hero .app-icon {
-  inline-size: var(--hero-icon) !important;
-  block-size: var(--hero-icon) !important;
 }
 .app-hero .app-icon svg {
   inline-size: 58%;
   block-size: 58%;
 }
 .app-hero-text {
+  flex: 1 1 12rem;
   min-inline-size: 0;
 }
 .app-hero-text h1 {
   margin: 0;
-  font-size: clamp(1.75rem, 8vw, 2.25rem);
+  font-size: clamp(1.75rem, 8.5vw, 2.25rem);
   font-weight: var(--weight-semibold);
   letter-spacing: -0.04em;
   line-height: 1.05;
   overflow-wrap: break-word;
-  hyphens: auto;
   text-wrap: balance;
 }
 .app-tagline {
@@ -80,14 +84,22 @@
   font-size: 1.125rem;
   line-height: 1.35;
 }
+.app-category {
+  margin: var(--space-1) 0 0;
+  color: var(--text-muted);
+  font-size: 0.9375rem;
+  line-height: 1.35;
+}
 .app-primary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  box-sizing: border-box;
   min-block-size: 2.75rem;
-  min-inline-size: 7rem;
+  min-inline-size: min(7rem, 100%);
+  max-inline-size: 100%;
   margin-block-start: var(--space-4);
-  padding-inline: var(--space-8);
+  padding-inline: var(--space-6);
   border: 1px solid transparent;
   border-radius: var(--radius-pill);
   background: var(--accent-fill);
@@ -100,10 +112,10 @@
 .app-primary:hover {
   filter: brightness(1.08);
 }
-/* The narrowest phones: a smaller icon, so a long name still fits beside it. */
-@media (max-width: 23.5rem) {
+/* The narrowest phones (320 px): a smaller icon, so a long name still fits beside it. */
+@media (max-width: 21rem) {
   .app-hero {
-    --hero-icon: 4.5rem;
+    --icon-size: 4.5rem;
     gap: var(--space-4);
   }
   .app-hero-text h1 {
@@ -112,7 +124,7 @@
 }
 @media (min-width: 40rem) {
   .app-hero {
-    --hero-icon: 7.5rem;
+    --icon-size: 7.5rem;
     align-items: center;
     gap: var(--space-8);
     margin-block-end: var(--space-12);
@@ -153,6 +165,7 @@
   border-block-start: var(--st-hair);
 }
 .app-facts dt {
+  overflow-wrap: anywhere;
   color: var(--text-muted);
   font-size: 0.6875rem;
   font-weight: var(--weight-semibold);
@@ -165,8 +178,7 @@
   font-weight: var(--weight-semibold);
   letter-spacing: -0.02em;
   line-height: 1.2;
-  overflow-wrap: break-word;
-  hyphens: auto;
+  overflow-wrap: anywhere;
   text-wrap: balance;
 }
 @media (min-width: 40rem) {
@@ -206,10 +218,15 @@
   line-height: 1.5;
   overflow-wrap: break-word;
 }
+/* On a translated page the purpose is English; the line that says so comes first, before the English. */
 .app-note {
-  margin: var(--space-3) 0 0;
-  color: var(--text-subtle);
+  margin: calc(var(--space-2) * -1) 0 var(--space-3);
+  color: var(--text-muted);
   font-size: 0.875rem;
+}
+/* A long second paragraph folds under "Read more", in the same quiet pill as the other folds. */
+.app-read > .app-purpose-rest {
+  margin-block-start: var(--space-3);
 }
 @media (min-width: 48rem) {
   .app-purpose {
@@ -220,7 +237,8 @@
 /* What you can do, what it keeps: soft cards. */
 .app-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+  /* auto-fit: one or two cards stretch to the column instead of leaving an empty stretch beside them */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
   gap: var(--space-3);
   margin: 0;
   padding: 0;
@@ -236,7 +254,6 @@
   border-radius: var(--st-radius);
   background: var(--surface);
   overflow-wrap: break-word;
-  hyphens: auto;
 }
 .app-card h3 {
   margin: 0;
@@ -245,8 +262,10 @@
   letter-spacing: -0.015em;
   line-height: 1.25;
 }
+/* The kicker is part of the heading (so a list of headings tells the cards apart), drawn above the title. */
 .app-card-kicker {
-  margin: 0;
+  display: block;
+  margin-block-end: 0.125rem;
   color: var(--text-muted);
   font-size: 0.75rem;
   font-weight: var(--weight-semibold);
@@ -277,12 +296,27 @@
   text-wrap: wrap;
   color: var(--text-muted);
 }
+/* Long compound words break at a hyphen in the languages that make them, where the words are their own;
+   English stays whole (no "or-der"). Text marked lang="en" inside a translated page does not match. */
+:is(.app-hero-text h1, .app-facts dd, .app-card h3, .app-card-text, .app-safe li):is(
+  :lang(de),
+  :lang(fi),
+  :lang(sv),
+  :lang(pl)
+) {
+  hyphens: auto;
+}
+/* A single fold: more cards stay in columns (a lone card in the fold keeps a normal width). */
+.app-more .app-cards {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+}
 
 /* The two folds ("Show N more", "Show technical details"): one quiet pill, no accent colour. */
 .app-more {
   margin-block-start: var(--space-4);
 }
 .app-more > summary,
+.app-read > summary,
 .app-dev > summary {
   display: inline-flex;
   align-items: center;
@@ -299,15 +333,17 @@
   transition: background-color var(--dur-2) var(--ease-out);
 }
 .app-more > summary::-webkit-details-marker,
-.app-dev > summary::-webkit-details-marker,
-.app-cmd > summary::-webkit-details-marker {
+.app-read > summary::-webkit-details-marker,
+.app-dev > summary::-webkit-details-marker {
   display: none;
 }
 .app-more > summary:hover,
+.app-read > summary:hover,
 .app-dev > summary:hover {
   background: var(--border);
 }
-.app-more[open] > summary {
+.app-more[open] > summary,
+.app-read[open] > summary {
   margin-block-end: var(--space-3);
 }
 .app-dev > summary::after {
@@ -338,6 +374,8 @@
   align-items: flex-start;
   gap: var(--space-3);
   padding-block: var(--space-4);
+  /* A long German word at a large text size breaks instead of pushing the line off the screen. */
+  overflow-wrap: anywhere;
 }
 .app-safe li + li {
   border-block-start: var(--st-hair);
@@ -348,27 +386,30 @@
   color: var(--text-muted);
 }
 
-/* Works with, related apps: icons with their names, the first icon on the text's left edge. */
+/*
+ * Works with, related apps: icons with their names. The icon and the name start at the text's own
+ * edge, so nothing sticks out past the column and a keyboard focus ring is never cut off by the screen.
+ */
 .app-icons {
+  --icon-size: 4rem;
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-6) var(--space-3);
   margin: 0;
-  margin-inline-start: -1.125rem;
   padding: 0;
   list-style: none;
 }
 .app-icons a {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-2);
   inline-size: 6.25rem;
   color: var(--text);
   font-size: 0.875rem;
   line-height: 1.25;
   overflow-wrap: anywhere;
-  text-align: center;
+  text-align: start;
   text-decoration: none;
 }
 .app-icons a:hover span {
@@ -381,25 +422,38 @@
   margin: 0;
   border-block-start: var(--st-hair);
 }
+/* The label beside its value; at a very large text size there is no room for both, so the value wraps below. */
 .app-info > div {
-  display: grid;
-  grid-template-columns: minmax(6.5rem, 10rem) minmax(0, 1fr);
-  gap: var(--space-4);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
   padding-block: var(--space-4);
   border-block-end: var(--st-hair);
 }
 .app-info dt {
+  flex: 0 0 clamp(6.5rem, 30%, 10rem);
+  min-inline-size: 0;
   color: var(--text-muted);
+  overflow-wrap: anywhere;
 }
 .app-info dd {
+  flex: 1 1 12rem;
+  min-inline-size: 0;
   margin: 0;
   overflow-wrap: anywhere;
 }
 /* A link in a row is a 44 px target; the extra height is borrowed from the row's padding. */
 .app-info a {
   display: inline-block;
-  padding-block: 0.625rem;
-  margin-block: -0.625rem;
+  box-sizing: border-box;
+  min-block-size: 2.75rem;
+  padding-block: 0.6875rem;
+  margin-block: -0.6875rem;
+}
+/* A built-in app: one quiet line under the information, not a section of its own. */
+.app-included {
+  margin: var(--space-5) 0 0;
+  color: var(--text-muted);
 }
 .app-info .mono {
   font-family: var(--font-mono);
@@ -410,7 +464,11 @@
   color: var(--text-muted);
 }
 
-/* Get: one sentence, the command line folded away, or one line for a built-in app. */
+/*
+ * Get: one plain sentence, a quiet pill to open obop (where Customize and its Marketplace are), the
+ * command line and what it needs. The hero's pill is the one filled pill of the page; this one is
+ * the same shape in a quiet colour.
+ */
 .app-getbox {
   padding: var(--space-6);
   border: var(--st-hair);
@@ -424,37 +482,33 @@
 .app-getbox p:last-child {
   margin-block-end: 0;
 }
-.app-cmd {
-  margin-block-end: var(--space-4);
-}
-.app-cmd > summary {
-  display: inline-flex;
+.app-pill {
+  display: flex;
+  inline-size: fit-content;
   align-items: center;
-  gap: var(--space-2);
+  justify-content: center;
+  box-sizing: border-box;
   min-block-size: 2.75rem;
-  color: var(--accent-ink);
-  cursor: pointer;
-  list-style: none;
+  max-inline-size: 100%;
+  margin-block-end: var(--space-6);
+  padding-inline: var(--space-6);
+  border-radius: var(--radius-pill);
+  background: var(--surface-3);
+  color: var(--text);
+  font-weight: var(--weight-semibold);
+  text-align: center;
+  text-decoration: none;
+  transition: background-color var(--dur-2) var(--ease-out);
 }
-.app-cmd > summary::after {
-  content: "";
-  flex: none;
-  inline-size: 0.5rem;
-  block-size: 0.5rem;
-  border-inline-end: 2px solid currentColor;
-  border-block-end: 2px solid currentColor;
-  transform: translateY(-2px) rotate(45deg);
-  transition: transform var(--dur-2) var(--ease-out);
+.app-pill:hover {
+  background: var(--border);
 }
-.app-cmd[open] > summary::after {
-  transform: translateY(2px) rotate(-135deg);
-}
-.app-cmd > summary:hover {
-  text-decoration: underline;
-  text-underline-offset: 0.2em;
+.app-or {
+  color: var(--text-muted);
+  font-size: 0.9375rem;
 }
 .app-getbox div[class*="language-"] {
-  margin-block: var(--space-2) 0;
+  margin-block: 0 var(--space-4);
   background: var(--surface-2);
 }
 /* The command wraps instead of scrolling, so a phone shows all of it; the copy button has its own room. */
@@ -517,7 +571,7 @@
   @supports selector(::details-content) {
     .app-dev:not([open])::details-content,
     .app-more:not([open])::details-content,
-    .app-cmd:not([open])::details-content {
+    .app-read:not([open])::details-content {
       content-visibility: visible;
     }
   }

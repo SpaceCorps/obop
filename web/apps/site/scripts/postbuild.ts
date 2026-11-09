@@ -87,7 +87,13 @@ export async function postbuild(records: PageRecord[]): Promise<void> {
   for (const l of LOCALES) {
     const idx = records
       .filter((r) => r.locale === l && r.section !== "search")
-      .map((r) => [r.url, r.title, r.text.slice(0, 2500), r.headings.join(" ")]);
+      // An app page keeps two stretches (see assemble.ts), so it may be twice as long.
+      .map((r) => [
+        r.url,
+        r.title,
+        r.text.slice(0, r.path.startsWith("/apps/") ? 5100 : 2500),
+        r.headings.join(" "),
+      ]);
     write(`search/${l}.json`, JSON.stringify(idx));
   }
 

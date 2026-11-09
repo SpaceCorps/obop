@@ -8,9 +8,10 @@ import AppIcons from "./AppIcons.vue";
 import Icon from "./Icon.vue";
 import Tile from "./Tile.vue";
 
-// One app, laid out like a store page: the icon, the name and one primary button; a strip of facts;
-// what it is for, what you can do, what it keeps, what is safe, who it works with; the information
-// list; how to get it. Everything technical is the Markdown of the page, folded under "For developers".
+// One app, laid out like a store page: the icon, the name, the category and one primary button; a
+// strip of facts; what it is for, what you can do, what it keeps, what is safe, who it works with;
+// the information list; how to get it. Everything technical is the Markdown of the page, folded
+// under "For developers".
 const { fm, m, href, locale } = useSite();
 const s = computed(() => m.value.apps.store);
 const view = computed(() => fm.value["view"] as AppView);
@@ -28,10 +29,11 @@ const pathParts = (path: string) => path.split(new RegExp("(?<=/)"));
     </p>
 
     <header class="app-hero">
-      <Tile :id="String(fm['appId'])" :name="String(fm['title'])" :size="120" />
+      <Tile fluid :id="String(fm['appId'])" :name="String(fm['appId'])" :size="120" />
       <div class="app-hero-text">
         <h1>{{ fm["title"] }}</h1>
         <p class="app-tagline">{{ fm["tagline"] }}</p>
+        <p class="app-category">{{ view.category }}</p>
         <a class="app-primary" :href="builtin ? href('/app/') : '#get'">{{
           builtin ? s.open : s.get
         }}</a>
@@ -47,9 +49,15 @@ const pathParts = (path: string) => path.split(new RegExp("(?<=/)"));
 
     <section class="app-sec">
       <h2 :id="String(fm['purposeId'])">{{ m.apps.h.purpose }}</h2>
-      <p class="app-purpose" :lang="en">{{ view.purposeLead }}</p>
-      <p v-if="view.purposeRest" class="app-purpose-rest" :lang="en">{{ view.purposeRest }}</p>
       <p v-if="en" class="app-note">{{ s.purposeEnglish }}</p>
+      <p class="app-purpose" :lang="en">{{ view.purposeLead }}</p>
+      <template v-if="view.purposeRest">
+        <details v-if="view.purposeFold" class="app-read">
+          <summary>{{ s.readMore }}</summary>
+          <p class="app-purpose-rest" :lang="en">{{ view.purposeRest }}</p>
+        </details>
+        <p v-else class="app-purpose-rest" :lang="en">{{ view.purposeRest }}</p>
+      </template>
     </section>
 
     <section class="app-sec">
@@ -65,7 +73,7 @@ const pathParts = (path: string) => path.split(new RegExp("(?<=/)"));
 
     <section class="app-sec">
       <h2 id="safe-with-agents">{{ s.safe }}</h2>
-      <ul class="app-safe">
+      <ul class="app-safe" role="list">
         <li v-for="line in view.safe" :key="line">
           <Icon name="shield-check" :size="22" />{{ line }}
         </li>
@@ -93,23 +101,20 @@ const pathParts = (path: string) => path.split(new RegExp("(?<=/)"));
           </dd>
         </div>
       </dl>
+      <p v-if="!view.command" class="app-included">{{ s.included }}</p>
     </section>
 
-    <section class="app-sec">
-      <h2 :id="view.command ? 'get' : 'included'">{{ view.command ? s.get : s.includedTitle }}</h2>
+    <section v-if="view.command" class="app-sec">
+      <h2 id="get">{{ s.get }}</h2>
       <div class="app-getbox">
-        <template v-if="view.command">
-          <p>{{ s.getLead }}</p>
-          <details class="app-cmd">
-            <summary>{{ s.commandLine }}</summary>
-            <div class="language-bash">
-              <button class="copy" type="button" :aria-label="m.ui.copy"></button>
-              <pre><code>{{ view.command }}</code></pre>
-            </div>
-          </details>
-          <p class="fine">{{ m.apps.installNote }}</p>
-        </template>
-        <p v-else>{{ s.included }}</p>
+        <p>{{ s.getLead }}</p>
+        <a class="app-pill" :href="href('/app/')">{{ s.openObop }}</a>
+        <p class="app-or">{{ s.commandLine }}</p>
+        <div class="language-bash">
+          <button class="copy" type="button" :aria-label="m.ui.copy"></button>
+          <pre><code>{{ view.command }}</code></pre>
+        </div>
+        <p class="fine">{{ s.getNote }}</p>
       </div>
     </section>
 

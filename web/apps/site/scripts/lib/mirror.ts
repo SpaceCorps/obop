@@ -1,5 +1,5 @@
 import type { Messages } from "../../i18n/types.ts";
-import type { App } from "./apps.ts";
+import { appName, type App } from "./apps.ts";
 
 /** Plain Markdown equivalents of the pages that are drawn from data (home, apps index, pricing). */
 export function homeMirror(m: Messages, prefix: string, apps: App[]): string {
@@ -34,9 +34,9 @@ export function homeMirror(m: Messages, prefix: string, apps: App[]): string {
 }
 
 /** The apps index as the page shows it: the built-in apps ("Ready to use"), then the rest by category. */
-export function appsIndexMirror(m: Messages, prefix: string, apps: App[]): string {
+export function appsIndexMirror(m: Messages, prefix: string, apps: App[], locale: string): string {
   const link = (a: App) =>
-    `- [${a.name}](${prefix}/apps/${a.slug}/): ${m.apps.taglines[a.id] ?? a.tagline}`;
+    `- [${appName(a, locale)}](${prefix}/apps/${a.slug}/): ${m.apps.taglines[a.id] ?? a.tagline}`;
   const out: string[] = [m.apps.lead, "", `## ${m.apps.store.ready}`, ""];
   for (const a of apps.filter((x) => x.builtin)) out.push(link(a));
   out.push("", `## ${m.apps.store.more}`, "");

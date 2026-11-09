@@ -1,5 +1,5 @@
 import type { Messages } from "../../i18n/types.ts";
-import { agentView, loadLabels, type App, type Model } from "./apps.ts";
+import { agentView, appName, loadLabels, type App, type Model } from "./apps.ts";
 import { GITHUB } from "./paths.ts";
 
 /**
@@ -38,10 +38,14 @@ export interface AppLink {
   slug: string;
 }
 export interface AppView {
+  /** The category, as the quiet line under the tagline. */
+  category: string;
   facts: Fact[];
   /** The first sentence of the purpose, set large, and the rest, set small (empty for one sentence). */
   purposeLead: string;
   purposeRest: string;
+  /** The rest is long: the page folds it under "Read more". */
+  purposeFold: boolean;
   /** One card per workflow action; none when records are created and edited directly. */
   actions: Card[];
   /** One card per model: what the app keeps. */
@@ -81,6 +85,11 @@ export function modelLabel(app: App, model: Model): string {
 const fill = (s: string, vars: Record<string, string>) =>
   s.replace(/\{(\w+)\}/g, (_m, k: string) => vars[k] ?? "");
 
+export const wordCount = (s: string): number => (s.trim() ? s.trim().split(/\s+/).length : 0);
+/** The large lead stays short enough to read at a glance; the quiet rest folds when it is a wall. */
+export const LEAD_WORDS = 25;
+export const FOLD_WORDS = 40;
+
 /**
  * The first sentence of a purpose text and the rest. A sentence ends at a full stop, question or
  * exclamation mark followed by a space and a capital; the purposes are hand-written and checked by
@@ -88,9 +97,20 @@ const fill = (s: string, vars: Record<string, string>) =>
  */
 export function splitPurpose(text: string): { lead: string; rest: string } {
   const m = /[.!?](?=\s+[A-Z0-9"(])/.exec(text);
-  if (!m) return { lead: text, rest: "" };
-  const at = m.index + 1;
-  return { lead: text.slice(0, at), rest: text.slice(at).trim() };
+  let lead = m ? text.slice(0, m.index + 1) : text;
+  let rest = m ? text.slice(m.index + 1).trim() : "";
+  // A long first sentence is cut at its first colon or semicolon: the cut ends in a full stop and
+  // what follows opens the quiet paragraph. The words stay the manifest owner's; only the place
+  // where the big type ends is decided here.
+  if (wordCount(lead) > LEAD_WORDS) {
+    const cut = /[:;]/.exec(lead);
+    if (cut && cut.index > 0) {
+      const tail = lead.slice(cut.index + 1).trim();
+      lead = `${lead.slice(0, cut.index)}.`;
+      rest = [capital(tail), rest].filter(Boolean).join(" ");
+    }
+  }
+  return { lead, rest };
 }
 
 /** `^0.2` is "0.2" in plain words; any other range stays as the manifest wrote it. */
@@ -108,14 +128,17 @@ export function appView(app: App, m: Messages, all: App[], locale = "en"): AppVi
     a.meta.maturities[meta.maturity as keyof typeof a.meta.maturities] ?? meta.maturity;
   const developers = [meta.author, ...meta.authors].filter(Boolean).join(", ");
 
+  // An app is called what the product calls it in the page language (packages/labels), else by its
+  // English name.
+  const link = (x: App): AppLink => ({ id: x.id, name: appName(x, locale), slug: x.slug });
   const worksWith = app.dependencies.flatMap((d) => {
     const dep = all.find((x) => x.id === d.id);
-    return dep ? [{ id: dep.id, name: dep.name, slug: dep.slug }] : [];
+    return dep ? [link(dep)] : [];
   });
 
-  // The strip says what differs from app to app: how mature it is, which version, what it needs
-  // and where it belongs. The developer and the licence are the same for every app and live in
-  // the information list.
+  // The strip: how mature the app is, which version, what it works with and under which licence.
+  // The category is the quiet line in the hero and the developer is in the information list; every
+  // value comes from the manifest.
   const facts: Fact[] = [
     { label: a.meta.maturity, value: maturity },
     { label: a.meta.version, value: app.version },
@@ -123,7 +146,7 @@ export function appView(app: App, m: Messages, all: App[], locale = "en"): AppVi
       label: s.worksWith,
       value: worksWith.length > 0 ? worksWith.map((d) => d.name).join(", ") : s.standalone,
     },
-    { label: s.category, value: category },
+    { label: a.meta.license, value: meta.license },
   ].filter((f) => f.value);
 
   // The words on the cards: the page language's own labels where the product has them (D52), else
@@ -169,7 +192,7 @@ export function appView(app: App, m: Messages, all: App[], locale = "en"): AppVi
   const related = all
     .filter((x) => x.category === app.category && x.id !== app.id)
     .slice(0, 6)
-    .map((x) => ({ id: x.id, name: x.name, slug: x.slug }));
+    .map(link);
 
   const info: InfoRow[] = [
     { label: s.developer, value: developers },
@@ -210,9 +233,11 @@ export function appView(app: App, m: Messages, all: App[], locale = "en"): AppVi
 
   const purpose = splitPurpose(app.purpose);
   return {
+    category,
     facts,
     purposeLead: purpose.lead,
     purposeRest: purpose.rest,
+    purposeFold: wordCount(purpose.rest) > FOLD_WORDS,
     actions,
     models,
     safe,

@@ -1,12 +1,11 @@
 /*
  * The apps pages: the index (.store) and every app page (.app-page).
  *
- * The feel is borrowed from how Apple builds its store pages, as a reference for restraint and
- * structure only: one idea per screen, one accent colour (the primary pill and links), large type
- * with a strong hierarchy, long calm vertical rhythm, soft rounded surfaces with hairline edges,
- * touch targets of at least 44 px for the controls it adds, and nothing that decorates
- * without meaning. Written mobile
- * first; the colours, fonts and radii are the @obop/ui tokens, so light and dark come for free.
+ * The feel is that of an app store's pages, as a reference for restraint and structure only: one
+ * idea per screen, one accent colour (the primary pill and links), large type with a strong
+ * hierarchy, long calm vertical rhythm, soft rounded surfaces with hairline edges, touch targets of
+ * at least 44 px for the controls it adds, and nothing that decorates without meaning. Written
+ * mobile first; the colours, fonts and radii are the @obop/ui tokens, so light and dark come for free.
  */
 .store,
 .app-page {
@@ -23,10 +22,18 @@
   }
 }
 
-/* Squircle app icons (about 22 percent): the shared tile helper sets 28 percent inline. */
-.store .app-icon,
-.app-page .app-icon {
-  border-radius: 22.37% !important;
+/*
+ * App icons here are "fluid" tiles (components/Tile.vue): their size is the custom property
+ * --icon-size, which each place below sets in rem (so icons follow the reader's text size), and
+ * their corners are the squircle's 22 percent. A printed page without background graphics would
+ * draw the white glyph on white, so the icon keeps its colours in print.
+ */
+@media print {
+  .store .app-icon,
+  .app-page .app-icon {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 }
 
 .store a,
@@ -93,7 +100,7 @@
 
 /* The six built-in apps: large friendly tiles, one column on a phone. The icon is 72 px, 96 px on a wide screen. */
 .store-tiles {
-  --store-icon: 4.5rem;
+  --icon-size: 4.5rem;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
@@ -103,10 +110,6 @@
 }
 .store-tile .tile-wrap {
   flex: none;
-}
-.store-tile .app-icon {
-  inline-size: var(--store-icon) !important;
-  block-size: var(--store-icon) !important;
 }
 .store-tile .app-icon svg {
   inline-size: 58%;
@@ -143,14 +146,14 @@
 }
 @media (min-width: 64rem) {
   .store-tiles {
-    --store-icon: 6rem;
+    --icon-size: 6rem;
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   .store-tile {
     flex-direction: column;
     align-items: flex-start;
-    gap: var(--space-6);
-    min-block-size: 15rem;
+    gap: var(--space-5);
+    min-block-size: 12.5rem;
     padding: var(--space-8);
   }
   .store-tile .store-text {
@@ -165,19 +168,23 @@
   }
 }
 
-/* The marketplace apps: rows grouped by category, hairline dividers, a small "Get" pill. */
+/* The marketplace apps: rows grouped by category with hairline dividers; a chevron says a row opens a page. */
 .store-group + .store-group {
   margin-block-start: var(--space-10);
 }
+/* A category is a quiet label over its rows (the one big heading is "More apps"), like the facts strip's labels. */
 .store-group h3 {
   margin: 0;
-  padding-block-end: var(--space-2);
+  padding-block-end: var(--space-3);
   border-block-end: var(--st-hair);
-  font-size: 1.25rem;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
   font-weight: var(--weight-semibold);
-  letter-spacing: -0.02em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 .store-rows {
+  --icon-size: 3rem;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   column-gap: var(--space-12);

@@ -1,5 +1,5 @@
 import type { Messages } from "../../i18n/types.ts";
-import { agentView, type App } from "./apps.ts";
+import { agentView, appName, type App } from "./apps.ts";
 import { appView, lowerFirst } from "./app-view.ts";
 import { CORE_VERSION } from "./paths.ts";
 
@@ -156,7 +156,7 @@ export function developerBody(
     out.push(a.depLead, "");
     for (const d of app.dependencies) {
       const dep = all.find((x) => x.id === d.id);
-      const name = dep ? `[${dep.name}](${prefix}/apps/${dep.slug}/)` : code(d.id);
+      const name = dep ? `[${appName(dep, locale)}](${prefix}/apps/${dep.slug}/)` : code(d.id);
       out.push(
         `- ${name}: ${code(d.requirement)}${dep?.builtin ? ` (${a.meta.builtinWord})` : ""}`,
       );
@@ -203,12 +203,15 @@ export function appMirror(
   const a = m.apps;
   const s = a.store;
   const v = appView(app, m, all, locale);
-  const out: string[] = [a.taglines[app.id] ?? app.tagline, ""];
+  const out: string[] = [a.taglines[app.id] ?? app.tagline, "", v.category, ""];
   for (const f of v.facts) out.push(`- **${f.label}:** ${f.value}`);
   out.push("");
   if (app.builtin) out.push(`[${s.open}](/app/)`, "");
 
-  out.push(`## ${a.h.purpose}`, "", app.purpose, "");
+  // The page shows the purpose in two parts (large, then quiet); the copy says it in one paragraph.
+  out.push(`## ${a.h.purpose}`, "");
+  if (locale !== "en") out.push(`*${s.purposeEnglish}*`, "");
+  out.push([v.purposeLead, v.purposeRest].filter(Boolean).join(" "), "");
 
   out.push(`## ${s.canDo}`, "");
   if (v.actions.length === 0) out.push(s.directEdit, "");
@@ -242,11 +245,15 @@ export function appMirror(
   }
   out.push("");
 
-  out.push(`## ${v.command === null ? s.includedTitle : s.get}`, "");
+  // A built-in app says on one quiet line that it is included; a marketplace app has a Get section.
   if (v.command === null) out.push(s.included, "");
   else
     out.push(
+      `## ${s.get}`,
+      "",
       s.getLead,
+      "",
+      `[${s.openObop}](/app/)`,
       "",
       `${s.commandLine}:`,
       "",
@@ -254,7 +261,7 @@ export function appMirror(
       v.command,
       "```",
       "",
-      a.installNote,
+      s.getNote,
       "",
     );
 

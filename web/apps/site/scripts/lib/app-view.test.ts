@@ -1,20 +1,54 @@
 import { describe, expect, test } from "vite-plus/test";
 import { LOCALES, messages } from "../../i18n/index.ts";
-import { appView, splitPurpose } from "./app-view.ts";
-import { loadApps } from "./apps.ts";
+import { FOLD_WORDS, LEAD_WORDS, appView, splitPurpose, wordCount } from "./app-view.ts";
+import { appName, loadApps } from "./apps.ts";
 
 const apps = loadApps();
 
+// The words of a text without its punctuation and capitals: what the manifest owner wrote.
+const words = (t: string) =>
+  t
+    .toLowerCase()
+    .replace(/[^p{L}p{N}]+/gu, " ")
+    .trim();
+
 describe("the purpose is split after its first sentence", () => {
-  test("every purpose gives a lead that is one whole sentence and a rest that is the remainder", () => {
+  test("every purpose gives a short lead that is one whole sentence and a rest that is the remainder", () => {
     for (const app of apps) {
       const { lead, rest } = splitPurpose(app.purpose);
       expect(lead, app.id).toMatch(/[.!?]$/);
-      expect(rest === "" ? lead : `${lead} ${rest}`, app.id).toBe(app.purpose);
+      // The words are the owner's; at most a colon or semicolon at the cut becomes a full stop.
+      expect(words(rest === "" ? lead : `${lead} ${rest}`), app.id).toBe(words(app.purpose));
       if (rest) expect(rest, app.id).toMatch(/^[A-Z0-9"(]/);
-      // A lead that runs on is a sentence the rule split wrongly (an abbreviation, say).
-      expect(lead.length, app.id).toBeLessThan(260);
+      // The large lead is short enough to read at a glance; a longer one is a sentence the rule
+      // could not cut (no colon or semicolon) and needs a plainer sentence in data/apps.ts.
+      expect(wordCount(lead), app.id).toBeLessThanOrEqual(LEAD_WORDS);
     }
+  });
+
+  test("only a wall of text folds, and it is the Connectors page today", () => {
+    const folded = apps
+      .filter((a) => wordCount(splitPurpose(a.purpose).rest) > FOLD_WORDS)
+      .map((a) => a.id);
+    expect(folded).toEqual(["connectors"]);
+    const view = (id: string) =>
+      appView(
+        apps.find((a) => a.id === id)!,
+        messages.en,
+        apps,
+        "en",
+      ).purposeFold;
+    expect(view("connectors")).toBe(true);
+    expect(view("hr")).toBe(false);
+  });
+
+  test("a long first sentence is cut at its colon, which ends in a full stop", () => {
+    const long = `${"word ".repeat(30).trim()}: and the rest follows. Second sentence.`;
+    const { lead, rest } = splitPurpose(long);
+    expect(lead).toBe(`${"word ".repeat(30).trim()}.`);
+    expect(rest).toBe("And the rest follows. Second sentence.");
+    // A short first sentence keeps its colon.
+    expect(splitPurpose("Short: it stays. Next one.").lead).toBe("Short: it stays.");
   });
 
   test("one sentence has no rest, and an abbreviation does not end a sentence", () => {
@@ -40,8 +74,9 @@ describe("the view of an app, in every language", () => {
           m.apps.meta.maturity,
           m.apps.meta.version,
           m.apps.store.worksWith,
-          m.apps.store.category,
+          m.apps.meta.license,
         ]);
+        expect(v.category, app.id).toBe(m.apps.categories[app.category]);
         expect(
           v.facts.every((f) => f.value.length > 0),
           app.id,
@@ -60,6 +95,31 @@ describe("the view of an app, in every language", () => {
       }
     });
   }
+
+  test("an app has the name the product gives it in the page language, else its English name", () => {
+    const byId = (id: string) => apps.find((a) => a.id === id)!;
+    const names = (id: string) => ({
+      en: appName(byId(id), "en"),
+      sv: appName(byId(id), "sv"),
+      de: appName(byId(id), "de"),
+    });
+    expect(names("invoicing")).toEqual({
+      en: "Invoicing",
+      sv: "Fakturering",
+      de: "Rechnungsstellung",
+    });
+    expect(names("helpdesk").sv).toBe("Kundtjänst");
+    // The who-it-works-with and related lists say the same names as the pages themselves.
+    const v = appView(byId("field_service"), messages.de, apps, "de");
+    expect(v.worksWith.map((d) => d.name)).toContain(appName(byId("base"), "de"));
+    expect(v.worksWith.map((d) => d.name)).not.toContain("Contacts");
+    // A language without a label file for the module falls back to the English name.
+    expect(appName(byId("crm"), "xx")).toBe("CRM");
+    // Every app has a name in every language that has a label file, so no page mixes them.
+    for (const locale of LOCALES)
+      for (const app of apps)
+        expect(appName(app, locale).length, `${locale} ${app.id}`).toBeGreaterThan(0);
+  });
 
   test("English cards carry no lang mark and use plain names for the oddly named models", () => {
     const m = messages.en;

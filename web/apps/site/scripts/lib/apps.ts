@@ -75,6 +75,9 @@ export interface App {
 
 type Raw = Record<string, unknown>;
 
+/** A TOML value as text when it is text, else the fallback: a missing key reads as absent. */
+const str = (v: unknown, fallback = ""): string => (typeof v === "string" ? v : fallback);
+
 function load(file: string): Raw {
   return parse(readFileSync(file, "utf8")) as Raw;
 }
@@ -107,8 +110,8 @@ function toApp(raw: Raw, builtin: boolean, source: string): App {
         description: String(f["description"]),
         class: String(f["class"]),
         personal_data: f["personal_data"] === true,
-        group: String(f["group"] ?? rg),
-        kind: String(f["kind"] ?? "text"),
+        group: str(f["group"], rg),
+        kind: str(f["kind"], "text"),
         options: f["options"] as string[] | undefined,
         to: f["to"] as string | undefined,
         required: f["required"] === true,
@@ -119,7 +122,7 @@ function toApp(raw: Raw, builtin: boolean, source: string): App {
         field: a["field"] as string | undefined,
         from: a["from"] as string | undefined,
         to: a["to"] as string | undefined,
-        group: String(a["group"] ?? m["write_group"]),
+        group: str(a["group"], String(m["write_group"])),
         approval: a["approval"] === true,
       })),
     };
@@ -134,18 +137,18 @@ function toApp(raw: Raw, builtin: boolean, source: string): App {
     version: String(mod["version"]),
     description: String(mod["description"]),
     meta: {
-      summary: String(mod["summary"] ?? ""),
-      author: String(mod["author"] ?? ""),
+      summary: str(mod["summary"]),
+      author: str(mod["author"]),
       authors: (mod["authors"] as string[] | undefined) ?? [],
-      license: String(mod["license"] ?? ""),
-      homepage: String(mod["homepage"] ?? ""),
-      repository: String(mod["repository"] ?? ""),
-      documentation: String(mod["documentation"] ?? ""),
-      support: String(mod["support"] ?? ""),
+      license: str(mod["license"]),
+      homepage: str(mod["homepage"]),
+      repository: str(mod["repository"]),
+      documentation: str(mod["documentation"]),
+      support: str(mod["support"]),
       keywords: (mod["keywords"] as string[] | undefined) ?? [],
       categories: (mod["categories"] as string[] | undefined) ?? [],
-      maturity: String(mod["maturity"] ?? ""),
-      requiresCore: String(mod["requires_core"] ?? "*"),
+      maturity: str(mod["maturity"]),
+      requiresCore: str(mod["requires_core"], "*"),
     },
     dependencies: dependenciesOf(mod),
     tagline: copy.tagline,
@@ -189,6 +192,8 @@ export function loadApps(): App[] {
  * can use them instead of the English manifest. Empty for English and for a missing file.
  */
 export interface Labels {
+  /** The module's own name in that language (`[labels.<locale>.module] name`). */
+  moduleName?: string;
   models: Record<string, { name?: string; description?: string }>;
   actions: Record<string, { label?: string; description?: string }>;
 }
@@ -202,8 +207,10 @@ export function loadLabels(locale: string, id: string): Labels {
   // English has no label file; a missing file means the cards fall back to the English manifest.
   if (locale !== "en" && existsSync(file)) {
     const doc = load(file);
-    const models =
-      ((doc["labels"] as Raw | undefined)?.[locale] as Raw | undefined)?.["model"] ?? {};
+    const own = (doc["labels"] as Raw | undefined)?.[locale] as Raw | undefined;
+    const name = (own?.["module"] as Raw | undefined)?.["name"];
+    if (typeof name === "string" && name.trim()) out.moduleName = name.trim();
+    const models = own?.["model"] ?? {};
     for (const [model, raw] of Object.entries(models as Record<string, Raw>)) {
       out.models[model] = {
         name: raw["name"] as string | undefined,
@@ -218,6 +225,15 @@ export function loadLabels(locale: string, id: string): Labels {
   }
   labelCache.set(key, out);
   return out;
+}
+
+/**
+ * The name a page in `locale` calls the app: the product's own name for the module in that language
+ * (`packages/labels`, D52, so "Fakturering" for Invoicing in Swedish, as in the product), else the
+ * English name from `data/apps.ts`.
+ */
+export function appName(app: App, locale: string): string {
+  return loadLabels(locale, app.id).moduleName ?? app.name;
 }
 
 export type AgentView = "clear" | "masked" | "withheld";

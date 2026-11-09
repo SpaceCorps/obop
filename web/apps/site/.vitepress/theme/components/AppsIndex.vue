@@ -9,7 +9,7 @@ import Tile from "./Tile.vue";
 // apps as list rows grouped by category. No filters, counts or status pills; every tile and row is
 // one link (a row ends in a chevron, because it opens the app's page), so the page works and reads
 // the same without JavaScript.
-const { m, href } = useSite();
+const { m, href, locale } = useSite();
 const ready = apps.filter((a) => a.builtin);
 const cats = Object.keys(m.value.apps.categories) as (keyof typeof m.value.apps.categories)[];
 const groups = computed(() =>
@@ -22,6 +22,9 @@ const groups = computed(() =>
     .filter((g) => g.apps.length > 0),
 );
 const tagline = (id: string, fallback: string) => m.value.apps.taglines[id] ?? fallback;
+// An app is called what the product calls it in the page language, else by its English name.
+const label = (a: { name: string; names: object }) =>
+  (a.names as Record<string, string>)[locale.value] ?? a.name;
 </script>
 
 <template>
@@ -33,12 +36,12 @@ const tagline = (id: string, fallback: string) => m.value.apps.taglines[id] ?? f
 
     <section class="store-sec" aria-labelledby="store-ready">
       <h2 id="store-ready">{{ m.apps.store.ready }}</h2>
-      <ul class="store-tiles">
+      <ul class="store-tiles" role="list">
         <li v-for="a in ready" :key="a.id">
           <a class="store-tile" :href="href(`/apps/${a.slug}/`)">
-            <Tile :id="a.id" :name="a.name" :size="96" />
+            <Tile fluid :id="a.id" :name="a.name" :size="96" />
             <span class="store-text">
-              <span class="store-name">{{ a.name }}</span>
+              <span class="store-name">{{ label(a) }}</span>
               <span class="store-tag">{{ tagline(a.id, a.tagline) }}</span>
             </span>
           </a>
@@ -50,12 +53,12 @@ const tagline = (id: string, fallback: string) => m.value.apps.taglines[id] ?? f
       <h2 id="store-more">{{ m.apps.store.more }}</h2>
       <div v-for="g in groups" :key="g.id" class="store-group">
         <h3>{{ g.title }}</h3>
-        <ul class="store-rows">
+        <ul class="store-rows" role="list">
           <li v-for="a in g.apps" :key="a.id">
             <a class="store-row" :href="href(`/apps/${a.slug}/`)">
-              <Tile :id="a.id" :name="a.name" :size="48" />
+              <Tile fluid :id="a.id" :name="a.name" :size="48" />
               <span class="store-text">
-                <span class="store-name">{{ a.name }}</span>
+                <span class="store-name">{{ label(a) }}</span>
                 <span class="store-tag">{{ tagline(a.id, a.tagline) }}</span>
               </span>
               <span class="store-chev" aria-hidden="true"

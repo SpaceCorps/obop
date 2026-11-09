@@ -224,11 +224,15 @@ export interface Messages {
       /** Uses {n}: the folded rest of the action cards and of the cards for what it keeps. */
       showMoreActions: string;
       showMoreKeeps: string;
-      /** The Get box: one plain sentence, then the label of the folded command line. */
+      /**
+       * The Get box of a marketplace app: one plain sentence, the button that opens obop (where
+       * Customize and its Marketplace are), the label above the command line, and what it needs.
+       */
       getLead: string;
+      openObop: string;
       commandLine: string;
-      /** Built-in apps: the heading of the Get box and the line under it. */
-      includedTitle: string;
+      getNote: string;
+      /** A built-in app: the one quiet line under its information. */
       included: string;
       safeMasked: string;
       safeWithheld: string;
@@ -240,6 +244,8 @@ export interface Messages {
       developersShow: string;
       /** Said under the purpose on a translated page, where the text is English. */
       purposeEnglish: string;
+      /** The label that opens a long second paragraph under "What it is for". */
+      readMore: string;
     };
     /** One-line taglines by module id. */
     taglines: Record<string, string>;
