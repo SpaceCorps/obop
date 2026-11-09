@@ -69,12 +69,17 @@ export function catalogueHits(file: string, messages: Record<string, string>): H
 }
 
 /**
- * The files in `src` that import `Logo` by name. `Logo` is obop's own mark, and the apps draw the
- * instance's logo through `InstanceLogo`, which shows it when there is no brand.
+ * Whether a file imports `Logo` by name, or re-exports it by name (`export { Logo } from "…"`, so
+ * that another file can import it from there). `Logo` is obop's own mark, and the apps draw the
+ * instance's logo through `InstanceLogo`, which shows it when there is no brand. The package index
+ * of `@obop/ui` re-exports the whole file with `export * from "./logo.tsx"`, which names nothing and
+ * is not a hit.
  */
 export function logoImports(src: string): boolean {
   const masked = code(src);
-  for (const m of masked.matchAll(/import\s+(?:type\s+)?\{([^}]*)\}\s*from\s*["'][^"']*["']/g)) {
+  for (const m of masked.matchAll(
+    /(?:import|export)\s+(?:type\s+)?\{([^}]*)\}\s*from\s*["'][^"']*["']/g,
+  )) {
     const list = m[1]!.split(",").map((s) =>
       s
         .trim()

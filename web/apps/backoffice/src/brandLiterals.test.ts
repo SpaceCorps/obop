@@ -11,7 +11,9 @@ import { catalogueHits, logoImports, sourceHits, type Hit } from "./brandLiteral
 //
 // What the scan does not see: text built at run time, text in a dependency, a file that is not on
 // the list, a name inside a longer literal that is on the list for another reason, text in a binary
-// asset, and a `Logo` reached through a namespace import. It does not stop a determined workaround.
+// asset, and a `Logo` reached through a namespace import or through `export *` (the package index of
+// `@obop/ui` is the one `export *` of the mark, by design). A named re-export is seen. It does not
+// stop a determined workaround.
 
 const here = new URL(".", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
 const WEB = join(here, "../../..");
@@ -238,8 +240,12 @@ describe("Logo, obop's own mark", () => {
       .filter((p) => logoImports(readFileSync(p, "utf8")))
       .map(rel)
       .sort();
+    // The back office's own barrel re-exports the primitives of `@obop/ui` by name, `Logo` among
+    // them. A file that imports the mark from the barrel is found as an importer itself, so the
+    // barrel is the one re-export allowed; a second file that re-exports `Logo` is a failure.
+    const BARREL = "apps/backoffice/src/ui.tsx";
     const outsiders = importers.filter(
-      (f) => f !== `${UI}/instance-logo.tsx` && !f.startsWith(`${BRAND_DIR}/`),
+      (f) => f !== `${UI}/instance-logo.tsx` && f !== BARREL && !f.startsWith(`${BRAND_DIR}/`),
     );
     expect(outsiders, "draw the logo of the instance with InstanceLogo").toEqual([]);
     // And the two that may, do.
@@ -295,6 +301,13 @@ describe("the reader", () => {
     expect(logoImports(`import { type Logo } from "@obop/ui";`)).toBe(true);
     expect(logoImports(`import { InstanceLogo, LogoProps } from "@obop/ui";`)).toBe(false);
     expect(logoImports(`import { Icon } from "./ui.tsx"; // Logo is not imported`)).toBe(false);
-    expect(logoImports(`export { Logo } from "@obop/ui";`)).toBe(false);
+    // A re-export by name makes the mark importable from a file that is not on the list.
+    expect(logoImports(`export { Logo } from "@obop/ui";`)).toBe(true);
+    expect(logoImports(`export { Icon, Logo as Mark } from "./logo.tsx";`)).toBe(true);
+    expect(logoImports(`export type { Logo } from "./logo.tsx";`)).toBe(true);
+    // The package index re-exports the file as a whole and names nothing.
+    expect(logoImports(`export * from "./logo.tsx";`)).toBe(false);
+    expect(logoImports(`export { InstanceLogo } from "./instance-logo.tsx";`)).toBe(false);
+    expect(logoImports(`export const Logo = 1; // not from a module`)).toBe(false);
   });
 });
