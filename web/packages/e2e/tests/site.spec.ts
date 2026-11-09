@@ -39,15 +39,41 @@ test.describe("website without JavaScript", () => {
     await expect(page.locator("#faq details").first()).toHaveJSProperty("open", true);
   });
 
-  test("the apps index filters by status and category with CSS only", async ({ page }) => {
+  test("the apps index is a simple store: six tiles, 22 rows, no filters, no jargon", async ({
+    page,
+  }) => {
+    const s = messages.en.apps.store;
+    // One short plain sentence: no numbers, at most 14 words.
+    expect(messages.en.apps.lead.split(/\s+/).length).toBeLessThanOrEqual(14);
+
     await page.goto(`${base()}/apps/`);
-    await expect(page.locator(".apps .app")).toHaveCount(28);
-    await page.locator('label[for="st-live"]').click();
-    await expect(page.locator(".apps .app:visible")).toHaveCount(6);
-    await page.locator('label[for="st-all"]').click();
-    await page.locator('label[for="cat-finance"]').click();
-    const names = await page.locator(".apps .app:visible h3").allTextContents();
-    expect(names.sort()).toEqual(["Accounting", "Expenses", "Invoicing"]);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Apps");
+    await expect(page.locator(".store-lead")).toHaveText(messages.en.apps.lead);
+    expect(await page.locator(".store-head").innerText()).not.toMatch(/\d/);
+
+    // The built-in apps as tiles, the marketplace apps as rows grouped by category; every tile and
+    // row is one link to the app's own page.
+    await expect(page.locator("main").getByRole("heading", { level: 2 })).toHaveText([
+      s.ready,
+      s.more,
+    ]);
+    await expect(page.locator("main .store-tile")).toHaveCount(6);
+    await expect(page.locator("main .store-row")).toHaveCount(22);
+    await expect(page.locator("main a[href^='/apps/']")).toHaveCount(28);
+    await expect(page.locator("main .store-tile").first()).toHaveAttribute("href", "/apps/crm/");
+    await expect(page.locator("main .store-row .store-get").first()).toHaveText(s.get);
+    expect(await page.locator("main h3").allTextContents()).toEqual(
+      Object.values(messages.en.apps.categories).filter((c) => c !== "Foundation"),
+    );
+
+    // No filters, counts or status pills, and none of the technical words.
+    await expect(page.locator("main input, main fieldset, main .status")).toHaveCount(0);
+    const text = (await page.locator("main").innerText()).toLowerCase();
+    for (const word of ["models", "fields", "data class", "workflow", "agent"])
+      expect(text, word).not.toContain(word);
+
+    await page.locator("main .store-row", { hasText: "Helpdesk" }).click();
+    await expect(page).toHaveURL(`${base()}/apps/helpdesk/`);
   });
 
   test("the home page lists apps in two labelled groups and the status filter shows one", async ({
@@ -66,11 +92,60 @@ test.describe("website without JavaScript", () => {
     await expect(page.locator("#apps .apps-group-title:visible")).toHaveCount(2);
   });
 
-  test("an app page lists models, fields, workflows, approvals and agent limits", async ({
+  test("a built-in app page is laid out like a store page, with the technical detail folded", async ({
     page,
   }) => {
+    const s = messages.en.apps.store;
     await page.goto(`${base()}/apps/invoicing/`);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Invoicing");
+
+    // The hero: the name, one line, and one primary button; a built-in app is opened.
+    await expect(page.locator(".app-tagline")).toHaveText("Drafts, posting, numbering");
+    const primary = page.locator(".app-hero .app-primary");
+    await expect(primary).toHaveText(s.open);
+    await expect(primary).toHaveAttribute("href", "/app/");
+    await expect(page.locator("main .app-primary")).toHaveCount(1);
+
+    // The facts strip: four cells, from the manifest only.
+    const facts = page.locator(".app-facts > div");
+    await expect(facts).toHaveCount(4);
+    await expect(page.locator(".app-facts")).toContainText("Stable");
+    await expect(page.locator(".app-facts")).toContainText("Finance");
+    await expect(page.locator(".app-facts")).toContainText("SpaceCorps");
+    await expect(page.locator(".app-facts")).toContainText("Apache-2.0");
+
+    // The sections, in order.
+    const a = messages.en.apps;
+    await expect(
+      page.locator("main > .wrap > section > h2, main > .wrap > details > summary > h2"),
+    ).toHaveText([
+      a.h.purpose,
+      s.canDo,
+      s.keeps,
+      s.safe,
+      s.worksWith,
+      s.info,
+      s.get,
+      s.developers,
+      a.h.related,
+    ]);
+    // What you can do: one card per workflow action, with the approval mark where it is needed.
+    const post = page.locator(".app-card", { hasText: "Post a draft invoice" });
+    await expect(post.locator("h3")).toHaveText("Post");
+    await expect(post).toContainText(s.needsApproval);
+    await expect(
+      page.locator(".app-card", { hasText: "Cancel a draft invoice" }),
+    ).not.toContainText(s.needsApproval);
+    await expect(page.locator(".app-safe li")).toHaveCount(1);
+    await expect(page.locator(".app-info")).toContainText("SpaceCorps");
+    await expect(page.locator(".app-getbox")).toHaveText(s.included);
+
+    // For developers: present and closed, and everything technical is inside it.
+    const dev = page.locator("details#developers");
+    await expect(dev).toHaveJSProperty("open", false);
+    await expect(page.getByRole("heading", { level: 2, name: "Models" })).toBeHidden();
+    await dev.locator("summary").click();
+    await expect(dev).toHaveJSProperty("open", true);
     await expect(page.getByRole("heading", { level: 2, name: "Models" })).toBeVisible();
     await expect(page.getByRole("cell", { name: "total_minor" })).toBeVisible();
     await expect(page.getByRole("cell", { name: "invoice.post" })).toBeVisible();
@@ -78,12 +153,52 @@ test.describe("website without JavaScript", () => {
       page.getByRole("heading", { name: "What agents can and cannot do" }),
     ).toBeVisible();
     await expect(page.getByText("It can only propose these steps")).toContainText("invoice.post");
+    // The headings keep the ids they always had, so old links still land.
+    for (const id of ["what-it-is-for", "models", "workflows", "install", "build-your-own"])
+      await expect(page.locator(`#${id}`)).toHaveCount(1);
+  });
 
+  test("a marketplace app page gets: the button jumps to the install box", async ({ page }) => {
+    const s = messages.en.apps.store;
     await page.goto(`${base()}/apps/helpdesk/`);
+    const primary = page.locator(".app-hero .app-primary");
+    await expect(primary).toHaveText(s.get);
+    await expect(primary).toHaveAttribute("href", "#get");
+    await primary.click();
+    await expect(page).toHaveURL(/\/apps\/helpdesk\/#get$/);
+    await expect(page.getByRole("heading", { level: 2, name: s.get })).toBeInViewport();
+    await expect(page.locator(".app-getbox pre code")).toHaveText(
+      "obop modules install-from helpdesk",
+    );
+    await expect(page.locator("details#developers")).toHaveJSProperty("open", false);
+    await page.locator("details#developers summary").click();
+    await expect(page.getByRole("cell", { name: "requester_email" })).toBeVisible();
+    // The same command is also part of the folded technical detail.
     await expect(
       page.locator("pre code").filter({ hasText: "obop modules install-from helpdesk" }),
-    ).toBeVisible();
-    await expect(page.getByRole("cell", { name: "requester_email" })).toBeVisible();
+    ).toHaveCount(2);
+  });
+
+  test("an app without workflow actions says records are edited directly", async ({ page }) => {
+    await page.goto(`${base()}/apps/products/`);
+    await expect(page.locator(".app-direct")).toHaveText(messages.en.apps.store.directEdit);
+    await expect(page.locator(".app-card h3")).toHaveText(["Product"]);
+  });
+
+  test("a translated app page speaks the page language and marks the English text", async ({
+    page,
+  }) => {
+    const s = messages.de.apps.store;
+    await page.goto(`${base()}/de/apps/helpdesk/`);
+    await expect(page.locator(".app-hero .app-primary")).toHaveText(s.get);
+    await expect(page.locator(".app-tagline")).toHaveText(messages.de.apps.taglines["helpdesk"]!);
+    await expect(page.getByRole("heading", { level: 2, name: s.canDo })).toBeVisible();
+    await expect(page.locator(".app-purpose")).toHaveAttribute("lang", "en");
+    await expect(page.locator(".app-card h3").first()).toHaveAttribute("lang", "en");
+    await expect(page.locator("details#developers > summary h2")).toHaveText(s.developers);
+    await page.goto(`${base()}/de/apps/crm/`);
+    await expect(page.locator(".app-hero .app-primary")).toHaveText(s.open);
+    await expect(page.locator(".app-hero .app-primary")).toHaveAttribute("href", "/app/");
   });
 
   test("docs: sidebar, breadcrumb, previous and next, edit link, table of contents", async ({
@@ -275,6 +390,26 @@ test.describe("website behaviour with JavaScript", () => {
     await block.getByRole("button", { name: "Copy" }).click();
     await expect(block.getByRole("button", { name: "Copied" })).toBeVisible();
   });
+
+  test("the install box of a marketplace app has the copy button", async ({ page, context }) => {
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page.goto(`${base()}/apps/helpdesk/`);
+    const block = page.locator('.app-getbox div[class*="language-"]');
+    await block.hover();
+    await block.getByRole("button", { name: "Copy" }).click();
+    await expect(block.getByRole("button", { name: "Copied" })).toBeVisible();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+      "obop modules install-from helpdesk",
+    );
+  });
+
+  test("a link to a heading inside the folded developer part opens it", async ({ page }) => {
+    await page.goto(`${base()}/apps/invoicing/#models`);
+    await expect(page.locator("details#developers")).toHaveJSProperty("open", true);
+    await expect(page.locator("#models")).toBeInViewport();
+    await page.goto(`${base()}/apps/invoicing/`);
+    await expect(page.locator("details#developers")).toHaveJSProperty("open", false);
+  });
 });
 
 test.describe("language hint", () => {
@@ -351,6 +486,25 @@ test.describe("crawlers and agents", () => {
     expect((await request.get(`${base()}/index.md`)).status()).toBe(200);
     expect((await request.get(`${base()}/de/index.md`)).status()).toBe(200);
     expect((await request.get(`${base()}/apps/crm.md`)).status()).toBe(200);
+  });
+
+  test("the Markdown copies of the apps index and of an app page match what the pages show", async ({
+    request,
+  }) => {
+    const s = messages.en.apps.store;
+    const index = await (await request.get(`${base()}/apps.md`)).text();
+    expect(index).toContain(messages.en.apps.lead);
+    expect(index).toContain(`## ${s.ready}`);
+    expect(index).toContain(`## ${s.more}`);
+    expect(index.match(/^- \[/gm)).toHaveLength(28);
+    expect(index).not.toContain(`(${messages.en.apps.status.marketplace})`); // no status labels
+
+    const app = await (await request.get(`${base()}/apps/helpdesk.md`)).text();
+    for (const h of [s.canDo, s.keeps, s.safe, s.info, s.get, s.developers])
+      expect(app, h).toContain(`## ${h}`);
+    expect(app).toContain("- **Ticket: close** (" + s.needsApproval + ")");
+    expect(app).toContain("obop modules install-from helpdesk");
+    expect(app).toContain("### Models");
   });
 
   test("security.txt and humans.txt", async ({ request }) => {
@@ -431,6 +585,7 @@ test.describe("accessibility", () => {
     "/",
     "/apps/",
     "/apps/crm/",
+    "/apps/helpdesk/",
     "/docs/",
     "/docs/agents/mcp/",
     "/pricing/",
@@ -438,6 +593,7 @@ test.describe("accessibility", () => {
     "/404.html",
     "/de/",
     "/fi/apps/",
+    "/sv/apps/invoicing/",
     "/marketplace/",
   ];
 
@@ -481,7 +637,14 @@ test.describe("accessibility", () => {
   test("no horizontal scroll at 390px and 320px", async ({ page }) => {
     for (const w of [390, 320]) {
       await page.setViewportSize({ width: w, height: 800 });
-      for (const path of ["/", "/apps/", "/docs/agents/mcp/", "/apps/helpdesk/"]) {
+      for (const path of [
+        "/",
+        "/apps/",
+        "/docs/agents/mcp/",
+        "/apps/helpdesk/",
+        "/apps/invoicing/",
+        "/de/apps/connectors/",
+      ]) {
         await page.goto(`${base()}${path}`);
         const overflow = await page.evaluate(
           () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
