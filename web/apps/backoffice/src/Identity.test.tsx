@@ -380,6 +380,17 @@ describe("the Identity tab", () => {
     expect(button("Save").disabled).toBe(false);
   });
 
+  it("marks the name as required until there is a record, and not after", async () => {
+    store = none();
+    await mount();
+    expect(field("Name").required).toBe(true);
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    store = row();
+    await mount();
+    expect(field("Name").required).toBe(false);
+  });
+
   it("previews the sign-in card from the form, with the message of the chosen language", async () => {
     await mount();
     await type(field("Name"), "Acme");
@@ -455,6 +466,67 @@ describe("the Identity tab", () => {
     await click(button("Undo"));
     expect(container.querySelector(".identity-card img")!.getAttribute("src")).toBe(saved);
     expect(container.querySelector(".identity-tile img")!.getAttribute("src")).toBe(saved);
+  });
+
+  it("offers to remove the logo only when there is one, and Discard puts a choice about it back", async () => {
+    await mount();
+    // The stored logo is the tile of the name: there is no artwork to remove.
+    expect(button("Remove the logo")).toBeUndefined();
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    store = row({
+      effective: JSON.stringify({
+        name: { value: "MOHV", source: "record" },
+        slug: { value: "mohv", source: "record" },
+        logo: { value: "artwork", source: "record" },
+      }),
+    });
+    await mount();
+    await type(field("Name"), "MOHV AB");
+    await click(button("Remove the logo"));
+    expect(container.textContent).toContain("The logo will be removed when you save.");
+    await click(button("Discard changes"));
+    expect(container.textContent).not.toContain("The logo will be removed when you save.");
+    expect(button("Undo")).toBeUndefined();
+    expect(field("Name").value).toBe("MOHV");
+    expect(button("Save").disabled).toBe(true);
+  });
+
+  it("draws no landmark of its own: the groups are named by a heading and no field repeats it", async () => {
+    await mount();
+    expect(container.querySelectorAll('section, [role="region"]')).toHaveLength(0);
+    // The only named things are the two groups of language inputs, which a screen reader reads out
+    // with the heading above them; the Name field has one label and nothing else called Name.
+    const named = [...container.querySelectorAll("[aria-labelledby]")];
+    expect(named.map((e) => e.getAttribute("role"))).toEqual(["group", "group"]);
+    const names = [...container.querySelectorAll("h3, label")].filter(
+      (e) => e.textContent === "Name",
+    );
+    expect(names.map((e) => e.tagName)).toEqual(["LABEL"]);
+  });
+
+  it("puts the focus on the first field after a save, because Save turns itself off", async () => {
+    await mount();
+    await type(field("English"), "Welcome back");
+    button("Save").focus();
+    expect(document.activeElement).toBe(button("Save"));
+    await click(button("Save"));
+    expect(button("Save").disabled).toBe(true);
+    expect(document.activeElement).toBe(field("Name"));
+  });
+
+  it("leaves the focus where the person put it while the save was running", async () => {
+    await mount();
+    await type(field("Name"), "MOHV AB");
+    let release!: () => void;
+    hold = new Promise<void>((resolve) => (release = resolve));
+    button("Save").focus();
+    await click(button("Save"));
+    field("English").focus();
+    release();
+    await act(async () => {});
+    expect(calls.filter((c) => c.command === "instance_brand.configure")).toHaveLength(1);
+    expect(document.activeElement).toBe(field("English"));
   });
 
   it("says so when the record cannot be read", async () => {

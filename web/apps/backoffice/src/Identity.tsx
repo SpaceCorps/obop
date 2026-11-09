@@ -9,6 +9,7 @@ import {
   Select,
   Skeleton,
   Switch,
+  brandLogoUrl,
   brandMessageIn,
   getLang,
   t,
@@ -61,7 +62,10 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
   const [error, setError] = useState("");
   const [fileError, setFileError] = useState("");
   const [previewLang, setPreviewLang] = useState<Lang>(startLang);
+  // Counts the saves that went through; the effect below reads it to put the focus back.
+  const [saves, setSaves] = useState(0);
   const file = useRef<HTMLInputElement>(null);
+  const nameId = `${ids}-name`;
 
   // `sent` is the form and the logo choice a save has just sent. A person who went on typing while
   // the save ran keeps what was typed: the form is replaced by the record only when it is still
@@ -77,6 +81,16 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
   useEffect(() => {
     void load();
   }, [token]);
+
+  // Save turns itself off when the form is read again, and a button that is off cannot keep the
+  // focus: a person who saved with the keyboard would be left on nothing, at the end of the page.
+  // The focus goes to the first field, unless it is somewhere that works.
+  useEffect(() => {
+    if (saves === 0) return;
+    const at = document.activeElement as HTMLElement | null;
+    if (!at || at === document.body || (at as HTMLButtonElement).disabled)
+      document.getElementById(nameId)?.focus();
+  }, [saves, nameId]);
 
   // A chosen file is previewed from a local address that is let go when it changes or the tab closes.
   useEffect(() => {
@@ -147,6 +161,7 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
       ),
     );
     await load(sent);
+    setSaves((n) => n + 1);
   }
 
   async function remove() {
@@ -200,11 +215,9 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
             })}
           </Notice>
         )}
-        <section className="stack" aria-labelledby={`${ids}-name`}>
-          <h3 id={`${ids}-name`} className="overline">
-            {t("Name")}
-          </h3>
+        <div className="stack">
           <Input
+            id={nameId}
             label={t("Name")}
             hint={t("Shown in the tab, on the sign-in screens and in the top bar.")}
             value={form.name}
@@ -222,11 +235,9 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
             autoComplete="off"
             onChange={(e) => setText({ slug: clip(e.target.value, LIMITS.slug) })}
           />
-        </section>
-        <section className="stack" aria-labelledby={`${ids}-logo`}>
-          <h3 id={`${ids}-logo`} className="overline">
-            {t("Logo")}
-          </h3>
+        </div>
+        <div className="stack">
+          <h3 className="overline">{t("Logo")}</h3>
           <p className="hint">
             {t(
               "An SVG file of at most 16 KiB. Without one, a tile with the first letter of the name is drawn.",
@@ -275,7 +286,7 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
               {fileError}
             </p>
           )}
-        </section>
+        </div>
         <div className="stack" role="group" aria-labelledby={`${ids}-msg`}>
           <h3 id={`${ids}-msg`} className="overline">
             {t("Message on the sign-in screen")}
@@ -316,10 +327,8 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
             />
           ))}
         </div>
-        <section className="stack" aria-labelledby={`${ids}-docs`}>
-          <h3 id={`${ids}-docs`} className="overline">
-            {t("Product pages")}
-          </h3>
+        <div className="stack">
+          <h3 className="overline">{t("Product pages")}</h3>
           <Switch
             label={t("Hide the Brand book and the Guide")}
             checked={form.hideDocs}
@@ -330,7 +339,7 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
               "They describe the product, not this instance. Hidden for everyone, administrators included. Only people who are signed in can read this setting.",
             )}
           </p>
-        </section>
+        </div>
         {error && (
           <Notice tone="danger" title={t("The identity was not saved")}>
             <span className="identity-refusal">{error}</span>
@@ -368,10 +377,8 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
         )}
       </div>
       <div className="stack">
-        <section className="stack identity-preview" aria-labelledby={`${ids}-preview`}>
-          <h3 id={`${ids}-preview`} className="overline">
-            {t("Preview")}
-          </h3>
+        <div className="stack identity-preview">
+          <h3 className="overline">{t("Preview")}</h3>
           <Select
             label={t("Language of the message in the preview")}
             value={previewLang}
@@ -407,11 +414,7 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
           <div className="identity-tile">
             {loaded.set && !removing ? (
               <img
-                src={
-                  logo.kind === "replace" && pending
-                    ? pending
-                    : `/api/brand/logo.svg?v=${encodeURIComponent(loaded.v)}`
-                }
+                src={logo.kind === "replace" && pending ? pending : brandLogoUrl(preview)}
                 alt=""
                 width={64}
                 height={64}
@@ -425,7 +428,7 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
                 : t("Shown after the first save.")}
             </p>
           </div>
-        </section>
+        </div>
       </div>
     </form>
   );
