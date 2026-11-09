@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type MouseEvent } from "react";
 import {
   Button,
   InstanceLogo,
@@ -62,8 +62,15 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
   const [error, setError] = useState("");
   const [fileError, setFileError] = useState("");
   const [previewLang, setPreviewLang] = useState<Lang>(startLang);
-  // Counts the saves that went through; the effect below reads it to put the focus back.
-  const [saves, setSaves] = useState(0);
+  // Counts the changes that can take away the button that has the focus (a save, Discard changes, a
+  // removal); the effect below reads it to put the focus back. `keyboard` says whether the last of
+  // them was started with the keyboard (or an assistive technology), which sends a click with no
+  // pointer behind it.
+  const [refocus, setRefocus] = useState(0);
+  const keyboard = useRef(true);
+  const started = (e: MouseEvent) => {
+    keyboard.current = e.detail === 0;
+  };
   const file = useRef<HTMLInputElement>(null);
   const nameId = `${ids}-name`;
 
@@ -82,15 +89,17 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
     void load();
   }, [token]);
 
-  // Save turns itself off when the form is read again, and a button that is off cannot keep the
-  // focus: a person who saved with the keyboard would be left on nothing, at the end of the page.
-  // The focus goes to the first field, unless it is somewhere that works.
+  // Save and Discard changes turn themselves off when the form is read again or reset, and Remove
+  // the identity goes away: a button that is off or gone cannot keep the focus, and a person who
+  // used the keyboard would be left on nothing, at the end of the page. The focus goes to the first
+  // field, unless it is somewhere that works. A person with a mouse is left where the page is: the
+  // jump to the first field would scroll a form that was saved from its bottom.
   useEffect(() => {
-    if (saves === 0) return;
+    if (refocus === 0 || !keyboard.current) return;
     const at = document.activeElement as HTMLElement | null;
     if (!at || at === document.body || (at as HTMLButtonElement).disabled)
       document.getElementById(nameId)?.focus();
-  }, [saves, nameId]);
+  }, [refocus, nameId]);
 
   // A chosen file is previewed from a local address that is let go when it changes or the tab closes.
   useEffect(() => {
@@ -161,7 +170,7 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
       ),
     );
     await load(sent);
-    setSaves((n) => n + 1);
+    setRefocus((n) => n + 1);
   }
 
   async function remove() {
@@ -188,6 +197,7 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
       ),
     );
     await load();
+    setRefocus((n) => n + 1);
   }
 
   const slugNow = form.slug || loaded.slug;
@@ -351,23 +361,33 @@ export function IdentityTab({ token, notify }: { token: string; notify: Notify }
             type="submit"
             loading={busy}
             disabled={!dirty || needsName || busy}
+            onClick={started}
           >
             {t("Save")}
           </Button>
           <Button
             variant="ghost"
             disabled={!dirty || busy}
-            onClick={() => {
+            onClick={(e) => {
+              started(e);
               setForm(loaded.form);
               setLogo({ kind: "keep" });
               setError("");
               setFileError("");
+              setRefocus((n) => n + 1);
             }}
           >
             {t("Discard changes")}
           </Button>
           {loaded.set && (
-            <Button variant="danger" disabled={busy} onClick={() => void remove()}>
+            <Button
+              variant="danger"
+              disabled={busy}
+              onClick={(e) => {
+                started(e);
+                void remove();
+              }}
+            >
               {t("Remove the identity")}
             </Button>
           )}

@@ -5,19 +5,27 @@
 // entry, so a `main.tsx` that stops calling it is a failing test.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-// The entry is imported afresh by each test, and that transforms the whole graph of the app, which
-// takes a few hundred milliseconds alone and several seconds on a machine that is running the other
-// test files too: the default five seconds is not enough there, and a test that timed out leaves
-// its import running, which renders into the next test.
+// The entry is imported afresh by each test. What costs time is transforming the modules it pulls
+// in, once per test file: the whole of `@obop/ui` and the error screen with the data layer behind
+// it come to hundreds of modules, which took 20 seconds on a machine that was running the other test
+// files too (the default is five), and a test that timed out leaves its import running, which
+// renders into the next test. So the entry gets only what it reads: the brand of the page and the
+// theme, as they are (`brandPage.ts` runs on them), and stand-ins for the rest. The timeout stays as
+// a margin.
 const SLOW = 60_000;
 
 const render = vi.fn();
 vi.mock("react-dom/client", () => ({ createRoot: () => ({ render }) }));
 vi.mock("./App.tsx", () => ({ App: () => null }));
-vi.mock("@obop/ui", async (original) => ({
-  ...(await original<typeof import("@obop/ui")>()),
+vi.mock("./ErrorBoundary.tsx", () => ({
+  ErrorBoundary: ({ children }: { children: unknown }) => children,
+}));
+vi.mock("@obop/ui", async () => ({
+  ...(await import("../../../packages/ui/src/brand.ts")),
+  ...(await import("../../../packages/ui/src/theme.ts")),
   // The catalogues are not the business of this test: they are loaded when the entry runs.
   initI18n: () => Promise.resolve(),
+  I18nProvider: ({ children }: { children: unknown }) => children,
 }));
 
 const TAG = (extra: object) =>

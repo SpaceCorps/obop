@@ -266,6 +266,13 @@ for (const layout of LAYOUTS) {
       await expectBrandLogo(page);
       await expect(page.locator(".topbar")).toContainText(brand.name);
       await expectNoProductName(page);
+      // The link carries its name as a tooltip (the bar cuts a long name); the accessibility tree
+      // of the browser must read the name once, not again as the description of the link.
+      const cdp = await page.context().newCDPSession(page);
+      const { nodes } = await cdp.send("Accessibility.getFullAXTree");
+      const links = nodes.filter((n) => n.role?.value === "link" && n.name?.value === brand.name);
+      expect(links).toHaveLength(1);
+      expect(links[0]!.description?.value ?? "").toBe("");
     });
 
     test("a person who must choose a password first meets the brand there too", async ({
@@ -532,14 +539,19 @@ test.describe("the pages that document the product", () => {
  * the record, and a field filled in before it arrives would be lost.
  */
 async function saveIdentity(page: Page, how: "button" | "enter" = "button") {
-  const reread = page.waitForResponse(
-    (r) =>
-      new URL(r.url()).pathname === "/api/instance_brand/get" && r.request().method() === "POST",
-  );
+  const reread = identityRead(page);
   if (how === "enter") await page.keyboard.press("Enter");
   else await page.getByRole("button", { name: "Save" }).click();
   await reread;
   await expect(page.getByRole("button", { name: "Save" })).toBeDisabled();
+}
+
+/** Resolves when the Identity form has read the record (`instance_brand.get`) again. */
+function identityRead(page: Page) {
+  return page.waitForResponse(
+    (r) =>
+      new URL(r.url()).pathname === "/api/instance_brand/get" && r.request().method() === "POST",
+  );
 }
 
 test.describe("the Identity tab", () => {
@@ -664,6 +676,73 @@ test.describe("the Identity tab", () => {
     // record is gone the logo route answers 404 for the logo the page was loaded with, and the
     // console guard of this suite reports a request for it.
     expect(new Set(brandCalls)).toEqual(new Set(["get", "configure"]));
+  });
+});
+
+test.describe("the Identity tab and the focus", () => {
+  test.describe.configure({ mode: "serial" });
+  const base = brandUrl();
+  let admin = "";
+
+  test.beforeAll(async ({ playwright }) => {
+    const request = await playwright.request.newContext();
+    try {
+      admin = await tokenOf(request, base, users.root);
+    } finally {
+      await request.dispose();
+    }
+  });
+  test.afterAll(async ({ playwright }) => {
+    const request = await playwright.request.newContext();
+    try {
+      await call(request, base, admin, "instance_brand.configure", { message_en: brand.message });
+    } finally {
+      await request.dispose();
+    }
+  });
+
+  // Save and Discard changes turn themselves off, and a button that is off cannot keep the focus:
+  // a person with the keyboard is put on the first field; a person with the mouse is left where the
+  // page is, so a form that was saved from its bottom does not scroll to its top.
+  test("the keyboard is put on the first field after Save and Discard changes, the mouse is not scrolled", async ({
+    page,
+  }) => {
+    test.setTimeout(60_000);
+    await page.setViewportSize({ width: 1280, height: 420 });
+    await openAs(page, `${base}/#/customize/identity?tab=identity`, admin, users.root.name);
+    const name = page.getByRole("textbox", { name: "Name", exact: true });
+    const english = page
+      .getByRole("group", { name: "Message on the sign-in screen" })
+      .getByLabel("English");
+    const save = page.getByRole("button", { name: "Save" });
+    const discard = page.getByRole("button", { name: "Discard changes" });
+    await expect(name).toHaveValue(brand.name);
+
+    await english.fill("Saved with the keyboard");
+    await save.focus();
+    const read = identityRead(page);
+    await page.keyboard.press("Enter");
+    await read;
+    await expect(save).toBeDisabled();
+    await expect(name).toBeFocused();
+
+    await english.fill("Typed and dropped");
+    await discard.focus();
+    await page.keyboard.press("Enter");
+    await expect(english).toHaveValue("Saved with the keyboard");
+    await expect(discard).toBeDisabled();
+    await expect(name).toBeFocused();
+
+    await english.fill("Saved with the mouse");
+    await save.scrollIntoViewIfNeeded();
+    // The form is scrolled: the first field is above the window.
+    expect((await name.boundingBox())!.y).toBeLessThan(0);
+    const again = identityRead(page);
+    await save.click();
+    await again;
+    await expect(save).toBeDisabled();
+    await expect(name).not.toBeFocused();
+    expect((await name.boundingBox())!.y, "the form was not scrolled back").toBeLessThan(0);
   });
 });
 

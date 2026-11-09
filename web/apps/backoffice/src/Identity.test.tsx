@@ -495,8 +495,10 @@ describe("the Identity tab", () => {
   it("draws no landmark of its own: the groups are named by a heading and no field repeats it", async () => {
     await mount();
     expect(container.querySelectorAll('section, [role="region"]')).toHaveLength(0);
-    // The only named things are the two groups of language inputs, which a screen reader reads out
-    // with the heading above them; the Name field has one label and nothing else called Name.
+    // The only groups named by a heading are the two of language inputs, which a screen reader
+    // reads out with the heading above them (the preview card has a label of its own, and so has
+    // the hidden file input, but neither is a landmark); the Name field has one label and nothing
+    // else called Name.
     const named = [...container.querySelectorAll("[aria-labelledby]")];
     expect(named.map((e) => e.getAttribute("role"))).toEqual(["group", "group"]);
     const names = [...container.querySelectorAll("h3, label")].filter(
@@ -513,6 +515,65 @@ describe("the Identity tab", () => {
     await click(button("Save"));
     expect(button("Save").disabled).toBe(true);
     expect(document.activeElement).toBe(field("Name"));
+  });
+
+  it("puts the focus on the first field when nothing has it any more at the end of the save", async () => {
+    await mount();
+    await type(field("English"), "Welcome back");
+    let release!: () => void;
+    hold = new Promise<void>((resolve) => (release = resolve));
+    button("Save").focus();
+    await click(button("Save"));
+    // The focus is on the page and nowhere else: a browser that resets it when the button turns off
+    // (focus fixup), or a click on the page beside the form. A field that is focused and left
+    // is the way to get there here, because jsdom cannot blur a button that is off.
+    field("English").focus();
+    field("English").blur();
+    expect(document.activeElement).toBe(document.body);
+    release();
+    await act(async () => {});
+    expect(document.activeElement).toBe(field("Name"));
+  });
+
+  it("puts the focus on the first field after Discard changes, which turns itself off", async () => {
+    await mount();
+    await type(field("English"), "Welcome back");
+    button("Discard changes").focus();
+    await click(button("Discard changes"));
+    expect(button("Discard changes").disabled).toBe(true);
+    expect(field("English").value).toBe("Welcome");
+    expect(document.activeElement).toBe(field("Name"));
+  });
+
+  it("puts the focus on the first field after the identity is removed, because that button goes", async () => {
+    await mount();
+    button("Remove the identity").focus();
+    await click(button("Remove the identity"));
+    await act(async () => {});
+    expect(calls.map((c) => c.command)).toContain("instance_brand.clear");
+    expect(button("Remove the identity")).toBeUndefined();
+    expect(document.activeElement).toBe(field("Name"));
+  });
+
+  it("leaves the focus alone after a save or a discard with the mouse, which a jump to the first field would scroll away from", async () => {
+    // A click with a pointer behind it has a detail of 1 or more; one from the keyboard has none.
+    const pointer = (el: HTMLElement) =>
+      act(async () => {
+        el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 }));
+      });
+    await mount();
+    await type(field("English"), "Welcome back");
+    button("Discard changes").focus();
+    await pointer(button("Discard changes"));
+    expect(button("Discard changes").disabled).toBe(true);
+    expect(document.activeElement).not.toBe(field("Name"));
+    await type(field("English"), "Welcome back");
+    button("Save").focus();
+    await pointer(button("Save"));
+    await act(async () => {});
+    expect(calls.filter((c) => c.command === "instance_brand.configure")).toHaveLength(1);
+    expect(button("Save").disabled).toBe(true);
+    expect(document.activeElement).not.toBe(field("Name"));
   });
 
   it("leaves the focus where the person put it while the save was running", async () => {

@@ -4,7 +4,7 @@
 // `productDocsVisible()` (docs/spec/branding.md, section 6) and are drawn without it while the
 // instance hides them. The other five places are held by `productDocs.test.ts` and by the Playwright
 // spec `brand-backoffice.spec.ts`.
-import { act } from "react";
+import { act, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { Palette, TopBar } from "./Chrome.tsx";
@@ -37,11 +37,11 @@ function setBrand(content: object | null) {
 }
 
 const none = () => {};
-function bar() {
+function bar(current?: ComponentProps<typeof TopBar>["current"]) {
   return (
     <TopBar
       apps={[]}
-      current={undefined}
+      current={current}
       email="ann@example.test"
       menuOpen={false}
       hasMenu={false}
@@ -136,5 +136,22 @@ describe("the name of the top bar link", () => {
     setBrand({ name: long, slug: "example", messages: {}, v: "0123456789abcdef" });
     await act(async () => root.render(bar()));
     expect(container.querySelector("a.brand")?.getAttribute("title")).toBe(long);
+  });
+
+  it("carries no title once an app is open, where the bar shows the mark and the name of the app", async () => {
+    setBrand({ name: "MOHV", slug: "mohv", messages: {}, v: "0123456789abcdef" });
+    await act(async () =>
+      root.render(
+        bar({
+          id: "customize",
+          name: "Customize",
+          color: "#6d3fd0",
+          module: { id: "platform", name: "Platform", models: [] },
+        }),
+      ),
+    );
+    const link = container.querySelector("a.brand");
+    expect(link?.textContent?.trim()).toBe("/Customize");
+    expect(link?.hasAttribute("title")).toBe(false);
   });
 });
