@@ -478,14 +478,20 @@ impl Runtime {
     /// back. `fresh()` answers a store that cannot be read with the error, so the send is refused
     /// with the fault (`storage_busy: ...`): the person who started it is told to try again, an event
     /// is tried again, nothing leaves signed with a name the instance did not choose, and nothing is
-    /// recorded for a message that never left. A stored name that fails the read check is read as the
-    /// default, by the one rule of section 4 for every surface. The other providers sign nothing and
-    /// ask nothing.
+    /// recorded for a message that never left. A read that fails for a reason that is no fault of
+    /// the store (no code word: SQLite gives none) refuses the send with the same text and no code
+    /// word; an event is not tried again for it, since nothing says the next read will pass, and is
+    /// reported on stderr by [`Runtime::handle_event`], as an event that met a fault is. A stored
+    /// name that fails the read check is read as the default, by the one rule of section 4 for every
+    /// surface. The other providers sign nothing and ask nothing.
+    ///
+    /// Each call costs the two uncached reads of `fresh()`, the row and the theme setting, where the
+    /// cell of `current()` would have cost at most two in two seconds; a fault on the theme read
+    /// alone refuses the send (docs/ISSUES.md PS3-10).
     fn signer(&self, p: &Provider) -> Result<String, String> {
         if p.body_format != "slack" {
             return Ok(String::new());
         }
-        const REFUSED: &str = "the name of the instance could not be read, so nothing was sent";
         match self.dispatcher.brand().fresh() {
             Ok(read) => Ok(read.shown().brand().name().to_string()),
             // The pool has noted the fault on this thread, so the layer above answers a request by
@@ -493,10 +499,23 @@ impl Runtime {
             // of the fault. An error that is not a fault of the store has no code word, and its text
             // is not echoed.
             Err(e) => Err(match obop_storage::fault::Fault::of_message(&e) {
-                Some(fault) => fault.message(REFUSED),
-                None => REFUSED.to_string(),
+                Some(fault) => fault.message(Self::NAME_REFUSED),
+                None => Self::NAME_REFUSED.to_string(),
             }),
         }
+    }
+
+    /// What a send says when the name that signs a Slack message could not be read.
+    const NAME_REFUSED: &'static str =
+        "the name of the instance could not be read, so nothing was sent";
+
+    /// Is this refusal of an event one to report on stderr? An event has nobody to tell, and a
+    /// refusal of the flow is already in the flow log, so those are not. A fault of the store is
+    /// (the event is tried again before), and so is a name that could not be read for another
+    /// reason, which has no code word and would otherwise leave an event that went nowhere with no
+    /// trace anywhere.
+    fn event_refusal_is_reported(e: &str) -> bool {
+        Fault::is_transient(e) || e == Self::NAME_REFUSED
     }
 
     /// Encode prepared rows for the provider: one body per request. `signer` is the name that signs
@@ -841,8 +860,20 @@ impl Runtime {
         Ok(json!({"results": results}))
     }
 
-    /// A command succeeded: deliver the record to the connections that subscribe to it.
+    /// A command succeeded: deliver the record to the connections that subscribe to it. What could
+    /// not be delivered and is worth a line (see [`Runtime::handle_event_with`]) is written to
+    /// stderr.
     pub fn handle_event(&self, command: &str, record: &str) {
+        self.handle_event_with(command, record, &mut |line| eprintln!("{line}"));
+    }
+
+    /// [`Runtime::handle_event`] that hands each line it would write to stderr to `report` instead,
+    /// at the moment it is made, so that a test can see them. A line is made for an event whose
+    /// connections could not be read, for a refusal that is a fault of the store (tried again
+    /// first) and for a name that could not be read for another reason (not tried again;
+    /// [`Runtime::event_refusal_is_reported`]); a refusal of the flow, which the flow log holds,
+    /// makes none.
+    pub fn handle_event_with(&self, command: &str, record: &str, report: &mut dyn FnMut(String)) {
         let Some((model, _)) = command.split_once('.') else {
             return;
         };
@@ -854,9 +885,9 @@ impl Runtime {
         ) {
             Ok(all) => all,
             Err(e) => {
-                eprintln!(
+                report(format!(
                     "connectors: the event {command} was not delivered, the connections could not be read: {e}"
-                );
+                ));
                 return;
             }
         };
@@ -875,11 +906,14 @@ impl Runtime {
             // A refusal of the flow is already in the flow log; an event has nobody to tell. A
             // busy store is not a refusal of the flow and is not logged as one: the event is tried
             // again (nothing was sent: the gate fails closed), and reported when it still cannot go.
+            // A name that could not be read for another reason is reported too, and not tried again.
             if let Err(e) = obop_storage::fault::patiently(4, Duration::from_millis(250), || {
                 self.send(&id, model, Some(&[record.to_string()]), command, "event")
-            }) && Fault::is_transient(&e)
+            }) && Self::event_refusal_is_reported(&e)
             {
-                eprintln!("connectors: the event {command} was not delivered to {id}: {e}");
+                report(format!(
+                    "connectors: the event {command} was not delivered to {id}: {e}"
+                ));
             }
         }
     }

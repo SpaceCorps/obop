@@ -2615,7 +2615,12 @@ fn the_scan_of_the_page_context_sees_a_public_field_a_missing_one_and_two() {
 // the first slice's and is left as it was. The row of `kernel/obop-http/src/lib.rs` in `ALLOWED` says
 // that `api_routes` reads nothing, and that stays true of the scan of that file; the OpenAPI handler
 // there asks the reader through `mcp::document_brand`, a call that scan does not see, and
-// `each_anonymous_document_asks_the_reader_once_and_first` below holds it.
+// `each_anonymous_document_asks_the_reader_once_and_first` below holds it. The same is true of the
+// row of `kernel/obop-http/src/oauth.rs` (`calls: 1, reads: 2`: the `.current(` of `read_brand` and
+// the one call of `rp_name(`) and of the module doc above, which names `rp_name(` as the one helper
+// that exists: `authorization_server` in that file asks through `mcp::document_brand` too, a third
+// path that neither the row nor `HELPER` sees, and the same test holds it: it looks for
+// `document_brand` by name, as `HELPER` looks for `rp_name(`.
 //
 // docs/spec/branding.md, section 13: "the list gains the files S3 changes, so no pending literal ever
 // sits on the list", and the word scan of the four crates that the phone's server text comes from. The
@@ -3222,11 +3227,16 @@ fn the_branded_counterpart_each_today_row_of_slice_s3_names_is_in_its_file() {
 // "github.com/SpaceCorps/obop"), unless a row of [`WORD_ALLOWED`] lets it stand. An identifier is not a
 // word and is not matched: `obop` with a letter, a digit, `_` or `-` on either side (`obop_setting`,
 // `x-obop-minimum`, `OBOP_PUBLIC_URL`, `myobop`), and the dotted name that goes on as a path
-// (`dev.obop/auth`). The hyphen is the price of that: a compound in prose (`an obop-style message`)
-// is not found, since a text cannot be told from the name of a header by its look (accepted, and
-// held as it is by `the_word_is_told_from_an_identifier`). The spec's own sentence (section 6, HP-11: "a space, a point or the end of the
-// literal") is narrower than its purpose, that no prose `obop` reaches a phone; the scan keeps the
-// purpose, since a name followed by a comma, a colon, an apostrophe or a bracket is as much prose.
+// (`dev.obop/auth`). The hyphen is accepted for simplicity: a compound in prose (`an obop-style
+// message`) is not found (held as it is by `the_word_is_told_from_an_identifier`). A rule could tell
+// it from the name of a header by what stands before the name (a hyphen after `obop` would make an
+// identifier only when an identifier character stands before it: `x-obop-minimum` yes, `an
+// obop-style` no), but it would also flag every literal that starts with `obop-`, which today are
+// the three hash prefixes of the signing link (`obop-sign-...` in `obop-commands/src/sign`), and each
+// would need a row; the slice does not buy that for a compound that no text of the four crates has.
+// The spec's own sentence (section 6, HP-11: "a space, a point or the end of the literal") is
+// narrower than its purpose, that no prose `obop` reaches a phone; the scan keeps the purpose, since
+// a name followed by a comma, a colon, an apostrophe or a bracket is as much prose.
 
 /// The four crates, as path prefixes under `crates/`.
 const WORD_CRATES: [&str; 4] = [
@@ -3732,5 +3742,206 @@ fn the_limits_of_the_rows_of_slice_s3_are_the_ones_decided() {
             panic!("{file} has no row with limits");
         };
         assert_eq!((*c, *r, *p, *t), (calls, reads, paths, types), "{file}");
+    }
+}
+
+// ---- The probes of the reader cost nothing outside the tests (slice S3) ------------------------------
+//
+// The probes of the brand reader that the tests of other crates use (`Reader::waiting`, `Reader::expire`,
+// `Reader::hold_fresh`) exist outside a test build of `obop-commands` only when the feature `test-support`
+// of that crate is on (`brand/reader.rs`, module `probe`). The claim that they cost nothing in a
+// binary that is shipped holds while no manifest turns the feature on for a normal build: it is no
+// default feature of `obop-commands`, and the one crate that asks for it, `obop`, asks in its
+// `[dev-dependencies]`. Nothing else checks that, and a `default = ["test-support"]` passes every test
+// of the tree, so this reads the manifests. It is a textual scan, one line at a time: a dependency
+// table spread over several lines is not seen (the manifests of the tree keep each on one line).
+
+/// Every line of `manifest` that asks for the feature `test-support` of `obop-commands`, with the
+/// section it stands in: a dependency on the crate that names the feature (`obop-commands = { ...,
+/// features = ["test-support"] }`, or the table form `[dependencies.obop-commands]` with a `features`
+/// line) or a feature of the manifest that forwards it (`obop-commands/test-support`).
+fn asks_for_the_probes(manifest: &str) -> Vec<(String, String)> {
+    let mut section = String::new();
+    let mut asks = Vec::new();
+    for raw in manifest.lines() {
+        let line = raw.trim();
+        if line.starts_with('#') {
+            continue;
+        }
+        if line.starts_with('[') && !line.contains('=') {
+            section = line.to_string();
+            continue;
+        }
+        let names_the_crate = line.contains("obop-commands") || section.contains("obop-commands");
+        if names_the_crate && line.contains("test-support") {
+            asks.push((section.clone(), line.to_string()));
+        }
+    }
+    asks
+}
+
+/// The `[features]` of `manifest` as (name, value) pairs.
+fn features_of(manifest: &str) -> Vec<(String, String)> {
+    let mut in_features = false;
+    let mut out = Vec::new();
+    for raw in manifest.lines() {
+        let line = raw.trim();
+        if line.starts_with('[') && !line.contains('=') {
+            in_features = line == "[features]";
+            continue;
+        }
+        if !in_features || line.starts_with('#') {
+            continue;
+        }
+        if let Some((k, v)) = line.split_once('=') {
+            out.push((k.trim().to_string(), v.trim().to_string()));
+        }
+    }
+    out
+}
+
+/// What is wrong with the way a tree of manifests holds `test-support`: the `[features]` of
+/// `obop-commands` (the one given) must have no `default`, an empty `test-support` and no other
+/// feature that mentions it, and every ask of any manifest (the workspace's included) must stand in
+/// a `[dev-dependencies]` section.
+fn probe_problems(commands: &str, others: &[(String, String)]) -> Vec<String> {
+    let mut problems = Vec::new();
+    let features = features_of(commands);
+    for (name, value) in &features {
+        if name == "default" {
+            problems.push(format!(
+                "obop-commands has a default feature ({value}): the probes would be on in every build"
+            ));
+        } else if name != "test-support" && value.contains("test-support") {
+            problems.push(format!(
+                "the feature {name} of obop-commands turns test-support on"
+            ));
+        }
+    }
+    match features.iter().find(|(n, _)| n == "test-support") {
+        Some((_, v)) if v == "[]" => {}
+        Some((_, v)) => problems.push(format!("test-support of obop-commands is {v}, not []")),
+        None => problems.push("obop-commands has no feature test-support".to_string()),
+    }
+    for (path, manifest) in others {
+        for (section, line) in asks_for_the_probes(manifest) {
+            if !section.contains("dev-dependencies") {
+                problems.push(format!(
+                    "{path}: {line} (in {section}, not dev-dependencies)"
+                ));
+            }
+        }
+    }
+    problems
+}
+
+/// Every `Cargo.toml` under `dir`, as (path, text); `target` and `node_modules` are not read.
+fn manifests_under(dir: &Path, out: &mut Vec<(String, String)>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().to_string();
+        if path.is_dir() {
+            if name != "target" && name != "node_modules" {
+                manifests_under(&path, out);
+            }
+        } else if name == "Cargo.toml"
+            && let Ok(text) = std::fs::read_to_string(&path)
+        {
+            out.push((path.display().to_string(), text));
+        }
+    }
+}
+
+#[test]
+fn the_probes_of_the_reader_are_no_default_feature_and_only_a_dev_dependency_asks_for_them() {
+    let crates = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut manifests = Vec::new();
+    manifests_under(&crates, &mut manifests);
+    // The workspace's own manifest is where a `features` line on a shared dependency would reach
+    // every crate.
+    let workspace = std::fs::read_to_string(crates.join("../Cargo.toml")).unwrap();
+    manifests.push(("Cargo.toml".to_string(), workspace));
+    assert!(
+        manifests.len() > 20,
+        "the scan reads the manifests of the tree: {}",
+        manifests.len()
+    );
+    let commands = std::fs::read_to_string(crates.join("kernel/obop-commands/Cargo.toml")).unwrap();
+    let problems = probe_problems(&commands, &manifests);
+    assert!(problems.is_empty(), "{}", problems.join("\n"));
+    // The scan is live: the one crate that asks does so, and in its dev-dependencies.
+    let asks: Vec<(String, (String, String))> = manifests
+        .iter()
+        .flat_map(|(p, m)| {
+            asks_for_the_probes(m)
+                .into_iter()
+                .map(move |a| (p.clone(), a))
+        })
+        .collect();
+    assert_eq!(asks.len(), 1, "who asks for the probes: {asks:?}");
+    assert!(
+        asks[0].0.replace('\\', "/").ends_with("/obop/Cargo.toml")
+            && asks[0].1.0 == "[dev-dependencies]",
+        "{asks:?}"
+    );
+}
+
+#[test]
+fn the_scan_of_the_manifests_sees_a_default_feature_and_an_ask_outside_dev_dependencies() {
+    let commands = "[features]\n# a comment\ntest-support = []\n";
+    let asks_in = |section: &str, line: &str| {
+        vec![(
+            "crates/x/Cargo.toml".to_string(),
+            format!("[package]\nname = \"x\"\n\n{section}\n{line}\n"),
+        )]
+    };
+    let dev = r#"obop-commands = { workspace = true, features = ["test-support"] }"#;
+    // The tree as it is meant to be.
+    assert_eq!(
+        probe_problems(commands, &asks_in("[dev-dependencies]", dev)),
+        Vec::<String>::new()
+    );
+    // The same ask in a section that a normal build reads, in each form it can take.
+    for (section, line) in [
+        ("[dependencies]", dev),
+        ("[build-dependencies]", dev),
+        ("[workspace.dependencies]", dev),
+        ("[target.'cfg(unix)'.dependencies]", dev),
+        (
+            "[dependencies.obop-commands]",
+            r#"features = ["test-support"]"#,
+        ),
+        ("[features]", r#"probes = ["obop-commands/test-support"]"#),
+    ] {
+        let found = probe_problems(commands, &asks_in(section, line));
+        assert_eq!(found.len(), 1, "{section} {line}: {found:?}");
+        assert!(found[0].contains("not dev-dependencies"), "{found:?}");
+    }
+    // A comment that mentions it asks for nothing.
+    assert!(probe_problems(commands, &asks_in("[dependencies]", &format!("# {dev}"))).is_empty());
+    // The feature itself: a default that turns it on, a feature that forwards it, a non-empty one,
+    // and one that is gone.
+    for (features, wanted) in [
+        (
+            "[features]\ndefault = [\"test-support\"]\ntest-support = []\n",
+            "default feature",
+        ),
+        (
+            "[features]\ndefault = []\ntest-support = []\n",
+            "default feature",
+        ),
+        (
+            "[features]\nprobes = [\"test-support\"]\ntest-support = []\n",
+            "turns test-support on",
+        ),
+        ("[features]\ntest-support = [\"other\"]\n", "not []"),
+        ("[features]\nother = []\n", "no feature test-support"),
+    ] {
+        let found = probe_problems(features, &[]);
+        assert_eq!(found.len(), 1, "{features}: {found:?}");
+        assert!(found[0].contains(wanted), "{features}: {found:?}");
     }
 }

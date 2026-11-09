@@ -1450,11 +1450,12 @@ pub(crate) async fn document_table(
 /// With a brand row in the store, the documents that name nothing of the instance are what they
 /// were, byte for byte: the catalogue (it has no human field and never asks the reader) and the
 /// refusal that an instance without an OAuth server sends for the authorization server's metadata.
-/// The other rows of the table are what slice S3 changes on purpose: with a row, `initialize`, the
-/// protected-resource documents, the server card and the metadata of the authorization server
-/// carry the name and lose their links; `brand_docs_tests.rs` holds each of those differences,
-/// member by member, against the same documents without the row. (Until S3 this test held every
-/// row of the table to its digest: the surfaces did not read the row yet.)
+/// The other rows of the table are what slice S3 changes on purpose: with a row, `initialize` and
+/// the server card carry the name, the protected-resource documents carry the name and lose their
+/// link, and the metadata of the authorization server carries no name and only loses its link;
+/// `brand_docs_tests.rs` holds each of those differences, member by member, against the same
+/// documents without the row. (Until S3 this test held every row of the table to its digest: the
+/// surfaces did not read the row yet.)
 #[tokio::test]
 async fn with_a_brand_row_the_documents_that_name_nothing_are_what_they_were() {
     use crate::mfa_tests::pin;

@@ -1033,9 +1033,11 @@ async fn while_a_refill_is_parked_the_documents_are_served_with_the_last_good_na
 /// is no last good name to give, so a request that finds the first refill running waits for it and
 /// shares its outcome (spec section 4). When that refill fails, the request that ran it is answered
 /// 503 by D74, because the pool noted the fault on its thread; the request that waited is answered 200
-/// with the default document, because nothing was noted on its thread, and the header of the
-/// document lets a shared cache keep it for five minutes. This test holds that as it is, so that a
-/// change of the reader that hands the waiter the failure fails it, and PS3-9 is closed with it.
+/// with the default document, because nothing was noted on its thread, and the header of a
+/// discovery document lets a shared cache keep it for five minutes. The OpenAPI document is the other
+/// waiter here: it is answered the same way and sends no `Cache-Control` at all, so nothing keeps it.
+/// This test holds that as it is, so that a change of the reader that hands the waiter the failure
+/// fails it, and PS3-9 is closed with it.
 ///
 /// The waiter is let go only once the reader says that it waits (`Reader::waiting`, a condition and
 /// not a time), so it is the case of the limit every time: a waiter that had reached the reader after
@@ -1071,20 +1073,32 @@ async fn a_request_that_waits_behind_a_failed_first_flight_is_given_the_default_
         let r = router.clone();
         tokio::spawn(async move { get(&r, "/mcp/server-card").await })
     };
+    let api_waiter = {
+        let r = router.clone();
+        tokio::spawn(async move { get(&r, "/api/openapi.json").await })
+    };
     // The reader counts a caller that has found the flight running and has nothing to serve; the
     // loop ends on that count, and the bound is only how long a broken test may take to fail.
     let reader = app.dispatcher.brand();
     let by = std::time::Instant::now() + std::time::Duration::from_secs(20);
-    while reader.waiting() < 1 {
+    while reader.waiting() < 2 {
         assert!(
             std::time::Instant::now() < by,
-            "the second request never waited for the flight"
+            "the other requests never waited for the flight"
         );
         tokio::time::sleep(std::time::Duration::from_millis(2)).await;
     }
     assert!(!waiter.is_finished(), "the waiter waits for the flight");
+    assert!(
+        !api_waiter.is_finished(),
+        "the waiter for the API waits for the flight"
+    );
     go_tx.send(()).unwrap();
-    let (owner, waiter) = (owner.await.unwrap(), waiter.await.unwrap());
+    let (owner, waiter, api) = (
+        owner.await.unwrap(),
+        waiter.await.unwrap(),
+        api_waiter.await.unwrap(),
+    );
 
     assert_eq!(owner.status, 503, "the request that ran the failed read");
     assert_eq!(owner.header("retry-after"), "1");
@@ -1097,6 +1111,18 @@ async fn a_request_that_waits_behind_a_failed_first_flight_is_given_the_default_
     let card = waiter.json();
     assert_eq!(card["title"], "obop instance", "the default, not the row");
     assert!(!String::from_utf8_lossy(&waiter.body).contains("MOHV"));
+
+    // The OpenAPI document that waited: 200, the title of an instance with no brand, and no
+    // `Cache-Control` (only `Vary`), so no cache is told to keep it.
+    assert_eq!(api.status, 200, "the API document that waited behind it");
+    assert_eq!(api.header("cache-control"), "", "none is sent");
+    assert_eq!(api.header("vary"), "Authorization");
+    assert_eq!(
+        api.json()["info"]["title"],
+        "obop instance API",
+        "the default, not the row"
+    );
+    assert!(!String::from_utf8_lossy(&api.body).contains("MOHV"));
 }
 
 /// The cost, while the store answers (section 9): the first request for a document costs the

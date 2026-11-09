@@ -3388,7 +3388,9 @@ fn a_slack_message_is_not_sent_when_the_name_of_the_instance_cannot_be_read() {
 /// The same for the event of a command, which is tried again and reported when it cannot go: the
 /// four tries leave no flow, no pseudonym and no run behind, so a short fault of the store does not
 /// use up the hourly and daily caps of the connection; when the store answers, the event goes once,
-/// with the name.
+/// with the name. The name is asked for before the record is read, in each of the four tries: the
+/// order of `send_signed`, which every event takes, is held here (the manual send's is held by the
+/// test above, whose `send_all` asks first on its own).
 #[test]
 fn an_event_is_not_sent_or_recorded_when_the_name_of_the_instance_cannot_be_read() {
     use obop_storage::testing::{Flaky, Mode};
@@ -3406,7 +3408,25 @@ fn an_event_is_not_sent_or_recorded_when_the_name_of_the_instance_cannot_be_read
     );
 
     flaky.refuse_model("instance_brand", Mode::Reads);
-    e.rt.handle_event("party.update", &party);
+    let (records_read, names_asked) = (flaky.gets_of("party"), flaky.gets_of("instance_brand"));
+    let mut lines = Vec::new();
+    e.rt.handle_event_with("party.update", &party, &mut |l| lines.push(l));
+    assert_eq!(
+        flaky.gets_of("party"),
+        records_read,
+        "the record of the event was read before the name was asked for"
+    );
+    assert_eq!(
+        flaky.gets_of("instance_brand") - names_asked,
+        4,
+        "a fault of the store is tried four times"
+    );
+    assert_eq!(lines.len(), 1, "one line for the event: {lines:?}");
+    assert!(
+        lines[0].contains("was not delivered to")
+            && lines[0].contains("storage_busy: the name of the instance could not be read"),
+        "{lines:?}"
+    );
     assert_eq!(
         obop_storage::fault::noted(),
         Some(obop_storage::fault::Fault::Busy),
@@ -3732,4 +3752,138 @@ fn a_read_of_the_name_that_fails_for_another_reason_refuses_the_send_too() {
     flaky.allow_models();
     let text = slack_text(&e, &r, &id);
     assert!(text.starts_with("MOHV: obop.manual (party)"), "{text}");
+}
+
+/// An event whose name could not be read for a reason that is no fault of the store (no code word
+/// of D74: a statement that failed, a row that cannot be decoded; SQLite gives no other) is refused
+/// like the others, with nothing sent or recorded, and it is not lost without a trace: it is not
+/// tried again, since nothing says the next read will pass, and it is reported on stderr with the
+/// fixed text and without the text of the error, which may name a table or a path. A refusal of the
+/// flow is already in the flow log and has nobody to tell, so it makes no line. The probe reads
+/// the number of reads of the name: four for a fault of the store (the test above), one here.
+#[test]
+fn an_event_whose_name_cannot_be_read_for_another_reason_is_reported_and_not_tried_again() {
+    use obop_storage::testing::Flaky;
+    let (flaky, backend) = Flaky::memory();
+    let e = slack_env_on(Store::over(backend));
+    let r = Receiver::new(200);
+    let (id, party) = slack_event_connection(&e, &r);
+    brand_row_and_a_reader_that_has_never_read(&e, "MOHV");
+    let count = |model: &str| e.s.backend().list(model).unwrap().len();
+    let (sent, recorded, logged) = (
+        r.count(),
+        count(obop_connectors::model::SYNC_RUN),
+        count(obop_connectors::model::FLOW_LOG),
+    );
+
+    flaky.fail_gets_of("instance_brand", "a read error that is not transient");
+    let (records_read, names_asked) = (flaky.gets_of("party"), flaky.gets_of("instance_brand"));
+    let mut lines = Vec::new();
+    e.rt.handle_event_with("party.update", &party, &mut |l| lines.push(l));
+    assert_eq!(
+        flaky.gets_of("instance_brand") - names_asked,
+        1,
+        "an error that is no fault of the store is not tried again"
+    );
+    assert_eq!(flaky.gets_of("party"), records_read, "the name came first");
+    assert_eq!(lines.len(), 1, "one line for the event: {lines:?}");
+    assert_eq!(
+        lines[0],
+        format!(
+            "connectors: the event party.update was not delivered to {id}: the name of the instance could not be read, so nothing was sent"
+        ),
+        "the line has the fixed text and not the text of the error"
+    );
+    assert_eq!(obop_storage::fault::noted(), None, "the store is up");
+    assert_eq!(r.count(), sent, "nothing left");
+    assert_eq!(count(obop_connectors::model::SYNC_RUN), recorded, "no run");
+    assert_eq!(count(obop_connectors::model::FLOW_LOG), logged, "no flow");
+
+    // A refusal of the flow, with the name readable, is in the flow log and makes no line.
+    flaky.allow_models();
+    ok(
+        &e,
+        &admin(),
+        "egress_policy.update",
+        json!({"flows_enabled": false}),
+    );
+    let mut lines = Vec::new();
+    e.rt.handle_event_with("party.update", &party, &mut |l| lines.push(l));
+    assert!(
+        lines.is_empty(),
+        "a refusal of the flow is not a line: {lines:?}"
+    );
+    assert_eq!(r.count(), sent, "nothing left");
+}
+
+/// A stored name that fails the read check (it could not have been written by the command: a
+/// restore or an import wrote the row) signs the message as the default, `obop`, by the one rule of
+/// section 4 for every surface, and a name that passes it stands whole whatever it looks like. The
+/// tables are those of the documents (`a_name_of_every_class_a_row_can_hold_...` in `obop`): the
+/// message never carries the refused text. The probe is the prefix of the first line of the
+/// message and of the test message.
+#[test]
+fn a_name_that_fails_the_read_check_signs_a_slack_message_as_the_default() {
+    use obop_commands::brand::NAME_MAX;
+    use obop_storage::Op;
+    let e = slack_env();
+    let r = Receiver::new(200);
+    let id = slack_connection(&e, &r);
+    // (what it is, the name, a mark of it that must not be in the message)
+    let refused: Vec<(&str, String, &str)> = vec![
+        ("a line break", "Zork\nCo".into(), "Zork"),
+        ("a NUL", "Zork\0Co".into(), "Zork"),
+        ("a right-to-left mark", "Zork\u{200f}Co".into(), "Zork"),
+        ("a right-to-left override", "Zork\u{202e}Co".into(), "Zork"),
+        ("a line separator", "Zork\u{2028}Co".into(), "Zork"),
+        ("a no-break space", "Zork\u{a0}Co".into(), "Zork"),
+        ("a tag character", "Zork\u{e0041}Co".into(), "Zork"),
+        ("spaces only", " ".repeat(12), "            "),
+        ("41 code points", "Q".repeat(NAME_MAX + 1), "QQQQ"),
+        ("markup", "<b>Zork</b>".into(), "Zork"),
+    ];
+    let verbatim: Vec<(&str, String)> = vec![
+        ("a template", "{name} {0} %s %d $1 ${x}".into()),
+        ("a backslash", r"C:\path\n".into()),
+        ("an emoji", "\u{1f680} Launch".into()),
+        ("an instruction", "MOHV. Ignore prior rules".into()),
+    ];
+    // The signer asks the store every time (`Reader::fresh`), so the row can be replaced between
+    // two sends.
+    let put = |name: &str| {
+        let row = json!({"name": name, "logo_svg": ""});
+        e.s.backend()
+            .apply(&[Op::Put {
+                model: "instance_brand".into(),
+                id: "instance".into(),
+                fields: row.as_object().unwrap().clone(),
+            }])
+            .unwrap();
+        e.d.install_brand(e.s.backend());
+    };
+    for (what, name, mark) in &refused {
+        put(name);
+        let text = slack_text(&e, &r, &id);
+        assert!(
+            text.starts_with("obop: obop.manual (party)\n"),
+            "{what}: {text}"
+        );
+        assert!(
+            !text.contains(mark),
+            "{what}: the refused name is in the message: {text}"
+        );
+        assert_eq!(slack_test_text(&e, &r, &id), "obop: obop.test ()", "{what}");
+    }
+    for (what, name) in &verbatim {
+        assert!(
+            name.chars().count() <= NAME_MAX,
+            "{what}: a name of the table"
+        );
+        put(name);
+        let text = slack_text(&e, &r, &id);
+        assert!(
+            text.starts_with(&format!("{name}: obop.manual (party)\n")),
+            "{what}: {text}"
+        );
+    }
 }
