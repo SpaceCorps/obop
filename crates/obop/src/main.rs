@@ -158,9 +158,11 @@ const USAGE: &str = "usage: obop <command>
                                                 in force and where each value comes from, the titles and messages that are stored,
                                                 and any stored field that fell back
   admin brand configure [--name N] [--slug S] [--title LANG=TEXT]... [--message LANG=TEXT]...
-                        [--logo-file FILE.svg | --clear-logo] [--from FILE.toml] [--dry-run]
+                        [--logo-file FILE.svg | --clear-logo] [--hide-product-docs on|off]
+                        [--from FILE.toml] [--dry-run]
                                                 set the fields given and keep the others (the first call needs --name); an empty text
-                                                clears a field (--title sv=); --from reads the [record] table of a values file;
+                                                clears a field (--title sv=); --hide-product-docs on hides the Brand book and the Guide
+                                                from the people of the instance; --from reads the [record] table of a values file;
                                                 --dry-run checks and writes nothing; every change is written to the security log
   admin brand clear [--dry-run]                 remove the branding
   admin brand check FILE.svg                    say whether FILE.svg is an artwork the branding accepts and its version, or every

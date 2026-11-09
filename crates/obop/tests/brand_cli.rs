@@ -190,12 +190,145 @@ fn the_help_lists_the_area() {
     for line in [
         "admin brand status",
         "admin brand configure [--name N] [--slug S] [--title LANG=TEXT]... [--message LANG=TEXT]...",
-        "[--logo-file FILE.svg | --clear-logo] [--from FILE.toml] [--dry-run]",
+        "[--logo-file FILE.svg | --clear-logo] [--hide-product-docs on|off]",
+        "[--from FILE.toml] [--dry-run]",
         "admin brand clear [--dry-run]",
         "admin brand check FILE.svg",
     ] {
         assert!(help.contains(line), "{line} is not in\n{help}");
     }
+}
+
+/// The usage text of the area (`obop admin brand`) and the help of the whole binary list the same
+/// flags: a flag added to one and not to the other is found here.
+#[test]
+fn the_help_of_the_binary_names_every_flag_of_the_usage_of_the_area() {
+    let help = refused(run(None, &["--help"], None, None), 2);
+    let area = refused(run(None, &["admin", "brand"], None, None), 2);
+    let flags: std::collections::BTreeSet<&str> = area
+        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '-'))
+        .filter(|w| w.starts_with("--") && w.len() > 2)
+        .collect();
+    for known in ["--name", "--hide-product-docs", "--dry-run", "--from"] {
+        assert!(flags.contains(known), "{known} is not in the usage:\n{area}");
+    }
+    for flag in flags {
+        assert!(help.contains(flag), "{flag} is not in the help:\n{help}");
+    }
+}
+
+// ---- the switch that hides the product pages -------------------------------------------------------
+
+#[test]
+fn hide_product_docs_on_and_off_reach_the_row_the_status_and_the_log_and_a_values_file_may_not_repeat_it()
+ {
+    let dir = Dir::started("switch");
+    let url = dir.url();
+
+    // `on` stores the switch with the first call; the status says so and the log has the change.
+    let c = ok(obop(
+        &url,
+        &[
+            "admin",
+            "brand",
+            "configure",
+            "--name",
+            "MOHV",
+            "--hide-product-docs",
+            "on",
+        ],
+        None,
+    ));
+    assert!(c.contains("  hide_product_docs: false -> true\n"), "{c}");
+    assert!(status(&url).contains("hide_product_docs: on\n"));
+    assert_eq!(
+        details(&url, "brand_configured"),
+        [
+            "hide_product_docs: false -> true".to_string(),
+            "name: \"\" -> \"MOHV\"".to_string()
+        ]
+    );
+    let stored = obop_storage::open(&url)
+        .unwrap()
+        .get("instance_brand", "instance")
+        .unwrap()
+        .expect("the row");
+    assert_eq!(stored.get("hide_product_docs"), Some(&serde_json::json!(true)));
+
+    // The same value again changes nothing; a dry run with `off` says what it would do and writes
+    // nothing.
+    let again = ok(obop(
+        &url,
+        &["admin", "brand", "configure", "--hide-product-docs", "on"],
+        None,
+    ));
+    assert!(again.contains("nothing changed"), "{again}");
+    let dry = ok(obop(
+        &url,
+        &[
+            "admin",
+            "brand",
+            "configure",
+            "--hide-product-docs",
+            "off",
+            "--dry-run",
+        ],
+        None,
+    ));
+    assert!(dry.contains("  hide_product_docs: true -> false\n"), "{dry}");
+    assert!(status(&url).contains("hide_product_docs: on\n"));
+    assert_eq!(events(&url).len(), 2);
+
+    // A values file may set it too, but not together with the flag.
+    let values = dir.file("v.toml", "[record]\nhide_product_docs = true\n");
+    let e = refused(
+        obop(
+            &url,
+            &[
+                "admin",
+                "brand",
+                "configure",
+                "--from",
+                &values,
+                "--hide-product-docs",
+                "off",
+            ],
+            None,
+        ),
+        2,
+    );
+    assert!(
+        e.contains("hide_product_docs is given twice: by the values file and by a flag"),
+        "{e}"
+    );
+    assert!(status(&url).contains("hide_product_docs: on\n"));
+
+    // `off` removes it: the status does not mention it, the row has no key, the log has the change.
+    let c = ok(obop(
+        &url,
+        &["admin", "brand", "configure", "--hide-product-docs", "off"],
+        None,
+    ));
+    assert!(c.contains("  hide_product_docs: true -> false\n"), "{c}");
+    assert!(!status(&url).contains("hide_product_docs"));
+    let stored = obop_storage::open(&url)
+        .unwrap()
+        .get("instance_brand", "instance")
+        .unwrap()
+        .expect("the row");
+    assert!(stored.get("hide_product_docs").is_none(), "{stored:?}");
+    assert!(
+        details(&url, "brand_configured").contains(&"hide_product_docs: true -> false".to_string())
+    );
+
+    // A values file alone sets it again, as the JSON boolean.
+    let c = ok(obop(
+        &url,
+        &["admin", "brand", "configure", "--from", &values],
+        None,
+    ));
+    assert!(c.contains("  hide_product_docs: false -> true\n"), "{c}");
+    assert!(status(&url).contains("hide_product_docs: on\n"));
 }
 
 // ---- the local smoke: create, configure, status, check, clear --------------------------------------
