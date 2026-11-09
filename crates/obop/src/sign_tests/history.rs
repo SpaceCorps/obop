@@ -2657,19 +2657,44 @@ fn reads_before_the_history() -> [(&'static str, Reads); 5] {
     ]
 }
 
+/// The reads of the reader of the instance brand so far: the row and the theme setting it refills
+/// from (`obop_setting` is read by nothing else in these steps).
+fn brand_gets(flaky: &Flaky) -> u64 {
+    flaky.gets_of(obop_commands::brand::MODEL) + flaky.gets_of("obop_setting")
+}
+
+/// What the door read in a step that began when `brand_gets` stood at `before`. Every page of the door
+/// shows the brand (slice S1d), so the first page of a process asks the reader, which refills from
+/// two point reads, the row and the theme setting (a cell that is fresh costs none). Those are the
+/// reader's reads, held by the tests of the reader (`obop-commands`, `brand/tests/cache.rs`), and
+/// not the door's, so they are taken off: what is left is what the door read before the brand.
+fn door_part(flaky: &Flaky, before: u64) -> Reads {
+    let mut reads = flaky.reads();
+    let brand = brand_gets(flaky) - before;
+    assert!(
+        brand == 0 || brand == 2,
+        "the reader of the brand makes no reads, or the two of a refill; it made {brand}"
+    );
+    reads.gets -= brand;
+    reads
+}
+
 /// The steps of that measurement, on a request that was sent and has two links.
 async fn door_reads(f: &Fx, flaky: &Flaky, p1: &str, p2: &str) -> Vec<(&'static str, Reads)> {
     let mut out = Vec::new();
     flaky.reset_reads();
+    let b = brand_gets(flaky);
     assert_eq!(f.get(&format!("{p1}?lang=en"), &ip(1)).await.status, 200);
-    out.push(("the page", flaky.reads()));
+    out.push(("the page", door_part(flaky, b)));
     flaky.reset_reads();
+    let b = brand_gets(flaky);
     assert_eq!(
         f.get(&format!("{p1}/document.pdf"), &ip(2)).await.status,
         200
     );
-    out.push(("the PDF", flaky.reads()));
+    out.push(("the PDF", door_part(flaky, b)));
     flaky.reset_reads();
+    let b = brand_gets(flaky);
     let r = f
         .post(
             p1,
@@ -2683,16 +2708,21 @@ async fn door_reads(f: &Fx, flaky: &Flaky, p1: &str, p2: &str) -> Vec<(&'static 
         )
         .await;
     assert_eq!(r.status, 303, "{}", r.text());
-    out.push(("the signature", flaky.reads()));
+    out.push(("the signature", door_part(flaky, b)));
     flaky.reset_reads();
+    let b = brand_gets(flaky);
     assert_eq!(f.get(&format!("{p1}?lang=en"), &ip(4)).await.status, 200);
     out.push((
         "the page after signing, from the link that signed",
-        flaky.reads(),
+        door_part(flaky, b),
     ));
     flaky.reset_reads();
+    let b = brand_gets(flaky);
     assert_eq!(f.get(&format!("{p2}?lang=en"), &ip(5)).await.status, 200);
-    out.push(("the page after signing, from a second link", flaky.reads()));
+    out.push((
+        "the page after signing, from a second link",
+        door_part(flaky, b),
+    ));
     out
 }
 
