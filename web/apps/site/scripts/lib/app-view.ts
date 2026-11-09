@@ -68,7 +68,15 @@ export const words = (id: string): string =>
     .map((w) => ACRONYMS[w] ?? w)
     .join(" ");
 export const capital = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
-export const lowerFirst = (s: string): string => s.charAt(0).toLowerCase() + s.slice(1);
+/**
+ * The first letter in lower case, for a title that continues a sentence ("Ticket: close"). A word that
+ * starts with an acronym or a camel-case name keeps its capitals ("OAuth start", "BOM explode"): it
+ * is left alone when its second letter is a capital too.
+ */
+export const lowerFirst = (s: string): string =>
+  s.length > 1 && s.charAt(1) !== s.charAt(1).toLowerCase()
+    ? s
+    : s.charAt(0).toLowerCase() + s.slice(1);
 
 /**
  * A model's name in plain English: the one `data/apps.ts` gives it where the technical name reads
@@ -136,15 +144,21 @@ export function appView(app: App, m: Messages, all: App[], locale = "en"): AppVi
     return dep ? [link(dep)] : [];
   });
 
-  // The strip: how mature the app is, which version, what it works with and under which licence.
-  // The category is the quiet line in the hero and the developer is in the information list; every
-  // value comes from the manifest.
+  // The strip: how mature the app is, which version, how many other apps it works with (their names
+  // are the "Works with" section below it) and under which licence. The category is the quiet line in
+  // the hero and the developer is in the information list; every value comes from the manifest.
+  // The plural category of the count in this language; "zero" and "two" (Arabic, Welsh) fall to "other".
+  const form = new Intl.PluralRules(locale).select(worksWith.length);
+  const plural = form === "one" || form === "few" || form === "many" ? form : "other";
   const facts: Fact[] = [
     { label: a.meta.maturity, value: maturity },
     { label: a.meta.version, value: app.version },
     {
       label: s.worksWith,
-      value: worksWith.length > 0 ? worksWith.map((d) => d.name).join(", ") : s.standalone,
+      value:
+        worksWith.length > 0
+          ? fill(s.worksCount[plural], { n: String(worksWith.length) })
+          : s.standalone,
     },
     { label: a.meta.license, value: meta.license },
   ].filter((f) => f.value);
@@ -199,7 +213,7 @@ export function appView(app: App, m: Messages, all: App[], locale = "en"): AppVi
     { label: s.category, value: category },
     {
       label: a.meta.version,
-      value: app.builtin ? fill(a.meta.builtinVersion, { version: app.version }) : app.version,
+      value: app.builtin ? fill(s.sameAsObop, { version: app.version }) : app.version,
     },
     {
       label: a.meta.license,

@@ -1,6 +1,14 @@
 import { describe, expect, test } from "vite-plus/test";
 import { LOCALES, messages } from "../../i18n/index.ts";
-import { FOLD_WORDS, LEAD_WORDS, appView, splitPurpose, wordCount } from "./app-view.ts";
+import { appMirror } from "./app-page.ts";
+import {
+  FOLD_WORDS,
+  LEAD_WORDS,
+  appView,
+  lowerFirst,
+  splitPurpose,
+  wordCount,
+} from "./app-view.ts";
 import { appName, loadApps } from "./apps.ts";
 
 const apps = loadApps();
@@ -9,8 +17,19 @@ const apps = loadApps();
 const words = (t: string) =>
   t
     .toLowerCase()
-    .replace(/[^p{L}p{N}]+/gu, " ")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim();
+
+describe("the helper that compares words really compares them", () => {
+  // The helper once lost its backslashes and kept only the letter p, so a purpose that lost words
+  // still passed. These cases fail if that happens again.
+  test("it keeps letters and digits, and drops the rest", () => {
+    expect(words("Prepare customer invoices, as drafts (v2).")).toBe(
+      "prepare customer invoices as drafts v2",
+    );
+    expect(words("Completely different words entirely.")).not.toBe(words("Prepare invoices."));
+  });
+});
 
 describe("the purpose is split after its first sentence", () => {
   test("every purpose gives a short lead that is one whole sentence and a rest that is the remainder", () => {
@@ -129,5 +148,110 @@ describe("the view of an app, in every language", () => {
     expect(titles("manufacturing")).toEqual(["Bill of materials", "Component", "Order"]);
     expect(titles("accounting")).toContain("Journal entry");
     expect(titles("inventory")).toContain("Stock move");
+  });
+
+  test("a language without label files marks every card it takes from the English manifest", () => {
+    // 'xx' has no packages/labels/xx: each card falls back to English and says so, for screen readers.
+    const v = appView(
+      apps.find((a) => a.id === "accounting")!,
+      messages.en,
+      apps,
+      "xx",
+    );
+    expect(v.actions.length).toBeGreaterThan(0);
+    for (const c of [...v.actions, ...v.models]) expect(c.lang, c.title).toBe("en");
+    // English itself needs no mark.
+    const en = appView(
+      apps.find((a) => a.id === "accounting")!,
+      messages.en,
+      apps,
+      "en",
+    );
+    for (const c of [...en.actions, ...en.models]) expect(c.lang, c.title).toBeUndefined();
+  });
+});
+
+describe("what it works with is a count, in the plural of the language", () => {
+  const some = (n: number) => apps.slice(0, n).map((a) => ({ id: a.id, requirement: "*" }));
+  const fact = (locale: (typeof LOCALES)[number], n: number) => {
+    const base = apps.find((a) => a.id === "product")!;
+    const view = appView({ ...base, dependencies: some(n) }, messages[locale], apps, locale);
+    return view.facts.find((f) => f.label === messages[locale].apps.store.worksWith)!.value;
+  };
+
+  test("English, Polish and Finnish", () => {
+    expect(fact("en", 1)).toBe("1 app");
+    expect(fact("en", 2)).toBe("2 apps");
+    expect(fact("pl", 1)).toBe("1 aplikacja");
+    expect(fact("pl", 2)).toBe("2 aplikacje");
+    expect(fact("pl", 5)).toBe("5 aplikacji");
+    expect(fact("fi", 1)).toBe("1 sovellus");
+    expect(fact("fi", 3)).toBe("3 sovellusta");
+  });
+
+  test("no dependency says so in words, and every language has a form for every case", () => {
+    for (const locale of LOCALES) {
+      const s = messages[locale].apps.store;
+      expect(fact(locale, 0), locale).toBe(s.standalone);
+      for (const form of Object.values(s.worksCount)) expect(form, locale).toContain("{n}");
+      for (const n of [1, 2, 3, 5, 6]) expect(fact(locale, n), `${locale} ${n}`).toMatch(/\d/);
+    }
+  });
+});
+
+describe("a title that starts with an acronym keeps its capitals in the Markdown copy", () => {
+  test("lowerFirst", () => {
+    expect(lowerFirst("Close")).toBe("close");
+    expect(lowerFirst("OAuth start")).toBe("OAuth start");
+    expect(lowerFirst("BOM explode")).toBe("BOM explode");
+    expect(lowerFirst("A")).toBe("a");
+    expect(lowerFirst("")).toBe("");
+  });
+
+  test("the Connectors copy says 'OAuth start', as the page does", () => {
+    const connectors = apps.find((a) => a.id === "connectors")!;
+    const page = appView(connectors, messages.en, apps, "en");
+    expect(page.actions.map((c) => c.title)).toContain("OAuth start");
+    const md = appMirror(connectors, "en", messages.en, "", apps);
+    expect(md).toContain(": OAuth start**");
+    expect(md).not.toMatch(/\boAuth\b/);
+  });
+});
+
+describe("the site's own grouping of the apps is pinned", () => {
+  // The category of an app (its quiet line, its row on the index, its related apps) is written by
+  // hand in data/apps.ts and is not the manifest's list of categories (shown under For developers,
+  // where Helpdesk says "Services"). A change of grouping is a decision: it edits this list too.
+  test("the category of every app", () => {
+    expect(Object.fromEntries(apps.map((a) => [a.id, a.category]))).toEqual({
+      crm: "customers",
+      sales: "customers",
+      invoicing: "finance",
+      product: "foundation",
+      base: "foundation",
+      connectors: "foundation",
+      projects: "people",
+      helpdesk: "customers",
+      fleet: "operations",
+      inventory: "operations",
+      purchase: "operations",
+      manufacturing: "operations",
+      hr: "people",
+      timesheets: "people",
+      planning: "people",
+      field_service: "operations",
+      pos: "operations",
+      ecommerce: "operations",
+      website: "content",
+      email_marketing: "content",
+      documents: "content",
+      sign: "content",
+      subscriptions: "customers",
+      dashboards: "content",
+      accounting: "finance",
+      knowledge: "content",
+      appointments: "customers",
+      expenses: "finance",
+    });
   });
 });

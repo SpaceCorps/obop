@@ -291,7 +291,7 @@ export const en: Messages = {
   apps: {
     title: "Apps",
     description:
-      "All 28 obop apps: 6 ready to use and 22 more one click away. Open an app to see what it does.",
+      "All 28 obop apps: 6 ready to use and 22 more you can add. Open an app to see what it does.",
     lead: "Everything your business needs, in one place.",
     filterLabel: "Filter apps",
     all: "All",
@@ -400,9 +400,11 @@ export const en: Messages = {
       developer: "Developer",
       compat: "Compatibility",
       compatValue: "obop {version}",
-      manifest: "Manifest",
+      manifest: "Package file",
       source: "Source",
-      standalone: "On its own",
+      standalone: "No other apps needed",
+      worksCount: { one: "{n} app", few: "{n} apps", many: "{n} apps", other: "{n} apps" },
+      sameAsObop: "{version}, same as obop",
       directEdit: "Records are created and edited directly.",
       needsApproval: "When an agent asks, a person approves",
       showMoreActions: "Show {n} more actions",

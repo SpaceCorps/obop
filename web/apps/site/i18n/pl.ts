@@ -296,7 +296,7 @@ export const pl: Messages = {
   apps: {
     title: "Aplikacje",
     description:
-      "Wszystkie 28 aplikacji obop: 6 gotowych do użycia i 22 kolejne jednym kliknięciem. Otwórz aplikację, aby zobaczyć, co robi.",
+      "Wszystkie 28 aplikacji obop: 6 gotowych do użycia i 22 kolejne do dodania. Otwórz aplikację, aby zobaczyć, co robi.",
     lead: "Wszystko, czego potrzebuje Twoja firma, w jednym miejscu.",
     filterLabel: "Filtruj aplikacje",
     all: "Wszystkie",
@@ -406,9 +406,16 @@ export const pl: Messages = {
       developer: "Twórca",
       compat: "Zgodność",
       compatValue: "obop {version}",
-      manifest: "Manifest",
+      manifest: "Plik pakietu",
       source: "Kod źródłowy",
-      standalone: "Samodzielnie",
+      standalone: "Nie wymaga innych aplikacji",
+      worksCount: {
+        one: "{n} aplikacja",
+        few: "{n} aplikacje",
+        many: "{n} aplikacji",
+        other: "{n} aplikacji",
+      },
+      sameAsObop: "{version}, jak obop",
       directEdit: "Rekordy tworzy się i edytuje bezpośrednio.",
       needsApproval: "Gdy prosi agent, zatwierdza osoba",
       showMoreActions: "Pokaż pozostałe działania ({n})",

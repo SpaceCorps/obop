@@ -1,6 +1,7 @@
 // Structural check of the translations, read-only: `node scripts/check-i18n.ts [locale ...]`.
-// Messages must have the same keys, array lengths and link targets as English; translated Markdown
-// must keep the same code blocks, link targets and front matter keys as its English source.
+// Messages must have the same keys, array lengths, {placeholders} and link targets as English;
+// translated Markdown must keep the same code blocks, link targets and front matter keys as its
+// English source.
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { LOCALES, messages } from "../i18n/index.ts";
@@ -8,6 +9,13 @@ import { SITE_ROOT } from "./lib/paths.ts";
 
 const problems: string[] = [];
 const only = process.argv.slice(2);
+
+/** The {name} slots of a string, sorted: a translation may reorder them but not drop or add one. */
+const slots = (s: string) =>
+  [...s.matchAll(/\{\w+\}/g)]
+    .map((m) => m[0])
+    .sort()
+    .join(" ");
 
 function shape(a: unknown, b: unknown, path: string, where: string) {
   if (Array.isArray(a)) {
@@ -34,6 +42,10 @@ function shape(a: unknown, b: unknown, path: string, where: string) {
     if (a !== b) problems.push(`${where}: ${path} must stay ${JSON.stringify(a)}`);
   } else if (typeof b !== "string" || b.trim() === "") {
     problems.push(`${where}: ${path} is empty or not a string`);
+  } else if (slots(a) !== slots(b)) {
+    problems.push(
+      `${where}: ${path} should keep the placeholders [${slots(a)}], found [${slots(b)}]`,
+    );
   } else if (path.endsWith(".href") && a !== b) {
     problems.push(`${where}: ${path} must stay ${String(a)}`);
   } else if (path.endsWith(".icon") && a !== b) {

@@ -299,7 +299,7 @@ export const de: Messages = {
   apps: {
     title: "Apps",
     description:
-      "Alle 28 obop-Apps: 6 sofort nutzbar und 22 weitere mit einem Klick. Öffnen Sie eine App, um zu sehen, was sie kann.",
+      "Alle 28 obop-Apps: 6 sofort nutzbar und 22 weitere zum Hinzufügen. Öffnen Sie eine App, um zu sehen, was sie kann.",
     lead: "Alles, was Ihr Unternehmen braucht, an einem Ort.",
     filterLabel: "Apps filtern",
     all: "Alle",
@@ -413,9 +413,11 @@ export const de: Messages = {
       developer: "Entwickler",
       compat: "Kompatibilität",
       compatValue: "obop {version}",
-      manifest: "Manifest",
+      manifest: "Paketdatei",
       source: "Quellcode",
-      standalone: "Eigenständig",
+      standalone: "Keine weiteren Apps nötig",
+      worksCount: { one: "{n} App", few: "{n} Apps", many: "{n} Apps", other: "{n} Apps" },
+      sameAsObop: "{version}, wie obop",
       directEdit: "Datensätze werden direkt angelegt und bearbeitet.",
       needsApproval: "Fragt ein Agent an, gibt eine Person frei",
       showMoreActions: "{n} weitere Aktionen anzeigen",
@@ -433,7 +435,7 @@ export const de: Messages = {
       appMeta: "Eine App für obop, die Open-Source-Plattform für Unternehmen.",
       developersShow: "Technische Details anzeigen",
       purposeEnglish: "Die Beschreibung ist auf Englisch.",
-      readMore: "Mehr lesen",
+      readMore: "Weiterlesen",
     },
     taglines: {
       crm: "Verkaufschancen im Blick",

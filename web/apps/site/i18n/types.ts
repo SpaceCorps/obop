@@ -219,6 +219,13 @@ export interface Messages {
       source: string;
       /** The fact for an app that needs no other app. */
       standalone: string;
+      /**
+       * The fact for an app that works with others: how many ({n}). One string per plural category
+       * of the language (`Intl.PluralRules`), so Polish can say "2 aplikacje" and "5 aplikacji".
+       */
+      worksCount: Record<"one" | "few" | "many" | "other", string>;
+      /** A built-in app's version in plain words (uses {version}): it moves with obop itself. */
+      sameAsObop: string;
       directEdit: string;
       needsApproval: string;
       /** Uses {n}: the folded rest of the action cards and of the cards for what it keeps. */
