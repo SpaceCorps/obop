@@ -83,6 +83,11 @@ const ALLOWED: Allowed[] = [
     text: "obop",
     why: "The stem of the recovery-codes file where the page has no brand: the control-plane app keeps obop-recovery-codes.txt (spec section 6).",
   },
+  {
+    file: `${BO}/Chrome.tsx`,
+    text: '{pageBrand() ? null : <span className="sr-only">obop</span>}',
+    why: "The text a link to the home screen is named by where the page has no brand; with one, the logo shows the name.",
+  },
   { file: `${UI}/instance-logo.tsx`, text: "obop", why: OWN_MARK },
   { file: `${UI}/logo.tsx`, text: "obop", why: OWN_MARK },
   { file: `${UI}/static.ts`, text: "obop", why: OWN_MARK },

@@ -24,7 +24,17 @@ afterEach(() => {
   act(() => root.unmount());
   container.remove();
   setProductDocsHidden(false);
+  setBrand(null);
 });
+
+function setBrand(content: object | null) {
+  document.head.querySelectorAll('meta[name="obop-brand"]').forEach((m) => m.remove());
+  if (!content) return;
+  const meta = document.createElement("meta");
+  meta.name = "obop-brand";
+  meta.content = JSON.stringify(content);
+  document.head.append(meta);
+}
 
 const none = () => {};
 function bar() {
@@ -102,5 +112,21 @@ describe("the command palette", () => {
   it("does not find it while they are hidden", async () => {
     setProductDocsHidden(true);
     expect((await hits("custom module")).join("|")).not.toContain("How to write a custom module");
+  });
+});
+
+describe("the name of the top bar link", () => {
+  const name = () => container.querySelector<HTMLAnchorElement>("a.brand")?.textContent?.trim();
+
+  it("is the product's own name while the page has no brand, as text a check can read", async () => {
+    await act(async () => root.render(bar()));
+    expect(name()).toBe("obop");
+  });
+
+  it("is the name of the brand, once, and never obop, while the page has one", async () => {
+    setBrand({ name: "MOHV", slug: "mohv", messages: {}, v: "0123456789abcdef" });
+    await act(async () => root.render(bar()));
+    expect(name()).toBe("MOHV");
+    expect(container.querySelector("a.brand")?.innerHTML.toLowerCase()).not.toContain("obop");
   });
 });

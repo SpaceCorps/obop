@@ -12,6 +12,7 @@ import {
   Menu,
   compareText,
   inSentence,
+  pageBrand,
   t,
   tx,
   useI18n,
@@ -138,7 +139,11 @@ export function TopBar(props: {
             <span className="brand-app">{current.name}</span>
           </>
         ) : (
-          <InstanceLogo variant="full" size={24} />
+          <>
+            <InstanceLogo variant="full" size={24} title="" />
+            {/* With a brand the logo shows its name as text; without one the link is named like this. */}
+            {pageBrand() ? null : <span className="sr-only">obop</span>}
+          </>
         )}
       </a>
       <button className="searchpill" onClick={props.onPalette}>
