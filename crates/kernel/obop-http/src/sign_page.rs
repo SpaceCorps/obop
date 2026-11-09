@@ -598,6 +598,50 @@ mod tests {
         }
     }
 
+    /// The title of a request is staff text, and `fill` leaves it raw, so the `<title>` element of
+    /// the form is made safe by `shell` alone. A title that closes the element and opens a tag is
+    /// text in the head, with a brand and without, in every language.
+    #[test]
+    fn the_title_of_the_request_is_escaped_in_the_title_element_of_the_form() {
+        let hostile = "T</title><i>x</i>";
+        let escaped = "T&lt;/title&gt;&lt;i&gt;x&lt;/i&gt;";
+        let plain = unbranded();
+        let with = mohv();
+        for brand in [&plain, &*with] {
+            for lang in LANGS {
+                let html = form(
+                    lang,
+                    &Form {
+                        rid: "rid1",
+                        token: "tok1",
+                        title: hostile,
+                        message: "",
+                        signer_name: "Jane Test",
+                        document_title: "Test NDA",
+                        document_hash: &"ab".repeat(32),
+                        typed: "",
+                        error: None,
+                        history: None,
+                    },
+                    brand,
+                )
+                .html;
+                let open = html.find("<title>").expect("a title element") + "<title>".len();
+                let close = html.find("</title>").expect("a title element");
+                assert!(
+                    html[open..close].contains(escaped),
+                    "{lang}: {}",
+                    &html[open..close]
+                );
+                assert_eq!(html.matches("</title>").count(), 1, "{lang}");
+                assert!(
+                    !html.contains("<i>") && !html.contains("</title><i"),
+                    "{lang}: the title is a tag on the page"
+                );
+            }
+        }
+    }
+
     #[test]
     fn a_foreign_post_and_a_closed_request_show_their_own_texts_in_every_language() {
         for lang in LANGS {

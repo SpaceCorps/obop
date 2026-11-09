@@ -2068,9 +2068,20 @@ fn the_clean_files_are_closed_to_a_literal_that_names_obop() {
 }
 
 /// A clean file is in the tree (a file renamed or moved would otherwise be scanned for nothing), and
-/// has no row and no place on the list of files with rows: a row would let a literal stand.
+/// has no row and no place on the list of files with rows: a row would let a literal stand. The
+/// list itself is written out here: the loops below read it, so they cannot notice that a file was
+/// dropped from it, and a file off the list is a file whose literals nothing scans.
 #[test]
 fn the_clean_files_are_in_the_tree_and_have_no_row() {
+    assert_eq!(
+        CLEAN_LITERAL_FILES,
+        [
+            "kernel/obop-http/src/sign_page.rs",
+            "kernel/obop-http/src/sign.rs",
+            "kernel/obop-http/src/connectors.rs",
+        ],
+        "the closed list of files with no literal that names obop changed"
+    );
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let mut files = BTreeMap::new();
     read_tree(&root, &root, &mut files);
