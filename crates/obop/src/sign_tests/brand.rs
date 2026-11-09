@@ -355,44 +355,40 @@ async fn the_pages_that_list_the_signatures_so_far_show_the_brand() {
     assert_branded(&f, &r, "sv", "form again with history");
 }
 
-/// An instance whose `sign` package is not installed has a door that answers 404 to every link; the
-/// three handlers answer it with a page, and the page shows the brand.
-#[tokio::test]
-async fn the_door_of_an_instance_without_the_package_shows_the_brand_on_its_404() {
-    let app = App::new();
-    app.installer
-        .install(&Bundled.fetch("documents").unwrap(), "marketplace", "test")
-        .unwrap();
-    let auth = Arc::new(Auth::with_test_params(app.store.backend()));
-    let state = http_state(&app, auth);
-    let router = obop_http::router(state, None);
+/// The 404 of a link on the router given, from the three handlers (the page, the PDF and the post),
+/// in every language: the line of the brand, the tab icon, the image source in the policy, and no
+/// word that names the product.
+async fn assert_every_404_shows_the_brand(router: &axum::Router, shown: &Shown) {
     let tok = "a".repeat(64);
-    let get = |p: String| {
-        send(
-            &router,
-            Request::get(p)
-                .header("host", HOST)
-                .body(Body::empty())
-                .unwrap(),
-        )
-    };
-    let plain = get(format!("/sign/abc/{tok}")).await;
-    assert_eq!(plain.status, 404);
-    assert_plain(&plain, "no brand");
-    set_brand(&app);
-    let shown = app.dispatcher.brand().current();
     for lang in LANGS {
-        let line = brand_line(&shown, lang);
+        let line = brand_line(shown, lang);
         for (what, r) in [
-            ("page", get(format!("/sign/abc/{tok}?lang={lang}")).await),
+            (
+                "page",
+                send(
+                    router,
+                    Request::get(format!("/sign/abc/{tok}?lang={lang}"))
+                        .header("host", HOST)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await,
+            ),
             (
                 "pdf",
-                get(format!("/sign/abc/{tok}/document.pdf?lang={lang}")).await,
+                send(
+                    router,
+                    Request::get(format!("/sign/abc/{tok}/document.pdf?lang={lang}"))
+                        .header("host", HOST)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await,
             ),
             (
                 "post",
                 send(
-                    &router,
+                    router,
                     Request::post(format!("/sign/abc/{tok}?lang={lang}"))
                         .header("host", HOST)
                         .header("origin", ORIGIN)
@@ -414,6 +410,71 @@ async fn the_door_of_an_instance_without_the_package_shows_the_brand_on_its_404(
             assert!(!html.to_lowercase().contains("obop"), "{lang}/{what}");
         }
     }
+}
+
+/// An instance whose `sign` package is not installed has a door that answers 404 to every link; the
+/// three handlers answer it with a page, and the page shows the brand.
+#[tokio::test]
+async fn the_door_of_an_instance_without_the_package_shows_the_brand_on_its_404() {
+    let app = App::new();
+    app.installer
+        .install(&Bundled.fetch("documents").unwrap(), "marketplace", "test")
+        .unwrap();
+    let auth = Arc::new(Auth::with_test_params(app.store.backend()));
+    let state = http_state(&app, auth);
+    let router = obop_http::router(state, None);
+    let tok = "a".repeat(64);
+    let plain = send(
+        &router,
+        Request::get(format!("/sign/abc/{tok}"))
+            .header("host", HOST)
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(plain.status, 404);
+    assert_plain(&plain, "no brand");
+    set_brand(&app);
+    assert_every_404_shows_the_brand(&router, &app.dispatcher.brand().current()).await;
+}
+
+/// A dispatcher that registered no module at all has no signer service either (the service comes
+/// with the first module that is registered), and the three handlers take their first arm, before
+/// the door is asked anything. That 404 shows the brand too, and shows the plain page with no row.
+#[tokio::test]
+async fn the_door_of_a_dispatcher_without_a_signer_service_shows_the_brand_on_its_404() {
+    let app = App::new();
+    let backend = app.store.backend();
+    let dispatcher = Arc::new(obop_commands::Dispatcher::new());
+    let reader = dispatcher.install_brand(backend.clone());
+    assert!(
+        dispatcher.sign_service().is_none(),
+        "a dispatcher with no module has no signer service"
+    );
+    let auth = Arc::new(Auth::with_test_params(backend.clone()));
+    let state =
+        obop_http::HttpState::with_mcp(dispatcher, auth, obop_http::mcp::McpConfig::default());
+    let router = obop_http::router(state, None);
+    let tok = "a".repeat(64);
+    let plain = send(
+        &router,
+        Request::get(format!("/sign/abc/{tok}"))
+            .header("host", HOST)
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(plain.status, 404);
+    assert_plain(&plain, "no brand, no service");
+    let action = Action::Configure(
+        crate::brand_row_tests::FIELDS
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect(),
+    );
+    brand::apply(&*backend, Some(&reader), "operator", &action, false)
+        .unwrap_or_else(|e| panic!("the brand row was refused: {e}"));
+    assert_every_404_shows_the_brand(&router, &reader.current()).await;
 }
 
 /// The consent id is hashed from the texts the signer relied on, and a brand has no word in them:
