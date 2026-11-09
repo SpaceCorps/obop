@@ -428,6 +428,63 @@ fn status_with_no_record_and_an_explicit_site_key_says_which_values_are_not_the_
     }
 }
 
+/// The same for `OBOP_MFA_ISSUER` (slice S1e): with no record a value of the variable is a value that
+/// is not the default (its entry has the source `env`), so the header may not say that every value
+/// is, and it names the variable, alone or beside a `site.*` key when both are in force. With a
+/// record the header is `brand: set` whatever the variable says.
+#[test]
+fn status_with_no_record_and_the_issuer_variable_says_which_values_are_not_the_default() {
+    let (_store, backend) = memory();
+    let fresh = Reader::new(backend.clone()).fresh().unwrap();
+    let text = render_status_with(&fresh, Some("Acme".into()));
+    assert_eq!(
+        text,
+        "brand: not set (no record; every value is the default, except what OBOP_MFA_ISSUER sets)\n\
+         name: \"obop\" (default)\n\
+         slug: \"obop\" (default)\n\
+         logo: none (default)\n\
+         tile_accent: \"#495670\" (default)\n\
+         authenticator_issuer: \"Acme\" (env)\n\
+         favicon: \"tile\" (default)\n\
+         site.accent: \"#0f766e\" (default)\n\
+         site.logo_url: \"\" (default)\n\
+         site.title: \"My Shop\" (default)\n\
+         fallbacks: none\n"
+    );
+    // With no variable the header is the plain one, as the test above holds.
+    assert!(
+        render_status_with(&fresh, None)
+            .starts_with("brand: not set (no record; every value is the default)\n")
+    );
+    // Both in force: both are named.
+    put_settings(&backend, json!({"site": {"title": "Fernhill Goods"}}));
+    let fresh = Reader::new(backend.clone()).fresh().unwrap();
+    let text = render_status_with(&fresh, Some("Acme".into()));
+    assert!(
+        text.starts_with(
+            "brand: not set (no record; every value is the default, except what a site.* key or OBOP_MFA_ISSUER sets)\n"
+        ),
+        "{text}"
+    );
+    assert!(
+        text.contains("authenticator_issuer: \"Acme\" (env)\n"),
+        "{text}"
+    );
+    assert!(
+        text.contains("site.title: \"Fernhill Goods\" (site)\n"),
+        "{text}"
+    );
+    // A record: the header is the short one, the variable's entry is as before.
+    configure(&backend, &[("name", "MOHV")]);
+    let fresh = Reader::new(backend.clone()).fresh().unwrap();
+    let text = render_status_with(&fresh, Some("Acme".into()));
+    assert!(text.starts_with("brand: set\n"), "{text}");
+    assert!(
+        text.contains("authenticator_issuer: \"Acme\" (env)\n"),
+        "{text}"
+    );
+}
+
 #[test]
 fn status_shows_the_values_in_force_the_titles_and_messages_that_are_set_and_the_logo_version() {
     let (_store, backend) = memory();

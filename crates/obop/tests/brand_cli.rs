@@ -1801,6 +1801,41 @@ fn status_and_get_name_the_authenticator_issuer_and_the_source_that_won() {
     );
 }
 
+/// With no record, a value of the variable of the process that asks is a value that is not the
+/// default, and the header of `status` says so (it says "every value is the default" only when none
+/// is); a variable of only white space is no value, so the header stays as it has been.
+#[test]
+fn status_with_no_record_heads_the_output_with_the_variable_when_the_variable_is_set() {
+    let dir = Dir::started("issuer-no-record");
+    let url = dir.url();
+    let with_variable = |variable: &str| {
+        ok(run_with(
+            Some(&url),
+            &["admin", "brand", "status"],
+            None,
+            None,
+            &[("OBOP_MFA_ISSUER", variable)],
+        ))
+    };
+    let s = with_variable("Acme");
+    assert!(
+        s.starts_with(
+            "brand: not set (no record; every value is the default, except what OBOP_MFA_ISSUER sets)\n"
+        ),
+        "{s}"
+    );
+    assert!(s.contains("authenticator_issuer: \"Acme\" (env)\n"), "{s}");
+    let s = with_variable("  ");
+    assert!(
+        s.starts_with("brand: not set (no record; every value is the default)\n"),
+        "{s}"
+    );
+    assert!(
+        s.contains("authenticator_issuer: \"obop\" (default)\n"),
+        "{s}"
+    );
+}
+
 /// The repair the answer `brand_unavailable` points to: a stored name that cannot be shown is listed
 /// by `status` (which prints nothing of its value), and `configure` at the terminal, which needs no
 /// session, replaces it. Until then `authenticator_issuer` has no value (`null`, source

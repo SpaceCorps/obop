@@ -514,19 +514,33 @@ pub fn render_status_with(fresh: &Fresh, issuer_variable: Option<String>) -> Str
         serde_json::from_str(&fresh.effective_json_with(issuer_variable)).unwrap_or(J::Null);
     let mut out = String::new();
     // With no record the header says every value is the default, except what an explicit `site.*`
-    // key of the shop sets (that entry has the source `site`). The theme's accent is not named: with
-    // a theme alone the header reads as it has since S1a, which the no-record outputs hold, and the
-    // entry says `(theme)` on its own line.
-    let site_key_set = effective
-        .as_object()
-        .is_some_and(|entries| entries.values().any(|entry| entry["source"] == "site"));
-    out.push_str(match (fresh.set(), site_key_set) {
-        (true, _) => "brand: set\n",
-        (false, false) => "brand: not set (no record; every value is the default)\n",
-        (false, true) => {
-            "brand: not set (no record; every value is the default, except what a site.* key sets)\n"
-        }
-    });
+    // key of the shop sets (that entry has the source `site`) and what the variable `OBOP_MFA_ISSUER`
+    // sets (the entry `authenticator_issuer` has the source `env`), and it names which of the two is
+    // in force. With no record those are the only sources besides `default` and `theme`. The theme's
+    // accent is not named: with a theme alone the header reads as it has since S1a, which the
+    // no-record outputs hold, and the entry says `(theme)` on its own line.
+    let sourced = |wanted: &str| {
+        effective
+            .as_object()
+            .is_some_and(|entries| entries.values().any(|entry| entry["source"] == wanted))
+    };
+    let exceptions: Vec<&str> = [
+        (sourced("site"), "a site.* key"),
+        (sourced("env"), "OBOP_MFA_ISSUER"),
+    ]
+    .into_iter()
+    .filter_map(|(in_force, name)| in_force.then_some(name))
+    .collect();
+    if fresh.set() {
+        out.push_str("brand: set\n");
+    } else if exceptions.is_empty() {
+        out.push_str("brand: not set (no record; every value is the default)\n");
+    } else {
+        out.push_str(&format!(
+            "brand: not set (no record; every value is the default, except what {} sets)\n",
+            exceptions.join(" or ")
+        ));
+    }
     let mut line = |key: &str, raw: bool| {
         let entry = &effective[key];
         let Some(source) = entry["source"].as_str() else {

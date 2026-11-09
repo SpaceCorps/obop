@@ -1178,8 +1178,9 @@ async fn a_read_error_that_is_not_a_d74_class_is_served_the_stand_in_to_that_req
 /// write check never lets such a name in, so it comes from a restore, an import or a direct edit;
 /// the read check calls it empty (S1c). The shop falls back to the default name (S1f): its header and
 /// the title that `get` reports are `obop`, from the source `default`. Both the authenticator
-/// enrolment and the answer of `get` say that the name cannot be shown (S1e): the enrolment is
-/// refused with the 503 `brand_unavailable`, and `get` has no issuer in force. The two halves are
+/// enrolments (the TOTP `begin` and the passkey registration options) and the answer of `get` say
+/// that the name cannot be shown (S1e): the enrolments are refused with the 503 `brand_unavailable`,
+/// and `get` has no issuer in force. The two halves are
 /// held apart in `obop-site` (`tests_brand.rs`) and in `brand_enrol_tests`; this holds them to one
 /// another over one row, through the real routers of the public site and of the API.
 #[tokio::test]
@@ -1246,17 +1247,31 @@ async fn a_stored_name_of_only_spaces_is_the_default_in_the_shop_and_refused_by_
             );
         }
 
-        // The enrolment: refused as a name that cannot be shown, and waiting does not repair it.
-        let (s, body, headers) = send(
-            &f.router,
-            authed(Request::post("/api/auth/mfa/begin"))
-                .body(Body::from("{}"))
-                .unwrap(),
-        )
-        .await;
-        assert_eq!(s, 503, "{blank:?}: {body}");
-        let refused: J = serde_json::from_str(&body).unwrap();
-        assert_eq!(refused["code"], json!("brand_unavailable"), "{blank:?}");
-        assert!(headers.get("retry-after").is_none(), "{blank:?}");
+        // Both enrolments, the TOTP `begin` and the passkey registration options (the password the
+        // options ask for is that of the fixture's user): refused as a name that cannot be shown,
+        // and waiting does not repair it.
+        for (path, request) in [
+            ("/api/auth/mfa/begin", "{}".to_string()),
+            (
+                "/api/auth/passkeys/register/options",
+                json!({"password": "a long enough password"}).to_string(),
+            ),
+        ] {
+            let (s, body, headers) = send(
+                &f.router,
+                authed(Request::post(path))
+                    .body(Body::from(request))
+                    .unwrap(),
+            )
+            .await;
+            assert_eq!(s, 503, "{path} {blank:?}: {body}");
+            let refused: J = serde_json::from_str(&body).unwrap();
+            assert_eq!(
+                refused["code"],
+                json!("brand_unavailable"),
+                "{path} {blank:?}"
+            );
+            assert!(headers.get("retry-after").is_none(), "{path} {blank:?}");
+        }
     }
 }
