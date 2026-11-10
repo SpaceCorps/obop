@@ -5,6 +5,16 @@
  * strip, the cards and the text blocks share one measure.
  */
 .app-page.wrap {
+  /*
+   * The page name, and the sizes derived from it: the section headings, the large sentence and the
+   * tagline are never larger than the name, at any text size (at 150 percent they were: the heading
+   * rule shrank less than the name's did). 2.25rem, less on a narrow screen; the 1.15rem floor keeps
+   * "Manufacturing" whole in a 256 px column at 200 percent. The sizes are derived from --h1-base,
+   * which every page has; --h1 is the name's own size, smaller for a long name (see AppPage.vue), and
+   * a heading is also kept under it.
+   */
+  --h1-base: clamp(1.15rem, 9.6vw, 2.25rem);
+  --h1: var(--h1-base);
   max-inline-size: 58rem;
   padding-block: var(--space-4) var(--space-20);
   /* A word longer than its line (a compound at a large text size) breaks instead of overflowing. */
@@ -15,8 +25,8 @@
 }
 .app-page h2 {
   margin: 0 0 var(--space-5);
-  /* 1.75rem on a normal phone; the vw term and the 1.25rem floor shrink it only at a large text size, to keep "Information" whole in a 288 px column. */
-  font-size: clamp(1.25rem, 11vw, 1.75rem);
+  /* 1.75rem on a normal phone (0.78 of the name, and under 0.85 of a long name); never smaller than the text itself, and so always smaller than the name (the name is never under 1.15rem). */
+  font-size: max(min(calc(var(--h1-base) * 0.78), calc(var(--h1) * 0.85)), 1.0625rem);
   font-weight: var(--weight-semibold);
   letter-spacing: -0.03em;
   line-height: 1.15;
@@ -74,7 +84,7 @@
 .app-hero-text h1 {
   margin: 0;
   /* The floor is low on purpose: at 150 and 200 percent text the name still fits the column whole (at 200 percent on a 320 px phone the column is 256 px, and "Manufacturing", "Connaissances" and "Varastonhallinta" are 245 to 250 px at 1.15rem). */
-  font-size: clamp(1.15rem, 9.6vw, 2.25rem);
+  font-size: var(--h1);
   font-weight: var(--weight-semibold);
   letter-spacing: -0.04em;
   line-height: 1.05;
@@ -84,7 +94,7 @@
 .app-tagline {
   margin: var(--space-2) 0 0;
   color: var(--text-muted);
-  font-size: 1.125rem;
+  font-size: max(1rem, min(1.125rem, calc(var(--h1-base) * 0.7)));
   line-height: 1.35;
 }
 .app-category {
@@ -121,15 +131,15 @@
 .app-pill:hover {
   filter: brightness(1.08);
 }
-/* A long name (a word of 16 letters or more, marked by the page) is set a little smaller on a phone. */
+/* A long name (a word of 16 letters or more, marked by the page) is set a little smaller on a phone; the headings follow it. */
 @media (max-width: 39.99rem) {
-  .app-hero-text h1.app-long {
-    font-size: clamp(1.125rem, 7.6vw, 2rem);
+  .app-page.app-long {
+    --h1: clamp(1.125rem, 7.6vw, 2rem);
   }
 }
 /* Beside the icon on a medium screen the column is narrower than the line a long name needs. */
 @media (min-width: 48rem) {
-  .app-hero-text h1.app-long {
+  .app-page.app-long .app-hero-text h1 {
     font-size: clamp(2.5rem, 5vw, 3.5rem);
   }
 }
@@ -259,7 +269,8 @@
 .app-purpose {
   max-inline-size: 46rem;
   margin: 0;
-  font-size: 1.25rem;
+  /* 1.25rem; at a large text size no larger than 0.8 of the name, and never smaller than the text under it. */
+  font-size: max(1.0625rem, min(1.25rem, calc(var(--h1-base) * 0.8), calc(var(--h1) * 0.95)));
   letter-spacing: -0.01em;
   line-height: 1.45;
   overflow-wrap: break-word;
@@ -279,7 +290,8 @@
   font-size: 0.9375rem;
 }
 /* A long second paragraph folds under "Read more", in the same quiet pill as the other folds. */
-.app-purpose + .app-read {
+.app-purpose + .app-read,
+.app-purpose-rest + .app-read {
   margin-block-start: var(--space-4);
 }
 .app-read > .app-purpose-rest {
@@ -646,20 +658,22 @@
   /*
    * The technical tables print whole, at the width of the paper, instead of being cut at its edge or
    * shrunk by the browser to fit a wider table (7 pt text): the table is as wide as the paper and the
-   * columns share it by their content. A word of ordinary text stays whole (break-word: its column
-   * is never narrower than the longest word, so "masked" is not printed "maske / d"), and only a
-   * code token (a field or group name, which has no spaces) may break where it must (anywhere lets
-   * the code columns shrink so that the table fits the paper).
+   * columns share it by their content. No word is cut: a word of ordinary text stays whole
+   * (break-word: its column is never narrower than the longest word, so "masked" is not printed
+   * "maske / d"), and so does every part of a code token (a field or group name, which has no
+   * spaces): the page gives it places to break after its underscores and dots, so a column is never
+   * narrower than the longest part ("public_" and "directory") and "none" is not printed "non / e".
+   * Seven columns at the width of the paper need the smaller type.
    */
   .app-dev .prose table {
     display: table;
     inline-size: 100%;
     overflow: visible;
-    font-size: 0.8em;
+    font-size: 0.75em;
   }
   .app-dev .prose th,
   .app-dev .prose td {
-    padding: 0.25rem 0.4rem;
+    padding: 0.25rem 0.3rem;
   }
   .app-dev .prose th,
   .app-dev .prose td {
@@ -668,7 +682,7 @@
   }
   .app-dev .prose td code {
     white-space: normal;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
   }
   /* No card, line or row is cut across two sheets, and a heading is never left alone at the foot of one. */
   .app-card,

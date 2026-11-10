@@ -39,6 +39,12 @@ export function developerBody(
   // A field description is English, from the manifest: on a translated page it is marked as such.
   const desc = (t: string) =>
     mirror || locale === "en" ? esc(t) : `<span lang="en">${esc(t)}</span>`;
+  // A code token in a table cell (a field, a data class, a group, an action). On the page it may break
+  // after an underscore or a dot, where a reader splits it anyway ("public_" / "directory"), so that
+  // a printed table fits the paper with every part of every token whole (without these places the
+  // browser breaks a token anywhere: "non" / "e"). The Markdown copy keeps the plain token.
+  const token = (t: string) =>
+    mirror ? code(t) : `<code>${t.replace(/([_.])/g, "$1<wbr>")}</code>`;
 
   out.push(`${h2} ${a.h.package}`, "", eng(app.description), "");
   // What the plain text above leaves out as too technical (an API, a hash, a data class).
@@ -90,7 +96,7 @@ export function developerBody(
             : f.kind;
       const view = agentView(f);
       out.push(
-        `| ${code(f.name)} | ${esc(kind)} | ${code(f.class)} | ${f.personal_data ? a.yes : a.no} | ${code(f.group)} | ${a[view]} | ${desc(f.description)} |`,
+        `| ${token(f.name)} | ${esc(kind)} | ${token(f.class)} | ${f.personal_data ? a.yes : a.no} | ${token(f.group)} | ${a[view]} | ${desc(f.description)} |`,
       );
     }
     out.push("");
@@ -108,7 +114,7 @@ export function developerBody(
     for (const act of model.actions) {
       const moves = act.field ? `${act.field}: ${act.from ?? "*"} → ${act.to}` : "-";
       out.push(
-        `| ${code(`${model.name}.${act.name}`)} | ${esc(moves)} | ${code(act.group)} | ${act.approval ? a.yes : a.no} |`,
+        `| ${token(`${model.name}.${act.name}`)} | ${esc(moves)} | ${token(act.group)} | ${act.approval ? a.yes : a.no} |`,
       );
     }
     out.push("");
@@ -214,7 +220,7 @@ export function appMirror(
   // The page shows the purpose in two parts (large, then quiet); the copy says it in one paragraph.
   out.push(`## ${a.h.purpose}`, "");
   if (locale !== "en") out.push(`*${s.purposeEnglish}*`, "");
-  out.push([v.purposeLead, v.purposeRest].filter(Boolean).join(" "), "");
+  out.push([v.purposeLead, v.purposeRest, v.purposeMore].filter(Boolean).join(" "), "");
 
   out.push(`## ${s.canDo}`, "");
   if (v.actions.length === 0) out.push(s.directEdit, "");

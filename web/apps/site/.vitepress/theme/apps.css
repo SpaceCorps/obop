@@ -49,6 +49,12 @@
 
 /* ---------- Index ---------- */
 .store {
+  /*
+   * The page name: 2.25rem, a little less on the narrowest phones; the 1.25rem floor lets "Aplicaciones"
+   * stay inside the column at a large text size. The section headings and the lead are derived from it
+   * (never below the size of the text itself), so at no text size is one of them larger than the name.
+   */
+  --h1: clamp(1.25rem, 12vw, 2.25rem);
   padding-block: var(--space-12) var(--space-20);
 }
 .store-head {
@@ -56,8 +62,7 @@
 }
 .store-head h1 {
   margin: 0;
-  /* 2.25rem, a little less on the narrowest phones; the 1.25rem floor lets "Aplicaciones" stay inside the column at a large text size. */
-  font-size: clamp(1.25rem, 12vw, 2.25rem);
+  font-size: var(--h1);
   font-weight: var(--weight-semibold);
   letter-spacing: -0.04em;
   line-height: 1.05;
@@ -67,7 +72,7 @@
   max-inline-size: 36rem;
   margin: var(--space-3) 0 0;
   color: var(--text-muted);
-  font-size: 1.25rem;
+  font-size: max(1.0625rem, min(1.25rem, calc(var(--h1) * 0.8)));
   line-height: 1.4;
   text-wrap: balance;
 }
@@ -76,7 +81,7 @@
 }
 .store-sec > h2 {
   margin: 0 0 var(--space-5);
-  font-size: clamp(1.25rem, 11vw, 1.75rem);
+  font-size: max(calc(var(--h1) * 0.78), 1.0625rem);
   font-weight: var(--weight-semibold);
   letter-spacing: -0.03em;
   line-height: 1.15;
@@ -161,6 +166,28 @@
   }
   .store-row .store-name {
     font-size: 1rem;
+  }
+}
+/*
+ * At a large text size on a phone the rem sizes of the name, the tagline and the tile's padding grow
+ * with the text while the screen does not: "Connectors" (194 px) did not fit a 190 px column at 200
+ * percent on 320 px and broke after its last letters but one. A vw cap, which only bites there (at the
+ * normal size the rem value is the smaller one), and a padding that gives the room back, keep the
+ * ordinary names whole. The few words that are wider than the column at any size, German
+ * "Rechnungsstellung" and Finnish "Sähköpostimarkkinointi", still break at its edge.
+ */
+@media (max-width: 21rem) {
+  .store-tile {
+    padding: min(var(--space-4), 5vw);
+  }
+  .store-tile .store-name {
+    font-size: min(1.125rem, 8.5vw);
+  }
+  .store-row .store-name {
+    font-size: min(1rem, 7.5vw);
+  }
+  .store-tag {
+    font-size: min(0.9375rem, 6vw);
   }
 }
 /* The columns follow the room (and the reader's text size), so a large font never overflows a tile. */

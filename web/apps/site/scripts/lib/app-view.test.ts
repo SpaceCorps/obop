@@ -11,10 +11,20 @@ import {
   lowerFirst,
   modelLabel,
   splitPurpose,
+  splitRest,
   words as wordsOf,
   wordCount,
 } from "./app-view.ts";
-import { appName, loadApps, type Action, type App, type Field, type Labels } from "./apps.ts";
+import {
+  BUILTIN_MATURITY,
+  appName,
+  loadApps,
+  type Action,
+  type App,
+  type Field,
+  type Labels,
+} from "./apps.ts";
+import { technicalIn, visible } from "./plain.ts";
 
 // Label files that exist only in this test, for an app id no real app has: the rules that decide
 // whether a card speaks the page language (all of its words are there) are tried one word at a time.
@@ -78,6 +88,51 @@ describe("the purpose is split after its first sentence", () => {
     expect(view("hr")).toBe(false);
   });
 
+  test("a long rest keeps its first sentence in view and folds the others", () => {
+    const connectors = appView(
+      apps.find((a) => a.id === "connectors")!,
+      messages.en,
+      apps,
+      "en",
+    );
+    // The caveat of the page is the first sentence of the rest, so a reader sees it without opening
+    // anything: what the controls are, and that they are not legal advice or a certification.
+    expect(connectors.purposeRest).toBe(
+      "These are technical controls that support GDPR compliance, not legal advice or a certification.",
+    );
+    expect(connectors.purposeMore).toContain("Article 30");
+    expect(connectors.purposeMore).not.toContain("not legal advice");
+    // Nothing is lost: the Markdown copy says all of it, in order.
+    const md = appMirror(
+      apps.find((a) => a.id === "connectors")!,
+      "en",
+      messages.en,
+      "",
+      apps,
+    );
+    expect(md).toContain(
+      `${connectors.purposeLead} ${connectors.purposeRest} ${connectors.purposeMore}`,
+    );
+  });
+
+  test("splitRest: forty words stay shown, a longer rest folds after its first sentence", () => {
+    const sentence = (n: number) => `${["Word", ...Array(n - 1).fill("word")].join(" ")}.`;
+    expect(splitRest("")).toEqual({ shown: "", more: "" });
+    expect(splitRest(sentence(40))).toEqual({ shown: sentence(40), more: "" });
+    // 41 words in one sentence: nothing short enough to show alone, so all of it folds.
+    expect(splitRest(sentence(41))).toEqual({ shown: "", more: sentence(41) });
+    // Two sentences, 41 words in all: the first is shown, the second folds.
+    expect(splitRest(`${sentence(10)} ${sentence(31)}`)).toEqual({
+      shown: sentence(10),
+      more: sentence(31),
+    });
+    // A first sentence that is itself longer than 40 words is not shown on its own.
+    expect(splitRest(`${sentence(45)} Short.`)).toEqual({
+      shown: "",
+      more: `${sentence(45)} Short.`,
+    });
+  });
+
   test("a long first sentence is cut at its colon, which ends in a full stop", () => {
     const long = `${"word ".repeat(30).trim()}: and the rest follows. Second sentence.`;
     const { lead, rest } = splitPurpose(long);
@@ -119,12 +174,20 @@ describe("the view of an app, in every language", () => {
         ).toBe(true);
         expect(v.actions.length, app.id).toBe(app.models.flatMap((x) => x.actions).length);
         expect(v.models.length, app.id).toBe(app.models.length);
-        // Every card is complete, and in a translated language none falls back to English text:
-        // the product's label files cover every model and action.
-        for (const c of [...v.actions, ...v.models]) {
+        // Every card is complete, and in a translated language none falls back to English text
+        // except a card that data/apps.ts gives plain words of its own (English, and marked): the
+        // product's label files cover every other model and action.
+        const written = new Set(Object.keys(app.cards));
+        const keys = [
+          ...app.models.flatMap((model) => model.actions.map((x) => `${model.name}.${x.name}`)),
+          ...app.models.map((model) => model.name),
+        ];
+        [...v.actions, ...v.models].forEach((c, i) => {
           expect(c.title.length + c.text.length, app.id).toBeGreaterThan(0);
-          expect(c.lang, `${locale} ${app.id} ${c.title}`).toBeUndefined();
-        }
+          expect(c.lang, `${locale} ${app.id} ${c.title}`).toBe(
+            locale !== "en" && written.has(keys[i]!) ? "en" : undefined,
+          );
+        });
         expect(v.info.find((r) => r.label === m.apps.store.compat)?.value, app.id).toBe(
           m.apps.store.compatValue.replace("{version}", "0.2"),
         );
@@ -462,9 +525,9 @@ describe("a model has its name without the app's prefix, and a name that has no 
     // sale_order in Sales, lead in CRM, invoice in Invoicing and product in Products start with no
     // "<app>_": cutting the length of the prefix off the front would read "Rder", "", "Oice".
     const titles = (id: string) => view(apps.find((a) => a.id === id)!).models.map((c) => c.title);
-    expect(titles("sales")).toEqual(["Sale order"]);
+    expect(titles("sales")).toEqual(["Sale order", "Sale order line"]);
     expect(titles("crm")).toEqual(["Lead"]);
-    expect(titles("invoicing")).toEqual(["Invoice"]);
+    expect(titles("invoicing")).toEqual(["Invoice", "Invoice line"]);
     expect(titles("product")).toEqual(["Product"]);
   });
 
@@ -490,8 +553,11 @@ describe("the acronyms of the manifests keep their capitals in a title", () => {
     const titles = (id: string) => view(apps.find((a) => a.id === id)!).actions.map((c) => c.title);
     expect(titles("connectors")).toContain("Export CSV");
     expect(titles("connectors")).not.toContain("Export csv");
+    // The Helpdesk card says "Response times" (data/apps.ts); without that name the model reads "SLA".
     const helpdesk = apps.find((a) => a.id === "helpdesk")!;
-    expect(view(helpdesk).models.map((c) => c.title)).toContain("SLA");
+    expect(view(helpdesk).models.map((c) => c.title)).toContain("Response times");
+    const sla = helpdesk.models.find((x) => x.name === "helpdesk_sla")!;
+    expect(modelLabel({ ...helpdesk, modelNames: {} }, sla)).toBe("SLA");
   });
 });
 
@@ -593,6 +659,8 @@ describe("a card on a translated page uses the page language's own words, all or
       v.actions.forEach((card, i) => {
         const own = germanModelName(real.id, owners[i]!.name);
         expect(own, `${real.id} ${owners[i]!.name} has a German name`).toBeTruthy();
+        // A card with plain words of its own is English on a translated page (and says so).
+        if (card.lang === "en") return;
         expect(card.kicker, `${real.id} ${card.title}`).toBe(own);
         if (own !== modelLabel(real, owners[i]!)) differs++;
       });
@@ -617,19 +685,57 @@ describe("the large first sentence is cut only when it is longer than 25 words",
 });
 
 describe("the plain text of an app page leaves the technical words to the part for developers", () => {
-  // The large sentence is for a person who does not build software.
-  const technicalWords =
-    /\b(API|SKU|KPI|hash|payload|immutable|withheld|allowlist|pseudonyms?|approval-gated|anonymises|masked|client|schema|query|queries|JSON|endpoint|data classes?)\b/i;
+  // The large sentence is for a person who does not build software, and so is everything else
+  // that is on the first two screens: the paragraph under it, the cards that are shown without
+  // opening a fold, the lines about AI agents, the strip, the line under it.
 
   test("no large first sentence and no quiet paragraph uses one", () => {
     for (const app of apps) {
       const { lead, rest } = splitPurpose(app.purpose);
-      expect(lead, `${app.id} lead`).not.toMatch(technicalWords);
+      expect(technicalIn(lead), `${app.id} lead`).toBeNull();
       // The rest may say "pseudonym" where it explains it in the same sentence (Connectors).
-      expect(rest.replace(/code name \(a pseudonym\)/, ""), `${app.id} rest`).not.toMatch(
-        technicalWords,
-      );
+      expect(technicalIn(rest), `${app.id} rest`).toBeNull();
     }
+  });
+
+  test("nor does a card that is shown without opening a fold, a line about AI agents, or the strip", () => {
+    for (const app of apps) {
+      const v = view(app);
+      for (const card of [...visible(v.actions), ...visible(v.models)])
+        expect(
+          technicalIn(`${card.kicker ?? ""} ${card.title} ${card.text}`),
+          `${app.id} card "${card.title}": ${card.text}`,
+        ).toBeNull();
+      for (const line of v.safe) expect(technicalIn(line), `${app.id}: ${line}`).toBeNull();
+      for (const f of v.facts) expect(technicalIn(f.value), `${app.id} ${f.label}`).toBeNull();
+      expect(technicalIn(messages.en.apps.taglines[app.id] ?? ""), `${app.id} tagline`).toBeNull();
+    }
+    expect(technicalIn(messages.en.apps.store.experimentalNote)).toBeNull();
+    expect(technicalIn(messages.en.apps.store.directEdit)).toBeNull();
+  });
+
+  test("the rule can fail: each kind of word it lists is found, and a plain sentence is not", () => {
+    for (const bad of [
+      "takes the SHA-256 of the PDF",
+      "a hash of the payload",
+      "record signed_by first",
+      "needs the inventory.user group",
+      "Anonymise the party in place",
+      "a set of widgets",
+      "A service-level SLA",
+      "only the approver can do it",
+      "the field allowlist",
+    ])
+      expect(technicalIn(bad), bad).not.toBeNull();
+    for (const good of [
+      "Keep track of possible sales, from the first contact until you win or lose them.",
+      "Personal details go out under a code name (a pseudonym) unless you decide otherwise.",
+      "only people who may approve",
+    ])
+      expect(technicalIn(good), good).toBeNull();
+    // The cards a fold hides are not part of the rule: seven cards are all shown, eight fold after six.
+    expect(visible([1, 2, 3, 4, 5, 6, 7])).toHaveLength(7);
+    expect(visible([1, 2, 3, 4, 5, 6, 7, 8])).toHaveLength(6);
   });
 
   test("what was left out is in the technical part, in the Markdown copy", () => {
@@ -671,10 +777,23 @@ describe("an experimental app says in one plain line that it is still being test
 
 describe("the mark that a person approves a step is a few plain words, in every language", () => {
   test("short, and without the word agent", () => {
+    // An approval is asked for when an AI agent asks: a person who holds the permission runs the step
+    // directly and nobody approves it, so the words say whose step it is (the AI's) and not only that
+    // a person approves.
+    const ai = {
+      en: /\bAI\b/,
+      sv: /\bAI\b/,
+      de: /\bKI\b/,
+      fr: /\bIA\b/,
+      pl: /\bAI\b/,
+      fi: /^Tekoäly/,
+      es: /\bIA\b/,
+    };
     for (const locale of LOCALES) {
       const text = messages[locale].apps.store.needsApproval;
-      expect(text.length, locale).toBeLessThanOrEqual(32);
+      expect(text.length, locale).toBeLessThanOrEqual(40);
       expect(text, locale).not.toMatch(/agent/i);
+      expect(text, locale).toMatch(ai[locale as keyof typeof ai]);
     }
     // Every card that needs a person has the mark, in the Markdown copy too.
     const accounting = apps.find((a) => a.id === "accounting")!;
@@ -682,5 +801,84 @@ describe("the mark that a person approves a step is a few plain words, in every 
     const marked = view(accounting).actions.filter((c) => c.approval).length;
     expect(marked).toBeGreaterThan(1);
     expect(md.split(`(${messages.en.apps.store.needsApproval})`).length - 1).toBe(marked);
+  });
+});
+
+describe("a card with plain words of its own (data/apps.ts)", () => {
+  const withCards = apps.filter((a) => Object.keys(a.cards).length > 0);
+
+  test("every key is a real action (model.action) or model, so a renamed one cannot go stale", () => {
+    expect(withCards.length).toBeGreaterThan(8);
+    for (const app of withCards)
+      for (const key of Object.keys(app.cards)) {
+        const real =
+          app.models.some((model) => model.name === key) ||
+          app.models.some((model) => model.actions.some((x) => `${model.name}.${x.name}` === key));
+        expect(real, `${app.id}: ${key}`).toBe(true);
+      }
+  });
+
+  test("the English card says the written words, keeps the approval mark and the model it works on", () => {
+    const accounting = apps.find((a) => a.id === "accounting")!;
+    const post = view(accounting).actions.find((c) => c.title === "Post")!;
+    expect(post.text).toBe(accounting.cards["accounting_move.post"]!.text);
+    expect(post.kicker).toBe("Journal entry");
+    expect(post.approval).toBe(true);
+    expect(post.lang).toBeUndefined();
+    // A card that has none keeps the manifest's words.
+    const cancel = view(accounting).actions.find((c) => c.title === "Cancel")!;
+    expect(cancel.text).toBe("Cancel a draft entry that was never posted");
+    // A model card too, and a written title where the words of a name read oddly.
+    const dashboards = apps.find((a) => a.id === "dashboards")!;
+    expect(view(dashboards).models.map((c) => c.title)).toEqual(["Dashboard", "Dashboard item"]);
+    expect(view(dashboards).models[0]!.text).toBe(dashboards.cards["dashboards_dashboard"]!.text);
+  });
+
+  test("on a translated page it is English and marked, because the translation says the old words", () => {
+    const sign = apps.find((a) => a.id === "sign")!;
+    for (const locale of LOCALES.filter((l) => l !== "en")) {
+      const cards = view(sign, locale).actions;
+      const send = cards[0]!;
+      expect(send.text, locale).toBe(sign.cards["sign_request.send"]!.text);
+      expect(send.lang, locale).toBe("en");
+      expect(send.kicker, locale).toBe("Signature request");
+      // The cards without plain words of their own still speak the page language.
+      const decline = cards.find(
+        (c) => c.text !== sign.cards["sign_request.send"]!.text && !c.lang,
+      );
+      expect(decline, locale).toBeDefined();
+    }
+  });
+
+  test("what the overstating cards said is gone, and what replaced it says less", () => {
+    const text = (id: string, key: string) => apps.find((a) => a.id === id)!.cards[key]!.text;
+    // Nothing in the repository sends an email: the cards say that obop records the step and does
+    // not deliver the message.
+    expect(text("email_marketing", "email_marketing_campaign.send")).toContain(
+      "obop does not send the emails itself",
+    );
+    expect(text("email_marketing", "email_marketing_campaign.send_now")).toContain(
+      "obop does not send the emails itself",
+    );
+    expect(text("sign", "sign_request.send")).toContain("does not email the signer");
+    for (const app of withCards)
+      for (const card of Object.values(app.cards))
+        expect(card.text, app.id).not.toMatch(/to the whole list|credit notes/i);
+  });
+});
+
+describe("the maturity the site states", () => {
+  test("the six built-in apps are rated beta, as the FAQ says obop is; a marketplace app keeps its manifest's word", () => {
+    expect(BUILTIN_MATURITY).toBe("beta");
+    const builtin = apps.filter((a) => a.builtin);
+    expect(builtin).toHaveLength(6);
+    for (const app of builtin) {
+      expect(app.meta.maturity, app.id).toBe("beta");
+      expect(view(app).facts[0]!.value, app.id).toBe(messages.en.apps.meta.maturities.beta);
+      expect(view(app).experimental, app.id).toBe(false);
+    }
+    const sign = apps.find((a) => a.id === "sign")!;
+    expect(sign.meta.maturity).toBe("experimental");
+    expect(view(sign).facts[0]!.value).toBe(messages.en.apps.meta.maturities.experimental);
   });
 });

@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "smol-toml";
-import { APP_COPY, BUILTIN_IDS, type Category } from "../../data/apps.ts";
+import { APP_COPY, BUILTIN_IDS, type CardCopy, type Category } from "../../data/apps.ts";
 import { SITE_ROOT, REPO_ROOT } from "./paths.ts";
 
 export interface Field {
@@ -70,6 +70,8 @@ export interface App {
   technical?: string;
   /** Plain English names for the models that need one (see `AppCopy.modelNames`). */
   modelNames: Record<string, string>;
+  /** Plain words for the cards whose manifest text is not (see `AppCopy.cards`). */
+  cards: Record<string, CardCopy>;
   models: Model[];
   /** Repository path of the manifest (or the built-in snapshot). */
   source: string;
@@ -83,6 +85,14 @@ const str = (v: unknown, fallback = ""): string => (typeof v === "string" ? v : 
 function load(file: string): Raw {
   return parse(readFileSync(file, "utf8")) as Raw;
 }
+
+/**
+ * The maturity this site states for the six built-in apps. Their module metadata (the Rust constant
+ * behind `data/builtin/*.toml`) says "stable", but the product is in beta, as the FAQ on the home page
+ * says, so a page that said "Stable" next to "Is obop ready for production? Not yet." would contradict
+ * the site's own answer. The marketplace apps keep the word their manifest says.
+ */
+export const BUILTIN_MATURITY = "beta";
 
 /** `depends = [...]` (any version) and `[module.dependencies]` (a requirement each), in that order. */
 function dependenciesOf(mod: Raw): Dependency[] {
@@ -149,7 +159,7 @@ function toApp(raw: Raw, builtin: boolean, source: string): App {
       support: str(mod["support"]),
       keywords: (mod["keywords"] as string[] | undefined) ?? [],
       categories: (mod["categories"] as string[] | undefined) ?? [],
-      maturity: str(mod["maturity"]),
+      maturity: builtin ? BUILTIN_MATURITY : str(mod["maturity"]),
       requiresCore: str(mod["requires_core"], "*"),
     },
     dependencies: dependenciesOf(mod),
@@ -157,6 +167,7 @@ function toApp(raw: Raw, builtin: boolean, source: string): App {
     purpose: copy.purpose,
     ...(copy.technical ? { technical: copy.technical } : {}),
     modelNames: copy.modelNames ?? {},
+    cards: copy.cards ?? {},
     models,
     source,
   };

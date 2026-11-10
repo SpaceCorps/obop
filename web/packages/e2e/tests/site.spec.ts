@@ -4,6 +4,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { messages } from "../../../apps/site/i18n/index.ts";
+import { technicalIn } from "../../../apps/site/scripts/lib/plain.ts";
 import { platformUrl, repoRoot, siteDir } from "../support/env.ts";
 import { expect, test, unnamedControls } from "../support/fixtures.ts";
 
@@ -119,16 +120,19 @@ async function contrast(page: import("@playwright/test").Page, selector: string 
  * ("Apache-2.0" may break after its hyphen). `wide` counts the words that are wider than the box
  * holding them: nothing can keep those whole, so with `allowWide` they may break (and are only
  * counted, and listed in `wideWords`); every other word that is broken is returned in `cut`. Text
- * inside an element that matches `skip` is not looked at (a code token may break where it must).
+ * inside an element that matches `skip` is not looked at. With `parts`, an underscore and a dot
+ * end a word too: a code token (`public_directory`, `crm.user`) may break after them, and each
+ * part of it must stay whole.
  */
 async function brokenWords(
   page: import("@playwright/test").Page,
   selector: string,
   allowWide = false,
   skip = "",
+  parts = false,
 ) {
   return page.evaluate(
-    ({ sel, allowWide, skip }) => {
+    ({ sel, allowWide, skip, parts }) => {
       const cut: string[] = [];
       const wideWords: string[] = [];
       let wide = 0;
@@ -141,7 +145,7 @@ async function brokenWords(
         const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
         for (let n = walker.nextNode(); n; n = walker.nextNode()) {
           if (skip && n.parentElement?.closest(skip)) continue;
-          const re = /[^\s­-]+-?/g;
+          const re = parts ? /[^\s­_.-]+[_.-]?/g : /[^\s­-]+-?/g;
           for (let m = re.exec(n.textContent ?? ""); m; m = re.exec(n.textContent ?? "")) {
             const r = document.createRange();
             r.setStart(n, m.index);
@@ -166,7 +170,7 @@ async function brokenWords(
       }
       return { cut, wide, wideWords };
     },
-    { sel: selector, allowWide, skip },
+    { sel: selector, allowWide, skip, parts },
   );
 }
 
@@ -305,7 +309,7 @@ test.describe("website without JavaScript", () => {
     ]);
     // What it works with is a count (the names are the "Works with" section below the strip).
     await expect(page.locator(".app-facts dd")).toHaveText([
-      "Stable",
+      "Beta",
       "0.2.1",
       "2 apps",
       "Apache-2.0",
@@ -325,7 +329,7 @@ test.describe("website without JavaScript", () => {
     ]);
     // What it is for: the first sentence large, the rest small and quiet.
     await expect(page.locator(".app-purpose")).toHaveText(
-      "Prepare invoices for your customers as drafts, then post them to give each one its own legal invoice number.",
+      "Prepare invoices for your customers as drafts, then post each one to give it its own number, in an unbroken yearly series.",
     );
     await expect(page.locator(".app-purpose-rest")).toContainText(
       "Posting an invoice always needs a person",
@@ -453,7 +457,13 @@ test.describe("website without JavaScript", () => {
     await expect(page.locator(".app-purpose")).toHaveAttribute("lang", "en");
     await expect(page.locator(".app-note")).toHaveText(s.purposeEnglish);
     await expect(page.locator(".app-card .app-card-title").first()).toHaveText("Übernehmen");
-    await expect(page.locator(".app-card [lang]")).toHaveCount(0);
+    // The one card that has plain words of its own in data/apps.ts (Helpdesk's "Response times") is
+    // English and says so, in its heading and in its text; every other card is German.
+    await expect(page.locator(".app-card [lang]")).toHaveCount(2);
+    await expect(page.locator(".app-card", { has: page.locator("[lang=en]") })).toHaveCount(1);
+    await expect(page.locator(".app-card", { has: page.locator("[lang=en]") })).toContainText(
+      "Response times",
+    );
     await expect(page.locator("h2#for-developers")).toHaveText(s.developers);
     await expect(page.locator("details#developers > summary")).toHaveText(s.developersShow, {
       useInnerText: true,
@@ -537,7 +547,8 @@ test.describe("website without JavaScript", () => {
       );
       const withheld = fieldBlocks.some((b) => withheldClass.test(b));
       const version = /^version\s*=\s*"([^"]+)"/m.exec(toml)![1]!;
-      const maturity = /^maturity\s*=\s*"([^"]+)"/m.exec(toml)![1]!;
+      // The site rates the six built-in apps beta, whatever their snapshot says (see BUILTIN_MATURITY).
+      const maturity = app.builtin ? "beta" : /^maturity\s*=\s*"([^"]+)"/m.exec(toml)![1]!;
       const deps = [
         ...(/^depends\s*=\s*\[([^\]]*)\]/m.exec(toml)?.[1] ?? "").matchAll(/"([^"]+)"/g),
       ].map((m) => m[1]!);
@@ -637,12 +648,17 @@ test.describe("website without JavaScript", () => {
     const read = page.locator("details.app-read");
     await expect(read).toHaveJSProperty("open", false);
     await expect(read.locator("summary")).toHaveText(s.readMore);
-    await expect(page.locator(".app-purpose-rest")).toBeHidden();
+    // The first sentence of the rest is the caveat of the page and is always shown; the others fold.
+    await expect(page.locator(".app-purpose ~ .app-purpose-rest")).toHaveText(
+      "These are technical controls that support GDPR compliance, not legal advice or a certification.",
+    );
+    await expect(page.locator(".app-purpose ~ .app-purpose-rest")).toBeVisible();
+    await expect(read.locator(".app-purpose-rest")).toBeHidden();
     expect(await page.locator(".app-purpose").innerText()).toBe(
       "Connect your other tools to obop, with privacy controls built in.",
     );
     await read.locator("summary").click();
-    await expect(page.locator(".app-purpose-rest")).toContainText("Article 30");
+    await expect(read.locator(".app-purpose-rest")).toContainText("Article 30");
     // The Markdown copy says the whole purpose as one paragraph, as the page does.
     const md = await (await page.request.get(`${base()}/apps/hr.md`)).text();
     expect(md).toContain(
@@ -655,10 +671,13 @@ test.describe("website without JavaScript", () => {
     request,
   }) => {
     // The large first sentence of every page is for a person who does not build software: none of
-    // these words is in it (nor in the quiet paragraph under it). What was left out is the first
-    // paragraph of the technical part, in the page and in the Markdown copy.
-    const technical =
-      /(API|SKU|KPI|hash|payload|immutable|withheld|allowlist|pseudonyms?|approval-gated|anonymises|masked|client|schema|JSON|data classes?)/i;
+    // the words of apps/site/scripts/lib/plain.ts is in it (nor in the quiet paragraph under it, nor
+    // in the cards that are shown, nor in the lines about AI agents). What was left out is the
+    // first paragraph of the technical part, in the page and in the Markdown copy. The list is the
+    // one the unit tests read, so the two cannot differ.
+    // The rule can fail: a text with such words in it is found.
+    expect(technicalIn("a hash and a payload")).not.toBeNull();
+    expect(technicalIn("Keep track of possible sales.")).toBeNull();
     for (const slug of [
       "dashboards",
       "sign",
@@ -667,20 +686,27 @@ test.describe("website without JavaScript", () => {
       "products",
       "contacts",
       "ecommerce",
+      "accounting",
+      "pos",
     ]) {
       await page.goto(`${base()}/apps/${slug}/`);
       const lead = await page.locator(".app-purpose").innerText();
-      expect(lead, `${slug} lead`).not.toMatch(technical);
-      expect(lead.split(/s+/).length, `${slug} lead length`).toBeLessThanOrEqual(25);
-      await page
-        .locator("details.app-read > summary")
-        .click({ trial: false })
-        .catch(() => {});
-      const rest = await page
-        .locator(".app-purpose-rest")
-        .innerText()
-        .catch(() => "");
-      expect(rest.replace(/code name (a pseudonym)/, ""), `${slug} rest`).not.toMatch(technical);
+      expect(technicalIn(lead), `${slug} lead: ${lead}`).toBeNull();
+      expect(lead.split(/\s+/).length, `${slug} lead length`).toBeLessThanOrEqual(25);
+      // Open the fold, where there is one: the rest is what sits in it.
+      const fold = page.locator("details.app-read > summary");
+      if (await fold.count()) await fold.click();
+      const rest = (await page.locator(".app-purpose-rest").allInnerTexts()).join(" ");
+      expect(technicalIn(rest), `${slug} rest: ${rest}`).toBeNull();
+      // The cards that are shown, and the lines about AI agents.
+      const cards = [
+        ...(await page.locator("#can-do ~ .app-cards > .app-card").allInnerTexts()),
+        ...(await page.locator("#keeps ~ .app-cards > .app-card").allInnerTexts()),
+      ];
+      for (const card of cards)
+        expect(technicalIn(card.replace(/\s+/g, " ")), `${slug} card: ${card}`).toBeNull();
+      for (const line of await page.locator(".app-safe li").allInnerTexts())
+        expect(technicalIn(line), `${slug} safe line: ${line}`).toBeNull();
     }
     // The page the review named first: the dashboards sentence says what a person gets.
     await page.goto(`${base()}/apps/dashboards/`);
@@ -1942,10 +1968,11 @@ test.describe("accessibility", () => {
       expect(r.count, `${name}: elements measured`).toBeGreaterThan(0);
       expect(r.values, `${name}: how it is allowed to break`).toEqual(["avoid"]);
     }
-    // A cell of ordinary text is not split inside a word ("masked" once printed as "maske / d"), the
-    // way a code token (a field or group name, which has no spaces) may be, where it must, to fit.
-    // No word is allowed to be wider than its cell here: a column that shrinks below its word is
-    // exactly the defect (the cell is as narrow as the broken word needs). A4 is 794 px wide, and
+    // No word of a cell is split ("masked" once printed as "maske / d", the data class "none" as
+    // "non / e" and the group "connectors.user" as "connec / tors.us / er"): a code token breaks only
+    // after an underscore or a dot, where the page gives it room to, and every part of it stays
+    // whole. No word is allowed to be wider than its cell here: a column that shrinks below its word
+    // is exactly the defect (the cell is as narrow as the broken word needs). A4 is 794 px wide, and
     // 680 px inside the usual 15 mm margins.
     for (const sheet of [794, 680]) {
       await page.setViewportSize({ width: sheet, height: 1123 });
@@ -1959,586 +1986,669 @@ test.describe("accessibility", () => {
         "/de/apps/ecommerce/",
         "/de/apps/hr/",
         "/de/apps/accounting/",
+        "/fi/apps/accounting/",
+        "/sv/apps/connectors/",
       ]) {
         await page.goto(`${base()}${path}`);
         const { cut } = await brokenWords(
           page,
           ".app-dev .prose th, .app-dev .prose td",
           false,
-          "code",
+          "",
+          true,
         );
         expect(cut, `${path} on ${sheet}px paper: a word of a table cell is split`).toEqual([]);
       }
     }
   });
 
-  test("the apps index keeps its text readable at a large text size on a narrow screen, in every language", async ({
-    browser,
-  }) => {
-    // The browser's own text size is set (rem and rem media queries both scale; a style rule on the
-    // root element would leave the media queries at 16 px). The icon of a tile or a row grows with
-    // the text, so beside it the text column would shrink to a few letters per line: from a text
-    // column of less than 8rem the text must drop under the icon instead. A word that fits its
-    // column is never cut; only a word wider than the column may be.
-    test.setTimeout(300_000);
-    const indexes = Object.keys(messages).map((l) => (l === "en" ? "/apps/" : `/${l}/apps/`));
-    for (const [width, percent] of [
-      [640, 200],
-      [700, 200],
-      [390, 150],
-      [390, 200],
-      [375, 200],
-      [360, 175],
-      [320, 150],
-      [320, 200],
-    ] as const) {
-      const { page, context } = await pageWithTextSize(browser, percent, { width, height: 900 });
-      try {
-        for (const path of indexes) {
-          await page.goto(`${base()}${path}`);
-          // Hyphenation is switched off, so that the result is the same on every browser.
-          await page.addStyleTag({ content: "* { hyphens: manual !important; }" });
-          const where = `${path} at ${width}px with ${percent}% text`;
-          const m = await page.evaluate(() => {
-            const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
-            // The page's own content (the shared header has its own limits at such sizes).
-            const store = document.querySelector(".store") as HTMLElement;
-            const squeezed: string[] = [];
-            const items = [...document.querySelectorAll(".store-tile, .store-row")];
-            for (const item of items) {
+  // The sweeps below visit every page of every language at several widths and text sizes, in a
+  // browser whose text size is set through the protocol. Their time limit is set for the whole
+  // group, not by test.setTimeout in each body: a limit set in the body cannot cover the fixtures,
+  // and a slow start of a page (system Chrome, after another sweep) counted against the default 30 s
+  // and failed a test that had not begun. The slowest sweep takes about half a minute in the bundled
+  // Chromium and seven minutes in system Chrome, so the limit leaves room.
+  test.describe("sweeps over every page, language and size", () => {
+    test.describe.configure({ timeout: 900_000 });
+
+    test("the apps index keeps its text readable at a large text size on a narrow screen, in every language", async ({
+      browser,
+    }) => {
+      // The browser's own text size is set (rem and rem media queries both scale; a style rule on the
+      // root element would leave the media queries at 16 px). The icon of a tile or a row grows with
+      // the text, so beside it the text column would shrink to a few letters per line: from a text
+      // column of less than 8rem the text must drop under the icon instead. A word that fits its
+      // column is never cut; only a word wider than the column may be, and the words that are, at
+      // each size, are listed here: nothing else may be on the list (an ordinary name such as English
+      // "Connectors" once broke after "Connecto" at 200 percent on 320 px).
+      const indexes = Object.keys(messages).map((l) => (l === "en" ? "/apps/" : `/${l}/apps/`));
+      const longest = ["Rechnungsstellung", "Sähköpostimarkkinointi"];
+      const widest: Record<string, string[]> = {
+        "640@200": [],
+        "700@200": [],
+        "390@150": ["postmarknadsföring", "Instrumentpaneler", "Sähköpostimarkkinointi"],
+        "390@200": longest,
+        "375@200": longest,
+        "375@125": ["Rechnungsstellung", "myyntimahdollisuuksia", "Sähköpostimarkkinointi"],
+        "360@175": longest,
+        "320@150": longest,
+        "320@200": longest,
+      };
+      for (const [width, percent] of [
+        [640, 200],
+        [700, 200],
+        [390, 150],
+        [390, 200],
+        [375, 200],
+        [375, 125],
+        [360, 175],
+        [320, 150],
+        [320, 200],
+      ] as const) {
+        const { page, context } = await pageWithTextSize(browser, percent, { width, height: 900 });
+        try {
+          for (const path of indexes) {
+            await page.goto(`${base()}${path}`);
+            // Hyphenation is switched off, so that the result is the same on every browser.
+            await page.addStyleTag({ content: "* { hyphens: manual !important; }" });
+            const where = `${path} at ${width}px with ${percent}% text`;
+            const m = await page.evaluate(() => {
+              const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+              // The page's own content (the shared header has its own limits at such sizes).
+              const store = document.querySelector(".store") as HTMLElement;
+              const squeezed: string[] = [];
+              const items = [...document.querySelectorAll(".store-tile, .store-row")];
+              for (const item of items) {
+                const icon = item.querySelector(".app-icon")!.getBoundingClientRect();
+                const text = item.querySelector(".store-text")!.getBoundingClientRect();
+                if (text.top < icon.bottom - 0.5 && text.width < 7.9 * rem)
+                  squeezed.push(
+                    `${item.querySelector(".store-name")!.textContent} (${(text.width / rem).toFixed(1)}rem)`,
+                  );
+              }
+              return {
+                page: store.scrollWidth - store.clientWidth,
+                clipped: [...document.querySelectorAll(".store-text")].filter(
+                  (e) => e.scrollWidth > e.clientWidth + 1,
+                ).length,
+                items: items.length,
+                squeezed,
+              };
+            });
+            expect(m, where).toEqual({ page: 0, clipped: 0, items: 28, squeezed: [] });
+            const names = await brokenWords(page, ".store-name, .store-tag", true);
+            expect(names.cut, `${where}: a word that fits its column is cut`).toEqual([]);
+            expect(
+              names.wideWords.filter((w) => !widest[`${width}@${percent}`]!.includes(w)),
+              `${where}: words wider than their column that are not on the list`,
+            ).toEqual([]);
+            // The headings shrink with the room they have, so none of their words is cut at all.
+            const headings = await brokenWords(
+              page,
+              ".store-head h1, .store-sec > h2, .store-group h3",
+            );
+            expect(headings.cut, `${where}: a heading is cut in the middle of a word`).toEqual([]);
+          }
+        } finally {
+          await context.close();
+        }
+      }
+    });
+
+    test("at the normal text size the text of a tile or a row sits beside its icon on every phone and tablet, and no name is cut", async ({
+      page,
+    }) => {
+      // The tile's text drops under the icon only when the column beside it would be narrower than
+      // 8rem (128 px), so at 16 px text it does so at no width: the three-column grid at its
+      // narrowest (888 to 912 px, a 272 px column) once left 152 px beside the icon and flipped.
+      // From 64rem a tile is a column on purpose (icon above text), so it is left out there.
+      for (const width of [
+        320, 360, 375, 414, 600, 640, 700, 768, 800, 888, 896, 904, 912, 960, 1000,
+      ]) {
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto(`${base()}/apps/`);
+        const stacked = await page.evaluate(() =>
+          [...document.querySelectorAll(".store-tile, .store-row")]
+            .filter((item) => {
               const icon = item.querySelector(".app-icon")!.getBoundingClientRect();
               const text = item.querySelector(".store-text")!.getBoundingClientRect();
-              if (text.top < icon.bottom - 0.5 && text.width < 7.9 * rem)
-                squeezed.push(
-                  `${item.querySelector(".store-name")!.textContent} (${(text.width / rem).toFixed(1)}rem)`,
-                );
-            }
-            return {
-              page: store.scrollWidth - store.clientWidth,
-              clipped: [...document.querySelectorAll(".store-text")].filter(
-                (e) => e.scrollWidth > e.clientWidth + 1,
-              ).length,
-              items: items.length,
-              squeezed,
-            };
-          });
-          expect(m, where).toEqual({ page: 0, clipped: 0, items: 28, squeezed: [] });
-          const names = await brokenWords(page, ".store-name, .store-tag", true);
-          expect(names.cut, `${where}: a word that fits its column is cut`).toEqual([]);
-          // The headings shrink with the room they have, so none of their words is cut at all.
-          const headings = await brokenWords(
-            page,
-            ".store-head h1, .store-sec > h2, .store-group h3",
-          );
-          expect(headings.cut, `${where}: a heading is cut in the middle of a word`).toEqual([]);
-        }
-      } finally {
-        await context.close();
+              return text.top >= icon.bottom - 0.5;
+            })
+            .map((item) => item.querySelector(".store-name")!.textContent),
+        );
+        expect(
+          stacked,
+          `/apps/ at ${width}px: text under its icon at the normal text size`,
+        ).toEqual([]);
       }
-    }
-  });
+      // The narrowest phone: the longest name of each language (German "Rechnungsstellung" in a tile,
+      // Finnish "Sähköpostimarkkinointi" in a row) is whole, in every language, at 320 and 360 px.
+      for (const width of [320, 360]) {
+        await page.setViewportSize({ width, height: 900 });
+        for (const locale of Object.keys(messages)) {
+          await page.goto(`${base()}${locale === "en" ? "" : `/${locale}`}/apps/`);
+          await page.addStyleTag({ content: "* { hyphens: manual !important; }" });
+          const { cut } = await brokenWords(page, ".store-name, .store-tag");
+          expect(cut, `${locale} index at ${width}px`).toEqual([]);
+        }
+      }
+    });
 
-  test("at the normal text size the text of a tile or a row sits beside its icon on every phone and tablet, and no name is cut", async ({
-    page,
-  }) => {
-    // The tile's text drops under the icon only when the column beside it would be narrower than
-    // 8rem (128 px), so at 16 px text it does so at no width: the three-column grid at its
-    // narrowest (888 to 912 px, a 272 px column) once left 152 px beside the icon and flipped.
-    // From 64rem a tile is a column on purpose (icon above text), so it is left out there.
-    for (const width of [
-      320, 360, 375, 414, 600, 640, 700, 768, 800, 888, 896, 904, 912, 960, 1000,
-    ]) {
-      await page.setViewportSize({ width, height: 900 });
-      await page.goto(`${base()}/apps/`);
-      const stacked = await page.evaluate(() =>
-        [...document.querySelectorAll(".store-tile, .store-row")]
-          .filter((item) => {
-            const icon = item.querySelector(".app-icon")!.getBoundingClientRect();
-            const text = item.querySelector(".store-text")!.getBoundingClientRect();
-            return text.top >= icon.bottom - 0.5;
-          })
-          .map((item) => item.querySelector(".store-name")!.textContent),
-      );
-      expect(stacked, `/apps/ at ${width}px: text under its icon at the normal text size`).toEqual(
-        [],
-      );
-    }
-    // The narrowest phone: the longest name of each language (German "Rechnungsstellung" in a tile,
-    // Finnish "Sähköpostimarkkinointi" in a row) is whole, in every language, at 320 and 360 px.
-    for (const width of [320, 360]) {
-      await page.setViewportSize({ width, height: 900 });
+    test("the index names hyphenate in the languages that make long compounds, and stay whole in English", async ({
+      page,
+    }) => {
       for (const locale of Object.keys(messages)) {
         await page.goto(`${base()}${locale === "en" ? "" : `/${locale}`}/apps/`);
-        await page.addStyleTag({ content: "* { hyphens: manual !important; }" });
-        const { cut } = await brokenWords(page, ".store-name, .store-tag");
-        expect(cut, `${locale} index at ${width}px`).toEqual([]);
-      }
-    }
-  });
-
-  test("the index names hyphenate in the languages that make long compounds, and stay whole in English", async ({
-    page,
-  }) => {
-    for (const locale of Object.keys(messages)) {
-      await page.goto(`${base()}${locale === "en" ? "" : `/${locale}`}/apps/`);
-      const hyphens = await page.evaluate(() => [
-        ...new Set(
-          [...document.querySelectorAll(".store-name, .store-tag")].map(
-            (e) => getComputedStyle(e).hyphens,
+        const hyphens = await page.evaluate(() => [
+          ...new Set(
+            [...document.querySelectorAll(".store-name, .store-tag")].map(
+              (e) => getComputedStyle(e).hyphens,
+            ),
           ),
-        ),
-      ]);
-      expect(hyphens, locale).toEqual(
-        ["de", "fi", "pl", "sv"].includes(locale) ? ["auto"] : ["manual"],
-      );
-    }
-  });
-
-  test("the header button is the plain one on the apps index too, 'Read more' has air above it, and a right-to-left page mirrors the chevrons", async ({
-    page,
-  }) => {
-    // One filled pill per screen: on the apps pages (the index has none of its own) the header's
-    // "Start free" is the plain button, and on the home page it stays the filled one.
-    const header = () =>
-      page.locator(".head-cta .btn.primary").evaluate((el) => {
-        const cs = getComputedStyle(el);
-        return { background: cs.backgroundColor, color: cs.color, border: cs.borderTopColor };
-      });
-    await page.goto(`${base()}/apps/`);
-    const onIndex = await header();
-    await page.goto(`${base()}/apps/helpdesk/`);
-    const onApp = await header();
-    await page.goto(`${base()}/`);
-    const onHome = await header();
-    expect(onIndex, "the header button on /apps/ and on an app page").toEqual(onApp);
-    expect(onIndex, "the header button on /apps/ and on the home page").not.toEqual(onHome);
-
-    // The fold under a long purpose does not touch the sentence above it.
-    for (const width of [375, 1280]) {
-      await page.setViewportSize({ width, height: 900 });
-      await page.goto(`${base()}/apps/connectors/`);
-      const gap = await page.evaluate(
-        () =>
-          document.querySelector(".app-read > summary")!.getBoundingClientRect().top -
-          document.querySelector(".app-purpose")!.getBoundingClientRect().bottom,
-      );
-      expect(gap, `space above "Read more" at ${width}px`).toBeGreaterThanOrEqual(12);
-    }
-
-    // Right-to-left is not offered, but the back and row chevrons already point the other way.
-    for (const [path, chevron] of [
-      ["/apps/crm/", ".app-back svg"],
-      ["/apps/", ".store-chev svg"],
-    ] as const) {
-      await page.goto(`${base()}${path}`);
-      // The built style sheet turns :dir(rtl) into the list of right-to-left languages (:lang(ar),
-      // ...), for browsers that lack :dir(), so a right-to-left page is one with both set.
-      const turn = (dir: string, lang: string) =>
-        page.evaluate(
-          ([d, l, sel]) => {
-            document.documentElement.dir = d!;
-            document.documentElement.lang = l!;
-            return getComputedStyle(document.querySelector(sel!)!).transform;
-          },
-          [dir, lang, chevron],
+        ]);
+        expect(hyphens, locale).toEqual(
+          ["de", "fi", "pl", "sv"].includes(locale) ? ["auto"] : ["manual"],
         );
-      expect(await turn("ltr", "en"), `${path} chevron, left to right`).toBe("none");
-      expect(await turn("rtl", "ar"), `${path} chevron, right to left`).toBe(
-        "matrix(-1, 0, 0, 1, 0, 0)",
-      );
-    }
-  });
-
-  test("no horizontal scroll at 390px and 320px", async ({ page }) => {
-    for (const w of [390, 320]) {
-      await page.setViewportSize({ width: w, height: 800 });
-      for (const path of [
-        "/",
-        "/apps/",
-        "/docs/agents/mcp/",
-        "/apps/helpdesk/",
-        "/apps/invoicing/",
-        "/de/apps/connectors/",
-      ]) {
-        await page.goto(`${base()}${path}`);
-        const overflow = await page.evaluate(
-          () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-        );
-        expect(overflow, `${path} at ${w}px`).toBeLessThanOrEqual(0);
       }
-    }
-  });
+    });
 
-  test("no name or label is cut in the middle of a word on a phone, in any language", async ({
-    page,
-    request,
-  }) => {
-    // The hero's name, the icon names and the information labels (the facts strip and the cards have
-    // tests of their own below: this one cannot see a box that grows past its cell).
-    test.setTimeout(300_000);
-    let checked = 0;
-    for (const locale of Object.keys(messages)) {
-      const urls = (await pagesOf(request, locale)).filter((u) => /\/apps\/.+\/$/.test(u));
-      expect(urls.length, `${locale} app pages`).toBe(28);
-      for (const url of urls) {
-        await page.goto(`${base()}${url}`, { waitUntil: "domcontentloaded" });
-        // The safety nets (break-word, hyphens) are switched off: a word that does not fit its box
-        // then shows as overflow, instead of being broken in the middle by the browser.
-        await page.addStyleTag({
-          content:
-            "* { overflow-wrap: normal !important; hyphens: manual !important; word-break: normal !important; }",
+    test("the header button is the plain one on the apps index too, 'Read more' has air above it, and a right-to-left page mirrors the chevrons", async ({
+      page,
+    }) => {
+      // One filled pill per screen: on the apps pages (the index has none of its own) the header's
+      // "Start free" is the plain button, and on the home page it stays the filled one.
+      const header = () =>
+        page.locator(".head-cta .btn.primary").evaluate((el) => {
+          const cs = getComputedStyle(el);
+          return { background: cs.backgroundColor, color: cs.color, border: cs.borderTopColor };
         });
-        for (const width of [320, 375, 768]) {
-          await page.setViewportSize({ width, height: 800 });
-          const cut = await page.evaluate(() =>
-            [...document.querySelectorAll(".app-hero h1, .app-icons a, .app-info dt")]
-              .filter((e) => e.scrollWidth > e.clientWidth + 1)
-              .map((e) => `${e.tagName} "${(e.textContent ?? "").trim().slice(0, 30)}"`),
+      await page.goto(`${base()}/apps/`);
+      const onIndex = await header();
+      await page.goto(`${base()}/apps/helpdesk/`);
+      const onApp = await header();
+      await page.goto(`${base()}/`);
+      const onHome = await header();
+      expect(onIndex, "the header button on /apps/ and on an app page").toEqual(onApp);
+      expect(onIndex, "the header button on /apps/ and on the home page").not.toEqual(onHome);
+
+      // The fold under a long purpose does not touch the sentence above it.
+      for (const width of [375, 1280]) {
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto(`${base()}/apps/connectors/`);
+        // From the paragraph right above the fold (the caveat of the page), whatever it is.
+        const gap = await page.evaluate(
+          () =>
+            document.querySelector(".app-read > summary")!.getBoundingClientRect().top -
+            document.querySelector(".app-read")!.previousElementSibling!.getBoundingClientRect()
+              .bottom,
+        );
+        expect(gap, `space above "Read more" at ${width}px`).toBeGreaterThanOrEqual(12);
+      }
+
+      // Right-to-left is not offered, but the back and row chevrons already point the other way.
+      for (const [path, chevron] of [
+        ["/apps/crm/", ".app-back svg"],
+        ["/apps/", ".store-chev svg"],
+      ] as const) {
+        await page.goto(`${base()}${path}`);
+        // The built style sheet turns :dir(rtl) into the list of right-to-left languages (:lang(ar),
+        // ...), for browsers that lack :dir(), so a right-to-left page is one with both set.
+        const turn = (dir: string, lang: string) =>
+          page.evaluate(
+            ([d, l, sel]) => {
+              document.documentElement.dir = d!;
+              document.documentElement.lang = l!;
+              return getComputedStyle(document.querySelector(sel!)!).transform;
+            },
+            [dir, lang, chevron],
           );
-          expect(cut, `${url} at ${width}px`).toEqual([]);
-        }
-        checked++;
+        expect(await turn("ltr", "en"), `${path} chevron, left to right`).toBe("none");
+        expect(await turn("rtl", "ar"), `${path} chevron, right to left`).toBe(
+          "matrix(-1, 0, 0, 1, 0, 0)",
+        );
       }
-    }
-    expect(checked).toBe(7 * 28);
-  });
+    });
 
-  test("the page name and the section headings keep their words whole at a larger text size, in every language", async ({
-    request,
-    browser,
-  }) => {
-    // The browser's own text size is set to 125, 150 and 200 percent (rem units and rem media
-    // queries scale), on 320 and 375 px phones, and every heading of every apps page is asked which
-    // of its words were drawn on two lines. A heading shrinks with the room it has (a vw term over a
-    // low rem floor), so a word that fits stays whole; a word wider than the column even at the
-    // smallest size a heading may have cannot be kept whole by any size and breaks at the column's
-    // edge. Those words are listed here, and nothing else may be on the list. (Hyphenation is
-    // switched off, so that the result is the same on every browser.)
-    test.setTimeout(600_000);
-    const widest: Record<string, string[]> = {
-      "125@320": [],
-      "125@375": [],
-      "150@375": [],
-      "150@320": ["Sähköpostimarkkinointi"],
-      "200@375": ["tekoälyagenttien", "Sähköpostimarkkinointi", "postmarknadsföring"],
-      "200@320": [
-        "desarrolladores",
-        "tekoälyagenttien",
-        "Rechnungsstellung",
-        "Varastonhallinta",
-        "Sähköpostimarkkinointi",
-        "postmarknadsföring",
-        "Instrumentpaneler",
-      ],
-    };
-    const seen: Record<string, Set<string>> = Object.fromEntries(
-      Object.keys(widest).map((k) => [k, new Set<string>()]),
-    );
-    const sizes = new Map<number, Awaited<ReturnType<typeof pageWithTextSize>>>();
-    for (const percent of [125, 150, 200])
-      sizes.set(percent, await pageWithTextSize(browser, percent));
-    let pages = 0;
-    try {
+    test("no horizontal scroll at 390px and 320px", async ({ page }) => {
+      for (const w of [390, 320]) {
+        await page.setViewportSize({ width: w, height: 800 });
+        for (const path of [
+          "/",
+          "/apps/",
+          "/docs/agents/mcp/",
+          "/apps/helpdesk/",
+          "/apps/invoicing/",
+          "/de/apps/connectors/",
+        ]) {
+          await page.goto(`${base()}${path}`);
+          const overflow = await page.evaluate(
+            () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+          );
+          expect(overflow, `${path} at ${w}px`).toBeLessThanOrEqual(0);
+        }
+      }
+    });
+
+    test("no name or label is cut in the middle of a word on a phone, in any language", async ({
+      page,
+      request,
+    }) => {
+      // The hero's name, the icon names and the information labels (the facts strip and the cards have
+      // tests of their own below: this one cannot see a box that grows past its cell).
+      let checked = 0;
       for (const locale of Object.keys(messages)) {
-        for (const url of (await pagesOf(request, locale)).filter((u) => /\/apps\/.+\/$/.test(u))) {
-          for (const [percent, { page }] of sizes) {
-            await page.goto(`${base()}${url}`, { waitUntil: "domcontentloaded" });
-            await page.addStyleTag({ content: "* { hyphens: manual !important; }" });
-            for (const width of [320, 375]) {
-              await page.setViewportSize({ width, height: 900 });
-              const { cut, wideWords } = await brokenWords(
-                page,
-                ".app-hero h1, .app-page h2",
-                true,
-              );
-              const where = `${url} at ${width}px with ${percent}% text`;
-              expect(cut, `${where}: a heading is cut inside a word that fits`).toEqual([]);
-              for (const w of wideWords) seen[`${percent}@${width}`]!.add(w);
-            }
-          }
-          pages++;
-        }
-      }
-      expect(pages).toBe(7 * 28);
-      for (const [key, allowed] of Object.entries(widest)) {
-        const extra = [...seen[key]!].filter((w) => !allowed.includes(w));
-        expect(extra, `${key}: words wider than the column that are not on the list`).toEqual([]);
-      }
-      // Not vacuous: at 200 percent on the narrowest phone some word really is wider than its column.
-      expect(seen["200@320"]!.size).toBeGreaterThan(5);
-    } finally {
-      for (const { context } of sizes.values()) await context.close();
-    }
-  });
-
-  test("the facts strip keeps every word whole and inside its cell, in the layout its room asks for, in every language, as the page is drawn", async ({
-    page,
-    request,
-    browser,
-  }) => {
-    // Measured with nothing switched off: each word of each label and value is asked how many lines
-    // it was drawn on, and where it sits compared with its cell. (The strip once cut "Experimental"
-    // into "Experiment" and "al" between 640 and 810 px, and "Eksperymentalny" up to 800 px, while a
-    // test that first switched the safety nets off passed: the cell had shrunk below the word, which
-    // that state hid. A word that a cell is too small for is not cut when overflow-wrap is break-word:
-    // the box grows past its cell, so the words are also asked to lie inside it.) Every maturity word
-    // and the "no other apps" line of every language is tried, at the widths where the layout
-    // changes, and at larger text sizes set in the browser, as a visitor sets them.
-    test.setTimeout(600_000);
-    const widths = [320, 360, 375, 414, 480, 600, 640, 700, 768, 800, 860, 900, 1024, 1280];
-    const large = [
-      [320, 200],
-      [375, 150],
-      [640, 200],
-      [900, 150],
-    ] as const;
-    const sizes = new Map<number, Awaited<ReturnType<typeof pageWithTextSize>>>();
-    for (const percent of new Set(large.map(([, p]) => p)))
-      sizes.set(percent, await pageWithTextSize(browser, percent));
-
-    /** What the strip looks like now: words cut, text outside its cell, sideways scroll, columns. */
-    const measure = async (p: import("@playwright/test").Page) => {
-      const { cut } = await brokenWords(p, ".app-facts dt, .app-facts dd");
-      const layout = await p.evaluate(() => {
-        const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
-        const outside: string[] = [];
-        const cells = [...document.querySelectorAll(".app-facts > div")];
-        for (const cell of cells) {
-          const box = cell.getBoundingClientRect();
-          for (const el of cell.querySelectorAll("dt, dd")) {
-            const range = document.createRange();
-            range.selectNodeContents(el);
-            for (const r of range.getClientRects())
-              if (r.width > 0 && (r.left < box.left - 0.5 || r.right > box.right + 0.5))
-                outside.push(
-                  `${(el.textContent ?? "").trim()} (${Math.round(r.left)}..${Math.round(r.right)} in ${Math.round(box.left)}..${Math.round(box.right)})`,
-                );
-          }
-        }
-        const root = document.querySelector(".app-page") as HTMLElement;
-        return {
-          outside,
-          cells: cells.length,
-          sideways: root.scrollWidth - root.clientWidth,
-          columns: new Set(cells.map((c) => Math.round(c.getBoundingClientRect().left))).size,
-          room: (document.querySelector(".app-facts-box") as HTMLElement).clientWidth / rem,
-        };
-      });
-      return { cut, ...layout };
-    };
-    /** The columns the room asks for: one below 17.5rem, two by two, one row of four from 52rem. */
-    const columnsFor = (room: number) => (room < 17.5 ? 1 : room < 52 ? 2 : 4);
-
-    try {
-      const seenColumns = new Set<number>();
-      for (const locale of Object.keys(messages) as (keyof typeof messages)[]) {
         const urls = (await pagesOf(request, locale)).filter((u) => /\/apps\/.+\/$/.test(u));
-        const seen = new Set<string>();
-        const maturities = new Set<string>();
-        let standalone = 0;
+        expect(urls.length, `${locale} app pages`).toBe(28);
         for (const url of urls) {
           await page.goto(`${base()}${url}`, { waitUntil: "domcontentloaded" });
-          const values = await page.locator(".app-facts dd").allTextContents();
-          const key = `${values[0]}|${values[2] === messages[locale].apps.store.standalone}`;
-          if (seen.has(key)) continue;
-          seen.add(key);
-          maturities.add(values[0]!);
-          if (values[2] === messages[locale].apps.store.standalone) standalone++;
-          const check = async (p: import("@playwright/test").Page, where: string) => {
-            const r = await measure(p);
-            expect(r.cut, `${locale} ${url} ${where}: a word is cut`).toEqual([]);
-            expect(r.outside, `${locale} ${url} ${where}: text outside its cell`).toEqual([]);
-            expect(
-              r.sideways,
-              `${locale} ${url} ${where}: the page scrolls sideways`,
-            ).toBeLessThanOrEqual(0);
-            expect(r.cells, `${locale} ${url} ${where}: four cells`).toBe(4);
-            expect(
-              r.columns,
-              `${locale} ${url} ${where}: columns for ${r.room.toFixed(1)}rem`,
-            ).toBe(columnsFor(r.room));
-            seenColumns.add(r.columns);
-          };
-          for (const width of widths) {
+          // The safety nets (break-word, hyphens) are switched off: a word that does not fit its box
+          // then shows as overflow, instead of being broken in the middle by the browser.
+          await page.addStyleTag({
+            content:
+              "* { overflow-wrap: normal !important; hyphens: manual !important; word-break: normal !important; }",
+          });
+          for (const width of [320, 375, 768]) {
+            await page.setViewportSize({ width, height: 800 });
+            const cut = await page.evaluate(() =>
+              [...document.querySelectorAll(".app-hero h1, .app-icons a, .app-info dt")]
+                .filter((e) => e.scrollWidth > e.clientWidth + 1)
+                .map((e) => `${e.tagName} "${(e.textContent ?? "").trim().slice(0, 30)}"`),
+            );
+            expect(cut, `${url} at ${width}px`).toEqual([]);
+          }
+          checked++;
+        }
+      }
+      expect(checked).toBe(7 * 28);
+    });
+
+    test("at any text size the page name is larger than every section heading, and the large sentence is no larger than the name", async ({
+      browser,
+    }) => {
+      // At 150 percent text the section headings were larger than the page name (the heading's size
+      // shrank less with the room than the name's did), and at 200 percent on 320 px the large sentence
+      // was too. The headings and the sentence are now sizes derived from the name, so this holds at
+      // every text size and width, on the index and on app pages (long names included).
+      const pages = [
+        "/apps/",
+        "/apps/accounting/",
+        "/apps/crm/",
+        "/de/apps/invoicing/",
+        "/fi/apps/email-marketing/",
+        "/sv/apps/dashboards/",
+      ];
+      let measured = 0;
+      for (const percent of [100, 125, 150, 200]) {
+        const { page, context } = await pageWithTextSize(browser, percent);
+        try {
+          for (const width of [320, 375, 390, 768, 1280]) {
             await page.setViewportSize({ width, height: 900 });
-            await check(page, `at ${width}px`);
+            for (const path of pages) {
+              await page.goto(`${base()}${path}`, { waitUntil: "domcontentloaded" });
+              const size = await page.evaluate(() => {
+                const px = (el: Element | null) =>
+                  el ? parseFloat(getComputedStyle(el).fontSize) : 0;
+                return {
+                  name: px(document.querySelector(".app-hero h1, .store-head h1")),
+                  headings: [...document.querySelectorAll(".app-page h2, .store-sec > h2")].map(px),
+                  lead: px(document.querySelector(".app-purpose, .store-lead")),
+                };
+              });
+              const where = `${path} at ${width}px with ${percent}% text`;
+              expect(size.headings.length, `${where}: section headings`).toBeGreaterThan(1);
+              expect(
+                Math.max(...size.headings),
+                `${where}: the largest section heading`,
+              ).toBeLessThan(size.name);
+              expect(size.lead, `${where}: the large sentence`).toBeLessThanOrEqual(size.name);
+              measured++;
+            }
           }
-          // A text size of 150 and 200 percent, the browser's own setting: the strip asks for more
-          // room and stacks.
-          for (const [width, percent] of large) {
-            const big = sizes.get(percent)!.page;
-            await big.setViewportSize({ width, height: 900 });
-            await big.goto(`${base()}${url}`, { waitUntil: "domcontentloaded" });
-            await check(big, `at ${width}px, ${percent}% text`);
-          }
-        }
-        // Not vacuous: every maturity word the language has, and the line for an app that needs no
-        // other app, was on a page that was measured.
-        expect([...maturities].sort(), `${locale} maturity words measured`).toEqual(
-          Object.values(messages[locale].apps.meta.maturities).sort(),
-        );
-        expect(standalone, `${locale} pages with no other app measured`).toBeGreaterThan(0);
-      }
-      // Every layout the strip has was seen: one column, two by two and one row of four.
-      expect([...seenColumns].sort(), "strip layouts measured").toEqual([1, 2, 4]);
-    } finally {
-      for (const { context } of sizes.values()) await context.close();
-    }
-  });
-
-  test("the cards keep every word that fits whole, and nothing leaves its card", async ({
-    page,
-    request,
-  }) => {
-    // The limit, stated: a word wider than its card (Swedish "Integritetsförhandsgranskning" in a
-    // card 15 rem wide) cannot be kept whole by any rule, so it breaks at the card's edge; the
-    // browser hyphenates it only where it has a dictionary (hyphens: auto), and it is switched off
-    // here so that the result is the same on every browser. Every other word stays whole, and no
-    // text leaves its card.
-    test.setTimeout(300_000);
-    let wide = 0;
-    let cards = 0;
-    for (const locale of ["de", "sv", "fi", "pl"] as const) {
-      const urls = (await pagesOf(request, locale)).filter((u) => /\/apps\/.+\/$/.test(u));
-      for (const url of urls) {
-        await page.goto(`${base()}${url}`, { waitUntil: "domcontentloaded" });
-        await page.addStyleTag({ content: "* { hyphens: manual !important; }" });
-        await page.evaluate(() =>
-          document
-            .querySelectorAll("main details")
-            .forEach((d) => ((d as HTMLDetailsElement).open = true)),
-        );
-        for (const width of [320, 375, 768, 1024, 1280]) {
-          await page.setViewportSize({ width, height: 900 });
-          const r = await brokenWords(page, ".app-card h3, .app-card-text", true);
-          expect(r.cut, `${url} at ${width}px`).toEqual([]);
-          wide += r.wide;
-          const out = await page.evaluate(() =>
-            [...document.querySelectorAll(".app-card")]
-              .filter((c) => c.scrollWidth > c.clientWidth + 1)
-              .map((c) => (c.querySelector("h3")?.textContent ?? "").trim().slice(0, 30)),
-          );
-          expect(out, `${url} at ${width}px: text leaves its card`).toEqual([]);
-          cards += await page.locator(".app-card").count();
+        } finally {
+          await context.close();
         }
       }
-    }
-    // Not vacuous: there are cards, and some word really is wider than its card.
-    expect(cards).toBeGreaterThan(1000);
-    expect(wide, "words wider than their card, which the test allows to break").toBeGreaterThan(0);
-  });
+      expect(measured).toBe(4 * 5 * pages.length);
+    });
 
-  test("the Markdown copy of every app page says what the page says, in every language", async ({
-    page,
-    request,
-  }) => {
-    test.setTimeout(300_000);
-    let checked = 0;
-    for (const locale of Object.keys(messages) as (keyof typeof messages)[]) {
-      const needsApproval = messages[locale].apps.store.needsApproval;
-      const urls = (await pagesOf(request, locale)).filter((u) => /\/apps\/.+\/$/.test(u));
-      for (const url of urls) {
-        await page.goto(`${base()}${url}`, { waitUntil: "domcontentloaded" });
-        const view = await page.evaluate(() => {
-          const t = (e: Element | null) => (e?.textContent ?? "").replace(/\s+/g, " ").trim();
-          const cards = (heading: string) =>
-            [
-              ...document.querySelectorAll(
-                `${heading} ~ ul.app-cards > li.app-card, ${heading} ~ .app-more li.app-card`,
-              ),
-            ].map((c) => ({
-              kicker: t(c.querySelector(".app-card-kicker")),
-              title: t(c.querySelector(".app-card-title")),
-              text: t(c.querySelector(".app-card-text")),
-              approval: !!c.querySelector(".app-card-note"),
-            }));
-          const icons = (section: Element | undefined) =>
-            [...(section?.querySelectorAll(".app-icons a") ?? [])].map((a) => ({
-              name: t(a),
-              href: a.getAttribute("href"),
-            }));
-          const sections = [...document.querySelectorAll(".app-page > section")];
+    test("the page name and the section headings keep their words whole at a larger text size, in every language", async ({
+      request,
+      browser,
+    }) => {
+      // The browser's own text size is set to 125, 150 and 200 percent (rem units and rem media
+      // queries scale), on 320 and 375 px phones, and every heading of every apps page is asked which
+      // of its words were drawn on two lines. A heading shrinks with the room it has (a vw term over a
+      // low rem floor), so a word that fits stays whole; a word wider than the column even at the
+      // smallest size a heading may have cannot be kept whole by any size and breaks at the column's
+      // edge. Those words are listed here, and nothing else may be on the list. (Hyphenation is
+      // switched off, so that the result is the same on every browser.)
+      const widest: Record<string, string[]> = {
+        "125@320": [],
+        "125@375": [],
+        "150@375": [],
+        "150@320": ["Sähköpostimarkkinointi"],
+        "200@375": ["Sähköpostimarkkinointi", "postmarknadsföring"],
+        "200@320": [
+          "Rechnungsstellung",
+          "Varastonhallinta",
+          "Sähköpostimarkkinointi",
+          "postmarknadsföring",
+          "Instrumentpaneler",
+        ],
+      };
+      const seen: Record<string, Set<string>> = Object.fromEntries(
+        Object.keys(widest).map((k) => [k, new Set<string>()]),
+      );
+      const sizes = new Map<number, Awaited<ReturnType<typeof pageWithTextSize>>>();
+      for (const percent of [125, 150, 200])
+        sizes.set(percent, await pageWithTextSize(browser, percent));
+      let pages = 0;
+      try {
+        for (const locale of Object.keys(messages)) {
+          for (const url of (await pagesOf(request, locale)).filter((u) =>
+            /\/apps\/.+\/$/.test(u),
+          )) {
+            for (const [percent, { page }] of sizes) {
+              await page.goto(`${base()}${url}`, { waitUntil: "domcontentloaded" });
+              await page.addStyleTag({ content: "* { hyphens: manual !important; }" });
+              for (const width of [320, 375]) {
+                await page.setViewportSize({ width, height: 900 });
+                const { cut, wideWords } = await brokenWords(
+                  page,
+                  ".app-hero h1, .app-page h2",
+                  true,
+                );
+                const where = `${url} at ${width}px with ${percent}% text`;
+                expect(cut, `${where}: a heading is cut inside a word that fits`).toEqual([]);
+                for (const w of wideWords) seen[`${percent}@${width}`]!.add(w);
+              }
+            }
+            pages++;
+          }
+        }
+        expect(pages).toBe(7 * 28);
+        for (const [key, allowed] of Object.entries(widest)) {
+          const extra = [...seen[key]!].filter((w) => !allowed.includes(w));
+          expect(extra, `${key}: words wider than the column that are not on the list`).toEqual([]);
+        }
+        // Not vacuous: at 200 percent on the narrowest phone some word really is wider than its column.
+        expect(seen["200@320"]!.size).toBeGreaterThan(3);
+      } finally {
+        for (const { context } of sizes.values()) await context.close();
+      }
+    });
+
+    test("the facts strip keeps every word whole and inside its cell, in the layout its room asks for, in every language, as the page is drawn", async ({
+      page,
+      request,
+      browser,
+    }) => {
+      // Measured with nothing switched off: each word of each label and value is asked how many lines
+      // it was drawn on, and where it sits compared with its cell. (The strip once cut "Experimental"
+      // into "Experiment" and "al" between 640 and 810 px, and "Eksperymentalny" up to 800 px, while a
+      // test that first switched the safety nets off passed: the cell had shrunk below the word, which
+      // that state hid. A word that a cell is too small for is not cut when overflow-wrap is break-word:
+      // the box grows past its cell, so the words are also asked to lie inside it.) Every maturity word
+      // and the "no other apps" line of every language is tried, at the widths where the layout
+      // changes, and at larger text sizes set in the browser, as a visitor sets them.
+      const widths = [320, 360, 375, 414, 480, 600, 640, 700, 768, 800, 860, 900, 1024, 1280];
+      const large = [
+        [320, 200],
+        [375, 150],
+        [640, 200],
+        [900, 150],
+      ] as const;
+      const sizes = new Map<number, Awaited<ReturnType<typeof pageWithTextSize>>>();
+      for (const percent of new Set(large.map(([, p]) => p)))
+        sizes.set(percent, await pageWithTextSize(browser, percent));
+
+      /** What the strip looks like now: words cut, text outside its cell, sideways scroll, columns. */
+      const measure = async (p: import("@playwright/test").Page) => {
+        const { cut } = await brokenWords(p, ".app-facts dt, .app-facts dd");
+        const layout = await p.evaluate(() => {
+          const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+          const outside: string[] = [];
+          const cells = [...document.querySelectorAll(".app-facts > div")];
+          for (const cell of cells) {
+            const box = cell.getBoundingClientRect();
+            for (const el of cell.querySelectorAll("dt, dd")) {
+              const range = document.createRange();
+              range.selectNodeContents(el);
+              for (const r of range.getClientRects())
+                if (r.width > 0 && (r.left < box.left - 0.5 || r.right > box.right + 0.5))
+                  outside.push(
+                    `${(el.textContent ?? "").trim()} (${Math.round(r.left)}..${Math.round(r.right)} in ${Math.round(box.left)}..${Math.round(box.right)})`,
+                  );
+            }
+          }
+          const root = document.querySelector(".app-page") as HTMLElement;
           return {
-            facts: [...document.querySelectorAll(".app-facts > div")].map((d) => ({
-              label: t(d.querySelector("dt")),
-              value: t(d.querySelector("dd")),
-            })),
-            actions: cards("#can-do"),
-            models: cards("#keeps"),
-            safe: [...document.querySelectorAll(".app-safe li")].map((li) => t(li)),
-            works: icons(sections.find((s) => s.querySelector("#works-with"))),
-            related: icons(
-              sections.find(
-                (s) => s.querySelector(".app-icons") && !s.querySelector("#works-with"),
-              ),
-            ),
-            info: [...document.querySelectorAll(".app-info > div")].map((d) => ({
-              label: t(d.querySelector("dt")),
-              value: t(d.querySelector("dd")),
-            })),
+            outside,
+            cells: cells.length,
+            sideways: root.scrollWidth - root.clientWidth,
+            columns: new Set(cells.map((c) => Math.round(c.getBoundingClientRect().left))).size,
+            room: (document.querySelector(".app-facts-box") as HTMLElement).clientWidth / rem,
           };
         });
-        // A no-break space (French puts one before a semicolon) reads as a space on the page.
-        const md = (
-          await (await request.get(`${base()}${url.replace(/\/$/, "")}.md`)).text()
-        ).replace(/[  ]/g, " ");
-        const lines = md.split("\n");
-        const where = `${locale} ${url}`;
-        // The strip is the first list of the copy, line for line (the Information list repeats some of
-        // its labels and values further down, so a line that is merely contained would not do).
-        const first = lines.findIndex((l) => l.startsWith("- **"));
-        const strip: string[] = [];
-        for (let i = first; first >= 0 && lines[i]?.startsWith("- **"); i++) strip.push(lines[i]!);
-        expect(strip, `${where} facts`).toEqual(
-          view.facts.map((f) => `- **${f.label}:** ${f.value}`),
-        );
-        for (const c of view.actions)
-          expect(
-            lines.some(
-              (l) =>
-                l.startsWith(`- **${c.kicker}: `) &&
-                l.toLowerCase().includes(c.title.toLowerCase()) &&
-                l.endsWith(`: ${c.text}`) &&
-                l.includes(needsApproval) === c.approval,
-            ),
-            `${where} action ${c.kicker} ${c.title}`,
-          ).toBe(true);
-        for (const c of view.models)
-          expect(lines, `${where} keeps`).toContain(`- **${c.title}**: ${c.text}`);
-        for (const line of view.safe) expect(lines, `${where} safe`).toContain(`- ${line}`);
-        for (const a of [...view.works, ...view.related])
-          expect(md, `${where} link`).toContain(`[${a.name}](${a.href})`);
-        // The lists are as long as the page's, not only contained in it.
-        const section = (heading: string) => {
-          const at = lines.indexOf(heading);
-          if (at < 0) return [];
-          const list: string[] = [];
-          for (let i = at + 2; i < lines.length && lines[i]!.startsWith("- "); i++)
-            list.push(lines[i]!);
-          return list;
-        };
-        const listed = (heading: string) => section(heading).length;
-        expect(listed(`## ${messages[locale].apps.store.worksWith}`), `${where} works with`).toBe(
-          view.works.length,
-        );
-        expect(listed(`## ${messages[locale].apps.h.related}`), `${where} related`).toBe(
-          view.related.length,
-        );
-        expect(listed(`## ${messages[locale].apps.store.info}`), `${where} information`).toBe(
-          view.info.length,
-        );
-        for (const r of view.info) {
-          // The row of the Information section (the strip above repeats some labels).
-          const line = section(`## ${messages[locale].apps.store.info}`).find((l) =>
-            l.startsWith(`- **${r.label}:**`),
+        return { cut, ...layout };
+      };
+      /** The columns the room asks for: one below 17.5rem, two by two, one row of four from 52rem. */
+      const columnsFor = (room: number) => (room < 17.5 ? 1 : room < 52 ? 2 : 4);
+
+      try {
+        const seenColumns = new Set<number>();
+        for (const locale of Object.keys(messages) as (keyof typeof messages)[]) {
+          const urls = (await pagesOf(request, locale)).filter((u) => /\/apps\/.+\/$/.test(u));
+          const seen = new Set<string>();
+          const maturities = new Set<string>();
+          let standalone = 0;
+          for (const url of urls) {
+            await page.goto(`${base()}${url}`, { waitUntil: "domcontentloaded" });
+            const values = await page.locator(".app-facts dd").allTextContents();
+            const key = `${values[0]}|${values[2] === messages[locale].apps.store.standalone}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            maturities.add(values[0]!);
+            if (values[2] === messages[locale].apps.store.standalone) standalone++;
+            const check = async (p: import("@playwright/test").Page, where: string) => {
+              const r = await measure(p);
+              expect(r.cut, `${locale} ${url} ${where}: a word is cut`).toEqual([]);
+              expect(r.outside, `${locale} ${url} ${where}: text outside its cell`).toEqual([]);
+              expect(
+                r.sideways,
+                `${locale} ${url} ${where}: the page scrolls sideways`,
+              ).toBeLessThanOrEqual(0);
+              expect(r.cells, `${locale} ${url} ${where}: four cells`).toBe(4);
+              expect(
+                r.columns,
+                `${locale} ${url} ${where}: columns for ${r.room.toFixed(1)}rem`,
+              ).toBe(columnsFor(r.room));
+              seenColumns.add(r.columns);
+            };
+            for (const width of widths) {
+              await page.setViewportSize({ width, height: 900 });
+              await check(page, `at ${width}px`);
+            }
+            // A text size of 150 and 200 percent, the browser's own setting: the strip asks for more
+            // room and stacks.
+            for (const [width, percent] of large) {
+              const big = sizes.get(percent)!.page;
+              await big.setViewportSize({ width, height: 900 });
+              await big.goto(`${base()}${url}`, { waitUntil: "domcontentloaded" });
+              await check(big, `at ${width}px, ${percent}% text`);
+            }
+          }
+          // Not vacuous: every maturity word a page shows in the language, and the line for an app that
+          // needs no other app, was on a page that was measured. No page says "Stable": the six
+          // built-in apps are rated beta (BUILTIN_MATURITY) and no bundled package is stable.
+          const { stable: _unused, ...shown } = messages[locale].apps.meta.maturities;
+          expect([...maturities].sort(), `${locale} maturity words measured`).toEqual(
+            Object.values(shown).sort(),
           );
-          expect(line, `${where} information ${r.label}`).toBeDefined();
-          expect(line, `${where} information ${r.label}`).toContain(r.value);
+          expect(standalone, `${locale} pages with no other app measured`).toBeGreaterThan(0);
         }
-        checked++;
+        // Every layout the strip has was seen: one column, two by two and one row of four.
+        expect([...seenColumns].sort(), "strip layouts measured").toEqual([1, 2, 4]);
+      } finally {
+        for (const { context } of sizes.values()) await context.close();
       }
-    }
-    expect(checked).toBe(7 * 28);
+    });
+
+    test("the cards keep every word that fits whole, and nothing leaves its card", async ({
+      page,
+      request,
+    }) => {
+      // The limit, stated: a word wider than its card (Swedish "Integritetsförhandsgranskning" in a
+      // card 15 rem wide) cannot be kept whole by any rule, so it breaks at the card's edge; the
+      // browser hyphenates it only where it has a dictionary (hyphens: auto), and it is switched off
+      // here so that the result is the same on every browser. Every other word stays whole, and no
+      // text leaves its card.
+      let wide = 0;
+      let cards = 0;
+      for (const locale of ["de", "sv", "fi", "pl"] as const) {
+        const urls = (await pagesOf(request, locale)).filter((u) => /\/apps\/.+\/$/.test(u));
+        for (const url of urls) {
+          await page.goto(`${base()}${url}`, { waitUntil: "domcontentloaded" });
+          await page.addStyleTag({ content: "* { hyphens: manual !important; }" });
+          await page.evaluate(() =>
+            document
+              .querySelectorAll("main details")
+              .forEach((d) => ((d as HTMLDetailsElement).open = true)),
+          );
+          for (const width of [320, 375, 768, 1024, 1280]) {
+            await page.setViewportSize({ width, height: 900 });
+            const r = await brokenWords(page, ".app-card h3, .app-card-text", true);
+            expect(r.cut, `${url} at ${width}px`).toEqual([]);
+            wide += r.wide;
+            const out = await page.evaluate(() =>
+              [...document.querySelectorAll(".app-card")]
+                .filter((c) => c.scrollWidth > c.clientWidth + 1)
+                .map((c) => (c.querySelector("h3")?.textContent ?? "").trim().slice(0, 30)),
+            );
+            expect(out, `${url} at ${width}px: text leaves its card`).toEqual([]);
+            cards += await page.locator(".app-card").count();
+          }
+        }
+      }
+      // Not vacuous: there are cards, and some word really is wider than its card.
+      expect(cards).toBeGreaterThan(1000);
+      expect(wide, "words wider than their card, which the test allows to break").toBeGreaterThan(
+        0,
+      );
+    });
+
+    test("the Markdown copy of every app page says what the page says, in every language", async ({
+      page,
+      request,
+    }) => {
+      let checked = 0;
+      for (const locale of Object.keys(messages) as (keyof typeof messages)[]) {
+        const needsApproval = messages[locale].apps.store.needsApproval;
+        const urls = (await pagesOf(request, locale)).filter((u) => /\/apps\/.+\/$/.test(u));
+        for (const url of urls) {
+          await page.goto(`${base()}${url}`, { waitUntil: "domcontentloaded" });
+          const view = await page.evaluate(() => {
+            const t = (e: Element | null) => (e?.textContent ?? "").replace(/\s+/g, " ").trim();
+            const cards = (heading: string) =>
+              [
+                ...document.querySelectorAll(
+                  `${heading} ~ ul.app-cards > li.app-card, ${heading} ~ .app-more li.app-card`,
+                ),
+              ].map((c) => ({
+                kicker: t(c.querySelector(".app-card-kicker")),
+                title: t(c.querySelector(".app-card-title")),
+                text: t(c.querySelector(".app-card-text")),
+                approval: !!c.querySelector(".app-card-note"),
+              }));
+            const icons = (section: Element | undefined) =>
+              [...(section?.querySelectorAll(".app-icons a") ?? [])].map((a) => ({
+                name: t(a),
+                href: a.getAttribute("href"),
+              }));
+            const sections = [...document.querySelectorAll(".app-page > section")];
+            return {
+              facts: [...document.querySelectorAll(".app-facts > div")].map((d) => ({
+                label: t(d.querySelector("dt")),
+                value: t(d.querySelector("dd")),
+              })),
+              actions: cards("#can-do"),
+              models: cards("#keeps"),
+              safe: [...document.querySelectorAll(".app-safe li")].map((li) => t(li)),
+              works: icons(sections.find((s) => s.querySelector("#works-with"))),
+              related: icons(
+                sections.find(
+                  (s) => s.querySelector(".app-icons") && !s.querySelector("#works-with"),
+                ),
+              ),
+              info: [...document.querySelectorAll(".app-info > div")].map((d) => ({
+                label: t(d.querySelector("dt")),
+                value: t(d.querySelector("dd")),
+              })),
+            };
+          });
+          // A no-break space (French puts one before a semicolon) reads as a space on the page.
+          const md = (
+            await (await request.get(`${base()}${url.replace(/\/$/, "")}.md`)).text()
+          ).replace(/[  ]/g, " ");
+          const lines = md.split("\n");
+          const where = `${locale} ${url}`;
+          // The strip is the first list of the copy, line for line (the Information list repeats some of
+          // its labels and values further down, so a line that is merely contained would not do).
+          const first = lines.findIndex((l) => l.startsWith("- **"));
+          const strip: string[] = [];
+          for (let i = first; first >= 0 && lines[i]?.startsWith("- **"); i++)
+            strip.push(lines[i]!);
+          expect(strip, `${where} facts`).toEqual(
+            view.facts.map((f) => `- **${f.label}:** ${f.value}`),
+          );
+          for (const c of view.actions)
+            expect(
+              lines.some(
+                (l) =>
+                  l.startsWith(`- **${c.kicker}: `) &&
+                  l.toLowerCase().includes(c.title.toLowerCase()) &&
+                  l.endsWith(`: ${c.text}`) &&
+                  l.includes(needsApproval) === c.approval,
+              ),
+              `${where} action ${c.kicker} ${c.title}`,
+            ).toBe(true);
+          for (const c of view.models)
+            expect(lines, `${where} keeps`).toContain(`- **${c.title}**: ${c.text}`);
+          for (const line of view.safe) expect(lines, `${where} safe`).toContain(`- ${line}`);
+          for (const a of [...view.works, ...view.related])
+            expect(md, `${where} link`).toContain(`[${a.name}](${a.href})`);
+          // The lists are as long as the page's, not only contained in it.
+          const section = (heading: string) => {
+            const at = lines.indexOf(heading);
+            if (at < 0) return [];
+            const list: string[] = [];
+            for (let i = at + 2; i < lines.length && lines[i]!.startsWith("- "); i++)
+              list.push(lines[i]!);
+            return list;
+          };
+          const listed = (heading: string) => section(heading).length;
+          expect(listed(`## ${messages[locale].apps.store.worksWith}`), `${where} works with`).toBe(
+            view.works.length,
+          );
+          expect(listed(`## ${messages[locale].apps.h.related}`), `${where} related`).toBe(
+            view.related.length,
+          );
+          expect(listed(`## ${messages[locale].apps.store.info}`), `${where} information`).toBe(
+            view.info.length,
+          );
+          for (const r of view.info) {
+            // The row of the Information section (the strip above repeats some labels).
+            const line = section(`## ${messages[locale].apps.store.info}`).find((l) =>
+              l.startsWith(`- **${r.label}:**`),
+            );
+            expect(line, `${where} information ${r.label}`).toBeDefined();
+            expect(line, `${where} information ${r.label}`).toContain(r.value);
+          }
+          checked++;
+        }
+      }
+      expect(checked).toBe(7 * 28);
+    });
   });
 
   test("no VitePress runtime is left in the files that are deployed", async () => {

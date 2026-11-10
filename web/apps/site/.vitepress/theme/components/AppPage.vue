@@ -30,7 +30,7 @@ const pathParts = (path: string) => path.split(new RegExp("(?<=/)"));
 </script>
 
 <template>
-  <div class="wrap app-page">
+  <div class="wrap app-page" :class="{ 'app-long': longName }">
     <p class="app-back">
       <a :href="href('/apps/')"><Icon name="chevron-left" :size="20" />{{ m.apps.title }}</a>
     </p>
@@ -38,7 +38,7 @@ const pathParts = (path: string) => path.split(new RegExp("(?<=/)"));
     <header class="app-hero">
       <Tile fluid :id="String(fm['appId'])" :name="String(fm['appId'])" :size="120" />
       <div class="app-hero-text">
-        <h1 :class="{ 'app-long': longName }">{{ fm["title"] }}</h1>
+        <h1>{{ fm["title"] }}</h1>
         <p class="app-tagline">{{ fm["tagline"] }}</p>
         <p class="app-category">{{ view.category }}</p>
         <a class="app-primary" :href="builtin ? href('/app/') : '#get'">{{
@@ -61,13 +61,11 @@ const pathParts = (path: string) => path.split(new RegExp("(?<=/)"));
       <h2 :id="String(fm['purposeId'])">{{ m.apps.h.purpose }}</h2>
       <p v-if="en" class="app-note">{{ s.purposeEnglish }}</p>
       <p class="app-purpose" :lang="en">{{ view.purposeLead }}</p>
-      <template v-if="view.purposeRest">
-        <details v-if="view.purposeFold" class="app-read">
-          <summary>{{ s.readMore }}</summary>
-          <p class="app-purpose-rest" :lang="en">{{ view.purposeRest }}</p>
-        </details>
-        <p v-else class="app-purpose-rest" :lang="en">{{ view.purposeRest }}</p>
-      </template>
+      <p v-if="view.purposeRest" class="app-purpose-rest" :lang="en">{{ view.purposeRest }}</p>
+      <details v-if="view.purposeMore" class="app-read">
+        <summary>{{ s.readMore }}</summary>
+        <p class="app-purpose-rest" :lang="en">{{ view.purposeMore }}</p>
+      </details>
     </section>
 
     <section class="app-sec">

@@ -46,7 +46,13 @@ export interface AppView {
   /** The first sentence of the purpose, set large, and the rest, set small (empty for one sentence). */
   purposeLead: string;
   purposeRest: string;
-  /** The rest is long: the page folds it under "Read more". */
+  /**
+   * The rest is long: its first sentence stays in `purposeRest`, where a reader always sees it (the
+   * caveat a page must not hide), and the remainder is `purposeMore`, which the page folds under
+   * "Read more". Empty when the rest is short.
+   */
+  purposeMore: string;
+  /** `purposeMore` is not empty. */
   purposeFold: boolean;
   /** One card per workflow action; none when records are created and edited directly. */
   actions: Card[];
@@ -101,12 +107,15 @@ export const LEAD_WORDS = 25;
 export const FOLD_WORDS = 40;
 
 /**
- * The first sentence of a purpose text and the rest. A sentence ends at a full stop, question or
- * exclamation mark followed by a space and a capital; the purposes are hand-written and checked by
- * a test, so the rule can stay this simple.
+ * Where a sentence of a purpose text ends: a full stop, question or exclamation mark followed by a
+ * space and a capital. The purposes are hand-written and checked by a test, so the rule can stay
+ * this simple.
  */
+const SENTENCE_END = /[.!?](?=\s+[A-Z0-9"(])/;
+
+/** The first sentence of a purpose text and the rest. */
 export function splitPurpose(text: string): { lead: string; rest: string } {
-  const m = /[.!?](?=\s+[A-Z0-9"(])/.exec(text);
+  const m = SENTENCE_END.exec(text);
   let lead = m ? text.slice(0, m.index + 1) : text;
   let rest = m ? text.slice(m.index + 1).trim() : "";
   // A long first sentence is cut at its first colon or semicolon: the cut ends in a full stop and
@@ -121,6 +130,21 @@ export function splitPurpose(text: string): { lead: string; rest: string } {
     }
   }
   return { lead, rest };
+}
+
+/**
+ * A long rest of the purpose, split for the page: its first sentence, which is always shown, and the
+ * remainder, which folds. A rest of one long sentence has nothing it could show on its own, so all of
+ * it folds.
+ */
+export function splitRest(rest: string): { shown: string; more: string } {
+  if (wordCount(rest) <= FOLD_WORDS) return { shown: rest, more: "" };
+  const m = SENTENCE_END.exec(rest);
+  if (!m) return { shown: "", more: rest };
+  const shown = rest.slice(0, m.index + 1);
+  return wordCount(shown) > FOLD_WORDS
+    ? { shown: "", more: rest }
+    : { shown, more: rest.slice(m.index + 1).trim() };
 }
 
 /** `^0.2` is "0.2" in plain words; any other range stays as the manifest wrote it. */
@@ -173,6 +197,17 @@ export function appView(app: App, m: Messages, all: App[], locale = "en"): AppVi
     model.actions.map((act): Card => {
       const own = labels.actions[`${model.name}.${act.name}`];
       const modelName = labels.models[model.name]?.name;
+      // Plain words written for this card (data/apps.ts) are English, and so is the whole card on a
+      // translated page: the product's translation of the manifest text says the old words.
+      const plain = app.cards[`${model.name}.${act.name}`];
+      if (plain)
+        return {
+          kicker: modelLabel(app, model),
+          title: plain.title ?? capital(words(act.name)),
+          text: plain.text,
+          approval: act.approval,
+          ...(translated ? { lang: "en" as const } : {}),
+        };
       const ok = translated && !!own?.label && !!own?.description && !!modelName;
       return {
         kicker: ok ? modelName : modelLabel(app, model),
@@ -185,6 +220,13 @@ export function appView(app: App, m: Messages, all: App[], locale = "en"): AppVi
   );
   const models: Card[] = app.models.map((model) => {
     const own = labels.models[model.name];
+    const plain = app.cards[model.name];
+    if (plain)
+      return {
+        title: plain.title ?? modelLabel(app, model),
+        text: plain.text,
+        ...(translated ? { lang: "en" as const } : {}),
+      };
     const ok = translated && !!own?.name && !!own?.description;
     return {
       title: ok ? own!.name! : modelLabel(app, model),
@@ -248,13 +290,15 @@ export function appView(app: App, m: Messages, all: App[], locale = "en"): AppVi
   ].filter((r) => r.value);
 
   const purpose = splitPurpose(app.purpose);
+  const rest = splitRest(purpose.rest);
   return {
     category,
     facts,
     experimental: meta.maturity === "experimental",
     purposeLead: purpose.lead,
-    purposeRest: purpose.rest,
-    purposeFold: wordCount(purpose.rest) > FOLD_WORDS,
+    purposeRest: rest.shown,
+    purposeMore: rest.more,
+    purposeFold: rest.more !== "",
     actions,
     models,
     safe,
