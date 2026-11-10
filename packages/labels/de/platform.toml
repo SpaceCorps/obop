@@ -798,6 +798,10 @@ description = "Der Hinweis auf Spanisch: ein einfacher Text mit höchstens 240 Z
 label = "Logo (SVG)"
 description = "Eingabe von configure: der Text einer SVG-Datei, höchstens 16 KiB, eine strenge Teilmenge (Formen und Pfade in einfachen Farben; kein Skript, kein Text, kein Bild, kein Link). Gespeichert wird der kanonische Text, den der Server neu geschrieben hat, nie die Eingabe; get gibt ihn nicht zurück. Leer löscht ihn, und das Logo wird dann aus dem Namen gezeichnet"
 
+[labels.de.model.instance_brand.field.hide_product_docs]
+label = "Produktdokumentation ausblenden"
+description = "true oder false: Das Markenhandbuch und die Anleitung in Anpassen, im Kontomenü und in der Befehlspalette ausblenden. Aus, solange kein boolesches true gespeichert ist. Vor der Anmeldung wird es nicht gezeigt; jede angemeldete Person kann es lesen"
+
 [labels.de.model.instance_brand.field.dry_run]
 label = "Probelauf"
 description = "Eingabe von configure und clear: true oder false. Mit true wird alles geprüft und nichts geschrieben oder protokolliert; die Antwort sagt, was geschehen würde, und gibt dry_run zurück"
@@ -812,7 +816,7 @@ description = "Antwort von get und configure: die Version des Logos (16 Hexziffe
 
 [labels.de.model.instance_brand.field.effective]
 label = "Wirksam"
-description = "Antwort von get: ein JSON-Objekt mit dem Wert und der gewinnenden Quelle (record, env, site, theme, unreadable oder default) für jeden geltenden Wert (name, slug, logo, tile_accent, authenticator_issuer, site.title, site.logo_url, site.accent, favicon, title_XX und message_XX; XX ist der Sprachcode: en, de, fr, pl, fi, sv, es)"
+description = "Antwort von get: ein JSON-Objekt mit dem Wert und der gewinnenden Quelle (record, env, site, theme, unreadable oder default) für jeden geltenden Wert (name, slug, logo, tile_accent, accent, authenticator_issuer, site.title, site.logo_url, site.accent, favicon, title_XX und message_XX; XX ist der Sprachcode: en, de, fr, pl, fi, sv, es)"
 
 [labels.de.model.instance_brand.field.fallbacks]
 label = "Rückfallwerte"
@@ -832,7 +836,7 @@ description = "Antwort von clear: ob eine Marke entfernt wurde (mit dry_run: ob 
 
 [labels.de.model.instance_brand.action.configure]
 label = "Einrichten"
-description = "Das Branding der Instanz setzen. Nur die zu ändernden Felder angeben (die übrigen behalten ihren Wert); der erste Aufruf braucht name. Felder: name, slug, title_XX, message_XX, logo_svg (SVG-Text). Ein leerer Text löscht ein Feld, außer name. dry_run (true oder false) schreibt nichts. Antwortet mit changes und v (mit dry_run auch refusals). Nur eine Person mit platform.admin darf es ausführen"
+description = "Das Branding setzen. Nur zu ändernde Felder angeben (die übrigen bleiben); der erste Aufruf braucht name. Felder: name, slug, title_XX, message_XX, logo_svg (SVG-Text), hide_product_docs (true oder false). Ein leerer Text löscht ein Feld, außer name. dry_run (true oder false) schreibt nichts. Antwort: changes und v (mit dry_run auch refusals). Nur eine Person mit platform.admin darf es ausführen"
 
 [labels.de.model.instance_brand.action.clear]
 label = "Entfernen"

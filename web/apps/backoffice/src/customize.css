@@ -164,3 +164,51 @@
 .security-tab .tf {
   max-inline-size: 44rem;
 }
+
+/* Identity: the form of the instance's name and logo, and its preview. */
+.identity-tab .identity-preview {
+  position: sticky;
+  inset-block-start: var(--space-4);
+  align-self: start;
+}
+.identity-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-6);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+}
+.identity-card-title {
+  margin-block-start: var(--space-2);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+}
+.identity-card-button {
+  align-self: flex-start;
+  margin-block-start: var(--space-2);
+  pointer-events: none;
+}
+.identity-tile {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.identity-tile img,
+.identity-tile-empty {
+  flex: none;
+  inline-size: 64px;
+  block-size: 64px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+  object-fit: contain;
+}
+.identity-refusal {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.identity-error {
+  color: var(--danger-ink, var(--text));
+}

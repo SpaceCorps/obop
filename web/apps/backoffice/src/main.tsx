@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { I18nProvider, initI18n } from "@obop/ui";
 import "@obop/ui/styles.css";
 import { App } from "./App.tsx";
+import { applyBrandToPage } from "./brandPage.ts";
 import { ErrorBoundary } from "./ErrorBoundary.tsx";
 import "./style.css";
 import "./controlpanel.css";
@@ -31,6 +32,9 @@ addEventListener("unhandledrejection", (e) => {
   console.error("[obop] unhandled promise rejection", e.reason);
   e.preventDefault();
 });
+
+// The brand of the page (tab title, accent of the sign-in screens) is in place before the first paint.
+applyBrandToPage();
 
 void initI18n({ loaders }).then(() =>
   createRoot(document.getElementById("root")!).render(

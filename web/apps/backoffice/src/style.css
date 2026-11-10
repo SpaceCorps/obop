@@ -47,6 +47,14 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* The bar is 3.5rem high whatever the name is: a long name of the instance (up to 40 characters)
+   stays on one line and ends in an ellipsis, as the name of the app beside it does. The link
+   carries the whole name as its title. */
+.brand .instance-logo-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .menu-btn {
   display: none;
 }
@@ -569,6 +577,10 @@
 .signin-head h2 {
   font-size: var(--text-2xl);
   margin-block-end: 0.2rem;
+}
+.signin-message {
+  margin-block-start: var(--space-2);
+  overflow-wrap: anywhere;
 }
 
 /* ---------- Responsive ---------- */

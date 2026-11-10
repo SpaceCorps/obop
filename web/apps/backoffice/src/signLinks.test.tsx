@@ -122,7 +122,7 @@ describe("the dialog that shows the link once", () => {
     expect(h).toContain("Anyone who has this link can sign for Ada Example.");
     expect(h).toContain("It cannot be shown again.");
     expect(h).toContain("If you lose it, create another link for this request.");
-    expect(h).toContain("obop sends no email");
+    expect(h).toContain("No email is sent");
   });
 
   it("shows the link in a read-only field next to a Copy button and a Done button", () => {

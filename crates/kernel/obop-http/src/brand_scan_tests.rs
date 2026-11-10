@@ -90,7 +90,7 @@ enum Limit {
 
 /// Where the brand is read or written: the path from `crates/` (a prefix when it ends with `/`),
 /// why, and what the file may do.
-const ALLOWED: [(&str, &str, Limit); 20] = [
+const ALLOWED: [(&str, &str, Limit); 21] = [
     (
         "kernel/obop-commands/src/brand/",
         "the module itself: the reader, `strict()`, `apply` and the read of `get`",
@@ -204,6 +204,16 @@ const ALLOWED: [(&str, &str, Limit); 20] = [
             reads: 0,
             paths: &["Shown"],
             types: &[],
+        },
+    ),
+    (
+        "kernel/obop-http/src/shell.rs",
+        "the back office shell (S2): `Shell::for_state` gets the reader of the dispatcher once, `shown()` asks it once, on a blocking thread, and only when the answer is the HTML document itself (never for a script, a style sheet or a picture); `Public::of` takes the public subset from the `Shown` with one call of the accessor `Shown::brand()`; it names the types `Reader` and `Shown` as types only (no function through them, no second name, no impl), so it builds no reader",
+        Limit::Reads {
+            calls: 2,
+            reads: 1,
+            paths: &["Reader", "Shown"],
+            types: &["Reader", "Shown"],
         },
     ),
     (
@@ -855,6 +865,10 @@ fn the_scan_sees_the_ways_a_file_can_read_the_row_and_leaves_the_allowed_files_a
             "use obop_commands::brand::Shown; fn f() -> Arc<Shown> { Arc::new(Shown::not_set(None)) }",
         ),
         (
+            "kernel/obop-http/src/shell.rs",
+            "use obop_commands::brand::{Reader, Shown}; fn f(s: &S) -> Arc<Reader> { s.dispatcher.brand() } fn g(r: Arc<Reader>) -> Arc<Shown> { r.current() } fn h(s: &Shown) -> &str { s.brand().name() }",
+        ),
+        (
             "kernel/obop-http/src/mcp.rs",
             "async fn f(s: &S) -> Brand { super::brand::current(s.dispatcher.brand()).await.brand().clone() }",
         ),
@@ -1300,6 +1314,7 @@ fn the_rows_with_limits_are_the_files_that_only_ask_the_reader() {
             "kernel/obop-http/src/oauth.rs",
             "kernel/obop-oauth/src/page.rs",
             "kernel/obop-oauth/src/flow.rs",
+            "kernel/obop-http/src/shell.rs",
             // S3: the anonymous documents, `initialize` and the Slack message only ask the reader.
             "kernel/obop-http/src/mcp.rs",
             "kernel/obop-mcp/src/lib.rs",
@@ -1316,7 +1331,8 @@ fn the_rows_with_limits_are_the_files_that_only_ask_the_reader() {
 /// the reader, which paths through the module `brand` and which types as types only. The test above
 /// holds which files have limits; this holds the limits, so that a row loosened by a number or a name
 /// (a second call, a read, `apply` among the paths) is a change of this test, and so a decision that
-/// shows in the diff. Every row with limits has its own line here.
+/// shows in the diff. Every row of the slices before S3 has its own line here; the rows of S3 are
+/// held by `the_limits_of_the_rows_of_slice_s3_are_the_ones_decided`.
 #[test]
 fn the_limits_of_the_rows_with_limits_are_the_ones_decided() {
     type Want = (
@@ -1326,7 +1342,7 @@ fn the_limits_of_the_rows_with_limits_are_the_ones_decided() {
         &'static [&'static str],
         &'static [&'static str],
     );
-    let decided: [Want; 12] = [
+    let decided: [Want; 13] = [
         (
             "kernel/obop-http/src/brand.rs",
             1,
@@ -1372,6 +1388,13 @@ fn the_limits_of_the_rows_with_limits_are_the_ones_decided() {
         ),
         ("kernel/obop-oauth/src/page.rs", 4, 0, &["Shown"], &[]),
         ("kernel/obop-oauth/src/flow.rs", 0, 0, &["Shown"], &[]),
+        (
+            "kernel/obop-http/src/shell.rs",
+            2,
+            1,
+            &["Reader", "Shown"],
+            &["Reader", "Shown"],
+        ),
         (
             "kernel/obop-http/src/sign_page.rs",
             0,
@@ -4281,4 +4304,58 @@ fn the_scan_of_the_manifests_sees_a_default_feature_and_an_ask_outside_dev_depen
         assert_eq!(found.len(), 1, "{features}: {found:?}");
         assert!(found[0].contains(wanted), "{features}: {found:?}");
     }
+}
+
+// ---- The limits of a row are what its file does -------------------------------------------------
+
+/// A limit that is higher than what the file does is room for a second read that nothing counts, and
+/// a `types` list shorter than what the reason says is a way round the rule that the file names the
+/// type only. So each row of [`Limit::Reads`] is held to the file: the calls of `brand()` and the
+/// reads it makes are exactly the numbers of the row (the same count `beyond` makes against a limit,
+/// here against equality), and a row that says in its reason that it names types "as a type only"
+/// lists exactly those names in `types`.
+#[test]
+fn the_limits_of_a_row_are_what_its_file_does_and_a_type_only_row_lists_its_types() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut files = BTreeMap::new();
+    read_tree(&root, &root, &mut files);
+    let lexed = non_test(&files);
+    let mut loose = Vec::new();
+    for (path, why, limit) in &ALLOWED {
+        let Limit::Reads {
+            calls,
+            reads,
+            paths,
+            types,
+        } = limit
+        else {
+            continue;
+        };
+        let Some(l) = lexed.get(*path) else {
+            loose.push(format!("{path}: not in the tree"));
+            continue;
+        };
+        let mut hits = readers(l);
+        hits.extend(uses(l, types));
+        let asked = hits.iter().filter(|h| h.what == CALL).count();
+        let read = hits
+            .iter()
+            .filter(|h| h.what == READ || h.what == HELPER)
+            .count();
+        if (asked, read) != (*calls, *reads) {
+            loose.push(format!(
+                "{path}: the row says {calls} calls of `brand()` and {reads} reads, the file makes \
+                 {asked} and {read}"
+            ));
+        }
+        if (why.contains("type only") || why.contains("types only"))
+            && (types.is_empty() || types != paths)
+        {
+            loose.push(format!(
+                "{path}: the reason says the file names types only, so `types` must list what \
+                 `paths` lists ({paths:?}), not {types:?}"
+            ));
+        }
+    }
+    assert!(loose.is_empty(), "{}", loose.join("\n"));
 }

@@ -15,6 +15,7 @@ use std::sync::Arc;
 use tower::ServiceExt;
 
 mod brand;
+mod brand_words;
 mod door;
 mod hardening;
 mod history;

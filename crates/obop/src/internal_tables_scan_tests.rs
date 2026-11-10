@@ -151,13 +151,16 @@ const BUNDLED_MODELS: [&str; 26] = [
 /// guard of the store gives to `swap_fields` (`done(.., "swap")`, whose parameter is called `model`):
 /// that call spans no model. The scan did not see it while the signer's page had a function `done`
 /// of the same arity (the name was ambiguous, so its literals were not read); it does now, since that
-/// function takes the brand as a fourth argument (slice S1d of the branding work). Adding a name here
-/// says it is no table; a name that the scan no longer finds is a failure, like the other lists.
-const NOT_TABLES: [&str; 8] = [
+/// function takes the brand as a fourth argument (slice S1d of the branding work). `hide_product_docs`
+/// is the switch of the instance's brand, a field of its row, read with `row.get(SWITCH)` (S2). Adding
+/// a name here says it is no table; a name that the scan no longer finds is a failure, like the other
+/// lists.
+const NOT_TABLES: [&str; 9] = [
     "account",
     "company",
     "customer",
     "document",
+    "hide_product_docs",
     "journal",
     "show_history",
     "swap",

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import {
   Button,
+  InstanceLogo,
   Input,
   Notice,
   Switch,
@@ -13,7 +14,7 @@ import {
   type TwoFactorStatus,
 } from "@obop/ui";
 import { search, saveSettings, type Row, type Settings } from "./api.ts";
-import { Icon, Logo } from "./ui.tsx";
+import { Icon } from "./ui.tsx";
 import { PasskeysSection } from "./Passkeys.tsx";
 import {
   ConnectedAppsSection,
@@ -295,7 +296,7 @@ export function EnrolmentGate({
     <main className="gate">
       <div className="gate-card panel">
         <header className="gate-head">
-          <Logo variant="full" size={26} title="obop" />
+          <InstanceLogo variant="full" size={26} />
           <span className="hint">{user}</span>
         </header>
         <Notice tone="warning" title={t("Set up two-factor authentication to continue")}>

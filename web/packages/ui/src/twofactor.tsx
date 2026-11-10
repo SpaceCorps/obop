@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { pageBrand, recoveryFileName } from "./brand.ts";
 import { Icon } from "./icons.tsx";
 import { QrCode } from "./qr.tsx";
 import { Badge, Button, Checkbox, Input, Notice } from "./primitives.tsx";
@@ -408,7 +409,8 @@ export function TwoFactorPanel({
               const url = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
               const a = document.createElement("a");
               a.href = url;
-              a.download = "obop-recovery-codes.txt";
+              // With a brand the file is named by its slug; the control-plane app has none and keeps obop.
+              a.download = recoveryFileName(pageBrand());
               a.click();
               setTimeout(() => URL.revokeObjectURL(url), 1000);
             }}

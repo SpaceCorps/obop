@@ -798,6 +798,10 @@ description = "Le message en espagnol : un texte simple de 240 caractères au pl
 label = "Logo (SVG)"
 description = "Entrée de configure : le texte d'un fichier SVG, 16 Kio au plus, un sous-ensemble strict (formes et tracés en couleurs unies ; ni script, ni texte, ni image, ni lien). Ce qui est enregistré est le texte canonique que le serveur a réécrit, jamais l'entrée ; get ne le renvoie pas. Vide : il est effacé et le logo est alors dessiné à partir du nom"
 
+[labels.fr.model.instance_brand.field.hide_product_docs]
+label = "Masquer la documentation du produit"
+description = "true ou false : masquer la charte graphique et le guide dans Personnaliser, le menu du compte et la palette de commandes. Désactivé tant qu'un true booléen n'est pas enregistré. Non affiché avant la connexion ; toute personne connectée peut le lire"
+
 [labels.fr.model.instance_brand.field.dry_run]
 label = "Simulation"
 description = "Entrée de configure et clear : true ou false. Avec true, tout est vérifié et rien n'est écrit ni journalisé ; la réponse dit ce qui se passerait et renvoie dry_run"
@@ -812,7 +816,7 @@ description = "Réponse de get et configure : la version du logo (16 chiffres he
 
 [labels.fr.model.instance_brand.field.effective]
 label = "En vigueur"
-description = "Réponse de get : un objet JSON qui donne, pour chaque valeur en vigueur (name, slug, logo, tile_accent, authenticator_issuer, site.title, site.logo_url, site.accent, favicon, title_XX et message_XX; XX est le code de la langue : en, de, fr, pl, fi, sv, es), sa valeur et la source retenue : record, env, site, theme, unreadable ou default"
+description = "Réponse de get : un objet JSON qui donne, pour chaque valeur en vigueur (name, slug, logo, tile_accent, accent, authenticator_issuer, site.title, site.logo_url, site.accent, favicon, title_XX et message_XX; XX est le code de la langue : en, de, fr, pl, fi, sv, es), sa valeur et la source retenue : record, env, site, theme, unreadable ou default"
 
 [labels.fr.model.instance_brand.field.fallbacks]
 label = "Valeurs de repli"
@@ -832,7 +836,7 @@ description = "Réponse de clear : si une marque a été supprimée (avec dry_ru
 
 [labels.fr.model.instance_brand.action.configure]
 label = "Configurer"
-description = "Définir l'image de marque de l'instance. Ne donnez que les champs à modifier (les autres gardent leur valeur) ; le premier appel exige name. Champs : name, slug, title_XX, message_XX, logo_svg (texte SVG). Un texte vide efface un champ, sauf name. dry_run (true ou false) n'écrit rien. Répond par changes et v (avec dry_run aussi refusals). Seule une personne avec platform.admin peut l'exécuter"
+description = "Définir l'image de marque. Ne donnez que les champs à modifier (les autres restent) ; le premier appel exige name. Champs : name, slug, title_XX, message_XX, logo_svg (texte SVG), hide_product_docs (true ou false). Un texte vide efface un champ, sauf name. dry_run (true ou false) n'écrit rien. Répond : changes et v (avec dry_run aussi refusals). Réservé à une personne avec platform.admin"
 
 [labels.fr.model.instance_brand.action.clear]
 label = "Supprimer"

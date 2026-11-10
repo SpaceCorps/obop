@@ -15,7 +15,7 @@
 //! global options of the same names take one value each for `status incident`, so `main` hands the
 //! argument list to [`take_flags`] first. Only when the first two words are `admin brand` does it
 //! pull out the flags of this area (`--title`, `--message`, `--name`, `--slug`, `--logo-file`,
-//! `--clear-logo`); every other command line goes on untouched. `--db`, `--dry-run` and `--from`
+//! `--clear-logo`, `--hide-product-docs`); every other command line goes on untouched. `--db`, `--dry-run` and `--from`
 //! stay the global options and arrive as arguments of [`run`].
 //!
 //! **What a line may hold.** The lines about `--from FILE` name the field or the table and the
@@ -52,7 +52,8 @@ const OPERATOR: &str = "operator";
 pub(crate) const USAGE: &str = "usage:
   obop admin brand status
   obop admin brand configure [--name N] [--slug S] [--title LANG=TEXT]... [--message LANG=TEXT]...
-                             [--logo-file FILE.svg | --clear-logo] [--from FILE.toml] [--dry-run]
+                             [--logo-file FILE.svg | --clear-logo] [--hide-product-docs on|off]
+                             [--from FILE.toml] [--dry-run]
   obop admin brand clear [--dry-run]
   obop admin brand check FILE.svg
 (--db URL as for every command; LANG is one of en, de, fr, pl, fi, sv, es)";
@@ -126,6 +127,8 @@ pub struct Flags {
     pub messages: Vec<(String, String)>,
     pub logo_file: Option<String>,
     pub clear_logo: bool,
+    /// `--hide-product-docs on|off`: the one switch of the record.
+    pub hide_product_docs: Option<bool>,
 }
 
 impl Flags {
@@ -256,6 +259,16 @@ pub fn take_flags(args: Vec<&str>) -> Result<(Option<Flags>, Vec<&str>), String>
                 list.push((lang, text));
             }
             "--clear-logo" => flags.clear_logo = true,
+            "--hide-product-docs" => {
+                let on = match value(a, "on or off")? {
+                    "on" => true,
+                    "off" => false,
+                    _ => return Err(format!("{a} needs on or off")),
+                };
+                if flags.hide_product_docs.replace(on).is_some() {
+                    return Err(format!("{a} is given twice"));
+                }
+            }
             // `--from` stays a global option, which takes the next argument as its file. With none
             // it would yield no file, and the call would go on as if no file had been meant.
             "--from" => {
@@ -358,6 +371,9 @@ fn supplied(flags: &Flags, from: Option<&str>) -> Result<Vec<(String, String)>, 
     }
     if flags.clear_logo {
         add("logo_svg".into(), String::new())?;
+    }
+    if let Some(on) = flags.hide_product_docs {
+        add(brand::SWITCH.into(), on.to_string())?;
     }
     Ok(out)
 }
@@ -575,6 +591,11 @@ pub fn render_status_with(fresh: &Fresh, issuer_variable: Option<String>) -> Str
                 line(&field, false);
             }
         }
+    }
+    // Off is the default and prints nothing, so the text of `status` is what it was for a brand
+    // that does not use the switch; a stored value that is not a boolean is under the fallbacks.
+    if shown.hide_product_docs() {
+        out.push_str("hide_product_docs: on\n");
     }
     if !shown.v().is_empty() {
         out.push_str(&format!("logo version: {}\n", shown.v()));

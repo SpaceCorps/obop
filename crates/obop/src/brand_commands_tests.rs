@@ -380,7 +380,7 @@ async fn rest_refuses_unknown_keys_by_name_and_accepts_a_bool_as_text_or_json() 
         "id",
         "set",
         "bogus",
-        "hide_product_docs",
+        "future_switch",
         "_foo",
         "_caller2",
     ] {
