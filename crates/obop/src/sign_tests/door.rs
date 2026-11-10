@@ -1397,39 +1397,3 @@ async fn without_the_package_the_door_exposes_nothing() {
     .await;
     assert_eq!(r.status, 404);
 }
-
-/// S1a: with a brand row in the store, the signer's page in each of the seven languages is what it
-/// was without one (the golden pins of `obop-http` hold the renderer; this holds that the door
-/// hands it nothing from the row yet), and so is the page after signing and the refusal of a link
-/// that is wrong. The slice that makes the signer's page show the name moves this.
-#[tokio::test]
-async fn with_a_brand_row_the_signer_page_is_what_it_was() {
-    let (f, _, path, tok) = sent().await;
-    let from = ip(31);
-    let wrong = format!(
-        "{}/{}",
-        path.rsplit_once('/').unwrap().0,
-        "0".repeat(tok.len())
-    );
-    let mut pages = Vec::new();
-    for lang in obop_oauth::page::LANGS {
-        for (what, p) in [("form", &path), ("refused", &wrong)] {
-            let r = f.get(&format!("{p}?lang={lang}"), &from).await;
-            pages.push((format!("{lang}/{what}"), r.status, r.text()));
-        }
-    }
-    assert!(pages.iter().any(|(_, s, _)| *s == 200), "a page is served");
-    crate::brand_row_tests::set_brand(&f.app);
-    let mut now = Vec::new();
-    for lang in obop_oauth::page::LANGS {
-        for (what, p) in [("form", &path), ("refused", &wrong)] {
-            let r = f.get(&format!("{p}?lang={lang}"), &from).await;
-            now.push((format!("{lang}/{what}"), r.status, r.text()));
-        }
-    }
-    assert_eq!(
-        now, pages,
-        "a signer page moved when a brand row was written"
-    );
-    assert!(now.iter().all(|(_, _, html)| !html.contains("MOHV")));
-}

@@ -1,10 +1,12 @@
 //! With a brand row in the store, an instance sends what it sent without one (docs/spec/branding.md,
 //! slice S1a): the record exists, the reader of the dispatcher answers it, and no surface but the
 //! logo route (`brand_http_tests`), from slice S1c the pages of the OAuth authorization flow
-//! (`oauth_tests/brand.rs`) and, since slice S1f, the settings door of the public site
-//! (`PublicApi::site_settings_read`, `public_site_tests`) asks the reader; since S1e the enrolment
-//! texts ask it too, and the two `with_a_brand_row_*` tests of the authenticator label and the
-//! passkey name assert the name (`brand_enrol_tests`). The golden pins of the first commit of the
+//! (`oauth_tests/brand.rs`), since slice S1d the signer's door (`sign_tests/brand.rs`) and the
+//! return page of the connectors' OAuth callback (`connectors_tests`, `drive_admin_tests`) and,
+//! since slice S1f, the settings door of the public site (`PublicApi::site_settings_read`,
+//! `public_site_tests`) asks the reader; since S1e the enrolment texts ask it too, and the two
+//! `with_a_brand_row_*` tests of the authenticator label and the passkey name assert the name
+//! (`brand_enrol_tests`). The golden pins of the first commit of the
 //! slice (`pins_*`) hold what an instance with **no** row sends; the tests named
 //! `with_a_brand_row_*`, next to each pin, build the same outputs after [`set_brand`] has written a
 //! row through `brand::apply` and hold them to the same digests (or, where the output carries a

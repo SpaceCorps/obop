@@ -14,6 +14,7 @@ use serde_json::{Value as J, json};
 use std::sync::Arc;
 use tower::ServiceExt;
 
+mod brand;
 mod door;
 mod hardening;
 mod history;
