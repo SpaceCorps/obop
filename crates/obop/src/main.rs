@@ -94,6 +94,9 @@ mod sie;
 mod sie_tests;
 #[cfg(test)]
 mod sign_tests;
+mod vat;
+#[cfg(test)]
+mod vat_tests;
 // The reader of the Rust source that the scans of obop-http use, compiled here too (it is a file of
 // that crate's tests and uses nothing of it): the scan of the tables the program names needs the
 // real `App`, which only this crate has. What this crate's scan does not use is left alone.

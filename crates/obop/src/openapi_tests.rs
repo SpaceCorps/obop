@@ -30,6 +30,7 @@ const KNOWN_OMITTED: &[&str] = &[
     "setting.update",
     "sie_exchange.export",
     "sie_exchange.import",
+    "vat_computation.compute",
 ];
 
 /// The committed copy: `web/packages/client/openapi.json`, from the root of the workspace.
