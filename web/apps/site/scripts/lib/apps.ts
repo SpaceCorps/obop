@@ -72,6 +72,8 @@ export interface App {
   modelNames: Record<string, string>;
   /** Plain words for the cards whose manifest text is not (see `AppCopy.cards`). */
   cards: Record<string, CardCopy>;
+  /** The models that have no `delete` command (see `AppCopy.noDelete`). */
+  noDelete: string[];
   models: Model[];
   /** Repository path of the manifest (or the built-in snapshot). */
   source: string;
@@ -120,7 +122,9 @@ function toApp(raw: Raw, builtin: boolean, source: string): App {
       write_group: String(m["write_group"]),
       fields: ((m["field"] as Raw[] | undefined) ?? []).map((f): Field => ({
         name: String(f["name"]),
-        description: String(f["description"]),
+        // The manifest's words, unless data/apps.ts corrects one that says more than the module does.
+        description:
+          copy.fieldText?.[`${String(m["name"])}.${String(f["name"])}`] ?? String(f["description"]),
         class: String(f["class"]),
         personal_data: f["personal_data"] === true,
         group: str(f["group"], rg),
@@ -169,6 +173,7 @@ function toApp(raw: Raw, builtin: boolean, source: string): App {
     ...(copy.technical ? { technical: copy.technical } : {}),
     modelNames: copy.modelNames ?? {},
     cards: copy.cards ?? {},
+    noDelete: copy.noDelete ?? [],
     models,
     source,
   };
@@ -253,10 +258,22 @@ export function appName(app: App, locale: string): string {
 
 export type AgentView = "clear" | "masked" | "withheld";
 
+/**
+ * The data classes an agent token never receives (obop-masking `mode_for`: a sensitive class or a
+ * secret is denied; every other class is allowed, personal data masked). A money field of class
+ * `none` is not among them: an AI assistant sees an order total.
+ */
+export const WITHHELD_CLASSES = [
+  "financial",
+  "confidential_hr",
+  "special_category",
+  "secret",
+] as const;
+export type WithheldClass = (typeof WITHHELD_CLASSES)[number];
+
 /** What an agent token sees of a field (D40): sensitive classes are withheld, personal data masked. */
 export function agentView(f: Field): AgentView {
-  if (["confidential_hr", "special_category", "financial", "secret"].includes(f.class))
-    return "withheld";
+  if ((WITHHELD_CLASSES as readonly string[]).includes(f.class)) return "withheld";
   if (f.personal_data) return "masked";
   return "clear";
 }

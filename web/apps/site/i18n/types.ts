@@ -245,7 +245,10 @@ export interface Messages {
       /** One plain line under the facts of an experimental app (maturity "experimental"). */
       experimentalNote: string;
       safeMasked: string;
+      /** The line about what an AI assistant never sees; {list} is the kinds below that the app holds. */
       safeWithheld: string;
+      /** One kind of withheld detail, by the data class that is withheld (apps.ts `WITHHELD_CLASSES`). */
+      safeKinds: Record<"financial" | "confidential_hr" | "special_category" | "secret", string>;
       safeApprove: string;
       safeApproveNone: string;
       /** The tail of the meta description of an app page in a language other than English. */

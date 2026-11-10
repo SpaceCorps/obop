@@ -17,6 +17,7 @@ import {
 } from "./app-view.ts";
 import {
   BUILTIN_MATURITY,
+  agentView as agentViewOf,
   appName,
   loadApps,
   type Action,
@@ -24,7 +25,7 @@ import {
   type Field,
   type Labels,
 } from "./apps.ts";
-import { OVERSTATED } from "./claims.ts";
+import { CLAIMS } from "./claims.ts";
 import { TECHNICAL, technicalIn, visible } from "./plain.ts";
 
 // Label files that exist only in this test, for an app id no real app has: the rules that decide
@@ -369,6 +370,19 @@ const made = (over: Partial<App>): App => ({ ...crm, ...over });
 const view = (app: App, locale: (typeof LOCALES)[number] = "en") =>
   appView(app, messages[locale], apps, locale);
 
+/** The line about what is withheld, as it must read for these data classes (in the order of the table). */
+const withheld = (
+  locale: (typeof LOCALES)[number],
+  classes: ("financial" | "confidential_hr" | "special_category" | "secret")[],
+) => {
+  const t = messages[locale].apps.store;
+  const kinds = classes.map((c) => t.safeKinds[c]);
+  return t.safeWithheld.replace(
+    "{list}",
+    new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(kinds),
+  );
+};
+
 describe("the lines under 'Safe with AI agents' follow the fields and actions of the app", () => {
   const s = messages.en.apps.store;
   const model = (fields: Field[], actions: Action[]) =>
@@ -382,16 +396,16 @@ describe("the lines under 'Safe with AI agents' follow the fields and actions of
       s.safeApprove,
     ]);
     expect(view(model([field({ class: "financial" })], needsPerson)).safe).toEqual([
-      s.safeWithheld,
+      withheld("en", ["financial"]),
       s.safeApprove,
     ]);
     expect(
       view(model([field({ personal_data: true }), field({ class: "secret" })], needsPerson)).safe,
-    ).toEqual([s.safeMasked, s.safeWithheld, s.safeApprove]);
+    ).toEqual([s.safeMasked, withheld("en", ["secret"]), s.safeApprove]);
     // Personal data of a sensitive class is withheld, not only masked.
     expect(
       view(model([field({ class: "confidential_hr", personal_data: true })], needsPerson)).safe,
-    ).toEqual([s.safeWithheld, s.safeApprove]);
+    ).toEqual([withheld("en", ["confidential_hr"]), s.safeApprove]);
     // The two lines are different sentences, in every language.
     for (const locale of LOCALES) {
       const t = messages[locale].apps.store;
@@ -901,27 +915,63 @@ describe("a card with plain words of its own (data/apps.ts)", () => {
     expect(text("email_marketing", "email_marketing_campaign.send_now")).toContain(
       "obop does not send the emails itself",
     );
-    expect(text("sign", "sign_request.send")).toContain("does not email the signer");
-    expect(text("purchase", "purchase_order.send")).toContain("does not contact the vendor");
+    // "By itself": a webhook connection can post the record on these commands, and the DocuSeal
+    // package sends the request on sign_request.send (claims.ts), so a flat denial says more than the
+    // module does.
+    expect(text("sign", "sign_request.send")).toContain(
+      "By itself, this does not email the signer",
+    );
+    expect(text("purchase", "purchase_order.send")).toContain(
+      "By itself, this does not contact the vendor",
+    );
+    expect(text("purchase", "purchase_order.confirm")).toContain(
+      "By itself, this does not contact the vendor",
+    );
     expect(text("subscriptions", "subscriptions_subscription.activate")).toContain(
-      "does not start any billing",
+      "By itself, this does not start any billing",
     );
     expect(text("accounting", "accounting_period.close")).toContain("label only");
     expect(text("accounting", "accounting_fiscal_year.close")).toContain("label only");
     for (const key of ["ecommerce_order.refund", "ecommerce_order.refund_delivered"])
       expect(text("ecommerce", key), key).toContain("you pay it back yourself");
-    expect(text("pos", "pos_order.refund")).toContain("does not pay money back");
+    expect(text("pos", "pos_order.refund")).toContain("By itself, this does not pay money back");
   });
 
   // A ratchet over the pages as they are drawn, not over the cards alone (claims.ts: each sentence
   // was on a page, and the module does not do what it said). The browser tests run the same list over
   // the pages as deployed.
-  test("no page of any app says what the module does not do again", () => {
+  test("no page of any app, and not the index, says what the module does not do again", () => {
     for (const app of apps) {
       const page = appMirror(app, "en", messages.en, "", apps);
-      for (const [bad, why] of OVERSTATED)
-        expect(page, `${app.id} ${bad}: ${why}`).not.toMatch(bad);
+      for (const { re, why } of CLAIMS) expect(page, `${app.id} ${re}: ${why}`).not.toMatch(re);
     }
+    for (const { re, why } of CLAIMS)
+      expect(messages.en.apps.lead, `the apps index ${re}: ${why}`).not.toMatch(re);
+  });
+
+  // Every row of the list can fail: it catches the sentence it was written for, and leaves alone
+  // the true sentences that stand where it was (a pattern that is deleted, weakened or made so broad
+  // that it catches its own correction fails here). The count is pinned, so a row is not dropped
+  // unnoticed.
+  test("each row of the ratchet catches its own sentence and leaves the corrections alone", () => {
+    expect(CLAIMS).toHaveLength(33);
+    for (const { re, example, fine, why } of CLAIMS) {
+      expect(example, `${re}: ${why}`).toMatch(re);
+      for (const ok of fine ?? []) expect(ok, `${re} must leave this alone`).not.toMatch(re);
+    }
+    // The wider rows catch other wordings of the same claim.
+    const claim = (text: string) => CLAIMS.filter((c) => c.re.test(text)).length;
+    for (const text of [
+      "Closing a period locks it against new entries.",
+      "Closing the year blocks further posting.",
+      "Closing a month stops posting.",
+    ])
+      expect(claim(text), text).toBeGreaterThan(0);
+    for (const text of [
+      "Closing a month or year is only a label; it does not stop new entries.",
+      "Closing a period never blocks entries.",
+    ])
+      expect(claim(text), text).toBe(0);
   });
 
   test("the ratchet can fail: each sentence is caught where it was, in a card, the lead or the technical part", () => {
@@ -938,8 +988,8 @@ describe("a card with plain words of its own (data/apps.ts)", () => {
           : m,
       ),
     };
-    expect(appMirror(old, "en", messages.en, "", apps)).toMatch(OVERSTATED[0]![0]);
-    expect(appMirror(invoicing, "en", messages.en, "", apps)).not.toMatch(OVERSTATED[0]![0]);
+    expect(appMirror(old, "en", messages.en, "", apps)).toMatch(CLAIMS[0]!.re);
+    expect(appMirror(invoicing, "en", messages.en, "", apps)).not.toMatch(CLAIMS[0]!.re);
     // The package text of Email Marketing is the site's, and keeps the manifest's other sentences.
     const email = apps.find((a) => a.id === "email_marketing")!;
     const manifest = readFileSync(join(REPO, "packages/email_marketing.toml"), "utf8");
@@ -1001,6 +1051,7 @@ describe("the plain layer says AI assistants, and the technical part says agents
         "safeApproveNone",
       ] as const)
         expect(s[key], `${locale} ${key}`).not.toMatch(agent);
+      for (const kind of Object.values(s.safeKinds)) expect(kind, locale).not.toMatch(agent);
     }
     for (const app of apps) {
       const { lead, rest } = splitPurpose(app.purpose);
@@ -1008,22 +1059,112 @@ describe("the plain layer says AI assistants, and the technical part says agents
     }
   });
 
-  test("the line about what is withheld names the kinds of detail, in every language", () => {
-    // It said only "sensitive details": a visitor could not learn that an AI assistant cannot read a
-    // journal entry's amounts. The kinds are those of the classes the product withholds (financial,
-    // confidential_hr, special_category, secret).
-    const kinds: Record<string, RegExp[]> = {
-      en: [/money/, /bank/, /pay/, /health/, /sign-in/],
-      de: [/Geldbeträge/, /Bankdaten/, /Gehälter/, /Gesundheit/, /Zugangsdaten/],
-      es: [/importes/, /bancarios/, /salarios/, /salud/, /credenciales/],
-      fi: [/rahamääri/, /pankki/, /palkk/, /terveys/, /kirjautumis/],
-      fr: [/montants/, /bancaires/, /salaires/, /santé/, /identifiants/],
-      pl: [/kwoty/, /bankowe/, /wynagrodzenia/, /zdrowiu/, /logowania/],
-      sv: [/belopp/, /bank/, /löner/, /hälso/, /inloggning/],
-    };
-    for (const locale of LOCALES)
-      for (const word of kinds[locale]!)
-        expect(messages[locale].apps.store.safeWithheld, locale).toMatch(word);
+  // A visitor could not learn what an AI assistant cannot read when the line said only "sensitive
+  // details"; but a line that names money amounts is false where the amounts are in clear (an order
+  // total, a vehicle's cost: their data class is none). So the line names the kinds of the data
+  // classes that are withheld on this page, and no others.
+  test("the line about what is withheld names only the kinds this app withholds, in every language", () => {
+    const classes = ["financial", "confidential_hr", "special_category", "secret"] as const;
+    for (const locale of LOCALES) {
+      const t = messages[locale].apps.store;
+      expect(t.safeWithheld, locale).toContain("{list}");
+      expect(
+        new Set(classes.map((c) => t.safeKinds[c])).size,
+        `${locale}: four different kinds`,
+      ).toBe(4);
+    }
+    for (const app of apps) {
+      const held = new Set(
+        app.models.flatMap((m) =>
+          m.fields.filter((f) => agentViewOf(f) === "withheld").map((f) => f.class),
+        ),
+      );
+      for (const locale of LOCALES) {
+        const t = messages[locale].apps.store;
+        const line = view(app, locale).safe.find((l) =>
+          l.startsWith(t.safeWithheld.split("{list}")[0]!),
+        );
+        if (held.size === 0) {
+          expect(
+            line,
+            `${app.id} ${locale}: a line about withheld details on an app that withholds none`,
+          ).toBeUndefined();
+          continue;
+        }
+        expect(line, `${app.id} ${locale}`).toBe(
+          withheld(
+            locale,
+            classes.filter((c) => held.has(c)),
+          ),
+        );
+        for (const c of classes)
+          expect(line!.includes(t.safeKinds[c]), `${app.id} ${locale}: ${c}`).toBe(held.has(c));
+      }
+    }
+  });
+
+  test("it does not name money where the amounts are in clear: Fleet, Purchase, Point of Sale and eCommerce show what they withhold", () => {
+    const line = (id: string) =>
+      view(apps.find((a) => a.id === id)!).safe.find((l) => /never see/.test(l))!;
+    expect(line("fleet")).toBe(
+      "AI assistants never see sensitive details. In this app: confidential HR details.",
+    );
+    expect(line("purchase")).toBe(
+      "AI assistants never see sensitive details. In this app: sensitive financial details.",
+    );
+    expect(line("connectors")).toBe(
+      "AI assistants never see sensitive details. In this app: secrets (such as sign-in details).",
+    );
+    expect(line("ecommerce")).toBe(
+      "AI assistants never see sensitive details. In this app: sensitive financial details and secrets (such as sign-in details).",
+    );
+    expect(line("hr")).toBe(
+      "AI assistants never see sensitive details. In this app: sensitive financial details, confidential HR details, and special-category personal data (such as health).",
+    );
+    // The amounts of these four apps are in clear, as their own tables say, so no line may say
+    // that money, bank details or pay are hidden from an AI assistant for them.
+    for (const id of ["fleet", "purchase", "pos", "ecommerce"]) {
+      const app = apps.find((a) => a.id === id)!;
+      const money = app.models
+        .flatMap((m) => m.fields.map((f) => ({ ...f, model: m.name })))
+        .filter((f) => f.kind === "money" && agentViewOf(f) === "clear");
+      expect(money.length, `${id}: money fields in clear`).toBeGreaterThan(0);
+      expect(view(app).safe.join(" "), id).not.toMatch(/money|amount|bank|pay\b/i);
+    }
+  });
+
+  test("the developer part lists a delete step only for a model that has one", () => {
+    const connectors = apps.find((a) => a.id === "connectors")!;
+    const propose = (app: App) =>
+      /can only propose these steps[\s\S]*?\n\n/.exec(
+        developerBody(app, "en", messages.en, true, "", apps),
+      )?.[0] ?? "";
+    // Connectors: create, update and delete exist for three models; the log, the runs, the register
+    // and the other read-only models cannot be deleted, and a consent is kept as evidence.
+    const list = propose(connectors);
+    expect(list).toContain("`connection.delete`");
+    expect(list).toContain("`provider_policy.delete`");
+    for (const model of connectors.noDelete)
+      expect(list, model).not.toContain(`\`${model}.delete\``);
+    expect(connectors.noDelete).toContain("data_flow_log");
+    expect(connectors.noDelete).toContain("consent");
+    // An app that did not say so lists every model.
+    const crmApp = apps.find((a) => a.id === "crm")!;
+    expect(propose(crmApp)).toContain("`lead.delete`");
+  });
+
+  test("a field description the module words too strongly is corrected in the table, not the others", () => {
+    const invoicing = apps.find((a) => a.id === "invoicing")!;
+    const number = invoicing.models
+      .find((m) => m.name === "invoice")!
+      .fields.find((f) => f.name === "number")!;
+    expect(number.description).toBe(
+      "Gapless yearly number such as INV-2026-00042, assigned when the invoice is posted",
+    );
+    const total = invoicing.models
+      .find((m) => m.name === "invoice")!
+      .fields.find((f) => f.name === "total_minor")!;
+    expect(total.description).toBe("Invoice total in minor units, the sum of the lines");
   });
 });
 

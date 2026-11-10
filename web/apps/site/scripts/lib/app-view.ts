@@ -1,5 +1,5 @@
 import type { Messages } from "../../i18n/types.ts";
-import { agentView, appName, loadLabels, type App, type Model } from "./apps.ts";
+import { WITHHELD_CLASSES, agentView, appName, loadLabels, type App, type Model } from "./apps.ts";
 import { GITHUB } from "./paths.ts";
 
 /**
@@ -236,11 +236,22 @@ export function appView(app: App, m: Messages, all: App[], locale = "en"): AppVi
   });
 
   // Three short lines at most, from the same facts as the technical "agents" section: what is
-  // masked, what is withheld, and that a person approves the steps an agent can only propose.
+  // masked, what is withheld, and that a person approves the steps an agent can only propose. The
+  // withheld line names only the kinds of detail this app really withholds (the data classes of its
+  // withheld fields): an app whose amounts are in clear (an order total) must not say that money is
+  // hidden from an AI assistant.
   const fields = app.models.flatMap((model) => model.fields);
   const safe: string[] = [];
   if (fields.some((f) => agentView(f) === "masked")) safe.push(s.safeMasked);
-  if (fields.some((f) => agentView(f) === "withheld")) safe.push(s.safeWithheld);
+  const held = new Set(fields.filter((f) => agentView(f) === "withheld").map((f) => f.class));
+  if (held.size > 0)
+    safe.push(
+      fill(s.safeWithheld, {
+        list: new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(
+          WITHHELD_CLASSES.filter((c) => held.has(c)).map((c) => s.safeKinds[c]),
+        ),
+      }),
+    );
   safe.push(
     app.models.some((model) => model.actions.some((x) => x.approval))
       ? s.safeApprove

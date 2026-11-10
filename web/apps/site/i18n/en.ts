@@ -291,7 +291,7 @@ export const en: Messages = {
   apps: {
     title: "Apps",
     description:
-      "All 28 obop apps: 6 that come with obop and 22 more you can add. Open an app to see what it does.",
+      "Here are 28 obop apps: 6 that come with obop and 22 more you can add. Open an app to see what it does.",
     lead: "The apps for everyday work in a small business.",
     filterLabel: "Filter apps",
     all: "All",
@@ -415,9 +415,15 @@ export const en: Messages = {
       getNote: "You need an administrator account.",
       included: "Included in every obop.",
       experimentalNote: "Still being tested. Try it with sample data first.",
-      safeMasked: "AI assistants see only part of people's personal details.",
-      safeWithheld:
-        "AI assistants never see sensitive details, such as money amounts, bank details, pay, health data or sign-in details.",
+      safeMasked:
+        "AI assistants see names, emails and other personal details only as placeholders.",
+      safeWithheld: "AI assistants never see sensitive details. In this app: {list}.",
+      safeKinds: {
+        financial: "sensitive financial details",
+        confidential_hr: "confidential HR details",
+        special_category: "special-category personal data (such as health)",
+        secret: "secrets (such as sign-in details)",
+      },
       safeApprove:
         "Some steps an AI assistant can only propose, and a person approves them. Other steps it can take on its own, within its permissions.",
       safeApproveNone:

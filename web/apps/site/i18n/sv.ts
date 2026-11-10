@@ -296,7 +296,7 @@ export const sv: Messages = {
   apps: {
     title: "Appar",
     description:
-      "Alla 28 appar i obop: 6 som följer med obop och 22 till att lägga till. Öppna en app för att se vad den gör.",
+      "Här är 28 appar i obop: 6 som följer med obop och 22 till att lägga till. Öppna en app för att se vad den gör.",
     lead: "Apparna för det dagliga arbetet i ett litet företag.",
     filterLabel: "Filtrera appar",
     all: "Alla",
@@ -421,9 +421,15 @@ export const sv: Messages = {
       getNote: "Du behöver ett administratörskonto.",
       included: "Ingår i varje obop.",
       experimentalNote: "Testas fortfarande. Prova den först med exempeldata.",
-      safeMasked: "AI-assistenter ser bara en del av människors personuppgifter.",
-      safeWithheld:
-        "AI-assistenter ser aldrig känsliga uppgifter, till exempel belopp, bankuppgifter, löner, hälsouppgifter eller inloggningsuppgifter.",
+      safeMasked:
+        "AI-assistenter ser namn, e-postadresser och andra personuppgifter bara som platshållare.",
+      safeWithheld: "AI-assistenter ser aldrig känsliga uppgifter. I den här appen: {list}.",
+      safeKinds: {
+        financial: "känsliga finansiella uppgifter",
+        confidential_hr: "konfidentiella HR-uppgifter",
+        special_category: "särskilda kategorier av personuppgifter (till exempel hälsa)",
+        secret: "hemligheter (till exempel inloggningsuppgifter)",
+      },
       safeApprove:
         "Vissa steg kan en AI-assistent bara föreslå, och en person godkänner dem. Andra steg kan den utföra själv, inom sina behörigheter.",
       safeApproveNone:

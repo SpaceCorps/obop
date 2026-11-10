@@ -299,7 +299,7 @@ export const de: Messages = {
   apps: {
     title: "Apps",
     description:
-      "Alle 28 obop-Apps: 6 sind bei obop dabei und 22 weitere zum Hinzufügen. Öffnen Sie eine App, um zu sehen, was sie kann.",
+      "Hier sind 28 obop-Apps: 6 sind bei obop dabei und 22 weitere zum Hinzufügen. Öffnen Sie eine App, um zu sehen, was sie kann.",
     lead: "Die Apps für den Arbeitsalltag in einem kleinen Unternehmen.",
     filterLabel: "Apps filtern",
     all: "Alle",
@@ -428,9 +428,15 @@ export const de: Messages = {
       getNote: "Sie brauchen ein Administratorkonto.",
       included: "In jedem obop enthalten.",
       experimentalNote: "Noch in der Erprobung. Probieren Sie es zuerst mit Beispieldaten aus.",
-      safeMasked: "KI-Assistenten sehen nur einen Teil der persönlichen Angaben von Menschen.",
-      safeWithheld:
-        "KI-Assistenten sehen sensible Angaben nie, zum Beispiel Geldbeträge, Bankdaten, Gehälter, Gesundheitsdaten oder Zugangsdaten.",
+      safeMasked:
+        "KI-Assistenten sehen Namen, E-Mail-Adressen und andere persönliche Angaben nur als Platzhalter.",
+      safeWithheld: "KI-Assistenten sehen sensible Angaben nie. In dieser App: {list}.",
+      safeKinds: {
+        financial: "sensible Finanzangaben",
+        confidential_hr: "vertrauliche Personalangaben",
+        special_category: "besondere Kategorien personenbezogener Daten (etwa Gesundheitsdaten)",
+        secret: "Geheimnisse (etwa Zugangsdaten)",
+      },
       safeApprove:
         "Einige Schritte kann ein KI-Assistent nur vorschlagen, eine Person gibt sie frei. Andere Schritte darf er selbst ausführen, im Rahmen seiner Berechtigungen.",
       safeApproveNone:

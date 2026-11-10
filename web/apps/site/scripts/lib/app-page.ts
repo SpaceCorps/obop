@@ -153,7 +153,14 @@ export function developerBody(
       .map((f) => code(`${model.name}.${f.name}`)),
   );
   out.push(`${h2} ${a.h.agents}`, "", a.agentsCan, "");
-  const propose = [...approvals.map(code), ...app.models.map((x) => code(`${x.name}.delete`))];
+  // Every model has a delete step an AI assistant can only propose, except the few a module makes
+  // read-only (data/apps.ts `noDelete`).
+  const propose = [
+    ...approvals.map(code),
+    ...app.models
+      .filter((x) => !app.noDelete.includes(x.name))
+      .map((x) => code(`${x.name}.delete`)),
+  ];
   out.push(fill(a.agentsPropose, { list: propose.join(", ") }), "");
   if (masked.length) out.push(fill(a.agentsMasked, { list: masked.join(", ") }), "");
   if (withheld.length) out.push(fill(a.agentsWithheld, { list: withheld.join(", ") }), "");

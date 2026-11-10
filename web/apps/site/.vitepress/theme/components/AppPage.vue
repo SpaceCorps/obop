@@ -4,6 +4,7 @@ import { Content } from "vitepress";
 import type { AppView } from "../../../scripts/lib/app-view.ts";
 import { useSite } from "../composables.ts";
 import AppCards from "./AppCards.vue";
+import { softName } from "../softname.ts";
 import AppIcons from "./AppIcons.vue";
 import Icon from "./Icon.vue";
 import Tile from "./Tile.vue";
@@ -18,8 +19,9 @@ const view = computed(() => fm.value["view"] as AppView);
 const builtin = computed(() => fm.value["builtin"] === true);
 // The purpose text comes from data/apps.ts, in English: say so on translated pages.
 const en = computed(() => (locale.value === "en" ? undefined : "en"));
-// A long name (a word of 16 letters or more: Rechnungsstellung, Sähköpostimarkkinointi) is set a
-// little smaller on a phone, so it fits the line whole whether or not the browser can hyphenate.
+// A long name (a word of 16 letters or more: Rechnungsstellung, Sähköpostimarkkinointi) breaks at the
+// seams of its compound (softname.ts, a soft hyphen drawn only where the line breaks) instead of inside a
+// word, and keeps its size on a phone; beside the icon on a tablet it is set smaller (app-page.css).
 const longName = computed(() =>
   String(fm.value["title"])
     .split(/[\s-]+/)
@@ -38,7 +40,7 @@ const pathParts = (path: string) => path.split(new RegExp("(?<=/)"));
     <header class="app-hero">
       <Tile fluid :id="String(fm['appId'])" :name="String(fm['appId'])" :size="120" />
       <div class="app-hero-text">
-        <h1>{{ fm["title"] }}</h1>
+        <h1>{{ softName(String(fm["title"])) }}</h1>
         <p class="app-tagline">{{ fm["tagline"] }}</p>
         <p class="app-category">{{ view.category }}</p>
         <a class="app-primary" :href="builtin ? href('/app/') : '#get'">{{

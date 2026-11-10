@@ -4,7 +4,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { messages } from "../../../apps/site/i18n/index.ts";
-import { OVERSTATED } from "../../../apps/site/scripts/lib/claims.ts";
+import { CLAIMS } from "../../../apps/site/scripts/lib/claims.ts";
 import { TECHNICAL, technicalIn } from "../../../apps/site/scripts/lib/plain.ts";
 import { platformUrl, repoRoot, siteDir } from "../support/env.ts";
 import { expect, test, unnamedControls } from "../support/fixtures.ts";
@@ -345,14 +345,14 @@ test.describe("website without JavaScript", () => {
     ]);
     // What it is for: the first sentence large, the rest small and quiet.
     await expect(page.locator(".app-purpose")).toHaveText(
-      "Prepare invoices for your customers as drafts, then finalise each one to give it its own number, in a yearly series with no gaps.",
+      "Prepare invoices for your customers as drafts, then post each one: posting gives it its own number, in a yearly series with no gaps.",
     );
     await expect(page.locator(".app-purpose-rest")).toContainText(
-      "Finalising needs a person with the right permission",
+      "Posting needs a person with the right permission",
     );
     // What you can do: one card per workflow action, with the approval mark where it is needed.
     // The thing it works on is part of the heading, so a list of headings tells the cards apart.
-    const post = page.locator(".app-card", { hasText: "Finalise a draft invoice" });
+    const post = page.locator(".app-card", { hasText: "Post a draft invoice" });
     await expect(post.locator("h3")).toHaveText("Invoice Post");
     await expect(post.locator(".app-card-title")).toHaveText("Post");
     await expect(post).toContainText(s.needsApproval);
@@ -561,7 +561,14 @@ test.describe("website without JavaScript", () => {
       const masked = fieldBlocks.some(
         (b) => /^\s*personal_data\s*=\s*true/m.test(b) && !withheldClass.test(b),
       );
-      const withheld = fieldBlocks.some((b) => withheldClass.test(b));
+      // The kinds of detail the manifest withholds: its data classes, in the order of the table.
+      const withheldClasses = new Set(
+        fieldBlocks.flatMap((b) => {
+          const c = withheldClass.exec(b)?.[1];
+          return c ? [c] : [];
+        }),
+      );
+      const withheld = withheldClasses.size > 0;
       const version = /^version\s*=\s*"([^"]+)"/m.exec(toml)![1]!;
       // The site rates the six built-in apps beta, whatever their snapshot says (see BUILTIN_MATURITY).
       const maturity = app.builtin ? "beta" : /^maturity\s*=\s*"([^"]+)"/m.exec(toml)![1]!;
@@ -630,12 +637,31 @@ test.describe("website without JavaScript", () => {
           s.showMoreKeeps.replace("{n}", String(foldedModels)),
         );
       // AI assistants and this app: exactly the lines the manifest earns.
+      const kinds = (["financial", "confidential_hr", "special_category", "secret"] as const)
+        .filter((c) => withheldClasses.has(c))
+        .map((c) => s.safeKinds[c]);
       const lines = [
         ...(masked ? [s.safeMasked] : []),
-        ...(withheld ? [s.safeWithheld] : []),
+        ...(withheld
+          ? [
+              s.safeWithheld.replace(
+                "{list}",
+                new Intl.ListFormat("en", { style: "long", type: "conjunction" }).format(kinds),
+              ),
+            ]
+          : []),
         approvals ? s.safeApprove : s.safeApproveNone,
       ];
       await expect(page.locator(".app-safe li")).toHaveText(lines);
+      // Said out loud for the two pages: what each withholds, and nothing it does not.
+      if (app.slug === "accounting")
+        expect(lines).toContain(
+          "AI assistants never see sensitive details. In this app: sensitive financial details.",
+        );
+      if (app.slug === "connectors")
+        expect(lines).toContain(
+          "AI assistants never see sensitive details. In this app: secrets (such as sign-in details).",
+        );
       // Works with: a link for each dependency that is an app of its own.
       if (deps.includes("base"))
         await expect(
@@ -1321,15 +1347,26 @@ test.describe("crawlers and agents", () => {
     // why a card that corrects one is English.)
     const urls = (await pagesOf(request, "en")).filter((u) => /^\/apps\/.+\/$/.test(u));
     expect(urls).toHaveLength(28);
-    expect(OVERSTATED.length).toBeGreaterThan(15);
-    // The test can fail: a sentence of the list is found in a text that has it.
-    expect("Close the period against further posting.").toMatch(OVERSTATED[4]![0]);
+    // The list is pinned, and every row can fail: it catches the sentence it was written for and
+    // leaves alone the true sentences that stand where it was (claims.ts).
+    expect(CLAIMS).toHaveLength(33);
+    for (const { re, example, fine, why } of CLAIMS) {
+      expect(example, `${re}: ${why}`).toMatch(re);
+      for (const ok of fine ?? []) expect(ok, `${re} must leave this alone`).not.toMatch(re);
+    }
     const texts = (await Promise.all(
       urls.map(async (u) => [
         u,
         await (await request.get(`${base()}${u.replace(/\/$/, "")}.md`)).text(),
       ]),
     )) as [string, string][];
+    // The index holds the lead of the index, and llms.txt, which agents read first, repeats it (its
+    // other sentences, about agents and approval, are the site's own and are not what the list is for).
+    texts.push(["/apps.md", await (await request.get(`${base()}/apps.md`)).text()]);
+    const all28 = CLAIMS.find((c) => c.re.source.includes("All 28"))!;
+    expect(await (await request.get(`${base()}/llms.txt`)).text(), "llms.txt").not.toMatch(
+      all28.re,
+    );
     // llms-full.txt, which agents read, holds every page of the site: the app pages are its sections
     // that have "What it is for" (the changelog and the docs may use the same words for other things).
     const full = (await (await request.get(`${base()}/llms-full.txt`)).text())
@@ -1338,12 +1375,52 @@ test.describe("crawlers and agents", () => {
     expect(full.length, "app sections in llms-full.txt").toBeGreaterThanOrEqual(28);
     full.forEach((section, i) => texts.push([`/llms-full.txt (app section ${i + 1})`, section]));
     for (const [url, text] of texts)
-      for (const [bad, why] of OVERSTATED) expect(text, `${url} ${bad}: ${why}`).not.toMatch(bad);
+      for (const { re, why } of CLAIMS) expect(text, `${url} ${re}: ${why}`).not.toMatch(re);
     // And the HTML of the pages that carried the worst of them says what is true.
     const html = await (await request.get(`${base()}/apps/accounting/`)).text();
     expect(html).toContain("This is a label only: entries can still be posted into it.");
     expect(await (await request.get(`${base()}/apps/purchase/`)).text()).toContain(
-      "obop does not contact the vendor.",
+      "By itself, this does not contact the vendor.",
+    );
+  });
+
+  test("the line about what an AI assistant never sees names only what the app withholds, and the log is not said to be append-only", async ({
+    request,
+  }) => {
+    // Money is in clear on these four pages (a vehicle's cost, an order total, a sale's amounts: their
+    // data class is none), so none of them may say that money, bank details or pay are hidden.
+    const line = async (slug: string) => {
+      const md = await (await request.get(`${base()}/apps/${slug}.md`)).text();
+      return /^- (AI assistants never see sensitive details\..*)$/m.exec(md)?.[1] ?? "";
+    };
+    expect(await line("fleet")).toBe(
+      "AI assistants never see sensitive details. In this app: confidential HR details.",
+    );
+    expect(await line("purchase")).toBe(
+      "AI assistants never see sensitive details. In this app: sensitive financial details.",
+    );
+    expect(await line("pos")).toContain("sensitive financial details");
+    expect(await line("ecommerce")).toBe(
+      "AI assistants never see sensitive details. In this app: sensitive financial details and secrets (such as sign-in details).",
+    );
+    for (const slug of ["fleet", "purchase", "pos", "ecommerce"])
+      expect(await line(slug), slug).not.toMatch(/money|amount|bank|\bpay\b/i);
+    // An app that withholds nothing says nothing of the kind.
+    expect(await line("crm")).toBe("");
+    // The transfer log is deleted by the purge, and the technical part lists no delete for a model
+    // that has none.
+    const connectors = await (await request.get(`${base()}/apps/connectors.md`)).text();
+    expect(connectors).toContain("not edited by people");
+    expect(connectors).toContain("`connection.delete`");
+    for (const model of ["data_flow_log", "sync_run", "consent", "egress_policy"])
+      expect(connectors, model).not.toContain(`\`${model}.delete\``);
+    // The contact's erase says what else it reaches.
+    expect(await (await request.get(`${base()}/apps/contacts.md`)).text()).toContain(
+      "The Connectors app also deletes the code names and links it kept for this contact.",
+    );
+    // A planning manager records the confirmation: the employee does not.
+    expect(await (await request.get(`${base()}/apps/planning.md`)).text()).toContain(
+      "Only a planning manager can do this.",
     );
   });
 
@@ -1889,6 +1966,39 @@ test.describe("accessibility", () => {
     }
   });
 
+  test("a long page name carries the seams of its compound, keeps its size, and is still the plain name to a reader", async ({
+    page,
+    request,
+  }) => {
+    // The index had soft hyphens at the seams of these names; the page's own name did not, so at 150
+    // and 200 percent text on a phone it was cut inside a word ("Sähköpostimarkkinoin" / "ti", "E-" /
+    // "postmarkn" / "adsföring") and set smaller than the section headings could follow.
+    await page.setViewportSize({ width: 320, height: 800 });
+    for (const [path, name] of [
+      ["/de/apps/invoicing/", "Rechnungsstellung"],
+      ["/fi/apps/email-marketing/", "Sähköpostimarkkinointi"],
+      ["/fi/apps/inventory/", "Varastonhallinta"],
+      ["/sv/apps/email-marketing/", "E-postmarknadsföring"],
+      ["/sv/apps/dashboards/", "Instrumentpaneler"],
+    ] as const) {
+      await page.goto(`${base()}${path}`);
+      const h1 = page.locator(".app-hero h1");
+      const text = (await h1.textContent())!;
+      expect(text, `${path}: soft hyphens at the seams`).toContain("\u00ad");
+      expect(text.replaceAll("\u00ad", ""), `${path}: nothing but soft hyphens added`).toBe(name);
+      // The name is not set smaller on a phone: it is the same size as any other page's.
+      expect(
+        parseFloat(await h1.evaluate((el) => getComputedStyle(el).fontSize)),
+        `${path}: the name's size`,
+      ).toBeGreaterThanOrEqual(30);
+      // The title, the Markdown copy and the search index keep the plain name.
+      expect(await page.title(), `${path}: title`).toContain(name);
+      const md = await (await request.get(`${base()}${path.replace(/\/$/, "")}.md`)).text();
+      expect(md, `${path}: the Markdown copy`).toContain(`title: "${name}`);
+      expect(md, `${path}: the Markdown copy has no soft hyphen`).not.toContain("\u00ad");
+    }
+  });
+
   test("every text on the apps pages keeps 4.5:1 or better, in both colour schemes and when hovered", async ({
     page,
   }) => {
@@ -2057,6 +2167,10 @@ test.describe("accessibility", () => {
         h2: of(".app-page h2", "breakAfter"),
         h3: of(".app-dev .prose h3", "breakAfter"),
         h4: of(".app-dev .prose h4", "breakAfter"),
+        // The description and the "Read group" line of a model, which stay with its table (they were
+        // left at the foot of a sheet, with the table on the next), and the lines under "Permission groups".
+        underModel: of(".app-dev .prose h4 + p, .app-dev .prose h4 + p + p", "breakAfter"),
+        underHeading: of(".app-dev .prose h3 + p, .app-dev .prose h3 + p + p", "breakAfter"),
       };
     });
     for (const [name, r] of Object.entries(asked)) {
@@ -2411,6 +2525,13 @@ test.describe("accessibility", () => {
                 Math.max(...size.headings),
                 `${where}: the largest section heading`,
               ).toBeLessThan(size.name);
+              // And visibly so on an app page up to 150 percent text: a long name was set smaller on a
+              // phone and was 3 percent larger than the headings (24.3 px against 23.6) at 100 percent.
+              if (path !== "/apps/" && percent <= 150)
+                expect(
+                  size.name,
+                  `${where}: the name is clearly larger than the section headings`,
+                ).toBeGreaterThanOrEqual(Math.max(...size.headings) * 1.15);
               expect(size.lead, `${where}: the large sentence`).toBeLessThanOrEqual(size.name);
               expect(size.tagline, `${where}: the tagline`).toBeLessThanOrEqual(size.name);
               // A card title is under the heading of its section (it was larger at 125 percent on a 320 px
@@ -2513,8 +2634,16 @@ test.describe("accessibility", () => {
             });
             expect(m.lines, `${where}: lines of the command`).toBeLessThanOrEqual(8);
             expect(m.onButton, `${where}: the command runs under the copy button`).toBe(false);
-            const { cut } = await brokenWords(page, ".app-getbox pre code", true);
-            expect(cut, `${where}: a word of the command that fits is cut`).toEqual([]);
+            // Not `allowWide`: the command is an inline element, which has no width of its own, so every
+            // word looked wider than "its box" and none was ever reported. The box is the line of the
+            // block, and a word of up to 12 letters (obop, modules, install-from, most slugs) must fit it.
+            const { cut } = await brokenWords(page, ".app-getbox pre code");
+            expect(
+              cut.filter((c) => c.split(" ")[0]!.length <= 12),
+              `${where}: a word of the command is cut`,
+            ).toEqual([]);
+            const lead = await brokenWords(page, ".app-getbox p", true);
+            expect(lead.cut, `${where}: a word of the sentences in the box is cut`).toEqual([]);
           }
         } finally {
           await context.close();
@@ -2532,20 +2661,17 @@ test.describe("accessibility", () => {
       // low rem floor), so a word that fits stays whole; a word wider than the column even at the
       // smallest size a heading may have cannot be kept whole by any size and breaks at the column's
       // edge. Those words are listed here, and nothing else may be on the list. (Hyphenation is
-      // switched off, so that the result is the same on every browser.)
+      // switched off, so that the result is the same on every browser.) The list is empty: the five
+      // long page names carry the seams of their compound (softname.ts), like the names on the index, so
+      // the browser breaks them at a joint, with a hyphen, and never inside a word; they were on this
+      // list at 150 and 200 percent text, and the headings are no wider than a column at any size.
       const widest: Record<string, string[]> = {
         "125@320": [],
         "125@375": [],
         "150@375": [],
-        "150@320": ["Sähköpostimarkkinointi"],
-        "200@375": ["Sähköpostimarkkinointi", "postmarknadsföring"],
-        "200@320": [
-          "Rechnungsstellung",
-          "Varastonhallinta",
-          "Sähköpostimarkkinointi",
-          "postmarknadsföring",
-          "Instrumentpaneler",
-        ],
+        "150@320": [],
+        "200@375": [],
+        "200@320": [],
       };
       const seen: Record<string, Set<string>> = Object.fromEntries(
         Object.keys(widest).map((k) => [k, new Set<string>()]),
@@ -2582,8 +2708,19 @@ test.describe("accessibility", () => {
           const extra = [...seen[key]!].filter((w) => !allowed.includes(w));
           expect(extra, `${key}: words wider than the column that are not on the list`).toEqual([]);
         }
-        // Not vacuous: at 200 percent on the narrowest phone some word really is wider than its column.
-        expect(seen["200@320"]!.size).toBeGreaterThan(3);
+        // Not vacuous: the measurement can fail. Without its seams the longest name is wider than its
+        // column at 200 percent on the narrowest phone, and the test sees it (the page name used to be
+        // drawn so).
+        const { page: probe } = sizes.get(200)!;
+        await probe.setViewportSize({ width: 320, height: 900 });
+        await probe.goto(`${base()}/de/apps/invoicing/`, { waitUntil: "domcontentloaded" });
+        await probe.addStyleTag({ content: "* { hyphens: manual !important; }" });
+        await probe.evaluate(() => {
+          const h1 = document.querySelector(".app-hero h1")!;
+          h1.textContent = (h1.textContent ?? "").replaceAll("­", "");
+        });
+        const bare = await brokenWords(probe, ".app-hero h1", true);
+        expect(bare.wideWords, "the name without its seams").toEqual(["Rechnungsstellung"]);
       } finally {
         for (const { context } of sizes.values()) await context.close();
       }
@@ -2744,6 +2881,50 @@ test.describe("accessibility", () => {
       // Not vacuous: there are cards, and some word really is wider than its card.
       expect(cards).toBeGreaterThan(1000);
       expect(wide, "words wider than their card, which the test allows to break").toBeGreaterThan(
+        0,
+      );
+    });
+
+    test("the AI list, the card titles and the card text keep every word that fits whole at a large text size on a phone", async ({
+      browser,
+      request,
+    }) => {
+      // The lines about AI assistants sat beside an icon, and the box round them was in rem: at 200
+      // percent text on a 320 px phone the line had 158 of the box's 256 px, and English words that fit
+      // the box ("assistants", "placeholders", "permissions") were cut inside ("assista" / "nts"). A card
+      // title ("statement") was cut the same way. Hyphenation is switched off (English has none anyway,
+      // so what is measured is what a visitor sees), every fold is open, and a word wider than the
+      // whole line may still break: nothing can keep it whole.
+      let items = 0;
+      let wide = 0;
+      for (const [width, percent] of [
+        [320, 200],
+        [375, 200],
+        [320, 150],
+        [320, 125],
+      ] as const) {
+        const { page, context } = await pageWithTextSize(browser, percent, { width, height: 900 });
+        try {
+          for (const url of (await pagesOf(request, "en")).filter((u) => /\/apps\/.+\/$/.test(u))) {
+            await page.goto(`${base()}${url}`, { waitUntil: "domcontentloaded" });
+            await page.addStyleTag({ content: "* { hyphens: manual !important; }" });
+            await page.evaluate(() =>
+              document
+                .querySelectorAll("main details")
+                .forEach((d) => ((d as HTMLDetailsElement).open = true)),
+            );
+            const r = await brokenWords(page, ".app-safe li, .app-card h3, .app-card-text", true);
+            expect(r.cut, `${url} at ${width}px with ${percent}% text`).toEqual([]);
+            wide += r.wide;
+            items += await page.locator(".app-safe li, .app-card").count();
+          }
+        } finally {
+          await context.close();
+        }
+      }
+      // Not vacuous: there are lines and cards in numbers, and some word really is wider than its line.
+      expect(items).toBeGreaterThan(1000);
+      expect(wide, "words wider than their line, which the test allows to break").toBeGreaterThan(
         0,
       );
     });

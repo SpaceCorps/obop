@@ -10,8 +10,9 @@
    * tagline are never larger than the name, at any text size (at 150 percent they were: the heading
    * rule shrank less than the name's did). 2.25rem, less on a narrow screen; the 1.15rem floor keeps
    * "Manufacturing" whole in a 256 px column at 200 percent. The sizes are derived from --h1-base,
-   * which every page has; --h1 is the name's own size, smaller for a long name (see AppPage.vue), and
-   * a heading is also kept under it.
+   * which every page has; --h1 is the name's own size, and a heading is also kept under it. A long name
+   * keeps its size on a phone: it breaks at the seams of its compound (softname.ts) instead of being set
+   * smaller, which had left the name no larger than the section headings.
    */
   --h1-base: clamp(1.15rem, 9.6vw, 2.25rem);
   --h1: var(--h1-base);
@@ -137,12 +138,6 @@
 .app-primary:hover,
 .app-pill:hover {
   filter: brightness(1.08);
-}
-/* A long name (a word of 16 letters or more, marked by the page) is set a little smaller on a phone; the headings follow it. */
-@media (max-width: 39.99rem) {
-  .app-page.app-long {
-    --h1: clamp(1.125rem, 7.6vw, 2rem);
-  }
 }
 /* Beside the icon on a medium screen the column is narrower than the line a long name needs. */
 @media (min-width: 48rem) {
@@ -325,7 +320,8 @@
   flex-direction: column;
   gap: var(--space-1);
   min-inline-size: 0;
-  padding: var(--space-5) var(--space-6);
+  /* The room round the text is in rem, so at 200 percent on a 320 px phone it was 80 of the card's 256 px: a vw ceiling keeps the column. */
+  padding: min(var(--space-5), 5vw) min(var(--space-6), 5vw);
   border: var(--st-hair);
   border-radius: var(--st-radius);
   background: var(--surface);
@@ -452,10 +448,12 @@
   display: none;
 }
 
-/* Safe with AI agents: up to three short lines. */
+/* The AI assistants and this app: up to three short lines. */
 .app-safe {
+  /* Asks its own width (in rem, so a larger text size asks for more room), see the container rule below. */
+  container-type: inline-size;
   margin: 0;
-  padding: var(--space-2) var(--space-6);
+  padding: var(--space-2) min(var(--space-6), 5vw);
   border: var(--st-hair);
   border-radius: var(--st-radius);
   background: var(--surface);
@@ -464,7 +462,7 @@
 .app-safe li {
   display: flex;
   align-items: flex-start;
-  gap: var(--space-3);
+  gap: min(var(--space-3), 3vw);
   padding-block: var(--space-4);
   /* A long German word at a large text size breaks instead of pushing the line off the screen. */
   overflow-wrap: anywhere;
@@ -476,6 +474,17 @@
   flex: none;
   margin-block-start: 0.1rem;
   color: var(--text-muted);
+}
+/*
+ * Where the box is narrow in rem (a large text size on a phone: 7 rem at 200 percent on 320 px) the icon
+ * sits above the line instead of beside it, so the line has the whole width: beside the icon an English
+ * word that fits the box ("placeholders", "permissions") did not fit what was left and was cut.
+ */
+@container (width < 12rem) {
+  .app-safe li {
+    flex-direction: column;
+    gap: var(--space-2);
+  }
 }
 
 /*
@@ -573,7 +582,8 @@
 .app-getbox {
   /* The command below asks how much room the box has, in rem, so a larger text size asks for more. */
   container-type: inline-size;
-  padding: var(--space-6);
+  /* In rem the room round the text left 110 of 254 px for the command at 200 percent on a 320 px phone; a vw ceiling keeps it. */
+  padding: min(var(--space-6), 5vw);
   border: var(--st-hair);
   border-radius: var(--st-radius);
   background: var(--surface);
@@ -619,7 +629,7 @@
 }
 @media (max-width: 39.99rem) {
   .app-getbox {
-    padding: var(--space-5);
+    padding: min(var(--space-5), 5vw);
   }
 }
 /*
@@ -630,7 +640,7 @@
  */
 @container (width < 24rem) {
   .app-getbox div[class*="language-"] pre {
-    padding-inline: var(--space-4);
+    padding-inline: min(var(--space-4), 3vw);
     padding-block-end: 3.75rem;
   }
   .app-getbox div[class*="language-"] button.copy {
@@ -721,6 +731,16 @@
   .app-page h2,
   .app-dev .prose h3,
   .app-dev .prose h4 {
+    break-after: avoid;
+  }
+  /*
+   * A heading is kept with the two lines under it, which in turn are kept with the table or the list
+   * they introduce: a model heading, its description and its "Read group" line were left at the foot of
+   * a sheet while the table began on the next. (On a translated page the description is inside a
+   * `.en-note`.)
+   */
+  .app-dev .prose :is(h3, h4) + :is(p, .en-note),
+  .app-dev .prose :is(h3, h4) + :is(p, .en-note) + :is(p, .en-note) {
     break-after: avoid;
   }
   /* A printed page keeps the technical part: the folds print open, so their buttons are not printed. */

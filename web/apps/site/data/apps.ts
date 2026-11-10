@@ -44,6 +44,15 @@ export interface AppCopy {
   packageText?: string;
   /** The same for the description of one model in the technical part, by model name. */
   modelText?: Record<string, string>;
+  /** The same for the description of one field in the technical tables, by `model.field`. */
+  fieldText?: Record<string, string>;
+  /**
+   * Models that have no `delete` command, by model name. The technical part lists `model.delete` among
+   * the steps an AI assistant can only propose, for every model, which is right where the module
+   * generates the command; a module that makes a model read-only (or refuses the delete) lists it here
+   * so the page does not name a command that is not there.
+   */
+  noDelete?: string[];
 }
 
 export interface CardCopy {
@@ -69,7 +78,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Sales",
     tagline: "Quotations and orders",
     purpose:
-      "Write quotes for customers and turn them into confirmed orders. Each order belongs to a contact and has lines, a total and a currency. Confirming an order prepares a draft invoice with the same lines, for Invoicing to finalise. The person who confirms also needs access to Invoicing.",
+      "Write quotes for customers and turn them into confirmed orders. Each order belongs to a contact and has lines, a total and a currency. Confirming an order prepares a draft invoice with the same lines, for Invoicing to post. The person who confirms also needs access to Invoicing.",
   },
   {
     id: "invoicing",
@@ -77,23 +86,30 @@ export const APP_COPY: AppCopy[] = [
     name: "Invoicing",
     tagline: "Bill your customers",
     purpose:
-      "Prepare invoices for your customers as drafts, then finalise each one to give it its own number, in a yearly series with no gaps. Finalising needs a person with the right permission: an AI assistant can prepare the draft and propose finalising it, but cannot finalise it.",
+      "Prepare invoices for your customers as drafts, then post each one: posting gives it its own number, in a yearly series with no gaps. Posting needs a person with the right permission: an AI assistant can prepare the draft and propose posting it, but cannot post it.",
     cards: {
       invoice: {
         text: "A customer invoice: its lines, a total that adds them up, and a number once it is posted.",
       },
       "invoice.post": {
-        text: "Finalise a draft invoice and give it its next number in the yearly series.",
+        text: "Post a draft invoice and give it its next number in the yearly series. Refused if the invoice has no amount.",
       },
     },
     // The module says "posted invoices are corrected only by credit notes" (crates/modules/invoicing/src/lib.rs:17):
     // there is no credit note in the module, and nothing locks a posted invoice's fields. What holds is
-    // that no action leaves "posted". Its package text says "legal number"; the module gives a gapless
-    // number of the year and makes no claim about the law.
+    // that no action leaves "posted" (lib.rs:72-85 is the whole list of actions: post, cancel). The
+    // module's number field says "legal number" (lib.rs:64) and its post action "assign its legal
+    // number" (lib.rs:75): the module gives a gapless number of the year (lib.rs:69-70,
+    // `.sequence(.., true, Reset::Year).assign_on("post")`) and makes no claim about the law, so the
+    // site says that. A post is refused for an invoice with no amount (lib.rs:79-82).
     packageText:
       "Customer invoices with lines: drafts, posting with a gapless yearly number, cancellation.",
     modelText: {
       invoice: "A customer invoice. A posted invoice cannot go back to draft.",
+    },
+    fieldText: {
+      "invoice.number":
+        "Gapless yearly number such as INV-2026-00042, assigned when the invoice is posted",
     },
   },
   {
@@ -110,7 +126,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Contacts",
     tagline: "People and companies",
     purpose:
-      "One record for every person and company you deal with, used by Sales, Invoicing, Purchase and other apps. Names and email addresses are personal data, so AI assistants see only part of them, and the tax number is kept from them completely. A separate erase step, for the privacy officer role, replaces a contact's details with [erased].",
+      "One record for every person and company you deal with, used by Sales, Invoicing, Purchase and other apps. Names and email addresses are personal data, so AI assistants see them only as placeholders, and the tax number is kept from them completely. A separate erase step, for the privacy officer role, replaces a contact's details with [erased].",
     technical:
       "The erase action anonymises a contact in place and is gated by approval. Names and emails are masked for agents; the tax identifier is withheld.",
     modelNames: {
@@ -118,9 +134,16 @@ export const APP_COPY: AppCopy[] = [
     },
     cards: {
       "party.erase": {
-        text: "Replace a contact's name, email, tax number and notes with [erased], and remove the photo. Copies in other apps are not touched.",
+        text: "Replace a contact's name, email, tax number and notes with [erased], and remove the photo. The Connectors app also deletes the code names and links it kept for this contact. Names typed into other records, such as a lead's contact name, are not changed.",
       },
     },
+    // The erase sets name, email, tax_id and notes to "[erased]" and clears the photo
+    // (crates/modules/base/src/lib.rs:97-103). The Connectors module, which is built in, listens for
+    // party.erase (crates/modules/connectors/src/lib.rs:28, crates/kernel/obop-connectors/src/runtime.rs:1391-1416)
+    // and deletes the pseudonym, sealed-value and external-id entries of "party:<id>"
+    // (obop-connectors/src/egress.rs:643-693). Nothing else reacts to the command (a search for
+    // "party.erase" in crates/ finds only those two, the error tests and the CLI test), and a lead keeps
+    // its contact name and email as plain text with no reference to a contact (crates/modules/crm/src/lib.rs:26-39).
   },
   {
     id: "connectors",
@@ -158,7 +181,7 @@ export const APP_COPY: AppCopy[] = [
         text: "The reason for sharing recorded for a connection: who, why, which kinds of data, and whether it was withdrawn.",
       },
       data_flow_log: {
-        text: "A record of every transfer that is only ever added to: when, what, how many, which details, how they were treated, and a fingerprint of the content. Never the content itself.",
+        text: "A record of every transfer, written by obop and not edited by people: when, what, how many, which details, how they were treated, and a fingerprint of the content. Never the content itself. Entries older than the retention period are removed by the purge.",
       },
       processing_register: {
         text: "A generated list of what each connection processes, as a starting point for your own record of processing under GDPR; exportable as CSV.",
@@ -170,6 +193,30 @@ export const APP_COPY: AppCopy[] = [
         text: "What a sample record looks like after the privacy rules, so you can check it before anything is sent.",
       },
     },
+    // The module calls the log "Append-only" (crates/modules/connectors/src/meta.rs:233, snapshot in
+    // data/builtin/connectors.toml), but the purge deletes its rows once they are older than the
+    // retention of their connection (egress_policy.purge, crates/modules/connectors/src/handlers.rs:736-747,
+    // calls Runtime::purge, crates/kernel/obop-connectors/src/runtime.rs:1455-1493, which deletes FLOW_LOG
+    // and SYNC_RUN rows at line 1483). Nobody edits the log: the module registers it read-only
+    // (handlers.rs:532-542; crates/kernel/obop-commands/src/store.rs:358-371 gives such a model its reads,
+    // list and search, and nothing that writes).
+    modelText: {
+      data_flow_log:
+        "Record of every flow, written by obop and not edited by people: when, what, how many, which fields, how treated, and a hash of the payload; never the payload. The purge removes entries older than the retention of their connection.",
+    },
+    // The module generates create, update and delete for three models only (connection, provider_policy,
+    // consent: handlers.rs:528-531); the other six are read-only (handlers.rs:532-542), and consent.delete
+    // is generated but always refused ("consent records are kept as evidence and cannot be deleted",
+    // crates/modules/connectors/src/guards.rs:696-698).
+    noDelete: [
+      "connector_provider",
+      "sync_run",
+      "data_flow_log",
+      "consent",
+      "processing_register",
+      "egress_policy",
+      "privacy_preview",
+    ],
   },
   {
     id: "projects",
@@ -185,7 +232,11 @@ export const APP_COPY: AppCopy[] = [
     name: "Helpdesk",
     tagline: "Support tickets",
     purpose:
-      "Keep customer support requests and work through them, with priorities and response-time targets. A typical use is an AI assistant that reads new tickets and drafts a first assessment, while people keep ownership of the replies.",
+      "Keep customer support requests and work through them, with priorities and response-time targets. An AI assistant can read new tickets and set their category and priority, within its permissions. Closing a ticket is a manager's step that an AI assistant can only propose.",
+    // Category and priority are fields of a ticket that the ticket's write group may set
+    // (packages/helpdesk.toml:94-107, model at 57-60); closing is for helpdesk.manager and needs approval
+    // (packages/helpdesk.toml:178-186). The module holds no assessment and no reply: a ticket has a
+    // description, a resolution and dates, and nothing drafts text.
     modelNames: {
       helpdesk_sla: "Response times",
     },
@@ -228,13 +279,13 @@ export const APP_COPY: AppCopy[] = [
       "Keep your vendors and the purchase orders you place with them, with order lines and a flow from draft to received. The order total is added up from its lines.",
     cards: {
       "purchase_order.send": {
-        text: "Mark the order as sent to the vendor. obop does not contact the vendor.",
+        text: "Mark the order as sent to the vendor. By itself, this does not contact the vendor.",
       },
       "purchase_order.confirm": {
-        text: "Mark the order as confirmed with the vendor. obop does not contact the vendor.",
+        text: "Mark the order as confirmed with the vendor. By itself, this does not contact the vendor.",
       },
       "purchase_order.receive": {
-        text: "Record that the goods arrived. A draft stock move is prepared for each line, for the warehouse to confirm. Needs permission to use Inventory.",
+        text: "Record that the goods arrived. If the order has a receiving location, a draft stock move is prepared for each line, for the warehouse to confirm, and you need permission to use Inventory.",
       },
     },
   },
@@ -272,7 +323,25 @@ export const APP_COPY: AppCopy[] = [
     name: "Planning",
     tagline: "Shifts and resources",
     purpose:
-      "Plan shifts for your employees from reusable templates. A shift with nobody assigned is an open shift; it goes from open to published, and then the employee confirms it.",
+      "Plan shifts for your employees. A shift with nobody assigned is an open shift; it goes from open to published, and then a manager records that the employee confirmed it. Templates hold shift patterns to copy into shifts.",
+    cards: {
+      "planning_shift.publish": {
+        text: "Mark the shift as published. By itself, this does not notify anyone: everyone who can read shifts sees every shift, published or not.",
+      },
+      "planning_shift.confirm": {
+        text: "Record that the employee confirmed they will work the shift. Only a planning manager can do this.",
+      },
+    },
+    // The manifest says the employee confirms ("Workflow: open, published, confirmed by the employee",
+    // packages/planning.toml:5; confirm: "The employee confirms they will work the shift", :150), but
+    // confirm (name at :149) has no group of its own, so it takes the model's write group planning.manager
+    // (:74; the rule is a.group.unwrap_or(&m.write_group), crates/kernel/obop-pkg/src/manifest.rs:1793):
+    // an employee with only planning.user cannot run it. Publish (:133) and unpublish (:141) are
+    // planning.manager too and have no effect, no notification and no visibility rule: planning_shift
+    // has one read group, planning.user (:73), and no [model.access]. Nothing in crates/ or
+    // web/apps/backoffice/src refers to planning_template, so a shift is not made from a template.
+    packageText:
+      "Shifts for employees, with roles and shift templates (patterns to copy into shifts). A shift has a day and a start and end in minutes since midnight (0 to 1439; 540 is 09:00). A shift with no employee is an open shift. Workflow: open, published, confirmed; a planning manager moves a shift through all three steps. Needs the Human Resources package.",
   },
   {
     id: "field_service",
@@ -302,7 +371,7 @@ export const APP_COPY: AppCopy[] = [
         text: "Mark the sale as fully paid. Refused until the payments cover the total. If the sale has a stock location, a draft record of the goods leaving is prepared for each line, for the warehouse to confirm. You need access to Inventory.",
       },
       "pos_order.refund": {
-        text: "Record that the sale was refunded. obop does not pay money back.",
+        text: "Record that the sale was refunded. By itself, this does not pay money back.",
       },
     },
   },
@@ -338,7 +407,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Email Marketing",
     tagline: "Campaigns",
     purpose:
-      "Keep mailing lists with each contact's consent status and date, and prepare campaigns. Emails are not sent by obop: marking a campaign as sent only records that it went out.",
+      "Keep mailing lists with each contact's consent status and date, and prepare campaigns. Marking a campaign as sent only records that it went out; obop does not send the emails itself.",
     // The package text says "Sending is irreversible and reaches real people, so it needs a human
     // approval" (packages/email_marketing.toml:5). Nothing in the repository sends an email: the
     // action marks the campaign as sent. The rest of the text is the manifest's, word for word.
@@ -346,10 +415,10 @@ export const APP_COPY: AppCopy[] = [
       "Mailing lists, the contacts on them with their consent status and date, and campaigns with a draft, scheduled, sent flow. Marking a campaign as sent needs a manager, and agents may only propose it; obop does not send the emails itself. Campaign statistics are numbers entered or imported, not computed. Contacts are personal data: keep consent_status and consent_date accurate and never mail a contact that is not opted_in.",
     cards: {
       email_marketing_campaign: {
-        text: "One mailing to a list: its subject, sender, content and the day it should go out. obop does not send it.",
+        text: "One mailing to a list: its subject, sender, content and the day it should go out. By itself, obop does not send it.",
       },
       "email_marketing_campaign.schedule": {
-        text: "Mark the campaign as scheduled for its day. obop does not send it.",
+        text: "Mark the campaign as scheduled for its day. By itself, this does not send it.",
       },
       "email_marketing_campaign.send": {
         text: "Record that the scheduled campaign has been sent (manager only). obop does not send the emails itself.",
@@ -381,7 +450,7 @@ export const APP_COPY: AppCopy[] = [
     },
     cards: {
       "sign_request.send": {
-        text: "Mark the request as sent. obop does not email the signer.",
+        text: "Mark the request as sent. By itself, this does not email the signer.",
       },
       "sign_request.send_document": {
         text: "Send a request about a PDF stored in Documents. obop keeps an exact copy for the signer to read. Then create the signing link.",
@@ -400,7 +469,7 @@ export const APP_COPY: AppCopy[] = [
       "Define recurring plans and follow your customers' subscriptions, from trial to cancelled. A subscription is in trial, active, past due or cancelled, and has the date of its next invoice. It does not create invoices by itself.",
     cards: {
       "subscriptions_subscription.activate": {
-        text: "Mark the subscription as active when the trial ends. obop does not start any billing.",
+        text: "Mark the subscription as active when the trial ends. By itself, this does not start any billing.",
       },
     },
   },
@@ -431,7 +500,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Accounting",
     tagline: "Ledger and journals",
     purpose:
-      "Record what your business earns and spends, and finalise each entry in the ledger. An entry is a set of debit and credit lines, finalised only when the totals match. Closing a month or year is only a label; it does not stop new entries. Tax amounts are typed in by hand.",
+      "Record what your business earns and spends, and post each entry to the ledger. An entry is a set of debit and credit lines, posted only when the totals match. Closing a month or year is only a label; it does not stop new entries. Tax amounts are typed in by hand.",
     modelNames: {
       accounting_move: "Journal entry",
       accounting_move_line: "Journal entry line",
@@ -450,7 +519,7 @@ export const APP_COPY: AppCopy[] = [
         text: "Mark a closed period as open again.",
       },
       "accounting_move.post": {
-        text: "Finalise a draft entry in the ledger and give it its next number. Refused unless the debits equal the credits.",
+        text: "Post a draft entry to the ledger and give it its next number. Refused unless the debits equal the credits.",
       },
       "accounting_move.reverse": {
         text: "Mark a posted entry as reversed. The opposite entry is booked separately.",

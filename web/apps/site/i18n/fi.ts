@@ -299,7 +299,7 @@ export const fi: Messages = {
   apps: {
     title: "Sovellukset",
     description:
-      "Kaikki 28 obop-sovellusta: 6 tulee obopin mukana ja 22 muuta, jotka voit ottaa käyttöön. Avaa sovellus nähdäksesi, mitä se tekee.",
+      "Tässä 28 obop-sovellusta: 6 tulee obopin mukana ja 22 muuta, jotka voit ottaa käyttöön. Avaa sovellus nähdäksesi, mitä se tekee.",
     lead: "Sovellukset pienyrityksen arkeen.",
     filterLabel: "Suodata sovelluksia",
     all: "Kaikki",
@@ -431,9 +431,16 @@ export const fi: Messages = {
       getNote: "Tarvitset ylläpitäjän tunnuksen.",
       included: "Sisältyy jokaiseen obopiin.",
       experimentalNote: "Vielä testauksessa. Kokeile sitä ensin esimerkkitiedoilla.",
-      safeMasked: "Tekoälyavustajat näkevät vain osan ihmisten henkilötiedoista.",
+      safeMasked:
+        "Tekoälyavustajat näkevät nimet, sähköpostiosoitteet ja muut henkilötiedot vain paikkamerkkeinä.",
       safeWithheld:
-        "Tekoälyavustajat eivät koskaan näe arkaluonteisia tietoja, kuten rahamääriä, pankkitietoja, palkkoja, terveystietoja tai kirjautumistietoja.",
+        "Tekoälyavustajat eivät koskaan näe arkaluonteisia tietoja. Tässä sovelluksessa: {list}.",
+      safeKinds: {
+        financial: "arkaluonteiset taloustiedot",
+        confidential_hr: "luottamukselliset henkilöstötiedot",
+        special_category: "erityiset henkilötietoryhmät (esimerkiksi terveystiedot)",
+        secret: "salaisuudet (esimerkiksi kirjautumistiedot)",
+      },
       safeApprove:
         "Joitakin vaiheita tekoälyavustaja voi vain ehdottaa, ja henkilö hyväksyy ne. Muut vaiheet se voi tehdä itse, oikeuksiensa rajoissa.",
       safeApproveNone:

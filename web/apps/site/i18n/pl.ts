@@ -296,7 +296,7 @@ export const pl: Messages = {
   apps: {
     title: "Aplikacje",
     description:
-      "Wszystkie 28 aplikacji obop: 6 w zestawie z obop i 22 kolejne do dodania. Otwórz aplikację, aby zobaczyć, co robi.",
+      "Oto 28 aplikacji obop: 6 w zestawie z obop i 22 kolejne do dodania. Otwórz aplikację, aby zobaczyć, co robi.",
     lead: "Aplikacje do codziennej pracy w małej firmie.",
     filterLabel: "Filtruj aplikacje",
     all: "Wszystkie",
@@ -426,9 +426,15 @@ export const pl: Messages = {
       getNote: "Potrzebne jest konto administratora.",
       included: "Wchodzi w skład każdego obop.",
       experimentalNote: "Wciąż w fazie testów. Najpierw wypróbuj ją na danych przykładowych.",
-      safeMasked: "Asystenci AI widzą tylko część danych osobowych.",
-      safeWithheld:
-        "Asystenci AI nigdy nie widzą danych wrażliwych, takich jak kwoty, dane bankowe, wynagrodzenia, dane o zdrowiu czy dane logowania.",
+      safeMasked:
+        "Asystenci AI widzą imiona i nazwiska, adresy e-mail i inne dane osobowe tylko jako symbole zastępcze.",
+      safeWithheld: "Asystenci AI nigdy nie widzą danych wrażliwych. W tej aplikacji: {list}.",
+      safeKinds: {
+        financial: "wrażliwe dane finansowe",
+        confidential_hr: "poufne dane kadrowe",
+        special_category: "szczególne kategorie danych osobowych (na przykład dane o zdrowiu)",
+        secret: "sekrety (na przykład dane logowania)",
+      },
       safeApprove:
         "Niektóre kroki asystent AI może tylko zaproponować, a zatwierdza je osoba. Pozostałe może wykonać sam, w granicach swoich uprawnień.",
       safeApproveNone:

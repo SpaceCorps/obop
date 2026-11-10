@@ -300,7 +300,7 @@ export const es: Messages = {
   apps: {
     title: "Aplicaciones",
     description:
-      "Las 28 aplicaciones de obop: 6 vienen con obop y 22 más para añadir. Abre una aplicación para ver qué hace.",
+      "Estas son 28 aplicaciones de obop: 6 vienen con obop y 22 más para añadir. Abre una aplicación para ver qué hace.",
     lead: "Las aplicaciones para el trabajo diario de una pequeña empresa.",
     filterLabel: "Filtrar aplicaciones",
     all: "Todas",
@@ -426,9 +426,16 @@ export const es: Messages = {
       getNote: "Necesitas una cuenta de administrador.",
       included: "Incluida en cada obop.",
       experimentalNote: "Todavía en pruebas. Pruébala primero con datos de ejemplo.",
-      safeMasked: "Los asistentes de IA solo ven una parte de los datos personales.",
+      safeMasked:
+        "Los asistentes de IA ven los nombres, los correos electrónicos y otros datos personales solo como marcadores de posición.",
       safeWithheld:
-        "Los asistentes de IA nunca ven los datos sensibles, como importes, datos bancarios, salarios, datos de salud o credenciales de acceso.",
+        "Los asistentes de IA nunca ven los datos sensibles. En esta aplicación: {list}.",
+      safeKinds: {
+        financial: "datos financieros sensibles",
+        confidential_hr: "datos confidenciales de recursos humanos",
+        special_category: "categorías especiales de datos personales (por ejemplo, de salud)",
+        secret: "secretos (por ejemplo, credenciales de acceso)",
+      },
       safeApprove:
         "Algunos pasos un asistente de IA solo puede proponerlos, y una persona los aprueba. Los demás puede hacerlos por su cuenta, dentro de sus permisos.",
       safeApproveNone:
