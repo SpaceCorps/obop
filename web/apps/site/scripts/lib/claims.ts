@@ -153,17 +153,21 @@ export const CLAIMS: readonly Claim[] = [
     fine: ["Post a draft invoice and give it its next number in the yearly series."],
   },
   {
-    re: /never see sensitive details, such as/i,
+    re: /never see sensitive details/i,
     why: "money is in clear for an AI assistant wherever its class is none: Fleet cost, Purchase and POS totals, eCommerce order and payment amounts (packages/fleet.toml:192-195, purchase.toml:117-121, pos.toml, ecommerce.toml), and obop-masking allows that class (crates/kernel/obop-masking/src/lib.rs:15-33)",
     example:
       "AI assistants never see sensitive details, such as money amounts, bank details, pay, health data or sign-in details.",
-    fine: ["AI assistants never see sensitive details. In this app: sensitive financial details."],
+    fine: [
+      "AI assistants never see the fields marked as sensitive. In this app: sensitive financial details. A price or a total is shown unless its field is one of these.",
+    ],
   },
   {
     re: /see only part of/i,
     why: "a masked field is shown as a placeholder, never in part (crates/kernel/obop-commands/src/lib.rs:1381-1387, crates/kernel/obop-masking/src/lib.rs:22-30)",
     example: "AI assistants see only part of people's personal details.",
-    fine: ["AI assistants see names, emails and other personal details only as placeholders."],
+    fine: [
+      "AI assistants see the fields marked as personal data, such as names and emails, only as placeholders.",
+    ],
   },
   {
     re: /Copies in other apps are not touched/i,
@@ -212,7 +216,7 @@ export const CLAIMS: readonly Claim[] = [
     example:
       "Record that the goods arrived. A draft stock move is prepared for each line, for the warehouse to confirm. Needs permission to use Inventory.",
     fine: [
-      "Record that the goods arrived. If the order has a receiving location, a draft stock move is prepared for each line, for the warehouse to confirm, and you need permission to use Inventory.",
+      "Record that the goods arrived. You need permission to use Inventory. If the order has a receiving location, a draft stock move is prepared for each line, for the warehouse to confirm.",
     ],
   },
   {
@@ -225,7 +229,119 @@ export const CLAIMS: readonly Claim[] = [
     re: /\bAll 28 obop apps\b/i,
     why: "the marketplace bundles 24 packages, two of them (Accounting Sweden, DocuSeal) have no page here (crates/kernel/obop-pkg/src/marketplace.rs:153-177), and Mileage is built in (crates/obop/src/app.rs:77-84)",
     example: "All 28 obop apps: 6 that come with obop and 22 more you can add.",
-    fine: ["Here are 28 obop apps: 6 that come with obop and 22 more you can add."],
+    fine: ["Here are 28 of the obop apps: 6 that come with obop and 22 more you can add."],
+  },
+  {
+    re: /see names, emails and other personal details only as placeholders/i,
+    why: "masking acts on the fields marked as personal data, and nothing reads free text: a name typed into a description reaches an AI assistant as written (crates/kernel/obop-commands/src/lib.rs:1377-1378, crates/kernel/obop-masking/src/lib.rs:15-33)",
+    example: "AI assistants see names, emails and other personal details only as placeholders.",
+    fine: [
+      "AI assistants see the fields marked as personal data, such as names and emails, only as placeholders. Text typed into a field that is not marked as personal data, such as a description, is not replaced by a placeholder.",
+    ],
+  },
+  {
+    re: /for the warehouse to confirm, and you need permission/i,
+    why: "the permission is needed whether or not the order has a receiving location: the guard looks at the effect and not at its condition (crates/kernel/obop-commands/src/guards.rs:244-258, the condition is at packages/purchase.toml:160-165)",
+    example:
+      "Record that the goods arrived. If the order has a receiving location, a draft stock move is prepared for each line, for the warehouse to confirm, and you need permission to use Inventory.",
+    fine: [
+      "Record that the goods arrived. You need permission to use Inventory. If the order has a receiving location, a draft stock move is prepared for each line, for the warehouse to confirm.",
+    ],
+  },
+  {
+    re: /\bNothing goes out or comes in until\b/i,
+    why: "the Google Drive connection is connected by the OAuth callback with no consent record (crates/kernel/obop-connectors/src/runtime.rs:1175-1209, drive.rs:320-372); the check for one is only on connection.connect (crates/modules/connectors/src/handlers.rs:298)",
+    example: "Nothing goes out or comes in until the reason for sharing is written down.",
+    fine: [
+      "No record goes out or comes in through a connection until the reason for sharing is written down.",
+    ],
+  },
+  {
+    re: /the money is returned too/i,
+    why: "obop asks Stripe to refund and accepts a pending refund (crates/kernel/obop-payments/src/stripe.rs:247-262); it was tested against a stand-in only (stripe.rs:15-16)",
+    example:
+      "For card payments through Stripe the money is returned too; otherwise you pay it back yourself.",
+    fine: [
+      "For card payments through Stripe, obop asks Stripe to refund the payment first, and the order stays paid if Stripe refuses. Otherwise you pay it back yourself.",
+    ],
+  },
+  {
+    re: /closed to new postings|can still receive entries|can still be chosen on new lines/i,
+    why: "nothing reads these flags, and the only assert of the package is the balance (packages/accounting.toml:346)",
+    example: "Whether the account is closed to new postings",
+    fine: ["A label only: entries can still be posted to a deprecated account."],
+  },
+  {
+    re: /customer (?:must|has to) sign off/i,
+    why: "completing a job has no assert and no effect, and nothing reads signature_required (packages/field_service.toml:168-175)",
+    example: "which parts were used and whether the customer must sign off.",
+    fine: ["which parts were used and a note of whether the customer is to sign off."],
+  },
+  {
+    re: /Whether visitors can subscribe themselves/i,
+    why: "the package has no public section and nothing reads is_public (packages/email_marketing.toml)",
+    example: "Whether visitors can subscribe themselves",
+    fine: ["A label only; nothing checks it, and this app has no sign-up page for visitors."],
+  },
+  {
+    // The same shape as the row above for "obop does not ...": a flat denial of sending.
+    re: /(?<!\bBy itself, )(?<!\bOn its own, )\bobop sends no\b/i,
+    why: "a webhook connection can post the record on any command (crates/kernel/obop-connectors/src/catalog.rs:222-262), and sign_docuseal sends the request on sign_request.send (packages/sign_docuseal.toml:5)",
+    example:
+      "Email address of the signer; optional, obop sends no email for a request about a document",
+    fine: [
+      "Email address of the signer; optional. By itself, obop sends no email for a request about a document.",
+    ],
+  },
+  {
+    re: /draft document the current version/i,
+    why: "publish only moves the state to published; the model has no version or history field (packages/documents.toml:130-135)",
+    example: "Make a draft document the current version",
+    fine: ["Mark a draft document as published."],
+  },
+  {
+    re: /Whether (?:the recipe can be used for new orders|the resource can be booked|new customers can pick the plan|the policy can be attached to new tickets|sessions must count the cash|cashiers may propose refunds)|empty for a private task/i,
+    why: "nothing reads these flags (the asserts of all packages are accounting.toml:346, pos.toml:226 and sign.toml:202), and projects_task has no [model.access], so a task without a project is not private",
+    example: "Whether the resource can be booked",
+    fine: ["Marks the resource as bookable or not. A label only; nothing checks it."],
+  },
+  {
+    re: /Each order belongs to a contact/i,
+    why: "party_id of a sale order is not required (crates/modules/sales/src/lib.rs:29-36)",
+    example: "Each order belongs to a contact and has lines, a total and a currency.",
+    fine: ["Each order can name a contact and has lines, a total and a currency."],
+  },
+  {
+    re: /read, search, create and update records of this app/i,
+    why: "some models are read-only (the logs, runs and catalogue views of Connectors: crates/modules/connectors/src/handlers.rs:532-542) and sign_link.create is refused to anything but a person (crates/kernel/obop-commands/src/sign/link.rs:48-55)",
+    example:
+      "An agent can read, search, create and update records of this app, and run the actions that need no approval.",
+    fine: [
+      "An agent can read and search records of this app, create and update them where the model allows it, and run the actions that need no approval.",
+    ],
+  },
+  {
+    // Wordings of earlier rounds that no test would have caught if they were put back.
+    re: /\bsends? the order to the vendor\b/i,
+    why: "the order is only marked sent; nothing reaches the vendor (packages/purchase.toml:138-143)",
+    example: "Purchase sends the order to the vendor.",
+    fine: ["Mark the order as sent to the vendor. By itself, this does not contact the vendor."],
+  },
+  {
+    re: /AI assistants never see (?:money|amounts?|financial)/i,
+    why: "money is in clear for an AI assistant wherever its class is none (crates/kernel/obop-masking/src/lib.rs:15-33)",
+    example: "AI assistants never see money amounts.",
+    fine: [
+      "AI assistants never see the fields marked as sensitive. In this app: sensitive financial details.",
+    ],
+  },
+  {
+    re: /leaves? other apps alone|other apps (?:are|stay|remain) (?:alone|untouched|unchanged)/i,
+    why: "the Connectors app deletes its code names for an erased contact, and the copies in other records stay (crates/kernel/obop-connectors/src/egress.rs:643-693)",
+    example: "Erasing a contact leaves other apps alone.",
+    fine: [
+      "Names, emails and addresses typed into other records (such as leads, orders and tickets) are not changed.",
+    ],
   },
 ];
 

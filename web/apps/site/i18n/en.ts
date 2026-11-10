@@ -113,7 +113,7 @@ export const en: Messages = {
     mockCaption: "Illustration with sample data",
     appsTitle: "All your business apps. One database.",
     appsSub:
-      "Every app shares the same contacts, products and permissions, so nothing needs gluing together. Six apps are built in; the other 22 install from the marketplace.",
+      "Every app shares the same contacts, products and permissions, so nothing needs gluing together. Some apps are built in; the others install from the marketplace.",
     seeAllApps: "Browse all apps and their data models",
     pillarsTitle: "Built for the way work happens now",
     pillarsSub:
@@ -291,8 +291,8 @@ export const en: Messages = {
   apps: {
     title: "Apps",
     description:
-      "Here are 28 obop apps: 6 that come with obop and 22 more you can add. Open an app to see what it does.",
-    lead: "The apps for everyday work in a small business.",
+      "Here are 28 of the obop apps: 6 that come with obop and 22 more you can add. Open an app to see what it does.",
+    lead: "The apps for everyday work in a small business, still in beta.",
     filterLabel: "Filter apps",
     all: "All",
     available: "Available",
@@ -378,7 +378,7 @@ export const en: Messages = {
     guideLink: "The module guide shows how apps like this one are written",
     englishNote: "English",
     agentsCan:
-      "An agent can read, search, create and update records of this app, and run the actions that need no approval, within the permission groups of its token.",
+      "An agent can read and search records of this app, create and update them where the model allows it, and run the actions that need no approval, within the permission groups of its token.",
     agentsPropose: "It can only propose these steps, and a person must approve them: {list}.",
     agentsMasked: "Personal data is masked as placeholder tokens: {list}.",
     agentsWithheld: "These fields are withheld from agents entirely: {list}.",
@@ -416,8 +416,9 @@ export const en: Messages = {
       included: "Included in every obop.",
       experimentalNote: "Still being tested. Try it with sample data first.",
       safeMasked:
-        "AI assistants see names, emails and other personal details only as placeholders.",
-      safeWithheld: "AI assistants never see sensitive details. In this app: {list}.",
+        "AI assistants see the fields marked as personal data, such as names and emails, only as placeholders. Text typed into a field that is not marked as personal data, such as a description, is not replaced by a placeholder.",
+      safeWithheld:
+        "AI assistants never see the fields marked as sensitive. In this app: {list}. A price or a total is shown unless its field is one of these.",
       safeKinds: {
         financial: "sensitive financial details",
         confidential_hr: "confidential HR details",

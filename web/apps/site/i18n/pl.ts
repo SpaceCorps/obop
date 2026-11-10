@@ -115,7 +115,7 @@ export const pl: Messages = {
     mockCaption: "Ilustracja z przykładowymi danymi",
     appsTitle: "Wszystkie aplikacje dla firmy. Jedna baza danych.",
     appsSub:
-      "Każda aplikacja korzysta z tych samych kontaktów, produktów i uprawnień, więc niczego nie trzeba ze sobą łączyć. Sześć aplikacji jest wbudowanych; pozostałe 22 instalujesz z marketplace'u.",
+      "Każda aplikacja korzysta z tych samych kontaktów, produktów i uprawnień, więc niczego nie trzeba ze sobą łączyć. Część aplikacji jest wbudowana; pozostałe instalujesz z marketplace'u.",
     seeAllApps: "Przeglądaj wszystkie aplikacje i ich modele danych",
     pillarsTitle: "Stworzona do pracy tak, jak wygląda dziś",
     pillarsSub:
@@ -296,8 +296,8 @@ export const pl: Messages = {
   apps: {
     title: "Aplikacje",
     description:
-      "Oto 28 aplikacji obop: 6 w zestawie z obop i 22 kolejne do dodania. Otwórz aplikację, aby zobaczyć, co robi.",
-    lead: "Aplikacje do codziennej pracy w małej firmie.",
+      "Oto 28 z aplikacji obop: 6 w zestawie z obop i 22 kolejne do dodania. Otwórz aplikację, aby zobaczyć, co robi.",
+    lead: "Aplikacje do codziennej pracy w małej firmie, wciąż w wersji beta.",
     filterLabel: "Filtruj aplikacje",
     all: "Wszystkie",
     available: "Dostępne",
@@ -384,7 +384,7 @@ export const pl: Messages = {
     guideLink: "Przewodnik po modułach pokazuje, jak pisze się takie aplikacje",
     englishNote: "po angielsku",
     agentsCan:
-      "Agent może odczytywać, wyszukiwać, tworzyć i aktualizować rekordy tej aplikacji oraz uruchamiać akcje niewymagające zatwierdzenia, w ramach grup uprawnień swojego tokenu.",
+      "Agent może odczytywać i wyszukiwać rekordy tej aplikacji, tworzyć je i aktualizować tam, gdzie model na to pozwala, oraz uruchamiać akcje niewymagające zatwierdzenia, w ramach grup uprawnień swojego tokenu.",
     agentsPropose: "Te kroki może tylko zaproponować, a człowiek musi je zatwierdzić: {list}.",
     agentsMasked: "Dane osobowe są maskowane jako tokeny zastępcze: {list}.",
     agentsWithheld: "Te pola są całkowicie wstrzymane i niedostępne dla agentów: {list}.",
@@ -427,8 +427,9 @@ export const pl: Messages = {
       included: "Wchodzi w skład każdego obop.",
       experimentalNote: "Wciąż w fazie testów. Najpierw wypróbuj ją na danych przykładowych.",
       safeMasked:
-        "Asystenci AI widzą imiona i nazwiska, adresy e-mail i inne dane osobowe tylko jako symbole zastępcze.",
-      safeWithheld: "Asystenci AI nigdy nie widzą danych wrażliwych. W tej aplikacji: {list}.",
+        "Asystenci AI widzą pola oznaczone jako dane osobowe, takie jak imiona i nazwiska oraz adresy e-mail, tylko jako symbole zastępcze. Tekst wpisany w pole, które nie jest oznaczone jako dane osobowe, na przykład w opis, nie jest zastępowany symbolem.",
+      safeWithheld:
+        "Asystenci AI nigdy nie widzą pól oznaczonych jako wrażliwe. W tej aplikacji: {list}. Cena lub suma jest widoczna, chyba że jej pole jest jednym z nich.",
       safeKinds: {
         financial: "wrażliwe dane finansowe",
         confidential_hr: "poufne dane kadrowe",
@@ -467,7 +468,7 @@ export const pl: Messages = {
       website: "Strony i formularze",
       email_marketing: "Kampanie",
       documents: "Pliki i foldery",
-      sign: "Podpisy elektroniczne",
+      sign: "Proste podpisy elektroniczne",
       subscriptions: "Plany i subskrypcje",
       dashboards: "Raporty i wykresy",
       accounting: "Księga główna i dzienniki",

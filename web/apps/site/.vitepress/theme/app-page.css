@@ -181,9 +181,11 @@
  * layout follows the room the strip has (a container query, in rem, so a larger text size asks for
  * more room too): one column when two cells would not fit side by side, two by two from 17.5rem, and
  * a single row of four only from 52rem, where the longest value word of every language (Polish
- * "Eksperymentalny" at 22 px is 176 px) still fits its cell whole. Between, the cells stay wide and
- * no value is cut in the middle of a word; break-word is only the last resort for a word wider than
- * the screen.
+ * "Eksperymentalny" at 22 px is 176 px) still fits its cell whole. Between, the cells stay wide, and
+ * where the strip is under 10rem wide (200 percent text on a 320 px phone) the value is set smaller,
+ * so that the same word keeps room to spare. A word wider than its cell is not broken (measured at
+ * 250 percent text on 320 px): the box grows past the cell, so the sweep in site.spec.ts only covers
+ * text up to 200 percent.
  */
 .app-facts-box {
   container-type: inline-size;
@@ -256,6 +258,12 @@
 @media (min-width: 40rem) {
   .app-facts dd {
     font-size: 1.375rem;
+  }
+}
+/* A strip under 10rem wide: the 1rem floor of the value is 32 px at 200 percent text, and "Eksperymentalny" would fill a 256 px cell. */
+@container (max-width: 10rem) {
+  .app-facts dd {
+    font-size: 0.8rem;
   }
 }
 /* An experimental app says so in one plain line under the strip, so the one word "Experimental" is not all there is. */

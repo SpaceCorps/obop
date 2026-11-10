@@ -115,7 +115,7 @@ export const fr: Messages = {
     mockCaption: "Illustration avec des données d'exemple",
     appsTitle: "Toutes vos applications de gestion. Une seule base de données.",
     appsSub:
-      "Toutes les applications partagent les mêmes contacts, les mêmes produits et les mêmes permissions : rien à raccorder à la main. Six applications sont intégrées ; les 22 autres s'installent depuis la place de marché.",
+      "Toutes les applications partagent les mêmes contacts, les mêmes produits et les mêmes permissions : rien à raccorder à la main. Certaines applications sont intégrées ; les autres s'installent depuis la place de marché.",
     seeAllApps: "Parcourir toutes les applications et leurs modèles de données",
     pillarsTitle: "Pensée pour la façon dont on travaille aujourd'hui",
     pillarsSub:
@@ -299,8 +299,8 @@ export const fr: Messages = {
   apps: {
     title: "Applications",
     description:
-      "Voici 28 applications d'obop : 6 sont fournies avec obop et 22 autres sont à ajouter. Ouvrez une application pour voir ce qu'elle fait.",
-    lead: "Les applications du quotidien d'une petite entreprise.",
+      "Voici 28 des applications d'obop : 6 sont fournies avec obop et 22 autres sont à ajouter. Ouvrez une application pour voir ce qu'elle fait.",
+    lead: "Les applications du quotidien d'une petite entreprise, encore en version bêta.",
     filterLabel: "Filtrer les applications",
     all: "Toutes",
     available: "Disponibles",
@@ -390,7 +390,7 @@ export const fr: Messages = {
     guideLink: "Le guide des modules montre comment sont écrites les applications de ce type",
     englishNote: "Anglais",
     agentsCan:
-      "Un agent peut lire, rechercher, créer et modifier les enregistrements de cette application, et exécuter les actions qui ne requièrent pas d'approbation, dans les limites des groupes de permissions de son jeton.",
+      "Un agent peut lire et rechercher les enregistrements de cette application, les créer et les modifier lorsque le modèle l'autorise, et exécuter les actions qui ne requièrent pas d'approbation, dans les limites des groupes de permissions de son jeton.",
     agentsPropose: "Il ne peut que proposer ces étapes, qu'une personne doit approuver : {list}.",
     agentsMasked:
       "Les données personnelles sont masquées sous forme de jetons de substitution : {list}.",
@@ -434,9 +434,9 @@ export const fr: Messages = {
       included: "Incluse dans chaque obop.",
       experimentalNote: "Encore en test. Essayez-la d'abord avec des données d'exemple.",
       safeMasked:
-        "Les assistants IA ne voient les noms, les adresses e-mail et les autres données personnelles que sous forme de marqueurs de remplacement.",
+        "Les assistants IA ne voient les champs marqués comme données personnelles, comme les noms et les adresses e-mail, que sous forme de marqueurs de remplacement. Le texte saisi dans un champ qui n'est pas marqué comme donnée personnelle, comme une description, n'est pas remplacé par un marqueur.",
       safeWithheld:
-        "Les assistants IA ne voient jamais les données sensibles. Dans cette application : {list}.",
+        "Les assistants IA ne voient jamais les champs marqués comme sensibles. Dans cette application : {list}. Un prix ou un total est affiché, sauf si son champ en fait partie.",
       safeKinds: {
         financial: "données financières sensibles",
         confidential_hr: "données RH confidentielles",
@@ -475,7 +475,7 @@ export const fr: Messages = {
       website: "Pages et formulaires",
       email_marketing: "Campagnes",
       documents: "Fichiers et dossiers",
-      sign: "Signatures électroniques",
+      sign: "Signatures électroniques simples",
       subscriptions: "Offres et abonnements",
       dashboards: "Rapports et graphiques",
       accounting: "Grand livre et journaux",

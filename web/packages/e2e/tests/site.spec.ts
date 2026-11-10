@@ -19,7 +19,11 @@ const DE_FIELD_SERVICE = (() => {
 
 /** URLs of every page of one language, from its sitemap. */
 async function pagesOf(request: import("@playwright/test").APIRequestContext, locale: string) {
-  const xml = await (await request.get(`${base()}/sitemap-${locale}.xml`)).text();
+  // A longer wait than the default 10 s: one run in three stalled on the body of a sitemap (headers 200, gzip,
+  // chunked) and passed on a rerun; the cause is not known.
+  const xml = await (
+    await request.get(`${base()}/sitemap-${locale}.xml`, { timeout: 30_000 })
+  ).text();
   return [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => new URL(m[1]!).pathname);
 }
 
@@ -115,6 +119,14 @@ async function contrast(page: import("@playwright/test").Page, selector: string 
 }
 
 /**
+ * Waits for the web fonts the page has asked for, so that a sweep measures the words in the font the
+ * visitor gets and not in the fallback of the moment before it loaded (a face for the Polish letters
+ * was still loading right after domcontentloaded).
+ */
+const settle = (page: import("@playwright/test").Page) =>
+  page.evaluate(() => document.fonts.ready.then(() => undefined));
+
+/**
  * The words of the elements that match `selector` which the browser has drawn on two lines, as the
  * visitor's page is drawn: nothing is switched off, so the test sees what the safety nets
  * (overflow-wrap, hyphens) really do. A word is a run of letters and digits up to a hyphen
@@ -132,6 +144,7 @@ async function brokenWords(
   skip = "",
   parts = false,
 ) {
+  await settle(page);
   return page.evaluate(
     ({ sel, allowWide, skip, parts }) => {
       const cut: string[] = [];
@@ -656,11 +669,11 @@ test.describe("website without JavaScript", () => {
       // Said out loud for the two pages: what each withholds, and nothing it does not.
       if (app.slug === "accounting")
         expect(lines).toContain(
-          "AI assistants never see sensitive details. In this app: sensitive financial details.",
+          "AI assistants never see the fields marked as sensitive. In this app: sensitive financial details. A price or a total is shown unless its field is one of these.",
         );
       if (app.slug === "connectors")
         expect(lines).toContain(
-          "AI assistants never see sensitive details. In this app: secrets (such as sign-in details).",
+          "AI assistants never see the fields marked as sensitive. In this app: secrets (such as sign-in details). A price or a total is shown unless its field is one of these.",
         );
       // Works with: a link for each dependency that is an app of its own.
       if (deps.includes("base"))
@@ -1338,7 +1351,7 @@ test.describe("crawlers and agents", () => {
     expect(crm).toContain("`crm.user`");
   });
 
-  test("no deployed apps page, Markdown copy or llms-full.txt says what the module does not do", async ({
+  test("the wordings on the list of false sentences are on no deployed apps page, Markdown copy or llms-full.txt", async ({
     request,
   }) => {
     // The pages as built, not as the unit tests build them from the data: the words of each sentence in
@@ -1349,7 +1362,7 @@ test.describe("crawlers and agents", () => {
     expect(urls).toHaveLength(28);
     // The list is pinned, and every row can fail: it catches the sentence it was written for and
     // leaves alone the true sentences that stand where it was (claims.ts).
-    expect(CLAIMS).toHaveLength(33);
+    expect(CLAIMS).toHaveLength(48);
     for (const { re, example, fine, why } of CLAIMS) {
       expect(example, `${re}: ${why}`).toMatch(re);
       for (const ok of fine ?? []) expect(ok, `${re} must leave this alone`).not.toMatch(re);
@@ -1363,7 +1376,8 @@ test.describe("crawlers and agents", () => {
     // The index holds the lead of the index, and llms.txt, which agents read first, repeats it (its
     // other sentences, about agents and approval, are the site's own and are not what the list is for).
     texts.push(["/apps.md", await (await request.get(`${base()}/apps.md`)).text()]);
-    const all28 = CLAIMS.find((c) => c.re.source.includes("All 28"))!;
+    const all28 = CLAIMS.find((c) => c.re.source.includes("All 28"));
+    if (!all28) throw new Error("the row for 'All 28 obop apps' is missing from claims.ts");
     expect(await (await request.get(`${base()}/llms.txt`)).text(), "llms.txt").not.toMatch(
       all28.re,
     );
@@ -1391,17 +1405,17 @@ test.describe("crawlers and agents", () => {
     // data class is none), so none of them may say that money, bank details or pay are hidden.
     const line = async (slug: string) => {
       const md = await (await request.get(`${base()}/apps/${slug}.md`)).text();
-      return /^- (AI assistants never see sensitive details\..*)$/m.exec(md)?.[1] ?? "";
+      return (
+        /^- (AI assistants never see the fields marked as sensitive\..*)$/m.exec(md)?.[1] ?? ""
+      );
     };
-    expect(await line("fleet")).toBe(
-      "AI assistants never see sensitive details. In this app: confidential HR details.",
-    );
-    expect(await line("purchase")).toBe(
-      "AI assistants never see sensitive details. In this app: sensitive financial details.",
-    );
+    const never = "AI assistants never see the fields marked as sensitive. In this app:";
+    const tail = " A price or a total is shown unless its field is one of these.";
+    expect(await line("fleet")).toBe(`${never} confidential HR details.${tail}`);
+    expect(await line("purchase")).toBe(`${never} sensitive financial details.${tail}`);
     expect(await line("pos")).toContain("sensitive financial details");
     expect(await line("ecommerce")).toBe(
-      "AI assistants never see sensitive details. In this app: sensitive financial details and secrets (such as sign-in details).",
+      `${never} sensitive financial details and secrets (such as sign-in details).${tail}`,
     );
     for (const slug of ["fleet", "purchase", "pos", "ecommerce"])
       expect(await line(slug), slug).not.toMatch(/money|amount|bank|\bpay\b/i);
@@ -2467,6 +2481,7 @@ test.describe("accessibility", () => {
           });
           for (const width of [320, 375, 768]) {
             await page.setViewportSize({ width, height: 800 });
+            await settle(page);
             const cut = await page.evaluate(() =>
               [...document.querySelectorAll(".app-hero h1, .app-icons a, .app-info dt")]
                 .filter((e) => e.scrollWidth > e.clientWidth + 1)

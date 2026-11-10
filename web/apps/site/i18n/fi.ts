@@ -115,7 +115,7 @@ export const fi: Messages = {
     mockCaption: "Havainnekuva esimerkkitiedoilla",
     appsTitle: "Kaikki yrityksen sovellukset. Yksi tietokanta.",
     appsSub:
-      "Kaikki sovellukset käyttävät samoja yhteystietoja, tuotteita ja käyttöoikeuksia, joten mitään ei tarvitse liimata yhteen. Kuusi sovellusta on sisäänrakennettuja, ja muut 22 asennetaan markkinapaikalta.",
+      "Kaikki sovellukset käyttävät samoja yhteystietoja, tuotteita ja käyttöoikeuksia, joten mitään ei tarvitse liimata yhteen. Osa sovelluksista on sisäänrakennettuja, ja muut asennetaan markkinapaikalta.",
     seeAllApps: "Selaa kaikkia sovelluksia ja niiden tietomalleja",
     pillarsTitle: "Tehty nykyiseen tapaan tehdä työtä",
     pillarsSub:
@@ -299,8 +299,8 @@ export const fi: Messages = {
   apps: {
     title: "Sovellukset",
     description:
-      "Tässä 28 obop-sovellusta: 6 tulee obopin mukana ja 22 muuta, jotka voit ottaa käyttöön. Avaa sovellus nähdäksesi, mitä se tekee.",
-    lead: "Sovellukset pienyrityksen arkeen.",
+      "Tässä 28 obopin sovellusta: 6 tulee obopin mukana ja 22 muuta, jotka voit ottaa käyttöön. Avaa sovellus nähdäksesi, mitä se tekee.",
+    lead: "Sovellukset pienyrityksen arkeen, vielä beta-vaiheessa.",
     filterLabel: "Suodata sovelluksia",
     all: "Kaikki",
     available: "Saatavilla",
@@ -389,7 +389,7 @@ export const fi: Messages = {
     guideLink: "Moduulioppaassa näytetään, miten tällaiset sovellukset kirjoitetaan",
     englishNote: "englanniksi",
     agentsCan:
-      "Agentti voi lukea, hakea, luoda ja päivittää tämän sovelluksen tietueita sekä suorittaa toiminnot, jotka eivät vaadi hyväksyntää, tunnisteensa käyttöoikeusryhmien rajoissa.",
+      "Agentti voi lukea ja hakea tämän sovelluksen tietueita, luoda ja päivittää niitä silloin, kun malli sen sallii, sekä suorittaa toiminnot, jotka eivät vaadi hyväksyntää, tunnisteensa käyttöoikeusryhmien rajoissa.",
     agentsPropose: "Se voi vain ehdottaa näitä vaiheita, ja ihmisen on hyväksyttävä ne: {list}.",
     agentsMasked: "Henkilötiedot maskataan paikkamerkeiksi: {list}.",
     agentsWithheld: "Nämä kentät pidätetään agenteilta kokonaan: {list}.",
@@ -432,9 +432,9 @@ export const fi: Messages = {
       included: "Sisältyy jokaiseen obopiin.",
       experimentalNote: "Vielä testauksessa. Kokeile sitä ensin esimerkkitiedoilla.",
       safeMasked:
-        "Tekoälyavustajat näkevät nimet, sähköpostiosoitteet ja muut henkilötiedot vain paikkamerkkeinä.",
+        "Tekoälyavustajat näkevät henkilötiedoiksi merkityt kentät, kuten nimet ja sähköpostiosoitteet, vain paikkamerkkeinä. Kenttään, jota ei ole merkitty henkilötiedoksi, esimerkiksi kuvaukseen, kirjoitettua tekstiä ei korvata paikkamerkillä.",
       safeWithheld:
-        "Tekoälyavustajat eivät koskaan näe arkaluonteisia tietoja. Tässä sovelluksessa: {list}.",
+        "Tekoälyavustajat eivät koskaan näe arkaluonteisiksi merkittyjä kenttiä. Tässä sovelluksessa: {list}. Hinta tai summa näytetään, ellei sen kenttä ole yksi näistä.",
       safeKinds: {
         financial: "arkaluonteiset taloustiedot",
         confidential_hr: "luottamukselliset henkilöstötiedot",
@@ -473,7 +473,7 @@ export const fi: Messages = {
       website: "Sivut ja lomakkeet",
       email_marketing: "Kampanjat",
       documents: "Tiedostot ja kansiot",
-      sign: "Sähköiset allekirjoitukset",
+      sign: "Yksinkertaiset sähköiset allekirjoitukset",
       subscriptions: "Suunnitelmat ja tilaukset",
       dashboards: "Raportit ja kaaviot",
       accounting: "Pääkirja ja päiväkirjat",

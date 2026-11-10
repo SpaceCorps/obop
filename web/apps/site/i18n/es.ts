@@ -115,7 +115,7 @@ export const es: Messages = {
     mockCaption: "Ilustración con datos de ejemplo",
     appsTitle: "Todas las aplicaciones de tu negocio. Una sola base de datos.",
     appsSub:
-      "Todas las aplicaciones comparten los mismos contactos, productos y permisos, así que no hay nada que integrar a mano. Seis aplicaciones vienen incluidas; las otras 22 se instalan desde el marketplace.",
+      "Todas las aplicaciones comparten los mismos contactos, productos y permisos, así que no hay nada que integrar a mano. Algunas aplicaciones vienen incluidas; las demás se instalan desde el marketplace.",
     seeAllApps: "Explora todas las aplicaciones y sus modelos de datos",
     pillarsTitle: "Hecha para la forma en que se trabaja hoy",
     pillarsSub:
@@ -300,8 +300,8 @@ export const es: Messages = {
   apps: {
     title: "Aplicaciones",
     description:
-      "Estas son 28 aplicaciones de obop: 6 vienen con obop y 22 más para añadir. Abre una aplicación para ver qué hace.",
-    lead: "Las aplicaciones para el trabajo diario de una pequeña empresa.",
+      "Estas son 28 de las aplicaciones de obop: 6 vienen con obop y 22 más para añadir. Abre una aplicación para ver qué hace.",
+    lead: "Las aplicaciones para el trabajo diario de una pequeña empresa, todavía en beta.",
     filterLabel: "Filtrar aplicaciones",
     all: "Todas",
     available: "Disponibles",
@@ -389,7 +389,7 @@ export const es: Messages = {
     guideLink: "La guía de módulos explica cómo se escriben aplicaciones como esta",
     englishNote: "Inglés",
     agentsCan:
-      "Un agente puede leer, buscar, crear y actualizar registros de esta aplicación, y ejecutar las acciones que no requieren aprobación, dentro de los grupos de permisos de su token.",
+      "Un agente puede leer y buscar registros de esta aplicación, crearlos y actualizarlos cuando el modelo lo permite, y ejecutar las acciones que no requieren aprobación, dentro de los grupos de permisos de su token.",
     agentsPropose: "Solo puede proponer estos pasos, y una persona debe aprobarlos: {list}.",
     agentsMasked: "Los datos personales se enmascaran como tokens marcadores: {list}.",
     agentsWithheld: "Estos campos se retienen por completo y los agentes no los ven: {list}.",
@@ -427,9 +427,9 @@ export const es: Messages = {
       included: "Incluida en cada obop.",
       experimentalNote: "Todavía en pruebas. Pruébala primero con datos de ejemplo.",
       safeMasked:
-        "Los asistentes de IA ven los nombres, los correos electrónicos y otros datos personales solo como marcadores de posición.",
+        "Los asistentes de IA ven los campos marcados como datos personales, como los nombres y los correos electrónicos, solo como marcadores de posición. El texto escrito en un campo que no está marcado como dato personal, como una descripción, no se sustituye por un marcador.",
       safeWithheld:
-        "Los asistentes de IA nunca ven los datos sensibles. En esta aplicación: {list}.",
+        "Los asistentes de IA nunca ven los campos marcados como sensibles. En esta aplicación: {list}. Un precio o un total se muestra, salvo que su campo sea uno de estos.",
       safeKinds: {
         financial: "datos financieros sensibles",
         confidential_hr: "datos confidenciales de recursos humanos",
@@ -468,7 +468,7 @@ export const es: Messages = {
       website: "Páginas y formularios",
       email_marketing: "Campañas",
       documents: "Archivos y carpetas",
-      sign: "Firmas electrónicas",
+      sign: "Firmas electrónicas simples",
       subscriptions: "Planes y suscripciones",
       dashboards: "Informes y gráficos",
       accounting: "Libro mayor y diarios",

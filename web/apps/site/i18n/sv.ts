@@ -115,7 +115,7 @@ export const sv: Messages = {
     mockCaption: "Illustration med exempeldata",
     appsTitle: "Alla företagets appar. En databas.",
     appsSub:
-      "Alla appar delar samma kontakter, produkter och behörigheter, så inget behöver kopplas ihop i efterhand. Sex appar är inbyggda; de övriga 22 installerar du från marknadsplatsen.",
+      "Alla appar delar samma kontakter, produkter och behörigheter, så inget behöver kopplas ihop i efterhand. Några appar är inbyggda; de övriga installerar du från marknadsplatsen.",
     seeAllApps: "Bläddra bland alla appar och deras datamodeller",
     pillarsTitle: "Byggd för hur man arbetar i dag",
     pillarsSub:
@@ -296,8 +296,8 @@ export const sv: Messages = {
   apps: {
     title: "Appar",
     description:
-      "Här är 28 appar i obop: 6 som följer med obop och 22 till att lägga till. Öppna en app för att se vad den gör.",
-    lead: "Apparna för det dagliga arbetet i ett litet företag.",
+      "Här är 28 av apparna i obop: 6 som följer med obop och 22 till att lägga till. Öppna en app för att se vad den gör.",
+    lead: "Apparna för det dagliga arbetet i ett litet företag, fortfarande i beta.",
     filterLabel: "Filtrera appar",
     all: "Alla",
     available: "Tillgängliga",
@@ -384,7 +384,7 @@ export const sv: Messages = {
     guideLink: "Modulguiden visar hur appar som den här skrivs",
     englishNote: "Engelska",
     agentsCan:
-      "En agent kan läsa, söka, skapa och uppdatera poster i den här appen, och köra de åtgärder som inte kräver godkännande, inom behörighetsgrupperna för sin token.",
+      "En agent kan läsa och söka poster i den här appen, skapa och uppdatera dem där modellen tillåter det, och köra de åtgärder som inte kräver godkännande, inom behörighetsgrupperna för sin token.",
     agentsPropose: "Den kan bara föreslå de här stegen, och en person måste godkänna dem: {list}.",
     agentsMasked: "Personuppgifter maskeras som platshållare: {list}.",
     agentsWithheld: "De här fälten undanhålls helt från agenter: {list}.",
@@ -422,8 +422,9 @@ export const sv: Messages = {
       included: "Ingår i varje obop.",
       experimentalNote: "Testas fortfarande. Prova den först med exempeldata.",
       safeMasked:
-        "AI-assistenter ser namn, e-postadresser och andra personuppgifter bara som platshållare.",
-      safeWithheld: "AI-assistenter ser aldrig känsliga uppgifter. I den här appen: {list}.",
+        "AI-assistenter ser fält som är märkta som personuppgifter, till exempel namn och e-postadresser, bara som platshållare. Text som skrivs i ett fält som inte är märkt som personuppgift, till exempel en beskrivning, ersätts inte av en platshållare.",
+      safeWithheld:
+        "AI-assistenter ser aldrig fält som är markerade som känsliga. I den här appen: {list}. Ett pris eller en summa visas, om inte dess fält är ett av dessa.",
       safeKinds: {
         financial: "känsliga finansiella uppgifter",
         confidential_hr: "konfidentiella HR-uppgifter",
@@ -462,7 +463,7 @@ export const sv: Messages = {
       website: "Sidor och formulär",
       email_marketing: "Kampanjer",
       documents: "Filer och mappar",
-      sign: "E-signering",
+      sign: "Enkel e-signering",
       subscriptions: "Planer och prenumerationer",
       dashboards: "Rapporter och diagram",
       accounting: "Huvudbok och journaler",

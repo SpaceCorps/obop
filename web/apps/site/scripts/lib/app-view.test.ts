@@ -939,8 +939,9 @@ describe("a card with plain words of its own (data/apps.ts)", () => {
 
   // A ratchet over the pages as they are drawn, not over the cards alone (claims.ts: each sentence
   // was on a page, and the module does not do what it said). The browser tests run the same list over
-  // the pages as deployed.
-  test("no page of any app, and not the index, says what the module does not do again", () => {
+  // the pages as deployed. It keeps these wordings from coming back; it does not prove that the pages
+  // are true (the manifest facts a card may assert are reviewed by a person).
+  test("the wordings on the list of false sentences are on no page of any app and not on the index", () => {
     for (const app of apps) {
       const page = appMirror(app, "en", messages.en, "", apps);
       for (const { re, why } of CLAIMS) expect(page, `${app.id} ${re}: ${why}`).not.toMatch(re);
@@ -954,7 +955,7 @@ describe("a card with plain words of its own (data/apps.ts)", () => {
   // that it catches its own correction fails here). The count is pinned, so a row is not dropped
   // unnoticed.
   test("each row of the ratchet catches its own sentence and leaves the corrections alone", () => {
-    expect(CLAIMS).toHaveLength(33);
+    expect(CLAIMS).toHaveLength(48);
     for (const { re, example, fine, why } of CLAIMS) {
       expect(example, `${re}: ${why}`).toMatch(re);
       for (const ok of fine ?? []) expect(ok, `${re} must leave this alone`).not.toMatch(re);
@@ -1106,20 +1107,17 @@ describe("the plain layer says AI assistants, and the technical part says agents
   test("it does not name money where the amounts are in clear: Fleet, Purchase, Point of Sale and eCommerce show what they withhold", () => {
     const line = (id: string) =>
       view(apps.find((a) => a.id === id)!).safe.find((l) => /never see/.test(l))!;
-    expect(line("fleet")).toBe(
-      "AI assistants never see sensitive details. In this app: confidential HR details.",
-    );
-    expect(line("purchase")).toBe(
-      "AI assistants never see sensitive details. In this app: sensitive financial details.",
-    );
-    expect(line("connectors")).toBe(
-      "AI assistants never see sensitive details. In this app: secrets (such as sign-in details).",
-    );
+    // The line says what is held back, and that a price or a total is shown unless its own field is.
+    const never = "AI assistants never see the fields marked as sensitive. In this app:";
+    const tail = " A price or a total is shown unless its field is one of these.";
+    expect(line("fleet")).toBe(`${never} confidential HR details.${tail}`);
+    expect(line("purchase")).toBe(`${never} sensitive financial details.${tail}`);
+    expect(line("connectors")).toBe(`${never} secrets (such as sign-in details).${tail}`);
     expect(line("ecommerce")).toBe(
-      "AI assistants never see sensitive details. In this app: sensitive financial details and secrets (such as sign-in details).",
+      `${never} sensitive financial details and secrets (such as sign-in details).${tail}`,
     );
     expect(line("hr")).toBe(
-      "AI assistants never see sensitive details. In this app: sensitive financial details, confidential HR details, and special-category personal data (such as health).",
+      `${never} sensitive financial details, confidential HR details, and special-category personal data (such as health).${tail}`,
     );
     // The amounts of these four apps are in clear, as their own tables say, so no line may say
     // that money, bank details or pay are hidden from an AI assistant for them.
@@ -1148,6 +1146,11 @@ describe("the plain layer says AI assistants, and the technical part says agents
       expect(list, model).not.toContain(`\`${model}.delete\``);
     expect(connectors.noDelete).toContain("data_flow_log");
     expect(connectors.noDelete).toContain("consent");
+    // Sign: a signing link is kept as a record, so even a person's approval cannot make an AI assistant
+    // delete one (crates/kernel/obop-commands/src/sign/link.rs:30-40); a request can still be deleted.
+    const sign = propose(apps.find((a) => a.id === "sign")!);
+    expect(sign).not.toContain("`sign_link.delete`");
+    expect(sign).toContain("`sign_request.delete`");
     // An app that did not say so lists every model.
     const crmApp = apps.find((a) => a.id === "crm")!;
     expect(propose(crmApp)).toContain("`lead.delete`");

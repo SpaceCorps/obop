@@ -49,8 +49,9 @@ export interface AppCopy {
   /**
    * Models that have no `delete` command, by model name. The technical part lists `model.delete` among
    * the steps an AI assistant can only propose, for every model, which is right where the module
-   * generates the command; a module that makes a model read-only (or refuses the delete) lists it here
-   * so the page does not name a command that is not there.
+   * generates the command; a module that makes a model read-only, or refuses an AI assistant's delete
+   * even once a person approves it (Sign's links), lists it here so the page does not name a step
+   * that can never complete.
    */
   noDelete?: string[];
 }
@@ -78,7 +79,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Sales",
     tagline: "Quotations and orders",
     purpose:
-      "Write quotes for customers and turn them into confirmed orders. Each order belongs to a contact and has lines, a total and a currency. Confirming an order prepares a draft invoice with the same lines, for Invoicing to post. The person who confirms also needs access to Invoicing.",
+      "Write quotes for customers and turn them into confirmed orders. Each order can name a contact and has lines, a total and a currency. Confirming an order prepares a draft invoice with the same lines, for Invoicing to post. The person who confirms also needs access to Invoicing.",
   },
   {
     id: "invoicing",
@@ -134,9 +135,13 @@ export const APP_COPY: AppCopy[] = [
     },
     cards: {
       "party.erase": {
-        text: "Replace a contact's name, email, tax number and notes with [erased], and remove the photo. The Connectors app also deletes the code names and links it kept for this contact. Names typed into other records, such as a lead's contact name, are not changed.",
+        text: "Replace a contact's name, email, tax number and notes with [erased], and remove the photo. The Connectors app also deletes the code names and links it kept for this contact. Names, emails and addresses typed into other records (such as leads, orders and tickets) are not changed, and a placeholder that an AI assistant already holds keeps standing for the old name until its list of placeholders is dropped, which can take a day.",
       },
     },
+    // The placeholder list of an AI session is not touched by the erase: Vault::erase_record
+    // (crates/kernel/obop-masking/src/lib.rs:151) has no caller outside tests, the REST list is kept
+    // 24 hours after its last change (crates/kernel/obop-http/src/shared.rs:20) and restore reads it
+    // (crates/kernel/obop-commands/src/lib.rs:1306-1311).
     // The erase sets name, email, tax_id and notes to "[erased]" and clears the photo
     // (crates/modules/base/src/lib.rs:97-103). The Connectors module, which is built in, listens for
     // party.erase (crates/modules/connectors/src/lib.rs:28, crates/kernel/obop-connectors/src/runtime.rs:1391-1416)
@@ -151,9 +156,9 @@ export const APP_COPY: AppCopy[] = [
     name: "Connectors",
     tagline: "Connect your other tools",
     purpose:
-      "Connect your other tools to obop, with privacy controls built in. These are technical controls that support GDPR compliance, not legal advice or a certification. The catalogue says for every service how much of it is built. Nothing goes out or comes in until the reason for sharing is written down and the details that may be shared are listed. Personal details go out under a code name (a pseudonym) unless you decide otherwise, and sensitive details stay back. Every transfer is logged without its content. When someone withdraws their consent, the service is disconnected and its sign-in details are deleted. A list of what each connection processes is also kept, and you can export it as a starting point for your own record of processing (GDPR Article 30).",
+      "Connect your other tools to obop, with privacy controls built in. These are technical controls that support GDPR compliance, not legal advice or a certification. The catalogue says for every service how much of it is built. No record goes out or comes in through a connection until the reason for sharing is written down and the details that may be shared are listed. Google Drive is the exception: once an administrator has signed in to Google, people with access can browse and import files, and, if allowed, add files, without a recorded reason. Personal details go out under a code name (a pseudonym) unless you decide otherwise, and sensitive details stay back. Every record that goes out or comes in through a connection is logged without its content; Google Drive imports and uploads are logged in the security log instead, and the shop's card payments through Stripe are not in this log. When someone withdraws their consent, the service is disconnected and its sign-in details are deleted. A list of what each connection processes is also kept, and you can export it as a starting point for your own record of processing (GDPR Article 30).",
     technical:
-      "Personal data leaves as keyed pseudonyms by default, the sensitive data classes stay withheld, every flow is recorded without its payload, and withdrawing consent disconnects the service and purges its credentials. The processing register is a generated read model over the connections, providers and consents, exportable as CSV; the complete Article 30 record stays with the operator.",
+      "Personal data leaves as keyed pseudonyms by default, the sensitive data classes stay withheld, every flow through a connection is recorded without its payload, and withdrawing consent disconnects the service and purges its credentials. The processing register is a generated read model over the connections, providers and consents, exportable as CSV; the complete Article 30 record stays with the operator.",
     modelNames: {
       connector_provider: "Service",
       provider_policy: "Service settings",
@@ -181,7 +186,7 @@ export const APP_COPY: AppCopy[] = [
         text: "The reason for sharing recorded for a connection: who, why, which kinds of data, and whether it was withdrawn.",
       },
       data_flow_log: {
-        text: "A record of every transfer, written by obop and not edited by people: when, what, how many, which details, how they were treated, and a fingerprint of the content. Never the content itself. Entries older than the retention period are removed by the purge.",
+        text: "A record of every transfer through a connection, written by obop and not edited by people: when, what, how many, which details, how they were treated, and a fingerprint of the content. Never the content itself. Entries older than the retention period are removed by the purge.",
       },
       processing_register: {
         text: "A generated list of what each connection processes, as a starting point for your own record of processing under GDPR; exportable as CSV.",
@@ -202,7 +207,7 @@ export const APP_COPY: AppCopy[] = [
     // list and search, and nothing that writes).
     modelText: {
       data_flow_log:
-        "Record of every flow, written by obop and not edited by people: when, what, how many, which fields, how treated, and a hash of the payload; never the payload. The purge removes entries older than the retention of their connection.",
+        "Record of every flow through a connection, written by obop and not edited by people: when, what, how many, which fields, how treated, and a hash of the payload; never the payload. The purge removes entries older than the retention of their connection.",
     },
     // The module generates create, update and delete for three models only (connection, provider_policy,
     // consent: handlers.rs:528-531); the other six are read-only (handlers.rs:532-542), and consent.delete
@@ -225,6 +230,12 @@ export const APP_COPY: AppCopy[] = [
     tagline: "Projects and tasks",
     purpose:
       "Plan work as projects, milestones and tasks, with people assigned and deadlines. Progress is tracked by status, which keeps it simple: it suits small teams that want a shared board rather than detailed effort accounting.",
+    // projects_task has no [model.access] (packages/projects.toml:161-): a task without a project is
+    // read by everyone who reads the model, so it is not "private".
+    fieldText: {
+      "projects_task.project_id":
+        "The project this task belongs to; empty for a task that belongs to no project.",
+    },
   },
   {
     id: "helpdesk",
@@ -239,6 +250,11 @@ export const APP_COPY: AppCopy[] = [
     // description, a resolution and dates, and nothing drafts text.
     modelNames: {
       helpdesk_sla: "Response times",
+    },
+    // A flag nothing reads: the only asserts in the packages are accounting.toml:346, pos.toml:226 and
+    // sign.toml:202, and a search of crates/ and web/apps/backoffice/src finds no reader of it.
+    fieldText: {
+      "helpdesk_sla.active": "Marks the policy as in use or not. A label only; nothing checks it.",
     },
     cards: {
       helpdesk_sla: {
@@ -285,7 +301,7 @@ export const APP_COPY: AppCopy[] = [
         text: "Mark the order as confirmed with the vendor. By itself, this does not contact the vendor.",
       },
       "purchase_order.receive": {
-        text: "Record that the goods arrived. If the order has a receiving location, a draft stock move is prepared for each line, for the warehouse to confirm, and you need permission to use Inventory.",
+        text: "Record that the goods arrived. You need permission to use Inventory. If the order has a receiving location, a draft stock move is prepared for each line, for the warehouse to confirm.",
       },
     },
   },
@@ -296,6 +312,12 @@ export const APP_COPY: AppCopy[] = [
     tagline: "Bills of materials",
     purpose:
       "Define what a product is made of and plan manufacturing orders from draft to done. An order goes through draft, confirmed, in progress and done. The stock of the components is not used up automatically.",
+    // A flag nothing reads: the only asserts in the packages are accounting.toml:346, pos.toml:226 and
+    // sign.toml:202, and a search of crates/ and web/apps/backoffice/src finds no reader of it.
+    fieldText: {
+      "manufacturing_bom.active":
+        "Marks the recipe as in use or not. A label only; nothing checks it.",
+    },
     modelNames: {
       manufacturing_bom: "Bill of materials",
       manufacturing_bom_line: "Component",
@@ -349,10 +371,20 @@ export const APP_COPY: AppCopy[] = [
     name: "Field Service",
     tagline: "Jobs on site",
     purpose:
-      "Schedule on-site jobs for customers: who does the work, where, when, which parts were used and whether the customer must sign off. Site addresses and contacts are personal data and are treated as such.",
+      "Schedule on-site jobs for customers: who does the work, where, when, which parts were used and a note of whether the customer is to sign off. Site addresses and contacts are personal data and are treated as such.",
+    // The complete action has no assert and no effect (packages/field_service.toml:168-175), and
+    // nothing in crates/ or web/apps/backoffice/src reads signature_required: a job is finished
+    // whether or not it is set. The package text is the manifest's (line 5) with one clause changed:
+    // it says "whether the customer must sign off".
+    packageText:
+      "On-site jobs for customers, done by a technician: scheduled, en route, in progress, done or cancelled. A job records the customer, the site, the technician, the planned day and start (minutes since midnight), the parts used and a note of whether the customer is to sign off. Site address and contact details are personal data. Needs the Human Resources and Products packages.",
+    fieldText: {
+      "field_service_job.signature_required":
+        "Whether the customer is to sign off the work. A reminder only: a job can be finished without it.",
+    },
     cards: {
       "field_service_job.complete": {
-        text: "Finish the job. If the customer must sign off, write down who signed and when first.",
+        text: "Finish the job. Nothing checks that the customer signed; if they are to sign off, write down who signed and when.",
       },
     },
   },
@@ -365,6 +397,14 @@ export const APP_COPY: AppCopy[] = [
       "Keep track of a shop's cash register: open and close the cash drawer, and record each sale and how it was paid. It records what happened at the register. It is not connected to card terminals, and card numbers must never be stored.",
     modelNames: {
       pos_config: "Point of sale",
+    },
+    // A flag nothing reads: the only asserts in the packages are accounting.toml:346, pos.toml:226 and
+    // sign.toml:202, and a search of crates/ and web/apps/backoffice/src finds no reader of it.
+    fieldText: {
+      "pos_config.cash_control":
+        "Whether sessions are meant to count the cash in the drawer when they open and close. A label only; nothing checks it.",
+      "pos_config.allow_refunds":
+        "Whether cashiers are meant to propose refunds at this point of sale. A label only; nothing checks it.",
     },
     cards: {
       "pos_order.pay": {
@@ -386,10 +426,10 @@ export const APP_COPY: AppCopy[] = [
       "With the public site turned on, obop shows the shop to visitors and takes orders; a custom storefront can use the API instead.",
     cards: {
       "ecommerce_order.refund": {
-        text: "Record the refund of a paid order that was not delivered. For card payments through Stripe the money is returned too; otherwise you pay it back yourself.",
+        text: "Record the refund of a paid order that was not delivered. For card payments through Stripe, obop asks Stripe to refund the payment first, and the order stays paid if Stripe refuses; this is tested only against a stand-in, not against Stripe itself. Otherwise you pay it back yourself.",
       },
       "ecommerce_order.refund_delivered": {
-        text: "Record the refund of a delivered order, for example after a return. For card payments through Stripe the money is returned too; otherwise you pay it back yourself.",
+        text: "Record the refund of a delivered order, for example after a return. For card payments through Stripe, obop asks Stripe to refund the payment first, and the order stays paid if Stripe refuses; this is tested only against a stand-in, not against Stripe itself. Otherwise you pay it back yourself.",
       },
     },
   },
@@ -399,7 +439,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Website",
     tagline: "Pages and forms",
     purpose:
-      "Hold the content of a public website: pages, menus, blog posts and the forms visitors send. This app stores and organises the content; with the public site turned on, obop shows it to visitors. Publishing is for managers; an AI assistant can only propose it.",
+      "Hold the content of a public website: pages, menus, blog posts and the forms visitors send. This app stores and organises the content; with the public site turned on, obop shows it to visitors. Publishing is for managers; an AI assistant can only propose it. Edits to a published page need no further approval.",
   },
   {
     id: "email_marketing",
@@ -413,6 +453,12 @@ export const APP_COPY: AppCopy[] = [
     // action marks the campaign as sent. The rest of the text is the manifest's, word for word.
     packageText:
       "Mailing lists, the contacts on them with their consent status and date, and campaigns with a draft, scheduled, sent flow. Marking a campaign as sent needs a manager, and agents may only propose it; obop does not send the emails itself. Campaign statistics are numbers entered or imported, not computed. Contacts are personal data: keep consent_status and consent_date accurate and never mail a contact that is not opted_in.",
+    // email_marketing_list.is_public: packages/email_marketing.toml has no [model.public] section and
+    // nothing in crates/ or web/apps/backoffice/src reads the flag.
+    fieldText: {
+      "email_marketing_list.is_public":
+        "A label only; nothing checks it, and this app has no sign-up page for visitors.",
+    },
     cards: {
       email_marketing_campaign: {
         text: "One mailing to a list: its subject, sender, content and the day it should go out. By itself, obop does not send it.",
@@ -435,18 +481,34 @@ export const APP_COPY: AppCopy[] = [
     tagline: "Files and folders",
     purpose:
       "A register of business documents, with their folder, kind, owner, expiry date and confidentiality. You can keep the file itself here, or just a note of where it is kept.",
+    // The manifest says publish makes a draft "the current version" (packages/documents.toml:132): the
+    // action only moves state to published, and the model has no version or history field.
+    cards: {
+      "documents_document.publish": {
+        text: "Mark a draft document as published.",
+      },
+    },
   },
   {
     id: "sign",
     category: "content",
     name: "Sign",
-    tagline: "E-signatures",
+    tagline: "Simple e-signatures",
     purpose:
-      "Keep templates and signature requests, and follow each request from draft to signed. This is a simple electronic signature: the signer types their name, which does not prove who they are. For a PDF from Documents it keeps an exact copy and a check code. An AI assistant cannot create signing links.",
+      "Collect simple electronic signatures: the signer types their name, which does not prove who they are. Keep templates and signature requests, and follow each request from draft to signed. For a PDF from Documents it keeps an exact copy and a check code. An AI assistant cannot create signing links.",
     technical:
       "For a PDF from Documents the app records the SHA-256 hash of the file and keeps an exact copy. A signed request can be changed or deleted only by an administrator, and the record is not tamper-proof: whoever can write the database can change it.",
     modelNames: {
       sign_request: "Signature request",
+    },
+    // sign_link.delete is refused to everyone but a person in the admin group, so an AI assistant's
+    // delete is refused even after a person approves it (crates/kernel/obop-commands/src/sign/link.rs:30-40,
+    // is_admin at sign/mod.rs:196-198): the page names no such step. The manifest's email field says
+    // "obop sends no email" (packages/sign.toml:95); a connection can send one (sign_docuseal).
+    noDelete: ["sign_link"],
+    fieldText: {
+      "sign_request.signer_email":
+        "Email address of the signer; optional. By itself, obop sends no email for a request about a document.",
     },
     cards: {
       "sign_request.send": {
@@ -467,6 +529,12 @@ export const APP_COPY: AppCopy[] = [
     tagline: "Plans and subscriptions",
     purpose:
       "Define recurring plans and follow your customers' subscriptions, from trial to cancelled. A subscription is in trial, active, past due or cancelled, and has the date of its next invoice. It does not create invoices by itself.",
+    // A flag nothing reads: the only asserts in the packages are accounting.toml:346, pos.toml:226 and
+    // sign.toml:202, and a search of crates/ and web/apps/backoffice/src finds no reader of it.
+    fieldText: {
+      "subscriptions_plan.active":
+        "Marks the plan as open to new customers or not. A label only; nothing checks it.",
+    },
     cards: {
       "subscriptions_subscription.activate": {
         text: "Mark the subscription as active when the trial ends. By itself, this does not start any billing.",
@@ -505,6 +573,15 @@ export const APP_COPY: AppCopy[] = [
       accounting_move: "Journal entry",
       accounting_move_line: "Journal entry line",
     },
+    // deprecated, active (journal, tax): the only assert in the package is the balance
+    // (packages/accounting.toml:346) and nothing in crates/ or web/apps/backoffice/src reads these flags.
+    fieldText: {
+      "accounting_account.deprecated":
+        "A label only: entries can still be posted to a deprecated account.",
+      "accounting_journal.active":
+        "A label only: entries can still be booked in an inactive journal.",
+      "accounting_tax.active": "A label only: an inactive tax can still be put on a line.",
+    },
     cards: {
       "accounting_fiscal_year.close": {
         text: "Mark the fiscal year as closed. This is a label only: entries can still be posted into it.",
@@ -541,6 +618,12 @@ export const APP_COPY: AppCopy[] = [
     tagline: "Bookable resources",
     purpose:
       "Describe the people, rooms and equipment that can be booked, and record appointments with a date, a start and an end. Overlapping bookings are not prevented automatically.",
+    // A flag nothing reads: the only asserts in the packages are accounting.toml:346, pos.toml:226 and
+    // sign.toml:202, and a search of crates/ and web/apps/backoffice/src finds no reader of it.
+    fieldText: {
+      "appointments_resource.active":
+        "Marks the resource as bookable or not. A label only; nothing checks it.",
+    },
   },
   {
     id: "expenses",

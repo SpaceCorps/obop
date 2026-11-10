@@ -46,6 +46,13 @@ class = "internal"
 personal_data = true
 kind = "longtext"
 
+[[model.field]]
+name = "photo"
+description = "Photo or logo of the contact (PNG, JPEG, WebP or GIF, up to 2 MiB)"
+class = "internal"
+personal_data = true
+kind = "image"
+
 [[model.action]]
 name = "erase"
 description = "Anonymise the party in place and record the erasure"

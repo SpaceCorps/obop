@@ -115,7 +115,7 @@ export const de: Messages = {
     mockCaption: "Illustration mit Beispieldaten",
     appsTitle: "Alle Ihre Geschäfts-Apps. Eine Datenbank.",
     appsSub:
-      "Alle Apps teilen sich dieselben Kontakte, Produkte und Berechtigungen, sodass nichts zusammengeklebt werden muss. Sechs Apps sind integriert; die anderen 22 installieren Sie über den Marktplatz.",
+      "Alle Apps teilen sich dieselben Kontakte, Produkte und Berechtigungen, sodass nichts zusammengeklebt werden muss. Einige Apps sind integriert; die anderen installieren Sie über den Marktplatz.",
     seeAllApps: "Alle Apps und ihre Datenmodelle ansehen",
     pillarsTitle: "Gebaut für die heutige Arbeitsweise",
     pillarsSub:
@@ -299,8 +299,8 @@ export const de: Messages = {
   apps: {
     title: "Apps",
     description:
-      "Hier sind 28 obop-Apps: 6 sind bei obop dabei und 22 weitere zum Hinzufügen. Öffnen Sie eine App, um zu sehen, was sie kann.",
-    lead: "Die Apps für den Arbeitsalltag in einem kleinen Unternehmen.",
+      "Hier sind 28 der obop-Apps: 6 sind bei obop dabei und 22 weitere zum Hinzufügen. Öffnen Sie eine App, um zu sehen, was sie kann.",
+    lead: "Die Apps für den Arbeitsalltag in einem kleinen Unternehmen, noch in der Beta.",
     filterLabel: "Apps filtern",
     all: "Alle",
     available: "Verfügbar",
@@ -390,7 +390,7 @@ export const de: Messages = {
     guideLink: "Der Modulleitfaden zeigt, wie Apps wie diese geschrieben werden",
     englishNote: "Englisch",
     agentsCan:
-      "Ein Agent kann Datensätze dieser App lesen, durchsuchen, anlegen und aktualisieren sowie Aktionen ausführen, die keine Freigabe brauchen, und zwar innerhalb der Berechtigungsgruppen seines Tokens.",
+      "Ein Agent kann Datensätze dieser App lesen und durchsuchen, sie anlegen und aktualisieren, wo das Modell es erlaubt, sowie Aktionen ausführen, die keine Freigabe brauchen, und zwar innerhalb der Berechtigungsgruppen seines Tokens.",
     agentsPropose:
       "Diese Schritte kann er nur vorschlagen, und eine Person muss sie freigeben: {list}.",
     agentsMasked: "Personenbezogene Daten werden als Platzhalter maskiert: {list}.",
@@ -429,8 +429,9 @@ export const de: Messages = {
       included: "In jedem obop enthalten.",
       experimentalNote: "Noch in der Erprobung. Probieren Sie es zuerst mit Beispieldaten aus.",
       safeMasked:
-        "KI-Assistenten sehen Namen, E-Mail-Adressen und andere persönliche Angaben nur als Platzhalter.",
-      safeWithheld: "KI-Assistenten sehen sensible Angaben nie. In dieser App: {list}.",
+        "KI-Assistenten sehen die als personenbezogen gekennzeichneten Felder, etwa Namen und E-Mail-Adressen, nur als Platzhalter. Text in einem Feld, das nicht als personenbezogen gekennzeichnet ist, etwa in einer Beschreibung, wird nicht durch einen Platzhalter ersetzt.",
+      safeWithheld:
+        "KI-Assistenten sehen die als sensibel gekennzeichneten Felder nie. In dieser App: {list}. Ein Preis oder eine Summe wird angezeigt, es sei denn, ihr Feld gehört dazu.",
       safeKinds: {
         financial: "sensible Finanzangaben",
         confidential_hr: "vertrauliche Personalangaben",
@@ -469,7 +470,7 @@ export const de: Messages = {
       website: "Seiten und Formulare",
       email_marketing: "Kampagnen",
       documents: "Dateien und Ordner",
-      sign: "Elektronische Signaturen",
+      sign: "Einfache elektronische Signaturen",
       subscriptions: "Tarife und Abonnements",
       dashboards: "Berichte und Diagramme",
       accounting: "Hauptbuch und Journale",
