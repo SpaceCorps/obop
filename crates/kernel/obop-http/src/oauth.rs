@@ -295,10 +295,12 @@ pub(crate) async fn authorization_server(State(s): Shared, h: HeaderMap) -> Resp
     if s.oauth.is_none() {
         return disabled();
     }
+    // An anonymous document: the brand is asked first and once, as the discovery documents do.
+    let brand = super::mcp::document_brand(&s).await;
     let base = s.mcp.base_url(&h);
     super::mcp::public_json(
         "application/json",
-        &obop_oauth::authorization_server_metadata(&base),
+        &obop_oauth::authorization_server_metadata(&base, &brand),
     )
 }
 

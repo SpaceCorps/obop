@@ -19,6 +19,8 @@ mod brand_cmd_tests;
 #[cfg(test)]
 mod brand_commands_tests;
 #[cfg(test)]
+mod brand_docs_tests;
+#[cfg(test)]
 mod brand_enrol_tests;
 #[cfg(test)]
 mod brand_http_tests;

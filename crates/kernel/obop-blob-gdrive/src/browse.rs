@@ -308,7 +308,9 @@ impl DriveBrowser {
             return Err(if e.folder {
                 "that is a folder".into()
             } else {
-                "obop cannot bring that kind of Google file in (only Docs, Sheets, Slides, Drawings and ordinary files)"
+                // No product is named: this is read by any person who imports a file, on every
+                // instance (docs/spec/branding.md, OT-14).
+                "That kind of Google file cannot be brought in (only Docs, Sheets, Slides, Drawings and ordinary files)"
                     .into()
             });
         }

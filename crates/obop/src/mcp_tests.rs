@@ -101,7 +101,7 @@ async fn rpc(r: &axum::Router, token: &str, session: &str, msg: J) -> Resp {
     post_raw(r, Some(token), Some(session), msg.to_string(), &[]).await
 }
 
-async fn initialize(r: &axum::Router, token: &str, version: &str) -> (String, J) {
+pub(crate) async fn initialize(r: &axum::Router, token: &str, version: &str) -> (String, J) {
     let resp = post_raw(
         r,
         Some(token),
@@ -1405,8 +1405,10 @@ async fn pins_the_anonymous_documents_and_initialize_as_an_instance_with_no_bran
 }
 
 /// The rows of `DOCUMENT_PINS` for one instance: the `initialize` result and the six anonymous
-/// documents. (The same builder is held to the same table with a brand row in the store, by
-/// `with_a_brand_row_the_anonymous_documents_and_initialize_are_what_they_were`.)
+/// documents. (With a brand row in the store the documents that name nothing are held to the same
+/// table by `with_a_brand_row_the_documents_that_name_nothing_are_what_they_were`; `initialize` and
+/// the documents that name the instance read the row from slice S3 on and are held to the branded
+/// words, member by member, in `brand_docs_tests.rs`.)
 pub(crate) async fn document_table(
     inst: &crate::mfa_tests::pin::Instance,
 ) -> Vec<(String, String)> {
@@ -1445,20 +1447,35 @@ pub(crate) async fn document_table(
     now
 }
 
-/// S1a: the brand row is in the store and no surface reads it yet, so the documents are the ones
-/// an instance with no row sends, byte for byte. The reader of the dispatcher is told the row
-/// exists (`set_brand` checks that it answers the name), so a document that began to read it would
-/// move a digest here. The slice that makes a document show the name moves its pin in its own
-/// commit, with the reason.
+/// With a brand row in the store, the documents that name nothing of the instance are what they
+/// were, byte for byte: the catalogue (it has no human field and never asks the reader) and the
+/// refusal that an instance without an OAuth server sends for the authorization server's metadata.
+/// The other rows of the table are what slice S3 changes on purpose: with a row, `initialize` and
+/// the server card carry the name, the protected-resource documents carry the name and lose their
+/// link, and the metadata of the authorization server carries no name and only loses its link;
+/// `brand_docs_tests.rs` holds each of those differences, member by member, against the same
+/// documents without the row. (Until S3 this test held every row of the table to its digest: the
+/// surfaces did not read the row yet.)
 #[tokio::test]
-async fn with_a_brand_row_the_anonymous_documents_and_initialize_are_what_they_were() {
+async fn with_a_brand_row_the_documents_that_name_nothing_are_what_they_were() {
     use crate::mfa_tests::pin;
+    const UNMOVED: [&str; 3] = [
+        "dev/ai_catalog",
+        "dev/authorization_server",
+        "auth/ai_catalog",
+    ];
     let mut now = Vec::new();
     for inst in pin::instances().await {
         crate::brand_row_tests::set_brand(&inst.app);
         now.extend(document_table(&inst).await);
     }
-    pin::check("DOCUMENT_PINS", DOCUMENT_PINS, &now);
+    now.retain(|(name, _)| UNMOVED.contains(&name.as_str()));
+    let pinned: Vec<(&str, &str)> = DOCUMENT_PINS
+        .iter()
+        .copied()
+        .filter(|(name, _)| UNMOVED.contains(name))
+        .collect();
+    pin::check("DOCUMENT_PINS_UNMOVED", &pinned, &now);
 }
 
 // Printed by `OBOP_PRINT_PINS=1` on origin/main 12a59a79 and pasted here.
