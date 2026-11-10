@@ -338,7 +338,7 @@ test.describe("website without JavaScript", () => {
     ]);
     // What it works with is a count (the names are the "Works with" section below the strip).
     await expect(page.locator(".app-facts dd")).toHaveText([
-      "Beta",
+      "Stable",
       "0.2.1",
       "2 apps",
       "Apache-2.0",
@@ -583,8 +583,9 @@ test.describe("website without JavaScript", () => {
       );
       const withheld = withheldClasses.size > 0;
       const version = /^version\s*=\s*"([^"]+)"/m.exec(toml)![1]!;
-      // The site rates the six built-in apps beta, whatever their snapshot says (see BUILTIN_MATURITY).
-      const maturity = app.builtin ? "beta" : /^maturity\s*=\s*"([^"]+)"/m.exec(toml)![1]!;
+      // The word is the file's own, for a built-in app too (its snapshot says stable, as the Rust does).
+      const maturity = /^maturity\s*=\s*"([^"]+)"/m.exec(toml)![1]!;
+      if (app.builtin) expect(maturity, "the Connectors snapshot says stable").toBe("stable");
       const deps = [
         ...(/^depends\s*=\s*\[([^\]]*)\]/m.exec(toml)?.[1] ?? "").matchAll(/"([^"]+)"/g),
       ].map((m) => m[1]!);
@@ -649,7 +650,8 @@ test.describe("website without JavaScript", () => {
         await expect(keeps.locator(".app-more > summary")).toHaveText(
           s.showMoreKeeps.replace("{n}", String(foldedModels)),
         );
-      // AI assistants and this app: exactly the lines the manifest earns.
+      // AI agents and this app: the sentence that says what an AI agent is, then exactly the lines the
+      // manifest earns.
       const kinds = (["financial", "confidential_hr", "special_category", "secret"] as const)
         .filter((c) => withheldClasses.has(c))
         .map((c) => s.safeKinds[c]);
@@ -666,14 +668,17 @@ test.describe("website without JavaScript", () => {
         approvals ? s.safeApprove : s.safeApproveNone,
       ];
       await expect(page.locator(".app-safe li")).toHaveText(lines);
+      await expect(page.locator("#safe-with-agents")).toHaveText(s.safe);
+      await expect(page.locator("#safe-with-agents + .app-safe-what + .app-safe")).toHaveCount(1);
+      await expect(page.locator(".app-safe-what")).toHaveText(s.safeWhat);
       // Said out loud for the two pages: what each withholds, and nothing it does not.
       if (app.slug === "accounting")
         expect(lines).toContain(
-          "AI assistants never see the fields marked as sensitive. In this app: sensitive financial details. A price or a total is shown unless its field is one of these.",
+          "AI agents never see the fields marked as sensitive. In this app: sensitive financial details. A price or a total is shown unless its field is one of these.",
         );
       if (app.slug === "connectors")
         expect(lines).toContain(
-          "AI assistants never see the fields marked as sensitive. In this app: secrets (such as sign-in details). A price or a total is shown unless its field is one of these.",
+          "AI agents never see the fields marked as sensitive. In this app: secrets (such as sign-in details). A price or a total is shown unless its field is one of these.",
         );
       // Works with: a link for each dependency that is an app of its own.
       if (deps.includes("base"))
@@ -727,7 +732,7 @@ test.describe("website without JavaScript", () => {
   }) => {
     // The large first sentence of every page is for a person who does not build software: none of
     // the words of apps/site/scripts/lib/plain.ts is in it (nor in the quiet paragraph under it, nor
-    // in the cards that are shown, nor in the lines about AI assistants). What was left out is the
+    // in the cards that are shown, nor in the lines about AI agents). What was left out is the
     // first paragraph of the technical part, in the page and in the Markdown copy. The list is the
     // one the unit tests read, so the two cannot differ.
     // The rule can fail: a text with such words in it is found.
@@ -761,7 +766,7 @@ test.describe("website without JavaScript", () => {
       if (await fold.count()) await fold.click();
       const rest = (await page.locator(".app-purpose-rest").allInnerTexts()).join(" ");
       expect(technicalIn(rest), `${slug} rest: ${rest}`).toBeNull();
-      // The cards that are shown, and the lines about AI assistants.
+      // The cards that are shown, and the sentence and the lines about AI agents.
       const cards = [
         ...(await page.locator("#can-do ~ .app-cards > .app-card").allInnerTexts()),
         ...(await page.locator("#keeps ~ .app-cards > .app-card").allInnerTexts()),
@@ -770,6 +775,8 @@ test.describe("website without JavaScript", () => {
         expect(technicalIn(card.replace(/\s+/g, " ")), `${slug} card: ${card}`).toBeNull();
       for (const line of await page.locator(".app-safe li").allInnerTexts())
         expect(technicalIn(line), `${slug} safe line: ${line}`).toBeNull();
+      const what = await page.locator(".app-safe-what").innerText();
+      expect(technicalIn(what), `${slug} safe sentence: ${what}`).toBeNull();
     }
     // The page the review named first: the dashboards sentence says what a person gets.
     await page.goto(`${base()}/apps/dashboards/`);
@@ -826,6 +833,144 @@ test.describe("website without JavaScript", () => {
       );
     }
   });
+
+  test("the six built-in apps say Stable on every surface, in every language, and none of them says Beta", async ({
+    page,
+    request,
+  }) => {
+    // The owner's ruling of 2026-11-10: the built-in apps show the maturity their snapshots and the Rust
+    // code say (stable), not the word the loader once forced. The pages as built: the strip, the
+    // information list, the text of the page (the folded technical part included), the structured
+    // data, the descriptions, the Markdown copy, the index and llms-full.txt. (The banner and the home
+    // page FAQ are the site's own and say that obop is in beta; they are not on these pages.)
+    const slugs = ["contacts", "products", "crm", "sales", "invoicing", "connectors"];
+    for (const locale of Object.keys(messages) as (keyof typeof messages)[]) {
+      const m = messages[locale].apps;
+      const prefix = locale === "en" ? "" : `/${locale}`;
+      const beta = new RegExp(`(?<!\\p{L})${m.meta.maturities.beta}(?!\\p{L})`, "iu");
+      // The rule can fail: the language's own word for beta is found, and "Betalning" is not it.
+      expect(`Maturity: ${m.meta.maturities.beta}`).toMatch(beta);
+      expect(`Maturity: ${m.meta.maturities.stable}`).not.toMatch(beta);
+      for (const slug of slugs) {
+        const where = `${locale} ${slug}`;
+        await page.goto(`${base()}${prefix}/apps/${slug}/`, { waitUntil: "domcontentloaded" });
+        await expect(page.locator(".app-facts dd").first(), where).toHaveText(
+          m.meta.maturities.stable,
+        );
+        await expect(
+          page.locator(".app-info > div", { hasText: m.meta.maturity }).locator("dd").first(),
+          where,
+        ).toHaveText(m.meta.maturities.stable);
+        const text = await page.locator("main").evaluate((el) => el.textContent ?? "");
+        expect(text, `${where}: the page text`).not.toMatch(beta);
+        const data = await page
+          .locator(
+            'script[type="application/ld+json"], meta[name="description"], meta[property="og:description"]',
+          )
+          .evaluateAll((els) =>
+            els.map((el) => (el.tagName === "META" ? el.getAttribute("content") : el.textContent)),
+          );
+        expect(data.join(" "), `${where}: structured data and descriptions`).not.toMatch(beta);
+        const md = await (await request.get(`${base()}${prefix}/apps/${slug}.md`)).text();
+        expect(md, `${where}: the Markdown copy`).not.toMatch(beta);
+        expect(md, where).toContain(`**${m.meta.maturity}:** ${m.meta.maturities.stable}`);
+      }
+      // The index: the tiles and rows name no maturity, and its lead no longer says "still in beta".
+      await page.goto(`${base()}${prefix}/apps/`, { waitUntil: "domcontentloaded" });
+      expect(await page.locator("main").evaluate((el) => el.textContent ?? ""), locale).not.toMatch(
+        beta,
+      );
+      expect(
+        await (await request.get(`${base()}${prefix}/apps.md`)).text(),
+        `${locale} apps.md`,
+      ).not.toMatch(beta);
+    }
+    // llms-full.txt: the six English sections say Stable once in the strip, once in the information
+    // list and once in the technical table.
+    const sections = (await (await request.get(`${base()}/llms-full.txt`)).text())
+      .split("\n\n---\n\n")
+      .filter((section) => section.includes("\n## What it is for\n"));
+    const builtin = sections.filter((section) =>
+      slugs.some((slug) => section.trimEnd().endsWith(`/apps/${slug}/`)),
+    );
+    expect(builtin, "the six built-in sections of llms-full.txt").toHaveLength(6);
+    for (const section of builtin) {
+      expect(section.split("**Maturity:** Stable").length - 1).toBe(3);
+      expect(section).not.toMatch(/(?<!\p{L})beta(?!\p{L})/iu);
+    }
+    // The marketplace apps keep their manifests' words: some are beta and some experimental.
+    const maturities = new Set(
+      sections.flatMap((section) =>
+        [...section.matchAll(/\*\*Maturity:\*\* (\w+)/g)].map((x) => x[1]),
+      ),
+    );
+    expect([...maturities].sort()).toEqual(["Beta", "Experimental", "Stable"]);
+  });
+
+  // The owner's ruling of 2026-11-10: the app pages say "AI agent", not "AI assistant", and each page
+  // explains the word once. The word each language uses on its home page and in its docs; "asistente"
+  // alone is also an attendee in the product's own Spanish labels of an appointment.
+  const agent = {
+    en: /\bAI agents?\b/,
+    sv: /\bAI-agent(?:er)?\b/,
+    de: /\bKI-Agent(?:en)?\b/,
+    fr: /\bagents? IA\b/,
+    pl: /\bagen(?:t|ci) AI\b/i,
+    fi: /\btekoälyagentti|\btekoälyagentit/i,
+    es: /\bagentes? de IA\b/,
+  } as const;
+  const assistant = /assistants?\b|assistent|asystent|asystenc|avustaj|asistentes? de IA/i;
+
+  test("the sentence that says what an AI agent is is the owner's, and the rule that finds 'assistant' can fail", () => {
+    expect(messages.en.apps.store.safeWhat).toBe(
+      "An AI agent is an AI program that works in obop for a person, and can do no more than that person may.",
+    );
+    for (const example of [
+      "AI assistants and this app",
+      "KI-Assistenten und diese App",
+      "Les assistants IA",
+      "Asystenci AI i ta aplikacja",
+      "Tekoälyavustajat näkevät",
+      "Los asistentes de IA",
+      "AI-assistenter och den här appen",
+    ])
+      expect(example).toMatch(assistant);
+    expect("Nombre del asistente").not.toMatch(assistant);
+  });
+
+  // One test for each language (28 pages each), so that none runs past the 30 seconds a test has.
+  for (const locale of Object.keys(messages) as (keyof typeof messages)[]) {
+    test(`${locale}: every app page explains what an AI agent is once, right under the heading, in the language's own word, and says assistant nowhere`, async ({
+      page,
+      request,
+    }) => {
+      const s = messages[locale].apps.store;
+      const urls = (await pagesOf(request, locale)).filter((u) => /\/apps\/.+\/$/.test(u));
+      expect(urls, locale).toHaveLength(28);
+      for (const url of urls) {
+        const where = `${locale} ${url}`;
+        await page.goto(`${base()}${url}`, { waitUntil: "domcontentloaded" });
+        await expect(page.locator("#safe-with-agents"), where).toHaveText(s.safe);
+        expect(s.safe, where).toMatch(agent[locale]);
+        await expect(
+          page.locator("#safe-with-agents + .app-safe-what + .app-safe"),
+          where,
+        ).toHaveCount(1);
+        await expect(page.locator(".app-safe-what"), where).toHaveText(s.safeWhat);
+        // The plain part is the page without its folded technical part; the sentence is in it once,
+        // and nowhere else on the page.
+        const plain = await page.locator("main").evaluate((el) => {
+          const copy = el.cloneNode(true) as HTMLElement;
+          copy.querySelector("#developers")?.remove();
+          return copy.textContent ?? "";
+        });
+        expect(plain.split(s.safeWhat).length - 1, `${where}: the sentence, once`).toBe(1);
+        expect(plain, `${where}: no assistant`).not.toMatch(assistant);
+        const all = await page.locator("main").evaluate((el) => el.textContent ?? "");
+        expect(all.split(s.safeWhat).length - 1, `${where}: not in the technical part`).toBe(1);
+      }
+    });
+  }
 
   test("the section after the technical part lists the other apps of the category, and says so", async ({
     page,
@@ -1398,18 +1543,16 @@ test.describe("crawlers and agents", () => {
     );
   });
 
-  test("the line about what an AI assistant never sees names only what the app withholds, and the log is not said to be append-only", async ({
+  test("the line about what an AI agent never sees names only what the app withholds, and the log is not said to be append-only", async ({
     request,
   }) => {
     // Money is in clear on these four pages (a vehicle's cost, an order total, a sale's amounts: their
     // data class is none), so none of them may say that money, bank details or pay are hidden.
     const line = async (slug: string) => {
       const md = await (await request.get(`${base()}/apps/${slug}.md`)).text();
-      return (
-        /^- (AI assistants never see the fields marked as sensitive\..*)$/m.exec(md)?.[1] ?? ""
-      );
+      return /^- (AI agents never see the fields marked as sensitive\..*)$/m.exec(md)?.[1] ?? "";
     };
-    const never = "AI assistants never see the fields marked as sensitive. In this app:";
+    const never = "AI agents never see the fields marked as sensitive. In this app:";
     const tail = " A price or a total is shown unless its field is one of these.";
     expect(await line("fleet")).toBe(`${never} confidential HR details.${tail}`);
     expect(await line("purchase")).toBe(`${never} sensitive financial details.${tail}`);
@@ -2841,12 +2984,11 @@ test.describe("accessibility", () => {
               await check(big, `at ${width}px, ${percent}% text`);
             }
           }
-          // Not vacuous: every maturity word a page shows in the language, and the line for an app that
-          // needs no other app, was on a page that was measured. No page says "Stable": the six
-          // built-in apps are rated beta (BUILTIN_MATURITY) and no bundled package is stable.
-          const { stable: _unused, ...shown } = messages[locale].apps.meta.maturities;
+          // Not vacuous: every maturity word a page shows in the language (stable for the six built-in
+          // apps, beta and experimental for the bundled packages), and the line for an app that needs
+          // no other app, was on a page that was measured.
           expect([...maturities].sort(), `${locale} maturity words measured`).toEqual(
-            Object.values(shown).sort(),
+            Object.values(messages[locale].apps.meta.maturities).sort(),
           );
           expect(standalone, `${locale} pages with no other app measured`).toBeGreaterThan(0);
         }
@@ -2904,9 +3046,9 @@ test.describe("accessibility", () => {
       browser,
       request,
     }) => {
-      // The lines about AI assistants sat beside an icon, and the box round them was in rem: at 200
+      // The lines about AI agents sat beside an icon, and the box round them was in rem: at 200
       // percent text on a 320 px phone the line had 158 of the box's 256 px, and English words that fit
-      // the box ("assistants", "placeholders", "permissions") were cut inside ("assista" / "nts"). A card
+      // the box ("placeholders", "permissions") were cut inside. A card
       // title ("statement") was cut the same way. Hyphenation is switched off (English has none anyway,
       // so what is measured is what a visitor sees), every fold is open, and a word wider than the
       // whole line may still break: nothing can keep it whole.

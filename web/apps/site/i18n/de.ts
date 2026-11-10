@@ -300,7 +300,7 @@ export const de: Messages = {
     title: "Apps",
     description:
       "Hier sind 28 der obop-Apps: 6 sind bei obop dabei und 22 weitere zum Hinzufügen. Öffnen Sie eine App, um zu sehen, was sie kann.",
-    lead: "Die Apps für den Arbeitsalltag in einem kleinen Unternehmen, noch in der Beta.",
+    lead: "Die Apps für den Arbeitsalltag in einem kleinen Unternehmen.",
     filterLabel: "Apps filtern",
     all: "Alle",
     available: "Verfügbar",
@@ -405,7 +405,9 @@ export const de: Messages = {
       get: "Laden",
       canDo: "Was Sie damit tun können",
       keeps: "Was sie speichert",
-      safe: "KI-Assistenten und diese App",
+      safe: "KI-Agenten und diese App",
+      safeWhat:
+        "Ein KI-Agent ist ein KI-Programm, das in obop für eine Person arbeitet und nicht mehr tun darf als diese Person.",
       worksWith: "Funktioniert mit",
       info: "Informationen",
       developers: "Für Entwickler",
@@ -429,9 +431,9 @@ export const de: Messages = {
       included: "In jedem obop enthalten.",
       experimentalNote: "Noch in der Erprobung. Probieren Sie es zuerst mit Beispieldaten aus.",
       safeMasked:
-        "KI-Assistenten sehen die als personenbezogen gekennzeichneten Felder, etwa Namen und E-Mail-Adressen, nur als Platzhalter. Text in einem Feld, das nicht als personenbezogen gekennzeichnet ist, etwa in einer Beschreibung, wird nicht durch einen Platzhalter ersetzt.",
+        "KI-Agenten sehen die als personenbezogen gekennzeichneten Felder, etwa Namen und E-Mail-Adressen, nur als Platzhalter. Text in einem Feld, das nicht als personenbezogen gekennzeichnet ist, etwa in einer Beschreibung, wird nicht durch einen Platzhalter ersetzt.",
       safeWithheld:
-        "KI-Assistenten sehen die als sensibel gekennzeichneten Felder nie. In dieser App: {list}. Ein Preis oder eine Summe wird angezeigt, es sei denn, ihr Feld gehört dazu.",
+        "KI-Agenten sehen die als sensibel gekennzeichneten Felder nie. In dieser App: {list}. Ein Preis oder eine Summe wird angezeigt, es sei denn, ihr Feld gehört dazu.",
       safeKinds: {
         financial: "sensible Finanzangaben",
         confidential_hr: "vertrauliche Personalangaben",
@@ -439,9 +441,9 @@ export const de: Messages = {
         secret: "Geheimnisse (etwa Zugangsdaten)",
       },
       safeApprove:
-        "Einige Schritte kann ein KI-Assistent nur vorschlagen, eine Person gibt sie frei. Andere Schritte darf er selbst ausführen, im Rahmen seiner Berechtigungen.",
+        "Einige Schritte kann ein KI-Agent nur vorschlagen, eine Person gibt sie frei. Andere Schritte darf er selbst ausführen, im Rahmen seiner Berechtigungen.",
       safeApproveNone:
-        "Ein KI-Assistent kann das Löschen von Datensätzen nur vorschlagen, eine Person gibt es frei. Alles andere darf er selbst tun, im Rahmen seiner Berechtigungen.",
+        "Ein KI-Agent kann das Löschen von Datensätzen nur vorschlagen, eine Person gibt es frei. Alles andere darf er selbst tun, im Rahmen seiner Berechtigungen.",
       appMeta: "Eine App für obop, die Open-Source-Plattform für Unternehmen.",
       developersShow: "Technische Details anzeigen",
       developersHide: "Technische Details ausblenden",

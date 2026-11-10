@@ -58,6 +58,8 @@ export interface AppView {
   actions: Card[];
   /** One card per model: what the app keeps. */
   models: Card[];
+  /** The one plain sentence that opens the section and says what an AI agent is (once per page). */
+  safeWhat: string;
   safe: string[];
   worksWith: AppLink[];
   /** Other apps of the same category, at most six. */
@@ -239,7 +241,7 @@ export function appView(app: App, m: Messages, all: App[], locale = "en"): AppVi
   // masked, what is withheld, and that a person approves the steps an agent can only propose. The
   // withheld line names only the kinds of detail this app really withholds (the data classes of its
   // withheld fields): an app whose amounts are in clear (an order total) must not say that money is
-  // hidden from an AI assistant.
+  // hidden from an AI agent.
   const fields = app.models.flatMap((model) => model.fields);
   const safe: string[] = [];
   if (fields.some((f) => agentView(f) === "masked")) safe.push(s.safeMasked);
@@ -312,6 +314,7 @@ export function appView(app: App, m: Messages, all: App[], locale = "en"): AppVi
     purposeFold: rest.more !== "",
     actions,
     models,
+    safeWhat: s.safeWhat,
     safe,
     worksWith,
     related,

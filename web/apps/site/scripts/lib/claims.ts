@@ -120,16 +120,16 @@ export const CLAIMS: readonly Claim[] = [
   },
   {
     re: /which a person must approve/i,
-    why: "a person with the group acts directly; approval is asked of an AI assistant (crates/kernel/obop-commands/src/lib.rs:1095)",
+    why: "a person with the group acts directly; approval is asked of an AI agent (crates/kernel/obop-commands/src/lib.rs:1095)",
     example:
       "A separate erase step, which a person must approve, removes a contact's personal details.",
   },
   {
-    // Not "when an AI assistant proposes it": that is the true sentence.
-    re: /\bneeds? approval\b(?!\s+(?:when|if|from) an AI assistant)/i,
-    why: "approval is asked of an AI assistant only (crates/kernel/obop-commands/src/lib.rs:1095)",
+    // Not "when an AI agent proposes it": that is the true sentence.
+    re: /\bneeds? approval\b(?!\s+(?:when|if|from) an AI agent)/i,
+    why: "approval is asked of an AI agent only (crates/kernel/obop-commands/src/lib.rs:1095)",
     example: "Publishing needs approval.",
-    fine: ["A refund needs approval when an AI assistant proposes it."],
+    fine: ["A refund needs approval when an AI agent proposes it."],
   },
   {
     re: /only people who may approve/i,
@@ -154,19 +154,19 @@ export const CLAIMS: readonly Claim[] = [
   },
   {
     re: /never see sensitive details/i,
-    why: "money is in clear for an AI assistant wherever its class is none: Fleet cost, Purchase and POS totals, eCommerce order and payment amounts (packages/fleet.toml:192-195, purchase.toml:117-121, pos.toml, ecommerce.toml), and obop-masking allows that class (crates/kernel/obop-masking/src/lib.rs:15-33)",
+    why: "money is in clear for an AI agent wherever its class is none: Fleet cost, Purchase and POS totals, eCommerce order and payment amounts (packages/fleet.toml:192-195, purchase.toml:117-121, pos.toml, ecommerce.toml), and obop-masking allows that class (crates/kernel/obop-masking/src/lib.rs:15-33)",
     example:
-      "AI assistants never see sensitive details, such as money amounts, bank details, pay, health data or sign-in details.",
+      "AI agents never see sensitive details, such as money amounts, bank details, pay, health data or sign-in details.",
     fine: [
-      "AI assistants never see the fields marked as sensitive. In this app: sensitive financial details. A price or a total is shown unless its field is one of these.",
+      "AI agents never see the fields marked as sensitive. In this app: sensitive financial details. A price or a total is shown unless its field is one of these.",
     ],
   },
   {
     re: /see only part of/i,
     why: "a masked field is shown as a placeholder, never in part (crates/kernel/obop-commands/src/lib.rs:1381-1387, crates/kernel/obop-masking/src/lib.rs:22-30)",
-    example: "AI assistants see only part of people's personal details.",
+    example: "AI agents see only part of people's personal details.",
     fine: [
-      "AI assistants see the fields marked as personal data, such as names and emails, only as placeholders.",
+      "AI agents see the fields marked as personal data, such as names and emails, only as placeholders.",
     ],
   },
   {
@@ -223,7 +223,7 @@ export const CLAIMS: readonly Claim[] = [
     re: /drafts a first assessment|keep ownership of the replies/i,
     why: "a ticket holds no assessment and no reply (packages/helpdesk.toml:57-165)",
     example:
-      "A typical use is an AI assistant that reads new tickets and drafts a first assessment, while people keep ownership of the replies.",
+      "A typical use is an AI agent that reads new tickets and drafts a first assessment, while people keep ownership of the replies.",
   },
   {
     re: /\bAll 28 obop apps\b/i,
@@ -233,10 +233,10 @@ export const CLAIMS: readonly Claim[] = [
   },
   {
     re: /see names, emails and other personal details only as placeholders/i,
-    why: "masking acts on the fields marked as personal data, and nothing reads free text: a name typed into a description reaches an AI assistant as written (crates/kernel/obop-commands/src/lib.rs:1377-1378, crates/kernel/obop-masking/src/lib.rs:15-33)",
-    example: "AI assistants see names, emails and other personal details only as placeholders.",
+    why: "masking acts on the fields marked as personal data, and nothing reads free text: a name typed into a description reaches an AI agent as written (crates/kernel/obop-commands/src/lib.rs:1377-1378, crates/kernel/obop-masking/src/lib.rs:15-33)",
+    example: "AI agents see names, emails and other personal details only as placeholders.",
     fine: [
-      "AI assistants see the fields marked as personal data, such as names and emails, only as placeholders. Text typed into a field that is not marked as personal data, such as a description, is not replaced by a placeholder.",
+      "AI agents see the fields marked as personal data, such as names and emails, only as placeholders. Text typed into a field that is not marked as personal data, such as a description, is not replaced by a placeholder.",
     ],
   },
   {
@@ -328,11 +328,11 @@ export const CLAIMS: readonly Claim[] = [
     fine: ["Mark the order as sent to the vendor. By itself, this does not contact the vendor."],
   },
   {
-    re: /AI assistants never see (?:money|amounts?|financial)/i,
-    why: "money is in clear for an AI assistant wherever its class is none (crates/kernel/obop-masking/src/lib.rs:15-33)",
-    example: "AI assistants never see money amounts.",
+    re: /AI agents never see (?:money|amounts?|financial)/i,
+    why: "money is in clear for an AI agent wherever its class is none (crates/kernel/obop-masking/src/lib.rs:15-33)",
+    example: "AI agents never see money amounts.",
     fine: [
-      "AI assistants never see the fields marked as sensitive. In this app: sensitive financial details.",
+      "AI agents never see the fields marked as sensitive. In this app: sensitive financial details.",
     ],
   },
   {

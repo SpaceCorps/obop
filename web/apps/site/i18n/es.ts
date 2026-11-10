@@ -301,7 +301,7 @@ export const es: Messages = {
     title: "Aplicaciones",
     description:
       "Estas son 28 de las aplicaciones de obop: 6 vienen con obop y 22 más para añadir. Abre una aplicación para ver qué hace.",
-    lead: "Las aplicaciones para el trabajo diario de una pequeña empresa, todavía en beta.",
+    lead: "Las aplicaciones para el trabajo diario de una pequeña empresa.",
     filterLabel: "Filtrar aplicaciones",
     all: "Todas",
     available: "Disponibles",
@@ -403,7 +403,9 @@ export const es: Messages = {
       get: "Obtener",
       canDo: "Qué puedes hacer",
       keeps: "Qué guarda",
-      safe: "Los asistentes de IA y esta aplicación",
+      safe: "Los agentes de IA y esta aplicación",
+      safeWhat:
+        "Un agente de IA es un programa de IA que trabaja en obop para una persona y no puede hacer más de lo que a esa persona se le permite.",
       worksWith: "Funciona con",
       info: "Información",
       developers: "Para desarrolladores",
@@ -427,9 +429,9 @@ export const es: Messages = {
       included: "Incluida en cada obop.",
       experimentalNote: "Todavía en pruebas. Pruébala primero con datos de ejemplo.",
       safeMasked:
-        "Los asistentes de IA ven los campos marcados como datos personales, como los nombres y los correos electrónicos, solo como marcadores de posición. El texto escrito en un campo que no está marcado como dato personal, como una descripción, no se sustituye por un marcador.",
+        "Los agentes de IA ven los campos marcados como datos personales, como los nombres y los correos electrónicos, solo como marcadores de posición. El texto escrito en un campo que no está marcado como dato personal, como una descripción, no se sustituye por un marcador.",
       safeWithheld:
-        "Los asistentes de IA nunca ven los campos marcados como sensibles. En esta aplicación: {list}. Un precio o un total se muestra, salvo que su campo sea uno de estos.",
+        "Los agentes de IA nunca ven los campos marcados como sensibles. En esta aplicación: {list}. Un precio o un total se muestra, salvo que su campo sea uno de estos.",
       safeKinds: {
         financial: "datos financieros sensibles",
         confidential_hr: "datos confidenciales de recursos humanos",
@@ -437,9 +439,9 @@ export const es: Messages = {
         secret: "secretos (por ejemplo, credenciales de acceso)",
       },
       safeApprove:
-        "Algunos pasos un asistente de IA solo puede proponerlos, y una persona los aprueba. Los demás puede hacerlos por su cuenta, dentro de sus permisos.",
+        "Algunos pasos un agente de IA solo puede proponerlos, y una persona los aprueba. Los demás puede hacerlos por su cuenta, dentro de sus permisos.",
       safeApproveNone:
-        "Un asistente de IA solo puede proponer eliminar registros, y una persona lo aprueba. Todo lo demás puede hacerlo por su cuenta, dentro de sus permisos.",
+        "Un agente de IA solo puede proponer eliminar registros, y una persona lo aprueba. Todo lo demás puede hacerlo por su cuenta, dentro de sus permisos.",
       appMeta: "Una aplicación para obop, la plataforma de código abierto para empresas.",
       developersShow: "Mostrar detalles técnicos",
       developersHide: "Ocultar detalles técnicos",

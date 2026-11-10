@@ -153,7 +153,7 @@ export function developerBody(
       .map((f) => code(`${model.name}.${f.name}`)),
   );
   out.push(`${h2} ${a.h.agents}`, "", a.agentsCan, "");
-  // Every model has a delete step an AI assistant can only propose, except the few a module makes
+  // Every model has a delete step an AI agent can only propose, except the few a module makes
   // read-only (data/apps.ts `noDelete`).
   const propose = [
     ...approvals.map(code),
@@ -244,7 +244,7 @@ export function appMirror(
   for (const c of v.models) out.push(`- **${c.title}**: ${c.text}`);
   out.push("");
 
-  out.push(`## ${s.safe}`, "");
+  out.push(`## ${s.safe}`, "", v.safeWhat, "");
   for (const line of v.safe) out.push(`- ${line}`);
   out.push("");
 

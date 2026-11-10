@@ -300,7 +300,7 @@ export const fi: Messages = {
     title: "Sovellukset",
     description:
       "Tässä 28 obopin sovellusta: 6 tulee obopin mukana ja 22 muuta, jotka voit ottaa käyttöön. Avaa sovellus nähdäksesi, mitä se tekee.",
-    lead: "Sovellukset pienyrityksen arkeen, vielä beta-vaiheessa.",
+    lead: "Sovellukset pienyrityksen arkeen.",
     filterLabel: "Suodata sovelluksia",
     all: "Kaikki",
     available: "Saatavilla",
@@ -403,7 +403,9 @@ export const fi: Messages = {
       get: "Lataa",
       canDo: "Mitä voit tehdä",
       keeps: "Mitä se tallentaa",
-      safe: "Tekoäly ja tämä sovellus",
+      safe: "Tekoälyagentit ja tämä sovellus",
+      safeWhat:
+        "Tekoälyagentti on tekoälyohjelma, joka toimii obopissa ihmisen puolesta eikä voi tehdä enempää kuin tämä ihminen saa.",
       worksWith: "Toimii yhdessä",
       info: "Tiedot",
       developers: "Kehittäjille",
@@ -432,9 +434,9 @@ export const fi: Messages = {
       included: "Sisältyy jokaiseen obopiin.",
       experimentalNote: "Vielä testauksessa. Kokeile sitä ensin esimerkkitiedoilla.",
       safeMasked:
-        "Tekoälyavustajat näkevät henkilötiedoiksi merkityt kentät, kuten nimet ja sähköpostiosoitteet, vain paikkamerkkeinä. Kenttään, jota ei ole merkitty henkilötiedoksi, esimerkiksi kuvaukseen, kirjoitettua tekstiä ei korvata paikkamerkillä.",
+        "Tekoälyagentit näkevät henkilötiedoiksi merkityt kentät, kuten nimet ja sähköpostiosoitteet, vain paikkamerkkeinä. Kenttään, jota ei ole merkitty henkilötiedoksi, esimerkiksi kuvaukseen, kirjoitettua tekstiä ei korvata paikkamerkillä.",
       safeWithheld:
-        "Tekoälyavustajat eivät koskaan näe arkaluonteisiksi merkittyjä kenttiä. Tässä sovelluksessa: {list}. Hinta tai summa näytetään, ellei sen kenttä ole yksi näistä.",
+        "Tekoälyagentit eivät koskaan näe arkaluonteisiksi merkittyjä kenttiä. Tässä sovelluksessa: {list}. Hinta tai summa näytetään, ellei sen kenttä ole yksi näistä.",
       safeKinds: {
         financial: "arkaluonteiset taloustiedot",
         confidential_hr: "luottamukselliset henkilöstötiedot",
@@ -442,9 +444,9 @@ export const fi: Messages = {
         secret: "salaisuudet (esimerkiksi kirjautumistiedot)",
       },
       safeApprove:
-        "Joitakin vaiheita tekoälyavustaja voi vain ehdottaa, ja henkilö hyväksyy ne. Muut vaiheet se voi tehdä itse, oikeuksiensa rajoissa.",
+        "Joitakin vaiheita tekoälyagentti voi vain ehdottaa, ja henkilö hyväksyy ne. Muut vaiheet se voi tehdä itse, oikeuksiensa rajoissa.",
       safeApproveNone:
-        "Tekoälyavustaja voi vain ehdottaa tietueiden poistamista, ja henkilö hyväksyy sen. Kaiken muun se voi tehdä itse, oikeuksiensa rajoissa.",
+        "Tekoälyagentti voi vain ehdottaa tietueiden poistamista, ja henkilö hyväksyy sen. Kaiken muun se voi tehdä itse, oikeuksiensa rajoissa.",
       appMeta: "Sovellus obopille, avoimen lähdekoodin yritysalustalle.",
       developersShow: "Näytä tekniset tiedot",
       developersHide: "Piilota tekniset tiedot",

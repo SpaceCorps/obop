@@ -1,7 +1,7 @@
 /**
  * The words and shapes that a person who does not build software cannot read, which the plain layer
  * of an app page (the large sentence, the paragraph under it, the cards that are visible without
- * opening a fold, the lines about AI assistants, the strip) leaves to the part for developers. One
+ * opening a fold, the lines about AI agents, the strip) leaves to the part for developers. One
  * list, read by the unit tests and by the browser tests, so the two cannot disagree (a copy of it
  * once lost its `\b` to two backspace characters and could not fail).
  *

@@ -456,7 +456,15 @@
   display: none;
 }
 
-/* The AI assistants and this app: up to three short lines. */
+/* The AI agents and this app: one sentence that says what an AI agent is, then up to three short lines. */
+.app-safe-what {
+  max-inline-size: 46rem;
+  margin: 0 0 var(--space-4);
+  color: var(--text-muted);
+  font-size: 1.0625rem;
+  line-height: 1.5;
+  overflow-wrap: break-word;
+}
 .app-safe {
   /* Asks its own width (in rem, so a larger text size asks for more room), see the container rule below. */
   container-type: inline-size;

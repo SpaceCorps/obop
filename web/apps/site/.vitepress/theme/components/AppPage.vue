@@ -83,6 +83,7 @@ const pathParts = (path: string) => path.split(new RegExp("(?<=/)"));
 
     <section class="app-sec">
       <h2 id="safe-with-agents">{{ s.safe }}</h2>
+      <p class="app-safe-what">{{ view.safeWhat }}</p>
       <ul class="app-safe" role="list">
         <li v-for="line in view.safe" :key="line">
           <Icon name="shield-check" :size="22" />{{ line }}

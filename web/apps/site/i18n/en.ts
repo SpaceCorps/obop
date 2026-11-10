@@ -292,7 +292,7 @@ export const en: Messages = {
     title: "Apps",
     description:
       "Here are 28 of the obop apps: 6 that come with obop and 22 more you can add. Open an app to see what it does.",
-    lead: "The apps for everyday work in a small business, still in beta.",
+    lead: "The apps for everyday work in a small business.",
     filterLabel: "Filter apps",
     all: "All",
     available: "Available",
@@ -392,7 +392,9 @@ export const en: Messages = {
       get: "Get",
       canDo: "What you can do",
       keeps: "What it keeps",
-      safe: "AI assistants and this app",
+      safe: "AI agents and this app",
+      safeWhat:
+        "An AI agent is an AI program that works in obop for a person, and can do no more than that person may.",
       worksWith: "Works with",
       info: "Information",
       developers: "For developers",
@@ -416,9 +418,9 @@ export const en: Messages = {
       included: "Included in every obop.",
       experimentalNote: "Still being tested. Try it with sample data first.",
       safeMasked:
-        "AI assistants see the fields marked as personal data, such as names and emails, only as placeholders. Text typed into a field that is not marked as personal data, such as a description, is not replaced by a placeholder.",
+        "AI agents see the fields marked as personal data, such as names and emails, only as placeholders. Text typed into a field that is not marked as personal data, such as a description, is not replaced by a placeholder.",
       safeWithheld:
-        "AI assistants never see the fields marked as sensitive. In this app: {list}. A price or a total is shown unless its field is one of these.",
+        "AI agents never see the fields marked as sensitive. In this app: {list}. A price or a total is shown unless its field is one of these.",
       safeKinds: {
         financial: "sensitive financial details",
         confidential_hr: "confidential HR details",
@@ -426,9 +428,9 @@ export const en: Messages = {
         secret: "secrets (such as sign-in details)",
       },
       safeApprove:
-        "Some steps an AI assistant can only propose, and a person approves them. Other steps it can take on its own, within its permissions.",
+        "Some steps an AI agent can only propose, and a person approves them. Other steps it can take on its own, within its permissions.",
       safeApproveNone:
-        "An AI assistant can only propose deleting records, and a person approves that. Everything else it can do on its own, within its permissions.",
+        "An AI agent can only propose deleting records, and a person approves that. Everything else it can do on its own, within its permissions.",
       appMeta: "An app for obop, the open-source platform for business.",
       developersShow: "Show technical details",
       developersHide: "Hide technical details",

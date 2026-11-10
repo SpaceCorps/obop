@@ -88,14 +88,6 @@ function load(file: string): Raw {
   return parse(readFileSync(file, "utf8")) as Raw;
 }
 
-/**
- * The maturity this site states for the six built-in apps. Their module metadata (the Rust constant
- * behind `data/builtin/*.toml`) says "stable", but the product is in beta, as the FAQ on the home page
- * says, so a page that said "Stable" next to "Is obop ready for production? Not yet." would contradict
- * the site's own answer. The marketplace apps keep the word their manifest says.
- */
-export const BUILTIN_MATURITY = "beta";
-
 /** `depends = [...]` (any version) and `[module.dependencies]` (a requirement each), in that order. */
 function dependenciesOf(mod: Raw): Dependency[] {
   const out: Dependency[] = ((mod["depends"] as string[] | undefined) ?? []).map((id) => ({
@@ -164,7 +156,7 @@ function toApp(raw: Raw, builtin: boolean, source: string): App {
       support: str(mod["support"]),
       keywords: (mod["keywords"] as string[] | undefined) ?? [],
       categories: (mod["categories"] as string[] | undefined) ?? [],
-      maturity: builtin ? BUILTIN_MATURITY : str(mod["maturity"]),
+      maturity: str(mod["maturity"]),
       requiresCore: str(mod["requires_core"], "*"),
     },
     dependencies: dependenciesOf(mod),
@@ -261,7 +253,7 @@ export type AgentView = "clear" | "masked" | "withheld";
 /**
  * The data classes an agent token never receives (obop-masking `mode_for`: a sensitive class or a
  * secret is denied; every other class is allowed, personal data masked). A money field of class
- * `none` is not among them: an AI assistant sees an order total.
+ * `none` is not among them: an AI agent sees an order total.
  */
 export const WITHHELD_CLASSES = [
   "financial",

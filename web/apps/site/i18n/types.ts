@@ -206,6 +206,8 @@ export interface Messages {
       canDo: string;
       keeps: string;
       safe: string;
+      /** One plain sentence that says what an AI agent is; it opens the section `safe`, once on every app page. */
+      safeWhat: string;
       worksWith: string;
       info: string;
       developers: string;
@@ -245,7 +247,7 @@ export interface Messages {
       /** One plain line under the facts of an experimental app (maturity "experimental"). */
       experimentalNote: string;
       safeMasked: string;
-      /** The line about what an AI assistant never sees; {list} is the kinds below that the app holds. */
+      /** The line about what an AI agent never sees; {list} is the kinds below that the app holds. */
       safeWithheld: string;
       /** One kind of withheld detail, by the data class that is withheld (apps.ts `WITHHELD_CLASSES`). */
       safeKinds: Record<"financial" | "confidential_hr" | "special_category" | "secret", string>;

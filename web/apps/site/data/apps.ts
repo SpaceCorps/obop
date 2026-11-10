@@ -48,8 +48,8 @@ export interface AppCopy {
   fieldText?: Record<string, string>;
   /**
    * Models that have no `delete` command, by model name. The technical part lists `model.delete` among
-   * the steps an AI assistant can only propose, for every model, which is right where the module
-   * generates the command; a module that makes a model read-only, or refuses an AI assistant's delete
+   * the steps an AI agent can only propose, for every model, which is right where the module
+   * generates the command; a module that makes a model read-only, or refuses an AI agent's delete
    * even once a person approves it (Sign's links), lists it here so the page does not name a step
    * that can never complete.
    */
@@ -71,7 +71,7 @@ export const APP_COPY: AppCopy[] = [
     name: "CRM",
     tagline: "Follow your sales leads",
     purpose:
-      "Keep track of possible sales, from the first contact until you win or lose them. Each lead has a title, a contact name and email, the revenue you expect and a stage. Moving a lead through the steps of a sale is a single action that your team and its AI assistants can both take.",
+      "Keep track of possible sales, from the first contact until you win or lose them. Each lead has a title, a contact name and email, the revenue you expect and a stage. Moving a lead through the steps of a sale is a single action that your team and its AI agents can both take.",
   },
   {
     id: "sales",
@@ -87,7 +87,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Invoicing",
     tagline: "Bill your customers",
     purpose:
-      "Prepare invoices for your customers as drafts, then post each one: posting gives it its own number, in a yearly series with no gaps. Posting needs a person with the right permission: an AI assistant can prepare the draft and propose posting it, but cannot post it.",
+      "Prepare invoices for your customers as drafts, then post each one: posting gives it its own number, in a yearly series with no gaps. Posting needs a person with the right permission: an AI agent can prepare the draft and propose posting it, but cannot post it.",
     cards: {
       invoice: {
         text: "A customer invoice: its lines, a total that adds them up, and a number once it is posted.",
@@ -119,7 +119,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Products",
     tagline: "Your products and prices",
     purpose:
-      "The list of everything you sell, with its name, product code, price and cost. Cost is shown only to people who may see costs, so a sales assistant can quote a price without seeing your margins.",
+      "The list of everything you sell, with its name, product code, price and cost. Cost is shown only to people who may see costs, so a salesperson can quote a price without seeing your margins.",
   },
   {
     id: "base",
@@ -127,7 +127,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Contacts",
     tagline: "People and companies",
     purpose:
-      "One record for every person and company you deal with, used by Sales, Invoicing, Purchase and other apps. Names and email addresses are personal data, so AI assistants see them only as placeholders, and the tax number is kept from them completely. A separate erase step, for the privacy officer role, replaces a contact's details with [erased].",
+      "One record for every person and company you deal with, used by Sales, Invoicing, Purchase and other apps. Names and email addresses are personal data, so AI agents see them only as placeholders, and the tax number is kept from them completely. A separate erase step, for the privacy officer role, replaces a contact's details with [erased].",
     technical:
       "The erase action anonymises a contact in place and is gated by approval. Names and emails are masked for agents; the tax identifier is withheld.",
     modelNames: {
@@ -135,7 +135,7 @@ export const APP_COPY: AppCopy[] = [
     },
     cards: {
       "party.erase": {
-        text: "Replace a contact's name, email, tax number and notes with [erased], and remove the photo. The Connectors app also deletes the code names and links it kept for this contact. Names, emails and addresses typed into other records (such as leads, orders and tickets) are not changed, and a placeholder that an AI assistant already holds keeps standing for the old name until its list of placeholders is dropped, which can take a day.",
+        text: "Replace a contact's name, email, tax number and notes with [erased], and remove the photo. The Connectors app also deletes the code names and links it kept for this contact. Names, emails and addresses typed into other records (such as leads, orders and tickets) are not changed, and a placeholder that an AI agent already holds keeps standing for the old name until its list of placeholders is dropped, which can take a day.",
       },
     },
     // The placeholder list of an AI session is not touched by the erase: Vault::erase_record
@@ -243,7 +243,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Helpdesk",
     tagline: "Support tickets",
     purpose:
-      "Keep customer support requests and work through them, with priorities and response-time targets. An AI assistant can read new tickets and set their category and priority, within its permissions. Closing a ticket is a manager's step that an AI assistant can only propose.",
+      "Keep customer support requests and work through them, with priorities and response-time targets. An AI agent can read new tickets and set their category and priority, within its permissions. Closing a ticket is a manager's step that an AI agent can only propose.",
     // Category and priority are fields of a ticket that the ticket's write group may set
     // (packages/helpdesk.toml:94-107, model at 57-60); closing is for helpdesk.manager and needs approval
     // (packages/helpdesk.toml:178-186). The module holds no assessment and no reply: a ticket has a
@@ -329,7 +329,7 @@ export const APP_COPY: AppCopy[] = [
     name: "HR",
     tagline: "Employees and leave",
     purpose:
-      "A register of employees, departments and leave requests, with strict rules about who sees what. Pay, bank details and national ID number are visible to managers only, and health or union data only to the people given that access. AI assistants never see any of these.",
+      "A register of employees, departments and leave requests, with strict rules about who sees what. Pay, bank details and national ID number are visible to managers only, and health or union data only to the people given that access. AI agents never see any of these.",
   },
   {
     id: "timesheets",
@@ -421,7 +421,7 @@ export const APP_COPY: AppCopy[] = [
     name: "eCommerce",
     tagline: "Online store",
     purpose:
-      "Keep the data of an online shop: listings, shipping methods, discount codes and web orders. Orders follow a fulfilment flow, and refunds are for managers; an AI assistant can only propose them. When the public site is turned on, obop shows the shop to visitors and takes their orders.",
+      "Keep the data of an online shop: listings, shipping methods, discount codes and web orders. Orders follow a fulfilment flow, and refunds are for managers; an AI agent can only propose them. When the public site is turned on, obop shows the shop to visitors and takes their orders.",
     technical:
       "With the public site turned on, obop shows the shop to visitors and takes orders; a custom storefront can use the API instead.",
     cards: {
@@ -439,7 +439,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Website",
     tagline: "Pages and forms",
     purpose:
-      "Hold the content of a public website: pages, menus, blog posts and the forms visitors send. This app stores and organises the content; with the public site turned on, obop shows it to visitors. Publishing is for managers; an AI assistant can only propose it. Edits to a published page need no further approval.",
+      "Hold the content of a public website: pages, menus, blog posts and the forms visitors send. This app stores and organises the content; with the public site turned on, obop shows it to visitors. Publishing is for managers; an AI agent can only propose it. Edits to a published page need no further approval.",
   },
   {
     id: "email_marketing",
@@ -495,13 +495,13 @@ export const APP_COPY: AppCopy[] = [
     name: "Sign",
     tagline: "Simple e-signatures",
     purpose:
-      "Collect simple electronic signatures: the signer types their name, which does not prove who they are. Keep templates and signature requests, and follow each request from draft to signed. For a PDF from Documents it keeps an exact copy and a check code. An AI assistant cannot create signing links.",
+      "Collect simple electronic signatures: the signer types their name, which does not prove who they are. Keep templates and signature requests, and follow each request from draft to signed. For a PDF from Documents it keeps an exact copy and a check code. An AI agent cannot create signing links.",
     technical:
       "For a PDF from Documents the app records the SHA-256 hash of the file and keeps an exact copy. A signed request can be changed or deleted only by an administrator, and the record is not tamper-proof: whoever can write the database can change it.",
     modelNames: {
       sign_request: "Signature request",
     },
-    // sign_link.delete is refused to everyone but a person in the admin group, so an AI assistant's
+    // sign_link.delete is refused to everyone but a person in the admin group, so an AI agent's
     // delete is refused even after a person approves it (crates/kernel/obop-commands/src/sign/link.rs:30-40,
     // is_admin at sign/mod.rs:196-198): the page names no such step. The manifest's email field says
     // "obop sends no email" (packages/sign.toml:95); a connection can send one (sign_docuseal).
@@ -631,6 +631,6 @@ export const APP_COPY: AppCopy[] = [
     name: "Expenses",
     tagline: "Claims and approvals",
     purpose:
-      "Employees file expense claims that move from draft to submitted, approved and paid. Paying is for the finance role; an AI assistant can only propose it. Receipts are mentioned in a note, not stored.",
+      "Employees file expense claims that move from draft to submitted, approved and paid. Paying is for the finance role; an AI agent can only propose it. Receipts are mentioned in a note, not stored.",
   },
 ];

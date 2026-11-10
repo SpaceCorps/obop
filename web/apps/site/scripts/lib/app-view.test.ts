@@ -16,7 +16,6 @@ import {
   wordCount,
 } from "./app-view.ts";
 import {
-  BUILTIN_MATURITY,
   agentView as agentViewOf,
   appName,
   loadApps,
@@ -730,6 +729,7 @@ describe("the plain text of an app page leaves the technical words to the part f
           technicalIn(`${card.kicker ?? ""} ${card.title} ${card.text}`),
           `${app.id} card "${card.title}": ${card.text}`,
         ).toBeNull();
+      expect(technicalIn(v.safeWhat), `${app.id}: ${v.safeWhat}`).toBeNull();
       for (const line of v.safe) expect(technicalIn(line), `${app.id}: ${line}`).toBeNull();
       for (const f of v.facts) expect(technicalIn(f.value), `${app.id} ${f.label}`).toBeNull();
       expect(technicalIn(messages.en.apps.taglines[app.id] ?? ""), `${app.id} tagline`).toBeNull();
@@ -1039,28 +1039,94 @@ describe("the page and its Markdown copy hold the same technical tables", () => 
   });
 });
 
-describe("the plain layer says AI assistants, and the technical part says agents", () => {
-  test("no word 'agent' in the heading, the lines or the large text, in any language", () => {
-    const agent = /agent|agenci|agentit/i;
+describe("the plain layer says AI agents and explains the word once; the technical part says agents", () => {
+  // The word each language uses for an AI agent on its home page and in its docs.
+  const AGENT: Record<(typeof LOCALES)[number], RegExp> = {
+    en: /\bAI agents?\b/,
+    sv: /\bAI-agent(?:er)?\b/,
+    de: /\bKI-Agent(?:en)?\b/,
+    fr: /\bagents? IA\b/,
+    pl: /\bagen(?:t|ci) AI\b/i,
+    fi: /\btekoälyagentti|\btekoälyagentit/i,
+    es: /\bagentes? de IA\b/,
+  };
+  // The word the owner dropped, in each language (the plural of Polish "asystent" is "asystenci"). Spanish
+  // "asistente" alone is also an attendee, as the product's own label of an appointment says, so only
+  // "asistente de IA" is the old word.
+  const ASSISTANT = /assistants?\b|assistent|asystent|asystenc|avustaj|asistentes? de IA/i;
+
+  test("the rule that finds the old word can fail, in every language", () => {
+    for (const example of [
+      "AI assistants and this app",
+      "KI-Assistenten und diese App",
+      "Les assistants IA",
+      "Asystenci AI i ta aplikacja",
+      "Tekoälyavustajat näkevät",
+      "Los asistentes de IA",
+      "AI-assistenter och den här appen",
+    ])
+      expect(example).toMatch(ASSISTANT);
+    expect("Tekoälyagentit ja tämä sovellus").not.toMatch(ASSISTANT);
+    for (const locale of LOCALES) expect(messages[locale].apps.store.safe).toMatch(AGENT[locale]);
+  });
+
+  test("the heading and the lines say 'AI agent' in the language's own word, and none says assistant", () => {
     for (const locale of LOCALES) {
       const s = messages[locale].apps.store;
       for (const key of [
         "safe",
+        "safeWhat",
         "safeMasked",
         "safeWithheld",
         "safeApprove",
         "safeApproveNone",
-      ] as const)
-        expect(s[key], `${locale} ${key}`).not.toMatch(agent);
-      for (const kind of Object.values(s.safeKinds)) expect(kind, locale).not.toMatch(agent);
+      ] as const) {
+        expect(s[key], `${locale} ${key}`).toMatch(AGENT[locale]);
+        expect(s[key], `${locale} ${key}`).not.toMatch(ASSISTANT);
+      }
+      for (const kind of Object.values(s.safeKinds)) expect(kind, locale).not.toMatch(ASSISTANT);
+      expect(s.needsApproval, locale).not.toMatch(ASSISTANT);
+      expect(messages[locale].apps.lead, locale).not.toMatch(ASSISTANT);
     }
-    for (const app of apps) {
-      const { lead, rest } = splitPurpose(app.purpose);
-      expect(`${lead} ${rest}`, app.id).not.toMatch(agent);
+    // The sentence, as the owner asked for it.
+    expect(messages.en.apps.store.safeWhat).toBe(
+      "An AI agent is an AI program that works in obop for a person, and can do no more than that person may.",
+    );
+  });
+
+  test("every app page has the explanation exactly once in its plain part, in every language, and no assistant", () => {
+    for (const locale of LOCALES) {
+      const m = messages[locale];
+      const s = m.apps.store;
+      for (const app of apps) {
+        const where = `${locale} ${app.id}`;
+        expect(appView(app, m, apps, locale).safeWhat, where).toBe(s.safeWhat);
+        const md = appMirror(app, locale, m, "", apps);
+        const cut = md.indexOf(`## ${s.developers}`);
+        expect(cut, where).toBeGreaterThan(0);
+        const plain = md.slice(0, cut);
+        // Once, and right under the heading that it opens, before the lines.
+        expect(plain.split(s.safeWhat).length - 1, where).toBe(1);
+        expect(plain, where).toContain(`## ${s.safe}\n\n${s.safeWhat}\n\n- `);
+        expect(plain, where).not.toMatch(ASSISTANT);
+        // And not again in the part for developers.
+        expect(md.split(s.safeWhat).length - 1, where).toBe(1);
+      }
     }
   });
 
-  // A visitor could not learn what an AI assistant cannot read when the line said only "sensitive
+  test("the part for developers keeps the word 'agent'", () => {
+    for (const locale of LOCALES) {
+      const a = messages[locale].apps;
+      for (const app of apps) {
+        const body = developerBody(app, locale, messages[locale], true, "", apps);
+        expect(body, `${locale} ${app.id}`).toContain(a.agentsPropose.split("{list}")[0]!);
+        expect(body, `${locale} ${app.id}`).not.toMatch(ASSISTANT);
+      }
+    }
+  });
+
+  // A visitor could not learn what an AI agent cannot read when the line said only "sensitive
   // details"; but a line that names money amounts is false where the amounts are in clear (an order
   // total, a vehicle's cost: their data class is none). So the line names the kinds of the data
   // classes that are withheld on this page, and no others.
@@ -1108,7 +1174,7 @@ describe("the plain layer says AI assistants, and the technical part says agents
     const line = (id: string) =>
       view(apps.find((a) => a.id === id)!).safe.find((l) => /never see/.test(l))!;
     // The line says what is held back, and that a price or a total is shown unless its own field is.
-    const never = "AI assistants never see the fields marked as sensitive. In this app:";
+    const never = "AI agents never see the fields marked as sensitive. In this app:";
     const tail = " A price or a total is shown unless its field is one of these.";
     expect(line("fleet")).toBe(`${never} confidential HR details.${tail}`);
     expect(line("purchase")).toBe(`${never} sensitive financial details.${tail}`);
@@ -1120,7 +1186,7 @@ describe("the plain layer says AI assistants, and the technical part says agents
       `${never} sensitive financial details, confidential HR details, and special-category personal data (such as health).${tail}`,
     );
     // The amounts of these four apps are in clear, as their own tables say, so no line may say
-    // that money, bank details or pay are hidden from an AI assistant for them.
+    // that money, bank details or pay are hidden from an AI agent for them.
     for (const id of ["fleet", "purchase", "pos", "ecommerce"]) {
       const app = apps.find((a) => a.id === id)!;
       const money = app.models
@@ -1146,7 +1212,7 @@ describe("the plain layer says AI assistants, and the technical part says agents
       expect(list, model).not.toContain(`\`${model}.delete\``);
     expect(connectors.noDelete).toContain("data_flow_log");
     expect(connectors.noDelete).toContain("consent");
-    // Sign: a signing link is kept as a record, so even a person's approval cannot make an AI assistant
+    // Sign: a signing link is kept as a record, so even a person's approval cannot make an AI agent
     // delete one (crates/kernel/obop-commands/src/sign/link.rs:30-40); a request can still be deleted.
     const sign = propose(apps.find((a) => a.id === "sign")!);
     expect(sign).not.toContain("`sign_link.delete`");
@@ -1172,17 +1238,76 @@ describe("the plain layer says AI assistants, and the technical part says agents
 });
 
 describe("the maturity the site states", () => {
-  test("the six built-in apps are rated beta, as the FAQ says obop is; a marketplace app keeps its manifest's word", () => {
-    expect(BUILTIN_MATURITY).toBe("beta");
+  const maturityOf = (file: string) =>
+    /^maturity\s*=\s*"([^"]+)"/m.exec(readFileSync(join(REPO, file), "utf8"))![1]!;
+
+  test("the six built-in apps show the maturity their snapshot and the Rust code say, which is stable; nothing overrides it", () => {
     const builtin = apps.filter((a) => a.builtin);
-    expect(builtin).toHaveLength(6);
+    expect(builtin.map((a) => a.id).sort()).toEqual([
+      "base",
+      "connectors",
+      "crm",
+      "invoicing",
+      "product",
+      "sales",
+    ]);
+    // What the Rust says: every built-in module takes its metadata from `ModuleMeta::first_party`,
+    // which rates it stable, and none of them changes the word afterwards.
+    const registry = readFileSync(join(REPO, "crates/kernel/obop-registry/src/lib.rs"), "utf8");
+    expect(registry).toContain('maturity: "stable".into()');
+    const module: Record<string, string> = {
+      base: "crates/modules/base/src/lib.rs",
+      product: "crates/modules/product/src/lib.rs",
+      crm: "crates/modules/crm/src/lib.rs",
+      sales: "crates/modules/sales/src/lib.rs",
+      invoicing: "crates/modules/invoicing/src/lib.rs",
+      connectors: "crates/modules/connectors/src/meta.rs",
+    };
     for (const app of builtin) {
-      expect(app.meta.maturity, app.id).toBe("beta");
-      expect(view(app).facts[0]!.value, app.id).toBe(messages.en.apps.meta.maturities.beta);
+      const code = readFileSync(join(REPO, module[app.id]!), "utf8");
+      expect(code, `${app.id}: takes its metadata from first_party`).toContain(
+        "ModuleMeta::first_party(",
+      );
+      expect(code, `${app.id}: sets no maturity of its own`).not.toMatch(/\.maturity\s*=/);
+      // The snapshot is a copy of that metadata, and the page shows the snapshot's word.
+      const snapshot = maturityOf(`web/apps/site/data/builtin/${app.id}.toml`);
+      expect(snapshot, app.id).toBe("stable");
+      expect(app.meta.maturity, app.id).toBe(snapshot);
+      expect(view(app).facts[0]!.value, app.id).toBe(messages.en.apps.meta.maturities.stable);
       expect(view(app).experimental, app.id).toBe(false);
     }
+  });
+
+  test("a marketplace app keeps its manifest's word", () => {
+    const marketplace = apps.filter((a) => !a.builtin);
+    expect(marketplace).toHaveLength(22);
+    for (const app of marketplace)
+      expect(app.meta.maturity, app.id).toBe(maturityOf(`packages/${app.id}.toml`));
     const sign = apps.find((a) => a.id === "sign")!;
     expect(sign.meta.maturity).toBe("experimental");
     expect(view(sign).facts[0]!.value).toBe(messages.en.apps.meta.maturities.experimental);
+  });
+
+  test("no built-in app is called beta on its page or in its Markdown copy, in any language", () => {
+    for (const locale of LOCALES) {
+      const m = messages[locale];
+      // The locale's word for beta as a whole word ("Betalning" is not it).
+      const word = new RegExp(`(?<!\\p{L})${m.apps.meta.maturities.beta}(?!\\p{L})`, "iu");
+      const stable = m.apps.meta.maturities.stable;
+      for (const app of apps.filter((a) => a.builtin)) {
+        const v = appView(app, m, apps, locale);
+        expect(v.facts[0]!.value, `${locale} ${app.id}`).toBe(stable);
+        expect(v.info.find((r) => r.label === m.apps.meta.maturity)!.value).toBe(stable);
+        const md = appMirror(app, locale, m, "", apps);
+        expect(md, `${locale} ${app.id}`).not.toMatch(word);
+        // The strip, the information list and the technical table all say it, and say the same.
+        expect(
+          md.split(`**${m.apps.meta.maturity}:** ${stable}`).length - 1,
+          `${locale} ${app.id}`,
+        ).toBe(3);
+      }
+      // The apps index no longer calls the apps beta (the marketplace ones keep their own word).
+      expect(m.apps.lead, locale).not.toMatch(word);
+    }
   });
 });

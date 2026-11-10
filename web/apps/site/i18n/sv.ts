@@ -297,7 +297,7 @@ export const sv: Messages = {
     title: "Appar",
     description:
       "Här är 28 av apparna i obop: 6 som följer med obop och 22 till att lägga till. Öppna en app för att se vad den gör.",
-    lead: "Apparna för det dagliga arbetet i ett litet företag, fortfarande i beta.",
+    lead: "Apparna för det dagliga arbetet i ett litet företag.",
     filterLabel: "Filtrera appar",
     all: "Alla",
     available: "Tillgängliga",
@@ -398,7 +398,9 @@ export const sv: Messages = {
       get: "Hämta",
       canDo: "Vad du kan göra",
       keeps: "Vad den sparar",
-      safe: "AI-assistenter och den här appen",
+      safe: "AI-agenter och den här appen",
+      safeWhat:
+        "En AI-agent är ett AI-program som arbetar i obop åt en person och inte får göra mer än den personen får.",
       worksWith: "Fungerar med",
       info: "Information",
       developers: "För utvecklare",
@@ -422,9 +424,9 @@ export const sv: Messages = {
       included: "Ingår i varje obop.",
       experimentalNote: "Testas fortfarande. Prova den först med exempeldata.",
       safeMasked:
-        "AI-assistenter ser fält som är märkta som personuppgifter, till exempel namn och e-postadresser, bara som platshållare. Text som skrivs i ett fält som inte är märkt som personuppgift, till exempel en beskrivning, ersätts inte av en platshållare.",
+        "AI-agenter ser fält som är märkta som personuppgifter, till exempel namn och e-postadresser, bara som platshållare. Text som skrivs i ett fält som inte är märkt som personuppgift, till exempel en beskrivning, ersätts inte av en platshållare.",
       safeWithheld:
-        "AI-assistenter ser aldrig fält som är markerade som känsliga. I den här appen: {list}. Ett pris eller en summa visas, om inte dess fält är ett av dessa.",
+        "AI-agenter ser aldrig fält som är markerade som känsliga. I den här appen: {list}. Ett pris eller en summa visas, om inte dess fält är ett av dessa.",
       safeKinds: {
         financial: "känsliga finansiella uppgifter",
         confidential_hr: "konfidentiella HR-uppgifter",
@@ -432,9 +434,9 @@ export const sv: Messages = {
         secret: "hemligheter (till exempel inloggningsuppgifter)",
       },
       safeApprove:
-        "Vissa steg kan en AI-assistent bara föreslå, och en person godkänner dem. Andra steg kan den utföra själv, inom sina behörigheter.",
+        "Vissa steg kan en AI-agent bara föreslå, och en person godkänner dem. Andra steg kan den utföra själv, inom sina behörigheter.",
       safeApproveNone:
-        "En AI-assistent kan bara föreslå att poster tas bort, och en person godkänner det. Allt annat kan den göra själv, inom sina behörigheter.",
+        "En AI-agent kan bara föreslå att poster tas bort, och en person godkänner det. Allt annat kan den göra själv, inom sina behörigheter.",
       appMeta: "En app för obop, plattformen med öppen källkod för företag.",
       developersShow: "Visa tekniska detaljer",
       developersHide: "Dölj tekniska detaljer",

@@ -297,7 +297,7 @@ export const pl: Messages = {
     title: "Aplikacje",
     description:
       "Oto 28 z aplikacji obop: 6 w zestawie z obop i 22 kolejne do dodania. Otwórz aplikację, aby zobaczyć, co robi.",
-    lead: "Aplikacje do codziennej pracy w małej firmie, wciąż w wersji beta.",
+    lead: "Aplikacje do codziennej pracy w małej firmie.",
     filterLabel: "Filtruj aplikacje",
     all: "Wszystkie",
     available: "Dostępne",
@@ -398,7 +398,9 @@ export const pl: Messages = {
       get: "Pobierz",
       canDo: "Co możesz zrobić",
       keeps: "Co przechowuje",
-      safe: "Asystenci AI i ta aplikacja",
+      safe: "Agenci AI i ta aplikacja",
+      safeWhat:
+        "Agent AI to program AI, który pracuje w obop dla osoby i nie może robić więcej, niż wolno tej osobie.",
       worksWith: "Współpracuje z",
       info: "Informacje",
       developers: "Dla programistów",
@@ -427,9 +429,9 @@ export const pl: Messages = {
       included: "Wchodzi w skład każdego obop.",
       experimentalNote: "Wciąż w fazie testów. Najpierw wypróbuj ją na danych przykładowych.",
       safeMasked:
-        "Asystenci AI widzą pola oznaczone jako dane osobowe, takie jak imiona i nazwiska oraz adresy e-mail, tylko jako symbole zastępcze. Tekst wpisany w pole, które nie jest oznaczone jako dane osobowe, na przykład w opis, nie jest zastępowany symbolem.",
+        "Agenci AI widzą pola oznaczone jako dane osobowe, takie jak imiona i nazwiska oraz adresy e-mail, tylko jako symbole zastępcze. Tekst wpisany w pole, które nie jest oznaczone jako dane osobowe, na przykład w opis, nie jest zastępowany symbolem.",
       safeWithheld:
-        "Asystenci AI nigdy nie widzą pól oznaczonych jako wrażliwe. W tej aplikacji: {list}. Cena lub suma jest widoczna, chyba że jej pole jest jednym z nich.",
+        "Agenci AI nigdy nie widzą pól oznaczonych jako wrażliwe. W tej aplikacji: {list}. Cena lub suma jest widoczna, chyba że jej pole jest jednym z nich.",
       safeKinds: {
         financial: "wrażliwe dane finansowe",
         confidential_hr: "poufne dane kadrowe",
@@ -437,9 +439,9 @@ export const pl: Messages = {
         secret: "sekrety (na przykład dane logowania)",
       },
       safeApprove:
-        "Niektóre kroki asystent AI może tylko zaproponować, a zatwierdza je osoba. Pozostałe może wykonać sam, w granicach swoich uprawnień.",
+        "Niektóre kroki agent AI może tylko zaproponować, a zatwierdza je osoba. Pozostałe może wykonać sam, w granicach swoich uprawnień.",
       safeApproveNone:
-        "Asystent AI może tylko zaproponować usunięcie rekordów, a zatwierdza je osoba. Resztę może zrobić sam, w granicach swoich uprawnień.",
+        "Agent AI może tylko zaproponować usunięcie rekordów, a zatwierdza je osoba. Resztę może zrobić sam, w granicach swoich uprawnień.",
       appMeta: "Aplikacja dla obop, otwartoźródłowej platformy dla firm.",
       developersShow: "Pokaż szczegóły techniczne",
       developersHide: "Ukryj szczegóły techniczne",
