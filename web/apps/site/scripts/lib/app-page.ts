@@ -41,6 +41,8 @@ export function developerBody(
     mirror || locale === "en" ? esc(t) : `<span lang="en">${esc(t)}</span>`;
 
   out.push(`${h2} ${a.h.package}`, "", eng(app.description), "");
+  // What the plain text above leaves out as too technical (an API, a hash, a data class).
+  if (app.technical) out.push(eng(app.technical), "");
 
   // Version, author, licence, core requirement, maturity: what the manifest declares (D55).
   const meta = app.meta;
@@ -206,6 +208,7 @@ export function appMirror(
   const out: string[] = [a.taglines[app.id] ?? app.tagline, "", v.category, ""];
   for (const f of v.facts) out.push(`- **${f.label}:** ${f.value}`);
   out.push("");
+  if (v.experimental) out.push(s.experimentalNote, "");
   if (app.builtin) out.push(`[${s.open}](/app/)`, "");
 
   // The page shows the purpose in two parts (large, then quiet); the copy says it in one paragraph.

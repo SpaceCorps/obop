@@ -327,7 +327,7 @@ export const fr: Messages = {
       dependencies: "Dépendances",
       install: "Installation",
       guide: "Créer la vôtre",
-      related: "Applications liées",
+      related: "Autres applications de cette catégorie",
     },
     th: {
       field: "Champ",
@@ -424,7 +424,7 @@ export const fr: Messages = {
       },
       sameAsObop: "{version}, comme obop",
       directEdit: "Les enregistrements sont créés et modifiés directement.",
-      needsApproval: "Si un agent le demande, une personne approuve",
+      needsApproval: "Une personne l'approuve",
       showMoreActions: "Afficher {n} actions de plus",
       showMoreKeeps: "Afficher {n} éléments conservés de plus",
       getLead: "Installez-la depuis l'application Personnaliser, dans la Place de marché.",
@@ -432,6 +432,7 @@ export const fr: Messages = {
       openObop: "Ouvrir obop",
       getNote: "Il faut un compte administrateur.",
       included: "Incluse dans chaque obop.",
+      experimentalNote: "Encore en test. Essayez-la d'abord avec des données d'exemple.",
       safeMasked: "Les données personnelles sont masquées pour les agents.",
       safeWithheld: "Les données sensibles ne sont jamais communiquées aux agents.",
       safeApprove:

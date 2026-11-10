@@ -41,6 +41,8 @@ export interface AppView {
   /** The category, as the quiet line under the tagline. */
   category: string;
   facts: Fact[];
+  /** The maturity is "experimental": one plain line under the facts says it is still being tested. */
+  experimental: boolean;
   /** The first sentence of the purpose, set large, and the rest, set small (empty for one sentence). */
   purposeLead: string;
   purposeRest: string;
@@ -249,6 +251,7 @@ export function appView(app: App, m: Messages, all: App[], locale = "en"): AppVi
   return {
     category,
     facts,
+    experimental: meta.maturity === "experimental",
     purposeLead: purpose.lead,
     purposeRest: purpose.rest,
     purposeFold: wordCount(purpose.rest) > FOLD_WORDS,

@@ -56,10 +56,12 @@
 }
 .store-head h1 {
   margin: 0;
-  font-size: 2.25rem;
+  /* 2.25rem, a little less on the narrowest phones; the 1.25rem floor lets "Aplicaciones" stay inside the column at a large text size. */
+  font-size: clamp(1.25rem, 12vw, 2.25rem);
   font-weight: var(--weight-semibold);
   letter-spacing: -0.04em;
   line-height: 1.05;
+  overflow-wrap: break-word;
 }
 .store-lead {
   max-inline-size: 36rem;
@@ -74,10 +76,11 @@
 }
 .store-sec > h2 {
   margin: 0 0 var(--space-5);
-  font-size: 1.75rem;
+  font-size: clamp(1.25rem, 11vw, 1.75rem);
   font-weight: var(--weight-semibold);
   letter-spacing: -0.03em;
   line-height: 1.15;
+  overflow-wrap: break-word;
 }
 .store-text {
   display: flex;
@@ -96,6 +99,10 @@
   color: var(--text-muted);
   font-size: 0.9375rem;
   line-height: 1.35;
+}
+/* The languages that make long compounds (Rechnungsstellung) break them at a hyphen, where the browser can; the app pages do the same. */
+:is(.store-name, .store-tag):is(:lang(de), :lang(fi), :lang(sv), :lang(pl)) {
+  hyphens: auto;
 }
 
 /* The six built-in apps: large friendly tiles, one column on a phone. The icon is 72 px, 96 px on a wide screen. */
@@ -132,7 +139,8 @@
     border-color var(--dur-2) var(--ease-out);
 }
 .store-tile .store-text {
-  flex: 1 1 10rem;
+  /* 8rem: the text drops under the icon only when the column beside it would be narrower than that. */
+  flex: 1 1 8rem;
 }
 .store-tile .store-name {
   font-size: 1.25rem;
@@ -141,6 +149,19 @@
 .store-tile:hover {
   border-color: var(--border-strong);
   background: var(--surface-2);
+}
+/*
+ * The narrowest phones (320 px, or a wider screen at a large text size): the names are a little smaller,
+ * so the longest word of a language (German "Rechnungsstellung" in a tile, Finnish
+ * "Sähköpostimarkkinointi" in a row) fits its column whole where the browser cannot hyphenate it.
+ */
+@media (max-width: 21rem) {
+  .store-tile .store-name {
+    font-size: 1.125rem;
+  }
+  .store-row .store-name {
+    font-size: 1rem;
+  }
 }
 /* The columns follow the room (and the reader's text size), so a large font never overflows a tile. */
 @media (min-width: 40rem) {
@@ -188,6 +209,7 @@
   font-weight: var(--weight-semibold);
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  overflow-wrap: break-word;
 }
 .store-rows {
   --icon-size: 3rem;
@@ -200,26 +222,49 @@
 }
 .store-rows > li {
   display: flex;
+  /* The row below asks how much room its item has, in rem, so a larger text size asks for more. */
+  container-type: inline-size;
 }
+/* The icon, the text and the chevron side by side: the text column is whatever the row has left. */
 .store-row {
-  display: flex;
+  display: grid;
   flex: 1;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   min-inline-size: 0;
   align-items: center;
-  gap: var(--space-4);
+  column-gap: var(--space-4);
   min-block-size: 4.25rem;
   padding-block: var(--space-3);
   border-block-end: var(--st-hair);
   color: var(--text);
 }
-.store-row .store-text {
-  flex: 1;
-}
 .store-chev {
   display: inline-flex;
-  flex: none;
   color: var(--text-subtle);
   transition: color var(--dur-2) var(--ease-out);
+}
+/*
+ * At a very large text size the icon grows with the text and the column beside it would be a sliver
+ * (3 to 4 letters per line): below 14.25rem (the 3rem icon, the chevron, the gaps and a text column of
+ * 8rem) the text drops under the icon and takes the whole row, and the chevron stays on the icon's line.
+ */
+@container (width < 14.25rem) {
+  .store-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: var(--space-2);
+  }
+  .store-row .tile-wrap {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .store-row .store-chev {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .store-row .store-text {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
 }
 .store-row:hover .store-chev {
   color: var(--text);

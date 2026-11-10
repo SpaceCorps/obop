@@ -55,6 +55,7 @@ const pathParts = (path: string) => path.split(new RegExp("(?<=/)"));
         </div>
       </dl>
     </div>
+    <p v-if="view.experimental" class="app-experimental">{{ s.experimentalNote }}</p>
 
     <section class="app-sec">
       <h2 :id="String(fm['purposeId'])">{{ m.apps.h.purpose }}</h2>
@@ -132,7 +133,7 @@ const pathParts = (path: string) => path.split(new RegExp("(?<=/)"));
       <details id="developers" class="app-dev">
         <summary>
           <span class="app-show">{{ s.developersShow }}</span
-          ><span class="app-hide">{{ s.developersHide }}</span>
+          >{{ " " }}<span class="app-hide">{{ s.developersHide }}</span>
         </summary>
         <div class="prose">
           <Content />

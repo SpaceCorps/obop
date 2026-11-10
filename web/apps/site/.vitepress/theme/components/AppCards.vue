@@ -24,18 +24,16 @@ const shown = computed(() =>
 const first = computed(() => props.cards.slice(0, shown.value));
 const rest = computed(() => props.cards.slice(shown.value));
 const moreLabel = computed(() => props.more.replace("{n}", String(rest.value.length)));
-// The first card that needs a person's approval says so in words; the others only carry the mark.
-const legend = computed(() => props.cards.findIndex((c) => c.approval));
 </script>
 
 <template>
   <ul class="app-cards" role="list">
-    <AppCard v-for="(c, i) in first" :key="i" :card="c" :legend="i === legend" />
+    <AppCard v-for="(c, i) in first" :key="i" :card="c" />
   </ul>
   <details v-if="rest.length" class="app-more">
     <summary>{{ moreLabel }}</summary>
     <ul class="app-cards" role="list">
-      <AppCard v-for="(c, i) in rest" :key="i" :card="c" :legend="shown + i === legend" />
+      <AppCard v-for="(c, i) in rest" :key="i" :card="c" />
     </ul>
   </details>
 </template>

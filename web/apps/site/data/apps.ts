@@ -12,7 +12,16 @@ export interface AppCopy {
   /** Short name used on tiles and headings. */
   name: string;
   tagline: string;
+  /**
+   * What it is for, in plain words for a person who does not build software: the first sentence is
+   * set large, so it is one short, plain sentence; the rest says what the app will and will not do.
+   */
   purpose: string;
+  /**
+   * The technical remainder of what the app does (an API, a hash, a data class), in a paragraph that
+   * sits under "For developers" and not in the plain text above.
+   */
+  technical?: string;
   /**
    * Plain names for the few models whose technical name reads oddly on a card, by model name
    * (`accounting_move` is "Journal entry"). The others are the model name in words.
@@ -29,7 +38,7 @@ export const APP_COPY: AppCopy[] = [
     name: "CRM",
     tagline: "Follow your sales leads",
     purpose:
-      "Keep track of prospective deals from first contact to won or lost. A lead has a title, a contact, an expected revenue and a stage, and moving it along the pipeline is a named action that the team and its agents can both run.",
+      "Keep track of possible sales, from the first contact until you win or lose them. Each lead has a title, a contact, the revenue you expect and a stage. Moving a lead along the pipeline is a named step that your team and its AI agents can both take.",
   },
   {
     id: "sales",
@@ -37,7 +46,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Sales",
     tagline: "Quotations and orders",
     purpose:
-      "Write quotations for customers and turn them into confirmed orders. Orders point at a contact, carry a total and a currency, and confirmed orders are what Invoicing bills.",
+      "Write quotations for customers and turn them into confirmed orders. Each order belongs to a contact and has a total and a currency. Invoicing bills the confirmed orders.",
   },
   {
     id: "invoicing",
@@ -45,7 +54,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Invoicing",
     tagline: "Bill your customers",
     purpose:
-      "Prepare customer invoices as drafts and post them to give each one its gapless legal number. Posting an invoice always needs a person: an agent can prepare the draft and propose the posting, and a human with the right permission approves it.",
+      "Prepare invoices for your customers as drafts, then post them to give each one its own legal invoice number. Posting an invoice always needs a person: an AI agent can prepare the draft and suggest posting it, and someone with the right permission approves it.",
   },
   {
     id: "product",
@@ -53,7 +62,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Products",
     tagline: "Your products and prices",
     purpose:
-      "The catalogue of what you sell: name, SKU, list price and unit cost. Cost is visible only to people in the cost viewer group, so a sales assistant or an agent can quote without seeing margins.",
+      "The list of everything you sell, with its name, product code, price and cost. Cost is shown only to people in the cost viewer group, so a sales assistant or an AI agent can quote a price without seeing your margins.",
   },
   {
     id: "base",
@@ -61,7 +70,9 @@ export const APP_COPY: AppCopy[] = [
     name: "Contacts",
     tagline: "People and companies",
     purpose:
-      "One record for every person and organisation you deal with, shared by all other apps. Names and emails are personal data and are masked for agents; the tax identifier is withheld from them entirely. A dedicated, approval-gated erase action anonymises a contact in place.",
+      "One record for every person and company you deal with, shared by all the other apps. Names and email addresses are personal data, so AI agents see only part of them, and the tax number is kept from them completely. A separate erase step, which a person must approve, removes a contact's personal details.",
+    technical:
+      "The erase action anonymises a contact in place and is gated by approval. Names and emails are masked for agents; the tax identifier is withheld.",
     modelNames: {
       party: "Contact",
     },
@@ -72,7 +83,9 @@ export const APP_COPY: AppCopy[] = [
     name: "Connectors",
     tagline: "Connect your other tools",
     purpose:
-      "Connect other systems to the instance and let people connect their own accounts, with the controls that support GDPR compliance built in. Nothing leaves or enters without a recorded legal basis and a field allowlist; personal data goes out as keyed pseudonyms unless you decide otherwise, the sensitive classes stay withheld, every flow is logged without its payload, and withdrawing consent disconnects the service and purges its credentials. A processing register for Article 30 is generated from the connections. It provides technical controls; it is not legal advice or a certification, and the catalogue says for every service how much of it is implemented.",
+      "Connect your other tools to obop, with privacy controls built in. Nothing goes out or comes in without a recorded legal basis and a list of the fields that may be shared. Personal data goes out under a code name (a pseudonym) unless you decide otherwise, sensitive data stays back, and every transfer is logged without its content. When someone withdraws their consent, the service is disconnected and its sign-in details are deleted. obop also writes the processing register that Article 30 of the GDPR asks for. These are technical controls that support GDPR compliance: they are not legal advice or a certification, and the catalogue says for every service how much of it is built.",
+    technical:
+      "Personal data leaves as keyed pseudonyms by default, the sensitive data classes stay withheld, every flow is recorded without its payload, and withdrawing consent disconnects the service and purges its credentials. A processing register for Article 30 is generated from the connections.",
     modelNames: {
       connector_provider: "Service",
       provider_policy: "Service settings",
@@ -85,7 +98,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Project",
     tagline: "Projects and tasks",
     purpose:
-      "Plan work as projects, milestones and tasks with assignees and deadlines. Progress is tracked by status, which keeps the model simple; it is a good fit for small teams that want a shared board rather than effort accounting.",
+      "Plan work as projects, milestones and tasks, with people assigned and deadlines. Progress is tracked by status, which keeps it simple: it suits small teams that want a shared board rather than detailed effort accounting.",
   },
   {
     id: "helpdesk",
@@ -93,7 +106,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Helpdesk",
     tagline: "Support tickets",
     purpose:
-      "Receive and work through customer support requests with priority, severity and service-level targets. A typical use is an agent that reads new tickets and drafts a first triage while people keep ownership of the replies.",
+      "Receive customer support requests and work through them, with priorities and response-time targets. A typical use is an AI agent that reads new tickets and drafts a first assessment, while people keep ownership of the replies.",
   },
   {
     id: "fleet",
@@ -101,7 +114,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Fleet",
     tagline: "Vehicles and drivers",
     purpose:
-      "Keep a register of company vehicles, who drives them and their service history. It records status and services; it does not compute running costs.",
+      "Keep a list of company vehicles, who drives them and when they were serviced. It records each vehicle's status and services; it does not work out running costs.",
   },
   {
     id: "inventory",
@@ -109,7 +122,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Inventory",
     tagline: "Stock and warehouses",
     purpose:
-      "Describe warehouses and locations, record stock levels and log stock moves. Quantities are entered by people, so it works as a ledger of what was counted and moved rather than an automatic stock engine.",
+      "Describe your warehouses and locations, record stock levels and log stock moves. People enter the quantities, so it works as a record of what was counted and moved rather than an automatic stock system.",
     modelNames: {
       inventory_move: "Stock move",
     },
@@ -120,7 +133,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Purchase",
     tagline: "Vendors and purchase orders",
     purpose:
-      "Keep vendors and the purchase orders you send them, with order lines and a draft to received flow. Totals are entered, not summed from the lines.",
+      "Keep your vendors and the purchase orders you send them, with order lines and a flow from draft to received. Totals are typed in, not added up from the lines.",
   },
   {
     id: "manufacturing",
@@ -128,7 +141,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Manufacturing",
     tagline: "Bills of materials",
     purpose:
-      "Define what a product is made of and plan manufacturing orders through draft, confirmed, in progress and done. Component stock is not consumed automatically.",
+      "Define what a product is made of and plan manufacturing orders from draft to done. An order goes through draft, confirmed, in progress and done. The stock of the components is not used up automatically.",
     modelNames: {
       manufacturing_bom: "Bill of materials",
       manufacturing_bom_line: "Component",
@@ -140,7 +153,7 @@ export const APP_COPY: AppCopy[] = [
     name: "HR",
     tagline: "Employees and leave",
     purpose:
-      "A register of employees, departments and leave requests, with strict data classes: pay, bank details and national id are visible to managers only and health or union data only to a special reader group. Agents never see the sensitive classes.",
+      "A register of employees, departments and leave requests, with strict rules about who sees what. Pay, bank details and national id are visible to managers only, and health or union data only to a special group of readers. AI agents never see the sensitive kinds.",
   },
   {
     id: "timesheets",
@@ -148,7 +161,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Timesheets",
     tagline: "Time and billing",
     purpose:
-      "Record time spent on project tasks in minutes, mark it billable and run it through an approval step. Needs the Projects package.",
+      "Record the time spent on project tasks in minutes, mark it as billable and send it for approval. Needs the Projects app.",
   },
   {
     id: "planning",
@@ -156,7 +169,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Planning",
     tagline: "Shifts and resources",
     purpose:
-      "Plan shifts for employees from reusable templates. A shift with nobody assigned is an open shift; the workflow runs from open through published to confirmed by the employee.",
+      "Plan shifts for your employees from reusable templates. A shift with nobody assigned is an open shift; it goes from open to published, and then the employee confirms it.",
   },
   {
     id: "field_service",
@@ -164,7 +177,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Field Service",
     tagline: "Jobs on site",
     purpose:
-      "Schedule on-site jobs for customers: who does the work, where, when, which parts were used and whether the customer must sign off. Site addresses and contacts are personal data and treated as such.",
+      "Schedule on-site jobs for customers: who does the work, where, when, which parts were used and whether the customer must sign off. Site addresses and contacts are personal data and are treated as such.",
   },
   {
     id: "pos",
@@ -172,7 +185,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Point of Sale",
     tagline: "Retail and restaurants",
     purpose:
-      "Model a shop till: configuration, cash-controlled sessions, orders with lines and payment lines per method. It records what happened at the till; it is not a payment terminal integration, and card numbers must never be stored.",
+      "Model a shop till: its settings, cash-controlled sessions, and orders with their lines and payments by method. It records what happened at the till. It is not a connection to card terminals, and card numbers must never be stored.",
     modelNames: {
       pos_config: "Point of sale",
     },
@@ -183,7 +196,9 @@ export const APP_COPY: AppCopy[] = [
     name: "eCommerce",
     tagline: "Online store",
     purpose:
-      "Store the data of an online shop: listings, shipping methods, discount codes and web orders with a fulfilment flow. Refunds need a manager and an approval. A storefront or other client reads and writes this data through the API.",
+      "Keep the data of an online shop: listings, shipping methods, discount codes and web orders. Orders follow a fulfilment flow, and refunds need a manager and an approval.",
+    technical:
+      "A storefront or another client reads and writes this data through the API; the package does not render a shop.",
   },
   {
     id: "website",
@@ -191,7 +206,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Website",
     tagline: "Pages and forms",
     purpose:
-      "Hold the content of a public website: pages, menus, blog posts and the form submissions visitors send. This app stores and organises content; something else renders it. Publishing needs approval.",
+      "Hold the content of a public website: pages, menus, blog posts and the forms visitors send. This app stores and organises the content, and something else shows it. Publishing needs approval.",
   },
   {
     id: "email_marketing",
@@ -199,7 +214,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Email Marketing",
     tagline: "Campaigns",
     purpose:
-      "Keep mailing lists with each contact's consent status and date, and prepare campaigns. Sending reaches real people and cannot be undone, so it always needs a human approval.",
+      "Keep mailing lists with each contact's consent status and date, and prepare campaigns. Sending reaches real people and cannot be undone, so it always needs a person's approval.",
   },
   {
     id: "documents",
@@ -207,7 +222,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Documents",
     tagline: "Files and folders",
     purpose:
-      "A register of business documents with folder, kind, owner, expiry and confidentiality. It stores references to documents, not the file contents.",
+      "A register of business documents, with their folder, kind, owner, expiry date and confidentiality. It keeps a reference to each document, not the file itself.",
   },
   {
     id: "sign",
@@ -215,7 +230,9 @@ export const APP_COPY: AppCopy[] = [
     name: "Sign",
     tagline: "E-signatures",
     purpose:
-      "Manage templates and signature requests through draft, sent, signed, declined and expired, and record the document hash that was signed. The platform cannot yet lock a record, so a signed request is immutable by convention only.",
+      "Keep templates and signature requests, and follow each request from draft to signed. A request goes through draft, sent, signed, declined and expired, and the app records a fingerprint of the document that was signed. The platform cannot yet lock a signed request, so treat it as final by agreement only.",
+    technical:
+      "The app records the hash of the signed document. The platform cannot yet lock a record, so a signed request is immutable by convention only.",
     modelNames: {
       sign_request: "Signature request",
     },
@@ -226,7 +243,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Subscriptions",
     tagline: "Recurring billing",
     purpose:
-      "Define recurring plans and track customer subscriptions with trial, active, past due and cancelled states, including the next invoice date. It does not create invoices by itself.",
+      "Define recurring plans and follow your customers' subscriptions, from trial to cancelled. A subscription is in trial, active, past due or cancelled, and has the date of its next invoice. It does not create invoices by itself.",
   },
   {
     id: "dashboards",
@@ -234,7 +251,9 @@ export const APP_COPY: AppCopy[] = [
     name: "Dashboards",
     tagline: "Reports and charts",
     purpose:
-      "Store dashboards and widgets as data (KPI, bar, line, pie and table definitions) for a client to render. The package never runs a query and does not check that the models it names exist.",
+      "Build dashboards that show your numbers as charts and tables. A dashboard is a set of widgets: a single figure, a bar, line or pie chart, or a table. The app stores what each widget should show and does not check that the data it points to exists.",
+    technical:
+      "Dashboards and widgets are stored as data (KPI, bar, line, pie and table definitions) for a client to render. The package never runs a query and does not check that the models a widget names exist.",
   },
   {
     id: "accounting",
@@ -242,7 +261,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Accounting",
     tagline: "Ledger and reports",
     purpose:
-      "A chart of accounts, journals, tax rates, journal entries with debit and credit lines, fiscal periods and bank statement lines. Nothing is computed for you: balancing and tax amounts are the responsibility of whoever enters them. Posting and closing need approval.",
+      "Keep your books: accounts, journals, tax rates, journal entries, fiscal periods and bank statement lines. Journal entries have debit and credit lines. Nothing is calculated for you: whoever enters the figures is responsible for balancing them and for the tax amounts. Posting and closing need approval.",
     modelNames: {
       accounting_move: "Journal entry",
       accounting_move_line: "Journal entry line",
@@ -254,7 +273,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Knowledge",
     tagline: "Articles and guides",
     purpose:
-      "A wiki of articles arranged in a tree, with draft, published and archived states and tags. Visibility is a label: there are no row-level permissions yet, so everyone with access to the app reads every article.",
+      "A wiki of articles arranged in a tree, with draft, published and archived states and tags. Visibility is only a label: there are no permissions per article yet, so everyone who can open the app reads every article.",
   },
   {
     id: "appointments",
@@ -262,7 +281,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Appointments",
     tagline: "Bookable resources",
     purpose:
-      "Describe bookable people, rooms and equipment and record appointments with a date, start and end. Overlaps are not prevented automatically.",
+      "Describe the people, rooms and equipment that can be booked, and record appointments with a date, a start and an end. Overlapping bookings are not prevented automatically.",
   },
   {
     id: "expenses",
@@ -270,6 +289,6 @@ export const APP_COPY: AppCopy[] = [
     name: "Expenses",
     tagline: "Claims and approvals",
     purpose:
-      "Employees file expense claims that move through draft, submitted, approved and paid. Paying needs its own permission and a human approval; receipts are referenced by note, not stored.",
+      "Employees file expense claims that move from draft to submitted, approved and paid. Paying needs its own permission and a person's approval. Receipts are mentioned in a note, not stored.",
   },
 ];

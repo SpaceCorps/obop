@@ -1,17 +1,34 @@
-import { describe, expect, test } from "vite-plus/test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { describe, expect, test, vi } from "vite-plus/test";
 import { LOCALES, messages } from "../../i18n/index.ts";
 import { appMirror } from "./app-page.ts";
 import {
   FOLD_WORDS,
   LEAD_WORDS,
   appView,
+  capital,
   lowerFirst,
+  modelLabel,
   splitPurpose,
+  words as wordsOf,
   wordCount,
 } from "./app-view.ts";
-import { appName, loadApps, type Action, type App, type Field } from "./apps.ts";
+import { appName, loadApps, type Action, type App, type Field, type Labels } from "./apps.ts";
+
+// Label files that exist only in this test, for an app id no real app has: the rules that decide
+// whether a card speaks the page language (all of its words are there) are tried one word at a time.
+const fake = vi.hoisted(() => ({ labels: {} as Record<string, Labels> }));
+vi.mock("./apps.ts", async (importOriginal) => {
+  const real = await importOriginal<typeof import("./apps.ts")>();
+  return {
+    ...real,
+    loadLabels: (locale: string, id: string) => fake.labels[id] ?? real.loadLabels(locale, id),
+  };
+});
 
 const apps = loadApps();
+const REPO = join(import.meta.dirname, "../../../../..");
 
 // The words of a text without its punctuation and capitals: what the manifest owner wrote.
 const words = (t: string) =>
@@ -437,5 +454,233 @@ describe("a sentence ends before a capital, a digit, a quote or a bracket", () =
     // A lower-case word after the full stop is the same sentence.
     expect(splitPurpose("It costs 3.5 euro. Next.").lead).toBe("It costs 3.5 euro.");
     expect(splitPurpose("See e.g. this one. Next.").lead).toBe("See e.g. this one.");
+  });
+});
+
+describe("a model has its name without the app's prefix, and a name that has no prefix is kept whole", () => {
+  test("the cards of the apps whose model names carry no app prefix", () => {
+    // sale_order in Sales, lead in CRM, invoice in Invoicing and product in Products start with no
+    // "<app>_": cutting the length of the prefix off the front would read "Rder", "", "Oice".
+    const titles = (id: string) => view(apps.find((a) => a.id === id)!).models.map((c) => c.title);
+    expect(titles("sales")).toEqual(["Sale order"]);
+    expect(titles("crm")).toEqual(["Lead"]);
+    expect(titles("invoicing")).toEqual(["Invoice"]);
+    expect(titles("product")).toEqual(["Product"]);
+  });
+
+  test("a prefix is cut once, and only where it is there", () => {
+    const helpdesk = apps.find((a) => a.id === "helpdesk")!;
+    const model = (name: string) => ({ ...helpdesk.models[0]!, name });
+    expect(modelLabel(helpdesk, model("helpdesk_ticket"))).toBe("Ticket");
+    expect(modelLabel(helpdesk, model("ticket"))).toBe("Ticket");
+    expect(modelLabel(helpdesk, model("sale_order"))).toBe("Sale order");
+  });
+});
+
+describe("the acronyms of the manifests keep their capitals in a title", () => {
+  test("words() and capital()", () => {
+    expect(capital(wordsOf("export_csv"))).toBe("Export CSV");
+    expect(wordsOf("helpdesk_sla")).toBe("helpdesk SLA");
+    expect(wordsOf("oauth_start")).toBe("OAuth start");
+    expect(wordsOf("bom_line")).toBe("BOM line");
+    expect(wordsOf("reset_to_draft")).toBe("reset to draft");
+  });
+
+  test("the real cards: Export CSV (Connectors) and SLA (Helpdesk)", () => {
+    const titles = (id: string) => view(apps.find((a) => a.id === id)!).actions.map((c) => c.title);
+    expect(titles("connectors")).toContain("Export CSV");
+    expect(titles("connectors")).not.toContain("Export csv");
+    const helpdesk = apps.find((a) => a.id === "helpdesk")!;
+    expect(view(helpdesk).models.map((c) => c.title)).toContain("SLA");
+  });
+});
+
+describe("the install command names the module, whose id is not always its page address", () => {
+  test("an id with an underscore is written as the module's id, not as the slug", () => {
+    for (const [id, slug] of [
+      ["field_service", "field-service"],
+      ["email_marketing", "email-marketing"],
+    ] as const) {
+      const app = apps.find((a) => a.id === id)!;
+      expect(app.slug).toBe(slug);
+      expect(view(app).command).toBe(`obop modules install-from ${id}`);
+    }
+    // Every marketplace app: its id, whatever its slug.
+    for (const app of apps.filter((a) => !a.builtin))
+      expect(view(app).command, app.id).toBe(`obop modules install-from ${app.id}`);
+  });
+});
+
+// The name that the German label file gives a model (the product's own word for it), read from the
+// TOML file itself and not through the site's loader.
+function germanModelName(id: string, model: string): string | undefined {
+  const toml = readFileSync(join(REPO, "packages/labels/de", `${id}.toml`), "utf8");
+  const head = `[labels.de.model.${model}]`;
+  const at = toml.indexOf(head);
+  if (at < 0) return undefined;
+  return /^name\s*=\s*"([^"]+)"/m.exec(toml.slice(at + head.length))?.[1];
+}
+
+describe("a card on a translated page uses the page language's own words, all or none", () => {
+  const thing = {
+    ...crm.models[0]!,
+    name: "thing",
+    actions: [action({ name: "close", description: "Close it" })],
+  };
+  const app = made({ id: "fake_labels", slug: "fake-labels", models: [thing] });
+  const cards = (labels: Labels, locale: (typeof LOCALES)[number] = "de") => {
+    fake.labels["fake_labels"] = labels;
+    const v = view(app, locale);
+    return { action: v.actions[0]!, model: v.models[0]! };
+  };
+  const full: Labels = {
+    models: { thing: { name: "Ding", description: "Ein Ding" } },
+    actions: { "thing.close": { label: "Schliessen", description: "Schliesst es" } },
+  };
+
+  test("with every word there, the page language is used and nothing is marked English", () => {
+    const { action: a, model: m } = cards(full);
+    expect(a).toMatchObject({ kicker: "Ding", title: "Schliessen", text: "Schliesst es" });
+    expect(a.lang).toBeUndefined();
+    expect(m).toMatchObject({ title: "Ding", text: "Ein Ding" });
+    expect(m.lang).toBeUndefined();
+  });
+
+  test("an action card with the model's name, the label or the description missing is English, and says so", () => {
+    for (const labels of [
+      { ...full, models: { thing: { description: "Ein Ding" } } },
+      { ...full, actions: { "thing.close": { description: "Schliesst es" } } },
+      { ...full, actions: { "thing.close": { label: "Schliessen" } } },
+    ] as Labels[]) {
+      const a = cards(labels).action;
+      expect(a, JSON.stringify(labels)).toMatchObject({
+        kicker: "Thing",
+        title: "Close",
+        text: "Close it",
+        lang: "en",
+      });
+    }
+  });
+
+  test("a model card with the name or the description missing is English, and says so", () => {
+    for (const labels of [
+      { ...full, models: { thing: { description: "Ein Ding" } } },
+      { ...full, models: { thing: { name: "Ding" } } },
+    ] as Labels[]) {
+      const m = cards(labels).model;
+      expect(m, JSON.stringify(labels)).toMatchObject({
+        title: "Thing",
+        text: thing.description,
+        lang: "en",
+      });
+    }
+  });
+
+  test("English never reads a label file", () => {
+    const { action: a, model: m } = cards(full, "en");
+    expect(a).toMatchObject({ kicker: "Thing", title: "Close", text: "Close it" });
+    expect(a.lang).toBeUndefined();
+    expect(m.title).toBe("Thing");
+  });
+
+  test("in the real data every action card of a translated page has the label file's name for its model", () => {
+    delete fake.labels["fake_labels"];
+    let differs = 0;
+    for (const real of apps) {
+      const v = view(real, "de");
+      const owners = real.models.flatMap((model) => model.actions.map(() => model));
+      expect(v.actions.length, real.id).toBe(owners.length);
+      v.actions.forEach((card, i) => {
+        const own = germanModelName(real.id, owners[i]!.name);
+        expect(own, `${real.id} ${owners[i]!.name} has a German name`).toBeTruthy();
+        expect(card.kicker, `${real.id} ${card.title}`).toBe(own);
+        if (own !== modelLabel(real, owners[i]!)) differs++;
+      });
+    }
+    // Not vacuous: the German names are not the English ones.
+    expect(differs).toBeGreaterThan(10);
+  });
+});
+
+describe("the large first sentence is cut only when it is longer than 25 words", () => {
+  const sentence = (n: number) => `${["Start:", ...Array(n - 1).fill("word")].join(" ")}.`;
+  test("25 words keep their colon, 26 are cut at it", () => {
+    expect(LEAD_WORDS).toBe(25);
+    const whole = splitPurpose(`${sentence(25)} The rest.`);
+    expect(wordCount(whole.lead)).toBe(25);
+    expect(whole.lead).toBe(sentence(25));
+    expect(whole.rest).toBe("The rest.");
+    const cut = splitPurpose(`${sentence(26)} The rest.`);
+    expect(cut.lead).toBe("Start.");
+    expect(cut.rest).toMatch(/^Word word.* The rest\.$/);
+  });
+});
+
+describe("the plain text of an app page leaves the technical words to the part for developers", () => {
+  // The large sentence is for a person who does not build software.
+  const technicalWords =
+    /\b(API|SKU|KPI|hash|payload|immutable|withheld|allowlist|pseudonyms?|approval-gated|anonymises|masked|client|schema|query|queries|JSON|endpoint|data classes?)\b/i;
+
+  test("no large first sentence and no quiet paragraph uses one", () => {
+    for (const app of apps) {
+      const { lead, rest } = splitPurpose(app.purpose);
+      expect(lead, `${app.id} lead`).not.toMatch(technicalWords);
+      // The rest may say "pseudonym" where it explains it in the same sentence (Connectors).
+      expect(rest.replace(/code name \(a pseudonym\)/, ""), `${app.id} rest`).not.toMatch(
+        technicalWords,
+      );
+    }
+  });
+
+  test("what was left out is in the technical part, in the Markdown copy", () => {
+    const withTechnical = apps.filter((a) => a.technical);
+    expect(withTechnical.length).toBeGreaterThan(0);
+    for (const app of withTechnical) {
+      expect(app.purpose, app.id).not.toContain(app.technical);
+      const md = appMirror(app, "en", messages.en, "", apps);
+      const cut = md.indexOf(`\n## ${messages.en.apps.store.developers}\n`);
+      expect(md.slice(cut), app.id).toContain(app.technical!);
+      expect(md.slice(0, cut), app.id).not.toContain(app.technical!);
+    }
+  });
+});
+
+describe("an experimental app says in one plain line that it is still being tested", () => {
+  test("the flag follows the maturity, and the Markdown copy has the line once, after the facts", () => {
+    const withMaturity = (maturity: string) => made({ meta: { ...crm.meta, maturity } });
+    expect(view(withMaturity("experimental")).experimental).toBe(true);
+    expect(view(withMaturity("beta")).experimental).toBe(false);
+    expect(view(withMaturity("stable")).experimental).toBe(false);
+    for (const locale of LOCALES) {
+      const s = messages[locale].apps.store;
+      const md = appMirror(withMaturity("experimental"), locale, messages[locale], "", apps);
+      expect(md.split(s.experimentalNote).length - 1, locale).toBe(1);
+      expect(md.indexOf(s.experimentalNote), locale).toBeGreaterThan(md.indexOf("- **"));
+      expect(md.indexOf(s.experimentalNote), locale).toBeLessThan(md.indexOf("\n## "));
+      expect(
+        appMirror(withMaturity("beta"), locale, messages[locale], "", apps),
+        locale,
+      ).not.toContain(s.experimentalNote);
+    }
+    // Real data: the flag is the manifest's own word, and some app is experimental.
+    const real = apps.filter((a) => a.meta.maturity === "experimental");
+    expect(real.length).toBeGreaterThan(0);
+    for (const app of apps) expect(view(app).experimental, app.id).toBe(real.includes(app));
+  });
+});
+
+describe("the mark that a person approves a step is a few plain words, in every language", () => {
+  test("short, and without the word agent", () => {
+    for (const locale of LOCALES) {
+      const text = messages[locale].apps.store.needsApproval;
+      expect(text.length, locale).toBeLessThanOrEqual(32);
+      expect(text, locale).not.toMatch(/agent/i);
+    }
+    // Every card that needs a person has the mark, in the Markdown copy too.
+    const accounting = apps.find((a) => a.id === "accounting")!;
+    const md = appMirror(accounting, "en", messages.en, "", apps);
+    const marked = view(accounting).actions.filter((c) => c.approval).length;
+    expect(marked).toBeGreaterThan(1);
+    expect(md.split(`(${messages.en.apps.store.needsApproval})`).length - 1).toBe(marked);
   });
 });

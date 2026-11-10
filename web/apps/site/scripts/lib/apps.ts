@@ -66,6 +66,8 @@ export interface App {
   dependencies: Dependency[];
   tagline: string;
   purpose: string;
+  /** The technical remainder of the purpose, shown under "For developers" (see `AppCopy.technical`). */
+  technical?: string;
   /** Plain English names for the models that need one (see `AppCopy.modelNames`). */
   modelNames: Record<string, string>;
   models: Model[];
@@ -153,6 +155,7 @@ function toApp(raw: Raw, builtin: boolean, source: string): App {
     dependencies: dependenciesOf(mod),
     tagline: copy.tagline,
     purpose: copy.purpose,
+    ...(copy.technical ? { technical: copy.technical } : {}),
     modelNames: copy.modelNames ?? {},
     models,
     source,

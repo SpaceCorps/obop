@@ -15,7 +15,8 @@
 }
 .app-page h2 {
   margin: 0 0 var(--space-5);
-  font-size: 1.75rem;
+  /* 1.75rem on a normal phone; the vw term and the 1.25rem floor shrink it only at a large text size, to keep "Information" whole in a 288 px column. */
+  font-size: clamp(1.25rem, 11vw, 1.75rem);
   font-weight: var(--weight-semibold);
   letter-spacing: -0.03em;
   line-height: 1.15;
@@ -27,7 +28,6 @@
     font-size: 2rem;
   }
 }
-
 .app-back {
   margin: 0;
 }
@@ -73,7 +73,8 @@
 }
 .app-hero-text h1 {
   margin: 0;
-  font-size: clamp(1.75rem, 9.6vw, 2.25rem);
+  /* The floor is low on purpose: at 150 and 200 percent text the name still fits the column whole (at 200 percent on a 320 px phone the column is 256 px, and "Manufacturing", "Connaissances" and "Varastonhallinta" are 245 to 250 px at 1.15rem). */
+  font-size: clamp(1.15rem, 9.6vw, 2.25rem);
   font-weight: var(--weight-semibold);
   letter-spacing: -0.04em;
   line-height: 1.05;
@@ -123,7 +124,7 @@
 /* A long name (a word of 16 letters or more, marked by the page) is set a little smaller on a phone. */
 @media (max-width: 39.99rem) {
   .app-hero-text h1.app-long {
-    font-size: clamp(1.5rem, 7.6vw, 2rem);
+    font-size: clamp(1.125rem, 7.6vw, 2rem);
   }
 }
 /* Beside the icon on a medium screen the column is narrower than the line a long name needs. */
@@ -245,6 +246,14 @@
     font-size: 1.375rem;
   }
 }
+/* An experimental app says so in one plain line under the strip, so the one word "Experimental" is not all there is. */
+.app-experimental {
+  margin: var(--space-3) 0 0;
+  color: var(--text-muted);
+  font-size: 0.9375rem;
+  line-height: 1.4;
+  text-align: center;
+}
 
 /* What it is for: the first sentence large and calm, the rest in a quiet normal-size paragraph. */
 .app-purpose {
@@ -339,16 +348,8 @@
   margin-block-start: auto;
   padding-block-start: var(--space-3);
 }
-/* Text for screen readers (and search) that is not drawn: the mark on a card after the first one. */
-.app-sr {
-  position: absolute;
-  inline-size: 1px;
-  block-size: 1px;
-  margin: -1px;
-  padding: 0;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
+.app-card-note svg {
+  flex: none;
 }
 .app-direct {
   margin: 0;
@@ -357,12 +358,14 @@
 }
 /* Long compound words break at a hyphen in the languages that make them, where the words are their own;
    English stays whole (no "or-der"). Text marked lang="en" inside a translated page does not match. */
-:is(.app-hero-text h1, .app-card h3, .app-card-text, .app-safe li, .app-icons a span):is(
-  :lang(de),
-  :lang(fi),
-  :lang(sv),
-  :lang(pl)
-) {
+:is(
+  .app-hero-text h1,
+  .app-page h2,
+  .app-card h3,
+  .app-card-text,
+  .app-safe li,
+  .app-icons a span
+):is(:lang(de), :lang(fi), :lang(sv), :lang(pl)) {
   hyphens: auto;
 }
 /* A single fold: more cards stay in columns (a lone card in the fold keeps a normal width). */
@@ -642,9 +645,11 @@
   }
   /*
    * The technical tables print whole, at the width of the paper, instead of being cut at its edge or
-   * shrunk by the browser to fit a wider table (7 pt text): the table is as wide as the paper, the
-   * columns share it by their content, and a cell may break a long token where it must (break-word
-   * would leave the table as wide as its longest word; anywhere lets it shrink to the paper).
+   * shrunk by the browser to fit a wider table (7 pt text): the table is as wide as the paper and the
+   * columns share it by their content. A word of ordinary text stays whole (break-word: its column
+   * is never narrower than the longest word, so "masked" is not printed "maske / d"), and only a
+   * code token (a field or group name, which has no spaces) may break where it must (anywhere lets
+   * the code columns shrink so that the table fits the paper).
    */
   .app-dev .prose table {
     display: table;
@@ -657,10 +662,25 @@
     padding: 0.25rem 0.4rem;
   }
   .app-dev .prose th,
-  .app-dev .prose td,
+  .app-dev .prose td {
+    white-space: normal;
+    overflow-wrap: break-word;
+  }
   .app-dev .prose td code {
     white-space: normal;
     overflow-wrap: anywhere;
+  }
+  /* No card, line or row is cut across two sheets, and a heading is never left alone at the foot of one. */
+  .app-card,
+  .app-safe li,
+  .app-icons li,
+  .app-info > div {
+    break-inside: avoid;
+  }
+  .app-page h2,
+  .app-dev .prose h3,
+  .app-dev .prose h4 {
+    break-after: avoid;
   }
   /* A printed page keeps the technical part: the folds print open, so their buttons are not printed. */
   @supports selector(::details-content) {

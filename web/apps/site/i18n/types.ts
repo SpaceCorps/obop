@@ -227,6 +227,7 @@ export interface Messages {
       /** A built-in app's version in plain words (uses {version}): it moves with obop itself. */
       sameAsObop: string;
       directEdit: string;
+      /** Said on every action card that a person approves, next to the person icon. */
       needsApproval: string;
       /** Uses {n}: the folded rest of the action cards and of the cards for what it keeps. */
       showMoreActions: string;
@@ -241,6 +242,8 @@ export interface Messages {
       getNote: string;
       /** A built-in app: the one quiet line under its information. */
       included: string;
+      /** One plain line under the facts of an experimental app (maturity "experimental"). */
+      experimentalNote: string;
       safeMasked: string;
       safeWithheld: string;
       safeApprove: string;
