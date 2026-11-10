@@ -125,11 +125,17 @@ export const CLAIMS: readonly Claim[] = [
       "A separate erase step, which a person must approve, removes a contact's personal details.",
   },
   {
-    // Not "when an AI agent proposes it": that is the true sentence.
-    re: /\bneeds? approval\b(?!\s+(?:when|if|from) an AI agent)/i,
+    // Not "when an AI agent proposes it" and not "when a person runs it": those are the true sentences.
+    // "needs an approval" slipped past the first form of this row, which was written for "Publishing
+    // needs approval."
+    re: /\bneeds? (?:an? )?approval\b(?!\s+(?:(?:when|if|from) an AI agent|when a person runs it))/i,
     why: "approval is asked of an AI agent only (crates/kernel/obop-commands/src/lib.rs:1095)",
-    example: "Publishing needs approval.",
-    fine: ["A refund needs approval when an AI agent proposes it."],
+    example: "No step in this app needs an approval, apart from deleting records.",
+    fine: [
+      "A refund needs approval when an AI agent proposes it.",
+      "A refund needs an approval when an AI agent proposes it.",
+      "No step in this app needs approval when a person runs it.",
+    ],
   },
   {
     re: /only people who may approve/i,
@@ -342,6 +348,103 @@ export const CLAIMS: readonly Claim[] = [
     fine: [
       "Names, emails and addresses typed into other records (such as leads, orders and tickets) are not changed.",
     ],
+  },
+  {
+    // Round 7: the wordings that the last sweep took out of the pages.
+    re: /\bPersonal details go out under a code name\b|\bsensitive details stay back\b/i,
+    why: "only a field marked as personal data gets a code name, any other listed field goes out as written, and an impact assessment releases a sensitive kind (crates/kernel/obop-connectors/src/policy.rs:3-6, :66-73, :86)",
+    example:
+      "Personal details go out under a code name (a pseudonym) unless you decide otherwise, and sensitive details stay back.",
+    fine: [
+      "Fields marked as personal data go out under a code name (a pseudonym) unless you decide otherwise.",
+      "Sensitive fields stay back by default; a person can release a sensitive kind for a connection only by writing down an impact assessment, and secrets never leave.",
+    ],
+  },
+  {
+    re: /Check the settings and the address without sending personal data/i,
+    why: "for a service that receives records the test sends one empty event to the address (crates/kernel/obop-connectors/src/runtime.rs:1279-1313)",
+    example: "Check the settings and the address without sending personal data",
+    fine: [
+      "Check the settings and the address. For some services that receive records from obop, it also sends one empty test event (no records, no personal data) to that address.",
+    ],
+  },
+  {
+    re: /\bWhen someone withdraws their consent\b|sign-in details[^.]*\b(?:are|is) deleted\b/i,
+    why: "only the connection's owner or an administrator can withdraw (crates/modules/connectors/src/guards.rs:86-103, :668), and revoking clears only obop's own copy: the key or authorisation at the other service stays valid (crates/kernel/obop-connectors/src/runtime.rs:1351-1360)",
+    example:
+      "End the connection for good. Access stops, and the sign-in details and code-name lists are deleted.",
+    fine: [
+      "End the connection for good. obop stops using it and deletes its own copy of the sign-in details and code-name lists.",
+      "Withdraw the reason for sharing (the connection's owner or an administrator): the connection ends and obop deletes its copy of the sign-in details.",
+    ],
+  },
+  {
+    re: /\bthe platform has no row-level permissions\b/i,
+    why: "the platform has row-level rules (crates/kernel/obop-commands/src/engine/access.rs:1-8, used by packages/hr.toml, timesheets.toml, documents.toml, dashboards.toml); Knowledge declares none",
+    example:
+      "Visibility is a label for the UI and for people to respect; the platform has no row-level permissions yet, so everyone with the Knowledge groups can read every article.",
+    fine: [
+      "Visibility is a label for the UI and for people to respect; this package sets no row rules, so everyone with the Knowledge groups can read every article.",
+    ],
+  },
+  {
+    re: /\bPublishing (?:is for managers|makes content public and needs a human approval)\b/i,
+    why: "the published flag of a translation and the visible flag of a menu entry are plain fields that publish with no approval (packages/website.toml:393-398, :145-149; crates/kernel/obop-commands/src/public.rs:259-263)",
+    example:
+      "Publishing is for managers; an AI agent can only propose it. Edits to a published page need no further approval.",
+    fine: ["Publishing a page or a blog post is for managers; an AI agent can only propose it."],
+  },
+  {
+    re: /reverse only with an HR decision/i,
+    why: "no action leaves offboarded, so nothing reverses it (packages/hr.toml:199-213, crates/kernel/obop-commands/src/guards.rs:158)",
+    example: "End the employment record; reverse only with an HR decision",
+    fine: [
+      "Mark an active employee as offboarded. The record and its details stay, and no step moves it back.",
+    ],
+  },
+  {
+    re: /Submit the request to the manager/i,
+    why: "request only moves the state; nothing notifies a manager (packages/hr.toml:302-308)",
+    example: "Submit the request to the manager",
+    fine: [
+      "Mark the draft as requested, for a manager to approve or refuse. By itself, this does not notify anyone.",
+    ],
+  },
+  {
+    re: /so it can be billed/i,
+    why: "approving an entry only moves the state; nothing bills it and nothing reads timesheets_entry (packages/timesheets.toml:85-98)",
+    example: "Approve a submitted entry so it can be billed (manager only)",
+    fine: ["Mark a submitted entry as approved (manager only). By itself, this does not bill it."],
+  },
+  {
+    re: /a done move cannot be undone/i,
+    why: "no action reverses a done move, but its record is written by inventory.user and can be edited or deleted (packages/inventory.toml:126-129, :181-189)",
+    example:
+      "the quantity leaves the source item and arrives at the destination item (stock managers only); a done move cannot be undone",
+    fine: [
+      "No action reverses a done move, but its record can still be edited or deleted, and the stock does not follow.",
+    ],
+  },
+  {
+    re: /card numbers must never be stored/i,
+    why: "nothing checks for a card number: provider_reference is a plain text field (packages/pos.toml:340-345)",
+    example: "It is not connected to card terminals, and card numbers must never be stored.",
+    fine: ["Do not type card numbers into any field: obop does not check for them."],
+  },
+  {
+    re: /Confidentiality is enforced/i,
+    why: "the instance administrator holds every group and sees every record (crates/kernel/obop-commands/src/engine/access.rs:1-8, :57-59; crates/kernel/obop-commands/src/lib.rs:105-118)",
+    example:
+      "Confidentiality is enforced: confidential and restricted documents are visible only to their owner and to documents.manager",
+    fine: [
+      "Confidentiality limits who can see a document: confidential and restricted documents are visible only to their owner, to documents.manager and to the instance administrator",
+    ],
+  },
+  {
+    re: /\bposted only when the totals match\b/i,
+    why: "the totals are checked once, when post runs; the lines of a posted entry stay editable and an entry with no lines posts (packages/accounting.toml:346, :368)",
+    example: "An entry is a set of debit and credit lines, posted only when the totals match.",
+    fine: ["An entry is a set of debit and credit lines; its totals are checked only at posting."],
   },
 ];
 

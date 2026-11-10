@@ -343,7 +343,8 @@ export const en: Messages = {
     masked: "masked",
     withheld: "withheld",
     noWorkflow: "This app has no workflow actions; records are created and edited directly.",
-    noApproval: "No step in this app needs an approval, apart from deleting records.",
+    noApproval:
+      "No step in this app needs approval when a person runs it. An AI agent can only propose deleting records, and a person approves that.",
     noDependencies: "None.",
     depLead:
       "Each dependency states the versions it accepts. Built-in apps version with the core, so a requirement on one is checked against the core version.",

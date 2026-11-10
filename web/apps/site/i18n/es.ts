@@ -353,7 +353,8 @@ export const es: Messages = {
     withheld: "retenido",
     noWorkflow:
       "Esta aplicación no tiene acciones de flujo de trabajo; los registros se crean y se editan directamente.",
-    noApproval: "Ningún paso de esta aplicación requiere aprobación, salvo eliminar registros.",
+    noApproval:
+      "Ningún paso de esta aplicación requiere aprobación cuando lo ejecuta una persona. Un agente de IA solo puede proponer eliminar registros, y una persona lo aprueba.",
     noDependencies: "Ninguna.",
     depLead:
       "Cada dependencia indica las versiones que acepta. Las aplicaciones integradas se versionan con el núcleo, así que un requisito sobre ellas se comprueba con la versión del núcleo.",
@@ -467,7 +468,7 @@ export const es: Messages = {
       field_service: "Trabajos en el sitio",
       pos: "Cajas de tienda",
       ecommerce: "Tienda en línea",
-      website: "Páginas y formularios",
+      website: "Páginas y formulario de contacto",
       email_marketing: "Campañas",
       documents: "Archivos y carpetas",
       sign: "Firmas electrónicas simples",

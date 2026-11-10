@@ -722,7 +722,7 @@ test.describe("website without JavaScript", () => {
     // The Markdown copy says the whole purpose as one paragraph, as the page does.
     const md = await (await page.request.get(`${base()}/apps/hr.md`)).text();
     expect(md).toContain(
-      "who sees what. Pay, bank details and national ID number are visible to managers only",
+      "who sees what. Pay, bank details and national ID number are visible to HR managers only",
     );
   });
 
@@ -841,8 +841,9 @@ test.describe("website without JavaScript", () => {
     // The owner's ruling of 2026-11-10: the built-in apps show the maturity their snapshots and the Rust
     // code say (stable), not the word the loader once forced. The pages as built: the strip, the
     // information list, the text of the page (the folded technical part included), the structured
-    // data, the descriptions, the Markdown copy, the index and llms-full.txt. (The banner and the home
-    // page FAQ are the site's own and say that obop is in beta; they are not on these pages.)
+    // data, the descriptions, the Markdown copy, the index and llms-full.txt. (The footer of every page,
+    // the home page FAQ, the home page pill and llms.txt still call obop beta; they are the site's own and
+    // are not in the main content of these pages, which is what this test reads.)
     const slugs = ["contacts", "products", "crm", "sales", "invoicing", "connectors"];
     for (const locale of Object.keys(messages) as (keyof typeof messages)[]) {
       const m = messages[locale].apps;
@@ -1507,7 +1508,7 @@ test.describe("crawlers and agents", () => {
     expect(urls).toHaveLength(28);
     // The list is pinned, and every row can fail: it catches the sentence it was written for and
     // leaves alone the true sentences that stand where it was (claims.ts).
-    expect(CLAIMS).toHaveLength(48);
+    expect(CLAIMS).toHaveLength(60);
     for (const { re, example, fine, why } of CLAIMS) {
       expect(example, `${re}: ${why}`).toMatch(re);
       for (const ok of fine ?? []) expect(ok, `${re} must leave this alone`).not.toMatch(re);

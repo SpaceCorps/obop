@@ -353,7 +353,7 @@ export const fi: Messages = {
     noWorkflow:
       "Tässä sovelluksessa ei ole työnkulun toimintoja; tietueet luodaan ja muokataan suoraan.",
     noApproval:
-      "Mikään tämän sovelluksen vaihe ei vaadi hyväksyntää tietueiden poistamista lukuun ottamatta.",
+      "Mikään tämän sovelluksen vaihe ei vaadi hyväksyntää, kun henkilö suorittaa sen. Tekoälyagentti voi vain ehdottaa tietueiden poistamista, ja henkilö hyväksyy sen.",
     noDependencies: "Ei ole.",
     depLead:
       "Jokainen riippuvuus kertoo hyväksymänsä versiot. Sisäänrakennetut sovellukset versioituvat ytimen mukana, joten niitä koskeva vaatimus tarkistetaan ytimen versiota vasten.",
@@ -472,7 +472,7 @@ export const fi: Messages = {
       field_service: "Kohdetyöt asiakkaan luona",
       pos: "Kauppakassat",
       ecommerce: "Verkkokauppa",
-      website: "Sivut ja lomakkeet",
+      website: "Sivut ja yhteyslomake",
       email_marketing: "Kampanjat",
       documents: "Tiedostot ja kansiot",
       sign: "Yksinkertaiset sähköiset allekirjoitukset",

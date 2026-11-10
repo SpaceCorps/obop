@@ -349,7 +349,8 @@ export const pl: Messages = {
     withheld: "wstrzymane",
     noWorkflow:
       "Ta aplikacja nie ma akcji przepływu pracy; rekordy są tworzone i edytowane bezpośrednio.",
-    noApproval: "Żaden krok w tej aplikacji nie wymaga zatwierdzenia, poza usuwaniem rekordów.",
+    noApproval:
+      "Żaden krok w tej aplikacji nie wymaga zatwierdzenia, gdy wykonuje go osoba. Agent AI może tylko zaproponować usunięcie rekordów, a zatwierdza je osoba.",
     noDependencies: "Brak.",
     depLead:
       "Każda zależność podaje akceptowane wersje. Aplikacje wbudowane są wersjonowane razem z rdzeniem, więc wymaganie wobec nich sprawdza się względem wersji rdzenia.",
@@ -467,7 +468,7 @@ export const pl: Messages = {
       field_service: "Zlecenia u klienta",
       pos: "Kasy sklepowe",
       ecommerce: "Sklep internetowy",
-      website: "Strony i formularze",
+      website: "Strony i formularz kontaktowy",
       email_marketing: "Kampanie",
       documents: "Pliki i foldery",
       sign: "Proste podpisy elektroniczne",

@@ -348,7 +348,8 @@ export const sv: Messages = {
     masked: "maskerad",
     withheld: "undanhållen",
     noWorkflow: "Den här appen har inga arbetsflödesåtgärder; poster skapas och redigeras direkt.",
-    noApproval: "Inget steg i den här appen kräver godkännande, förutom att ta bort poster.",
+    noApproval:
+      "Inget steg i den här appen kräver godkännande när en person kör det. En AI-agent kan bara föreslå att poster tas bort, och en person godkänner det.",
     noDependencies: "Inga.",
     depLead:
       "Varje beroende anger vilka versioner det accepterar. Inbyggda appar versioneras med kärnan, så ett krav på en sådan kontrolleras mot kärnversionen.",
@@ -462,7 +463,7 @@ export const sv: Messages = {
       field_service: "Uppdrag på plats",
       pos: "Butikskassor",
       ecommerce: "Webbutik",
-      website: "Sidor och formulär",
+      website: "Sidor och kontaktformulär",
       email_marketing: "Kampanjer",
       documents: "Filer och mappar",
       sign: "Enkel e-signering",

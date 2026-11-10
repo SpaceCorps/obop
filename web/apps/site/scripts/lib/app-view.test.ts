@@ -955,7 +955,7 @@ describe("a card with plain words of its own (data/apps.ts)", () => {
   // that it catches its own correction fails here). The count is pinned, so a row is not dropped
   // unnoticed.
   test("each row of the ratchet catches its own sentence and leaves the corrections alone", () => {
-    expect(CLAIMS).toHaveLength(48);
+    expect(CLAIMS).toHaveLength(60);
     for (const { re, example, fine, why } of CLAIMS) {
       expect(example, `${re}: ${why}`).toMatch(re);
       for (const ok of fine ?? []) expect(ok, `${re} must leave this alone`).not.toMatch(re);
@@ -966,11 +966,14 @@ describe("a card with plain words of its own (data/apps.ts)", () => {
       "Closing a period locks it against new entries.",
       "Closing the year blocks further posting.",
       "Closing a month stops posting.",
+      "Publishing needs approval.",
+      "No step in this app needs an approval, apart from deleting records.",
     ])
       expect(claim(text), text).toBeGreaterThan(0);
     for (const text of [
       "Closing a month or year is only a label; it does not stop new entries.",
       "Closing a period never blocks entries.",
+      "No step in this app needs approval when a person runs it.",
     ])
       expect(claim(text), text).toBe(0);
   });

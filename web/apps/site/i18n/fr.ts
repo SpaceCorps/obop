@@ -353,7 +353,7 @@ export const fr: Messages = {
     noWorkflow:
       "Cette application n'a aucune action de flux de travail ; les enregistrements sont créés et modifiés directement.",
     noApproval:
-      "Aucune étape de cette application ne requiert d'approbation, hormis la suppression d'enregistrements.",
+      "Aucune étape de cette application ne requiert d'approbation lorsqu'une personne l'exécute. Un agent IA ne peut que proposer la suppression d'enregistrements, et une personne l'approuve.",
     noDependencies: "Aucune.",
     depLead:
       "Chaque dépendance indique les versions qu’elle accepte. Les applications intégrées suivent les versions du noyau : une exigence à leur égard est donc vérifiée par rapport à la version du noyau.",
@@ -474,7 +474,7 @@ export const fr: Messages = {
       field_service: "Interventions sur site",
       pos: "Caisses de magasin",
       ecommerce: "Boutique en ligne",
-      website: "Pages et formulaires",
+      website: "Pages et formulaire de contact",
       email_marketing: "Campagnes",
       documents: "Fichiers et dossiers",
       sign: "Signatures électroniques simples",

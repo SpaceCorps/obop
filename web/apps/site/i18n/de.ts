@@ -353,7 +353,7 @@ export const de: Messages = {
     noWorkflow:
       "Diese App hat keine Workflow-Aktionen; Datensätze werden direkt angelegt und bearbeitet.",
     noApproval:
-      "Kein Schritt dieser App braucht eine Freigabe, abgesehen vom Löschen von Datensätzen.",
+      "Kein Schritt dieser App braucht eine Freigabe, wenn eine Person ihn ausführt. Ein KI-Agent kann das Löschen von Datensätzen nur vorschlagen, eine Person gibt es frei.",
     noDependencies: "Keine.",
     depLead:
       "Jede Abhängigkeit nennt die Versionen, die sie akzeptiert. Integrierte Apps werden mit dem Kern versioniert; eine Anforderung an sie wird daher gegen die Kernversion geprüft.",
@@ -469,7 +469,7 @@ export const de: Messages = {
       field_service: "Einsätze vor Ort",
       pos: "Ladenkassen",
       ecommerce: "Online-Shop",
-      website: "Seiten und Formulare",
+      website: "Seiten und Kontaktformular",
       email_marketing: "Kampagnen",
       documents: "Dateien und Ordner",
       sign: "Einfache elektronische Signaturen",
