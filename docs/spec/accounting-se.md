@@ -21,7 +21,7 @@ Two rules shape every stage.
 | Stage | What it is | Status |
 |---|---|---|
 | 1. Ledger | Accounts, journals, entries, periods, fiscal years, gapless numbering, approval to post | Built (`packages/accounting.toml`), plus the Swedish company and voucher series models of this PR |
-| 2. VAT | VAT boxes, VAT codes, the VAT report per period with propose and approve | `packages/accounting_se.toml` (bundled in the catalogue; labels in de, fr, pl, fi, sv and es are machine-drafted); computing the boxes from the ledger is not built |
+| 2. VAT | VAT boxes, VAT codes, the VAT report per period with propose and approve | `packages/accounting_se.toml` (bundled in the catalogue; labels in de, fr, pl, fi, sv and es are machine-drafted); the boxes are computed from the ledger by `vat_computation.compute` (section 3.2); UNVERIFIED, never compared with Skatteverket or run on PostgreSQL |
 | 3. SIE 4 | Import and export of SIE 4 files | Built: the crate `obop-sie` (file format) and the commands `obop sie export|import` and `sie_exchange.export|import` (section 4.1); tested on generated files only, NOT checked against the official SIE specification, never run against Fortnox, Visma or a real file |
 | 4. OAS importer | `obop import oas` reads the OAS SQLite file and documents directory | Built for company, accounts, vouchers with entries, customers and receipts (`crates/obop/src/import_oas/`, section 5.3); invoices, payroll, bank, time are listed as skipped; tested against generated data only, never against real books |
 | 5. Invoices | Customer invoices with the ledger voucher | Not built for Sweden (the `invoicing` module exists; the link to the ledger and the Swedish rules do not) |
@@ -64,6 +64,18 @@ The package `accounting_se` depends on `accounting` (`^0.3`) and needs core 0.2.
 - **Rows are not locked.** A report line or a box can be edited by anyone with the write group after a report is approved, because X1 does not lock records (MODULES.md section 10). The approve action stamps the state only.
 - **Due date.** The date is entered. OAS computes it from the quarter and moves it off weekends; the rule has not been checked, so it is not copied.
 - **Readiness checks.** OAS reports checks (unverified boxes, an amount in a box marked not used, reverse-charge consistency, vouchers without a code or receipt). `approve` has one assertion only (`boxes_confirmed`). The rest would need a command, not a model.
+
+### 3.2 Computing a VAT report from the ledger (`vat_computation.compute`)
+
+A typed command (REST, MCP, same functions as in `crates/obop/src/vat.rs`; group `accounting.user`) with input `report` (id or name) and `dry_run`. It reads the user's own `accounting_se_vat_box` and `accounting_se_vat_code` rows and the posted ledger; no box, code, rate or account is built in (D34), and nothing is checked against Skatteverket.
+
+- Moves in state `posted` or `reversed` dated from `start_on` to `end_on` count; drafts and cancelled moves do not.
+- A code maps a ledger line to a box through the `tax_id` it shares with the line: a line with that tax on any account but the code's VAT account adds to `base_box_id`; a line on `vat_account_id` adds to `vat_box_id`. A line on a VAT account without a tax is given to the one code whose tax is on another line of the same move; otherwise the run is refused and names the voucher. Each side is `credit - debit` or `debit - credit` as `base_side` and `vat_side` say. Amounts are integer ore, with overflow checks.
+- It writes one `accounting_se_vat_report_line` per box any code points to (zero amounts included): kind copied from the box, amount, and the numbers of the vouchers behind it, one per line. The report totals (`output_vat`, `input_vat`, `vat_to_pay`) are the report's own computed fields over those lines. Result boxes get no line.
+- It runs only on a report in state `draft`, replaces that report's lines, and clears `boxes_confirmed`. The report stays a draft; proposing and approving stay the person's, and `approve` still needs the approver's confirmation. An approved, proposed or filed report is refused.
+- Refused in words: no code maps to a box, a code that maps to a box without `tax_id`, side or VAT account, two codes on one tax, a box that does not exist, an amount in a box marked `not_used`, an unattributable VAT line.
+- `dry_run` computes and returns the lines and writes nothing. An agent may only dry-run; a real run needs a person. A run is not atomic across the delete and the create (a failure leaves the draft without lines; run it again).
+- Tests: `crates/obop/src/vat_tests.rs` (invented chart on memory storage only). Parity gap: no CLI verb and no UI button (docs/ISSUES.md K59).
 
 ## 4. Stage 3: SIE 4 (crate `obop-sie`)
 
