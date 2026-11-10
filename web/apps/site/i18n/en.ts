@@ -392,7 +392,7 @@ export const en: Messages = {
       get: "Get",
       canDo: "What you can do",
       keeps: "What it keeps",
-      safe: "What AI agents may do",
+      safe: "AI assistants and this app",
       worksWith: "Works with",
       info: "Information",
       developers: "For developers",
@@ -415,12 +415,13 @@ export const en: Messages = {
       getNote: "You need an administrator account.",
       included: "Included in every obop.",
       experimentalNote: "Still being tested. Try it with sample data first.",
-      safeMasked: "AI agents see only part of people's personal details.",
-      safeWithheld: "AI agents never see sensitive details.",
+      safeMasked: "AI assistants see only part of people's personal details.",
+      safeWithheld:
+        "AI assistants never see sensitive details, such as money amounts, bank details, pay, health data or sign-in details.",
       safeApprove:
-        "Some steps an AI agent can only propose, and a person approves them. Other steps it can take on its own, within its permissions.",
+        "Some steps an AI assistant can only propose, and a person approves them. Other steps it can take on its own, within its permissions.",
       safeApproveNone:
-        "An AI agent can only propose deleting records, and a person approves that. Everything else it can do on its own, within its permissions.",
+        "An AI assistant can only propose deleting records, and a person approves that. Everything else it can do on its own, within its permissions.",
       appMeta: "An app for obop, the open-source platform for business.",
       developersShow: "Show technical details",
       developersHide: "Hide technical details",

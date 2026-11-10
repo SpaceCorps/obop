@@ -15,6 +15,14 @@
    */
   --h1-base: clamp(1.15rem, 9.6vw, 2.25rem);
   --h1: var(--h1-base);
+  /*
+   * The section headings: 0.78 of the name at its normal size, so a long name that is set smaller on
+   * a phone does not take them down with it (they were 25 percent smaller than the name's own
+   * shrinkage allowed, and no larger than the large sentence or a card title); but always under the
+   * name itself, and never smaller than the text. Card titles and the headings of the technical part
+   * are derived from this one, so none of them is larger than the heading above it.
+   */
+  --h2: max(min(calc(var(--h1-base) * 0.78), calc(var(--h1) * 0.97)), 1.0625rem);
   max-inline-size: 58rem;
   padding-block: var(--space-4) var(--space-20);
   /* A word longer than its line (a compound at a large text size) breaks instead of overflowing. */
@@ -25,8 +33,7 @@
 }
 .app-page h2 {
   margin: 0 0 var(--space-5);
-  /* 1.75rem on a normal phone (0.78 of the name, and under 0.85 of a long name); never smaller than the text itself, and so always smaller than the name (the name is never under 1.15rem). */
-  font-size: max(min(calc(var(--h1-base) * 0.78), calc(var(--h1) * 0.85)), 1.0625rem);
+  font-size: var(--h2);
   font-weight: var(--weight-semibold);
   letter-spacing: -0.03em;
   line-height: 1.15;
@@ -34,8 +41,8 @@
   overflow-wrap: break-word;
 }
 @media (min-width: 48rem) {
-  .app-page h2 {
-    font-size: 2rem;
+  .app-page.wrap {
+    --h2: 2rem;
   }
 }
 .app-back {
@@ -326,7 +333,8 @@
 }
 .app-card h3 {
   margin: 0;
-  font-size: 1.25rem;
+  /* 1.25rem, but under the heading of its section at every text size, and never smaller than the text of its card. */
+  font-size: max(min(1.25rem, calc(var(--h2) * 0.92)), 1.0625rem);
   font-weight: var(--weight-semibold);
   letter-spacing: -0.015em;
   line-height: 1.25;
@@ -563,6 +571,8 @@
  * this point the page's one filled pill is this one, and the next step is obvious.
  */
 .app-getbox {
+  /* The command below asks how much room the box has, in rem, so a larger text size asks for more. */
+  container-type: inline-size;
   padding: var(--space-6);
   border: var(--st-hair);
   border-radius: var(--st-radius);
@@ -612,6 +622,22 @@
     padding: var(--space-5);
   }
 }
+/*
+ * Where the box is narrow (every phone, and a wider screen at a large text size) the copy button does
+ * not sit beside the command: the room it takes, in rem, left a column of 28 px at 200 percent on a
+ * 320 px phone and the command broke into single letters. It sits under the command, at its end,
+ * and the command has the whole width.
+ */
+@container (width < 24rem) {
+  .app-getbox div[class*="language-"] pre {
+    padding-inline: var(--space-4);
+    padding-block-end: 3.75rem;
+  }
+  .app-getbox div[class*="language-"] button.copy {
+    inset-block: auto 0.5rem;
+    inset-inline-end: 0.5rem;
+  }
+}
 
 /* For developers: a heading and one fold that holds everything technical. */
 .app-dev .prose {
@@ -631,7 +657,7 @@
 .app-dev .prose h3 {
   position: relative;
   margin: calc(var(--space-12) + var(--space-6) + 1px) 0 var(--space-3);
-  font-size: var(--text-2xl);
+  font-size: min(var(--text-2xl), var(--h2));
 }
 .app-dev .prose h3::before {
   content: "";
@@ -647,7 +673,7 @@
   display: none;
 }
 .app-dev .prose h4 {
-  font-size: var(--text-xl);
+  font-size: max(min(var(--text-xl), calc(var(--h2) * 0.92)), 1.0625rem);
 }
 
 @media print {
@@ -684,11 +710,12 @@
     white-space: normal;
     overflow-wrap: break-word;
   }
-  /* No card, line or row is cut across two sheets, and a heading is never left alone at the foot of one. */
+  /* No card, line, information row or table row is cut across two sheets, and a heading is never left alone at the foot of one. */
   .app-card,
   .app-safe li,
   .app-icons li,
-  .app-info > div {
+  .app-info > div,
+  .app-dev .prose tr {
     break-inside: avoid;
   }
   .app-page h2,

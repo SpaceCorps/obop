@@ -398,7 +398,7 @@ export const sv: Messages = {
       get: "Hämta",
       canDo: "Vad du kan göra",
       keeps: "Vad den sparar",
-      safe: "Vad AI-agenter får göra",
+      safe: "AI-assistenter och den här appen",
       worksWith: "Fungerar med",
       info: "Information",
       developers: "För utvecklare",
@@ -421,12 +421,13 @@ export const sv: Messages = {
       getNote: "Du behöver ett administratörskonto.",
       included: "Ingår i varje obop.",
       experimentalNote: "Testas fortfarande. Prova den först med exempeldata.",
-      safeMasked: "AI-agenter ser bara en del av människors personuppgifter.",
-      safeWithheld: "AI-agenter ser aldrig känsliga uppgifter.",
+      safeMasked: "AI-assistenter ser bara en del av människors personuppgifter.",
+      safeWithheld:
+        "AI-assistenter ser aldrig känsliga uppgifter, till exempel belopp, bankuppgifter, löner, hälsouppgifter eller inloggningsuppgifter.",
       safeApprove:
-        "Vissa steg kan en AI-agent bara föreslå, och en person godkänner dem. Andra steg kan den ta själv, inom sina behörigheter.",
+        "Vissa steg kan en AI-assistent bara föreslå, och en person godkänner dem. Andra steg kan den utföra själv, inom sina behörigheter.",
       safeApproveNone:
-        "En AI-agent kan bara föreslå att poster tas bort, och en person godkänner det. Allt annat kan den göra själv, inom sina behörigheter.",
+        "En AI-assistent kan bara föreslå att poster tas bort, och en person godkänner det. Allt annat kan den göra själv, inom sina behörigheter.",
       appMeta: "En app för obop, plattformen med öppen källkod för företag.",
       developersShow: "Visa tekniska detaljer",
       developersHide: "Dölj tekniska detaljer",

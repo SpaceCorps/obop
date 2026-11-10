@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test, vi } from "vite-plus/test";
 import { LOCALES, messages } from "../../i18n/index.ts";
-import { appMirror } from "./app-page.ts";
+import { appMirror, developerBody } from "./app-page.ts";
 import {
   FOLD_WORDS,
   LEAD_WORDS,
@@ -24,7 +24,8 @@ import {
   type Field,
   type Labels,
 } from "./apps.ts";
-import { technicalIn, visible } from "./plain.ts";
+import { OVERSTATED } from "./claims.ts";
+import { TECHNICAL, technicalIn, visible } from "./plain.ts";
 
 // Label files that exist only in this test, for an app id no real app has: the rules that decide
 // whether a card speaks the page language (all of its words are there) are tried one word at a time.
@@ -69,6 +70,15 @@ describe("the purpose is split after its first sentence", () => {
       // The large lead is short enough to read at a glance; a longer one is a sentence the rule
       // could not cut (no colon or semicolon) and needs a plainer sentence in data/apps.ts.
       expect(wordCount(lead), app.id).toBeLessThanOrEqual(LEAD_WORDS);
+      // One sentence, counted and not only cut: the splitter ends a sentence before a capital, so a
+      // sentence that begins with the product's lower-case name ("obop does not ...") would stay in
+      // the large type behind the first one (Email Marketing's did).
+      expect(lead.match(/[.!?](?=\s|$)/g), `${app.id} lead: ${lead}`).toHaveLength(1);
+      // So no sentence of a purpose begins in lower case ("e.g." and "i.e." are not ends).
+      expect(
+        app.purpose.replace(/\b(?:e\.g|i\.e)\./g, "").match(/[.!?]\s+[a-z]/g) ?? [],
+        `${app.id}: a sentence that begins in lower case`,
+      ).toEqual([]);
     }
   });
 
@@ -714,18 +724,49 @@ describe("the plain text of an app page leaves the technical words to the part f
     expect(technicalIn(messages.en.apps.store.directEdit)).toBeNull();
   });
 
-  test("the rule can fail: each kind of word it lists is found, and a plain sentence is not", () => {
-    for (const bad of [
-      "takes the SHA-256 of the PDF",
-      "a hash of the payload",
-      "record signed_by first",
-      "needs the inventory.user group",
-      "Anonymise the party in place",
-      "a set of widgets",
-      "A service-level SLA",
-      "only the approver can do it",
-      "the field allowlist",
-    ])
+  test("the rule can fail: every word it lists is found by its own example, and the list cannot shrink unseen", () => {
+    // The words themselves are pinned here, so deleting one from plain.ts (the list could once lose
+    // seventeen of its twenty-three without a test noticing) fails this line, and adding one needs a
+    // row with an example in plain.ts and a line here.
+    expect(TECHNICAL.map((t) => t.word)).toEqual([
+      "API",
+      "SKU",
+      "KPI",
+      "hash(?:es)?",
+      "SHA-?\\d*",
+      "payload",
+      "immutable",
+      "withheld",
+      "allow-?list",
+      "pseudonyms?",
+      "approval-gated",
+      "anonymi[sz]e[sd]?",
+      "masked",
+      "clients?",
+      "schema",
+      "quer(?:y|ies)",
+      "JSON",
+      "endpoint",
+      "data class(?:es)?",
+      "widgets?",
+      "aggregate",
+      "SLA",
+      "approvers?",
+    ]);
+    for (const { word, example } of TECHNICAL) {
+      // The example is found by this word and by no other: the rule built without the word does not
+      // see it, so the word is what the example tests.
+      expect(new RegExp(`\\b(?:${word})\\b`, "i").test(example), `${word}: ${example}`).toBe(true);
+      const others = TECHNICAL.filter((t) => t.word !== word).map((t) => t.word);
+      expect(
+        new RegExp(`\\b(?:${others.join("|")})\\b`, "i").test(example),
+        `${word}: ${example} must not be found by another word`,
+      ).toBe(false);
+      expect(technicalIn(example), example).not.toBeNull();
+    }
+    // A word is a whole word: a longer word that merely contains one is not found.
+    expect(technicalIn("a classic clientele with an apiary")).toBeNull();
+    for (const bad of ["record signed_by first", "needs the inventory.user group"])
       expect(technicalIn(bad), bad).not.toBeNull();
     for (const good of [
       "Keep track of possible sales, from the first contact until you win or lose them.",
@@ -861,9 +902,128 @@ describe("a card with plain words of its own (data/apps.ts)", () => {
       "obop does not send the emails itself",
     );
     expect(text("sign", "sign_request.send")).toContain("does not email the signer");
-    for (const app of withCards)
-      for (const card of Object.values(app.cards))
-        expect(card.text, app.id).not.toMatch(/to the whole list|credit notes/i);
+    expect(text("purchase", "purchase_order.send")).toContain("does not contact the vendor");
+    expect(text("subscriptions", "subscriptions_subscription.activate")).toContain(
+      "does not start any billing",
+    );
+    expect(text("accounting", "accounting_period.close")).toContain("label only");
+    expect(text("accounting", "accounting_fiscal_year.close")).toContain("label only");
+    for (const key of ["ecommerce_order.refund", "ecommerce_order.refund_delivered"])
+      expect(text("ecommerce", key), key).toContain("you pay it back yourself");
+    expect(text("pos", "pos_order.refund")).toContain("does not pay money back");
+  });
+
+  // A ratchet over the pages as they are drawn, not over the cards alone (claims.ts: each sentence
+  // was on a page, and the module does not do what it said). The browser tests run the same list over
+  // the pages as deployed.
+  test("no page of any app says what the module does not do again", () => {
+    for (const app of apps) {
+      const page = appMirror(app, "en", messages.en, "", apps);
+      for (const [bad, why] of OVERSTATED)
+        expect(page, `${app.id} ${bad}: ${why}`).not.toMatch(bad);
+    }
+  });
+
+  test("the ratchet can fail: each sentence is caught where it was, in a card, the lead or the technical part", () => {
+    const invoicing = apps.find((a) => a.id === "invoicing")!;
+    // The technical part: the model text, with the old claim put back, is found.
+    const old: App = {
+      ...invoicing,
+      models: invoicing.models.map((m) =>
+        m.name === "invoice"
+          ? {
+              ...m,
+              description: "A customer invoice; posted invoices are corrected only by credit notes",
+            }
+          : m,
+      ),
+    };
+    expect(appMirror(old, "en", messages.en, "", apps)).toMatch(OVERSTATED[0]![0]);
+    expect(appMirror(invoicing, "en", messages.en, "", apps)).not.toMatch(OVERSTATED[0]![0]);
+    // The package text of Email Marketing is the site's, and keeps the manifest's other sentences.
+    const email = apps.find((a) => a.id === "email_marketing")!;
+    const manifest = readFileSync(join(REPO, "packages/email_marketing.toml"), "utf8");
+    const own = /^description = "([^"]+)"/m.exec(manifest)![1]!;
+    expect(own).toMatch(/irreversible and reaches real people/);
+    expect(email.description).not.toMatch(/irreversible and reaches real people/);
+    for (const kept of [
+      "Campaign statistics are numbers entered or imported, not computed.",
+      "never mail a contact that is not opted_in.",
+    ])
+      expect(
+        [own, email.description].every((t) => t.includes(kept)),
+        kept,
+      ).toBe(true);
+  });
+});
+
+describe("the page and its Markdown copy hold the same technical tables", () => {
+  const tokens = (md: string) =>
+    md.replace(/<code>(.*?)<\/code>/g, (_m, t: string) => `\`${t.replace(/<wbr>/g, "")}\``);
+
+  test("the copy has no <wbr> and no <code> tag, in any language, and the page's tokens are the copy's", () => {
+    for (const app of apps)
+      for (const locale of LOCALES) {
+        const m = messages[locale];
+        const copy = appMirror(app, locale, m, "", apps);
+        expect(copy, `${locale} ${app.id}: a break point in the Markdown copy`).not.toContain(
+          "<wbr>",
+        );
+        expect(copy, `${locale} ${app.id}: an HTML token in the Markdown copy`).not.toContain(
+          "<code>",
+        );
+      }
+    // The tables of the page are the copy's, token for token (English: nothing else differs).
+    for (const app of apps) {
+      const page = developerBody(app, "en", messages.en, false, "", apps);
+      const copy = developerBody(app, "en", messages.en, true, "", apps);
+      expect(page, app.id).toContain("<wbr>");
+      expect(tokens(page), app.id).toBe(copy);
+      // Each token of a table cell, with the break points taken out, is the plain token.
+      for (const cell of page.match(/<code>.*?<\/code>/g) ?? [])
+        expect(copy, `${app.id} ${cell}`).toContain(
+          `\`${cell.replace(/<\/?code>/g, "").replace(/<wbr>/g, "")}\``,
+        );
+    }
+  });
+});
+
+describe("the plain layer says AI assistants, and the technical part says agents", () => {
+  test("no word 'agent' in the heading, the lines or the large text, in any language", () => {
+    const agent = /agent|agenci|agentit/i;
+    for (const locale of LOCALES) {
+      const s = messages[locale].apps.store;
+      for (const key of [
+        "safe",
+        "safeMasked",
+        "safeWithheld",
+        "safeApprove",
+        "safeApproveNone",
+      ] as const)
+        expect(s[key], `${locale} ${key}`).not.toMatch(agent);
+    }
+    for (const app of apps) {
+      const { lead, rest } = splitPurpose(app.purpose);
+      expect(`${lead} ${rest}`, app.id).not.toMatch(agent);
+    }
+  });
+
+  test("the line about what is withheld names the kinds of detail, in every language", () => {
+    // It said only "sensitive details": a visitor could not learn that an AI assistant cannot read a
+    // journal entry's amounts. The kinds are those of the classes the product withholds (financial,
+    // confidential_hr, special_category, secret).
+    const kinds: Record<string, RegExp[]> = {
+      en: [/money/, /bank/, /pay/, /health/, /sign-in/],
+      de: [/Geldbeträge/, /Bankdaten/, /Gehälter/, /Gesundheit/, /Zugangsdaten/],
+      es: [/importes/, /bancarios/, /salarios/, /salud/, /credenciales/],
+      fi: [/rahamääri/, /pankki/, /palkk/, /terveys/, /kirjautumis/],
+      fr: [/montants/, /bancaires/, /salaires/, /santé/, /identifiants/],
+      pl: [/kwoty/, /bankowe/, /wynagrodzenia/, /zdrowiu/, /logowania/],
+      sv: [/belopp/, /bank/, /löner/, /hälso/, /inloggning/],
+    };
+    for (const locale of LOCALES)
+      for (const word of kinds[locale]!)
+        expect(messages[locale].apps.store.safeWithheld, locale).toMatch(word);
   });
 });
 

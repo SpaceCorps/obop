@@ -405,7 +405,7 @@ export const fr: Messages = {
       get: "Obtenir",
       canDo: "Ce que vous pouvez faire",
       keeps: "Ce qu'elle conserve",
-      safe: "Ce que les agents IA peuvent faire",
+      safe: "Les assistants IA et cette application",
       worksWith: "Fonctionne avec",
       info: "Informations",
       developers: "Pour les développeurs",
@@ -433,12 +433,13 @@ export const fr: Messages = {
       getNote: "Il faut un compte administrateur.",
       included: "Incluse dans chaque obop.",
       experimentalNote: "Encore en test. Essayez-la d'abord avec des données d'exemple.",
-      safeMasked: "Les agents IA ne voient qu'une partie des données personnelles.",
-      safeWithheld: "Les agents IA ne voient jamais les données sensibles.",
+      safeMasked: "Les assistants IA ne voient qu'une partie des données personnelles.",
+      safeWithheld:
+        "Les assistants IA ne voient jamais les données sensibles, comme les montants, les coordonnées bancaires, les salaires, les données de santé ou les identifiants de connexion.",
       safeApprove:
-        "Pour certaines étapes, un agent IA ne peut que proposer, et une personne approuve. Il peut mener les autres seul, dans la limite de ses permissions.",
+        "Pour certaines étapes, un assistant IA ne peut que proposer, et une personne approuve. Il peut mener les autres seul, dans la limite de ses permissions.",
       safeApproveNone:
-        "Un agent IA ne peut que proposer la suppression d'enregistrements, et une personne l'approuve. Il peut faire tout le reste seul, dans la limite de ses permissions.",
+        "Un assistant IA ne peut que proposer la suppression d'enregistrements, et une personne l'approuve. Il peut faire tout le reste seul, dans la limite de ses permissions.",
       appMeta: "Une application pour obop, la plateforme open source pour les entreprises.",
       developersShow: "Afficher les détails techniques",
       developersHide: "Masquer les détails techniques",

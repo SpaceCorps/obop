@@ -4,7 +4,8 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { messages } from "../../../apps/site/i18n/index.ts";
-import { technicalIn } from "../../../apps/site/scripts/lib/plain.ts";
+import { OVERSTATED } from "../../../apps/site/scripts/lib/claims.ts";
+import { TECHNICAL, technicalIn } from "../../../apps/site/scripts/lib/plain.ts";
 import { platformUrl, repoRoot, siteDir } from "../support/env.ts";
 import { expect, test, unnamedControls } from "../support/fixtures.ts";
 
@@ -150,7 +151,22 @@ async function brokenWords(
             const r = document.createRange();
             r.setStart(n, m.index);
             r.setEnd(n, m.index + m[0].length);
-            const tops = [...r.getClientRects()].filter((x) => x.width > 0).map((x) => x.top);
+            let rects = [...r.getClientRects()].filter((x) => x.width > 0);
+            // A word that follows a soft hyphen at which the line broke: the browser reports the hyphen
+            // it drew at the end of the line above as the first rectangle of the word. That hyphen is not
+            // part of the word, which stands whole on the next line. It is told by its width (the width
+            // of a hyphen in the same font) and by lying on the line above.
+            if (n.textContent?.[m.index - 1] === "­" && rects.length > 1) {
+              const hy = document.createElement("span");
+              hy.style.cssText = "position:absolute;visibility:hidden;white-space:nowrap";
+              hy.textContent = "-";
+              n.parentElement!.appendChild(hy);
+              const hyphen = hy.getBoundingClientRect().width;
+              hy.remove();
+              if (Math.abs(rects[0]!.width - hyphen) < 1.5 && rects[0]!.top < rects[1]!.top - 3)
+                rects = rects.slice(1);
+            }
+            const tops = rects.map((x) => x.top);
             if (tops.length < 2 || Math.max(...tops) - Math.min(...tops) <= 3) continue;
             // Two lines: is the word wider than the box it sits in?
             const probe = document.createElement("span");
@@ -329,14 +345,14 @@ test.describe("website without JavaScript", () => {
     ]);
     // What it is for: the first sentence large, the rest small and quiet.
     await expect(page.locator(".app-purpose")).toHaveText(
-      "Prepare invoices for your customers as drafts, then post each one to give it its own number, in an unbroken yearly series.",
+      "Prepare invoices for your customers as drafts, then finalise each one to give it its own number, in a yearly series with no gaps.",
     );
     await expect(page.locator(".app-purpose-rest")).toContainText(
-      "Posting an invoice always needs a person",
+      "Finalising needs a person with the right permission",
     );
     // What you can do: one card per workflow action, with the approval mark where it is needed.
     // The thing it works on is part of the heading, so a list of headings tells the cards apart.
-    const post = page.locator(".app-card", { hasText: "Post a draft invoice" });
+    const post = page.locator(".app-card", { hasText: "Finalise a draft invoice" });
     await expect(post.locator("h3")).toHaveText("Invoice Post");
     await expect(post.locator(".app-card-title")).toHaveText("Post");
     await expect(post).toContainText(s.needsApproval);
@@ -613,7 +629,7 @@ test.describe("website without JavaScript", () => {
         await expect(keeps.locator(".app-more > summary")).toHaveText(
           s.showMoreKeeps.replace("{n}", String(foldedModels)),
         );
-      // Safe with AI agents: exactly the lines the manifest earns.
+      // AI assistants and this app: exactly the lines the manifest earns.
       const lines = [
         ...(masked ? [s.safeMasked] : []),
         ...(withheld ? [s.safeWithheld] : []),
@@ -640,7 +656,7 @@ test.describe("website without JavaScript", () => {
       "A register of employees, departments and leave requests, with strict rules about who sees what.",
     );
     await expect(page.locator(".app-purpose-rest")).toContainText(
-      "Pay, bank details and national id",
+      "Pay, bank details and national ID number",
     );
     await expect(page.locator(".app-read")).toHaveCount(0);
     // A rest that is a wall of text sits under "Read more", closed, and is still in the page.
@@ -662,7 +678,7 @@ test.describe("website without JavaScript", () => {
     // The Markdown copy says the whole purpose as one paragraph, as the page does.
     const md = await (await page.request.get(`${base()}/apps/hr.md`)).text();
     expect(md).toContain(
-      "who sees what. Pay, bank details and national id are visible to managers only",
+      "who sees what. Pay, bank details and national ID number are visible to managers only",
     );
   });
 
@@ -672,12 +688,16 @@ test.describe("website without JavaScript", () => {
   }) => {
     // The large first sentence of every page is for a person who does not build software: none of
     // the words of apps/site/scripts/lib/plain.ts is in it (nor in the quiet paragraph under it, nor
-    // in the cards that are shown, nor in the lines about AI agents). What was left out is the
+    // in the cards that are shown, nor in the lines about AI assistants). What was left out is the
     // first paragraph of the technical part, in the page and in the Markdown copy. The list is the
     // one the unit tests read, so the two cannot differ.
     // The rule can fail: a text with such words in it is found.
     expect(technicalIn("a hash and a payload")).not.toBeNull();
     expect(technicalIn("Keep track of possible sales.")).toBeNull();
+    // Every word the rule lists is found by its own example (the unit test pins the list itself).
+    expect(TECHNICAL.length).toBeGreaterThanOrEqual(23);
+    for (const { word, example } of TECHNICAL)
+      expect(technicalIn(example), `the rule must find "${word}" in "${example}"`).not.toBeNull();
     for (const slug of [
       "dashboards",
       "sign",
@@ -688,17 +708,21 @@ test.describe("website without JavaScript", () => {
       "ecommerce",
       "accounting",
       "pos",
+      "email-marketing",
     ]) {
       await page.goto(`${base()}/apps/${slug}/`);
       const lead = await page.locator(".app-purpose").innerText();
       expect(technicalIn(lead), `${slug} lead: ${lead}`).toBeNull();
       expect(lead.split(/\s+/).length, `${slug} lead length`).toBeLessThanOrEqual(25);
+      // One sentence: the caveat of Email Marketing ("obop does not send the emails itself") was once
+      // a second sentence in the large type, because the splitter ends a sentence before a capital.
+      expect(lead.match(/[.!?](?=\s|$)/g), `${slug} lead is one sentence: ${lead}`).toHaveLength(1);
       // Open the fold, where there is one: the rest is what sits in it.
       const fold = page.locator("details.app-read > summary");
       if (await fold.count()) await fold.click();
       const rest = (await page.locator(".app-purpose-rest").allInnerTexts()).join(" ");
       expect(technicalIn(rest), `${slug} rest: ${rest}`).toBeNull();
-      // The cards that are shown, and the lines about AI agents.
+      // The cards that are shown, and the lines about AI assistants.
       const cards = [
         ...(await page.locator("#can-do ~ .app-cards > .app-card").allInnerTexts()),
         ...(await page.locator("#keeps ~ .app-cards > .app-card").allInnerTexts()),
@@ -1275,6 +1299,52 @@ test.describe("crawlers and agents", () => {
     expect(sv).toContain("Fakturering");
     expect(app).toContain("### Models");
     expect(app).toContain(`- **${messages.en.apps.meta.version}:** 0.4.0`);
+    // The page breaks a table token after an underscore or a dot with <wbr>; the copy, and
+    // llms-full.txt which agents read, keep the plain token in backticks and no HTML tag.
+    expect(app).toContain("`requester_email`");
+    expect(app).not.toMatch(/<wbr>|<code>/);
+    for (const url of ["/apps/crm.md", "/apps/accounting.md", "/de/apps/hr.md", "/llms-full.txt"]) {
+      const text = await (await request.get(`${base()}${url}`)).text();
+      expect(text, `${url}: no <wbr> in the Markdown`).not.toContain("<wbr>");
+    }
+    const crm = await (await request.get(`${base()}/apps/crm.md`)).text();
+    expect(crm).toContain("`contact_email`");
+    expect(crm).toContain("`crm.user`");
+  });
+
+  test("no deployed apps page, Markdown copy or llms-full.txt says what the module does not do", async ({
+    request,
+  }) => {
+    // The pages as built, not as the unit tests build them from the data: the words of each sentence in
+    // apps/site/scripts/lib/claims.ts were once on a page and the module does not stand behind them.
+    // (The product's own translations of the module are not looked at: they say the old words, which is
+    // why a card that corrects one is English.)
+    const urls = (await pagesOf(request, "en")).filter((u) => /^\/apps\/.+\/$/.test(u));
+    expect(urls).toHaveLength(28);
+    expect(OVERSTATED.length).toBeGreaterThan(15);
+    // The test can fail: a sentence of the list is found in a text that has it.
+    expect("Close the period against further posting.").toMatch(OVERSTATED[4]![0]);
+    const texts = (await Promise.all(
+      urls.map(async (u) => [
+        u,
+        await (await request.get(`${base()}${u.replace(/\/$/, "")}.md`)).text(),
+      ]),
+    )) as [string, string][];
+    // llms-full.txt, which agents read, holds every page of the site: the app pages are its sections
+    // that have "What it is for" (the changelog and the docs may use the same words for other things).
+    const full = (await (await request.get(`${base()}/llms-full.txt`)).text())
+      .split("\n\n---\n\n")
+      .filter((section) => section.includes("\n## What it is for\n"));
+    expect(full.length, "app sections in llms-full.txt").toBeGreaterThanOrEqual(28);
+    full.forEach((section, i) => texts.push([`/llms-full.txt (app section ${i + 1})`, section]));
+    for (const [url, text] of texts)
+      for (const [bad, why] of OVERSTATED) expect(text, `${url} ${bad}: ${why}`).not.toMatch(bad);
+    // And the HTML of the pages that carried the worst of them says what is true.
+    const html = await (await request.get(`${base()}/apps/accounting/`)).text();
+    expect(html).toContain("This is a label only: entries can still be posted into it.");
+    expect(await (await request.get(`${base()}/apps/purchase/`)).text()).toContain(
+      "obop does not contact the vendor.",
+    );
   });
 
   test("security.txt and humans.txt", async ({ request }) => {
@@ -1328,6 +1398,20 @@ test.describe("crawlers and agents", () => {
     expect(await types("/apps/crm/")).toEqual(
       expect.arrayContaining(["BreadcrumbList", "SoftwareApplication"]),
     );
+    // There is one obop and no edition: an app's offer is free and says nothing else (a sentence
+    // about "the open-source edition" was English on every translated page, and implied a second one).
+    for (const path of ["/apps/crm/", "/apps/helpdesk/", "/sv/apps/sign/"]) {
+      await page.goto(`${base()}${path}`);
+      const ld = (await page.locator('script[type="application/ld+json"]').allTextContents()).map(
+        (r) => JSON.parse(r),
+      );
+      const app = ld.find((x) => x["@type"] === "SoftwareApplication");
+      expect(app.offers, `${path}: the offer`).toEqual({
+        "@type": "Offer",
+        price: "0",
+        priceCurrency: "EUR",
+      });
+    }
     expect(await types("/docs/agents/")).toEqual(
       expect.arrayContaining(["BreadcrumbList", "TechArticle"]),
     );
@@ -1406,157 +1490,165 @@ test.describe("accessibility", () => {
     }
   });
 
-  test("every apps page has the same sound structure, in its own language, with one small script", async ({
-    page,
-    request,
-  }) => {
-    test.setTimeout(240_000);
-    let checked = 0;
-    for (const locale of Object.keys(messages) as (keyof typeof messages)[]) {
-      const urls = (await pagesOf(request, locale)).filter((u) => /\/apps\/(.+\/)?$/.test(u));
-      expect(urls.length, `${locale} apps pages`).toBe(29);
-      for (const url of urls) {
-        await page.goto(`${base()}${url}`, { waitUntil: "domcontentloaded" });
-        const problems = await page.evaluate((htmlLang) => {
-          const out: string[] = [];
-          if (document.documentElement.lang !== htmlLang)
-            out.push(`html lang ${document.documentElement.lang}, not ${htmlLang}`);
-          const heads = [...document.querySelectorAll("h1,h2,h3,h4,h5,h6")].map((h) =>
-            Number(h.tagName[1]),
-          );
-          if (heads.filter((h) => h === 1).length !== 1) out.push("not exactly one h1");
-          if (heads[0] !== 1) out.push(`first heading is h${heads[0]}`);
-          for (let i = 1; i < heads.length; i++)
-            if (heads[i]! - heads[i - 1]! > 1)
-              out.push(`heading jumps h${heads[i - 1]} to h${heads[i]}`);
-          const ids = new Map<string, number>();
-          document.querySelectorAll("[id]").forEach((e) => ids.set(e.id, (ids.get(e.id) ?? 0) + 1));
-          for (const [id, n] of ids) if (n > 1) out.push(`duplicate id ${id}`);
-          for (const n of document.querySelectorAll("nav"))
-            if (!n.getAttribute("aria-label") && !n.getAttribute("aria-labelledby"))
-              out.push("nav without a label");
-          const control = "a[href], button, input, select, textarea, summary";
-          for (const el of document.querySelectorAll(control))
-            if (el.parentElement?.closest("a[href], button"))
-              out.push(`nested control ${el.outerHTML.slice(0, 60)}`);
-          for (const el of document.querySelectorAll("main [lang]"))
-            if (el.getAttribute("lang") !== "en")
-              out.push(`unexpected lang ${el.getAttribute("lang")} on ${el.tagName}`);
-          for (const sc of document.querySelectorAll("script[src]"))
-            if (sc.getAttribute("src") !== "/site/site.js")
-              out.push(`script ${sc.getAttribute("src")}`);
-          if (document.querySelector("script[type=module]")) out.push("module script");
-          // The English that a translated page carries is marked as English, on every page: the
-          // purpose (the lead and the rest), the package text and the descriptions in the field tables.
-          if (htmlLang !== "en" && document.querySelector(".app-page")) {
-            if (document.querySelector(".app-purpose")?.getAttribute("lang") !== "en")
-              out.push("the purpose is not marked lang=en");
-            for (const rest of document.querySelectorAll(".app-purpose-rest"))
-              if (rest.getAttribute("lang") !== "en")
-                out.push("the rest of the purpose is not marked lang=en");
-            const notes = document.querySelectorAll("#developers .en-note");
-            if (notes.length === 0) out.push("no English note in the technical part");
-            for (const n of notes)
-              if (n.getAttribute("lang") !== "en")
-                out.push("an English note is not marked lang=en");
-            for (const t of document.querySelectorAll("#developers table")) {
-              if (t.querySelectorAll("thead th").length !== 7) continue; // the field tables
-              for (const td of t.querySelectorAll("tbody tr td:last-child"))
-                if (td.querySelector(':scope > span[lang="en"]')?.textContent !== td.textContent)
-                  out.push(
-                    `a field description is not marked lang=en: ${td.textContent?.slice(0, 30)}`,
-                  );
-            }
-          }
-          return out;
-        }, messages[locale].htmlLang);
-        expect(problems, `${locale} ${url}`).toEqual([]);
-        // Every control has a name, on every apps page (strict: text under aria-hidden is no name).
-        expect(
-          await unnamedControls(page, { strict: true }),
-          `${locale} ${url} unnamed controls`,
-        ).toEqual([]);
-        checked++;
-      }
-    }
-    expect(checked).toBe(7 * 29);
-  });
+  // The two walks below visit every apps page and take ten to fifty seconds (the Tab walk the most), where
+  // the repository's limit is 30 s a test. A limit set in a test's body (test.setTimeout) does not cover
+  // its fixtures, and one slow start of a page in system Chrome used up the default before the body began:
+  // so the limit is set for the group, like that of the sweeps further down.
+  test.describe("walks over the apps pages", () => {
+    test.describe.configure({ timeout: 240_000 });
 
-  test("the apps pages show a focus ring on every stop of a Tab walk, forward and back, and the focused control is never under the header", async ({
-    page,
-  }) => {
-    test.setTimeout(240_000);
-    for (const width of [1440, 375]) {
-      await page.setViewportSize({ width, height: 900 });
-      for (const [path, atLeast] of [
-        ["/apps/", 28],
-        ["/apps/helpdesk/", 8],
-        ["/apps/accounting/", 11],
-      ] as const) {
-        for (const key of ["Tab", "Shift+Tab"] as const) {
-          await page.goto(`${base()}${path}`);
-          let stops = 0;
-          // The walk ends when every control of main has had its turn (plus the header's and the
-          // footer's on the way), not after a fixed number of presses: this is the slowest test of
-          // the file, and a slower runner has more room that way.
-          const expected = await page.evaluate(
-            () =>
-              [...document.querySelectorAll("main a[href], main summary, main button")].filter(
-                (el) => el.getClientRects().length > 0 && el.checkVisibility(),
-              ).length,
-          );
-          for (let i = 0; i < 120 && stops < expected; i++) {
-            await page.keyboard.press(key);
-            // The browser scrolls the focused control into view, smoothly where the page asks for it:
-            // measure where it comes to rest, not where it passes.
-            await page.evaluate(
-              () =>
-                new Promise<void>((done) => {
-                  let last = -1;
-                  let still = 0;
-                  const tick = () => {
-                    still = window.scrollY === last ? still + 1 : 0;
-                    last = window.scrollY;
-                    if (still >= 3) done();
-                    else requestAnimationFrame(tick);
-                  };
-                  tick();
-                }),
+    test("every apps page has the same sound structure, in its own language, with one small script", async ({
+      page,
+      request,
+    }) => {
+      let checked = 0;
+      for (const locale of Object.keys(messages) as (keyof typeof messages)[]) {
+        const urls = (await pagesOf(request, locale)).filter((u) => /\/apps\/(.+\/)?$/.test(u));
+        expect(urls.length, `${locale} apps pages`).toBe(29);
+        for (const url of urls) {
+          await page.goto(`${base()}${url}`, { waitUntil: "domcontentloaded" });
+          const problems = await page.evaluate((htmlLang) => {
+            const out: string[] = [];
+            if (document.documentElement.lang !== htmlLang)
+              out.push(`html lang ${document.documentElement.lang}, not ${htmlLang}`);
+            const heads = [...document.querySelectorAll("h1,h2,h3,h4,h5,h6")].map((h) =>
+              Number(h.tagName[1]),
             );
-            const stop = await page.evaluate(() => {
-              const el = document.activeElement as HTMLElement | null;
-              if (!el || !el.closest("main")) return null;
-              const cs = getComputedStyle(el);
-              const r = el.getBoundingClientRect();
-              // The ring is drawn outside the box by its offset and its width.
-              const reach = parseFloat(cs.outlineOffset) + parseFloat(cs.outlineWidth);
-              return {
-                what: `${el.tagName} ${(el.textContent ?? "").trim().slice(0, 30)}`,
-                style: cs.outlineStyle,
-                width: parseFloat(cs.outlineWidth),
-                left: r.left - reach,
-                right: r.right + reach,
-                top: r.top,
-                header: document.querySelector(".site-header")!.getBoundingClientRect().bottom,
-                screen: document.documentElement.clientWidth,
-              };
-            });
-            if (!stop) continue;
-            stops++;
-            const where = `${path} at ${width}px (${key}): ${stop.what}`;
-            expect(stop.style, where).not.toBe("none");
-            expect(stop.width, where).toBeGreaterThanOrEqual(2);
-            expect(stop.left, `${where} ring starts on screen`).toBeGreaterThanOrEqual(0);
-            expect(stop.right, `${where} ring ends on screen`).toBeLessThanOrEqual(stop.screen);
-            // Going back scrolls a control in from above: the sticky header must not cover it.
-            expect(stop.top, `${where} is under the header`).toBeGreaterThanOrEqual(
-              stop.header - 0.5,
-            );
-          }
-          expect(stops, `${path} stops in main (${key})`).toBeGreaterThanOrEqual(atLeast);
+            if (heads.filter((h) => h === 1).length !== 1) out.push("not exactly one h1");
+            if (heads[0] !== 1) out.push(`first heading is h${heads[0]}`);
+            for (let i = 1; i < heads.length; i++)
+              if (heads[i]! - heads[i - 1]! > 1)
+                out.push(`heading jumps h${heads[i - 1]} to h${heads[i]}`);
+            const ids = new Map<string, number>();
+            document
+              .querySelectorAll("[id]")
+              .forEach((e) => ids.set(e.id, (ids.get(e.id) ?? 0) + 1));
+            for (const [id, n] of ids) if (n > 1) out.push(`duplicate id ${id}`);
+            for (const n of document.querySelectorAll("nav"))
+              if (!n.getAttribute("aria-label") && !n.getAttribute("aria-labelledby"))
+                out.push("nav without a label");
+            const control = "a[href], button, input, select, textarea, summary";
+            for (const el of document.querySelectorAll(control))
+              if (el.parentElement?.closest("a[href], button"))
+                out.push(`nested control ${el.outerHTML.slice(0, 60)}`);
+            for (const el of document.querySelectorAll("main [lang]"))
+              if (el.getAttribute("lang") !== "en")
+                out.push(`unexpected lang ${el.getAttribute("lang")} on ${el.tagName}`);
+            for (const sc of document.querySelectorAll("script[src]"))
+              if (sc.getAttribute("src") !== "/site/site.js")
+                out.push(`script ${sc.getAttribute("src")}`);
+            if (document.querySelector("script[type=module]")) out.push("module script");
+            // The English that a translated page carries is marked as English, on every page: the
+            // purpose (the lead and the rest), the package text and the descriptions in the field tables.
+            if (htmlLang !== "en" && document.querySelector(".app-page")) {
+              if (document.querySelector(".app-purpose")?.getAttribute("lang") !== "en")
+                out.push("the purpose is not marked lang=en");
+              for (const rest of document.querySelectorAll(".app-purpose-rest"))
+                if (rest.getAttribute("lang") !== "en")
+                  out.push("the rest of the purpose is not marked lang=en");
+              const notes = document.querySelectorAll("#developers .en-note");
+              if (notes.length === 0) out.push("no English note in the technical part");
+              for (const n of notes)
+                if (n.getAttribute("lang") !== "en")
+                  out.push("an English note is not marked lang=en");
+              for (const t of document.querySelectorAll("#developers table")) {
+                if (t.querySelectorAll("thead th").length !== 7) continue; // the field tables
+                for (const td of t.querySelectorAll("tbody tr td:last-child"))
+                  if (td.querySelector(':scope > span[lang="en"]')?.textContent !== td.textContent)
+                    out.push(
+                      `a field description is not marked lang=en: ${td.textContent?.slice(0, 30)}`,
+                    );
+              }
+            }
+            return out;
+          }, messages[locale].htmlLang);
+          expect(problems, `${locale} ${url}`).toEqual([]);
+          // Every control has a name, on every apps page (strict: text under aria-hidden is no name).
+          expect(
+            await unnamedControls(page, { strict: true }),
+            `${locale} ${url} unnamed controls`,
+          ).toEqual([]);
+          checked++;
         }
       }
-    }
+      expect(checked).toBe(7 * 29);
+    });
+
+    test("the apps pages show a focus ring on every stop of a Tab walk, forward and back, and the focused control is never under the header", async ({
+      page,
+    }) => {
+      for (const width of [1440, 375]) {
+        await page.setViewportSize({ width, height: 900 });
+        for (const [path, atLeast] of [
+          ["/apps/", 28],
+          ["/apps/helpdesk/", 8],
+          ["/apps/accounting/", 11],
+        ] as const) {
+          for (const key of ["Tab", "Shift+Tab"] as const) {
+            await page.goto(`${base()}${path}`);
+            let stops = 0;
+            // The walk ends when every control of main has had its turn (plus the header's and the
+            // footer's on the way), not after a fixed number of presses: this is the slowest test of
+            // the file, and a slower runner has more room that way.
+            const expected = await page.evaluate(
+              () =>
+                [...document.querySelectorAll("main a[href], main summary, main button")].filter(
+                  (el) => el.getClientRects().length > 0 && el.checkVisibility(),
+                ).length,
+            );
+            for (let i = 0; i < 120 && stops < expected; i++) {
+              await page.keyboard.press(key);
+              // The browser scrolls the focused control into view, smoothly where the page asks for it:
+              // measure where it comes to rest, not where it passes.
+              await page.evaluate(
+                () =>
+                  new Promise<void>((done) => {
+                    let last = -1;
+                    let still = 0;
+                    const tick = () => {
+                      still = window.scrollY === last ? still + 1 : 0;
+                      last = window.scrollY;
+                      if (still >= 3) done();
+                      else requestAnimationFrame(tick);
+                    };
+                    tick();
+                  }),
+              );
+              const stop = await page.evaluate(() => {
+                const el = document.activeElement as HTMLElement | null;
+                if (!el || !el.closest("main")) return null;
+                const cs = getComputedStyle(el);
+                const r = el.getBoundingClientRect();
+                // The ring is drawn outside the box by its offset and its width.
+                const reach = parseFloat(cs.outlineOffset) + parseFloat(cs.outlineWidth);
+                return {
+                  what: `${el.tagName} ${(el.textContent ?? "").trim().slice(0, 30)}`,
+                  style: cs.outlineStyle,
+                  width: parseFloat(cs.outlineWidth),
+                  left: r.left - reach,
+                  right: r.right + reach,
+                  top: r.top,
+                  header: document.querySelector(".site-header")!.getBoundingClientRect().bottom,
+                  screen: document.documentElement.clientWidth,
+                };
+              });
+              if (!stop) continue;
+              stops++;
+              const where = `${path} at ${width}px (${key}): ${stop.what}`;
+              expect(stop.style, where).not.toBe("none");
+              expect(stop.width, where).toBeGreaterThanOrEqual(2);
+              expect(stop.left, `${where} ring starts on screen`).toBeGreaterThanOrEqual(0);
+              expect(stop.right, `${where} ring ends on screen`).toBeLessThanOrEqual(stop.screen);
+              // Going back scrolls a control in from above: the sticky header must not cover it.
+              expect(stop.top, `${where} is under the header`).toBeGreaterThanOrEqual(
+                stop.header - 0.5,
+              );
+            }
+            expect(stops, `${path} stops in main (${key})`).toBeGreaterThanOrEqual(atLeast);
+          }
+        }
+      }
+    });
   });
 
   test("no tabindex above zero on the apps pages", async ({ page }) => {
@@ -1937,7 +2029,7 @@ test.describe("accessibility", () => {
     }
   });
 
-  test("a printed app page keeps each card, line and row whole, a heading with what follows it, and the plain words of the tables", async ({
+  test("a printed app page keeps each card, line, information row and table row whole, a heading with what follows it, and the plain words of the tables", async ({
     page,
   }) => {
     // The sheets are cut by the browser's own pagination, which a test cannot see; what the page
@@ -1959,6 +2051,9 @@ test.describe("accessibility", () => {
         safe: of(".app-safe li", "breakInside"),
         icons: of(".app-icons li", "breakInside"),
         info: of(".app-info > div", "breakInside"),
+        // A row of a technical table: "or payee" once stood alone at the top of a sheet, in an
+        // otherwise empty row under the repeated header, after "Bank account of the payer" at the foot of the last.
+        rows: of(".app-dev .prose tr", "breakInside"),
         h2: of(".app-page h2", "breakAfter"),
         h3: of(".app-dev .prose h3", "breakAfter"),
         h4: of(".app-dev .prose h4", "breakAfter"),
@@ -2006,8 +2101,13 @@ test.describe("accessibility", () => {
   // browser whose text size is set through the protocol. Their time limit is set for the whole
   // group, not by test.setTimeout in each body: a limit set in the body cannot cover the fixtures,
   // and a slow start of a page (system Chrome, after another sweep) counted against the default 30 s
-  // and failed a test that had not begun. The slowest sweep takes about half a minute in the bundled
-  // Chromium and seven minutes in system Chrome, so the limit leaves room.
+  // and failed a test that had not begun. The limit is room, not a fix for a slow sweep. The slowest
+  // (the facts strip) makes about 2,900 round trips to the browser for its 49 distinct pages: measured
+  // alone, it takes 29 s in the bundled Chromium and 36 s in system Chrome (12 ms a round trip), and 44 s
+  // in system Chrome while 32 busy loops took every thread of the machine. A review saw 114 s and 282 s
+  // in system Chrome once each and the cause was not found; it was not Chrome's speed on these
+  // operations (page loads, resizes and range measurements cost the same in both) and it was not
+  // the load of the machine, so a slow run is something to look into, not to wait for.
   test.describe("sweeps over every page, language and size", () => {
     test.describe.configure({ timeout: 900_000 });
 
@@ -2020,19 +2120,23 @@ test.describe("accessibility", () => {
       // column of less than 8rem the text must drop under the icon instead. A word that fits its
       // column is never cut; only a word wider than the column may be, and the words that are, at
       // each size, are listed here: nothing else may be on the list (an ordinary name such as English
-      // "Connectors" once broke after "Connecto" at 200 percent on 320 px).
+      // "Connectors" once broke after "Connecto" at 200 percent on 320 px). The five long compound names
+      // (German "Rechnungsstellung", Finnish "Sähköpostimarkkinointi", Swedish "E-postmarknadsföring" and
+      // the rest) are not on it: they have seams (softname.ts), a soft hyphen at the joints of the
+      // compound, so a line that is too short for one breaks it there and the browser never cuts it
+      // inside a word; they were on this list, three of them at 125 percent text on a 375 px phone.
+      // What remains is one Finnish tagline word.
       const indexes = Object.keys(messages).map((l) => (l === "en" ? "/apps/" : `/${l}/apps/`));
-      const longest = ["Rechnungsstellung", "Sähköpostimarkkinointi"];
       const widest: Record<string, string[]> = {
         "640@200": [],
         "700@200": [],
-        "390@150": ["postmarknadsföring", "Instrumentpaneler", "Sähköpostimarkkinointi"],
-        "390@200": longest,
-        "375@200": longest,
-        "375@125": ["Rechnungsstellung", "myyntimahdollisuuksia", "Sähköpostimarkkinointi"],
-        "360@175": longest,
-        "320@150": longest,
-        "320@200": longest,
+        "390@150": [],
+        "390@200": [],
+        "375@200": [],
+        "375@125": ["myyntimahdollisuuksia"],
+        "360@175": [],
+        "320@150": [],
+        "320@200": [],
       };
       for (const [width, percent] of [
         [640, 200],
@@ -2262,7 +2366,7 @@ test.describe("accessibility", () => {
       expect(checked).toBe(7 * 28);
     });
 
-    test("at any text size the page name is larger than every section heading, and the large sentence is no larger than the name", async ({
+    test("at any text size the page name is larger than every section heading, and no card title, technical heading, tagline or large sentence is larger than what it sits under", async ({
       browser,
     }) => {
       // At 150 percent text the section headings were larger than the page name (the heading's size
@@ -2292,6 +2396,13 @@ test.describe("accessibility", () => {
                   name: px(document.querySelector(".app-hero h1, .store-head h1")),
                   headings: [...document.querySelectorAll(".app-page h2, .store-sec > h2")].map(px),
                   lead: px(document.querySelector(".app-purpose, .store-lead")),
+                  // The line under the name (the page's own, absent on the index), the titles of the
+                  // cards, and the headings of the technical part, which is closed (a closed fold still has
+                  // computed sizes).
+                  tagline: px(document.querySelector(".app-tagline")),
+                  cards: [...document.querySelectorAll(".app-card h3")].map(px),
+                  dev3: [...document.querySelectorAll(".app-dev .prose h3")].map(px),
+                  dev4: [...document.querySelectorAll(".app-dev .prose h4")].map(px),
                 };
               });
               const where = `${path} at ${width}px with ${percent}% text`;
@@ -2301,6 +2412,48 @@ test.describe("accessibility", () => {
                 `${where}: the largest section heading`,
               ).toBeLessThan(size.name);
               expect(size.lead, `${where}: the large sentence`).toBeLessThanOrEqual(size.name);
+              expect(size.tagline, `${where}: the tagline`).toBeLessThanOrEqual(size.name);
+              // A card title is under the heading of its section (it was larger at 125 percent on a 320 px
+              // phone, and larger than the name at 200), and so is a heading of the technical part; a
+              // heading under that is under it. They are also never below the size of the text.
+              const heading = Math.min(...size.headings);
+              if (percent === 100) {
+                expect(
+                  heading,
+                  `${where}: a section heading is clearly larger than the large sentence`,
+                ).toBeGreaterThanOrEqual(size.lead * 1.1);
+                for (const px of size.cards)
+                  expect(
+                    px,
+                    `${where}: a card title is clearly under the section heading`,
+                  ).toBeLessThanOrEqual(heading * 0.95);
+              }
+              for (const px of size.cards) {
+                expect(px, `${where}: a card title and the section heading`).toBeLessThanOrEqual(
+                  heading + 0.01,
+                );
+                expect(px, `${where}: a card title and the name`).toBeLessThan(size.name);
+              }
+              for (const px of size.dev3)
+                expect(
+                  px,
+                  `${where}: a technical heading and the section heading`,
+                ).toBeLessThanOrEqual(heading + 0.01);
+              for (const px of size.dev4)
+                expect(
+                  px,
+                  `${where}: a technical sub-heading and the heading above it`,
+                ).toBeLessThanOrEqual(Math.min(...size.dev3) + 0.01);
+              if (path !== "/apps/") {
+                expect(size.cards.length, `${where}: card titles measured`).toBeGreaterThan(0);
+                expect(size.dev3.length, `${where}: technical headings measured`).toBeGreaterThan(
+                  0,
+                );
+                expect(
+                  size.dev4.length,
+                  `${where}: technical sub-headings measured`,
+                ).toBeGreaterThan(0);
+              }
               measured++;
             }
           }
@@ -2309,6 +2462,64 @@ test.describe("accessibility", () => {
         }
       }
       expect(measured).toBe(4 * 5 * pages.length);
+    });
+
+    test("the install command of a marketplace app keeps a column of its own at a large text size on a phone, and the copy button does not sit on it", async ({
+      browser,
+    }) => {
+      // The button's room was reserved beside the command, in rem: at 200 percent on 320 px the column
+      // was 28 px wide and the command broke into single letters (34 lines, a box 1,479 px high).
+      for (const [width, percent] of [
+        [320, 200],
+        [320, 150],
+        [320, 125],
+        [375, 200],
+        [375, 125],
+        [390, 100],
+        [640, 200],
+      ] as const) {
+        const { page, context } = await pageWithTextSize(browser, percent, { width, height: 900 });
+        try {
+          for (const path of [
+            "/apps/accounting/",
+            "/fi/apps/email-marketing/",
+            "/de/apps/field-service/",
+          ]) {
+            await page.goto(`${base()}${path}`);
+            await page.waitForSelector("html.js-ready");
+            await page.addStyleTag({ content: "* { hyphens: manual !important; }" });
+            const where = `${path} at ${width}px with ${percent}% text`;
+            const m = await page.evaluate(() => {
+              const code = document.querySelector(".app-getbox pre code")!;
+              const range = document.createRange();
+              range.selectNodeContents(code);
+              const rects = [...range.getClientRects()].filter((r) => r.width > 0);
+              const button = document
+                .querySelector(".app-getbox button.copy")!
+                .getBoundingClientRect();
+              return {
+                lines: new Set(rects.map((r) => Math.round(r.top))).size,
+                onButton: rects.some(
+                  (r) =>
+                    r.right > button.left &&
+                    r.left < button.right &&
+                    r.bottom > button.top &&
+                    r.top < button.bottom,
+                ),
+                box: document
+                  .querySelector(".app-getbox div[class*='language-']")!
+                  .getBoundingClientRect().height,
+              };
+            });
+            expect(m.lines, `${where}: lines of the command`).toBeLessThanOrEqual(8);
+            expect(m.onButton, `${where}: the command runs under the copy button`).toBe(false);
+            const { cut } = await brokenWords(page, ".app-getbox pre code", true);
+            expect(cut, `${where}: a word of the command that fits is cut`).toEqual([]);
+          }
+        } finally {
+          await context.close();
+        }
+      }
     });
 
     test("the page name and the section headings keep their words whole at a larger text size, in every language", async ({

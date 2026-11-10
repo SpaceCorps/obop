@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import apps from "../../../.generated/apps.json";
 import { useSite } from "../composables.ts";
+import { softName } from "../softname.ts";
 import Icon from "./Icon.vue";
 import Tile from "./Tile.vue";
 
@@ -22,9 +23,10 @@ const groups = computed(() =>
     .filter((g) => g.apps.length > 0),
 );
 const tagline = (id: string, fallback: string) => m.value.apps.taglines[id] ?? fallback;
-// An app is called what the product calls it in the page language, else by its English name.
+// An app is called what the product calls it in the page language, else by its English name; a long
+// name may break at the seams of its compound (softname.ts).
 const label = (a: { name: string; names: object }) =>
-  (a.names as Record<string, string>)[locale.value] ?? a.name;
+  softName((a.names as Record<string, string>)[locale.value] ?? a.name);
 </script>
 
 <template>

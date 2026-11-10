@@ -114,7 +114,8 @@ function toApp(raw: Raw, builtin: boolean, source: string): App {
     const rg = String(m["read_group"]);
     return {
       name: String(m["name"]),
-      description: String(m["description"]),
+      // The manifest's words, unless data/apps.ts corrects one that says more than the module does.
+      description: copy.modelText?.[String(m["name"])] ?? String(m["description"]),
       read_group: rg,
       write_group: String(m["write_group"]),
       fields: ((m["field"] as Raw[] | undefined) ?? []).map((f): Field => ({
@@ -147,7 +148,7 @@ function toApp(raw: Raw, builtin: boolean, source: string): App {
     category: copy.category,
     builtin,
     version: String(mod["version"]),
-    description: String(mod["description"]),
+    description: copy.packageText ?? String(mod["description"]),
     meta: {
       summary: str(mod["summary"]),
       author: str(mod["author"]),

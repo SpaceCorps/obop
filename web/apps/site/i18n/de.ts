@@ -405,7 +405,7 @@ export const de: Messages = {
       get: "Laden",
       canDo: "Was Sie damit tun können",
       keeps: "Was sie speichert",
-      safe: "Was KI-Agenten tun dürfen",
+      safe: "KI-Assistenten und diese App",
       worksWith: "Funktioniert mit",
       info: "Informationen",
       developers: "Für Entwickler",
@@ -428,12 +428,13 @@ export const de: Messages = {
       getNote: "Sie brauchen ein Administratorkonto.",
       included: "In jedem obop enthalten.",
       experimentalNote: "Noch in der Erprobung. Probieren Sie es zuerst mit Beispieldaten aus.",
-      safeMasked: "KI-Agenten sehen nur einen Teil der persönlichen Angaben von Menschen.",
-      safeWithheld: "KI-Agenten sehen sensible Angaben nie.",
+      safeMasked: "KI-Assistenten sehen nur einen Teil der persönlichen Angaben von Menschen.",
+      safeWithheld:
+        "KI-Assistenten sehen sensible Angaben nie, zum Beispiel Geldbeträge, Bankdaten, Gehälter, Gesundheitsdaten oder Zugangsdaten.",
       safeApprove:
-        "Einige Schritte kann ein KI-Agent nur vorschlagen, eine Person gibt sie frei. Andere Schritte darf er selbst ausführen, im Rahmen seiner Berechtigungen.",
+        "Einige Schritte kann ein KI-Assistent nur vorschlagen, eine Person gibt sie frei. Andere Schritte darf er selbst ausführen, im Rahmen seiner Berechtigungen.",
       safeApproveNone:
-        "Ein KI-Agent kann das Löschen von Datensätzen nur vorschlagen, eine Person gibt es frei. Alles andere darf er selbst tun, im Rahmen seiner Berechtigungen.",
+        "Ein KI-Assistent kann das Löschen von Datensätzen nur vorschlagen, eine Person gibt es frei. Alles andere darf er selbst tun, im Rahmen seiner Berechtigungen.",
       appMeta: "Eine App für obop, die Open-Source-Plattform für Unternehmen.",
       developersShow: "Technische Details anzeigen",
       developersHide: "Technische Details ausblenden",

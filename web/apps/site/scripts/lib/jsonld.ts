@@ -136,11 +136,13 @@ export function jsonLd(c: Ctx): object[] {
       softwareVersion: String(c.fm["version"]),
       softwareRequirements: "obop",
       isPartOf: { "@id": `${SITE_URL}/#website` },
+      // Free, and the same for everyone: there is one obop and no edition (OR-1, OR-2). No sentence
+      // here: one would be English next to the page's `inLanguage`, a built-in app is included and a
+      // marketplace app is installed, and the offer is the same price either way.
       offers: {
         "@type": "Offer",
         price: "0",
         priceCurrency: "EUR",
-        description: "Included in the open-source edition",
       },
     });
   }

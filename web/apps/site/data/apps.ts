@@ -35,6 +35,15 @@ export interface AppCopy {
    * translation says the old words.
    */
   cards?: Record<string, CardCopy>;
+  /**
+   * The package text under "For developers" (what the package does and does not do), where the
+   * manifest's own text says more than the module does. The site cannot change the module's words, so
+   * it shows these instead; the sentence that was left out or reworded is named in a comment next to
+   * each, and the module's text is the thing to correct at its source.
+   */
+  packageText?: string;
+  /** The same for the description of one model in the technical part, by model name. */
+  modelText?: Record<string, string>;
 }
 
 export interface CardCopy {
@@ -52,7 +61,7 @@ export const APP_COPY: AppCopy[] = [
     name: "CRM",
     tagline: "Follow your sales leads",
     purpose:
-      "Keep track of possible sales, from the first contact until you win or lose them. Each lead has a title, a contact, the revenue you expect and a stage. Moving a lead along the pipeline is a single action that your team and its AI agents can both take.",
+      "Keep track of possible sales, from the first contact until you win or lose them. Each lead has a title, a contact name and email, the revenue you expect and a stage. Moving a lead through the steps of a sale is a single action that your team and its AI assistants can both take.",
   },
   {
     id: "sales",
@@ -60,7 +69,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Sales",
     tagline: "Quotations and orders",
     purpose:
-      "Write quotations for customers and turn them into confirmed orders. Each order belongs to a contact and has lines, a total and a currency. Confirming an order prepares a draft invoice with the same lines, for Invoicing to post.",
+      "Write quotes for customers and turn them into confirmed orders. Each order belongs to a contact and has lines, a total and a currency. Confirming an order prepares a draft invoice with the same lines, for Invoicing to finalise. The person who confirms also needs access to Invoicing.",
   },
   {
     id: "invoicing",
@@ -68,11 +77,23 @@ export const APP_COPY: AppCopy[] = [
     name: "Invoicing",
     tagline: "Bill your customers",
     purpose:
-      "Prepare invoices for your customers as drafts, then post each one to give it its own number, in an unbroken yearly series. Posting an invoice always needs a person: an AI agent can prepare the draft and suggest posting it, and someone with the right permission approves it.",
+      "Prepare invoices for your customers as drafts, then finalise each one to give it its own number, in a yearly series with no gaps. Finalising needs a person with the right permission: an AI assistant can prepare the draft and propose finalising it, but cannot finalise it.",
     cards: {
       invoice: {
         text: "A customer invoice: its lines, a total that adds them up, and a number once it is posted.",
       },
+      "invoice.post": {
+        text: "Finalise a draft invoice and give it its next number in the yearly series.",
+      },
+    },
+    // The module says "posted invoices are corrected only by credit notes" (crates/modules/invoicing/src/lib.rs:17):
+    // there is no credit note in the module, and nothing locks a posted invoice's fields. What holds is
+    // that no action leaves "posted". Its package text says "legal number"; the module gives a gapless
+    // number of the year and makes no claim about the law.
+    packageText:
+      "Customer invoices with lines: drafts, posting with a gapless yearly number, cancellation.",
+    modelText: {
+      invoice: "A customer invoice. A posted invoice cannot go back to draft.",
     },
   },
   {
@@ -81,7 +102,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Products",
     tagline: "Your products and prices",
     purpose:
-      "The list of everything you sell, with its name, product code, price and cost. Cost is shown only to people in the cost viewer group, so a sales assistant or an AI agent can quote a price without seeing your margins.",
+      "The list of everything you sell, with its name, product code, price and cost. Cost is shown only to people who may see costs, so a sales assistant can quote a price without seeing your margins.",
   },
   {
     id: "base",
@@ -89,14 +110,16 @@ export const APP_COPY: AppCopy[] = [
     name: "Contacts",
     tagline: "People and companies",
     purpose:
-      "One record for every person and company you deal with, shared by all the other apps. Names and email addresses are personal data, so AI agents see only part of them, and the tax number is kept from them completely. A separate erase step, which a person must approve, removes a contact's personal details.",
+      "One record for every person and company you deal with, used by Sales, Invoicing, Purchase and other apps. Names and email addresses are personal data, so AI assistants see only part of them, and the tax number is kept from them completely. A separate erase step, for the privacy officer role, replaces a contact's details with [erased].",
     technical:
       "The erase action anonymises a contact in place and is gated by approval. Names and emails are masked for agents; the tax identifier is withheld.",
     modelNames: {
       party: "Contact",
     },
     cards: {
-      "party.erase": { text: "Remove a contact's personal details and note that this was done." },
+      "party.erase": {
+        text: "Replace a contact's name, email, tax number and notes with [erased], and remove the photo. Copies in other apps are not touched.",
+      },
     },
   },
   {
@@ -105,13 +128,15 @@ export const APP_COPY: AppCopy[] = [
     name: "Connectors",
     tagline: "Connect your other tools",
     purpose:
-      "Connect your other tools to obop, with privacy controls built in. These are technical controls that support GDPR compliance, not legal advice or a certification. The catalogue says for every service how much of it is built. Nothing goes out or comes in until the reason for sharing is written down and the details that may be shared are listed. Personal details go out under a code name (a pseudonym) unless you decide otherwise, and sensitive details stay back. Every transfer is logged without its content. When someone withdraws their consent, the service is disconnected and its sign-in details are deleted. obop also keeps a list of what each connection processes, which you can export as a starting point for your own record of processing (GDPR Article 30).",
+      "Connect your other tools to obop, with privacy controls built in. These are technical controls that support GDPR compliance, not legal advice or a certification. The catalogue says for every service how much of it is built. Nothing goes out or comes in until the reason for sharing is written down and the details that may be shared are listed. Personal details go out under a code name (a pseudonym) unless you decide otherwise, and sensitive details stay back. Every transfer is logged without its content. When someone withdraws their consent, the service is disconnected and its sign-in details are deleted. A list of what each connection processes is also kept, and you can export it as a starting point for your own record of processing (GDPR Article 30).",
     technical:
       "Personal data leaves as keyed pseudonyms by default, the sensitive data classes stay withheld, every flow is recorded without its payload, and withdrawing consent disconnects the service and purges its credentials. The processing register is a generated read model over the connections, providers and consents, exportable as CSV; the complete Article 30 record stays with the operator.",
     modelNames: {
       connector_provider: "Service",
       provider_policy: "Service settings",
       egress_policy: "Data sharing settings",
+      sync_run: "Run",
+      data_flow_log: "Transfer log",
     },
     cards: {
       "connection.connect": {
@@ -160,7 +185,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Helpdesk",
     tagline: "Support tickets",
     purpose:
-      "Receive customer support requests and work through them, with priorities and response-time targets. A typical use is an AI agent that reads new tickets and drafts a first assessment, while people keep ownership of the replies.",
+      "Keep customer support requests and work through them, with priorities and response-time targets. A typical use is an AI assistant that reads new tickets and drafts a first assessment, while people keep ownership of the replies.",
     modelNames: {
       helpdesk_sla: "Response times",
     },
@@ -179,7 +204,7 @@ export const APP_COPY: AppCopy[] = [
       "Keep a list of company vehicles, who drives them and when they were serviced. It records each vehicle's status and services; it does not work out running costs.",
     cards: {
       "fleet_vehicle.retire": {
-        text: "Remove an available vehicle from the fleet for good (only people who may approve).",
+        text: "Remove an available vehicle from the fleet for good.",
       },
     },
   },
@@ -189,7 +214,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Inventory",
     tagline: "Stock and warehouses",
     purpose:
-      "Describe your warehouses and locations, record stock levels and log stock moves. When a stock manager confirms a move, the stock at both places is updated for you. Counting is still done by people.",
+      "Describe your warehouses and locations, record stock levels and log stock moves. When a stock manager confirms a move, the stock is taken from the place it left and added to the place it arrived. Counting is still done by people.",
     modelNames: {
       inventory_move: "Stock move",
     },
@@ -200,8 +225,14 @@ export const APP_COPY: AppCopy[] = [
     name: "Purchase",
     tagline: "Vendors and purchase orders",
     purpose:
-      "Keep your vendors and the purchase orders you send them, with order lines and a flow from draft to received. The order total is added up from its lines.",
+      "Keep your vendors and the purchase orders you place with them, with order lines and a flow from draft to received. The order total is added up from its lines.",
     cards: {
+      "purchase_order.send": {
+        text: "Mark the order as sent to the vendor. obop does not contact the vendor.",
+      },
+      "purchase_order.confirm": {
+        text: "Mark the order as confirmed with the vendor. obop does not contact the vendor.",
+      },
       "purchase_order.receive": {
         text: "Record that the goods arrived. A draft stock move is prepared for each line, for the warehouse to confirm. Needs permission to use Inventory.",
       },
@@ -225,7 +256,7 @@ export const APP_COPY: AppCopy[] = [
     name: "HR",
     tagline: "Employees and leave",
     purpose:
-      "A register of employees, departments and leave requests, with strict rules about who sees what. Pay, bank details and national id are visible to managers only, and health or union data only to a special group of readers. AI agents never see the sensitive kinds.",
+      "A register of employees, departments and leave requests, with strict rules about who sees what. Pay, bank details and national ID number are visible to managers only, and health or union data only to the people given that access. AI assistants never see any of these.",
   },
   {
     id: "timesheets",
@@ -262,13 +293,16 @@ export const APP_COPY: AppCopy[] = [
     name: "Point of Sale",
     tagline: "Shop tills",
     purpose:
-      "Keep track of a shop till: open and close the cash drawer, and record each sale and how it was paid. It records what happened at the till. It is not a connection to card terminals, and card numbers must never be stored.",
+      "Keep track of a shop's cash register: open and close the cash drawer, and record each sale and how it was paid. It records what happened at the register. It is not connected to card terminals, and card numbers must never be stored.",
     modelNames: {
       pos_config: "Point of sale",
     },
     cards: {
       "pos_order.pay": {
-        text: "Mark the sale as fully paid. Not allowed until the payments cover the total. Each line also prepares a stock move, so you need permission to use Inventory.",
+        text: "Mark the sale as fully paid. Refused until the payments cover the total. If the sale has a stock location, a draft record of the goods leaving is prepared for each line, for the warehouse to confirm. You need access to Inventory.",
+      },
+      "pos_order.refund": {
+        text: "Record that the sale was refunded. obop does not pay money back.",
       },
     },
   },
@@ -278,9 +312,17 @@ export const APP_COPY: AppCopy[] = [
     name: "eCommerce",
     tagline: "Online store",
     purpose:
-      "Keep the data of an online shop: listings, shipping methods, discount codes and web orders. Orders follow a fulfilment flow, and refunds need a manager and an approval. When the public site is turned on, obop shows the shop to visitors and takes their orders.",
+      "Keep the data of an online shop: listings, shipping methods, discount codes and web orders. Orders follow a fulfilment flow, and refunds are for managers; an AI assistant can only propose them. When the public site is turned on, obop shows the shop to visitors and takes their orders.",
     technical:
       "With the public site turned on, obop shows the shop to visitors and takes orders; a custom storefront can use the API instead.",
+    cards: {
+      "ecommerce_order.refund": {
+        text: "Record the refund of a paid order that was not delivered. For card payments through Stripe the money is returned too; otherwise you pay it back yourself.",
+      },
+      "ecommerce_order.refund_delivered": {
+        text: "Record the refund of a delivered order, for example after a return. For card payments through Stripe the money is returned too; otherwise you pay it back yourself.",
+      },
+    },
   },
   {
     id: "website",
@@ -288,7 +330,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Website",
     tagline: "Pages and forms",
     purpose:
-      "Hold the content of a public website: pages, menus, blog posts and the forms visitors send. This app stores and organises the content; with the public site turned on, obop shows it to visitors. Publishing needs approval.",
+      "Hold the content of a public website: pages, menus, blog posts and the forms visitors send. This app stores and organises the content; with the public site turned on, obop shows it to visitors. Publishing is for managers; an AI assistant can only propose it.",
   },
   {
     id: "email_marketing",
@@ -296,8 +338,19 @@ export const APP_COPY: AppCopy[] = [
     name: "Email Marketing",
     tagline: "Campaigns",
     purpose:
-      "Keep mailing lists with each contact's consent status and date, and prepare campaigns. obop does not send the emails itself: marking a campaign as sent only records that it went out, and when an AI agent does it, a person has to approve it.",
+      "Keep mailing lists with each contact's consent status and date, and prepare campaigns. Emails are not sent by obop: marking a campaign as sent only records that it went out.",
+    // The package text says "Sending is irreversible and reaches real people, so it needs a human
+    // approval" (packages/email_marketing.toml:5). Nothing in the repository sends an email: the
+    // action marks the campaign as sent. The rest of the text is the manifest's, word for word.
+    packageText:
+      "Mailing lists, the contacts on them with their consent status and date, and campaigns with a draft, scheduled, sent flow. Marking a campaign as sent needs a manager, and agents may only propose it; obop does not send the emails itself. Campaign statistics are numbers entered or imported, not computed. Contacts are personal data: keep consent_status and consent_date accurate and never mail a contact that is not opted_in.",
     cards: {
+      email_marketing_campaign: {
+        text: "One mailing to a list: its subject, sender, content and the day it should go out. obop does not send it.",
+      },
+      "email_marketing_campaign.schedule": {
+        text: "Mark the campaign as scheduled for its day. obop does not send it.",
+      },
       "email_marketing_campaign.send": {
         text: "Record that the scheduled campaign has been sent (manager only). obop does not send the emails itself.",
       },
@@ -320,7 +373,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Sign",
     tagline: "E-signatures",
     purpose:
-      "Keep templates and signature requests, and follow each request from draft to signed. This is a simple electronic signature: the signer types their name, which does not prove who they are. For a PDF from Documents the app keeps a fingerprint and an exact copy. Only an administrator can change a signed request.",
+      "Keep templates and signature requests, and follow each request from draft to signed. This is a simple electronic signature: the signer types their name, which does not prove who they are. For a PDF from Documents it keeps an exact copy and a check code. An AI assistant cannot create signing links.",
     technical:
       "For a PDF from Documents the app records the SHA-256 hash of the file and keeps an exact copy. A signed request can be changed or deleted only by an administrator, and the record is not tamper-proof: whoever can write the database can change it.",
     modelNames: {
@@ -345,6 +398,11 @@ export const APP_COPY: AppCopy[] = [
     tagline: "Plans and subscriptions",
     purpose:
       "Define recurring plans and follow your customers' subscriptions, from trial to cancelled. A subscription is in trial, active, past due or cancelled, and has the date of its next invoice. It does not create invoices by itself.",
+    cards: {
+      "subscriptions_subscription.activate": {
+        text: "Mark the subscription as active when the trial ends. obop does not start any billing.",
+      },
+    },
   },
   {
     id: "dashboards",
@@ -373,29 +431,29 @@ export const APP_COPY: AppCopy[] = [
     name: "Accounting",
     tagline: "Ledger and journals",
     purpose:
-      "Record what your business earns and spends, post each entry to the ledger, and close each month and year. Each entry has debit and credit lines, shows its totals and cannot be posted unless they match. Posted entries are numbered in an unbroken yearly series. Tax amounts are typed in by hand. Posting and closing need approval.",
+      "Record what your business earns and spends, and finalise each entry in the ledger. An entry is a set of debit and credit lines, finalised only when the totals match. Closing a month or year is only a label; it does not stop new entries. Tax amounts are typed in by hand.",
     modelNames: {
       accounting_move: "Journal entry",
       accounting_move_line: "Journal entry line",
     },
     cards: {
       "accounting_fiscal_year.close": {
-        text: "Close the fiscal year so nothing more is posted in it (only people who may approve).",
+        text: "Mark the fiscal year as closed. This is a label only: entries can still be posted into it.",
       },
       "accounting_fiscal_year.reopen": {
-        text: "Reopen a closed fiscal year to correct it (only people who may approve).",
+        text: "Mark a closed fiscal year as open again.",
       },
       "accounting_period.close": {
-        text: "Close the period against further posting (only people who may approve).",
+        text: "Mark the period as closed. This is a label only: entries can still be posted into it.",
       },
       "accounting_period.reopen": {
-        text: "Reopen a closed period (only people who may approve).",
+        text: "Mark a closed period as open again.",
       },
       "accounting_move.post": {
-        text: "Post a draft entry to the ledger and number it (only people who may approve; refused unless debits equal credits).",
+        text: "Finalise a draft entry in the ledger and give it its next number. Refused unless the debits equal the credits.",
       },
       "accounting_move.reverse": {
-        text: "Mark a posted entry as reversed; the opposite entry is booked separately (only people who may approve).",
+        text: "Mark a posted entry as reversed. The opposite entry is booked separately.",
       },
     },
   },
@@ -421,6 +479,6 @@ export const APP_COPY: AppCopy[] = [
     name: "Expenses",
     tagline: "Claims and approvals",
     purpose:
-      "Employees file expense claims that move from draft to submitted, approved and paid. Paying needs its own permission and a person's approval. Receipts are mentioned in a note, not stored.",
+      "Employees file expense claims that move from draft to submitted, approved and paid. Paying is for the finance role; an AI assistant can only propose it. Receipts are mentioned in a note, not stored.",
   },
 ];

@@ -403,7 +403,7 @@ export const fi: Messages = {
       get: "Lataa",
       canDo: "Mitä voit tehdä",
       keeps: "Mitä se tallentaa",
-      safe: "Mitä tekoälyagentit saavat tehdä",
+      safe: "Tekoäly ja tämä sovellus",
       worksWith: "Toimii yhdessä",
       info: "Tiedot",
       developers: "Kehittäjille",
@@ -431,12 +431,13 @@ export const fi: Messages = {
       getNote: "Tarvitset ylläpitäjän tunnuksen.",
       included: "Sisältyy jokaiseen obopiin.",
       experimentalNote: "Vielä testauksessa. Kokeile sitä ensin esimerkkitiedoilla.",
-      safeMasked: "Tekoälyagentit näkevät vain osan ihmisten henkilötiedoista.",
-      safeWithheld: "Tekoälyagentit eivät koskaan näe arkaluonteisia tietoja.",
+      safeMasked: "Tekoälyavustajat näkevät vain osan ihmisten henkilötiedoista.",
+      safeWithheld:
+        "Tekoälyavustajat eivät koskaan näe arkaluonteisia tietoja, kuten rahamääriä, pankkitietoja, palkkoja, terveystietoja tai kirjautumistietoja.",
       safeApprove:
-        "Joitakin vaiheita tekoälyagentti voi vain ehdottaa, ja henkilö hyväksyy ne. Muut vaiheet se voi tehdä itse, oikeuksiensa rajoissa.",
+        "Joitakin vaiheita tekoälyavustaja voi vain ehdottaa, ja henkilö hyväksyy ne. Muut vaiheet se voi tehdä itse, oikeuksiensa rajoissa.",
       safeApproveNone:
-        "Tekoälyagentti voi vain ehdottaa tietueiden poistamista, ja henkilö hyväksyy sen. Kaiken muun se voi tehdä itse, oikeuksiensa rajoissa.",
+        "Tekoälyavustaja voi vain ehdottaa tietueiden poistamista, ja henkilö hyväksyy sen. Kaiken muun se voi tehdä itse, oikeuksiensa rajoissa.",
       appMeta: "Sovellus obopille, avoimen lähdekoodin yritysalustalle.",
       developersShow: "Näytä tekniset tiedot",
       developersHide: "Piilota tekniset tiedot",

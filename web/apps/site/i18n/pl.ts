@@ -398,7 +398,7 @@ export const pl: Messages = {
       get: "Pobierz",
       canDo: "Co możesz zrobić",
       keeps: "Co przechowuje",
-      safe: "Co mogą robić agenci AI",
+      safe: "Asystenci AI i ta aplikacja",
       worksWith: "Współpracuje z",
       info: "Informacje",
       developers: "Dla programistów",
@@ -426,12 +426,13 @@ export const pl: Messages = {
       getNote: "Potrzebne jest konto administratora.",
       included: "Wchodzi w skład każdego obop.",
       experimentalNote: "Wciąż w fazie testów. Najpierw wypróbuj ją na danych przykładowych.",
-      safeMasked: "Agenci AI widzą tylko część danych osobowych.",
-      safeWithheld: "Agenci AI nigdy nie widzą danych wrażliwych.",
+      safeMasked: "Asystenci AI widzą tylko część danych osobowych.",
+      safeWithheld:
+        "Asystenci AI nigdy nie widzą danych wrażliwych, takich jak kwoty, dane bankowe, wynagrodzenia, dane o zdrowiu czy dane logowania.",
       safeApprove:
-        "Niektóre kroki agent AI może tylko zaproponować, a zatwierdza je osoba. Pozostałe może wykonać sam, w granicach swoich uprawnień.",
+        "Niektóre kroki asystent AI może tylko zaproponować, a zatwierdza je osoba. Pozostałe może wykonać sam, w granicach swoich uprawnień.",
       safeApproveNone:
-        "Agent AI może tylko zaproponować usunięcie rekordów, a zatwierdza je osoba. Resztę może zrobić sam, w granicach swoich uprawnień.",
+        "Asystent AI może tylko zaproponować usunięcie rekordów, a zatwierdza je osoba. Resztę może zrobić sam, w granicach swoich uprawnień.",
       appMeta: "Aplikacja dla obop, otwartoźródłowej platformy dla firm.",
       developersShow: "Pokaż szczegóły techniczne",
       developersHide: "Ukryj szczegóły techniczne",
