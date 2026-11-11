@@ -4,6 +4,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { messages } from "../../../apps/site/i18n/index.ts";
+import { APP_COPY } from "../../../apps/site/data/apps.ts";
 import { CLAIMS } from "../../../apps/site/scripts/lib/claims.ts";
 import { TECHNICAL, technicalIn } from "../../../apps/site/scripts/lib/plain.ts";
 import { platformUrl, repoRoot, siteDir } from "../support/env.ts";
@@ -349,7 +350,9 @@ test.describe("website without JavaScript", () => {
     await expect(page.locator(".app-info dd", { hasText: "Finance" })).toHaveCount(1);
     const primary = page.locator(".app-hero .app-primary");
     await expect(primary).toHaveText(s.open);
-    await expect(primary).toHaveAttribute("href", "/app/");
+    // The button leads to Getting started, not to /app/: no page of the site sends a visitor to the
+    // sign-up app from here (the hosted beta is not live).
+    await expect(primary).toHaveAttribute("href", "/docs/getting-started/");
     await expect(page.locator("main .app-primary")).toHaveCount(1);
 
     // The facts strip: four cells, from the manifest only.
@@ -410,6 +413,29 @@ test.describe("website without JavaScript", () => {
       page
         .locator(`details.app-row:has(#${id}) > summary`)
         .evaluate((el) => getComputedStyle(el, "::after").transform);
+    // The chevron is drawn, not only declared: a pseudo-element keeps its `transform` even when it
+    // has no content or no border, so the box and the line of it are read too.
+    const drawn = (id: string) =>
+      page.locator(`details.app-row:has(#${id}) > summary`).evaluate((el) => {
+        const cs = getComputedStyle(el, "::after");
+        return {
+          content: cs.content,
+          display: cs.display,
+          width: parseFloat(cs.width),
+          height: parseFloat(cs.height),
+          line: parseFloat(cs.borderInlineEndWidth),
+          colour: cs.borderInlineEndColor,
+        };
+      });
+    for (const id of ["information", "for-developers"]) {
+      const c = await drawn(id);
+      expect(c.content, `#${id}: the chevron has content to draw`).not.toBe("none");
+      expect(c.display, `#${id}: the chevron is not hidden`).not.toBe("none");
+      expect(c.width, `#${id}: the chevron has a width`).toBeGreaterThan(4);
+      expect(c.height, `#${id}: the chevron has a height`).toBeGreaterThan(4);
+      expect(c.line, `#${id}: the chevron has a line`).toBeGreaterThanOrEqual(1);
+      expect(c.colour, `#${id}: the line of the chevron is visible`).not.toBe("rgba(0, 0, 0, 0)");
+    }
     const closed = await chevron("information");
     expect(closed, "a closed row has a chevron").not.toBe("none");
     expect(await chevron("for-developers"), "closed rows look alike").toBe(closed);
@@ -455,11 +481,33 @@ test.describe("website without JavaScript", () => {
     await expect(
       page.locator(".app-info a", { hasText: "crates/modules/invoicing" }),
     ).toHaveAttribute("href", /\/tree\/main\/crates\/modules\/invoicing$/);
-    // A built-in app has no Get section: one quiet line under the information, in its row, says it
-    // is included.
+    // A built-in app has no Get section: one quiet line under the facts strip says it is included.
+    // It is not in the Information row: with that row closed it is the only place the visible page
+    // says that the app needs no install.
     await expect(page.locator(".app-getbox")).toHaveCount(0);
+    await expect(page.locator(".app-included")).toHaveCount(1);
     await expect(page.locator(".app-included")).toHaveText(s.included);
     await expect(page.locator(".app-included")).toBeVisible();
+    expect(
+      await page.locator(".app-included").evaluate((el) => !!el.closest("details")),
+      "the line that says the app is included is behind a tap",
+    ).toBe(false);
+    expect(
+      await page.evaluate(
+        () =>
+          !!(
+            document
+              .querySelector(".app-facts-box")!
+              .compareDocumentPosition(document.querySelector(".app-included")!) &
+              Node.DOCUMENT_POSITION_FOLLOWING &&
+            document
+              .querySelector(".app-included")!
+              .compareDocumentPosition(document.querySelector(".app-purpose")!) &
+              Node.DOCUMENT_POSITION_FOLLOWING
+          ),
+      ),
+      "the line is between the facts strip and the purpose",
+    ).toBe(true);
 
     // For developers: the second row. Its label is the heading, alone in the summary of a fold that
     // is present and closed, with everything technical inside it, one heading level below the
@@ -511,7 +559,7 @@ test.describe("website without JavaScript", () => {
     await expect(page.locator(".app-getbox > p").first()).toHaveText(s.getLead);
     const open = page.locator(".app-getbox a.app-pill");
     await expect(open).toHaveText(s.openObop);
-    await expect(open).toHaveAttribute("href", "/app/");
+    await expect(open).toHaveAttribute("href", "/docs/getting-started/");
     await expect(page.locator("main .app-primary")).toHaveCount(1); // the one button of the hero
     // The box follows the cards of "What you can do" and comes before everything else, so the
     // hero's button does not jump past the whole page (the box was the last thing before the
@@ -605,7 +653,10 @@ test.describe("website without JavaScript", () => {
     ).toBe("app-purpose");
     await page.goto(`${base()}/de/apps/crm/`);
     await expect(page.locator(".app-hero .app-primary")).toHaveText(s.open);
-    await expect(page.locator(".app-hero .app-primary")).toHaveAttribute("href", "/app/");
+    await expect(page.locator(".app-hero .app-primary")).toHaveAttribute(
+      "href",
+      "/de/docs/getting-started/",
+    );
   });
 
   test("a translated page calls an app what the product calls it in that language", async ({
@@ -650,10 +701,17 @@ test.describe("website without JavaScript", () => {
 
   // What the page shows is checked against the manifest read straight from the TOML file, not
   // through the site's own loader: the cards, the folds, the facts, the safe lines, the icons.
+  // `kept` is the number of action cards and of model cards that have `keep` in data/apps.ts (the
+  // manifest cannot say it: Connectors' Test step and its Transfer log).
   for (const app of [
-    { slug: "accounting", file: "packages/accounting.toml", builtin: false },
-    { slug: "connectors", file: "web/apps/site/data/builtin/connectors.toml", builtin: true },
-  ]) {
+    { slug: "accounting", file: "packages/accounting.toml", builtin: false, kept: [0, 0] },
+    {
+      slug: "connectors",
+      file: "web/apps/site/data/builtin/connectors.toml",
+      builtin: true,
+      kept: [1, 1],
+    },
+  ] as const) {
     test(`the ${app.slug} page shows what its manifest says`, async ({ page }) => {
       const s = messages.en.apps.store;
       const toml = readFileSync(join(repoRoot, app.file), "utf8");
@@ -743,13 +801,15 @@ test.describe("website without JavaScript", () => {
         expect(box, "the approval words of a card are drawn").not.toBeNull();
         expect(box!.width, "the approval words of a card are drawn").toBeGreaterThan(40);
       }
-      // Three cards are shown, or every marked card where there are more than three of those; four
-      // cards are all shown, and so is a card that would be alone in the fold.
+      // Three cards are shown in all: every marked card (the approval mark, or `keep` in
+      // data/apps.ts, counted in `app.kept`) and the first of the others for what is left of three,
+      // and at least one other where three or more are marked; four cards are all shown, and so is a
+      // card that would be alone in the fold.
       const folded = (n: number, marked: number) => {
-        const rest = n > 4 ? n - Math.max(3, marked) : 0;
+        const rest = n > 4 ? n - Math.max(3, marked + 1) : 0;
         return rest < 2 ? 0 : rest;
       };
-      const foldedActions = folded(actionBlocks.length, approvals);
+      const foldedActions = folded(actionBlocks.length, approvals + app.kept[0]);
       expect(foldedActions, `${app.slug}: its actions are folded`).toBeGreaterThan(0);
       await expect(can.locator(".app-more > summary")).toHaveText(
         s.showMoreActions.replace("{n}", String(foldedActions)),
@@ -759,7 +819,7 @@ test.describe("website without JavaScript", () => {
       // tap, as for the actions).
       const keeps = page.locator("section", { has: page.locator("h2#keeps") });
       await expect(keeps.locator(".app-card")).toHaveCount(models);
-      const foldedModels = folded(models, 0);
+      const foldedModels = folded(models, app.kept[1]);
       expect(foldedModels, `${app.slug}: what it keeps is folded`).toBeGreaterThan(0);
       await expect(keeps.locator(".app-more > summary")).toHaveText(
         s.showMoreKeeps.replace("{n}", String(foldedModels)),
@@ -805,7 +865,7 @@ test.describe("website without JavaScript", () => {
         ).toHaveCount(1);
       await expect(page.locator("main .app-primary")).toHaveAttribute(
         "href",
-        app.builtin ? "/app/" : "#get",
+        app.builtin ? "/docs/getting-started/" : "#get",
       );
     });
   }
@@ -1172,14 +1232,16 @@ test.describe("website without JavaScript", () => {
     page,
     request,
   }) => {
-    // The two pages where the first three actions of the manifest carry no mark: Subscriptions (its
-    // three marked cards are the fourth to the sixth) and eCommerce (its two refunds come late).
-    // The marked cards are shown first of all, then the others fill up to three.
+    // Two pages where the first three actions of the manifest carry no mark: Subscriptions (its three
+    // marked cards are the fourth to the sixth) and eCommerce (its two refunds come late). The marked
+    // cards are shown wherever they stand, then the others fill up to three in the manifest's order
+    // (Subscriptions has six cards in all, none of them folded: one other card is shown beside three
+    // marked ones, and the fold would have held one card more than it saves).
     for (const locale of ["en", "sv"] as const) {
       const s = messages[locale].apps.store;
       const at = (slug: string) => `${base()}${locale === "en" ? "" : `/${locale}`}/apps/${slug}/`;
       for (const [slug, marked, shown, folded] of [
-        ["subscriptions", 3, 3, 3],
+        ["subscriptions", 3, 6, 0],
         ["ecommerce", 2, 3, 5],
       ] as const) {
         await page.goto(at(slug));
@@ -1192,6 +1254,8 @@ test.describe("website without JavaScript", () => {
           await expect(note, `${where}: the words are drawn with the fold closed`).toBeVisible();
         }
         const fold = page.locator("#can-do ~ .app-more");
+        await expect(fold, where).toHaveCount(folded === 0 ? 0 : 1);
+        if (folded === 0) continue;
         await expect(fold, where).toHaveJSProperty("open", false);
         await expect(fold.locator("summary"), where).toHaveText(
           s.showMoreActions.replace("{n}", String(folded)),
@@ -1200,6 +1264,17 @@ test.describe("website without JavaScript", () => {
         await expect(fold.locator(".app-card-note"), where).toHaveCount(0);
       }
     }
+    // Subscriptions opens with its lifecycle, in the manifest's order, and not with three
+    // cancellations: its first step is the first card.
+    await page.goto(`${base()}/apps/subscriptions/`);
+    await expect(page.locator("#can-do ~ .app-cards > .app-card .app-card-title")).toHaveText([
+      "Activate",
+      "Mark past due",
+      "Recover",
+      "Cancel trial",
+      "Cancel",
+      "Cancel overdue",
+    ]);
     // And on every app page: no fold holds a marked card, and there are marked cards to hold.
     let marked = 0;
     let folds = 0;
@@ -1211,6 +1286,123 @@ test.describe("website without JavaScript", () => {
     }
     expect(marked, "cards with the approval mark").toBeGreaterThan(30);
     expect(folds, "pages that fold some of their actions").toBeGreaterThan(5);
+  });
+
+  test("a card whose words are a caveat (`keep` in data/apps.ts) is never behind a tap, in any language", async ({
+    page,
+    request,
+  }) => {
+    // The cards that state what an AI agent may do without approval (Website's four), that a step
+    // starts no billing (Subscriptions), notifies no one (HR) or sends an event to the remote address
+    // (Connectors' Test), and the log that keeps no content. Their text is English on every page (it
+    // is written for the card), so it is found by its words in all seven languages.
+    const kept = APP_COPY.flatMap((app) =>
+      Object.values(app.cards ?? {})
+        .filter((c) => c.keep)
+        .map((c) => ({ slug: app.id.replaceAll("_", "-"), text: c.text })),
+    );
+    expect(kept.length, "cards that have keep").toBe(8);
+    for (const locale of Object.keys(messages)) {
+      const prefix = locale === "en" ? "" : `/${locale}`;
+      for (const { slug, text } of kept) {
+        await page.goto(`${base()}${prefix}/apps/${slug}/`);
+        const where = `${locale} ${slug}: "${text.slice(0, 40)}"`;
+        const card = page.locator(".app-card-text", { hasText: text });
+        await expect(card, where).toHaveCount(1);
+        expect(
+          await card.evaluate((el) => !!el.closest("details")),
+          `${where} is behind a tap`,
+        ).toBe(false);
+        await expect(card, where).toBeVisible();
+      }
+    }
+    // What an AI agent may do without approval is not in any "Show N more" fold of the Website page,
+    // in any language (the sentence is the same on all of them).
+    for (const locale of Object.keys(messages)) {
+      await page.goto(`${base()}${locale === "en" ? "" : `/${locale}`}/apps/website/`);
+      const folds = await page.locator("main details.app-more").allTextContents();
+      expect(folds.length, `${locale}: the Website page has folds to look in`).toBeGreaterThan(0);
+      expect(
+        folds.join(" "),
+        `${locale}: no fold of the Website page says what an AI agent may do`,
+      ).not.toMatch(/without approval|no further approval|AI agent/);
+    }
+    // The Markdown copy keeps all four in its list, as it keeps every card.
+    const md = await (await request.get(`${base()}/apps/website.md`)).text();
+    for (const { slug, text } of kept) if (slug === "website") expect(md).toContain(text);
+  });
+
+  test("the room rule holds on every drawn app page: the marked cards and the first of the others, three in all", async ({
+    page,
+    request,
+  }) => {
+    // Read from the drawn page, not from the rule's code: the open cards of "What you can do" and of
+    // "What it keeps", the ones in the fold, and which of them are marked (the approval words, or a
+    // `keep` card of data/apps.ts). Where a fold exists, every marked card is open and the open cards
+    // that are not marked are what is left of three, and at least one.
+    await page.setViewportSize({ width: 390, height: 844 });
+    // Measured at 390x844: Accounting, with seven open cards, has it at 2.93 screens (2,476 px); the
+    // next are Hr (2.3), Subscriptions (2.2) and Pos (2.1). Three screens and a quarter is a ceiling,
+    // not a target: one more card on a page is caught by the numbers in cards.test.ts.
+    const LIMIT_SCREENS = 3.25;
+    const keptTexts = APP_COPY.flatMap((app) =>
+      Object.values(app.cards ?? {})
+        .filter((c) => c.keep)
+        .map((c) => c.text),
+    );
+    let sections = 0;
+    let foldedSections = 0;
+    let longest = 0;
+    for (const url of (await pagesOf(request, "en")).filter((u) => /\/apps\/.+\/$/.test(u))) {
+      await page.goto(`${base()}${url}`, { waitUntil: "domcontentloaded" });
+      const read = await page.evaluate((kept) => {
+        const cards = (heading: string) => {
+          const mark = (li: Element) =>
+            !!li.querySelector(".app-card-note") ||
+            kept.includes(li.querySelector(".app-card-text")?.textContent?.trim() ?? "");
+          const open = [...document.querySelectorAll(`${heading} ~ .app-cards > .app-card`)];
+          const folded = [...document.querySelectorAll(`${heading} ~ .app-more .app-card`)];
+          return {
+            open: open.length,
+            folded: folded.length,
+            openMarked: open.filter(mark).length,
+            foldedMarked: folded.filter(mark).length,
+          };
+        };
+        const get = document.querySelector("#get");
+        return {
+          can: cards("#can-do"),
+          keeps: cards("#keeps"),
+          getTop: get ? get.getBoundingClientRect().top + window.scrollY : null,
+          heroPill: document.querySelector(".app-primary")!.getBoundingClientRect().bottom,
+        };
+      }, keptTexts);
+      for (const [name, c] of [
+        ["What you can do", read.can],
+        ["What it keeps", read.keeps],
+      ] as const) {
+        const where = `${url} ${name}`;
+        expect(c.foldedMarked, `${where}: a marked card in the fold`).toBe(0);
+        sections++;
+        if (c.folded === 0) continue;
+        foldedSections++;
+        expect(c.folded, `${where}: a fold of one card`).toBeGreaterThanOrEqual(2);
+        expect(c.open - c.openMarked, `${where}: the other cards that are open`).toBe(
+          Math.max(1, 3 - c.openMarked),
+        );
+      }
+      // The first screen is the hero's: its button is on it, however many cards the page has.
+      expect(read.heroPill, `${url}: the button is on the first screen`).toBeLessThanOrEqual(844);
+      if (read.getTop !== null) longest = Math.max(longest, read.getTop);
+    }
+    expect(sections, "sections read").toBeGreaterThan(50);
+    expect(foldedSections, "sections with a fold").toBeGreaterThan(10);
+    // The Get box, after the cards of "What you can do", is where a marketplace app's button jumps: on
+    // a 390 px phone the longest page puts it within this many screens (Accounting: seven open cards).
+    expect(longest, "the Get box, in pixels from the top of the longest page").toBeGreaterThan(0);
+    expect(longest / 844, "the Get box is within this many screens").toBeLessThanOrEqual(
+      LIMIT_SCREENS,
+    );
   });
 
   test("the small word above a card's title is drawn on every card of a section or on none", async ({
@@ -1789,7 +1981,11 @@ test.describe("crawlers and agents", () => {
       expect(app, h).toContain(`## ${h}`);
     expect(app).toContain("- **Ticket: close** (" + s.needsApproval + ")");
     expect(app).toContain(s.getLead);
-    expect(app).toContain(`[${s.openObop}](/app/)`);
+    expect(app).toContain(`[${s.openObop}](/docs/getting-started/)`);
+    // The copy of a translated page leads to that language's Getting started, as its page does.
+    const appDe = await (await request.get(`${base()}/de/apps/helpdesk.md`)).text();
+    expect(appDe).toContain(`](/de/docs/getting-started/)`);
+    expect(appDe).not.toContain("](/app/)");
     expect(app).toContain(s.getNote);
     expect(app).toContain("obop modules install-from helpdesk");
     // A built-in app has no Get section, only the line that says it is included.
@@ -1813,6 +2009,43 @@ test.describe("crawlers and agents", () => {
     const crm = await (await request.get(`${base()}/apps/crm.md`)).text();
     expect(crm).toContain("`contact_email`");
     expect(crm).toContain("`crm.user`");
+  });
+
+  test("no app page leads to /app/ from its own content: the Open and Get buttons go to Getting started, in every language, in the page and in its Markdown copy", async ({
+    request,
+  }) => {
+    // The header and the footer still link to /app/ (sign in, start free); the page's own content does
+    // not. Read from the HTML as built: what is between <main> and </main>, and the Markdown copy.
+    let pages = 0;
+    let pills = 0;
+    for (const locale of Object.keys(messages)) {
+      const prefix = locale === "en" ? "" : `/${locale}`;
+      const urls = (await pagesOf(request, locale)).filter((u) => /\/apps\/.+\/$/.test(u));
+      expect(urls, `${locale} app pages`).toHaveLength(28);
+      for (const url of urls) {
+        const html = await (await request.get(`${base()}${url}`)).text();
+        const main = /<main[\s>][\s\S]*<\/main>/.exec(html)?.[0] ?? "";
+        expect(main.length, `${url}: main found`).toBeGreaterThan(5000);
+        expect(main, `${url}: a link to /app/ in the page`).not.toMatch(/href="\/app\/?"/);
+        const md = await (await request.get(`${base()}${url.replace(/\/$/, ".md")}`)).text();
+        expect(md, `${url}: a link to /app/ in the Markdown copy`).not.toContain("](/app/");
+        // Built-in: the hero's button; marketplace: the Get box's pill. Both lead to the language's own.
+        const target = `${prefix}/docs/getting-started/`;
+        const hero = /<a class="app-primary" href="([^"]+)"/.exec(main)?.[1];
+        const pill = /<a class="app-pill" href="([^"]+)"/.exec(main)?.[1];
+        expect([hero === target, hero === "#get"], `${url}: the hero's button (${hero})`).toContain(
+          true,
+        );
+        if (pill) {
+          expect(pill, `${url}: the Get box's pill`).toBe(target);
+          expect(md, `${url}: the Markdown copy's Get link`).toContain(`](${target})`);
+          pills++;
+        }
+        pages++;
+      }
+    }
+    expect(pages).toBe(7 * 28);
+    expect(pills, "Get boxes read").toBe(7 * 22);
   });
 
   test("the wordings on the list of false sentences are on no deployed apps page, Markdown copy or llms-full.txt", async ({
@@ -2163,8 +2396,9 @@ test.describe("accessibility", () => {
     }
   });
 
-  // The two walks below visit every apps page and take ten to fifty seconds (the Tab walk the most), where
-  // the repository's limit is 30 s a test. A limit set in a test's body (test.setTimeout) does not cover
+  // The two walks below visit every apps page and take from several seconds to a minute and a half (the
+  // Tab walk the most: 24 walks, six paths forward and back at two widths, 1.6 minutes in bundled
+  // Chromium), where the repository's limit is 30 s a test. A limit set in a test's body (test.setTimeout) does not cover
   // its fixtures, and one slow start of a page in system Chrome used up the default before the body began:
   // so the limit is set for the group, like that of the sweeps further down.
   test.describe("walks over the apps pages", () => {
@@ -2265,7 +2499,7 @@ test.describe("accessibility", () => {
           [
             "/apps/accounting/",
             14,
-            ["A Apache-2.0", "A packages/accounting.toml", "BUTTON", "SUMMARY Show 4 more actions"],
+            ["A Apache-2.0", "A packages/accounting.toml", "BUTTON", "SUMMARY Show 3 more actions"],
           ],
           ["/apps/invoicing/", 9, ["A Apache-2.0", "A crates/modules/invoicing"]],
         ] as const) {
@@ -2275,16 +2509,28 @@ test.describe("accessibility", () => {
             if (reach)
               expect(await openFolds(page, false), `${path}: folds to open`).toBeGreaterThan(0);
             let stops = 0;
+            // Every control of main that is drawn gets a number, in one call, so that the walk records
+            // WHICH control took the focus and not how many stops there were: a count is met by a
+            // control visited twice (a pass through the footer and the header comes back to main), and
+            // a control the Tab key cannot reach would go unseen.
+            const drawn = await page.evaluate(() => {
+              const controls = [
+                ...document.querySelectorAll<HTMLElement>(
+                  "main a[href], main summary, main button:not([disabled])",
+                ),
+              ].filter((el) => el.getClientRects().length > 0 && el.checkVisibility());
+              controls.forEach((el, i) => (el.dataset.walk = String(i)));
+              return controls.map(
+                (el) => `${el.tagName} ${(el.textContent ?? "").trim().slice(0, 30)}`,
+              );
+            });
+            const expected = drawn.length;
+            const reached = new Set<number>();
             // The walk ends when every control of main has had its turn (plus the header's and the
-            // footer's on the way), not after a fixed number of presses: this is the slowest test of
-            // the file, and a slower runner has more room that way.
-            const expected = await page.evaluate(
-              () =>
-                [...document.querySelectorAll("main a[href], main summary, main button")].filter(
-                  (el) => el.getClientRects().length > 0 && el.checkVisibility(),
-                ).length,
-            );
-            for (let i = 0; i < 120 && stops < expected; i++) {
+            // footer's on the way), or when it comes round to one it has already had, not after a
+            // fixed number of presses: this is the slowest test of the file, and a slower runner has
+            // more room that way. The cap is only a stop for a walk that is lost.
+            for (let i = 0; i < 120 && reached.size < expected; i++) {
               await page.keyboard.press(key);
               // The browser scrolls the focused control into view, smoothly where the page asks for it:
               // measure where it comes to rest, not where it passes.
@@ -2311,6 +2557,7 @@ test.describe("accessibility", () => {
                 const reach = parseFloat(cs.outlineOffset) + parseFloat(cs.outlineWidth);
                 return {
                   what: `${el.tagName} ${(el.textContent ?? "").trim().slice(0, 30)}`,
+                  walk: el.dataset["walk"] ?? null,
                   style: cs.outlineStyle,
                   width: parseFloat(cs.outlineWidth),
                   left: r.left - reach,
@@ -2332,13 +2579,17 @@ test.describe("accessibility", () => {
               expect(stop.top, `${where} is under the header`).toBeGreaterThanOrEqual(
                 stop.header - 0.5,
               );
+              // A control it has already had: the walk has come round, and nothing more is new.
+              if (stop.walk !== null) {
+                if (reached.has(Number(stop.walk))) break;
+                reached.add(Number(stop.walk));
+              }
             }
             expect(stops, `${path} stops in main (${key})`).toBeGreaterThanOrEqual(atLeast);
-            if (reach)
-              expect(
-                stops,
-                `${path} with its folds open (${key}): every drawn control of main had its turn`,
-              ).toBeGreaterThanOrEqual(expected);
+            expect(
+              drawn.filter((_, i) => !reached.has(i)),
+              `${path}${reach ? " with its folds open" : ""} at ${width}px (${key}): the controls of main that the walk never stopped on`,
+            ).toEqual([]);
             for (const control of reach ?? [])
               expect(
                 seen.some((what) => what.startsWith(control)),
@@ -2472,7 +2723,7 @@ test.describe("accessibility", () => {
       "/apps/helpdesk/ BUTTON",
       "/apps/helpdesk/ SUMMARY Or use the command line",
       "/apps/invoicing/ A crates/modules/invoicing",
-      "/apps/accounting/ SUMMARY Show 4 more actions",
+      "/apps/accounting/ SUMMARY Show 3 more actions",
       "/apps/accounting/ SUMMARY Show 5 more things it ke",
       "/apps/accounting/ SUMMARY Information",
       "/apps/accounting/ SUMMARY For developers",
@@ -2495,66 +2746,137 @@ test.describe("accessibility", () => {
     expect(small).toEqual([]);
   });
 
-  test("in its row the information list keeps label and value on one line on a phone, and a row's chevron sits beside its heading at the normal text size", async ({
+  test("in its row the information list keeps label and value on one line on a phone, a path or a file name goes under its label, and a row's chevron sits beside its heading at the normal text size", async ({
     page,
     browser,
   }) => {
-    // The row has padding of its own: with the value's old room the pair needed 336 px and had 317 on
-    // a 390 px phone, so every value dropped under its label (seven taller lines). At 390 and 375 px
-    // label and value share a line, as they did before the list was in a row; the paths are the
-    // longest values (a module path, a package file, "0.2.1, same as obop").
+    // The row has padding of its own: with the value's old room (12rem) the pair needed 336 px and had
+    // 317 on a 390 px phone, so every value dropped under its label (seven taller lines). At 390 and
+    // 375 px label and value share a line, as they did before the list was in a row. The exception is
+    // a value in code type, a module path or a package file: at 9rem it had no room beside its label
+    // and a file name was cut in the middle ("email_marketing.toml"), so it keeps the old 12rem and
+    // goes under its label, where it fits whole (the next test holds that it is never cut).
     let pairs = 0;
+    let codeUnder = 0;
     for (const width of [390, 375]) {
       await page.setViewportSize({ width, height: 844 });
       for (const path of ["/apps/invoicing/", "/apps/helpdesk/", "/sv/apps/crm/", "/de/apps/hr/"]) {
         await page.goto(`${base()}${path}`);
         await page.locator("#information").click();
-        const apart = await page.evaluate(() =>
-          [...document.querySelectorAll(".app-info > div")]
-            .map((row) => {
-              const label = row.querySelector("dt")!;
-              const value = row.querySelector("dd")!;
-              const range = document.createRange();
-              range.selectNodeContents(value);
-              // The first line of the value against the label's: an inline box, not the block.
-              const first = range.getClientRects()[0] ?? value.getBoundingClientRect();
-              return {
-                label: (label.textContent ?? "").trim(),
-                under:
-                  value.getBoundingClientRect().top >= label.getBoundingClientRect().bottom - 1,
-                beside: first.left > label.getBoundingClientRect().left + 40,
-              };
-            })
-            .filter((r) => r.under || !r.beside)
-            .map((r) => r.label),
+        const rows = await page.evaluate(() =>
+          [...document.querySelectorAll(".app-info > div")].map((row) => {
+            const label = row.querySelector("dt")!;
+            const value = row.querySelector("dd")!;
+            const range = document.createRange();
+            range.selectNodeContents(value);
+            // The first line of the value against the label's: an inline box, not the block.
+            const first = range.getClientRects()[0] ?? value.getBoundingClientRect();
+            return {
+              label: (label.textContent ?? "").trim(),
+              code: !!value.querySelector(".mono"),
+              under: value.getBoundingClientRect().top >= label.getBoundingClientRect().bottom - 1,
+              beside: first.left > label.getBoundingClientRect().left + 40,
+            };
+          }),
         );
-        expect(apart, `${path} at ${width}px: values that dropped under their label`).toEqual([]);
-        pairs += await page.locator(".app-info > div").count();
+        expect(
+          rows.filter((r) => !r.code && (r.under || !r.beside)).map((r) => r.label),
+          `${path} at ${width}px: values that dropped under their label`,
+        ).toEqual([]);
+        codeUnder += rows.filter((r) => r.code && r.under).length;
+        expect(
+          rows.filter((r) => r.code && !r.under && !r.beside).map((r) => r.label),
+          `${path} at ${width}px: a path that is neither beside nor under its label`,
+        ).toEqual([]);
+        pairs += rows.length;
       }
     }
     expect(pairs, "pairs of label and value measured").toBeGreaterThan(40);
+    expect(codeUnder, "paths and file names under their label").toBeGreaterThanOrEqual(8);
     // The chevron of a row sits beside the heading on every phone at the normal text size, the
     // 320 px one too (it sat under the heading there: the rule was written for 200 percent text). It
     // drops under the heading only where the row is very narrow in rem, so that the longest word of
     // a row label keeps the line: at 200 percent text on a phone.
+    // Read from the drawn boxes as well as from the declared direction: beside also means that the
+    // heading keeps one line (a label that wraps beside its chevron is the longest word not having
+    // the line), counted as the height of the heading in lines of its own.
     const layout = (p: import("@playwright/test").Page) =>
       p.evaluate(() =>
-        [...document.querySelectorAll("details.app-row > summary")].map(
-          (s) => getComputedStyle(s).flexDirection,
-        ),
+        [...document.querySelectorAll("details.app-row > summary")].map((s) => {
+          const h2 = s.querySelector("h2")!;
+          return {
+            direction: getComputedStyle(s).flexDirection,
+            lines: Math.round(
+              h2.getBoundingClientRect().height / parseFloat(getComputedStyle(h2).lineHeight),
+            ),
+          };
+        }),
       );
     for (const width of [320, 360, 390]) {
       await page.setViewportSize({ width, height: 800 });
       await page.goto(`${base()}/es/apps/crm/`);
-      expect(await layout(page), `${width}px at the normal text size`).toEqual(["row", "row"]);
+      expect(await layout(page), `${width}px at the normal text size`).toEqual([
+        { direction: "row", lines: 1 },
+        { direction: "row", lines: 1 },
+      ]);
     }
     const large = await pageWithTextSize(browser, 200, { width: 375, height: 800 });
     try {
       await large.page.goto(`${base()}/es/apps/crm/`);
-      expect(await layout(large.page), "375 px at 200 percent text").toEqual(["column", "column"]);
+      expect(
+        (await layout(large.page)).map((r) => r.direction),
+        "375 px at 200 percent text",
+      ).toEqual(["column", "column"]);
     } finally {
       await large.context.close();
     }
+  });
+
+  test("in its row no value of the information list is cut inside a word or wider than its box, at the normal text size and at 200 percent", async ({
+    page,
+    browser,
+  }) => {
+    // The values in code type are the long ones: a package file ("email_marketing.toml",
+    // "subscriptions.toml") had 146 to 173 px beside its label and was cut in the middle of its name;
+    // at 200 percent text a maturity word ("Eksperymentalny") and a short file name had to stay whole
+    // at 320 and 360 px. A value that does not fit beside its label goes under it.
+    let values = 0;
+    const whole = async (p: import("@playwright/test").Page, path: string, where: string) => {
+      await p.goto(`${base()}${path}`);
+      await openFolds(p, false);
+      const { cut } = await brokenWords(p, ".app-info dd");
+      expect(cut, `${where} ${path}: words of the list cut across two lines`).toEqual([]);
+      const outside = await p.evaluate(() =>
+        [...document.querySelectorAll<HTMLElement>(".app-info dd")]
+          .filter((dd) => dd.scrollWidth > dd.clientWidth + 1)
+          .map((dd) => (dd.textContent ?? "").trim()),
+      );
+      expect(outside, `${where} ${path}: values wider than their box`).toEqual([]);
+      values += await p.locator(".app-info dd").count();
+    };
+    for (const width of [390, 360, 320]) {
+      await page.setViewportSize({ width, height: 800 });
+      for (const path of [
+        "/apps/email-marketing/",
+        "/apps/subscriptions/",
+        "/apps/helpdesk/",
+        "/apps/field-service/",
+      ])
+        await whole(page, path, `${width}px`);
+    }
+    for (const [width, paths] of [
+      [320, ["/apps/helpdesk/", "/pl/apps/sign/", "/apps/email-marketing/"]],
+      [360, ["/apps/accounting/", "/pl/apps/sign/", "/apps/subscriptions/"]],
+      [375, ["/apps/helpdesk/", "/de/apps/hr/"]],
+    ] as const) {
+      const large = await pageWithTextSize(browser, 200, { width, height: 800 });
+      try {
+        for (const path of paths) await whole(large.page, path, `${width}px at 200 percent`);
+      } finally {
+        await large.context.close();
+      }
+    }
+    expect(values, "values of the list measured").toBeGreaterThan(80);
   });
 
   test("the app hero keeps its size on a phone and stacks at a very large text size", async ({
@@ -2851,7 +3173,7 @@ test.describe("accessibility", () => {
         .first()
         .evaluate((el) => getComputedStyle(el).color),
     );
-    // A built-in app: the line under its information list is printed too.
+    // A built-in app: the line under the facts strip, which says it is included, is printed too.
     await page.goto(`${base()}/apps/invoicing/`);
     await expect(page.locator(".app-info")).toBeVisible();
     await expect(page.locator(".app-included")).toBeVisible();
