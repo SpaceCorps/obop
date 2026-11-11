@@ -634,6 +634,7 @@ pub const INTERNAL_TABLES: [&str; 57] = [
     "connector_seen",
     "connector_vault",
     "import_map",
+    "invoice_posting",
     "oas_import_map",
     "oas_import_run",
     "oauth_client",
@@ -664,7 +665,6 @@ pub const INTERNAL_TABLES: [&str; 57] = [
     "status_maint",
     "status_probe_api",
     "status_recent",
-    "invoice_posting",
     "vat_computation",
 ];
 
