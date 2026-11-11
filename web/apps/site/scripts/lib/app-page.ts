@@ -229,7 +229,7 @@ export function appMirror(
   for (const f of v.facts) out.push(`- **${f.label}:** ${f.value}`);
   out.push("");
   if (v.experimental) out.push(s.experimentalNote, "");
-  if (app.builtin) out.push(`[${s.open}](/app/)`, "");
+  if (app.builtin) out.push(`[${s.open}](${prefix}/docs/getting-started/)`, "");
 
   // The page shows the purpose in two parts (large, then quiet); the copy says it in one paragraph.
   out.push(`## ${a.h.purpose}`, "");
@@ -276,7 +276,7 @@ export function appMirror(
       "",
       s.getLead,
       "",
-      `[${s.openObop}](/app/)`,
+      `[${s.openObop}](${prefix}/docs/getting-started/)`,
       "",
       `${s.commandLine}:`,
       "",

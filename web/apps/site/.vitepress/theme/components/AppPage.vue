@@ -12,8 +12,11 @@ import Tile from "./Tile.vue";
 // One app, laid out like a store page: the icon, the name, one line and one primary button; a strip
 // of facts; what it is for, what you can do, how to get it (a marketplace app), what it keeps, the AI
 // agents and this app, who it works with; then two closed rows, "Information" and "For developers".
-// Everything technical is the Markdown of the page, in the last row. What an AI agent may do, and what
-// needs a person, is never behind a tap.
+// Everything technical is the Markdown of the page, in the last row. Never behind a tap: the "AI
+// agents and this app" section, and every card with the approval mark or `keep` (data/apps.ts: a card
+// whose own words say what an AI agent may do without approval, or that a step does not do what its
+// name suggests). The last row repeats the detail for developers (the package text, who sees which
+// field), so it is not the only place that says it.
 const { fm, m, href, locale } = useSite();
 const s = computed(() => m.value.apps.store);
 const view = computed(() => fm.value["view"] as AppView);
@@ -43,7 +46,7 @@ const pathParts = (path: string) => path.split(new RegExp("(?<=/)"));
       <div class="app-hero-text">
         <h1>{{ softName(String(fm["title"])) }}</h1>
         <p class="app-tagline">{{ fm["tagline"] }}</p>
-        <a class="app-primary" :href="builtin ? href('/app/') : '#get'">{{
+        <a class="app-primary" :href="builtin ? href('/docs/getting-started/') : '#get'">{{
           builtin ? s.open : s.get
         }}</a>
       </div>
@@ -58,6 +61,8 @@ const pathParts = (path: string) => path.split(new RegExp("(?<=/)"));
       </dl>
     </div>
     <p v-if="view.experimental" class="app-experimental">{{ s.experimentalNote }}</p>
+    <!-- A built-in app has no Get box: this is where the page says it needs no install. -->
+    <p v-if="builtin" class="app-included">{{ s.included }}</p>
 
     <section class="app-sec">
       <!-- One sentence needs no heading above it: the heading stays for screen readers and for old links to its id. -->
@@ -82,7 +87,7 @@ const pathParts = (path: string) => path.split(new RegExp("(?<=/)"));
       <h2 id="get">{{ s.get }}</h2>
       <div class="app-getbox">
         <p>{{ s.getLead }}</p>
-        <a class="app-pill" :href="href('/app/')">{{ s.openObop }}</a>
+        <a class="app-pill" :href="href('/docs/getting-started/')">{{ s.openObop }}</a>
         <!-- The command is for developers: one quiet line to tap under the filled pill, not a second pill. -->
         <details class="app-cmd">
           <summary>{{ s.commandLine }}</summary>
@@ -143,7 +148,6 @@ const pathParts = (path: string) => path.split(new RegExp("(?<=/)"));
                 </dd>
               </div>
             </dl>
-            <p v-if="!view.command" class="app-included">{{ s.included }}</p>
           </div>
         </details>
       </section>

@@ -308,6 +308,34 @@ describe("a title that starts with an acronym keeps its capitals in the Markdown
     expect(md).toContain(": OAuth start**");
     expect(md).not.toMatch(/\boAuth\b/);
   });
+
+  test("the Open and Get links of the Markdown copy lead to Getting started in the page language, not to /app/", () => {
+    for (const [locale, prefix] of [
+      ["en", ""],
+      ["de", "/de"],
+      ["sv", "/sv"],
+    ] as const) {
+      const s = messages[locale].apps.store;
+      const target = `${prefix}/docs/getting-started/`;
+      const builtin = appMirror(
+        apps.find((a) => a.id === "crm")!,
+        locale,
+        messages[locale],
+        prefix,
+        apps,
+      );
+      expect(builtin, `${locale} built-in`).toContain(`[${s.open}](${target})`);
+      const market = appMirror(
+        apps.find((a) => a.id === "helpdesk")!,
+        locale,
+        messages[locale],
+        prefix,
+        apps,
+      );
+      expect(market, `${locale} marketplace`).toContain(`[${s.openObop}](${target})`);
+      for (const md of [builtin, market]) expect(md, locale).not.toContain("](/app/");
+    }
+  });
 });
 
 describe("the site's own grouping of the apps is pinned", () => {

@@ -260,8 +260,13 @@
     font-size: 0.8rem;
   }
 }
-/* An experimental app says so in one plain line under the strip, so the one word "Experimental" is not all there is. */
-.app-experimental {
+/*
+ * An experimental app says so in one plain line under the strip, so the one word "Experimental" is not
+ * all there is. A built-in app says in the same place and the same quiet way that it is included in
+ * every obop: it has no Get box, and this is the one place the page says it needs no install.
+ */
+.app-experimental,
+.app-included {
   margin: var(--space-3) 0 0;
   color: var(--text-muted);
   font-size: 0.9375rem;
@@ -550,11 +555,6 @@
   padding-block: 0.6875rem;
   margin-block: -0.6875rem;
 }
-/* A built-in app: one quiet line under the information, not a section of its own. */
-.app-included {
-  margin: var(--space-5) 0 0;
-  color: var(--text-muted);
-}
 .app-info .mono {
   font-family: var(--font-mono);
   font-size: 0.9375rem;
@@ -760,8 +760,20 @@
 .app-row-body .app-info dd {
   flex-basis: 9rem;
 }
-.app-row-body .app-included {
-  margin-block-start: var(--space-2);
+/*
+ * A path or a file name ("email_marketing.toml") has no room beside its label at 9rem: it was cut in
+ * the middle of its name. Its value keeps the old 12rem and drops under its label, where it fits
+ * whole. The shared `.app-info dd` also cancels the content's minimum width (`min-inline-size: 0`)
+ * and breaks a word anywhere; inside a row the minimum is restored and a word breaks only when it is
+ * wider than the whole line, so a long word moves its value under the label before it is ever cut, at
+ * a large text size too.
+ */
+.app-row-body .app-info dd:has(.mono) {
+  flex-basis: 12rem;
+}
+.app-row-body .app-info dd {
+  min-inline-size: auto;
+  overflow-wrap: break-word;
 }
 
 /* For developers: the last row, which holds everything technical. */
