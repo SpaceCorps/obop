@@ -11,7 +11,7 @@ Usługa hostowana daje każdej firmie własną instancję z własną bazą danyc
 1. **Zarejestruj się.** Otwórz [aplikację rejestracji](/app/), wpisz adres e-mail i hasło, a następnie wybierz _Create account_.
 2. **Utwórz instancję.** Nadaj jej nazwę o długości od 3 do 30 znaków. Adres powstaje z nazwy. Przygotowanie trwa chwilę; strona pokazuje postęp.
 3. **Zaloguj się.** Przejdź do odnośnika do swojej instancji i zaloguj się tym samym adresem e-mail i hasłem. Konto utworzone przy rejestracji zostaje pierwszym administratorem instancji.
-4. **Zainstaluj aplikację.** Otwórz _Customize_, następnie _Marketplace_ i zainstaluj aplikację, na przykład Helpdesk lub Projects. Instalowanie i usuwanie aplikacji wymaga grupy administratora. Sześć wbudowanych aplikacji (CRM, Sales, Invoicing, Products, Contacts i Connectors) jest już dostępnych.
+4. **Zainstaluj aplikację.** Otwórz _Customize_, następnie _Marketplace_ i zainstaluj aplikację, na przykład Helpdesk lub Projects. Instalowanie i usuwanie aplikacji wymaga grupy administratora. Wbudowane aplikacje (CRM, Sales, Invoicing, Products, Contacts i Connectors) są już dostępne.
 5. **Utwórz rekordy.** Otwórz aplikację, wybierz _New_ i wypełnij formularz. Listy, tablice i panel boczny są generowane z opisu aplikacji.
 6. **Zaproś agenta.** Nie ma jeszcze ekranu do tokenów agentów. Zaloguj się przez REST API i [utwórz token agenta](/docs/agents/tokens/), a potem [połącz się przez MCP](/docs/agents/mcp/) lub użyj [REST](/docs/agents/rest/).
 

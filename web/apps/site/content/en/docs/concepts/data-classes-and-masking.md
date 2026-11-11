@@ -37,7 +37,7 @@ A person sees real values under their normal permissions. An agent token (see [A
 
 An agent can pass a token in a write. The server swaps it for the real value if the agent could have read the record, so an agent can copy a contact into a new lead without ever seeing the contact's name or email. A token the server does not know is refused with `invalid token`.
 
-Tokens are kept sealed in the database per agent token (and per MCP session), so every server process on the database resolves them and a restart does not lose them. A different agent token starts with a fresh table, so an old token stops resolving; a table is forgotten 24 hours after its last change.
+Over REST and over MCP on HTTP, tokens are kept sealed in the database per agent token (and per MCP session), so every server process on the database resolves them and a restart does not lose them; a table is forgotten 24 hours after its last change (REST) or 2 hours after the session's last request (MCP). Under `obop mcp` the table lives in the command's memory and ends when it stops. A different agent token starts with a fresh table, so an old token stops resolving.
 
 ## Filtering and searching
 

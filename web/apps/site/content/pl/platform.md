@@ -13,7 +13,7 @@ Magazynem jest SQLite do wypróbowania i PostgreSQL do prawdziwego użytku. Reko
 
 ## Moduły to aplikacje
 
-Aplikacja to **moduł**: opis modeli, pól, grup uprawnień i akcji przepływu pracy. Sześć wbudowanych aplikacji ma stronę w tym serwisie (Contacts, Products, CRM, Sales, Invoicing, Connectors). Kolejne 24 są dołączone jako pakiety, a 22 z nich też ma stronę. Aplikacje dodajesz z marketplace'u jednym kliknięciem albo wgrywasz własny plik.
+Aplikacja to **moduł**: opis modeli, pól, grup uprawnień i akcji przepływu pracy. Sześć wbudowanych aplikacji ma stronę w tym serwisie (Contacts, Products, CRM, Sales, Invoicing, Connectors). Kolejne 24 są dołączone jako pakiety, a 22 z nich też mają stronę. Aplikacje dodajesz z marketplace'u jednym kliknięciem albo wgrywasz własny plik.
 
 Ponieważ każdy moduł przechodzi przez jeden rejestr, kontakt jest tym samym kontaktem w CRM, Sales i Invoicing, a każdy moduł dostaje to samo API, te same ekrany, uprawnienia i zasady prywatności. Zobacz [Aplikacje i moduły](/docs/concepts/apps-and-modules/) oraz [listę aplikacji](/apps/).
 

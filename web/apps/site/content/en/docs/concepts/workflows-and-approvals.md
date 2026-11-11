@@ -31,6 +31,6 @@ Permission says what an agent may try. Approval says what it may do without a pe
 
 ## What actions cannot do
 
-An action moves one state field. A package can also give it checks that must hold before it runs and effects that create or change other records in the same database (paying a sale in Point of Sale creates draft stock moves). A package cannot make an action send email or call another system; calls to other systems wait for the planned code tiers (CEL expressions, WebAssembly components). The one built-in exception is the eCommerce order actions, which ask Stripe when the shop takes card payments: see [Safety best practices](/docs/agents/safety/).
+An action usually moves one state field. A package can also give it checks that must hold before it runs and effects that create or change other records in the same database (paying a sale in Point of Sale creates draft stock moves). A package cannot make an action send email or call another system; calls to other systems wait for the planned code tiers (CEL expressions, WebAssembly components). Only obop's own code does that: it makes the eCommerce order actions ask Stripe when the shop takes card payments (see [Safety best practices](/docs/agents/safety/)), and it runs the Connectors actions `test` and `sync` (`sync` needs approval).
 
 See [The approval loop](/docs/agents/approvals/) for the exact calls.

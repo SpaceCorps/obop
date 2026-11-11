@@ -36,8 +36,8 @@ describe("the strings of the apps pages", () => {
 // The owner ruled on 2026-11-11 that the site says obop is below version 1.0 and not "beta": in the
 // footer of every page, on the pill of the home page and in the home page's answer to whether obop is
 // ready for production. This is true of all seven languages, not only English. (The word is still right
-// for an app that the manifest calls beta, so the maturity word of the language is taken out of the FAQ
-// answer before it is searched; llms.txt and the built pages are read by the browser tests.)
+// for an app that the manifest calls beta, so the FAQ answer may name the maturity label of the language
+// once, as the label and nothing else; llms.txt and the built pages are read by the browser tests.)
 describe("obop itself is below version 1.0 and not beta, in every language", () => {
   const OLD = /beta|bêta/i;
   for (const locale of LOCALES) {
@@ -52,8 +52,12 @@ describe("obop itself is below version 1.0 and not beta, in every language", () 
       }
       const answers = m.home.faq.filter((f) => f.a.includes("1.0"));
       expect(answers, `${locale}: the answer about production names version 1.0`).toHaveLength(1);
-      const own = answers[0]!.a.split(m.apps.meta.maturities.beta).join("");
-      expect(own, `${locale}: the answer about production`).not.toMatch(OLD);
+      // The answer may name the maturity label "Beta" of the other apps once (exactly as the language
+      // writes it, capital letter included); any further "beta" would be about obop itself.
+      expect(
+        answers[0]!.a.match(/beta|bêta/gi) ?? [],
+        `${locale}: the answer about production names beta only as the label of the other apps`,
+      ).toEqual([m.apps.meta.maturities.beta]);
     });
   }
 });

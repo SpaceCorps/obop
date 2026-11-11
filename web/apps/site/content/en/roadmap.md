@@ -42,7 +42,7 @@ obop is below version 1.0. This page separates what runs today from what the pla
 
 ## The plan in waves
 
-The product plan names five waves. The owner ruled to keep the dates and cut scope instead (OR-13), so the wave windows below are the plan's targets; the owner is still asked to confirm that reading. The dates of single releases, the French and Polish packs and later release series are proposals. No date is a promise.
+The product plan names five waves. The owner ruled to keep the dates and cut scope instead (OR-13), so the wave windows below are the plan's targets; the owner is still asked to confirm that reading. The dates of the 0.x releases, the French and Polish packs and later release series are proposals. No date is a promise.
 
 From wave 2 on, the apps and features in this table are an ordered backlog, not a promise: the plan's rule is that no new app is started without a design partner. Several apps named in the W3 row (manufacturing, point of sale, website, e-commerce and helpdesk) already exist as bundled packages, marked Beta or Experimental in the [list of apps](/apps/). The plan proposes, as the exit of wave 3, that at least two apps of its second tier (such as manufacturing and point of sale) are stable, each with a design partner; this is a proposal, not decided. The table lists the main items of each wave, not every one.
 
