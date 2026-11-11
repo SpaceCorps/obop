@@ -736,11 +736,12 @@
     white-space: normal;
     overflow-wrap: break-word;
   }
-  /* No card, line, information row or table row is cut across two sheets, and a heading is never left alone at the foot of one. */
+  /* No card, line, information row, list item or table row is cut across two sheets, and a heading is never left alone at the foot of one. */
   .app-card,
   .app-safe li,
   .app-icons li,
   .app-info > div,
+  .app-dev .prose li,
   .app-dev .prose tr {
     break-inside: avoid;
   }

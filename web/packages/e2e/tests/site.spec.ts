@@ -582,6 +582,16 @@ test.describe("website without JavaScript", () => {
         }),
       );
       const withheld = withheldClasses.size > 0;
+      // A money field that an AI agent reads in clear (its class is none and it is not personal data):
+      // only then does the withheld line add that a price or a total is shown. Neither of these two
+      // manifests has one (every amount in Accounting is financial, and Connectors has none).
+      const moneyInClear = fieldBlocks.some(
+        (b) =>
+          /^\s*kind\s*=\s*"money"/m.test(b) &&
+          !withheldClass.test(b) &&
+          !/^\s*personal_data\s*=\s*true/m.test(b),
+      );
+      expect(moneyInClear, `${app.slug}: no amount in clear`).toBe(false);
       const version = /^version\s*=\s*"([^"]+)"/m.exec(toml)![1]!;
       // The word is the file's own, for a built-in app too (its snapshot says stable, as the Rust does).
       const maturity = /^maturity\s*=\s*"([^"]+)"/m.exec(toml)![1]!;
@@ -659,10 +669,13 @@ test.describe("website without JavaScript", () => {
         ...(masked ? [s.safeMasked] : []),
         ...(withheld
           ? [
-              s.safeWithheld.replace(
-                "{list}",
-                new Intl.ListFormat("en", { style: "long", type: "conjunction" }).format(kinds),
-              ),
+              [
+                s.safeWithheld.replace(
+                  "{list}",
+                  new Intl.ListFormat("en", { style: "long", type: "conjunction" }).format(kinds),
+                ),
+                ...(moneyInClear ? [s.safeMoneyClear] : []),
+              ].join(" "),
             ]
           : []),
         approvals ? s.safeApprove : s.safeApproveNone,
@@ -674,11 +687,11 @@ test.describe("website without JavaScript", () => {
       // Said out loud for the two pages: what each withholds, and nothing it does not.
       if (app.slug === "accounting")
         expect(lines).toContain(
-          "AI agents never see the fields marked as sensitive. In this app: sensitive financial details. A price or a total is shown unless its field is one of these.",
+          "AI agents never see the fields marked as sensitive. In this app: sensitive financial details.",
         );
       if (app.slug === "connectors")
         expect(lines).toContain(
-          "AI agents never see the fields marked as sensitive. In this app: secrets (such as sign-in details). A price or a total is shown unless its field is one of these.",
+          "AI agents never see the fields marked as sensitive. In this app: secrets (such as sign-in details).",
         );
       // Works with: a link for each dependency that is an app of its own.
       if (deps.includes("base"))
@@ -842,8 +855,8 @@ test.describe("website without JavaScript", () => {
     // code say (stable), not the word the loader once forced. The pages as built: the strip, the
     // information list, the text of the page (the folded technical part included), the structured
     // data, the descriptions, the Markdown copy, the index and llms-full.txt. (The footer of every page,
-    // the home page FAQ, the home page pill and llms.txt still call obop beta; they are the site's own and
-    // are not in the main content of these pages, which is what this test reads.)
+    // the home page pill and FAQ and llms.txt now say that obop is below version 1.0; they are outside
+    // the main content of these pages, which is what this test reads.)
     const slugs = ["contacts", "products", "crm", "sales", "invoicing", "connectors"];
     for (const locale of Object.keys(messages) as (keyof typeof messages)[]) {
       const m = messages[locale].apps;
@@ -1561,8 +1574,19 @@ test.describe("crawlers and agents", () => {
     expect(await line("ecommerce")).toBe(
       `${never} sensitive financial details and secrets (such as sign-in details).${tail}`,
     );
-    for (const slug of ["fleet", "purchase", "pos", "ecommerce"])
+    for (const slug of ["fleet", "purchase", "pos", "ecommerce"]) {
       expect(await line(slug), slug).not.toMatch(/money|amount|bank|\bpay\b/i);
+      expect(await line(slug), `${slug}: an amount is in clear`).toMatch(
+        / A price or a total is shown unless its field is one of these\.$/,
+      );
+    }
+    // Where no amount is in clear for an AI agent the sentence is not there (it was the tail of every
+    // such line): Accounting, Expenses, Timesheets, Contacts, HR and Connectors.
+    for (const slug of ["accounting", "expenses", "timesheets", "contacts", "hr", "connectors"]) {
+      const text = await line(slug);
+      expect(text, `${slug}: the line is there`).toContain(never);
+      expect(text, `${slug}: no price or total is in clear`).not.toContain("A price or a total");
+    }
     // An app that withholds nothing says nothing of the kind.
     expect(await line("crm")).toBe("");
     // The transfer log is deleted by the purge, and the technical part lists no delete for a model
@@ -1580,6 +1604,79 @@ test.describe("crawlers and agents", () => {
     expect(await (await request.get(`${base()}/apps/planning.md`)).text()).toContain(
       "Only a planning manager can do this.",
     );
+  });
+
+  // The caveats that only a developer needs are under "For developers" (data/apps.ts `limit` and
+  // `limits`), in the page and in the Markdown copy, and not in the plain text above it. The sentences
+  // are written out here, not read from the site's data, so a change of the data is a change here.
+  test("the caveats that only a developer needs are in the folded part, and in English on a translated page", async ({
+    request,
+  }) => {
+    const folded = [
+      {
+        slug: "ecommerce",
+        text: "The refund through Stripe is tested only against a local stand-in, not against Stripe itself.",
+      },
+      { slug: "pos", text: "The payments are checked once, when pay is pressed." },
+      { slug: "pos", text: "obop does not check that the drawer was counted." },
+      {
+        slug: "contacts",
+        text: "The erase does not touch the list of placeholders an AI agent holds.",
+      },
+      {
+        slug: "planning",
+        text: "A template is not linked to shifts: no action or field creates a shift from one, so a pattern is copied by hand.",
+      },
+    ];
+    for (const { slug, text } of folded) {
+      const html = await (await request.get(`${base()}/apps/${slug}/`)).text();
+      const fold = html.indexOf('<details id="developers"');
+      expect(fold, `${slug}: the fold`).toBeGreaterThan(0);
+      expect(html.indexOf(text), `${slug}: in the page, after the fold opens`).toBeGreaterThan(
+        fold,
+      );
+      expect(html.slice(0, fold), `${slug}: not above the fold`).not.toContain(text);
+      const md = await (await request.get(`${base()}/apps/${slug}.md`)).text();
+      const cut = md.indexOf("\n## For developers\n");
+      expect(cut, `${slug}: the copy's fold`).toBeGreaterThan(0);
+      expect(md.indexOf(text), `${slug}: in the copy, under For developers`).toBeGreaterThan(cut);
+      // Under the package heading, the first of the folded part.
+      expect(md.indexOf(text), `${slug}: under the package text`).toBeLessThan(
+        md.indexOf("\n### Module details\n", cut),
+      );
+    }
+    // What stays on top says what holds without them.
+    const eco = await (await request.get(`${base()}/apps/ecommerce.md`)).text();
+    expect(eco.slice(0, eco.indexOf("\n## For developers\n"))).toContain(
+      "the order stays paid if Stripe refuses. Otherwise you pay it back yourself.",
+    );
+    const pos = await (await request.get(`${base()}/apps/pos.md`)).text();
+    expect(pos.slice(0, pos.indexOf("\n## For developers\n"))).toContain(
+      "a paid sale can still be edited afterwards",
+    );
+    // On a translated page the list is English, inside the English note.
+    const de = await (await request.get(`${base()}/de/apps/pos/`)).text();
+    const text = "The payments are checked once, when pay is pressed.";
+    const at = de.indexOf(text);
+    expect(at, "the sentence is on the German page").toBeGreaterThan(
+      de.indexOf('<details id="developers"'),
+    );
+    const note = de.lastIndexOf('class="en-note"', at);
+    expect(note, "an English note opens before it").toBeGreaterThan(-1);
+    expect(de.slice(note, at), "and is still open").not.toContain("</div>");
+    expect(de.slice(note - 40, note), "marked as English").toContain('lang="en"');
+  });
+
+  test("the site says obop is below version 1.0, not beta, in the footer, the home page pill and llms.txt", async ({
+    request,
+  }) => {
+    const txt = await (await request.get(`${base()}/llms.txt`)).text();
+    expect(txt).toContain("Status: below version 1.0");
+    expect(txt).not.toContain("Status: beta");
+    const home = await (await request.get(`${base()}/`)).text();
+    expect(home).toMatch(/class="pill"[^>]*><i><\/i>\s*Pre-1\.0/);
+    expect(home).not.toMatch(/class="pill"[^>]*><i><\/i>\s*Beta/);
+    expect(home).toContain("Open-source business platform. Below version 1.0.");
   });
 
   test("security.txt and humans.txt", async ({ request }) => {
@@ -2297,7 +2394,7 @@ test.describe("accessibility", () => {
     }
   });
 
-  test("a printed app page keeps each card, line, information row and table row whole, a heading with what follows it, and the plain words of the tables", async ({
+  test("a printed app page keeps each card, line, information row, list item and table row whole, a heading with what follows it, and the plain words of the tables", async ({
     page,
   }) => {
     // The sheets are cut by the browser's own pagination, which a test cannot see; what the page
@@ -2322,6 +2419,9 @@ test.describe("accessibility", () => {
         // A row of a technical table: "or payee" once stood alone at the top of a sheet, in an
         // otherwise empty row under the repeated header, after "Bank account of the payer" at the foot of the last.
         rows: of(".app-dev .prose tr", "breakInside"),
+        // An item of a list in the part for developers (the caveats under the package text, the
+        // permission groups): a sentence is not cut across two sheets.
+        items: of(".app-dev .prose li", "breakInside"),
         h2: of(".app-page h2", "breakAfter"),
         h3: of(".app-dev .prose h3", "breakAfter"),
         h4: of(".app-dev .prose h4", "breakAfter"),
@@ -3134,6 +3234,19 @@ test.describe("accessibility", () => {
                 label: t(d.querySelector("dt")),
                 value: t(d.querySelector("dd")),
               })),
+              // The caveats under the first heading of the folded part ("What the package does and
+              // does not do"): the list items between it and the next heading.
+              limits: (() => {
+                const out: string[] = [];
+                const first = document.querySelector(".app-dev .prose h3");
+                for (
+                  let el = first?.nextElementSibling ?? null;
+                  el && el.tagName !== "H3";
+                  el = el.nextElementSibling
+                )
+                  out.push(...[...el.querySelectorAll("li")].map((li) => t(li)));
+                return out;
+              })(),
             };
           });
           // A no-break space (French puts one before a semicolon) reads as a space on the page.
@@ -3186,6 +3299,18 @@ test.describe("accessibility", () => {
           expect(listed(`## ${messages[locale].apps.store.info}`), `${where} information`).toBe(
             view.info.length,
           );
+          // The caveats the plain text leaves out are the same list on the page and in the copy, item
+          // for item (an app without any has none in both).
+          const pkg = lines.indexOf(`### ${messages[locale].apps.h.package}`);
+          expect(pkg, `${where} package heading`).toBeGreaterThan(0);
+          const next = lines.findIndex((l, i) => i > pkg && l.startsWith("### "));
+          expect(
+            lines
+              .slice(pkg + 1, next)
+              .filter((l) => l.startsWith("- "))
+              .map((l) => l.slice(2).replace(/\*\*/g, "")),
+            `${where} caveats under the package text`,
+          ).toEqual(view.limits);
           for (const r of view.info) {
             // The row of the Information section (the strip above repeats some labels).
             const line = section(`## ${messages[locale].apps.store.info}`).find((l) =>

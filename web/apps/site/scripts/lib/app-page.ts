@@ -1,6 +1,6 @@
 import type { Messages } from "../../i18n/types.ts";
 import { agentView, appName, type App } from "./apps.ts";
-import { appView, lowerFirst } from "./app-view.ts";
+import { appView, limitsOf, lowerFirst } from "./app-view.ts";
 import { CORE_VERSION } from "./paths.ts";
 
 const esc = (s: string) => s.replace(/\|/g, "\\|");
@@ -49,6 +49,13 @@ export function developerBody(
   out.push(`${h2} ${a.h.package}`, "", eng(app.description), "");
   // What the plain text above leaves out as too technical (an API, a hash, a data class).
   if (app.technical) out.push(eng(app.technical), "");
+  // The caveats the plain text leaves out (data/apps.ts `limit` and `limits`): one list, so a card's
+  // limit is under the card's name and the app's own come first.
+  const limits = limitsOf(app);
+  if (limits.length > 0) {
+    const bullets = limits.map((l) => (l.head ? `- **${l.head}**: ${l.text}` : `- ${l.text}`));
+    out.push(eng(bullets.join("\n")), "");
+  }
 
   // Version, author, licence, core requirement, maturity: what the manifest declares (D55).
   const meta = app.meta;

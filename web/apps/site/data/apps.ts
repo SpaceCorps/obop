@@ -2,6 +2,25 @@
  * Hand-written copy per app. Everything structural (models, fields, workflows, groups, approvals) is
  * read from packages/*.toml and data/builtin/*.toml at build time; only the human "what it is for"
  * text lives here. English only; the one-line taglines are translated in i18n/<locale>.ts.
+ *
+ * Where a caveat goes (the rules for `limit`, `limits` and `technical`):
+ * - The plain text on top (`purpose`, a card's `text`) says what the app does and what a person needs
+ *   to know to use it safely: a step that does not do what its name suggests ("By itself, this does not
+ *   notify anyone"), an edit that is still possible after a step, a legal or privacy limit. It is true on
+ *   its own, is not empty and is at least three words: a reader who never opens the fold is not misled
+ *   by what is left. A caveat of that kind stays on top.
+ * - A caveat that only a developer or an operator needs (how a check is made, what is not tested against
+ *   a live service, a field nothing reads, a template that nothing links) goes under "For developers":
+ *   on a card as `limit`, for the app as an entry of `limits`. A limit is one sentence that ends with
+ *   a full stop and has no `<`, `>`, `*` or `|` and no `-` or `#` at its start (it is written into a
+ *   Markdown list). It is English, so a translated page marks it as English. It is shown only in the
+ *   fold, under "What the package does and does not do", never next to the card.
+ * - A card may carry a `limit` only if it has a `cards` entry here, since the card's `text` is the plain
+ *   top sentence. The limit is not a copy of the top text: the sentence is moved, so it is taken out of
+ *   `text` (or `purpose`).
+ * - A sentence the fold already has (`technical`, `packageText`, a `fieldText`) is deleted from the top,
+ *   not copied into a `limit`.
+ * `scripts/lib/app-view.test.ts` checks these rules for every app.
  */
 export type Category = "foundation" | "customers" | "finance" | "operations" | "people" | "content";
 
@@ -54,12 +73,24 @@ export interface AppCopy {
    * that can never complete.
    */
   noDelete?: string[];
+  /**
+   * Caveats of the app as a whole that only a developer or an operator needs, one sentence each. They
+   * are shown under "For developers", in the package part, after `technical`, and not in the plain
+   * text above (see the rules at the top of this file).
+   */
+  limits?: string[];
 }
 
 export interface CardCopy {
   /** The card's heading, when the words of its action name read oddly. */
   title?: string;
+  /** The plain sentence or sentences on the card; true on its own (see the rules at the top of this file). */
   text: string;
+  /**
+   * A caveat of this card that only a developer or an operator needs, one sentence. It is shown under
+   * "For developers", headed by the card's name, and not on the card.
+   */
+  limit?: string;
 }
 
 export const BUILTIN_IDS = ["base", "product", "crm", "sales", "invoicing", "connectors"] as const;
@@ -149,7 +180,9 @@ export const APP_COPY: AppCopy[] = [
     },
     cards: {
       "party.erase": {
-        text: "Replace a contact's name, email, tax number and notes with [erased], and remove the photo. The Connectors app also deletes the code names and links it kept for this contact. Names, emails and addresses typed into other records (such as leads, orders and tickets) are not changed. Backups made before the erase still hold the old details until they are deleted, a restored backup brings them back, and anything already sent to another system through a connection is not recalled. A placeholder that an AI agent already holds keeps standing for the old name until that agent's list of placeholders expires, at most a day after the agent last used it; a local MCP session keeps it until that session ends.",
+        text: "Replace a contact's name, email, tax number and notes with [erased], and remove the photo. The Connectors app also deletes the code names and links it kept for this contact. Names, emails and addresses typed into other records (such as leads, orders and tickets) are not changed. Backups made before the erase still hold the old details until they are deleted, a restored backup brings them back, and anything already sent to another system through a connection is not recalled. A placeholder that an AI agent already holds keeps standing for the old name for up to a day after the agent last used obop; in a local session, until that session ends.",
+        limit:
+          "The erase does not touch the list of placeholders an AI agent holds. That list is forgotten 24 hours after its last change for an agent that uses the REST API, 2 hours after the last request for an MCP session over HTTP, and when the process ends for a local MCP session.",
       },
     },
     // The placeholder list of an AI session is not touched by the erase: Vault::erase_record
@@ -431,7 +464,10 @@ export const APP_COPY: AppCopy[] = [
     name: "Planning",
     tagline: "Shifts and resources",
     purpose:
-      "Plan shifts for your employees. A shift with nobody assigned is an open shift; it goes from open to published, and then a manager records that the employee confirmed it. Templates hold shift patterns to copy into shifts.",
+      "Plan shifts for your employees. A shift with nobody assigned is an open shift; it goes from open to published, and then a manager records that the employee confirmed it. Templates keep reusable shift patterns, each with a name and start and end times.",
+    limits: [
+      "A template is not linked to shifts: no action or field creates a shift from one, so a pattern is copied by hand.",
+    ],
     cards: {
       "planning_shift.publish": {
         text: "Mark the shift as published. By itself, this does not notify anyone: everyone who can read shifts sees every shift, published or not.",
@@ -450,6 +486,12 @@ export const APP_COPY: AppCopy[] = [
     // web/apps/backoffice/src refers to planning_template, so a shift is not made from a template.
     // start_minute and end_minute are number fields with no min or max (packages/planning.toml:105-116), and a
     // limit is checked only where one is declared (crates/kernel/obop-commands/src/kinds.rs:146-152).
+    // The manifest calls a template "a reusable shift pattern to copy into shifts" (packages/planning.toml:38), which
+    // reads as a function; this site says what it keeps (name, start and end, and role_id, which is optional, :41-46).
+    modelText: {
+      planning_template:
+        "A reusable shift pattern, with a name, start and end times and, optionally, a role",
+    },
     fieldText: {
       "planning_shift.start_minute":
         "Start in minutes since midnight (540 is 09:00). Meant to be 0 to 1439; nothing checks it.",
@@ -457,7 +499,7 @@ export const APP_COPY: AppCopy[] = [
         "End in minutes since midnight (1020 is 17:00). Meant to be 0 to 1439; nothing checks it, or that the end is after the start.",
     },
     packageText:
-      "Shifts for employees, with roles and shift templates (patterns to copy into shifts). A shift has a day and a start and end in minutes since midnight (meant to be 0 to 1439; 540 is 09:00; nothing checks the range, or that the end is after the start). A shift with no employee is an open shift. Workflow: open, published, confirmed; a planning manager moves a shift through all three steps. Needs the Human Resources package.",
+      "Shifts for employees, with roles and shift templates (reusable patterns). A shift has a day and a start and end in minutes since midnight (meant to be 0 to 1439; 540 is 09:00; nothing checks the range, or that the end is after the start). A shift with no employee is an open shift. Workflow: open, published, confirmed; a planning manager moves a shift through all three steps. Needs the Human Resources package.",
   },
   {
     id: "field_service",
@@ -478,7 +520,8 @@ export const APP_COPY: AppCopy[] = [
     },
     cards: {
       "field_service_job.complete": {
-        text: "Finish the job. Nothing checks that the customer signed; if they are to sign off, write down who signed and when.",
+        text: "Finish the job. If the customer is to sign off, write down who signed and when.",
+        limit: "Nothing checks that the customer signed.",
       },
     },
   },
@@ -509,13 +552,15 @@ export const APP_COPY: AppCopy[] = [
     },
     cards: {
       "pos_order.pay": {
-        text: "Mark the sale as fully paid. Refused until the payments cover the total, which is checked only when you press pay: a paid sale can still be edited afterwards. If the sale has a stock location, a draft record of the goods leaving is prepared for each line, for the warehouse to confirm. You need access to Inventory.",
+        text: "Mark the sale as fully paid. Refused until the payments cover the total; a paid sale can still be edited afterwards. If the sale has a stock location, a draft record of the goods leaving is prepared for each line, for the warehouse to confirm. You need access to Inventory.",
+        limit: "The payments are checked once, when pay is pressed.",
       },
       "pos_order.refund": {
         text: "Record that the sale was refunded. By itself, this does not pay money back.",
       },
       "pos_session.close": {
-        text: "Close the session (manager only). obop does not check that the drawer was counted.",
+        text: "Close the session (manager only).",
+        limit: "obop does not check that the drawer was counted.",
       },
     },
   },
@@ -530,10 +575,14 @@ export const APP_COPY: AppCopy[] = [
       "With the public site turned on, obop shows the shop to visitors and takes orders; a custom storefront can use the API instead.",
     cards: {
       "ecommerce_order.refund": {
-        text: "Record the refund of a paid order that was not delivered. For card payments through Stripe, obop asks Stripe to refund the payment first, and the order stays paid if Stripe refuses; this is tested only against a stand-in, not against Stripe itself. Otherwise you pay it back yourself.",
+        text: "Record the refund of a paid order that was not delivered. For card payments through Stripe, obop asks Stripe to refund the payment first, and the order stays paid if Stripe refuses. Otherwise you pay it back yourself.",
+        limit:
+          "The refund through Stripe is tested only against a local stand-in, not against Stripe itself.",
       },
       "ecommerce_order.refund_delivered": {
-        text: "Record the refund of a delivered order, for example after a return. The units are not put back on the shelf. For card payments through Stripe, obop asks Stripe to refund the payment first, and the order stays paid if Stripe refuses; this is tested only against a stand-in, not against Stripe itself. Otherwise you pay it back yourself.",
+        text: "Record the refund of a delivered order, for example after a return. The units are not put back on the shelf. For card payments through Stripe, obop asks Stripe to refund the payment first, and the order stays paid if Stripe refuses. Otherwise you pay it back yourself.",
+        limit:
+          "The refund through Stripe is tested only against a local stand-in, not against Stripe itself.",
       },
     },
     // Units go back only for an order whose checkout recorded a reservation (crates/kernel/obop-payments/src/lib.rs:502-510;
@@ -692,7 +741,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Dashboards",
     tagline: "Reports and charts",
     purpose:
-      "Build dashboards that show your numbers as charts and tables. A dashboard is a set of items: a single number, a bar, line or pie chart, or a table. The app stores what each item should show and does not check that the data it points to exists.",
+      "Build dashboards that show your numbers as charts and tables. A dashboard is a set of items: a single number, a bar, line or pie chart, or a table.",
     technical:
       "Dashboards and widgets are stored as data (KPI, bar, line, pie and table definitions) for a client to render. The package never runs a query and does not check that the models a widget names exist.",
     modelNames: {
@@ -756,7 +805,9 @@ export const APP_COPY: AppCopy[] = [
         text: "Mark a closed period as open again (needs the approving role).",
       },
       "accounting_move.post": {
-        text: "Post a draft entry to the ledger and give it its next number (needs the approving role). Refused unless the debits equal the credits when you post. A posted entry can still be edited afterwards, and an entry with no lines can be posted.",
+        text: "Post a draft entry to the ledger and give it its next number (needs the approving role). Refused unless the debits equal the credits when you post. A posted entry can still be edited afterwards.",
+        limit:
+          "An entry with no lines has debits and credits of zero, which are equal, so it can be posted.",
       },
       "accounting_move.reverse": {
         text: "Mark a posted entry as reversed (needs the approving role). The opposite entry is booked separately.",

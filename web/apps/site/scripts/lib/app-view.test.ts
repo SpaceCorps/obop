@@ -8,6 +8,7 @@ import {
   LEAD_WORDS,
   appView,
   capital,
+  limitsOf,
   lowerFirst,
   modelLabel,
   splitPurpose,
@@ -369,18 +370,26 @@ const made = (over: Partial<App>): App => ({ ...crm, ...over });
 const view = (app: App, locale: (typeof LOCALES)[number] = "en") =>
   appView(app, messages[locale], apps, locale);
 
-/** The line about what is withheld, as it must read for these data classes (in the order of the table). */
+/**
+ * The line about what is withheld, as it must read for these data classes (in the order of the table).
+ * `moneyInClear`: the app has a price or a total an AI agent can read, and the line says so after the list.
+ */
 const withheld = (
   locale: (typeof LOCALES)[number],
   classes: ("financial" | "confidential_hr" | "special_category" | "secret")[],
+  moneyInClear = false,
 ) => {
   const t = messages[locale].apps.store;
   const kinds = classes.map((c) => t.safeKinds[c]);
-  return t.safeWithheld.replace(
+  const line = t.safeWithheld.replace(
     "{list}",
     new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(kinds),
   );
+  return moneyInClear ? `${line} ${t.safeMoneyClear}` : line;
 };
+/** An app has a money field that an AI agent reads in clear (its data class is none, and it is not personal data). */
+const moneyInClear = (app: App) =>
+  app.models.some((m) => m.fields.some((f) => f.kind === "money" && agentViewOf(f) === "clear"));
 
 describe("the lines under 'Safe with AI agents' follow the fields and actions of the app", () => {
   const s = messages.en.apps.store;
@@ -1165,6 +1174,7 @@ describe("the plain layer says AI agents and explains the word once; the technic
           withheld(
             locale,
             classes.filter((c) => held.has(c)),
+            moneyInClear(app),
           ),
         );
         for (const c of classes)
@@ -1176,17 +1186,20 @@ describe("the plain layer says AI agents and explains the word once; the technic
   test("it does not name money where the amounts are in clear: Fleet, Purchase, Point of Sale and eCommerce show what they withhold", () => {
     const line = (id: string) =>
       view(apps.find((a) => a.id === id)!).safe.find((l) => /never see/.test(l))!;
-    // The line says what is held back, and that a price or a total is shown unless its own field is.
+    // The line says what is held back, and where an amount is in clear, that a price or a total is
+    // shown unless its own field is one of these.
     const never = "AI agents never see the fields marked as sensitive. In this app:";
     const tail = " A price or a total is shown unless its field is one of these.";
     expect(line("fleet")).toBe(`${never} confidential HR details.${tail}`);
     expect(line("purchase")).toBe(`${never} sensitive financial details.${tail}`);
-    expect(line("connectors")).toBe(`${never} secrets (such as sign-in details).${tail}`);
+    expect(line("pos")).toContain(tail);
     expect(line("ecommerce")).toBe(
       `${never} sensitive financial details and secrets (such as sign-in details).${tail}`,
     );
+    // And where there is no such amount the sentence is not there: nothing on the page is a price.
+    expect(line("connectors")).toBe(`${never} secrets (such as sign-in details).`);
     expect(line("hr")).toBe(
-      `${never} sensitive financial details, confidential HR details, and special-category personal data (such as health).${tail}`,
+      `${never} sensitive financial details, confidential HR details, and special-category personal data (such as health).`,
     );
     // The amounts of these four apps are in clear, as their own tables say, so no line may say
     // that money, bank details or pay are hidden from an AI agent for them.
@@ -1198,6 +1211,73 @@ describe("the plain layer says AI agents and explains the word once; the technic
       expect(money.length, `${id}: money fields in clear`).toBeGreaterThan(0);
       expect(view(app).safe.join(" "), id).not.toMatch(/money|amount|bank|pay\b/i);
     }
+  });
+
+  // The sentence "a price or a total is shown" was the tail of every withheld line, also on pages with
+  // no price or total an AI agent can read (Accounting, Expenses, Timesheets, Contacts, HR, Connectors).
+  // Now only an app that has such an amount says it, and this list is the whole set: a new money field
+  // in clear, or a new sensitive field next to one, changes it and the test says so.
+  test("the sentence that a price or a total is shown is on exactly four pages, in every language", () => {
+    const withTail = ["ecommerce", "fleet", "pos", "purchase"];
+    for (const locale of LOCALES) {
+      const t = messages[locale].apps.store;
+      expect(t.safeMoneyClear.length, locale).toBeGreaterThan(10);
+      expect(t.safeMoneyClear, locale).not.toMatch(ASSISTANT);
+      // The line it follows must not already contain it, and the key is not part of that line.
+      expect(t.safeWithheld, locale).not.toContain(t.safeMoneyClear);
+      const got = apps
+        .filter((app) =>
+          view(app, locale).safe.some(
+            (l) => l.startsWith(t.safeWithheld.split("{list}")[0]!) && l.endsWith(t.safeMoneyClear),
+          ),
+        )
+        .map((app) => app.id)
+        .sort();
+      expect(got, locale).toEqual(withTail);
+      // It is the last words of the withheld line, and on no other line.
+      for (const app of apps)
+        expect(
+          view(app, locale).safe.filter((l) => l.includes(t.safeMoneyClear)).length,
+          `${app.id} ${locale}`,
+        ).toBe(withTail.includes(app.id) ? 1 : 0);
+    }
+    // The four are the apps that withhold something and also show an amount in clear.
+    expect(
+      apps
+        .filter(
+          (app) =>
+            moneyInClear(app) &&
+            app.models.some((m) => m.fields.some((f) => agentViewOf(f) === "withheld")),
+        )
+        .map((app) => app.id)
+        .sort(),
+    ).toEqual(withTail);
+  });
+
+  test("the tail follows the fields: money in clear next to a withheld field, and only then", () => {
+    const needsPerson = [action({ approval: true })];
+    const s = messages.en.apps.store;
+    const model = (fields: Field[], actions: Action[]) =>
+      made({ models: [{ ...crm.models[0]!, fields, actions }] });
+    const safe = (fields: Field[]) => view(model(fields, needsPerson)).safe;
+    // A price in clear and a withheld field: the line has the tail.
+    expect(safe([field({ kind: "money" }), field({ class: "financial" })])[0]).toBe(
+      withheld("en", ["financial"], true),
+    );
+    // A withheld money field and nothing in clear: no tail.
+    expect(safe([field({ kind: "money", class: "financial" })])[0]).toBe(
+      withheld("en", ["financial"]),
+    );
+    // Not a money kind, even if named like one: no tail.
+    expect(safe([field({ name: "total", kind: "number" }), field({ class: "secret" })])[0]).toBe(
+      withheld("en", ["secret"]),
+    );
+    // Money in clear and nothing withheld: no line about what is withheld, so no tail either.
+    expect(safe([field({ kind: "money" })])).toEqual([s.safeApprove]);
+    // A money field that is personal data is masked, not in clear: no tail.
+    expect(
+      safe([field({ kind: "money", personal_data: true }), field({ class: "secret" })]),
+    ).toEqual([s.safeMasked, withheld("en", ["secret"]), s.safeApprove]);
   });
 
   test("the developer part lists a delete step only for a model that has one", () => {
@@ -1312,5 +1392,215 @@ describe("the maturity the site states", () => {
       // The apps index no longer calls the apps beta (the marketplace ones keep their own word).
       expect(m.apps.lead, locale).not.toMatch(word);
     }
+  });
+});
+
+describe("a caveat that only a developer needs sits under 'For developers', moved and not copied", () => {
+  const en = messages.en;
+  const cut = (md: string) => md.indexOf(`\n## ${en.apps.store.developers}\n`);
+  /** Every caveat that data/apps.ts moves: a card's `limit` and an app's `limits`. */
+  const moved = apps.flatMap((app) => [
+    ...Object.entries(app.cards)
+      .filter(([, c]) => c.limit !== undefined)
+      .map(([key, c]) => ({ app, key, text: c.text, limit: c.limit! })),
+    ...app.limits.map((limit) => ({ app, key: "(app)", text: app.purpose, limit })),
+  ]);
+  const strip = (html: string) => html.replace(/<wbr>/g, "").replace(/<\/?code>/g, "");
+
+  test("these are the caveats that moved; a new one is a change of this list", () => {
+    expect(moved.map((x) => `${x.app.id} ${x.key}`).sort()).toEqual(
+      [
+        "accounting accounting_move.post",
+        "base party.erase",
+        "ecommerce ecommerce_order.refund",
+        "ecommerce ecommerce_order.refund_delivered",
+        "field_service field_service_job.complete",
+        "planning (app)",
+        "pos pos_order.pay",
+        "pos pos_session.close",
+      ].sort(),
+    );
+  });
+
+  test("a limit is one sentence a Markdown list can hold, and the text it leaves is a sentence of its own", () => {
+    for (const { app, key, text, limit } of moved) {
+      const where = `${app.id} ${key}`;
+      expect(limit.trim(), where).toBe(limit);
+      expect(limit, where).toMatch(/[.]$/);
+      expect(limit, where).not.toMatch(/[<>*|]/);
+      expect(limit, where).not.toMatch(/^[-#]/);
+      expect(limit.split("\n").length, where).toBe(1);
+      expect(wordCount(text), `${where}: the text on top`).toBeGreaterThanOrEqual(3);
+      expect(text.includes(limit), `${where}: the limit is not a copy of the text`).toBe(false);
+      expect(app.purpose.includes(limit), where).toBe(false);
+    }
+  });
+
+  test("the limit is in the part for developers of the Markdown copy, under the package heading, and not above it", () => {
+    for (const { app, key, limit } of moved) {
+      const md = appMirror(app, "en", en, "", apps);
+      const at = cut(md);
+      expect(at, `${app.id} ${key}`).toBeGreaterThan(0);
+      expect(md.slice(0, at), `${app.id} ${key}: above the fold`).not.toContain(limit);
+      // Two cards may share one sentence (the two refunds of eCommerce): once for each.
+      const sharing = moved.filter((x) => x.app === app && x.limit === limit).length;
+      expect(md.slice(at).split(limit).length - 1, `${app.id} ${key}`).toBe(sharing);
+      // And under the heading of the package, before the next one.
+      const heading = md.indexOf(`### ${en.apps.h.package}`, at);
+      const next = md.indexOf(`\n### `, heading + 1);
+      expect(md.indexOf(limit, at), `${app.id} ${key}`).toBeGreaterThan(heading);
+      expect(md.indexOf(limit, at), `${app.id} ${key}`).toBeLessThan(next);
+    }
+  });
+
+  test("the plain words that stay on top are still true on their own, and say what the limit does not", () => {
+    const card = (id: string, key: string) => apps.find((a) => a.id === id)!.cards[key]!;
+    const eco = card("ecommerce", "ecommerce_order.refund");
+    for (const key of ["ecommerce_order.refund", "ecommerce_order.refund_delivered"]) {
+      const c = card("ecommerce", key);
+      expect(c.text, key).toContain("the order stays paid if Stripe refuses. Otherwise you pay it");
+      expect(c.text, key).not.toMatch(/stand-in|tested/);
+      expect(c.limit, key).toBe(eco.limit);
+    }
+    expect(eco.limit).toContain("stand-in");
+    expect(card("pos", "pos_order.pay").text).toContain(
+      "a paid sale can still be edited afterwards",
+    );
+    expect(card("pos", "pos_order.pay").text).not.toContain("press pay");
+    expect(card("pos", "pos_order.pay").limit).toContain("checked once");
+    expect(card("pos", "pos_session.close").text).toBe("Close the session (manager only).");
+    expect(card("pos", "pos_session.close").limit).toContain("drawer was counted");
+    expect(card("accounting", "accounting_move.post").text).toContain(
+      "A posted entry can still be edited afterwards.",
+    );
+    expect(card("accounting", "accounting_move.post").text).not.toContain("no lines");
+    expect(card("accounting", "accounting_move.post").limit).toContain("no lines");
+    expect(card("field_service", "field_service_job.complete").text).not.toContain(
+      "Nothing checks",
+    );
+    expect(card("field_service", "field_service_job.complete").limit).toBe(
+      "Nothing checks that the customer signed.",
+    );
+    // The contact's erase keeps the day on top: an AI agent can go on using the old name for a while.
+    const erase = card("base", "party.erase");
+    expect(erase.text).toContain("up to a day");
+    expect(erase.text).not.toMatch(/MCP|list of placeholders/);
+    expect(erase.limit).toMatch(/24 hours[\s\S]*2 hours[\s\S]*process ends/);
+  });
+
+  test("Dashboards and Planning: the sentence is gone from the top, in every place the top says it", () => {
+    const dashboards = apps.find((a) => a.id === "dashboards")!;
+    expect(dashboards.purpose).not.toMatch(/does not check|points to/);
+    // The part for developers had it already (the technical text), so nothing is added there.
+    expect(dashboards.technical).toContain("does not check that the models a widget names exist");
+    expect(dashboards.limits).toEqual([]);
+    const planning = apps.find((a) => a.id === "planning")!;
+    for (const text of [
+      planning.purpose,
+      planning.description,
+      planning.models.find((x) => x.name === "planning_template")!.description,
+    ])
+      expect(text).not.toMatch(/copy into shifts|to copy into/);
+    expect(planning.limits).toEqual([
+      "A template is not linked to shifts: no action or field creates a shift from one, so a pattern is copied by hand.",
+    ]);
+    expect(appMirror(planning, "en", en, "", apps)).toContain(`- ${planning.limits[0]}`);
+  });
+
+  test("the head of a limit is the heading of its card, and a limit of the app has none", () => {
+    const eco = apps.find((a) => a.id === "ecommerce")!;
+    expect(limitsOf(eco).map((l) => l.head)).toEqual(["Order: refund", "Order: refund delivered"]);
+    // One list item per line, so the two refunds are two items and not one.
+    const md = appMirror(eco, "en", en, "", apps);
+    const lines = md.slice(cut(md)).split("\n");
+    expect(lines.filter((l) => l.startsWith("- **Order: refund"))).toHaveLength(2);
+    const planning = apps.find((a) => a.id === "planning")!;
+    expect(limitsOf(planning)).toEqual([{ text: planning.limits[0]! }]);
+    for (const locale of ["en", "de"] as const) {
+      const m = messages[locale];
+      for (const app of apps.filter((a) => limitsOf(a).some((l) => l.head))) {
+        const v = appView(app, m, apps, locale);
+        const md = appMirror(app, locale, m, "", apps);
+        // The same words as the card's heading (a translated page keeps the card's capital; the
+        // limit is English prose and lowers it).
+        const heads = [...v.actions, ...v.models].map((c) =>
+          (c.kicker ? `${c.kicker}: ${c.title}` : c.title).toLowerCase(),
+        );
+        for (const l of limitsOf(app).filter((x) => x.head)) {
+          expect(heads, `${locale} ${app.id} ${l.head}`).toContain(l.head!.toLowerCase());
+          expect(md, `${locale} ${app.id}`).toContain(`- **${l.head}**: ${l.text}`);
+        }
+      }
+    }
+  });
+
+  test("no heading is added and no id changes: the headings are those of an app without limits", () => {
+    const headings = (md: string) => md.split("\n").filter((l) => /^#{1,6} /.test(l));
+    for (const app of apps.filter((a) => limitsOf(a).length > 0))
+      for (const locale of LOCALES) {
+        const m = messages[locale];
+        const plain: App = {
+          ...app,
+          limits: [],
+          cards: Object.fromEntries(
+            Object.entries(app.cards).map(([k, c]) => [k, { ...c, limit: undefined }]),
+          ) as App["cards"],
+        };
+        expect(limitsOf(plain), `${locale} ${app.id}`).toEqual([]);
+        for (const mirror of [true, false])
+          expect(
+            headings(developerBody(app, locale, m, mirror, "", apps)),
+            `${locale} ${app.id}`,
+          ).toEqual(headings(developerBody(plain, locale, m, mirror, "", apps)));
+      }
+  });
+
+  test("on a translated page the limits are English and marked so; on an English page and in the copy there is no mark", () => {
+    const eco = apps.find((a) => a.id === "ecommerce")!;
+    const limit = eco.cards["ecommerce_order.refund"]!.limit!;
+    for (const locale of LOCALES) {
+      const m = messages[locale];
+      const page = developerBody(eco, locale, m, false, "", apps);
+      const copy = developerBody(eco, locale, m, true, "", apps);
+      const at = page.indexOf(limit);
+      expect(at, locale).toBeGreaterThan(0);
+      expect(copy, locale).toContain(limit);
+      expect(copy, `${locale}: no HTML in the copy`).not.toContain("en-note");
+      const before = page.slice(0, at);
+      if (locale === "en") expect(page, locale).not.toContain("en-note");
+      else {
+        // The nearest English note before the list is still open where the list starts.
+        const open = before.lastIndexOf('<div lang="en" class="en-note"');
+        expect(open, locale).toBeGreaterThan(-1);
+        expect(before.indexOf("</div>", open), `${locale}: the list is inside the note`).toBe(-1);
+      }
+    }
+  });
+
+  // The ratchet of false sentences reads what a visitor reads. The Markdown copy has the limits
+  // (above), and so does the page, which is the same list inside the English note.
+  test("the wordings on the list of false sentences are not in the folded part of any page either, in any language", () => {
+    for (const app of apps)
+      for (const locale of LOCALES) {
+        const folded = strip(developerBody(app, locale, messages[locale], false, "", apps));
+        for (const { re, why } of CLAIMS)
+          expect(folded, `${locale} ${app.id} ${re}: ${why}`).not.toMatch(re);
+      }
+  });
+
+  test("the ratchet reaches a limit: a false sentence put in one is found on the page and in the copy", () => {
+    const invoicing = apps.find((a) => a.id === "invoicing")!;
+    const bad: App = {
+      ...invoicing,
+      limits: [...invoicing.limits, "Then finalise each one to give it its own number."],
+    };
+    const claim = CLAIMS.find((c) => c.re.test("finalise each one"))!;
+    expect(claim).toBeDefined();
+    for (const locale of LOCALES) {
+      const page = strip(developerBody(bad, locale, messages[locale], false, "", apps));
+      expect(page, locale).toMatch(claim.re);
+      expect(appMirror(bad, locale, messages[locale], "", apps), locale).toMatch(claim.re);
+    }
+    expect(strip(developerBody(invoicing, "en", en, false, "", apps))).not.toMatch(claim.re);
   });
 });

@@ -100,6 +100,36 @@ export function modelLabel(app: App, model: Model): string {
   return capital(words(bare || model.name));
 }
 
+/** A caveat that sits under "For developers": the card it belongs to (none for the app as a whole), and its sentence. */
+export interface Limit {
+  head?: string;
+  text: string;
+}
+
+/**
+ * The caveats `data/apps.ts` moves out of the plain text: first those of the app as a whole, then the
+ * `limit` of each action card in the order of the cards, then those of the model cards. The head is the
+ * heading of the card the limit comes from, as the Markdown copy writes it ("Order: refund"). They are
+ * English, so a translated page marks them as English.
+ */
+export function limitsOf(app: App): Limit[] {
+  const out: Limit[] = app.limits.map((text) => ({ text }));
+  for (const model of app.models)
+    for (const act of model.actions) {
+      const card = app.cards[`${model.name}.${act.name}`];
+      if (card?.limit)
+        out.push({
+          head: `${modelLabel(app, model)}: ${lowerFirst(card.title ?? capital(words(act.name)))}`,
+          text: card.limit,
+        });
+    }
+  for (const model of app.models) {
+    const card = app.cards[model.name];
+    if (card?.limit) out.push({ head: card.title ?? modelLabel(app, model), text: card.limit });
+  }
+  return out;
+}
+
 const fill = (s: string, vars: Record<string, string>) =>
   s.replace(/\{(\w+)\}/g, (_m, k: string) => vars[k] ?? "");
 
@@ -241,18 +271,25 @@ export function appView(app: App, m: Messages, all: App[], locale = "en"): AppVi
   // masked, what is withheld, and that a person approves the steps an agent can only propose. The
   // withheld line names only the kinds of detail this app really withholds (the data classes of its
   // withheld fields): an app whose amounts are in clear (an order total) must not say that money is
-  // hidden from an AI agent.
+  // hidden from an AI agent. Only such an app adds, to that line, that a price or a total is shown;
+  // on a page with no price or total in clear the sentence would mean nothing.
   const fields = app.models.flatMap((model) => model.fields);
   const safe: string[] = [];
   if (fields.some((f) => agentView(f) === "masked")) safe.push(s.safeMasked);
   const held = new Set(fields.filter((f) => agentView(f) === "withheld").map((f) => f.class));
+  const moneyInClear = fields.some((f) => f.kind === "money" && agentView(f) === "clear");
   if (held.size > 0)
     safe.push(
-      fill(s.safeWithheld, {
-        list: new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(
-          WITHHELD_CLASSES.filter((c) => held.has(c)).map((c) => s.safeKinds[c]),
-        ),
-      }),
+      [
+        fill(s.safeWithheld, {
+          list: new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(
+            WITHHELD_CLASSES.filter((c) => held.has(c)).map((c) => s.safeKinds[c]),
+          ),
+        }),
+        moneyInClear ? s.safeMoneyClear : "",
+      ]
+        .filter(Boolean)
+        .join(" "),
     );
   safe.push(
     app.models.some((model) => model.actions.some((x) => x.approval))

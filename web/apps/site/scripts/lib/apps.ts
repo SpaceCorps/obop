@@ -74,6 +74,8 @@ export interface App {
   cards: Record<string, CardCopy>;
   /** The models that have no `delete` command (see `AppCopy.noDelete`). */
   noDelete: string[];
+  /** Caveats of the app as a whole, shown under "For developers" (see `AppCopy.limits`). */
+  limits: string[];
   models: Model[];
   /** Repository path of the manifest (or the built-in snapshot). */
   source: string;
@@ -166,6 +168,7 @@ function toApp(raw: Raw, builtin: boolean, source: string): App {
     modelNames: copy.modelNames ?? {},
     cards: copy.cards ?? {},
     noDelete: copy.noDelete ?? [],
+    limits: copy.limits ?? [],
     models,
     source,
   };
