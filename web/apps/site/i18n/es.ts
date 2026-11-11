@@ -211,7 +211,7 @@ export const es: Messages = {
       },
       {
         q: "¿Está obop listo para producción?",
-        a: "Todavía no. obop aún no ha llegado a la versión 1.0, así que una nueva versión todavía puede cambiar cosas. El núcleo funciona y está probado, las seis aplicaciones integradas figuran como Estable, las demás como Beta o Experimental, y muchas de las aplicaciones incluidas son deliberadamente sencillas. Las copias de seguridad programadas de las bases de datos alojadas aún no están construidas. Por ahora, úsalo para evaluarlo y para trabajo no crítico. La página de la hoja de ruta indica qué está construido y qué no.",
+        a: "Todavía no. obop aún no ha llegado a la versión 1.0, así que una nueva versión todavía puede cambiar cosas. El núcleo funciona y está probado, las seis aplicaciones integradas figuran como Estable, las demás como Beta o Experimental, y muchas de las aplicaciones incluidas son deliberadamente sencillas. El servicio alojado aún no activa las copias de seguridad programadas de sus bases de datos. Por ahora, úsalo para evaluarlo y para trabajo no crítico. La página de la hoja de ruta indica qué está construido y qué no.",
       },
       {
         q: "¿Cuánto cuesta?",

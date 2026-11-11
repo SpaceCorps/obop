@@ -211,7 +211,7 @@ export const de: Messages = {
       },
       {
         q: "Ist obop produktionsreif?",
-        a: "Noch nicht. obop hat die Version 1.0 noch nicht erreicht, daher kann eine neue Version noch etwas ändern. Der Kern funktioniert und ist getestet, die sechs eingebauten Apps sind als Stabil gekennzeichnet, die übrigen Apps als Beta oder Experimentell, und viele mitgelieferte Apps sind bewusst einfach gehalten. Zeitgesteuerte Sicherungen der gehosteten Datenbanken sind noch nicht gebaut. Nutzen Sie obop vorerst zum Evaluieren und für unkritische Arbeit. Die Roadmap-Seite zeigt, was gebaut ist und was nicht.",
+        a: "Noch nicht. obop hat die Version 1.0 noch nicht erreicht, daher kann eine neue Version noch etwas ändern. Der Kern funktioniert und ist getestet, die sechs integrierten Apps sind als Stabil gekennzeichnet, die übrigen Apps als Beta oder Experimentell, und viele mitgelieferte Apps sind bewusst einfach gehalten. Der gehostete Dienst schaltet zeitgesteuerte Sicherungen seiner Datenbanken noch nicht ein. Nutzen Sie obop vorerst zum Evaluieren und für unkritische Arbeit. Die Roadmap-Seite zeigt, was gebaut ist und was nicht.",
       },
       {
         q: "Was kostet obop?",

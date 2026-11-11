@@ -13,7 +13,7 @@ Tallennuksena on SQLite kokeiluun ja PostgreSQL oikeaan käyttöön. Tietueet ta
 
 ## Moduulit ovat sovelluksia
 
-Sovellus on **moduuli**: kuvaus malleista, kentistä, käyttöoikeusryhmistä ja työnkulun toiminnoista. Viisi moduulia on sisäänrakennettuja (Contacts, Products, CRM, Sales, Invoicing). Kaksikymmentäkaksi muuta toimitetaan paketteina. Sovelluksia lisätään markkinapaikalta yhdellä napsautuksella, tai voit ladata oman tiedostosi.
+Sovellus on **moduuli**: kuvaus malleista, kentistä, käyttöoikeusryhmistä ja työnkulun toiminnoista. Kuusi sovellusta on sisäänrakennettu (Contacts, Products, CRM, Sales, Invoicing, Connectors). Kaksikymmentäkaksi muuta toimitetaan paketteina. Sovelluksia lisätään markkinapaikalta yhdellä napsautuksella, tai voit ladata oman tiedostosi.
 
 Koska jokainen moduuli kulkee saman rekisterin kautta, yhteystieto on sama yhteystieto CRM:ssä, Salesissa ja Invoicingissa, ja jokainen moduuli saa samat rajapinnat, näkymät, käyttöoikeudet ja tietosuojasäännöt. Katso [Sovellukset ja moduulit](/docs/concepts/apps-and-modules/) ja [sovellusluettelo](/apps/).
 
@@ -35,15 +35,15 @@ Tilamuutokset ovat nimettyjä toimintoja. Toiminto voi vaatia tiukemman ryhmän 
 
 ## Kolme rajapintaa, yksi komentojen joukko
 
-| Rajapinta      | Kenelle                              | Miten                                                                                               |
-| -------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------- |
-| Verkkosovellus | Ihmisille                            | Muodostetaan moduulien kuvauksista: luettelot, taulut, lomakkeet.                                   |
-| REST           | Skripteille, palveluille, agenteille | `POST /api/{model}/{command}` Bearer-tunnisteella. [REST-viite](/docs/reference/rest-api/)          |
-| MCP            | Tekoälyavustajille                   | `obop mcp` stdio-yhteydellä, yksi työkalu komentoa kohti. [Yhdistä MCP:n kautta](/docs/agents/mcp/) |
-| CLI            | Komentoriville ja cronille           | `obop call model command key=value`. [CLI-viite](/docs/reference/cli/)                              |
+| Rajapinta      | Kenelle                              | Miten                                                                                                                        |
+| -------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| Verkkosovellus | Ihmisille                            | Muodostetaan moduulien kuvauksista: luettelot, taulut, lomakkeet.                                                            |
+| REST           | Skripteille, palveluille, agenteille | `POST /api/{model}/{command}` Bearer-tunnisteella. [REST-viite](/docs/reference/rest-api/)                                   |
+| MCP            | Tekoälyagenteille                    | `obop mcp` stdio-yhteydellä tai `/mcp` HTTP:n kautta, yksi työkalu komentoa kohti. [Yhdistä MCP:n kautta](/docs/agents/mcp/) |
+| CLI            | Komentoriville ja cronille           | `obop call model command key=value`. [CLI-viite](/docs/reference/cli/)                                                       |
 
 Kaikki kutsuvat samaa jakelijaa, joten käyttöoikeustarkistukset, maskaus ja hyväksynnät ovat täsmälleen samat.
 
 ## Mitä se ei ole (vielä)
 
-Tämä kannattaa tietää ennen sitoutumista: deklaratiivisten pakettien lisäksi koodiportaita ei ole (ei WebAssemblyä eikä etäsovelluksia), joten sovelluspaketti ei suorita omaa koodia eikä voi määritellä kutsuja muihin järjestelmiin, mutta se voi määritellä lasketut summat ja toiminnot, jotka muuttavat muita tietueita samassa tietokannassa; vain osa sovelluksista rajaa, mitkä tietueet henkilö näkee; tietoturvaloki kirjaa tili-, kirjautumis-, tietoturva-asetus- ja moduulitapahtumat mutta ei liiketoimintatietueiden muutoksia; suunniteltua koko yrityksen vientityötä ei ole rakennettu (listan voi viedä CSV-tiedostona, ja `obop backup --plain` kirjoittaa tietokannan kaikki tietueet salaamattomaan tiedostoon); eikä isännöidyn palvelun ajastettuja varmuuskopioita ole vielä rakennettu. [Tiekartta](/roadmap/) kertoo, mikä on valmista ja mikä ei.
+Tämä kannattaa tietää ennen sitoutumista: deklaratiivisten pakettien lisäksi koodiportaita ei ole (ei WebAssembly-komponentteja eikä etäsovelluksia), joten sovelluspaketti ei suorita omaa koodia eikä voi määritellä kutsuja muihin järjestelmiin, mutta se voi määritellä lasketut summat ja toiminnot, jotka muuttavat muita tietueita samassa tietokannassa; vain osa sovelluksista rajaa, mitkä tietueet henkilö näkee; tietoturvaloki kirjaa esimerkiksi tili-, kirjautumis-, tietoturva-asetus-, moduuli- ja allekirjoitustapahtumat, mutta se ei ole historia liiketoimintatietueiden muutoksista; suunniteltua koko yrityksen tietojen vientitoimintoa ei ole rakennettu (listan voi viedä CSV-tiedostona, ja `obop backup --plain` kirjoittaa tietokannan kaikki tietueet salaamattomaan tiedostoon); eikä isännöity palvelu ota vielä käyttöön tietokantojensa ajastettuja varmuuskopioita (jos ajat obopia itse, voit ottaa ne käyttöön). [Tiekartta](/roadmap/) kertoo, mikä on valmista ja mikä ei.

@@ -9,52 +9,52 @@ obop is below version 1.0. This page separates what runs today from what the pla
 
 ## Built today
 
-- **Kernel:** one command dispatcher behind REST, MCP over stdio and the CLI, with permission groups, field-level access, data classes, masking for agents, approvals and governed state fields.
+- **Kernel:** one command dispatcher behind REST, MCP (over stdio and over HTTP at `/mcp`) and the CLI, with permission groups, field-level access, data classes, masking for agents, approvals and governed state fields.
 - **Storage:** SQLite and PostgreSQL.
-- **Apps:** five built in (Contacts, Products, CRM, Sales, Invoicing) and 22 declarative packages in the marketplace, installable and removable at runtime.
+- **Backups:** `obop backup` takes a consistent copy while the server runs, sealed (encrypted) when a key is set; `obop restore` puts a backup back, and `obop drill` tests a restore in a scratch database. `OBOP_BACKUP_SCHEDULE` runs scheduled backups with retention and, if you set one, a copy to another directory.
+- **Apps:** six built in (Contacts, Products, CRM, Sales, Invoicing, Connectors) and 24 declarative packages bundled in the marketplace (22 of them have a page in the [list of apps](/apps/)), installable and removable at runtime.
 - **Users:** Argon2id passwords, sessions, scoped agent tokens, two-factor sign-in (authenticator app or passkey).
 - **Web app:** generated screens: launcher, list, board, record panel, Customize (theme, apps, module builder), light and dark themes.
 - **Hosted beta:** a control plane that creates instances with their own database, on Sliplane.
 - **This website:** multi-page, static, in seven languages, with Markdown copies of every page.
+- **Languages of the web app:** English, German, French, Polish, Finnish, Swedish and Spanish. The six translations are machine-drafted.
 - **Tests:** Rust tests, and a Playwright end-to-end suite over the built app.
 
 ## Partly built or simplified
 
-- Bundled apps record data but compute nothing: totals, balances, stock levels, tax amounts and numbering are entered by people.
-- Accounting stores a chart of accounts, entries and periods, but does not check that debits equal credits.
-- Knowledge visibility and Sign immutability are conventions, not enforced rules.
-- MCP exists over stdio only, with minimal tool schemas.
+- Bundled apps compute only some figures. Totals of their own lines (journal entries in Accounting, orders in Sales, Purchase and Point of Sale, invoices in Invoicing), numbers from a series (for example invoices, journal entries, sales and purchase orders, receipts) and stock quantities once a stock move is confirmed are computed. Other figures are still typed in, for example tax amounts in Accounting and the change and cash differences at the till in Point of Sale.
+- Accounting refuses to post an entry unless its debits equal its credits, but only at the moment of posting: a posted entry can still be edited afterwards, and closing a month or year is only a label that stops nothing.
+- Knowledge visibility is a label, not an enforced rule.
+- MCP is served over stdio and over HTTP at `/mcp`, with a browser sign-in (OAuth) for MCP clients. That sign-in has been tried only against our own test client and automated tests, not against Claude Desktop, claude.ai or Claude Code.
 
 ## Not built yet
 
-- **Code tiers** for modules: expressions (CEL), WebAssembly components, remote apps. Until then packages cannot compute or call out.
-- **Remote MCP** (HTTP transport with OAuth), so hosted instances are not reachable by desktop MCP clients.
+- **Code tiers** for modules: CEL expressions, WebAssembly components, remote apps. Until then a package can use only the small built-in expression language for computed fields, checks on actions and conditions on effects; it runs no code of its own and cannot declare calls to other systems.
 - **Agent token management:** a screen, listing, expiry and revocation.
-- **An audit trail of changes to business records.** A security log of account, sign-in and module events exists; no change history is switched on for any model yet.
+- **An audit trail of changes to business records.** A security log of events such as account, sign-in, security-setting and module events exists; no change history is switched on for any model yet.
 - **Row rules in most apps.** A few apps have them; the others show every record to everyone who can read the model.
 - **Single sign-on** other than Microsoft Entra. Entra sign-in is built and has been tried only against a stand-in.
-- **Schema manager and migrations**; records are JSON documents.
-- **Backups, point-in-time recovery and a full export tool.**
-- **Localisation of the application** itself. The website is localised; the web app is English.
+- **A schema manager with typed columns**; records are JSON documents. Schema versions, the migration ledger (`obop migrate`) and the `[[migration]]` steps of module updates exist; the component that issues DDL and the check that the previous release runs against the new schema do not.
+- **Point-in-time recovery and a customer-facing export tool.** `obop backup` and `obop restore` exist (see above), but obop does not run point-in-time recovery (PostgreSQL does it, and it has not been tried on Sliplane), and the planned export job for a whole business is not built. The hosted service does not switch on scheduled backups of its databases yet.
 - **Country packs** (tax, e-invoicing, charts of accounts for Germany, France, Poland) and the e-invoicing formats the plan names.
-- **Importers** from other systems.
-- **Billing.** Nothing is charged; plans are planned.
+- **Importers** for other systems such as Odoo, QuickBooks, Xero and ERPNext. A generic CSV import (`obop import` and the Import dialog) and a SIE file import for accounting exist.
+- **Billing.** Nothing is charged. The one planned paid service is dedicated hosting; it is not offered yet.
 
 ## The plan in waves
 
 The product plan names five waves. All dates are proposals.
 
-| Wave           | Window             | Aims                                                                                                                                                                                                                   |
-| -------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| W0 Foundations | 2026-10 to 2026-12 | The kernel, first tagged preview build, security policy.                                                                                                                                                               |
-| W1 Loop        | 2027-01 to 2027-09 | The seven-app loop (contacts, products, CRM, sales, invoicing, accounting, purchase and stock basics), MCP, code tiers X1, X2 and X4, a first country pack, a public alpha and a public beta with no commercial offer. |
-| W2 Release     | 2027-10 to 2028-06 | Services apps, more country packs, WebAssembly host, a 1.0 long-term-support release with five years of support.                                                                                                       |
-| W3 Breadth     | 2028-07 to 2029-06 | More apps (manufacturing, point of sale, website, e-commerce, helpdesk and others), payroll engine, custom domains, partner programme.                                                                                 |
-| W4 Ecosystem   | from 2029-07       | Marketplace commerce, verticals, 2.0.                                                                                                                                                                                  |
+| Wave           | Window             | Aims                                                                                                                                                                                                                                                                                                                             |
+| -------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| W0 Foundations | 2026-10 to 2026-12 | The kernel, first tagged preview build, security policy.                                                                                                                                                                                                                                                                         |
+| W1 Loop        | 2027-01 to 2027-09 | The smallest loop: kernel, invoicing, accounting with tax, German e-invoicing, CRM, sales and basic stock; the generated command line, REST API and MCP for every shipped module; code tiers X1 and X2 (X2 only if its limits spike passes); the German country pack; a public alpha and a public beta with no commercial offer. |
+| W2 Release     | 2027-10 to 2028-06 | The approvals engine, multi-company, a first-stage package registry, the web UI parity work, and 1.0, the first stable release, with a two-year security-fix window.                                                                                                                                                             |
+| W3 Breadth     | 2028-07 to 2029-06 | The services apps first, then in demand order: the extension platform (WebAssembly host, remote apps), more importers, bank feeds, stock extensions, more apps (manufacturing, point of sale, website, e-commerce, helpdesk and others), a Polish pack, payroll engine, custom domains.                                          |
+| W4 Ecosystem   | from 2029-07       | Later release series, including a 2.0 slot, and verticals.                                                                                                                                                                                                                                                                       |
 
 ## Decisions that are still open
 
-Several choices are recorded as proposals and wait for the project owner, including the pricing and the exact calendar. The licence is settled: Apache-2.0 for the whole project. Pricing on this site is therefore marked as planned and not charged.
+Several choices are recorded as proposals and wait for the project owner, including the exact calendar. The licence is settled: Apache-2.0 for the whole project. The hosting prices on this site are marked as planned and not charged.
 
 ## How to follow along
 

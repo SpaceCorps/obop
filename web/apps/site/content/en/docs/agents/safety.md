@@ -54,6 +54,6 @@ Point a new agent at a throwaway SQLite instance (`obop serve --demo` makes fake
 ## Know the limits
 
 - Row rules exist only in some apps, and CRM has none: an agent with `crm.user` can read every lead. Where an app has them (for example Expenses, Timesheets, HR leave requests), an agent never sees more than its owner.
-- Actions change one field and cannot send email or call other systems, so an agent cannot cause those side effects through obop.
+- An action moves one state field and can also create or change other records in the same database, for example paying a sale in Point of Sale can prepare draft stock moves. An action does not send email or call other systems itself. An administrator can, however, connect a [connector](/docs/concepts/connectors/) so that a webhook goes out when a command succeeds, and that includes commands an agent runs; check the connections before you give an agent write access.
 - Masking works on classified fields, not on free text.
 - Rate limiting applies to failed sign-ins only. There are no per-token quotas yet.

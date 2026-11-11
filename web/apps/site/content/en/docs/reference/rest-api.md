@@ -160,6 +160,6 @@ The same commands are also exposed as MCP tools at `POST /mcp` (Streamable HTTP,
 
 ## Versioning
 
-There is no version header or deprecation policy yet. The product plan calls for a dated version header; until it exists, remember that obop is below version 1.0, so a minor release can change the API, and check the [changelog](/changelog/) before you upgrade.
+There is no version header yet; the project plan calls for a dated one. Before version 1.0 the project has promised a deprecation window for the REST API and MCP: a contract is deprecated for at least 12 months before it is removed. obop is below version 1.0, so check the [changelog](/changelog/) before you upgrade.
 
 See [Use the REST API](/docs/agents/rest/) for worked examples and the [module manifest reference](/docs/reference/module-manifest/) for how fields and actions are declared.

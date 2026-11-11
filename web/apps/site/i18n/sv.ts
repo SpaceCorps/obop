@@ -208,7 +208,7 @@ export const sv: Messages = {
       },
       {
         q: "Är obop redo för skarp användning?",
-        a: "Inte ännu. obop har inte nått version 1.0 ännu, så en ny version kan fortfarande ändra saker. Kärnan fungerar och är testad, de sex inbyggda apparna är märkta Stabil, de övriga Beta eller Experimentell, och många av de medföljande apparna är medvetet enkla. Schemalagda säkerhetskopior av de hostade databaserna är ännu inte byggda. Använd obop för att utvärdera och för icke-kritiskt arbete tills vidare. På färdplanen ser du vad som är byggt och vad som inte är det.",
+        a: "Inte ännu. obop har inte nått version 1.0 ännu, så en ny version kan fortfarande ändra saker. Kärnan fungerar och är testad, de sex inbyggda apparna är märkta Stabil, de övriga Beta eller Experimentell, och många av de medföljande apparna är medvetet enkla. Den hostade tjänsten slår ännu inte på schemalagda säkerhetskopior av sina databaser. Använd obop för att utvärdera och för icke-kritiskt arbete tills vidare. På färdplanen ser du vad som är byggt och vad som inte är det.",
       },
       {
         q: "Vad kostar det?",

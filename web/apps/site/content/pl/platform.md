@@ -13,7 +13,7 @@ Magazynem jest SQLite do wypróbowania i PostgreSQL do prawdziwego użytku. Reko
 
 ## Moduły to aplikacje
 
-Aplikacja to **moduł**: opis modeli, pól, grup uprawnień i akcji przepływu pracy. Pięć modułów jest wbudowanych (Contacts, Products, CRM, Sales, Invoicing). Dwadzieścia dwa kolejne są dołączone jako pakiety. Aplikacje dodajesz z marketplace'u jednym kliknięciem albo wgrywasz własny plik.
+Aplikacja to **moduł**: opis modeli, pól, grup uprawnień i akcji przepływu pracy. Sześć aplikacji jest wbudowanych (Contacts, Products, CRM, Sales, Invoicing, Connectors). Dwadzieścia dwa kolejne są dołączone jako pakiety. Aplikacje dodajesz z marketplace'u jednym kliknięciem albo wgrywasz własny plik.
 
 Ponieważ każdy moduł przechodzi przez jeden rejestr, kontakt jest tym samym kontaktem w CRM, Sales i Invoicing, a każdy moduł dostaje to samo API, te same ekrany, uprawnienia i zasady prywatności. Zobacz [Aplikacje i moduły](/docs/concepts/apps-and-modules/) oraz [listę aplikacji](/apps/).
 
@@ -35,15 +35,15 @@ Zmiany stanu są nazwanymi akcjami. Akcja może wymagać ściślejszej grupy i m
 
 ## Trzy interfejsy, jeden zestaw poleceń
 
-| Interfejs        | Dla kogo                | Jak                                                                                             |
-| ---------------- | ----------------------- | ----------------------------------------------------------------------------------------------- |
-| Aplikacja webowa | Ludzie                  | Generowana z opisów modułów: listy, tablice, formularze.                                        |
-| REST             | Skrypty, usługi, agenci | `POST /api/{model}/{command}` z tokenem okaziciela. [Opis REST](/docs/reference/rest-api/)      |
-| MCP              | Asystenci AI            | `obop mcp` przez stdio, jedno narzędzie na polecenie. [Połączenie przez MCP](/docs/agents/mcp/) |
-| CLI              | Powłoki i cron          | `obop call model command key=value`. [Opis CLI](/docs/reference/cli/)                           |
+| Interfejs        | Dla kogo                | Jak                                                                                                                   |
+| ---------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Aplikacja webowa | Ludzie                  | Generowana z opisów modułów: listy, tablice, formularze.                                                              |
+| REST             | Skrypty, usługi, agenci | `POST /api/{model}/{command}` z tokenem okaziciela. [Opis REST](/docs/reference/rest-api/)                            |
+| MCP              | Agenci AI               | `obop mcp` przez stdio lub `/mcp` przez HTTP, jedno narzędzie na polecenie. [Połączenie przez MCP](/docs/agents/mcp/) |
+| CLI              | Powłoki i cron          | `obop call model command key=value`. [Opis CLI](/docs/reference/cli/)                                                 |
 
 Wszystkie wywołują ten sam dyspozytor, więc sprawdzanie uprawnień, maskowanie i zatwierdzanie są identyczne.
 
 ## Czego jeszcze nie ma
 
-Warto o tym wiedzieć, zanim się zdecydujesz: nie ma poziomów kodu poza pakietami deklaratywnymi (nie ma WebAssembly ani aplikacji zdalnych), więc pakiet aplikacji nie wykonuje własnego kodu i nie może deklarować wywołań innych systemów, może jednak deklarować obliczane sumy oraz akcje, które zmieniają inne rekordy w tej samej bazie danych; tylko niektóre aplikacje ograniczają, które rekordy widzi dana osoba; dziennik bezpieczeństwa rejestruje zdarzenia dotyczące kont, logowania, ustawień bezpieczeństwa i modułów, ale nie zmiany w rekordach biznesowych; planowane zadanie eksportu całej firmy nie jest gotowe (listę można wyeksportować do CSV, a `obop backup --plain` zapisuje wszystkie rekordy bazy danych do niezaszyfrowanego pliku); a zaplanowane kopie zapasowe usługi hostowanej nie są jeszcze gotowe. [Plan rozwoju](/roadmap/) wymienia, co jest gotowe, a czego jeszcze nie ma.
+Warto o tym wiedzieć, zanim się zdecydujesz: nie ma poziomów kodu poza pakietami deklaratywnymi (nie ma komponentów WebAssembly ani aplikacji zdalnych), więc pakiet aplikacji nie wykonuje własnego kodu i nie może deklarować wywołań innych systemów, może jednak deklarować obliczane sumy oraz akcje, które zmieniają inne rekordy w tej samej bazie danych; tylko niektóre aplikacje ograniczają, które rekordy widzi dana osoba; dziennik bezpieczeństwa rejestruje na przykład zdarzenia dotyczące kont, logowania, ustawień bezpieczeństwa, modułów i podpisów, ale nie jest historią zmian w rekordach biznesowych; planowane zadanie eksportu całej firmy nie jest gotowe (listę można wyeksportować do CSV, a `obop backup --plain` zapisuje wszystkie rekordy bazy danych do niezaszyfrowanego pliku); a usługa hostowana nie włącza jeszcze zaplanowanych kopii zapasowych swoich baz danych (kto uruchamia obop samodzielnie, może je włączyć). [Plan rozwoju](/roadmap/) wymienia, co jest gotowe, a czego jeszcze nie ma.

@@ -211,7 +211,7 @@ export const fr: Messages = {
       },
       {
         q: "obop est-il prêt pour la production ?",
-        a: "Pas encore. obop n'a pas encore atteint la version 1.0, donc une nouvelle version peut toujours changer des choses. Le cœur fonctionne et est testé, les six applications intégrées sont marquées Stable, les autres Bêta ou Expérimental, et de nombreuses applications fournies sont volontairement simples. Les sauvegardes planifiées des bases de données hébergées ne sont pas encore développées. Pour l'instant, utilisez-le pour évaluer la plateforme et pour des travaux non critiques. La page de la feuille de route indique ce qui est réalisé et ce qui ne l'est pas.",
+        a: "Pas encore. obop n'a pas encore atteint la version 1.0, donc une nouvelle version peut toujours changer des choses. Le cœur fonctionne et est testé, les six applications intégrées sont marquées Stable, les autres Bêta ou Expérimental, et de nombreuses applications fournies sont volontairement simples. Le service hébergé n'active pas encore les sauvegardes planifiées de ses bases de données. Pour l'instant, utilisez-le pour évaluer la plateforme et pour des travaux non critiques. La page de la feuille de route indique ce qui est réalisé et ce qui ne l'est pas.",
       },
       {
         q: "Combien cela coûte-t-il ?",

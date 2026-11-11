@@ -13,7 +13,7 @@ Storage is SQLite for trying things out and PostgreSQL for real use. Records are
 
 ## Modules are apps
 
-An app is a **module**: a description of models, fields, permission groups and workflow actions. Five modules are built in (Contacts, Products, CRM, Sales, Invoicing). Twenty-two more are bundled as packages. You add apps from the marketplace in a click, or upload your own file.
+An app is a **module**: a description of models, fields, permission groups and workflow actions. Six apps are built in (Contacts, Products, CRM, Sales, Invoicing, Connectors). Twenty-two more are bundled as packages. You add apps from the marketplace in a click, or upload your own file.
 
 Because every module goes through one registry, a contact is the same contact in CRM, Sales and Invoicing, and every module gets the same API, screens, permissions and privacy rules. See [Apps and modules](/docs/concepts/apps-and-modules/) and the [list of apps](/apps/).
 
@@ -35,15 +35,15 @@ State changes are named actions. An action can need a stricter group and can nee
 
 ## Three surfaces, one set of commands
 
-| Surface | For                       | How                                                                                            |
-| ------- | ------------------------- | ---------------------------------------------------------------------------------------------- |
-| Web app | People                    | Generated from the module descriptions: lists, boards, forms.                                  |
-| REST    | Scripts, services, agents | `POST /api/{model}/{command}` with a bearer token. [REST reference](/docs/reference/rest-api/) |
-| MCP     | AI assistants             | `obop mcp` over stdio, one tool per command. [Connect over MCP](/docs/agents/mcp/)             |
-| CLI     | Shells and cron           | `obop call model command key=value`. [CLI reference](/docs/reference/cli/)                     |
+| Surface | For                       | How                                                                                                    |
+| ------- | ------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Web app | People                    | Generated from the module descriptions: lists, boards, forms.                                          |
+| REST    | Scripts, services, agents | `POST /api/{model}/{command}` with a bearer token. [REST reference](/docs/reference/rest-api/)         |
+| MCP     | AI agents                 | `obop mcp` over stdio or `/mcp` over HTTP, one tool per command. [Connect over MCP](/docs/agents/mcp/) |
+| CLI     | Shells and cron           | `obop call model command key=value`. [CLI reference](/docs/reference/cli/)                             |
 
 All of them call the same dispatcher, so permission checks, masking and approvals are identical.
 
 ## What it is not (yet)
 
-Be aware before you commit: there are no code tiers beyond declarative packages (no WebAssembly components or remote apps), so an app package runs no code of its own and cannot declare calls to other systems, though it can declare computed totals and actions that change other records in the same database; only some apps limit which records a person sees; the security log records account, sign-in, security-setting and module events but not changes to business records; the planned export job for a whole business is not built (a list exports as CSV, and `obop backup --plain` writes every record of a database to an unencrypted file); and scheduled backups of the hosted service are not built yet. The [roadmap](/roadmap/) lists what is built and what is not.
+Be aware before you commit: there are no code tiers beyond declarative packages (no WebAssembly components or remote apps), so an app package runs no code of its own and cannot declare calls to other systems, though it can declare computed totals and actions that change other records in the same database; only some apps limit which records a person sees; the security log records, for example, account, sign-in, security-setting, module and signing events, but it is not a history of changes to business records; the planned export job for a whole business is not built (a list exports as CSV, and `obop backup --plain` writes every record of a database to an unencrypted file); and the hosted service does not switch on scheduled backups of its databases yet (if you run obop yourself, you can turn them on). The [roadmap](/roadmap/) lists what is built and what is not.

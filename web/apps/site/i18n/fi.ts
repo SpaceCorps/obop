@@ -211,7 +211,7 @@ export const fi: Messages = {
       },
       {
         q: "Onko obop valmis tuotantokäyttöön?",
-        a: "Ei vielä. obop ei ole vielä saavuttanut versiota 1.0, joten uusi versio voi vielä muuttaa asioita. Ydin toimii ja on testattu, kuusi sisäänrakennettua sovellusta on merkitty vakaiksi, muut sovellukset beta- tai kokeellisiksi, ja monet mukana tulevista sovelluksista ovat tarkoituksella yksinkertaisia. Isännöityjen tietokantojen ajastettuja varmuuskopioita ei ole vielä rakennettu. Käytä alustaa toistaiseksi arviointiin ja ei-kriittiseen työhön. Tiekarttasivu kertoo, mikä on valmista ja mikä ei.",
+        a: "Ei vielä. obop ei ole vielä saavuttanut versiota 1.0, joten uusi versio voi vielä muuttaa asioita. Ydin toimii ja on testattu, kuuden sisäänrakennetun sovelluksen tilaksi on merkitty Vakaa ja muiden sovellusten tilaksi Beta tai Kokeellinen, ja monet mukana tulevista sovelluksista ovat tarkoituksella yksinkertaisia. Isännöity palvelu ei vielä ota käyttöön tietokantojensa ajastettuja varmuuskopioita. Käytä alustaa toistaiseksi arviointiin ja ei-kriittiseen työhön. Tiekarttasivu kertoo, mikä on valmista ja mikä ei.",
       },
       {
         q: "Paljonko se maksaa?",

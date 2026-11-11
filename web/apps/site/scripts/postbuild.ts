@@ -212,7 +212,7 @@ export async function postbuild(records: PageRecord[]): Promise<void> {
     "",
     "How an agent should call obop:",
     "",
-    "- Use the instance REST API (`POST /api/<model>/<command>`, with `list`, `search`, `get`, `create`, `update`, `delete` and per-model actions), described by the OpenAPI document at `/api/openapi.json` on the instance, or connect over MCP with `obop mcp --token <agent token>`.",
+    "- Use the instance REST API (`POST /api/<model>/<command>`, with `list`, `search`, `get`, `create`, `update`, `delete` and per-model actions), described by the OpenAPI document at `/api/openapi.json` on the instance, or connect over MCP with `obop mcp --token <agent token>` (stdio) or to the `/mcp` endpoint of the instance (HTTP).",
     "- Ask `GET /api/meta` first: it lists exactly the models, fields and actions your token may use.",
     "- Treat a 202 `approval_required` response as a proposal: stop and ask the human to approve the plan.",
     "- The control plane API (sign up, create and delete instances) is described at `/openapi.json` on this site.",

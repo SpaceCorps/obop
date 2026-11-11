@@ -13,7 +13,7 @@ Lagringen är SQLite för att prova och PostgreSQL för skarp användning. Poste
 
 ## Moduler är appar
 
-En app är en **modul**: en beskrivning av modeller, fält, behörighetsgrupper och arbetsflödesåtgärder. Fem moduler är inbyggda (Contacts, Products, CRM, Sales, Invoicing). Tjugotvå till medföljer som paket. Du lägger till appar från marknadsplatsen med ett klick, eller laddar upp din egen fil.
+En app är en **modul**: en beskrivning av modeller, fält, behörighetsgrupper och arbetsflödesåtgärder. Sex appar är inbyggda (Contacts, Products, CRM, Sales, Invoicing, Connectors). Tjugotvå till medföljer som paket. Du lägger till appar från marknadsplatsen med ett klick, eller laddar upp din egen fil.
 
 Eftersom alla moduler går genom ett gemensamt register är en kontakt samma kontakt i CRM, Sales och Invoicing, och varje modul får samma API, skärmbilder, behörigheter och integritetsregler. Se [Appar och moduler](/docs/concepts/apps-and-modules/) och [listan över appar](/apps/).
 
@@ -35,15 +35,15 @@ Tillståndsändringar är namngivna åtgärder. En åtgärd kan kräva en strän
 
 ## Tre gränssnitt, en uppsättning kommandon
 
-| Gränssnitt | För                       | Hur                                                                                         |
-| ---------- | ------------------------- | ------------------------------------------------------------------------------------------- |
-| Webbapp    | Människor                 | Genereras från modulbeskrivningarna: listor, tavlor, formulär.                              |
-| REST       | Skript, tjänster, agenter | `POST /api/{model}/{command}` med en bärartoken. [REST-referens](/docs/reference/rest-api/) |
-| MCP        | AI-assistenter            | `obop mcp` över stdio, ett verktyg per kommando. [Anslut via MCP](/docs/agents/mcp/)        |
-| CLI        | Skal och cron             | `obop call model command key=value`. [CLI-referens](/docs/reference/cli/)                   |
+| Gränssnitt | För                       | Hur                                                                                                         |
+| ---------- | ------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Webbapp    | Människor                 | Genereras från modulbeskrivningarna: listor, tavlor, formulär.                                              |
+| REST       | Skript, tjänster, agenter | `POST /api/{model}/{command}` med en bärartoken. [REST-referens](/docs/reference/rest-api/)                 |
+| MCP        | AI-agenter                | `obop mcp` över stdio eller `/mcp` över HTTP, ett verktyg per kommando. [Anslut via MCP](/docs/agents/mcp/) |
+| CLI        | Skal och cron             | `obop call model command key=value`. [CLI-referens](/docs/reference/cli/)                                   |
 
 Alla anropar samma dispatcher, så behörighetskontroller, maskering och godkännanden är identiska.
 
 ## Vad det inte är (ännu)
 
-Tänk på det här innan du binder dig: det finns inga kodnivåer utöver deklarativa paket (inget WebAssembly och inga fjärrappar), så ett apppaket kör ingen egen kod och kan inte deklarera anrop till andra system, men det kan deklarera beräknade summor och åtgärder som ändrar andra poster i samma databas; bara vissa appar begränsar vilka poster en person ser; säkerhetsloggen registrerar händelser för konton, inloggning, säkerhetsinställningar och moduler men inte ändringar av affärsposter; det planerade exportjobbet för ett helt företag är inte byggt (en lista kan exporteras som CSV, och `obop backup --plain` skriver alla poster i en databas till en okrypterad fil); och schemalagda säkerhetskopior av den hostade tjänsten är inte byggda än. [Färdplanen](/roadmap/) listar vad som är byggt och vad som inte är det.
+Tänk på det här innan du binder dig: det finns inga kodnivåer utöver deklarativa paket (inga WebAssembly-komponenter och inga fjärrappar), så ett apppaket kör ingen egen kod och kan inte deklarera anrop till andra system, men det kan deklarera beräknade summor och åtgärder som ändrar andra poster i samma databas; bara vissa appar begränsar vilka poster en person ser; säkerhetsloggen registrerar till exempel händelser för konton, inloggning, säkerhetsinställningar, moduler och signering, men är ingen historik över ändringar av affärsposter; det planerade exportjobbet för ett helt företag är inte byggt (en lista kan exporteras som CSV, och `obop backup --plain` skriver alla poster i en databas till en okrypterad fil); och den hostade tjänsten slår ännu inte på schemalagda säkerhetskopior av sina databaser (den som kör obop själv kan slå på dem). [Färdplanen](/roadmap/) listar vad som är byggt och vad som inte är det.

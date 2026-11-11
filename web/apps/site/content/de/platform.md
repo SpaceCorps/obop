@@ -13,7 +13,7 @@ Als Speicher dient SQLite zum Ausprobieren und PostgreSQL für den echten Einsat
 
 ## Module sind Apps
 
-Eine App ist ein **Modul**: eine Beschreibung von Modellen, Feldern, Berechtigungsgruppen und Workflow-Aktionen. Fünf Module sind integriert (Contacts, Products, CRM, Sales, Invoicing). Zweiundzwanzig weitere werden als Pakete mitgeliefert. Sie fügen Apps mit einem Klick aus dem Marktplatz hinzu oder laden eine eigene Datei hoch.
+Eine App ist ein **Modul**: eine Beschreibung von Modellen, Feldern, Berechtigungsgruppen und Workflow-Aktionen. Sechs Apps sind integriert (Contacts, Products, CRM, Sales, Invoicing, Connectors). Zweiundzwanzig weitere werden als Pakete mitgeliefert. Sie fügen Apps mit einem Klick aus dem Marktplatz hinzu oder laden eine eigene Datei hoch.
 
 Weil jedes Modul durch eine gemeinsame Registry läuft, ist ein Kontakt in CRM, Sales und Invoicing derselbe Kontakt, und jedes Modul erhält dieselbe API, dieselben Oberflächen, Berechtigungen und Datenschutzregeln. Siehe [Apps und Module](/docs/concepts/apps-and-modules/) und die [Liste der Apps](/apps/).
 
@@ -35,15 +35,15 @@ Zustandsänderungen sind benannte Aktionen. Eine Aktion kann eine strengere Grup
 
 ## Drei Schnittstellen, ein Satz von Befehlen
 
-| Schnittstelle | Für                       | Wie                                                                                              |
-| ------------- | ------------------------- | ------------------------------------------------------------------------------------------------ |
-| Web-App       | Menschen                  | Aus den Modulbeschreibungen erzeugt: Listen, Boards, Formulare.                                  |
-| REST          | Skripte, Dienste, Agenten | `POST /api/{model}/{command}` mit einem Bearer-Token. [REST-Referenz](/docs/reference/rest-api/) |
-| MCP           | KI-Assistenten            | `obop mcp` über stdio, ein Tool pro Befehl. [Über MCP verbinden](/docs/agents/mcp/)              |
-| CLI           | Shells und Cron           | `obop call model command key=value`. [CLI-Referenz](/docs/reference/cli/)                        |
+| Schnittstelle | Für                       | Wie                                                                                                       |
+| ------------- | ------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Web-App       | Menschen                  | Aus den Modulbeschreibungen erzeugt: Listen, Boards, Formulare.                                           |
+| REST          | Skripte, Dienste, Agenten | `POST /api/{model}/{command}` mit einem Bearer-Token. [REST-Referenz](/docs/reference/rest-api/)          |
+| MCP           | KI-Agenten                | `obop mcp` über stdio oder `/mcp` über HTTP, ein Tool pro Befehl. [Über MCP verbinden](/docs/agents/mcp/) |
+| CLI           | Shells und Cron           | `obop call model command key=value`. [CLI-Referenz](/docs/reference/cli/)                                 |
 
 Alle rufen denselben Dispatcher auf, daher sind Berechtigungsprüfungen, Maskierung und Freigaben identisch.
 
 ## Was es (noch) nicht ist
 
-Bedenken Sie das, bevor Sie sich festlegen: Es gibt keine Code-Stufen über deklarative Pakete hinaus (kein WebAssembly, keine Remote-Apps), ein App-Paket führt also keinen eigenen Code aus und kann keine Aufrufe anderer Systeme deklarieren, kann aber berechnete Summen und Aktionen deklarieren, die andere Datensätze in derselben Datenbank ändern; nur manche Apps beschränken, welche Datensätze eine Person sieht; das Sicherheitslog erfasst Konto-, Anmelde-, Sicherheitseinstellungs- und Modulereignisse, aber keine Änderungen an Geschäftsdaten; der geplante Exportauftrag für ein ganzes Unternehmen ist nicht gebaut (eine Liste lässt sich als CSV exportieren, und `obop backup --plain` schreibt alle Datensätze einer Datenbank in eine unverschlüsselte Datei); und zeitgesteuerte Sicherungen des gehosteten Dienstes sind noch nicht gebaut. Die [Roadmap](/roadmap/) zeigt, was gebaut ist und was nicht.
+Bedenken Sie das, bevor Sie sich festlegen: Es gibt keine Code-Stufen über deklarative Pakete hinaus (keine WebAssembly-Komponenten, keine Remote-Apps), ein App-Paket führt also keinen eigenen Code aus und kann keine Aufrufe anderer Systeme deklarieren, kann aber berechnete Summen und Aktionen deklarieren, die andere Datensätze in derselben Datenbank ändern; nur manche Apps beschränken, welche Datensätze eine Person sieht; das Sicherheitslog erfasst zum Beispiel Konto-, Anmelde-, Sicherheitseinstellungs-, Modul- und Signaturereignisse, ist aber kein Verlauf der Änderungen an Geschäftsdaten; der geplante Exportauftrag für ein ganzes Unternehmen ist nicht gebaut (eine Liste lässt sich als CSV exportieren, und `obop backup --plain` schreibt alle Datensätze einer Datenbank in eine unverschlüsselte Datei); und der gehostete Dienst schaltet zeitgesteuerte Sicherungen seiner Datenbanken noch nicht ein (wer obop selbst betreibt, kann sie einschalten). Die [Roadmap](/roadmap/) zeigt, was gebaut ist und was nicht.

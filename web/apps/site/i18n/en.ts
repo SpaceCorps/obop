@@ -203,7 +203,7 @@ export const en: Messages = {
       },
       {
         q: "Is obop ready for production use?",
-        a: "Not yet. obop is below version 1.0, so a release can still change things. The core works and is tested, the six built-in apps are marked Stable, the other apps are marked Beta or Experimental, and many bundled apps are deliberately simple. Scheduled backups of the hosted databases are not built yet. Use it to evaluate and for non-critical work for now. The roadmap page lists what is built and what is not.",
+        a: "Not yet. obop is below version 1.0, so a release can still change things. The core works and is tested, the six built-in apps are marked Stable, the other apps are marked Beta or Experimental, and many bundled apps are deliberately simple. The hosted service does not switch on scheduled backups of its databases yet. Use it to evaluate and for non-critical work for now. The roadmap page lists what is built and what is not.",
       },
       {
         q: "How much does it cost?",
