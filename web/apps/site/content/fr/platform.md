@@ -13,7 +13,7 @@ Le stockage est SQLite pour essayer, PostgreSQL pour un usage réel. Pour l'inst
 
 ## Les modules sont des applications
 
-Une application est un **module** : une description de modèles, de champs, de groupes de permissions et d'actions de flux de travail. Six applications sont intégrées (Contacts, Products, CRM, Sales, Invoicing, Connectors). Vingt-deux autres sont fournis sous forme de paquets. Vous ajoutez des applications depuis la place de marché en un clic, ou vous importez votre propre fichier.
+Une application est un **module** : une description de modèles, de champs, de groupes de permissions et d'actions de flux de travail. Six applications intégrées ont une page sur ce site (Contacts, Products, CRM, Sales, Invoicing, Connectors). 24 autres sont fournies sous forme de paquets, et 22 d'entre elles ont aussi une page. Vous ajoutez des applications depuis la place de marché en un clic, ou vous importez votre propre fichier.
 
 Comme chaque module passe par un seul registre, un contact est le même contact dans CRM, Sales et Invoicing, et chaque module reçoit la même API, les mêmes écrans, les mêmes permissions et les mêmes règles de confidentialité. Voir [Applications et modules](/docs/concepts/apps-and-modules/) et la [liste des applications](/apps/).
 
@@ -46,4 +46,12 @@ Toutes appellent le même répartiteur : les contrôles de permissions, le masqu
 
 ## Ce qu'elle n'est pas (encore)
 
-Sachez-le avant de vous engager : il n'y a pas de niveaux de code au-delà des paquets déclaratifs (ni composants WebAssembly ni applications distantes), donc un paquet d'application n'exécute pas de code propre et ne peut pas déclarer d'appels vers d'autres systèmes, mais il peut déclarer des totaux calculés et des actions qui modifient d'autres enregistrements de la même base de données ; seules certaines applications limitent les enregistrements qu'une personne voit ; le journal de sécurité enregistre par exemple les événements de compte, de connexion, de paramètres de sécurité, de modules et de signature, mais ce n'est pas un historique des modifications des enregistrements de l'entreprise ; la tâche d'export prévue pour toute une entreprise n'est pas réalisée (une liste s'exporte en CSV, et `obop backup --plain` écrit tous les enregistrements d'une base de données dans un fichier non chiffré) ; et le service hébergé n'active pas encore les sauvegardes planifiées de ses bases de données (si vous faites tourner obop vous-même, vous pouvez les activer). La [feuille de route](/roadmap/) indique ce qui est réalisé et ce qui ne l'est pas.
+Sachez-le avant de vous engager :
+
+- Il n'y a pas de niveaux de code au-delà des paquets déclaratifs (ni composants WebAssembly ni applications distantes), donc un paquet d'application n'exécute pas de code propre et ne peut pas déclarer d'appels vers d'autres systèmes, mais il peut déclarer des totaux calculés et des actions qui modifient d'autres enregistrements de la même base de données.
+- Seules certaines applications (par exemple Expenses, Timesheets, les demandes de congé de HR, Documents et Dashboards) limitent les enregistrements qu'une personne voit. CRM, Sales et Invoicing ne le font pas.
+- Le journal de sécurité enregistre par exemple les événements de compte, de connexion, de paramètres de sécurité, de modules et de signature, mais ce n'est pas un historique des modifications des enregistrements de l'entreprise.
+- La tâche d'export prévue pour les données de toute une entreprise n'est pas réalisée. Une liste s'exporte en CSV depuis l'application web (jusqu'à 20 000 enregistrements), et `obop backup --plain` écrit les enregistrements et les fichiers téléversés d'une base de données dans un fichier non chiffré (les valeurs de courte durée, comme les sessions, en sont exclues, et les secrets restent scellés).
+- Le service hébergé n'active pas encore les sauvegardes planifiées de ses bases de données (si vous faites tourner obop vous-même, vous pouvez les activer).
+
+La [feuille de route](/roadmap/) indique ce qui est réalisé et ce qui ne l'est pas.

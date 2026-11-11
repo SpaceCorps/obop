@@ -15,11 +15,11 @@ Un **agente** es cualquier cosa que actúa sobre obop con un token de agente: un
 
 ## Tres formas de conectar
 
-| Superficie      | Úsala cuando                                                                                                          | Página                                     |
-| --------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| MCP sobre stdio | Un cliente MCP (Claude Desktop, Claude Code, Cursor, VS Code, Windsurf y otros) debe llamar a obop como herramientas. | [Conectar mediante MCP](/docs/agents/mcp/) |
-| REST            | Un script o servicio llama a endpoints HTTP.                                                                          | [Usar la API REST](/docs/agents/rest/)     |
-| CLI             | Una shell o una tarea cron llama a `obop call`.                                                                       | [Usar la CLI](/docs/agents/cli/)           |
+| Superficie | Úsala cuando                                                                                                          | Página                                     |
+| ---------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| MCP        | Un cliente MCP (Claude Desktop, Claude Code, Cursor, VS Code, Windsurf y otros) debe llamar a obop como herramientas. | [Conectar mediante MCP](/docs/agents/mcp/) |
+| REST       | Un script o servicio llama a endpoints HTTP.                                                                          | [Usar la API REST](/docs/agents/rest/)     |
+| CLI        | Una shell o una tarea cron llama a `obop call`.                                                                       | [Usar la CLI](/docs/agents/cli/)           |
 
 ## Configuración en cinco pasos
 
@@ -31,7 +31,7 @@ Un **agente** es cualquier cosa que actúa sobre obop con un token de agente: un
 
 ## Qué existe hoy y qué no
 
-- Construido: tokens con alcance limitado, enmascarado y restauración, planes de aprobación, MCP sobre stdio, REST y la CLI.
-- Aún no construido: un transporte MCP HTTP (remoto) con OAuth, por lo que todavía no se puede llegar a las instancias alojadas mediante MCP; una pantalla para crear o revocar tokens de agente; una lista de aprobaciones pendientes en la interfaz. Los tokens de agente no caducan y todavía no hay un comando para revocarlos. Se vuelve a señalar donde importa.
+- Construido: tokens con alcance limitado, enmascarado y restauración, planes de aprobación, MCP sobre stdio y sobre HTTP en `/mcp`, REST y la CLI.
+- Construido, pero probado solo con nuestro propio cliente de pruebas y con pruebas automatizadas, no con Claude Desktop, claude.ai ni Claude Code: el inicio de sesión en el navegador (OAuth) para clientes MCP. Aún no construido: una pantalla para crear o revocar tokens de agente; una lista de aprobaciones pendientes en la interfaz. Los tokens de agente no caducan y todavía no hay un comando para revocar uno solo; una aplicación conectada mediante el inicio de sesión en el navegador se puede revocar en _Personalizar, Seguridad, Aplicaciones conectadas_. Se vuelve a señalar donde importa.
 
 Consulta [Flujos de ejemplo](/docs/agents/workflows/) para prompts y flujos de partida, y [Solución de problemas](/docs/agents/troubleshooting/) cuando algo no funcione.

@@ -7,7 +7,7 @@ description: "Frequently asked questions about obop: status, licence, pricing, d
 
 ### What is obop?
 
-An open-source business platform with CRM, sales, invoicing, products, contacts and connectors built in, 22 more apps in a marketplace, and a REST API, MCP server and command line generated from the same definitions. See [Platform](/platform/).
+An open-source business platform with CRM, sales, invoicing, products, contacts and connectors built in, 24 more apps bundled as packages in a marketplace (22 of them have a page on this site), and a REST API, MCP server and command line generated from the same definitions. See [Platform](/platform/).
 
 ### Is it ready for production?
 
@@ -63,7 +63,7 @@ obop has an MCP server over stdio, an MCP endpoint at `/mcp` on every instance (
 
 ### How do I stop an agent?
 
-There is no revoke command yet. Remove the owning user, or stop giving the token to the agent. See [Safety](/docs/agents/safety/).
+There is no command to revoke a single token made with `obop agent-token` or the REST API yet: remove or disable the owning user (their tokens stop working at once), or stop giving the token to the agent. An app that connected through the browser sign-in is listed under _Customize, Security, Connected apps_, where its owner can revoke it at once. See [Safety](/docs/agents/safety/).
 
 ## Hosting and data
 
@@ -81,7 +81,7 @@ Your database is yours. A list exports as CSV from the web app, and `obop backup
 
 ### Which languages is the website in?
 
-English, German, French, Polish, Finnish, Swedish and Spanish. The web app is available in the same seven languages. The translations on this site and in the app are machine-drafted; the ones on this site are being reviewed by native speakers.
+English, German, French, Polish, Finnish, Swedish and Spanish. The web app is available in the same seven languages. The translations on this site and the translated labels in the apps are machine-drafted, and no native speaker has reviewed the ones on this site yet; [you can help review one](/about/community/).
 
 ## Contributing and contact
 

@@ -15,11 +15,11 @@ lead: "obop kohtelee tekoälyagentteja ensiluokkaisina käyttäjinä, joita rajo
 
 ## Kolme tapaa yhdistää
 
-| Rajapinta            | Käytä, kun                                                                                                     | Sivu                                        |
-| -------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| MCP stdio-yhteydellä | MCP-asiakkaan (Claude Desktop, Claude Code, Cursor, VS Code, Windsurf ja muut) pitää kutsua obopia työkaluina. | [Yhdistä MCP:n kautta](/docs/agents/mcp/)   |
-| REST                 | Skripti tai palvelu kutsuu HTTP-päätepisteitä.                                                                 | [Käytä REST-rajapintaa](/docs/agents/rest/) |
-| CLI                  | Komentorivi tai cron-ajo kutsuu komentoa `obop call`.                                                          | [Käytä CLI:tä](/docs/agents/cli/)           |
+| Rajapinta | Käytä, kun                                                                                                     | Sivu                                        |
+| --------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| MCP       | MCP-asiakkaan (Claude Desktop, Claude Code, Cursor, VS Code, Windsurf ja muut) pitää kutsua obopia työkaluina. | [Yhdistä MCP:n kautta](/docs/agents/mcp/)   |
+| REST      | Skripti tai palvelu kutsuu HTTP-päätepisteitä.                                                                 | [Käytä REST-rajapintaa](/docs/agents/rest/) |
+| CLI       | Komentorivi tai cron-ajo kutsuu komentoa `obop call`.                                                          | [Käytä CLI:tä](/docs/agents/cli/)           |
 
 ## Käyttöönotto viidessä vaiheessa
 
@@ -31,7 +31,7 @@ lead: "obop kohtelee tekoälyagentteja ensiluokkaisina käyttäjinä, joita rajo
 
 ## Mitä on tehty ja mitä ei
 
-- Tehty: rajatut tunnisteet, maskaus ja palautus, hyväksyntäsuunnitelmat, MCP stdio-yhteydellä, REST ja CLI.
-- Ei vielä tehty: HTTP-pohjainen (etä)MCP-siirto OAuthilla, joten isännöityihin instansseihin ei vielä pääse MCP:llä; näkymä agenttitunnisteiden luomiseen tai mitätöintiin; luettelo odottavista hyväksynnöistä käyttöliittymässä. Agenttitunnisteet eivät vanhene, eikä mitätöintikomentoa ole vielä. Nämä mainitaan uudelleen kohdissa, joissa niillä on merkitystä.
+- Tehty: rajatut tunnisteet, maskaus ja palautus, hyväksyntäsuunnitelmat, MCP stdio-yhteydellä ja HTTP:llä osoitteessa `/mcp`, REST ja CLI.
+- Tehty, mutta kokeiltu vain omalla testiasiakkaallamme ja automaattisilla testeillä, ei Claude Desktopilla, claude.ai:lla eikä Claude Codella: selainkirjautuminen (OAuth) MCP-asiakkaille. Ei vielä tehty: näkymä agenttitunnisteiden luomiseen tai mitätöintiin; luettelo odottavista hyväksynnöistä käyttöliittymässä. Agenttitunnisteet eivät vanhene, eikä yksittäisen tunnisteen mitätöintikomentoa ole vielä; selainkirjautumisella yhdistetyn sovelluksen voi peruuttaa kohdassa _Mukauta, Tietoturva, Yhdistetyt sovellukset_. Nämä mainitaan uudelleen kohdissa, joissa niillä on merkitystä.
 
 [Esimerkkityönkuluissa](/docs/agents/workflows/) on kehotteita ja kulkuja, joista voi lähteä liikkeelle, ja [Vianmäärityksestä](/docs/agents/troubleshooting/) apua, kun jokin ei toimi.

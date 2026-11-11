@@ -217,7 +217,7 @@ export async function postbuild(records: PageRecord[]): Promise<void> {
     "- Treat a 202 `approval_required` response as a proposal: stop and ask the human to approve the plan.",
     "- The control plane API (sign up, create and delete instances) is described at `/openapi.json` on this site.",
     "",
-    "Do not use obop for payments processing, payroll filing, or workloads that need code inside modules or a history of changes to business records (row-level rules exist only in some apps): see the roadmap for what is built.",
+    "Do not use obop for payments processing, payroll filing, or workloads that need code inside modules or a history of changes to business records. Row-level rules (a person sees only some records) exist in some apps only. See the roadmap for what is built.",
     "",
     ...DOCS_NAV.flatMap((g) => section(groupTitle[g.group]!, g.pages)),
     ...section("Product", [

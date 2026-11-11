@@ -13,7 +13,7 @@ Tallennuksena on SQLite kokeiluun ja PostgreSQL oikeaan käyttöön. Tietueet ta
 
 ## Moduulit ovat sovelluksia
 
-Sovellus on **moduuli**: kuvaus malleista, kentistä, käyttöoikeusryhmistä ja työnkulun toiminnoista. Kuusi sovellusta on sisäänrakennettu (Contacts, Products, CRM, Sales, Invoicing, Connectors). Kaksikymmentäkaksi muuta toimitetaan paketteina. Sovelluksia lisätään markkinapaikalta yhdellä napsautuksella, tai voit ladata oman tiedostosi.
+Sovellus on **moduuli**: kuvaus malleista, kentistä, käyttöoikeusryhmistä ja työnkulun toiminnoista. Kuudella sisäänrakennetulla sovelluksella on oma sivunsa tällä sivustolla (Contacts, Products, CRM, Sales, Invoicing, Connectors). 24 muuta toimitetaan paketteina, ja 22:lla niistä on myös oma sivu. Sovelluksia lisätään markkinapaikalta yhdellä napsautuksella, tai voit ladata oman tiedostosi.
 
 Koska jokainen moduuli kulkee saman rekisterin kautta, yhteystieto on sama yhteystieto CRM:ssä, Salesissa ja Invoicingissa, ja jokainen moduuli saa samat rajapinnat, näkymät, käyttöoikeudet ja tietosuojasäännöt. Katso [Sovellukset ja moduulit](/docs/concepts/apps-and-modules/) ja [sovellusluettelo](/apps/).
 
@@ -46,4 +46,12 @@ Kaikki kutsuvat samaa jakelijaa, joten käyttöoikeustarkistukset, maskaus ja hy
 
 ## Mitä se ei ole (vielä)
 
-Tämä kannattaa tietää ennen sitoutumista: deklaratiivisten pakettien lisäksi koodiportaita ei ole (ei WebAssembly-komponentteja eikä etäsovelluksia), joten sovelluspaketti ei suorita omaa koodia eikä voi määritellä kutsuja muihin järjestelmiin, mutta se voi määritellä lasketut summat ja toiminnot, jotka muuttavat muita tietueita samassa tietokannassa; vain osa sovelluksista rajaa, mitkä tietueet henkilö näkee; tietoturvaloki kirjaa esimerkiksi tili-, kirjautumis-, tietoturva-asetus-, moduuli- ja allekirjoitustapahtumat, mutta se ei ole historia liiketoimintatietueiden muutoksista; suunniteltua koko yrityksen tietojen vientitoimintoa ei ole rakennettu (listan voi viedä CSV-tiedostona, ja `obop backup --plain` kirjoittaa tietokannan kaikki tietueet salaamattomaan tiedostoon); eikä isännöity palvelu ota vielä käyttöön tietokantojensa ajastettuja varmuuskopioita (jos ajat obopia itse, voit ottaa ne käyttöön). [Tiekartta](/roadmap/) kertoo, mikä on valmista ja mikä ei.
+Tämä kannattaa tietää ennen sitoutumista:
+
+- Deklaratiivisten pakettien lisäksi koodiportaita ei ole (ei WebAssembly-komponentteja eikä etäsovelluksia), joten sovelluspaketti ei suorita omaa koodia eikä voi määritellä kutsuja muihin järjestelmiin, mutta se voi määritellä lasketut summat ja toiminnot, jotka muuttavat muita tietueita samassa tietokannassa.
+- Vain osa sovelluksista (esimerkiksi Expenses, Timesheets, HR:n lomapyynnöt, Documents ja Dashboards) rajaa, mitkä tietueet henkilö näkee. CRM, Sales ja Invoicing eivät tee niin.
+- Tietoturvaloki kirjaa esimerkiksi tili-, kirjautumis-, tietoturva-asetus-, moduuli- ja allekirjoitustapahtumat, mutta se ei ole historia liiketoimintatietueiden muutoksista.
+- Suunniteltua koko yrityksen tietojen vientitoimintoa ei ole rakennettu. Listan voi viedä CSV-tiedostona verkkosovelluksesta (enintään 20 000 tietuetta), ja `obop backup --plain` kirjoittaa tietokannan tietueet ja ladatut tiedostot salaamattomaan tiedostoon (lyhytikäiset arvot, kuten istunnot, jäävät pois, ja salaisuudet pysyvät sinetöityinä).
+- Isännöity palvelu ei ota vielä käyttöön tietokantojensa ajastettuja varmuuskopioita (jos ajat obopia itse, voit ottaa ne käyttöön).
+
+[Tiekartta](/roadmap/) kertoo, mikä on valmista ja mikä ei.

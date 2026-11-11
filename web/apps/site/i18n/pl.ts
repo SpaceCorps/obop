@@ -208,7 +208,7 @@ export const pl: Messages = {
       },
       {
         q: "Czy obop nadaje się do użytku produkcyjnego?",
-        a: "Jeszcze nie. obop nie osiągnął jeszcze wersji 1.0, więc nowe wydanie wciąż może wprowadzać zmiany. Rdzeń działa i jest testowany, sześć wbudowanych aplikacji jest oznaczonych jako Stabilny, pozostałe jako Beta lub Eksperymentalny, a wiele dołączonych aplikacji jest celowo prostych. Usługa hostowana nie włącza jeszcze zaplanowanych kopii zapasowych swoich baz danych. Na razie używaj jej do oceny i do mniej krytycznych zadań. Strona planu rozwoju wymienia, co jest gotowe, a czego jeszcze nie ma.",
+        a: "Jeszcze nie. obop nie osiągnął jeszcze wersji 1.0, więc nowe wydanie wciąż może wprowadzać zmiany. Rdzeń działa i jest testowany, sześć wbudowanych aplikacji ma status „Stabilny”, pozostałe „Beta” lub „Eksperymentalny”, a wiele dołączonych aplikacji jest celowo prostych. Usługa hostowana nie włącza jeszcze zaplanowanych kopii zapasowych swoich baz danych. Na razie używaj jej do oceny i do mniej krytycznych zadań. Strona planu rozwoju wymienia, co jest gotowe, a czego jeszcze nie ma.",
       },
       {
         q: "Ile to kosztuje?",

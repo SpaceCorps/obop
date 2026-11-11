@@ -13,7 +13,7 @@ Storage is SQLite for trying things out and PostgreSQL for real use. Records are
 
 ## Modules are apps
 
-An app is a **module**: a description of models, fields, permission groups and workflow actions. Six apps are built in (Contacts, Products, CRM, Sales, Invoicing, Connectors). Twenty-two more are bundled as packages. You add apps from the marketplace in a click, or upload your own file.
+An app is a **module**: a description of models, fields, permission groups and workflow actions. Six built-in apps have a page on this site (Contacts, Products, CRM, Sales, Invoicing, Connectors). 24 more are bundled as packages, 22 of them with a page too. You add apps from the marketplace in a click, or upload your own file.
 
 Because every module goes through one registry, a contact is the same contact in CRM, Sales and Invoicing, and every module gets the same API, screens, permissions and privacy rules. See [Apps and modules](/docs/concepts/apps-and-modules/) and the [list of apps](/apps/).
 
@@ -46,4 +46,12 @@ All of them call the same dispatcher, so permission checks, masking and approval
 
 ## What it is not (yet)
 
-Be aware before you commit: there are no code tiers beyond declarative packages (no WebAssembly components or remote apps), so an app package runs no code of its own and cannot declare calls to other systems, though it can declare computed totals and actions that change other records in the same database; only some apps limit which records a person sees; the security log records, for example, account, sign-in, security-setting, module and signing events, but it is not a history of changes to business records; the planned export job for a whole business is not built (a list exports as CSV, and `obop backup --plain` writes every record of a database to an unencrypted file); and the hosted service does not switch on scheduled backups of its databases yet (if you run obop yourself, you can turn them on). The [roadmap](/roadmap/) lists what is built and what is not.
+Be aware before you commit:
+
+- There are no code tiers beyond declarative packages (no WebAssembly components or remote apps), so an app package runs no code of its own and cannot declare calls to other systems, though it can declare computed totals and actions that change other records in the same database.
+- Only some apps (for example Expenses, Timesheets, HR leave requests, Documents and Dashboards) limit which records a person sees. CRM, Sales and Invoicing do not.
+- The security log records, for example, account, sign-in, security-setting, module and signing events, but it is not a history of changes to business records.
+- The planned export job for a whole business is not built. A list exports as CSV from the web app (up to 20,000 records), and `obop backup --plain` writes the records and uploaded files of a database to an unencrypted file (short-lived values such as sessions are left out, and secrets stay sealed).
+- The hosted service does not switch on scheduled backups of its databases yet (if you run obop yourself, you can turn them on).
+
+The [roadmap](/roadmap/) lists what is built and what is not.

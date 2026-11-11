@@ -30,13 +30,13 @@ obop stores what your business enters. The hosted beta stores it in a PostgreSQL
 Honest list, so you can decide:
 
 - **No audit trail of reads and changes to business records** yet, and no marking of who or which agent changed a record. A security log of events such as account, sign-in, security-setting and module events exists.
-- **No revoke command** for agent tokens and no expiry. A token works until its owner is removed.
+- **No command to revoke a single agent token** and no expiry. An agent token works until its owner is removed. An app connected through the browser sign-in can be revoked under Customize, Security, Connected apps.
 - **Row rules in some apps only.** Everywhere, access is by model and field group. Some apps (for example Expenses, Timesheets, HR leave requests, Documents and Dashboards) also limit which records a person sees; CRM, Sales and Invoicing do not. A rule covers whole records, not fields.
 - **No database-level encryption of records.** obop encrypts what it controls: secrets such as two-factor seeds and connection credentials (sealed under `OBOP_SECRET_KEY`, which `obop secrets rotate` changes) and sealed backups. The database itself must sit on encrypted storage that you provide; `obop storage attest` records who attested that.
 - **No scheduled backups and no point-in-time recovery** for the hosted service: the hosted service does not switch on scheduled backups of its databases yet. Self-hosted instances have `obop backup` and `OBOP_BACKUP_SCHEDULE`; obop does not run point-in-time recovery itself.
 - **Single sign-on only with Microsoft Entra, and not yet tried against a real tenant.** It covers one Microsoft tenant and is off until an administrator sets it up. Two-factor is an authenticator app or a passkey (no SMS), passkeys are tested only with software and virtual authenticators, and the server holds the key that seals the authenticator-app secrets.
 - **No customer-facing export tool.** A list exports as CSV, and `obop backup --plain` writes every record of a database to an unencrypted file; the planned export job for a whole business is not built.
-- **Masking is not free-text aware** and tokens live in server memory (not stable across restarts or sessions).
+- **Masking is not free-text aware**, and a placeholder resolves only for the agent token (or MCP session) that received it. Over REST and over MCP on HTTP the list of placeholders is kept sealed in the database and survives a restart; it is forgotten 24 hours after its last change (REST) or two hours after the last request of the session (MCP). Over the command `obop mcp` it lives in the command's memory and ends when the command stops.
 - **No certification.** obop has no SOC 2, ISO 27001 or similar attestation, and no independent penetration test yet.
 - **TLS** is the responsibility of your proxy or platform.
 - **Records are JSON documents.** The database does not enforce field types; the command layer does.

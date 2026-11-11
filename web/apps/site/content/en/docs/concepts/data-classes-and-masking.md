@@ -46,7 +46,7 @@ Filters and sorting run on the real values before masking. To stop an agent gues
 ## Limits, honestly
 
 - Masking is by field class and the personal-data flag. It does not look inside free text: a note typed into a `none` field is shown as it is. Classify free-text fields that may contain personal data as personal data.
-- Tokens are not stable across restarts or across agent tokens.
+- Tokens resolve only for the agent token (or MCP session) that received them; a different token or a new MCP session starts a new table.
 - Erasure: Contacts has an `erase` action that anonymises a record in place; other apps do not yet.
 
 See also [Masking tokens](/docs/agents/masking/) and [Security and privacy](/docs/reference/security/).

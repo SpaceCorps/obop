@@ -34,11 +34,11 @@ The list is the commands the token may use. Add the group that the missing comma
 
 ## An approval plan was lost
 
-Pending plans live in the server's memory and disappear when the server restarts. Ask the agent to propose again.
+A pending plan is kept in the database for 7 days and survives a server restart. It is gone after 7 days, or once it has been approved, so `approve` answers 404 (see below). Ask the agent to propose again.
 
 ## `approve` returns 404
 
-The plan id is unknown or was already used, an agent tried to approve (only a person can), or the approver does not hold the action's group.
+The plan id is unknown, already used or older than 7 days, an agent tried to approve (only a person can), or the approver does not hold the action's group.
 
 ## The agent keeps asking for data it cannot see
 

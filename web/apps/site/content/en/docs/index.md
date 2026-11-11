@@ -1,7 +1,7 @@
 ---
 title: "Documentation"
 description: "Documentation for obop: get started, learn the concepts, set up AI agents over MCP, REST and the CLI, and look up the reference."
-lead: "How to run obop, build on it and connect AI agents to it. Everything here was checked against the code and, where there is a command, run."
+lead: "How to run obop, build on it and connect AI agents to it. Pages say where something was checked against the code or run, and where it was not."
 ---
 
 obop is an open-source business platform. One program serves the web app, a REST API, an MCP server and a command line from the same definitions, on one data model.

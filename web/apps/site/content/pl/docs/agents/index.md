@@ -15,11 +15,11 @@ lead: "obop traktuje agentów AI jak pełnoprawnych użytkowników, którzy są 
 
 ## Trzy sposoby połączenia
 
-| Interfejs       | Użyj, gdy                                                                                                    | Strona                                       |
-| --------------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------- |
-| MCP przez stdio | Klient MCP (Claude Desktop, Claude Code, Cursor, VS Code, Windsurf i inne) ma wywoływać obop jako narzędzia. | [Połączenie przez MCP](/docs/agents/mcp/)    |
-| REST            | Skrypt lub usługa wywołuje punkty końcowe HTTP.                                                              | [Korzystanie z REST API](/docs/agents/rest/) |
-| CLI             | Powłoka lub zadanie cron wywołuje `obop call`.                                                               | [Korzystanie z CLI](/docs/agents/cli/)       |
+| Interfejs | Użyj, gdy                                                                                                    | Strona                                       |
+| --------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------- |
+| MCP       | Klient MCP (Claude Desktop, Claude Code, Cursor, VS Code, Windsurf i inne) ma wywoływać obop jako narzędzia. | [Połączenie przez MCP](/docs/agents/mcp/)    |
+| REST      | Skrypt lub usługa wywołuje punkty końcowe HTTP.                                                              | [Korzystanie z REST API](/docs/agents/rest/) |
+| CLI       | Powłoka lub zadanie cron wywołuje `obop call`.                                                               | [Korzystanie z CLI](/docs/agents/cli/)       |
 
 ## Konfiguracja w pięciu krokach
 
@@ -31,7 +31,7 @@ lead: "obop traktuje agentów AI jak pełnoprawnych użytkowników, którzy są 
 
 ## Co istnieje dziś, a czego jeszcze nie ma
 
-- Gotowe: tokeny o ograniczonym zakresie, maskowanie i przywracanie, plany zatwierdzania, MCP przez stdio, REST i CLI.
-- Jeszcze niegotowe: transport MCP przez HTTP (zdalny) z OAuth, więc instancji hostowanych nie można jeszcze osiągnąć przez MCP; ekran do tworzenia i unieważniania tokenów agentów; lista oczekujących zatwierdzeń w interfejsie. Tokeny agentów nie wygasają i nie ma jeszcze polecenia do ich unieważniania. Przypominamy o tym w miejscach, w których ma to znaczenie.
+- Gotowe: tokeny o ograniczonym zakresie, maskowanie i przywracanie, plany zatwierdzania, MCP przez stdio i przez HTTP pod adresem `/mcp`, REST i CLI.
+- Gotowe, ale wypróbowane tylko z naszym własnym klientem testowym i testami automatycznymi, nie z Claude Desktop, claude.ai ani Claude Code: logowanie w przeglądarce (OAuth) dla klientów MCP. Jeszcze niegotowe: ekran do tworzenia i unieważniania tokenów agentów; lista oczekujących zatwierdzeń w interfejsie. Tokeny agentów nie wygasają i nie ma jeszcze polecenia do unieważnienia pojedynczego tokenu; aplikację połączoną przez logowanie w przeglądarce można cofnąć w _Dostosuj, Bezpieczeństwo, Połączone aplikacje_. Przypominamy o tym w miejscach, w których ma to znaczenie.
 
 Gotowe prompty i przepływy znajdziesz w [Przykładowych przepływach pracy](/docs/agents/workflows/), a gdy coś nie działa, zajrzyj do [Rozwiązywania problemów](/docs/agents/troubleshooting/).

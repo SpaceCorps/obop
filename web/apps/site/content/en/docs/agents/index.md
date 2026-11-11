@@ -15,11 +15,11 @@ An **agent** is anything that acts on obop with an agent token: an MCP client su
 
 ## Three ways to connect
 
-| Surface        | Use it when                                                                                                  | Page                                   |
-| -------------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------- |
-| MCP over stdio | An MCP client (Claude Desktop, Claude Code, Cursor, VS Code, Windsurf and others) should call obop as tools. | [Connect over MCP](/docs/agents/mcp/)  |
-| REST           | A script or service calls HTTP endpoints.                                                                    | [Use the REST API](/docs/agents/rest/) |
-| CLI            | A shell or a cron job calls `obop call`.                                                                     | [Use the CLI](/docs/agents/cli/)       |
+| Surface | Use it when                                                                                                  | Page                                   |
+| ------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------- |
+| MCP     | An MCP client (Claude Desktop, Claude Code, Cursor, VS Code, Windsurf and others) should call obop as tools. | [Connect over MCP](/docs/agents/mcp/)  |
+| REST    | A script or service calls HTTP endpoints.                                                                    | [Use the REST API](/docs/agents/rest/) |
+| CLI     | A shell or a cron job calls `obop call`.                                                                     | [Use the CLI](/docs/agents/cli/)       |
 
 ## Set-up in five steps
 
@@ -31,7 +31,7 @@ An **agent** is anything that acts on obop with an agent token: an MCP client su
 
 ## What exists today, and what does not
 
-- Built: scoped tokens, masking and restore, approval plans, MCP over stdio, REST and the CLI.
-- Not built yet: an HTTP (remote) MCP transport with OAuth, so hosted instances cannot yet be reached over MCP; a screen for creating or revoking agent tokens; a list of pending approvals in the interface. Agent tokens do not expire and there is no revoke command yet. These are called out again where they matter.
+- Built: scoped tokens, masking and restore, approval plans, MCP over stdio and over HTTP at `/mcp`, REST and the CLI.
+- Built, but tried only against our own test client and automated tests, not against Claude Desktop, claude.ai or Claude Code: the browser sign-in (OAuth) for MCP clients. Not built yet: a screen for creating or revoking agent tokens; a list of pending approvals in the interface. Agent tokens do not expire and there is no command to revoke a single one yet; an app connected through the browser sign-in can be revoked under _Customize, Security, Connected apps_. These are called out again where they matter.
 
 See [Example workflows](/docs/agents/workflows/) for prompts and flows to start from, and [Troubleshooting](/docs/agents/troubleshooting/) when something does not work.

@@ -40,7 +40,7 @@ obop is a young project run by a small team, so we cannot promise a response tim
 
 ## What is missing
 
-No audit log, no token revocation, no scheduled backups switched on for the hosted service, no certification and no independent penetration test yet. Single sign-on exists only for Microsoft Entra and has not been tried against a real Microsoft tenant. The [Security and privacy reference](/docs/reference/security/) lists these in full.
+No audit trail of reads and changes to business records, no command to revoke a single agent token (an app connected through the browser sign-in can be revoked under Customize, Security, Connected apps, and offboarding a user ends their tokens), no scheduled backups switched on for the hosted service, no certification and no independent penetration test yet. Single sign-on exists only for Microsoft Entra and has not been tried against a real Microsoft tenant. A security log of events such as account, sign-in, security-setting and module events exists. The [Security and privacy reference](/docs/reference/security/) lists these in full.
 
 ## Supply chain
 

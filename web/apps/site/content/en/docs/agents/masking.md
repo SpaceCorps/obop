@@ -17,9 +17,9 @@ For a field that holds personal data, the server replaces the value with a token
 
 ## Rules of the tokens
 
-- **The same value gets the same token** within one session: one agent token on one server process. Two records that mention the same email show the same token, so the agent can see they match.
+- **The same value gets the same token** within one table: one agent token (or MCP session). Two records that mention the same email show the same token, so the agent can see they match.
 - **Counters are shared**, so a token's number says nothing about the record. Do not parse it.
-- **They are not stable across sessions.** A restart of the server, or a different agent token, starts a new table. A token an agent remembers from yesterday may not resolve today.
+- **They are not stable across agent tokens or MCP sessions.** A different agent token or a new MCP session starts a new table, and a table is forgotten after 24 hours (REST), 2 hours (MCP over HTTP) or when `obop mcp` stops; a restart of the server does not lose a table over REST or MCP on HTTP. A token an agent remembers from yesterday may not resolve today.
 - **They never leave the permission path.** A token only resolves if the agent could read the record the value came from.
 
 ## Passing tokens back

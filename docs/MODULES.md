@@ -26,7 +26,7 @@ Built-in modules (Rust crates, not removable): `base` (model `party`), `product`
 | `appointments`, `documents`, `expenses`, `fleet`, `helpdesk`, `manufacturing`, `projects`, `purchase`, `inventory`, `subscriptions`, `timesheets`, `hr` | varies | Services, supply chain and people apps |
 | `planning` | hr | Roles, shift templates, shifts (open, published, confirmed) |
 | `field_service` | base, product, hr | Jobs with site, technician, parts used, signature flag |
-| `pos` | base, product | Point-of-sale config, cash-controlled sessions, orders, lines, payments; refunds and session close need approval |
+| `pos` | base, product | Point-of-sale config, sessions, orders, lines, payments; refunds and session close need approval |
 | `ecommerce` | base, product | Categories, listings and translations, shipping methods, discount codes, web orders and lines; public shop and checkout when the site is enabled; refunds need approval |
 | `website` | none | Pages, menu items, blog posts, form submissions and translations; served publicly when the site is enabled (docs/STOREFRONT.md) |
 | `email_marketing` | none | Lists, contacts with consent, campaigns with statistics; sending needs approval |

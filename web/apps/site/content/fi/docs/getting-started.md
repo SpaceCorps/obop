@@ -11,7 +11,7 @@ Isännöity palvelu antaa jokaiselle yritykselle oman instanssin ja oman tietoka
 1. **Rekisteröidy.** Avaa [rekisteröitymissovellus](/app/), kirjoita sähköpostiosoitteesi ja salasana ja valitse _Create account_.
 2. **Luo instanssi.** Anna sille nimi, jossa on 3–30 merkkiä. Osoite muodostetaan nimestä. Käyttöönotto kestää hetken, ja sivu näyttää etenemisen.
 3. **Kirjaudu sisään.** Siirry linkistä instanssiisi ja kirjaudu sisään samalla sähköpostiosoitteella ja salasanalla. Rekisteröitymistilistäsi tulee instanssin ensimmäinen ylläpitäjä.
-4. **Asenna sovellus.** Avaa _Customize_, sitten _Marketplace_, ja asenna sovellus, esimerkiksi Helpdesk tai Projects. Sovellusten asentaminen ja poistaminen vaatii ylläpitäjän ryhmän. Viisi sisäänrakennettua sovellusta (CRM, Sales, Invoicing, Products ja Contacts) on jo valmiina.
+4. **Asenna sovellus.** Avaa _Customize_, sitten _Marketplace_, ja asenna sovellus, esimerkiksi Helpdesk tai Projects. Sovellusten asentaminen ja poistaminen vaatii ylläpitäjän ryhmän. Kuusi sisäänrakennettua sovellusta (CRM, Sales, Invoicing, Products, Contacts ja Connectors) on jo valmiina.
 5. **Luo tietueita.** Avaa sovellus, valitse _New_ ja täytä lomake. Luettelot, taulut ja sivupaneeli muodostetaan sovelluksen kuvauksesta.
 6. **Kutsu agentti.** Agenttitunnisteille ei ole vielä omaa näkymää. Kirjaudu sisään REST-rajapinnan kautta ja [luo agenttitunniste](/docs/agents/tokens/). Sen jälkeen voit [yhdistää MCP:n kautta](/docs/agents/mcp/) tai käyttää [REST-rajapintaa](/docs/agents/rest/).
 
