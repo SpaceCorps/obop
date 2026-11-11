@@ -20,6 +20,7 @@ import {
   agentView as agentViewOf,
   appName,
   loadApps,
+  loadLabels,
   type Action,
   type App,
   type Field,
@@ -1414,7 +1415,6 @@ describe("a caveat that only a developer needs sits under 'For developers', move
         "base party.erase",
         "ecommerce ecommerce_order.refund",
         "ecommerce ecommerce_order.refund_delivered",
-        "field_service field_service_job.complete",
         "planning (app)",
         "pos pos_order.pay",
         "pos pos_session.close",
@@ -1430,6 +1430,8 @@ describe("a caveat that only a developer needs sits under 'For developers', move
       expect(limit, where).not.toMatch(/[<>*|]/);
       expect(limit, where).not.toMatch(/^[-#]/);
       expect(limit.split("\n").length, where).toBe(1);
+      // One sentence: a full stop is followed by no further sentence (a semicolon joins two halves).
+      expect(limit.split(/(?<=[.])\s+/), where).toHaveLength(1);
       expect(wordCount(text), `${where}: the text on top`).toBeGreaterThanOrEqual(3);
       expect(text.includes(limit), `${where}: the limit is not a copy of the text`).toBe(false);
       expect(app.purpose.includes(limit), where).toBe(false);
@@ -1467,7 +1469,10 @@ describe("a caveat that only a developer needs sits under 'For developers', move
       "a paid sale can still be edited afterwards",
     );
     expect(card("pos", "pos_order.pay").text).not.toContain("press pay");
-    expect(card("pos", "pos_order.pay").limit).toContain("checked once");
+    expect(card("pos", "pos_order.pay").limit).toBe(
+      "The payments are checked only when the sale is paid.",
+    );
+    expect(card("pos", "pos_order.pay").limit).not.toMatch(/press/i);
     expect(card("pos", "pos_session.close").text).toBe("Close the session (manager only).");
     expect(card("pos", "pos_session.close").limit).toContain("drawer was counted");
     expect(card("accounting", "accounting_move.post").text).toContain(
@@ -1475,17 +1480,27 @@ describe("a caveat that only a developer needs sits under 'For developers', move
     );
     expect(card("accounting", "accounting_move.post").text).not.toContain("no lines");
     expect(card("accounting", "accounting_move.post").limit).toContain("no lines");
-    expect(card("field_service", "field_service_job.complete").text).not.toContain(
-      "Nothing checks",
+    // The sign-off reminder is said once, by the field text in the part for developers, so the card has no limit.
+    const complete = card("field_service", "field_service_job.complete");
+    expect(complete.text).not.toContain("Nothing checks");
+    expect(complete.limit).toBeUndefined();
+    const job = apps
+      .find((a) => a.id === "field_service")!
+      .models.find((m) => m.name === "field_service_job")!;
+    expect(job.fields.find((f) => f.name === "signature_required")!.description).toContain(
+      "a job can be finished without it",
     );
-    expect(card("field_service", "field_service_job.complete").limit).toBe(
-      "Nothing checks that the customer signed.",
-    );
-    // The contact's erase keeps the day on top: an AI agent can go on using the old name for a while.
+    // The contact's erase keeps the day on top: an AI agent can go on using the old name for a while,
+    // and for an agent that reaches obop through the obop mcp command until that command stops (a
+    // reader of "a local session" would take their own self-hosted install for it).
     const erase = card("base", "party.erase");
     expect(erase.text).toContain("up to a day");
-    expect(erase.text).not.toMatch(/MCP|list of placeholders/);
-    expect(erase.limit).toMatch(/24 hours[\s\S]*2 hours[\s\S]*process ends/);
+    expect(erase.text).toContain(
+      "through the obop mcp command, the placeholder keeps standing until that command stops.",
+    );
+    expect(erase.text).not.toMatch(/local session|list of placeholders/);
+    expect(erase.limit).toMatch(/24 hours[\s\S]*2 hours[\s\S]*command stops[\s\S]*obop mcp\.$/);
+    expect(erase.limit).not.toMatch(/local/);
   });
 
   test("Dashboards and Planning: the sentence is gone from the top, in every place the top says it", () => {
@@ -1502,9 +1517,80 @@ describe("a caveat that only a developer needs sits under 'For developers', move
     ])
       expect(text).not.toMatch(/copy into shifts|to copy into/);
     expect(planning.limits).toEqual([
-      "A template is not linked to shifts: no action or field creates a shift from one, so a pattern is copied by hand.",
+      "No action creates a shift from a template, and a shift has no field that names one.",
     ]);
     expect(appMirror(planning, "en", en, "", apps)).toContain(`- ${planning.limits[0]}`);
+    // The top does not say a template makes shifts: nothing in the plain text says "reusable" or "copy".
+    for (const text of [
+      planning.purpose,
+      planning.description,
+      planning.models.find((x) => x.name === "planning_template")!.description,
+      planning.cards["planning_template"]!.text,
+    ])
+      expect(text, "the plain text of the template").not.toMatch(/reusable|copy|copied/i);
+  });
+
+  test("Planning: the Template card says the same thing in every language and never that a template is copied into shifts", () => {
+    const planning = apps.find((a) => a.id === "planning")!;
+    const card = planning.cards["planning_template"]!;
+    expect(card.text).toBe(
+      "A shift pattern, with a name, start and end times and, optionally, a role.",
+    );
+    for (const locale of LOCALES) {
+      const v = view(planning, locale);
+      const shown = v.models.find(
+        (c) =>
+          c.title ===
+          modelLabel(
+            planning,
+            planning.models.find((m) => m.name === "planning_template")!,
+          ),
+      );
+      expect(shown, locale).toBeDefined();
+      expect(shown!.text, locale).toBe(card.text);
+      // An English card on a translated page is marked as English.
+      expect(shown!.lang, locale).toBe(locale === "en" ? undefined : "en");
+      // The product's own translation of the template ("copied into shifts") is on no card and not in the copy.
+      const md = appMirror(planning, locale, messages[locale], "", apps);
+      expect(md, locale).toContain(card.text);
+      if (locale !== "en") {
+        const label = loadLabels(locale, "planning").models["planning_template"]?.description;
+        expect(label, `${locale}: the label file has a description to keep away`).toBeTruthy();
+        expect(
+          v.models.map((c) => c.text),
+          locale,
+        ).not.toContain(label);
+        expect(md, locale).not.toContain(label!);
+      }
+    }
+  });
+
+  test("limitsOf also takes the limit of a model card, headed by the card's title or the model's name", () => {
+    // No model card of data/apps.ts carries a limit today, so this is the only thing that reaches the branch.
+    const model = crm.models[0]!;
+    const app = made({
+      limits: ["A limit of the whole app."],
+      cards: {
+        [model.name]: { text: "A plain sentence on the card.", limit: "A limit of the model." },
+      },
+    });
+    expect(limitsOf(app).map((l) => [l.head, l.text])).toEqual([
+      [undefined, "A limit of the whole app."],
+      [modelLabel(app, model), "A limit of the model."],
+    ]);
+    const titled = made({
+      cards: {
+        [model.name]: {
+          title: "Lead card",
+          text: "A plain sentence on the card.",
+          limit: "A limit of the model.",
+        },
+      },
+    });
+    expect(limitsOf(titled)).toEqual([{ head: "Lead card", text: "A limit of the model." }]);
+    expect(appMirror(titled, "en", messages.en, "", apps)).toContain(
+      "- **Lead card**: A limit of the model.",
+    );
   });
 
   test("the head of a limit is the heading of its card, and a limit of the app has none", () => {

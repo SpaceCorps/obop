@@ -1617,15 +1617,15 @@ test.describe("crawlers and agents", () => {
         slug: "ecommerce",
         text: "The refund through Stripe is tested only against a local stand-in, not against Stripe itself.",
       },
-      { slug: "pos", text: "The payments are checked once, when pay is pressed." },
+      { slug: "pos", text: "The payments are checked only when the sale is paid." },
       { slug: "pos", text: "obop does not check that the drawer was counted." },
       {
         slug: "contacts",
-        text: "The erase does not touch the list of placeholders an AI agent holds.",
+        text: "The erase does not touch the list of placeholders an AI agent holds;",
       },
       {
         slug: "planning",
-        text: "A template is not linked to shifts: no action or field creates a shift from one, so a pattern is copied by hand.",
+        text: "No action creates a shift from a template, and a shift has no field that names one.",
       },
     ];
     for (const { slug, text } of folded) {
@@ -1656,7 +1656,7 @@ test.describe("crawlers and agents", () => {
     );
     // On a translated page the list is English, inside the English note.
     const de = await (await request.get(`${base()}/de/apps/pos/`)).text();
-    const text = "The payments are checked once, when pay is pressed.";
+    const text = "The payments are checked only when the sale is paid.";
     const at = de.indexOf(text);
     expect(at, "the sentence is on the German page").toBeGreaterThan(
       de.indexOf('<details id="developers"'),
@@ -1665,6 +1665,18 @@ test.describe("crawlers and agents", () => {
     expect(note, "an English note opens before it").toBeGreaterThan(-1);
     expect(de.slice(note, at), "and is still open").not.toContain("</div>");
     expect(de.slice(note - 40, note), "marked as English").toContain('lang="en"');
+    // The Template card of Planning does not say, on a translated page either, that a template is
+    // copied into shifts (the product's German text does).
+    const plan = await (await request.get(`${base()}/de/apps/planning/`)).text();
+    const sentence = "A shift pattern, with a name, start and end times and, optionally, a role.";
+    const card = plan.indexOf(sentence);
+    expect(card, "the English card is on the German page").toBeGreaterThan(0);
+    expect(plan.slice(card - 40, card), "and is marked as English").toContain('lang="en">');
+    expect(plan).not.toContain("das in Schichten kopiert wird");
+    // The contact's erase says how long an agent's placeholder stands, for the obop mcp command too.
+    expect(await (await request.get(`${base()}/apps/contacts.md`)).text()).toContain(
+      "through the obop mcp command, the placeholder keeps standing until that command stops.",
+    );
   });
 
   test("the site says obop is below version 1.0, not beta, in the footer, the home page pill and llms.txt", async ({

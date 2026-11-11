@@ -180,16 +180,17 @@ export const APP_COPY: AppCopy[] = [
     },
     cards: {
       "party.erase": {
-        text: "Replace a contact's name, email, tax number and notes with [erased], and remove the photo. The Connectors app also deletes the code names and links it kept for this contact. Names, emails and addresses typed into other records (such as leads, orders and tickets) are not changed. Backups made before the erase still hold the old details until they are deleted, a restored backup brings them back, and anything already sent to another system through a connection is not recalled. A placeholder that an AI agent already holds keeps standing for the old name for up to a day after the agent last used obop; in a local session, until that session ends.",
+        text: "Replace a contact's name, email, tax number and notes with [erased], and remove the photo. The Connectors app also deletes the code names and links it kept for this contact. Names, emails and addresses typed into other records (such as leads, orders and tickets) are not changed. Backups made before the erase still hold the old details until they are deleted, a restored backup brings them back, and anything already sent to another system through a connection is not recalled. A placeholder that an AI agent already holds keeps standing for the old name for up to a day after the agent last used obop. For an agent that reaches obop through the obop mcp command, the placeholder keeps standing until that command stops.",
         limit:
-          "The erase does not touch the list of placeholders an AI agent holds. That list is forgotten 24 hours after its last change for an agent that uses the REST API, 2 hours after the last request for an MCP session over HTTP, and when the process ends for a local MCP session.",
+          "The erase does not touch the list of placeholders an AI agent holds; that list is forgotten 24 hours after its last change for an agent that uses the REST API, 2 hours after the last request for an MCP session over HTTP, and when the command stops for an agent that reaches obop through obop mcp.",
       },
     },
     // The placeholder list of an AI session is not touched by the erase: Vault::erase_record
     // (crates/kernel/obop-masking/src/lib.rs:151) has no caller outside tests, the REST list is kept
     // 24 hours after its last change (crates/kernel/obop-http/src/shared.rs:20, :110), an MCP session over
-    // HTTP 2 hours after its last request (crates/kernel/obop-http/src/mcp.rs:49, :78), a local MCP
-    // session in memory until the process ends (crates/kernel/obop-mcp/src/lib.rs:42, :51), and restore
+    // HTTP 2 hours after its last request (crates/kernel/obop-http/src/mcp.rs:49, :78), the `obop mcp` command
+    // (crates/obop/src/main.rs:1766-1769) keeps one Session, its vault in memory, until its input closes and
+    // the process ends (crates/kernel/obop-mcp/src/lib.rs:51, :498-512), and restore
     // reads it (crates/kernel/obop-commands/src/lib.rs:1306-1311). Backups keep the old details
     // (docs/DEPLOY.md:597), a restore does not replay an erasure (docs/RUNBOOK-RECOVERY.md:114) and a
     // delivery already made is not recalled (docs/CONNECTORS.md:168).
@@ -464,16 +465,18 @@ export const APP_COPY: AppCopy[] = [
     name: "Planning",
     tagline: "Shifts and resources",
     purpose:
-      "Plan shifts for your employees. A shift with nobody assigned is an open shift; it goes from open to published, and then a manager records that the employee confirmed it. Templates keep reusable shift patterns, each with a name and start and end times.",
-    limits: [
-      "A template is not linked to shifts: no action or field creates a shift from one, so a pattern is copied by hand.",
-    ],
+      "Plan shifts for your employees. A shift with nobody assigned is an open shift; it goes from open to published, and then a manager records that the employee confirmed it. Templates keep shift patterns, each with a name and start and end times.",
+    limits: ["No action creates a shift from a template, and a shift has no field that names one."],
     cards: {
       "planning_shift.publish": {
         text: "Mark the shift as published. By itself, this does not notify anyone: everyone who can read shifts sees every shift, published or not.",
       },
       "planning_shift.confirm": {
         text: "Record that the employee confirmed they will work the shift. Only a planning manager can do this.",
+      },
+      // A model card is English on a translated page: the product's translation of the template says "to copy into shifts".
+      planning_template: {
+        text: "A shift pattern, with a name, start and end times and, optionally, a role.",
       },
     },
     // The manifest says the employee confirms ("Workflow: open, published, confirmed by the employee",
@@ -490,7 +493,7 @@ export const APP_COPY: AppCopy[] = [
     // reads as a function; this site says what it keeps (name, start and end, and role_id, which is optional, :41-46).
     modelText: {
       planning_template:
-        "A reusable shift pattern, with a name, start and end times and, optionally, a role",
+        "A shift pattern, with a name, start and end times and, optionally, a role",
     },
     fieldText: {
       "planning_shift.start_minute":
@@ -499,7 +502,7 @@ export const APP_COPY: AppCopy[] = [
         "End in minutes since midnight (1020 is 17:00). Meant to be 0 to 1439; nothing checks it, or that the end is after the start.",
     },
     packageText:
-      "Shifts for employees, with roles and shift templates (reusable patterns). A shift has a day and a start and end in minutes since midnight (meant to be 0 to 1439; 540 is 09:00; nothing checks the range, or that the end is after the start). A shift with no employee is an open shift. Workflow: open, published, confirmed; a planning manager moves a shift through all three steps. Needs the Human Resources package.",
+      "Shifts for employees, with roles and shift templates (a name, start and end times, optionally a role). A shift has a day and a start and end in minutes since midnight (meant to be 0 to 1439; 540 is 09:00; nothing checks the range, or that the end is after the start). A shift with no employee is an open shift. Workflow: open, published, confirmed; a planning manager moves a shift through all three steps. Needs the Human Resources package.",
   },
   {
     id: "field_service",
@@ -521,7 +524,6 @@ export const APP_COPY: AppCopy[] = [
     cards: {
       "field_service_job.complete": {
         text: "Finish the job. If the customer is to sign off, write down who signed and when.",
-        limit: "Nothing checks that the customer signed.",
       },
     },
   },
@@ -553,7 +555,7 @@ export const APP_COPY: AppCopy[] = [
     cards: {
       "pos_order.pay": {
         text: "Mark the sale as fully paid. Refused until the payments cover the total; a paid sale can still be edited afterwards. If the sale has a stock location, a draft record of the goods leaving is prepared for each line, for the warehouse to confirm. You need access to Inventory.",
-        limit: "The payments are checked once, when pay is pressed.",
+        limit: "The payments are checked only when the sale is paid.",
       },
       "pos_order.refund": {
         text: "Record that the sale was refunded. By itself, this does not pay money back.",
