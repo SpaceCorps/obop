@@ -202,7 +202,7 @@ export const en: Messages = {
       },
       {
         q: "Is obop ready for production use?",
-        a: "Not yet. obop is below version 1.0, so a release can still change things. The core works and is tested, the six built-in apps are marked Stable, the other apps are marked Beta or Experimental, and many bundled apps are deliberately simple. Use obop to evaluate and for non-critical work for now. The roadmap page lists what is built and what is not.",
+        a: "Not yet. obop is below version 1.0, so a release can still change things. The core works and is tested, the built-in apps are marked Stable, the other apps are marked Beta or Experimental, and many bundled apps are deliberately simple. Use obop to evaluate and for non-critical work for now. The roadmap page lists what is built and what is not.",
       },
       {
         q: "How much does it cost?",
@@ -282,7 +282,7 @@ export const en: Messages = {
       },
       {
         q: "Can I leave and take my data?",
-        a: "Yes. obop is Apache-2.0 and its database is plain PostgreSQL, so you can run the same software yourself; obop backup and obop restore are built in.",
+        a: "Yes. obop is Apache-2.0, so you can run the same software yourself; obop backup and obop restore are built in.",
       },
     ],
     cta: "Run it yourself",
@@ -416,7 +416,7 @@ export const en: Messages = {
       openObop: "Get started",
       getNote: "You need an administrator account.",
       included: "Included in every obop.",
-      experimentalNote: "Still being tested. Try it with sample data first.",
+      experimentalNote: "Marked experimental by its developers. Try it with sample data first.",
       safeMasked:
         "AI agents see the fields marked as personal data, such as names and emails, only as placeholders. Text typed into a field that is not marked as personal data, such as a description, is not replaced by a placeholder.",
       safeWithheld: "AI agents never see the fields marked as sensitive. In this app: {list}.",

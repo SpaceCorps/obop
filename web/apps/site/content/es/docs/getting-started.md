@@ -49,7 +49,7 @@ echo "a password of 12+ characters" | cargo run -- admin create alice --all-grou
 cargo run -- serve --static web/apps/backoffice/dist
 ```
 
-Abre `http://127.0.0.1:8080` e inicia sesión como `alice`. Los datos están en `obop.db`, en el directorio actual; pasa `--db sqlite:///path/to/file.db` para usar otro archivo. Una base de datos SQLite nueva y vacía se rellena automáticamente con datos de demostración ficticios (`--demo` lo fuerza).
+Abre `http://127.0.0.1:8080` e inicia sesión como `alice`. Los datos están en `obop.db`, en el directorio actual; pasa `--db sqlite:///path/to/file.db` para usar otro archivo. Una base de datos SQLite que aún no tiene contactos se rellena automáticamente con datos de demostración ficticios; en PostgreSQL, `--demo` hace lo mismo.
 
 `--dev-auth` sustituye el inicio de sesión real por tokens fijos llamados `dev-admin`, `dev-sales` y `dev-agent`. Se niega a enlazarse a cualquier dirección que no sea localhost.
 

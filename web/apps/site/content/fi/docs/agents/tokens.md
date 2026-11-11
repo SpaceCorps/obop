@@ -72,7 +72,7 @@ Lisää `--db postgres://...` (tai aseta `OBOP_DATABASE_URL`), jos instanssi ei 
 Sama tunniste yhdistää MCP-asiakkaan instanssin etä-MCP-palvelimeen `https://YOUR-INSTANCE/mcp`: lähetä se muodossa `Authorization: Bearer obop_...` (asiakkailla on sitä varten `headers`-kenttä tai Bearer-tunnisteen muuttuja). CLI:llä tai REST-rajapinnan kautta luotu tunniste toimii molempiin; mitään MCP-kohtaista ei tarvitse luoda. Pidä mielessä nämä asiat:
 
 - Luo erillinen tunniste jokaista asiakasta varten ja anna sille vain ne rajaukset, joita asiakas tarvitsee. MCP-työkalulista on täsmälleen ne komennot, jotka rajaukset sallivat.
-- Myös sisäänkirjautumisen istuntotunniste toimii, mutta se vanhenee 12 tunnissa; agenttitunniste ei vanhene.
+- Myös sisäänkirjautumisen istuntotunniste toimii, mutta se vanhenee 12 tunnissa (agenttitunniste ei vanhene), ja se toimii sinun nimissäsi: henkilötietoja ei maskata, ja hyväksyntää vaativat komennot suoritetaan ilman hyväksyntää. Käytä agentille agenttitunnistetta.
 - Tunniste on lähetettävä jokaisessa pyynnössä, ei vain ensimmäisessä; asiakkaat tekevät tämän, kun tunniste on niiden asetuksissa.
 - Asiakkaat, jotka tukevat selainkirjautumista (OAuth), eivät tarvitse liitettyä tunnistetta: ne yhdistävät kirjautumalla ja saavat tunnisteen, joka on voimassa tunnin ja toimii vain osoitteessa `/mcp`. Emme ole vielä kokeilleet tätä Claude Desktopilla, claude.ai:lla tai Claude Codella; katso [Yhdistä MCP:n kautta](/docs/agents/mcp/).
 

@@ -1,7 +1,7 @@
 ---
 title: "Alusta"
 description: "Näin obop-alusta toimii: instanssit ja yksi tietokanta yritystä kohti, moduulit ja markkinapaikka, käyttöoikeusryhmät, tietoluokat ja maskaus, hyväksynnät sekä MCP-, REST- ja CLI-rajapinnat."
-lead: "Yksi ohjelma, yksi tietomalli, kolme tapaa käyttää. Tällä sivulla kerrotaan, miten osat liittyvät toisiinsa."
+lead: "Yksi ohjelma, yksi tietomalli, neljä tapaa käyttää. Tällä sivulla kerrotaan, miten osat liittyvät toisiinsa."
 eyebrow: "Näin se toimii"
 ---
 
@@ -27,13 +27,13 @@ Käyttöoikeusryhmät, kuten `crm.user` tai `invoicing.manager`, nimetään mall
 
 ## Tietoluokat ja maskaus
 
-Jokainen kenttä ilmoittaa tietoluokkansa (ei mikään, julkinen hakemisto, sisäinen, luottamuksellinen henkilöstötieto, erityisryhmä, talous, salaisuus) ja sen, onko se henkilötieto. Ihmiset näkevät arvot käyttöoikeuksiensa mukaan. Agentit näkevät henkilötiedot pysyvinä paikkamerkkeinä ja arkaluonteiset luokat eivät lainkaan, ja ne voivat välittää paikkamerkkejä takaisin viitatakseen arvoon näkemättä sitä. Katso [Tietoluokat ja maskaus](/docs/concepts/data-classes-and-masking/).
+Jokainen kenttä ilmoittaa tietoluokkansa (ei mikään, julkinen hakemisto, sisäinen, luottamuksellinen henkilöstötieto, erityisryhmä, talous, salaisuus) ja sen, onko se henkilötieto. Ihmiset näkevät arvot käyttöoikeuksiensa mukaan, paitsi salaisuus-luokan kenttiä, joita ei palauteta koskaan. Agentit näkevät henkilötiedot paikkamerkkeinä ja arkaluonteiset luokat eivät lainkaan, ja ne voivat välittää paikkamerkkejä takaisin viitatakseen arvoon näkemättä sitä. Katso [Tietoluokat ja maskaus](/docs/concepts/data-classes-and-masking/).
 
 ## Työnkulut ja hyväksynnät
 
 Tilamuutokset ovat nimettyjä toimintoja. Toiminto voi vaatia tiukemman ryhmän ja hyväksynnän. Agentti voi vain ehdottaa toimintoa, joka vaatii hyväksynnän: palvelin palauttaa suunnitelman eikä muuta mitään, ennen kuin ihminen hyväksyy sen. Myös tietueiden poistamisen agentit vain ehdottavat. Katso [Työnkulut ja hyväksynnät](/docs/concepts/workflows-and-approvals/).
 
-## Kolme rajapintaa, yksi komentojen joukko
+## Neljä tapaa käyttää, yksi komentojen joukko
 
 | Rajapinta      | Kenelle                              | Miten                                                                                                                        |
 | -------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |

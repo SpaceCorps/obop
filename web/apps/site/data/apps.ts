@@ -908,7 +908,7 @@ export const APP_COPY: AppCopy[] = [
     // (packages/knowledge.toml:5) without the claim about the platform. knowledge.user reads and writes
     // articles (:19-20); publish, unpublish and archive are knowledge.manager (:80-102).
     packageText:
-      "A wiki: articles arranged in a tree through a parent article, with a draft, published, archived flow, a visibility setting and tags. Visibility is a label for the UI and for people to respect; this package sets no row rules, so everyone with the Knowledge groups can read every article.",
+      "A wiki: articles arranged in a tree through a parent article, with a draft, published, archived flow, a visibility setting and tags. Visibility is only a label for people to respect; this package sets no row rules, so everyone with the Knowledge groups can read every article.",
   },
   {
     id: "appointments",
@@ -925,6 +925,13 @@ export const APP_COPY: AppCopy[] = [
       // packages/appointments.toml:36-40; the package has no assert or effect, and nothing in crates/ reads it.
       "appointments_resource.capacity":
         "How many people it can serve at once. A note; nothing checks it.",
+    },
+    // The actions only move the state (packages/appointments.toml:122-148); the package has no effect, and
+    // nothing in crates/ reads an appointment outside a list of states in crates/obop/src/main.rs:3407.
+    cards: {
+      "appointments_appointment.confirm": {
+        text: "Mark a scheduled appointment as confirmed. By itself, this does not notify the attendee.",
+      },
     },
   },
   {

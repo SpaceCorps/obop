@@ -72,7 +72,7 @@ Lägg till `--db postgres://...` (eller sätt `OBOP_DATABASE_URL`) om instansen 
 Samma token ansluter en MCP-klient till instansens fjärr-MCP-server, `https://YOUR-INSTANCE/mcp`: skicka den som `Authorization: Bearer obop_...` (klienter har ett `headers`-fält eller en variabel för bärartoken till detta). En token som skapats med CLI eller via REST fungerar för båda; det finns inget MCP-specifikt att skapa. Tänk på följande:
 
 - Skapa en separat token per klient och ge den bara de scope som klienten behöver. MCP-verktygslistan är exakt de kommandon som scope tillåter.
-- En sessionstoken från inloggning fungerar också, men den går ut efter 12 timmar; en agenttoken gör det inte.
+- En sessionstoken från inloggning fungerar också, men den går ut efter 12 timmar (en agenttoken gör det inte), och den agerar som du: personuppgifter maskeras inte och kommandon som kräver godkännande körs utan godkännande. Använd en agenttoken för en agent.
 - Token måste skickas med varje förfrågan, inte bara den första; klienter gör detta när den väl finns i deras konfiguration.
 - Klienter som stöder inloggning i webbläsaren (OAuth) behöver ingen inklistrad token: de ansluter med en inloggning och får en token som gäller en timme och bara fungerar på `/mcp`. Vi har ännu inte prövat det med Claude Desktop, claude.ai eller Claude Code; se [Anslut via MCP](/docs/agents/mcp/).
 

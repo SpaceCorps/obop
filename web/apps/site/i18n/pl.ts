@@ -207,7 +207,7 @@ export const pl: Messages = {
       },
       {
         q: "Czy obop nadaje się do użytku produkcyjnego?",
-        a: "Jeszcze nie. obop nie osiągnął jeszcze wersji 1.0, więc nowe wydanie wciąż może wprowadzać zmiany. Rdzeń działa i jest testowany, sześć wbudowanych aplikacji ma status „Stabilny”, pozostałe „Beta” lub „Eksperymentalny”, a wiele dołączonych aplikacji jest celowo prostych. Na razie używaj obop do oceny i do mniej krytycznych zadań. Strona planu rozwoju wymienia, co jest gotowe, a czego jeszcze nie ma.",
+        a: "Jeszcze nie. obop nie osiągnął jeszcze wersji 1.0, więc nowe wydanie wciąż może wprowadzać zmiany. Rdzeń działa i jest testowany, wbudowane aplikacje mają status „Stabilny”, pozostałe „Beta” lub „Eksperymentalny”, a wiele dołączonych aplikacji jest celowo prostych. Na razie używaj obop do oceny i do mniej krytycznych zadań. Strona planu rozwoju wymienia, co jest gotowe, a czego jeszcze nie ma.",
       },
       {
         q: "Ile to kosztuje?",
@@ -287,7 +287,7 @@ export const pl: Messages = {
       },
       {
         q: "Czy mogę odejść i zabrać dane?",
-        a: "Tak. obop ma licencję Apache-2.0, a jego baza to zwykły PostgreSQL, więc możesz uruchomić to samo oprogramowanie sam; obop backup i obop restore są wbudowane.",
+        a: "Tak. obop ma licencję Apache-2.0, więc możesz uruchomić to samo oprogramowanie sam; obop backup i obop restore są wbudowane.",
       },
     ],
     cta: "Uruchom samodzielnie",
@@ -427,7 +427,8 @@ export const pl: Messages = {
       openObop: "Zacznij",
       getNote: "Potrzebne jest konto administratora.",
       included: "Wchodzi w skład każdego obop.",
-      experimentalNote: "Wciąż w fazie testów. Najpierw wypróbuj ją na danych przykładowych.",
+      experimentalNote:
+        "Oznaczona przez twórców jako eksperymentalna. Najpierw wypróbuj ją na danych przykładowych.",
       safeMasked:
         "Agenci AI widzą pola oznaczone jako dane osobowe, takie jak imiona i nazwiska oraz adresy e-mail, tylko jako symbole zastępcze. Tekst wpisany w pole, które nie jest oznaczone jako dane osobowe, na przykład w opis, nie jest zastępowany symbolem.",
       safeWithheld:

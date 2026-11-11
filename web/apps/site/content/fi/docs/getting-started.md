@@ -49,7 +49,7 @@ echo "a password of 12+ characters" | cargo run -- admin create alice --all-grou
 cargo run -- serve --static web/apps/backoffice/dist
 ```
 
-Avaa `http://127.0.0.1:8080` ja kirjaudu sisään tunnuksella `alice`. Tiedot tallentuvat nykyisen hakemiston tiedostoon `obop.db`; toisen tiedoston voi ottaa käyttöön valitsimella `--db sqlite:///path/to/file.db`. Uusi, tyhjä SQLite-tietokanta täytetään automaattisesti keksityillä demotiedoilla (`--demo` pakottaa täytön).
+Avaa `http://127.0.0.1:8080` ja kirjaudu sisään tunnuksella `alice`. Tiedot tallentuvat nykyisen hakemiston tiedostoon `obop.db`; toisen tiedoston voi ottaa käyttöön valitsimella `--db sqlite:///path/to/file.db`. SQLite-tietokanta, jossa ei vielä ole yhtään yhteystietoa, täytetään automaattisesti keksityillä demotiedoilla; PostgreSQL:ssä saman tekee `--demo`.
 
 `--dev-auth` korvaa oikean kirjautumisen kiinteillä tunnisteilla `dev-admin`, `dev-sales` ja `dev-agent`. Se kieltäytyy sitoutumasta muuhun kuin localhostiin.
 

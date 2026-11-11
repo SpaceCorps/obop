@@ -11,7 +11,7 @@ An open-source business platform with CRM, sales, invoicing, products, contacts 
 
 ### Is it ready for production?
 
-Not yet. obop is below version 1.0, so a release can still change things. The six built-in apps are marked Stable, the other apps Beta or Experimental. Read the [roadmap](/roadmap/) and the limits on [Security and privacy](/docs/reference/security/) before you rely on it.
+Not yet. obop is below version 1.0, so a release can still change things. The built-in apps are marked Stable, the other apps Beta or Experimental. Read the [roadmap](/roadmap/) and the limits on [Security and privacy](/docs/reference/security/) before you rely on it.
 
 ### What does it cost?
 

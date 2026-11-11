@@ -49,7 +49,7 @@ echo "a password of 12+ characters" | cargo run -- admin create alice --all-grou
 cargo run -- serve --static web/apps/backoffice/dist
 ```
 
-Open `http://127.0.0.1:8080` and sign in as `alice`. The data is in `obop.db` in the current directory; pass `--db sqlite:///path/to/file.db` to use another file. A new, empty SQLite database is filled with fake demo data automatically (`--demo` forces it).
+Open `http://127.0.0.1:8080` and sign in as `alice`. The data is in `obop.db` in the current directory; pass `--db sqlite:///path/to/file.db` to use another file. A SQLite database that has no contacts yet is filled with fake demo data automatically; on PostgreSQL, `--demo` does the same.
 
 `--dev-auth` swaps real sign-in for fixed tokens named `dev-admin`, `dev-sales` and `dev-agent`. It refuses to bind to anything but localhost.
 

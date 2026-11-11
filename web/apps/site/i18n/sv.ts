@@ -207,7 +207,7 @@ export const sv: Messages = {
       },
       {
         q: "Är obop redo för skarp användning?",
-        a: "Inte ännu. obop har inte nått version 1.0 ännu, så en ny version kan fortfarande ändra saker. Kärnan fungerar och är testad, de sex inbyggda apparna är märkta Stabil, de övriga Beta eller Experimentell, och många av de medföljande apparna är medvetet enkla. Använd obop för att utvärdera och för icke-kritiskt arbete tills vidare. På färdplanen ser du vad som är byggt och vad som inte är det.",
+        a: "Inte ännu. obop har inte nått version 1.0 ännu, så en ny version kan fortfarande ändra saker. Kärnan fungerar och är testad, de inbyggda apparna är märkta Stabil, de övriga Beta eller Experimentell, och många av de medföljande apparna är medvetet enkla. Använd obop för att utvärdera och för icke-kritiskt arbete tills vidare. På färdplanen ser du vad som är byggt och vad som inte är det.",
       },
       {
         q: "Vad kostar det?",
@@ -287,7 +287,7 @@ export const sv: Messages = {
       },
       {
         q: "Kan jag lämna och ta med mina data?",
-        a: "Ja. obop har licensen Apache-2.0 och databasen är vanlig PostgreSQL, så du kan köra samma programvara själv; obop backup och obop restore finns inbyggda.",
+        a: "Ja. obop har licensen Apache-2.0, så du kan köra samma programvara själv; obop backup och obop restore finns inbyggda.",
       },
     ],
     cta: "Kör det själv",
@@ -422,7 +422,7 @@ export const sv: Messages = {
       openObop: "Kom igång",
       getNote: "Du behöver ett administratörskonto.",
       included: "Ingår i varje obop.",
-      experimentalNote: "Testas fortfarande. Prova den först med exempeldata.",
+      experimentalNote: "Märkt som experimentell av utvecklarna. Prova den först med exempeldata.",
       safeMasked:
         "AI-agenter ser fält som är märkta som personuppgifter, till exempel namn och e-postadresser, bara som platshållare. Text som skrivs i ett fält som inte är märkt som personuppgift, till exempel en beskrivning, ersätts inte av en platshållare.",
       safeWithheld:

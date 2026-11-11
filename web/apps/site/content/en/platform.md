@@ -1,7 +1,7 @@
 ---
 title: "Platform"
 description: "How the obop platform works: instances with one database per business, modules and the marketplace, permission groups, data classes and masking, approvals, and the MCP, REST and CLI surfaces."
-lead: "One program, one data model, three ways in. This page explains how the pieces fit."
+lead: "One program, one data model, four ways in. This page explains how the pieces fit."
 eyebrow: "How it works"
 ---
 
@@ -27,13 +27,13 @@ Permission groups such as `crm.user` or `invoicing.manager` are named by models,
 
 ## Data classes and masking
 
-Every field declares a data class (none, public directory, internal, confidential HR, special category, financial, secret) and whether it is personal data. People see values under their permissions. Agents see personal data as stable placeholder tokens and sensitive classes not at all, and can pass tokens back to refer to a value without seeing it. See [Data classes and masking](/docs/concepts/data-classes-and-masking/).
+Every field declares a data class (none, public directory, internal, confidential HR, special category, financial, secret) and whether it is personal data. People see values under their permissions, except fields of class secret, which are never returned. Agents see personal data as placeholder tokens and sensitive classes not at all, and can pass tokens back to refer to a value without seeing it. See [Data classes and masking](/docs/concepts/data-classes-and-masking/).
 
 ## Workflows and approvals
 
 State changes are named actions. An action can need a stricter group and can need approval. An agent can only propose an action that needs approval: the server returns a plan and changes nothing until a person approves it. Deleting records is also proposed by agents. See [Workflows and approvals](/docs/concepts/workflows-and-approvals/).
 
-## Three surfaces, one set of commands
+## Four ways in, one set of commands
 
 | Surface | For                       | How                                                                                                    |
 | ------- | ------------------------- | ------------------------------------------------------------------------------------------------------ |

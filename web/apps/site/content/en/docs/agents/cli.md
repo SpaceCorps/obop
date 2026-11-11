@@ -82,7 +82,7 @@ set -e
 obop call lead search 'filter=[{"field":"stage","op":"eq","value":"new"}]' limit=50
 ```
 
-Structured arguments such as `filter` are JSON text. For anything beyond a few fields, REST with `jq` is usually easier to read than the CLI.
+`filter` and `order` (for `list` and `search`) and `aggregate` (for `search`) are JSON text; every other value is sent as text, or as a number or boolean where the field has that type, so the CLI cannot pass a list or an object. For anything beyond a few fields, REST with `jq` is usually easier to read than the CLI.
 
 ## Flags
 

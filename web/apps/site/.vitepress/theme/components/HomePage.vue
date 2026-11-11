@@ -189,7 +189,11 @@ const openCards = computed(() =>
           </div>
           <div class="codebox">
             <div class="codebar"><i></i><i></i><i></i><span>obop.toml</span></div>
-            <pre class="code" aria-label="Example obop.toml"><code><span class="c">[module]</span>
+            <pre
+              class="code"
+              aria-label="Example obop.toml"
+            ><code># An excerpt of packages/fleet.toml
+<span class="c">[module]</span>
 <span class="k">id</span> = <span class="s">"fleet"</span>
 <span class="k">name</span> = <span class="s">"Fleet"</span>
 

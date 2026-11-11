@@ -1,7 +1,7 @@
 ---
 title: "Plattform"
 description: "So funktioniert die obop-Plattform: Instanzen mit einer Datenbank pro Unternehmen, Module und der Marktplatz, Berechtigungsgruppen, Datenklassen und Maskierung, Freigaben sowie die Schnittstellen MCP, REST und CLI."
-lead: "Ein Programm, ein Datenmodell, drei Zugänge. Diese Seite erklärt, wie die Teile zusammenpassen."
+lead: "Ein Programm, ein Datenmodell, vier Zugänge. Diese Seite erklärt, wie die Teile zusammenpassen."
 eyebrow: "So funktioniert es"
 ---
 
@@ -27,13 +27,13 @@ Berechtigungsgruppen wie `crm.user` oder `invoicing.manager` werden von Modellen
 
 ## Datenklassen und Maskierung
 
-Jedes Feld legt eine Datenklasse fest (none, public directory, internal, confidential HR, special category, financial, secret) und ob es sich um personenbezogene Daten handelt. Menschen sehen Werte im Rahmen ihrer Berechtigungen. Agenten sehen personenbezogene Daten als stabile Platzhalter und sensible Klassen gar nicht, und sie können Platzhalter zurückgeben, um sich auf einen Wert zu beziehen, ohne ihn zu sehen. Siehe [Datenklassen und Maskierung](/docs/concepts/data-classes-and-masking/).
+Jedes Feld legt eine Datenklasse fest (none, public directory, internal, confidential HR, special category, financial, secret) und ob es sich um personenbezogene Daten handelt. Menschen sehen Werte im Rahmen ihrer Berechtigungen, außer Feldern der Klasse secret, die nie zurückgegeben werden. Agenten sehen personenbezogene Daten als Platzhalter und sensible Klassen gar nicht, und sie können Platzhalter zurückgeben, um sich auf einen Wert zu beziehen, ohne ihn zu sehen. Siehe [Datenklassen und Maskierung](/docs/concepts/data-classes-and-masking/).
 
 ## Workflows und Freigaben
 
 Zustandsänderungen sind benannte Aktionen. Eine Aktion kann eine strengere Gruppe und eine Freigabe verlangen. Eine Aktion, die eine Freigabe braucht, kann ein Agent nur vorschlagen: Der Server liefert einen Plan zurück und ändert nichts, bis eine Person ihn freigibt. Auch das Löschen von Datensätzen schlagen Agenten nur vor. Siehe [Workflows und Freigaben](/docs/concepts/workflows-and-approvals/).
 
-## Drei Schnittstellen, ein Satz von Befehlen
+## Vier Zugänge, ein Satz von Befehlen
 
 | Schnittstelle | Für                       | Wie                                                                                                       |
 | ------------- | ------------------------- | --------------------------------------------------------------------------------------------------------- |
