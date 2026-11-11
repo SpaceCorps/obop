@@ -113,7 +113,7 @@ const CONST_WORDS: [&str; 3] = ["TABLE", "MODEL", "COLLECTION"];
 /// gap: docs/ISSUES.md N17 says so). Adding a name here is the decision that it is a bundled
 /// package's model and not a table of the program; the test below checks that a bundled package
 /// does declare it and that no module of the `App` and no reserved list has it.
-const BUNDLED_MODELS: [&str; 30] = [
+const BUNDLED_MODELS: [&str; 31] = [
     "accounting_account",
     "accounting_fiscal_year",
     "accounting_journal",
@@ -124,6 +124,7 @@ const BUNDLED_MODELS: [&str; 30] = [
     "accounting_se_vat_code",
     "accounting_se_vat_report",
     "accounting_se_vat_report_line",
+    "accounting_tax",
     "documents_document",
     "ecommerce_category",
     "ecommerce_discount_code",
