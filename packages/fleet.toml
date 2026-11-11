@@ -1,8 +1,8 @@
 [module]
 id = "fleet"
-version = "0.3.0"
+version = "0.3.1"
 name = "Fleet"
-description = "Vehicles, drivers and service history for a small fleet. Tracks status and service records; it does not compute running costs or fuel use."
+description = "Vehicles, drivers and service history for a small fleet. Tracks status and service records; it does not compute running costs or fuel use. A driver's status and licence expiry are only recorded: nothing checks them, not even when a driver is assigned to a vehicle."
 author = "SpaceCorps"
 summary = "Vehicles, drivers and service history for a small fleet."
 license = "Apache-2.0"
@@ -99,7 +99,7 @@ write_group = "fleet.manager"
 
 [[model]]
 name = "fleet_vehicle_driver"
-description = "A person authorised to drive fleet vehicles"
+description = "A driver on record, with licence details and an active or suspended status"
 read_group = "fleet.user"
 write_group = "fleet.manager"
 
@@ -141,14 +141,14 @@ write_group = "fleet.manager"
 
   [[model.action]]
   name = "suspend"
-  description = "Suspend a driver, for example after an expired licence"
+  description = "Mark a driver as suspended, for example after an expired licence"
   field = "state"
   from = "active"
   to = "suspended"
 
   [[model.action]]
   name = "reactivate"
-  description = "Allow a suspended driver to drive again"
+  description = "Set a suspended driver back to active"
   field = "state"
   from = "suspended"
   to = "active"

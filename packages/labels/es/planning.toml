@@ -1,7 +1,7 @@
 [labels.es.module]
 name = "Planificación"
-description = "Turnos de empleados, con funciones y plantillas reutilizables. Un turno tiene un día y una hora de inicio y de fin en minutos desde la medianoche (de 0 a 1439; 540 son las 09:00). Un turno sin empleado es un turno abierto. Flujo: abierto, publicado, confirmado por el empleado. Requiere el paquete Recursos humanos."
-summary = "Turnos de empleados con funciones y plantillas reutilizables; los turnos abiertos se publican y se confirman."
+description = "Turnos de empleados, con funciones y plantillas de turno. Una plantilla solo guarda un nombre, una función y unas horas: ninguna acción crea turnos a partir de ella. Un turno tiene un día y un inicio y un fin en minutos desde la medianoche (de 0 a 1439; 540 son las 09:00). Un turno sin empleado es un turno abierto. Flujo: abierto, publicado, confirmado por el empleado. Requiere Recursos humanos."
+summary = "Turnos de empleados con funciones y plantillas de turno; los turnos abiertos se publican y se confirman."
 
 [labels.es.model.planning_role]
 name = "Rol"
@@ -17,7 +17,7 @@ description = "En qué consiste la función"
 
 [labels.es.model.planning_template]
 name = "Plantilla"
-description = "Un patrón de turno reutilizable que se copia en los turnos"
+description = "Un patrón de turno con nombre, función y horas de inicio y fin; ninguna acción crea turnos a partir de él"
 
 [labels.es.model.planning_template.field.name]
 label = "Nombre"

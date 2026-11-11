@@ -2987,7 +2987,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("obop-check-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let bad = dir.join("bad.toml");
-        std::fs::write(&bad, fleet.replace("0.3.0", "2")).unwrap();
+        std::fs::write(&bad, fleet.replace("0.3.1", "2")).unwrap();
         let good = root.join("packages/fleet.toml");
         let (bad_s, good_s) = (
             bad.to_string_lossy().to_string(),

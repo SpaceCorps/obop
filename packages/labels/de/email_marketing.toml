@@ -1,7 +1,7 @@
 [labels.de.module]
 name = "E-Mail-Marketing"
-description = "Verteilerlisten, Kontakte darauf mit Einwilligungsstatus und -datum sowie Kampagnen (Entwurf, terminiert, gesendet). Der Versand ist unumkehrbar und braucht die Genehmigung einer Führungskraft; Agenten dürfen ihn nur vorschlagen. Statistiken sind erfasste Zahlen. Kontakte sind personenbezogene Daten: Einwilligung aktuell halten und nie Kontakte anschreiben, die nicht eingewilligt haben."
-summary = "Verteilerlisten, Kontakte mit Einwilligung und Kampagnen. Der Versand braucht eine menschliche Genehmigung."
+description = "Verteilerlisten, Kontakte mit Einwilligungsstatus und -datum sowie Kampagnen (Entwurf, terminiert, gesendet). Es wird keine E-Mail versendet: Eine Kampagne als gesendet zu markieren hält das nur fest und braucht die Genehmigung einer Führungskraft; Agenten dürfen es nur vorschlagen. Statistiken sind erfasste Zahlen. Personenbezogene Daten: Einwilligung aktuell halten, nur Einwilligte anschreiben."
+summary = "Verteilerlisten, Kontakte mit Einwilligung und Kampagnen. Kein E-Mail-Versand; das Markieren als gesendet braucht menschliche Genehmigung."
 
 [labels.de.model.email_marketing_list]
 name = "Liste"
@@ -55,7 +55,7 @@ description = "Wo die Einwilligung eingeholt wurde, zum Beispiel Anmeldeformular
 
 [labels.de.model.email_marketing_campaign]
 name = "Kampagne"
-description = "Ein Mailing, das an eine Liste gesendet wird"
+description = "Ein Mailing an eine Liste"
 
 [labels.de.model.email_marketing_campaign.field.name]
 label = "Name"
@@ -133,11 +133,11 @@ description = "Die Kampagne für den geplanten Tag vormerken"
 
 [labels.de.model.email_marketing_campaign.action.send]
 label = "Senden"
-description = "Die terminierte Kampagne an die ganze Liste senden (nur Führungskräfte)"
+description = "Die terminierte Kampagne als gesendet markieren; es wird keine E-Mail versendet (nur Führungskräfte)"
 
 [labels.de.model.email_marketing_campaign.action.send_now]
 label = "Jetzt senden"
-description = "Eine Kampagne im Entwurf sofort senden (nur Führungskräfte)"
+description = "Eine Kampagne im Entwurf als gesendet markieren; es wird keine E-Mail versendet (nur Führungskräfte)"
 
 [labels.de.model.email_marketing_campaign.action.unschedule]
 label = "Einplanung aufheben"

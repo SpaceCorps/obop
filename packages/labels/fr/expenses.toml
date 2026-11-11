@@ -1,6 +1,6 @@
 [labels.fr.module]
 name = "Notes de frais"
-description = "Demandes de remboursement de frais des employés avec un flux brouillon, soumise, approuvée et payée. Le paiement est une permission distincte et exige une approbation humaine ; les justificatifs sont référencés par une note, pas stockés. Une demande a un numéro issu d’une série annuelle ; un employé ne voit et ne modifie que ses propres demandes, les responsables et la finance voient toutes."
+description = "Notes de frais des employés : brouillon, soumise, approuvée, payée. Le paiement est une permission distincte. Approuver, refuser ou payer exige une approbation humaine ; les agents peuvent seulement le proposer. Justificatifs référencés par une note, pas stockés. Numéro d’une série annuelle ; un employé ne voit et ne modifie que ses propres demandes ; responsables et finance les voient toutes."
 summary = "Notes de frais des employés avec un flux brouillon, soumise, approuvée et payée."
 
 [labels.fr.model.expenses_expense]

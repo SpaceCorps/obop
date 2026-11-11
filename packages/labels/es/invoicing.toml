@@ -1,10 +1,10 @@
 [labels.es.module]
 name = "Facturación"
-summary = "Facturas de cliente con un ciclo de vida de borrador, contabilizada y pagada."
+summary = "Facturas de cliente con un ciclo de vida de borrador, contabilizada y cancelada."
 
 [labels.es.model.invoice]
 name = "Factura"
-description = "Una factura de cliente; las facturas contabilizadas solo se corrigen con notas de crédito"
+description = "Una factura de cliente; ninguna acción devuelve una factura contabilizada a borrador ni la cancela"
 
 [labels.es.model.invoice.field.sale_order_id]
 label = "Pedido de venta"
@@ -25,11 +25,11 @@ description = "Total de la factura en unidades menores, la suma de las líneas"
 
 [labels.es.model.invoice.field.number]
 label = "Número"
-description = "Número legal sin huecos, como INV-2026-00042, asignado al contabilizar"
+description = "Número de una serie anual sin huecos, como INV-2026-00042, asignado al contabilizar"
 
 [labels.es.model.invoice.action.post]
 label = "Contabilizar"
-description = "Contabilizar una factura en borrador y asignarle su número legal"
+description = "Contabilizar una factura en borrador y asignarle el siguiente número de la serie"
 
 [labels.es.model.invoice.action.cancel]
 label = "Cancelar"

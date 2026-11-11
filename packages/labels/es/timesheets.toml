@@ -1,6 +1,6 @@
 [labels.es.module]
 name = "Partes de horas"
-description = "Tiempo dedicado a tareas de proyecto, introducido en minutos, con un indicador de facturable y un paso de aprobación. Requiere el paquete Proyectos. Cada trabajador ve y edita solo sus propios registros; timesheets.manager ve todos."
+description = "Tiempo dedicado a tareas de proyecto, introducido en minutos, con un indicador de facturable y un paso de aprobación. Aprobar o rechazar un registro requiere aprobación humana; los agentes solo pueden proponerlo. Requiere el paquete Proyectos. Cada trabajador ve y edita solo sus propios registros; timesheets.manager ve todos."
 summary = "Tiempo dedicado a tareas de proyecto, en minutos, con un indicador de facturable y un paso de aprobación."
 
 [labels.es.model.timesheets_entry]
@@ -50,7 +50,7 @@ description = "Enviar el registro para su aprobación"
 
 [labels.es.model.timesheets_entry.action.approve]
 label = "Aprobar"
-description = "Aprobar un registro enviado para que se pueda facturar (solo responsables)"
+description = "Aprobar un registro enviado (solo responsables)"
 
 [labels.es.model.timesheets_entry.action.reject]
 label = "Rechazar"

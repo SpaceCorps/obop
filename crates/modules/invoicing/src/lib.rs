@@ -14,7 +14,7 @@ pub fn module() -> Module {
         models: vec![
             ModelDef {
                 name: "invoice",
-                description: "A customer invoice; posted invoices are corrected only by credit notes",
+                description: "A customer invoice; no action takes a posted invoice back to draft or cancels it",
                 read_group: "invoicing.user",
                 write_group: "invoicing.user",
                 access: None,
@@ -61,7 +61,7 @@ pub fn module() -> Module {
                     .computed("sum(lines.amount_minor)"),
                     F::new(
                         "number",
-                        "Gapless legal number such as INV-2026-00042, assigned when posted",
+                        "Number from a gapless yearly series, such as INV-2026-00042, assigned when posted",
                         NoClass,
                         false,
                         "invoicing.user",
@@ -72,7 +72,7 @@ pub fn module() -> Module {
                 commands: vec![
                     CommandDef::new(
                         "post",
-                        "Post a draft invoice and assign its legal number",
+                        "Post a draft invoice and give it the next number of the series",
                         "invoicing.manager",
                     )
                     .transition("state", Some("draft"), "posted")
@@ -153,7 +153,7 @@ pub fn module() -> Module {
         description: String::new(),
         translations: Default::default(),
         meta: ModuleMeta::first_party(
-            "Customer invoices with a draft, posted and paid life cycle.",
+            "Customer invoices with a draft, posted and cancelled life cycle.",
             &["finance"],
             &["invoices", "billing"],
             "invoicing",
@@ -179,7 +179,7 @@ pub fn register(d: &Dispatcher, store: &Store) {
 }
 
 /// A demo draft invoice for `order_id` with one line. Written straight into the store, as
-/// seeds are, so it has no legal number until it is posted.
+/// seeds are, so it has no number until it is posted.
 pub fn seed(store: &Store, order_id: &str) -> String {
     let invoice = store
         .insert(
@@ -302,7 +302,7 @@ mod tests {
     }
 
     /// A plain `invoicing.user` can edit invoices but cannot post one by setting `state`; the
-    /// manager can, and the update runs the real post action, so the legal number is assigned.
+    /// manager can, and the update runs the real post action, so the number is assigned.
     #[test]
     fn posting_by_update_needs_the_manager_and_still_numbers_the_invoice() {
         let (d, s) = (Dispatcher::new(), Store::new());

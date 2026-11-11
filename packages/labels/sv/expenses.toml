@@ -1,6 +1,6 @@
 [labels.sv.module]
 name = "Utlägg"
-description = "Anställdas utläggsansökningar med flödet utkast, inskickad, godkänd och betald. Utbetalning är en separat behörighet och kräver mänskligt godkännande; kvitton anges i en anteckning och lagras inte. Ett utlägg har ett nummer ur en årlig serie, och en anställd ser och ändrar bara sina egna utlägg; chefer och ekonomi ser alla."
+description = "Anställdas utläggsansökningar med flödet utkast, inskickad, godkänd och betald. Utbetalning är en separat behörighet. Att godkänna, avslå och betala ut kräver mänskligt godkännande; agenter får bara föreslå det. Kvitton anges i en anteckning och lagras inte. Ett utlägg har ett nummer ur en årlig serie, och en anställd ser och ändrar bara sina egna utlägg; chefer och ekonomi ser alla."
 summary = "Anställdas utläggsansökningar med flödet utkast, inskickad, godkänd och betald."
 
 [labels.sv.model.expenses_expense]

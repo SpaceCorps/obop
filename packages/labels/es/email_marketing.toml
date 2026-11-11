@@ -1,7 +1,7 @@
 [labels.es.module]
 name = "Marketing por correo"
-description = "Listas de correo, contactos con su consentimiento y campañas con flujo de borrador, programada y enviada. Enviar es irreversible y llega a personas reales, por lo que requiere aprobación humana de un responsable; los agentes solo pueden proponerlo. Las estadísticas se introducen, no se calculan. Los contactos son datos personales: no escribas a quien no haya dado su consentimiento."
-summary = "Listas de correo, contactos con consentimiento y campañas. Enviar requiere aprobación humana."
+description = "Listas de correo, contactos con su consentimiento y campañas con flujo de borrador, programada y enviada. No se envía ningún correo: marcar una campaña como enviada solo lo registra y requiere aprobación humana de un responsable; los agentes solo pueden proponerlo. Las estadísticas se introducen, no se calculan. Los contactos son datos personales: no escribas a quien no haya consentido."
+summary = "Listas de correo, contactos con consentimiento y campañas. No se envía correo; marcar como enviada requiere aprobación."
 
 [labels.es.model.email_marketing_list]
 name = "Lista"
@@ -55,7 +55,7 @@ description = "Dónde se obtuvo el consentimiento, por ejemplo formulario de sus
 
 [labels.es.model.email_marketing_campaign]
 name = "Campaña"
-description = "Un envío realizado a una lista"
+description = "Un envío a una lista"
 
 [labels.es.model.email_marketing_campaign.field.name]
 label = "Nombre"
@@ -129,15 +129,15 @@ cancelled = "Cancelado"
 
 [labels.es.model.email_marketing_campaign.action.schedule]
 label = "Programar"
-description = "Poner la campaña en cola para el día programado"
+description = "Marcar la campaña como programada para su día"
 
 [labels.es.model.email_marketing_campaign.action.send]
 label = "Enviar"
-description = "Enviar la campaña programada a toda la lista (solo responsables)"
+description = "Marcar la campaña programada como enviada; no se envía ningún correo (solo responsables)"
 
 [labels.es.model.email_marketing_campaign.action.send_now]
 label = "Enviar ahora"
-description = "Enviar de inmediato una campaña en borrador (solo responsables)"
+description = "Marcar como enviada una campaña en borrador; no se envía ningún correo (solo responsables)"
 
 [labels.es.model.email_marketing_campaign.action.unschedule]
 label = "Cancelar programación"
