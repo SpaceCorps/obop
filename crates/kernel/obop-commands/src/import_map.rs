@@ -123,7 +123,7 @@ pub fn entry_id(model: &str, system: &str, table: &str, source_id: &str) -> Stri
 }
 
 /// The fields of an entry.
-pub(crate) fn entry_fields(
+pub fn entry_fields(
     (model, record): (&str, &str),
     (system, table, source_id): (&str, &str, &str),
     now: u64,
