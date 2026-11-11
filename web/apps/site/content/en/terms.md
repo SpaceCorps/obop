@@ -1,11 +1,11 @@
 ---
 title: "Terms"
-description: "Draft terms for the hosted obop service that SpaceCorps plans, which is not offered yet, and for this website. A draft for review by counsel, not legal advice, to be replaced before any paid plan starts."
+description: "Draft terms for the hosted obop service that SpaceCorps plans, which is not offered yet, and for this website. A draft for review by counsel, not legal advice, to be replaced before the planned sandbox or hosting service opens."
 lead: "A plain-language draft of the terms for the hosted service SpaceCorps plans. That service is not offered yet."
 eyebrow: "Draft"
 ---
 
-> **This is a draft.** It is not legal advice and has not been reviewed by counsel. It will be replaced before any paid plan starts. Do not rely on it as a contract.
+> **This is a draft.** It is not legal advice and has not been reviewed by counsel. It will be replaced before the planned sandbox or hosting service opens. Do not rely on it as a contract.
 
 ## The hosted service
 
@@ -29,7 +29,7 @@ Prices on this site are planned and are not charged. If we begin charging, we wi
 
 ## Liability
 
-To the extent the law allows, the service is provided without warranties, and we are not liable for loss of data or profit from using it. This section will be replaced by counsel-reviewed text.
+To the extent the law allows, this website and, once it is offered, the hosted service are provided without warranties, and we are not liable for loss of data or profit from using them. This section will be replaced by counsel-reviewed text.
 
 ## Changes and contact
 

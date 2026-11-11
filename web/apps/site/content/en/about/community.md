@@ -1,15 +1,13 @@
 ---
 title: "Community"
-description: "The obop community: where to ask questions and share ideas in the community forum, the ground rules, and how to contribute."
-lead: "A place to ask questions, share what you build and help each other. Be kind, be specific, and keep personal data out."
+description: "The obop community: where to ask questions and share ideas, the ground rules, and how to contribute."
+lead: "How to ask questions and share ideas about obop, the ground rules, and how to contribute. Be kind, be specific, and keep personal data out."
 eyebrow: "Community"
 ---
 
-## The forum
+## Where to ask
 
-The community forum is part of the obop control plane: where a control plane serves this website, the forum is at [/community/](/community/). It is separate from this website and has its own sitemap. Use it for questions about using obop, ideas, and showing what you have built.
-
-If the forum is not reachable yet, the [GitHub repository](https://github.com/SpaceCorps/obop) is the place for bug reports and feature requests: open an issue.
+A control plane (`obop platform serve`) includes a forum at `/community/` for its own users. Questions, ideas, bug reports and feature requests for the obop project go to [GitHub issues](https://github.com/SpaceCorps/obop/issues).
 
 ## Ground rules
 
@@ -20,7 +18,7 @@ If the forum is not reachable yet, the [GitHub repository](https://github.com/Sp
 5. **No advertising or spam.** Relevant links to your own marketplace or app are welcome when you say it is yours.
 6. **Stay on topic**, and use the language you are most comfortable in; English is the common one.
 
-Moderators may hide posts or remove threads that break these rules.
+Maintainers may hide comments or close issues that break these rules.
 
 ## Contribute
 

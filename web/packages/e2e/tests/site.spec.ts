@@ -1203,6 +1203,15 @@ test.describe("website without JavaScript", () => {
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Page not found");
     await expect(page.getByRole("search")).toHaveCount(2); // header and page
     await expect(page.getByRole("link", { name: "Getting started" }).first()).toBeVisible();
+    const list = page.locator(".notfound .linklist");
+    await expect(list.getByRole("link", { name: "Community" })).toHaveAttribute(
+      "href",
+      "/about/community/",
+    );
+    await expect(list.getByRole("link", { name: "Status" })).toHaveAttribute(
+      "href",
+      "/about/status/",
+    );
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex");
   });
 
@@ -1725,26 +1734,32 @@ test.describe("crawlers and agents", () => {
     }
   });
 
-  // The owner ruled on 2026-11-11 that there is no hosted beta: the site offers no sign-up. The sign-up
-  // app under /app/ stays in the build for operators of a control plane, but no page links to it, and
-  // the header's button and the home page's calls to action lead to Getting started instead.
+  // SpaceCorps hosts no obop for other people today (OR-11; the owner confirmed in chat on 2026-11-11
+  // that the hosted beta is not live): the site offers no sign-up. The sign-up app under /app/ stays
+  // in the build, which a control plane serves, but no page links to it, and the header's button and
+  // the home page's calls to action lead to Getting started instead.
   test("no page links to the sign-up app; the header, the home page and pricing lead to Getting started", async ({
     request,
   }) => {
-    const toApp = /\bhref="(?:\/[a-z]{2})?\/app\/|\]\((?:\/[a-z]{2})?\/app\/\)/;
-    // The rule can fail: it finds a link to /app/ in HTML and in Markdown, in any language.
+    const toApp = /(?:\bhref="|\]\()(?:https?:\/\/[^/"\s)]+)?(?:\/[a-z]{2})?\/app(?:[/"#?)]|$)/;
+    // The rule can fail: it finds a link to /app/ in HTML and in Markdown, in any language, relative
+    // or absolute, with or without a fragment.
     expect('<a class="btn primary" href="/app/">Start free</a>').toMatch(toApp);
     expect("- [Get your own instance](/de/app/)").toMatch(toApp);
+    expect('<a href="https://obop.dev/app/">x</a>').toMatch(toApp);
+    expect("[x](/app/#s)").toMatch(toApp);
     expect('<a href="/apps/crm/">CRM</a> served under `/app/`').not.toMatch(toApp);
+    expect("[CRM](/apps/crm/)").not.toMatch(toApp);
 
-    // Every page and Markdown copy of the built site (the sign-up app's own files under /app/ aside).
+    // Every page, Markdown copy and text file (llms.txt, llms-full.txt) of the built site (the
+    // sign-up app's own files under /app/ aside).
     const files: string[] = [];
     const walk = (dir: string) => {
       for (const e of readdirSync(dir, { withFileTypes: true })) {
         const path = join(dir, e.name);
         if (e.isDirectory()) {
           if (path !== join(siteDir, "app")) walk(path);
-        } else if (/\.(html|md)$/.test(e.name)) files.push(path);
+        } else if (/\.(html|md|txt)$/.test(e.name)) files.push(path);
       }
     };
     walk(siteDir);

@@ -1,14 +1,14 @@
 ---
 title: "Pierwsze kroki"
 description: "Uruchom pierwszą instancję obop: samodzielnie w Dockerze z PostgreSQL albo lokalnie z SQLite. Potem zainstaluj aplikację, utwórz rekordy i zaproś agenta."
-lead: "Dwa sposoby uruchomienia obop: Docker z PostgreSQL do prawdziwego wdrożenia albo lokalna kompilacja do pracy deweloperskiej. obop.dev nie oferuje jeszcze hostowanych instancji."
+lead: "Dwa sposoby uruchomienia obop: w Dockerze z PostgreSQL albo z lokalnej kompilacji do pracy deweloperskiej. SpaceCorps nie hostuje jeszcze obop dla innych."
 ---
 
-SpaceCorps nie hostuje jeszcze obop dla innych, więc uruchamiasz obop samodzielnie. Planowane są bezpłatna piaskownica (sandbox) z przykładowymi danymi i płatny hosting na serwerach dedykowanych; żadne z nich nie jest jeszcze dostępne i nie obiecujemy żadnego terminu. Zobacz [Cennik](/pricing/). Nazwy elementów interfejsu podajemy tak, jak wyświetla je aplikacja w języku polskim.
+SpaceCorps nie hostuje jeszcze obop dla innych, więc uruchamiasz obop samodzielnie. Planowane są bezpłatna piaskownica (sandbox) z przykładowymi danymi i płatny hosting na serwerach dedykowanych; żadne z nich nie jest jeszcze dostępne i nie obiecujemy żadnego terminu. Zobacz [Cennik](/pricing/) i [plan rozwoju](/roadmap/).
 
 ## Opcja 1: własny hosting w Dockerze z PostgreSQL
 
-Potrzebujesz Dockera. Repozytorium zawiera plik Compose, który uruchamia razem PostgreSQL i obop, udostępnione wyłącznie na localhost:
+Potrzebujesz Dockera. Repozytorium zawiera plik Compose do lokalnego wypróbowania, który uruchamia razem PostgreSQL i obop, udostępnione wyłącznie na localhost:
 
 ```bash
 git clone https://github.com/SpaceCorps/obop.git
@@ -54,6 +54,8 @@ Otwórz `http://127.0.0.1:8080` i zaloguj się jako `alice`. Dane znajdują się
 `--dev-auth` zastępuje prawdziwe logowanie stałymi tokenami `dev-admin`, `dev-sales` i `dev-agent`. Odmawia działania na jakimkolwiek adresie poza localhost.
 
 ## Po zalogowaniu
+
+Nazwy elementów interfejsu podajemy tak, jak wyświetla je aplikacja w języku polskim.
 
 1. **Zainstaluj aplikację.** Otwórz aplikację _Dostosowanie_, w niej _Moduły_ i kartę _Marketplace_, a potem zainstaluj aplikację, na przykład Helpdesk lub Projekty. Instalowanie i usuwanie aplikacji wymaga grupy administratora. Wbudowane aplikacje są już dostępne, a wśród nich Kontakty, Produkty, CRM, Sprzedaż, Fakturowanie i Konektory (sześć, które mają stronę aplikacji).
 2. **Utwórz rekordy.** Otwórz aplikację, wybierz _Nowy_ i wypełnij formularz. Listy, tablice i panel boczny są generowane z opisu aplikacji.

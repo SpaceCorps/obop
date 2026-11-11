@@ -183,7 +183,7 @@ export const fi: Messages = {
     openPoints: [
       {
         title: "Palvelinhotellointi, suunnitteilla",
-        body: "SpaceCorps suunnittelee ilmaista testiympäristöä, jossa on vain esimerkkidataa, sekä maksullista palvelinhotellointia omilla palvelimilla. Kumpaakaan ei vielä tarjota.",
+        body: "SpaceCorps suunnittelee ilmaista hiekkalaatikkoa (sandbox), jossa on vain esimerkkidataa, sekä maksullista palvelinhotellointia dedikoiduilla palvelimilla. Kumpaakaan ei vielä tarjota.",
       },
       {
         title: "Omalla palvelimella",

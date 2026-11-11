@@ -183,7 +183,7 @@ export const sv: Messages = {
     openPoints: [
       {
         title: "Hosting, planerad",
-        body: "SpaceCorps planerar en kostnadsfri sandlåda med enbart exempeldata och betald hosting på dedikerade servrar. Inget av dem erbjuds ännu.",
+        body: "SpaceCorps planerar en kostnadsfri sandlåda med enbart exempeldata och betald hosting på dedikerade servrar. Ingen av dem erbjuds ännu.",
       },
       {
         title: "Egen drift",

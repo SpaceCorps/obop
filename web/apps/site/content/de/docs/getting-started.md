@@ -1,14 +1,14 @@
 ---
 title: "Erste Schritte"
 description: "Ihre erste obop-Instanz: mit Docker und PostgreSQL selbst hosten oder lokal mit SQLite betreiben. Danach eine App installieren, Datensätze anlegen und einen KI-Agenten einladen."
-lead: "Zwei Wege, obop zu betreiben: Docker mit PostgreSQL für einen echten Einsatz oder ein lokaler Build für die Entwicklung. obop.dev bietet noch keine gehosteten Instanzen an."
+lead: "Zwei Wege, obop zu betreiben: mit Docker und PostgreSQL oder als lokaler Build für die Entwicklung. SpaceCorps hostet obop noch nicht für andere."
 ---
 
-SpaceCorps hostet obop noch nicht für andere, Sie betreiben obop also selbst. Eine kostenlose Sandbox mit Beispieldaten und kostenpflichtiges Hosting auf dedizierten Servern sind geplant; beides ist noch nicht verfügbar, und kein Termin ist zugesagt. Siehe [Preise](/pricing/).
+SpaceCorps hostet obop noch nicht für andere, Sie betreiben obop also selbst. Eine kostenlose Sandbox mit Beispieldaten und kostenpflichtiges Hosting auf dedizierten Servern sind geplant; beides ist noch nicht verfügbar, und kein Termin ist zugesagt. Siehe [Preise](/pricing/) und die [Roadmap](/roadmap/).
 
 ## Option 1: selbst hosten mit Docker und PostgreSQL
 
-Sie benötigen Docker. Das Repository enthält eine Compose-Datei, die PostgreSQL und obop gemeinsam startet und nur auf localhost veröffentlicht:
+Sie benötigen Docker. Das Repository enthält eine Compose-Datei zum lokalen Ausprobieren, die PostgreSQL und obop gemeinsam startet und nur auf localhost veröffentlicht:
 
 ```bash
 git clone https://github.com/SpaceCorps/obop.git

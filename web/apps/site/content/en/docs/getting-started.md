@@ -1,14 +1,14 @@
 ---
 title: "Getting started"
 description: "Run your first obop instance: self-host with Docker and PostgreSQL, or run it locally with SQLite. Then install an app, create records and invite an agent."
-lead: "Two ways to run obop: Docker with PostgreSQL for a real deployment, or a local build for development. obop.dev offers no hosted instances yet."
+lead: "Two ways to run obop: with Docker and PostgreSQL, or a local build for development. SpaceCorps does not host obop for other people yet."
 ---
 
-SpaceCorps does not host obop for other people yet, so you run obop yourself. A free sandbox with sample data and paid hosting on dedicated servers are planned; neither is open yet, and no date is promised. See [Pricing](/pricing/).
+SpaceCorps does not host obop for other people yet, so you run obop yourself. A free sandbox with sample data and paid hosting on dedicated servers are planned; neither is open yet, and no date is promised. See [Pricing](/pricing/) and the [roadmap](/roadmap/).
 
 ## Option 1: self-host with Docker and PostgreSQL
 
-You need Docker. The repository includes a Compose file that starts PostgreSQL and obop together, published on localhost only:
+You need Docker. The repository includes a Compose file for a local trial; it starts PostgreSQL and obop together, published on localhost only:
 
 ```bash
 git clone https://github.com/SpaceCorps/obop.git

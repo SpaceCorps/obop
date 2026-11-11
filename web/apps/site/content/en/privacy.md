@@ -17,7 +17,7 @@ The obop project, run by SpaceCorps. There is no data protection officer or EU r
 - Your chosen colour theme and the dismissal of the language hint are stored in your own browser (local storage). They never leave your device.
 - Like any web server, the server that hosts this site processes your IP address and the pages you request to deliver them. We do not use that to build profiles.
 
-## Sign-up and the hosted service
+## The planned hosted service
 
 SpaceCorps does not offer a hosted obop yet. When someone creates an account and an instance on a control plane, the control plane software processes:
 
@@ -26,9 +26,9 @@ SpaceCorps does not offer a hosted obop yet. When someone creates an account and
 | Email address                           | Sign in, and to identify the account            | The control plane's database                    |
 | Password                                | Sign in. Stored only as a one-way Argon2id hash | The control plane and, as a hash, your instance |
 | Instance name and address               | To provision and show your instance             | The control plane                               |
-| Everything you enter into your instance | To provide the service                          | A database belonging to your instance           |
+| Everything you enter into your instance | To run the instance                             | A database belonging to your instance           |
 
-We do not sell personal data. We do not use the data in your instance for anything but running it.
+We do not sell personal data. The table describes what the software does, not a service SpaceCorps offers; before the planned sandbox or hosting service opens, the final notice will say what SpaceCorps processes for it.
 
 ## Subprocessors
 

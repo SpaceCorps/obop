@@ -1,14 +1,14 @@
 ---
 title: "Aloitusopas"
 description: "Ota käyttöön ensimmäinen obop-instanssisi: aja alustaa itse Dockerilla ja PostgreSQL:llä tai käytä sitä paikallisesti SQLitellä. Asenna sen jälkeen sovellus, luo tietueita ja kutsu agentti mukaan."
-lead: "obopia voi ajaa kahdella tavalla: Docker ja PostgreSQL sopivat oikeaan käyttöön, ja paikallinen versio on tarkoitettu kehitykseen. obop.dev ei vielä tarjoa isännöityjä instansseja."
+lead: "obopia voi ajaa kahdella tavalla: Dockerilla ja PostgreSQL:llä tai paikallisena versiona, joka on tarkoitettu kehitykseen. SpaceCorps ei vielä isännöi obopia muille."
 ---
 
-SpaceCorps ei vielä isännöi obopia muille, joten ajat obopia itse. Ilmainen hiekkalaatikko (sandbox) esimerkkitiedoilla ja maksullinen isännöinti dedikoiduilla palvelimilla ovat suunnitteilla; kumpikaan ei ole vielä avoinna, eikä mitään päivämäärää luvata. Katso [Hinnoittelu](/pricing/).
+SpaceCorps ei vielä isännöi obopia muille, joten ajat obopia itse. Ilmainen hiekkalaatikko (sandbox) esimerkkitiedoilla ja maksullinen palvelinhotellointi dedikoiduilla palvelimilla ovat suunnitteilla; kumpikaan ei ole vielä avoinna, eikä mitään päivämäärää luvata. Katso [Hinnoittelu](/pricing/) ja [tiekartta](/roadmap/).
 
 ## Vaihtoehto 1: aja itse Dockerilla ja PostgreSQL:llä
 
-Tarvitset Dockerin. Repositorion Compose-tiedosto käynnistää PostgreSQL:n ja obopin yhdessä, ja ne julkaistaan vain localhostissa:
+Tarvitset Dockerin. Repositorion Compose-tiedosto on paikallista kokeilua varten: se käynnistää PostgreSQL:n ja obopin yhdessä, ja ne julkaistaan vain localhostissa:
 
 ```bash
 git clone https://github.com/SpaceCorps/obop.git

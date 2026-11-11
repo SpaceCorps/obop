@@ -62,8 +62,9 @@ describe("obop itself is below version 1.0 and not beta, in every language", () 
   }
 });
 
-// The owner ruled on 2026-11-11 that the hosted beta is not live: SpaceCorps hosts no obop for other
-// people (OR-11), so nothing may say that something is free during the beta, and no call to action may
+// SpaceCorps hosts no obop for other people today (OR-11); a sandbox and paid hosting are planned, not
+// offered (OR-20, OR-22, D83); the owner confirmed in chat on 2026-11-11 that the hosted beta is not
+// live. So nothing may say that something is free during the beta, and no call to action may
 // offer a free start or an instance of one's own. The words are each language's own; the old strings
 // of every language are the examples the rules must catch.
 const FREE: Record<(typeof LOCALES)[number], RegExp> = {
@@ -76,7 +77,7 @@ const FREE: Record<(typeof LOCALES)[number], RegExp> = {
   sv: /gratis|kostnadsfri|avgiftsfri/i,
 };
 // "Beta" in each language, as a word: "Betalning" (Swedish for payment) is not it.
-const BETA = /(?<!\p{L})(?:b[eê]ta|bety|betan|beta-?vaihe\p{L}*)(?!\p{L})/iu;
+const BETA = /(?<!\p{L})(?:b[eê]ta(?!l[andt])\p{L}*|bet[yęą]|becie)(?!\p{L})/iu;
 const INSTANCE = /instan(?:ce|z|cia|ssi|cj|s)/i;
 const OLD: Record<(typeof LOCALES)[number], { beta: string[]; cta: string[] }> = {
   en: {
@@ -84,7 +85,11 @@ const OLD: Record<(typeof LOCALES)[number], { beta: string[]; cta: string[] }> =
     cta: ["Start free", "Get your own instance"],
   },
   de: {
-    beta: ["Während der Beta ist alles kostenlos.", "Kostenlos während der Beta."],
+    beta: [
+      "Während der Beta ist alles kostenlos.",
+      "Kostenlos während der Beta.",
+      "Kostenlos in der Betaphase.",
+    ],
     cta: ["Kostenlos starten", "Eigene Instanz erhalten"],
   },
   es: {
@@ -92,7 +97,11 @@ const OLD: Record<(typeof LOCALES)[number], { beta: string[]; cta: string[] }> =
     cta: ["Empezar gratis", "Obtén tu propia instancia"],
   },
   fi: {
-    beta: ["Kaikki on ilmaista beta-vaiheen ajan.", "Maksuton betavaiheen ajan."],
+    beta: [
+      "Kaikki on ilmaista beta-vaiheen ajan.",
+      "Maksuton betavaiheen ajan.",
+      "Ilmainen betassa.",
+    ],
     cta: ["Aloita ilmaiseksi", "Hanki oma instanssi"],
   },
   fr: {
@@ -100,11 +109,16 @@ const OLD: Record<(typeof LOCALES)[number], { beta: string[]; cta: string[] }> =
     cta: ["Commencer gratuitement", "Obtenir votre instance"],
   },
   pl: {
-    beta: ["W czasie bety wszystko jest bezpłatne.", "Bezpłatnie w okresie beta."],
+    beta: [
+      "W czasie bety wszystko jest bezpłatne.",
+      "Bezpłatnie w okresie beta.",
+      "Za darmo w becie.",
+      "Za darmo z betą.",
+    ],
     cta: ["Zacznij za darmo", "Załóż własną instancję"],
   },
   sv: {
-    beta: ["Allt är gratis under betan.", "Gratis under betan."],
+    beta: ["Allt är gratis under betan.", "Gratis under betan.", "Gratis under betaperioden."],
     cta: ["Kom igång gratis", "Skaffa din egen instans"],
   },
 };

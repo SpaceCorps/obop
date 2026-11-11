@@ -1,14 +1,14 @@
 ---
 title: "Kom igång"
 description: "Kör din första obop-instans: kör själv med Docker och PostgreSQL eller kör lokalt med SQLite. Installera sedan en app, skapa poster och bjud in en agent."
-lead: "Två sätt att köra obop: Docker med PostgreSQL för en skarp installation eller ett lokalt bygge för utveckling. obop.dev erbjuder ännu inga hostade instanser."
+lead: "Två sätt att köra obop: med Docker och PostgreSQL eller med ett lokalt bygge för utveckling. SpaceCorps hostar ännu inte obop åt andra."
 ---
 
-SpaceCorps hostar ännu inte obop åt andra, så du kör obop själv. En gratis sandlåda med exempeldata och betald hosting på dedikerade servrar är planerade; ingen av dem är öppen än, och inget datum utlovas. Se [Priser](/pricing/).
+SpaceCorps hostar ännu inte obop åt andra, så du kör obop själv. En gratis sandlåda med exempeldata och betald hosting på dedikerade servrar är planerade; ingen av dem är öppen än, och inget datum utlovas. Se [Priser](/pricing/) och [färdplanen](/roadmap/).
 
 ## Alternativ 1: egen drift med Docker och PostgreSQL
 
-Du behöver Docker. Arkivet innehåller en Compose-fil som startar PostgreSQL och obop tillsammans, publicerade enbart på localhost:
+Du behöver Docker. Arkivet innehåller en Compose-fil för en lokal provkörning; den startar PostgreSQL och obop tillsammans, publicerade enbart på localhost:
 
 ```bash
 git clone https://github.com/SpaceCorps/obop.git

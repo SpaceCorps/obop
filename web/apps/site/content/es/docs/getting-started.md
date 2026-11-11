@@ -1,14 +1,14 @@
 ---
 title: "Primeros pasos"
 description: "Pon en marcha tu primera instancia de obop: autoalójala con Docker y PostgreSQL, o ejecútala en local con SQLite. Después instala una aplicación, crea registros e invita a un agente."
-lead: "Dos formas de ejecutar obop: Docker con PostgreSQL para un despliegue real, o una compilación local para desarrollar. obop.dev aún no ofrece instancias alojadas."
+lead: "Dos formas de ejecutar obop: con Docker y PostgreSQL, o con una compilación local para desarrollar. SpaceCorps aún no aloja obop para otras personas."
 ---
 
-SpaceCorps aún no aloja obop para otras personas, así que obop lo ejecutas tú. Están previstos un entorno de pruebas (sandbox) gratuito con datos de ejemplo y un alojamiento de pago en servidores dedicados; ninguno de los dos está abierto todavía, y no se promete ninguna fecha. Consulta [Precios](/pricing/).
+SpaceCorps aún no aloja obop para otras personas, así que obop lo ejecutas tú. Están previstos un entorno de pruebas (sandbox) gratuito con datos de ejemplo y un alojamiento de pago en servidores dedicados; ninguno de los dos está abierto todavía, y no se promete ninguna fecha. Consulta [Precios](/pricing/) y la [hoja de ruta](/roadmap/).
 
 ## Opción 1: autoalojar con Docker y PostgreSQL
 
-Necesitas Docker. El repositorio incluye un archivo Compose que inicia PostgreSQL y obop juntos, publicados solo en localhost:
+Necesitas Docker. El repositorio incluye un archivo Compose para una prueba local; inicia PostgreSQL y obop juntos, publicados solo en localhost:
 
 ```bash
 git clone https://github.com/SpaceCorps/obop.git
