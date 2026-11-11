@@ -325,12 +325,13 @@ async fn login(State(s): Shared, parts: Parts, Json(b): Json<J>) -> Response {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use obop_commands::brand::{Action, apply};
 
-    /// An authenticator that knows no one: only enough for the state to exist.
-    struct Nobody;
+    /// An authenticator that knows no one: only enough for the state to exist (the tests of the
+    /// back office shell use it too).
+    pub(crate) struct Nobody;
 
     impl obop_commands::Authenticator for Nobody {
         fn resolve(&self, _: &str) -> Option<obop_commands::Principal> {

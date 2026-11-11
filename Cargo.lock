@@ -1451,6 +1451,7 @@ dependencies = [
 name = "obop-mcp"
 version = "0.2.1"
 dependencies = [
+ "obop-brand",
  "obop-commands",
  "obop-registry",
  "obop-types",

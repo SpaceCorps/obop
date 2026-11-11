@@ -5,9 +5,11 @@ import { DetailPanel } from "./modules/DetailPanel.tsx";
 import { ModulesPage } from "./modules/ModulesPage.tsx";
 import type { ModulesRoute } from "./modules/types.ts";
 import { useModulesView } from "./modules/view.ts";
+import { IdentityTab } from "./Identity.tsx";
 import { BuildTab } from "./ModuleBuilder.tsx";
 import { SecurityTab } from "./Security.tsx";
 import { UpdatesPage } from "./updates/UpdatesPage.tsx";
+import { productDocsVisible, visibleTabs } from "./productDocs.ts";
 import { href } from "./route.ts";
 import { ContrastReport } from "./brand/ContrastReport.tsx";
 import { ACCENTS, applyTheme, hasPersonalTheme, rememberTheme, resolveTheme } from "./theme.ts";
@@ -68,6 +70,7 @@ type Props = {
 const TABS = [
   { id: "theme", label: msg("Theme"), icon: "sun" },
   { id: "apps", label: msg("Apps"), icon: "grid" },
+  { id: "identity", label: msg("Identity"), icon: "star" },
   { id: "modules", label: msg("Modules"), icon: "plug" },
   { id: "updates", label: msg("Updates"), icon: "arrow-up" },
   { id: "build", label: msg("Build a module"), icon: "edit" },
@@ -77,12 +80,11 @@ const TABS = [
 ] as const;
 
 export function Customize(p: Props) {
-  // Everyone gets their own theme and the read-only brand book; the rest changes the instance.
-  const tabs = TABS.filter(
-    (x) =>
-      p.isAdmin || x.id === "theme" || x.id === "security" || x.id === "brand" || x.id === "guide",
-  );
-  const tab = tabs.some((x) => x.id === p.tab) ? p.tab : "theme";
+  // Everyone gets their own theme and the read-only brand book; the rest changes the instance. The
+  // Brand book and the Guide go when the instance hides them, and the address of a tab that is not
+  // shown opens the first one that is.
+  const tabs = visibleTabs(TABS, { isAdmin: p.isAdmin, docs: productDocsVisible() });
+  const tab = tabs.some((x) => x.id === p.tab) ? p.tab : tabs[0]!.id;
   const current = tabs.find((x) => x.id === tab)!;
   const view = useModulesView({
     token: p.token,
@@ -120,6 +122,7 @@ export function Customize(p: Props) {
         >
           {tab === "theme" && <ThemeTab {...p} />}
           {tab === "apps" && <AppsTab {...p} />}
+          {tab === "identity" && <IdentityTab token={p.token} notify={p.notify} />}
           {tab === "modules" && (
             <ModulesPage view={view} guideHref={GUIDE_LINK} goBuild={() => p.go("build")} />
           )}
@@ -393,16 +396,20 @@ function ThemeTab(props: Props) {
           </div>
         </div>
         <ContrastReport accent={theme.accent} />
-        <Notice tone="info" title={t("Looking for the rules?")}>
-          {t(
-            "The Brand book shows every colour, type size, icon and component in the theme you just picked.",
-          )}
-        </Notice>
-        <div>
-          <Button variant="ghost" iconEnd="arrow-right" onClick={() => go("brand")}>
-            {t("Open the Brand book")}
-          </Button>
-        </div>
+        {productDocsVisible() && (
+          <>
+            <Notice tone="info" title={t("Looking for the rules?")}>
+              {t(
+                "The Brand book shows every colour, type size, icon and component in the theme you just picked.",
+              )}
+            </Notice>
+            <div>
+              <Button variant="ghost" iconEnd="arrow-right" onClick={() => go("brand")}>
+                {t("Open the Brand book")}
+              </Button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
