@@ -1,6 +1,6 @@
 [labels.fi.module]
 name = "Kalusto"
-description = "Pienen kaluston ajoneuvot, kuljettajat ja huoltohistoria. Seuraa tilaa ja huoltotietoja; se ei laske käyttökustannuksia tai polttoaineen kulutusta."
+description = "Pienen kaluston ajoneuvot, kuljettajat ja huoltohistoria. Seuraa tilaa ja huoltotietoja; se ei laske käyttökustannuksia tai polttoaineen kulutusta. Kuljettajan tila ja ajokortin voimassaolo vain kirjataan: mikään ei tarkista niitä, ei myöskään kuljettajaa ajoneuvoon liitettäessä."
 summary = "Pienen kaluston ajoneuvot, kuljettajat ja huoltohistoria."
 
 [labels.fi.model.fleet_vehicle]
@@ -70,7 +70,7 @@ description = "Poista vapaana oleva ajoneuvo kalustosta pysyvästi (vaatii hyvä
 
 [labels.fi.model.fleet_vehicle_driver]
 name = "Kuljettaja"
-description = "Henkilö, jolla on lupa ajaa kaluston ajoneuvoja"
+description = "Kirjattu kuljettaja, jolla on ajokorttitiedot ja tila aktiivinen tai keskeytetty"
 
 [labels.fi.model.fleet_vehicle_driver.field.name]
 label = "Nimi"
@@ -98,11 +98,11 @@ suspended = "Keskeytetty"
 
 [labels.fi.model.fleet_vehicle_driver.action.suspend]
 label = "Keskeytä"
-description = "Keskeytä kuljettaja, esimerkiksi ajokortin vanhennuttua"
+description = "Merkitse kuljettaja keskeytetyksi, esimerkiksi ajokortin vanhennuttua"
 
 [labels.fi.model.fleet_vehicle_driver.action.reactivate]
 label = "Aktivoi uudelleen"
-description = "Salli keskeytetyn kuljettajan ajaa taas"
+description = "Palauta keskeytetty kuljettaja aktiiviseksi"
 
 [labels.fi.model.fleet_vehicle_service]
 name = "Ajoneuvohuolto"

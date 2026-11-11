@@ -1,7 +1,7 @@
 [labels.fi.module]
 name = "Sähköpostimarkkinointi"
-description = "Postituslistat, niillä olevat yhteystiedot suostumuksen tilan ja päivän kanssa sekä kampanjat luonnos-, ajoitettu- ja lähetetty-kulussa. Lähetys on peruuttamaton ja tavoittaa oikeita ihmisiä, joten se vaatii esihenkilön hyväksynnän; agentit voivat vain ehdottaa sitä. Tilastot syötetään tai tuodaan, niitä ei lasketa. Älä koskaan lähetä viestiä yhteystiedolle, joka ei ole tilannut."
-summary = "Postituslistat, suostumuksen antaneet yhteystiedot ja kampanjat. Lähetys vaatii ihmisen hyväksynnän."
+description = "Postituslistat, yhteystiedot suostumuksen tilan ja päivän kanssa sekä kampanjat luonnos-, ajoitettu- ja lähetetty-kulussa. Sähköpostia ei lähetetä: kampanjan merkitseminen lähetetyksi vain kirjaa sen ja vaatii esihenkilön hyväksynnän; agentit voivat vain ehdottaa sitä. Tilastot syötetään tai tuodaan, niitä ei lasketa. Älä koskaan lähetä viestiä yhteystiedolle, joka ei ole tilannut."
+summary = "Postituslistat, yhteystiedot suostumuksineen ja kampanjat. Sähköpostia ei lähetetä; lähetetyksi merkitseminen vaatii hyväksynnän."
 
 [labels.fi.model.email_marketing_list]
 name = "Postituslista"
@@ -55,7 +55,7 @@ description = "Mistä suostumus kerättiin, esimerkiksi verkkosivuston tilauslom
 
 [labels.fi.model.email_marketing_campaign]
 name = "Kampanja"
-description = "Yksi listalle lähetettävä postitus"
+description = "Yksi postitus listalle"
 
 [labels.fi.model.email_marketing_campaign.field.name]
 label = "Nimi"
@@ -129,15 +129,15 @@ cancelled = "Peruutettu"
 
 [labels.fi.model.email_marketing_campaign.action.schedule]
 label = "Ajoita"
-description = "Aseta kampanja jonoon ajoitettua päivää varten"
+description = "Merkitse kampanja ajoitetuksi sen päivälle"
 
 [labels.fi.model.email_marketing_campaign.action.send]
 label = "Lähetä"
-description = "Lähetä ajoitettu kampanja koko listalle (vain esihenkilö)"
+description = "Merkitse ajoitettu kampanja lähetetyksi; sähköpostia ei lähetetä (vain esihenkilö)"
 
 [labels.fi.model.email_marketing_campaign.action.send_now]
 label = "Lähetä nyt"
-description = "Lähetä luonnoskampanja heti (vain esihenkilö)"
+description = "Merkitse luonnoskampanja lähetetyksi; sähköpostia ei lähetetä (vain esihenkilö)"
 
 [labels.fi.model.email_marketing_campaign.action.unschedule]
 label = "Poista ajoitus"
