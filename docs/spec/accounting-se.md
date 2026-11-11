@@ -24,7 +24,7 @@ Two rules shape every stage.
 | 2. VAT | VAT boxes, VAT codes, the VAT report per period with propose and approve | `packages/accounting_se.toml` (bundled in the catalogue; labels in de, fr, pl, fi, sv and es are machine-drafted); the boxes are computed from the ledger by `vat_computation.compute` (section 3.2); UNVERIFIED, never compared with Skatteverket or run on PostgreSQL |
 | 3. SIE 4 | Import and export of SIE 4 files | Built: the crate `obop-sie` (file format) and the commands `obop sie export|import` and `sie_exchange.export|import` (section 4.1); tested on generated files only, NOT checked against the official SIE specification, never run against Fortnox, Visma or a real file |
 | 4. OAS importer | `obop import oas` reads the OAS SQLite file and documents directory | Built for company, accounts, vouchers with entries, customers and receipts (`crates/obop/src/import_oas/`, section 5.3); invoices, payroll, bank, time are listed as skipped; tested against generated data only, never against real books |
-| 5. Invoices | Customer invoices with the ledger voucher | Not built for Sweden (the `invoicing` module exists; the link to the ledger and the Swedish rules do not) |
+| 5. Invoices | Customer invoices with the ledger voucher | First slice: `invoice_posting.create_move` books a posted invoice as a draft move (section 6); UNVERIFIED against Swedish invoice and VAT rules; credit notes, EU and export cases, payment matching not built |
 | 6. Payroll and AGI | Employees, pay runs, employer contributions, AGI file | Data model only, in `packages/contrib/payroll_se/payroll_se.toml` ([payroll-se.md](payroll-se.md); installable by upload, not bundled; every rate and rule UNVERIFIED, nothing seeded); no computation, no AGI XML |
 | 7. Receipts and bank | Receipt archive, bank lines, matching | Parts exist (`documents`, `accounting_bank_statement_line`); matching and booking not built |
 | 8. Time tracking | Projects, time entries, billing | Parts exist (`timesheets` package); the link to invoices is not built |
@@ -151,6 +151,17 @@ An operator command: `obop import oas --from FILE.sqlite --documents DIR` (the f
 ## 6. Stage 5: invoices
 
 OAS issues invoices with a gapless series `F`, a snapshot of the customer, a locked issued state and a draft ledger voucher. obop has the `invoicing` module for posting and numbering. Not built: the link from an issued invoice to an `accounting_move`, Swedish VAT on the invoice (the OAS limit is domestic customers at 25, 12 or 6 percent only), credit notes, EU and export invoices, and payment matching. Work order: the link to the ledger first, then credit notes, then EU and export cases once the codes are verified.
+
+### 6.1 The first slice: `invoice_posting.create_move`
+
+Built in `crates/obop/src/invoice_posting.rs` (typed command on REST and MCP, like `vat_computation.compute`). For a **posted** invoice (one with its number) it creates a **draft** `accounting_move` and its lines, as the caller:
+
+- the caller names `journal`, `receivable_account`, `revenue_account`, `tax` (an `accounting_tax`) and `date` (an invoice has no date of its own); the VAT account is the tax's `tax_account_id`, or `vat_account` when given. Nothing is built in (no BAS account, rate or code, D34); a missing or unknown one is refused in words;
+- lines: one receivable debit (net plus VAT), one revenue credit per invoice line carrying the `tax_id`, one VAT credit carrying the same `tax_id`, so `vat_computation.compute` (section 3.2) finds the base and the VAT once the move is posted and the tax has an `accounting_se_vat_code`. The command notes when no code has that `tax_id`;
+- amounts are integer minor units; VAT is the net total times `rate_bp`, rounded half up once on the total (not per line); a zero rate gives no VAT line; credit notes (a negative line) and a non-positive total are refused;
+- idempotent: a row of `invoice_posting` (invoice id, move id) is the link; a second run for the invoice is refused and writes nothing. The check and the link write are not one transaction: two simultaneous runs could both pass the check (a draft move would be doubled, never posted);
+- governed: the move is a draft and gapless numbering is untouched. Posting is `accounting_move.post` (`accounting.approver`, approval). An agent may only `dry_run`;
+- UNVERIFIED: nothing is checked against Swedish invoice requirements or the VAT act; the invoice currency is not compared with the ledger's; there is no customer snapshot, due date, payment term, OCR number or e-invoice. Gaps in the surfaces: docs/ISSUES.md K60.
 
 ## 7. Stage 6 to 8: payroll, receipts and bank, time
 

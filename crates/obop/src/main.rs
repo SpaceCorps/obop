@@ -53,6 +53,9 @@ mod import_oas_tests;
 mod import_timeline;
 #[cfg(test)]
 mod internal_tables_scan_tests;
+mod invoice_posting;
+#[cfg(test)]
+mod invoice_posting_tests;
 #[cfg(test)]
 mod kinds_tests;
 #[cfg(test)]
