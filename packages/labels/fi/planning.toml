@@ -1,7 +1,7 @@
 [labels.fi.module]
 name = "Suunnittelu"
-description = "Työntekijöiden työvuorot rooleineen ja uudelleenkäytettävine malleineen. Vuorolla on päivä sekä alku- ja loppuaika minuutteina keskiyöstä (0-1439; 540 tarkoittaa kello 9.00). Vuoro ilman työntekijää on avoin vuoro. Kulku: avoin, julkaistu, työntekijän vahvistama. Vaatii Henkilöstö-paketin."
-summary = "Työntekijöiden työvuorot rooleineen ja uudelleenkäytettävine malleineen; avoimet vuorot julkaistaan ja vahvistetaan."
+description = "Työntekijöiden työvuorot rooleineen ja vuoromalleineen. Malli tallentaa vain nimen, roolin ja ajat: mikään toiminto ei luo siitä vuoroa. Vuorolla on päivä sekä alku- ja loppuaika minuutteina keskiyöstä (0-1439; 540 tarkoittaa kello 9.00). Vuoro ilman työntekijää on avoin vuoro. Kulku: avoin, julkaistu, työntekijän vahvistama. Vaatii Henkilöstö-paketin."
+summary = "Työntekijöiden työvuorot rooleineen ja vuoromalleineen; avoimet vuorot julkaistaan ja vahvistetaan."
 
 [labels.fi.model.planning_role]
 name = "Rooli"
@@ -17,7 +17,7 @@ description = "Mitä rooliin kuuluu"
 
 [labels.fi.model.planning_template]
 name = "Vuoromalli"
-description = "Uudelleenkäytettävä vuoromalli, josta kopioidaan vuoroja"
+description = "Nimetty vuoromalli, jossa on rooli sekä alku- ja loppuaika; mikään toiminto ei luo siitä vuoroja"
 
 [labels.fi.model.planning_template.field.name]
 label = "Nimi"

@@ -1035,7 +1035,10 @@ describe("a card with plain words of its own (data/apps.ts)", () => {
     const email = apps.find((a) => a.id === "email_marketing")!;
     const manifest = readFileSync(join(REPO, "packages/email_marketing.toml"), "utf8");
     const own = /^description = "([^"]+)"/m.exec(manifest)![1]!;
-    expect(own).toMatch(/irreversible and reaches real people/);
+    // The manifest no longer says that sending reaches people (pull request 114); the site's text adds what
+    // a Connectors connection can do, which the manifest does not know.
+    expect(own).toMatch(/No email is sent/);
+    expect(own).not.toMatch(/irreversible and reaches real people/);
     expect(email.description).not.toMatch(/irreversible and reaches real people/);
     for (const kept of [
       "Campaign statistics are numbers entered or imported, not computed.",

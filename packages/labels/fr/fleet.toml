@@ -1,6 +1,6 @@
 [labels.fr.module]
 name = "Parc automobile"
-description = "Véhicules, conducteurs et historique d’entretien pour un petit parc. Suit les statuts et les interventions ; ne calcule ni les coûts d’exploitation ni la consommation de carburant."
+description = "Véhicules, conducteurs et historique d’entretien pour un petit parc. Suit les statuts et les interventions ; ne calcule ni les coûts d’exploitation ni la consommation de carburant. Le statut d’un conducteur et l’expiration de son permis sont seulement enregistrés : rien ne les vérifie, pas même l’affectation d’un conducteur à un véhicule."
 summary = "Véhicules, conducteurs et historique d’entretien pour un petit parc."
 
 [labels.fr.model.fleet_vehicle]
@@ -70,7 +70,7 @@ description = "Retire définitivement un véhicule disponible du parc (nécessit
 
 [labels.fr.model.fleet_vehicle_driver]
 name = "Conducteur"
-description = "Une personne autorisée à conduire les véhicules du parc"
+description = "Un conducteur enregistré, avec les données de son permis et un statut actif ou suspendu"
 
 [labels.fr.model.fleet_vehicle_driver.field.name]
 label = "Nom"
@@ -98,11 +98,11 @@ suspended = "Suspendu"
 
 [labels.fr.model.fleet_vehicle_driver.action.suspend]
 label = "Suspendre"
-description = "Suspend un conducteur, par exemple après l’expiration de son permis"
+description = "Marque un conducteur comme suspendu, par exemple après l’expiration de son permis"
 
 [labels.fr.model.fleet_vehicle_driver.action.reactivate]
 label = "Réactiver"
-description = "Autorise de nouveau un conducteur suspendu à conduire"
+description = "Remet un conducteur suspendu au statut actif"
 
 [labels.fr.model.fleet_vehicle_service]
 name = "Intervention sur véhicule"

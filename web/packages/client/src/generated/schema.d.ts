@@ -1033,7 +1033,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Post a draft invoice and assign its legal number
+         * Post a draft invoice and give it the next number of the series
          * @description Irreversible or money-moving: an agent token only proposes this and a human approves.
          */
         post: operations["invoice.post"];
@@ -3469,11 +3469,11 @@ export interface components {
             /** @description Output of the last command (checklist, purge); never stored */
             result?: string;
         };
-        /** @description A customer invoice; posted invoices are corrected only by credit notes */
+        /** @description A customer invoice; no action takes a posted invoice back to draft or cancels it */
         invoice: {
             /** @description ISO 4217 currency code */
             currency?: string;
-            /** @description Gapless legal number such as INV-2026-00042, assigned when posted (a number the system assigns; read-only) */
+            /** @description Number from a gapless yearly series, such as INV-2026-00042, assigned when posted (a number the system assigns; read-only) */
             readonly number?: string;
             /** @description Customer party id */
             party_id?: string;

@@ -3,8 +3,8 @@
 id = "invoicing"
 version = "0.2.1"
 name = "Invoicing"
-description = "Customer invoices with lines: drafts, posting with a gapless legal number, cancellation."
-summary = "Customer invoices with a draft, posted and paid life cycle."
+description = "Customer invoices with lines: drafts, posting with the next number of a gapless yearly series, cancellation."
+summary = "Customer invoices with a draft, posted and cancelled life cycle."
 author = "SpaceCorps"
 license = "Apache-2.0"
 homepage = "https://github.com/SpaceCorps/obop"
@@ -20,7 +20,7 @@ sales = "*"
 
 [[model]]
 name = "invoice"
-description = "A customer invoice; posted invoices are corrected only by credit notes"
+description = "A customer invoice; no action takes a posted invoice back to draft or cancels it"
 read_group = "invoicing.user"
 write_group = "invoicing.user"
 
@@ -59,7 +59,7 @@ computed = "sum(lines.amount_minor)"
 
 [[model.field]]
 name = "number"
-description = "Gapless legal number such as INV-2026-00042, assigned when posted"
+description = "Number from a gapless yearly series, such as INV-2026-00042, assigned when posted"
 class = "none"
 kind = "sequence"
 format = "INV-{year}-{seq:05}"
@@ -68,7 +68,7 @@ gapless = true
 
 [[model.action]]
 name = "post"
-description = "Post a draft invoice and assign its legal number"
+description = "Post a draft invoice and give it the next number of the series"
 field = "state"
 from = "draft"
 to = "posted"

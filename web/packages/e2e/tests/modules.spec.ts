@@ -78,7 +78,7 @@ test.describe("Customize > Modules", () => {
     await page.getByRole("tab", { name: /^Marketplace/ }).click();
     const ts = card(page, "Timesheets");
     await expect(ts).toBeVisible();
-    await expect(ts).toContainText("0.3.0 · SpaceCorps");
+    await expect(ts).toContainText("0.3.1 · SpaceCorps");
     await expect(ts).toContainText("Beta");
     await expect(ts).toContainText("Works with core 0.2");
     await expect(ts).toContainText("Marketplace");
