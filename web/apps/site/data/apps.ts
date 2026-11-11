@@ -143,13 +143,13 @@ export const APP_COPY: AppCopy[] = [
         text: "Post a draft invoice and give it its next number in the yearly series. Refused if the invoice has no amount.",
       },
     },
-    // The module says "posted invoices are corrected only by credit notes" (crates/modules/invoicing/src/lib.rs:17):
-    // there is no credit note in the module, and nothing locks a posted invoice's fields. What holds is
-    // that no action leaves "posted" (lib.rs:72-85 is the whole list of actions: post, cancel). The
-    // module's number field says "legal number" (lib.rs:64) and its post action "assign its legal
-    // number" (lib.rs:75): the module gives a gapless number of the year (lib.rs:69-70,
-    // `.sequence(.., true, Reset::Year).assign_on("post")`) and makes no claim about the law, so the
-    // site says that. A post is refused for an invoice with no amount (lib.rs:79-82). Posting locks nothing:
+    // The module once said "posted invoices are corrected only by credit notes", "legal number" and "paid"
+    // (fixed at the source in pull request 114; data/builtin/invoicing.toml follows it): there
+    // is no credit note in the module, and nothing locks a posted invoice's fields. What holds is
+    // that no action leaves "posted" (the actions are post and cancel, and cancel only from draft). The
+    // module gives a gapless number of the year (`.sequence(.., true, Reset::Year).assign_on("post")`)
+    // and makes no claim about the law, so the site says that. A post is refused for an invoice with no
+    // amount (lib.rs, the post guard). Posting locks nothing:
     // invoice and invoice_line have `ext: Default::default()` (lib.rs:87, :149), so no immutable_when (the guard
     // exists in crates/kernel/obop-registry/src/ext.rs:112-128, and no module or package uses it), and
     // invoicing.user writes the lines (:93).
@@ -712,9 +712,9 @@ export const APP_COPY: AppCopy[] = [
       "Keep mailing lists with each contact's consent status and date, and prepare campaigns. By itself, marking a campaign as sent only records that it went out; obop does not send the emails itself. A connection set up in Connectors can pass the campaign to another tool when it is marked as sent.",
     // A connection to a service that receives records delivers the record on the commands it lists
     // (crates/kernel/obop-connectors/src/runtime.rs:758-800, :1580-1605; the events field,
-    // crates/kernel/obop-connectors/src/catalog.rs:249-255). The package text says "Sending is irreversible and reaches real people, so it needs a human
-    // approval" (packages/email_marketing.toml:5). Nothing in the repository sends an email: the
-    // action marks the campaign as sent. The rest of the text is the manifest's, word for word.
+    // crates/kernel/obop-connectors/src/catalog.rs:249-255). The package text used to say "Sending is irreversible and reaches real people, so it needs a human
+    // approval" (fixed at the source in pull request 114). Nothing in the repository sends an email: the
+    // action marks the campaign as sent. The site's text adds the Connectors sentence; the rest is the manifest's.
     packageText:
       "Mailing lists, the contacts on them with their consent status and date, and campaigns with a draft, scheduled, sent flow. Marking a campaign as sent needs a manager, and agents may only propose it; obop does not send the emails itself. Campaign statistics are numbers entered or imported, not computed. Contacts are personal data: keep consent_status and consent_date accurate and never mail a contact that is not opted_in.",
     // email_marketing_list.is_public: packages/email_marketing.toml has no [model.public] section and
