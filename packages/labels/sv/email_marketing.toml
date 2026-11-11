@@ -1,7 +1,7 @@
 [labels.sv.module]
 name = "E-postmarknadsföring"
-description = "Utskickslistor, kontakterna på dem med samtyckesstatus och datum samt kampanjer med flödet utkast, schemalagd, skickad. Utskick kan inte ångras och kräver en chefs godkännande; agenter får bara föreslå dem. Kampanjstatistik anges eller importeras. Kontakter är personuppgifter: håll samtycket korrekt och skicka aldrig till en kontakt som inte är anmäld."
-summary = "Utskickslistor, kontakter med samtycke och kampanjer. Utskick kräver mänskligt godkännande."
+description = "Utskickslistor, kontakter med samtyckesstatus och datum samt kampanjer med flödet utkast, schemalagd, skickad. Ingen e-post skickas: att markera en kampanj som skickad registrerar bara det och kräver en chefs godkännande; agenter får bara föreslå det. Kampanjstatistik anges eller importeras. Kontakter är personuppgifter: håll samtycket korrekt och skicka aldrig till en kontakt som inte är anmäld."
+summary = "Utskickslistor, kontakter med samtycke och kampanjer. Ingen e-post skickas; att markera som skickad kräver godkännande."
 
 [labels.sv.model.email_marketing_list]
 name = "Utskickslista"
@@ -129,15 +129,15 @@ cancelled = "Annullerad"
 
 [labels.sv.model.email_marketing_campaign.action.schedule]
 label = "Schemalägg"
-description = "Köa kampanjen till dess schemalagda dag"
+description = "Markera kampanjen som schemalagd till dess dag"
 
 [labels.sv.model.email_marketing_campaign.action.send]
 label = "Skicka"
-description = "Skicka den schemalagda kampanjen till hela listan (endast chef)"
+description = "Markera den schemalagda kampanjen som skickad; ingen e-post skickas (endast chef)"
 
 [labels.sv.model.email_marketing_campaign.action.send_now]
 label = "Skicka nu"
-description = "Skicka en kampanj i utkast direkt (endast chef)"
+description = "Markera en kampanj i utkast som skickad; ingen e-post skickas (endast chef)"
 
 [labels.sv.model.email_marketing_campaign.action.unschedule]
 label = "Avbryt schemaläggning"

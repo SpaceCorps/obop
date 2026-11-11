@@ -1,10 +1,10 @@
 [labels.pl.module]
 name = "Fakturowanie"
-summary = "Faktury klientów z cyklem życia wersja robocza, zaksięgowana, opłacona."
+summary = "Faktury klientów z cyklem życia wersja robocza, zaksięgowana, anulowana."
 
 [labels.pl.model.invoice]
 name = "Faktura"
-description = "Faktura sprzedaży dla klienta; zaksięgowane faktury koryguje się wyłącznie fakturami korygującymi"
+description = "Faktura sprzedaży dla klienta; żadna akcja nie przywraca zaksięgowanej faktury do wersji roboczej ani jej nie anuluje"
 
 [labels.pl.model.invoice.field.sale_order_id]
 label = "Zamówienie sprzedaży"
@@ -25,11 +25,11 @@ description = "Suma faktury w jednostkach podrzędnych waluty, czyli suma pozycj
 
 [labels.pl.model.invoice.field.number]
 label = "Numer"
-description = "Ciągły numer prawny, np. INV-2026-00042, nadawany przy księgowaniu"
+description = "Numer z ciągłej serii rocznej, np. INV-2026-00042, nadawany przy księgowaniu"
 
 [labels.pl.model.invoice.action.post]
 label = "Zaksięguj"
-description = "Księguje fakturę roboczą i nadaje jej numer prawny"
+description = "Księguje fakturę roboczą i nadaje jej kolejny numer z serii"
 
 [labels.pl.model.invoice.action.cancel]
 label = "Anuluj"

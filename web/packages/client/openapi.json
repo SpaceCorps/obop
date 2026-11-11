@@ -528,14 +528,14 @@
         "type": "object"
       },
       "invoice": {
-        "description": "A customer invoice; posted invoices are corrected only by credit notes",
+        "description": "A customer invoice; no action takes a posted invoice back to draft or cancels it",
         "properties": {
           "currency": {
             "description": "ISO 4217 currency code",
             "type": "string"
           },
           "number": {
-            "description": "Gapless legal number such as INV-2026-00042, assigned when posted (a number the system assigns; read-only)",
+            "description": "Number from a gapless yearly series, such as INV-2026-00042, assigned when posted (a number the system assigns; read-only)",
             "readOnly": true,
             "type": "string"
           },
@@ -10204,7 +10204,7 @@
             "bearerAuth": []
           }
         ],
-        "summary": "Post a draft invoice and assign its legal number",
+        "summary": "Post a draft invoice and give it the next number of the series",
         "tags": [
           "Invoicing"
         ]
