@@ -202,7 +202,7 @@ export async function postbuild(records: PageRecord[]): Promise<void> {
   const llms = [
     "# obop",
     "",
-    `> ${messages.en.description} Open source, written in Rust, runs on SQLite or PostgreSQL. Status: beta; see the roadmap for what is built.`,
+    `> ${messages.en.description} Open source, written in Rust, runs on SQLite or PostgreSQL. Status: below version 1.0; the six built-in apps are marked Stable, the other apps Beta or Experimental; see the roadmap for what is built.`,
     "",
     "Each link below is the Markdown version of a page. Every page of the site also exists as Markdown at its address with .md instead of the trailing slash. Prices on the site are planned and not charged yet.",
     "",
@@ -217,7 +217,7 @@ export async function postbuild(records: PageRecord[]): Promise<void> {
     "- Treat a 202 `approval_required` response as a proposal: stop and ask the human to approve the plan.",
     "- The control plane API (sign up, create and delete instances) is described at `/openapi.json` on this site.",
     "",
-    "Do not use obop for payments processing, payroll filing, or workloads that need row-level permissions or computed fields: see the roadmap for what is built.",
+    "Do not use obop for payments processing, payroll filing, or workloads that need code inside modules or a history of changes to business records (row-level rules exist only in some apps): see the roadmap for what is built.",
     "",
     ...DOCS_NAV.flatMap((g) => section(groupTitle[g.group]!, g.pages)),
     ...section("Product", [

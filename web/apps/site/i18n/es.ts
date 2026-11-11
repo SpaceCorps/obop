@@ -43,7 +43,7 @@ export const es: Messages = {
     langSuggest: "Esta página también está disponible en español.",
     langSuggestGo: "Cambiar a español",
     dismiss: "Cerrar",
-    betaNote: "Plataforma empresarial de código abierto. Beta.",
+    betaNote: "Plataforma empresarial de código abierto. Anterior a la versión 1.0.",
     allRightsNote: "Los precios previstos aún no se cobran.",
     sourceCode: "Código fuente en GitHub",
     docsHome: "Documentación",
@@ -101,7 +101,7 @@ export const es: Messages = {
   },
   home: {
     eyebrow: "Plataforma empresarial de código abierto",
-    badge: "Beta",
+    badge: "Antes de 1.0",
     titleA: "Un negocio.",
     titleB: "Una plataforma.",
     lead: "CRM, ventas, facturación y más sobre un único modelo de datos. Pensada para personas y para agentes de IA, con los permisos y la privacidad necesarios para confiar en ambos.",
@@ -211,7 +211,7 @@ export const es: Messages = {
       },
       {
         q: "¿Está obop listo para producción?",
-        a: "Todavía no. obop está en beta. El núcleo funciona y está probado, pero aún no hay migraciones de datos entre versiones de los módulos, nada hace copias de seguridad de las bases de datos alojadas y muchas de las aplicaciones incluidas son deliberadamente sencillas. Por ahora, úsalo para evaluarlo y para trabajo no crítico. La página de la hoja de ruta indica qué está construido y qué no.",
+        a: "Todavía no. obop aún no ha llegado a la versión 1.0, así que una nueva versión todavía puede cambiar cosas. El núcleo funciona y está probado, las seis aplicaciones integradas figuran como Estable, las demás como Beta o Experimental, y muchas de las aplicaciones incluidas son deliberadamente sencillas. Las copias de seguridad programadas de las bases de datos alojadas aún no están construidas. Por ahora, úsalo para evaluarlo y para trabajo no crítico. La página de la hoja de ruta indica qué está construido y qué no.",
       },
       {
         q: "¿Cuánto cuesta?",
@@ -432,7 +432,8 @@ export const es: Messages = {
       safeMasked:
         "Los agentes de IA ven los campos marcados como datos personales, como los nombres y los correos electrónicos, solo como marcadores de posición. El texto escrito en un campo que no está marcado como dato personal, como una descripción, no se sustituye por un marcador.",
       safeWithheld:
-        "Los agentes de IA nunca ven los campos marcados como sensibles. En esta aplicación: {list}. Un precio o un total se muestra, salvo que su campo sea uno de estos.",
+        "Los agentes de IA nunca ven los campos marcados como sensibles. En esta aplicación: {list}.",
+      safeMoneyClear: "Un precio o un total se muestra, salvo que su campo sea uno de estos.",
       safeKinds: {
         financial: "datos financieros sensibles",
         confidential_hr: "datos confidenciales de recursos humanos",

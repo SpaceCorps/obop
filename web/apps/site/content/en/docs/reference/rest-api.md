@@ -160,6 +160,6 @@ The same commands are also exposed as MCP tools at `POST /mcp` (Streamable HTTP,
 
 ## Versioning
 
-There is no version header or deprecation policy yet. The product plan calls for a dated version header; until it exists, treat the API as unstable during the beta and check the [changelog](/changelog/).
+There is no version header or deprecation policy yet. The product plan calls for a dated version header; until it exists, remember that obop is below version 1.0, so a minor release can change the API, and check the [changelog](/changelog/) before you upgrade.
 
 See [Use the REST API](/docs/agents/rest/) for worked examples and the [module manifest reference](/docs/reference/module-manifest/) for how fields and actions are declared.

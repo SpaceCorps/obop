@@ -43,7 +43,7 @@ export const sv: Messages = {
     langSuggest: "Den här sidan finns också på svenska.",
     langSuggestGo: "Byt till svenska",
     dismiss: "Stäng",
-    betaNote: "Affärsplattform med öppen källkod. Beta.",
+    betaNote: "Affärsplattform med öppen källkod. Före version 1.0.",
     allRightsNote: "Planerade priser debiteras inte ännu.",
     sourceCode: "Källkod på GitHub",
     docsHome: "Dokumentation",
@@ -101,7 +101,7 @@ export const sv: Messages = {
   },
   home: {
     eyebrow: "Affärsplattform med öppen källkod",
-    badge: "Beta",
+    badge: "Före 1.0",
     titleA: "Ett företag.",
     titleB: "En plattform.",
     lead: "CRM, försäljning, fakturering och mer på en enda datamodell. Byggd för människor och för AI-agenter, med de behörigheter och den integritet som krävs för att kunna lita på båda.",
@@ -208,7 +208,7 @@ export const sv: Messages = {
       },
       {
         q: "Är obop redo för skarp användning?",
-        a: "Inte ännu. obop är i beta. Kärnan fungerar och är testad, men det finns inga datamigreringar mellan modulversioner ännu, ingenting tar säkerhetskopior av de hostade databaserna och många av de medföljande apparna är medvetet enkla. Använd obop för att utvärdera och för icke-kritiskt arbete tills vidare. På färdplanen ser du vad som är byggt och vad som inte är det.",
+        a: "Inte ännu. obop har inte nått version 1.0 ännu, så en ny version kan fortfarande ändra saker. Kärnan fungerar och är testad, de sex inbyggda apparna är märkta Stabil, de övriga Beta eller Experimentell, och många av de medföljande apparna är medvetet enkla. Schemalagda säkerhetskopior av de hostade databaserna är ännu inte byggda. Använd obop för att utvärdera och för icke-kritiskt arbete tills vidare. På färdplanen ser du vad som är byggt och vad som inte är det.",
       },
       {
         q: "Vad kostar det?",
@@ -427,7 +427,8 @@ export const sv: Messages = {
       safeMasked:
         "AI-agenter ser fält som är märkta som personuppgifter, till exempel namn och e-postadresser, bara som platshållare. Text som skrivs i ett fält som inte är märkt som personuppgift, till exempel en beskrivning, ersätts inte av en platshållare.",
       safeWithheld:
-        "AI-agenter ser aldrig fält som är markerade som känsliga. I den här appen: {list}. Ett pris eller en summa visas, om inte dess fält är ett av dessa.",
+        "AI-agenter ser aldrig fält som är markerade som känsliga. I den här appen: {list}.",
+      safeMoneyClear: "Ett pris eller en summa visas, om inte dess fält är ett av dessa.",
       safeKinds: {
         financial: "känsliga finansiella uppgifter",
         confidential_hr: "konfidentiella HR-uppgifter",

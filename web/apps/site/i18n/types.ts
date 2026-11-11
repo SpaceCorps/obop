@@ -249,6 +249,8 @@ export interface Messages {
       safeMasked: string;
       /** The line about what an AI agent never sees; {list} is the kinds below that the app holds. */
       safeWithheld: string;
+      /** The tail line of an app that holds a money field an AI agent can read (a price or a total). */
+      safeMoneyClear: string;
       /** One kind of withheld detail, by the data class that is withheld (apps.ts `WITHHELD_CLASSES`). */
       safeKinds: Record<"financial" | "confidential_hr" | "special_category" | "secret", string>;
       safeApprove: string;

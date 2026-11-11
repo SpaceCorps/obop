@@ -43,7 +43,7 @@ export const de: Messages = {
     langSuggest: "Diese Seite gibt es auch auf Englisch.",
     langSuggestGo: "Zu Englisch wechseln",
     dismiss: "Schließen",
-    betaNote: "Open-Source-Geschäftsplattform. Beta.",
+    betaNote: "Open-Source-Geschäftsplattform. Vor Version 1.0.",
     allRightsNote: "Geplante Preise werden noch nicht berechnet.",
     sourceCode: "Quellcode auf GitHub",
     docsHome: "Dokumentation",
@@ -101,7 +101,7 @@ export const de: Messages = {
   },
   home: {
     eyebrow: "Open-Source-Geschäftsplattform",
-    badge: "Beta",
+    badge: "Vor 1.0",
     titleA: "Ein Unternehmen.",
     titleB: "Eine Plattform.",
     lead: "CRM, Vertrieb, Rechnungsstellung und mehr auf einem einzigen Datenmodell. Gebaut für Menschen und für KI-Agenten, mit den Berechtigungen und dem Datenschutz, die beiden Vertrauen ermöglichen.",
@@ -211,7 +211,7 @@ export const de: Messages = {
       },
       {
         q: "Ist obop produktionsreif?",
-        a: "Noch nicht. obop befindet sich in der Beta. Der Kern funktioniert und ist getestet, aber es gibt noch keine Datenmigrationen zwischen Modulversionen, die gehosteten Datenbanken werden nicht gesichert, und viele mitgelieferte Apps sind bewusst einfach gehalten. Nutzen Sie obop vorerst zum Evaluieren und für unkritische Arbeit. Die Roadmap-Seite zeigt, was gebaut ist und was nicht.",
+        a: "Noch nicht. obop hat die Version 1.0 noch nicht erreicht, daher kann eine neue Version noch etwas ändern. Der Kern funktioniert und ist getestet, die sechs eingebauten Apps sind als Stabil gekennzeichnet, die übrigen Apps als Beta oder Experimentell, und viele mitgelieferte Apps sind bewusst einfach gehalten. Zeitgesteuerte Sicherungen der gehosteten Datenbanken sind noch nicht gebaut. Nutzen Sie obop vorerst zum Evaluieren und für unkritische Arbeit. Die Roadmap-Seite zeigt, was gebaut ist und was nicht.",
       },
       {
         q: "Was kostet obop?",
@@ -433,7 +433,9 @@ export const de: Messages = {
       safeMasked:
         "KI-Agenten sehen die als personenbezogen gekennzeichneten Felder, etwa Namen und E-Mail-Adressen, nur als Platzhalter. Text in einem Feld, das nicht als personenbezogen gekennzeichnet ist, etwa in einer Beschreibung, wird nicht durch einen Platzhalter ersetzt.",
       safeWithheld:
-        "KI-Agenten sehen die als sensibel gekennzeichneten Felder nie. In dieser App: {list}. Ein Preis oder eine Summe wird angezeigt, es sei denn, ihr Feld gehört dazu.",
+        "KI-Agenten sehen die als sensibel gekennzeichneten Felder nie. In dieser App: {list}.",
+      safeMoneyClear:
+        "Ein Preis oder eine Summe wird angezeigt, es sei denn, ihr Feld gehört dazu.",
       safeKinds: {
         financial: "sensible Finanzangaben",
         confidential_hr: "vertrauliche Personalangaben",

@@ -31,7 +31,7 @@ Honest list, so you can decide:
 
 - **No audit log** of reads and changes yet, and no marking of who or which agent changed a record.
 - **No revoke command** for agent tokens and no expiry. A token works until its owner is removed.
-- **No row-level permissions.** Access is by model and field group.
+- **Row rules in some apps only.** Everywhere, access is by model and field group. Some apps (for example Expenses, Timesheets, HR leave requests, Documents and Dashboards) also limit which records a person sees; CRM, Sales and Invoicing do not. A rule covers whole records, not fields.
 - **No encryption at rest or key management** beyond what your database provider gives you.
 - **No backups or point-in-time recovery** for the hosted service.
 - **No single sign-on.** Two-factor is an authenticator app or a passkey (no SMS), passkeys are tested only with software and virtual authenticators, and the server holds the key that seals the authenticator-app secrets.

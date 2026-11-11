@@ -43,7 +43,7 @@ export const fr: Messages = {
     langSuggest: "Cette page est aussi disponible en français.",
     langSuggestGo: "Passer en français",
     dismiss: "Fermer",
-    betaNote: "Plateforme de gestion open source. Bêta.",
+    betaNote: "Plateforme de gestion open source. Avant la version 1.0.",
     allRightsNote: "Les tarifs prévus ne sont pas encore facturés.",
     sourceCode: "Code source sur GitHub",
     docsHome: "Documentation",
@@ -101,7 +101,7 @@ export const fr: Messages = {
   },
   home: {
     eyebrow: "Plateforme de gestion open source",
-    badge: "Bêta",
+    badge: "Avant 1.0",
     titleA: "Une entreprise.",
     titleB: "Une plateforme.",
     lead: "CRM, ventes, facturation et plus encore sur un seul modèle de données. Conçue pour les personnes comme pour les agents IA, avec les permissions et la confidentialité qui permettent de se fier aux deux.",
@@ -211,7 +211,7 @@ export const fr: Messages = {
       },
       {
         q: "obop est-il prêt pour la production ?",
-        a: "Pas encore. obop est en bêta. Le cœur fonctionne et est testé, mais il n'existe pas encore de migrations de données entre les versions de modules, rien ne sauvegarde les bases de données hébergées, et de nombreuses applications fournies sont volontairement simples. Pour l'instant, utilisez-le pour évaluer la plateforme et pour des travaux non critiques. La page de la feuille de route indique ce qui est réalisé et ce qui ne l'est pas.",
+        a: "Pas encore. obop n'a pas encore atteint la version 1.0, donc une nouvelle version peut toujours changer des choses. Le cœur fonctionne et est testé, les six applications intégrées sont marquées Stable, les autres Bêta ou Expérimental, et de nombreuses applications fournies sont volontairement simples. Les sauvegardes planifiées des bases de données hébergées ne sont pas encore développées. Pour l'instant, utilisez-le pour évaluer la plateforme et pour des travaux non critiques. La page de la feuille de route indique ce qui est réalisé et ce qui ne l'est pas.",
       },
       {
         q: "Combien cela coûte-t-il ?",
@@ -438,7 +438,8 @@ export const fr: Messages = {
       safeMasked:
         "Les agents IA ne voient les champs marqués comme données personnelles, comme les noms et les adresses e-mail, que sous forme de marqueurs de remplacement. Le texte saisi dans un champ qui n'est pas marqué comme donnée personnelle, comme une description, n'est pas remplacé par un marqueur.",
       safeWithheld:
-        "Les agents IA ne voient jamais les champs marqués comme sensibles. Dans cette application : {list}. Un prix ou un total est affiché, sauf si son champ en fait partie.",
+        "Les agents IA ne voient jamais les champs marqués comme sensibles. Dans cette application : {list}.",
+      safeMoneyClear: "Un prix ou un total est affiché, sauf si son champ en fait partie.",
       safeKinds: {
         financial: "données financières sensibles",
         confidential_hr: "données RH confidentielles",

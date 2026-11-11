@@ -43,7 +43,7 @@ export const pl: Messages = {
     langSuggest: "Ta strona jest dostępna także po angielsku.",
     langSuggestGo: "Przełącz na angielski",
     dismiss: "Zamknij",
-    betaNote: "Otwartoźródłowa platforma biznesowa. Wersja beta.",
+    betaNote: "Otwartoźródłowa platforma biznesowa. Przed wersją 1.0.",
     allRightsNote: "Planowane ceny nie są jeszcze pobierane.",
     sourceCode: "Kod źródłowy na GitHubie",
     docsHome: "Dokumentacja",
@@ -101,7 +101,7 @@ export const pl: Messages = {
   },
   home: {
     eyebrow: "Otwartoźródłowa platforma biznesowa",
-    badge: "Beta",
+    badge: "Przed 1.0",
     titleA: "Jedna firma.",
     titleB: "Jedna platforma.",
     lead: "CRM, sprzedaż, fakturowanie i inne aplikacje na jednym modelu danych. Stworzona dla ludzi i dla agentów AI, z uprawnieniami i ochroną prywatności, które pozwalają zaufać jednym i drugim.",
@@ -208,7 +208,7 @@ export const pl: Messages = {
       },
       {
         q: "Czy obop nadaje się do użytku produkcyjnego?",
-        a: "Jeszcze nie. Platforma jest w fazie beta. Rdzeń działa i jest testowany, ale nie ma jeszcze migracji danych między wersjami modułów, nic nie tworzy kopii zapasowych hostowanych baz danych, a wiele wbudowanych aplikacji jest celowo prostych. Na razie używaj jej do oceny i do mniej krytycznych zadań. Strona planu rozwoju wymienia, co jest gotowe, a czego jeszcze nie ma.",
+        a: "Jeszcze nie. obop nie osiągnął jeszcze wersji 1.0, więc nowe wydanie wciąż może coś zmienić. Rdzeń działa i jest testowany, sześć wbudowanych aplikacji jest oznaczonych jako Stabilny, pozostałe jako Beta lub Eksperymentalny, a wiele dołączonych aplikacji jest celowo prostych. Zaplanowane kopie zapasowe hostowanych baz danych nie są jeszcze gotowe. Na razie używaj jej do oceny i do mniej krytycznych zadań. Strona planu rozwoju wymienia, co jest gotowe, a czego jeszcze nie ma.",
       },
       {
         q: "Ile to kosztuje?",
@@ -432,7 +432,8 @@ export const pl: Messages = {
       safeMasked:
         "Agenci AI widzą pola oznaczone jako dane osobowe, takie jak imiona i nazwiska oraz adresy e-mail, tylko jako symbole zastępcze. Tekst wpisany w pole, które nie jest oznaczone jako dane osobowe, na przykład w opis, nie jest zastępowany symbolem.",
       safeWithheld:
-        "Agenci AI nigdy nie widzą pól oznaczonych jako wrażliwe. W tej aplikacji: {list}. Cena lub suma jest widoczna, chyba że jej pole jest jednym z nich.",
+        "Agenci AI nigdy nie widzą pól oznaczonych jako wrażliwe. W tej aplikacji: {list}.",
+      safeMoneyClear: "Cena lub suma jest widoczna, chyba że jej pole jest jednym z nich.",
       safeKinds: {
         financial: "wrażliwe dane finansowe",
         confidential_hr: "poufne dane kadrowe",

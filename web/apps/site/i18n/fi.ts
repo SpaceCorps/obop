@@ -43,7 +43,7 @@ export const fi: Messages = {
     langSuggest: "Tämä sivu on saatavilla myös englanniksi.",
     langSuggestGo: "Vaihda englantiin",
     dismiss: "Sulje",
-    betaNote: "Avoimen lähdekoodin yritysalusta. Beta-vaihe.",
+    betaNote: "Avoimen lähdekoodin yritysalusta. Ennen versiota 1.0.",
     allRightsNote: "Suunniteltuja hintoja ei veloiteta vielä.",
     sourceCode: "Lähdekoodi GitHubissa",
     docsHome: "Dokumentaatio",
@@ -101,7 +101,7 @@ export const fi: Messages = {
   },
   home: {
     eyebrow: "Avoimen lähdekoodin yritysalusta",
-    badge: "Beta",
+    badge: "Ennen 1.0",
     titleA: "Yksi yritys.",
     titleB: "Yksi alusta.",
     lead: "CRM, myynti, laskutus ja muuta yhdellä tietomallilla. Tehty ihmisille ja tekoälyagenteille, ja käyttöoikeudet ja tietosuoja on rakennettu niin, että molempiin voi luottaa.",
@@ -211,7 +211,7 @@ export const fi: Messages = {
       },
       {
         q: "Onko obop valmis tuotantokäyttöön?",
-        a: "Ei vielä. obop on beta-vaiheessa. Ydin toimii ja on testattu, mutta moduulien versioiden välille ei ole vielä tietomigraatioita, isännöityjen tietokantojen varmuuskopiointia ei ole, ja monet mukana tulevista sovelluksista ovat tarkoituksella yksinkertaisia. Käytä alustaa toistaiseksi arviointiin ja ei-kriittiseen työhön. Tiekarttasivu kertoo, mikä on valmista ja mikä ei.",
+        a: "Ei vielä. obop ei ole vielä saavuttanut versiota 1.0, joten uusi versio voi vielä muuttaa asioita. Ydin toimii ja on testattu, kuusi sisäänrakennettua sovellusta on merkitty vakaiksi, muut sovellukset beta- tai kokeellisiksi, ja monet mukana tulevista sovelluksista ovat tarkoituksella yksinkertaisia. Isännöityjen tietokantojen ajastettuja varmuuskopioita ei ole vielä rakennettu. Käytä alustaa toistaiseksi arviointiin ja ei-kriittiseen työhön. Tiekarttasivu kertoo, mikä on valmista ja mikä ei.",
       },
       {
         q: "Paljonko se maksaa?",
@@ -436,7 +436,8 @@ export const fi: Messages = {
       safeMasked:
         "Tekoälyagentit näkevät henkilötiedoiksi merkityt kentät, kuten nimet ja sähköpostiosoitteet, vain paikkamerkkeinä. Kenttään, jota ei ole merkitty henkilötiedoksi, esimerkiksi kuvaukseen, kirjoitettua tekstiä ei korvata paikkamerkillä.",
       safeWithheld:
-        "Tekoälyagentit eivät koskaan näe arkaluonteisiksi merkittyjä kenttiä. Tässä sovelluksessa: {list}. Hinta tai summa näytetään, ellei sen kenttä ole yksi näistä.",
+        "Tekoälyagentit eivät koskaan näe arkaluonteisiksi merkittyjä kenttiä. Tässä sovelluksessa: {list}.",
+      safeMoneyClear: "Hinta tai summa näytetään, ellei sen kenttä ole yksi näistä.",
       safeKinds: {
         financial: "arkaluonteiset taloustiedot",
         confidential_hr: "luottamukselliset henkilöstötiedot",

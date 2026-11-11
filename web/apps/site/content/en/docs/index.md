@@ -24,6 +24,6 @@ obop is an open-source business platform. One program serves the web app, a REST
 
 ## Status
 
-obop is in beta. Where a feature is not built yet, the page says so plainly. The [roadmap](/roadmap/) lists what exists and what does not, and the [changelog](/changelog/) lists what changed.
+obop is below version 1.0. Where a feature is not built yet, the page says so. The [roadmap](/roadmap/) lists what exists and what does not, and the [changelog](/changelog/) lists what changed.
 
 Every page here is also available as plain Markdown: add `.md` instead of the trailing slash, or read the whole documentation in one file at [llms-full.txt](/llms-full.txt).

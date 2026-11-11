@@ -45,7 +45,7 @@ export const en: Messages = {
     langSuggest: "This page is also available in English.",
     langSuggestGo: "Switch to English",
     dismiss: "Dismiss",
-    betaNote: "Open-source business platform. Beta.",
+    betaNote: "Open-source business platform. Below version 1.0.",
     allRightsNote: "Planned prices are not yet charged.",
     sourceCode: "Source code on GitHub",
     docsHome: "Documentation",
@@ -103,7 +103,7 @@ export const en: Messages = {
   },
   home: {
     eyebrow: "Open-source business platform",
-    badge: "Beta",
+    badge: "Pre-1.0",
     titleA: "One business.",
     titleB: "One platform.",
     lead: "CRM, sales, invoicing and more on a single data model. Built for people and for AI agents, with the permissions and privacy to trust both.",
@@ -203,7 +203,7 @@ export const en: Messages = {
       },
       {
         q: "Is obop ready for production use?",
-        a: "Not yet. obop is in beta. The core works and is tested, but there are no data migrations between module versions yet, nothing backs up the hosted databases, and many bundled apps are deliberately simple. Use it to evaluate and for non-critical work for now. The roadmap page lists what is built and what is not.",
+        a: "Not yet. obop is below version 1.0, so a release can still change things. The core works and is tested, the six built-in apps are marked Stable, the other apps are marked Beta or Experimental, and many bundled apps are deliberately simple. Scheduled backups of the hosted databases are not built yet. Use it to evaluate and for non-critical work for now. The roadmap page lists what is built and what is not.",
       },
       {
         q: "How much does it cost?",
@@ -420,8 +420,8 @@ export const en: Messages = {
       experimentalNote: "Still being tested. Try it with sample data first.",
       safeMasked:
         "AI agents see the fields marked as personal data, such as names and emails, only as placeholders. Text typed into a field that is not marked as personal data, such as a description, is not replaced by a placeholder.",
-      safeWithheld:
-        "AI agents never see the fields marked as sensitive. In this app: {list}. A price or a total is shown unless its field is one of these.",
+      safeWithheld: "AI agents never see the fields marked as sensitive. In this app: {list}.",
+      safeMoneyClear: "A price or a total is shown unless its field is one of these.",
       safeKinds: {
         financial: "sensitive financial details",
         confidential_hr: "confidential HR details",

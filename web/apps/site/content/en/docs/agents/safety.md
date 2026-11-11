@@ -53,7 +53,7 @@ Point a new agent at a throwaway SQLite instance (`obop serve --demo` makes fake
 
 ## Know the limits
 
-- No row-level permissions: an agent with `crm.user` can read every lead.
+- Row rules exist only in some apps, and CRM has none: an agent with `crm.user` can read every lead. Where an app has them (for example Expenses, Timesheets, HR leave requests), an agent never sees more than its owner.
 - Actions change one field and cannot send email or call other systems, so an agent cannot cause those side effects through obop.
 - Masking works on classified fields, not on free text.
 - Rate limiting applies to failed sign-ins only. There are no per-token quotas yet.

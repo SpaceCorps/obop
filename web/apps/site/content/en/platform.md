@@ -46,4 +46,4 @@ All of them call the same dispatcher, so permission checks, masking and approval
 
 ## What it is not (yet)
 
-Be aware before you commit: there are no code tiers, so modules cannot compute fields or run side effects; there are no row-level permissions; there is no audit log, no data export tool and no backups for the hosted service. The [roadmap](/roadmap/) lists what is built and what is not.
+Be aware before you commit: there are no code tiers beyond declarative packages (no WebAssembly components or remote apps), so an app package runs no code of its own and cannot declare calls to other systems, though it can declare computed totals and actions that change other records in the same database; only some apps limit which records a person sees; the security log records account, sign-in, security-setting and module events but not changes to business records; the planned export job for a whole business is not built (a list exports as CSV, and `obop backup --plain` writes every record of a database to an unencrypted file); and scheduled backups of the hosted service are not built yet. The [roadmap](/roadmap/) lists what is built and what is not.
