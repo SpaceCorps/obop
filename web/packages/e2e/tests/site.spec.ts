@@ -339,10 +339,14 @@ test.describe("website without JavaScript", () => {
     await page.goto(`${base()}/apps/invoicing/`);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Invoicing");
 
-    // The hero: the name, one line, the category as a quiet line and one primary button; a
-    // built-in app is opened.
+    // The hero: the name, one line and one primary button; a built-in app is opened. There is no
+    // category line under the tagline (one more small line before the button): the category is a row
+    // of the Information list.
     await expect(page.locator(".app-tagline")).toHaveText(messages.en.apps.taglines["invoicing"]!);
-    await expect(page.locator(".app-category")).toHaveText("Finance");
+    await expect(page.locator(".app-category")).toHaveCount(0);
+    await expect(page.locator(".app-hero-text > *")).toHaveCount(3); // the name, the line, the button
+    await expect(page.locator(".app-info dt", { hasText: s.category })).toHaveCount(1);
+    await expect(page.locator(".app-info dd", { hasText: "Finance" })).toHaveCount(1);
     const primary = page.locator(".app-hero .app-primary");
     await expect(primary).toHaveText(s.open);
     await expect(primary).toHaveAttribute("href", "/app/");
@@ -366,7 +370,10 @@ test.describe("website without JavaScript", () => {
     await expect(page.locator("#works-with ~ .app-icons a")).toHaveText(["Contacts", "Sales"]);
 
     // The sections, in order; a marketplace app has a "Get" section where a built-in app has none.
-    await expect(page.locator("main > .wrap > section > h2")).toHaveText([
+    // The order is the one it was. (The headings of "Information" and "For developers" are now the
+    // labels of two rows, inside a <summary>, so they are found by the page and not as children of a
+    // section.)
+    await expect(page.locator("main .app-page h2")).toHaveText([
       a.h.purpose,
       s.canDo,
       s.keeps,
@@ -376,6 +383,45 @@ test.describe("website without JavaScript", () => {
       s.developers,
       a.h.related,
     ]);
+    // The one large sentence has no heading drawn above it; the heading stays in the page for screen
+    // readers and for old links to its id (a box of one pixel).
+    const purposeHeading = page.locator("h2#what-it-is-for");
+    await expect(purposeHeading).toHaveText(a.h.purpose);
+    expect((await purposeHeading.boundingBox())!.width).toBeLessThanOrEqual(1);
+    // What an AI agent may do and what needs a person is on the page without a tap, and so is what
+    // the app keeps: neither is a row, and neither is inside any <details>.
+    await expect(page.locator(".app-safe-what")).toBeVisible();
+    await expect(page.locator(".app-safe li").first()).toBeVisible();
+    await expect(page.locator("#keeps ~ .app-cards > .app-card").first()).toBeVisible();
+    for (const sel of ["#safe-with-agents", ".app-safe-what", ".app-safe", "#keeps", "#can-do"])
+      expect(
+        await page.locator(sel).evaluate((el) => !!el.closest("details")),
+        `${sel} is behind a tap`,
+      ).toBe(false);
+    // The two rows at the end are closed and hold their content in the page; a tap on a row's
+    // heading opens it, without script, and an open row is drawn differently from a closed one (the
+    // chevron turns: it is the only thing that tells the two apart).
+    const rows = page.locator("main .app-rows > section > details.app-row");
+    await expect(rows).toHaveCount(2);
+    for (const row of await rows.all()) await expect(row).toHaveJSProperty("open", false);
+    await expect(rows.locator("summary > h2")).toHaveText([s.info, s.developers]);
+    await expect(page.locator(".app-info")).toBeHidden();
+    const chevron = (id: string) =>
+      page
+        .locator(`details.app-row:has(#${id}) > summary`)
+        .evaluate((el) => getComputedStyle(el, "::after").transform);
+    const closed = await chevron("information");
+    expect(closed, "a closed row has a chevron").not.toBe("none");
+    expect(await chevron("for-developers"), "closed rows look alike").toBe(closed);
+    await page.locator("#information").click();
+    await expect(
+      page.locator("details.app-row", { has: page.locator("#information") }),
+    ).toHaveJSProperty("open", true);
+    await expect(page.locator(".app-info")).toBeVisible();
+    await expect
+      .poll(() => chevron("information"), { message: "the chevron of an open row has turned" })
+      .not.toBe(closed);
+    expect(await chevron("for-developers"), "the other row is still closed").toBe(closed);
     // What it is for: the first sentence large, the rest small and quiet.
     await expect(page.locator(".app-purpose")).toHaveText(
       "Prepare invoices for your customers as drafts, then post each one: posting gives it its own number, in a yearly series with no gaps.",
@@ -409,30 +455,35 @@ test.describe("website without JavaScript", () => {
     await expect(
       page.locator(".app-info a", { hasText: "crates/modules/invoicing" }),
     ).toHaveAttribute("href", /\/tree\/main\/crates\/modules\/invoicing$/);
-    // A built-in app has no Get section: one quiet line under the information says it is included.
+    // A built-in app has no Get section: one quiet line under the information, in its row, says it
+    // is included.
     await expect(page.locator(".app-getbox")).toHaveCount(0);
     await expect(page.locator(".app-included")).toHaveText(s.included);
+    await expect(page.locator(".app-included")).toBeVisible();
 
-    // For developers: a heading, then a fold that is present and closed, with everything technical
-    // inside it, one heading level below the heading.
+    // For developers: the second row. Its label is the heading, alone in the summary of a fold that
+    // is present and closed, with everything technical inside it, one heading level below the
+    // heading. (It was a heading with a pill that said "Show technical details", then "Hide technical
+    // details": those two labels are no longer drawn, and the state is the chevron's, held above.)
     await expect(page.locator("h2#for-developers")).toHaveText(s.developers);
     const dev = page.locator("details#developers");
     await expect(dev).toHaveJSProperty("open", false);
-    await expect(dev.locator("summary")).toHaveText(s.developersShow, { useInnerText: true });
-    // Both labels are in the markup, with a space between them, so a reader that ignores the style
-    // sheet (a crawler, an agent, a reader mode) does not get "detailsHide".
-    expect(await dev.locator("summary").evaluate((el) => el.textContent)).toBe(
-      `${s.developersShow} ${s.developersHide}`,
+    await expect(dev.locator("summary")).toHaveText(s.developers, { useInnerText: true });
+    await expect(dev.locator("summary > h2#for-developers")).toHaveCount(1);
+    // Nothing else is in the summary, so a reader that ignores the style sheet (a crawler, an agent,
+    // a reader mode) gets the heading and no leftover label.
+    expect(await dev.locator("summary").evaluate((el) => el.textContent?.trim())).toBe(
+      s.developers,
     );
     const html = await (await page.request.get(`${base()}/apps/invoicing/`)).text();
-    expect(html).toContain(
-      `>${s.developersShow}</span> <span class="app-hide">${s.developersHide}</span>`,
-    );
+    expect(html).not.toContain(s.developersShow);
+    expect(html).not.toContain(s.developersHide);
     await expect(page.getByRole("heading", { level: 3, name: "Models" })).toBeHidden();
     await dev.locator("summary").click();
     await expect(dev).toHaveJSProperty("open", true);
-    // The button says what it does now: Hide while the part is open.
-    await expect(dev.locator("summary")).toHaveText(s.developersHide, { useInnerText: true });
+    await expect
+      .poll(() => chevron("for-developers"), { message: "its chevron has turned too" })
+      .not.toBe(closed);
     await expect(page.getByRole("heading", { level: 3, name: "Models" })).toBeVisible();
     await expect(page.getByRole("cell", { name: "total_minor" })).toBeVisible();
     await expect(page.getByRole("cell", { name: "invoice.post" })).toBeVisible();
@@ -455,12 +506,25 @@ test.describe("website without JavaScript", () => {
     await expect(page).toHaveURL(/\/apps\/helpdesk\/#get$/);
     await expect(page.getByRole("heading", { level: 2, name: s.get })).toBeInViewport();
     // The box ends the jump with something to do: one plain sentence, the pill that opens obop
-    // (where Customize and its Marketplace are), and the command line, shown, with what it needs.
+    // (where Customize and its Marketplace are) and what it needs. The command line is for
+    // developers: it is in a closed fold of the box, one tap away.
     await expect(page.locator(".app-getbox > p").first()).toHaveText(s.getLead);
     const open = page.locator(".app-getbox a.app-pill");
     await expect(open).toHaveText(s.openObop);
     await expect(open).toHaveAttribute("href", "/app/");
     await expect(page.locator("main .app-primary")).toHaveCount(1); // the one button of the hero
+    // The box follows the cards of "What you can do" and comes before everything else, so the
+    // hero's button does not jump past the whole page (the box was the last thing before the
+    // technical part).
+    const order = await page.evaluate(() => {
+      const before = (a: string, b: string) =>
+        !!(
+          document.querySelector(a)!.compareDocumentPosition(document.querySelector(b)!) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+        );
+      return { afterCards: before("#can-do", "#get"), beforeKeeps: before("#get", "#keeps") };
+    });
+    expect(order).toEqual({ afterCards: true, beforeKeeps: true });
     // The jump lands on a filled pill, not a grey one: with the hero's button off screen it is the
     // one filled pill of that screen, and the header's "Start free" is the plain button.
     const fill = (sel: string) =>
@@ -471,13 +535,27 @@ test.describe("website without JavaScript", () => {
     expect(await fill(".app-getbox a.app-pill")).toEqual(await fill(".app-hero .app-primary"));
     await expect(page.locator(".app-hero .app-primary")).not.toBeInViewport();
     expect(await fill(".head-cta .btn.primary")).not.toEqual(await fill(".app-getbox a.app-pill"));
-    await expect(page.locator(".app-getbox .app-or")).toHaveText(s.commandLine);
+    const cmd = page.locator(".app-getbox details");
+    await expect(cmd).toHaveCount(1);
+    await expect(cmd).toHaveJSProperty("open", false);
+    await expect(cmd.locator("summary")).toHaveText(s.commandLine);
+    // Its label is a quiet line of text under the filled pill, not a second pill: no fill, no
+    // rounded box, and not the pill's colours.
+    const quiet = await cmd.locator("summary").evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return { background: cs.backgroundColor, radius: cs.borderTopLeftRadius };
+    });
+    expect(quiet).toEqual({ background: "rgba(0, 0, 0, 0)", radius: "0px" });
+    expect((await fill(".app-getbox details > summary")).color).not.toBe(
+      (await fill(".app-getbox a.app-pill")).color,
+    );
+    await expect(page.locator(".app-getbox pre code")).toBeHidden();
+    await cmd.locator("summary").click();
     await expect(page.locator(".app-getbox pre code")).toBeVisible();
     await expect(page.locator(".app-getbox pre code")).toHaveText(
       "obop modules install-from helpdesk",
     );
     await expect(page.locator(".app-getbox .fine")).toHaveText(s.getNote);
-    await expect(page.locator(".app-getbox details")).toHaveCount(0);
     await expect(page.locator("details#developers")).toHaveJSProperty("open", false);
     await page.locator("details#developers summary").click();
     await expect(page.getByRole("cell", { name: "requester_email" })).toBeVisible();
@@ -514,7 +592,7 @@ test.describe("website without JavaScript", () => {
       "Response times",
     );
     await expect(page.locator("h2#for-developers")).toHaveText(s.developers);
-    await expect(page.locator("details#developers > summary")).toHaveText(s.developersShow, {
+    await expect(page.locator("details#developers > summary")).toHaveText(s.developers, {
       useInnerText: true,
     });
     // Field descriptions in the technical tables are English and say so.
@@ -1468,6 +1546,8 @@ test.describe("website behaviour with JavaScript", () => {
   test("the install box of a marketplace app has the copy button", async ({ page, context }) => {
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     await page.goto(`${base()}/apps/helpdesk/`);
+    // The command is in a closed fold of the box: one tap on its line shows it.
+    await page.locator(".app-getbox details > summary").click();
     const block = page.locator('.app-getbox div[class*="language-"]');
     await block.hover();
     await block.getByRole("button", { name: "Copy" }).click();
@@ -1568,7 +1648,52 @@ test.describe("website behaviour with JavaScript", () => {
       route.fulfill({ contentType: "text/javascript", body: "" }),
     );
     await page.goto(`${base()}/apps/helpdesk/`);
+    // The fold that holds the command is opened first: in a closed fold the button would be hidden
+    // whatever the script did.
+    await page.locator(".app-getbox details > summary").click();
+    await expect(page.locator(".app-getbox pre code")).toBeVisible();
     await expect(page.locator(".app-getbox button.copy")).toBeHidden();
+  });
+
+  test("a link to a row's heading opens the row with the script; without the script it lands on the closed row", async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const row = (id: string) => page.locator("details.app-row", { has: page.locator(`#${id}`) });
+    // With the script: on arrival, and for a link followed later on the same page.
+    for (const id of ["information", "for-developers"]) {
+      await page.goto(`${base()}/apps/invoicing/#${id}`);
+      await expect(row(id), `#${id} on arrival`).toHaveJSProperty("open", true);
+      await expect(page.locator(`#${id}`)).toBeInViewport();
+    }
+    await page.goto(`${base()}/apps/invoicing/`);
+    for (const id of ["information", "for-developers"])
+      await expect(row(id), `#${id} without a link`).toHaveJSProperty("open", false);
+    await page.evaluate(() => {
+      location.hash = "#information";
+    });
+    await expect(row("information"), "a link followed on the page").toHaveJSProperty("open", true);
+    await expect(row("for-developers")).toHaveJSProperty("open", false);
+    // Without the script (served, but wiring nothing): the heading of a row is in its <summary>,
+    // which is outside what a browser reveals for a fragment, so the row stays closed. The link
+    // still lands on the row, which is one tap from open. An id inside a row is revealed by the
+    // browser itself.
+    await page.route("**/site/site.js", (route) =>
+      route.fulfill({ contentType: "text/javascript", body: "" }),
+    );
+    // Another app's page, so that the page is loaded anew (the address above, fragment and all, is
+    // the one this page already has: going to it again would not load it, and the row would still be
+    // open from the step before).
+    await page.goto(`${base()}/apps/helpdesk/#information`);
+    await expect(page.locator("#information")).toBeInViewport();
+    await expect(row("information"), "no script: the row is closed").toHaveJSProperty(
+      "open",
+      false,
+    );
+    await expect(page.locator("html.js-ready"), "the script wired nothing").toHaveCount(0);
+    await page.goto(`${base()}/apps/crm/#models`);
+    await expect(page.locator("details#developers")).toHaveJSProperty("open", true);
+    await expect(page.locator("#models")).toBeInViewport();
   });
 });
 
@@ -2127,13 +2252,28 @@ test.describe("accessibility", () => {
     }) => {
       for (const width of [1440, 375]) {
         await page.setViewportSize({ width, height: 900 });
-        for (const [path, atLeast] of [
-          ["/apps/", 28],
-          ["/apps/helpdesk/", 8],
-          ["/apps/accounting/", 11],
+        for (const [path, atLeast, reach] of [
+          ["/apps/", 28, null],
+          ["/apps/helpdesk/", 8, null],
+          ["/apps/accounting/", 11, null],
+          // A second pass with everything outside the technical part opened (the "Information" row,
+          // the folds of the cards, the command line): the walk above only stops on what is drawn, so
+          // the links of the information list, the copy button and the buttons of the folds were out
+          // of its reach once they were behind a tap. Each of these walks must stop on the controls
+          // named here, and on every control of main that is drawn.
+          ["/apps/helpdesk/", 13, ["A Apache-2.0", "A packages/helpdesk.toml", "BUTTON"]],
+          [
+            "/apps/accounting/",
+            14,
+            ["A Apache-2.0", "A packages/accounting.toml", "BUTTON", "SUMMARY Show 4 more actions"],
+          ],
+          ["/apps/invoicing/", 9, ["A Apache-2.0", "A crates/modules/invoicing"]],
         ] as const) {
           for (const key of ["Tab", "Shift+Tab"] as const) {
             await page.goto(`${base()}${path}`);
+            const seen: string[] = [];
+            if (reach)
+              expect(await openFolds(page, false), `${path}: folds to open`).toBeGreaterThan(0);
             let stops = 0;
             // The walk ends when every control of main has had its turn (plus the header's and the
             // footer's on the way), not after a fixed number of presses: this is the slowest test of
@@ -2182,7 +2322,8 @@ test.describe("accessibility", () => {
               });
               if (!stop) continue;
               stops++;
-              const where = `${path} at ${width}px (${key}): ${stop.what}`;
+              seen.push(stop.what);
+              const where = `${path}${reach ? " with its folds open" : ""} at ${width}px (${key}): ${stop.what}`;
               expect(stop.style, where).not.toBe("none");
               expect(stop.width, where).toBeGreaterThanOrEqual(2);
               expect(stop.left, `${where} ring starts on screen`).toBeGreaterThanOrEqual(0);
@@ -2193,6 +2334,16 @@ test.describe("accessibility", () => {
               );
             }
             expect(stops, `${path} stops in main (${key})`).toBeGreaterThanOrEqual(atLeast);
+            if (reach)
+              expect(
+                stops,
+                `${path} with its folds open (${key}): every drawn control of main had its turn`,
+              ).toBeGreaterThanOrEqual(expected);
+            for (const control of reach ?? [])
+              expect(
+                seen.some((what) => what.startsWith(control)),
+                `${path} with its folds open at ${width}px (${key}): the walk stops on "${control}" (it stopped on: ${seen.join(" | ")})`,
+              ).toBe(true);
           }
         }
       }
@@ -2272,30 +2423,65 @@ test.describe("accessibility", () => {
     });
     const page = await context.newPage();
     const small: string[] = [];
-    for (const path of ["/apps/", "/apps/helpdesk/", "/apps/invoicing/", "/apps/accounting/"]) {
-      await page.goto(`${base()}${path}`);
-      small.push(
-        ...(await page.evaluate((p) => {
+    let measured = 0;
+    const reached: string[] = [];
+    // Each page twice: as it arrives, and with everything outside the technical part opened (the
+    // "Information" row, the folds of the cards, the command line), so that what is one tap away is
+    // held to 44 px as well: the links of the information list, the copy button, the cards' folds.
+    for (const folds of ["closed", "open"] as const)
+      for (const path of ["/apps/", "/apps/helpdesk/", "/apps/invoicing/", "/apps/accounting/"]) {
+        await page.goto(`${base()}${path}`);
+        if (folds === "open" && (await openFolds(page, false)) === 0) continue; // the index has none
+        const walk = await page.evaluate((p) => {
           const out: string[] = [];
+          const seen: string[] = [];
           for (const el of document.querySelectorAll("main a, main summary, main button")) {
-            // Inside a closed fold (the technical part) nothing can be tapped.
+            // Inside a closed fold (the technical part) nothing can be tapped. The summary of a
+            // closed fold is the one thing of it that can, so it is measured (it was skipped, as its
+            // own fold was closed).
             const fold = [
               ...(function* () {
-                for (let n = el.parentElement; n; n = n.parentElement) yield n;
+                for (
+                  let n =
+                    el.tagName === "SUMMARY" ? el.parentElement!.parentElement : el.parentElement;
+                  n;
+                  n = n.parentElement
+                )
+                  yield n;
               })(),
             ].find((n) => n.tagName === "DETAILS" && !(n as HTMLDetailsElement).open);
             if (fold) continue;
             const r = el.getBoundingClientRect();
             if (r.width === 0 || r.height === 0) continue;
+            seen.push(`${el.tagName} ${(el.textContent ?? "").trim().slice(0, 24)}`);
             if (r.height < 43.9 || r.width < 43.9)
               out.push(
                 `${p} ${el.tagName} "${(el.textContent ?? "").trim().slice(0, 24)}" ${Math.round(r.width)}x${r.height.toFixed(1)}`,
               );
           }
-          return out;
-        }, path)),
-      );
-    }
+          return { out, seen };
+        }, `${path} (folds ${folds})`);
+        small.push(...walk.out);
+        measured += walk.seen.length;
+        if (folds === "open") reached.push(...walk.seen.map((what) => `${path} ${what}`));
+      }
+    // Not vacuous: the second pass measured the controls that are one tap away.
+    for (const control of [
+      "/apps/helpdesk/ A Apache-2.0",
+      "/apps/helpdesk/ A packages/helpdesk.toml",
+      "/apps/helpdesk/ BUTTON",
+      "/apps/helpdesk/ SUMMARY Or use the command line",
+      "/apps/invoicing/ A crates/modules/invoicing",
+      "/apps/accounting/ SUMMARY Show 4 more actions",
+      "/apps/accounting/ SUMMARY Show 5 more things it ke",
+      "/apps/accounting/ SUMMARY Information",
+      "/apps/accounting/ SUMMARY For developers",
+    ])
+      expect(
+        reached.some((what) => what.startsWith(control)),
+        `the walk with the folds open measures "${control}"`,
+      ).toBe(true);
+    expect(measured, "controls measured in the two passes").toBeGreaterThan(80);
     // There is no hover to reveal the copy button of the install box: it is drawn, not transparent.
     for (const path of ["/apps/helpdesk/", "/sv/apps/sign/"]) {
       await page.goto(`${base()}${path}`);
@@ -2307,6 +2493,68 @@ test.describe("accessibility", () => {
     }
     await context.close();
     expect(small).toEqual([]);
+  });
+
+  test("in its row the information list keeps label and value on one line on a phone, and a row's chevron sits beside its heading at the normal text size", async ({
+    page,
+    browser,
+  }) => {
+    // The row has padding of its own: with the value's old room the pair needed 336 px and had 317 on
+    // a 390 px phone, so every value dropped under its label (seven taller lines). At 390 and 375 px
+    // label and value share a line, as they did before the list was in a row; the paths are the
+    // longest values (a module path, a package file, "0.2.1, same as obop").
+    let pairs = 0;
+    for (const width of [390, 375]) {
+      await page.setViewportSize({ width, height: 844 });
+      for (const path of ["/apps/invoicing/", "/apps/helpdesk/", "/sv/apps/crm/", "/de/apps/hr/"]) {
+        await page.goto(`${base()}${path}`);
+        await page.locator("#information").click();
+        const apart = await page.evaluate(() =>
+          [...document.querySelectorAll(".app-info > div")]
+            .map((row) => {
+              const label = row.querySelector("dt")!;
+              const value = row.querySelector("dd")!;
+              const range = document.createRange();
+              range.selectNodeContents(value);
+              // The first line of the value against the label's: an inline box, not the block.
+              const first = range.getClientRects()[0] ?? value.getBoundingClientRect();
+              return {
+                label: (label.textContent ?? "").trim(),
+                under:
+                  value.getBoundingClientRect().top >= label.getBoundingClientRect().bottom - 1,
+                beside: first.left > label.getBoundingClientRect().left + 40,
+              };
+            })
+            .filter((r) => r.under || !r.beside)
+            .map((r) => r.label),
+        );
+        expect(apart, `${path} at ${width}px: values that dropped under their label`).toEqual([]);
+        pairs += await page.locator(".app-info > div").count();
+      }
+    }
+    expect(pairs, "pairs of label and value measured").toBeGreaterThan(40);
+    // The chevron of a row sits beside the heading on every phone at the normal text size, the
+    // 320 px one too (it sat under the heading there: the rule was written for 200 percent text). It
+    // drops under the heading only where the row is very narrow in rem, so that the longest word of
+    // a row label keeps the line: at 200 percent text on a phone.
+    const layout = (p: import("@playwright/test").Page) =>
+      p.evaluate(() =>
+        [...document.querySelectorAll("details.app-row > summary")].map(
+          (s) => getComputedStyle(s).flexDirection,
+        ),
+      );
+    for (const width of [320, 360, 390]) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto(`${base()}/es/apps/crm/`);
+      expect(await layout(page), `${width}px at the normal text size`).toEqual(["row", "row"]);
+    }
+    const large = await pageWithTextSize(browser, 200, { width: 375, height: 800 });
+    try {
+      await large.page.goto(`${base()}/es/apps/crm/`);
+      expect(await layout(large.page), "375 px at 200 percent text").toEqual(["column", "column"]);
+    } finally {
+      await large.context.close();
+    }
   });
 
   test("the app hero keeps its size on a phone and stacks at a very large text size", async ({
@@ -2481,10 +2729,13 @@ test.describe("accessibility", () => {
       "/de/apps/helpdesk/",
       "/fi/apps/",
     ];
-    // The controls whose colours change on hover: the folds, the two pills and the "Read more" fold.
+    // The controls whose colours change on hover: the folds, the two pills, the "Read more" fold, the
+    // two rows and the line that opens the command.
     const hover = [
       ".app-more > summary",
       ".app-dev > summary",
+      ".app-row > summary",
+      ".app-cmd > summary",
       ".app-read > summary",
       ".app-primary",
       ".app-getbox .app-pill",
@@ -2537,11 +2788,12 @@ test.describe("accessibility", () => {
     page,
   }) => {
     await page.emulateMedia({ forcedColors: "active" });
-    // Every pill the apps pages draw: the hero's button, the Get box's button, the folds.
+    // Every pill the apps pages draw: the hero's button, the Get box's button, the folds. The two
+    // rows are not pills (the summary of "For developers" was one): their edge is the box they share.
     for (const [path, selectors] of [
       [
         "/apps/accounting/",
-        [".app-primary", ".app-getbox .app-pill", ".app-more > summary", ".app-dev > summary"],
+        [".app-primary", ".app-getbox .app-pill", ".app-more > summary", ".app-rows"],
       ],
       ["/apps/connectors/", [".app-read > summary", ".app-primary"]],
     ] as const) {
@@ -2567,8 +2819,42 @@ test.describe("accessibility", () => {
     await expect(page.locator("button.copy").first()).toBeHidden();
     await expect(page.locator("details#developers")).toHaveJSProperty("open", false);
     await expect(page.getByRole("heading", { level: 3, name: "Models" })).toBeVisible();
-    await expect(page.locator(".app-dev > summary")).toBeHidden();
+    // The summary of a row is its heading, so it is printed, without its chevron; the buttons of the
+    // card folds are not.
+    for (const id of ["information", "for-developers"]) {
+      await expect(page.locator(`details.app-row > summary > h2#${id}`)).toBeVisible();
+      expect(
+        await page
+          .locator(`details.app-row:has(#${id}) > summary`)
+          .evaluate((el) => getComputedStyle(el, "::after").display),
+        `the chevron of #${id} in print`,
+      ).toBe("none");
+    }
     await expect(page.locator(".app-more > summary").first()).toBeHidden();
+    // What the closed row and the closed folds hold is printed: the information list, the cards of
+    // the two card folds, and the command with the sentence that introduces it (as plain text: the
+    // colour of the text round it, not a link's).
+    for (const row of await page.locator("details.app-row, .app-more, .app-cmd").all())
+      await expect(row).toHaveJSProperty("open", false);
+    await expect(page.locator(".app-info")).toBeVisible();
+    await expect(page.locator(".app-info dd").last()).toBeVisible();
+    await expect(page.locator("#can-do ~ .app-more .app-card").first()).toBeVisible();
+    await expect(page.locator("#can-do ~ .app-more .app-card").last()).toBeVisible();
+    await expect(page.locator("#keeps ~ .app-more .app-card").last()).toBeVisible();
+    await expect(page.locator(".app-getbox pre code")).toBeVisible();
+    const label = page.locator(".app-getbox details > summary");
+    await expect(label).toBeVisible();
+    await expect(label).toHaveText(messages.en.apps.store.commandLine);
+    expect(await label.evaluate((el) => getComputedStyle(el).color)).toBe(
+      await page
+        .locator(".app-getbox > p")
+        .first()
+        .evaluate((el) => getComputedStyle(el).color),
+    );
+    // A built-in app: the line under its information list is printed too.
+    await page.goto(`${base()}/apps/invoicing/`);
+    await expect(page.locator(".app-info")).toBeVisible();
+    await expect(page.locator(".app-included")).toBeVisible();
     await page.goto(`${base()}/apps/connectors/`);
     await expect(page.locator(".app-read > summary")).toBeHidden();
     // The folds still open on screen: the button is only gone from the printed page.
@@ -2917,6 +3203,15 @@ test.describe("accessibility", () => {
             () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
           );
           expect(overflow, `${path} at ${w}px`).toBeLessThanOrEqual(0);
+          // Once more with every row and fold of an app page open, the technical part too: what is
+          // one tap away (the information list in its row, the folded cards, the command, the
+          // tables) does not make the page scroll sideways either.
+          if (!path.includes("/apps/") || path.endsWith("/apps/")) continue;
+          expect(await openFolds(page), `${path}: folds to open`).toBeGreaterThan(1);
+          const open = await page.evaluate(
+            () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+          );
+          expect(open, `${path} at ${w}px with its rows and folds open`).toBeLessThanOrEqual(0);
         }
       }
     });
@@ -2933,6 +3228,9 @@ test.describe("accessibility", () => {
         expect(urls.length, `${locale} app pages`).toBe(28);
         for (const url of urls) {
           await page.goto(`${base()}${url}`, { waitUntil: "domcontentloaded" });
+          // The information labels are in a closed row: it is opened, or they have no box to measure
+          // (an element without a box is 0 wide and 0 across, and would pass).
+          expect(await openFolds(page, false), `${url}: the row to open`).toBeGreaterThan(0);
           // The safety nets (break-word, hyphens) are switched off: a word that does not fit its box
           // then shows as overflow, instead of being broken in the middle by the browser.
           await page.addStyleTag({
@@ -2948,6 +3246,13 @@ test.describe("accessibility", () => {
                 .map((e) => `${e.tagName} "${(e.textContent ?? "").trim().slice(0, 30)}"`),
             );
             expect(cut, `${url} at ${width}px`).toEqual([]);
+            // Every information label was measured with a box of its own.
+            expect(
+              await page.evaluate(() =>
+                [...document.querySelectorAll(".app-info dt")].every((e) => e.clientWidth > 0),
+              ),
+              `${url} at ${width}px: the information labels are drawn`,
+            ).toBe(true);
           }
           checked++;
         }
@@ -3069,8 +3374,10 @@ test.describe("accessibility", () => {
         [320, 200],
         [320, 150],
         [320, 125],
+        [360, 200],
         [375, 200],
         [375, 125],
+        [390, 200],
         [390, 100],
         [640, 200],
       ] as const) {
@@ -3080,11 +3387,27 @@ test.describe("accessibility", () => {
             "/apps/accounting/",
             "/fi/apps/email-marketing/",
             "/de/apps/field-service/",
+            "/sv/apps/helpdesk/",
           ]) {
             await page.goto(`${base()}${path}`);
             await page.waitForSelector("html.js-ready");
             await page.addStyleTag({ content: "* { hyphens: manual !important; }" });
             const where = `${path} at ${width}px with ${percent}% text`;
+            // The command is in a closed fold whose label is one line of text under the pill. As
+            // the visitor gets it, closed: no word of the label is drawn on two lines, at any of
+            // these sizes (at 200 percent "kommandoraden", "Kommandozeile" and "komentoriviltä" were
+            // wider than the room a pill left them, from 320 to 390 px). Not `allowWide`: a word
+            // wider than the box is exactly the defect.
+            const fold = page.locator(".app-getbox details");
+            await expect(fold, where).toHaveJSProperty("open", false);
+            const label = await brokenWords(page, ".app-getbox details > summary");
+            expect(label.cut, `${where}: a word of the command's label is cut`).toEqual([]);
+            expect(
+              await fold.locator("summary").evaluate((el) => el.getBoundingClientRect().width),
+              `${where}: the label is drawn`,
+            ).toBeGreaterThan(40);
+            // Then the command itself, with its fold open (closed, it has no box to measure).
+            await fold.evaluate((el) => ((el as HTMLDetailsElement).open = true));
             const m = await page.evaluate(() => {
               const code = document.querySelector(".app-getbox pre code")!;
               const range = document.createRange();
