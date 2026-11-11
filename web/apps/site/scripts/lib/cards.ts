@@ -8,23 +8,33 @@
 export const SHOWN_CARDS = 3;
 
 /**
- * The cards that are shown and the cards that go in the fold, both in the order they came in (the
- * manifest's). All are shown when there are at most `limit` + 1: a fold is only made for two cards or
- * more ("Show 1 more actions" is not a sentence in most languages). Otherwise every card that carries
- * the approval mark is shown, however many there are (a step that needs a person's approval is never
- * behind a tap), then the first of the others until `limit` are shown.
+ * A card that is never folded: it carries the approval mark (a step that needs a person's approval
+ * when an AI agent asks) or `keep` (its own words are a caveat that must not be missed: what an AI
+ * agent may do without approval, that a step starts no billing; set in `data/apps.ts`, by the card's
+ * source key, so every language has it).
  */
-export function splitCards<T extends { approval?: boolean }>(
+export const isMarked = (c: { approval?: boolean; keep?: boolean }): boolean =>
+  !!(c.approval || c.keep);
+
+/**
+ * The cards that are shown and the cards that go in the fold, both in the order they came in (the
+ * manifest's). Every marked card (`isMarked`) is shown, however many there are and however late they
+ * come. Marked cards never take all the room: the first of the others fill what is left of `limit`,
+ * and at least one of them is shown, so a section is never only its exceptions (a page whose "What you
+ * can do" is three cancellations, its first step folded). A fold is only made for two cards or more
+ * ("Show 1 more actions" is not a sentence in most languages): where one card would be left in it, it
+ * is shown too, and so are all of them when there are at most `limit` + 1.
+ */
+export function splitCards<T extends { approval?: boolean; keep?: boolean }>(
   cards: readonly T[],
   limit: number = SHOWN_CARDS,
 ): { shown: T[]; folded: T[] } {
-  if (cards.length <= limit + 1) return { shown: [...cards], folded: [] };
-  const marked = cards.filter((c) => c.approval).length;
-  let room = Math.max(0, limit - marked);
+  const marked = cards.filter(isMarked).length;
+  let room = Math.max(1, limit - marked);
   const shown: T[] = [];
   const folded: T[] = [];
   for (const c of cards) {
-    if (c.approval) shown.push(c);
+    if (isMarked(c)) shown.push(c);
     else if (room > 0) {
       shown.push(c);
       room--;

@@ -35,6 +35,13 @@ export interface Card {
   text: string;
   /** The quiet "a person approves when an agent asks" mark. */
   approval?: boolean;
+  /**
+   * The card's own words state a caveat a reader must not miss (what an AI agent may do without
+   * approval; that a step does not bill, notify or send what its name suggests). `data/apps.ts` sets
+   * it, by the card's source key, so a translated page inherits it. Like the approval mark it keeps the
+   * card out of the fold ("Show N more"); see `splitCards`.
+   */
+  keep?: boolean;
   /** "en" when the words are the English manifest's on a translated page; absent otherwise. */
   lang?: "en";
 }
@@ -245,6 +252,7 @@ export function appView(app: App, m: Messages, all: App[], locale = "en"): AppVi
           title: plain.title ?? capital(words(act.name)),
           text: plain.text,
           approval: act.approval,
+          ...(plain.keep ? { keep: true } : {}),
           ...(translated ? { lang: "en" as const } : {}),
         };
       const ok = translated && !!own?.label && !!own?.description && !!modelName;
@@ -265,6 +273,7 @@ export function appView(app: App, m: Messages, all: App[], locale = "en"): AppVi
       return {
         title: plain.title ?? modelLabel(app, model),
         text: plain.text,
+        ...(plain.keep ? { keep: true } : {}),
         ...(translated ? { lang: "en" as const } : {}),
       };
     const ok = translated && !!own?.name && !!own?.description;

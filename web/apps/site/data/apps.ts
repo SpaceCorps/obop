@@ -96,6 +96,16 @@ export interface CardCopy {
    * "For developers", headed by the card's name, and not on the card.
    */
   limit?: string;
+  /**
+   * The card stays outside the "Show N more" fold, like a card with the approval mark. Set it only
+   * where the card's own words are a caveat that stops a misreading of the text above them: what an
+   * AI agent may do without approval, or that a step does not do what its name suggests (it starts no
+   * billing, it notifies no one, a test sends an event to the remote address). It is not a rule for
+   * every hand-written card: most of them are ordinary descriptions and may be folded. A unit test
+   * (`cards.test.ts`) lists the cards that have it, and fails for a card whose words speak of an AI
+   * agent or of approval and that has neither this nor the approval mark.
+   */
+  keep?: boolean;
 }
 
 export const BUILTIN_IDS = ["base", "product", "crm", "sales", "invoicing", "connectors"] as const;
@@ -229,6 +239,7 @@ export const APP_COPY: AppCopy[] = [
       },
       "connection.test": {
         text: "Check the settings and the address. For some services that receive records from obop, it also sends one empty test event (no records, no personal data) to that address.",
+        keep: true,
       },
       "connection.revoke": {
         text: "End the connection for good. obop stops using it and deletes its own copy of the sign-in details and code-name lists. The key or authorisation you gave obop stays valid at the other service until you remove it there.",
@@ -247,6 +258,7 @@ export const APP_COPY: AppCopy[] = [
       },
       data_flow_log: {
         text: "A record of every transfer through a connection, written by obop and not edited by people: when, what, how many, which details, how they were treated, and a fingerprint of the content. Never the content itself. Entries older than the retention period are removed by the purge.",
+        keep: true,
       },
       processing_register: {
         text: "A generated list of what each connection processes, as a starting point for your own record of processing under GDPR; exportable as CSV.",
@@ -443,6 +455,7 @@ export const APP_COPY: AppCopy[] = [
       },
       "hr_leave_request.request": {
         text: "Mark the draft as requested, for a manager to approve or refuse. By itself, this does not notify anyone.",
+        keep: true,
       },
     },
   },
@@ -610,15 +623,19 @@ export const APP_COPY: AppCopy[] = [
     cards: {
       website_page: {
         text: "A page of the website. Edits to a published page need no further approval.",
+        keep: true,
       },
       website_menu_item: {
         text: "An entry of the site's menu. It is shown as soon as its visible box is ticked; anyone who can edit it, an AI agent included, can do that without approval.",
+        keep: true,
       },
       website_page_translation: {
         text: "A page in another language. It is shown as soon as its published box is ticked, once its page is published; anyone who can edit it, an AI agent included, can do that without approval.",
+        keep: true,
       },
       website_blog_post_translation: {
         text: "A blog post in another language. It is shown as soon as its published box is ticked, once its post is published; anyone who can edit it, an AI agent included, can do that without approval.",
+        keep: true,
       },
     },
     // Only a page's or a post's state is moved by an action that needs approval (packages/website.toml:84-90,
@@ -740,6 +757,7 @@ export const APP_COPY: AppCopy[] = [
     cards: {
       "subscriptions_subscription.activate": {
         text: "Mark the subscription as active when the trial ends. By itself, this does not start any billing.",
+        keep: true,
       },
     },
   },
