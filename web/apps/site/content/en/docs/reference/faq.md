@@ -69,11 +69,11 @@ There is no command to revoke a single token made with `obop agent-token` or the
 
 ### Where is my data?
 
-Hosted: in a database that belongs to your instance, on PostgreSQL. Self-hosted: wherever you run it.
+Where you run obop: each instance keeps its records in its own database (SQLite or PostgreSQL). SpaceCorps does not host obop for other people yet.
 
 ### How do I back up?
 
-Run `obop backup --db URL --out DIR`: a consistent copy taken while the server runs, sealed (encrypted) when a key is set, which `obop restore` reads back; see the [CLI reference](/docs/reference/cli/) and [Self-hosting and operations](/docs/reference/self-hosting/). `OBOP_BACKUP_SCHEDULE` together with `OBOP_BACKUP_DIR` makes `obop serve` take backups on a timer. Point-in-time recovery is not run by obop; your database server needs its own for that. The hosted service does not switch on scheduled backups of its databases yet.
+Run `obop backup --db URL --out DIR`: a consistent copy taken while the server runs, sealed (encrypted) when a key is set, which `obop restore` reads back; see the [CLI reference](/docs/reference/cli/) and [Self-hosting and operations](/docs/reference/self-hosting/). `OBOP_BACKUP_SCHEDULE` together with `OBOP_BACKUP_DIR` makes `obop serve` take backups on a timer. Point-in-time recovery is not run by obop; your database server needs its own for that. A control plane does not switch on scheduled backups of the instances it creates.
 
 ### Can I export everything?
 

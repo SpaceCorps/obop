@@ -50,7 +50,7 @@ curl -s -X POST http://127.0.0.1:8080/api/auth/agent-token \
 { "token": "obop_1e00c3..." }
 ```
 
-Pole `scopes` jest wymagane, nie może być puste i może wskazywać tylko grupy przypisane do Twojego własnego konta; `platform.admin` nie zastępuje tu pozostałych grup. Pierwsze konto nowej instancji hostowanej ma tylko `platform.admin`, więc najpierw nadaj mu grupy, które chcesz przekazać, w _Dostosuj, Bezpieczeństwo, Ludzie_. Pole `label` to dowolny tekst. W instancji hostowanej użyj jej adresu zamiast `127.0.0.1:8080`, a jako nazwy użytkownika podaj adres e-mail użyty przy rejestracji.
+Pole `scopes` jest wymagane, nie może być puste i może wskazywać tylko grupy przypisane do Twojego własnego konta; `platform.admin` nie zastępuje tu pozostałych grup. Pierwsze konto instancji utworzonej przez płaszczyznę sterowania ma tylko `platform.admin`, więc najpierw nadaj mu grupy, które chcesz przekazać, w _Dostosuj, Bezpieczeństwo, Ludzie_. Pole `label` to dowolny tekst. W takiej instancji użyj jej adresu zamiast `127.0.0.1:8080`, a jako nazwy użytkownika podaj adres e-mail użyty przy rejestracji.
 
 ## Za pomocą CLI
 

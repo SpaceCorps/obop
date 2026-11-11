@@ -20,8 +20,7 @@ export const fr: Messages = {
     docsNav: "Documentation",
     breadcrumb: "Fil d'Ariane",
     home: "obop, accueil",
-    signIn: "Se connecter",
-    startFree: "Commencer gratuitement",
+    startFree: "Commencer",
     search: "Rechercher",
     searchPlaceholder: "Rechercher sur le site",
     searchEmpty: "Aucun résultat. Essayez avec moins de mots, ou d'autres mots.",
@@ -105,7 +104,7 @@ export const fr: Messages = {
     titleA: "Une entreprise.",
     titleB: "Une plateforme.",
     lead: "CRM, ventes, facturation et plus encore sur un seul modèle de données. Conçue pour les personnes comme pour les agents IA, avec les permissions et la confidentialité qui permettent de se fier aux deux.",
-    ctaPrimary: "Obtenir votre instance",
+    ctaPrimary: "L'héberger vous-même",
     ctaSecondary: "Voir les applications",
     heroPoints: [
       "Open source",
@@ -170,24 +169,21 @@ export const fr: Messages = {
     marketCta: "Explorer la place de marché",
     stepsTitle: "En route en trois étapes",
     steps: [
-      { title: "Inscrivez-vous", body: "Créez un compte avec votre adresse e-mail." },
-      {
-        title: "Obtenez votre instance",
-        body: "Votre propre base de données et votre propre adresse, prêtes en quelques minutes.",
-      },
+      { title: "Lancez-le", body: "Exécutez obop avec Docker, ou compilez-le depuis les sources." },
+      { title: "Créez votre administrateur", body: "Une commande crée le premier compte." },
       {
         title: "Ajoutez des modules",
-        body: "Connectez-vous avec le même identifiant et installez les applications dont vous avez besoin.",
+        body: "Connectez-vous et installez les applications dont vous avez besoin depuis Personnaliser.",
       },
     ],
-    stepsCta: "Commencer gratuitement",
+    stepsCta: "Commencer",
     openTitle: "Open source, et à héberger chez vous si vous le souhaitez",
     openBody:
-      "Le serveur obop est écrit en Rust et fonctionne avec SQLite ou PostgreSQL. Utilisez le service hébergé, ou faites tourner le même programme vous-même avec Docker. Dans les deux cas, chaque entreprise a sa propre base de données, et les données vous appartiennent.",
+      "Le serveur obop est écrit en Rust et fonctionne avec SQLite ou PostgreSQL. Faites-le tourner vous-même avec Docker, ou compilez-le depuis les sources. Chaque entreprise a sa propre base de données, et les données vous appartiennent.",
     openPoints: [
       {
-        title: "Hébergé par nous",
-        body: "Nous créons pour vous une instance avec sa propre base de données. Tout est gratuit pendant la bêta.",
+        title: "Hébergement, prévu",
+        body: "SpaceCorps prévoit un bac à sable gratuit, avec des données d'exemple uniquement, et un hébergement payant sur des serveurs dédiés. Aucun des deux n'est encore proposé.",
       },
       {
         title: "Auto-hébergé",
@@ -198,7 +194,7 @@ export const fr: Messages = {
         body: "Lisez le code, les décisions et la feuille de route. Apache-2.0, libre d'usage et auto-hébergeable ; consultez le dépôt.",
       },
     ],
-    pricingTitle: "Gratuit à utiliser. L'hébergement si vous le souhaitez.",
+    pricingTitle: "Gratuit à utiliser. Hébergement prévu.",
     pricingSub: `obop est gratuit et open source : exploitez-le vous-même sur votre propre serveur. Si vous préférez ne pas le faire, un hébergement dédié est prévu à partir de ${eur(HOSTING.servers[0].eur)} par mois. Rien n'est facturé aujourd'hui.`,
     pricingFine:
       "Prix prévus par serveur et par mois, hors TVA. L'hébergement n'est pas encore proposé ni facturé.",
@@ -211,7 +207,7 @@ export const fr: Messages = {
       },
       {
         q: "obop est-il prêt pour la production ?",
-        a: "Pas encore. obop n'a pas encore atteint la version 1.0, donc une nouvelle version peut toujours changer des choses. Le cœur fonctionne et est testé, les six applications intégrées sont marquées Stable, les autres Bêta ou Expérimental, et de nombreuses applications fournies sont volontairement simples. Le service hébergé n'active pas encore les sauvegardes planifiées de ses bases de données. Pour l'instant, utilisez-le pour évaluer la plateforme et pour des travaux non critiques. La page de la feuille de route indique ce qui est réalisé et ce qui ne l'est pas.",
+        a: "Pas encore. obop n'a pas encore atteint la version 1.0, donc une nouvelle version peut toujours changer des choses. Le cœur fonctionne et est testé, les six applications intégrées sont marquées Stable, les autres Bêta ou Expérimental, et de nombreuses applications fournies sont volontairement simples. Pour l'instant, utilisez obop pour évaluer la plateforme et pour des travaux non critiques. La page de la feuille de route indique ce qui est réalisé et ce qui ne l'est pas.",
       },
       {
         q: "Combien cela coûte-t-il ?",
@@ -219,7 +215,7 @@ export const fr: Messages = {
       },
       {
         q: "Où sont stockées mes données ?",
-        a: "Chaque entreprise dispose de sa propre base de données, en PostgreSQL pour l'hébergement et la production. Si vous l'auto-hébergez, elle se trouve là où vous l'exécutez. Les enregistrements sont stockés sous forme de documents JSON jusqu'à l'arrivée du gestionnaire de schéma.",
+        a: "Sur le serveur où vous exécutez obop : chaque entreprise a sa propre base de données, SQLite pour essayer et PostgreSQL pour un usage réel. SpaceCorps ne propose pas encore d'hébergement. Les enregistrements sont stockés sous forme de documents JSON jusqu'à l'arrivée du gestionnaire de schéma.",
       },
       {
         q: "Comment les agents IA travaillent-ils avec obop ?",
@@ -240,7 +236,7 @@ export const fr: Messages = {
     ],
     ctaTitle: "Une entreprise, une plateforme.",
     ctaBody: "Open source, serveur écrit en Rust, fonctionne avec SQLite ou PostgreSQL.",
-    ctaButton: "Obtenir votre instance",
+    ctaButton: "Commencer",
   },
   pricing: {
     title: "Tarifs",
@@ -276,7 +272,7 @@ export const fr: Messages = {
     selfHostTitle: "Gratuit, et à vous de l'exploiter",
     selfHostBody:
       "obop n'a pas d'édition payante ni de fonctions réservées : chaque application, l'API REST, MCP et la ligne de commande sont dans la version gratuite Apache-2.0. Vous l'exploitez vous-même avec SQLite ou PostgreSQL.",
-    hostingTitle: "L'hébergement, si vous le souhaitez",
+    hostingTitle: "Hébergement, prévu",
     hostingBody:
       "Un service prévu : SpaceCorps exploite un serveur dédié pour votre entreprise sur l'infrastructure de Sliplane, avec obop et PostgreSQL dessus. Le prix suit la taille du serveur ; il n'y a pas de frais par utilisateur.",
     faqTitle: "Questions sur les tarifs",
@@ -287,14 +283,14 @@ export const fr: Messages = {
       },
       {
         q: "Pourquoi l'hébergement est-il tarifé par serveur et non par utilisateur ?",
-        a: "Chaque entreprise hébergée reçoit un serveur dédié : le prix suit donc la taille du serveur et le stockage ajouté. Ajouter des personnes ne coûte rien de plus.",
+        a: "Chaque entreprise hébergée recevrait un serveur dédié : le prix suivrait donc la taille du serveur et le stockage ajouté. Ajouter des personnes ne coûterait rien de plus.",
       },
       {
         q: "Puis-je partir avec mes données ?",
         a: "Oui. obop est sous licence Apache-2.0 et sa base est du PostgreSQL ordinaire : vous pouvez exploiter le même logiciel vous-même ; obop backup et obop restore sont intégrés.",
       },
     ],
-    cta: "Obtenir votre instance",
+    cta: "L'héberger vous-même",
   },
   apps: {
     title: "Applications",
@@ -401,7 +397,7 @@ export const fr: Messages = {
     store: {
       ready: "Fournies avec obop",
       more: "Plus d'applications",
-      open: "Ouvrir",
+      open: "Commencer",
       get: "Obtenir",
       canDo: "Ce que vous pouvez faire",
       keeps: "Ce qu'elle conserve",
@@ -431,7 +427,7 @@ export const fr: Messages = {
       showMoreKeeps: "Afficher {n} éléments conservés de plus",
       getLead: "Installez-la depuis l'application Personnaliser, dans la Place de marché.",
       commandLine: "Ou en ligne de commande",
-      openObop: "Ouvrir obop",
+      openObop: "Commencer",
       getNote: "Il faut un compte administrateur.",
       included: "Incluse dans chaque obop.",
       experimentalNote: "Encore en test. Essayez-la d'abord avec des données d'exemple.",

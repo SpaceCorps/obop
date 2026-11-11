@@ -31,7 +31,7 @@ The server stores only the public key, a name and counters, never anything that 
 
 ## Administrators must have it
 
-By default every person who holds `platform.admin` has to use two-factor (an authenticator app or a passkey) on a new instance whose server has a secret key (`OBOP_SECRET_KEY`). Without a key the policy is not applied. The first administrator of a hosted instance signs in with the password they signed up with, and is taken straight to the setup: until it is done, every other request answers `403` with the code `mfa_enrolment_required` and a hint, and the app shows only the setup. Finishing it lifts that same session.
+By default every person who holds `platform.admin` has to use two-factor (an authenticator app or a passkey) on a new instance whose server has a secret key (`OBOP_SECRET_KEY`). Without a key the policy is not applied. The first administrator of an instance that a control plane created signs in with the password they signed up with, and is taken straight to the setup: until it is done, every other request answers `403` with the code `mfa_enrolment_required` and a hint, and the app shows only the setup. Finishing it lifts that same session.
 
 An administrator can change the policy under Customize > Security: **Require 2FA for admins** (on by default) and **Require 2FA for everyone** (off by default). The stored setting is `security.require_mfa_for_admins` and `security.require_mfa_for_all` in the instance settings. The policy applies at the next sign-in. Operators who run the test suite or a demo can change the default with `OBOP_REQUIRE_MFA_FOR_ADMINS=0`; a value an administrator stored wins.
 
@@ -72,7 +72,7 @@ The shared secret is stored encrypted (ChaCha20-Poly1305) under a key derived fr
 ## Limits
 
 - TOTP can be phished by a site that relays the code in real time; passkeys resist that, so prefer them where your devices allow. SMS codes are deliberately not offered.
-- Passkeys were tested with software authenticators (Rust) and Chrome's virtual authenticator, not with real phones, security keys, Safari or Firefox. They work on instances, not on the sign-up service of the hosted platform. A passkey is made for one address; there is no sign-in hint for a non-discoverable key, so those work only as a second step; there is no attestation, so obop cannot tell makes of authenticator apart.
+- Passkeys were tested with software authenticators (Rust) and Chrome's virtual authenticator, not with real phones, security keys, Safari or Firefox. They work on instances, not on the sign-up service of a control plane. A passkey is made for one address; there is no sign-in hint for a non-discoverable key, so those work only as a second step; there is no attestation, so obop cannot tell makes of authenticator apart.
 - The server holds the key. Whoever controls both the running server and `OBOP_SECRET_KEY` can read the secrets. The key can be rotated without downtime with `obop secrets rotate` (see [Self-hosting](/docs/reference/self-hosting/)).
 - There is no step-up check for sensitive actions and no "remember this browser".
 - Other languages of this page are not translated yet and show the English text.

@@ -20,8 +20,7 @@ export const fi: Messages = {
     docsNav: "Dokumentaatio",
     breadcrumb: "Polku",
     home: "obop, etusivu",
-    signIn: "Kirjaudu sisään",
-    startFree: "Aloita ilmaiseksi",
+    startFree: "Aloita",
     search: "Haku",
     searchPlaceholder: "Hae sivustolta",
     searchEmpty: "Ei tuloksia. Kokeile vähemmän tai eri hakusanoja.",
@@ -105,7 +104,7 @@ export const fi: Messages = {
     titleA: "Yksi yritys.",
     titleB: "Yksi alusta.",
     lead: "CRM, myynti, laskutus ja muuta yhdellä tietomallilla. Tehty ihmisille ja tekoälyagenteille, ja käyttöoikeudet ja tietosuoja on rakennettu niin, että molempiin voi luottaa.",
-    ctaPrimary: "Hanki oma instanssi",
+    ctaPrimary: "Aja se itse",
     ctaSecondary: "Katso sovellukset",
     heroPoints: [
       "Avoin lähdekoodi",
@@ -170,24 +169,21 @@ export const fi: Messages = {
     marketCta: "Tutustu markkinapaikkaan",
     stepsTitle: "Käyttöön kolmella askeleella",
     steps: [
-      { title: "Rekisteröidy", body: "Luo tili sähköpostiosoitteellasi." },
-      {
-        title: "Hanki instanssi",
-        body: "Oma tietokanta ja osoite valmiina muutamassa minuutissa.",
-      },
+      { title: "Käynnistä obop", body: "Aja obop Dockerilla tai käännä se lähdekoodista." },
+      { title: "Luo ylläpitäjä", body: "Yksi komento luo ensimmäisen tilin." },
       {
         title: "Lisää moduuleja",
-        body: "Kirjaudu sisään samoilla tunnuksilla ja asenna tarvitsemasi sovellukset.",
+        body: "Kirjaudu sisään ja asenna tarvitsemasi sovellukset Mukauta-sovelluksesta.",
       },
     ],
-    stepsCta: "Aloita ilmaiseksi",
+    stepsCta: "Aloita",
     openTitle: "Avoin lähdekoodi, ja voit ylläpitää sitä itse",
     openBody:
-      "obopin palvelin on kirjoitettu Rustilla, ja se toimii SQLiten tai PostgreSQL:n kanssa. Käytä isännöityä palvelua tai aja sama ohjelma itse Dockerilla. Kummassakin tapauksessa jokaisella yrityksellä on oma tietokanta, ja tiedot kuuluvat sinulle.",
+      "obopin palvelin on kirjoitettu Rustilla, ja se toimii SQLiten tai PostgreSQL:n kanssa. Aja se itse Dockerilla tai käännä se lähdekoodista. Jokaisella yrityksellä on oma tietokanta, ja tiedot kuuluvat sinulle.",
     openPoints: [
       {
-        title: "Meidän isännöimänä",
-        body: "Luomme sinulle instanssin, jolla on oma tietokanta. Kaikki on ilmaista beta-vaiheen ajan.",
+        title: "Palvelinhotellointi, suunnitteilla",
+        body: "SpaceCorps suunnittelee ilmaista testiympäristöä, jossa on vain esimerkkidataa, sekä maksullista palvelinhotellointia omilla palvelimilla. Kumpaakaan ei vielä tarjota.",
       },
       {
         title: "Omalla palvelimella",
@@ -198,7 +194,7 @@ export const fi: Messages = {
         body: "Lue koodi, päätökset ja tiekartta. Apache-2.0, vapaasti käytettävissä ja itse isännöitävissä; katso tarkemmat tiedot repositoriosta.",
       },
     ],
-    pricingTitle: "Ilmainen käyttää. Palvelinhotellointi, jos haluat.",
+    pricingTitle: "Ilmainen käyttää. Palvelinhotellointi suunnitteilla.",
     pricingSub: `obop on ilmainen ja avointa lähdekoodia: aja sitä itse omalla palvelimellasi. Jos et halua, oma palvelin on suunnitteilla alkaen ${eur(HOSTING.servers[0].eur)} kuukaudessa. Tänään mitään ei laskuteta.`,
     pricingFine:
       "Suunnitellut hinnat palvelinta ja kuukautta kohti, ilman arvonlisäveroa. Palvelinhotellointia ei vielä tarjota eikä laskuteta.",
@@ -211,7 +207,7 @@ export const fi: Messages = {
       },
       {
         q: "Onko obop valmis tuotantokäyttöön?",
-        a: "Ei vielä. obop ei ole vielä saavuttanut versiota 1.0, joten uusi versio voi vielä muuttaa asioita. Ydin toimii ja on testattu, kuuden sisäänrakennetun sovelluksen tilaksi on merkitty Vakaa ja muiden sovellusten tilaksi Beta tai Kokeellinen, ja monet mukana tulevista sovelluksista ovat tarkoituksella yksinkertaisia. Isännöity palvelu ei vielä ota käyttöön tietokantojensa ajastettuja varmuuskopioita. Käytä alustaa toistaiseksi arviointiin ja ei-kriittiseen työhön. Tiekarttasivu kertoo, mikä on valmista ja mikä ei.",
+        a: "Ei vielä. obop ei ole vielä saavuttanut versiota 1.0, joten uusi versio voi vielä muuttaa asioita. Ydin toimii ja on testattu, kuuden sisäänrakennetun sovelluksen tilaksi on merkitty Vakaa ja muiden sovellusten tilaksi Beta tai Kokeellinen, ja monet mukana tulevista sovelluksista ovat tarkoituksella yksinkertaisia. Käytä alustaa toistaiseksi arviointiin ja ei-kriittiseen työhön. Tiekarttasivu kertoo, mikä on valmista ja mikä ei.",
       },
       {
         q: "Paljonko se maksaa?",
@@ -219,7 +215,7 @@ export const fi: Messages = {
       },
       {
         q: "Missä tietoni sijaitsevat?",
-        a: "Jokaisella yrityksellä on oma tietokantansa, isännöidyssä ja tuotantokäytössä PostgreSQL-tietokanta. Jos ylläpidät alustaa itse, tiedot sijaitsevat siellä, missä ajat sitä. Tietueet tallennetaan JSON-dokumentteina, kunnes skeemanhallinta valmistuu.",
+        a: "Palvelimella, jolla ajat obopia: jokaisella yrityksellä on oma tietokantansa, SQLite kokeiluun ja PostgreSQL oikeaan käyttöön. SpaceCorps ei vielä tarjoa palvelinhotellointia. Tietueet tallennetaan JSON-dokumentteina, kunnes skeemanhallinta valmistuu.",
       },
       {
         q: "Miten tekoälyagentit toimivat obop-alustan kanssa?",
@@ -241,7 +237,7 @@ export const fi: Messages = {
     ctaTitle: "Yksi yritys, yksi alusta.",
     ctaBody:
       "Avointa lähdekoodia, palvelin tehty Rustilla, toimii SQLiten tai PostgreSQL:n kanssa.",
-    ctaButton: "Hanki oma instanssi",
+    ctaButton: "Aloita",
   },
   pricing: {
     title: "Hinnoittelu",
@@ -277,7 +273,7 @@ export const fi: Messages = {
     selfHostTitle: "Ilmainen, ja ajat sitä itse",
     selfHostBody:
       "obopissa ei ole maksullista versiota eikä pantattuja ominaisuuksia: jokainen sovellus, REST-rajapinta, MCP ja komentorivi kuuluvat ilmaiseen Apache-2.0-julkaisuun. Ajat sitä itse SQLitellä tai PostgreSQL:llä.",
-    hostingTitle: "Palvelinhotellointi, jos haluat",
+    hostingTitle: "Palvelinhotellointi, suunnitteilla",
     hostingBody:
       "Suunniteltu palvelu: SpaceCorps ylläpitää yrityksellesi omaa palvelinta Sliplanen infrastruktuurissa, jolla ovat obop ja PostgreSQL. Hinta määräytyy palvelimen koon mukaan; käyttäjäkohtaisia maksuja ei ole.",
     faqTitle: "Hinnoittelun kysymyksiä",
@@ -288,14 +284,14 @@ export const fi: Messages = {
       },
       {
         q: "Miksi hinta määräytyy palvelimen eikä käyttäjien mukaan?",
-        a: "Jokainen isännöity yritys saa oman palvelimen, joten hinta seuraa palvelimen kokoa ja lisättyä tallennustilaa. Lisää ihmisiä ei maksa mitään.",
+        a: "Jokainen isännöity yritys saisi oman palvelimen, joten hinta seuraisi palvelimen kokoa ja lisättyä tallennustilaa. Lisää ihmisiä ei maksaisi mitään.",
       },
       {
         q: "Voinko lähteä ja ottaa tietoni mukaan?",
         a: "Kyllä. obop on Apache-2.0-lisenssin alla ja sen tietokanta on tavallinen PostgreSQL, joten voit ajaa samaa ohjelmistoa itse; obop backup ja obop restore ovat mukana.",
       },
     ],
-    cta: "Hanki oma instanssi",
+    cta: "Aja se itse",
   },
   apps: {
     title: "Sovellukset",
@@ -400,7 +396,7 @@ export const fi: Messages = {
     store: {
       ready: "Mukana obopissa",
       more: "Lisää sovelluksia",
-      open: "Avaa",
+      open: "Aloita",
       get: "Lataa",
       canDo: "Mitä voit tehdä",
       keeps: "Mitä se tallentaa",
@@ -430,7 +426,7 @@ export const fi: Messages = {
       showMoreKeeps: "Näytä {n} tallennettavaa asiaa lisää",
       getLead: "Asenna se Mukauta-sovelluksesta, kohdasta Moduulikauppa.",
       commandLine: "Tai komentoriviltä",
-      openObop: "Avaa obop",
+      openObop: "Aloita",
       getNote: "Tarvitset ylläpitäjän tunnuksen.",
       included: "Sisältyy jokaiseen obopiin.",
       experimentalNote: "Vielä testauksessa. Kokeile sitä ensin esimerkkitiedoilla.",

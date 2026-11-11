@@ -50,7 +50,7 @@ curl -s -X POST http://127.0.0.1:8080/api/auth/agent-token \
 { "token": "obop_1e00c3..." }
 ```
 
-`scopes` ist erforderlich, darf nicht leer sein und darf nur Gruppen nennen, die in Ihrem eigenen Konto eingetragen sind; `platform.admin` steht hier nicht für die anderen Gruppen. Das erste Konto einer neuen gehosteten Instanz hat nur `platform.admin`; geben Sie ihm also zuerst die Gruppen, die Sie weitergeben wollen, unter _Anpassen, Sicherheit, Personal_. `label` ist freier Text. Bei einer gehosteten Instanz verwenden Sie deren Adresse statt `127.0.0.1:8080` und melden sich mit Ihrer Registrierungs-E-Mail-Adresse als Benutzernamen an.
+`scopes` ist erforderlich, darf nicht leer sein und darf nur Gruppen nennen, die in Ihrem eigenen Konto eingetragen sind; `platform.admin` steht hier nicht für die anderen Gruppen. Das erste Konto einer Instanz, die eine Control Plane angelegt hat, hat nur `platform.admin`; geben Sie ihm also zuerst die Gruppen, die Sie weitergeben wollen, unter _Anpassen, Sicherheit, Personal_. `label` ist freier Text. Bei einer solchen Instanz verwenden Sie deren Adresse statt `127.0.0.1:8080` und melden sich mit Ihrer Registrierungs-E-Mail-Adresse als Benutzernamen an.
 
 ## Mit der CLI
 

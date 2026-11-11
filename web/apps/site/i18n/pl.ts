@@ -20,8 +20,7 @@ export const pl: Messages = {
     docsNav: "Dokumentacja",
     breadcrumb: "Ścieżka nawigacji",
     home: "obop, strona główna",
-    signIn: "Zaloguj się",
-    startFree: "Zacznij za darmo",
+    startFree: "Zacznij",
     search: "Szukaj",
     searchPlaceholder: "Przeszukaj witrynę",
     searchEmpty: "Brak wyników. Spróbuj użyć mniejszej liczby lub innych słów.",
@@ -105,7 +104,7 @@ export const pl: Messages = {
     titleA: "Jedna firma.",
     titleB: "Jedna platforma.",
     lead: "CRM, sprzedaż, fakturowanie i inne aplikacje na jednym modelu danych. Stworzona dla ludzi i dla agentów AI, z uprawnieniami i ochroną prywatności, które pozwalają zaufać jednym i drugim.",
-    ctaPrimary: "Załóż własną instancję",
+    ctaPrimary: "Uruchom samodzielnie",
     ctaSecondary: "Zobacz aplikacje",
     heroPoints: [
       "Otwarte źródła",
@@ -170,21 +169,21 @@ export const pl: Messages = {
     marketCta: "Poznaj marketplace",
     stepsTitle: "Uruchom w trzech krokach",
     steps: [
-      { title: "Zarejestruj się", body: "Utwórz konto za pomocą adresu e-mail." },
-      { title: "Odbierz instancję", body: "Własna baza danych i adres, gotowe w kilka minut." },
+      { title: "Uruchom obop", body: "Uruchom obop w Dockerze albo zbuduj go z kodu źródłowego." },
+      { title: "Utwórz administratora", body: "Jedno polecenie tworzy pierwsze konto." },
       {
         title: "Dodaj moduły",
-        body: "Zaloguj się tymi samymi danymi i zainstaluj potrzebne aplikacje.",
+        body: "Zaloguj się i zainstaluj potrzebne aplikacje w aplikacji Dostosowanie.",
       },
     ],
-    stepsCta: "Zacznij za darmo",
+    stepsCta: "Zacznij",
     openTitle: "Otwarte źródła i własny hosting",
     openBody:
-      "Serwer obop jest napisany w Rust i działa z SQLite lub PostgreSQL. Skorzystaj z usługi hostowanej albo uruchom ten sam program samodzielnie w Dockerze. W obu przypadkach każda firma ma własną bazę danych, a dane należą do niej.",
+      "Serwer obop jest napisany w Rust i działa z SQLite lub PostgreSQL. Uruchom go samodzielnie w Dockerze albo zbuduj z kodu źródłowego. Każda firma ma własną bazę danych, a dane należą do niej.",
     openPoints: [
       {
-        title: "Hostowane przez nas",
-        body: "Tworzymy dla Ciebie instancję z własną bazą danych. W czasie bety wszystko jest bezpłatne.",
+        title: "Hosting, planowany",
+        body: "SpaceCorps planuje bezpłatną piaskownicę wyłącznie z przykładowymi danymi oraz płatny hosting na dedykowanych serwerach. Żadne z nich nie jest jeszcze oferowane.",
       },
       {
         title: "Własny hosting",
@@ -195,7 +194,7 @@ export const pl: Messages = {
         body: "Czytaj kod, decyzje i plan rozwoju. Apache-2.0, bezpłatny w użyciu i do samodzielnego hostowania; zajrzyj do repozytorium.",
       },
     ],
-    pricingTitle: "Za darmo. Hosting, jeśli chcesz.",
+    pricingTitle: "Za darmo. Hosting planowany.",
     pricingSub: `obop jest darmowy i open source: uruchom go sam na własnym serwerze. Jeśli wolisz tego nie robić, planowany jest dedykowany hosting od ${eur(HOSTING.servers[0].eur)} miesięcznie. Dziś nic nie jest naliczane.`,
     pricingFine:
       "Planowane ceny za serwer miesięcznie, bez VAT. Hosting nie jest jeszcze oferowany ani naliczany.",
@@ -208,7 +207,7 @@ export const pl: Messages = {
       },
       {
         q: "Czy obop nadaje się do użytku produkcyjnego?",
-        a: "Jeszcze nie. obop nie osiągnął jeszcze wersji 1.0, więc nowe wydanie wciąż może wprowadzać zmiany. Rdzeń działa i jest testowany, sześć wbudowanych aplikacji ma status „Stabilny”, pozostałe „Beta” lub „Eksperymentalny”, a wiele dołączonych aplikacji jest celowo prostych. Usługa hostowana nie włącza jeszcze zaplanowanych kopii zapasowych swoich baz danych. Na razie używaj jej do oceny i do mniej krytycznych zadań. Strona planu rozwoju wymienia, co jest gotowe, a czego jeszcze nie ma.",
+        a: "Jeszcze nie. obop nie osiągnął jeszcze wersji 1.0, więc nowe wydanie wciąż może wprowadzać zmiany. Rdzeń działa i jest testowany, sześć wbudowanych aplikacji ma status „Stabilny”, pozostałe „Beta” lub „Eksperymentalny”, a wiele dołączonych aplikacji jest celowo prostych. Na razie używaj obop do oceny i do mniej krytycznych zadań. Strona planu rozwoju wymienia, co jest gotowe, a czego jeszcze nie ma.",
       },
       {
         q: "Ile to kosztuje?",
@@ -216,7 +215,7 @@ export const pl: Messages = {
       },
       {
         q: "Gdzie są moje dane?",
-        a: "Każda firma ma własną bazę danych, w PostgreSQL w przypadku hostingu i użytku produkcyjnego. Przy własnym hostingu dane znajdują się tam, gdzie system został uruchomiony. Do czasu powstania menedżera schematu rekordy są przechowywane jako dokumenty JSON.",
+        a: "Na serwerze, na którym uruchamiasz obop: każda firma ma własną bazę danych, SQLite do wypróbowania i PostgreSQL do prawdziwego użytku. SpaceCorps nie oferuje jeszcze hostingu. Do czasu powstania menedżera schematu rekordy są przechowywane jako dokumenty JSON.",
       },
       {
         q: "Jak agenci AI współpracują z platformą?",
@@ -237,7 +236,7 @@ export const pl: Messages = {
     ],
     ctaTitle: "Jedna firma, jedna platforma.",
     ctaBody: "Otwarte źródła, serwer napisany w Rust, działa z SQLite lub PostgreSQL.",
-    ctaButton: "Załóż własną instancję",
+    ctaButton: "Zacznij",
   },
   pricing: {
     title: "Cennik",
@@ -273,7 +272,7 @@ export const pl: Messages = {
     selfHostTitle: "Za darmo i do uruchomienia po Twojej stronie",
     selfHostBody:
       "obop nie ma płatnej edycji ani wstrzymanych funkcji: każda aplikacja, REST API, MCP i wiersz poleceń są w darmowym wydaniu Apache-2.0. Uruchamiasz go sam na SQLite lub PostgreSQL.",
-    hostingTitle: "Hosting, jeśli chcesz",
+    hostingTitle: "Hosting, planowany",
     hostingBody:
       "Planowana usługa: SpaceCorps prowadzi dedykowany serwer dla Twojej firmy w infrastrukturze Sliplane, z obop i PostgreSQL na nim. Cena zależy od wielkości serwera; nie ma opłat za użytkownika.",
     faqTitle: "Pytania o cennik",
@@ -284,14 +283,14 @@ export const pl: Messages = {
       },
       {
         q: "Dlaczego hosting wyceniany jest za serwer, a nie za użytkownika?",
-        a: "Każda hostowana firma dostaje dedykowany serwer, więc cena zależy od wielkości serwera i dodanego miejsca. Dodawanie osób nic nie kosztuje.",
+        a: "Każda hostowana firma dostawałaby dedykowany serwer, więc cena zależałaby od wielkości serwera i dodanego miejsca. Dodawanie osób nic by nie kosztowało.",
       },
       {
         q: "Czy mogę odejść i zabrać dane?",
         a: "Tak. obop ma licencję Apache-2.0, a jego baza to zwykły PostgreSQL, więc możesz uruchomić to samo oprogramowanie sam; obop backup i obop restore są wbudowane.",
       },
     ],
-    cta: "Załóż własną instancję",
+    cta: "Uruchom samodzielnie",
   },
   apps: {
     title: "Aplikacje",
@@ -395,7 +394,7 @@ export const pl: Messages = {
     store: {
       ready: "W zestawie z obop",
       more: "Więcej aplikacji",
-      open: "Otwórz",
+      open: "Zacznij",
       get: "Pobierz",
       canDo: "Co możesz zrobić",
       keeps: "Co przechowuje",
@@ -425,7 +424,7 @@ export const pl: Messages = {
       showMoreKeeps: "Pokaż pozostałe zapisywane dane ({n})",
       getLead: "Zainstaluj ją w aplikacji Dostosowanie, w sekcji Marketplace.",
       commandLine: "Albo z wiersza poleceń",
-      openObop: "Otwórz obop",
+      openObop: "Zacznij",
       getNote: "Potrzebne jest konto administratora.",
       included: "Wchodzi w skład każdego obop.",
       experimentalNote: "Wciąż w fazie testów. Najpierw wypróbuj ją na danych przykładowych.",

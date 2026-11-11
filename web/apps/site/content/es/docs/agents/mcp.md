@@ -6,7 +6,7 @@ lead: "Cada instancia de obop tiene un servidor MCP en /mcp. Apunta un cliente a
 
 ## MCP remoto: conectar por URL
 
-Una instancia sirve el [Model Context Protocol](https://modelcontextprotocol.io/) mediante **Streamable HTTP** en `https://YOUR-INSTANCE/mcp`. Lo tienen tanto una instancia alojada (por ejemplo en Sliplane) como un `obop serve` local; no hay nada que activar.
+Una instancia sirve el [Model Context Protocol](https://modelcontextprotocol.io/) mediante **Streamable HTTP** en `https://YOUR-INSTANCE/mcp`. Lo tienen tanto una instancia en un servidor (por ejemplo en Sliplane) como un `obop serve` local; no hay nada que activar.
 
 - **Autenticación:** un inicio de sesión en el navegador (OAuth, véase abajo; aún no probado con las aplicaciones reales de Claude) para Claude Desktop, claude.ai y Claude Code, o `Authorization: Bearer <token>` en cada petición con un token de agente. En ambos casos el token se comprueba como en REST. Un token ausente o inválido recibe `401` con `WWW-Authenticate: Bearer resource_metadata="https://YOUR-INSTANCE/.well-known/oauth-protected-resource/mcp"`, como pide la especificación de autorización de MCP; ese documento nombra el servidor de autorización de la instancia (`/.well-known/oauth-authorization-server`). Un token emitido por el inicio de sesión solo vale para `/mcp`, no para `/api`.
 - **Revisiones del protocolo:** `2025-11-25`, `2025-06-18` y `2025-03-26`, negociadas en `initialize`. La revisión más reciente, `2026-07-28`, no tiene estado y funciona de otra manera; obop todavía no la implementa. Un cliente que admite ambas vuelve a `initialize` cuando recibe un `400` simple, que es lo que envía obop ante una cabecera de versión no admitida.

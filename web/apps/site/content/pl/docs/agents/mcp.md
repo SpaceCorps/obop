@@ -6,7 +6,7 @@ lead: "Każda instancja obop ma serwer MCP pod adresem /mcp. Skieruj klienta na 
 
 ## Zdalny MCP: połączenie przez adres URL
 
-Instancja udostępnia [Model Context Protocol](https://modelcontextprotocol.io/) przez **Streamable HTTP** pod adresem `https://YOUR-INSTANCE/mcp`. Mają go zarówno instancja hostowana (na przykład w Sliplane), jak i lokalne `obop serve`; niczego nie trzeba włączać.
+Instancja udostępnia [Model Context Protocol](https://modelcontextprotocol.io/) przez **Streamable HTTP** pod adresem `https://YOUR-INSTANCE/mcp`. Mają go zarówno instancja na serwerze (na przykład w Sliplane), jak i lokalne `obop serve`; niczego nie trzeba włączać.
 
 - **Uwierzytelnianie:** logowanie w przeglądarce (OAuth, zobacz niżej; jeszcze niewypróbowane z prawdziwymi aplikacjami Claude) dla Claude Desktop, claude.ai i Claude Code albo nagłówek `Authorization: Bearer <token>` w każdym żądaniu z tokenem agenta. W obu przypadkach token jest sprawdzany jak w REST. Brak tokenu lub zły token daje `401` z `WWW-Authenticate: Bearer resource_metadata="https://YOUR-INSTANCE/.well-known/oauth-protected-resource/mcp"`, jak wymaga specyfikacja autoryzacji MCP; ten dokument wskazuje serwer autoryzacji instancji (`/.well-known/oauth-authorization-server`). Token wydany przez logowanie działa tylko dla `/mcp`, nie dla `/api`.
 - **Wersje protokołu:** `2025-11-25`, `2025-06-18` i `2025-03-26`, uzgadniane w `initialize`. Najnowsza wersja, `2026-07-28`, jest bezstanowa i działa inaczej; obop jeszcze jej nie implementuje. Klient obsługujący obie wersje wraca do `initialize`, gdy zobaczy zwykłe `400`, które obop wysyła dla nieobsługiwanego nagłówka wersji.

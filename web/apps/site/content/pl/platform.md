@@ -7,7 +7,7 @@ eyebrow: "Jak to działa"
 
 ## Jedna instancja na firmę
 
-Każda firma działa we własnej **instancji** z własną bazą danych, własnymi użytkownikami i własnym adresem. W usłudze hostowanej płaszczyzna sterowania tworzy instancję po rejestracji i podaje jej adres; osoba, która się zarejestrowała, zostaje jej pierwszym administratorem. Ten sam program możesz też uruchomić samodzielnie. Zobacz [Instancje](/docs/concepts/instances/).
+Każda firma działa we własnej **instancji** z własną bazą danych, własnymi użytkownikami i własnym adresem. Program uruchamiasz samodzielnie: jedno `obop serve` to jedna instancja. Ten sam program ma drugi tryb, płaszczyznę sterowania (`obop platform serve`), w której można się zarejestrować i tworzyć własne instancje; osoba, która tworzy instancję, zostaje jej pierwszym administratorem. SpaceCorps nie hostuje jeszcze obop dla innych. Zobacz [Instancje](/docs/concepts/instances/).
 
 Magazynem jest SQLite do wypróbowania i PostgreSQL do prawdziwego użytku. Rekordy są na razie przechowywane jako dokumenty JSON; warstwa poleceń sprawdza typy pól, a menedżer schematu jest w planach.
 
@@ -52,6 +52,6 @@ Warto o tym wiedzieć, zanim się zdecydujesz:
 - Tylko niektóre aplikacje (na przykład Expenses, Timesheets, wnioski urlopowe w HR, Documents i Dashboards) ograniczają, które rekordy widzi dana osoba. CRM, Sales i Invoicing tego nie robią.
 - Dziennik bezpieczeństwa rejestruje na przykład zdarzenia dotyczące kont, logowania, ustawień bezpieczeństwa, modułów i podpisów, ale nie jest historią zmian w rekordach biznesowych.
 - Planowane zadanie eksportu danych całej firmy nie jest gotowe. Listę można wyeksportować do CSV z aplikacji webowej (do 20 000 rekordów), a `obop backup --plain` zapisuje rekordy i wgrane pliki bazy danych do niezaszyfrowanego pliku (wartości krótkotrwałe, takie jak sesje, są pominięte; sekrety pozostają zaszyfrowane, ale jeśli nie ustawiono `OBOP_SECRET_KEY`, klucz wygenerowany dla nich przez obop jest w pliku).
-- Usługa hostowana nie włącza jeszcze zaplanowanych kopii zapasowych swoich baz danych (kto uruchamia obop samodzielnie, może je włączyć).
+- Płaszczyzna sterowania nie włącza zaplanowanych kopii zapasowych instancji, które tworzy (kto uruchamia instancję samodzielnie, może je włączyć).
 
 [Plan rozwoju](/roadmap/) wymienia, co jest gotowe, a czego jeszcze nie ma.

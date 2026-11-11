@@ -6,7 +6,7 @@ lead: "Varje obop-instans har en MCP-server på /mcp. Rikta en klient mot URL:en
 
 ## Fjärr-MCP: anslut via URL
 
-En instans tillhandahåller [Model Context Protocol](https://modelcontextprotocol.io/) över **Streamable HTTP** på `https://YOUR-INSTANCE/mcp`. En hostad instans (till exempel på Sliplane) och en lokal `obop serve` har båda den; inget behöver slås på.
+En instans tillhandahåller [Model Context Protocol](https://modelcontextprotocol.io/) över **Streamable HTTP** på `https://YOUR-INSTANCE/mcp`. En instans på en server (till exempel på Sliplane) och en lokal `obop serve` har båda den; inget behöver slås på.
 
 - **Autentisering:** inloggning i webbläsaren (OAuth, se nedan; ännu inte prövad med de riktiga Claude-apparna) för Claude Desktop, claude.ai och Claude Code, eller `Authorization: Bearer <token>` i varje förfrågan med en agenttoken. I båda fallen kontrolleras token som för REST. En saknad eller felaktig token får `401` med `WWW-Authenticate: Bearer resource_metadata="https://YOUR-INSTANCE/.well-known/oauth-protected-resource/mcp"`, som MCP:s auktoriseringsspecifikation kräver; det dokumentet nämner instansens auktoriseringsserver (`/.well-known/oauth-authorization-server`). En token som utfärdats vid inloggningen gäller bara för `/mcp`, inte för `/api`.
 - **Protokollrevisioner:** `2025-11-25`, `2025-06-18` och `2025-03-26`, förhandlade i `initialize`. Den nyaste revisionen, `2026-07-28`, är tillståndslös och fungerar annorlunda; obop implementerar den inte ännu. En klient som talar båda faller tillbaka på `initialize` när den får ett vanligt `400`, vilket är vad obop skickar för en versionsheader som inte stöds.

@@ -7,7 +7,7 @@ eyebrow: "Community"
 
 ## The forum
 
-The community forum lives at [/community/](/community/). It is separate from this website and has its own sitemap. Use it for questions about using obop, ideas, and showing what you have built.
+The community forum is part of the obop control plane: where a control plane serves this website, the forum is at [/community/](/community/). It is separate from this website and has its own sitemap. Use it for questions about using obop, ideas, and showing what you have built.
 
 If the forum is not reachable yet, the [GitHub repository](https://github.com/SpaceCorps/obop) is the place for bug reports and feature requests: open an issue.
 

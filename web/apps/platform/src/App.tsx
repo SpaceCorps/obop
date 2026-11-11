@@ -10,9 +10,11 @@ import {
   Logo,
   Notice,
   Dialog,
+  LANGS,
   TwoFactorPanel,
   TwoFactorStep,
   createTwoFactorApi,
+  getLang,
   msg,
   rich,
   t,
@@ -37,6 +39,14 @@ function remember(token: string) {
   } catch {
     /* storage unavailable: the session lasts until reload */
   }
+}
+
+/** The website's Getting started page in the current language (the site has the same seven). */
+function gettingStarted(): string {
+  const lang = getLang();
+  return lang !== "en" && (LANGS as readonly string[]).includes(lang)
+    ? `/${lang}/docs/getting-started/`
+    : "/docs/getting-started/";
 }
 
 function Auth({ onToken }: { onToken: (token: string) => void }) {
@@ -80,7 +90,6 @@ function Auth({ onToken }: { onToken: (token: string) => void }) {
             <Icon name="sparkle" size={18} /> {t("Agents that propose, humans that approve")}
           </li>
         </ul>
-        <p className="hint">{t("Free while in beta. No card needed.")}</p>
       </aside>
       {step ? (
         <div className="auth">
@@ -121,10 +130,15 @@ function Auth({ onToken }: { onToken: (token: string) => void }) {
           </h1>
           <div className="auth-head">
             <h2>{mode === "signup" ? t("Create your account") : t("Sign in")}</h2>
-            <p className="hint">
-              {t("One business, one platform. Sign up and get your own instance.")}
-            </p>
+            <p className="hint">{t("Create and manage obop instances from this server.")}</p>
           </div>
+          <Notice tone="info">
+            {rich(
+              "obop.dev does not offer hosted instances yet. To use obop today, <a>run it yourself</a>.",
+              {},
+              { a: (c) => <a href={gettingStarted()}>{c}</a> },
+            )}
+          </Notice>
           <Input
             label={t("Email")}
             name="email"

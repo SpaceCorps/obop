@@ -6,7 +6,7 @@ lead: "Chaque instance obop dispose d'un serveur MCP à l'adresse /mcp. Pointez 
 
 ## MCP distant : connexion par URL
 
-Une instance sert le [Model Context Protocol](https://modelcontextprotocol.io/) en **Streamable HTTP** à l'adresse `https://YOUR-INSTANCE/mcp`. Une instance hébergée (par exemple sur Sliplane) comme un `obop serve` local l'offrent ; il n'y a rien à activer.
+Une instance sert le [Model Context Protocol](https://modelcontextprotocol.io/) en **Streamable HTTP** à l'adresse `https://YOUR-INSTANCE/mcp`. Une instance sur un serveur (par exemple sur Sliplane) comme un `obop serve` local l'offrent ; il n'y a rien à activer.
 
 - **Authentification :** une connexion dans le navigateur (OAuth, voir ci-dessous ; pas encore essayée avec les vraies applications Claude) pour Claude Desktop, claude.ai et Claude Code, ou `Authorization: Bearer <token>` sur chaque requête avec un jeton d'agent. Dans les deux cas le jeton est vérifié comme pour REST. Un jeton absent ou invalide reçoit `401` avec `WWW-Authenticate: Bearer resource_metadata="https://YOUR-INSTANCE/.well-known/oauth-protected-resource/mcp"`, comme l'exige la spécification d'autorisation MCP ; ce document nomme le serveur d'autorisation de l'instance (`/.well-known/oauth-authorization-server`). Un jeton émis par la connexion ne vaut que pour `/mcp`, pas pour `/api`.
 - **Révisions du protocole :** `2025-11-25`, `2025-06-18` et `2025-03-26`, négociées dans `initialize`. La révision la plus récente, `2026-07-28`, est sans état et fonctionne différemment ; obop ne l'implémente pas encore. Un client qui parle les deux revient à `initialize` lorsqu'il reçoit un simple `400`, ce que obop envoie pour un en-tête de version non pris en charge.

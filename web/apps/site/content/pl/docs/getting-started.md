@@ -1,21 +1,12 @@
 ---
 title: "Pierwsze kroki"
-description: "Uruchom pierwszą instancję obop: zarejestruj się w hostowanej wersji beta, uruchom system samodzielnie w Dockerze z PostgreSQL albo lokalnie z SQLite. Potem zainstaluj aplikację, utwórz rekordy i zaproś agenta."
-lead: "Trzy sposoby uruchomienia obop. Wybierz hostowaną betę, aby wypróbować system w kilka minut, Dockera z PostgreSQL do prawdziwego wdrożenia albo lokalną kompilację do pracy deweloperskiej."
+description: "Uruchom pierwszą instancję obop: samodzielnie w Dockerze z PostgreSQL albo lokalnie z SQLite. Potem zainstaluj aplikację, utwórz rekordy i zaproś agenta."
+lead: "Dwa sposoby uruchomienia obop: Docker z PostgreSQL do prawdziwego wdrożenia albo lokalna kompilacja do pracy deweloperskiej. obop.dev nie oferuje jeszcze hostowanych instancji."
 ---
 
-## Opcja 1: hostowana beta
+SpaceCorps nie hostuje jeszcze obop dla innych, więc uruchamiasz obop samodzielnie. Planowane są bezpłatna piaskownica (sandbox) z przykładowymi danymi i płatny hosting na serwerach dedykowanych; żadne z nich nie jest jeszcze dostępne i nie obiecujemy żadnego terminu. Zobacz [Cennik](/pricing/). Nazwy elementów interfejsu podajemy tak, jak wyświetla je aplikacja w języku polskim.
 
-Usługa hostowana daje każdej firmie własną instancję z własną bazą danych. W czasie bety jest bezpłatna. Nazwy elementów interfejsu podajemy tak, jak wyświetla je aplikacja w języku polskim.
-
-1. **Zarejestruj się.** Otwórz [aplikację rejestracji](/app/), wpisz adres e-mail i hasło, a następnie wybierz _Utwórz konto_.
-2. **Utwórz instancję.** Nadaj jej nazwę o długości od 3 do 30 znaków. Adres powstaje z nazwy. Przygotowanie trwa chwilę; strona pokazuje postęp.
-3. **Zaloguj się.** Przejdź do odnośnika do swojej instancji i zaloguj się tym samym adresem e-mail i hasłem. Konto utworzone przy rejestracji zostaje pierwszym administratorem instancji.
-4. **Zainstaluj aplikację.** Otwórz aplikację _Dostosowanie_, w niej _Moduły_ i kartę _Marketplace_, a potem zainstaluj aplikację, na przykład Helpdesk lub Projekty. Instalowanie i usuwanie aplikacji wymaga grupy administratora. Wbudowane aplikacje są już dostępne, a wśród nich Kontakty, Produkty, CRM, Sprzedaż, Fakturowanie i Konektory (sześć, które mają stronę aplikacji).
-5. **Utwórz rekordy.** Otwórz aplikację, wybierz _Nowy_ i wypełnij formularz. Listy, tablice i panel boczny są generowane z opisu aplikacji.
-6. **Zaproś agenta.** Nie ma jeszcze ekranu do tokenów agentów. Zaloguj się przez REST API i [utwórz token agenta](/docs/agents/tokens/), a potem [połącz się przez MCP](/docs/agents/mcp/) lub użyj [REST](/docs/agents/rest/).
-
-## Opcja 2: własny hosting w Dockerze z PostgreSQL
+## Opcja 1: własny hosting w Dockerze z PostgreSQL
 
 Potrzebujesz Dockera. Repozytorium zawiera plik Compose, który uruchamia razem PostgreSQL i obop, udostępnione wyłącznie na localhost:
 
@@ -44,7 +35,7 @@ docker run -d --name obop -p 8080:8080 \
 
 Obraz domyślnie uruchamia jedną instancję. Jego polecenie to `obop serve --addr 0.0.0.0:8080 --static /srv/backoffice --public-site --trust-proxy`: publiczna strona jest pod `/`, a panel administracyjny pod `/admin/`. `--trust-proxy` odczytuje adres klienta z nagłówka `X-Forwarded-For`, więc uruchamiaj obraz za serwerem proxy, który sam kontrolujesz. Pierwszego administratora utworzysz poleceniem `docker exec -i obop obop admin create alice --all-groups`. Płaszczyznę sterowania, kopie zapasowe i to, czego jeszcze brakuje, opisuje strona [Własny hosting i eksploatacja](/docs/reference/self-hosting/).
 
-## Opcja 3: praca lokalna z SQLite
+## Opcja 2: praca lokalna z SQLite
 
 Potrzebujesz zestawu narzędzi Rust z pliku `rust-toolchain.toml`, pnpm oraz Vite+ (`vp`). Domyślnym magazynem jest SQLite, więc serwer bazy danych nie jest potrzebny.
 
@@ -61,6 +52,12 @@ cargo run -- serve --static web/apps/backoffice/dist
 Otwórz `http://127.0.0.1:8080` i zaloguj się jako `alice`. Dane znajdują się w pliku `obop.db` w bieżącym katalogu; aby użyć innego pliku, przekaż `--db sqlite:///path/to/file.db`. Nowa, pusta baza SQLite jest automatycznie wypełniana fikcyjnymi danymi demonstracyjnymi (`--demo` wymusza to zawsze).
 
 `--dev-auth` zastępuje prawdziwe logowanie stałymi tokenami `dev-admin`, `dev-sales` i `dev-agent`. Odmawia działania na jakimkolwiek adresie poza localhost.
+
+## Po zalogowaniu
+
+1. **Zainstaluj aplikację.** Otwórz aplikację _Dostosowanie_, w niej _Moduły_ i kartę _Marketplace_, a potem zainstaluj aplikację, na przykład Helpdesk lub Projekty. Instalowanie i usuwanie aplikacji wymaga grupy administratora. Wbudowane aplikacje są już dostępne, a wśród nich Kontakty, Produkty, CRM, Sprzedaż, Fakturowanie i Konektory (sześć, które mają stronę aplikacji).
+2. **Utwórz rekordy.** Otwórz aplikację, wybierz _Nowy_ i wypełnij formularz. Listy, tablice i panel boczny są generowane z opisu aplikacji.
+3. **Zaproś agenta.** Nie ma jeszcze ekranu do tokenów agentów. Zaloguj się przez REST API i [utwórz token agenta](/docs/agents/tokens/), a potem [połącz się przez MCP](/docs/agents/mcp/) lub użyj [REST](/docs/agents/rest/).
 
 ## Co dalej
 

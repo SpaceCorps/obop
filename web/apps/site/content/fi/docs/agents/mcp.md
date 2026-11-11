@@ -6,7 +6,7 @@ lead: "Jokaisella obop-instanssilla on MCP-palvelin osoitteessa /mcp. Osoita asi
 
 ## Etä-MCP: yhdistä osoitteella
 
-Instanssi tarjoaa [Model Context Protocolin](https://modelcontextprotocol.io/) **Streamable HTTP** -siirrolla osoitteessa `https://YOUR-INSTANCE/mcp`. Isännöidyllä instanssilla (esimerkiksi Sliplanessa) ja paikallisella `obop serve` -komennolla se on käytössä; mitään ei tarvitse kytkeä päälle.
+Instanssi tarjoaa [Model Context Protocolin](https://modelcontextprotocol.io/) **Streamable HTTP** -siirrolla osoitteessa `https://YOUR-INSTANCE/mcp`. Palvelimella toimivalla instanssilla (esimerkiksi Sliplanessa) ja paikallisella `obop serve` -komennolla se on käytössä; mitään ei tarvitse kytkeä päälle.
 
 - **Todennus:** selainkirjautuminen (OAuth, katso alla; ei vielä kokeiltu oikeilla Claude-sovelluksilla) Claude Desktopille, claude.ai:lle ja Claude Codelle tai `Authorization: Bearer <token>` jokaisessa pyynnössä agenttitunnisteella. Tunniste tarkistetaan kummassakin tapauksessa kuten REST-rajapinnassa. Puuttuva tai virheellinen tunniste saa vastauksen `401` ja `WWW-Authenticate: Bearer resource_metadata="https://YOUR-INSTANCE/.well-known/oauth-protected-resource/mcp"`, kuten MCP:n valtuutusmäärittely edellyttää; kyseinen dokumentti nimeää instanssin valtuutuspalvelimen (`/.well-known/oauth-authorization-server`). Kirjautumisella annettu tunniste toimii vain osoitteessa `/mcp`, ei osoitteessa `/api`.
 - **Protokollaversiot:** `2025-11-25`, `2025-06-18` ja `2025-03-26`, neuvoteltu `initialize`-kutsussa. Uusin versio, `2026-07-28`, on tilaton ja toimii eri tavalla; obop ei tue sitä vielä. Asiakas, joka puhuu molempia, palaa `initialize`-kutsuun, kun se saa pelkän `400`-vastauksen, jonka obop lähettää tukemattomasta versio-otsakkeesta.

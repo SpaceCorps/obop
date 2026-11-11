@@ -4,7 +4,7 @@ description: "Use the obop command line as an agent: obop commands lists what a 
 lead: "The CLI is the third surface over the same commands. It is the simplest way for a shell script or a scheduled job to work with obop."
 ---
 
-The CLI opens the database directly, like `obop mcp`, so it runs where the database is reachable. For a hosted instance use [REST](/docs/agents/rest/).
+The CLI opens the database directly, like `obop mcp`, so it runs where the database is reachable. For an instance on another server, use [REST](/docs/agents/rest/).
 
 ## Set the token and database once
 

@@ -17,15 +17,52 @@ const emailFor = (uid: (p: string) => string) => `${uid("owner").replace(/ /g, "
 const nameFor = (uid: (p: string) => string) => uid("Acme").replace(/ /g, "").slice(0, 24);
 
 test.describe("landing page", () => {
-  test("loads, shows the pitch and its call to action reaches the app", async ({ page }) => {
+  // The owner ruled on 2026-11-11 that there is no hosted beta: the site's call to action leads to
+  // Getting started (run obop yourself), not to the sign-up app.
+  test("loads, shows the pitch and its call to action reaches Getting started", async ({
+    page,
+  }) => {
     await page.goto(`${platformUrl()}/`);
     await expect(page).toHaveTitle(/obop/);
     await expect(page.getByRole("heading", { level: 1 })).toContainText("One business.");
     await expect(page.getByRole("link", { name: "See the apps" })).toBeVisible();
 
-    await page.getByRole("link", { name: "Get your own instance" }).first().click();
-    await expect(page).toHaveURL(`${platformUrl()}/app/`);
-    await expect(page.getByRole("button", { name: "Create account" })).toBeVisible();
+    await page.getByRole("link", { name: "Run it yourself" }).first().click();
+    await expect(page).toHaveURL(`${platformUrl()}/docs/getting-started/`);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Getting started");
+  });
+});
+
+test.describe("sign-up app", () => {
+  // The app stays for operators who run a control plane, and says that obop.dev offers no hosted
+  // instances yet, with a link to Getting started in the language the app is shown in.
+  test("says that obop.dev offers no hosted instances yet and links to Getting started", async ({
+    page,
+  }) => {
+    await page.goto(`${platformUrl()}/app/`);
+    const notice = page
+      .getByRole("status")
+      .filter({ hasText: "obop.dev does not offer hosted instances yet." });
+    await expect(notice).toBeVisible();
+    const link = notice.getByRole("link", { name: "run it yourself" });
+    await expect(link).toHaveAttribute("href", "/docs/getting-started/");
+    await expect(page.getByText("Free while in beta")).toHaveCount(0);
+    // It shows in both modes of the form.
+    await page.getByRole("button", { name: "I already have an account" }).click();
+    await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+    await expect(notice).toBeVisible();
+
+    await page.getByRole("button", { name: "Language" }).click();
+    await page.getByRole("menuitem", { name: "Suomi" }).click();
+    await expect(page.locator("html")).toHaveAttribute("lang", "fi");
+    await expect(page.getByRole("status").getByRole("link")).toHaveAttribute(
+      "href",
+      "/fi/docs/getting-started/",
+    );
+
+    await page.getByRole("status").getByRole("link").click();
+    await expect(page).toHaveURL(`${platformUrl()}/fi/docs/getting-started/`);
+    await expect(page.locator("html")).toHaveAttribute("lang", "fi");
   });
 });
 

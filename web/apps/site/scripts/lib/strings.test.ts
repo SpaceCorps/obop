@@ -61,3 +61,99 @@ describe("obop itself is below version 1.0 and not beta, in every language", () 
     });
   }
 });
+
+// The owner ruled on 2026-11-11 that the hosted beta is not live: SpaceCorps hosts no obop for other
+// people (OR-11), so nothing may say that something is free during the beta, and no call to action may
+// offer a free start or an instance of one's own. The words are each language's own; the old strings
+// of every language are the examples the rules must catch.
+const FREE: Record<(typeof LOCALES)[number], RegExp> = {
+  en: /(?<!\p{L})free(?!\p{L})/iu,
+  de: /kostenlos|gratis/i,
+  es: /gratis|gratuit/i,
+  fi: /ilmai|maksuton|maksutta/i,
+  fr: /gratuit/i,
+  pl: /bezpłatn|darm/i,
+  sv: /gratis|kostnadsfri|avgiftsfri/i,
+};
+// "Beta" in each language, as a word: "Betalning" (Swedish for payment) is not it.
+const BETA = /(?<!\p{L})(?:b[eê]ta|bety|betan|beta-?vaihe\p{L}*)(?!\p{L})/iu;
+const INSTANCE = /instan(?:ce|z|cia|ssi|cj|s)/i;
+const OLD: Record<(typeof LOCALES)[number], { beta: string[]; cta: string[] }> = {
+  en: {
+    beta: ["Everything is free during the beta.", "Free while in beta."],
+    cta: ["Start free", "Get your own instance"],
+  },
+  de: {
+    beta: ["Während der Beta ist alles kostenlos.", "Kostenlos während der Beta."],
+    cta: ["Kostenlos starten", "Eigene Instanz erhalten"],
+  },
+  es: {
+    beta: ["Todo es gratis durante la beta.", "Gratis durante la beta."],
+    cta: ["Empezar gratis", "Obtén tu propia instancia"],
+  },
+  fi: {
+    beta: ["Kaikki on ilmaista beta-vaiheen ajan.", "Maksuton betavaiheen ajan."],
+    cta: ["Aloita ilmaiseksi", "Hanki oma instanssi"],
+  },
+  fr: {
+    beta: ["Tout est gratuit pendant la bêta.", "Gratuit pendant la bêta."],
+    cta: ["Commencer gratuitement", "Obtenir votre instance"],
+  },
+  pl: {
+    beta: ["W czasie bety wszystko jest bezpłatne.", "Bezpłatnie w okresie beta."],
+    cta: ["Zacznij za darmo", "Załóż własną instancję"],
+  },
+  sv: {
+    beta: ["Allt är gratis under betan.", "Gratis under betan."],
+    cta: ["Kom igång gratis", "Skaffa din egen instans"],
+  },
+};
+
+const sentences = (text: string) => text.split(/(?<=[.!?])\s+/);
+const freeDuringBeta = (locale: (typeof LOCALES)[number], text: string) =>
+  sentences(text).filter((s) => FREE[locale].test(s) && BETA.test(s));
+/** Every string of a message tree, with its path. */
+function strings(value: unknown, path = ""): [string, string][] {
+  if (typeof value === "string") return [[path, value]];
+  if (Array.isArray(value)) return value.flatMap((v, i) => strings(v, `${path}[${i}]`));
+  if (value && typeof value === "object")
+    return Object.entries(value).flatMap(([k, v]) => strings(v, path ? `${path}.${k}` : k));
+  return [];
+}
+
+describe("there is no hosted beta: nothing is free during the beta, and no call to action offers an instance", () => {
+  for (const locale of LOCALES) {
+    test(locale, () => {
+      // The rules can fail: each catches the old strings of its language, and not today's maturity label.
+      for (const old of OLD[locale].beta)
+        expect(freeDuringBeta(locale, old), `${locale}: ${old}`).toHaveLength(1);
+      expect(BETA.test("Betalning")).toBe(false);
+      const m = messages[locale];
+      const cta = {
+        "ui.startFree": m.ui.startFree,
+        "home.ctaPrimary": m.home.ctaPrimary,
+        "home.stepsCta": m.home.stepsCta,
+        "home.ctaButton": m.home.ctaButton,
+        "pricing.cta": m.pricing.cta,
+        "apps.store.open": m.apps.store.open,
+        "apps.store.openObop": m.apps.store.openObop,
+      };
+      const offers = (text: string) => FREE[locale].test(text) || INSTANCE.test(text);
+      for (const old of OLD[locale].cta) expect(offers(old), `${locale}: ${old}`).toBe(true);
+
+      // The website's strings.
+      for (const [path, text] of strings(m))
+        expect(freeDuringBeta(locale, text), `${locale}: ${path}`).toEqual([]);
+      for (const [key, text] of Object.entries(cta))
+        expect(offers(text), `${locale}: ${key} "${text}"`).toBe(false);
+
+      // The sign-up app's catalogue (its English ids are its English text).
+      const file = join(REPO_ROOT, "web/apps/platform/locales", locale, "messages.json");
+      const catalogue = JSON.parse(readFileSync(file, "utf8")) as Record<string, string>;
+      for (const [id, text] of Object.entries(catalogue)) {
+        expect(freeDuringBeta("en", id), `the sign-up app: ${id}`).toEqual([]);
+        expect(freeDuringBeta(locale, text), `the sign-up app, ${locale}: ${id}`).toEqual([]);
+      }
+    });
+  }
+});

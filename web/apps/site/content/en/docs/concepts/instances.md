@@ -7,7 +7,7 @@ An **instance** is one running obop for one business. It has its own database, i
 
 ## The control plane
 
-The hosted service is a **control plane**, a second mode of the same program (`obop platform serve`). It does three things:
+A **control plane** is a second mode of the same program (`obop platform serve`), for running instances for other people. SpaceCorps does not host obop for other people yet. A control plane does three things:
 
 1. People sign up with an email and a password.
 2. Each person can create, list and delete their own instances.
@@ -19,7 +19,7 @@ The password you signed up with is copied into the new instance as an Argon2id h
 
 ## One database per business
 
-On hosted PostgreSQL every business gets its own database and its own database role on a shared server. An instance cannot read another instance's data, because it has no credentials for it. Records are stored as JSON documents until the schema manager exists, so column types in the database are not enforced by the database; the command layer enforces them.
+With the `sliplane` provisioner every business gets its own database and its own database role on a shared PostgreSQL server. An instance cannot read another instance's data, because it has no credentials for it. Records are stored as JSON documents until the schema manager exists, so column types in the database are not enforced by the database; the command layer enforces them.
 
 ## Self-hosted
 
@@ -32,6 +32,6 @@ An administrator updates the instance from _Customize_, _Updates_. The page read
 ## Known limits
 
 - On Sliplane, an instance created from the repository (`OBOP_REPO`) builds the Rust workspace on the server, which is slow; an instance started from the published image (`OBOP_IMAGE`) needs no build.
-- Upgrading hosted instances (`obop platform upgrade-instances`, or _Customize_, _Updates_ in an instance) has been tested against stand-ins only, not against live Sliplane.
-- The control plane does not schedule backups of hosted instances (it does not set `OBOP_BACKUP_SCHEDULE`) and does not back up the shared database server.
+- Upgrading the instances a control plane created (`obop platform upgrade-instances`, or _Customize_, _Updates_ in an instance) has been tested against stand-ins only, not against live Sliplane.
+- The control plane does not schedule backups of the instances it creates (it does not set `OBOP_BACKUP_SCHEDULE`) and does not back up the shared database server.
 - TLS ends at the hosting platform's proxy.

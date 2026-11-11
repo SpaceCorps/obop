@@ -314,8 +314,8 @@
 }
 
 /*
- * One primary action per screen: an app page has its own filled pill (Open or Get), and the index
- * is a list of links with none, so the header's "Start free" is the plain button on both, and the
+ * One primary action per screen: an app page has its own filled pill (Get started or Get), and the
+ * index is a list of links with none, so the header's "Get started" is the plain button on both, and the
  * header does not change style between the two pages of one flow.
  */
 :root:has(.app-page, .store) .head-cta .btn.primary {

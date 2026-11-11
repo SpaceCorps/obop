@@ -23,8 +23,7 @@ export const en: Messages = {
     docsNav: "Documentation",
     breadcrumb: "Breadcrumb",
     home: "obop, home",
-    signIn: "Sign in",
-    startFree: "Start free",
+    startFree: "Get started",
     search: "Search",
     searchPlaceholder: "Search the site",
     searchEmpty: "No results. Try fewer or different words.",
@@ -107,7 +106,7 @@ export const en: Messages = {
     titleA: "One business.",
     titleB: "One platform.",
     lead: "CRM, sales, invoicing and more on a single data model. Built for people and for AI agents, with the permissions and privacy to trust both.",
-    ctaPrimary: "Get your own instance",
+    ctaPrimary: "Run it yourself",
     ctaSecondary: "See the apps",
     heroPoints: ["Open source", "One database per business", "Agents propose, humans approve"],
     mockCaption: "Illustration with sample data",
@@ -165,21 +164,21 @@ export const en: Messages = {
     marketCta: "Explore the marketplace",
     stepsTitle: "Get running in three steps",
     steps: [
-      { title: "Sign up", body: "Create an account with your email." },
-      { title: "Get your instance", body: "Your own database and address, ready in minutes." },
+      { title: "Start it", body: "Run obop with Docker, or build it from source." },
+      { title: "Create your administrator", body: "One command creates the first account." },
       {
         title: "Add modules",
-        body: "Sign in with the same login and install the apps you need.",
+        body: "Sign in and install the apps you need from Customize.",
       },
     ],
-    stepsCta: "Start free",
+    stepsCta: "Get started",
     openTitle: "Open source, and yours to host",
     openBody:
-      "The obop server is written in Rust and runs on SQLite or PostgreSQL. Use the hosted service, or run the same program yourself with Docker. Either way each business has its own database, and the data is yours.",
+      "The obop server is written in Rust and runs on SQLite or PostgreSQL. Run it yourself with Docker, or build it from source. Each business has its own database, and the data is yours.",
     openPoints: [
       {
-        title: "Hosted by us",
-        body: "We create an instance with its own database for you. Everything is free during the beta.",
+        title: "Hosting, planned",
+        body: "SpaceCorps plans a free sandbox with sample data only, and paid hosting on dedicated servers. Neither is offered yet.",
       },
       {
         title: "Self-hosted",
@@ -190,7 +189,7 @@ export const en: Messages = {
         body: "Read the code, the decisions and the roadmap. Apache-2.0, free to use and to self-host; see the repository.",
       },
     ],
-    pricingTitle: "Free to use. Hosting if you want it.",
+    pricingTitle: "Free to use. Hosting planned.",
     pricingSub: `obop is free and open source: run it yourself on your own server. If you would rather not, dedicated hosting is planned from ${eur(HOSTING.servers[0].eur)} a month. Nothing is charged today.`,
     pricingFine:
       "Planned prices per server and month, excluding VAT. Hosting is not offered or charged yet.",
@@ -203,7 +202,7 @@ export const en: Messages = {
       },
       {
         q: "Is obop ready for production use?",
-        a: "Not yet. obop is below version 1.0, so a release can still change things. The core works and is tested, the six built-in apps are marked Stable, the other apps are marked Beta or Experimental, and many bundled apps are deliberately simple. The hosted service does not switch on scheduled backups of its databases yet. Use it to evaluate and for non-critical work for now. The roadmap page lists what is built and what is not.",
+        a: "Not yet. obop is below version 1.0, so a release can still change things. The core works and is tested, the six built-in apps are marked Stable, the other apps are marked Beta or Experimental, and many bundled apps are deliberately simple. Use obop to evaluate and for non-critical work for now. The roadmap page lists what is built and what is not.",
       },
       {
         q: "How much does it cost?",
@@ -211,7 +210,7 @@ export const en: Messages = {
       },
       {
         q: "Where does my data live?",
-        a: "Each business gets its own database, in PostgreSQL for hosted and production use. If you self-host, it lives wherever you run it. Records are stored as JSON documents until the schema manager exists.",
+        a: "On the server where you run obop: each business has its own database, SQLite to try it out and PostgreSQL for real use. Hosting by SpaceCorps is not offered yet. Records are stored as JSON documents until the schema manager exists.",
       },
       {
         q: "How do AI agents work with obop?",
@@ -232,7 +231,7 @@ export const en: Messages = {
     ],
     ctaTitle: "One business, one platform.",
     ctaBody: "Open source, server built in Rust, runs on SQLite or PostgreSQL.",
-    ctaButton: "Get your own instance",
+    ctaButton: "Get started",
   },
   pricing: {
     title: "Pricing",
@@ -268,7 +267,7 @@ export const en: Messages = {
     selfHostTitle: "Free, and yours to run",
     selfHostBody:
       "obop has no paid edition and no held-back features: every app, the REST API, MCP and the command line are in the free Apache-2.0 release. You run it yourself on SQLite or PostgreSQL.",
-    hostingTitle: "Hosting, if you want it",
+    hostingTitle: "Hosting, planned",
     hostingBody:
       "A planned service: SpaceCorps runs a dedicated server for your business on Sliplane's infrastructure, with obop and PostgreSQL on it. The price follows the size of the server; there are no per-user fees.",
     faqTitle: "Pricing questions",
@@ -279,14 +278,14 @@ export const en: Messages = {
       },
       {
         q: "Why is hosting priced by server and not by user?",
-        a: "Each hosted business gets a dedicated server, so the price follows the size of the server and the storage you add. Adding people costs nothing extra.",
+        a: "Each hosted business would get a dedicated server, so the price would follow the size of the server and the storage you add. Adding people would cost nothing extra.",
       },
       {
         q: "Can I leave and take my data?",
         a: "Yes. obop is Apache-2.0 and its database is plain PostgreSQL, so you can run the same software yourself; obop backup and obop restore are built in.",
       },
     ],
-    cta: "Get your own instance",
+    cta: "Run it yourself",
   },
   apps: {
     title: "Apps",
@@ -389,7 +388,7 @@ export const en: Messages = {
     store: {
       ready: "Comes with obop",
       more: "More apps",
-      open: "Open",
+      open: "Get started",
       get: "Get",
       canDo: "What you can do",
       keeps: "What it keeps",
@@ -414,7 +413,7 @@ export const en: Messages = {
       showMoreKeeps: "Show {n} more things it keeps",
       getLead: "Install it from the Customize app, under Marketplace.",
       commandLine: "Or use the command line",
-      openObop: "Open obop",
+      openObop: "Get started",
       getNote: "You need an administrator account.",
       included: "Included in every obop.",
       experimentalNote: "Still being tested. Try it with sample data first.",
