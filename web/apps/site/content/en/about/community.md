@@ -20,7 +20,7 @@ If the forum is not reachable yet, the [GitHub repository](https://github.com/Sp
 5. **No advertising or spam.** Relevant links to your own marketplace or app are welcome when you say it is yours.
 6. **Stay on topic**, and use the language you are most comfortable in; English is the common one.
 
-Moderators may edit or remove posts that break these rules.
+Moderators may hide posts or remove threads that break these rules.
 
 ## Contribute
 

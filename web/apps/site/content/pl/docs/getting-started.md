@@ -6,12 +6,12 @@ lead: "Trzy sposoby uruchomienia obop. Wybierz hostowaną betę, aby wypróbowa�
 
 ## Opcja 1: hostowana beta
 
-Usługa hostowana daje każdej firmie własną instancję z własną bazą danych. W czasie bety jest bezpłatna. Nazwy elementów interfejsu (_Create account_, _Customize_, _Marketplace_, _New_) podajemy tak, jak widać je w aplikacji, czyli po angielsku.
+Usługa hostowana daje każdej firmie własną instancję z własną bazą danych. W czasie bety jest bezpłatna. Nazwy elementów interfejsu (_Create account_, _Customize_, _Modules_, _Marketplace_, _New_) podajemy tak, jak widać je w aplikacji, czyli po angielsku.
 
 1. **Zarejestruj się.** Otwórz [aplikację rejestracji](/app/), wpisz adres e-mail i hasło, a następnie wybierz _Create account_.
 2. **Utwórz instancję.** Nadaj jej nazwę o długości od 3 do 30 znaków. Adres powstaje z nazwy. Przygotowanie trwa chwilę; strona pokazuje postęp.
 3. **Zaloguj się.** Przejdź do odnośnika do swojej instancji i zaloguj się tym samym adresem e-mail i hasłem. Konto utworzone przy rejestracji zostaje pierwszym administratorem instancji.
-4. **Zainstaluj aplikację.** Otwórz _Customize_, następnie _Marketplace_ i zainstaluj aplikację, na przykład Helpdesk lub Projects. Instalowanie i usuwanie aplikacji wymaga grupy administratora. Wbudowane aplikacje (CRM, Sales, Invoicing, Products, Contacts i Connectors) są już dostępne.
+4. **Zainstaluj aplikację.** Otwórz _Customize_, następnie _Modules_ i kartę _Marketplace_, a potem zainstaluj aplikację, na przykład Helpdesk lub Projects. Instalowanie i usuwanie aplikacji wymaga grupy administratora. Wbudowane aplikacje (Contacts, Products, CRM, Sales, Invoicing, Connectors i Mileage) są już dostępne.
 5. **Utwórz rekordy.** Otwórz aplikację, wybierz _New_ i wypełnij formularz. Listy, tablice i panel boczny są generowane z opisu aplikacji.
 6. **Zaproś agenta.** Nie ma jeszcze ekranu do tokenów agentów. Zaloguj się przez REST API i [utwórz token agenta](/docs/agents/tokens/), a potem [połącz się przez MCP](/docs/agents/mcp/) lub użyj [REST](/docs/agents/rest/).
 
@@ -25,7 +25,7 @@ cd obop
 docker compose up --build
 ```
 
-Pierwsza kompilacja obejmuje cały workspace w Rust i trwa dość długo. Gdy system się uruchomi, otwórz `http://127.0.0.1:8080`. Plik Compose uruchamia obop z danymi demonstracyjnymi (`--demo`) i bez użytkowników, więc utwórz pierwszego administratora:
+Pierwsza kompilacja obejmuje cały workspace w Rust i trwa dość długo. Gdy system się uruchomi, otwórz `http://127.0.0.1:8080/admin/`. Plik Compose uruchamia obop z danymi demonstracyjnymi (`--demo`) i bez użytkowników, więc utwórz pierwszego administratora:
 
 ```bash
 docker compose exec obop obop admin create alice --all-groups
@@ -42,7 +42,7 @@ docker run -d --name obop -p 8080:8080 \
   obop
 ```
 
-Obraz domyślnie uruchamia jedną instancję. Jego polecenie to `obop serve --addr 0.0.0.0:8080 --static /srv/backoffice`. Płaszczyznę sterowania, kopie zapasowe i to, czego jeszcze brakuje, opisuje strona [Własny hosting i eksploatacja](/docs/reference/self-hosting/).
+Obraz domyślnie uruchamia jedną instancję. Jego polecenie to `obop serve --addr 0.0.0.0:8080 --static /srv/backoffice --public-site --trust-proxy`: publiczna strona jest pod `/`, a panel administracyjny pod `/admin/`. `--trust-proxy` odczytuje adres klienta z nagłówka `X-Forwarded-For`, więc uruchamiaj obraz za serwerem proxy, który sam kontrolujesz. Pierwszego administratora utworzysz poleceniem `docker exec -i obop obop admin create alice --all-groups`. Płaszczyznę sterowania, kopie zapasowe i to, czego jeszcze brakuje, opisuje strona [Własny hosting i eksploatacja](/docs/reference/self-hosting/).
 
 ## Opcja 3: praca lokalna z SQLite
 

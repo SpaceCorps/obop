@@ -11,7 +11,7 @@ Isännöity palvelu antaa jokaiselle yritykselle oman instanssin ja oman tietoka
 1. **Rekisteröidy.** Avaa [rekisteröitymissovellus](/app/), kirjoita sähköpostiosoitteesi ja salasana ja valitse _Create account_.
 2. **Luo instanssi.** Anna sille nimi, jossa on 3–30 merkkiä. Osoite muodostetaan nimestä. Käyttöönotto kestää hetken, ja sivu näyttää etenemisen.
 3. **Kirjaudu sisään.** Siirry linkistä instanssiisi ja kirjaudu sisään samalla sähköpostiosoitteella ja salasanalla. Rekisteröitymistilistäsi tulee instanssin ensimmäinen ylläpitäjä.
-4. **Asenna sovellus.** Avaa _Customize_, sitten _Marketplace_, ja asenna sovellus, esimerkiksi Helpdesk tai Projects. Sovellusten asentaminen ja poistaminen vaatii ylläpitäjän ryhmän. Sisäänrakennetut sovellukset (CRM, Sales, Invoicing, Products, Contacts ja Connectors) ovat jo valmiina.
+4. **Asenna sovellus.** Avaa _Customize_, sitten _Modules_ ja sen välilehti _Marketplace_, ja asenna sovellus, esimerkiksi Helpdesk tai Projects. Sovellusten asentaminen ja poistaminen vaatii ylläpitäjän ryhmän. Sisäänrakennetut sovellukset (Contacts, Products, CRM, Sales, Invoicing, Connectors ja Mileage) ovat jo valmiina.
 5. **Luo tietueita.** Avaa sovellus, valitse _New_ ja täytä lomake. Luettelot, taulut ja sivupaneeli muodostetaan sovelluksen kuvauksesta.
 6. **Kutsu agentti.** Agenttitunnisteille ei ole vielä omaa näkymää. Kirjaudu sisään REST-rajapinnan kautta ja [luo agenttitunniste](/docs/agents/tokens/). Sen jälkeen voit [yhdistää MCP:n kautta](/docs/agents/mcp/) tai käyttää [REST-rajapintaa](/docs/agents/rest/).
 
@@ -25,7 +25,7 @@ cd obop
 docker compose up --build
 ```
 
-Ensimmäinen koontiversio kääntää Rust-työtilan ja kestää hetken. Kun palvelu on käynnissä, avaa `http://127.0.0.1:8080`. Compose-tiedosto käynnistää obopin demotiedoilla (`--demo`) ja ilman käyttäjiä, joten luo ensimmäinen ylläpitäjä:
+Ensimmäinen koontiversio kääntää Rust-työtilan ja kestää hetken. Kun palvelu on käynnissä, avaa `http://127.0.0.1:8080/admin/`. Compose-tiedosto käynnistää obopin demotiedoilla (`--demo`) ja ilman käyttäjiä, joten luo ensimmäinen ylläpitäjä:
 
 ```bash
 docker compose exec obop obop admin create alice --all-groups
@@ -42,7 +42,7 @@ docker run -d --name obop -p 8080:8080 \
   obop
 ```
 
-Image ajaa oletuksena yhtä instanssia. Sen komento on `obop serve --addr 0.0.0.0:8080 --static /srv/backoffice`. Ohjaustaso, varmuuskopiot ja puuttuvat ominaisuudet on kuvattu sivulla [Oma ylläpito ja käyttö](/docs/reference/self-hosting/).
+Image ajaa oletuksena yhtä instanssia. Sen komento on `obop serve --addr 0.0.0.0:8080 --static /srv/backoffice --public-site --trust-proxy`: julkinen sivusto on osoitteessa `/` ja hallintanäkymä osoitteessa `/admin/`. `--trust-proxy` lukee asiakkaan osoitteen otsakkeesta `X-Forwarded-For`, joten aja imagea itse hallitsemasi välityspalvelimen takana. Luo ensimmäinen ylläpitäjä komennolla `docker exec -i obop obop admin create alice --all-groups`. Ohjaustaso, varmuuskopiot ja puuttuvat ominaisuudet on kuvattu sivulla [Oma ylläpito ja käyttö](/docs/reference/self-hosting/).
 
 ## Vaihtoehto 3: paikallinen kehitys SQLitellä
 

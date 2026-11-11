@@ -11,7 +11,7 @@ The hosted service gives each business its own instance with its own database. I
 1. **Sign up.** Open [the sign-up app](/app/), enter your email and a password, and choose _Create account_.
 2. **Create an instance.** Give it a name of 3 to 30 characters. The address is made from the name. Setting up takes a short while; the page shows the progress.
 3. **Sign in.** Follow the link to your instance and sign in with the same email and password. Your sign-up account becomes the first administrator of the instance.
-4. **Install an app.** Open _Customize_, then _Marketplace_, and install an app such as Helpdesk or Projects. Installing and removing apps needs the administrator group. The built-in apps (CRM, Sales, Invoicing, Products, Contacts and Connectors) are already there.
+4. **Install an app.** Open _Customize_, then _Modules_, then the _Marketplace_ tab, and install an app such as Helpdesk or Projects. Installing and removing apps needs the administrator group. The built-in apps (Contacts, Products, CRM, Sales, Invoicing, Connectors and Mileage) are already there.
 5. **Create records.** Open an app, choose _New_ and fill in the form. Lists, boards and the side panel are generated from the app's description.
 6. **Invite an agent.** There is no screen for agent tokens yet. Sign in over the REST API and [create an agent token](/docs/agents/tokens/), then [connect over MCP](/docs/agents/mcp/) or use [REST](/docs/agents/rest/).
 
@@ -25,7 +25,7 @@ cd obop
 docker compose up --build
 ```
 
-The first build compiles the Rust workspace and takes a while. When it is up, open `http://127.0.0.1:8080`. The Compose file starts obop with demo data (`--demo`) and no users, so create the first administrator:
+The first build compiles the Rust workspace and takes a while. When it is up, open `http://127.0.0.1:8080/admin/`. The Compose file starts obop with demo data (`--demo`) and no users, so create the first administrator:
 
 ```bash
 docker compose exec obop obop admin create alice --all-groups
@@ -42,7 +42,7 @@ docker run -d --name obop -p 8080:8080 \
   obop
 ```
 
-The image runs one instance by default. Its command is `obop serve --addr 0.0.0.0:8080 --static /srv/backoffice`. See [Self-hosting and operations](/docs/reference/self-hosting/) for the control plane, backups and what is missing.
+The image runs one instance by default. Its command is `obop serve --addr 0.0.0.0:8080 --static /srv/backoffice --public-site --trust-proxy`: the public site is at `/` and the back office at `/admin/`. `--trust-proxy` reads the client address from `X-Forwarded-For`, so run the image behind a proxy you control. Create the first administrator with `docker exec -i obop obop admin create alice --all-groups`. See [Self-hosting and operations](/docs/reference/self-hosting/) for the control plane, backups and what is missing.
 
 ## Option 3: local development with SQLite
 

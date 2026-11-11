@@ -73,7 +73,8 @@ function Auth({ onToken }: { onToken: (token: string) => void }) {
             {t("Your own instance, with its own database and address")}
           </li>
           <li>
-            <Icon name="shield-check" size={18} /> {t("Personal data masked unless you may see it")}
+            <Icon name="shield-check" size={18} />{" "}
+            {t("Agents get personal data masked or withheld")}
           </li>
           <li>
             <Icon name="sparkle" size={18} /> {t("Agents that propose, humans that approve")}

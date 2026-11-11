@@ -7,14 +7,14 @@ eyebrow: "Acerca de"
 
 ## Qué estamos construyendo
 
-Una suite empresarial modular, en la línea de los grandes sistemas ERP todo en uno, que sea abierta, portable y esté preparada para los agentes de IA desde el principio. Hoy cubre CRM, ventas, facturación, productos y contactos, y aspira a incluir contabilidad, inventario, fabricación, RR. HH., proyectos, punto de venta, comercio electrónico, sitio web, marketing, helpdesk y documentos.
+Una suite empresarial modular, en la línea de los grandes sistemas ERP todo en uno, que sea abierta, portable y esté preparada para los agentes de IA desde el principio. Tiene aplicaciones integradas para contactos, productos, CRM, ventas, facturación, conectores y kilometraje, y 24 paquetes incluidos (contabilidad, inventario, fabricación, RR. HH., proyectos, punto de venta, comercio electrónico, sitio web, marketing por correo, helpdesk, documentos y más) que todavía están en beta o son experimentales.
 
 obop es una reimplementación desde cero de ideas que el software empresarial ha demostrado válidas durante décadas. No copia el código de nadie.
 
 ## Principios
 
 - **Un negocio, una plataforma.** Un único modelo de datos para todas las aplicaciones, de modo que no hay nada que integrar a mano.
-- **Los agentes son de primera clase, y están limitados.** Tokens con alcance limitado, datos personales enmascarados y aprobaciones para todo lo irreversible.
+- **Los agentes son de primera clase, y están limitados.** Tokens con alcance limitado, datos personales enmascarados y la aprobación de una persona para cada eliminación y para los pasos que un módulo marca como sujetos a aprobación.
 - **Abierto y portable.** El código es público, funciona sobre PostgreSQL y los datos de un negocio son suyos.
 - **Honesto.** Decimos qué está construido y qué no. Sin clientes, citas ni cifras inventados: este sitio no tiene ninguno porque todavía no hay nada real que mostrar.
 - **Lenguaje claro.** La documentación y la interfaz dicen lo que quieren decir.
@@ -25,7 +25,7 @@ obop lo construye [SpaceCorps](https://github.com/SpaceCorps). El código, las d
 
 ## Tecnología
 
-El backend está escrito en Rust. Las aplicaciones web usan Vite+ y React. Este sitio web es un sitio estático generado con VitePress a partir de Markdown y un sistema de diseño compartido, en siete idiomas.
+El backend está escrito en Rust. Las aplicaciones web usan Vite+ y React. Este sitio web es un sitio estático generado con VitePress a partir de Markdown y un sistema de diseño compartido. La interfaz y las páginas principales están disponibles en siete idiomas (traducidas automáticamente); las demás páginas muestran el texto en inglés.
 
 ## Adónde ir después
 

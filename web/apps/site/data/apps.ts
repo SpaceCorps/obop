@@ -332,8 +332,12 @@ export const APP_COPY: AppCopy[] = [
     },
     // A flag nothing reads: the only asserts in the packages are accounting.toml:346, pos.toml:226 and
     // sign.toml:202, and a search of crates/ and web/apps/backoffice/src finds no reader of it.
+    // sla_id is a plain ref (packages/helpdesk.toml:120-125) and due_on a plain date (:139-143); the package has
+    // no assert, effect or computed field, and nothing in crates/ reads a ticket outside the tests.
     fieldText: {
       "helpdesk_sla.active": "Marks the policy as in use or not. A label only; nothing checks it.",
+      "helpdesk_ticket.sla_id":
+        "The service-level policy the ticket is meant to meet. Nothing measures the ticket against it, and nothing fills in the due date.",
     },
     cards: {
       helpdesk_sla: {
@@ -350,12 +354,26 @@ export const APP_COPY: AppCopy[] = [
       "Keep a list of company vehicles, who drives them and when they were serviced. It records each vehicle's status and services; it does not work out running costs.",
     cards: {
       "fleet_vehicle.retire": {
-        text: "Mark an available vehicle as retired. The record stays and nothing moves it back. Needs the approving role.",
+        text: "Mark an available vehicle as retired. No step moves it back. Needs the approving role.",
+      },
+      fleet_vehicle_driver: {
+        text: "A driver of fleet vehicles: name, phone, licence number and licence expiry date.",
+        limit: "A driver's status and licence expiry are not checked when a vehicle is assigned.",
+      },
+      "fleet_vehicle_driver.suspend": {
+        text: "Mark a driver as suspended, for example after an expired licence. By itself, this does not stop the driver being assigned a vehicle.",
+      },
+      "fleet_vehicle_driver.reactivate": {
+        text: "Mark a suspended driver as active again.",
       },
     },
     // The retire action only sets the state to retired and needs fleet.approver (packages/fleet.toml:91-100);
-    // no action leaves "retired". No action reaches "maintenance" either (:77-100), and a governed state
+    // no action leaves "retired", and like every model a vehicle has a delete command, so "the record stays"
+    // is not said. No action reaches "maintenance" either (:77-100), and a governed state
     // starts at its first option and moves only through actions (crates/kernel/obop-commands/src/guards.rs:65, :158).
+    // A driver's state (active, suspended) only moves through suspend and reactivate (:134-154): nothing reads
+    // it or licence_expiry, fleet_vehicle.driver_id is a plain ref (:63-68) and dispatch has no assert or effect
+    // (:77-82), so the manifest's "authorised to drive" and "allow ... to drive again" (:102, :151) are not said.
     fieldText: {
       "fleet_vehicle.state":
         "Availability: available, in service or retired. The option maintenance exists, but no step moves a vehicle into it.",
@@ -544,21 +562,38 @@ export const APP_COPY: AppCopy[] = [
     // card-number sentence, and "cash-controlled" left out of "cash-controlled sessions", because cash_control is a
     // flag that nothing reads (:44-48; fieldText below). Close has no assert and no counted-cash field is required (:142-148, :116-118); pay
     // checks the payments once, when it runs (:220-226), and pos_order and its lines stay writable by pos.user
-    // (:151-154, :252-255).
+    // (:151-154, :252-255). The stock moves are made only when the sale has a stock location (:228-233,
+    // when = "is_set(stock_location_id)"), and the package needs Inventory too (:16-19).
     packageText:
-      "Shop tills: a point-of-sale configuration, sessions that are opened and closed, orders with lines, and payment lines per method. A refund and the closing of a session need a human approval from a manager; agents may only propose them. Line subtotals and the order total are computed from the lines, receipts get a gapless yearly number, and paying is refused until the payments cover the total; change and cash differences are still entered. Paying also creates a draft stock move per line from the order's stock location, for the warehouse to validate. Do not store card numbers: obop does not check for them. Keep only the payment provider's reference. Needs the Products package.",
+      "Shop tills: a point-of-sale configuration, sessions that are opened and closed, orders with lines, and payment lines per method. A refund and the closing of a session need a human approval from a manager; agents may only propose them. Line subtotals and the order total are computed from the lines, receipts get a gapless yearly number, and paying is refused until the payments cover the total; change and cash differences are still entered. When the sale has a stock location, paying also creates a draft stock move per line from it, for the warehouse to validate. Do not store card numbers: obop does not check for them. Keep only the payment provider's reference. Needs the Products and Inventory packages.",
     modelNames: {
       pos_config: "Point of sale",
     },
-    // A flag nothing reads: the only asserts in the packages are accounting.toml:346, pos.toml:226 and
-    // sign.toml:202, and a search of crates/ and web/apps/backoffice/src finds no reader of it.
+    // Flags nothing reads: the only asserts in the packages are accounting.toml:346, pos.toml:226 and
+    // sign.toml:202, and a search of crates/ and web/apps/backoffice/src finds no reader of them (active:
+    // pos.toml:62-66; a session's config_id is a plain ref, :75-79). Nothing prints a till receipt:
+    // receipt_header, receipt_number and a line's description are read by no code outside the tests
+    // (crates/obop/src/model_tests.rs:462); the shop's printable receipt is eCommerce's order page.
     fieldText: {
       "pos_config.cash_control":
         "Whether sessions are meant to count the cash in the drawer when they open and close. A label only; nothing checks it.",
       "pos_config.allow_refunds":
         "Whether cashiers are meant to propose refunds at this point of sale. A label only; nothing checks it.",
+      "pos_config.active":
+        "Marks the point of sale as in use or not. A label only; nothing checks it.",
+      "pos_config.receipt_header":
+        "Text meant for the top of receipts. Point of Sale does not print receipts; the text is only stored.",
+      "pos_order.receipt_number":
+        "Number for the receipt, such as R-2026-000042: a gapless series that starts again each year, assigned when the sale is created. Point of Sale does not print receipts.",
+      "pos_order_line.description":
+        "Text meant for the receipt line. Point of Sale does not print receipts; the text is only stored.",
     },
     cards: {
+      // The manifest says "and its rules" (packages/pos.toml:23): its only rule-like fields are the two flags
+      // above, which nothing reads, and the one assert is on pos_order.pay (:226).
+      pos_config: {
+        text: "A point of sale: a till or a shop, with its name, currency and receipt header.",
+      },
       "pos_order.pay": {
         text: "Mark the sale as fully paid. Refused until the payments cover the total; a paid sale can still be edited afterwards. If the sale has a stock location, a draft record of the goods leaving is prepared for each line, for the warehouse to confirm. You need access to Inventory.",
         limit: "The payments are checked only when the sale is paid.",
@@ -579,11 +614,19 @@ export const APP_COPY: AppCopy[] = [
     tagline: "Online store",
     purpose:
       "Keep the data of an online shop: listings, shipping methods, discount codes and web orders. Orders follow a fulfilment flow, and refunds are for managers; an AI agent can only propose them. When the public site is turned on, obop shows the shop to visitors and takes their orders.",
-    technical:
-      "With the public site turned on, obop shows the shop to visitors and takes orders; a custom storefront can use the API instead.",
+    // No `technical`: it repeated the last sentence of the purpose and added "a custom storefront can use the
+    // API instead", which nothing supports (the shop path PublicApi serves obop's own public site only,
+    // docs/STOREFRONT.md:127; an order written through the API is not priced, packages/ecommerce.toml:591-605;
+    // the headless API is Open in docs/PRODUCT.md).
+    // The manifest's text (packages/ecommerce.toml:5) with the stock sentence narrowed: the checkout takes
+    // stock only for block_when_out and allow_backorder (crates/kernel/obop-site/src/checkout.rs:318-322, :1207).
+    packageText:
+      "An online shop: categories, product listings with translations, shipping methods, discount codes, web orders with lines and a fulfilment flow of pending, paid, shipped, delivered, cancelled and refunded. When the instance runs with the public site enabled, visitors browse the published listings and place orders without an account; the server prices every order from the published listing and never trusts the browser. At checkout the server takes the ordered units off each listing whose stock policy is block_when_out or allow_backorder and applies discount codes and tax rates; orders are paid by bank transfer, by card through Stripe Checkout or in a local demo mode; the payment record, the provider reference and refunds are kept with the order. Refunds need a human approval from a manager; agents may only propose them. Customer name, email and addresses are personal data and are never public. Needs the Products package.",
     cards: {
+      // refund runs only from paid (packages/ecommerce.toml:665-672); a shipped order has no refund and no
+      // cancel (:644-663), and refund_delivered starts from delivered (:674-681).
       "ecommerce_order.refund": {
-        text: "Record the refund of a paid order that was not delivered. For card payments through Stripe, obop asks Stripe to refund the payment first, and the order stays paid if Stripe refuses. Otherwise you pay it back yourself.",
+        text: "Record the refund of an order that is paid and not yet shipped. For card payments through Stripe, obop asks Stripe to refund the payment first, and the order stays paid if Stripe refuses. Otherwise you pay it back yourself.",
         limit:
           "The refund through Stripe is tested only against a local stand-in, not against Stripe itself.",
       },
@@ -592,12 +635,29 @@ export const APP_COPY: AppCopy[] = [
         limit:
           "The refund through Stripe is tested only against a local stand-in, not against Stripe itself.",
       },
+      // The manifest says "computed on the server" (packages/ecommerce.toml:418): the only reader is the public
+      // checkout (Site::tax_rates, crates/kernel/obop-site/src/checkout.rs:142-170), which picks a rate by the
+      // delivery country and the line's category; an order made by staff is not taxed from these rates.
+      ecommerce_tax_rate: {
+        text: "A tax rate that the shop's public checkout applies when it prices an order, by delivery country and category.",
+      },
     },
     // Units go back only for an order whose checkout recorded a reservation (crates/kernel/obop-payments/src/lib.rs:502-510;
-    // docs/DEPLOY.md:139), and the refund of a delivered order never restocks (lib.rs:843-860).
+    // docs/DEPLOY.md:139), and the refund of a delivered order never restocks (lib.rs:843-860). Only a listing
+    // whose policy is block_when_out or allow_backorder is counted (crates/kernel/obop-site/src/checkout.rs:318-322,
+    // :1207; obop-payments/src/lib.rs:530-533). The order number is a required text field (packages/ecommerce.toml:475-479;
+    // packages can declare sequences, pos.toml:168), and the checkout makes a random one (obop-site/src/shop.rs:687-697).
+    // Free delivery is judged at the checkout on the lines at listing prices, at or above the threshold
+    // (checkout.rs:352, :403; pricing.rs:140), and a tax rate is either inside the price or added on top (pricing.rs:152-167).
     fieldText: {
       "ecommerce_listing.stock_quantity":
-        "Units on hand, used with the stock policy. Orders placed through the shop's checkout take their units off, and a cancelled, expired or refunded (not yet delivered) order puts them back. A staff-made order, or the refund of a delivered order, does not; correct the quantity by hand, also after a stock count",
+        "Units on hand, used with the stock policy. For a listing set to block when out or allow backorder, orders placed through the shop's checkout take their units off, and a cancelled, expired or refunded (not yet delivered) order puts them back. A staff-made order, or the refund of a delivered order, does not; correct the quantity by hand, also after a stock count",
+      "ecommerce_listing.price":
+        "Shop price (minor currency units, e.g. cents). At checkout, a tax rate that applies is either included in it or added on top, as the rate is set",
+      "ecommerce_shipping_method.free_over":
+        "At the shop's checkout, delivery is free when the lines, at listing prices, come to this amount or more (minor currency units); empty means never",
+      "ecommerce_order.number":
+        "Order number shown to the shopper. A required text field: the public checkout makes a random one, and any other order needs one entered.",
     },
   },
   {
@@ -620,6 +680,12 @@ export const APP_COPY: AppCopy[] = [
       website_blog_post_translation: {
         text: "A blog post in another language. It is shown as soon as its published box is ticked, once its post is published; anyone who can edit it, an AI agent included, can do that without approval.",
       },
+    },
+    // The publish action has no effect (packages/website.toml:84-90, and the package has none), so it does not
+    // set published_on (:62-66), which the public site uses as the page's date (obop-site/src/content.rs:244, :253).
+    fieldText: {
+      "website_page.published_on":
+        "The page's publish date (YYYY-MM-DD). Publishing does not fill it in.",
     },
     // Only a page's or a post's state is moved by an action that needs approval (packages/website.toml:84-90,
     // :237-245). The published flag of a translation (:393-398, :443-448) and the visible flag of a menu entry
@@ -828,11 +894,12 @@ export const APP_COPY: AppCopy[] = [
     name: "Knowledge",
     tagline: "Articles and guides",
     purpose:
-      "A shared handbook of articles that your team can write, arrange in a tree, publish and tag. Visibility is only a label: there are no permissions per article yet, so everyone who can open the app reads every article.",
+      "A shared handbook of articles. Your team writes, arranges in a tree and tags them; managers publish, unpublish and archive them. Visibility is only a label: this package sets no per-article permissions, so everyone who can open the app reads every article, drafts included.",
     // The platform has row-level rules (crates/kernel/obop-commands/src/engine/access.rs:1-8, used by
     // packages/hr.toml, timesheets.toml, documents.toml and dashboards.toml); this package declares none (it has no
     // [model.access]), so everyone with its groups reads every article. The package text is the manifest's
-    // (packages/knowledge.toml:5) without the claim about the platform.
+    // (packages/knowledge.toml:5) without the claim about the platform. knowledge.user reads and writes
+    // articles (:19-20); publish, unpublish and archive are knowledge.manager (:80-102).
     packageText:
       "A wiki: articles arranged in a tree through a parent article, with a draft, published, archived flow, a visibility setting and tags. Visibility is a label for the UI and for people to respect; this package sets no row rules, so everyone with the Knowledge groups can read every article.",
   },
@@ -848,6 +915,9 @@ export const APP_COPY: AppCopy[] = [
     fieldText: {
       "appointments_resource.active":
         "Marks the resource as bookable or not. A label only; nothing checks it.",
+      // packages/appointments.toml:36-40; the package has no assert or effect, and nothing in crates/ reads it.
+      "appointments_resource.capacity":
+        "How many people it can serve at once. A note; nothing checks it.",
     },
   },
   {

@@ -115,7 +115,7 @@ export const pl: Messages = {
     mockCaption: "Ilustracja z przykładowymi danymi",
     appsTitle: "Wszystkie aplikacje dla firmy. Jedna baza danych.",
     appsSub:
-      "Każda aplikacja korzysta z tych samych kontaktów, produktów i uprawnień, więc niczego nie trzeba ze sobą łączyć. Część aplikacji jest wbudowana; pozostałe instalujesz z marketplace'u.",
+      "Wszystkie aplikacje korzystają z jednej bazy danych i jednego zestawu grup uprawnień, a sprzedaż, fakturowanie i zakupy używają tych samych kontaktów i produktów. Część aplikacji jest wbudowana; pozostałe instalujesz z marketplace'u.",
     seeAllApps: "Przeglądaj wszystkie aplikacje i ich modele danych",
     pillarsTitle: "Stworzona do pracy tak, jak wygląda dziś",
     pillarsSub:
@@ -136,8 +136,8 @@ export const pl: Messages = {
       {
         icon: "grid",
         title: "Jeden model danych",
-        body: "Aplikacje są modułami w jednym rejestrze, więc kontakt jest tym samym kontaktem w CRM, w sprzedaży i w fakturowaniu. Uprawnienia, audyt i API są dostępne dla każdego dodawanego modelu.",
-        tag: "Pod spodem PostgreSQL",
+        body: "Aplikacje są modułami w jednym rejestrze, więc kontakt jest tym samym kontaktem w sprzedaży i w fakturowaniu. Uprawnienia, klasy danych i API są dostępne dla każdego dodawanego modelu.",
+        tag: "Pod spodem PostgreSQL lub SQLite",
       },
     ],
     flowLabel: "Jak agent pracuje z Tobą",
@@ -180,7 +180,7 @@ export const pl: Messages = {
     stepsCta: "Zacznij za darmo",
     openTitle: "Otwarte źródła i własny hosting",
     openBody:
-      "obop jest napisany w Rust i działa wszędzie tam, gdzie działa PostgreSQL. Skorzystaj z usługi hostowanej albo uruchom ten sam program samodzielnie w Dockerze. W obu przypadkach każda firma ma własną bazę danych, a dane należą do niej.",
+      "Serwer obop jest napisany w Rust i działa z SQLite lub PostgreSQL. Skorzystaj z usługi hostowanej albo uruchom ten sam program samodzielnie w Dockerze. W obu przypadkach każda firma ma własną bazę danych, a dane należą do niej.",
     openPoints: [
       {
         title: "Hostowane przez nas",
@@ -188,7 +188,7 @@ export const pl: Messages = {
       },
       {
         title: "Własny hosting",
-        body: "Jeden plik binarny lub jeden obraz Dockera, SQLite do wypróbowania, PostgreSQL do prawdziwego użytku.",
+        body: "Zbuduj obop z kodu źródłowego i uruchom go bezpośrednio lub w Dockerze. SQLite do wypróbowania, PostgreSQL do prawdziwego użytku.",
       },
       {
         title: "Kod na GitHubie",
@@ -204,7 +204,7 @@ export const pl: Messages = {
     faq: [
       {
         q: "Czym jest obop?",
-        a: "obop to otwartoźródłowa platforma biznesowa. Daje firmie CRM, sprzedaż, fakturowanie, kontakty i produkty na jednym modelu danych oraz pozwala instalować kolejne aplikacje z marketplace'u. Każda akcja jest dostępna dla ludzi w przeglądarce i dla agentów AI przez REST, MCP i wiersz poleceń.",
+        a: "obop to otwartoźródłowa platforma biznesowa. Daje firmie CRM, sprzedaż, fakturowanie, kontakty i produkty na jednym modelu danych oraz pozwala instalować kolejne aplikacje z marketplace'u. Ludzie pracują w przeglądarce, a agenci AI korzystają z jej poleceń przez REST, MCP i wiersz poleceń.",
       },
       {
         q: "Czy obop nadaje się do użytku produkcyjnego?",
@@ -224,7 +224,7 @@ export const pl: Messages = {
       },
       {
         q: "Czy agent może odczytać dane osobowe moich klientów?",
-        a: "Nie w postaci jawnej. Dane osobowe wracają jako stałe tokeny zastępcze, takie jak EMAIL_1, a pola finansowe, kadrowe i należące do szczególnych kategorii danych są całkowicie wstrzymane. Agent może przekazać token z powrotem, aby odwołać się do wartości, nigdy jej nie widząc.",
+        a: "Nie w postaci jawnej, gdy pole jest oznaczone jako dane osobowe. Pola finansowe, kadrowe, należące do szczególnych kategorii danych oraz pola z sekretami są całkowicie wstrzymane, a pozostałe pola oznaczone jako dane osobowe wracają jako stałe tokeny zastępcze, takie jak EMAIL_1. Tekst wpisany w pole, które nie jest oznaczone jako dane osobowe, na przykład w opis, nie jest zastępowany. Agent może przekazać token z powrotem, aby odwołać się do wartości, nigdy jej nie widząc.",
       },
       {
         q: "Czy mogę zbudować lub dodać własne aplikacje?",
@@ -236,7 +236,7 @@ export const pl: Messages = {
       },
     ],
     ctaTitle: "Jedna firma, jedna platforma.",
-    ctaBody: "Otwarte źródła, napisane w Rust, działa wszędzie tam, gdzie działa PostgreSQL.",
+    ctaBody: "Otwarte źródła, serwer napisany w Rust, działa z SQLite lub PostgreSQL.",
     ctaButton: "Załóż własną instancję",
   },
   pricing: {
@@ -251,7 +251,7 @@ export const pl: Messages = {
         name: "Samodzielny hosting",
         price: eur(0),
         period: "",
-        blurb: "Cały projekt na Twoim własnym serwerze. Apache-2.0, darmowy na zawsze.",
+        blurb: "Cały projekt na Twoim własnym serwerze. Apache-2.0, bezpłatny w użyciu.",
         features: [
           "Wszystkie dołączone aplikacje",
           "REST API, MCP i wiersz poleceń",

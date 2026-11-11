@@ -51,7 +51,7 @@ Be aware before you commit:
 - There are no code tiers beyond declarative packages (no WebAssembly components or remote apps), so an app package runs no code of its own and cannot declare calls to other systems, though it can declare computed totals and actions that change other records in the same database.
 - Only some apps (for example Expenses, Timesheets, HR leave requests, Documents and Dashboards) limit which records a person sees. CRM, Sales and Invoicing do not.
 - The security log records, for example, account, sign-in, security-setting, module and signing events, but it is not a history of changes to business records.
-- The planned export job for a whole business is not built. A list exports as CSV from the web app (up to 20,000 records), and `obop backup --plain` writes the records and uploaded files of a database to an unencrypted file (short-lived values such as sessions are left out, and secrets stay sealed).
+- The planned export job for a whole business is not built. A list exports as CSV from the web app (up to 20,000 records), and `obop backup --plain` writes the records and uploaded files of a database to an unencrypted file (short-lived values such as sessions are left out; secrets stay sealed, but if you did not set `OBOP_SECRET_KEY`, the key obop generated for them is in the file).
 - The hosted service does not switch on scheduled backups of its databases yet (if you run obop yourself, you can turn them on).
 
 The [roadmap](/roadmap/) lists what is built and what is not.

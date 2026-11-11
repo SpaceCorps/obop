@@ -73,7 +73,7 @@ Hosted: in a database that belongs to your instance, on PostgreSQL. Self-hosted:
 
 ### How do I back up?
 
-Run `obop backup --db URL --out DIR`: a consistent copy taken while the server runs, sealed (encrypted) when a key is set, which `obop restore` reads back; see the [CLI reference](/docs/reference/cli/) and [Self-hosting and operations](/docs/reference/self-hosting/). `OBOP_BACKUP_SCHEDULE` makes `obop serve` take backups on a timer. Point-in-time recovery is not run by obop; your database server needs its own for that. The hosted service does not switch on scheduled backups of its databases yet.
+Run `obop backup --db URL --out DIR`: a consistent copy taken while the server runs, sealed (encrypted) when a key is set, which `obop restore` reads back; see the [CLI reference](/docs/reference/cli/) and [Self-hosting and operations](/docs/reference/self-hosting/). `OBOP_BACKUP_SCHEDULE` together with `OBOP_BACKUP_DIR` makes `obop serve` take backups on a timer. Point-in-time recovery is not run by obop; your database server needs its own for that. The hosted service does not switch on scheduled backups of its databases yet.
 
 ### Can I export everything?
 
@@ -81,7 +81,7 @@ Your database is yours. A list exports as CSV from the web app, and `obop backup
 
 ### Which languages is the website in?
 
-English, German, French, Polish, Finnish, Swedish and Spanish. The web app is available in the same seven languages. The translations on this site and the translated labels in the apps are machine-drafted, and no native speaker has reviewed the ones on this site yet; [you can help review one](/about/community/).
+The home page, the app pages, pricing, About, Platform and a few documentation pages are in English, German, French, Polish, Finnish, Swedish and Spanish; the other pages are shown in English. The web app is available in the same seven languages. The translations on this site and the translated labels in the apps are machine-drafted, and no native speaker has reviewed the ones on this site yet; [you can help review one](/about/community/).
 
 ## Contributing and contact
 

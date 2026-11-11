@@ -15,7 +15,7 @@ The hosted service is a **control plane**, a second mode of the same program (`o
 
 There are three provisioners. `local` starts child `obop serve` processes with SQLite on one machine. `sliplane` creates a database on a shared PostgreSQL server and a service on Sliplane for each instance. `fake` is for tests.
 
-The password you signed up with is copied into the new instance as a hash, so the same email and password sign in to the instance, where you are its first administrator (`platform.admin`). The control plane never sees your password after sign-up.
+The password you signed up with is copied into the new instance as an Argon2id hash, so the same email and password sign in to the instance, where you are its first administrator (`platform.admin`). Only the hash is passed on, never the password itself.
 
 ## One database per business
 
@@ -27,11 +27,11 @@ Self-hosting is the same program without the control plane: `obop serve` is one 
 
 ## Updating an instance
 
-An administrator updates the instance from _Customize_, _Updates_. The page reads the published releases, checks every installed module against the new core, takes a backup and asks the control plane to redeploy the instance; the control plane waits for the new version to answer and puts the old one back if it does not. The instance holds only a narrow update token, never hosting credentials, and an agent can only propose the update. A self-hosted instance gets the commands to run instead (`obop update check`). Details: [Self-hosting and operations](/docs/reference/self-hosting/).
+An administrator updates the instance from _Customize_, _Updates_. The page reads the published releases, checks every installed module against the new core, takes a backup into `OBOP_BACKUP_DIR` (where none is set, the administrator must confirm they have their own) and asks the control plane to redeploy the instance; the control plane waits for the new version to answer and, when it knows the image the instance ran before, puts that one back if it does not. The instance holds only a narrow update token, never hosting credentials, and an agent can only propose the update. A self-hosted instance gets the commands to run instead (`obop update check`). Details: [Self-hosting and operations](/docs/reference/self-hosting/).
 
 ## Known limits
 
-- Creating an instance builds the Rust workspace on the host, which is slow until a prebuilt image registry is used.
-- Upgrading hosted instances is manual.
-- Nothing backs up the hosted database server yet.
+- On Sliplane, an instance created from the repository (`OBOP_REPO`) builds the Rust workspace on the server, which is slow; an instance started from the published image (`OBOP_IMAGE`) needs no build.
+- Upgrading hosted instances (`obop platform upgrade-instances`, or _Customize_, _Updates_ in an instance) has been tested against stand-ins only, not against live Sliplane.
+- The control plane does not schedule backups of hosted instances (it does not set `OBOP_BACKUP_SCHEDULE`) and does not back up the shared database server.
 - TLS ends at the hosting platform's proxy.

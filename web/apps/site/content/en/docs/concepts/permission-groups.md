@@ -7,7 +7,7 @@ A **permission group** is a name of the form `module.role`, for example `crm.use
 
 ## Three places that name a group
 
-1. **Model:** `read_group` allows `get`, `list` and `search`. `write_group` allows `create`, `update` and `delete`.
+1. **Model:** `read_group` allows `get`, `list` and `search`. `write_group` allows `create`, `bulk_create`, `update` and `delete`.
 2. **Field:** `group` says who sees the field. It defaults to the model's read group. A field a caller cannot read is not even described to them.
 3. **Action:** `group` says who may run a workflow step. It defaults to the model's write group. This is how posting or paying can need a stricter group than editing.
 
@@ -15,7 +15,7 @@ A **permission group** is a name of the form `module.role`, for example `crm.use
 
 `<module>.user` is the day-to-day role and `<module>.manager` handles configuration and approvals. A third group such as `approver` appears only when someone who enters a thing must not be the person who releases it.
 
-`platform.admin` satisfies every check for a person. The first user of a hosted instance holds it, and it is what lets someone install modules.
+`platform.admin` satisfies every permission check for a person, but an agent token can only be scoped to groups the person holds by name. The first user of a hosted instance holds `platform.admin`, and it is what lets someone install modules.
 
 ## Users and agents
 

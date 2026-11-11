@@ -43,7 +43,7 @@ Honest list, so you can decide:
 
 ## Data protection notes
 
-- Contacts has an `erase` action that anonymises a party in place and keeps references valid. It needs approval and the `privacy.officer` group. Other apps have no erase action yet.
+- Contacts has an `erase` action that anonymises a party in place and keeps references valid. It needs the `privacy.officer` group; an agent can only propose it, and a person in that group approves. Other apps have no erase action yet.
 - Marking `personal_data` correctly is what lets masking and, later, access and erasure requests work. The install gate refuses personal data classed `none`.
 - A Data Processing Agreement and sub-processor list do not exist yet. The [Terms](/terms/) and [Privacy](/privacy/) pages are drafts.
 

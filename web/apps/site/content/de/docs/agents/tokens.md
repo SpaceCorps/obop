@@ -10,7 +10,7 @@ lead: "Ein Agent-Token ist ein Bearer-Token, das einer Person gehört und eine L
 - Es wird **einmal** angezeigt. obop speichert nur einen Hash, ein verlorenes Token lässt sich also nicht wiederherstellen; erstellen Sie ein neues.
 - Es beginnt mit `obop_`. Behandeln Sie es wie ein Passwort.
 - Nur eine Person kann Tokens erstellen. Ein Agent kann kein weiteres Token ausstellen.
-- Es läuft nicht ab und funktioniert nicht mehr, sobald sein Besitzer gelöscht wird. Einen Befehl, um ein einzelnes Token zu widerrufen, gibt es noch nicht (siehe [Sicherheit](/docs/agents/safety/)).
+- Es läuft nicht ab. Es funktioniert nicht, solange das Konto seines Besitzers deaktiviert ist, und endgültig nicht mehr, sobald der Besitzer ausgeschieden ist (Offboarding). Einen Befehl, um ein einzelnes Token zu widerrufen, gibt es noch nicht (siehe [Sicherheit](/docs/agents/safety/)).
 
 ## Die Scopes wählen
 
@@ -37,7 +37,7 @@ curl -s -X POST http://127.0.0.1:8080/api/auth/login \
   -d '{"username":"alice","password":"your password"}'
 ```
 
-Die Antwort ist `{"token":"obop_..."}`: ein Sitzungs-Token, das 12 Stunden gültig ist. Verwenden Sie es als Bearer-Token, um das Agent-Token zu erstellen:
+Die Antwort ist `{"token":"obop_..."}`: ein Sitzungs-Token, das 12 Stunden gültig ist. Ist für das Konto die Zwei-Faktor-Anmeldung eingeschaltet, lautet die Antwort stattdessen `{"mfa_required":true,"mfa_token":"..."}`; senden Sie `{"mfa_token":"...","code":"123456"}` mit einem Code aus Ihrer Authenticator-App an `POST /api/auth/login/mfa`, um das Sitzungs-Token zu erhalten. Verwenden Sie das Sitzungs-Token als Bearer-Token, um das Agent-Token zu erstellen:
 
 ```bash
 curl -s -X POST http://127.0.0.1:8080/api/auth/agent-token \
@@ -50,7 +50,7 @@ curl -s -X POST http://127.0.0.1:8080/api/auth/agent-token \
 { "token": "obop_1e00c3..." }
 ```
 
-`scopes` ist erforderlich und muss mindestens eine Gruppe nennen, die Sie selbst haben. `label` ist freier Text. Bei einer gehosteten Instanz verwenden Sie deren Adresse statt `127.0.0.1:8080` und melden sich mit Ihrer Registrierungs-E-Mail-Adresse als Benutzernamen an.
+`scopes` ist erforderlich, darf nicht leer sein und darf nur Gruppen nennen, die in Ihrem eigenen Konto eingetragen sind; `platform.admin` steht hier nicht für die anderen Gruppen. Das erste Konto einer neuen gehosteten Instanz hat nur `platform.admin`; geben Sie ihm also zuerst die Gruppen, die Sie weitergeben wollen, unter _Anpassen, Sicherheit, Personal_. `label` ist freier Text. Bei einer gehosteten Instanz verwenden Sie deren Adresse statt `127.0.0.1:8080` und melden sich mit Ihrer Registrierungs-E-Mail-Adresse als Benutzernamen an.
 
 ## Mit der CLI
 
@@ -74,21 +74,22 @@ Dasselbe Token verbindet einen MCP-Client mit dem entfernten MCP-Server der Inst
 - Erstellen Sie pro Client ein eigenes Token und geben Sie ihm nur die Scopes, die dieser Client braucht. Die MCP-Tool-Liste besteht genau aus den Befehlen, die die Scopes erlauben.
 - Ein Sitzungs-Token aus der Anmeldung funktioniert ebenfalls, läuft aber nach 12 Stunden ab; ein Agent-Token nicht.
 - Das Token muss bei jeder Anfrage gesendet werden, nicht nur bei der ersten; Clients tun das, sobald es in ihrer Konfiguration steht.
-- Clients mit Browser-Anmeldung (Claude Desktop, claude.ai, Claude Code) brauchen kein eingefügtes Token: Sie verbinden sich per Anmeldung und erhalten ein kurzlebiges Token dieser Art. Siehe [Über MCP verbinden](/docs/agents/mcp/).
+- Clients, die eine Browser-Anmeldung (OAuth) unterstützen, brauchen kein eingefügtes Token: Sie verbinden sich per Anmeldung und erhalten ein Token, das eine Stunde gilt und nur auf `/mcp` funktioniert. Mit Claude Desktop, claude.ai oder Claude Code haben wir das noch nicht ausprobiert; siehe [Über MCP verbinden](/docs/agents/mcp/).
 
 ## Sicher aufbewahren
 
 - Legen Sie es in einer Umgebungsvariablen oder einem Secret-Store ab, nicht in einem Repository.
-- Verwenden Sie lieber ein Token pro Agent und pro Aufgabe, damit Sie sie unterscheiden und eines entfernen können, ohne die übrigen zu beeinträchtigen.
+- Verwenden Sie lieber ein Token pro Agent und pro Aufgabe, jedes nur mit den Scopes, die dieser Agent braucht.
 - Ein Token in der Konfigurationsdatei eines Clients ist für alles lesbar, was diese Datei lesen kann.
 
 ## Fehler
 
-| Antwort                                                                        | Bedeutung                                                       |
-| ------------------------------------------------------------------------------ | --------------------------------------------------------------- |
-| `400 {"error":"an agent token needs at least one scope"}`                      | `scopes` war leer.                                              |
-| `400 {"error":"you do not hold invoicing.manager, so you cannot delegate it"}` | Sie haben eine Gruppe angefordert, die Sie nicht haben.         |
-| `400 {"error":"only a human user can issue agent tokens"}`                     | Sie haben ein Agent-Token benutzt, um ein weiteres anzufordern. |
-| `401`                                                                          | Sitzungs-Token fehlt, ist falsch oder abgelaufen.               |
+| Antwort                                                                            | Bedeutung                                                                                                    |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `400 {"error":"an agent token needs at least one scope"}`                          | `scopes` war leer.                                                                                           |
+| `400 {"error":"you do not hold invoicing.manager, so you cannot delegate it"}`     | Sie haben eine Gruppe angefordert, die Sie nicht haben.                                                      |
+| `400 {"error":"only a human user can issue agent tokens"}`                         | Sie haben ein Agent-Token benutzt, um ein weiteres anzufordern.                                              |
+| `401`                                                                              | Sitzungs-Token fehlt, ist falsch oder abgelaufen.                                                            |
+| `403 {"error":"two-factor authentication must be set up before you can continue"}` | Ihr Konto muss zuerst die Zwei-Faktor-Anmeldung einrichten; bis dahin kann diese Sitzung nur sie einrichten. |
 
 Weiter geht es mit [Über MCP verbinden](/docs/agents/mcp/) oder [Die REST-API nutzen](/docs/agents/rest/).

@@ -115,7 +115,7 @@ export const sv: Messages = {
     mockCaption: "Illustration med exempeldata",
     appsTitle: "Alla företagets appar. En databas.",
     appsSub:
-      "Alla appar delar samma kontakter, produkter och behörigheter, så inget behöver kopplas ihop i efterhand. Några appar är inbyggda; de övriga installerar du från marknadsplatsen.",
+      "Alla appar delar en databas och en uppsättning behörighetsgrupper, och försäljning, fakturering och inköp använder samma kontakter och produkter. Några appar är inbyggda; de övriga installerar du från marknadsplatsen.",
     seeAllApps: "Bläddra bland alla appar och deras datamodeller",
     pillarsTitle: "Byggd för hur man arbetar i dag",
     pillarsSub:
@@ -136,8 +136,8 @@ export const sv: Messages = {
       {
         icon: "grid",
         title: "En datamodell",
-        body: "Appar är moduler i ett gemensamt register, så en kontakt är samma kontakt i CRM, försäljning och fakturering. Behörigheter, granskning och API följer med varje modell du lägger till.",
-        tag: "PostgreSQL under ytan",
+        body: "Appar är moduler i ett gemensamt register, så en kontakt är samma kontakt i försäljning och fakturering. Behörigheter, dataklasser och API följer med varje modell du lägger till.",
+        tag: "PostgreSQL eller SQLite under ytan",
       },
     ],
     flowLabel: "Så arbetar en agent med dig",
@@ -180,7 +180,7 @@ export const sv: Messages = {
     stepsCta: "Kom igång gratis",
     openTitle: "Öppen källkod, och du kan drifta den själv",
     openBody:
-      "obop är skrivet i Rust och körs överallt där PostgreSQL går att köra. Använd den hostade tjänsten, eller kör samma program själv med Docker. Oavsett vilket har varje företag sin egen databas, och datan är din.",
+      "obop-servern är skriven i Rust och körs med SQLite eller PostgreSQL. Använd den hostade tjänsten, eller kör samma program själv med Docker. Oavsett vilket har varje företag sin egen databas, och datan är din.",
     openPoints: [
       {
         title: "Drivs av oss",
@@ -188,7 +188,7 @@ export const sv: Messages = {
       },
       {
         title: "Egen drift",
-        body: "En binärfil eller en Docker-avbild, SQLite för att prova och PostgreSQL för skarp användning.",
+        body: "Bygg obop från källkoden och kör det direkt eller med Docker. SQLite för att prova och PostgreSQL för skarp användning.",
       },
       {
         title: "Källkod på GitHub",
@@ -204,7 +204,7 @@ export const sv: Messages = {
     faq: [
       {
         q: "Vad är obop?",
-        a: "obop är en affärsplattform med öppen källkod. Den ger ett företag CRM, försäljning, fakturering, kontakter och produkter på en gemensam datamodell, och du kan installera fler appar från en marknadsplats. Varje åtgärd finns för människor i webbläsaren och för AI-agenter via REST, MCP och kommandoraden.",
+        a: "obop är en affärsplattform med öppen källkod. Den ger ett företag CRM, försäljning, fakturering, kontakter och produkter på en gemensam datamodell, och du kan installera fler appar från en marknadsplats. Människor arbetar i webbläsaren, och AI-agenter använder dess kommandon via REST, MCP och kommandoraden.",
       },
       {
         q: "Är obop redo för skarp användning?",
@@ -224,7 +224,7 @@ export const sv: Messages = {
       },
       {
         q: "Kan en agent läsa mina kunders personuppgifter?",
-        a: "Inte i klartext. Personuppgifter kommer tillbaka som stabila platshållare, till exempel EMAIL_1, och finansiella uppgifter, personaluppgifter och särskilda kategorier av uppgifter undanhålls helt. Agenten kan skicka tillbaka en platshållare för att hänvisa till ett värde utan att någonsin se det.",
+        a: "Inte i klartext när ett fält är märkt som personuppgift. Fält med finansiella uppgifter, personaluppgifter, särskilda kategorier av uppgifter och hemligheter undanhålls helt, och övriga fält som är märkta som personuppgifter kommer tillbaka som stabila platshållare, till exempel EMAIL_1. Text som skrivs i ett fält som inte är märkt som personuppgift, till exempel en beskrivning, ersätts inte. Agenten kan skicka tillbaka en platshållare för att hänvisa till ett värde utan att någonsin se det.",
       },
       {
         q: "Kan jag bygga eller lägga till egna appar?",
@@ -236,7 +236,7 @@ export const sv: Messages = {
       },
     ],
     ctaTitle: "Ett företag, en plattform.",
-    ctaBody: "Öppen källkod, byggd i Rust, körs överallt där PostgreSQL går att köra.",
+    ctaBody: "Öppen källkod, server byggd i Rust, körs med SQLite eller PostgreSQL.",
     ctaButton: "Skaffa din egen instans",
   },
   pricing: {
@@ -251,7 +251,7 @@ export const sv: Messages = {
         name: "Egen drift",
         price: eur(0),
         period: "",
-        blurb: "Hela projektet på din egen server. Apache-2.0, gratis för alltid.",
+        blurb: "Hela projektet på din egen server. Apache-2.0, gratis att använda.",
         features: [
           "Alla medföljande appar",
           "REST-API, MCP och kommandoraden",

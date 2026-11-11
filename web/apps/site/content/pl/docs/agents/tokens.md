@@ -10,7 +10,7 @@ lead: "Token agenta to token okaziciela, który należy do osoby i zawiera list�
 - Jest pokazywany **raz**. obop przechowuje tylko jego skrót, więc zgubionego tokenu nie można odzyskać; utwórz nowy.
 - Zaczyna się od `obop_`. Traktuj go jak hasło.
 - Tokeny mogą tworzyć tylko ludzie. Agent nie może wygenerować kolejnego tokenu.
-- Nie wygasa i przestaje działać dopiero po usunięciu jego właściciela. Nie ma jeszcze polecenia do unieważnienia pojedynczego tokenu (zobacz [Bezpieczeństwo](/docs/agents/safety/)).
+- Nie wygasa. Nie działa, dopóki konto jego właściciela jest wyłączone, a na stałe przestaje działać, gdy właściciel zostanie wyłączony z firmy (offboarding). Nie ma jeszcze polecenia do unieważnienia pojedynczego tokenu (zobacz [Bezpieczeństwo](/docs/agents/safety/)).
 
 ## Wybierz zakresy
 
@@ -37,7 +37,7 @@ curl -s -X POST http://127.0.0.1:8080/api/auth/login \
   -d '{"username":"alice","password":"your password"}'
 ```
 
-Odpowiedź to `{"token":"obop_..."}`: token sesji, który działa 12 godzin. Użyj go jako tokenu okaziciela, aby utworzyć token agenta:
+Odpowiedź to `{"token":"obop_..."}`: token sesji, który działa 12 godzin. Jeśli konto ma włączone logowanie dwuskładnikowe, odpowiedzią jest zamiast tego `{"mfa_required":true,"mfa_token":"..."}`; wyślij `{"mfa_token":"...","code":"123456"}` z kodem z aplikacji uwierzytelniającej do `POST /api/auth/login/mfa`, aby dostać token sesji. Użyj tokenu sesji jako tokenu okaziciela, aby utworzyć token agenta:
 
 ```bash
 curl -s -X POST http://127.0.0.1:8080/api/auth/agent-token \
@@ -50,7 +50,7 @@ curl -s -X POST http://127.0.0.1:8080/api/auth/agent-token \
 { "token": "obop_1e00c3..." }
 ```
 
-Pole `scopes` jest wymagane i musi wskazywać co najmniej jedną grupę, którą posiadasz. Pole `label` to dowolny tekst. W instancji hostowanej użyj jej adresu zamiast `127.0.0.1:8080`, a jako nazwy użytkownika podaj adres e-mail użyty przy rejestracji.
+Pole `scopes` jest wymagane, nie może być puste i może wskazywać tylko grupy przypisane do Twojego własnego konta; `platform.admin` nie zastępuje tu pozostałych grup. Pierwsze konto nowej instancji hostowanej ma tylko `platform.admin`, więc najpierw nadaj mu grupy, które chcesz przekazać, w _Dostosuj, Bezpieczeństwo, Ludzie_. Pole `label` to dowolny tekst. W instancji hostowanej użyj jej adresu zamiast `127.0.0.1:8080`, a jako nazwy użytkownika podaj adres e-mail użyty przy rejestracji.
 
 ## Za pomocą CLI
 
@@ -74,21 +74,22 @@ Ten sam token łączy klienta MCP ze zdalnym serwerem MCP instancji, `https://YO
 - Utwórz osobny token dla każdego klienta i nadaj mu tylko zakresy, których ten klient potrzebuje. Lista narzędzi MCP to dokładnie te polecenia, na które pozwalają zakresy.
 - Token sesji z logowania też działa, ale wygasa po 12 godzinach; token agenta nie wygasa.
 - Token trzeba wysyłać w każdym żądaniu, nie tylko w pierwszym; klienci robią to sami, gdy mają go w konfiguracji.
-- Klienci oferujący logowanie w przeglądarce (Claude Desktop, claude.ai, Claude Code) nie potrzebują wklejanego tokenu: łączą się przez logowanie i dostają krótko żyjący token tego rodzaju. Zobacz [Połączenie przez MCP](/docs/agents/mcp/).
+- Klienci obsługujący logowanie w przeglądarce (OAuth) nie potrzebują wklejanego tokenu: łączą się przez logowanie i dostają token, który działa godzinę i tylko na `/mcp`. Nie wypróbowaliśmy jeszcze tego z Claude Desktop, claude.ai ani Claude Code; zobacz [Połączenie przez MCP](/docs/agents/mcp/).
 
 ## Przechowuj go bezpiecznie
 
 - Umieść go w zmiennej środowiskowej lub w magazynie sekretów, a nie w repozytorium.
-- Najlepiej utwórz jeden token na agenta i na zadanie, aby je rozróżniać i móc usunąć jeden bez wpływu na pozostałe.
+- Najlepiej utwórz jeden token na agenta i na zadanie, każdy tylko z tymi zakresami, których ten agent potrzebuje.
 - Tokeny w pliku konfiguracyjnym klienta może odczytać wszystko, co ma dostęp do tego pliku.
 
 ## Błędy
 
-| Odpowiedź                                                                      | Znaczenie                                    |
-| ------------------------------------------------------------------------------ | -------------------------------------------- |
-| `400 {"error":"an agent token needs at least one scope"}`                      | Pole `scopes` było puste.                    |
-| `400 {"error":"you do not hold invoicing.manager, so you cannot delegate it"}` | Poproszono o grupę, której nie posiadasz.    |
-| `400 {"error":"only a human user can issue agent tokens"}`                     | Użyto tokenu agenta, aby poprosić o kolejny. |
-| `401`                                                                          | Brakujący, błędny lub wygasły token sesji.   |
+| Odpowiedź                                                                          | Znaczenie                                                                                                             |
+| ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `400 {"error":"an agent token needs at least one scope"}`                          | Pole `scopes` było puste.                                                                                             |
+| `400 {"error":"you do not hold invoicing.manager, so you cannot delegate it"}`     | Poproszono o grupę, której nie posiadasz.                                                                             |
+| `400 {"error":"only a human user can issue agent tokens"}`                         | Użyto tokenu agenta, aby poprosić o kolejny.                                                                          |
+| `401`                                                                              | Brakujący, błędny lub wygasły token sesji.                                                                            |
+| `403 {"error":"two-factor authentication must be set up before you can continue"}` | Twoje konto musi najpierw skonfigurować logowanie dwuskładnikowe; do tego czasu ta sesja może tylko je skonfigurować. |
 
 Dalej: [połącz się przez MCP](/docs/agents/mcp/) lub [użyj REST API](/docs/agents/rest/).

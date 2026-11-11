@@ -11,26 +11,26 @@ A module is described by models. A model has fields, and fields have a kind, a d
 
 From that description obop generates, for every model:
 
-- six commands: `get`, `list`, `search`, `create`, `update` and `delete` (for the model `lead`: `lead.get`, `lead.list` and so on);
+- seven commands: `get`, `list`, `search`, `create`, `bulk_create`, `update` and `delete` (for the model `lead`: `lead.get`, `lead.list` and so on);
 - one command per action, for example `lead.qualify`;
 - the same commands as REST endpoints, MCP tools and CLI commands;
 - screens: list, board, form, status bar and buttons.
 
-Permissions, masking, approvals and audit are applied for free, because they live in the dispatcher and not in each app.
+Permissions, masking and approvals are applied for free, because they live in the dispatcher and not in each app.
 
 ## Built in and installable
 
 | Kind             | Apps                                                                             | Notes                                                                                                                                 |
 | ---------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | Built in         | Contacts, Products, CRM, Sales, Invoicing, Connectors (the six with an app page) | Written in Rust, always present, cannot be removed. Mileage, the server side of a planned phone app, is built in too and has no page. |
-| Bundled packages | 24 more (22 have an app page)                                                    | Plain `obop.toml` files in the `packages/` directory, installed from the marketplace.                                                 |
+| Bundled packages | 24 more (22 have an app page)                                                    | Plain package files (`<id>.toml`, in the `obop.toml` format) in the `packages/` directory, installed from the marketplace.            |
 | Your own         | Anything you write                                                               | Upload a file, or publish your own marketplace.                                                                                       |
 
 A package is one text file. It contains no code, so an administrator can install it at runtime. It can declare computed totals (in a small built-in expression language), numbered fields and actions that change other records. Further code tiers (CEL expressions, WebAssembly components) are planned but not built, so a package runs no code of its own and cannot declare calls to other systems. The [roadmap](/roadmap/) is honest about that.
 
 ## Installing and removing
 
-Administrators install, upgrade and uninstall packages from _Customize_, or with the CLI (`obop modules install-from ID`, `obop modules install FILE`, `obop modules uninstall ID`). Install checks the file first: every field must have a description, a data class and a permission group, personal data may not be classed `none`, and dependencies must be installed.
+Administrators install, upgrade and uninstall packages from _Customize_, or with the CLI (`obop modules install-from ID`, `obop modules install FILE`, `obop modules uninstall ID`). Install checks the file first: every field must have a description, a data class and a permission group, and personal data may not be classed `none`. Missing dependencies are installed with the module from the marketplace, or the install is refused.
 
 Uninstalling removes the commands and screens but keeps the data in the database. Installing the module again brings the records back.
 

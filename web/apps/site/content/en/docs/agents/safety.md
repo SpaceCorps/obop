@@ -12,24 +12,20 @@ lead: "obop limits what an agent can do, but you choose the limits. These are th
 
 ## One token per agent and per task
 
-A token made with `obop agent-token` or the REST API has a label, but you cannot list or revoke those tokens yet. Separate tokens limit damage and make an investigation possible:
+A token made with `obop agent-token` or the REST API has a label, but you cannot list or revoke those tokens yet. Separate tokens limit damage: each can carry only the scopes one agent needs.
 
 - Create a fresh token for each agent and each unattended job.
 - Create short-lived work with a token you will stop using, and stop using it.
-- If you share one token between agents, you cannot tell their actions apart and you cannot cut one off.
 
 ## Keep tokens secret
 
 - Use environment variables or a secret store. Never commit a token, paste it into a chat, or put it in a prompt.
 - In an MCP client config, reference the environment where the client allows it (`${env:OBOP_TOKEN}`, `${input:...}`) so the file holds no secret.
-- Agent tokens do not expire. A leaked one works until its owner is removed.
+- Agent tokens do not expire. A leaked one stops working while its owner's account is disabled, and for good when the account is offboarded.
 
 ## If a token leaks
 
-There is no command to revoke a single token made with `obop agent-token` or the REST API yet. The ways to stop one today are:
-
-1. Delete or disable the owning user so that the token stops resolving (a token stops working when its owner is deleted).
-2. Rotate the whole instance database credentials if the leak is wider than one token.
+There is no command to revoke a single token made with `obop agent-token` or the REST API yet. To stop one today, have an administrator offboard the owning user (_Customize, Security, People_, or `obop admin offboard USER`). That disables the account and ends every session, agent token and connected app of that account for good. A plain disable stops the tokens only until the account is enabled again.
 
 An app that connected through the browser sign-in (see [MCP](/docs/agents/mcp/)) is listed under _Customize, Security, Connected apps_, where its owner can revoke it at once.
 
