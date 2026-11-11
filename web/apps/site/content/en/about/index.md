@@ -7,7 +7,7 @@ eyebrow: "About"
 
 ## What we are building
 
-A modular business suite, in the spirit of the big all-in-one ERP systems, that is open, portable and ready for AI agents from the start. It has built-in apps for contacts, products, CRM, sales, invoicing, connectors and mileage, and 24 bundled packages (accounting, inventory, manufacturing, HR, projects, point of sale, e-commerce, website, email marketing, helpdesk, documents and more) that are still beta or experimental.
+A modular business suite, in the spirit of the big all-in-one ERP systems, that is open, portable and ready for AI agents from the start. Its built-in apps include contacts, products, CRM, sales, invoicing and connectors (the six with an app page), and it has 24 bundled packages (accounting, inventory, manufacturing, HR, projects, point of sale, e-commerce, website, email marketing, helpdesk, documents and more) that are still beta or experimental.
 
 obop is a clean-room re-implementation of ideas that business software has proven over decades. It does not copy anyone's code.
 

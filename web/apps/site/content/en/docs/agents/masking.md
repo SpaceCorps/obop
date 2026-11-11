@@ -32,7 +32,7 @@ curl -s -X POST http://127.0.0.1:8080/api/lead/create \
   -d '{"title":"Support renewal","contact_name":"NAME_5","contact_email":"EMAIL_4"}'
 ```
 
-A person opening that lead sees the real name and email. The agent only ever handled the tokens. A token is replaced only when it is the whole value of a field and is in the agent's table. A token the server does not know (for example one from a forgotten table) is not refused: it is saved as the literal text, so check the record.
+A person opening that lead sees the real name and email. The agent only ever handled the tokens. A token is replaced only when a text value in the request, such as a field's value, is exactly that token and the token is in the agent's table. A token the server does not know (for example one from a forgotten table) is not refused: it is saved as the literal text, so check the record.
 
 If the agent types a real value instead (for example because a user told it), the value is saved as given and shown to the agent as a new token afterwards.
 

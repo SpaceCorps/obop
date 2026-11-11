@@ -8,11 +8,11 @@ lead: "Tres formas de ejecutar obop. Elige la beta alojada para probarlo en minu
 
 El servicio alojado da a cada negocio su propia instancia con su propia base de datos. Es gratis durante la beta.
 
-1. **Regístrate.** Abre [la aplicación de registro](/app/), introduce tu correo electrónico y una contraseña, y elige _Create account_.
+1. **Regístrate.** Abre [la aplicación de registro](/app/), introduce tu correo electrónico y una contraseña, y elige _Crear cuenta_.
 2. **Crea una instancia.** Ponle un nombre de entre 3 y 30 caracteres. La dirección se genera a partir del nombre. La preparación tarda un poco; la página muestra el progreso.
 3. **Inicia sesión.** Sigue el enlace a tu instancia e inicia sesión con el mismo correo y la misma contraseña. Tu cuenta de registro se convierte en el primer administrador de la instancia.
-4. **Instala una aplicación.** Abre _Customize_, luego _Modules_ y después la pestaña _Marketplace_, e instala una aplicación como Helpdesk o Projects. Instalar y quitar aplicaciones requiere el grupo de administradores. Las aplicaciones incluidas (Contacts, Products, CRM, Sales, Invoicing, Connectors y Mileage) ya están disponibles.
-5. **Crea registros.** Abre una aplicación, elige _New_ y rellena el formulario. Las listas, los tableros y el panel lateral se generan a partir de la descripción de la aplicación.
+4. **Instala una aplicación.** Abre _Personalizar, Módulos_ y después la pestaña _Mercado_, e instala una aplicación como Servicio de asistencia o Proyectos. Instalar y quitar aplicaciones requiere el grupo de administradores. Las aplicaciones incluidas ya están disponibles, entre ellas Contactos, Productos, CRM, Ventas, Facturación y Conectores (las seis que tienen una página de aplicación).
+5. **Crea registros.** Abre una aplicación, elige _Nuevo_ y rellena el formulario. Las listas, los tableros y el panel lateral se generan a partir de la descripción de la aplicación.
 6. **Invita a un agente.** Todavía no hay una pantalla para los tokens de agente. Inicia sesión mediante la API REST y [crea un token de agente](/docs/agents/tokens/); después [conéctate mediante MCP](/docs/agents/mcp/) o usa [REST](/docs/agents/rest/).
 
 ## Opción 2: autoalojar con Docker y PostgreSQL
@@ -65,6 +65,6 @@ Abre `http://127.0.0.1:8080` e inicia sesión como `alice`. Los datos están en 
 ## Y después
 
 - Conoce los bloques básicos en [Conceptos](/docs/concepts/).
-- Explora las [aplicaciones](/apps/) e instala las que necesites desde _Customize_, o desde la línea de comandos con `obop modules install-from helpdesk`.
+- Explora las [aplicaciones](/apps/) e instala las que necesites desde _Personalizar_, o desde la línea de comandos con `obop modules install-from helpdesk`.
 - Configura un agente: [Resumen de agentes](/docs/agents/).
 - Escribe tu propia aplicación: [referencia del manifiesto de módulo](/docs/reference/module-manifest/).

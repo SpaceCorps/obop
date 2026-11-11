@@ -7,7 +7,7 @@ eyebrow: "À propos"
 
 ## Ce que nous construisons
 
-Une suite de gestion modulaire, dans l'esprit des grands ERP tout-en-un, mais ouverte, portable et prête pour les agents IA dès le départ. Elle propose des applications intégrées pour les contacts, les produits, le CRM, les ventes, la facturation, les connecteurs et le kilométrage, ainsi que 24 paquets fournis (comptabilité, stocks, production, RH, projets, point de vente, commerce en ligne, site web, marketing par e-mail, assistance, documents et d'autres) qui sont encore en bêta ou expérimentaux.
+Une suite de gestion modulaire, dans l'esprit des grands ERP tout-en-un, mais ouverte, portable et prête pour les agents IA dès le départ. Parmi ses applications intégrées figurent les contacts, les produits, le CRM, les ventes, la facturation et les connecteurs (les six qui ont une page d'application), et elle propose 24 paquets fournis (comptabilité, stocks, production, RH, projets, point de vente, commerce en ligne, site web, marketing par e-mail, assistance, documents et d'autres) qui sont encore en bêta ou expérimentaux.
 
 obop est une réécriture « clean room » d'idées que les logiciels de gestion ont éprouvées pendant des décennies. Il ne copie le code de personne.
 

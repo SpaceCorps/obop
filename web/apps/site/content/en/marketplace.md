@@ -7,7 +7,7 @@ eyebrow: "Apps you can install"
 
 ## The bundled catalog
 
-The packages in the `packages/` directory of the repository ship with obop, compiled into the program: 24 in all. The 22 listed here have an app page, and each name links to it. Administrators install them from _Customize_, then _Modules_, then the _Marketplace_ tab, or with `obop modules install-from ID`. The built-in apps (Contacts, Products, CRM, Sales, Invoicing, Connectors and Mileage) are not listed here because they are always present.
+The packages in the `packages/` directory of the repository ship with obop, compiled into the program: 24 in all. The 22 listed here have an app page, and each name links to it. Administrators install them from _Customize_, then _Modules_, then the _Marketplace_ tab, or with `obop modules install-from ID`. The built-in apps, among them Contacts, Products, CRM, Sales, Invoicing and Connectors (the six with an app page), are not listed here because they are always present.
 
 %%catalog%%
 

@@ -8,11 +8,11 @@ lead: "Trois façons d'exécuter obop. Choisissez la bêta hébergée pour essay
 
 Le service hébergé donne à chaque entreprise sa propre instance, avec sa propre base de données. Il est gratuit pendant la bêta.
 
-1. **Inscrivez-vous.** Ouvrez [l'application d'inscription](/app/), saisissez votre adresse e-mail et un mot de passe, puis choisissez _Create account_.
+1. **Inscrivez-vous.** Ouvrez [l'application d'inscription](/app/), saisissez votre adresse e-mail et un mot de passe, puis choisissez _Créer le compte_.
 2. **Créez une instance.** Donnez-lui un nom de 3 à 30 caractères. L'adresse est construite à partir du nom. La mise en place prend un moment ; la page affiche la progression.
 3. **Connectez-vous.** Suivez le lien vers votre instance et connectez-vous avec la même adresse e-mail et le même mot de passe. Votre compte d'inscription devient le premier administrateur de l'instance.
-4. **Installez une application.** Ouvrez _Customize_, puis _Modules_ et l'onglet _Marketplace_, et installez une application telle que Helpdesk ou Projects. L'installation et la suppression d'applications nécessitent le groupe administrateur. Les applications intégrées (Contacts, Products, CRM, Sales, Invoicing, Connectors et Mileage) sont déjà là.
-5. **Créez des enregistrements.** Ouvrez une application, choisissez _New_ et remplissez le formulaire. Les listes, les tableaux et le panneau latéral sont générés à partir de la description de l'application.
+4. **Installez une application.** Ouvrez _Personnaliser, Modules_ puis l'onglet _Place de marché_, et installez une application telle qu'Assistance ou Projets. L'installation et la suppression d'applications nécessitent le groupe administrateur. Les applications intégrées sont déjà là, parmi elles Contacts, Produits, CRM, Ventes, Facturation et Connecteurs (les six qui ont une page d'application).
+5. **Créez des enregistrements.** Ouvrez une application, choisissez _Nouveau_ et remplissez le formulaire. Les listes, les tableaux et le panneau latéral sont générés à partir de la description de l'application.
 6. **Invitez un agent.** Il n'existe pas encore d'écran pour les jetons d'agent. Connectez-vous via l'API REST et [créez un jeton d'agent](/docs/agents/tokens/), puis [connectez-vous via MCP](/docs/agents/mcp/) ou utilisez [REST](/docs/agents/rest/).
 
 ## Option 2 : auto-hébergement avec Docker et PostgreSQL
@@ -65,6 +65,6 @@ Ouvrez `http://127.0.0.1:8080` et connectez-vous en tant que `alice`. Les donné
 ## Et ensuite
 
 - Découvrez les briques de base dans [Concepts](/docs/concepts/).
-- Parcourez les [applications](/apps/) et installez celles dont vous avez besoin depuis _Customize_, ou en ligne de commande avec `obop modules install-from helpdesk`.
+- Parcourez les [applications](/apps/) et installez celles dont vous avez besoin depuis _Personnaliser_, ou en ligne de commande avec `obop modules install-from helpdesk`.
 - Configurez un agent : [Présentation des agents](/docs/agents/).
 - Écrivez votre propre application : [référence du manifeste de module](/docs/reference/module-manifest/).

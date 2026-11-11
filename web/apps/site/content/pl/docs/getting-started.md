@@ -6,13 +6,13 @@ lead: "Trzy sposoby uruchomienia obop. Wybierz hostowaną betę, aby wypróbowa�
 
 ## Opcja 1: hostowana beta
 
-Usługa hostowana daje każdej firmie własną instancję z własną bazą danych. W czasie bety jest bezpłatna. Nazwy elementów interfejsu (_Create account_, _Customize_, _Modules_, _Marketplace_, _New_) podajemy tak, jak widać je w aplikacji, czyli po angielsku.
+Usługa hostowana daje każdej firmie własną instancję z własną bazą danych. W czasie bety jest bezpłatna. Nazwy elementów interfejsu podajemy tak, jak wyświetla je aplikacja w języku polskim.
 
-1. **Zarejestruj się.** Otwórz [aplikację rejestracji](/app/), wpisz adres e-mail i hasło, a następnie wybierz _Create account_.
+1. **Zarejestruj się.** Otwórz [aplikację rejestracji](/app/), wpisz adres e-mail i hasło, a następnie wybierz _Utwórz konto_.
 2. **Utwórz instancję.** Nadaj jej nazwę o długości od 3 do 30 znaków. Adres powstaje z nazwy. Przygotowanie trwa chwilę; strona pokazuje postęp.
 3. **Zaloguj się.** Przejdź do odnośnika do swojej instancji i zaloguj się tym samym adresem e-mail i hasłem. Konto utworzone przy rejestracji zostaje pierwszym administratorem instancji.
-4. **Zainstaluj aplikację.** Otwórz _Customize_, następnie _Modules_ i kartę _Marketplace_, a potem zainstaluj aplikację, na przykład Helpdesk lub Projects. Instalowanie i usuwanie aplikacji wymaga grupy administratora. Wbudowane aplikacje (Contacts, Products, CRM, Sales, Invoicing, Connectors i Mileage) są już dostępne.
-5. **Utwórz rekordy.** Otwórz aplikację, wybierz _New_ i wypełnij formularz. Listy, tablice i panel boczny są generowane z opisu aplikacji.
+4. **Zainstaluj aplikację.** Otwórz aplikację _Dostosowanie_, w niej _Moduły_ i kartę _Marketplace_, a potem zainstaluj aplikację, na przykład Helpdesk lub Projekty. Instalowanie i usuwanie aplikacji wymaga grupy administratora. Wbudowane aplikacje są już dostępne, a wśród nich Kontakty, Produkty, CRM, Sprzedaż, Fakturowanie i Konektory (sześć, które mają stronę aplikacji).
+5. **Utwórz rekordy.** Otwórz aplikację, wybierz _Nowy_ i wypełnij formularz. Listy, tablice i panel boczny są generowane z opisu aplikacji.
 6. **Zaproś agenta.** Nie ma jeszcze ekranu do tokenów agentów. Zaloguj się przez REST API i [utwórz token agenta](/docs/agents/tokens/), a potem [połącz się przez MCP](/docs/agents/mcp/) lub użyj [REST](/docs/agents/rest/).
 
 ## Opcja 2: własny hosting w Dockerze z PostgreSQL
@@ -65,6 +65,6 @@ Otwórz `http://127.0.0.1:8080` i zaloguj się jako `alice`. Dane znajdują się
 ## Co dalej
 
 - Poznaj elementy składowe w części [Pojęcia](/docs/concepts/).
-- Przejrzyj [aplikacje](/apps/) i zainstaluj potrzebne z _Customize_ albo z wiersza poleceń poleceniem `obop modules install-from helpdesk`.
+- Przejrzyj [aplikacje](/apps/) i zainstaluj potrzebne w aplikacji _Dostosowanie_ albo z wiersza poleceń poleceniem `obop modules install-from helpdesk`.
 - Skonfiguruj agenta: [przegląd agentów](/docs/agents/).
 - Napisz własną aplikację: [opis manifestu modułu](/docs/reference/module-manifest/).

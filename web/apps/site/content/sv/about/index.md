@@ -7,7 +7,7 @@ eyebrow: "Om oss"
 
 ## Vad vi bygger
 
-En modulär affärssvit, i andan av de stora allt-i-ett-systemen för verksamhetsstyrning, som är öppen, portabel och förberedd för AI-agenter från början. Den har inbyggda appar för kontakter, produkter, CRM, försäljning, fakturering, kopplingar och körjournal, och 24 medföljande paket (bokföring, lager, tillverkning, personal, projekt, kassasystem, e-handel, webbplats, e-postmarknadsföring, helpdesk, dokument med mera) som fortfarande är i beta eller experimentella.
+En modulär affärssvit, i andan av de stora allt-i-ett-systemen för verksamhetsstyrning, som är öppen, portabel och förberedd för AI-agenter från början. Bland dess inbyggda appar finns appar för kontakter, produkter, CRM, försäljning, fakturering och kopplingar (de sex som har en appsida), och den har 24 medföljande paket (bokföring, lager, tillverkning, personal, projekt, kassasystem, e-handel, webbplats, e-postmarknadsföring, helpdesk, dokument med mera) som fortfarande är i beta eller experimentella.
 
 obop är en omskrivning från grunden av idéer som affärsprogramvara har visat fungerar under decennier. Vi kopierar ingen annans kod.
 

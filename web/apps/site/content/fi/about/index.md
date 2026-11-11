@@ -7,7 +7,7 @@ eyebrow: "Tietoa"
 
 ## Mitä rakennamme
 
-Modulaarinen yrityssovellusten kokonaisuus suurten kaikenkattavien toiminnanohjausjärjestelmien hengessä, mutta avoin, siirrettävä ja alusta asti valmis tekoälyagenteille. Siinä on sisäänrakennetut sovellukset yhteystiedoille, tuotteille, CRM:lle, myynnille, laskutukselle, liittimille ja ajopäiväkirjalle sekä 24 mukana toimitettua pakettia (kirjanpito, varasto, valmistus, henkilöstöhallinto, projektit, kassajärjestelmä, verkkokauppa, verkkosivusto, sähköpostimarkkinointi, asiakaspalvelu, asiakirjat ja muita), jotka ovat vielä beta- tai kokeiluvaiheessa.
+Modulaarinen yrityssovellusten kokonaisuus suurten kaikenkattavien toiminnanohjausjärjestelmien hengessä, mutta avoin, siirrettävä ja alusta asti valmis tekoälyagenteille. Sen sisäänrakennettuihin sovelluksiin kuuluvat yhteystiedot, tuotteet, CRM, myynti, laskutus ja liittimet (ne kuusi, joilla on oma sovellussivu), ja siinä on 24 mukana toimitettua pakettia (kirjanpito, varasto, valmistus, henkilöstöhallinto, projektit, kassajärjestelmä, verkkokauppa, verkkosivusto, sähköpostimarkkinointi, asiakaspalvelu, asiakirjat ja muita), jotka ovat vielä beta- tai kokeiluvaiheessa.
 
 obop on puhtaalta pöydältä tehty uusi toteutus ideoista, jotka yrityssovellukset ovat todistaneet toimiviksi vuosikymmenten aikana. Se ei kopioi kenenkään koodia.
 

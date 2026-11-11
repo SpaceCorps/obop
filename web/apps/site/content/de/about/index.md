@@ -7,7 +7,7 @@ eyebrow: "Über uns"
 
 ## Was wir bauen
 
-Eine modulare Geschäftssoftware im Geist der großen All-in-One-ERP-Systeme, die von Anfang an offen, portabel und bereit für KI-Agenten ist. Sie hat eingebaute Apps für Kontakte, Produkte, CRM, Vertrieb, Rechnungsstellung, Konnektoren und Fahrtenbuch sowie 24 mitgelieferte Pakete (Buchhaltung, Lager, Fertigung, Personal, Projekte, Kassensysteme, E-Commerce, Website, E-Mail-Marketing, Helpdesk, Dokumente und weitere), die sich noch im Beta- oder Experimentierstadium befinden.
+Eine modulare Geschäftssoftware im Geist der großen All-in-One-ERP-Systeme, die von Anfang an offen, portabel und bereit für KI-Agenten ist. Zu ihren eingebauten Apps gehören Kontakte, Produkte, CRM, Verkauf, Rechnungsstellung und Konnektoren (die sechs mit einer App-Seite), und sie hat 24 mitgelieferte Pakete (Buchhaltung, Lager, Fertigung, Personal, Projekte, Kassensysteme, E-Commerce, Website, E-Mail-Marketing, Helpdesk, Dokumente und weitere), die sich noch im Beta- oder Experimentierstadium befinden.
 
 obop ist eine Clean-Room-Neuimplementierung von Ideen, die sich in der Geschäftssoftware über Jahrzehnte bewährt haben. Es kopiert niemandes Code.
 

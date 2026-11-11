@@ -8,11 +8,11 @@ lead: "obopia voi ajaa kolmella tavalla. Isännöity beta on nopein tapa kokeill
 
 Isännöity palvelu antaa jokaiselle yritykselle oman instanssin ja oman tietokannan. Se on ilmainen beta-vaiheen ajan.
 
-1. **Rekisteröidy.** Avaa [rekisteröitymissovellus](/app/), kirjoita sähköpostiosoitteesi ja salasana ja valitse _Create account_.
+1. **Rekisteröidy.** Avaa [rekisteröitymissovellus](/app/), kirjoita sähköpostiosoitteesi ja salasana ja valitse _Luo tili_.
 2. **Luo instanssi.** Anna sille nimi, jossa on 3–30 merkkiä. Osoite muodostetaan nimestä. Käyttöönotto kestää hetken, ja sivu näyttää etenemisen.
 3. **Kirjaudu sisään.** Siirry linkistä instanssiisi ja kirjaudu sisään samalla sähköpostiosoitteella ja salasanalla. Rekisteröitymistilistäsi tulee instanssin ensimmäinen ylläpitäjä.
-4. **Asenna sovellus.** Avaa _Customize_, sitten _Modules_ ja sen välilehti _Marketplace_, ja asenna sovellus, esimerkiksi Helpdesk tai Projects. Sovellusten asentaminen ja poistaminen vaatii ylläpitäjän ryhmän. Sisäänrakennetut sovellukset (Contacts, Products, CRM, Sales, Invoicing, Connectors ja Mileage) ovat jo valmiina.
-5. **Luo tietueita.** Avaa sovellus, valitse _New_ ja täytä lomake. Luettelot, taulut ja sivupaneeli muodostetaan sovelluksen kuvauksesta.
+4. **Asenna sovellus.** Avaa _Mukauta, Moduulit_ ja siellä välilehti _Moduulikauppa_, ja asenna sovellus, esimerkiksi Asiakastuki tai Projektit. Sovellusten asentaminen ja poistaminen vaatii ylläpitäjän ryhmän. Sisäänrakennetut sovellukset ovat jo valmiina, muun muassa Yhteystiedot, Tuotteet, CRM, Myynti, Laskutus ja Liittimet (ne kuusi, joilla on oma sovellussivu).
+5. **Luo tietueita.** Avaa sovellus, valitse _Uusi_ ja täytä lomake. Luettelot, taulut ja sivupaneeli muodostetaan sovelluksen kuvauksesta.
 6. **Kutsu agentti.** Agenttitunnisteille ei ole vielä omaa näkymää. Kirjaudu sisään REST-rajapinnan kautta ja [luo agenttitunniste](/docs/agents/tokens/). Sen jälkeen voit [yhdistää MCP:n kautta](/docs/agents/mcp/) tai käyttää [REST-rajapintaa](/docs/agents/rest/).
 
 ## Vaihtoehto 2: aja itse Dockerilla ja PostgreSQL:llä
@@ -65,6 +65,6 @@ Avaa `http://127.0.0.1:8080` ja kirjaudu sisään tunnuksella `alice`. Tiedot ta
 ## Mitä seuraavaksi
 
 - Tutustu rakennuspalikoihin sivulla [Peruskäsitteet](/docs/concepts/).
-- Selaa [sovelluksia](/apps/) ja asenna tarvitsemasi _Customize_-sovelluksesta tai komentoriviltä komennolla `obop modules install-from helpdesk`.
+- Selaa [sovelluksia](/apps/) ja asenna tarvitsemasi _Mukauta_-sovelluksesta tai komentoriviltä komennolla `obop modules install-from helpdesk`.
 - Ota agentti käyttöön: [Agenttien yleiskatsaus](/docs/agents/).
 - Kirjoita oma sovellus: [moduulin manifestiviite](/docs/reference/module-manifest/).

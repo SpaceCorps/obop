@@ -11,7 +11,7 @@ The hosted service gives each business its own instance with its own database. I
 1. **Sign up.** Open [the sign-up app](/app/), enter your email and a password, and choose _Create account_.
 2. **Create an instance.** Give it a name of 3 to 30 characters. The address is made from the name. Setting up takes a short while; the page shows the progress.
 3. **Sign in.** Follow the link to your instance and sign in with the same email and password. Your sign-up account becomes the first administrator of the instance.
-4. **Install an app.** Open _Customize_, then _Modules_, then the _Marketplace_ tab, and install an app such as Helpdesk or Projects. Installing and removing apps needs the administrator group. The built-in apps (Contacts, Products, CRM, Sales, Invoicing, Connectors and Mileage) are already there.
+4. **Install an app.** Open _Customize_, then _Modules_, then the _Marketplace_ tab, and install an app such as Helpdesk or Projects. Installing and removing apps needs the administrator group. The built-in apps are already there, among them Contacts, Products, CRM, Sales, Invoicing and Connectors (the six with an app page).
 5. **Create records.** Open an app, choose _New_ and fill in the form. Lists, boards and the side panel are generated from the app's description.
 6. **Invite an agent.** There is no screen for agent tokens yet. Sign in over the REST API and [create an agent token](/docs/agents/tokens/), then [connect over MCP](/docs/agents/mcp/) or use [REST](/docs/agents/rest/).
 

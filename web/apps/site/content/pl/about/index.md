@@ -7,7 +7,7 @@ eyebrow: "O nas"
 
 ## Co budujemy
 
-Modułowy pakiet biznesowy w duchu dużych systemów ERP typu wszystko w jednym, który jest otwarty, przenośny i od początku przygotowany na agentów AI. Ma wbudowane aplikacje do kontaktów, produktów, CRM, sprzedaży, fakturowania, konektorów i kilometrówki oraz 24 dołączone pakiety (księgowość, magazyn, produkcja, HR, projekty, punkt sprzedaży, e-commerce, strona internetowa, marketing e-mailowy, helpdesk, dokumenty i inne), które wciąż są w wersji beta lub eksperymentalne.
+Modułowy pakiet biznesowy w duchu dużych systemów ERP typu wszystko w jednym, który jest otwarty, przenośny i od początku przygotowany na agentów AI. Wśród jego wbudowanych aplikacji są aplikacje do kontaktów, produktów, CRM, sprzedaży, fakturowania i konektorów (sześć, które mają stronę aplikacji); ma też 24 dołączone pakiety (księgowość, magazyn, produkcja, HR, projekty, punkt sprzedaży, e-commerce, strona internetowa, marketing e-mailowy, helpdesk, dokumenty i inne), które wciąż są w wersji beta lub eksperymentalne.
 
 obop jest reimplementacją w czystym pokoju (clean-room) pomysłów, które oprogramowanie biznesowe sprawdzało przez dziesięciolecia. Nie kopiuje niczyjego kodu.
 

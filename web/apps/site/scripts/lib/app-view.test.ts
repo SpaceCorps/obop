@@ -1486,9 +1486,16 @@ describe("a caveat that only a developer needs sits under 'For developers', move
   test("the plain words that stay on top are still true on their own, and say what the limit does not", () => {
     const card = (id: string, key: string) => apps.find((a) => a.id === id)!.cards[key]!;
     const eco = card("ecommerce", "ecommerce_order.refund");
-    for (const key of ["ecommerce_order.refund", "ecommerce_order.refund_delivered"]) {
+    // A refusal leaves the order in the state the refund starts from (packages/ecommerce.toml:665-681;
+    // crates/kernel/obop-payments/src/lib.rs:843-875): paid for one, delivered for the other.
+    for (const [key, state] of [
+      ["ecommerce_order.refund", "paid"],
+      ["ecommerce_order.refund_delivered", "delivered"],
+    ] as const) {
       const c = card("ecommerce", key);
-      expect(c.text, key).toContain("the order stays paid if Stripe refuses. Otherwise you pay it");
+      expect(c.text, key).toContain(
+        `the order stays ${state} if Stripe refuses. Otherwise you pay it`,
+      );
       expect(c.text, key).not.toMatch(/stand-in|tested/);
       expect(c.limit, key).toBe(eco.limit);
     }
@@ -1522,6 +1529,25 @@ describe("a caveat that only a developer needs sits under 'For developers', move
       "By itself, this does not stop the driver being assigned a vehicle.",
     );
     expect(card("fleet", "fleet_vehicle_driver").text).not.toMatch(/authori[sz]ed|checked/i);
+    // The fold that carries that limit also prints the model's description (app-page.ts), so it does not
+    // say it either.
+    const driverModel = apps
+      .find((a) => a.id === "fleet")!
+      .models.find((m) => m.name === "fleet_vehicle_driver")!;
+    expect(driverModel.description).toBe(
+      "A driver of fleet vehicles, with a status of active or suspended",
+    );
+    for (const mirror of [false, true])
+      expect(
+        developerBody(
+          apps.find((a) => a.id === "fleet")!,
+          "en",
+          messages.en,
+          mirror,
+          "",
+          apps,
+        ),
+      ).not.toMatch(/authori[sz]ed|drive again/i);
     expect(card("fleet", "fleet_vehicle_driver").limit).toBe(
       "A driver's status and licence expiry are not checked when a vehicle is assigned.",
     );

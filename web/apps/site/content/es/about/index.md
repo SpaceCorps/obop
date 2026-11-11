@@ -7,7 +7,7 @@ eyebrow: "Acerca de"
 
 ## Qué estamos construyendo
 
-Una suite empresarial modular, en la línea de los grandes sistemas ERP todo en uno, que sea abierta, portable y esté preparada para los agentes de IA desde el principio. Tiene aplicaciones integradas para contactos, productos, CRM, ventas, facturación, conectores y kilometraje, y 24 paquetes incluidos (contabilidad, inventario, fabricación, RR. HH., proyectos, punto de venta, comercio electrónico, sitio web, marketing por correo, helpdesk, documentos y más) que todavía están en beta o son experimentales.
+Una suite empresarial modular, en la línea de los grandes sistemas ERP todo en uno, que sea abierta, portable y esté preparada para los agentes de IA desde el principio. Entre sus aplicaciones integradas están las de contactos, productos, CRM, ventas, facturación y conectores (las seis que tienen una página de aplicación), y tiene 24 paquetes incluidos (contabilidad, inventario, fabricación, RR. HH., proyectos, punto de venta, comercio electrónico, sitio web, marketing por correo, helpdesk, documentos y más) que todavía están en beta o son experimentales.
 
 obop es una reimplementación desde cero de ideas que el software empresarial ha demostrado válidas durante décadas. No copia el código de nadie.
 

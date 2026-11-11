@@ -374,6 +374,11 @@ export const APP_COPY: AppCopy[] = [
     // A driver's state (active, suspended) only moves through suspend and reactivate (:134-154): nothing reads
     // it or licence_expiry, fleet_vehicle.driver_id is a plain ref (:63-68) and dispatch has no assert or effect
     // (:77-82), so the manifest's "authorised to drive" and "allow ... to drive again" (:102, :151) are not said.
+    // The fold prints a model's description (scripts/lib/app-page.ts:88), so the driver model gets its own:
+    // the state is required, with the options active and suspended (:134-140).
+    modelText: {
+      fleet_vehicle_driver: "A driver of fleet vehicles, with a status of active or suspended",
+    },
     fieldText: {
       "fleet_vehicle.state":
         "Availability: available, in service or retired. The option maintenance exists, but no step moves a vehicle into it.",
@@ -624,14 +629,16 @@ export const APP_COPY: AppCopy[] = [
       "An online shop: categories, product listings with translations, shipping methods, discount codes, web orders with lines and a fulfilment flow of pending, paid, shipped, delivered, cancelled and refunded. When the instance runs with the public site enabled, visitors browse the published listings and place orders without an account; the server prices every order from the published listing and never trusts the browser. At checkout the server takes the ordered units off each listing whose stock policy is block_when_out or allow_backorder and applies discount codes and tax rates; orders are paid by bank transfer, by card through Stripe Checkout or in a local demo mode; the payment record, the provider reference and refunds are kept with the order. Refunds need a human approval from a manager; agents may only propose them. Customer name, email and addresses are personal data and are never public. Needs the Products package.",
     cards: {
       // refund runs only from paid (packages/ecommerce.toml:665-672); a shipped order has no refund and no
-      // cancel (:644-663), and refund_delivered starts from delivered (:674-681).
+      // cancel (:644-663), and refund_delivered starts from delivered (:674-681). Stripe is asked before the
+      // state moves, and a refusal returns before it (crates/kernel/obop-payments/src/lib.rs:843-875), so each
+      // order keeps the state it started from.
       "ecommerce_order.refund": {
         text: "Record the refund of an order that is paid and not yet shipped. For card payments through Stripe, obop asks Stripe to refund the payment first, and the order stays paid if Stripe refuses. Otherwise you pay it back yourself.",
         limit:
           "The refund through Stripe is tested only against a local stand-in, not against Stripe itself.",
       },
       "ecommerce_order.refund_delivered": {
-        text: "Record the refund of a delivered order, for example after a return. The units are not put back on the shelf. For card payments through Stripe, obop asks Stripe to refund the payment first, and the order stays paid if Stripe refuses. Otherwise you pay it back yourself.",
+        text: "Record the refund of a delivered order, for example after a return. The units are not put back on the shelf. For card payments through Stripe, obop asks Stripe to refund the payment first, and the order stays delivered if Stripe refuses. Otherwise you pay it back yourself.",
         limit:
           "The refund through Stripe is tested only against a local stand-in, not against Stripe itself.",
       },
