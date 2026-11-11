@@ -1474,12 +1474,29 @@ describe("a caveat that only a developer needs sits under 'For developers', move
     );
     expect(card("pos", "pos_order.pay").limit).not.toMatch(/press/i);
     expect(card("pos", "pos_session.close").text).toBe("Close the session (manager only).");
-    expect(card("pos", "pos_session.close").limit).toContain("drawer was counted");
+    // cash_control is a flag nothing reads (packages/pos.toml:44-48, and the field text below it says so),
+    // so the package text does not call a session "cash-controlled" (it is shown in the fold, on the
+    // marketplace page and in llms-full.txt).
+    expect(apps.find((a) => a.id === "pos")!.description).not.toMatch(/cash-controlled/i);
+    // The module guide on /docs/reference/module-manifest/ is docs/MODULES.md as it stands, so its
+    // `pos` rows (the module list and section 12) must not say it either.
+    const posRows = readFileSync(join(REPO, "docs/MODULES.md"), "utf8")
+      .split("\n")
+      .filter((line) => line.startsWith("| `pos` |"));
+    expect(posRows.length).toBeGreaterThan(0);
+    for (const row of posRows) expect(row).not.toMatch(/cash-controlled/i);
+    expect(card("pos", "pos_session.close").limit).toBe(
+      "obop does not check that the drawer was counted.",
+    );
     expect(card("accounting", "accounting_move.post").text).toContain(
       "A posted entry can still be edited afterwards.",
     );
     expect(card("accounting", "accounting_move.post").text).not.toContain("no lines");
-    expect(card("accounting", "accounting_move.post").limit).toContain("no lines");
+    // Said once, in the fold: the sum of no lines is zero on both sides, so the check "debits equal
+    // credits" is met (packages/accounting.toml:321, :346; computed.rs, the empty child set sums to 0).
+    expect(card("accounting", "accounting_move.post").limit).toBe(
+      "An entry with no lines has debits and credits of zero, which are equal, so it can be posted.",
+    );
     // The sign-off reminder is said once, by the field text in the part for developers, so the card has no limit.
     const complete = card("field_service", "field_service_job.complete");
     expect(complete.text).not.toContain("Nothing checks");

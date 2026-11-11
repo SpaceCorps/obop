@@ -1620,6 +1620,10 @@ test.describe("crawlers and agents", () => {
       { slug: "pos", text: "The payments are checked only when the sale is paid." },
       { slug: "pos", text: "obop does not check that the drawer was counted." },
       {
+        slug: "accounting",
+        text: "An entry with no lines has debits and credits of zero, which are equal, so it can be posted.",
+      },
+      {
         slug: "contacts",
         text: "The erase does not touch the list of placeholders an AI agent holds;",
       },
@@ -1689,6 +1693,26 @@ test.describe("crawlers and agents", () => {
     expect(home).toMatch(/class="pill"[^>]*><i><\/i>\s*Pre-1\.0/);
     expect(home).not.toMatch(/class="pill"[^>]*><i><\/i>\s*Beta/);
     expect(home).toContain("Open-source business platform. Below version 1.0.");
+  });
+
+  // The strings are pinned in the site's unit tests (strings.test.ts); this reads the pages as built, so a
+  // footer or a pill that is drawn from somewhere else than the language's own strings is found too.
+  test("every language's home page says in its own words that obop is below version 1.0, in the footer and the pill", async ({
+    request,
+  }) => {
+    const old = /beta|bêta/i;
+    for (const locale of Object.keys(messages) as (keyof typeof messages)[]) {
+      const m = messages[locale];
+      const html = await (
+        await request.get(`${base()}${locale === "en" ? "" : `/${locale}`}/`)
+      ).text();
+      const pill = /class="pill"[^>]*><i><\/i>\s*([^<]*)</.exec(html)?.[1]?.trim();
+      expect(pill, `${locale}: the pill`).toBe(m.home.badge);
+      expect(pill, `${locale}: the pill`).not.toMatch(old);
+      const footer = /<\/a><p>([^<]*)<\/p><p class="fine"/.exec(html)?.[1];
+      expect(footer, `${locale}: the footer note`).toBe(m.ui.betaNote);
+      expect(footer, `${locale}: the footer note`).not.toMatch(old);
+    }
   });
 
   test("security.txt and humans.txt", async ({ request }) => {

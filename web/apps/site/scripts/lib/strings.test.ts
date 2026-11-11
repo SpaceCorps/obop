@@ -32,3 +32,28 @@ describe("the strings of the apps pages", () => {
       );
   });
 });
+
+// The owner ruled on 2026-11-11 that the site says obop is below version 1.0 and not "beta": in the
+// footer of every page, on the pill of the home page and in the home page's answer to whether obop is
+// ready for production. This is true of all seven languages, not only English. (The word is still right
+// for an app that the manifest calls beta, so the maturity word of the language is taken out of the FAQ
+// answer before it is searched; llms.txt and the built pages are read by the browser tests.)
+describe("obop itself is below version 1.0 and not beta, in every language", () => {
+  const OLD = /beta|bêta/i;
+  for (const locale of LOCALES) {
+    test(locale, () => {
+      const m = messages[locale];
+      for (const [where, text] of [
+        ["the footer note", m.ui.betaNote],
+        ["the pill", m.home.badge],
+      ] as const) {
+        expect(text, `${locale}: ${where}`).not.toMatch(OLD);
+        expect(text, `${locale}: ${where} names the version`).toMatch(/1\.0/);
+      }
+      const answers = m.home.faq.filter((f) => f.a.includes("1.0"));
+      expect(answers, `${locale}: the answer about production names version 1.0`).toHaveLength(1);
+      const own = answers[0]!.a.split(m.apps.meta.maturities.beta).join("");
+      expect(own, `${locale}: the answer about production`).not.toMatch(OLD);
+    });
+  }
+});

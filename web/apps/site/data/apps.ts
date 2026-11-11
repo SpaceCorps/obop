@@ -20,7 +20,12 @@
  *   `text` (or `purpose`).
  * - A sentence the fold already has (`technical`, `packageText`, a `fieldText`) is deleted from the top,
  *   not copied into a `limit`.
- * `scripts/lib/app-view.test.ts` checks these rules for every app.
+ * `scripts/lib/app-view.test.ts` checks, for every card or app that carries a `limit` or `limits`, that
+ * it is one sentence without markup, that the text left on top has at least three words and does not
+ * contain it, and that it is in the part for developers of the Markdown copy and not above it (the
+ * browser test reads the page); it also lists the caveats that exist, so a new one is a deliberate
+ * change, and pins the wording of some. Whether a caveat is only for a developer, and whether what is
+ * left on top is true on its own, is a judgement that no test makes.
  */
 export type Category = "foundation" | "customers" | "finance" | "operations" | "people" | "content";
 
@@ -489,8 +494,8 @@ export const APP_COPY: AppCopy[] = [
     // web/apps/backoffice/src refers to planning_template, so a shift is not made from a template.
     // start_minute and end_minute are number fields with no min or max (packages/planning.toml:105-116), and a
     // limit is checked only where one is declared (crates/kernel/obop-commands/src/kinds.rs:146-152).
-    // The manifest calls a template "a reusable shift pattern to copy into shifts" (packages/planning.toml:38), which
-    // reads as a function; this site says what it keeps (name, start and end, and role_id, which is optional, :41-46).
+    // The manifest calls a template "a reusable shift pattern to copy into shifts" (packages/planning.toml:39), which
+    // reads as a function; this site says what it keeps (name, start and end, and role_id, which is optional, :49-54).
     modelText: {
       planning_template:
         "A shift pattern, with a name, start and end times and, optionally, a role",
@@ -533,14 +538,15 @@ export const APP_COPY: AppCopy[] = [
     name: "Point of Sale",
     tagline: "Shop tills",
     purpose:
-      "Keep track of a shop's cash register: open and close the cash drawer, and record each sale and how it was paid. It records what happened at the register. It is not connected to card terminals. Do not type card numbers into any field: obop does not check for them.",
+      "Keep track of a shop's cash register: open and close a shift at the till, and record each sale and how it was paid. It records what happened at the register. It is not connected to card terminals. Do not type card numbers into any field: obop does not check for them.",
     // Card numbers: no field checks for one (provider_reference in packages/pos.toml:340-345 is a plain text
-    // field, and nothing in crates/ looks for a card number). The package text is the manifest's (:5) with that
-    // one sentence changed. Close has no assert and no counted-cash field is required (:142-148, :116-118); pay
+    // field, and nothing in crates/ looks for a card number). The package text is the manifest's (:5) with two changes: the
+    // card-number sentence, and "cash-controlled" left out of "cash-controlled sessions", because cash_control is a
+    // flag that nothing reads (:44-48; fieldText below). Close has no assert and no counted-cash field is required (:142-148, :116-118); pay
     // checks the payments once, when it runs (:220-226), and pos_order and its lines stay writable by pos.user
     // (:151-154, :252-255).
     packageText:
-      "Shop tills: a point-of-sale configuration, cash-controlled sessions that are opened and closed, orders with lines, and payment lines per method. A refund and the closing of a session need a human approval from a manager; agents may only propose them. Line subtotals and the order total are computed from the lines, receipts get a gapless yearly number, and paying is refused until the payments cover the total; change and cash differences are still entered. Paying also creates a draft stock move per line from the order's stock location, for the warehouse to validate. Do not store card numbers: obop does not check for them. Keep only the payment provider's reference. Needs the Products package.",
+      "Shop tills: a point-of-sale configuration, sessions that are opened and closed, orders with lines, and payment lines per method. A refund and the closing of a session need a human approval from a manager; agents may only propose them. Line subtotals and the order total are computed from the lines, receipts get a gapless yearly number, and paying is refused until the payments cover the total; change and cash differences are still entered. Paying also creates a draft stock move per line from the order's stock location, for the warehouse to validate. Do not store card numbers: obop does not check for them. Keep only the payment provider's reference. Needs the Products package.",
     modelNames: {
       pos_config: "Point of sale",
     },
