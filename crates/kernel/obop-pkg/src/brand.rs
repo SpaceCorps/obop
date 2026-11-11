@@ -30,6 +30,11 @@
 //! `effective`, `fallbacks`, `changes`, `refusals`, `cleared`) are fields of the model; the registry
 //! has no object or list kind, so a structured part is a text field that holds JSON.
 //!
+//! **The switch.** `hide_product_docs` is the one boolean field of the record. It is stored as the
+//! boolean true (false removes the key, so off is the absence of the switch), `configure` takes the
+//! JSON booleans and the texts `true` and `false`, and `get` answers it to any signed-in principal
+//! (it is not public before sign-in: the shell does not carry it).
+//!
 //! The descriptions say what the record holds, not which pages show it.
 
 use obop_commands::brand::{self, Action, Applied, Reader, fallbacks_json, show_key};
@@ -56,7 +61,7 @@ const LANGUAGES: [(&str, &str); 7] = [
 
 const PUBLIC: &str = "Public by design, so it holds no personal data";
 
-const CONFIGURE: &str = "Set the instance branding. Give only the fields to change (the others keep their value); the first call needs name. Fields: name, slug, title_<lang>, message_<lang>, logo_svg (SVG text). An empty text clears a field, except name. dry_run (true or false) writes nothing. Answers changes and v (with dry_run also refusals). Only a person with platform.admin may run it";
+const CONFIGURE: &str = "Set the instance branding. Give only the fields to change (the others keep their value); the first call needs name. Fields: name, slug, title_<lang>, message_<lang>, logo_svg (SVG text), hide_product_docs (true or false). An empty text clears a field, except name. dry_run (true or false) writes nothing. Answers changes and v (with dry_run also refusals). Only a person with platform.admin may run it";
 
 const CLEAR: &str = "Remove the instance branding: the one record is deleted, so no brand is set. dry_run (true or false) checks and removes nothing. Answers cleared: true when a brand was (with dry_run, would be) removed, false with none, and nothing is written then. Only a person with platform.admin may run it";
 
@@ -115,6 +120,13 @@ pub fn instance_brand_model() -> ModelDef {
         )
         .kind(FieldKind::LongText),
     );
+    fields.push(
+        f(
+            "hide_product_docs",
+            "true or false: hide the Brand book and the Guide in Customize, the account menu and the command palette. Off unless a boolean true is stored. Not shown before sign-in; any signed-in person can read it",
+        )
+        .kind(FieldKind::Bool),
+    );
     // The declared fields of the answers (and the input `dry_run`).
     fields.extend([
         f(
@@ -133,7 +145,7 @@ pub fn instance_brand_model() -> ModelDef {
         ),
         f(
             "effective",
-            "Answer of get: a JSON object with, for each value in force (name, slug, logo, tile_accent, authenticator_issuer, site.title, site.logo_url, site.accent, favicon, title_<lang> and message_<lang>), its value and the source that won: record, env, site, theme, unreadable or default",
+            "Answer of get: a JSON object with, for each value in force (name, slug, logo, tile_accent, accent, authenticator_issuer, site.title, site.logo_url, site.accent, favicon, title_<lang> and message_<lang>), its value and the source that won: record, env, site, theme, unreadable or default",
         ),
         f(
             "fallbacks",
@@ -229,11 +241,13 @@ fn get(reader: &Reader) -> Result<Value, String> {
     let shown = fresh.shown();
     let mut m = BTreeMap::new();
     for field in brand::writable_fields() {
-        if field != "logo_svg" {
+        if field != "logo_svg" && field != brand::SWITCH {
             let value = Value::text(&brand::printable(&field, fresh.stored_text(&field)));
             m.insert(field, value);
         }
     }
+    // The switch is read as a boolean only: any other stored value is off (and under `fallbacks`).
+    m.insert(brand::SWITCH.into(), Value::Bool(shown.hide_product_docs()));
     m.insert("set".into(), Value::Bool(fresh.set()));
     m.insert("v".into(), Value::text(shown.v()));
     m.insert("effective".into(), Value::Text(fresh.effective_json()));
@@ -275,10 +289,20 @@ fn configure(backend: &dyn Backend, reader: &Reader, input: &Value) -> Result<Va
     });
     let mut supplied = Vec::new();
     for field in &writable {
-        match x.get(field) {
-            None => {}
-            Some(Value::Text(t)) => supplied.push((field.clone(), t.clone())),
-            Some(_) => problems.push(format!(
+        match (field.as_str(), x.get(field)) {
+            (_, None) => {}
+            // The switch: the JSON booleans and the texts `true` and `false`, as `dry_run` is.
+            (brand::SWITCH, Some(Value::Bool(b))) => {
+                supplied.push((field.clone(), b.to_string()));
+            }
+            (brand::SWITCH, Some(Value::Text(t))) if t == "true" || t == "false" => {
+                supplied.push((field.clone(), t.clone()));
+            }
+            (brand::SWITCH, Some(_)) => problems.push(format!(
+                "instance_brand.configure: {field} must be true or false"
+            )),
+            (_, Some(Value::Text(t))) => supplied.push((field.clone(), t.clone())),
+            (_, Some(_)) => problems.push(format!(
                 "instance_brand.configure: {field} must be text; an empty text clears it"
             )),
         }
@@ -408,7 +432,7 @@ pub fn read_values_file(text: &str) -> Result<Vec<(String, String)>, Vec<String>
             for (key, value) in table {
                 if !writable.iter().any(|f| f == key) {
                     problems.push(format!(
-                        "[record] the key {} is not a field of the brand; the fields are name, slug, title_<lang>, message_<lang> and logo_svg",
+                        "[record] the key {} is not a field of the brand; the fields are name, slug, title_<lang>, message_<lang>, logo_svg and hide_product_docs",
                         show_key(key)
                     ));
                     continue;
@@ -416,6 +440,13 @@ pub fn read_values_file(text: &str) -> Result<Vec<(String, String)>, Vec<String>
                 match value {
                     toml::Value::String(s) => {
                         fields.insert(key.as_str(), s.clone());
+                    }
+                    // The switch is the one boolean of the record: `hide_product_docs = true`.
+                    toml::Value::Boolean(b) if key == brand::SWITCH => {
+                        fields.insert(key.as_str(), b.to_string());
+                    }
+                    _ if key == brand::SWITCH => {
+                        problems.push(format!("[record] {key} must be true or false (a boolean)"))
                     }
                     _ => problems.push(format!("[record] {key} must be text (a string)")),
                 }

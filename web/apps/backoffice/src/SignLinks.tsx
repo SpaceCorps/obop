@@ -266,7 +266,7 @@ export function SignLinkBody({
       <div id={noteId}>
         <Notice tone="warning" title={t("Shown once")}>
           {t(
-            "Anyone who has this link can sign for {name}. It cannot be shown again. If you lose it, create another link for this request. obop sends no email, so give the link to the signer yourself.",
+            "Anyone who has this link can sign for {name}. It cannot be shown again. If you lose it, create another link for this request. No email is sent, so give the link to the signer yourself.",
             { name: signer },
           )}
         </Notice>

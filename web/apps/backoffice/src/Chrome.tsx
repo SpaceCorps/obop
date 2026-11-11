@@ -5,13 +5,14 @@ import {
   Dialog,
   Icon,
   IconButton,
+  InstanceLogo,
   Kbd,
   LANGS,
   LANG_INFO,
-  Logo,
   Menu,
   compareText,
   inSentence,
+  pageBrand,
   t,
   tx,
   useI18n,
@@ -22,6 +23,7 @@ import { appColor } from "./theme.ts";
 import { modulesHref } from "./modules/route.ts";
 import { href } from "./route.ts";
 import { boardHref } from "./dashboards/route.ts";
+import { productDocsVisible } from "./productDocs.ts";
 import { appTitle, modelTitle } from "./labels.ts";
 
 export type App = { id: string; name: string; color: string; module: ModuleMeta };
@@ -100,6 +102,7 @@ export function TopBar(props: {
 }) {
   const { current } = props;
   const i18n = useI18n();
+  const docs = productDocsVisible();
   const languages: MenuItem[] = [
     { heading: t("Language") },
     ...LANGS.map((l) => ({
@@ -126,10 +129,10 @@ export function TopBar(props: {
           onClick={props.onMenu}
         />
       )}
-      <a className="brand" href="#/">
+      <a className="brand" href="#/" title={current ? undefined : pageBrand()?.name}>
         {current ? (
           <>
-            <Logo variant="mark" size={22} title="" />
+            <InstanceLogo variant="mark" size={22} title="" />
             <span className="brand-sep" aria-hidden="true">
               /
             </span>
@@ -137,8 +140,9 @@ export function TopBar(props: {
           </>
         ) : (
           <>
-            <Logo variant="full" size={24} title="" />
-            <span className="sr-only">obop</span>
+            <InstanceLogo variant="full" size={24} title="" />
+            {/* With a brand the logo shows its name as text; without one the link is named like this. */}
+            {pageBrand() ? null : <span className="sr-only">obop</span>}
           </>
         )}
       </a>
@@ -158,7 +162,9 @@ export function TopBar(props: {
             { heading: props.email || t("Signed in") },
             { label: t("Theme"), icon: "sun", onSelect: props.onTheme },
             { label: t("Security"), icon: "shield-check", onSelect: props.onSecurity },
-            { label: t("Brand book"), icon: "sparkle", onSelect: props.onBrand },
+            ...(docs
+              ? [{ label: t("Brand book"), icon: "sparkle" as const, onSelect: props.onBrand }]
+              : []),
             "separator",
             ...languages,
             "separator",
@@ -235,6 +241,7 @@ export function Palette({ apps, onClose }: { apps: App[]; onClose: () => void })
   const [q, setQ] = useState("");
   const [sel, setSel] = useState(0);
   const { lang } = useI18n();
+  const guideShown = productDocsVisible();
   const hits = useMemo<Hit[]>(() => {
     const all: Hit[] = [];
     for (const a of apps) {
@@ -306,17 +313,18 @@ export function Palette({ apps, onClose }: { apps: App[]; onClose: () => void })
       hint: t("Customize"),
       to: href({ app: "customize", model: "theme", tab: "theme" }),
     });
-    all.push({
-      key: "guide",
-      title: t("How to write a custom module"),
-      hint: t("Guide"),
-      to: href({ app: "customize", model: "guide", tab: "guide" }),
-    });
+    if (guideShown)
+      all.push({
+        key: "guide",
+        title: t("How to write a custom module"),
+        hint: t("Guide"),
+        to: href({ app: "customize", model: "guide", tab: "guide" }),
+      });
     const needle = q.toLowerCase().trim();
     // Every word has to match somewhere in the title, so "write module" finds "How to write a custom module".
     const words = needle.split(/\s+/).filter(Boolean);
     return all.filter((h) => words.every((w) => h.title.toLowerCase().includes(w))).slice(0, 12);
-  }, [apps, q, lang]);
+  }, [apps, q, lang, guideShown]);
   useEffect(() => setSel(0), [q]);
   const go = (h: Hit | undefined) => {
     if (!h) return;

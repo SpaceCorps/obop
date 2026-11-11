@@ -1,5 +1,5 @@
 //! Upgrading `sign` from the version that is deployed today (0.2.0) to the one with the signer
-//! door (0.2.1; the bundled package is 0.2.2 since the history of a file, `history.rs`), on an
+//! door (0.2.1; the bundled package is 0.2.3, see `history.rs` and `brand_words.rs`), on an
 //! instance that already has records in every state. The two fixtures are copies of
 //! `packages/sign.toml` and `packages/documents.toml` as they were on `main` before D92; they are
 //! not edited.
@@ -170,9 +170,9 @@ async fn the_upgrade_from_0_2_0_is_additive_and_keeps_every_record() {
         .installer
         .install_outcome(&new_text, "marketplace", "test")
         .unwrap();
-    // The bundled package is 0.2.2 since the history of a file (the switch `show_history`); the
-    // upgrade from 0.2.0 still goes in one step.
-    assert_eq!(out.root.version, "0.2.2");
+    // The bundled package is 0.2.3 (0.2.2 added the switch `show_history`, 0.2.3 rewords one help);
+    // the upgrade from 0.2.0 still goes in one step.
+    assert_eq!(out.root.version, "0.2.3");
 
     // Nothing was rewritten.
     assert_eq!(snapshot(&f, &requests), before);

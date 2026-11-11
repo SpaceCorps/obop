@@ -5,6 +5,7 @@ import { label as labelOf } from "./format.ts";
 import { appTitle, modelTitle } from "./labels.ts";
 import { serverMessage } from "./serverMessage.ts";
 import { href } from "./route.ts";
+import { productDocsVisible } from "./productDocs.ts";
 
 type Props = {
   token: string;
@@ -279,10 +280,18 @@ export function BuildTab({ token, modules, onModulesChanged, notify }: Props) {
         <p className="hint">
           {t(
             "Describe a model and install it as a module. It gets the API, agent tools, permissions and privacy rules like every other app.",
-          )}{" "}
-          <a className="reflink" href={href({ app: "customize", model: "guide", tab: "guide" })}>
-            {t("How to write a custom module?")}
-          </a>
+          )}
+          {productDocsVisible() && (
+            <>
+              {" "}
+              <a
+                className="reflink"
+                href={href({ app: "customize", model: "guide", tab: "guide" })}
+              >
+                {t("How to write a custom module?")}
+              </a>
+            </>
+          )}
         </p>
         <label className="field">
           <span className="flabel">{t("Module name")}</span>

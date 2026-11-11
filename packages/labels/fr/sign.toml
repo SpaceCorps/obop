@@ -53,7 +53,7 @@ description = "Nom de la personne qui doit signer"
 
 [labels.fr.model.sign_request.field.signer_email]
 label = "E-mail du signataire"
-description = "Adresse e-mail du signataire ; facultative, obop n'envoie pas d'e-mail pour une demande portant sur un document"
+description = "Adresse e-mail du signataire ; facultative, aucun e-mail n'est envoyé pour une demande portant sur un document"
 
 [labels.fr.model.sign_request.field.sent_on]
 label = "Envoyé le"

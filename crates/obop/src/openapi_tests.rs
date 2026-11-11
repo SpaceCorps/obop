@@ -30,6 +30,7 @@ const KNOWN_OMITTED: &[&str] = &[
     "setting.update",
     "sie_exchange.export",
     "sie_exchange.import",
+    "vat_computation.compute",
 ];
 
 /// The committed copy: `web/packages/client/openapi.json`, from the root of the workspace.
@@ -343,18 +344,24 @@ const OPENAPI_ANONYMOUS_PINS: &[(&str, &str)] = &[
     ("auth/openapi", "00ccf5de37ea58c660fe82c8033793864d1f7070ed4bc12bc0f5c486dfdf2162"),
 ];
 
-/// S1a: the brand row is in the store and the anonymous document is the one an instance with no
-/// row sends (see `with_a_brand_row_the_anonymous_documents_and_initialize_are_what_they_were`).
+/// With a brand row in the store the anonymous document is the one an instance with no row sends,
+/// byte for byte, headers included, but for its title (slice S3: `{name} API`, in place of
+/// "obop instance API"; `brand_docs_tests.rs` holds the difference member by member). With the
+/// title put back, the digest is the pinned one: nothing else of the document moved.
 #[tokio::test]
-async fn with_a_brand_row_the_anonymous_openapi_document_is_what_it_was() {
+async fn with_a_brand_row_the_anonymous_openapi_document_is_what_it_was_but_for_its_title() {
     use crate::mfa_tests::pin;
     let mut now = Vec::new();
     for inst in pin::instances().await {
         crate::brand_row_tests::set_brand(&inst.app);
-        now.push((
-            format!("{}/openapi", inst.name),
-            pin::sha(&pin::document(&inst.router, "/api/openapi.json").await),
-        ));
+        let text = pin::document(&inst.router, "/api/openapi.json").await;
+        let put_back = text.replacen(
+            "\"title\":\"MOHV API\"",
+            "\"title\":\"obop instance API\"",
+            1,
+        );
+        assert_ne!(text, put_back, "{}: the title is the name's", inst.name);
+        now.push((format!("{}/openapi", inst.name), pin::sha(&put_back)));
     }
     pin::check("OPENAPI_ANONYMOUS_PINS", OPENAPI_ANONYMOUS_PINS, &now);
 }

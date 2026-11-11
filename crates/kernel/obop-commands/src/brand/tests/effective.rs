@@ -1,12 +1,12 @@
 //! The `effective` answer of `get` (docs/spec/branding.md, section 3, "What `get` shows", and section
 //! 13, "Commands"): each value in force with the source that won, one case per value and source. The
-//! object is staged by slice, so these tests also pin what it does not hold yet: the entries of the
-//! surfaces that are not built (`accent`) are not there, because an entry whose precedence involves a
-//! surface that is not wired would be untrue. `authenticator_issuer` is there since the slice that
-//! reads the record for the enrolment texts (S1e); its cases, with the variable `OBOP_MFA_ISSUER`
-//! given as a value, are the last in this file. The entries of the public site (`site.title`,
-//! `site.logo_url`, `site.accent` and `favicon`) arrived with the slice that wires the shop to the
-//! record (S1f); their cases come before those of the issuer.
+//! object is staged by slice, and these tests pin what it holds: an entry whose precedence involves a
+//! surface that is not wired would be untrue, so a surface's entry arrives with its slice.
+//! `authenticator_issuer` is there since the slice that reads the record for the enrolment texts
+//! (S1e); its cases, with the variable `OBOP_MFA_ISSUER` given as a value, are the last in this file.
+//! The entries of the public site (`site.title`, `site.logo_url`, `site.accent` and `favicon`)
+//! arrived with the slice that wires the shop to the record (S1f); their cases come before those of
+//! the issuer. `accent`, the accent of the sign-in screens, arrived with the back office page (S2).
 
 use super::*;
 use obop_brand::LANGS;
@@ -85,6 +85,7 @@ fn the_object_holds_exactly_the_entries_of_the_surfaces_that_exist() {
         "slug",
         "logo",
         "tile_accent",
+        "accent",
         "site.title",
         "site.logo_url",
         "site.accent",
@@ -100,7 +101,7 @@ fn the_object_holds_exactly_the_entries_of_the_surfaces_that_exist() {
     }
     want.sort();
     assert_eq!(keys, want.iter().map(String::as_str).collect::<Vec<_>>());
-    assert_eq!(keys.len(), 9 + 14);
+    assert_eq!(keys.len(), 10 + 14);
     // Every entry is exactly a value and a source, and the source is one of the five a good row
     // gives (a sixth, `unreadable`, is the issuer of a name an enrolment would refuse, below).
     for (k, v) in e.as_object().unwrap() {
@@ -110,7 +111,6 @@ fn the_object_holds_exactly_the_entries_of_the_surfaces_that_exist() {
             "{k}"
         );
     }
-    assert!(e.get("accent").is_none(), "accent arrives with its surface");
 }
 
 #[test]
@@ -252,6 +252,53 @@ fn the_tile_accent_is_the_themes_unless_it_is_missing_invalid_or_the_default_vio
         "#c2410c",
         "theme",
     );
+}
+
+/// The accent of the sign-in screens (S2): the theme's stored accent, else the stock violet.
+#[test]
+fn the_accent_of_the_sign_in_screens_is_the_themes_else_the_stock_violet() {
+    let row: &[(&str, J)] = &[("name", s("MOHV"))];
+    is(&effective(Some(row), None), "accent", "#6d3fd0", "default");
+    is(&effective(None, None), "accent", "#6d3fd0", "default");
+    // With no row the page has no tag, so the screens show the stock violet whatever the theme
+    // stores; `tile_accent` still says what a tile would be drawn with.
+    let e = effective(None, Some("#c2410c"));
+    is(&e, "accent", "#6d3fd0", "default");
+    is(&e, "tile_accent", "#c2410c", "theme");
+    is(
+        &effective(Some(row), Some("#c2410c")),
+        "accent",
+        "#c2410c",
+        "theme",
+    );
+    is(
+        &effective(Some(row), Some("#C2410C")),
+        "accent",
+        "#c2410c",
+        "theme",
+    );
+    // A theme that stores exactly the stock violet stores it: the screens show that violet, and the
+    // tile stays slate (spec section 2).
+    is(
+        &effective(Some(row), Some("#6d3fd0")),
+        "accent",
+        "#6d3fd0",
+        "theme",
+    );
+    is(
+        &effective(Some(row), Some("#6d3fd0")),
+        "tile_accent",
+        "#495670",
+        "default",
+    );
+    for bad in ["red", "#abc", "#12345g", "c2410c"] {
+        is(
+            &effective(Some(row), Some(bad)),
+            "accent",
+            "#6d3fd0",
+            "default",
+        );
+    }
 }
 
 #[test]

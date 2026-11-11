@@ -798,6 +798,10 @@ description = "El mensaje en español: un texto sencillo de 240 caracteres como 
 label = "Logotipo (SVG)"
 description = "Entrada de configure: el texto de un archivo SVG, 16 KiB como máximo, un subconjunto estricto (formas y trazados en colores lisos; sin script, texto, imagen ni enlace). Lo que se guarda es el texto canónico que el servidor reescribió, nunca la entrada; get no lo devuelve. Vacío lo borra, y el logotipo se dibuja entonces a partir del nombre"
 
+[labels.es.model.instance_brand.field.hide_product_docs]
+label = "Ocultar la documentación del producto"
+description = "true o false: oculta el manual de marca y la guía en Personalizar, el menú de la cuenta y la paleta de comandos. Desactivado mientras no se guarde un true booleano. No se muestra antes de iniciar sesión; cualquier persona con sesión iniciada puede leerlo"
+
 [labels.es.model.instance_brand.field.dry_run]
 label = "Simulación"
 description = "Entrada de configure y clear: true o false. Con true se comprueba todo y no se escribe ni se registra nada; la respuesta dice qué ocurriría y devuelve dry_run"
@@ -812,7 +816,7 @@ description = "Respuesta de get y configure: la versión del logotipo (16 dígit
 
 [labels.es.model.instance_brand.field.effective]
 label = "En vigor"
-description = "Respuesta de get: un objeto JSON con, para cada valor en vigor (name, slug, logo, tile_accent, authenticator_issuer, site.title, site.logo_url, site.accent, favicon, title_XX y message_XX; XX es el código del idioma: en, de, fr, pl, fi, sv, es), su valor y la fuente que ganó: record, env, site, theme, unreadable o default"
+description = "Respuesta de get: un objeto JSON con, para cada valor en vigor (name, slug, logo, tile_accent, accent, authenticator_issuer, site.title, site.logo_url, site.accent, favicon, title_XX y message_XX; XX es el código del idioma: en, de, fr, pl, fi, sv, es), su valor y la fuente que ganó: record, env, site, theme, unreadable o default"
 
 [labels.es.model.instance_brand.field.fallbacks]
 label = "Valores de respaldo"
@@ -832,7 +836,7 @@ description = "Respuesta de clear: si se eliminó una marca (con dry_run, si se 
 
 [labels.es.model.instance_brand.action.configure]
 label = "Configurar"
-description = "Definir la marca de la instancia. Indique solo los campos que cambian (los demás conservan su valor); la primera llamada necesita name. Campos: name, slug, title_XX, message_XX, logo_svg (texto SVG). Un texto vacío borra un campo, salvo name. dry_run (true o false) no escribe nada. Responde con changes y v (con dry_run también refusals). Solo una persona con platform.admin puede ejecutarlo"
+description = "Definir la marca. Indique solo los campos a cambiar (los demás se conservan); la primera llamada necesita name. Campos: name, slug, title_XX, message_XX, logo_svg (texto SVG), hide_product_docs (true o false). Un texto vacío borra un campo, salvo name. dry_run (true o false) no escribe nada. Responde: changes y v (con dry_run también refusals). Solo una persona con platform.admin puede usarlo"
 
 [labels.es.model.instance_brand.action.clear]
 label = "Eliminar"

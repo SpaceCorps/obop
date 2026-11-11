@@ -426,11 +426,14 @@ fn folders_forms_and_oversized_files_are_refused() {
     let f = fake();
     let b = browser(&f);
     assert!(b.fetch("dir1", 1000).unwrap_err().contains("folder"));
-    assert!(
-        b.fetch("form1", 1000)
-            .unwrap_err()
-            .contains("kind of Google file")
+    // The sentence a person who imports a file reads names no product (docs/spec/branding.md, S3,
+    // OT-14): it is the same on every instance, so it cannot name the one that is not theirs.
+    let form = b.fetch("form1", 1000).unwrap_err();
+    assert_eq!(
+        form,
+        "That kind of Google file cannot be brought in (only Docs, Sheets, Slides, Drawings and ordinary files)"
     );
+    assert!(!form.to_lowercase().contains("obop"), "{form}");
     assert!(b.fetch("big1", 1000).unwrap_err().contains("larger than"));
     // An export has no size up front: the cap is enforced while reading.
     assert!(b.fetch("doc1", 4).unwrap_err().contains("larger than"));

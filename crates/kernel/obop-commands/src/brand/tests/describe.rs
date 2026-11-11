@@ -35,6 +35,10 @@ fn the_describe_hook_answers_for_get_of_this_model_only() {
     let text = describe(MODEL, "get").expect("a text for get");
     assert!(text.contains("Takes no input"), "{text}");
     assert!(text.contains("fallbacks") && text.contains("effective") && text.contains("set"));
+    assert!(
+        text.contains("hide_product_docs (the switch: false unless a boolean true is stored)"),
+        "the answer of get names the switch: {text}"
+    );
     assert!(!text.contains("by id"), "not the generated text");
     // No other command of this model, and no other model.
     for c in [
