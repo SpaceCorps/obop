@@ -6,24 +6,31 @@ import Icon from "./Icon.vue";
 // on is a small line above the title, inside the heading, so a list of headings reads "Fiscal year
 // Close", "Period Close" and not the same word twice. A step a person approves says so in a few plain
 // words next to a person icon, on every card that has it: the icon alone does not tell a reader
-// what it means.
-defineProps<{
-  card: {
-    kicker?: string;
-    title: string;
-    text: string;
-    approval?: boolean;
-    /** "en" when the words are English on a translated page: they are marked for screen readers. */
-    lang?: string;
-  };
-}>();
+// what it means. The kicker always stays in the heading for screen readers; `drawn` says whether it is
+// also drawn (AppCards: not when every card of the section works on the same thing).
+withDefaults(
+  defineProps<{
+    card: {
+      kicker?: string;
+      title: string;
+      text: string;
+      approval?: boolean;
+      /** "en" when the words are English on a translated page: they are marked for screen readers. */
+      lang?: string;
+    };
+    drawn?: boolean;
+  }>(),
+  { drawn: true },
+);
 const { m } = useSite();
 </script>
 
 <template>
   <li class="app-card">
     <h3 :lang="card.lang">
-      <span v-if="card.kicker" class="app-card-kicker">{{ card.kicker }}</span
+      <span v-if="card.kicker" class="app-card-kicker" :class="{ 'sr-only': !drawn }">{{
+        card.kicker
+      }}</span
       >{{ " " }}<span class="app-card-title">{{ card.title }}</span>
     </h3>
     <p class="app-card-text" :lang="card.lang">{{ card.text }}</p>

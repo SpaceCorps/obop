@@ -25,6 +25,12 @@ export interface InfoRow {
 export interface Card {
   /** A small line above the title: the thing the action works on. */
   kicker?: string;
+  /**
+   * The model an action card works on, by its technical name. The page tells the cards of a section
+   * apart by it and not by `kicker`, which names one model in two languages on a translated page (the
+   * product's word on one card, the English one on a card that is shown in English).
+   */
+  model?: string;
   title: string;
   text: string;
   /** The quiet "a person approves when an agent asks" mark. */
@@ -235,6 +241,7 @@ export function appView(app: App, m: Messages, all: App[], locale = "en"): AppVi
       if (plain)
         return {
           kicker: modelLabel(app, model),
+          model: model.name,
           title: plain.title ?? capital(words(act.name)),
           text: plain.text,
           approval: act.approval,
@@ -243,6 +250,7 @@ export function appView(app: App, m: Messages, all: App[], locale = "en"): AppVi
       const ok = translated && !!own?.label && !!own?.description && !!modelName;
       return {
         kicker: ok ? modelName : modelLabel(app, model),
+        model: model.name,
         title: ok ? own!.label! : capital(words(act.name)),
         text: ok ? own!.description! : act.description,
         approval: act.approval,

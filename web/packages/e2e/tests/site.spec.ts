@@ -127,6 +127,26 @@ const settle = (page: import("@playwright/test").Page) =>
   page.evaluate(() => document.fonts.ready.then(() => undefined));
 
 /**
+ * Opens what an app page keeps closed outside the technical part: the two rows ("Information", "For
+ * developers"), the folds of the cards, "Read more" and the command line of the Get box. What is inside
+ * a closed fold has no box and no inner text, so a walk or a sweep that measures boxes or reads text
+ * would see nothing there: the tests that must reach it call this first, and say so. With
+ * `technical: false` the "For developers" row stays closed (its tables and permalinks have tests of
+ * their own, and are not held to the 44 px of the plain page). Returns how many it opened, so a caller
+ * can tell that there was something to open.
+ */
+const openFolds = (page: import("@playwright/test").Page, technical = true) =>
+  page.evaluate((all) => {
+    let opened = 0;
+    for (const d of document.querySelectorAll<HTMLDetailsElement>("main details")) {
+      if (!all && d.closest("#developers")) continue;
+      if (!d.open) opened++;
+      d.open = true;
+    }
+    return opened;
+  }, technical);
+
+/**
  * The words of the elements that match `selector` which the browser has drawn on two lines, as the
  * visitor's page is drawn: nothing is switched off, so the test sees what the safety nets
  * (overflow-wrap, hyphens) really do. A word is a run of letters and digits up to a hyphen
@@ -627,39 +647,46 @@ test.describe("website without JavaScript", () => {
         );
       expect(dd[3]).toBe(license);
       // What you can do: one card per action, the approval mark exactly where the manifest says,
-      // and the cards beyond the sixth folded with a label that counts and names them (a fold is
-      // only made for two cards or more).
+      // and the cards beyond the ones that are shown folded with a label that counts and names them
+      // (a fold is only made for two cards or more).
       const can = page.locator("section", { has: page.locator("h2#can-do") });
       await expect(can.locator(".app-card")).toHaveCount(actionBlocks.length);
       await expect(can.locator(".app-card-note")).toHaveCount(approvals);
       // Every marked card says it in a few plain words next to the icon: an icon alone tells a
       // reader nothing. (The last span of a note holds the words; the first holds the icon.) The
-      // words are drawn, not left to screen readers: each one has a box, in whichever fold it sits.
+      // words are drawn, not left to screen readers, and without a tap: no marked card is in the
+      // fold, so each one has a box while every fold is still closed.
       const words = can.locator(".app-card-note > span:last-child");
       await expect(words).toHaveText(Array(approvals).fill(s.needsApproval));
-      await can
-        .locator(".app-more")
-        .evaluateAll((all) => all.forEach((d) => ((d as HTMLDetailsElement).open = true)));
+      await expect(can.locator(".app-more .app-card-note")).toHaveCount(0);
+      await expect(can.locator(".app-more[open]")).toHaveCount(0);
       for (const w of await words.all()) {
         const box = await w.boundingBox();
         expect(box, "the approval words of a card are drawn").not.toBeNull();
         expect(box!.width, "the approval words of a card are drawn").toBeGreaterThan(40);
       }
-      const folded = (n: number) => (n > 7 ? n - 6 : 0);
-      const foldedActions = folded(actionBlocks.length);
-      if (foldedActions)
-        await expect(can.locator(".app-more > summary")).toHaveText(
-          s.showMoreActions.replace("{n}", String(foldedActions)),
-        );
-      else await expect(can.locator(".app-more")).toHaveCount(0);
-      // What it keeps: one card per model, the same way.
+      // Three cards are shown, or every marked card where there are more than three of those; four
+      // cards are all shown, and so is a card that would be alone in the fold.
+      const folded = (n: number, marked: number) => {
+        const rest = n > 4 ? n - Math.max(3, marked) : 0;
+        return rest < 2 ? 0 : rest;
+      };
+      const foldedActions = folded(actionBlocks.length, approvals);
+      expect(foldedActions, `${app.slug}: its actions are folded`).toBeGreaterThan(0);
+      await expect(can.locator(".app-more > summary")).toHaveText(
+        s.showMoreActions.replace("{n}", String(foldedActions)),
+      );
+      await expect(can.locator(".app-more .app-card")).toHaveCount(foldedActions);
+      // What it keeps: one card per model, three shown, the others in a fold of the same kind (one
+      // tap, as for the actions).
       const keeps = page.locator("section", { has: page.locator("h2#keeps") });
       await expect(keeps.locator(".app-card")).toHaveCount(models);
-      const foldedModels = folded(models);
-      if (foldedModels)
-        await expect(keeps.locator(".app-more > summary")).toHaveText(
-          s.showMoreKeeps.replace("{n}", String(foldedModels)),
-        );
+      const foldedModels = folded(models, 0);
+      expect(foldedModels, `${app.slug}: what it keeps is folded`).toBeGreaterThan(0);
+      await expect(keeps.locator(".app-more > summary")).toHaveText(
+        s.showMoreKeeps.replace("{n}", String(foldedModels)),
+      );
+      await expect(keeps.locator("ul.app-cards").first().locator(".app-card")).toHaveCount(3);
       // AI agents and this app: the sentence that says what an AI agent is, then exactly the lines the
       // manifest earns.
       const kinds = (["financial", "confidential_hr", "special_category", "secret"] as const)
@@ -777,20 +804,48 @@ test.describe("website without JavaScript", () => {
       // Open the fold, where there is one: the rest is what sits in it.
       const fold = page.locator("details.app-read > summary");
       if (await fold.count()) await fold.click();
-      const rest = (await page.locator(".app-purpose-rest").allInnerTexts()).join(" ");
+      const rests = await page.locator(".app-purpose-rest").allInnerTexts();
+      const rest = rests.join(" ");
       expect(technicalIn(rest), `${slug} rest: ${rest}`).toBeNull();
       // The cards that are shown, and the sentence and the lines about AI agents.
-      const cards = [
-        ...(await page.locator("#can-do ~ .app-cards > .app-card").allInnerTexts()),
-        ...(await page.locator("#keeps ~ .app-cards > .app-card").allInnerTexts()),
-      ];
+      const actions = await page.locator("#can-do ~ .app-cards > .app-card").allInnerTexts();
+      const kept = await page.locator("#keeps ~ .app-cards > .app-card").allInnerTexts();
+      const cards = [...actions, ...kept];
       for (const card of cards)
         expect(technicalIn(card.replace(/\s+/g, " ")), `${slug} card: ${card}`).toBeNull();
-      for (const line of await page.locator(".app-safe li").allInnerTexts())
-        expect(technicalIn(line), `${slug} safe line: ${line}`).toBeNull();
+      const lines = await page.locator(".app-safe li").allInnerTexts();
+      for (const line of lines) expect(technicalIn(line), `${slug} safe line: ${line}`).toBeNull();
       const what = await page.locator(".app-safe-what").innerText();
       expect(technicalIn(what), `${slug} safe sentence: ${what}`).toBeNull();
+      // None of these reads is empty: text that is not drawn (inside a closed fold, or hidden) reads
+      // as "", and the rule finds nothing in "", so a check of text nobody can see would always pass.
+      // Every page has a card for what it keeps and a line about AI agents; an app has cards for what
+      // it can do, or the one line that says records are edited directly.
+      expect(kept.length, `${slug}: cards for what it keeps`).toBeGreaterThan(0);
+      expect(lines.length, `${slug}: lines about AI agents`).toBeGreaterThan(0);
+      expect(
+        actions.length + (await page.locator(".app-direct").count()),
+        `${slug}: cards for what it can do, or the line that there are none`,
+      ).toBeGreaterThan(0);
+      for (const [name, text] of [
+        ["lead", lead],
+        ["safe sentence", what],
+        ...rests.map((t) => ["rest", t] as const),
+        ...cards.map((t) => ["card", t] as const),
+        ...lines.map((t) => ["safe line", t] as const),
+      ] as const)
+        expect(text.trim().length, `${slug} ${name}: read as empty`).toBeGreaterThan(0);
     }
+    // The rule about empty reads can fail: the text of a closed fold reads as empty.
+    await page.goto(`${base()}/apps/accounting/`);
+    expect(
+      (await page.locator("#keeps ~ .app-more .app-card").allInnerTexts()).join("").trim(),
+      "a card in a closed fold reads as empty",
+    ).toBe("");
+    expect(
+      await page.locator("#keeps ~ .app-more .app-card").count(),
+      "and there are such cards",
+    ).toBeGreaterThan(1);
     // The page the review named first: the dashboards sentence says what a person gets.
     await page.goto(`${base()}/apps/dashboards/`);
     await expect(page.locator(".app-purpose")).toHaveText(
@@ -1021,10 +1076,135 @@ test.describe("website without JavaScript", () => {
     });
     expect(edge.cards).toBe(2);
     expect(edge.gap).toBeLessThan(2);
-    // Fleet has seven actions: all shown, no fold for a single card.
-    await page.goto(`${base()}/apps/fleet/`);
-    await expect(page.locator("#can-do ~ .app-cards .app-card")).toHaveCount(7);
+    // CRM has four actions: all shown, no fold for a single card. Fleet has seven: three are shown
+    // (a store page shows a few cards, not the manual) and the other four are in a fold that counts
+    // them.
+    await page.goto(`${base()}/apps/crm/`);
+    await expect(page.locator("#can-do ~ .app-cards .app-card")).toHaveCount(4);
     await expect(page.locator("#can-do ~ .app-more")).toHaveCount(0);
+    await page.goto(`${base()}/apps/fleet/`);
+    await expect(page.locator("#can-do ~ .app-cards .app-card")).toHaveCount(3);
+    await expect(page.locator("#can-do ~ .app-more > summary")).toHaveText(
+      messages.en.apps.store.showMoreActions.replace("{n}", "4"),
+    );
+    await expect(page.locator("#can-do ~ .app-more .app-card")).toHaveCount(4);
+  });
+
+  test("a card that needs a person's approval is never behind a tap, on any app page", async ({
+    page,
+    request,
+  }) => {
+    // The two pages where the first three actions of the manifest carry no mark: Subscriptions (its
+    // three marked cards are the fourth to the sixth) and eCommerce (its two refunds come late).
+    // The marked cards are shown first of all, then the others fill up to three.
+    for (const locale of ["en", "sv"] as const) {
+      const s = messages[locale].apps.store;
+      const at = (slug: string) => `${base()}${locale === "en" ? "" : `/${locale}`}/apps/${slug}/`;
+      for (const [slug, marked, shown, folded] of [
+        ["subscriptions", 3, 3, 3],
+        ["ecommerce", 2, 3, 5],
+      ] as const) {
+        await page.goto(at(slug));
+        const where = `${locale} ${slug}`;
+        const top = page.locator("#can-do ~ .app-cards > .app-card");
+        await expect(top, where).toHaveCount(shown);
+        await expect(top.locator(".app-card-note"), where).toHaveCount(marked);
+        for (const note of await top.locator(".app-card-note > span:last-child").all()) {
+          await expect(note, where).toHaveText(s.needsApproval);
+          await expect(note, `${where}: the words are drawn with the fold closed`).toBeVisible();
+        }
+        const fold = page.locator("#can-do ~ .app-more");
+        await expect(fold, where).toHaveJSProperty("open", false);
+        await expect(fold.locator("summary"), where).toHaveText(
+          s.showMoreActions.replace("{n}", String(folded)),
+        );
+        await expect(fold.locator(".app-card"), where).toHaveCount(folded);
+        await expect(fold.locator(".app-card-note"), where).toHaveCount(0);
+      }
+    }
+    // And on every app page: no fold holds a marked card, and there are marked cards to hold.
+    let marked = 0;
+    let folds = 0;
+    for (const url of (await pagesOf(request, "en")).filter((u) => /\/apps\/.+\/$/.test(u))) {
+      await page.goto(`${base()}${url}`, { waitUntil: "domcontentloaded" });
+      await expect(page.locator("main details .app-card-note"), url).toHaveCount(0);
+      marked += await page.locator("main .app-card-note").count();
+      folds += await page.locator("#can-do ~ .app-more").count();
+    }
+    expect(marked, "cards with the approval mark").toBeGreaterThan(30);
+    expect(folds, "pages that fold some of their actions").toBeGreaterThan(5);
+  });
+
+  test("the small word above a card's title is drawn on every card of a section or on none", async ({
+    page,
+  }) => {
+    // The boxes of the small words of a section, the fold opened: [width, height] of each.
+    const kickers = async (heading: string) => {
+      await openFolds(page, false);
+      return page.evaluate(
+        (h) =>
+          [
+            ...document.querySelectorAll(
+              `${h} ~ .app-cards .app-card-kicker, ${h} ~ .app-more .app-card-kicker`,
+            ),
+          ].map((k) => {
+            const r = k.getBoundingClientRect();
+            return [Math.round(r.width), Math.round(r.height)];
+          }),
+        heading,
+      );
+    };
+    // CRM: four cards that all work on a lead. "LEAD" four times says nothing, so none is drawn;
+    // each is still in its card's heading for a screen reader ("Lead Qualify").
+    await page.goto(`${base()}/apps/crm/`);
+    const crm = await kickers("#can-do");
+    expect(crm, "CRM has four such words in the page").toHaveLength(4);
+    for (const [w, h] of crm) expect(Math.max(w!, h!), "CRM: no small word has a box").toBe(1);
+    await expect(page.locator("#can-do ~ .app-cards .app-card h3").first()).toHaveText(
+      "Lead Qualify",
+    );
+    // Swedish Expenses: one thing with two words (the product's and the English one on a card that
+    // is shown in English). A change of language is not a change of thing: none is drawn.
+    await page.goto(`${base()}/sv/apps/expenses/`);
+    const words = await page.locator("#can-do ~ .app-cards .app-card-kicker").allTextContents();
+    expect(new Set(words).size, `the words are ${words.join(", ")}`).toBeGreaterThan(1);
+    for (const [w, h] of await kickers("#can-do"))
+      expect(Math.max(w!, h!), "sv Expenses: no small word has a box").toBe(1);
+    // Accounting works on several things (fiscal years, periods, journal entries ...): every card
+    // says its thing, the first card of the fold too, at 1440 px (three cards a row) and on a phone.
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const path of ["/apps/accounting/", "/apps/ecommerce/", "/sv/apps/projects/"]) {
+        await page.goto(`${base()}${path}`);
+        const cards = await page.locator("#can-do ~ * .app-card, #can-do ~ .app-card").count();
+        const boxes = await kickers("#can-do");
+        const where = `${path} at ${width}px`;
+        expect(boxes.length, `${where}: one small word a card`).toBe(cards);
+        expect(cards, where).toBeGreaterThan(4);
+        for (const [w, h] of boxes) {
+          expect(w, `${where}: a small word is drawn`).toBeGreaterThan(20);
+          expect(h, `${where}: a small word is drawn`).toBeGreaterThan(8);
+        }
+        // In a row of cards every title starts at one height (a card without its word started
+        // higher than its neighbours).
+        const ragged = await page.evaluate(() => {
+          const rows = new Map<number, number[]>();
+          for (const c of document.querySelectorAll(
+            "#can-do ~ .app-cards .app-card, #can-do ~ .app-more .app-card",
+          )) {
+            const top = Math.round(c.getBoundingClientRect().top);
+            const title = c.querySelector(".app-card-title")!.getBoundingClientRect().top;
+            rows.set(top, [...(rows.get(top) ?? []), Math.round(title - top)]);
+          }
+          return [...rows.values()].filter((r) => new Set(r).size > 1);
+        });
+        expect(ragged, `${where}: rows whose titles start at different heights`).toEqual([]);
+      }
+    }
+    // What it keeps: a card there is the thing itself and has no small word.
+    await expect(
+      page.locator("#keeps ~ * .app-card-kicker, #keeps ~ .app-card-kicker"),
+    ).toHaveCount(0);
   });
 
   test("English words are not hyphenated; the languages with long compounds hyphenate their own", async ({

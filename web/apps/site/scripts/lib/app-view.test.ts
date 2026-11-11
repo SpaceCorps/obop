@@ -701,6 +701,30 @@ describe("a card on a translated page uses the page language's own words, all or
     // Not vacuous: the German names are not the English ones.
     expect(differs).toBeGreaterThan(10);
   });
+
+  test("every action card names the model it works on, so the page tells the cards apart by the thing and not by its word", () => {
+    delete fake.labels["fake_labels"];
+    let twoWords = 0;
+    for (const locale of ["en", "sv", "de"] as const)
+      for (const real of apps) {
+        const v = view(real, locale);
+        const owners = real.models.flatMap((model) => model.actions.map(() => model.name));
+        expect(
+          v.actions.map((c) => c.model),
+          `${locale} ${real.id}`,
+        ).toEqual(owners);
+        // The reason the word alone will not do: on a translated page one model can have two words
+        // (the product's on one card, the English one on a card that is shown in English).
+        const words = new Map<string, Set<string>>();
+        for (const c of v.actions)
+          words.set(c.model!, (words.get(c.model!) ?? new Set()).add(c.kicker ?? ""));
+        if ([...words.values()].some((w) => w.size > 1)) twoWords++;
+      }
+    // Not vacuous: such pages exist (Expenses and Planning in Swedish, among others).
+    expect(twoWords).toBeGreaterThan(0);
+    // A model card has no model of its own to name: it is the thing.
+    expect(view(crm).models.every((c) => c.model === undefined)).toBe(true);
+  });
 });
 
 describe("the large first sentence is cut only when it is longer than 25 words", () => {
