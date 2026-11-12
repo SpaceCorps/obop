@@ -1298,11 +1298,14 @@ test.describe("website without JavaScript", () => {
       // The cards are the pinned list below, with their words read from `data/apps.ts` by key and not
       // by the `keep` flag: a card that loses its flag is still looked for on its page, and where that
       // leaves it in a fold the test fails on the page ("is behind a tap"), not on a count of the data.
-      // (A card that is among the first three ordinary cards of its section stays open without the flag,
-      // as Fleet "Suspend" does: the page cannot tell, the last assertion does, and the room-rule
-      // tests read the open count of the page.) Seventeen cards have words of their own and `keep`; the
-      // eighteenth, Expenses "Submit", keeps the manifest's translated words (`keep` of the app) and is
-      // on a page that has no fold.
+      // (A card that is among the first three ordinary cards of its section stays open without the flag.
+      // Fleet "Suspend" does: without `keep` it is still shown, as the third ordinary card, so the page
+      // loop below cannot tell. What fails is the last assertion, the pinned list, and the test "one or
+      // two cards use the width of the column; the others keep their columns", which counts the open
+      // cards of the Fleet page: 5 expected, 4 found. A card that falls into a fold without its flag
+      // fails on the page: Connectors' Transfer log is "behind a tap".) Seventeen cards have words of
+      // their own and `keep`; the eighteenth, Expenses "Submit", keeps the manifest's translated words
+      // (`keep` of the app) and is on a page that has no fold.
       const PINNED: [string, string][] = [
         ["connectors", "connection.test"],
         ["connectors", "data_flow_log"],
@@ -3075,9 +3078,9 @@ test.describe("accessibility", () => {
       // (24 px) it is the same longest pages at the same three widths: a package file name is drawn in
       // parts ("packages/", "email_marketing", ".toml", with a `<wbr>` between them) and no part of it may
       // be cut across two lines unless the part is itself wider than the line (at 200 percent on a 320 px
-      // phone "email_marketing" is 270 px of 222). Without the break before ".toml" the name was drawn
-      // "email_marketing.t" and "oml" at 150 percent on 320 px. A copied file name is the name: the
-      // selection has no character the break places added.
+      // phone "email_marketing" is 270 px of 222). Without the break before ".toml" the part ".toml" is
+      // drawn on two lines at 150 percent on 320 px (68 px in a line of 238). A copied file name is the
+      // name: the selection has no character the break places added.
       const long = [
         "/apps/email-marketing/",
         "/apps/subscriptions/",
@@ -3115,6 +3118,7 @@ test.describe("accessibility", () => {
       let measured = 0;
       let values = 0;
       let wideParts = 0;
+      let copyChecks = 0;
       for (const [percent, widths] of [
         [200, [320, 360, 390]],
         [150, [320, 360, 390]],
@@ -3167,7 +3171,8 @@ test.describe("accessibility", () => {
                   const name = nodes.map((n) => n.data).join("");
                   const room = a.closest("dd")!.clientWidth;
                   let at = 0;
-                  for (const part of name.split(/(?<=\/)|(?=\.)/)) {
+                  // The same break places as `pathParts` in AppPage.vue: the two expressions must stay equal.
+                  for (const part of name.split(/(?<=\/)|(?=\.toml$)/)) {
                     const first = at;
                     const last = at + part.length;
                     at = last;
@@ -3204,13 +3209,16 @@ test.describe("accessibility", () => {
                     if (natural > room - 0.5) wide++;
                     else cutParts.push({ name, part, natural: Math.round(natural), room });
                   }
-                  // What a visitor copies from the name: the name, and no character the break places added.
-                  if (!copied) {
-                    const selection = window.getSelection()!;
-                    selection.selectAllChildren(a);
-                    copied = `${selection.toString()}|${(a as HTMLAnchorElement).href}`;
-                    selection.removeAllRanges();
-                  }
+                }
+                // What a visitor copies from a package's file name: the name, and no character the break
+                // places added. Only a marketplace page has such a link (a built-in app's link goes to its
+                // module's folder), so this runs on the pages that have one, and the test counts them.
+                const file = list.querySelector<HTMLAnchorElement>('a.mono[href$=".toml"]');
+                if (file) {
+                  const selection = window.getSelection()!;
+                  selection.selectAllChildren(file);
+                  copied = `${selection.toString()}|${file.href}`;
+                  selection.removeAllRanges();
                 }
                 return {
                   values: list.querySelectorAll("dd").length,
@@ -3245,9 +3253,14 @@ test.describe("accessibility", () => {
                 offenders.push(
                   `${where}: the part "${c.part}" of the file name "${c.name}" is drawn on two lines (${c.natural}px in a line of ${c.room}px)`,
                 );
-              const [text, href] = m.copied.split("|");
-              if (text && !href!.endsWith(`/${text}`))
-                offenders.push(`${where}: a copied file name is "${text}", not the end of ${href}`);
+              if (m.copied) {
+                copyChecks++;
+                const [text, href] = m.copied.split("|");
+                if (!text || !href!.endsWith(`/${text}`))
+                  offenders.push(
+                    `${where}: a copied file name is "${text}", not the end of ${href}`,
+                  );
+              }
             }
           } finally {
             await large.context.close();
@@ -3265,6 +3278,15 @@ test.describe("accessibility", () => {
         wideParts,
         "parts of a file name wider than the line at 200 percent (they break inside)",
       ).toBeGreaterThan(0);
+      // The copied name was read on the loads of a page that has a package file link: 20 of the 23 pages
+      // at 200 percent on 320 px (not Connectors, which is built in, and not the two label pages, which
+      // are CRM, built in), the 6 long-name pages at 360 and 390 px, and the 6 at 150 percent at three
+      // widths: 20 + 12 + 18 = 50. The floor is 45, so that a page or two may leave the lists or become
+      // built in, and a selector that matches nothing (0) is far below it.
+      expect(
+        copyChecks,
+        "page loads where the copied file name was checked",
+      ).toBeGreaterThanOrEqual(45);
     });
   });
 

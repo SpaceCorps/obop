@@ -277,6 +277,7 @@ describe("which cards a section shows and which it folds", () => {
     expect(NOT_DONE.test("Create a lead")).toBe(false);
     const speaks: string[] = [];
     let notDone = 0;
+    let either = 0;
     let checked = 0;
     for (const a of apps)
       for (const section of SECTIONS) {
@@ -300,6 +301,7 @@ describe("which cards a section shows and which it folds", () => {
           }
           // A card of either kind is shown and not folded in every language: both are set by key.
           if (!says && !speaksOf) return;
+          either++;
           for (const locale of locales) {
             checked++;
             const cards = view(a.id, locale)[section];
@@ -324,11 +326,11 @@ describe("which cards a section shows and which it folds", () => {
       expect(speaks, name).toContain(name);
     expect(speaks, "cards that speak of approval, proposing or an AI agent").toHaveLength(19);
     expect(notDone, "cards that say what they do not do").toBe(14);
-    // The language loop ran for the cards of both kinds, not for the first kind only: more checks than
-    // the cards that speak of approval alone would make.
-    expect(checked, "checks of a card of either kind in a language").toBeGreaterThan(
-      speaks.length * locales.length,
-    );
+    // The language loop ran for every card of either kind, in every language, and not for the first
+    // kind only: 4 cards are of both kinds, so the cards of either kind are 19 + 14 - 4. A card that is
+    // added or lost moves these numbers.
+    expect(either, "cards of either kind").toBe(29);
+    expect(checked, "checks of a card of either kind in a language").toBe(either * locales.length);
   });
 
   test("the cards a page opens with: the numbers on the pages that were named", () => {
