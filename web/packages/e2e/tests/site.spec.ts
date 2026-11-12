@@ -4,7 +4,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { messages } from "../../../apps/site/i18n/index.ts";
-import { APP_COPY } from "../../../apps/site/data/apps.ts";
+import { APP_COPY, BUILTIN_IDS } from "../../../apps/site/data/apps.ts";
 import { CLAIMS } from "../../../apps/site/scripts/lib/claims.ts";
 import { TECHNICAL, technicalIn } from "../../../apps/site/scripts/lib/plain.ts";
 import { platformUrl, repoRoot, siteDir } from "../support/env.ts";
@@ -2281,6 +2281,49 @@ test.describe("crawlers and agents", () => {
       expect(links(pricing, "btn", "primary", "large"), `${locale}: pricing`).toEqual([start]);
       expect((await request.get(`${base()}${start}`)).status(), start).toBe(200);
     }
+  });
+
+  test("on every app page, in every language, the hero's button of a built-in app and the Get box's pill lead to Getting started in the page language, in the page and in its Markdown copy", async ({
+    request,
+  }) => {
+    // What the test above does not say: it finds no link to /app/; this one says where the two
+    // buttons of an app page do lead (a built-in app's hero button, a marketplace app's pill in the
+    // Get box; the hero's button of a marketplace app jumps to the box, on the same page).
+    const hrefs = (html: string, cls: string) =>
+      [...html.matchAll(/<a\b[^>]*>/g)].flatMap(([tag]) => {
+        const classes = (/\bclass="([^"]*)"/.exec(tag)?.[1] ?? "").split(/\s+/);
+        return classes.includes(cls) ? [/\bhref="([^"]*)"/.exec(tag)?.[1]] : [];
+      });
+    let checked = 0;
+    for (const locale of Object.keys(messages) as (keyof typeof messages)[]) {
+      const s = messages[locale].apps.store;
+      const prefix = locale === "en" ? "" : `/${locale}`;
+      const start = `${prefix}/docs/getting-started/`;
+      for (const app of APP_COPY) {
+        // The page's address: the two built-in apps with a plain name are Contacts and Products.
+        const slug =
+          app.id === "base"
+            ? "contacts"
+            : app.id === "product"
+              ? "products"
+              : app.id.replaceAll("_", "-");
+        const builtin = (BUILTIN_IDS as readonly string[]).includes(app.id);
+        const where = `${locale} ${slug}`;
+        const html = await (await request.get(`${base()}${prefix}/apps/${slug}/`)).text();
+        expect(hrefs(html, "app-primary"), `${where}: the hero's button`).toEqual([
+          builtin ? start : "#get",
+        ]);
+        expect(hrefs(html, "app-pill"), `${where}: the pill of the Get box`).toEqual(
+          builtin ? [] : [start],
+        );
+        const md = await (await request.get(`${base()}${prefix}/apps/${slug}.md`)).text();
+        expect(md, `${where}: the Markdown copy`).toContain(
+          `[${builtin ? s.open : s.openObop}](${start})`,
+        );
+        checked++;
+      }
+    }
+    expect(checked, "app pages in all languages").toBe(APP_COPY.length * 7);
   });
 
   test("security.txt and humans.txt", async ({ request }) => {
