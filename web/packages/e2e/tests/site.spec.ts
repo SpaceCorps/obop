@@ -808,7 +808,10 @@ test.describe("website without JavaScript", () => {
       await expect(keeps.locator(".app-more > summary")).toHaveText(
         s.showMoreKeeps.replace("{n}", String(foldedModels)),
       );
-      await expect(keeps.locator("ul.app-cards").first().locator(".app-card")).toHaveCount(3);
+      // Open: the marked cards and three others (one other beside three or more marked cards).
+      await expect(keeps.locator("ul.app-cards").first().locator(".app-card")).toHaveCount(
+        app.kept[1] + (app.kept[1] >= 3 ? 1 : 3),
+      );
       // AI agents and this app: the sentence that says what an AI agent is, then exactly the lines the
       // manifest earns.
       const kinds = (["financial", "confidential_hr", "special_category", "secret"] as const)
@@ -1386,7 +1389,9 @@ test.describe("website without JavaScript", () => {
       if (read.getTop !== null) longest = Math.max(longest, read.getTop);
     }
     expect(sections, "sections read").toBeGreaterThan(50);
-    expect(foldedSections, "sections with a fold").toBeGreaterThan(10);
+    // Ten sections fold something under the room rule (eleven under the old cap, which left Email
+    // Marketing's actions two cards to fold; three others beside two marked cards leave none).
+    expect(foldedSections, "sections with a fold").toBeGreaterThanOrEqual(10);
     // The Get box, after the cards of "What you can do", is where a marketplace app's button jumps: on
     // a 390 px phone the longest page puts it within this many screens (Accounting: seven open cards).
     expect(longest, "the Get box, in pixels from the top of the longest page").toBeGreaterThan(0);
