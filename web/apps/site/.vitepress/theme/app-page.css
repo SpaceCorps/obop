@@ -739,28 +739,26 @@
  * the middle of its name. Its value keeps the old 12rem and drops under its label, where it has the
  * whole line. The name has break places after each slash and before ".toml" (`pathParts` in
  * AppPage.vue, a `<wbr>`), so that where it does not fit the line it breaks into "packages/",
- * "email_marketing" and ".toml" and not inside a word. At the normal text size on a 320 px phone the
- * whole path is 261 px in a line of 254: it breaks after "packages/" and "email_marketing.toml"
- * (180 px) stays whole. At 150 percent on a 320 px phone "email_marketing.toml" is 270 px in a line of
- * 238 and breaks before ".toml" ("email_marketing" and ".toml" on two lines; without the `<wbr>` it
- * broke as "email_marketing.t" and "oml"; the list as it was drawn on the page before it moved into a
- * row had the name whole there).
+ * "email_marketing" and ".toml" and not inside a word. On a 320 px phone the line is 254 px at the
+ * normal text size and 238 px at 150 percent: "packages/email_marketing.toml" is 261 px at the
+ * normal size and breaks after "packages/"; at 150 percent it is 392 px and breaks into "packages/",
+ * "email_marketing" (203 px) and ".toml" (68 px), on three lines with each part whole.
  * At 200 percent a part can be wider than the whole line (the part "email_marketing" is 270 px; the
- * line is 222 px at 320 and 258 px at 360): then it breaks inside the part ("email_market" and
- * "ing.toml" at 320 px; the list before it moved into a row broke "email_marketin" and "g.toml" there),
- * as every word of the list may (`overflow-wrap: anywhere` and no minimum width, from the shared
- * `.app-info dd`), and it never runs out of its card. Do not restore a minimum width
- * (`min-inline-size: auto`) with `overflow-wrap: break-word` here: the value's box then grows with the
- * word and the list ran 138 px past its card and the page 89 px past a 320 px screen.
+ * line is 222 px at 320 and 258 px at 360): then it breaks inside the part, as every word of the list
+ * may (`overflow-wrap: anywhere` and no minimum width, from the shared `.app-info dd`), and it never
+ * runs out of its card. Do not restore a minimum width (`min-inline-size: auto`) with
+ * `overflow-wrap: break-word` here: the value's box then grows with the word and the list ran 138 px
+ * past its card and the page 89 px past a 320 px screen.
  */
 .app-row-body .app-info dd:has(.mono) {
   flex-basis: 12rem;
 }
 /*
  * The label's own room is `clamp(8rem, 32%, 10rem)`, which is 256 px at 200 percent text and is more
- * than the 222 px of the list on a 320 px phone: the box of every label was wider than the list, and
- * the longest label word ("Yhteensopivuus" in Finnish) ended past the card. Inside the row the label
- * is never wider than the pair's line; a word wider than that breaks inside it (`overflow-wrap`).
+ * than the 222 px of the list on a 320 px phone: without the cap the box of a label is 34 px wider
+ * than the list, and the longest label word ("Yhteensopivuus" in Finnish) ends 23 px past it.
+ * Inside the row the label is never wider than the pair's line; a word wider than that breaks inside
+ * it (`overflow-wrap`).
  */
 .app-row-body .app-info dt {
   max-inline-size: 100%;

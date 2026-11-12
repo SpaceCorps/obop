@@ -12,11 +12,12 @@
  *   fold with `keep` (`CardCopy.keep`, or `AppCopy.keep` where the card has no words of its own
  *   here), but only for two kinds of words, the two that a unit test (`cards.test.ts`) enforces: words
  *   that say what the step does not do ("By itself, this does not ...", "By itself, obop does not
- *   ..."), and words that speak of approval, of proposing or of an AI agent. "An edit that is still
- *   possible after a step" ("can still be edited": Sales "Confirm", Point of Sale "Pay") is a caveat
- *   on top and is NOT kept: that card has neither the mark nor `keep`, and a fold may hide it. Two
- *   cards are kept by hand beyond the two kinds (Connectors "Test" and its Transfer log, which say what
- *   is sent and what is held); they are on the pinned list of kept cards in `cards.test.ts`.
+ *   ...", matched on the card's text), and words that speak of approval, of proposing or of an AI agent
+ *   (matched on the card's title and text). "An edit that is still possible after a step" ("can still
+ *   be edited": Sales "Confirm", Point of Sale "Pay") is a caveat on top and is NOT kept: that card
+ *   has neither the mark nor `keep`, and a fold may hide it. Two cards are kept by hand beyond the two
+ *   kinds (Connectors "Test" and its Transfer log, which say what is sent and what is held); they are
+ *   on the pinned list of kept cards in `cards.test.ts`.
  * - A caveat that only a developer or an operator needs (how a check is made, what is not tested against
  *   a live service, a field nothing reads, a template that nothing links) goes under "For developers":
  *   on a card as `limit`, for the app as an entry of `limits`. A limit is one sentence that ends with
@@ -115,10 +116,10 @@ export interface CardCopy {
   /**
    * The card stays outside the "Show N more" fold, like a card with the approval mark. Set it for the
    * two kinds of words that a unit test (`cards.test.ts`) enforces: words that say what the step does
-   * not do ("By itself, this does not notify anyone", "By itself, obop does not ..."), and words that
-   * speak of approval, of proposing or of an AI agent (what an AI agent may do without approval). The
-   * test fails for a card of either kind that has neither this nor the approval mark, and it lists
-   * the cards that have it. Other caveats are not kept: "can still be edited" (Sales "Confirm", Point
+   * not do ("By itself, this does not notify anyone", "By itself, obop does not ...", matched on the
+   * card's text), and words that speak of approval, of proposing or of an AI agent (what an AI agent
+   * may do without approval; matched on the card's title and text). The test fails for a card of either
+   * kind that has neither this nor the approval mark, and it lists the cards that have it. Other caveats are not kept: "can still be edited" (Sales "Confirm", Point
    * of Sale "Pay") is not a reason, and such a card may be folded. It is not a rule for every
    * hand-written card: most of them are ordinary descriptions. Connectors "Test" and its Transfer log
    * are kept by hand beyond the two kinds and are on the test's pinned list.
