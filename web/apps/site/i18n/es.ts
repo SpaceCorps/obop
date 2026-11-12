@@ -20,8 +20,7 @@ export const es: Messages = {
     docsNav: "Documentación",
     breadcrumb: "Ruta de navegación",
     home: "obop, inicio",
-    signIn: "Iniciar sesión",
-    startFree: "Empezar gratis",
+    startFree: "Empezar",
     search: "Buscar",
     searchPlaceholder: "Buscar en el sitio",
     searchEmpty: "Sin resultados. Prueba con menos palabras o con otras distintas.",
@@ -43,7 +42,7 @@ export const es: Messages = {
     langSuggest: "Esta página también está disponible en español.",
     langSuggestGo: "Cambiar a español",
     dismiss: "Cerrar",
-    betaNote: "Plataforma empresarial de código abierto. Beta.",
+    betaNote: "Plataforma empresarial de código abierto. Anterior a la versión 1.0.",
     allRightsNote: "Los precios previstos aún no se cobran.",
     sourceCode: "Código fuente en GitHub",
     docsHome: "Documentación",
@@ -101,11 +100,11 @@ export const es: Messages = {
   },
   home: {
     eyebrow: "Plataforma empresarial de código abierto",
-    badge: "Beta",
+    badge: "Antes de 1.0",
     titleA: "Un negocio.",
     titleB: "Una plataforma.",
     lead: "CRM, ventas, facturación y más sobre un único modelo de datos. Pensada para personas y para agentes de IA, con los permisos y la privacidad necesarios para confiar en ambos.",
-    ctaPrimary: "Obtén tu propia instancia",
+    ctaPrimary: "Ejecútalo tú mismo",
     ctaSecondary: "Ver las aplicaciones",
     heroPoints: [
       "Código abierto",
@@ -115,7 +114,7 @@ export const es: Messages = {
     mockCaption: "Ilustración con datos de ejemplo",
     appsTitle: "Todas las aplicaciones de tu negocio. Una sola base de datos.",
     appsSub:
-      "Todas las aplicaciones comparten los mismos contactos, productos y permisos, así que no hay nada que integrar a mano. Seis aplicaciones vienen incluidas; las otras 22 se instalan desde el marketplace.",
+      "Todas las aplicaciones comparten una base de datos y un mismo conjunto de grupos de permisos, y ventas, facturación y compras usan los mismos contactos y productos. Algunas aplicaciones vienen incluidas; las demás se instalan desde el marketplace.",
     seeAllApps: "Explora todas las aplicaciones y sus modelos de datos",
     pillarsTitle: "Hecha para la forma en que se trabaja hoy",
     pillarsSub:
@@ -136,8 +135,8 @@ export const es: Messages = {
       {
         icon: "grid",
         title: "Un único modelo de datos",
-        body: "Las aplicaciones son módulos de un mismo registro, de modo que un contacto es el mismo contacto en CRM, ventas y facturación. Los permisos, la auditoría y la API vienen con cada modelo que añades.",
-        tag: "PostgreSQL por debajo",
+        body: "Las aplicaciones son módulos de un mismo registro, de modo que un contacto es el mismo contacto en ventas y facturación. Los permisos, las clases de datos y la API vienen con cada modelo que añades.",
+        tag: "PostgreSQL o SQLite por debajo",
       },
     ],
     flowLabel: "Cómo trabaja un agente contigo",
@@ -170,35 +169,32 @@ export const es: Messages = {
     marketCta: "Explorar el marketplace",
     stepsTitle: "Empieza en tres pasos",
     steps: [
-      { title: "Regístrate", body: "Crea una cuenta con tu correo electrónico." },
-      {
-        title: "Obtén tu instancia",
-        body: "Tu propia base de datos y dirección, listas en minutos.",
-      },
+      { title: "Inícialo", body: "Ejecuta obop con Docker o compílalo desde el código fuente." },
+      { title: "Crea tu administrador", body: "Un comando crea la primera cuenta." },
       {
         title: "Añade módulos",
-        body: "Inicia sesión con las mismas credenciales e instala las aplicaciones que necesites.",
+        body: "Inicia sesión e instala las aplicaciones que necesites desde Personalizar.",
       },
     ],
-    stepsCta: "Empezar gratis",
+    stepsCta: "Empezar",
     openTitle: "Código abierto y tuyo para alojar",
     openBody:
-      "obop está escrito en Rust y funciona en cualquier lugar donde funcione PostgreSQL. Usa el servicio alojado o ejecuta el mismo programa tú mismo con Docker. En ambos casos, cada negocio tiene su propia base de datos y los datos son tuyos.",
+      "El servidor de obop está escrito en Rust y funciona con SQLite o PostgreSQL. Ejecútalo tú mismo con Docker o compílalo desde el código fuente. Cada negocio tiene su propia base de datos y los datos son tuyos.",
     openPoints: [
       {
-        title: "Alojado por nosotros",
-        body: "Creamos para ti una instancia con su propia base de datos. Todo es gratis durante la beta.",
+        title: "Alojamiento, previsto",
+        body: "SpaceCorps prevé un entorno de pruebas gratuito, solo con datos de ejemplo, y un alojamiento de pago en servidores dedicados. Ninguno de los dos se ofrece todavía.",
       },
       {
         title: "Autoalojado",
-        body: "Un binario o una imagen de Docker: SQLite para probar, PostgreSQL para un uso real.",
+        body: "Compílalo desde el código fuente y ejecútalo directamente o con Docker. SQLite para probar, PostgreSQL para un uso real.",
       },
       {
         title: "Código en GitHub",
         body: "Lee el código, las decisiones y la hoja de ruta. Apache-2.0, de uso libre y autoalojable; consulta el repositorio.",
       },
     ],
-    pricingTitle: "Gratis de usar. Alojamiento si lo quieres.",
+    pricingTitle: "Gratis de usar. Alojamiento previsto.",
     pricingSub: `obop es gratuito y de código abierto: ejecútalo tú mismo en tu propio servidor. Si prefieres no hacerlo, el alojamiento dedicado está previsto desde ${eur(HOSTING.servers[0].eur)} al mes. Hoy no se cobra nada.`,
     pricingFine:
       "Precios previstos por servidor y mes, sin IVA. El alojamiento aún no se ofrece ni se cobra.",
@@ -207,11 +203,11 @@ export const es: Messages = {
     faq: [
       {
         q: "¿Qué es obop?",
-        a: "obop es una plataforma empresarial de código abierto. Ofrece a una empresa CRM, ventas, facturación, contactos y productos sobre un único modelo de datos, y permite instalar más aplicaciones desde un marketplace. Cada acción está disponible para las personas en el navegador y para los agentes de IA mediante REST, MCP y la línea de comandos.",
+        a: "obop es una plataforma empresarial de código abierto. Ofrece a una empresa CRM, ventas, facturación, contactos y productos sobre un único modelo de datos, y permite instalar más aplicaciones desde un marketplace. Las personas trabajan en el navegador, y los agentes de IA usan los comandos de obop mediante REST, MCP y la línea de comandos.",
       },
       {
         q: "¿Está obop listo para producción?",
-        a: "Todavía no. obop está en beta. El núcleo funciona y está probado, pero aún no hay migraciones de datos entre versiones de los módulos, nada hace copias de seguridad de las bases de datos alojadas y muchas de las aplicaciones incluidas son deliberadamente sencillas. Por ahora, úsalo para evaluarlo y para trabajo no crítico. La página de la hoja de ruta indica qué está construido y qué no.",
+        a: "Todavía no. obop aún no ha llegado a la versión 1.0, así que una nueva versión todavía puede cambiar cosas. El núcleo funciona y está probado, las aplicaciones integradas figuran como Estable, las demás como Beta o Experimental, y muchas de las aplicaciones incluidas son deliberadamente sencillas. Por ahora, usa obop para evaluarlo y para trabajo no crítico. La página de la hoja de ruta indica qué está construido y qué no.",
       },
       {
         q: "¿Cuánto cuesta?",
@@ -219,7 +215,7 @@ export const es: Messages = {
       },
       {
         q: "¿Dónde se guardan mis datos?",
-        a: "Cada negocio tiene su propia base de datos, en PostgreSQL para el servicio alojado y para producción. Si lo autoalojas, los datos están donde lo ejecutes. Los registros se guardan como documentos JSON hasta que exista el gestor de esquemas.",
+        a: "En el servidor donde ejecutes obop: cada negocio tiene su propia base de datos, SQLite para probar y PostgreSQL para un uso real. SpaceCorps aún no ofrece alojamiento. Los registros se guardan como documentos JSON hasta que exista el gestor de esquemas.",
       },
       {
         q: "¿Cómo trabajan los agentes de IA con obop?",
@@ -227,7 +223,7 @@ export const es: Messages = {
       },
       {
         q: "¿Puede un agente leer los datos personales de mis clientes?",
-        a: "No en claro. Los datos personales se devuelven como tokens marcadores estables, como EMAIL_1, y los campos financieros, de RR. HH. y de categorías especiales se retienen por completo. El agente puede devolver un token para referirse a un valor sin llegar a verlo.",
+        a: "No en claro cuando un campo está marcado como dato personal. Los campos financieros, de RR. HH., de categorías especiales y secretos se retienen por completo, y los demás campos marcados como datos personales se devuelven como tokens marcadores estables, como EMAIL_1. El texto escrito en un campo que no está marcado como dato personal, como una descripción, no se sustituye. El agente puede devolver un token para referirse a un valor sin llegar a verlo.",
       },
       {
         q: "¿Puedo crear o añadir mis propias aplicaciones?",
@@ -239,9 +235,8 @@ export const es: Messages = {
       },
     ],
     ctaTitle: "Un negocio, una plataforma.",
-    ctaBody:
-      "Código abierto, escrita en Rust, funciona en cualquier lugar donde funcione PostgreSQL.",
-    ctaButton: "Obtén tu propia instancia",
+    ctaBody: "Código abierto, servidor escrito en Rust, funciona con SQLite o PostgreSQL.",
+    ctaButton: "Empezar",
   },
   pricing: {
     title: "Precios",
@@ -255,7 +250,7 @@ export const es: Messages = {
         name: "Autoalojado",
         price: eur(0),
         period: "",
-        blurb: "El proyecto completo en tu propio servidor. Apache-2.0, gratis para siempre.",
+        blurb: "El proyecto completo en tu propio servidor. Apache-2.0, gratuito de usar.",
         features: [
           "Todas las apps incluidas",
           "API REST, MCP y línea de comandos",
@@ -277,7 +272,7 @@ export const es: Messages = {
     selfHostTitle: "Gratis, y lo ejecutas tú",
     selfHostBody:
       "obop no tiene edición de pago ni funciones reservadas: cada app, la API REST, MCP y la línea de comandos están en la versión gratuita Apache-2.0. Lo ejecutas tú mismo con SQLite o PostgreSQL.",
-    hostingTitle: "Alojamiento, si lo quieres",
+    hostingTitle: "Alojamiento, previsto",
     hostingBody:
       "Un servicio previsto: SpaceCorps gestiona un servidor dedicado para tu empresa en la infraestructura de Sliplane, con obop y PostgreSQL en él. El precio sigue el tamaño del servidor; no hay tarifas por usuario.",
     faqTitle: "Preguntas sobre precios",
@@ -288,20 +283,20 @@ export const es: Messages = {
       },
       {
         q: "¿Por qué el alojamiento se cobra por servidor y no por usuario?",
-        a: "Cada empresa alojada recibe un servidor dedicado, así que el precio sigue el tamaño del servidor y el almacenamiento que añadas. Añadir personas no cuesta nada más.",
+        a: "Cada empresa alojada recibiría un servidor dedicado, así que el precio seguiría el tamaño del servidor y el almacenamiento que añadas. Añadir personas no costaría nada más.",
       },
       {
         q: "¿Puedo irme y llevarme mis datos?",
-        a: "Sí. obop tiene licencia Apache-2.0 y su base de datos es PostgreSQL normal, así que puedes ejecutar el mismo software tú mismo; obop backup y obop restore vienen integrados.",
+        a: "Sí. obop tiene licencia Apache-2.0, así que puedes ejecutar el mismo software tú mismo; obop backup y obop restore vienen integrados.",
       },
     ],
-    cta: "Obtén tu propia instancia",
+    cta: "Ejecútalo tú mismo",
   },
   apps: {
     title: "Aplicaciones",
     description:
-      "Las 28 aplicaciones de obop: 6 incluidas (CRM, Ventas, Facturación, Productos, Contactos y Conectores) y 22 instalables desde el marketplace. Cada página indica modelos, campos, clases de datos, flujos de trabajo y qué pueden hacer los agentes.",
-    lead: "Cada aplicación es un módulo sobre un único modelo de datos. Seis vienen incluidas; las otras 22 se instalan desde el marketplace con un clic. Abre una aplicación para ver sus modelos, campos, flujos de trabajo y qué puede hacer con ella un agente de IA.",
+      "Estas son 28 de las aplicaciones de obop: 6 vienen con obop y 22 más para añadir. Abre una aplicación para ver qué hace.",
+    lead: "Las aplicaciones para el trabajo diario de una pequeña empresa.",
     filterLabel: "Filtrar aplicaciones",
     all: "Todas",
     available: "Disponibles",
@@ -315,7 +310,6 @@ export const es: Messages = {
       content: "Contenido y documentos",
     },
     status: { available: "Disponible", marketplace: "Marketplace" },
-    countLine: "{n} aplicaciones",
     h: {
       purpose: "Para qué sirve",
       package: "Qué hace y qué no hace el paquete",
@@ -329,7 +323,7 @@ export const es: Messages = {
       dependencies: "Dependencias",
       install: "Instalación",
       guide: "Crea la tuya",
-      related: "Aplicaciones relacionadas",
+      related: "Otras aplicaciones de esta categoría",
     },
     th: {
       field: "Campo",
@@ -354,7 +348,8 @@ export const es: Messages = {
     withheld: "retenido",
     noWorkflow:
       "Esta aplicación no tiene acciones de flujo de trabajo; los registros se crean y se editan directamente.",
-    noApproval: "Ningún paso de esta aplicación requiere aprobación, salvo eliminar registros.",
+    noApproval:
+      "Ningún paso de esta aplicación requiere aprobación cuando lo ejecuta una persona. Un agente de IA solo puede proponer eliminar registros, y una persona lo aprueba.",
     noDependencies: "Ninguna.",
     depLead:
       "Cada dependencia indica las versiones que acepta. Las aplicaciones integradas se versionan con el núcleo, así que un requisito sobre ellas se comprueba con la versión del núcleo.",
@@ -390,20 +385,73 @@ export const es: Messages = {
     guideLink: "La guía de módulos explica cómo se escriben aplicaciones como esta",
     englishNote: "Inglés",
     agentsCan:
-      "Un agente puede leer, buscar, crear y actualizar registros de esta aplicación, y ejecutar las acciones que no requieren aprobación, dentro de los grupos de permisos de su token.",
+      "Un agente puede leer y buscar registros de esta aplicación, crearlos y actualizarlos cuando el modelo lo permite, y ejecutar las acciones que no requieren aprobación, dentro de los grupos de permisos de su token.",
     agentsPropose: "Solo puede proponer estos pasos, y una persona debe aprobarlos: {list}.",
     agentsMasked: "Los datos personales se enmascaran como tokens marcadores: {list}.",
     agentsWithheld: "Estos campos se retienen por completo y los agentes no los ven: {list}.",
     agentsNone: "ninguno",
     approvalsLead: "Pasos que un agente solo puede proponer:",
     permissionsLead: "Grupos que usa esta aplicación:",
-    versionLabel: "Versión",
+    store: {
+      ready: "Incluidas en obop",
+      more: "Más aplicaciones",
+      open: "Empezar",
+      get: "Obtener",
+      canDo: "Qué puedes hacer",
+      keeps: "Qué guarda",
+      safe: "Los agentes de IA y esta aplicación",
+      safeWhat:
+        "Un agente de IA es un programa de IA que trabaja en obop para una persona y no puede hacer más de lo que a esa persona se le permite.",
+      worksWith: "Funciona con",
+      info: "Información",
+      developers: "Para desarrolladores",
+      category: "Categoría",
+      developer: "Desarrollador",
+      compat: "Compatibilidad",
+      compatValue: "obop {version}",
+      manifest: "Archivo del paquete",
+      source: "Código fuente",
+      standalone: "No necesita otras apps",
+      worksCount: { one: "{n} app", few: "{n} apps", many: "{n} apps", other: "{n} apps" },
+      sameAsObop: "{version}, igual que obop",
+      directEdit: "Los registros se crean y se editan directamente.",
+      needsApproval: "La IA requiere aprobación de una persona",
+      showMoreActions: "Mostrar {n} acciones más",
+      showMoreKeeps: "Mostrar {n} elementos guardados más",
+      getLead: "Instálala desde la aplicación Personalizar, en Mercado.",
+      commandLine: "O desde la línea de comandos",
+      openObop: "Empezar",
+      getNote: "Necesitas una cuenta de administrador.",
+      included: "Incluida en cada obop.",
+      experimentalNote:
+        "Marcada como experimental por sus desarrolladores. Pruébala primero con datos de ejemplo.",
+      safeMasked:
+        "Los agentes de IA ven los campos marcados como datos personales, como los nombres y los correos electrónicos, solo como marcadores de posición. El texto escrito en un campo que no está marcado como dato personal, como una descripción, no se sustituye por un marcador.",
+      safeWithheld:
+        "Los agentes de IA nunca ven los campos marcados como sensibles. En esta aplicación: {list}.",
+      safeMoneyClear: "Un precio o un total se muestra, salvo que su campo sea uno de estos.",
+      safeKinds: {
+        financial: "datos financieros sensibles",
+        confidential_hr: "datos confidenciales de recursos humanos",
+        special_category: "categorías especiales de datos personales (por ejemplo, de salud)",
+        secret: "secretos (por ejemplo, credenciales de acceso)",
+      },
+      safeApprove:
+        "Algunos pasos un agente de IA solo puede proponerlos, y una persona los aprueba. Los demás puede hacerlos por su cuenta, dentro de sus permisos.",
+      safeApproveNone:
+        "Un agente de IA solo puede proponer eliminar registros, y una persona lo aprueba. Todo lo demás puede hacerlo por su cuenta, dentro de sus permisos.",
+      appMeta: "Una aplicación para obop, la plataforma de código abierto para empresas.",
+      developersShow: "Mostrar detalles técnicos",
+      developersHide: "Ocultar detalles técnicos",
+      purposeEnglish: "La descripción está en inglés.",
+      readMore: "Leer más",
+    },
     taglines: {
-      crm: "Oportunidades y embudo de ventas",
+      crm: "Tus oportunidades de venta",
       sales: "Presupuestos y pedidos",
-      invoicing: "Borradores, contabilización y numeración",
-      connectors: "Conectar sistemas, con controles RGPD",
-      product: "Precios, SKU y costes",
+      invoicing: "Factura a tus clientes",
+      connectors: "Conecta otras herramientas",
+      product: "Tus productos y precios",
       base: "Personas y empresas",
       projects: "Proyectos y tareas",
       helpdesk: "Tickets de soporte",
@@ -412,18 +460,18 @@ export const es: Messages = {
       purchase: "Proveedores y pedidos de compra",
       manufacturing: "Listas de materiales",
       hr: "Empleados y ausencias",
-      timesheets: "Tiempo y facturación",
+      timesheets: "Tiempo y aprobación",
       planning: "Turnos y recursos",
       field_service: "Trabajos en el sitio",
-      pos: "Comercios y restaurantes",
+      pos: "Cajas de tienda",
       ecommerce: "Tienda en línea",
-      website: "Páginas y formularios",
+      website: "Páginas y formulario de contacto",
       email_marketing: "Campañas",
       documents: "Archivos y carpetas",
-      sign: "Firmas electrónicas",
-      subscriptions: "Facturación recurrente",
+      sign: "Firmas electrónicas simples",
+      subscriptions: "Planes y suscripciones",
       dashboards: "Informes y gráficos",
-      accounting: "Libro mayor e informes",
+      accounting: "Libro mayor y diarios",
       knowledge: "Artículos y guías",
       appointments: "Recursos reservables",
       expenses: "Gastos y aprobaciones",

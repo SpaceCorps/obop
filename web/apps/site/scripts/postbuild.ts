@@ -64,6 +64,13 @@ export async function postbuild(records: PageRecord[]): Promise<void> {
   rmSync(join(DIST, "hashmap.json"), { force: true });
   const assets = join(DIST, "assets");
   for (const f of readdirSync(assets)) if (f.endsWith(".js")) rmSync(join(assets, f));
+  // The runtime chunks VitePress puts beside them (framework, theme, metadata) are requested by no
+  // page either: they would only be dead weight on the server.
+  const chunks = join(assets, "chunks");
+  if (existsSync(chunks)) {
+    for (const f of readdirSync(chunks)) if (f.endsWith(".js")) rmSync(join(chunks, f));
+    if (readdirSync(chunks).length === 0) rmSync(chunks, { recursive: true });
+  }
   for (const r of records) {
     const file = join(DIST, r.url === "/" ? "index.html" : `${r.url.slice(1)}index.html`);
     let html = readFileSync(file, "utf8");
@@ -87,7 +94,13 @@ export async function postbuild(records: PageRecord[]): Promise<void> {
   for (const l of LOCALES) {
     const idx = records
       .filter((r) => r.locale === l && r.section !== "search")
-      .map((r) => [r.url, r.title, r.text.slice(0, 2500), r.headings.join(" ")]);
+      // An app page keeps two stretches (see assemble.ts), so it may be twice as long.
+      .map((r) => [
+        r.url,
+        r.title,
+        r.text.slice(0, r.path.startsWith("/apps/") ? 5100 : 2500),
+        r.headings.join(" "),
+      ]);
     write(`search/${l}.json`, JSON.stringify(idx));
   }
 
@@ -189,22 +202,22 @@ export async function postbuild(records: PageRecord[]): Promise<void> {
   const llms = [
     "# obop",
     "",
-    `> ${messages.en.description} Open source, written in Rust, runs on SQLite or PostgreSQL. Status: beta; see the roadmap for what is built.`,
+    `> ${messages.en.description} Open source, written in Rust, runs on SQLite or PostgreSQL. Status: below version 1.0; the built-in apps are marked Stable, the other apps Beta or Experimental; see the roadmap for what is built.`,
     "",
-    "Each link below is the Markdown version of a page. Every page of the site also exists as Markdown at its address with .md instead of the trailing slash. Prices on the site are planned and not charged yet.",
+    "Each link below is the Markdown version of a page. Every page of the site also exists as Markdown at its address with .md instead of the trailing slash. SpaceCorps does not offer hosted obop instances yet: you run obop yourself, with Docker and PostgreSQL or locally on SQLite. Prices on the site are planned and not charged yet.",
     "",
     "## When to use obop",
     "",
-    "Reach for obop when the job is running a small or mid-sized business on one shared database: contacts, leads and quotes, sales orders, invoices, stock, purchasing, HR, projects, support tickets, a web shop. It fits when you want an AI agent to read and draft business records safely: an agent works under a scoped token, sees personal and financial fields masked, and can only propose irreversible steps (post an invoice, pay an expense, delete a record) for a human to approve.",
+    "Reach for obop when the job is running a small or mid-sized business on one shared database: contacts, leads and quotes, sales orders, invoices, stock, purchasing, HR, projects, support tickets, a web shop. It fits when you want an AI agent to read and draft business records safely: an agent works under a scoped token, sees personal fields masked and never sees fields of the financial, confidential HR, special-category or secret data classes, and can only propose the steps that need approval (every delete, and the actions a module marks, such as posting an invoice or paying an expense) for a person to approve.",
     "",
     "How an agent should call obop:",
     "",
-    "- Use the instance REST API (`POST /api/<model>/<command>`, with `list`, `search`, `get`, `create`, `update`, `delete` and per-model actions), described by the OpenAPI document at `/api/openapi.json` on the instance, or connect over MCP with `obop mcp --token <agent token>`.",
+    "- Use the instance REST API (`POST /api/<model>/<command>`, with `list`, `search`, `get`, `create`, `update`, `delete` and per-model actions), described by the OpenAPI document at `/api/openapi.json` on the instance, or connect over MCP with `obop mcp --token <agent token>` (stdio) or to the `/mcp` endpoint of the instance (HTTP).",
     "- Ask `GET /api/meta` first: it lists exactly the models, fields and actions your token may use.",
     "- Treat a 202 `approval_required` response as a proposal: stop and ask the human to approve the plan.",
-    "- The control plane API (sign up, create and delete instances) is described at `/openapi.json` on this site.",
+    "- A control plane (`obop platform serve`) describes its API (sign up, create and delete instances) at `/openapi.json` on its own address.",
     "",
-    "Do not use obop for payments processing, payroll filing, or workloads that need row-level permissions or computed fields: see the roadmap for what is built.",
+    "Do not use obop for payments processing, payroll filing, or workloads that need code inside modules or a history of changes to business records. Row-level rules (a person sees only some records) exist in some apps only. See the roadmap for what is built.",
     "",
     ...DOCS_NAV.flatMap((g) => section(groupTitle[g.group]!, g.pages)),
     ...section("Product", [

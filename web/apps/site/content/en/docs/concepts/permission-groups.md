@@ -5,9 +5,9 @@ description: "Permission groups in obop are names like crm.user and invoicing.ma
 
 A **permission group** is a name of the form `module.role`, for example `crm.user`, `helpdesk.agent` or `invoicing.manager`. A group exists as soon as something refers to it. Users hold groups, and so do agent tokens.
 
-## Three places that name a group
+## Where a group is named
 
-1. **Model:** `read_group` allows `get`, `list` and `search`. `write_group` allows `create`, `update` and `delete`.
+1. **Model:** `read_group` allows `get`, `list` and `search`. `write_group` allows `create`, `bulk_create`, `update` and `delete`.
 2. **Field:** `group` says who sees the field. It defaults to the model's read group. A field a caller cannot read is not even described to them.
 3. **Action:** `group` says who may run a workflow step. It defaults to the model's write group. This is how posting or paying can need a stricter group than editing.
 
@@ -15,7 +15,7 @@ A **permission group** is a name of the form `module.role`, for example `crm.use
 
 `<module>.user` is the day-to-day role and `<module>.manager` handles configuration and approvals. A third group such as `approver` appears only when someone who enters a thing must not be the person who releases it.
 
-`platform.admin` satisfies every check for a person. The first user of a hosted instance holds it, and it is what lets someone install modules.
+`platform.admin` satisfies every permission check for a person, but an agent token can only be scoped to groups the person holds by name. The first user of an instance that a control plane created holds `platform.admin`, and it is what lets someone install modules.
 
 ## Users and agents
 
@@ -25,6 +25,6 @@ An unknown command, a hidden command and a forbidden command all answer `404 not
 
 ## Limits
 
-There are no row-level permissions yet. Access is by model and field group only, so everyone who can read a model reads every record in it. A `visibility` field in an app such as Knowledge is a label, not a rule.
+Groups decide which models, fields and actions a person can use. Which records they see can be limited further by row rules, which an app declares per model (`[model.access]` in its package file). A model with no row rule shows every record to everyone who can read it. A row rule can also name groups (`see_all_group`) whose holders see every record. Apps that declare one include Expenses, Timesheets, leave requests in HR, Documents and Dashboards; CRM, Sales and Invoicing do not. A rule covers whole records, not single fields, and an administrator sees every record. A `visibility` field in an app such as Knowledge is a label, not a rule.
 
 See [Create an agent token](/docs/agents/tokens/) and [Safety best practices](/docs/agents/safety/).

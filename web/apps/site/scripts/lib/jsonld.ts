@@ -40,9 +40,8 @@ const ORG = {
   contactPoint: [
     {
       "@type": "ContactPoint",
-      contactType: "customer support",
+      contactType: "bug reports and feature requests",
       url: `${GITHUB}/issues`,
-      availableLanguage: ["en", "de", "fr", "pl", "fi", "sv", "es"],
     },
     {
       "@type": "ContactPoint",
@@ -58,7 +57,7 @@ export function jsonLd(c: Ctx): object[] {
   const lang = m.htmlLang;
   const out: object[] = [];
   const ctx = "https://schema.org";
-  const section = String(c.fm["section"] ?? "");
+  const section = typeof c.fm["section"] === "string" ? c.fm["section"] : "";
 
   if (c.path === "/") {
     out.push({ "@context": ctx, ...ORG });
@@ -87,14 +86,13 @@ export function jsonLd(c: Ctx): object[] {
       description: m.description,
       url: `${SITE_URL}/`,
       applicationCategory: "BusinessApplication",
-      operatingSystem: "Web, Linux, macOS",
+      operatingSystem: "Web, Linux",
       inLanguage: lang,
       codeRepository: GITHUB,
       offers: {
         "@type": "Offer",
         price: "0",
         priceCurrency: "EUR",
-        description: "Self-hosted open-source edition",
       },
     });
     out.push(faq(m.home.faq));
@@ -136,11 +134,13 @@ export function jsonLd(c: Ctx): object[] {
       softwareVersion: String(c.fm["version"]),
       softwareRequirements: "obop",
       isPartOf: { "@id": `${SITE_URL}/#website` },
+      // Free, and the same for everyone: there is one obop and no edition (OR-1, OR-2). No sentence
+      // here: one would be English next to the page's `inLanguage`, a built-in app is included and a
+      // marketplace app is installed, and the offer is the same price either way.
       offers: {
         "@type": "Offer",
         price: "0",
         priceCurrency: "EUR",
-        description: "Included in the open-source edition",
       },
     });
   }

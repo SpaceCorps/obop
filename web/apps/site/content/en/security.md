@@ -26,7 +26,7 @@ obop is a young project run by a small team, so we cannot promise a response tim
 
 ### Please do not
 
-- Run denial-of-service tests against the hosted beta.
+- Run denial-of-service tests against this website.
 - Access, change or delete other people's data.
 - Use social engineering or physical attacks.
 
@@ -36,11 +36,11 @@ obop is a young project run by a small team, so we cannot promise a response tim
 - Every field has a data class; agents get masked personal data and no sensitive classes.
 - Agents act with scoped tokens and can only propose irreversible steps; a person approves.
 - One dispatcher serves every surface, so permissions and masking cannot be skipped by choosing a different one.
-- On the hosted service each business has its own database and role.
+- Each instance has its own database; one that a control plane creates on PostgreSQL also gets its own database role.
 
 ## What is missing
 
-No audit log, no token revocation, no single sign-on, no backups for the hosted service, no certification and no independent penetration test yet. The [Security and privacy reference](/docs/reference/security/) lists these in full.
+No audit trail of reads and changes to business records, no command to revoke a single agent token (an app connected through the browser sign-in can be revoked under Customize, Security, Connected apps, and offboarding a user ends their tokens), no scheduled backups switched on by a control plane for the instances it creates, no certification and no independent penetration test yet. Single sign-on exists only for Microsoft Entra and has not been tried against a real Microsoft tenant. A security log of events such as account, sign-in, security-setting and module events exists. The [Security and privacy reference](/docs/reference/security/) lists these in full.
 
 ## Supply chain
 

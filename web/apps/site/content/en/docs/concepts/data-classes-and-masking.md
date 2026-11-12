@@ -30,14 +30,14 @@ A field can also be marked `personal_data = true`: it is about an identifiable p
 
 A person sees real values under their normal permissions. An agent token (see [Agents](/docs/agents/)) gets:
 
-- **Masked** values for personal data, such as `NAME_2` or `EMAIL_1`. A token is stable for the same value within one session of that agent token, so the agent can still tell that two records mention the same person.
-- **Withheld** fields for sensitive classes. The response lists the field names that were withheld (`denied` in REST, `withheld_fields` over MCP).
+- **Masked** values for personal data, such as `NAME_2` or `EMAIL_1`. A token is stable for the same value in a field of the same name within one session of that agent token, so the agent can still tell that two records mention the same person. The same value in a field with another name gets its own token.
+- **Withheld** fields for sensitive classes. The response lists them as `model.field` names in `denied`, over REST and over MCP.
 
 ## Writing tokens back
 
-An agent can pass a token in a write. The server swaps it for the real value if the agent could have read the record, so an agent can copy a contact into a new lead without ever seeing the contact's name or email. A token the server does not know is refused with `invalid token`.
+An agent can pass a token in a write. When a value is exactly a token from that agent's own table (see below), the server swaps it for the real value, so an agent can copy a contact into a new lead without ever seeing the contact's name or email. The server checks only that the caller holds at least one permission group, not that it can still read the record the token came from. A token that is not in that table, for example one from another agent token, is not refused: it is stored as the text the agent sent.
 
-Tokens are kept sealed in the database per agent token (and per MCP session), so every server process on the database resolves them and a restart does not lose them. A different agent token starts with a fresh table, so an old token stops resolving; a table is forgotten 24 hours after its last change.
+Over REST and over MCP on HTTP, tokens are kept sealed in the database per agent token (and per MCP session), so every server process on the database resolves them and a restart does not lose them; a table is forgotten 24 hours after its last change (REST) or 2 hours after the session's last request (MCP). Under `obop mcp` the table lives in the command's memory and ends when it stops. A different agent token starts with a fresh table, so an old token stops resolving.
 
 ## Filtering and searching
 
@@ -46,7 +46,7 @@ Filters and sorting run on the real values before masking. To stop an agent gues
 ## Limits, honestly
 
 - Masking is by field class and the personal-data flag. It does not look inside free text: a note typed into a `none` field is shown as it is. Classify free-text fields that may contain personal data as personal data.
-- Tokens are not stable across restarts or across agent tokens.
+- Tokens resolve only for the agent token (or MCP session) that received them; a different token or a new MCP session starts a new table.
 - Erasure: Contacts has an `erase` action that anonymises a record in place; other apps do not yet.
 
 See also [Masking tokens](/docs/agents/masking/) and [Security and privacy](/docs/reference/security/).

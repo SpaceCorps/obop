@@ -1,0 +1,781 @@
+/*
+ * One app page (.app-page), laid out like a store page. The shared tokens (--st-gap, --st-radius,
+ * --st-hair) and the squircle icons are in apps.css. Mobile first: the one-column layout is the
+ * base, and the wider layouts only add. Everything sits in one centred column, so the hero, the
+ * strip, the cards and the text blocks share one measure.
+ */
+.app-page.wrap {
+  /*
+   * The page name, and the sizes derived from it: the section headings, the large sentence and the
+   * tagline are never larger than the name, at any text size (at 150 percent they were: the heading
+   * rule shrank less than the name's did). 2.25rem, less on a narrow screen; the 1.15rem floor keeps
+   * "Manufacturing" whole in a 256 px column at 200 percent. The sizes are derived from --h1-base,
+   * which every page has; --h1 is the name's own size, and a heading is also kept under it. A long name
+   * keeps its size on a phone: it breaks at the seams of its compound (softname.ts) instead of being set
+   * smaller, which had left the name no larger than the section headings.
+   */
+  --h1-base: clamp(1.15rem, 9.6vw, 2.25rem);
+  --h1: var(--h1-base);
+  /*
+   * The section headings: 0.78 of the name at its normal size, so a long name that is set smaller on
+   * a phone does not take them down with it (they were 25 percent smaller than the name's own
+   * shrinkage allowed, and no larger than the large sentence or a card title); but always under the
+   * name itself, and never smaller than the text. Card titles and the headings of the technical part
+   * are derived from this one, so none of them is larger than the heading above it.
+   */
+  --h2: max(min(calc(var(--h1-base) * 0.78), calc(var(--h1) * 0.97)), 1.0625rem);
+  max-inline-size: 58rem;
+  padding-block: var(--space-4) var(--space-20);
+  /* A word longer than its line (a compound at a large text size) breaks instead of overflowing. */
+  overflow-wrap: break-word;
+}
+.app-page > section {
+  margin-block-start: var(--st-gap);
+}
+.app-page h2 {
+  margin: 0 0 var(--space-5);
+  font-size: var(--h2);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  text-align: start;
+  overflow-wrap: break-word;
+}
+@media (min-width: 48rem) {
+  .app-page.wrap {
+    --h2: 2rem;
+  }
+}
+.app-back {
+  margin: 0;
+}
+.app-back a {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 2.75rem;
+  margin-inline-start: -0.375rem;
+  color: var(--accent-ink);
+  font-size: 1.0625rem;
+  text-decoration: none;
+}
+.app-back a:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+/*
+ * Hero: the icon, the name, the tagline, the category and one button. On a phone the icon sits above
+ * the text, so the name has the whole width of the column and a long name (Rechnungsstellung,
+ * Sähköpostimarkkinointi) is not squeezed beside a 96 px icon; from 40rem the icon (120 px) sits beside
+ * the text. The row wraps, so at a very large text size the icon goes above the text instead of
+ * pushing the button off the screen.
+ */
+.app-hero {
+  --icon-size: 6rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-4);
+  margin-block: var(--space-3) var(--space-10);
+}
+.app-hero .tile-wrap {
+  flex: none;
+}
+.app-hero .app-icon svg {
+  inline-size: 58%;
+  block-size: 58%;
+}
+.app-hero-text {
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+.app-hero-text h1 {
+  margin: 0;
+  /* The floor is low on purpose: at 150 and 200 percent text the name still fits the column whole (at 200 percent on a 320 px phone the column is 256 px, and "Manufacturing", "Connaissances" and "Varastonhallinta" are 245 to 250 px at 1.15rem). */
+  font-size: var(--h1);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+  overflow-wrap: break-word;
+  text-wrap: balance;
+}
+.app-tagline {
+  margin: var(--space-2) 0 0;
+  color: var(--text-muted);
+  font-size: max(1rem, min(1.125rem, calc(var(--h1-base) * 0.7)));
+  line-height: 1.35;
+}
+.app-category {
+  margin: var(--space-1) 0 0;
+  color: var(--text-muted);
+  font-size: 0.9375rem;
+  line-height: 1.35;
+}
+/* The one filled pill of a screen: the hero's button, and the button in the Get box further down. */
+.app-primary,
+.app-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-block-size: 2.75rem;
+  min-inline-size: min(7rem, 100%);
+  max-inline-size: 100%;
+  padding-inline: var(--space-6);
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  font-size: 1.0625rem;
+  font-weight: var(--weight-semibold);
+  text-align: center;
+  text-decoration: none;
+  transition: filter var(--dur-2) var(--ease-out);
+}
+.app-primary {
+  margin-block-start: var(--space-4);
+}
+.app-primary:hover,
+.app-pill:hover {
+  filter: brightness(1.08);
+}
+/* Beside the icon on a medium screen the column is narrower than the line a long name needs. */
+@media (min-width: 48rem) {
+  .app-page.app-long .app-hero-text h1 {
+    font-size: clamp(2.5rem, 5vw, 3.5rem);
+  }
+}
+/* The narrowest phones (320 px): a smaller icon. */
+@media (max-width: 21rem) {
+  .app-hero {
+    --icon-size: 4.5rem;
+  }
+}
+@media (min-width: 40rem) {
+  .app-hero {
+    --icon-size: 7.5rem;
+    flex-flow: row wrap;
+    align-items: center;
+    gap: var(--space-4) var(--space-8);
+    margin-block-end: var(--space-12);
+  }
+  .app-hero-text {
+    flex: 1 1 12rem;
+    inline-size: auto;
+  }
+  .app-tagline {
+    font-size: 1.375rem;
+  }
+  .app-primary {
+    margin-block-start: var(--space-5);
+  }
+}
+@media (min-width: 48rem) {
+  .app-hero-text h1 {
+    font-size: 3.5rem;
+  }
+}
+
+/*
+ * The facts strip: small label over a big value, hairline dividers, nothing but manifest data. The
+ * layout follows the room the strip has (a container query, in rem, so a larger text size asks for
+ * more room too): one column when two cells would not fit side by side, two by two from 17.5rem, and
+ * a single row of four only from 52rem, where the longest value word of every language (Polish
+ * "Eksperymentalny" at 22 px is 176 px) still fits its cell whole. Between, the cells stay wide, and
+ * where the strip is under 10rem wide (200 percent text on a 320 px phone) the value is set smaller,
+ * so that the same word keeps room to spare. A word wider than its cell is not broken (measured at
+ * 250 percent text on 320 px): the box grows past the cell, so the sweep in site.spec.ts only covers
+ * text up to 200 percent.
+ */
+.app-facts-box {
+  container-type: inline-size;
+}
+.app-facts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
+  border-block: var(--st-hair);
+}
+.app-facts > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  min-inline-size: 0;
+  padding: var(--space-5) var(--space-2);
+  text-align: center;
+}
+.app-facts > div + div {
+  border-block-start: var(--st-hair);
+}
+.app-facts dt {
+  overflow-wrap: break-word;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.app-facts dd {
+  margin: 0;
+  font-size: clamp(1rem, 4.6vw, 1.375rem);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  overflow-wrap: break-word;
+  text-wrap: balance;
+}
+@container (min-width: 17.5rem) {
+  .app-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .app-facts > div + div {
+    border-block-start: 0;
+  }
+  .app-facts > div:nth-child(even) {
+    border-inline-start: var(--st-hair);
+  }
+  .app-facts > div:nth-child(n + 3) {
+    border-block-start: var(--st-hair);
+  }
+}
+@container (min-width: 52rem) {
+  .app-facts {
+    grid-auto-flow: column;
+    grid-template-columns: none;
+    grid-auto-columns: minmax(0, 1fr);
+  }
+  .app-facts > div {
+    padding: var(--space-6) var(--space-3);
+  }
+  .app-facts > div:nth-child(n + 3) {
+    border-block-start: 0;
+  }
+  .app-facts > div + div {
+    border-inline-start: var(--st-hair);
+  }
+}
+@media (min-width: 40rem) {
+  .app-facts dd {
+    font-size: 1.375rem;
+  }
+}
+/* A strip under 10rem wide: the 1rem floor of the value is 32 px at 200 percent text, and "Eksperymentalny" would fill a 256 px cell. */
+@container (max-width: 10rem) {
+  .app-facts dd {
+    font-size: 0.8rem;
+  }
+}
+/* An experimental app says so in one plain line under the strip, so the one word "Experimental" is not all there is. */
+.app-experimental {
+  margin: var(--space-3) 0 0;
+  color: var(--text-muted);
+  font-size: 0.9375rem;
+  line-height: 1.4;
+  text-align: center;
+}
+
+/* What it is for: the first sentence large and calm, the rest in a quiet normal-size paragraph. */
+.app-purpose {
+  max-inline-size: 46rem;
+  margin: 0;
+  /* 1.25rem; at a large text size no larger than 0.8 of the name, and never smaller than the text under it. */
+  font-size: max(1.0625rem, min(1.25rem, calc(var(--h1-base) * 0.8), calc(var(--h1) * 0.95)));
+  letter-spacing: -0.01em;
+  line-height: 1.45;
+  overflow-wrap: break-word;
+}
+.app-purpose-rest {
+  max-inline-size: 46rem;
+  margin: var(--space-4) 0 0;
+  color: var(--text-muted);
+  font-size: 1.0625rem;
+  line-height: 1.5;
+  overflow-wrap: break-word;
+}
+/* On a translated page the purpose is English; the line that says so comes first, before the English. */
+.app-note {
+  margin: calc(var(--space-2) * -1) 0 var(--space-3);
+  color: var(--text-muted);
+  font-size: 0.9375rem;
+}
+/* A long second paragraph folds under "Read more", in the same quiet pill as the other folds. */
+.app-purpose + .app-read,
+.app-purpose-rest + .app-read {
+  margin-block-start: var(--space-4);
+}
+.app-read > .app-purpose-rest {
+  margin-block-start: var(--space-3);
+}
+@media (min-width: 48rem) {
+  .app-purpose {
+    font-size: 1.5rem;
+  }
+}
+
+/* What you can do, what it keeps: soft cards. */
+.app-cards {
+  display: grid;
+  /* auto-fit: one or two cards stretch to the column instead of leaving an empty stretch beside them */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.app-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-inline-size: 0;
+  /* The room round the text is in rem, so at 200 percent on a 320 px phone it was 80 of the card's 256 px: a vw ceiling keeps the column. */
+  padding: min(var(--space-5), 5vw) min(var(--space-6), 5vw);
+  border: var(--st-hair);
+  border-radius: var(--st-radius);
+  background: var(--surface);
+  overflow-wrap: break-word;
+}
+.app-card h3 {
+  margin: 0;
+  /* 1.25rem, but under the heading of its section at every text size, and never smaller than the text of its card. */
+  font-size: max(min(1.25rem, calc(var(--h2) * 0.92)), 1.0625rem);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+}
+/* The kicker is part of the heading (so a list of headings tells the cards apart), drawn above the title. */
+.app-card-kicker {
+  display: block;
+  margin-block-end: 0.125rem;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.app-card-text {
+  margin: 0;
+  text-wrap: wrap;
+  color: var(--text-muted);
+  font-size: 1rem;
+  line-height: 1.45;
+}
+.app-card-note {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin: var(--space-2) 0 0;
+  color: var(--text-muted);
+  font-size: 0.9375rem;
+}
+.app-card-text + .app-card-note {
+  margin-block-start: auto;
+  padding-block-start: var(--space-3);
+}
+.app-card-note svg {
+  flex: none;
+}
+.app-direct {
+  margin: 0;
+  text-wrap: wrap;
+  color: var(--text-muted);
+}
+/* Long compound words break at a hyphen in the languages that make them, where the words are their own;
+   English stays whole (no "or-der"). Text marked lang="en" inside a translated page does not match. */
+:is(
+  .app-hero-text h1,
+  .app-page h2,
+  .app-card h3,
+  .app-card-text,
+  .app-safe li,
+  .app-icons a span
+):is(:lang(de), :lang(fi), :lang(sv), :lang(pl)) {
+  hyphens: auto;
+}
+/* A single fold: more cards stay in columns (a lone card in the fold keeps a normal width). */
+.app-more .app-cards {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+}
+
+/* The two folds ("Show N more", "Show technical details"): one quiet pill, no accent colour. */
+.app-more {
+  margin-block-start: var(--space-4);
+}
+.app-more > summary,
+.app-read > summary,
+.app-dev > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  box-sizing: border-box;
+  min-block-size: 2.75rem;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  padding-block: var(--space-2);
+  padding-inline: var(--space-5);
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: var(--surface-3);
+  color: var(--text);
+  font-weight: var(--weight-semibold);
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  list-style: none;
+  transition: background-color var(--dur-2) var(--ease-out);
+}
+.app-more > summary::-webkit-details-marker,
+.app-read > summary::-webkit-details-marker,
+.app-dev > summary::-webkit-details-marker {
+  display: none;
+}
+.app-more > summary:hover,
+.app-read > summary:hover,
+.app-dev > summary:hover {
+  background: var(--border);
+}
+.app-more[open] > summary,
+.app-read[open] > summary {
+  margin-block-end: var(--space-3);
+}
+.app-dev > summary::after {
+  content: "";
+  flex: none;
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  border-inline-end: 2px solid var(--text-muted);
+  border-block-end: 2px solid var(--text-muted);
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform var(--dur-2) var(--ease-out);
+}
+.app-dev[open] > summary::after {
+  transform: translateY(2px) rotate(-135deg);
+}
+/* The button says what it does: "Show ..." while the part is folded, "Hide ..." while it is open. */
+.app-dev:not([open]) .app-hide,
+.app-dev[open] .app-show {
+  display: none;
+}
+
+/* The AI agents and this app: one sentence that says what an AI agent is, then up to three short lines. */
+.app-safe-what {
+  max-inline-size: 46rem;
+  margin: 0 0 var(--space-4);
+  color: var(--text-muted);
+  font-size: 1.0625rem;
+  line-height: 1.5;
+  overflow-wrap: break-word;
+}
+.app-safe {
+  /* Asks its own width (in rem, so a larger text size asks for more room), see the container rule below. */
+  container-type: inline-size;
+  margin: 0;
+  padding: var(--space-2) min(var(--space-6), 5vw);
+  border: var(--st-hair);
+  border-radius: var(--st-radius);
+  background: var(--surface);
+  list-style: none;
+}
+.app-safe li {
+  display: flex;
+  align-items: flex-start;
+  gap: min(var(--space-3), 3vw);
+  padding-block: var(--space-4);
+  /* A long German word at a large text size breaks instead of pushing the line off the screen. */
+  overflow-wrap: anywhere;
+}
+.app-safe li + li {
+  border-block-start: var(--st-hair);
+}
+.app-safe svg {
+  flex: none;
+  margin-block-start: 0.1rem;
+  color: var(--text-muted);
+}
+/*
+ * Where the box is narrow in rem (a large text size on a phone: 7 rem at 200 percent on 320 px) the icon
+ * sits above the line instead of beside it, so the line has the whole width: beside the icon an English
+ * word that fits the box ("placeholders", "permissions") did not fit what was left and was cut.
+ */
+@container (width < 12rem) {
+  .app-safe li {
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+}
+
+/*
+ * Works with, related apps: icons with their names. The icon and the name start at the text's own
+ * edge, so nothing sticks out past the column and a keyboard focus ring is never cut off by the screen.
+ */
+.app-icons {
+  --icon-size: 4rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6) var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* A name is not cut in the middle of a word below 11rem, and the item is never wider than the column. */
+.app-icons > li {
+  min-inline-size: 0;
+  max-inline-size: min(100%, 11rem);
+}
+.app-icons a {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  /* As wide as the name needs, at least as wide as the icon; the item (li) caps it. */
+  inline-size: max-content;
+  min-inline-size: 4.5rem;
+  max-inline-size: 100%;
+  color: var(--text);
+  font-size: 0.875rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  text-align: start;
+  text-decoration: none;
+}
+.app-icons a:hover span {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+/* Information: label and value rows, as in a store's information list. */
+.app-info {
+  margin: 0;
+  border-block-start: var(--st-hair);
+}
+/* The label beside its value; at a very large text size there is no room for both, so the value wraps below. */
+.app-info > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  padding-block: var(--space-4);
+  border-block-end: var(--st-hair);
+}
+/* The label column holds the longest label word of every language ("Yhteensopivuus", "Kompatibilitet"). */
+.app-info dt {
+  flex: 0 0 clamp(8rem, 32%, 10rem);
+  min-inline-size: 0;
+  color: var(--text-muted);
+  overflow-wrap: break-word;
+}
+.app-info dd {
+  flex: 1 1 12rem;
+  min-inline-size: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+/* A link in a row is a 44 px target; the extra height is borrowed from the row's padding. */
+.app-info a {
+  display: inline-block;
+  box-sizing: border-box;
+  min-block-size: 2.75rem;
+  padding-block: 0.6875rem;
+  margin-block: -0.6875rem;
+}
+/* A built-in app: one quiet line under the information, not a section of its own. */
+.app-included {
+  margin: var(--space-5) 0 0;
+  color: var(--text-muted);
+}
+.app-info .mono {
+  font-family: var(--font-mono);
+  font-size: 0.9375rem;
+}
+.app-info-note {
+  margin-inline-start: 0.35em;
+  color: var(--text-muted);
+}
+
+/*
+ * Get: one plain sentence, the pill that opens obop (where Customize and its Marketplace are), the
+ * command line and what it needs. The pill has the hero's look: the hero's button jumps here, so at
+ * this point the page's one filled pill is this one, and the next step is obvious.
+ */
+.app-getbox {
+  /* The command below asks how much room the box has, in rem, so a larger text size asks for more. */
+  container-type: inline-size;
+  /* In rem the room round the text left 110 of 254 px for the command at 200 percent on a 320 px phone; a vw ceiling keeps it. */
+  padding: min(var(--space-6), 5vw);
+  border: var(--st-hair);
+  border-radius: var(--st-radius);
+  background: var(--surface);
+}
+.app-getbox p {
+  margin: 0 0 var(--space-4);
+  text-wrap: wrap;
+}
+.app-getbox p:last-child {
+  margin-block-end: 0;
+}
+.app-pill {
+  margin-block-end: var(--space-6);
+}
+.app-or {
+  color: var(--text-muted);
+  font-size: 0.9375rem;
+}
+.app-getbox div[class*="language-"] {
+  margin-block: 0 var(--space-4);
+  background: var(--surface-2);
+}
+/* The command wraps instead of scrolling, so a phone shows all of it; the copy button has its own room. */
+.app-getbox div[class*="language-"] pre {
+  padding-inline: var(--space-4) 3.5rem;
+}
+.app-getbox div[class*="language-"] pre code {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+/* On a touch screen there is no hover to reveal the copy button: it is always there, 44 px square. */
+@media (hover: none) {
+  .app-getbox div[class*="language-"] button.copy {
+    inline-size: 2.75rem;
+    block-size: 2.75rem;
+    inset-block-start: 0;
+    inset-inline-end: 0;
+    opacity: 1;
+  }
+  .app-getbox div[class*="language-"] pre {
+    padding-inline-end: 3.75rem;
+  }
+}
+@media (max-width: 39.99rem) {
+  .app-getbox {
+    padding: min(var(--space-5), 5vw);
+  }
+}
+/*
+ * Where the box is narrow (every phone, and a wider screen at a large text size) the copy button does
+ * not sit beside the command: the room it takes, in rem, left a column of 28 px at 200 percent on a
+ * 320 px phone and the command broke into single letters. It sits under the command, at its end,
+ * and the command has the whole width.
+ */
+@container (width < 24rem) {
+  .app-getbox div[class*="language-"] pre {
+    padding-inline: min(var(--space-4), 3vw);
+    padding-block-end: 3.75rem;
+  }
+  .app-getbox div[class*="language-"] button.copy {
+    inset-block: auto 0.5rem;
+    inset-inline-end: 0.5rem;
+  }
+}
+
+/* For developers: a heading and one fold that holds everything technical. */
+.app-dev .prose {
+  padding-block: var(--space-8) 0;
+  font-size: var(--text-md);
+  line-height: var(--leading-reading, 1.65);
+}
+.app-dev[open] > .prose {
+  margin-block-start: var(--space-5);
+  border-block-start: var(--st-hair);
+}
+/*
+ * The rule above a heading is drawn by ::before, outside the heading's own box, so the focus ring that
+ * a link to the heading draws (VitePress gives it tabindex -1) hugs the heading's text instead of a
+ * box with 24 px of empty padding above it.
+ */
+.app-dev .prose h3 {
+  position: relative;
+  margin: calc(var(--space-12) + var(--space-6) + 1px) 0 var(--space-3);
+  font-size: min(var(--text-2xl), var(--h2));
+}
+.app-dev .prose h3::before {
+  content: "";
+  position: absolute;
+  inset-block-start: calc(var(--space-6) * -1 - 1px);
+  inset-inline: 0;
+  border-block-start: var(--st-hair);
+}
+.app-dev .prose h3:first-of-type {
+  margin-block-start: 0;
+}
+.app-dev .prose h3:first-of-type::before {
+  display: none;
+}
+.app-dev .prose h4 {
+  font-size: max(min(var(--text-xl), calc(var(--h2) * 0.92)), 1.0625rem);
+}
+
+@media print {
+  .app-primary,
+  .app-page button.copy {
+    display: none;
+  }
+  /*
+   * The technical tables print whole, at the width of the paper, instead of being cut at its edge or
+   * shrunk by the browser to fit a wider table (7 pt text): the table is as wide as the paper and the
+   * columns share it by their content. No word is cut: a word of ordinary text stays whole
+   * (break-word: its column is never narrower than the longest word, so "masked" is not printed
+   * "maske / d"), and so does every part of a code token (a field or group name, which has no
+   * spaces): the page gives it places to break after its underscores and dots, so a column is never
+   * narrower than the longest part ("public_" and "directory") and "none" is not printed "non / e".
+   * Seven columns at the width of the paper need the smaller type.
+   */
+  .app-dev .prose table {
+    display: table;
+    inline-size: 100%;
+    overflow: visible;
+    font-size: 0.75em;
+  }
+  .app-dev .prose th,
+  .app-dev .prose td {
+    padding: 0.25rem 0.3rem;
+  }
+  .app-dev .prose th,
+  .app-dev .prose td {
+    white-space: normal;
+    overflow-wrap: break-word;
+  }
+  .app-dev .prose td code {
+    white-space: normal;
+    overflow-wrap: break-word;
+  }
+  /* No card, line, information row, list item or table row is cut across two sheets, and a heading is never left alone at the foot of one. */
+  .app-card,
+  .app-safe li,
+  .app-icons li,
+  .app-info > div,
+  .app-dev .prose li,
+  .app-dev .prose tr {
+    break-inside: avoid;
+  }
+  .app-page h2,
+  .app-dev .prose h3,
+  .app-dev .prose h4 {
+    break-after: avoid;
+  }
+  /*
+   * A heading is kept with the two lines under it, which in turn are kept with the table or the list
+   * they introduce: a model heading, its description and its "Read group" line were left at the foot of
+   * a sheet while the table began on the next. (On a translated page the description is inside a
+   * `.en-note`.)
+   */
+  .app-dev .prose :is(h3, h4) + :is(p, .en-note),
+  .app-dev .prose :is(h3, h4) + :is(p, .en-note) + :is(p, .en-note) {
+    break-after: avoid;
+  }
+  /* A printed page keeps the technical part: the folds print open, so their buttons are not printed. */
+  @supports selector(::details-content) {
+    .app-dev:not([open])::details-content,
+    .app-more:not([open])::details-content,
+    .app-read:not([open])::details-content {
+      content-visibility: visible;
+    }
+    .app-dev > summary,
+    .app-more > summary,
+    .app-read > summary {
+      display: none;
+    }
+  }
+}
+
+/* Right-to-left (not offered yet): the back chevron points the other way. */
+:dir(rtl) .app-back svg {
+  transform: scaleX(-1);
+}

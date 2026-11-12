@@ -7,6 +7,8 @@ import { THEME_SCRIPT } from "../scripts/lib/theme-script.ts";
 
 const root = resolve(import.meta.dirname, "..");
 const prefixOf = (l: Locale) => (l === "en" ? "" : `/${l}`);
+/** A front matter value as text when it is text, else "". */
+const text = (v: unknown): string => (typeof v === "string" ? v : "");
 
 const locales = Object.fromEntries(
   LOCALES.map((l) => [
@@ -44,9 +46,9 @@ export default defineConfig({
   },
   transformPageData(pageData) {
     const fm = pageData.frontmatter as Record<string, unknown>;
-    const seo = String(fm["seoTitle"] ?? fm["title"] ?? "obop");
+    const seo = text(fm["seoTitle"]) || text(fm["title"]) || "obop";
     pageData.title = fm["section"] === "home" ? seo : `${seo} | obop`;
-    pageData.description = String(fm["description"] ?? messages.en.description);
+    pageData.description = text(fm["description"]) || messages.en.description;
   },
   transformHead({ pageData, assets }) {
     const fm = pageData.frontmatter as Record<string, unknown>;
@@ -65,7 +67,7 @@ export default defineConfig({
     }
     const locale = (fm["locale"] as Locale | undefined) ?? "en";
     const m = messages[locale];
-    const path = String(fm["pagePath"] ?? "/");
+    const path = text(fm["pagePath"]) || "/";
     const url = `${prefixOf(locale)}${path}`;
     const fallback = fm["fallback"] === true;
     const canonical = `${SITE_URL}${fallback ? path : url}`;
