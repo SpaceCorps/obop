@@ -25,10 +25,24 @@ export interface InfoRow {
 export interface Card {
   /** A small line above the title: the thing the action works on. */
   kicker?: string;
+  /**
+   * The model an action card works on, by its technical name. The page tells the cards of a section
+   * apart by it and not by `kicker`, which names one model in two languages on a translated page (the
+   * product's word on one card, the English one on a card that is shown in English).
+   */
+  model?: string;
   title: string;
   text: string;
   /** The quiet "a person approves when an agent asks" mark. */
   approval?: boolean;
+  /**
+   * The card's own words state a caveat a reader must not miss (what an AI agent may do without
+   * approval; that a step does not bill, notify or send what its name suggests; a step whose words
+   * speak of approval without the mark). `data/apps.ts` sets it, by the card's source key (`keep` of a
+   * card's own words, or `keep` of the app), so a translated page inherits it. Like the approval mark it
+   * keeps the card out of the fold ("Show N more"); see `splitCards`.
+   */
+  keep?: boolean;
   /** "en" when the words are the English manifest's on a translated page; absent otherwise. */
   lang?: "en";
 }
@@ -231,21 +245,26 @@ export function appView(app: App, m: Messages, all: App[], locale = "en"): AppVi
       const modelName = labels.models[model.name]?.name;
       // Plain words written for this card (data/apps.ts) are English, and so is the whole card on a
       // translated page: the product's translation of the manifest text says the old words.
-      const plain = app.cards[`${model.name}.${act.name}`];
+      const key = `${model.name}.${act.name}`;
+      const plain = app.cards[key];
       if (plain)
         return {
           kicker: modelLabel(app, model),
+          model: model.name,
           title: plain.title ?? capital(words(act.name)),
           text: plain.text,
           approval: act.approval,
+          ...(plain.keep || app.keep.includes(key) ? { keep: true } : {}),
           ...(translated ? { lang: "en" as const } : {}),
         };
       const ok = translated && !!own?.label && !!own?.description && !!modelName;
       return {
         kicker: ok ? modelName : modelLabel(app, model),
+        model: model.name,
         title: ok ? own!.label! : capital(words(act.name)),
         text: ok ? own!.description! : act.description,
         approval: act.approval,
+        ...(app.keep.includes(key) ? { keep: true } : {}),
         ...(translated && !ok ? { lang: "en" as const } : {}),
       };
     }),
@@ -257,12 +276,14 @@ export function appView(app: App, m: Messages, all: App[], locale = "en"): AppVi
       return {
         title: plain.title ?? modelLabel(app, model),
         text: plain.text,
+        ...(plain.keep || app.keep.includes(model.name) ? { keep: true } : {}),
         ...(translated ? { lang: "en" as const } : {}),
       };
     const ok = translated && !!own?.name && !!own?.description;
     return {
       title: ok ? own!.name! : modelLabel(app, model),
       text: ok ? own!.description! : model.description,
+      ...(app.keep.includes(model.name) ? { keep: true } : {}),
       ...(translated && !ok ? { lang: "en" as const } : {}),
     };
   });

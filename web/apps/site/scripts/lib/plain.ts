@@ -42,8 +42,13 @@ export const TECHNICAL_WORDS = new RegExp(`\\b(${TECHNICAL.map((t) => t.word).jo
 export const CODE_TOKENS = /\b[a-z]+_[a-z_]+\b|\b[a-z][a-z_]*\.(?:user|manager|approver|admin)\b/;
 
 /**
- * The cards a visitor sees without opening a fold: the first six, or all of them when there are seven
- * (a fold is only made for two cards or more; AppCards.vue).
+ * The first six cards of a section, or all of them when there are seven: the fold the page had when it
+ * showed six. It is no longer what a visitor sees without opening a fold. The page shows what
+ * `splitCards` (scripts/lib/cards.ts) picks: every card with the approval mark or `keep`, then the
+ * first three of the others (the first one where three or more cards are marked), so a marked card
+ * from further down is shown and a card among the first six can be folded. The test in cards.test.ts reads those cards
+ * against the words above; this list is left as it was, so the older tests read at least as many
+ * cards as they did.
  */
 export const visible = <T>(cards: T[]): T[] => (cards.length > 7 ? cards.slice(0, 6) : cards);
 

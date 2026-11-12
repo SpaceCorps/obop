@@ -64,7 +64,7 @@
 }
 
 /*
- * Hero: the icon, the name, the tagline, the category and one button. On a phone the icon sits above
+ * Hero: the icon, the name, the tagline and one button. On a phone the icon sits above
  * the text, so the name has the whole width of the column and a long name (Rechnungsstellung,
  * Sähköpostimarkkinointi) is not squeezed beside a 96 px icon; from 40rem the icon (120 px) sits beside
  * the text. The row wraps, so at a very large text size the icon goes above the text instead of
@@ -103,12 +103,6 @@
   margin: var(--space-2) 0 0;
   color: var(--text-muted);
   font-size: max(1rem, min(1.125rem, calc(var(--h1-base) * 0.7)));
-  line-height: 1.35;
-}
-.app-category {
-  margin: var(--space-1) 0 0;
-  color: var(--text-muted);
-  font-size: 0.9375rem;
   line-height: 1.35;
 }
 /* The one filled pill of a screen: the hero's button, and the button in the Get box further down. */
@@ -266,8 +260,13 @@
     font-size: 0.8rem;
   }
 }
-/* An experimental app says so in one plain line under the strip, so the one word "Experimental" is not all there is. */
-.app-experimental {
+/*
+ * An experimental app says so in one plain line under the strip, so the one word "Experimental" is not
+ * all there is. A built-in app says in the same place and the same quiet way that it is included in
+ * every obop: it has no Get box, and this is the one place the page says it needs no install.
+ */
+.app-experimental,
+.app-included {
   margin: var(--space-3) 0 0;
   color: var(--text-muted);
   font-size: 0.9375rem;
@@ -397,13 +396,12 @@
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
 }
 
-/* The two folds ("Show N more", "Show technical details"): one quiet pill, no accent colour. */
+/* The two folds ("Show N more", "Read more"): one quiet pill, no accent colour. */
 .app-more {
   margin-block-start: var(--space-4);
 }
 .app-more > summary,
-.app-read > summary,
-.app-dev > summary {
+.app-read > summary {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
@@ -412,7 +410,8 @@
   min-inline-size: 0;
   max-inline-size: 100%;
   padding-block: var(--space-2);
-  padding-inline: var(--space-5);
+  /* In rem the room round the label took 80 px of a phone's width at 200 percent text: a vw ceiling keeps the label its line. */
+  padding-inline: min(var(--space-5), 5vw);
   border: 1px solid transparent;
   border-radius: var(--radius-pill);
   background: var(--surface-3);
@@ -424,36 +423,16 @@
   transition: background-color var(--dur-2) var(--ease-out);
 }
 .app-more > summary::-webkit-details-marker,
-.app-read > summary::-webkit-details-marker,
-.app-dev > summary::-webkit-details-marker {
+.app-read > summary::-webkit-details-marker {
   display: none;
 }
 .app-more > summary:hover,
-.app-read > summary:hover,
-.app-dev > summary:hover {
+.app-read > summary:hover {
   background: var(--border);
 }
 .app-more[open] > summary,
 .app-read[open] > summary {
   margin-block-end: var(--space-3);
-}
-.app-dev > summary::after {
-  content: "";
-  flex: none;
-  inline-size: 0.5rem;
-  block-size: 0.5rem;
-  border-inline-end: 2px solid var(--text-muted);
-  border-block-end: 2px solid var(--text-muted);
-  transform: translateY(-2px) rotate(45deg);
-  transition: transform var(--dur-2) var(--ease-out);
-}
-.app-dev[open] > summary::after {
-  transform: translateY(2px) rotate(-135deg);
-}
-/* The button says what it does: "Show ..." while the part is folded, "Hide ..." while it is open. */
-.app-dev:not([open]) .app-hide,
-.app-dev[open] .app-show {
-  display: none;
 }
 
 /* The AI agents and this app: one sentence that says what an AI agent is, then up to three short lines. */
@@ -576,11 +555,6 @@
   padding-block: 0.6875rem;
   margin-block: -0.6875rem;
 }
-/* A built-in app: one quiet line under the information, not a section of its own. */
-.app-included {
-  margin: var(--space-5) 0 0;
-  color: var(--text-muted);
-}
 .app-info .mono {
   font-family: var(--font-mono);
   font-size: 0.9375rem;
@@ -591,9 +565,9 @@
 }
 
 /*
- * Get: one plain sentence, the pill that opens obop (where Customize and its Marketplace are), the
- * command line and what it needs. The pill has the hero's look: the hero's button jumps here, so at
- * this point the page's one filled pill is this one, and the next step is obvious.
+ * Get: one plain sentence, the pill that leads to Getting started, the command line and what it
+ * needs. The pill has the hero's look: the hero's button jumps here, so at this point the page's one
+ * filled pill is this one, and the next step is obvious.
  */
 .app-getbox {
   /* The command below asks how much room the box has, in rem, so a larger text size asks for more. */
@@ -665,15 +639,121 @@
   }
 }
 
-/* For developers: a heading and one fold that holds everything technical. */
+/*
+ * The two closed rows at the end of the page, "Information" and "For developers": what a visitor does
+ * not need on the first read, one tap away, in one rounded box (a store's information list). A row is
+ * a <details class="app-row">: its summary holds the section's own <h2> (same id and the same size as
+ * every other section heading, so the heading-size rules above still hold) and a chevron that turns
+ * when the row is open. Without script it works the same: the content of both is in the page.
+ */
+.app-rows {
+  margin-block-start: var(--st-gap);
+  border: var(--st-hair);
+  border-radius: var(--st-radius);
+  background: var(--surface);
+}
+.app-rows > section + section {
+  border-block-start: var(--st-hair);
+}
+.app-row {
+  /* The summary below asks how much room the row has, in rem, so a larger text size asks for more. */
+  container-type: inline-size;
+}
+.app-row > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  box-sizing: border-box;
+  min-block-size: 4.5rem;
+  padding-block: var(--space-4);
+  padding-inline: min(var(--space-6), 5vw);
+  cursor: pointer;
+  list-style: none;
+}
+.app-row > summary::-webkit-details-marker {
+  display: none;
+}
+/* The heading is the label of the row: no margin of its own, and it may wrap beside the chevron. */
+.app-row > summary h2 {
+  min-inline-size: 0;
+  margin: 0;
+}
+.app-row > summary::after {
+  content: "";
+  flex: none;
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  border-inline-end: 2px solid var(--text-muted);
+  border-block-end: 2px solid var(--text-muted);
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform var(--dur-2) var(--ease-out);
+}
+.app-row > summary:hover::after {
+  border-color: var(--text);
+}
+.app-row[open] > summary::after {
+  transform: translateY(2px) rotate(-135deg);
+}
+/* The ring is drawn inside the row: the rows share one rounded box, and a ring outside it would be cut at the screen's edge. */
+.app-page .app-row > summary:focus-visible {
+  outline-offset: -4px;
+  border-radius: var(--st-radius);
+}
+/*
+ * Where the row is very narrow in rem (a phone at 150 to 200 percent text; not a 320 px phone at the
+ * normal size, whose row is 18 rem) the chevron does not sit beside the heading: the longest word of a
+ * row label ("desarrolladores") needs the whole line there. It drops under the heading, at the end.
+ */
+@container (width < 13rem) {
+  .app-row > summary {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2);
+  }
+  .app-row > summary::after {
+    align-self: flex-end;
+  }
+}
+.app-row-body {
+  padding-block: 0 var(--space-6);
+  padding-inline: min(var(--space-6), 5vw);
+}
+/* Inside its row the information list has no line above it or under its last pair: the row is the box. */
+.app-row-body .app-info {
+  border-block-start: 0;
+}
+.app-row-body .app-info > div:last-child {
+  border-block-end: 0;
+}
+/*
+ * The row's own padding takes 41 px of a 390 px phone: with the value's 12rem the pair needed 336 px
+ * and had 317, so every value dropped under its label. 9rem keeps label and value on one line there,
+ * as they were before the list was in a row.
+ */
+.app-row-body .app-info dd {
+  flex-basis: 9rem;
+}
+/*
+ * A path or a file name ("email_marketing.toml") has no room beside its label at 9rem: it was cut in
+ * the middle of its name. Its value keeps the old 12rem and drops under its label, where it has the
+ * whole line and fits whole at the normal text size. At a very large text size a name can be wider
+ * than the whole line (200 percent on a 320 px phone: the name is 360 px, the line 222): then it
+ * breaks inside the name, as every word of the list may (`overflow-wrap: anywhere` and no minimum
+ * width, from the shared `.app-info dd`), and it never runs out of its card. Do not restore a
+ * minimum width (`min-inline-size: auto`) with `overflow-wrap: break-word` here: the value's box then
+ * grows with the word and the list ran 138 px past its card and the page 89 px past a 320 px screen.
+ */
+.app-row-body .app-info dd:has(.mono) {
+  flex-basis: 12rem;
+}
+
+/* For developers: the last row, which holds everything technical. */
 .app-dev .prose {
-  padding-block: var(--space-8) 0;
+  padding-block: var(--space-2) var(--space-6);
+  padding-inline: min(var(--space-6), 5vw);
   font-size: var(--text-md);
   line-height: var(--leading-reading, 1.65);
-}
-.app-dev[open] > .prose {
-  margin-block-start: var(--space-5);
-  border-block-start: var(--st-hair);
 }
 /*
  * The rule above a heading is drawn by ::before, outside the heading's own box, so the focus ring that
@@ -760,18 +840,27 @@
   .app-dev .prose :is(h3, h4) + :is(p, .en-note) + :is(p, .en-note) {
     break-after: avoid;
   }
-  /* A printed page keeps the technical part: the folds print open, so their buttons are not printed. */
+  /*
+   * A printed page keeps what the folds and the two rows hold: they print open. The buttons of the card
+   * folds and of "Read more" are not printed (what they would open is already there). The summary of a
+   * row is its heading, so it is printed, as plain text with no chevron.
+   */
   @supports selector(::details-content) {
-    .app-dev:not([open])::details-content,
+    .app-row:not([open])::details-content,
     .app-more:not([open])::details-content,
     .app-read:not([open])::details-content {
       content-visibility: visible;
     }
-    .app-dev > summary,
     .app-more > summary,
     .app-read > summary {
       display: none;
     }
+  }
+  .app-row > summary::after {
+    display: none;
+  }
+  .app-row > summary {
+    break-after: avoid;
   }
 }
 

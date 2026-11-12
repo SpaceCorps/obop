@@ -72,6 +72,8 @@ export interface App {
   modelNames: Record<string, string>;
   /** Plain words for the cards whose manifest text is not (see `AppCopy.cards`). */
   cards: Record<string, CardCopy>;
+  /** Cards kept out of the fold that keep the manifest's words (see `AppCopy.keep`). */
+  keep: string[];
   /** The models that have no `delete` command (see `AppCopy.noDelete`). */
   noDelete: string[];
   /** Caveats of the app as a whole, shown under "For developers" (see `AppCopy.limits`). */
@@ -167,6 +169,7 @@ function toApp(raw: Raw, builtin: boolean, source: string): App {
     ...(copy.technical ? { technical: copy.technical } : {}),
     modelNames: copy.modelNames ?? {},
     cards: copy.cards ?? {},
+    keep: copy.keep ?? [],
     noDelete: copy.noDelete ?? [],
     limits: copy.limits ?? [],
     models,
