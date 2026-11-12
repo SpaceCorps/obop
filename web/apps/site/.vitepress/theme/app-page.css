@@ -736,18 +736,16 @@
 }
 /*
  * A path or a file name ("email_marketing.toml") has no room beside its label at 9rem: it was cut in
- * the middle of its name. Its value keeps the old 12rem and drops under its label, where it fits
- * whole. The shared `.app-info dd` also cancels the content's minimum width (`min-inline-size: 0`)
- * and breaks a word anywhere; inside a row the minimum is restored and a word breaks only when it is
- * wider than the whole line, so a long word moves its value under the label before it is ever cut, at
- * a large text size too.
+ * the middle of its name. Its value keeps the old 12rem and drops under its label, where it has the
+ * whole line and fits whole at the normal text size. At a very large text size a name can be wider
+ * than the whole line (200 percent on a 320 px phone: the name is 360 px, the line 222): then it
+ * breaks inside the name, as every word of the list may (`overflow-wrap: anywhere` and no minimum
+ * width, from the shared `.app-info dd`), and it never runs out of its card. Do not restore a
+ * minimum width (`min-inline-size: auto`) with `overflow-wrap: break-word` here: the value's box then
+ * grows with the word and the list ran 138 px past its card and the page 89 px past a 320 px screen.
  */
 .app-row-body .app-info dd:has(.mono) {
   flex-basis: 12rem;
-}
-.app-row-body .app-info dd {
-  min-inline-size: auto;
-  overflow-wrap: break-word;
 }
 
 /* For developers: the last row, which holds everything technical. */
