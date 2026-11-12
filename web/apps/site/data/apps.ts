@@ -8,9 +8,15 @@
  *   to know to use it safely: a step that does not do what its name suggests ("By itself, this does not
  *   notify anyone"), an edit that is still possible after a step, a legal or privacy limit. It is true on
  *   its own, is not empty and is at least three words: a reader who never opens the fold is not misled
- *   by what is left. A caveat of that kind stays on top, and the card that carries it has `keep`
- *   (`CardCopy.keep`, or `AppCopy.keep` where the card has no words of its own here), so a "Show N
- *   more" fold never hides it.
+ *   by what is left. A caveat of that kind stays on top. A card is also held outside the "Show N more"
+ *   fold with `keep` (`CardCopy.keep`, or `AppCopy.keep` where the card has no words of its own
+ *   here), but only for two kinds of words, the two that a unit test (`cards.test.ts`) enforces: words
+ *   that say what the step does not do ("By itself, this does not ...", "By itself, obop does not
+ *   ..."), and words that speak of approval, of proposing or of an AI agent. "An edit that is still
+ *   possible after a step" ("can still be edited": Sales "Confirm", Point of Sale "Pay") is a caveat
+ *   on top and is NOT kept: that card has neither the mark nor `keep`, and a fold may hide it. Two
+ *   cards are kept by hand beyond the two kinds (Connectors "Test" and its Transfer log, which say what
+ *   is sent and what is held); they are on the pinned list of kept cards in `cards.test.ts`.
  * - A caveat that only a developer or an operator needs (how a check is made, what is not tested against
  *   a live service, a field nothing reads, a template that nothing links) goes under "For developers":
  *   on a card as `limit`, for the app as an entry of `limits`. A limit is one sentence that ends with
@@ -107,13 +113,15 @@ export interface CardCopy {
    */
   limit?: string;
   /**
-   * The card stays outside the "Show N more" fold, like a card with the approval mark. Set it only
-   * where the card's own words are a caveat that stops a misreading of the text above them: what an
-   * AI agent may do without approval, or that a step does not do what its name suggests (it starts no
-   * billing, it notifies no one, a test sends an event to the remote address). It is not a rule for
-   * every hand-written card: most of them are ordinary descriptions and may be folded. A unit test
-   * (`cards.test.ts`) lists the cards that have it, and fails for a card whose words speak of an AI
-   * agent or of approval and that has neither this nor the approval mark.
+   * The card stays outside the "Show N more" fold, like a card with the approval mark. Set it for the
+   * two kinds of words that a unit test (`cards.test.ts`) enforces: words that say what the step does
+   * not do ("By itself, this does not notify anyone", "By itself, obop does not ..."), and words that
+   * speak of approval, of proposing or of an AI agent (what an AI agent may do without approval). The
+   * test fails for a card of either kind that has neither this nor the approval mark, and it lists
+   * the cards that have it. Other caveats are not kept: "can still be edited" (Sales "Confirm", Point
+   * of Sale "Pay") is not a reason, and such a card may be folded. It is not a rule for every
+   * hand-written card: most of them are ordinary descriptions. Connectors "Test" and its Transfer log
+   * are kept by hand beyond the two kinds and are on the test's pinned list.
    */
   keep?: boolean;
 }
