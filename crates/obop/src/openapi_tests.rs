@@ -16,6 +16,8 @@ use tower::ServiceExt;
 
 /// Commands of models that have no `list` command: registered on REST, absent from the document.
 const KNOWN_OMITTED: &[&str] = &[
+    "bank_matching.book",
+    "bank_matching.suggest",
     "import_map.get",
     "import_map.search",
     "instance_brand.clear",
