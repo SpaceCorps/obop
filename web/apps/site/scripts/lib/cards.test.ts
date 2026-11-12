@@ -31,10 +31,19 @@ describe("which cards a section shows and which it folds", () => {
   });
 
   test("a marked card is never folded, however late it comes and however many there are", () => {
-    // The marked ones are shown wherever they stand; the first of the others fill what is left of three.
-    const late = [card("a"), card("b"), card("c"), card("d"), card("E", true), card("F", true)];
-    expect(titles(splitCards(late).shown)).toEqual(["a", "E", "F"]);
-    expect(titles(splitCards(late).folded)).toEqual(["b", "c", "d"]);
+    // The marked ones are shown wherever they stand, and with fewer than three of them the first three
+    // of the others are shown beside them.
+    const late = [
+      card("a"),
+      card("b"),
+      card("c"),
+      card("d"),
+      card("e"),
+      card("F", true),
+      card("G", true),
+    ];
+    expect(titles(splitCards(late).shown)).toEqual(["a", "b", "c", "F", "G"]);
+    expect(titles(splitCards(late).folded)).toEqual(["d", "e"]);
     // More marked cards than three: all of them are shown, and the first other card with them.
     const many = [
       card("A", true),
@@ -62,11 +71,16 @@ describe("which cards a section shows and which it folds", () => {
     expect(splitCards(one).shown).toHaveLength(5);
     const alone = [card("A", true), card("b"), card("C", true), card("D", true), card("e")];
     expect(splitCards(alone).folded).toHaveLength(0);
+    // The same with fewer than three marked: three others are shown, the fourth would be alone.
+    const fourth = [card("a"), card("b"), card("c"), card("d"), card("E", true)];
+    expect(splitCards(fourth).folded).toHaveLength(0);
+    expect(splitCards(fourth).shown).toHaveLength(5);
   });
 
-  test("marked cards never take all the room: at least one other card is shown beside them", () => {
+  test("the room beside the marked cards: three others beside fewer than three, one beside three or more", () => {
     // Three cancellations and then the steps that lead up to them: the page said "What you can do:
-    // cancel", with its first step folded. The first of the others is shown, in the manifest's order.
+    // cancel", with its first step folded. With three or more marked cards one of the others is
+    // shown, in the manifest's order, so a section is never only its exceptions.
     const cancels = [
       card("Activate"),
       card("Mark past due"),
@@ -82,13 +96,41 @@ describe("which cards a section shows and which it folds", () => {
       "Cancel overdue",
     ]);
     expect(titles(splitCards(cancels).folded)).toEqual(["Mark past due", "Recover"]);
-    // Where fewer than three are marked, the others fill up to three in all (the room is what is left).
+    // Where fewer than three are marked, three of the others are shown beside them (not what is left
+    // of three: the marked cards do not take the room of the others).
     const one = [card("a"), card("b"), card("c"), card("d"), card("E", true), card("f")];
-    expect(titles(splitCards(one).shown)).toEqual(["a", "b", "E"]);
+    expect(titles(splitCards(one).shown)).toEqual(["a", "b", "c", "E"]);
+    expect(titles(splitCards(one).folded)).toEqual(["d", "f"]);
+    const two = [
+      card("a"),
+      card("B", true),
+      card("c"),
+      card("D", true),
+      card("e"),
+      card("f"),
+      card("g"),
+    ];
+    expect(titles(splitCards(two).shown)).toEqual(["a", "B", "c", "D", "e"]);
+    expect(titles(splitCards(two).folded)).toEqual(["f", "g"]);
     const none = [card("a"), card("b"), card("c"), card("d"), card("e")];
     expect(titles(splitCards(none).shown)).toEqual(["a", "b", "c"]);
+    // At three marked cards the rule turns over: one of the others, not three.
+    const three = [
+      card("a"),
+      card("B", true),
+      card("c"),
+      card("D", true),
+      card("e"),
+      card("F", true),
+      card("g"),
+    ];
+    expect(titles(splitCards(three).shown)).toEqual(["a", "B", "D", "F"]);
+    expect(titles(splitCards(three).folded)).toEqual(["c", "e", "g"]);
     // The limit is a parameter of the rule, not a number in it.
     expect(titles(splitCards(none, 2).shown)).toEqual(["a", "b"]);
+    expect(titles(splitCards([card("a"), card("B", true), card("c"), card("d")], 1).shown)).toEqual(
+      ["a", "B"],
+    );
   });
 
   test("a card with `keep` is held like a card with the approval mark", () => {
@@ -97,8 +139,8 @@ describe("which cards a section shows and which it folds", () => {
     expect(isMarked(card("x"))).toBe(false);
     expect(isMarked({ approval: false, keep: false })).toBe(false);
     const cards = [card("a"), card("b"), card("c"), card("d"), kept("E"), card("f")];
-    expect(titles(splitCards(cards).shown)).toEqual(["a", "b", "E"]);
-    expect(titles(splitCards(cards).folded)).toEqual(["c", "d", "f"]);
+    expect(titles(splitCards(cards).shown)).toEqual(["a", "b", "c", "E"]);
+    expect(titles(splitCards(cards).folded)).toEqual(["d", "f"]);
     // It counts with the approval mark, and it is shown however late it comes and however many are.
     const mixed = [
       card("a"),
@@ -148,50 +190,84 @@ describe("which cards a section shows and which it folds", () => {
   });
 
   test("the cards with `keep` are the ones that were chosen, and each reaches a card", () => {
-    // A card is given `keep` by hand, where its own words are a caveat that must not be missed: a
-    // new one is a deliberate change of this list.
-    const chosen = apps.flatMap((a) =>
-      Object.entries(a.cards)
+    // A card is given `keep` by hand, where its own words are a caveat that must not be missed, or
+    // speak of approval without the approval mark: a new one is a deliberate change of this list. The
+    // flag is a card's own (`cards`) or, for a card that keeps the manifest's translated words, the
+    // app's list of keys (`keep`).
+    const chosen = apps.flatMap((a) => [
+      ...Object.entries(a.cards)
         .filter(([, c]) => c.keep)
         .map(([key]) => `${a.id}: ${key}`),
-    );
+      ...a.keep.map((key) => `${a.id}: ${key}`),
+    ]);
     expect(chosen.sort()).toEqual(
       [
         "connectors: connection.test",
         "connectors: data_flow_log",
+        "expenses: expenses_expense.approve",
+        "expenses: expenses_expense.submit",
         "hr: hr_leave_request.request",
         "subscriptions: subscriptions_subscription.activate",
+        "timesheets: timesheets_entry.approve",
+        "timesheets: timesheets_entry.submit",
         "website: website_blog_post_translation",
         "website: website_menu_item",
         "website: website_page",
         "website: website_page_translation",
       ].sort(),
     );
-    // Each of them is a card of the page (a key that matches no card would hold nothing).
-    for (const a of apps) {
-      const n = Object.values(a.cards).filter((c) => c.keep).length;
-      const onPage = SECTIONS.flatMap((section) => view(a.id)[section]).filter((c) => c.keep);
-      expect(onPage, `${a.id}: the cards that have keep`).toHaveLength(n);
+    // Each of them is a card of the page (a key that matches no card would hold nothing), in every
+    // language: the flag comes with the source key and not with the words.
+    for (const a of apps)
+      for (const locale of locales) {
+        const n = Object.values(a.cards).filter((c) => c.keep).length + a.keep.length;
+        const onPage = SECTIONS.flatMap((section) => view(a.id, locale)[section]).filter(
+          (c) => c.keep,
+        );
+        expect(onPage, `${locale} ${a.id}: the cards that have keep`).toHaveLength(n);
+      }
+  });
+
+  test("a card that keeps the manifest's words keeps its translations", () => {
+    // Expenses "Submit" has no words of its own in data/apps.ts (an entry there would make it English
+    // on every page): `keep` of the app holds it by key and the product's translation stays.
+    const en = view("expenses").actions.find((c) => c.title === "Submit")!;
+    expect(en.keep).toBe(true);
+    expect(en.lang).toBeUndefined();
+    expect(en.text).toBe("Submit the claim for approval");
+    const at = view("expenses").actions.findIndex((c) => c.title === "Submit");
+    for (const locale of locales.filter((l) => l !== "en")) {
+      const submit = view("expenses", locale).actions[at]!;
+      expect(submit.keep, `${locale}: kept`).toBe(true);
+      expect(submit.lang, `${locale}: the product's own words, not English`).toBeUndefined();
+      expect(submit.text, locale).not.toBe(en.text);
     }
   });
 
   test("the cards whose words speak of an AI agent or of approval are never folded", () => {
-    // What proceeds without approval, and what an AI agent may do: the one statement an owner must
-    // not miss. Matched on the English words of the card; the same card is then checked in every
-    // language, since its mark is set by key.
-    const SAYS = /\bAI agents?\b|\b(?:no|without)\s+(?:further\s+)?approval\b/i;
+    // What proceeds without approval, what needs a person's approval and what an AI agent may do: the
+    // statements an owner must not miss. Matched on the English words of the card: every card whose
+    // text speaks of approval or of an AI agent carries the approval mark or `keep`, and is then
+    // checked in every language, since both are set by key.
     const SPEAKS = /approv|\bAI agents?\b/i;
-    expect(SAYS.test("Edits to a published page need no further approval.")).toBe(true);
-    expect(SAYS.test("an AI agent included, can do that without approval")).toBe(true);
-    expect(SAYS.test("Submit the claim for approval")).toBe(false);
-    const says: string[] = [];
-    let speaks = 0;
+    expect(SPEAKS.test("Edits to a published page need no further approval.")).toBe(true);
+    expect(SPEAKS.test("an AI agent included, can do that without approval")).toBe(true);
+    expect(SPEAKS.test("Submit the claim for approval")).toBe(true);
+    expect(SPEAKS.test("Mark the entry as submitted, for a manager to approve or reject.")).toBe(
+      true,
+    );
+    expect(SPEAKS.test("Create a lead")).toBe(false);
+    const speaks: string[] = [];
     for (const a of apps)
       for (const section of SECTIONS) {
         const english = view(a.id)[section];
         english.forEach((c, i) => {
           if (!SPEAKS.test(c.text)) return;
-          speaks++;
+          speaks.push(`${a.id}: ${c.title}`);
+          expect(
+            isMarked(c),
+            `${a.id}: "${c.title}" speaks of approval or of an AI agent, and has neither the approval mark nor keep`,
+          ).toBe(true);
           for (const locale of locales) {
             const cards = view(a.id, locale)[section];
             expect(
@@ -199,24 +275,21 @@ describe("which cards a section shows and which it folds", () => {
               `${locale} ${a.id}: "${c.title}" speaks of approval and is folded`,
             ).toContain(cards[i]);
           }
-          if (SAYS.test(c.text)) {
-            says.push(`${a.id}: ${c.title}`);
-            expect(
-              isMarked(c),
-              `${a.id}: "${c.title}" says what an AI agent may do or what needs no approval, and has neither the approval mark nor keep`,
-            ).toBe(true);
-          }
         });
       }
-    // Not vacuous: the four Website cards, and the Contacts erase step, are among them.
-    expect(says.sort()).toEqual([
+    // Not vacuous: the four Website cards, the Contacts erase step and the two Submit cards that
+    // have no approval mark are among them.
+    for (const name of [
       "base: Erase",
+      "expenses: Submit",
+      "timesheets: Submit",
       "website: Blog post translation",
       "website: Menu item",
       "website: Page",
       "website: Page translation",
-    ]);
-    expect(speaks).toBeGreaterThan(8);
+    ])
+      expect(speaks, name).toContain(name);
+    expect(speaks.length).toBeGreaterThan(8);
   });
 
   test("the cards a page opens with: the numbers on the pages that were named", () => {
@@ -234,26 +307,52 @@ describe("which cards a section shows and which it folds", () => {
       "Cancel",
       "Cancel overdue",
     ]);
-    // eCommerce: the two refunds and the first other step.
-    expect(at("ecommerce", "actions")).toEqual([3, 5]);
+    // eCommerce: the two refunds and the first three other steps, in the manifest's order.
+    expect(at("ecommerce", "actions")).toEqual([5, 3]);
+    expect(titles(splitCards(view("ecommerce").actions).shown)).toEqual([
+      "Mark paid",
+      "Ship",
+      "Deliver",
+      "Refund",
+      "Refund delivered",
+    ]);
+    expect(titles(splitCards(view("ecommerce").actions).folded)).toEqual([
+      "Cancel",
+      "Mark failed",
+      "Cancel",
+    ]);
     expect(splitCards(view("ecommerce").actions).shown.filter(isMarked)).toHaveLength(2);
     // Website: the four cards that state a caveat are shown, in the manifest's order; only the blog
-    // post and the form submission are left, and a fold is not made for them.
+    // post and the form submission are left, and a fold is not made for them. The page's Archive is
+    // shown before the blog's Publish.
     expect(at("website", "models")).toEqual([6, 0]);
-    expect(at("website", "actions")).toEqual([3, 5]);
+    expect(at("website", "actions")).toEqual([5, 3]);
+    expect(titles(splitCards(view("website").actions).shown)).toEqual([
+      "Publish",
+      "Unpublish",
+      "Archive",
+      "Publish",
+      "Unpublish",
+    ]);
     expect(at("hr", "actions")).toEqual([5, 0]);
+    // Nine marked cards and one other (three or more marked): the rule holds a long run to one other.
     expect(at("connectors", "actions")).toEqual([10, 3]);
     expect(at("accounting", "actions")).toEqual([7, 3]);
     expect(at("accounting", "models")).toEqual([3, 5]);
-    // The room: three in all while fewer than three are marked, and one other beside any number of
-    // marked ones. No page opens with more than the marked cards and one other, or with three.
+    // The two apps whose Submit and Approve cards speak of approval: nothing is folded, as before.
+    expect(at("timesheets", "actions")).toEqual([3, 0]);
+    expect(at("expenses", "actions")).toEqual([4, 0]);
+    // The room: three others while fewer than three cards are marked, one other from three marked
+    // cards on. No page opens with more cards than the marked ones and that room.
     for (const a of apps)
       for (const section of SECTIONS) {
         const cards = view(a.id)[section];
         const { shown, folded } = splitCards(cards);
         if (folded.length === 0) continue;
         const marked = cards.filter(isMarked).length;
-        expect(shown, `${a.id} ${section}`).toHaveLength(Math.max(SHOWN_CARDS, marked + 1));
+        expect(shown, `${a.id} ${section}`).toHaveLength(
+          marked + (marked >= SHOWN_CARDS ? 1 : SHOWN_CARDS),
+        );
       }
     // The Get box follows these cards on a marketplace app: none of them opens with more than seven.
     const longest = Math.max(

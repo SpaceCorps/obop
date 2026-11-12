@@ -19,18 +19,20 @@ export const isMarked = (c: { approval?: boolean; keep?: boolean }): boolean =>
 /**
  * The cards that are shown and the cards that go in the fold, both in the order they came in (the
  * manifest's). Every marked card (`isMarked`) is shown, however many there are and however late they
- * come. Marked cards never take all the room: the first of the others fill what is left of `limit`,
- * and at least one of them is shown, so a section is never only its exceptions (a page whose "What you
- * can do" is three cancellations, its first step folded). A fold is only made for two cards or more
- * ("Show 1 more actions" is not a sentence in most languages): where one card would be left in it, it
- * is shown too, and so are all of them when there are at most `limit` + 1.
+ * come. Few marked cards do not take the room of the others: with fewer than `limit` of them, the
+ * first `limit` of the others are shown as well (three ordinary cards beside one or two marked
+ * ones). With `limit` or more marked cards the first one of the others is shown, so a section is never
+ * only its exceptions (a page whose "What you can do" is three cancellations, its first step folded)
+ * and a long run of marked cards does not also push out the ordinary ones. A fold is only made for two
+ * cards or more ("Show 1 more actions" is not a sentence in most languages): where one card would be
+ * left in it, it is shown too, so when at most one of the others would be folded nothing is.
  */
 export function splitCards<T extends { approval?: boolean; keep?: boolean }>(
   cards: readonly T[],
   limit: number = SHOWN_CARDS,
 ): { shown: T[]; folded: T[] } {
   const marked = cards.filter(isMarked).length;
-  let room = Math.max(1, limit - marked);
+  let room = marked >= limit ? 1 : limit;
   const shown: T[] = [];
   const folded: T[] = [];
   for (const c of cards) {

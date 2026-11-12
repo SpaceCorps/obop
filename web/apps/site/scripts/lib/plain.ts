@@ -45,8 +45,8 @@ export const CODE_TOKENS = /\b[a-z]+_[a-z_]+\b|\b[a-z][a-z_]*\.(?:user|manager|a
  * The first six cards of a section, or all of them when there are seven: the fold the page had when it
  * showed six. It is no longer what a visitor sees without opening a fold. The page shows what
  * `splitCards` (scripts/lib/cards.ts) picks: every card with the approval mark or `keep`, then the
- * first of the others, three in all and at least one other, so a marked card from further down is
- * shown and a card among the first six can be folded. The test in cards.test.ts reads those cards
+ * first three of the others (the first one where three or more cards are marked), so a marked card
+ * from further down is shown and a card among the first six can be folded. The test in cards.test.ts reads those cards
  * against the words above; this list is left as it was, so the older tests read at least as many
  * cards as they did.
  */

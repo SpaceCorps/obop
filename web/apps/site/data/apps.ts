@@ -60,6 +60,14 @@ export interface AppCopy {
    */
   cards?: Record<string, CardCopy>;
   /**
+   * Cards that stay outside the "Show N more" fold like a card with `CardCopy.keep`, and keep the
+   * manifest's words, which the product translates: by `model.action` or by model name. For a card
+   * whose words speak of approval and that has no approval mark and no plain words of its own in
+   * `cards` ("Submit the claim for approval"); giving it an entry in `cards` only to set `keep`
+   * would turn its translations into English.
+   */
+  keep?: string[];
+  /**
    * The package text under "For developers" (what the package does and does not do), where the
    * manifest's own text says more than the module does. The site cannot change the module's words, so
    * it shows these instead; the sentence that was left out or reworded is named in a comment next to
@@ -494,9 +502,11 @@ export const APP_COPY: AppCopy[] = [
     cards: {
       "timesheets_entry.submit": {
         text: "Mark the entry as submitted, for a manager to approve or reject. By itself, this does not notify anyone.",
+        keep: true,
       },
       "timesheets_entry.approve": {
         text: "Mark a submitted entry as approved (manager only). By itself, this does not bill it.",
+        keep: true,
       },
     },
   },
@@ -965,10 +975,14 @@ export const APP_COPY: AppCopy[] = [
     cards: {
       "expenses_expense.approve": {
         text: "Approve a submitted claim (manager only). This does not lock the claim, and a manager can approve their own.",
+        keep: true,
       },
       "expenses_expense.pay": {
         text: "Mark an approved claim as paid (finance only). By itself, this does not pay anyone, and a paid claim can still be changed or deleted by the employee.",
       },
     },
+    // "Submit the claim for approval" is the manifest's text, which the product translates: it is kept
+    // by key here and has no entry of its own in `cards`, so its translations stay.
+    keep: ["expenses_expense.submit"],
   },
 ];

@@ -785,12 +785,12 @@ test.describe("website without JavaScript", () => {
         expect(box, "the approval words of a card are drawn").not.toBeNull();
         expect(box!.width, "the approval words of a card are drawn").toBeGreaterThan(40);
       }
-      // Three cards are shown in all: every marked card (the approval mark, or `keep` in
-      // data/apps.ts, counted in `app.kept`) and the first of the others for what is left of three,
-      // and at least one other where three or more are marked; four cards are all shown, and so is a
-      // card that would be alone in the fold.
+      // Every marked card (the approval mark, or `keep` in data/apps.ts, counted in `app.kept`) is
+      // shown, and so are the first three of the others while fewer than three cards are marked, or
+      // the first one of the others from three marked cards on; a card that would be alone in the
+      // fold is shown too.
       const folded = (n: number, marked: number) => {
-        const rest = n > 4 ? n - Math.max(3, marked + 1) : 0;
+        const rest = n - marked - (marked >= 3 ? 1 : 3);
         return rest < 2 ? 0 : rest;
       };
       const foldedActions = folded(actionBlocks.length, approvals + app.kept[0]);
@@ -1198,18 +1198,18 @@ test.describe("website without JavaScript", () => {
     });
     expect(edge.cards).toBe(2);
     expect(edge.gap).toBeLessThan(2);
-    // CRM has four actions: all shown, no fold for a single card. Fleet has seven: three are shown
-    // (a store page shows a few cards, not the manual) and the other four are in a fold that counts
-    // them.
+    // CRM has four actions: all shown, no fold for a single card. Fleet has seven: four are shown
+    // (its one marked card, Retire, and the first three others: a store page shows a few cards, not
+    // the manual) and the other three are in a fold that counts them.
     await page.goto(`${base()}/apps/crm/`);
     await expect(page.locator("#can-do ~ .app-cards .app-card")).toHaveCount(4);
     await expect(page.locator("#can-do ~ .app-more")).toHaveCount(0);
     await page.goto(`${base()}/apps/fleet/`);
-    await expect(page.locator("#can-do ~ .app-cards .app-card")).toHaveCount(3);
+    await expect(page.locator("#can-do ~ .app-cards .app-card")).toHaveCount(4);
     await expect(page.locator("#can-do ~ .app-more > summary")).toHaveText(
-      messages.en.apps.store.showMoreActions.replace("{n}", "4"),
+      messages.en.apps.store.showMoreActions.replace("{n}", "3"),
     );
-    await expect(page.locator("#can-do ~ .app-more .app-card")).toHaveCount(4);
+    await expect(page.locator("#can-do ~ .app-more .app-card")).toHaveCount(3);
   });
 
   test("a card that needs a person's approval is never behind a tap, on any app page", async ({
@@ -1218,7 +1218,8 @@ test.describe("website without JavaScript", () => {
   }) => {
     // Two pages where the first three actions of the manifest carry no mark: Subscriptions (its three
     // marked cards are the fourth to the sixth) and eCommerce (its two refunds come late). The marked
-    // cards are shown wherever they stand, then the others fill up to three in the manifest's order
+    // cards are shown wherever they stand, and the first others in the manifest's order: three of them
+    // beside fewer than three marked cards (eCommerce shows five of its eight), one beside three
     // (Subscriptions has six cards in all, none of them folded: one other card is shown beside three
     // marked ones, and the fold would have held one card more than it saves).
     for (const locale of ["en", "sv"] as const) {
@@ -1226,7 +1227,7 @@ test.describe("website without JavaScript", () => {
       const at = (slug: string) => `${base()}${locale === "en" ? "" : `/${locale}`}/apps/${slug}/`;
       for (const [slug, marked, shown, folded] of [
         ["subscriptions", 3, 6, 0],
-        ["ecommerce", 2, 3, 5],
+        ["ecommerce", 2, 5, 3],
       ] as const) {
         await page.goto(at(slug));
         const where = `${locale} ${slug}`;
@@ -1277,15 +1278,18 @@ test.describe("website without JavaScript", () => {
     request,
   }) => {
     // The cards that state what an AI agent may do without approval (Website's four), that a step
-    // starts no billing (Subscriptions), notifies no one (HR) or sends an event to the remote address
-    // (Connectors' Test), and the log that keeps no content. Their text is English on every page (it
+    // starts no billing (Subscriptions), notifies no one (HR, Timesheets) or sends an event to the
+    // remote address (Connectors' Test), what Expenses' and Timesheets' approval does not do, and the
+    // log that keeps no content. Their text is English on every page (it
     // is written for the card), so it is found by its words in all seven languages.
     const kept = APP_COPY.flatMap((app) =>
       Object.values(app.cards ?? {})
         .filter((c) => c.keep)
         .map((c) => ({ slug: app.id.replaceAll("_", "-"), text: c.text })),
     );
-    expect(kept.length, "cards that have keep").toBe(8);
+    // Eleven cards have words of their own and `keep`; the twelfth, Expenses "Submit", keeps the
+    // manifest's translated words (`keep` of the app) and is on a page that has no fold.
+    expect(kept.length, "cards that have keep, with words of their own").toBe(11);
     for (const locale of Object.keys(messages)) {
       const prefix = locale === "en" ? "" : `/${locale}`;
       for (const { slug, text } of kept) {
@@ -1316,14 +1320,16 @@ test.describe("website without JavaScript", () => {
     for (const { slug, text } of kept) if (slug === "website") expect(md).toContain(text);
   });
 
-  test("the room rule holds on every drawn app page: the marked cards and the first of the others, three in all", async ({
+  test("the room rule holds on every drawn app page: the marked cards, and three others beside fewer than three of them, one beside three or more", async ({
     page,
     request,
   }) => {
     // Read from the drawn page, not from the rule's code: the open cards of "What you can do" and of
     // "What it keeps", the ones in the fold, and which of them are marked (the approval words, or a
-    // `keep` card of data/apps.ts). Where a fold exists, every marked card is open and the open cards
-    // that are not marked are what is left of three, and at least one.
+    // `keep` card of data/apps.ts, found by its English words: a card that keeps the manifest's
+    // translated words has none to find, and the one such card, Expenses "Submit", is on a page
+    // without a fold). Where a fold exists, every marked card is open and the open cards that are not
+    // marked are three while fewer than three cards are marked, and one from three marked cards on.
     await page.setViewportSize({ width: 390, height: 844 });
     // Measured at 390x844: Accounting, with seven open cards, has it at 2.93 screens (2,476 px); the
     // next are Hr (2.3), Subscriptions (2.2) and Pos (2.1). Three screens and a quarter is a ceiling,
@@ -1372,7 +1378,7 @@ test.describe("website without JavaScript", () => {
         foldedSections++;
         expect(c.folded, `${where}: a fold of one card`).toBeGreaterThanOrEqual(2);
         expect(c.open - c.openMarked, `${where}: the other cards that are open`).toBe(
-          Math.max(1, 3 - c.openMarked),
+          c.openMarked >= 3 ? 1 : 3,
         );
       }
       // The first screen is the hero's: its button is on it, however many cards the page has.
