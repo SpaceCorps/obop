@@ -122,7 +122,8 @@ const pathParts = (path: string) => path.split(new RegExp("(?<=/)"));
       the part for developers). The heading is the label of its row, inside the summary, so its id,
       its size and its place in the heading order are what they were; everything is in the page, and
       print opens both. With script a link to a row's heading opens the row (site.js); without script
-      it lands on the closed row, and a link to anything inside a row opens it in the browser itself.
+      it lands on the closed row. A link to anything inside a row is opened by the browsers that
+      reveal a closed details for a fragment (Chromium); in others it lands on the closed row.
     -->
     <div class="app-rows">
       <section>
