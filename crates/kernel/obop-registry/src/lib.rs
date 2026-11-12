@@ -615,6 +615,7 @@ pub const INTERNAL_TABLES: [&str; 58] = [
     "auth_sso_provider",
     "auth_token",
     "auth_user",
+    "bank_matching",
     "bulk_idempotency",
     "community_audit",
     "community_category",

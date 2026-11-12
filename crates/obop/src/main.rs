@@ -11,6 +11,9 @@ mod assert_lang_tests;
 mod backup_cli;
 #[cfg(test)]
 mod backup_gate_tests;
+mod bank_matching;
+#[cfg(test)]
+mod bank_matching_tests;
 #[cfg(test)]
 mod blobs_tests;
 mod brand_cmd;
