@@ -31,8 +31,9 @@ const longName = computed(() =>
     .split(/[\s-]+/)
     .some((w) => w.length >= 16),
 );
-// A path breaks after its slashes, not in the middle of a word.
-const pathParts = (path: string) => path.split(new RegExp("(?<=/)"));
+// A path breaks after its slashes and before a package file's ".toml", not in the middle of a word: a
+// `<wbr>` between the parts is a break place that adds no character, so a copied name is the name.
+const pathParts = (path: string) => path.split(new RegExp("(?<=/)|(?=\\.toml$)"));
 </script>
 
 <template>
