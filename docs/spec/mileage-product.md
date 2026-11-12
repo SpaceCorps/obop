@@ -1,7 +1,7 @@
 # Mileage: product requirements (PROPOSED)
 
-- **Status:** Draft 0.1. PROPOSED. This is the product view of Mileage: the problem, who it is for, what it must do, how it competes and what is still to decide. The technical design of the `mileage` package and the app stays in [mobile.md](mobile.md), which this document does not replace. Nothing here is ratified unless it cites an owner ruling (OR-n) in [DECISIONS.md](../DECISIONS.md).
-- **Date:** 2026-11-11
+- **Status:** Draft 0.2. PROPOSED. This is the product view of Mileage: the problem, who it is for, what it must do, how it competes and what is still to decide. The technical design of the `mileage` package and the app stays in [mobile.md](mobile.md), which this document does not replace. Nothing here is ratified unless it cites an owner ruling (OR-n) in [DECISIONS.md](../DECISIONS.md). The product decisions of 2026-11-10 to 2026-11-12 in section 11.1 were agreed with the owner and are relayed, not quoted.
+- **Date:** 2026-11-12 (first draft 2026-11-11)
 - **Scope:** Mileage as a product built on obop: automatic recording of business trips, sorting them into business and private, approval, turning approved kilometres into money for the employee, and the logbook a tax authority accepts. Country rules are data, not code.
 
 **Reading notes.** Decisions are cited by ID and owner rulings as OR-n. Facts are marked as in [mobile.md](mobile.md): **verified** means a page was read on the date above; **search** means it comes from a search result summary and the page itself was not opened; **general knowledge** means no source was checked and it must be verified before anything depends on it. Nothing here is legal or tax advice. Prices of other products come from third-party comparison sites, disagree with each other and must be checked on each vendor's site.
@@ -10,7 +10,15 @@
 
 Employers in Sweden, Germany and many other countries may pay employees a tax-free amount for every kilometre they drive for work in their own (or privately leased) car, and an employee with a company car pays less benefit tax when a logbook shows the private use. Both need a trip log that the tax authority accepts, and today most people keep it by hand, late and incomplete, and lose money.
 
-Mileage records trips on the phone without Start and Stop buttons, sorts them into business and private with the obop calendar, contacts and fleet, lets a manager approve them, and turns approved kilometres into an expense claim or a payroll line in the same obop instance. The raw route stays on the phone; the employer sees only what the tax rules require.
+Mileage records trips on the phone without Start and Stop buttons, sorts them into business and private with the obop calendar, contacts and fleet, lets a manager approve them, and turns approved kilometres into an expense claim in the same obop instance. Private trips never leave the phone; the employer sees only business trips, and the raw route of those is deleted after a set time.
+
+### 1.1 Product shape
+
+| Part | Who uses it | What it does | State |
+|---|---|---|---|
+| **obop phone app** with Mileage preinstalled | Employees (drivers) | One obop app for the phone: sign in to the company's obop instance, then the Mileage module records, classifies and sends trips. Further modules can be added to the same app later | Decided 2026-11-11 (11.1); the host design in [mobile-host.md](mobile-host.md) is PROPOSED. Sign-in, shared native components and Swedish texts exist on the branches `feat/mileage-app`, `feat/mileage-ios`, `feat/mileage-sv` |
+| **obop back office** (browser) | Approvers, finance, administrators | Approve trips, set rates and vehicles, pay claims, export the logbook. Its screens are generated from the module (D46); no separate desktop app | The Mileage app tile and the trip and point lists exist |
+| **obop server**, module `mileage` | Nobody directly | Stores trips, checks the distance, governs the states, computes totals. The only place where business logic lives | Built ([mobile.md](mobile.md) 8.6) |
 
 ## 2. The problem
 
@@ -18,16 +26,16 @@ Mileage records trips on the phone without Start and Stop buttons, sorts them in
 
 | Situation | What the rules allow | What goes wrong without a good log |
 |---|---|---|
-| Employee drives **their own or a privately leased car** for work | A tax-free mileage allowance per kilometre. Sweden 2026: 25 SEK per mil (10 km) for an own car; a privately leased car counts as an own car (search, skatteverket.se). Germany: about 0.30 EUR per km (general knowledge) | No log, no tax-free payment: either nothing is paid, or the employer pays it as salary and about a third goes to tax |
-| Employee has a **company car** that is also used privately | The benefit is taxed; a logbook can show that private use is small. Sweden 2026: the tax-free fuel amount for a company car is 12 SEK per mil, 9.50 SEK for a fully electric one (search, skatteverket.se). Germany: a Fahrtenbuch instead of the flat 1 % rule (general knowledge) | Without a logbook the authority may assume private use (search, skatteverket.se), and the employee pays more tax than needed |
-| **Finance / payroll** | Pays allowances and books them | Collects paper or spreadsheet logs from everyone, checks them by hand, types the amounts into payroll |
+| Employee drives **their own or a privately leased car** for work | A tax-free mileage allowance per kilometre (rates in 8.1). In Sweden a privately leased car counts as an own car (search, skatteverket.se) | No log, no tax-free payment: either nothing is paid, or the employer pays it as salary and about a third goes to tax |
+| Employee has a **company car** that is also used privately | The benefit is taxed; a logbook can show that private use is small. In Sweden a logbook is not required by law, but without one the authority may assume private use (search, skatteverket.se). Germany: a Fahrtenbuch instead of the flat 1 % rule (general knowledge) | The employee pays more benefit tax than needed |
+| **Finance / payroll** | Pays allowances and books them | Collects paper or spreadsheet logs from everyone, checks them by hand, types the amounts in |
 
 ### 2.2 Why the existing habit fails
 
 - People forget to write trips down, and reconstruct them weeks later from memory.
 - Kilometres are rounded by eye, which is a risk in a tax audit.
 - Business and private trips are mixed, and nobody sorts them.
-- The log and the payroll live in different tools.
+- The log and the payment live in different tools.
 
 ## 3. Goals and non-goals
 
@@ -35,16 +43,17 @@ Mileage records trips on the phone without Start and Stop buttons, sorts them in
 
 1. The driver does nothing during a normal working day except confirm a summary (one tap per day or per week).
 2. Every approved business kilometre becomes money for the employee in the same obop instance, without retyping.
-3. The log meets what the tax authority of the configured country asks for.
-4. The employer never sees where an employee drove privately, and never sees raw routes after approval.
-5. A new country is a new set of configuration data, not new code.
+3. The log meets what the tax authority of the configured country asks for; Sweden first.
+4. The employer never sees private trips, and raw routes of business trips are deleted after a set time.
+5. A new country is configuration data, not new code.
 
-**Non-goals (for now)**
+**Non-goals**
 
+- Monitoring working time, performance or where an employee is outside working hours. The Swedish data-protection authority (IMY) does not accept GPS monitoring of working time or of position outside working time (search, imy.se and legal commentary); an electronic logbook for the tax authority is an accepted purpose. Mileage data is used for the logbook and the allowance only.
 - Fleet telematics, live vehicle tracking, route optimisation, dispatch maps.
-- A dongle or other hardware in the car (a later option, see 9).
+- A device in the car (OBD dongle) for now.
 - Filing anything with a tax authority directly.
-- A desktop app: recording needs the phone (desktop is the obop back office).
+- A separate desktop app: managers and finance use the obop back office in the browser.
 
 ## 4. Personas
 
@@ -52,9 +61,9 @@ Mileage records trips on the phone without Start and Stop buttons, sorts them in
 |---|---|---|
 | **Driver** (employee, salesperson, technician, consultant) | Get paid for business kilometres without effort; keep private trips private | `mileage.driver` |
 | **Approver** (manager or finance) | See and approve the month's business trips quickly; trust the numbers | `mileage.reviewer` |
-| **Payroll / finance** | Approved amounts arrive as claims or payroll lines, ready to pay and book | `expenses` and payroll groups |
-| **Administrator** | Set the country, rates, vehicles; handle stuck trips and lost phones | `mileage.admin` |
-| **Sole trader** (later) | The same log for their own tax deduction, no approver | Open (11, item 7) |
+| **Finance** | Approved amounts arrive as expense claims, ready to pay and book | groups of the `expenses` package |
+| **Administrator** | Set the country, rates, vehicles and retention; handle stuck trips and lost phones | `mileage.admin` |
+| **Sole trader** | The same log for their own tax deduction, with no approver | Later (11.1: companies first) |
 
 ## 5. How it works
 
@@ -63,12 +72,12 @@ Mileage records trips on the phone without Start and Stop buttons, sorts them in
 1. Anna has a meeting with a customer at 14:00 in the obop calendar, at the customer's address from Contacts.
 2. She gets into her car. She presses nothing. The phone notices it is in a vehicle and starts recording.
 3. She arrives; the phone notices the drive has ended and stops recording.
-4. On the phone, the trip is matched: it ended near the meeting address at 13:55, so it is proposed as **business**, purpose "Meeting with <customer>".
+4. On the phone, the trip is matched: it ended near the meeting address at 13:55, so it is proposed as **business**, purpose "Meeting with Example AB".
 5. In the evening a notification shows the day's trips: two business, one private. Anna checks them with one tap.
 6. Only the business trips go to obop. The private trip never leaves the phone.
 7. At the end of the month her manager approves the month in the obop back office.
-8. obop computes kilometres times the country rate and creates one expense claim (or payroll line) for Anna. Finance pays it as usual.
-9. The logbook for the month (and the year, with odometer readings for a company car) can be exported in the format of the country.
+8. obop computes kilometres times the rate and creates one expense claim for Anna in `expenses`. Finance pays it as usual.
+9. The logbook for the month and the year can be exported in the Swedish format.
 
 ### 5.2 How a trip is detected (no Start and Stop)
 
@@ -78,9 +87,9 @@ Mileage records trips on the phone without Start and Stop buttons, sorts them in
 | The car's Bluetooth, CarPlay or Android Auto connecting and disconnecting | Stronger signal where the car has it |
 | A vehicle dispatched to the driver in `fleet` (`dispatch`, `return_to_pool`) | Opens and closes the window in which trips of a company car are expected |
 | A calendar event with a location | A hint that a trip is likely; also used to classify |
-| Manual Start and Stop | Always available as a fallback |
+| Manual Start and Stop | Always available as a fallback, and the alternative to automatic recording that a driver can choose |
 
-Detection is not done by AI. It needs an own native module on both platforms: `expo-location` has no motion detection, and the library that has it is excluded as the default (OR-34 d, [mobile.md](mobile.md) 4.1).
+Detection is not done by AI. It needs a native module of our own on both platforms: `expo-location` has no motion detection, and the library that has it is excluded as the default (OR-34 d, [mobile.md](mobile.md) 4.1).
 
 ### 5.3 How a trip is classified
 
@@ -90,45 +99,88 @@ Rules first, on the phone:
 |---|---|
 | The trip ends near the location of a calendar event of the driver, close to its start time | Business, purpose = the event title |
 | The trip ends at the address of a contact or lead in obop | Business, purpose = the contact |
-| Home to the usual workplace and back | Commute (not a business trip in Sweden or Germany; general knowledge for Germany) |
+| Home to the usual workplace and back | Commute (not a business trip in Sweden or Germany) |
 | Outside working hours, on a weekend, or no match | Proposed as private |
 
 AI is optional and only for unclear trips (for example, proposing a purpose text). If it is used, it runs on the device: the SpaceCorps project `open-apple-models` runs Apple's on-device model with tool calling on iOS; an Android equivalent is not ready. The driver always confirms; nothing is approved by a rule or a model alone (D18).
 
-### 5.4 What stays on the phone and what is sent
+### 5.4 What is kept, where and for how long (decided 2026-11-12, 11.1)
 
-| Data | Where |
+| Data | Phone | Server |
+|---|---|---|
+| Raw points of a **private** trip | Until the daily confirmation, at most 7 days | Never sent |
+| Raw points of a **business** trip | At most 7 days | Sent so the server computes and checks the distance; deleted **90 days after approval** by default, configurable per company |
+| The logbook of a business trip: date, start and end address, kilometres, purpose, vehicle, odometer where needed | — | Kept as long as the bookkeeping rules require. In Sweden accounting records are kept seven years after the end of the calendar year in which the financial year ended (Bokföringslagen chapter 7, search); that a logbook behind an allowance counts as such a record is a reading of search results, not verified |
+| Calendar and contact matching | Done on the phone | — |
+
+This keeps the built rule that the server computes the distance and never trusts the phone's number ([mobile.md](mobile.md) 5.4: a prior app once recorded a trip of 8,666 km), but only for trips the employer pays for. The retention job that deletes raw points is not built (ISSUES M5).
+
+### 5.5 Technology
+
+The stack is set in [mobile.md](mobile.md) and [CLAUDE.md](../../CLAUDE.md); this section only points to it.
+
+| Part | Technology |
 |---|---|
-| Raw GPS points of a private trip | Phone only, deleted after a short time |
-| Raw GPS points of a business trip | Sent so the server can check the distance (see below), deleted after approval |
-| A business trip's date, start and end address, kilometres, purpose, vehicle | Sent and kept: the tax rules require it |
-| Calendar and contact matching | Done on the phone |
+| Phone app | React Native with Expo (SDK 57, or 58 if it passes the cooldown, OR-34 e), TypeScript, `expo prebuild`; iOS built with Xcode on a Mac. Started through `vp run` (the mobile-toolchain exception, OR-34 b); pnpm only |
+| Calls to obop | `@obop/client` (types generated from the OpenAPI document) and the mobile OAuth sign-in (D64 amendment) |
+| Trip detection | An Expo native module of our own (Swift, Kotlin) for motion and Bluetooth; `expo-location` for GPS while driving |
+| Distance rules | `@obop/trip-core`, shared test vectors with the server |
+| Local storage | `expo-sqlite`, encrypted at rest with the key in the platform keystore ([mobile.md](mobile.md) 3) |
+| On-device AI (optional) | `open-apple-models` (Swift) through an Expo native module; iOS only, and per its README only iOS 27 and later on devices with Apple Intelligence, so the rules of 5.3 must work without it |
+| Live Activity | A widget extension in SwiftUI with ActivityKit and WidgetKit, added to the Expo app through a native module; designed with SwiftUI previews and the simulator (5.6) |
+| Server | The Rust module `crates/modules/mileage`; rates and claims in the `mileage` module and the `expenses` package |
 
-**A decision to make (11, item 3).** The built design sends every point to the server and computes the distance there, because a phone's number cannot be trusted ([mobile.md](mobile.md) 5.4: a prior app once recorded a trip of 8,666 km). Sending nothing but totals is more private but trusts the phone. The proposal above is the middle: points of business trips only, checked on the server, deleted after approval; private trips never leave the phone.
+Xcode runs only on macOS. The TypeScript parts can be written on any system and tried on an Android emulator; iOS builds, the Live Activity and the native modules need a Mac. Development builds use the developer's own free Apple ID and a Mac the developer arranges; signing, TestFlight builds for device tests and publishing are done from the owner's Mac and Apple account (11.1, Q37).
+
+### 5.6 The Live Activity and devices
+
+Device and version facts here are general knowledge and are checked when the work starts.
+
+| Presentation | When | Shows |
+|---|---|---|
+| Compact | Phone unlocked, the island collapsed | Elapsed time on the left, distance on the right |
+| Expanded | A long press on the island | Time, distance, Stop and Pause |
+| Lock screen | Phone locked | As expanded, with the buttons |
+| Minimal | Another activity runs at the same time | The obop icon |
+
+| Device or system | Result | Setting needed |
+|---|---|---|
+| iPhone with a Dynamic Island (14 Pro and later, except budget models without one) | Island and lock screen | No |
+| iPhone without a Dynamic Island (11 to 14, 14 Plus, SE) | Lock screen and banner only; the same code | No |
+| iOS 16.1 to 16.x | Live Activity without buttons; below the minimum of BR-24 | — |
+| iOS 26 and later | Liquid Glass for system elements; own components use a glass view where available | No |
+| Earlier iOS | Plain look | No |
+
+The system chooses the presentation; the app has no switch for it.
 
 ## 6. Business requirements
 
 | ID | Requirement | Priority |
 |---|---|---|
-| BR-1 | A trip is recorded without the driver pressing Start or Stop on a normal working day | Must (needs 11, item 1) |
-| BR-2 | Manual Start and Stop stay available | Must |
+| BR-1 | A trip is recorded without the driver pressing Start or Stop on a normal working day | Must (agreed, 11.1; to be recorded, 11.2) |
+| BR-2 | Manual Start and Stop stay available, and a driver can choose them instead of automatic recording | Must |
 | BR-3 | The server computes the distance; the phone's number is never trusted | Must (built) |
 | BR-4 | Each trip is classified as business, private or commute, proposed automatically and confirmed by the driver | Must |
-| BR-5 | Private trips and their routes are never sent to the employer | Must |
-| BR-6 | Raw points of business trips are deleted a set number of days after approval; distance and addresses stay | Must |
+| BR-5 | Private trips and their points are never sent to the server | Must |
+| BR-6 | Retention as in 5.4: raw points 7 days on the phone, 90 days after approval on the server (configurable per company); the logbook as long as the bookkeeping rules of the country require | Must |
 | BR-7 | An approver who is not the driver approves business trips; a driver never approves their own | Must (built) |
-| BR-8 | Approved kilometres times the rate of the configured country become an expense claim or a payroll line in the same instance | Must |
-| BR-9 | Rates, the unit (km or mil), the currency and the required log fields come from a country configuration, not from code | Must |
-| BR-10 | The monthly and yearly logbook can be exported in the format of the configured country (PDF and CSV) | Must |
-| BR-11 | A trip can reference a vehicle from `fleet`; for a company car the logbook includes the odometer at the start and end of the year | Should |
-| BR-12 | Trips of a dispatched company car are linked to that car automatically | Should |
-| BR-13 | Recording is always visible (notification or status indicator) and can be paused | Must |
-| BR-14 | Automatic recording can be limited to working hours and is switched on by the driver | Must |
-| BR-15 | The app works on Android and iOS; iOS ships first, Android follows | Must (OR-36 requires both platforms and sets no order; iOS first was decided on 2026-11-11, relayed) |
-| BR-16 | Every capability exists in the CLI, the REST API and MCP; the app and the back office are clients | Must (OR-4, D80) |
-| BR-17 | Trips can be imported from a Google Timeline export | Built (`obop import timeline`) |
-| BR-18 | No limit on the number of trips per month | Should |
-| BR-19 | A published privacy notice states what is stored, where, for how long and why | Must |
+| BR-8 | Approved kilometres become one expense claim per driver per month in the `expenses` package, which then follows its own flow to payment. A payroll line is later | Must |
+| BR-9 | Rates come from configuration (8.2): the official tax-free rate of the country by default; a company can override it, per employee and per vehicle type; tiers by yearly distance; dated changes | Must |
+| BR-10 | A rate above the tax-free rate is allowed: the app warns, and the claim splits the amount into a tax-free part and a taxable part | Must |
+| BR-11 | The monthly and yearly logbook can be exported (PDF and CSV); Sweden first, Germany second | Must |
+| BR-12 | A trip can reference a vehicle from `fleet`; for a company car the logbook holds the odometer at the start and end of the year and of each trip, as Skatteverket lists | Should |
+| BR-13 | Trips of a dispatched company car are linked to that car automatically | Should |
+| BR-14 | Recording is always visible (notification or status indicator) and the driver can pause it | Must |
+| BR-15 | Automatic recording only in the working hours the driver sets, and only after the driver switches it on | Must |
+| BR-16 | The app works on Android and iOS; iOS ships first, Android follows | Must (OR-36 requires both platforms and sets no order; 11.1) |
+| BR-17 | Every capability exists in the CLI, the REST API and MCP; the phone app and the back office are clients | Must (OR-4, D80) |
+| BR-18 | Trips can be imported from a Google Timeline export | Built (`obop import timeline`) |
+| BR-19 | No limit on the number of trips per month | Should |
+| BR-20 | A published privacy notice tells employees what is stored, where, for how long and for which purpose, before recording starts | Must |
+| BR-21 | Mileage data is not used to monitor working time, performance or position outside working hours | Must |
+| BR-22 | A trip being recorded shows as a Live Activity on iOS with the presentations of 5.6 (compact, expanded on a long press, lock screen, minimal), with the time, the distance and Stop and Pause buttons; on Android the ongoing notification shows the same | Must for the release, after the first prototype |
+| BR-23 | The first prototype uses a minimal standard iOS look; the release uses the obop design system (the `ui-native` tokens and components) with Liquid Glass where the iOS version has it and a plain fallback elsewhere | Must for the release |
+| BR-24 | The app runs on iOS 17 and later (the first version with buttons in a Live Activity) | Must (proposed minimum) |
 
 ## 7. User stories
 
@@ -137,9 +189,9 @@ Each story has acceptance criteria (AC). "Built" marks what exists today.
 **US-1 Automatic recording.** As a driver, I want my drives recorded without pressing anything, so that I never forget a trip.
 - AC1: Getting into a car and driving starts a recording within a set time; stopping and leaving the car ends it.
 - AC2: A walk, a bus or a train ride is not recorded as a car trip.
-- AC3: Recording is visible while it runs, and I can pause automatic recording.
+- AC3: Recording is visible while it runs; I can pause it; it only runs in my working hours.
 
-**US-2 Manual fallback.** As a driver, I can start and stop a trip by hand when detection misses one. *(Built in the backend; the app is on branches, not merged.)*
+**US-2 Manual fallback.** As a driver, I can start and stop a trip by hand, and I can choose manual recording instead of automatic. *(Built in the backend; the app is on branches.)*
 
 **US-3 Proposed classification.** As a driver, I want each trip proposed as business, private or commute with a purpose, so that I only have to confirm.
 - AC1: A trip ending near a calendar event's location around its start time is proposed as business, with the event title as purpose.
@@ -149,47 +201,65 @@ Each story has acceptance criteria (AC). "Built" marks what exists today.
 
 **US-4 Daily confirmation.** As a driver, I want one summary per day (or week) that I confirm with one tap.
 - AC1: Only trips I confirmed as business are sent to obop.
-- AC2: Private trips are kept on the phone only and deleted after a set time.
+- AC2: Private trips are deleted from the phone after the confirmation.
 
-**US-5 Privacy.** As a driver, I want my employer to see only my business trips, never my private routes.
+**US-5 Privacy.** As a driver, I want my employer to see only my business trips.
 - AC1: No request from the app contains points of a private trip.
-- AC2: After approval, the raw points of a business trip are deleted; distance, addresses and purpose stay.
+- AC2: 90 days after approval (or the company's setting) the raw points of a business trip are gone from the server; date, addresses, distance and purpose stay.
 
-**US-6 Approval.** As an approver, I want to see a month of business trips per driver with distance, addresses, purpose and any integrity flags, and approve them together.
+**US-6 Approval.** As an approver, I want to see a month of business trips per driver with distance, addresses, purpose and integrity flags, and approve them together in the back office.
 - AC1: I cannot approve my own trips. *(Built.)*
 - AC2: I can reject a trip with a reason; the driver can correct and resubmit. *(Built.)*
 
-**US-7 Getting paid.** As a driver, I want my approved kilometres paid with my salary or as an expense claim, without filling in anything.
-- AC1: After approval, one claim (or payroll line) per driver per month is created with kilometres times the rate of the country and the vehicle type.
-- AC2: The claim lists the trips it covers.
+**US-7 Getting paid.** As a driver, I want my approved kilometres paid without filling in anything.
+- AC1: After approval, one expense claim per driver per month is created in `expenses` with the kilometres times my rate.
+- AC2: If my rate is above the tax-free rate, the claim shows a tax-free part and a taxable part.
+- AC3: The claim lists the trips it covers.
 
-**US-8 Finance.** As finance, I want approved mileage to arrive as normal claims or payroll lines I can pay and book as usual.
+**US-8 Finance.** As finance, I want approved mileage to arrive as normal expense claims I can pay and book as usual.
 
-**US-9 Logbook export.** As a driver or finance, I want the month's and the year's logbook in the format the tax authority of my country accepts.
-- AC1: The export holds the fields the country configuration requires (for Sweden: date, start, destination, purpose, distance; for a company car also the odometer readings).
+**US-9 Swedish logbook.** As a driver or finance, I want the month's and the year's logbook in a form Skatteverket accepts.
+- AC1: The export holds, per trip, the date, start and end address, kilometres and purpose (purpose not needed for private trips), and for a company car the odometer at the start and end of each trip and of the year, the registration number and the year.
 
-**US-10 Company car.** As a driver of a company car, I want trips linked to the car I was given in `fleet`, and the yearly odometer readings in the log.
+**US-10 Company car.** As a driver of a company car, I want trips linked to the car I was given in `fleet`.
 
-**US-11 Country.** As an administrator, I choose the country of the instance (or of an employee) and get its rates, unit, currency and log format without any code change.
+**US-11 Rates.** As an administrator, I want the official rate of my country preset, and to change it for the company, an employee or a vehicle type, with a date from which it applies.
+- AC1: A new instance in Sweden starts with 25 SEK per mil for an own car and 12 SEK (9.50 SEK electric) for a company car.
+- AC2: Setting a rate above the tax-free rate shows a warning that the difference is taxable.
 
 **US-12 Import.** As a driver, I can import past drives from Google Timeline and classify them. *(Built as `obop import timeline`.)*
 
-**US-13 Lost phone.** As an administrator, I revoke a lost phone; its unsent trips are lost, and it can no longer send. *(Device revocation built, D64 amendment.)*
+**US-13 Lost phone.** As an administrator, I revoke a lost phone; it can no longer send. *(Device revocation built, D64 amendment.)*
 
-## 8. Country configuration
+## 8. Countries and rates
 
-The core is the same everywhere. A country is a small set of data, shipped the same way as other country packs ([LOCALIZATION.md](../LOCALIZATION.md)).
+### 8.1 Default rates, own or privately leased car, 2026
 
-| Setting | Sweden (search, skatteverket.se, 2026) | Germany (general knowledge, to verify) |
+All from search results; each must be checked against the authority's page before it ships as a default.
+
+| Country | Tax-free rate | Notes |
 |---|---|---|
-| Rate, own or privately leased car | 25 SEK per mil | about 0.30 EUR per km |
-| Rate, company car | 12 SEK per mil; 9.50 SEK fully electric | different rules (1 % rule or logbook) |
-| Unit and currency | mil (10 km), SEK | km, EUR |
-| Commute | not a business trip; a separate deduction above a yearly threshold | not a business trip; separate commuter allowance |
-| Required log fields | date, start, destination, purpose, distance; odometer for a company car | date, odometer start and end, destination, purpose, business partner; the log must not be changeable afterwards |
-| Where the money goes | expense claim or Swedish payroll (`payroll_se`) | expense claim or German payroll (not built) |
+| Sweden | 25 SEK per mil (10 km) | Company car: 12 SEK per mil, 9.50 SEK fully electric. Commute is not a business trip; a separate deduction above a yearly threshold |
+| Germany | 0.30 EUR per km | Motorcycle 0.20 EUR. Commute is separate (Entfernungspauschale, 0.38 EUR per km from 2026) |
+| Netherlands | 0.25 EUR per km | One source still lists 0.23 (2025) |
+| Finland | 0.55 EUR per km | 0.59 in 2025 |
+| Norway | 3.50 NOK per km | Same for electric cars |
+| Denmark | 3.94 DKK per km up to 20,000 km a year, 2.28 DKK above | Needs tiers (BR-9) |
 
-Amounts above the tax-free rate are taxable salary in both countries (general knowledge). A rate change is effective-dated, like any country data.
+### 8.2 Rate configuration
+
+The core is the same everywhere; a country is a small set of data shipped like other country packs ([LOCALIZATION.md](../LOCALIZATION.md)).
+
+| Setting | Level |
+|---|---|
+| Rate per vehicle type (own car, company car, electric company car, motorcycle) | Country default → company override → employee override |
+| Tiers by yearly distance | Country default (Denmark), company may change |
+| Unit (km or mil) and currency | Country |
+| Tax-free limit | Country; used for the warning and the split of BR-10 |
+| Required logbook fields and export format | Country |
+| Valid from | Every rate and limit is dated |
+
+Amounts above the tax-free rate are taxable salary (general knowledge for all countries listed).
 
 ## 9. Competitive analysis
 
@@ -205,61 +275,95 @@ Amounts above the tax-free rate are taxable salary in both countries (general kn
 
 ### 9.2 What Mileage has that they do not
 
-1. **One system, no integration.** Trip, approval, payment and accounting in one database (the obop principle). The others glue a logbook to payroll through integrations.
+1. **One system, no integration.** Trip, approval, expense claim and accounting in one database (the obop principle). The others glue a logbook to payroll through integrations.
 2. **Better classification.** Matching with the obop calendar, contacts and fleet, not only working hours and frequent places.
-3. **Privacy by design.** Classification on the phone; private trips never leave it; raw routes deleted after approval.
-4. **Price.** obop is free and open (OR-1, OR-2); no trip limits. Market leaders' prices are rising.
-5. **Open surface.** Every capability in CLI, API and MCP: an agent can prepare the month for a human to approve.
+3. **Visible and in reach.** A Live Activity in the Dynamic Island shows the trip being recorded and stops it with one tap (BR-22).
+4. **Privacy by design.** Private trips never leave the phone; raw routes are deleted after 90 days; the data is not used to monitor people (BR-21).
+5. **Price.** obop is free and open (OR-1, OR-2); no trip limits. Market leaders' prices are rising.
+6. **Open surface.** Every capability in CLI, API and MCP: an agent can prepare the month for a human to approve.
 
 ### 9.3 What we lack today
 
-1. Automatic detection (decision needed, 11 item 1; native module to build).
-2. Kilometres to money (BR-8): `expenses` has the claim flow but no rate calculation; `payroll_se` has no line for a tax-free allowance.
-3. A country configuration and a logbook export (BR-9, BR-10); none is filled in yet.
-4. A merged mobile app: the app is on the branches `feat/mileage-app`, `feat/mileage-ios` and `feat/mileage-sv`.
-5. For Germany, an unchangeable log: the record immutability of D77 is not built.
+1. Automatic detection (agreed, 11.1; the native module is to build).
+2. Kilometres to money (BR-8, BR-10): `expenses` has the claim flow, but no rate configuration and no link from approved trips to a claim.
+3. The Swedish logbook export (BR-11) and the odometer fields (BR-12).
+4. A merged phone app: it is on the branches `feat/mileage-app`, `feat/mileage-ios` and `feat/mileage-sv`.
+5. The retention job (ISSUES M5).
+6. For Germany later, an unchangeable log: the record immutability of D77 is not built.
 
 ### 9.4 Verdict
 
-As a stand-alone app in the stores, Mileage would compete with products that have years of polish, automatic detection and many countries. As a part of obop for small and medium businesses, it fills a gap nobody else fills: from the trip to the payment and the books in one system, private by design, and free. The product should be positioned as the second, and needs three things to be credible: automatic detection (or at least one-tap start from a calendar reminder), kilometres to money, and a logbook export for the first country.
+As a stand-alone app in the stores, Mileage would compete with products that have years of polish, automatic detection and many countries. As a part of obop for small and medium businesses, it fills a gap nobody else fills: from the trip to the payment and the books in one system, private by design, and free. The product is positioned as the second, and needs three things to be credible: automatic detection (or at least one-tap start from a calendar reminder), kilometres to money, and the Swedish logbook.
 
 ## 10. Phases
 
 | Phase | Content | Depends on |
 |---|---|---|
 | 0 (built) | Backend: trips, points, server distance, review, monthly totals; device sign-in; Google Timeline import | done ([mobile.md](mobile.md) 8.5, 8.6) |
-| 1 | The iOS app (merge the branches); manual Start and Stop; calendar reminder with one-tap start. The Android app follows with the same features | OR-34 as it stands |
-| 2 | Classification on the phone (calendar, contacts, fleet); daily confirmation; private trips stay on the phone | 11, item 3 |
-| 3 | Kilometres to money (expense claim, then payroll); the first country configuration and logbook export | 11, items 4 and 5 |
-| 4 | Automatic start and stop (motion, Bluetooth, fleet dispatch) | 11, item 1 |
-| Later | On-device AI for unclear trips; sole traders; more countries; a car device or OBD option | — |
+| 1 | The obop phone app on iOS with Mileage, in a minimal standard iOS look: sign-in to the instance, module list, manual Start and Stop, calendar reminder with one-tap start. Goal: prove that trips are recorded, sent and computed correctly. Android follows with the same features | OR-34 as it stands |
+| 1b | The Live Activity of BR-22 (Dynamic Island and lock screen on iOS, the ongoing notification on Android) | The first working prototype of phase 1 |
+| 2 | Classification on the phone (calendar, contacts, fleet); daily confirmation; only business trips sent; retention of 5.4 | — |
+| 3 | Rate configuration with Swedish defaults; approved trips become expense claims with the tax-free and taxable split; the Swedish logbook export with odometer fields | — |
+| 4 | Automatic start and stop (motion, Bluetooth, fleet dispatch) | The ruling recorded in DECISIONS.md (11.2) |
+| 4b | The obop design (BR-23): `ui-native` tokens and components, Liquid Glass where available, the Live Activity in the same style | Phase 1 working |
+| Release | Phases 1 to 4b complete, BR-22 done, the checks of 11.3 done. A prototype with phase 1 may go to testers earlier; the public release is the complete app | 11.2 recorded before phase 4 |
+| Later | A payroll line instead of an expense claim; the German logbook; sole traders; on-device AI for unclear trips; more countries; an OBD option | — |
 
-## 11. Open questions for the owner
+## 11. Decisions
 
-1. **Automatic start and stop.** The lead said in chat on 2026-11-10 (relayed, not a quotation) that automatic start and stop is fine, with data minimised before any AI, a clear statement of what is stored, and a public page with the data terms. This changes OR-34 c (auto-stop only after legal sign-off) and covers automatic start, which no ruling covers. It must be recorded in DECISIONS.md as an owner ruling before it is built. Proposed wording: automatic start and stop are allowed under BR-5, BR-6, BR-13, BR-14 and BR-19, with a legal check before the first release rather than before development.
-2. **Free or paid.** obop is completely free (OR-1, OR-2). A paid store app or subscription (an idea of about 5 USD a month was mentioned) would be a separate product and needs the owner's decision; until then Mileage is free.
-3. **Privacy model.** All points to the server (built), totals only, or the middle of 5.4.
-4. **First country.** Sweden or Germany (obop's first market is Germany, OR-7).
-5. **Where the money goes first.** Expense claim (`expenses`, closer) or payroll line (`payroll_se`, Sweden only).
-6. **Retention.** How many days raw points of a business trip are kept after approval ([mobile.md](mobile.md) 15).
-7. **Sole traders.** Whether a driver without an approver (own deduction) is in scope.
+### 11.1 Agreed with the owner (2026-11-10 to 2026-11-12, relayed)
+
+| Topic | Decision |
+|---|---|
+| Automatic start and stop | Allowed, under BR-5, BR-6, BR-14, BR-15, BR-20 and BR-21; data is minimised before any AI, what is stored is stated, and a public page sets out the data terms. A legal check comes before the first release, not before development (2026-11-10) |
+| Phone app | One obop phone app with Mileage preinstalled; the back office in the browser for approvers and finance (1.1) |
+| Platforms | iOS first, Android follows (BR-16) |
+| Price | Free for now; a paid version may come later as a separate decision of the owner (the software stays free, OR-1, OR-2) |
+| Rates | Configurable, with the official rate of each country as default (8) |
+| Above the tax-free rate | Allowed, with a warning and a split claim (BR-10) |
+| Privacy | Only business trips are sent; private trips stay on the phone (5.4) |
+| Retention | Phone 7 days; server 90 days after approval by default, configurable; logbook per bookkeeping rules (5.4) |
+| Money | Expense claim in `expenses` first; payroll line later (BR-8) |
+| First country | Sweden for the logbook; Germany second (BR-11) |
+| Sole traders | Later; companies first |
+| Apple account and release | Development with the developer's own free Apple ID; signing, TestFlight and publishing from the owner's account at the end (5.5) |
+| Order of work | A manual Start and Stop prototype with a minimal iOS look first; automatic start and stop, the Live Activity (BR-22) and the obop design (BR-23) after it; the public release only when phases 1 to 4b and the checks of 11.3 are done (10) |
+
+### 11.2 To record in DECISIONS.md
+
+The decision on automatic start and stop (11.1) changes OR-34 c (auto-stop only after legal sign-off) and covers automatic start, which no ruling covers. It is entered in DECISIONS.md as an owner ruling before phase 4 is built, so that the register and this document agree.
+
+### 11.3 To check before release (not owner questions)
+
+- The rates of 8.1 against each authority's page.
+- Whether a logbook behind an allowance is accounting information that must be kept seven years in Sweden (Skatteverket guidance VL00-5).
+- IMY's current guidance on positioning employees: informing them in advance, offering manual recording as an alternative, the retention period.
 
 ## 12. Risks
 
 | Risk | Mitigation |
 |---|---|
 | Store review of background location (Google Play declaration and video; Apple "Always" permission) | Disclosures in the app and on the website; tap-to-start path as fallback ([mobile.md](mobile.md) 4.2) |
-| Employee tracking is sensitive (GDPR; in Germany works councils, general knowledge) | Private trips stay on the phone; raw routes deleted; recording visible and pausable; legal check before release |
+| Employee positioning is sensitive (GDPR; IMY has ruled against detailed positioning without information or an alternative, Wihlborgs 2014, search; in Germany works councils, general knowledge) | BR-2, BR-5, BR-14, BR-15, BR-20, BR-21; legal check before release (11.3) |
 | Detection misses or splits trips; Android vendors kill background apps | Manual fallback; "keep running" guide; field test on real phones |
 | Battery drain | Motion sensors first, GPS only while driving |
-| Wrong rates or log format | Rates are dated data per country, checked against the authority's pages before release |
-| The phone's distance is manipulated | Server computes the distance from the points of business trips (BR-3) |
+| Wrong rates or log format | Rates are dated data per country, checked before release (11.3) |
+| The phone's distance is manipulated | The server computes the distance from the points of business trips (BR-3) |
 
 ## 13. Sources
 
 - Skatteverket, amounts 2026: https://www.skatteverket.se/privat/skatter/beloppochprocent/2026 (search)
 - Skatteverket, travel and car allowances: https://www.skatteverket.se/foretag/arbetsgivare/lonochersattning/traktamenteochbilersattning (search)
 - Skatteverket, logbook: https://www.skatteverket.se/privat/skatter/arbeteochinkomst/formaner/bilforman/korjournal (search)
+- Skatteverket, guidance on accounting records (VL00-5): https://www4.skatteverket.se/download/18.22f626eb14fb326a4b6da0a/1698823437809/VL00-5-rakenarkiv.pdf (search)
+- Bokföringslag (1999:1078): https://data.riksdagen.se/dokument/sfs-1999-1078.html (search)
+- IMY decision Wihlborgs 2014: https://www.imy.se/globalassets/dokument/beslut/2014-02-11-wihlborgs-gps.pdf (search)
+- Lawline, GPS in the car as monitoring: https://lawline.se/answers/far-arbetsgivare-anvanda-gpsen-i-bilen-som-overvakning (search)
+- Germany, Kilometerpauschale 2026: https://www.lexware.de/wissen/mitarbeiter-gehalt/wissenswertes-zur-kilometerpauschale/ and https://www.taxmaro.com/post/kilometerpauschale-2026 (search)
+- Finland: https://www.perk.com/uk/blog/mileage-allowance-finland/ (search)
+- Norway: https://www.perk.com/uk/blog/mileage-allowance-norway/ (search)
+- Denmark: https://www.bdo.dk/getattachment/6a75b0c0-0844-48f1-90d6-53a2ecd1393e/Tax-free-mileage-allowances_2026.pdf?lang=en-GB (search)
+- Netherlands: https://www.rydoo.com/compliance/netherlands/netherlands-mileage/ (search)
 - Driversnote pricing: https://driversnote.com/pricing (search)
 - MileIQ pricing (third party): https://frontdeskreview.com/software/mileage-tracking/mileiq/ (search)
 - Everlance and TripLog: https://www.g2.com/compare/everlance-vs-triplog (search)
