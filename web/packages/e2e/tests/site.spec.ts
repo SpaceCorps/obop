@@ -1287,6 +1287,10 @@ test.describe("website without JavaScript", () => {
     // address (Connectors' Test), what Expenses' and Timesheets' approval does not do, and the log
     // that keeps no content. Their text is English on every page (it is written for the card), so it
     // is found by its words in all seven languages.
+    // 7 languages x 11 pages with 1 to 4 such cards each (77 loads, a page loaded once per language
+    // and its cards read from it, not 17 loads per language), and the test gets 120 seconds, not the
+    // 30 of the others.
+    test.setTimeout(120_000);
     const kept = APP_COPY.flatMap((app) =>
       Object.values(app.cards ?? {})
         .filter((c) => c.keep)
@@ -1295,18 +1299,22 @@ test.describe("website without JavaScript", () => {
     // Seventeen cards have words of their own and `keep`; the eighteenth, Expenses "Submit", keeps the
     // manifest's translated words (`keep` of the app) and is on a page that has no fold.
     expect(kept.length, "cards that have keep, with words of their own").toBe(17);
+    const bySlug = new Map<string, string[]>();
+    for (const { slug, text } of kept) bySlug.set(slug, [...(bySlug.get(slug) ?? []), text]);
     for (const locale of Object.keys(messages)) {
       const prefix = locale === "en" ? "" : `/${locale}`;
-      for (const { slug, text } of kept) {
+      for (const [slug, texts] of bySlug) {
         await page.goto(`${base()}${prefix}/apps/${slug}/`);
-        const where = `${locale} ${slug}: "${text.slice(0, 40)}"`;
-        const card = page.locator(".app-card-text", { hasText: text });
-        await expect(card, where).toHaveCount(1);
-        expect(
-          await card.evaluate((el) => !!el.closest("details")),
-          `${where} is behind a tap`,
-        ).toBe(false);
-        await expect(card, where).toBeVisible();
+        for (const text of texts) {
+          const where = `${locale} ${slug}: "${text.slice(0, 40)}"`;
+          const card = page.locator(".app-card-text", { hasText: text });
+          await expect(card, where).toHaveCount(1);
+          expect(
+            await card.evaluate((el) => !!el.closest("details")),
+            `${where} is behind a tap`,
+          ).toBe(false);
+          await expect(card, where).toBeVisible();
+        }
       }
     }
     // What an AI agent may do without approval is not in any "Show N more" fold of the Website page,
@@ -2852,7 +2860,9 @@ test.describe("accessibility", () => {
     // 375 px label and value share a line, as they did before the list was in a row. The exception is
     // a value in code type, a module path or a package file: at 9rem it had no room beside its label
     // and a file name was cut in the middle ("email_marketing.toml"), so it keeps the old 12rem and
-    // goes under its label, where it fits whole (the next test holds that it is never cut).
+    // goes under its label, where it fits whole at the normal text size (the next test holds that it
+    // is never cut; at 200 percent text a name wider than the whole line breaks inside, and the one
+    // after that holds that no value ends past its card).
     let pairs = 0;
     let codeUnder = 0;
     for (const width of [390, 375]) {
@@ -2934,21 +2944,41 @@ test.describe("accessibility", () => {
     browser,
   }) => {
     // The values in code type are the long ones: a package file ("email_marketing.toml",
-    // "subscriptions.toml") had 146 to 173 px beside its label and was cut in the middle of its name;
-    // at 200 percent text a maturity word ("Eksperymentalny") and a short file name had to stay whole
-    // at 320 and 360 px. A value that does not fit beside its label goes under it.
+    // "subscriptions.toml") had 146 to 173 px beside its label and was cut in the middle of its name.
+    // A value that does not fit beside its label goes under it, and at the normal text size no word
+    // of the list is cut. At 200 percent text a file name or a maturity word ("Eksperymentalny")
+    // can be wider than the whole line (360 px of 222 on a 320 px phone): it breaks inside, and every
+    // word that does fit stays whole. What no value may do, at any size, is end past the list: the
+    // next test measures that for the pages whose names are the longest.
     let values = 0;
-    const whole = async (p: import("@playwright/test").Page, path: string, where: string) => {
+    let wideWords = 0;
+    const whole = async (
+      p: import("@playwright/test").Page,
+      path: string,
+      where: string,
+      large = false,
+    ) => {
       await p.goto(`${base()}${path}`);
       await openFolds(p, false);
-      const { cut } = await brokenWords(p, ".app-info dd");
+      const { cut, wide } = await brokenWords(p, ".app-info dd", large);
       expect(cut, `${where} ${path}: words of the list cut across two lines`).toEqual([]);
-      const outside = await p.evaluate(() =>
-        [...document.querySelectorAll<HTMLElement>(".app-info dd")]
-          .filter((dd) => dd.scrollWidth > dd.clientWidth + 1)
-          .map((dd) => (dd.textContent ?? "").trim()),
-      );
-      expect(outside, `${where} ${path}: values wider than their box`).toEqual([]);
+      wideWords += wide;
+      const outside = await p.evaluate(() => {
+        const list = document.querySelector<HTMLElement>(".app-info")!;
+        const edge = list.getBoundingClientRect().right;
+        return [...list.querySelectorAll<HTMLElement>("dd")]
+          .filter((dd) => {
+            const range = document.createRange();
+            range.selectNodeContents(dd);
+            const right = Math.max(...[...range.getClientRects()].map((r) => r.right));
+            return dd.scrollWidth > dd.clientWidth + 1 || right > edge + 0.5;
+          })
+          .map((dd) => (dd.textContent ?? "").trim());
+      });
+      expect(
+        outside,
+        `${where} ${path}: values wider than their box or ending past the list`,
+      ).toEqual([]);
       values += await p.locator(".app-info dd").count();
     };
     for (const width of [390, 360, 320]) {
@@ -2968,12 +2998,111 @@ test.describe("accessibility", () => {
     ] as const) {
       const large = await pageWithTextSize(browser, 200, { width, height: 800 });
       try {
-        for (const path of paths) await whole(large.page, path, `${width}px at 200 percent`);
+        for (const path of paths) await whole(large.page, path, `${width}px at 200 percent`, true);
       } finally {
         await large.context.close();
       }
     }
     expect(values, "values of the list measured").toBeGreaterThan(80);
+    expect(
+      wideWords,
+      "words wider than their box at 200 percent (they break inside)",
+    ).toBeGreaterThan(0);
+  });
+
+  test("at 200 percent text, with the Information row open, no value leaves its card and the page does not scroll sideways", async ({
+    browser,
+  }) => {
+    // The hero test below measured the width of the page at this size when the information list was
+    // open on the page; the list is in a closed row now, so that test no longer sees a file name that
+    // runs out of its card. This one opens the row and measures the same two numbers (the page's
+    // content over its box, and over the screen) and each value's right edge against the list's, at
+    // 320, 360 and 390 px with 32 px text, on the pages whose names are the longest, and on the pages
+    // of the hero test at 320 px (the narrowest screen, where a 360 px name has 222 px of line).
+    // A name wider than the whole line may break inside; it may not end past the list or the screen.
+    test.setTimeout(120_000);
+    const long = [
+      "/apps/email-marketing/",
+      "/apps/subscriptions/",
+      "/apps/field-service/",
+      "/apps/manufacturing/",
+      "/apps/appointments/",
+      "/pl/apps/sign/",
+    ];
+    // The pages of the hero test at 320 px with 32 px text (its own list, copied: its body stays as it is).
+    const hero = [
+      "/apps/accounting/",
+      "/apps/helpdesk/",
+      "/apps/manufacturing/",
+      "/apps/appointments/",
+      "/apps/subscriptions/",
+      "/apps/connectors/",
+      "/apps/dashboards/",
+      "/apps/documents/",
+      "/apps/ecommerce/",
+      "/apps/knowledge/",
+      "/de/apps/accounting/",
+      "/fr/apps/accounting/",
+      "/pl/apps/accounting/",
+      "/fi/apps/email-marketing/",
+      "/fi/apps/website/",
+      "/pl/apps/projects/",
+      "/pl/apps/hr/",
+    ];
+    const offenders: string[] = [];
+    let measured = 0;
+    let values = 0;
+    for (const width of [320, 360, 390]) {
+      const large = await pageWithTextSize(browser, 200, { width, height: 844 });
+      try {
+        const paths = width === 320 ? [...new Set([...long, ...hero])] : long;
+        for (const path of paths) {
+          await large.page.goto(`${base()}${path}`);
+          // Hyphenation is switched off, as in the hero test, so that the result is the same on every browser.
+          await large.page.addStyleTag({ content: "* { hyphens: manual !important; }" });
+          await openFolds(large.page, false);
+          const m = await large.page.evaluate(() => {
+            const root = document.querySelector<HTMLElement>(".app-page")!;
+            const screen = document.documentElement.clientWidth;
+            const list = document.querySelector<HTMLElement>(".app-row-body .app-info")!;
+            const edge = list.getBoundingClientRect().right;
+            let past = 0;
+            let worst = "";
+            const dds = [...list.querySelectorAll<HTMLElement>("dd")];
+            for (const dd of dds) {
+              const range = document.createRange();
+              range.selectNodeContents(dd);
+              const right = Math.max(...[...range.getClientRects()].map((r) => r.right));
+              if (right - edge > past) {
+                past = Math.round(right - edge);
+                worst = (dd.textContent ?? "").trim();
+              }
+            }
+            return {
+              values: dds.length,
+              past,
+              worst,
+              page: root.scrollWidth - root.clientWidth,
+              pageEnd: root.scrollWidth - screen,
+            };
+          });
+          measured++;
+          values += m.values;
+          const where = `${width}px with 32px text, ${path}`;
+          if (m.page > 0)
+            offenders.push(`${where}: the page's content scrolls sideways by ${m.page}px`);
+          if (m.pageEnd > 0)
+            offenders.push(`${where}: the content ends ${m.pageEnd}px past the screen`);
+          if (m.past > 0) offenders.push(`${where}: "${m.worst}" ends ${m.past}px past the list`);
+        }
+      } finally {
+        await large.context.close();
+      }
+    }
+    expect(offenders, "values or content that leave their card or the screen").toEqual([]);
+    // 6 pages at three widths, and the 14 pages of the hero test that are not among them, at 320 px.
+    expect(measured, "pages measured").toBe(6 * 3 + 14);
+    expect(values, "values of the list measured").toBeGreaterThan(200);
   });
 
   test("the app hero keeps its size on a phone and stacks at a very large text size", async ({
