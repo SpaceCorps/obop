@@ -1,6 +1,6 @@
 # Mileage: product requirements (PROPOSED)
 
-- **Status:** Draft 0.2. PROPOSED. This is the product view of Mileage: the problem, who it is for, what it must do, how it competes and what is still to decide. The technical design of the `mileage` package and the app stays in [mobile.md](mobile.md), which this document does not replace. Nothing here is ratified unless it cites an owner ruling (OR-n) in [DECISIONS.md](../DECISIONS.md). The product decisions of 2026-11-10 to 2026-11-12 in section 11.1 were agreed with the owner and are relayed, not quoted.
+- **Status:** Draft 0.2. PROPOSED. This is the product view of Mileage: the problem, who it is for, what it must do, how it competes and what is still to decide. The technical design of the `mileage` package and the app stays in [mobile.md](mobile.md), which this document does not replace. Nothing here is ratified unless it cites an owner ruling (OR-n) in [DECISIONS.md](../DECISIONS.md). Section 11.1 lists product positions discussed with the owner on 2026-11-10 to 2026-11-12; they are relayed, not quoted, unconfirmed, and PROPOSED until each is recorded as an owner ruling (OR-n).
 - **Date:** 2026-11-12 (first draft 2026-11-11)
 - **Scope:** Mileage as a product built on obop: automatic recording of business trips, sorting them into business and private, approval, turning approved kilometres into money for the employee, and the logbook a tax authority accepts. Country rules are data, not code.
 
@@ -16,7 +16,7 @@ Mileage records trips on the phone without Start and Stop buttons, sorts them in
 
 | Part | Who uses it | What it does | State |
 |---|---|---|---|
-| **obop phone app** with Mileage preinstalled | Employees (drivers) | One obop app for the phone: sign in to the company's obop instance, then the Mileage module records, classifies and sends trips. Further modules can be added to the same app later | Decided 2026-11-11 (11.1); the host design in [mobile-host.md](mobile-host.md) is PROPOSED. Sign-in, shared native components and Swedish texts exist on the branches `feat/mileage-app`, `feat/mileage-ios`, `feat/mileage-sv` |
+| **obop phone app** with Mileage preinstalled | Employees (drivers) | One obop app for the phone: sign in to the company's obop instance, then the Mileage module records, classifies and sends trips. Further modules can be added to the same app later | Proposed (11.1); the host design in [mobile-host.md](mobile-host.md) is PROPOSED too. Sign-in, shared native components and Swedish texts exist on the branches `feat/mileage-app`, `feat/mileage-ios`, `feat/mileage-sv` |
 | **obop back office** (browser) | Approvers, finance, administrators | Approve trips, set rates and vehicles, pay claims, export the logbook. Its screens are generated from the module (D46); no separate desktop app | The Mileage app tile and the trip and point lists exist |
 | **obop server**, module `mileage` | Nobody directly | Stores trips, checks the distance, governs the states, computes totals. The only place where business logic lives | Built ([mobile.md](mobile.md) 8.6) |
 
@@ -104,7 +104,7 @@ Rules first, on the phone:
 
 AI is optional and only for unclear trips (for example, proposing a purpose text). If it is used, it runs on the device: the SpaceCorps project `open-apple-models` runs Apple's on-device model with tool calling on iOS; an Android equivalent is not ready. The driver always confirms; nothing is approved by a rule or a model alone (D18).
 
-### 5.4 What is kept, where and for how long (decided 2026-11-12, 11.1)
+### 5.4 What is kept, where and for how long (proposed, 11.1)
 
 | Data | Phone | Server |
 |---|---|---|
@@ -114,6 +114,8 @@ AI is optional and only for unclear trips (for example, proposing a purpose text
 | Calendar and contact matching | Done on the phone | — |
 
 This keeps the built rule that the server computes the distance and never trusts the phone's number ([mobile.md](mobile.md) 5.4: a prior app once recorded a trip of 8,666 km), but only for trips the employer pays for. The retention job that deletes raw points is not built (ISSUES M5).
+
+[mobile.md](mobile.md) 5.6 and its open question 4 (15) still treat what happens to private trips as open; mobile.md is out of step with this section until the owner rules on it.
 
 ### 5.5 Technology
 
@@ -157,7 +159,7 @@ The system chooses the presentation; the app has no switch for it.
 
 | ID | Requirement | Priority |
 |---|---|---|
-| BR-1 | A trip is recorded without the driver pressing Start or Stop on a normal working day | Must (agreed, 11.1; to be recorded, 11.2) |
+| BR-1 | A trip is recorded without the driver pressing Start or Stop on a normal working day | Proposed, needs the ruling of 11.2 (OR-34 c still requires legal sign-off before auto-stop) |
 | BR-2 | Manual Start and Stop stay available, and a driver can choose them instead of automatic recording | Must |
 | BR-3 | The server computes the distance; the phone's number is never trusted | Must (built) |
 | BR-4 | Each trip is classified as business, private or commute, proposed automatically and confirmed by the driver | Must |
@@ -172,7 +174,7 @@ The system chooses the presentation; the app has no switch for it.
 | BR-13 | Trips of a dispatched company car are linked to that car automatically | Should |
 | BR-14 | Recording is always visible (notification or status indicator) and the driver can pause it | Must |
 | BR-15 | Automatic recording only in the working hours the driver sets, and only after the driver switches it on | Must |
-| BR-16 | The app works on Android and iOS; iOS ships first, Android follows | Must (OR-36 requires both platforms and sets no order; 11.1) |
+| BR-16 | The app works on Android and iOS; iOS ships first, Android follows | Must (OR-36 requires both platforms and sets no order; iOS first is proposed, 11.1) |
 | BR-17 | Every capability exists in the CLI, the REST API and MCP; the phone app and the back office are clients | Must (OR-4, D80) |
 | BR-18 | Trips can be imported from a Google Timeline export | Built (`obop import timeline`) |
 | BR-19 | No limit on the number of trips per month | Should |
@@ -284,7 +286,7 @@ Amounts above the tax-free rate are taxable salary (general knowledge for all co
 
 ### 9.3 What we lack today
 
-1. Automatic detection (agreed, 11.1; the native module is to build).
+1. Automatic detection (proposed, needs the ruling of 11.2; the native module is to build).
 2. Kilometres to money (BR-8, BR-10): `expenses` has the claim flow, but no rate configuration and no link from approved trips to a claim.
 3. The Swedish logbook export (BR-11) and the odometer fields (BR-12).
 4. A merged phone app: it is on the branches `feat/mileage-app`, `feat/mileage-ios` and `feat/mileage-sv`.
@@ -311,14 +313,16 @@ As a stand-alone app in the stores, Mileage would compete with products that hav
 
 ## 11. Decisions
 
-### 11.1 Agreed with the owner (2026-11-10 to 2026-11-12, relayed)
+### 11.1 Proposed, relayed, unconfirmed (2026-11-10 to 2026-11-12)
 
-| Topic | Decision |
+None of these rows is in DECISIONS.md, and the register treats a decision as made only when it is an owner ruling (OR-n). Each row stays PROPOSED until the owner confirms it and it is recorded there; this document then cites the OR number.
+
+| Topic | Proposal |
 |---|---|
 | Automatic start and stop | Allowed, under BR-5, BR-6, BR-14, BR-15, BR-20 and BR-21; data is minimised before any AI, what is stored is stated, and a public page sets out the data terms. A legal check comes before the first release, not before development (2026-11-10) |
 | Phone app | One obop phone app with Mileage preinstalled; the back office in the browser for approvers and finance (1.1) |
 | Platforms | iOS first, Android follows (BR-16) |
-| Price | Free for now; a paid version may come later as a separate decision of the owner (the software stays free, OR-1, OR-2) |
+| Price | Free (OR-1, OR-2). The only planned paid service is SpaceCorps hosting (OR-22) |
 | Rates | Configurable, with the official rate of each country as default (8) |
 | Above the tax-free rate | Allowed, with a warning and a split claim (BR-10) |
 | Privacy | Only business trips are sent; private trips stay on the phone (5.4) |
@@ -331,7 +335,7 @@ As a stand-alone app in the stores, Mileage would compete with products that hav
 
 ### 11.2 To record in DECISIONS.md
 
-The decision on automatic start and stop (11.1) changes OR-34 c (auto-stop only after legal sign-off) and covers automatic start, which no ruling covers. It is entered in DECISIONS.md as an owner ruling before phase 4 is built, so that the register and this document agree.
+The proposal on automatic start and stop (11.1) would change OR-34 c (auto-stop only after legal sign-off) and covers automatic start, which no ruling covers. Until the owner rules on it and it is recorded in DECISIONS.md as an OR-n, OR-34 c stands and phase 4 is not built. The other rows of 11.1 are recorded the same way when the owner confirms them.
 
 ### 11.3 To check before release (not owner questions)
 
