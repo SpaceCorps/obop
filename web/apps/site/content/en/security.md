@@ -32,16 +32,16 @@ obop is a young project run by a small team, so we cannot promise a response tim
 
 ## What protects you today
 
-- Passwords are stored with Argon2id; tokens are stored only as hashes.
+- Passwords are stored with Argon2id; session and agent tokens are stored only as hashes.
 - Every field has a data class; agents get masked personal data and no sensitive classes.
-- Agents act with scoped tokens and can only propose irreversible steps; a person approves.
-- One dispatcher serves every surface, so permissions and masking cannot be skipped by choosing a different one.
+- Agents act with scoped tokens; when an agent calls a command marked as needing approval, such as every delete, the call is only proposed, and it runs only if a person approves it.
+- One dispatcher serves REST, MCP and `obop call`, so none of them skips permissions or masking; public pages, sign-in routes, file routes and operator commands do not go through it.
 - Each instance has its own database; one that a control plane creates on PostgreSQL also gets its own database role.
 
 ## What is missing
 
-No audit trail of reads and changes to business records, no command to revoke a single agent token (an app connected through the browser sign-in can be revoked under Customize, Security, Connected apps, and offboarding a user ends their tokens), no scheduled backups switched on by a control plane for the instances it creates, no certification and no independent penetration test yet. Single sign-on exists only for Microsoft Entra and has not been tried against a real Microsoft tenant. A security log of events such as account, sign-in, security-setting and module events exists. The [Security and privacy reference](/docs/reference/security/) lists these in full.
+No general audit trail of reads and changes to business records (a reviewer's or administrator's read of mileage route points is logged), no command to revoke a single agent token (an app connected through the browser sign-in can be revoked under Customize, Security, Connected apps, and offboarding a user ends their tokens), no scheduled backups switched on by a control plane for the instances it creates, no certification and no independent penetration test yet. Single sign-on exists only for Microsoft Entra and has not been tried against a real Microsoft tenant. A security log of events such as account, sign-in, security-setting and module events exists. The [Security and privacy reference](/docs/reference/security/) lists these in full.
 
 ## Supply chain
 
-The repository pins its JavaScript dependencies in a single lockfile and its Rust dependencies in `Cargo.lock`. Releases are not signed and no software bill of materials is published yet.
+The repository pins its JavaScript dependencies in a single lockfile and its Rust dependencies in `Cargo.lock`. Releases are not signed. The container image that CI publishes from the `main` and `deploy` branches carries a build provenance record and an SBOM; the workflow does not sign them, and the SBOM lists operating-system packages only, not the Rust or JavaScript dependencies.
