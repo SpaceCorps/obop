@@ -25,4 +25,9 @@ function site() {
   };
 }
 
-export default defineConfig({ plugins: [site()] });
+// `vp check` only reports type errors when lint.options.typeCheck is on (it needs typeAware): without
+// it a missing translation string (the `Messages` type in i18n/types.ts) compiles, builds and ships.
+export default defineConfig({
+  plugins: [site()],
+  lint: { options: { typeAware: true, typeCheck: true } },
+});

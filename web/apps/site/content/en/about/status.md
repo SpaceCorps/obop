@@ -16,7 +16,7 @@ The live status page is at [/status](/status). It is served by the control plane
 
 ## What it does not promise
 
-obop is in beta. There is no service level agreement, no uptime target and no support commitment yet. Instances may be restarted, upgraded by hand or lost while the platform matures; nothing backs up the hosted databases yet. Do not keep the only copy of important data in the hosted beta.
+The hosted service is a beta. There is no service level agreement, no uptime target and no support commitment yet. Instances may be restarted, upgraded or lost while the platform matures; the hosted service does not switch on scheduled backups of its databases yet (the program can take them, and a self-hosted instance can turn them on). Do not keep the only copy of important data in the hosted beta.
 
 ## If something is down
 

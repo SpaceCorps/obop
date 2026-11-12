@@ -11,7 +11,7 @@ Der gehostete Dienst gibt jedem Unternehmen eine eigene Instanz mit eigener Date
 1. **Registrieren.** Öffnen Sie [die Registrierungs-App](/app/), geben Sie Ihre E-Mail-Adresse und ein Passwort ein und wählen Sie _Create account_.
 2. **Instanz anlegen.** Vergeben Sie einen Namen mit 3 bis 30 Zeichen. Die Adresse wird aus dem Namen gebildet. Die Einrichtung dauert einen Moment; die Seite zeigt den Fortschritt.
 3. **Anmelden.** Folgen Sie dem Link zu Ihrer Instanz und melden Sie sich mit derselben E-Mail-Adresse und demselben Passwort an. Ihr Registrierungskonto wird der erste Administrator der Instanz.
-4. **Eine App installieren.** Öffnen Sie _Customize_, dann _Marketplace_, und installieren Sie eine App wie Helpdesk oder Projects. Zum Installieren und Entfernen von Apps ist die Administratorgruppe nötig. Die fünf integrierten Apps (CRM, Sales, Invoicing, Products und Contacts) sind bereits vorhanden.
+4. **Eine App installieren.** Öffnen Sie _Customize_, dann _Marketplace_, und installieren Sie eine App wie Helpdesk oder Projects. Zum Installieren und Entfernen von Apps ist die Administratorgruppe nötig. Die integrierten Apps (CRM, Sales, Invoicing, Products, Contacts und Connectors) sind bereits vorhanden.
 5. **Datensätze anlegen.** Öffnen Sie eine App, wählen Sie _New_ und füllen Sie das Formular aus. Listen, Boards und die Seitenleiste werden aus der Beschreibung der App erzeugt.
 6. **Einen Agenten einladen.** Für Agent-Tokens gibt es noch keine Oberfläche. Melden Sie sich über die REST-API an und [erstellen Sie ein Agent-Token](/docs/agents/tokens/), dann [verbinden Sie sich über MCP](/docs/agents/mcp/) oder nutzen [REST](/docs/agents/rest/).
 

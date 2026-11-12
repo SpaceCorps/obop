@@ -13,7 +13,7 @@ El almacenamiento es SQLite para probar y PostgreSQL para un uso real. Por ahora
 
 ## Los módulos son aplicaciones
 
-Una aplicación es un **módulo**: una descripción de modelos, campos, grupos de permisos y acciones de flujo de trabajo. Cinco módulos vienen incluidos (Contacts, Products, CRM, Sales, Invoicing). Otros veintidós se distribuyen como paquetes. Añades aplicaciones desde el marketplace con un clic, o subes tu propio archivo.
+Una aplicación es un **módulo**: una descripción de modelos, campos, grupos de permisos y acciones de flujo de trabajo. Seis aplicaciones integradas tienen una página en este sitio (Contacts, Products, CRM, Sales, Invoicing, Connectors). Otras 24 se distribuyen como paquetes, y 22 de ellas también tienen página. Añades aplicaciones desde el marketplace con un clic, o subes tu propio archivo.
 
 Como todos los módulos pasan por un único registro, un contacto es el mismo contacto en CRM, Sales e Invoicing, y cada módulo obtiene la misma API, las mismas pantallas, los mismos permisos y las mismas reglas de privacidad. Consulta [Aplicaciones y módulos](/docs/concepts/apps-and-modules/) y la [lista de aplicaciones](/apps/).
 
@@ -35,15 +35,23 @@ Los cambios de estado son acciones con nombre. Una acción puede requerir un gru
 
 ## Tres superficies, un mismo conjunto de comandos
 
-| Superficie     | Para                        | Cómo                                                                                            |
-| -------------- | --------------------------- | ----------------------------------------------------------------------------------------------- |
-| Aplicación web | Personas                    | Generada a partir de las descripciones de los módulos: listas, tableros, formularios.           |
-| REST           | Scripts, servicios, agentes | `POST /api/{model}/{command}` con un bearer token. [Referencia REST](/docs/reference/rest-api/) |
-| MCP            | Asistentes de IA            | `obop mcp` sobre stdio, una herramienta por comando. [Conectar mediante MCP](/docs/agents/mcp/) |
-| CLI            | Shells y cron               | `obop call model command key=value`. [Referencia de la CLI](/docs/reference/cli/)               |
+| Superficie     | Para                        | Cómo                                                                                                                |
+| -------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Aplicación web | Personas                    | Generada a partir de las descripciones de los módulos: listas, tableros, formularios.                               |
+| REST           | Scripts, servicios, agentes | `POST /api/{model}/{command}` con un bearer token. [Referencia REST](/docs/reference/rest-api/)                     |
+| MCP            | Agentes de IA               | `obop mcp` sobre stdio o `/mcp` sobre HTTP, una herramienta por comando. [Conectar mediante MCP](/docs/agents/mcp/) |
+| CLI            | Shells y cron               | `obop call model command key=value`. [Referencia de la CLI](/docs/reference/cli/)                                   |
 
 Todas llaman al mismo despachador, por lo que las comprobaciones de permisos, el enmascarado y las aprobaciones son idénticos.
 
 ## Lo que (todavía) no es
 
-Ten en cuenta esto antes de comprometerte: no hay niveles de código, por lo que los módulos no pueden calcular campos ni ejecutar efectos secundarios; no hay permisos a nivel de fila; no hay registro de auditoría, ni herramienta de exportación de datos, ni copias de seguridad para el servicio alojado. La [hoja de ruta](/roadmap/) indica qué está construido y qué no.
+Ten en cuenta esto antes de comprometerte:
+
+- No hay niveles de código más allá de los paquetes declarativos (ni componentes WebAssembly ni aplicaciones remotas), por lo que un paquete de aplicación no ejecuta código propio y no puede declarar llamadas a otros sistemas, aunque sí puede declarar totales calculados y acciones que cambian otros registros de la misma base de datos.
+- Solo algunas aplicaciones (por ejemplo Expenses, Timesheets, las solicitudes de ausencia de HR, Documents y Dashboards) limitan qué registros ve una persona. CRM, Sales e Invoicing no lo hacen.
+- El registro de seguridad recoge, por ejemplo, eventos de cuentas, de inicio de sesión, de ajustes de seguridad, de módulos y de firmas, pero no es un historial de los cambios en los registros del negocio.
+- La tarea de exportación prevista para todo un negocio no está construida. Una lista se exporta como CSV desde la aplicación web (hasta 20 000 registros), y `obop backup --plain` escribe los registros y los archivos subidos de una base de datos en un archivo sin cifrar (los valores de corta duración, como las sesiones, se dejan fuera, y los secretos siguen sellados).
+- El servicio alojado aún no activa las copias de seguridad programadas de sus bases de datos (quien ejecuta obop por su cuenta puede activarlas).
+
+La [hoja de ruta](/roadmap/) indica qué está construido y qué no.

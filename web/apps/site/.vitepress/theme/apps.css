@@ -1,0 +1,335 @@
+/*
+ * The apps pages: the index (.store) and every app page (.app-page).
+ *
+ * The feel is that of an app store's pages, as a reference for restraint and structure only: one
+ * idea per screen, one accent colour (the primary pill and links), large type with a strong
+ * hierarchy, long calm vertical rhythm, soft rounded surfaces with hairline edges, touch targets of
+ * at least 44 px for the controls it adds, and nothing that decorates without meaning. Written
+ * mobile first; the colours, fonts and radii are the @obop/ui tokens, so light and dark come for free.
+ */
+.store,
+.app-page {
+  --st-gap: var(--space-16);
+  --st-radius: 1.25rem;
+  --st-hair: 1px solid var(--border);
+  font-size: 1.0625rem;
+  line-height: 1.5;
+}
+@media (min-width: 48rem) {
+  .store,
+  .app-page {
+    --st-gap: var(--space-24);
+  }
+}
+
+/*
+ * App icons here are "fluid" tiles (components/Tile.vue): their size is the custom property
+ * --icon-size, which each place below sets in rem (so icons follow the reader's text size), and
+ * their corners are the squircle's 22 percent. A printed page without background graphics would
+ * draw the white glyph on white, so the icon keeps its colours in print.
+ */
+@media print {
+  .store .app-icon,
+  .app-page .app-icon {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+.store a,
+.app-page a.app-link {
+  text-decoration: none;
+}
+.store a:focus-visible,
+.app-page a:focus-visible,
+.app-page summary:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+
+/* ---------- Index ---------- */
+.store {
+  /*
+   * The page name: 2.25rem, a little less on the narrowest phones; the 1.25rem floor lets "Aplicaciones"
+   * stay inside the column at a large text size. The section headings and the lead are derived from it
+   * (never below the size of the text itself), so at no text size is one of them larger than the name.
+   */
+  --h1: clamp(1.25rem, 12vw, 2.25rem);
+  padding-block: var(--space-12) var(--space-20);
+}
+.store-head {
+  margin-block-end: var(--st-gap);
+}
+.store-head h1 {
+  margin: 0;
+  font-size: var(--h1);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+  overflow-wrap: break-word;
+}
+.store-lead {
+  max-inline-size: 36rem;
+  margin: var(--space-3) 0 0;
+  color: var(--text-muted);
+  font-size: max(1.0625rem, min(1.25rem, calc(var(--h1) * 0.8)));
+  line-height: 1.4;
+  text-wrap: balance;
+}
+.store-sec + .store-sec {
+  margin-block-start: var(--st-gap);
+}
+.store-sec > h2 {
+  margin: 0 0 var(--space-5);
+  font-size: max(calc(var(--h1) * 0.78), 1.0625rem);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  overflow-wrap: break-word;
+}
+.store-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-inline-size: 0;
+}
+.store-name {
+  font-weight: var(--weight-semibold);
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.store-tag {
+  overflow-wrap: anywhere;
+  text-wrap: wrap;
+  color: var(--text-muted);
+  font-size: 0.9375rem;
+  line-height: 1.35;
+}
+/* The languages that make long compounds (Rechnungsstellung) break them at a hyphen, where the browser can; the app pages do the same. */
+:is(.store-name, .store-tag):is(:lang(de), :lang(fi), :lang(sv), :lang(pl)) {
+  hyphens: auto;
+}
+
+/* The six built-in apps: large friendly tiles, one column on a phone. The icon is 72 px, 96 px on a wide screen. */
+.store-tiles {
+  --icon-size: 4.5rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.store-tile .tile-wrap {
+  flex: none;
+}
+.store-tile .app-icon svg {
+  inline-size: 58%;
+  block-size: 58%;
+}
+.store-tile {
+  display: flex;
+  /* At a very large text size the icon grows with it: the text drops under the icon instead of being squeezed beside it. */
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+  min-block-size: 6.5rem;
+  padding: var(--space-4);
+  border: var(--st-hair);
+  border-radius: var(--st-radius);
+  background: var(--surface);
+  color: var(--text);
+  transition:
+    background-color var(--dur-2) var(--ease-out),
+    border-color var(--dur-2) var(--ease-out);
+}
+.store-tile .store-text {
+  /* 8rem: the text drops under the icon only when the column beside it would be narrower than that. */
+  flex: 1 1 8rem;
+}
+.store-tile .store-name {
+  font-size: 1.25rem;
+  letter-spacing: -0.015em;
+}
+.store-tile:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+}
+/*
+ * The narrowest phones (320 px, or a wider screen at a large text size): the names are a little smaller,
+ * so the longest word of a language (German "Rechnungsstellung" in a tile, Finnish
+ * "Sähköpostimarkkinointi" in a row) fits its column whole where the browser cannot hyphenate it.
+ */
+@media (max-width: 21rem) {
+  .store-tile .store-name {
+    font-size: 1.125rem;
+  }
+  .store-row .store-name {
+    font-size: 1rem;
+  }
+}
+/*
+ * At a large text size on a phone the rem sizes of the name, the tagline and the tile's padding grow
+ * with the text while the screen does not: "Connectors" (194 px) did not fit a 190 px column at 200
+ * percent on 320 px and broke after its last letters but one. A vw cap, which only bites there (at the
+ * normal size the rem value is the smaller one), and a padding that gives the room back, keep the
+ * ordinary names whole. The few words that are wider than the column at any size, German
+ * "Rechnungsstellung" and Finnish "Sähköpostimarkkinointi", still break at its edge.
+ */
+@media (max-width: 21rem) {
+  .store-tile {
+    padding: min(var(--space-4), 5vw);
+  }
+  .store-tile .store-name {
+    font-size: min(1.125rem, 8.5vw);
+  }
+  .store-row .store-name {
+    font-size: min(1rem, 7.5vw);
+  }
+  .store-tag {
+    font-size: min(0.9375rem, 6vw);
+  }
+}
+/* The columns follow the room (and the reader's text size), so a large font never overflows a tile. */
+@media (min-width: 40rem) {
+  .store-tiles {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
+    gap: var(--space-4);
+  }
+}
+@media (min-width: 64rem) {
+  .store-tiles {
+    --icon-size: 6rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .store-tile {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-5);
+    min-block-size: 12.5rem;
+    padding: var(--space-8);
+  }
+  .store-tile .store-text {
+    flex: 0 1 auto;
+    gap: 0.25rem;
+    margin-block-start: auto;
+  }
+  .store-tile .store-name {
+    font-size: 1.5rem;
+  }
+  .store-tile .store-tag {
+    font-size: 1.0625rem;
+  }
+}
+
+/* The marketplace apps: rows grouped by category with hairline dividers; a chevron says a row opens a page. */
+.store-group + .store-group {
+  margin-block-start: var(--space-10);
+}
+/* A category is a quiet label over its rows (the one big heading is "More apps"), like the facts strip's labels. */
+.store-group h3 {
+  margin: 0;
+  padding-block-end: var(--space-3);
+  border-block-end: var(--st-hair);
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  overflow-wrap: break-word;
+}
+.store-rows {
+  --icon-size: 3rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  column-gap: var(--space-12);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.store-rows > li {
+  display: flex;
+  /* The row below asks how much room its item has, in rem, so a larger text size asks for more. */
+  container-type: inline-size;
+}
+/* The icon, the text and the chevron side by side: the text column is whatever the row has left. */
+.store-row {
+  display: grid;
+  flex: 1;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-inline-size: 0;
+  align-items: center;
+  column-gap: var(--space-4);
+  min-block-size: 4.25rem;
+  padding-block: var(--space-3);
+  border-block-end: var(--st-hair);
+  color: var(--text);
+}
+.store-chev {
+  display: inline-flex;
+  color: var(--text-subtle);
+  transition: color var(--dur-2) var(--ease-out);
+}
+/*
+ * At a very large text size the icon grows with the text and the column beside it would be a sliver
+ * (3 to 4 letters per line): below 14.25rem (the 3rem icon, the chevron, the gaps and a text column of
+ * 8rem) the text drops under the icon and takes the whole row, and the chevron stays on the icon's line.
+ */
+@container (width < 14.25rem) {
+  .store-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: var(--space-2);
+  }
+  .store-row .tile-wrap {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .store-row .store-chev {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .store-row .store-text {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+.store-row:hover .store-chev {
+  color: var(--text);
+}
+@media (min-width: 48rem) {
+  .store-rows {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+  }
+}
+@media (min-width: 48rem) {
+  .store-head h1 {
+    font-size: 3.5rem;
+  }
+  .store-lead {
+    font-size: 1.5rem;
+  }
+  .store-sec > h2 {
+    font-size: 2rem;
+  }
+}
+
+/*
+ * One primary action per screen: an app page has its own filled pill (Open or Get), and the index
+ * is a list of links with none, so the header's "Start free" is the plain button on both, and the
+ * header does not change style between the two pages of one flow.
+ */
+:root:has(.app-page, .store) .head-cta .btn.primary {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--text);
+  box-shadow: var(--shadow-1);
+}
+:root:has(.app-page, .store) .head-cta .btn.primary:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: var(--text-subtle);
+}
+
+/* Right-to-left (not offered yet): the row chevron points the other way. */
+:dir(rtl) .store-chev svg {
+  transform: scaleX(-1);
+}

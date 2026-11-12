@@ -37,7 +37,7 @@ A person sees real values under their normal permissions. An agent token (see [A
 
 An agent can pass a token in a write. The server swaps it for the real value if the agent could have read the record, so an agent can copy a contact into a new lead without ever seeing the contact's name or email. A token the server does not know is refused with `invalid token`.
 
-Tokens are kept sealed in the database per agent token (and per MCP session), so every server process on the database resolves them and a restart does not lose them. A different agent token starts with a fresh table, so an old token stops resolving; a table is forgotten 24 hours after its last change.
+Over REST and over MCP on HTTP, tokens are kept sealed in the database per agent token (and per MCP session), so every server process on the database resolves them and a restart does not lose them; a table is forgotten 24 hours after its last change (REST) or 2 hours after the session's last request (MCP). Under `obop mcp` the table lives in the command's memory and ends when it stops. A different agent token starts with a fresh table, so an old token stops resolving.
 
 ## Filtering and searching
 
@@ -46,7 +46,7 @@ Filters and sorting run on the real values before masking. To stop an agent gues
 ## Limits, honestly
 
 - Masking is by field class and the personal-data flag. It does not look inside free text: a note typed into a `none` field is shown as it is. Classify free-text fields that may contain personal data as personal data.
-- Tokens are not stable across restarts or across agent tokens.
+- Tokens resolve only for the agent token (or MCP session) that received them; a different token or a new MCP session starts a new table.
 - Erasure: Contacts has an `erase` action that anonymises a record in place; other apps do not yet.
 
 See also [Masking tokens](/docs/agents/masking/) and [Security and privacy](/docs/reference/security/).

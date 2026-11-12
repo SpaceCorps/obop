@@ -25,6 +25,6 @@ An unknown command, a hidden command and a forbidden command all answer `404 not
 
 ## Limits
 
-There are no row-level permissions yet. Access is by model and field group only, so everyone who can read a model reads every record in it. A `visibility` field in an app such as Knowledge is a label, not a rule.
+Groups decide which models, fields and actions a person can use. Which records they see can be limited further by row rules, which an app declares per model (`[model.access]` in its package file). A model with no row rule shows every record to everyone who can read it. Apps that declare one include Expenses, Timesheets, leave requests in HR, Documents and Dashboards; CRM, Sales and Invoicing do not. A rule covers whole records, not single fields, and an administrator sees every record. A `visibility` field in an app such as Knowledge is a label, not a rule.
 
 See [Create an agent token](/docs/agents/tokens/) and [Safety best practices](/docs/agents/safety/).

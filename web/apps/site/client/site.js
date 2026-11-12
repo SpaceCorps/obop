@@ -29,6 +29,30 @@
     });
   }
 
+  // ---- A link to a heading inside a folded <details> (the "For developers" part of an app page)
+  // opens the details and scrolls to the heading. Without this, a link to such an id lands on
+  // nothing in browsers that do not open the details themselves. ----
+  function openTarget() {
+    var id = "";
+    try {
+      id = decodeURIComponent(location.hash.slice(1));
+    } catch {
+      return;
+    }
+    var target = id ? doc.getElementById(id) : null;
+    if (!target) return;
+    var opened = false;
+    for (var el = target; el; el = el.parentElement) {
+      if (el.tagName === "DETAILS" && !el.open) {
+        el.open = true;
+        opened = true;
+      }
+    }
+    if (opened) target.scrollIntoView();
+  }
+  openTarget();
+  addEventListener("hashchange", openTarget);
+
   // ---- Strings for the page language (copy buttons, language hint) ----
   var hints = {};
   var banner = doc.querySelector(".lang-banner");
@@ -46,7 +70,7 @@
     btn.addEventListener("click", function () {
       var code = btn.parentElement && btn.parentElement.querySelector("pre code");
       if (!code || !navigator.clipboard) return;
-      navigator.clipboard.writeText(code.innerText).then(function () {
+      void navigator.clipboard.writeText(code.innerText).then(function () {
         btn.classList.add("copied");
         btn.setAttribute("aria-label", strings.copied || "Copied");
         setTimeout(function () {
@@ -56,6 +80,10 @@
       });
     });
   });
+
+  // The copy buttons show only once they are wired (the CSS hides them without this class), so a
+  // script that fails to load never leaves a button that does nothing.
+  root.classList.add("js-ready");
 
   // ---- Language hint: a dismissible bubble, never a redirect ----
   if (banner && storage("get", "obop-lang-dismissed") !== "1") {

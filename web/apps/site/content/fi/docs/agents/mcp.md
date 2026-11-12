@@ -19,7 +19,7 @@ Instanssi tarjoaa [Model Context Protocolin](https://modelcontextprotocol.io/) *
 
 Claude Desktop, claude.ai ja Claude Code voivat yhdistää instanssiin ilman liitettyä tunnistetta. Lisää sovelluksessa mukautettu liitin (custom connector) osoitteella `https://YOUR-INSTANCE/mcp` (Claude Code: `claude mcp add --transport http obop https://YOUR-INSTANCE/mcp`, sitten `/mcp` ja valitse tunnistautuminen). Sovellus löytää kirjautumisen itse ja avaa selaimeen **oman instanssisi** sivun. Siellä:
 
-1. kirjaudut obop-tililläsi ja annat kaksivaiheisen koodin, jos tilillä on sellainen (myös pääsyavain käy, toisena vaiheena tai yksinään, jos sallit sen kohdassa Turvallisuus);
+1. kirjaudut obop-tililläsi ja annat kaksivaiheisen koodin, jos tilillä on sellainen (myös pääsyavain käy, toisena vaiheena tai yksinään, jos sallit sen kohdassa Tietoturva);
 2. näet, mikä sovellus pyytää ja mihin osoitteeseen selain palaa;
 3. valitset luovutettavat käyttöoikeusryhmät, valitset pääsyn keston (1, 7, 30 tai 90 päivää) ja painat **Salli**.
 
@@ -28,7 +28,7 @@ Mitä tämä tarkoittaa:
 - **Sovellus voi vain kaventaa oikeuksiasi.** Tarjolla ovat ryhmät, jotka itse omistat; sovellus toimii puolestasi valitsemillasi ryhmillä, ei koskaan laajemmin ([agenttitunnisteet](/docs/agents/tokens/) toimivat samoin). Sen toimet tallennetaan agenttisi toimina.
 - **Hyväksynnät vaativat edelleen ihmisen.** Hyväksyntää vaativa vaihe odottaa obopissa ihmistä; sovellus ei voi hyväksyä omia ehdotuksiaan.
 - **Lyhytikäiset tunnisteet.** Sovellus saa tunnisteen, joka on voimassa tunnin, ja uusintatunnisteen, jota käytetään kerran ja joka vaihtuu joka kerta. Jos uusintatunnistetta käytetään kahdesti, koko yhteys päättyy. Tämän kirjautumisen pääsytunniste toimii vain osoitteessa `/mcp`.
-- **Pysyt hallinnassa.** Kohdassa _Mukauta, Turvallisuus, Yhdistetyt sovellukset_ näkyy jokainen yhteys ryhmineen ja päättymispäivineen; **Peruuta** päättää sen heti. Yhdistäminen, kieltäytyminen, peruutus ja kahdesti käytetty tunniste näkyvät turvallisuuslokissa.
+- **Pysyt hallinnassa.** Kohdassa _Mukauta, Tietoturva, Yhdistetyt sovellukset_ näkyy jokainen yhteys ryhmineen ja päättymispäivineen; **Peruuta** päättää sen heti. Yhdistäminen, kieltäytyminen, peruutus ja kahdesti käytetty tunniste näkyvät turvallisuuslokissa.
 - **Mitään ei luoteta etukäteen.** Kuka tahansa sovellus voi rekisteröityä itse, joten sivu näyttää sen valitseman nimen ja paluuosoitteen ja kertoo, ettei obop voi tarkistaa, kuka sitä ylläpitää. Paluuosoitteiden on oltava `https` (tai `http` osoitteissa `localhost`, `127.0.0.1` tai `[::1]`), rekisteröinnit on rajattu ja käyttämättömät vanhenevat.
 
 Protokolla asiakkaiden tekijöille: RFC 9728- ja RFC 8414 -metatiedot, dynaaminen asiakasrekisteröinti (RFC 7591, julkiset asiakkaat), valtuutuskoodi PKCE **S256** -menetelmällä (pakollinen), `resource`-parametri (RFC 8707, sen on oltava instanssin `/mcp`-osoite), uusintatunnisteiden kierto uudelleenkäytön tunnistuksella, peruutus (RFC 7009) ja `iss`-parametri uudelleenohjauksessa (RFC 9207). Päätepisteet: `/oauth/register`, `/oauth/authorize`, `/oauth/token`, `/oauth/revoke`. Loopback-uudelleenohjaus (`http://127.0.0.1:PORT/...`) saa käyttää mitä tahansa porttia (RFC 8252); kaikkien muiden on täsmättävä tarkasti. Välityspalvelimen takana oleva instanssi tarvitsee `OBOP_PUBLIC_URL`-asetuksen, jotta näiden dokumenttien osoitteet ovat julkiset. Rakensimme tämän määrittelyn mukaan ja testasimme omalla asiakkaallamme automaattisissa testeissä; emme ole **vielä yhdistäneet** siihen oikeita Claude-sovelluksia.

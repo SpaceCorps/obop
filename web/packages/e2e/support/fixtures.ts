@@ -207,12 +207,27 @@ export async function open(page: Page, hash: string): Promise<void> {
   await expect(page.locator(".topbar")).toBeVisible();
 }
 
-/** Every visible control must have an accessible name; returns the offenders. */
-export async function unnamedControls(page: Page): Promise<string[]> {
-  return page.evaluate(() => {
+/**
+ * Every visible control must have an accessible name; returns the offenders. With `strict` the name
+ * is computed the way a browser does for a link or button: text inside `aria-hidden` parts does not
+ * count (a row whose only words sit in a hidden pill has no name), and disclosure `summary`
+ * elements are controls too.
+ */
+export async function unnamedControls(
+  page: Page,
+  { strict = false }: { strict?: boolean } = {},
+): Promise<string[]> {
+  return page.evaluate((strict) => {
     const bad: string[] = [];
     const sel =
-      "button, input, select, textarea, a[href], [role=button], [role=combobox], [role=checkbox], [role=radio], [role=tab]";
+      "button, input, select, textarea, a[href], [role=button], [role=combobox], [role=checkbox], [role=radio], [role=tab]" +
+      (strict ? ", summary" : "");
+    const ownText = (el: HTMLElement): string => {
+      if (!strict) return el.textContent?.trim() ?? "";
+      const copy = el.cloneNode(true) as HTMLElement;
+      copy.querySelectorAll("[aria-hidden=true]").forEach((n) => n.remove());
+      return copy.textContent?.trim() ?? "";
+    };
     for (const el of document.querySelectorAll<HTMLElement>(sel)) {
       if (el instanceof HTMLInputElement && el.type === "hidden") continue;
       if (el.closest("[hidden], [aria-hidden=true]")) continue;
@@ -237,12 +252,10 @@ export async function unnamedControls(page: Page): Promise<string[]> {
               : "") || forLabel?.textContent?.trim()
           : "") ||
         (el instanceof HTMLInputElement && el.type === "color" ? el.title : "") ||
-        (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement
-          ? ""
-          : el.textContent?.trim()) ||
+        (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement ? "" : ownText(el)) ||
         el.getAttribute("title")?.trim();
       if (!name) bad.push(el.outerHTML.slice(0, 140));
     }
     return bad;
-  });
+  }, strict);
 }

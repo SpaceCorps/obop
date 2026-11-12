@@ -12,7 +12,7 @@ lead: "obop limits what an agent can do, but you choose the limits. These are th
 
 ## One token per agent and per task
 
-A token has a label, but you cannot list or revoke tokens yet. Separate tokens limit damage and make an investigation possible:
+A token made with `obop agent-token` or the REST API has a label, but you cannot list or revoke those tokens yet. Separate tokens limit damage and make an investigation possible:
 
 - Create a fresh token for each agent and each unattended job.
 - Create short-lived work with a token you will stop using, and stop using it.
@@ -22,14 +22,16 @@ A token has a label, but you cannot list or revoke tokens yet. Separate tokens l
 
 - Use environment variables or a secret store. Never commit a token, paste it into a chat, or put it in a prompt.
 - In an MCP client config, reference the environment where the client allows it (`${env:OBOP_TOKEN}`, `${input:...}`) so the file holds no secret.
-- Tokens do not expire. A leaked token works until its owner is removed.
+- Agent tokens do not expire. A leaked one works until its owner is removed.
 
 ## If a token leaks
 
-There is no revoke command yet. The ways to stop a token today are:
+There is no command to revoke a single token made with `obop agent-token` or the REST API yet. The ways to stop one today are:
 
 1. Delete or disable the owning user so that the token stops resolving (a token stops working when its owner is deleted).
 2. Rotate the whole instance database credentials if the leak is wider than one token.
+
+An app that connected through the browser sign-in (see [MCP](/docs/agents/mcp/)) is listed under _Customize, Security, Connected apps_, where its owner can revoke it at once.
 
 Then review what the token did: records changed by an agent are not yet marked as such in the interface, so compare against your backups and the approvals you granted. A revoke command and an audit view are on the [roadmap](/roadmap/).
 
@@ -53,7 +55,7 @@ Point a new agent at a throwaway SQLite instance (`obop serve --demo` makes fake
 
 ## Know the limits
 
-- No row-level permissions: an agent with `crm.user` can read every lead.
-- Actions change one field and cannot send email or call other systems, so an agent cannot cause those side effects through obop.
+- Row rules exist only in some apps, and CRM has none: an agent with `crm.user` can read every lead. Where an app has them (for example Expenses, Timesheets, HR leave requests), an agent never sees more than its owner.
+- An action usually moves one state field and can also create or change other records in the same database, for example paying a sale in Point of Sale can prepare draft stock moves. An action does not send email. The Connectors actions `test` and `sync` reach the other system of a connection (`sync` needs approval). In the eCommerce app, when the shop takes card payments through Stripe, the order actions `refund` and `refund_delivered` ask Stripe to refund the payment first (both need approval, so an agent can only propose them), and `cancel` asks Stripe to close the open payment and to return a payment that had already arrived (it needs no approval, so an agent that holds `ecommerce.user` can run it). An administrator can also connect a [connector](/docs/concepts/connectors/) so that a webhook goes out when a command succeeds, and that includes commands an agent runs; check the connections before you give an agent write access.
 - Masking works on classified fields, not on free text.
-- Rate limiting applies to failed sign-ins only. There are no per-token quotas yet.
+- Failed sign-ins are rate limited. So are requests on `/mcp`, per token (600 a minute by default, `OBOP_MCP_RATE_PER_MINUTE`), bulk imports, per person and shared with that person's agents (12 a minute by default, `OBOP_BULK_PER_MINUTE`), and file uploads (40 in ten minutes per principal and server process). Other REST calls have no per-token limit. See the [environment variables](/docs/reference/environment/).

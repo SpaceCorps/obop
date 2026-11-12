@@ -15,11 +15,11 @@ Ein **Agent** ist alles, was mit einem Agent-Token auf obop zugreift: ein MCP-Cl
 
 ## Drei Wege der Verbindung
 
-| Schnittstelle  | Wann sie passt                                                                                                   | Seite                                     |
-| -------------- | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| MCP über stdio | Ein MCP-Client (Claude Desktop, Claude Code, Cursor, VS Code, Windsurf und andere) soll obop als Tools aufrufen. | [Über MCP verbinden](/docs/agents/mcp/)   |
-| REST           | Ein Skript oder Dienst ruft HTTP-Endpunkte auf.                                                                  | [Die REST-API nutzen](/docs/agents/rest/) |
-| CLI            | Eine Shell oder ein Cron-Job ruft `obop call` auf.                                                               | [Die CLI nutzen](/docs/agents/cli/)       |
+| Schnittstelle | Wann sie passt                                                                                                   | Seite                                     |
+| ------------- | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| MCP           | Ein MCP-Client (Claude Desktop, Claude Code, Cursor, VS Code, Windsurf und andere) soll obop als Tools aufrufen. | [Über MCP verbinden](/docs/agents/mcp/)   |
+| REST          | Ein Skript oder Dienst ruft HTTP-Endpunkte auf.                                                                  | [Die REST-API nutzen](/docs/agents/rest/) |
+| CLI           | Eine Shell oder ein Cron-Job ruft `obop call` auf.                                                               | [Die CLI nutzen](/docs/agents/cli/)       |
 
 ## Einrichtung in fünf Schritten
 
@@ -31,7 +31,7 @@ Ein **Agent** ist alles, was mit einem Agent-Token auf obop zugreift: ein MCP-Cl
 
 ## Was es heute gibt und was nicht
 
-- Gebaut: Tokens mit eingeschränktem Umfang, Maskierung und Wiederherstellung, Freigabepläne, MCP über stdio, REST und die CLI.
-- Noch nicht gebaut: ein HTTP-Transport (remote) für MCP mit OAuth, weshalb gehostete Instanzen noch nicht über MCP erreichbar sind; eine Oberfläche zum Erstellen oder Widerrufen von Agent-Tokens; eine Liste offener Freigaben in der Oberfläche. Agent-Tokens laufen nicht ab, und einen Befehl zum Widerrufen gibt es noch nicht. Darauf weisen wir erneut hin, wo es relevant ist.
+- Gebaut: Tokens mit eingeschränktem Umfang, Maskierung und Wiederherstellung, Freigabepläne, MCP über stdio und über HTTP unter `/mcp`, REST und die CLI.
+- Gebaut, aber nur mit unserem eigenen Testclient und automatisierten Tests ausprobiert, nicht mit Claude Desktop, claude.ai oder Claude Code: die Anmeldung im Browser (OAuth) für MCP-Clients. Noch nicht gebaut: eine Oberfläche zum Erstellen oder Widerrufen von Agent-Tokens; eine Liste offener Freigaben in der Oberfläche. Agent-Tokens laufen nicht ab, und einen Befehl, um ein einzelnes zu widerrufen, gibt es noch nicht; eine App, die über die Anmeldung im Browser verbunden wurde, lässt sich unter _Anpassen, Sicherheit, Verbundene Apps_ widerrufen. Darauf weisen wir erneut hin, wo es relevant ist.
 
 Beispiele für Prompts und Abläufe finden Sie unter [Beispiel-Workflows](/docs/agents/workflows/), bei Problemen unter [Fehlerbehebung](/docs/agents/troubleshooting/).

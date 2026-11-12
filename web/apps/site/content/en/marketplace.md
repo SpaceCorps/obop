@@ -1,13 +1,13 @@
 ---
 title: "Marketplace"
-description: "The obop marketplace: 22 bundled packages you can install in a click, and how to publish your own catalog as a static host with an index.json file and obop.toml packages."
+description: "The obop marketplace: bundled packages you can install in a click, and how to publish your own catalog as a static host with an index.json file and obop.toml packages."
 lead: "Install what you need. Publish what you build. The catalog is a static host, so anyone can run one."
 eyebrow: "Apps you can install"
 ---
 
 ## The bundled catalog
 
-These 22 packages ship with obop (the `packages/` directory of the repository, compiled into the program). Administrators install them from _Customize_, then _Marketplace_, or with `obop modules install-from ID`. The five built-in apps (Contacts, Products, CRM, Sales and Invoicing) are not listed here because they are always present. Each name links to its app page.
+The packages in the `packages/` directory of the repository ship with obop, compiled into the program: 24 in all. The 22 listed here have an app page, and each name links to it. Administrators install them from _Customize_, then _Marketplace_, or with `obop modules install-from ID`. The built-in apps (Contacts, Products, CRM, Sales, Invoicing and Connectors) are not listed here because they are always present.
 
 %%catalog%%
 

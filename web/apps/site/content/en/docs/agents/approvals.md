@@ -89,8 +89,7 @@ If the database refuses the approval before anything was changed (`503` with `"a
 
 ## Limits, honestly
 
-- Pending plans are kept in the server's memory. A restart forgets them; the agent has to propose again.
-- Plans do not expire on their own.
+- A pending plan is kept sealed in the instance's database for 7 days, so a restart does not lose it, and any server process on that database can approve it. After 7 days it is forgotten: approving it answers 404 and the agent has to propose again.
 - There is no list-pending-plans call. The plan id travels from the agent to the approver by whatever channel you set up (a chat message, a ticket).
 - A person approving should read what the plan does. The plan id alone does not show it; ask the agent to describe the change in words before you approve.
 

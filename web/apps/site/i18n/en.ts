@@ -45,7 +45,7 @@ export const en: Messages = {
     langSuggest: "This page is also available in English.",
     langSuggestGo: "Switch to English",
     dismiss: "Dismiss",
-    betaNote: "Open-source business platform. Beta.",
+    betaNote: "Open-source business platform. Below version 1.0.",
     allRightsNote: "Planned prices are not yet charged.",
     sourceCode: "Source code on GitHub",
     docsHome: "Documentation",
@@ -103,7 +103,7 @@ export const en: Messages = {
   },
   home: {
     eyebrow: "Open-source business platform",
-    badge: "Beta",
+    badge: "Pre-1.0",
     titleA: "One business.",
     titleB: "One platform.",
     lead: "CRM, sales, invoicing and more on a single data model. Built for people and for AI agents, with the permissions and privacy to trust both.",
@@ -113,7 +113,7 @@ export const en: Messages = {
     mockCaption: "Illustration with sample data",
     appsTitle: "All your business apps. One database.",
     appsSub:
-      "Every app shares the same contacts, products and permissions, so nothing needs gluing together. Six apps are built in; the other 22 install from the marketplace.",
+      "Every app shares the same contacts, products and permissions, so nothing needs gluing together. Some apps are built in; the others install from the marketplace.",
     seeAllApps: "Browse all apps and their data models",
     pillarsTitle: "Built for the way work happens now",
     pillarsSub:
@@ -203,7 +203,7 @@ export const en: Messages = {
       },
       {
         q: "Is obop ready for production use?",
-        a: "Not yet. obop is in beta. The core works and is tested, but there are no data migrations between module versions yet, nothing backs up the hosted databases, and many bundled apps are deliberately simple. Use it to evaluate and for non-critical work for now. The roadmap page lists what is built and what is not.",
+        a: "Not yet. obop is below version 1.0, so a release can still change things. The core works and is tested, the six built-in apps are marked Stable, the other apps are marked Beta or Experimental, and many bundled apps are deliberately simple. The hosted service does not switch on scheduled backups of its databases yet. Use it to evaluate and for non-critical work for now. The roadmap page lists what is built and what is not.",
       },
       {
         q: "How much does it cost?",
@@ -291,8 +291,8 @@ export const en: Messages = {
   apps: {
     title: "Apps",
     description:
-      "All 28 obop apps: 6 built in (CRM, Sales, Invoicing, Products, Contacts, Connectors) and 22 installable from the marketplace. Each page lists models, fields, data classes, workflows and what agents can do.",
-    lead: "Every app is a module on one data model. Six are built in; the other 22 install from the marketplace in a click. Open an app to see its models, fields, workflows and what an AI agent may do with it.",
+      "Here are 28 of the obop apps: 6 that come with obop and 22 more you can add. Open an app to see what it does.",
+    lead: "The apps for everyday work in a small business.",
     filterLabel: "Filter apps",
     all: "All",
     available: "Available",
@@ -306,7 +306,6 @@ export const en: Messages = {
       content: "Content and documents",
     },
     status: { available: "Available", marketplace: "Marketplace" },
-    countLine: "{n} apps",
     h: {
       purpose: "What it is for",
       package: "What the package does and does not do",
@@ -320,7 +319,7 @@ export const en: Messages = {
       dependencies: "Dependencies",
       install: "Install",
       guide: "Build your own",
-      related: "Related apps",
+      related: "Other apps in this category",
     },
     th: {
       field: "Field",
@@ -344,7 +343,8 @@ export const en: Messages = {
     masked: "masked",
     withheld: "withheld",
     noWorkflow: "This app has no workflow actions; records are created and edited directly.",
-    noApproval: "No step in this app needs an approval, apart from deleting records.",
+    noApproval:
+      "No step in this app needs approval when a person runs it. An AI agent can only propose deleting records, and a person approves that.",
     noDependencies: "None.",
     depLead:
       "Each dependency states the versions it accepts. Built-in apps version with the core, so a requirement on one is checked against the core version.",
@@ -379,14 +379,65 @@ export const en: Messages = {
     guideLink: "The module guide shows how apps like this one are written",
     englishNote: "English",
     agentsCan:
-      "An agent can read, search, create and update records of this app, and run the actions that need no approval, within the permission groups of its token.",
+      "An agent can read and search records of this app, create and update them where the model allows it, and run the actions that need no approval, within the permission groups of its token.",
     agentsPropose: "It can only propose these steps, and a person must approve them: {list}.",
     agentsMasked: "Personal data is masked as placeholder tokens: {list}.",
     agentsWithheld: "These fields are withheld from agents entirely: {list}.",
     agentsNone: "none",
     approvalsLead: "Steps an agent can only propose:",
     permissionsLead: "Groups used by this app:",
-    versionLabel: "Version",
+    store: {
+      ready: "Comes with obop",
+      more: "More apps",
+      open: "Open",
+      get: "Get",
+      canDo: "What you can do",
+      keeps: "What it keeps",
+      safe: "AI agents and this app",
+      safeWhat:
+        "An AI agent is an AI program that works in obop for a person, and can do no more than that person may.",
+      worksWith: "Works with",
+      info: "Information",
+      developers: "For developers",
+      category: "Category",
+      developer: "Developer",
+      compat: "Compatibility",
+      compatValue: "obop {version}",
+      manifest: "Package file",
+      source: "Source",
+      standalone: "No other apps needed",
+      worksCount: { one: "{n} app", few: "{n} apps", many: "{n} apps", other: "{n} apps" },
+      sameAsObop: "{version}, same as obop",
+      directEdit: "Records are created and edited directly.",
+      needsApproval: "AI needs a person's approval",
+      showMoreActions: "Show {n} more actions",
+      showMoreKeeps: "Show {n} more things it keeps",
+      getLead: "Install it from the Customize app, under Marketplace.",
+      commandLine: "Or use the command line",
+      openObop: "Open obop",
+      getNote: "You need an administrator account.",
+      included: "Included in every obop.",
+      experimentalNote: "Still being tested. Try it with sample data first.",
+      safeMasked:
+        "AI agents see the fields marked as personal data, such as names and emails, only as placeholders. Text typed into a field that is not marked as personal data, such as a description, is not replaced by a placeholder.",
+      safeWithheld: "AI agents never see the fields marked as sensitive. In this app: {list}.",
+      safeMoneyClear: "A price or a total is shown unless its field is one of these.",
+      safeKinds: {
+        financial: "sensitive financial details",
+        confidential_hr: "confidential HR details",
+        special_category: "special-category personal data (such as health)",
+        secret: "secrets (such as sign-in details)",
+      },
+      safeApprove:
+        "Some steps an AI agent can only propose, and a person approves them. Other steps it can take on its own, within its permissions.",
+      safeApproveNone:
+        "An AI agent can only propose deleting records, and a person approves that. Everything else it can do on its own, within its permissions.",
+      appMeta: "An app for obop, the open-source platform for business.",
+      developersShow: "Show technical details",
+      developersHide: "Hide technical details",
+      purposeEnglish: "The description is in English.",
+      readMore: "Read more",
+    },
     taglines,
   },
   docs: {

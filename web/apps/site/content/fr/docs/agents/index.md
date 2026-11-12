@@ -15,11 +15,11 @@ Un **agent** est tout ce qui agit sur obop avec un jeton d'agent : un client MCP
 
 ## Trois façons de se connecter
 
-| Interface     | À utiliser quand                                                                                                       | Page                                      |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| MCP via stdio | Un client MCP (Claude Desktop, Claude Code, Cursor, VS Code, Windsurf et d'autres) doit appeler obop comme des outils. | [Se connecter via MCP](/docs/agents/mcp/) |
-| REST          | Un script ou un service appelle des points de terminaison HTTP.                                                        | [Utiliser l'API REST](/docs/agents/rest/) |
-| CLI           | Un shell ou une tâche cron appelle `obop call`.                                                                        | [Utiliser la CLI](/docs/agents/cli/)      |
+| Interface | À utiliser quand                                                                                                       | Page                                      |
+| --------- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| MCP       | Un client MCP (Claude Desktop, Claude Code, Cursor, VS Code, Windsurf et d'autres) doit appeler obop comme des outils. | [Se connecter via MCP](/docs/agents/mcp/) |
+| REST      | Un script ou un service appelle des points de terminaison HTTP.                                                        | [Utiliser l'API REST](/docs/agents/rest/) |
+| CLI       | Un shell ou une tâche cron appelle `obop call`.                                                                        | [Utiliser la CLI](/docs/agents/cli/)      |
 
 ## Mise en place en cinq étapes
 
@@ -31,7 +31,7 @@ Un **agent** est tout ce qui agit sur obop avec un jeton d'agent : un client MCP
 
 ## Ce qui existe aujourd'hui, et ce qui n'existe pas
 
-- Réalisé : jetons à périmètre limité, masquage et restauration, plans d'approbation, MCP via stdio, REST et la CLI.
-- Pas encore réalisé : un transport MCP HTTP (distant) avec OAuth, de sorte que les instances hébergées ne sont pas encore accessibles via MCP ; un écran pour créer ou révoquer des jetons d'agent ; une liste des approbations en attente dans l'interface. Les jetons d'agent n'expirent pas et il n'existe pas encore de commande de révocation. Ces points sont rappelés là où ils comptent.
+- Réalisé : jetons à périmètre limité, masquage et restauration, plans d'approbation, MCP via stdio et via HTTP à l'adresse `/mcp`, REST et la CLI.
+- Réalisé, mais essayé seulement avec notre propre client de test et des tests automatisés, pas avec Claude Desktop, claude.ai ni Claude Code : la connexion par le navigateur (OAuth) pour les clients MCP. Pas encore réalisé : un écran pour créer ou révoquer des jetons d'agent ; une liste des approbations en attente dans l'interface. Les jetons d'agent n'expirent pas et il n'existe pas encore de commande pour en révoquer un seul ; une application connectée par la connexion du navigateur peut être révoquée sous _Personnaliser, Sécurité, Applications connectées_. Ces points sont rappelés là où ils comptent.
 
 Consultez [Exemples de flux de travail](/docs/agents/workflows/) pour des requêtes et des enchaînements de départ, et [Dépannage](/docs/agents/troubleshooting/) quand quelque chose ne fonctionne pas.

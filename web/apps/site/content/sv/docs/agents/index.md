@@ -15,11 +15,11 @@ En **agent** är allt som agerar i obop med en agenttoken: en MCP-klient som Cla
 
 ## Tre sätt att ansluta
 
-| Gränssnitt     | Använd det när                                                                                                | Sida                                     |
-| -------------- | ------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| MCP över stdio | En MCP-klient (Claude Desktop, Claude Code, Cursor, VS Code, Windsurf och andra) ska anropa obop som verktyg. | [Anslut via MCP](/docs/agents/mcp/)      |
-| REST           | Ett skript eller en tjänst anropar HTTP-slutpunkter.                                                          | [Använd REST-API:et](/docs/agents/rest/) |
-| CLI            | Ett skal eller ett cron-jobb anropar `obop call`.                                                             | [Använd CLI](/docs/agents/cli/)          |
+| Gränssnitt | Använd det när                                                                                                | Sida                                     |
+| ---------- | ------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| MCP        | En MCP-klient (Claude Desktop, Claude Code, Cursor, VS Code, Windsurf och andra) ska anropa obop som verktyg. | [Anslut via MCP](/docs/agents/mcp/)      |
+| REST       | Ett skript eller en tjänst anropar HTTP-slutpunkter.                                                          | [Använd REST-API:et](/docs/agents/rest/) |
+| CLI        | Ett skal eller ett cron-jobb anropar `obop call`.                                                             | [Använd CLI](/docs/agents/cli/)          |
 
 ## Inställning i fem steg
 
@@ -31,7 +31,7 @@ En **agent** är allt som agerar i obop med en agenttoken: en MCP-klient som Cla
 
 ## Vad som finns i dag, och vad som inte gör det
 
-- Byggt: token med begränsad behörighet, maskering och återställning, godkännandeplaner, MCP över stdio, REST och CLI.
-- Inte byggt ännu: en HTTP-transport (fjärr-MCP) med OAuth, så hostade instanser går ännu inte att nå via MCP; en skärmbild för att skapa eller återkalla agenttoken; en lista över väntande godkännanden i gränssnittet. Agenttoken upphör inte att gälla och det finns inget kommando för att återkalla dem ännu. Det här påpekas igen där det spelar roll.
+- Byggt: token med begränsad behörighet, maskering och återställning, godkännandeplaner, MCP över stdio och över HTTP på `/mcp`, REST och CLI.
+- Byggt, men bara prövat mot vår egen testklient och automatiska tester, inte mot Claude Desktop, claude.ai eller Claude Code: inloggningen i webbläsaren (OAuth) för MCP-klienter. Inte byggt ännu: en skärmbild för att skapa eller återkalla agenttoken; en lista över väntande godkännanden i gränssnittet. Agenttoken upphör inte att gälla och det finns inget kommando för att återkalla en enskild ännu; en app som anslutits via inloggningen i webbläsaren kan återkallas under _Anpassa, Säkerhet, Anslutna appar_. Det här påpekas igen där det spelar roll.
 
 Se [Exempel på arbetsflöden](/docs/agents/workflows/) för uppmaningar och flöden att utgå från, och [Felsökning](/docs/agents/troubleshooting/) när något inte fungerar.

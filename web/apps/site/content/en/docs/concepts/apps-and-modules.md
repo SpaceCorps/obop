@@ -20,13 +20,13 @@ Permissions, masking, approvals and audit are applied for free, because they liv
 
 ## Built in and installable
 
-| Kind             | Apps                                      | Notes                                                                                 |
-| ---------------- | ----------------------------------------- | ------------------------------------------------------------------------------------- |
-| Built in         | Contacts, Products, CRM, Sales, Invoicing | Written in Rust, always present, cannot be removed.                                   |
-| Bundled packages | The other 22 apps                         | Plain `obop.toml` files in the `packages/` directory, installed from the marketplace. |
-| Your own         | Anything you write                        | Upload a file, or publish your own marketplace.                                       |
+| Kind             | Apps                                                                             | Notes                                                                                                                                 |
+| ---------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Built in         | Contacts, Products, CRM, Sales, Invoicing, Connectors (the six with an app page) | Written in Rust, always present, cannot be removed. Mileage, the server side of a planned phone app, is built in too and has no page. |
+| Bundled packages | 24 more (22 have an app page)                                                    | Plain `obop.toml` files in the `packages/` directory, installed from the marketplace.                                                 |
+| Your own         | Anything you write                                                               | Upload a file, or publish your own marketplace.                                                                                       |
 
-A package is one text file. It contains no code, so an administrator can install it at runtime. Code tiers (expressions, WebAssembly) are planned but not built, which is why packages cannot yet compute totals, generate sequences or call out to other systems. The [roadmap](/roadmap/) is honest about that.
+A package is one text file. It contains no code, so an administrator can install it at runtime. It can declare computed totals (in a small built-in expression language), numbered fields and actions that change other records. Further code tiers (CEL expressions, WebAssembly components) are planned but not built, so a package runs no code of its own and cannot declare calls to other systems. The [roadmap](/roadmap/) is honest about that.
 
 ## Installing and removing
 

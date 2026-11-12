@@ -1,7 +1,7 @@
 ---
 title: "Documentation"
 description: "Documentation for obop: get started, learn the concepts, set up AI agents over MCP, REST and the CLI, and look up the reference."
-lead: "How to run obop, build on it and connect AI agents to it. Everything here was checked against the code and, where there is a command, run."
+lead: "How to run obop, build on it and connect AI agents to it. Pages say where something was checked against the code or run, and where it was not."
 ---
 
 obop is an open-source business platform. One program serves the web app, a REST API, an MCP server and a command line from the same definitions, on one data model.
@@ -24,6 +24,6 @@ obop is an open-source business platform. One program serves the web app, a REST
 
 ## Status
 
-obop is in beta. Where a feature is not built yet, the page says so plainly. The [roadmap](/roadmap/) lists what exists and what does not, and the [changelog](/changelog/) lists what changed.
+obop is below version 1.0. Where a feature is not built yet, the page says so. The [roadmap](/roadmap/) lists what exists and what does not, and the [changelog](/changelog/) lists what changed.
 
 Every page here is also available as plain Markdown: add `.md` instead of the trailing slash, or read the whole documentation in one file at [llms-full.txt](/llms-full.txt).

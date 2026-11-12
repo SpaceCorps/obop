@@ -11,7 +11,7 @@ Le service hébergé donne à chaque entreprise sa propre instance, avec sa prop
 1. **Inscrivez-vous.** Ouvrez [l'application d'inscription](/app/), saisissez votre adresse e-mail et un mot de passe, puis choisissez _Create account_.
 2. **Créez une instance.** Donnez-lui un nom de 3 à 30 caractères. L'adresse est construite à partir du nom. La mise en place prend un moment ; la page affiche la progression.
 3. **Connectez-vous.** Suivez le lien vers votre instance et connectez-vous avec la même adresse e-mail et le même mot de passe. Votre compte d'inscription devient le premier administrateur de l'instance.
-4. **Installez une application.** Ouvrez _Customize_, puis _Marketplace_, et installez une application telle que Helpdesk ou Projects. L'installation et la suppression d'applications nécessitent le groupe administrateur. Les cinq applications intégrées (CRM, Sales, Invoicing, Products et Contacts) sont déjà là.
+4. **Installez une application.** Ouvrez _Customize_, puis _Marketplace_, et installez une application telle que Helpdesk ou Projects. L'installation et la suppression d'applications nécessitent le groupe administrateur. Les applications intégrées (CRM, Sales, Invoicing, Products, Contacts et Connectors) sont déjà là.
 5. **Créez des enregistrements.** Ouvrez une application, choisissez _New_ et remplissez le formulaire. Les listes, les tableaux et le panneau latéral sont générés à partir de la description de l'application.
 6. **Invitez un agent.** Il n'existe pas encore d'écran pour les jetons d'agent. Connectez-vous via l'API REST et [créez un jeton d'agent](/docs/agents/tokens/), puis [connectez-vous via MCP](/docs/agents/mcp/) ou utilisez [REST](/docs/agents/rest/).
 
