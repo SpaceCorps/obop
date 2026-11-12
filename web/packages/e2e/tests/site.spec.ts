@@ -320,12 +320,12 @@ test.describe("website without JavaScript", () => {
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Invoicing");
 
     // The hero: the name, one line, the category as a quiet line and one primary button; a
-    // built-in app is opened.
+    // built-in app comes with obop, so the button leads to Getting started.
     await expect(page.locator(".app-tagline")).toHaveText(messages.en.apps.taglines["invoicing"]!);
     await expect(page.locator(".app-category")).toHaveText("Finance");
     const primary = page.locator(".app-hero .app-primary");
     await expect(primary).toHaveText(s.open);
-    await expect(primary).toHaveAttribute("href", "/app/");
+    await expect(primary).toHaveAttribute("href", "/docs/getting-started/");
     await expect(page.locator("main .app-primary")).toHaveCount(1);
 
     // The facts strip: four cells, from the manifest only.
@@ -434,15 +434,16 @@ test.describe("website without JavaScript", () => {
     await primary.click();
     await expect(page).toHaveURL(/\/apps\/helpdesk\/#get$/);
     await expect(page.getByRole("heading", { level: 2, name: s.get })).toBeInViewport();
-    // The box ends the jump with something to do: one plain sentence, the pill that opens obop
-    // (where Customize and its Marketplace are), and the command line, shown, with what it needs.
+    // The box ends the jump with something to do: one plain sentence, the pill to Getting started
+    // (how to run obop, whose Customize app has the Marketplace), and the command line, shown, with
+    // what it needs.
     await expect(page.locator(".app-getbox > p").first()).toHaveText(s.getLead);
     const open = page.locator(".app-getbox a.app-pill");
     await expect(open).toHaveText(s.openObop);
-    await expect(open).toHaveAttribute("href", "/app/");
+    await expect(open).toHaveAttribute("href", "/docs/getting-started/");
     await expect(page.locator("main .app-primary")).toHaveCount(1); // the one button of the hero
     // The jump lands on a filled pill, not a grey one: with the hero's button off screen it is the
-    // one filled pill of that screen, and the header's "Start free" is the plain button.
+    // one filled pill of that screen, and the header's "Get started" is the plain button.
     const fill = (sel: string) =>
       page.locator(sel).evaluate((el) => {
         const cs = getComputedStyle(el);
@@ -507,7 +508,10 @@ test.describe("website without JavaScript", () => {
     ).toBe("app-purpose");
     await page.goto(`${base()}/de/apps/crm/`);
     await expect(page.locator(".app-hero .app-primary")).toHaveText(s.open);
-    await expect(page.locator(".app-hero .app-primary")).toHaveAttribute("href", "/app/");
+    await expect(page.locator(".app-hero .app-primary")).toHaveAttribute(
+      "href",
+      "/de/docs/getting-started/",
+    );
   });
 
   test("a translated page calls an app what the product calls it in that language", async ({
@@ -700,7 +704,7 @@ test.describe("website without JavaScript", () => {
         ).toHaveCount(1);
       await expect(page.locator("main .app-primary")).toHaveAttribute(
         "href",
-        app.builtin ? "/app/" : "#get",
+        app.builtin ? "/docs/getting-started/" : "#get",
       );
     });
   }
@@ -1199,6 +1203,15 @@ test.describe("website without JavaScript", () => {
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Page not found");
     await expect(page.getByRole("search")).toHaveCount(2); // header and page
     await expect(page.getByRole("link", { name: "Getting started" }).first()).toBeVisible();
+    const list = page.locator(".notfound .linklist");
+    await expect(list.getByRole("link", { name: "Community" })).toHaveAttribute(
+      "href",
+      "/about/community/",
+    );
+    await expect(list.getByRole("link", { name: "Status" })).toHaveAttribute(
+      "href",
+      "/about/status/",
+    );
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex");
   });
 
@@ -1484,7 +1497,7 @@ test.describe("crawlers and agents", () => {
       expect(app, h).toContain(`## ${h}`);
     expect(app).toContain("- **Ticket: close** (" + s.needsApproval + ")");
     expect(app).toContain(s.getLead);
-    expect(app).toContain(`[${s.openObop}](/app/)`);
+    expect(app).toContain(`[${s.openObop}](/docs/getting-started/)`);
     expect(app).toContain(s.getNote);
     expect(app).toContain("obop modules install-from helpdesk");
     // A built-in app has no Get section, only the line that says it is included.
@@ -1718,6 +1731,74 @@ test.describe("crawlers and agents", () => {
       const footer = /<\/a><p>([^<]*)<\/p><p class="fine"/.exec(html)?.[1];
       expect(footer, `${locale}: the footer note`).toBe(m.ui.betaNote);
       expect(footer, `${locale}: the footer note`).not.toMatch(old);
+    }
+  });
+
+  // SpaceCorps hosts no obop for other people today (OR-11; the owner confirmed in chat on 2026-11-11
+  // that the hosted beta is not live): the site offers no sign-up. The sign-up app under /app/ stays
+  // in the build, which a control plane serves, but no page links to it, and the header's button and
+  // the home page's calls to action lead to Getting started instead.
+  test("no page links to the sign-up app; the header, the home page and pricing lead to Getting started", async ({
+    request,
+  }) => {
+    const toApp = /(?:\bhref="|\]\()(?:https?:\/\/[^/"\s)]+)?(?:\/[a-z]{2})?\/app(?:[/"#?)]|$)/;
+    // The rule can fail: it finds a link to /app/ in HTML and in Markdown, in any language, relative
+    // or absolute, with or without a fragment.
+    expect('<a class="btn primary" href="/app/">Start free</a>').toMatch(toApp);
+    expect("- [Get your own instance](/de/app/)").toMatch(toApp);
+    expect('<a href="https://obop.dev/app/">x</a>').toMatch(toApp);
+    expect("[x](/app/#s)").toMatch(toApp);
+    expect('<a href="/apps/crm/">CRM</a> served under `/app/`').not.toMatch(toApp);
+    expect("[CRM](/apps/crm/)").not.toMatch(toApp);
+
+    // Every page, Markdown copy and text file (llms.txt, llms-full.txt) of the built site (the
+    // sign-up app's own files under /app/ aside).
+    const files: string[] = [];
+    const walk = (dir: string) => {
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        const path = join(dir, e.name);
+        if (e.isDirectory()) {
+          if (path !== join(siteDir, "app")) walk(path);
+        } else if (/\.(html|md|txt)$/.test(e.name)) files.push(path);
+      }
+    };
+    walk(siteDir);
+    // 7 x 72 pages, each with its Markdown copy.
+    expect(files.filter((f) => f.endsWith(".html")).length, "the pages").toBeGreaterThan(500);
+    expect(files.filter((f) => f.endsWith(".md")).length, "the Markdown copies").toBeGreaterThan(
+      500,
+    );
+    const linking = files.filter((f) => toApp.test(readFileSync(f, "utf8")));
+    expect(
+      linking.map((f) => f.slice(siteDir.length)),
+      "pages that link to /app/",
+    ).toEqual([]);
+
+    /** The `href` of every `<a>` whose class has all of `classes`, in the order of the page. */
+    const links = (html: string, ...classes: string[]) =>
+      [...html.matchAll(/<a\b[^>]*>/g)].flatMap(([tag]) => {
+        const cls = (/\bclass="([^"]*)"/.exec(tag)?.[1] ?? "").split(/\s+/);
+        return classes.every((c) => cls.includes(c)) ? [/\bhref="([^"]*)"/.exec(tag)?.[1]] : [];
+      });
+    for (const locale of Object.keys(messages) as (keyof typeof messages)[]) {
+      const prefix = locale === "en" ? "" : `/${locale}`;
+      const start = `${prefix}/docs/getting-started/`;
+      const home = await (await request.get(`${base()}${prefix}/`)).text();
+      const head = /<div class="head-cta"[^>]*>([\s\S]*?)<\/div>/.exec(home)?.[1];
+      expect(head, `${locale}: the header's buttons`).toBeDefined();
+      expect(
+        [...head!.matchAll(/\bhref="([^"]*)"/g)].map((h) => h[1]),
+        locale,
+      ).toEqual([start]);
+      // The hero's button, the one under the steps and the closing band.
+      expect(links(home, "btn", "primary", "large"), `${locale}: the home page`).toEqual([
+        start,
+        start,
+      ]);
+      expect(links(home, "btn", "large", "light"), `${locale}: the closing band`).toEqual([start]);
+      const pricing = await (await request.get(`${base()}${prefix}/pricing/`)).text();
+      expect(links(pricing, "btn", "primary", "large"), `${locale}: pricing`).toEqual([start]);
+      expect((await request.get(`${base()}${start}`)).status(), start).toBe(200);
     }
   });
 
@@ -2674,7 +2755,7 @@ test.describe("accessibility", () => {
       page,
     }) => {
       // One filled pill per screen: on the apps pages (the index has none of its own) the header's
-      // "Start free" is the plain button, and on the home page it stays the filled one.
+      // "Get started" is the plain button, and on the home page it stays the filled one.
       const header = () =>
         page.locator(".head-cta .btn.primary").evaluate((el) => {
           const cs = getComputedStyle(el);

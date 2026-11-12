@@ -1,23 +1,14 @@
 ---
 title: "Primeros pasos"
-description: "Obtén tu primera instancia de obop: regístrate en la beta alojada, autoaloja con Docker y PostgreSQL, o ejecútala en local con SQLite. Después instala una aplicación, crea registros e invita a un agente."
-lead: "Tres formas de ejecutar obop. Elige la beta alojada para probarlo en minutos, Docker con PostgreSQL para un despliegue real, o una compilación local para desarrollar."
+description: "Pon en marcha tu primera instancia de obop: autoalójala con Docker y PostgreSQL, o ejecútala en local con SQLite. Después instala una aplicación, crea registros e invita a un agente."
+lead: "Dos formas de ejecutar obop: con Docker y PostgreSQL, o con una compilación local para desarrollar. SpaceCorps aún no aloja obop para otras personas."
 ---
 
-## Opción 1: la beta alojada
+SpaceCorps aún no aloja obop para otras personas, así que obop lo ejecutas tú. Están previstos un entorno de pruebas (sandbox) gratuito con datos de ejemplo y un alojamiento de pago en servidores dedicados; ninguno de los dos está abierto todavía, y no se promete ninguna fecha. Consulta [Precios](/pricing/) y la [hoja de ruta](/roadmap/).
 
-El servicio alojado da a cada negocio su propia instancia con su propia base de datos. Es gratis durante la beta.
+## Opción 1: autoalojar con Docker y PostgreSQL
 
-1. **Regístrate.** Abre [la aplicación de registro](/app/), introduce tu correo electrónico y una contraseña, y elige _Crear cuenta_.
-2. **Crea una instancia.** Ponle un nombre de entre 3 y 30 caracteres. La dirección se genera a partir del nombre. La preparación tarda un poco; la página muestra el progreso.
-3. **Inicia sesión.** Sigue el enlace a tu instancia e inicia sesión con el mismo correo y la misma contraseña. Tu cuenta de registro se convierte en el primer administrador de la instancia.
-4. **Instala una aplicación.** Abre _Personalizar, Módulos_ y después la pestaña _Mercado_, e instala una aplicación como Servicio de asistencia o Proyectos. Instalar y quitar aplicaciones requiere el grupo de administradores. Las aplicaciones incluidas ya están disponibles, entre ellas Contactos, Productos, CRM, Ventas, Facturación y Conectores (las seis que tienen una página de aplicación).
-5. **Crea registros.** Abre una aplicación, elige _Nuevo_ y rellena el formulario. Las listas, los tableros y el panel lateral se generan a partir de la descripción de la aplicación.
-6. **Invita a un agente.** Todavía no hay una pantalla para los tokens de agente. Inicia sesión mediante la API REST y [crea un token de agente](/docs/agents/tokens/); después [conéctate mediante MCP](/docs/agents/mcp/) o usa [REST](/docs/agents/rest/).
-
-## Opción 2: autoalojar con Docker y PostgreSQL
-
-Necesitas Docker. El repositorio incluye un archivo Compose que inicia PostgreSQL y obop juntos, publicados solo en localhost:
+Necesitas Docker. El repositorio incluye un archivo Compose para una prueba local; inicia PostgreSQL y obop juntos, publicados solo en localhost:
 
 ```bash
 git clone https://github.com/SpaceCorps/obop.git
@@ -44,7 +35,7 @@ docker run -d --name obop -p 8080:8080 \
 
 Por defecto, la imagen ejecuta una sola instancia. Su comando es `obop serve --addr 0.0.0.0:8080 --static /srv/backoffice --public-site --trust-proxy`: el sitio público está en `/` y el back office en `/admin/`. `--trust-proxy` toma la dirección del cliente de `X-Forwarded-For`, así que ejecuta la imagen detrás de un proxy que controles. Crea el primer administrador con `docker exec -i obop obop admin create alice --all-groups`. Consulta [Autoalojamiento y operación](/docs/reference/self-hosting/) para el plano de control, las copias de seguridad y lo que falta.
 
-## Opción 3: desarrollo local con SQLite
+## Opción 2: desarrollo local con SQLite
 
 Necesitas la toolchain de Rust indicada en `rust-toolchain.toml`, pnpm y Vite+ (`vp`). SQLite es el almacenamiento por defecto, así que no hace falta un servidor de base de datos.
 
@@ -61,6 +52,12 @@ cargo run -- serve --static web/apps/backoffice/dist
 Abre `http://127.0.0.1:8080` e inicia sesión como `alice`. Los datos están en `obop.db`, en el directorio actual; pasa `--db sqlite:///path/to/file.db` para usar otro archivo. Una base de datos SQLite nueva y vacía se rellena automáticamente con datos de demostración ficticios (`--demo` lo fuerza).
 
 `--dev-auth` sustituye el inicio de sesión real por tokens fijos llamados `dev-admin`, `dev-sales` y `dev-agent`. Se niega a enlazarse a cualquier dirección que no sea localhost.
+
+## Después de iniciar sesión
+
+1. **Instala una aplicación.** Abre _Personalizar, Módulos_ y después la pestaña _Mercado_, e instala una aplicación como Servicio de asistencia o Proyectos. Instalar y quitar aplicaciones requiere el grupo de administradores. Las aplicaciones incluidas ya están disponibles, entre ellas Contactos, Productos, CRM, Ventas, Facturación y Conectores (las seis que tienen una página de aplicación).
+2. **Crea registros.** Abre una aplicación, elige _Nuevo_ y rellena el formulario. Las listas, los tableros y el panel lateral se generan a partir de la descripción de la aplicación.
+3. **Invita a un agente.** Todavía no hay una pantalla para los tokens de agente. Inicia sesión mediante la API REST y [crea un token de agente](/docs/agents/tokens/); después [conéctate mediante MCP](/docs/agents/mcp/) o usa [REST](/docs/agents/rest/).
 
 ## Y después
 

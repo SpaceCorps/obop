@@ -50,7 +50,7 @@ curl -s -X POST http://127.0.0.1:8080/api/auth/agent-token \
 { "token": "obop_1e00c3..." }
 ```
 
-`scopes` är obligatoriskt, får inte vara tomt och får bara ange grupper som står på ditt eget konto; `platform.admin` ersätter inte de andra grupperna här. Det första kontot på en ny hostad instans har bara `platform.admin`, så ge det först de grupper du vill lämna över, under _Anpassa, Säkerhet, Människor_. `label` är fri text. På en hostad instans använder du dess adress i stället för `127.0.0.1:8080` och loggar in med e-postadressen från registreringen som användarnamn.
+`scopes` är obligatoriskt, får inte vara tomt och får bara ange grupper som står på ditt eget konto; `platform.admin` ersätter inte de andra grupperna här. Det första kontot på en instans som ett kontrollplan har skapat har bara `platform.admin`, så ge det först de grupper du vill lämna över, under _Anpassa, Säkerhet, Människor_. `label` är fri text. På en sådan instans använder du dess adress i stället för `127.0.0.1:8080` och loggar in med e-postadressen från registreringen som användarnamn.
 
 ## Med CLI
 

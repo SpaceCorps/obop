@@ -43,7 +43,7 @@ const pathParts = (path: string) => path.split(new RegExp("(?<=/)"));
         <h1>{{ softName(String(fm["title"])) }}</h1>
         <p class="app-tagline">{{ fm["tagline"] }}</p>
         <p class="app-category">{{ view.category }}</p>
-        <a class="app-primary" :href="builtin ? href('/app/') : '#get'">{{
+        <a class="app-primary" :href="builtin ? href('/docs/getting-started/') : '#get'">{{
           builtin ? s.open : s.get
         }}</a>
       </div>
@@ -119,7 +119,7 @@ const pathParts = (path: string) => path.split(new RegExp("(?<=/)"));
       <h2 id="get">{{ s.get }}</h2>
       <div class="app-getbox">
         <p>{{ s.getLead }}</p>
-        <a class="app-pill" :href="href('/app/')">{{ s.openObop }}</a>
+        <a class="app-pill" :href="href('/docs/getting-started/')">{{ s.openObop }}</a>
         <p class="app-or">{{ s.commandLine }}</p>
         <div class="language-bash">
           <button class="copy" type="button" :aria-label="m.ui.copy"></button>

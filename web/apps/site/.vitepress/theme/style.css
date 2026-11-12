@@ -2239,9 +2239,6 @@ div[class*="language-"] button.copy.copied {
   .docs-toc {
     display: none;
   }
-  .head-cta .btn.ghost {
-    display: none;
-  }
 }
 @media (max-width: 52rem) {
   nav.main-nav,

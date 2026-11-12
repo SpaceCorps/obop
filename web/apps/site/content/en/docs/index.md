@@ -8,7 +8,7 @@ obop is an open-source business platform. One program serves the web app, a REST
 
 ## Where to start
 
-- **New to obop?** Read [Getting started](/docs/getting-started/). It covers the hosted beta, self-hosting with Docker and PostgreSQL, and local development with SQLite.
+- **New to obop?** Read [Getting started](/docs/getting-started/). It covers self-hosting with Docker and PostgreSQL, and local development with SQLite.
 - **Want an AI agent to work with obop?** Start with [Agents](/docs/agents/), then [create an agent token](/docs/agents/tokens/) and [connect over MCP](/docs/agents/mcp/).
 - **Building your own app?** The [module manifest reference](/docs/reference/module-manifest/) explains how to describe models, fields, workflows and permissions in one `obop.toml` file.
 - **Looking something up?** See the [CLI](/docs/reference/cli/), [REST API](/docs/reference/rest-api/), [environment variables](/docs/reference/environment/) and the [FAQ](/docs/reference/faq/).

@@ -50,8 +50,7 @@ function switchUrl(l: (typeof LOCALES)[number]): string {
         <span class="when-dark"><Icon name="sun" :size="18" /></span>
       </button>
       <div class="head-cta">
-        <a class="btn ghost" href="/app/">{{ m.ui.signIn }}</a>
-        <a class="btn primary" href="/app/">{{ m.ui.startFree }}</a>
+        <a class="btn primary" :href="href('/docs/getting-started/')">{{ m.ui.startFree }}</a>
       </div>
       <details class="menu">
         <summary :aria-label="m.ui.menu"><Icon name="menu" :size="20" /></summary>
@@ -59,7 +58,6 @@ function switchUrl(l: (typeof LOCALES)[number]): string {
           <SearchBox id="q-menu" />
           <div class="menu-links">
             <a v-for="n in m.nav" :key="n.href" :href="href(n.href)">{{ n.label }}</a>
-            <a href="/app/">{{ m.ui.signIn }}</a>
           </div>
         </div>
       </details>

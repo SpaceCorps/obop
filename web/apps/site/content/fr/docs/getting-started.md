@@ -1,23 +1,14 @@
 ---
 title: "Premiers pas"
-description: "Obtenez votre première instance obop : inscrivez-vous à la bêta hébergée, auto-hébergez avec Docker et PostgreSQL, ou exécutez-la en local avec SQLite. Installez ensuite une application, créez des enregistrements et invitez un agent."
-lead: "Trois façons d'exécuter obop. Choisissez la bêta hébergée pour essayer en quelques minutes, Docker avec PostgreSQL pour un vrai déploiement, ou une compilation locale pour le développement."
+description: "Lancez votre première instance obop : auto-hébergez avec Docker et PostgreSQL, ou exécutez-la en local avec SQLite. Installez ensuite une application, créez des enregistrements et invitez un agent."
+lead: "Deux façons d'exécuter obop : avec Docker et PostgreSQL, ou avec une compilation locale pour le développement. SpaceCorps n'héberge pas encore obop pour d'autres personnes."
 ---
 
-## Option 1 : la bêta hébergée
+SpaceCorps n'héberge pas encore obop pour d'autres personnes : c'est donc vous qui faites tourner obop. Un bac à sable gratuit avec des données d'exemple et un hébergement payant sur serveurs dédiés sont prévus ; aucun des deux n'est encore ouvert, et aucune date n'est promise. Voir [Tarifs](/pricing/) et la [feuille de route](/roadmap/).
 
-Le service hébergé donne à chaque entreprise sa propre instance, avec sa propre base de données. Il est gratuit pendant la bêta.
+## Option 1 : auto-hébergement avec Docker et PostgreSQL
 
-1. **Inscrivez-vous.** Ouvrez [l'application d'inscription](/app/), saisissez votre adresse e-mail et un mot de passe, puis choisissez _Créer le compte_.
-2. **Créez une instance.** Donnez-lui un nom de 3 à 30 caractères. L'adresse est construite à partir du nom. La mise en place prend un moment ; la page affiche la progression.
-3. **Connectez-vous.** Suivez le lien vers votre instance et connectez-vous avec la même adresse e-mail et le même mot de passe. Votre compte d'inscription devient le premier administrateur de l'instance.
-4. **Installez une application.** Ouvrez _Personnaliser, Modules_ puis l'onglet _Place de marché_, et installez une application telle qu'Assistance ou Projets. L'installation et la suppression d'applications nécessitent le groupe administrateur. Les applications intégrées sont déjà là, parmi elles Contacts, Produits, CRM, Ventes, Facturation et Connecteurs (les six qui ont une page d'application).
-5. **Créez des enregistrements.** Ouvrez une application, choisissez _Nouveau_ et remplissez le formulaire. Les listes, les tableaux et le panneau latéral sont générés à partir de la description de l'application.
-6. **Invitez un agent.** Il n'existe pas encore d'écran pour les jetons d'agent. Connectez-vous via l'API REST et [créez un jeton d'agent](/docs/agents/tokens/), puis [connectez-vous via MCP](/docs/agents/mcp/) ou utilisez [REST](/docs/agents/rest/).
-
-## Option 2 : auto-hébergement avec Docker et PostgreSQL
-
-Vous avez besoin de Docker. Le dépôt contient un fichier Compose qui démarre PostgreSQL et obop ensemble, exposés uniquement sur localhost :
+Vous avez besoin de Docker. Le dépôt contient un fichier Compose pour un essai local, qui démarre PostgreSQL et obop ensemble, exposés uniquement sur localhost :
 
 ```bash
 git clone https://github.com/SpaceCorps/obop.git
@@ -44,7 +35,7 @@ docker run -d --name obop -p 8080:8080 \
 
 Par défaut, l'image exécute une seule instance. Sa commande est `obop serve --addr 0.0.0.0:8080 --static /srv/backoffice --public-site --trust-proxy` : le site public est à `/` et le back-office à `/admin/`. `--trust-proxy` lit l'adresse du client dans `X-Forwarded-For` ; exécutez donc l'image derrière un proxy que vous contrôlez. Créez le premier administrateur avec `docker exec -i obop obop admin create alice --all-groups`. Consultez [Auto-hébergement et exploitation](/docs/reference/self-hosting/) pour le plan de contrôle, les sauvegardes et ce qui manque.
 
-## Option 3 : développement local avec SQLite
+## Option 2 : développement local avec SQLite
 
 Vous avez besoin de la chaîne d'outils Rust définie dans `rust-toolchain.toml`, de pnpm et de Vite+ (`vp`). SQLite est le stockage par défaut : aucun serveur de base de données n'est nécessaire.
 
@@ -61,6 +52,12 @@ cargo run -- serve --static web/apps/backoffice/dist
 Ouvrez `http://127.0.0.1:8080` et connectez-vous en tant que `alice`. Les données se trouvent dans `obop.db`, dans le répertoire courant ; passez `--db sqlite:///path/to/file.db` pour utiliser un autre fichier. Une base SQLite neuve et vide est remplie automatiquement de fausses données de démonstration (`--demo` force ce remplissage).
 
 `--dev-auth` remplace la vraie connexion par des jetons fixes nommés `dev-admin`, `dev-sales` et `dev-agent`. Il refuse de s'attacher à toute adresse autre que localhost.
+
+## Après la connexion
+
+1. **Installez une application.** Ouvrez _Personnaliser, Modules_ puis l'onglet _Place de marché_, et installez une application telle qu'Assistance ou Projets. L'installation et la suppression d'applications nécessitent le groupe administrateur. Les applications intégrées sont déjà là, parmi elles Contacts, Produits, CRM, Ventes, Facturation et Connecteurs (les six qui ont une page d'application).
+2. **Créez des enregistrements.** Ouvrez une application, choisissez _Nouveau_ et remplissez le formulaire. Les listes, les tableaux et le panneau latéral sont générés à partir de la description de l'application.
+3. **Invitez un agent.** Il n'existe pas encore d'écran pour les jetons d'agent. Connectez-vous via l'API REST et [créez un jeton d'agent](/docs/agents/tokens/), puis [connectez-vous via MCP](/docs/agents/mcp/) ou utilisez [REST](/docs/agents/rest/).
 
 ## Et ensuite
 

@@ -7,7 +7,7 @@ eyebrow: "Comment ça marche"
 
 ## Une instance par entreprise
 
-Chaque entreprise fonctionne dans sa propre **instance**, avec sa propre base de données, ses propres utilisateurs et sa propre adresse. Sur le service hébergé, un plan de contrôle crée l'instance pour vous après l'inscription et vous en communique l'adresse ; la personne qui s'est inscrite en devient le premier administrateur. Vous pouvez aussi exécuter vous-même le même programme. Voir [Instances](/docs/concepts/instances/).
+Chaque entreprise fonctionne dans sa propre **instance**, avec sa propre base de données, ses propres utilisateurs et sa propre adresse. C'est vous qui exécutez le programme : un `obop serve` est une instance. Le même programme a un second mode, un plan de contrôle (`obop platform serve`), où chacun s'inscrit et crée ses propres instances ; la personne qui crée une instance en est le premier administrateur. SpaceCorps n'héberge pas encore obop pour d'autres personnes. Voir [Instances](/docs/concepts/instances/).
 
 Le stockage est SQLite pour essayer, PostgreSQL pour un usage réel. Pour l'instant, les enregistrements sont stockés sous forme de documents JSON ; la couche de commandes vérifie les types de champs, et un gestionnaire de schéma est prévu.
 
@@ -52,6 +52,6 @@ Sachez-le avant de vous engager :
 - Seules certaines applications (par exemple Expenses, Timesheets, les demandes de congé de HR, Documents et Dashboards) limitent les enregistrements qu'une personne voit. CRM, Sales et Invoicing ne le font pas.
 - Le journal de sécurité enregistre par exemple les événements de compte, de connexion, de paramètres de sécurité, de modules et de signature, mais ce n'est pas un historique des modifications des enregistrements de l'entreprise.
 - La tâche d'export prévue pour les données de toute une entreprise n'est pas réalisée. Une liste s'exporte en CSV depuis l'application web (jusqu'à 20 000 enregistrements), et `obop backup --plain` écrit les enregistrements et les fichiers téléversés d'une base de données dans un fichier non chiffré (les valeurs de courte durée, comme les sessions, en sont exclues ; les secrets restent scellés, mais si vous n'avez pas défini `OBOP_SECRET_KEY`, la clé qu'obop a générée pour eux se trouve dans le fichier).
-- Le service hébergé n'active pas encore les sauvegardes planifiées de ses bases de données (si vous faites tourner obop vous-même, vous pouvez les activer).
+- Un plan de contrôle n'active pas les sauvegardes planifiées des instances qu'il crée (si vous faites tourner une instance vous-même, vous pouvez les activer).
 
 La [feuille de route](/roadmap/) indique ce qui est réalisé et ce qui ne l'est pas.

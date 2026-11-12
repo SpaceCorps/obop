@@ -50,7 +50,7 @@ curl -s -X POST http://127.0.0.1:8080/api/auth/agent-token \
 { "token": "obop_1e00c3..." }
 ```
 
-`scopes` is required, must not be empty and may name only groups that are listed on your own account; `platform.admin` does not stand in for the other groups here. The first account of a new hosted instance holds only `platform.admin`, so give it the groups you want to hand over first, under Customize > Security > People. `label` is free text. On a hosted instance use its address instead of `127.0.0.1:8080`, and sign in with your sign-up email as the username.
+`scopes` is required, must not be empty and may name only groups that are listed on your own account; `platform.admin` does not stand in for the other groups here. The first account of an instance that a control plane created holds only `platform.admin`, so give it the groups you want to hand over first, under Customize > Security > People. `label` is free text. On such an instance use its address instead of `127.0.0.1:8080`, and sign in with your sign-up email as the username.
 
 ## With the CLI
 

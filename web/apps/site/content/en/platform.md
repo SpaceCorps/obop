@@ -7,7 +7,7 @@ eyebrow: "How it works"
 
 ## One instance per business
 
-Each business runs in its own **instance** with its own database, its own users and its own address. On the hosted service a control plane creates the instance for you after sign-up and gives you its address; the person who signed up becomes its first administrator. You can also run the same program yourself. See [Instances](/docs/concepts/instances/).
+Each business runs in its own **instance** with its own database, its own users and its own address. You run the program yourself: one `obop serve` is one instance. The same program has a second mode, a control plane (`obop platform serve`), where people sign up and create their own instances; the person who creates an instance is its first administrator. SpaceCorps does not host obop for other people yet. See [Instances](/docs/concepts/instances/).
 
 Storage is SQLite for trying things out and PostgreSQL for real use. Records are stored as JSON documents for now; the command layer checks field types, and a schema manager is planned.
 
@@ -52,6 +52,6 @@ Be aware before you commit:
 - Only some apps (for example Expenses, Timesheets, HR leave requests, Documents and Dashboards) limit which records a person sees. CRM, Sales and Invoicing do not.
 - The security log records, for example, account, sign-in, security-setting, module and signing events, but it is not a history of changes to business records.
 - The planned export job for a whole business is not built. A list exports as CSV from the web app (up to 20,000 records), and `obop backup --plain` writes the records and uploaded files of a database to an unencrypted file (short-lived values such as sessions are left out; secrets stay sealed, but if you did not set `OBOP_SECRET_KEY`, the key obop generated for them is in the file).
-- The hosted service does not switch on scheduled backups of its databases yet (if you run obop yourself, you can turn them on).
+- A control plane does not switch on scheduled backups of the instances it creates (if you run an instance yourself, you can turn them on).
 
 The [roadmap](/roadmap/) lists what is built and what is not.

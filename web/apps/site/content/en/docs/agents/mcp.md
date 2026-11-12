@@ -6,7 +6,7 @@ lead: "Every obop instance has an MCP server at /mcp. Point a client at the URL 
 
 ## Remote MCP: connect by URL
 
-An instance serves the [Model Context Protocol](https://modelcontextprotocol.io/) over **Streamable HTTP** at `https://YOUR-INSTANCE/mcp`. A hosted instance (for example on Sliplane) and a local `obop serve` both have it; there is nothing to switch on.
+An instance serves the [Model Context Protocol](https://modelcontextprotocol.io/) over **Streamable HTTP** at `https://YOUR-INSTANCE/mcp`. An instance on a server (for example on Sliplane) and a local `obop serve` both have it; there is nothing to switch on.
 
 - **Authentication:** a browser sign-in (OAuth, [below](#connect-with-a-browser-sign-in-oauth); not yet tried with the real Claude apps) for Claude Desktop, claude.ai and Claude Code, or `Authorization: Bearer <token>` on every request with an agent token. Either way the token is checked as for REST. A missing or bad token gets `401` with `WWW-Authenticate: Bearer resource_metadata="https://YOUR-INSTANCE/.well-known/oauth-protected-resource/mcp"`, as the MCP authorization specification asks; that document names the authorization server of the instance (`/.well-known/oauth-authorization-server`). A token issued by the sign-in works on `/mcp` only, not on `/api`.
 - **Protocol revisions:** `2025-11-25`, `2025-06-18` and `2025-03-26`, negotiated in `initialize`. The newest revision, `2026-07-28`, is stateless and works differently; obop does not implement it yet. A client that speaks both falls back to `initialize` when it sees a plain `400`, which is what obop sends for an unsupported version header.

@@ -50,7 +50,7 @@ curl -s -X POST http://127.0.0.1:8080/api/auth/agent-token \
 { "token": "obop_1e00c3..." }
 ```
 
-`scopes` es obligatorio, no puede estar vacío y solo puede nombrar grupos que figuren en tu propia cuenta; aquí `platform.admin` no sustituye a los demás grupos. La primera cuenta de una instancia alojada nueva solo tiene `platform.admin`, así que primero dale los grupos que quieras delegar, en _Personalizar, Seguridad, Personas_. `label` es texto libre. En una instancia alojada, usa su dirección en lugar de `127.0.0.1:8080` e inicia sesión con el correo de tu registro como nombre de usuario.
+`scopes` es obligatorio, no puede estar vacío y solo puede nombrar grupos que figuren en tu propia cuenta; aquí `platform.admin` no sustituye a los demás grupos. La primera cuenta de una instancia creada por un plano de control solo tiene `platform.admin`, así que primero dale los grupos que quieras delegar, en _Personalizar, Seguridad, Personas_. `label` es texto libre. En una instancia así, usa su dirección en lugar de `127.0.0.1:8080` e inicia sesión con el correo de tu registro como nombre de usuario.
 
 ## Con la CLI
 

@@ -20,8 +20,7 @@ export const sv: Messages = {
     docsNav: "Dokumentation",
     breadcrumb: "Sökväg",
     home: "obop, startsida",
-    signIn: "Logga in",
-    startFree: "Kom igång gratis",
+    startFree: "Kom igång",
     search: "Sök",
     searchPlaceholder: "Sök på webbplatsen",
     searchEmpty: "Inga träffar. Prova färre eller andra ord.",
@@ -105,7 +104,7 @@ export const sv: Messages = {
     titleA: "Ett företag.",
     titleB: "En plattform.",
     lead: "CRM, försäljning, fakturering och mer på en enda datamodell. Byggd för människor och för AI-agenter, med de behörigheter och den integritet som krävs för att kunna lita på båda.",
-    ctaPrimary: "Skaffa din egen instans",
+    ctaPrimary: "Kör det själv",
     ctaSecondary: "Se apparna",
     heroPoints: [
       "Öppen källkod",
@@ -170,21 +169,21 @@ export const sv: Messages = {
     marketCta: "Utforska marknadsplatsen",
     stepsTitle: "Kom igång i tre steg",
     steps: [
-      { title: "Registrera dig", body: "Skapa ett konto med din e-postadress." },
-      { title: "Få din instans", body: "Din egen databas och adress, klar på några minuter." },
+      { title: "Starta det", body: "Kör obop med Docker, eller bygg det från källkoden." },
+      { title: "Skapa din administratör", body: "Ett kommando skapar det första kontot." },
       {
         title: "Lägg till moduler",
-        body: "Logga in med samma uppgifter och installera de appar du behöver.",
+        body: "Logga in och installera de appar du behöver från Anpassa.",
       },
     ],
-    stepsCta: "Kom igång gratis",
+    stepsCta: "Kom igång",
     openTitle: "Öppen källkod, och du kan drifta den själv",
     openBody:
-      "obop-servern är skriven i Rust och körs med SQLite eller PostgreSQL. Använd den hostade tjänsten, eller kör samma program själv med Docker. Oavsett vilket har varje företag sin egen databas, och datan är din.",
+      "obop-servern är skriven i Rust och körs med SQLite eller PostgreSQL. Kör den själv med Docker, eller bygg den från källkoden. Varje företag har sin egen databas, och datan är din.",
     openPoints: [
       {
-        title: "Drivs av oss",
-        body: "Vi skapar en instans med egen databas åt dig. Allt är gratis under betan.",
+        title: "Hosting, planerad",
+        body: "SpaceCorps planerar en kostnadsfri sandlåda med enbart exempeldata och betald hosting på dedikerade servrar. Ingen av dem erbjuds ännu.",
       },
       {
         title: "Egen drift",
@@ -195,7 +194,7 @@ export const sv: Messages = {
         body: "Läs koden, besluten och färdplanen. Apache-2.0, fri att använda och köra själv; se arkivet.",
       },
     ],
-    pricingTitle: "Gratis att använda. Hosting om du vill.",
+    pricingTitle: "Gratis att använda. Hosting planeras.",
     pricingSub: `obop är gratis och öppen källkod: kör det själv på din egen server. Vill du hellre slippa är dedikerad hosting planerad från ${eur(HOSTING.servers[0].eur)} i månaden. Inget debiteras idag.`,
     pricingFine:
       "Planerade priser per server och månad, exklusive moms. Hosting erbjuds eller debiteras inte ännu.",
@@ -208,7 +207,7 @@ export const sv: Messages = {
       },
       {
         q: "Är obop redo för skarp användning?",
-        a: "Inte ännu. obop har inte nått version 1.0 ännu, så en ny version kan fortfarande ändra saker. Kärnan fungerar och är testad, de sex inbyggda apparna är märkta Stabil, de övriga Beta eller Experimentell, och många av de medföljande apparna är medvetet enkla. Den hostade tjänsten slår ännu inte på schemalagda säkerhetskopior av sina databaser. Använd obop för att utvärdera och för icke-kritiskt arbete tills vidare. På färdplanen ser du vad som är byggt och vad som inte är det.",
+        a: "Inte ännu. obop har inte nått version 1.0 ännu, så en ny version kan fortfarande ändra saker. Kärnan fungerar och är testad, de sex inbyggda apparna är märkta Stabil, de övriga Beta eller Experimentell, och många av de medföljande apparna är medvetet enkla. Använd obop för att utvärdera och för icke-kritiskt arbete tills vidare. På färdplanen ser du vad som är byggt och vad som inte är det.",
       },
       {
         q: "Vad kostar det?",
@@ -216,7 +215,7 @@ export const sv: Messages = {
       },
       {
         q: "Var finns min data?",
-        a: "Varje företag får sin egen databas, i PostgreSQL för hostad och skarp användning. Om du driftar obop själv finns datan där du kör det. Poster lagras som JSON-dokument tills schemahanteraren finns.",
+        a: "På servern där du kör obop: varje företag har sin egen databas, SQLite för att prova och PostgreSQL för skarp användning. SpaceCorps erbjuder ännu ingen hosting. Poster lagras som JSON-dokument tills schemahanteraren finns.",
       },
       {
         q: "Hur arbetar AI-agenter med obop?",
@@ -237,7 +236,7 @@ export const sv: Messages = {
     ],
     ctaTitle: "Ett företag, en plattform.",
     ctaBody: "Öppen källkod, server byggd i Rust, körs med SQLite eller PostgreSQL.",
-    ctaButton: "Skaffa din egen instans",
+    ctaButton: "Kom igång",
   },
   pricing: {
     title: "Priser",
@@ -273,7 +272,7 @@ export const sv: Messages = {
     selfHostTitle: "Gratis, och du kör det själv",
     selfHostBody:
       "obop har ingen betald utgåva och inga undanhållna funktioner: varje app, REST-API:t, MCP och kommandoraden ingår i den kostnadsfria Apache-2.0-utgåvan. Du kör det själv på SQLite eller PostgreSQL.",
-    hostingTitle: "Hosting, om du vill",
+    hostingTitle: "Hosting, planerad",
     hostingBody:
       "En planerad tjänst: SpaceCorps driver en dedikerad server åt ditt företag på Sliplanes infrastruktur, med obop och PostgreSQL på den. Priset följer serverns storlek; det finns inga avgifter per användare.",
     faqTitle: "Frågor om priser",
@@ -284,14 +283,14 @@ export const sv: Messages = {
       },
       {
         q: "Varför prissätts hosting per server och inte per användare?",
-        a: "Varje hostat företag får en dedikerad server, så priset följer serverns storlek och den lagring du lägger till. Fler personer kostar inget extra.",
+        a: "Varje hostat företag skulle få en dedikerad server, så priset skulle följa serverns storlek och den lagring du lägger till. Fler personer skulle inte kosta något extra.",
       },
       {
         q: "Kan jag lämna och ta med mina data?",
         a: "Ja. obop har licensen Apache-2.0 och databasen är vanlig PostgreSQL, så du kan köra samma programvara själv; obop backup och obop restore finns inbyggda.",
       },
     ],
-    cta: "Skaffa din egen instans",
+    cta: "Kör det själv",
   },
   apps: {
     title: "Appar",
@@ -395,7 +394,7 @@ export const sv: Messages = {
     store: {
       ready: "Följer med obop",
       more: "Fler appar",
-      open: "Öppna",
+      open: "Kom igång",
       get: "Hämta",
       canDo: "Vad du kan göra",
       keeps: "Vad den sparar",
@@ -420,7 +419,7 @@ export const sv: Messages = {
       showMoreKeeps: "Visa {n} fler saker den sparar",
       getLead: "Installera den från appen Anpassa, under Marknadsplats.",
       commandLine: "Eller från kommandoraden",
-      openObop: "Öppna obop",
+      openObop: "Kom igång",
       getNote: "Du behöver ett administratörskonto.",
       included: "Ingår i varje obop.",
       experimentalNote: "Testas fortfarande. Prova den först med exempeldata.",

@@ -80,7 +80,6 @@ function Auth({ onToken }: { onToken: (token: string) => void }) {
             <Icon name="sparkle" size={18} /> {t("Agents that propose, humans that approve")}
           </li>
         </ul>
-        <p className="hint">{t("Free while in beta. No card needed.")}</p>
       </aside>
       {step ? (
         <div className="auth">
@@ -121,9 +120,7 @@ function Auth({ onToken }: { onToken: (token: string) => void }) {
           </h1>
           <div className="auth-head">
             <h2>{mode === "signup" ? t("Create your account") : t("Sign in")}</h2>
-            <p className="hint">
-              {t("One business, one platform. Sign up and get your own instance.")}
-            </p>
+            <p className="hint">{t("Create and manage obop instances from this server.")}</p>
           </div>
           <Input
             label={t("Email")}

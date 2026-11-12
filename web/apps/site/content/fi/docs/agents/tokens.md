@@ -50,7 +50,7 @@ curl -s -X POST http://127.0.0.1:8080/api/auth/agent-token \
 { "token": "obop_1e00c3..." }
 ```
 
-Kenttä `scopes` on pakollinen, se ei saa olla tyhjä, ja siinä saa nimetä vain ryhmiä, jotka on merkitty omalle tilillesi; `platform.admin` ei tässä korvaa muita ryhmiä. Uuden isännöidyn instanssin ensimmäisellä tilillä on vain `platform.admin`, joten anna sille ensin ryhmät, jotka haluat luovuttaa, kohdassa _Mukauta, Tietoturva, Ihmiset_. Kenttä `label` on vapaata tekstiä. Isännöidyssä instanssissa käytä sen osoitetta osoitteen `127.0.0.1:8080` sijaan ja kirjaudu sisään rekisteröitymisessä käyttämälläsi sähköpostiosoitteella käyttäjätunnuksena.
+Kenttä `scopes` on pakollinen, se ei saa olla tyhjä, ja siinä saa nimetä vain ryhmiä, jotka on merkitty omalle tilillesi; `platform.admin` ei tässä korvaa muita ryhmiä. Ohjaustason luoman instanssin ensimmäisellä tilillä on vain `platform.admin`, joten anna sille ensin ryhmät, jotka haluat luovuttaa, kohdassa _Mukauta, Tietoturva, Ihmiset_. Kenttä `label` on vapaata tekstiä. Tällaisessa instanssissa käytä sen osoitetta osoitteen `127.0.0.1:8080` sijaan ja kirjaudu sisään rekisteröitymisessä käyttämälläsi sähköpostiosoitteella käyttäjätunnuksena.
 
 ## CLI:llä
 

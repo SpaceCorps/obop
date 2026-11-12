@@ -15,7 +15,7 @@ A **permission group** is a name of the form `module.role`, for example `crm.use
 
 `<module>.user` is the day-to-day role and `<module>.manager` handles configuration and approvals. A third group such as `approver` appears only when someone who enters a thing must not be the person who releases it.
 
-`platform.admin` satisfies every permission check for a person, but an agent token can only be scoped to groups the person holds by name. The first user of a hosted instance holds `platform.admin`, and it is what lets someone install modules.
+`platform.admin` satisfies every permission check for a person, but an agent token can only be scoped to groups the person holds by name. The first user of an instance that a control plane created holds `platform.admin`, and it is what lets someone install modules.
 
 ## Users and agents
 

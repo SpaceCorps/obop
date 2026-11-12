@@ -50,7 +50,7 @@ curl -s -X POST http://127.0.0.1:8080/api/auth/agent-token \
 { "token": "obop_1e00c3..." }
 ```
 
-`scopes` est obligatoire, ne doit pas être vide et ne peut nommer que des groupes inscrits sur votre propre compte ; ici, `platform.admin` ne remplace pas les autres groupes. Le premier compte d'une nouvelle instance hébergée ne détient que `platform.admin` : donnez-lui donc d'abord les groupes que vous voulez déléguer, sous _Personnaliser, Sécurité, Personnes_. `label` est un texte libre. Sur une instance hébergée, utilisez son adresse à la place de `127.0.0.1:8080`, et connectez-vous avec votre adresse e-mail d'inscription comme nom d'utilisateur.
+`scopes` est obligatoire, ne doit pas être vide et ne peut nommer que des groupes inscrits sur votre propre compte ; ici, `platform.admin` ne remplace pas les autres groupes. Le premier compte d'une instance créée par un plan de contrôle ne détient que `platform.admin` : donnez-lui donc d'abord les groupes que vous voulez déléguer, sous _Personnaliser, Sécurité, Personnes_. `label` est un texte libre. Sur une telle instance, utilisez son adresse à la place de `127.0.0.1:8080`, et connectez-vous avec votre adresse e-mail d'inscription comme nom d'utilisateur.
 
 ## Avec la CLI
 
