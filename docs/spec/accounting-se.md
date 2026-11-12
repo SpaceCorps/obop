@@ -27,7 +27,7 @@ Two rules shape every stage.
 | 5. Invoices | Customer invoices with the ledger voucher | First slice: `invoice_posting.create_move` books a posted invoice as a draft move (section 6); UNVERIFIED against Swedish invoice and VAT rules; credit notes, EU and export cases, payment matching not built |
 | 6. Payroll and AGI | Employees, pay runs, employer contributions, AGI file | Data model only, in `packages/contrib/payroll_se/payroll_se.toml` ([payroll-se.md](payroll-se.md); installable by upload, not bundled; every rate and rule UNVERIFIED, nothing seeded); no computation, no AGI XML |
 | 7. Receipts and bank | Receipt archive, bank lines, matching | First slice: `bank_matching.suggest` and `bank_matching.book` (section 7.1) match a bank line to a posted invoice by exact amount and book it as a draft move; UNVERIFIED; receipts matching, scoring, Swedish bank file import and reconciliation not built |
-| 8. Time tracking | Projects, time entries, billing | Parts exist (`timesheets` package); the link to invoices is not built |
+| 8. Time tracking | Projects, time entries, billing | First slice built: `time_billing.create_invoice` bills approved time as a draft `invoice` (section 7.2); payroll-style extras, project rates and customers on the project, grouping and VAT are not built |
 | 9. Immutability and hash chain | Vouchers that cannot change, with a verifiable chain | Not built; waits on K5 (see 9) |
 
 ## 3. Stage 1 and 2: the `accounting_se` package
@@ -166,8 +166,18 @@ Built in `crates/obop/src/invoice_posting.rs` (typed command on REST and MCP, li
 ## 7. Stage 6 to 8: payroll, receipts and bank, time
 
 - **Payroll and AGI.** OAS computes gross, preliminary tax (entered per person), employer contributions by age class, a locked pay run that proposes a voucher, and an AGI XML file it says validates against Skatteverket's published schema. Planned as a new later package. Every rate, age class and the XML layout are UNVERIFIED and must be checked by the owner. Taxable benefits, absence and holiday pay, and the tax tables are not built in OAS either.
-- **Receipts and bank.** OAS keeps receipts by content hash, imports a bank CSV, and proposes scored matches between bank lines and receipts. obop has `documents` and `accounting_bank_statement_line` with `match`, `reconcile` and `unmatch` actions. The suggestion and the booking of a bank line as a draft entry are the first slice (7.1). Not built: matching to receipts, fuzzy scoring, the bank CSV import for Swedish formats and the `reconcile` step. A suggestion engine needs a command (X2), not a model.
-- **Time tracking.** OAS has projects, activities, a timer and time entries billed once. The `timesheets` package covers time entries. Not built: the rule that an entry is billed at most once, and the invoice built from tracked hours.
+- **Receipts and bank.** OAS keeps receipts by content hash, imports a bank CSV, and proposes scored matches between bank lines and receipts. obop has `documents` and `accounting_bank_statement_line` with `match`, `reconcile` and `unmatch` actions. Not built: the scoring, the bank CSV import for Swedish formats and the booking of a bank line as a draft entry. A suggestion engine needs a command (X2), not a model.
+- **Time tracking.** OAS has projects, activities, a timer and time entries billed once. The `timesheets` package covers time entries. The rule that an entry is billed at most once and the invoice built from tracked hours are the first slice, 7.1.
+
+### 7.2 `time_billing.create_invoice`
+
+Built in `crates/obop/src/time_billing.rs` (typed command on REST and MCP, like `invoice_posting.create_move`). `timesheets_entry` has minutes, a billable flag and an approval state; neither it nor `projects_project` has a rate or a customer, so the caller names `project` (id, code or name), `customer` (a `party`, id or name), `from` and `to` (YYYY-MM-DD) and `hourly_rate_minor` (integer minor units per hour; optional `currency`, default `SEK`). Nothing is built in.
+
+- picks entries of the project's tasks that are billable, dated inside the period and not yet linked; a billable entry in the period that is not `approved` refuses the whole run in words (nothing is written); no qualifying entry, a rate of zero or less, an unknown customer or project, a missing date and a non-positive minute count are refused too;
+- creates a draft `invoice` and one `invoice_line` per entry (quantity 1, unit price the line amount, because the line quantity is a whole number). Amount is `minutes * rate / 60` rounded half up per entry in integer minor units; hours are shown as an `obop_values::Decimal` with two places. No float;
+- idempotent: one `time_billing` row (entry id, invoice id) per billed entry; an entry is never billed twice. The check and the writes are not one transaction;
+- governed: needs `invoicing.user` and `timesheets.manager`; an agent may only `dry_run`. The invoice is a draft; posting is `invoice.post`;
+- UNVERIFIED: no VAT, issue or due date, and no check against Swedish invoice rules. Gaps in the surfaces: docs/ISSUES.md K62.
 
 ### 7.1 The first slice: `bank_matching.suggest` and `bank_matching.book`
 
