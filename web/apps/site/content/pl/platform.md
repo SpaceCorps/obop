@@ -1,7 +1,7 @@
 ---
 title: "Platforma"
 description: "Jak działa platforma obop: instancje z jedną bazą danych na firmę, moduły i marketplace, grupy uprawnień, klasy danych i maskowanie, zatwierdzanie oraz interfejsy MCP, REST i CLI."
-lead: "Jeden program, jeden model danych, trzy sposoby dostępu. Ta strona wyjaśnia, jak te elementy do siebie pasują."
+lead: "Jeden program, jeden model danych, cztery sposoby dostępu. Ta strona wyjaśnia, jak te elementy do siebie pasują."
 eyebrow: "Jak to działa"
 ---
 
@@ -27,13 +27,13 @@ Grupy uprawnień, takie jak `crm.user` lub `invoicing.manager`, są wskazywane p
 
 ## Klasy danych i maskowanie
 
-Każde pole deklaruje klasę danych (brak, katalog publiczny, wewnętrzne, poufne kadrowe, szczególna kategoria, finansowe, sekret) oraz to, czy jest daną osobową. Ludzie widzą wartości zgodnie ze swoimi uprawnieniami. Agenci widzą dane osobowe jako stałe tokeny zastępcze, a klasy wrażliwe wcale; mogą przekazywać tokeny z powrotem, aby odwołać się do wartości, nie widząc jej. Zobacz [Klasy danych i maskowanie](/docs/concepts/data-classes-and-masking/).
+Każde pole deklaruje klasę danych (brak, katalog publiczny, wewnętrzne, poufne kadrowe, szczególna kategoria, finansowe, sekret) oraz to, czy jest daną osobową. Ludzie widzą wartości zgodnie ze swoimi uprawnieniami, z wyjątkiem pól klasy sekret, które nigdy nie są zwracane. Agenci widzą dane osobowe jako tokeny zastępcze, a klasy wrażliwe wcale; mogą przekazywać tokeny z powrotem, aby odwołać się do wartości, nie widząc jej. Zobacz [Klasy danych i maskowanie](/docs/concepts/data-classes-and-masking/).
 
 ## Przepływy pracy i zatwierdzanie
 
 Zmiany stanu są nazwanymi akcjami. Akcja może wymagać ściślejszej grupy i może wymagać zatwierdzenia. Agent może tylko zaproponować akcję wymagającą zatwierdzenia: serwer zwraca plan i niczego nie zmienia, dopóki człowiek go nie zatwierdzi. Usuwanie rekordów agenci również mogą tylko proponować. Zobacz [Przepływy pracy i zatwierdzanie](/docs/concepts/workflows-and-approvals/).
 
-## Trzy interfejsy, jeden zestaw poleceń
+## Cztery sposoby dostępu, jeden zestaw poleceń
 
 | Interfejs        | Dla kogo                | Jak                                                                                                                   |
 | ---------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------- |

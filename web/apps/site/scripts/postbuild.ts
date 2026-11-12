@@ -202,7 +202,7 @@ export async function postbuild(records: PageRecord[]): Promise<void> {
   const llms = [
     "# obop",
     "",
-    `> ${messages.en.description} Open source, written in Rust, runs on SQLite or PostgreSQL. Status: below version 1.0; the six built-in apps are marked Stable, the other apps Beta or Experimental; see the roadmap for what is built.`,
+    `> ${messages.en.description} Open source, written in Rust, runs on SQLite or PostgreSQL. Status: below version 1.0; the built-in apps are marked Stable, the other apps Beta or Experimental; see the roadmap for what is built.`,
     "",
     "Each link below is the Markdown version of a page. Every page of the site also exists as Markdown at its address with .md instead of the trailing slash. SpaceCorps does not offer hosted obop instances yet: you run obop yourself, with Docker and PostgreSQL or locally on SQLite. Prices on the site are planned and not charged yet.",
     "",

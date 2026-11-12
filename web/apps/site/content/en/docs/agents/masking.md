@@ -6,7 +6,7 @@ lead: "Agents can work with people's data without seeing it. This page explains 
 
 ## What an agent receives
 
-For a field that holds personal data, the server replaces the value with a token built from the field name and a counter, such as `EMAIL_1`, `NAME_2` or `CONTACT_EMAIL_7`. Fields in a sensitive data class (confidential HR, special category, financial) or in the secret class are left out and named in `denied`, over REST and over MCP.
+For a field that holds personal data, the server replaces a value written as a string (text, long text, a date, a choice, a reference and the like) with a token built from the field name and a counter, such as `EMAIL_1`, `NAME_2` or `CONTACT_EMAIL_7`; any other value of such a field (a number, a yes/no value, a list or an empty one) shows `[masked]`. Fields in a sensitive data class (confidential HR, special category, financial) or in the secret class are left out and named in `denied`, over REST and over MCP.
 
 ```json
 {
@@ -34,7 +34,7 @@ curl -s -X POST http://127.0.0.1:8080/api/lead/create \
 
 A person opening that lead sees the real name and email. The agent only ever handled the tokens. A token is replaced only when a text value in the request, such as a field's value, is exactly that token and the token is in the agent's table. A token the server does not know (for example one from a forgotten table) is not refused: it is saved as the literal text, so check the record.
 
-If the agent types a real value instead (for example because a user told it), the value is saved as given and shown to the agent as a new token afterwards.
+If the agent types a real value instead (for example because a user told it), the value is saved as given and shown to the agent as a token afterwards.
 
 ## Filtering by a masked field
 

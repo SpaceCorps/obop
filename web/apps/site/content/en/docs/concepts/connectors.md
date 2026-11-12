@@ -22,7 +22,7 @@ Facts about a recipient that were not checked say "verify with the provider". An
 
 1. **Service.** Pick one that is enabled.
 2. **Settings.** The address and the credentials. Credentials are write-only: they are stored encrypted and never returned. The connection shows only whether they are set and, for a long value, its last four characters.
-3. **Fields.** Choose the fields that may leave, model by model. Each field shows its data class and what happens to it: sent as a pseudonym, sent as is, or never sent. An empty choice sends nothing. The **privacy preview** shows one real record exactly as it would leave.
+3. **Fields.** Choose the fields that may leave, model by model. Each field shows its data class and what happens to it: sent as a pseudonym, sent as is, or never sent. An empty choice sends nothing. The **privacy preview** shows one real record exactly as it would leave. For a service that sends data in, you choose instead the fields it may write, and a record that carries a field that is not chosen is refused as a whole.
 4. **Purpose and legal basis.** Say what the data is used for, choose the basis, and see who receives it and which data classes would flow. Confirming records a consent record.
 5. **Test and connect.** A test sends no personal data. Connect starts the flows.
 

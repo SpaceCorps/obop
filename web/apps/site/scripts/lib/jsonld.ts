@@ -86,7 +86,7 @@ export function jsonLd(c: Ctx): object[] {
       description: m.description,
       url: `${SITE_URL}/`,
       applicationCategory: "BusinessApplication",
-      operatingSystem: "Web, Linux, macOS",
+      operatingSystem: "Web, Linux",
       inLanguage: lang,
       codeRepository: GITHUB,
       offers: {

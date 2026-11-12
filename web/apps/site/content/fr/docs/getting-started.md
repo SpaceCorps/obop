@@ -49,7 +49,7 @@ echo "a password of 12+ characters" | cargo run -- admin create alice --all-grou
 cargo run -- serve --static web/apps/backoffice/dist
 ```
 
-Ouvrez `http://127.0.0.1:8080` et connectez-vous en tant que `alice`. Les données se trouvent dans `obop.db`, dans le répertoire courant ; passez `--db sqlite:///path/to/file.db` pour utiliser un autre fichier. Une base SQLite neuve et vide est remplie automatiquement de fausses données de démonstration (`--demo` force ce remplissage).
+Ouvrez `http://127.0.0.1:8080` et connectez-vous en tant que `alice`. Les données se trouvent dans `obop.db`, dans le répertoire courant ; passez `--db sqlite:///path/to/file.db` pour utiliser un autre fichier. Une base SQLite qui ne contient encore aucun contact est remplie automatiquement de fausses données de démonstration ; sur PostgreSQL, `--demo` fait de même.
 
 `--dev-auth` remplace la vraie connexion par des jetons fixes nommés `dev-admin`, `dev-sales` et `dev-agent`. Il refuse de s'attacher à toute adresse autre que localhost.
 

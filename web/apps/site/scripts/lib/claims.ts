@@ -384,7 +384,7 @@ export const CLAIMS: readonly Claim[] = [
     example:
       "Visibility is a label for the UI and for people to respect; the platform has no row-level permissions yet, so everyone with the Knowledge groups can read every article.",
     fine: [
-      "Visibility is a label for the UI and for people to respect; this package sets no row rules, so everyone with the Knowledge groups can read every article.",
+      "Visibility is only a label for people to respect; this package sets no row rules, so everyone with the Knowledge groups can read every article.",
     ],
   },
   {

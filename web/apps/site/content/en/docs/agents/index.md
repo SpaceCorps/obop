@@ -9,7 +9,7 @@ lead: "obop treats AI agents as first-class users that are limited on purpose. T
 An **agent** is anything that acts on obop with an agent token: an MCP client such as Claude Desktop or Cursor, a script that calls the REST API, or the command line. Agents work on the same records and through the same commands as people. Four rules make that safe.
 
 1. **Scoped.** An agent token carries a list of permission groups (its _scopes_). It can only narrow what its owner may do, never widen it. Asking for a group the owner does not hold is refused.
-2. **Masked.** Personal data comes back as stable placeholder tokens such as `EMAIL_1`. Financial, HR and special-category fields are withheld. An agent can still reason about records and pass tokens back, but it never sees the real values. See [Masking tokens](/docs/agents/masking/).
+2. **Masked.** Personal data comes back as placeholder tokens such as `EMAIL_1`. Financial, HR and special-category fields are withheld. An agent can still reason about records and pass tokens back, but it never sees the real values. See [Masking tokens](/docs/agents/masking/).
 3. **Propose, don't commit.** An agent can run ordinary actions within its scopes, but for the commands that are marked as needing approval (for example posting an invoice, refunding, publishing and deleting a record) it can only _propose_. The server returns a plan id and changes nothing. A person approves. See [The approval loop](/docs/agents/approvals/).
 4. **Same door.** REST, MCP and the CLI go through one dispatcher, so an agent has exactly the same permissions, masking and approvals whichever way it connects.
 

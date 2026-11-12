@@ -207,7 +207,7 @@ export const es: Messages = {
       },
       {
         q: "¿Está obop listo para producción?",
-        a: "Todavía no. obop aún no ha llegado a la versión 1.0, así que una nueva versión todavía puede cambiar cosas. El núcleo funciona y está probado, las seis aplicaciones integradas figuran como Estable, las demás como Beta o Experimental, y muchas de las aplicaciones incluidas son deliberadamente sencillas. Por ahora, usa obop para evaluarlo y para trabajo no crítico. La página de la hoja de ruta indica qué está construido y qué no.",
+        a: "Todavía no. obop aún no ha llegado a la versión 1.0, así que una nueva versión todavía puede cambiar cosas. El núcleo funciona y está probado, las aplicaciones integradas figuran como Estable, las demás como Beta o Experimental, y muchas de las aplicaciones incluidas son deliberadamente sencillas. Por ahora, usa obop para evaluarlo y para trabajo no crítico. La página de la hoja de ruta indica qué está construido y qué no.",
       },
       {
         q: "¿Cuánto cuesta?",
@@ -287,7 +287,7 @@ export const es: Messages = {
       },
       {
         q: "¿Puedo irme y llevarme mis datos?",
-        a: "Sí. obop tiene licencia Apache-2.0 y su base de datos es PostgreSQL normal, así que puedes ejecutar el mismo software tú mismo; obop backup y obop restore vienen integrados.",
+        a: "Sí. obop tiene licencia Apache-2.0, así que puedes ejecutar el mismo software tú mismo; obop backup y obop restore vienen integrados.",
       },
     ],
     cta: "Ejecútalo tú mismo",
@@ -423,7 +423,8 @@ export const es: Messages = {
       openObop: "Empezar",
       getNote: "Necesitas una cuenta de administrador.",
       included: "Incluida en cada obop.",
-      experimentalNote: "Todavía en pruebas. Pruébala primero con datos de ejemplo.",
+      experimentalNote:
+        "Marcada como experimental por sus desarrolladores. Pruébala primero con datos de ejemplo.",
       safeMasked:
         "Los agentes de IA ven los campos marcados como datos personales, como los nombres y los correos electrónicos, solo como marcadores de posición. El texto escrito en un campo que no está marcado como dato personal, como una descripción, no se sustituye por un marcador.",
       safeWithheld:

@@ -207,7 +207,7 @@ export const fi: Messages = {
       },
       {
         q: "Onko obop valmis tuotantokäyttöön?",
-        a: "Ei vielä. obop ei ole vielä saavuttanut versiota 1.0, joten uusi versio voi vielä muuttaa asioita. Ydin toimii ja on testattu, kuuden sisäänrakennetun sovelluksen tilaksi on merkitty Vakaa ja muiden sovellusten tilaksi Beta tai Kokeellinen, ja monet mukana tulevista sovelluksista ovat tarkoituksella yksinkertaisia. Käytä alustaa toistaiseksi arviointiin ja ei-kriittiseen työhön. Tiekarttasivu kertoo, mikä on valmista ja mikä ei.",
+        a: "Ei vielä. obop ei ole vielä saavuttanut versiota 1.0, joten uusi versio voi vielä muuttaa asioita. Ydin toimii ja on testattu, sisäänrakennettujen sovellusten tilaksi on merkitty Vakaa ja muiden sovellusten tilaksi Beta tai Kokeellinen, ja monet mukana tulevista sovelluksista ovat tarkoituksella yksinkertaisia. Käytä alustaa toistaiseksi arviointiin ja ei-kriittiseen työhön. Tiekarttasivu kertoo, mikä on valmista ja mikä ei.",
       },
       {
         q: "Paljonko se maksaa?",
@@ -288,7 +288,7 @@ export const fi: Messages = {
       },
       {
         q: "Voinko lähteä ja ottaa tietoni mukaan?",
-        a: "Kyllä. obop on Apache-2.0-lisenssin alla ja sen tietokanta on tavallinen PostgreSQL, joten voit ajaa samaa ohjelmistoa itse; obop backup ja obop restore ovat mukana.",
+        a: "Kyllä. obop on Apache-2.0-lisenssin alla, joten voit ajaa samaa ohjelmistoa itse; obop backup ja obop restore ovat mukana.",
       },
     ],
     cta: "Aja se itse",
@@ -429,7 +429,8 @@ export const fi: Messages = {
       openObop: "Aloita",
       getNote: "Tarvitset ylläpitäjän tunnuksen.",
       included: "Sisältyy jokaiseen obopiin.",
-      experimentalNote: "Vielä testauksessa. Kokeile sitä ensin esimerkkitiedoilla.",
+      experimentalNote:
+        "Sen kehittäjät ovat merkinneet sen kokeelliseksi. Kokeile sitä ensin esimerkkitiedoilla.",
       safeMasked:
         "Tekoälyagentit näkevät henkilötiedoiksi merkityt kentät, kuten nimet ja sähköpostiosoitteet, vain paikkamerkkeinä. Kenttään, jota ei ole merkitty henkilötiedoksi, esimerkiksi kuvaukseen, kirjoitettua tekstiä ei korvata paikkamerkillä.",
       safeWithheld:

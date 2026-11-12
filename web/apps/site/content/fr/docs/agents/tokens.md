@@ -72,7 +72,7 @@ Ajoutez `--db postgres://...` (ou définissez `OBOP_DATABASE_URL`) si l'instance
 Le même jeton connecte un client MCP au serveur MCP distant de l'instance, `https://YOUR-INSTANCE/mcp` : envoyez-le sous la forme `Authorization: Bearer obop_...` (les clients ont un champ `headers` ou une variable de jeton porteur pour cela). Un jeton créé avec la CLI ou via REST fonctionne pour les deux ; il n'y a rien de spécifique à MCP à créer. Gardez ces points à l'esprit :
 
 - Créez un jeton distinct par client et ne lui donnez que les scopes dont ce client a besoin. La liste des outils MCP correspond exactement aux commandes que les scopes autorisent.
-- Un jeton de session obtenu à la connexion fonctionne aussi, mais il expire après 12 heures ; un jeton d'agent n'expire pas.
+- Un jeton de session obtenu à la connexion fonctionne aussi, mais il expire après 12 heures (un jeton d'agent n'expire pas), et il agit en votre nom : les données personnelles ne sont pas masquées et les commandes soumises à approbation s'exécutent sans approbation. Utilisez un jeton d'agent pour un agent.
 - Le jeton doit être envoyé à chaque requête, pas seulement à la première ; les clients le font dès qu'il figure dans leur configuration.
 - Les clients qui prennent en charge une connexion par navigateur (OAuth) n'ont pas besoin d'un jeton collé : ils se connectent par une connexion et reçoivent un jeton valable une heure qui ne fonctionne que sur `/mcp`. Nous ne l'avons pas encore essayé avec Claude Desktop, claude.ai ou Claude Code ; voir [Se connecter via MCP](/docs/agents/mcp/).
 

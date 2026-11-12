@@ -72,7 +72,7 @@ Dodaj `--db postgres://...` (lub ustaw `OBOP_DATABASE_URL`), jeśli instancja ni
 Ten sam token łączy klienta MCP ze zdalnym serwerem MCP instancji, `https://YOUR-INSTANCE/mcp`: wysyłaj go jako `Authorization: Bearer obop_...` (klienci mają do tego pole `headers` lub zmienną z tokenem okaziciela). Token utworzony przez CLI lub REST działa w obu przypadkach; nie trzeba tworzyć niczego specjalnego dla MCP. Pamiętaj o następujących zasadach:
 
 - Utwórz osobny token dla każdego klienta i nadaj mu tylko zakresy, których ten klient potrzebuje. Lista narzędzi MCP to dokładnie te polecenia, na które pozwalają zakresy.
-- Token sesji z logowania też działa, ale wygasa po 12 godzinach; token agenta nie wygasa.
+- Token sesji z logowania też działa, ale wygasa po 12 godzinach (token agenta nie wygasa) i działa jako Ty: dane osobowe nie są maskowane, a polecenia wymagające zatwierdzenia wykonują się bez zatwierdzenia. Dla agenta używaj tokenu agenta.
 - Token trzeba wysyłać w każdym żądaniu, nie tylko w pierwszym; klienci robią to sami, gdy mają go w konfiguracji.
 - Klienci obsługujący logowanie w przeglądarce (OAuth) nie potrzebują wklejanego tokenu: łączą się przez logowanie i dostają token, który działa godzinę i tylko na `/mcp`. Nie wypróbowaliśmy jeszcze tego z Claude Desktop, claude.ai ani Claude Code; zobacz [Połączenie przez MCP](/docs/agents/mcp/).
 
