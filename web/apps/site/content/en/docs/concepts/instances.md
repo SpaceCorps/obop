@@ -7,7 +7,7 @@ An **instance** is one running obop for one business. It has its own database, i
 
 ## The control plane
 
-A **control plane** is a second mode of the same program (`obop platform serve`), for running instances for other people. SpaceCorps does not host obop for other people yet. A control plane does three things:
+A **control plane** is a second mode of the same program (`obop platform serve`), for running instances for other people. SpaceCorps does not host obop for other people yet. A control plane does these things, among others:
 
 1. People sign up with an email and a password.
 2. Each person can create, list and delete their own instances.

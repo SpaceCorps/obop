@@ -210,7 +210,7 @@ export const de: Messages = {
       },
       {
         q: "Ist obop produktionsreif?",
-        a: "Noch nicht. obop hat die Version 1.0 noch nicht erreicht, daher kann eine neue Version noch etwas ändern. Der Kern funktioniert und ist getestet, die sechs integrierten Apps sind als Stabil gekennzeichnet, die übrigen Apps als Beta oder Experimentell, und viele mitgelieferte Apps sind bewusst einfach gehalten. Nutzen Sie obop vorerst zum Evaluieren und für unkritische Arbeit. Die Roadmap-Seite zeigt, was gebaut ist und was nicht.",
+        a: "Noch nicht. obop hat die Version 1.0 noch nicht erreicht, daher kann eine neue Version noch etwas ändern. Der Kern funktioniert und ist getestet, die integrierten Apps sind als Stabil gekennzeichnet, die übrigen Apps als Beta oder Experimentell, und viele mitgelieferte Apps sind bewusst einfach gehalten. Nutzen Sie obop vorerst zum Evaluieren und für unkritische Arbeit. Die Roadmap-Seite zeigt, was gebaut ist und was nicht.",
       },
       {
         q: "Was kostet obop?",
@@ -290,7 +290,7 @@ export const de: Messages = {
       },
       {
         q: "Kann ich gehen und meine Daten mitnehmen?",
-        a: "Ja. obop steht unter Apache-2.0 und die Datenbank ist einfaches PostgreSQL, Sie können dieselbe Software also selbst betreiben; obop backup und obop restore sind eingebaut.",
+        a: "Ja. obop steht unter Apache-2.0, Sie können dieselbe Software also selbst betreiben; obop backup und obop restore sind eingebaut.",
       },
     ],
     cta: "Selbst betreiben",
@@ -428,7 +428,8 @@ export const de: Messages = {
       openObop: "Loslegen",
       getNote: "Sie brauchen ein Administratorkonto.",
       included: "In jedem obop enthalten.",
-      experimentalNote: "Noch in der Erprobung. Probieren Sie es zuerst mit Beispieldaten aus.",
+      experimentalNote:
+        "Von den Entwicklern als experimentell gekennzeichnet. Probieren Sie es zuerst mit Beispieldaten aus.",
       safeMasked:
         "KI-Agenten sehen die als personenbezogen gekennzeichneten Felder, etwa Namen und E-Mail-Adressen, nur als Platzhalter. Text in einem Feld, das nicht als personenbezogen gekennzeichnet ist, etwa in einer Beschreibung, wird nicht durch einen Platzhalter ersetzt.",
       safeWithheld:

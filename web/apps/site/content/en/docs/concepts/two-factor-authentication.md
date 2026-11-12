@@ -27,7 +27,7 @@ A **passkey** is a second step that cannot be typed into a fake page: your phone
 - **Lost it.** Use a recovery code, ask an administrator to reset your two-factor (refused while that would leave fewer than two administrators who sign in with a password and a second factor, and any account signs in with Microsoft only), or ask the operator to run `obop admin reset-mfa`. A reset removes your passkeys too.
 - **Needs an address.** Passkeys work when the instance is reached by a host name over https (or `localhost` while developing), and the operator has set `OBOP_PUBLIC_URL` behind a proxy. An IP address or plain http does not work, and Security says so. If the address of an instance changes, passkeys made for the old one stop working and people add new ones.
 
-The server stores only the public key, a name and counters, never anything that could sign in. A counter that goes backwards (a copied passkey) is refused and logged.
+The server stores the public key, the credential id, a name, a signature counter and a few flags and dates, never anything that could sign in. A counter that goes backwards (a copied passkey) is refused and logged.
 
 ## Administrators must have it
 

@@ -1,7 +1,7 @@
 ---
 title: "Plateforme"
 description: "Comment fonctionne la plateforme obop : des instances avec une base de données par entreprise, les modules et la place de marché, les groupes de permissions, les classes de données et le masquage, les approbations, et les interfaces MCP, REST et CLI."
-lead: "Un seul programme, un seul modèle de données, trois points d'entrée. Cette page explique comment les pièces s'assemblent."
+lead: "Un seul programme, un seul modèle de données, quatre points d'entrée. Cette page explique comment les pièces s'assemblent."
 eyebrow: "Comment ça marche"
 ---
 
@@ -27,13 +27,13 @@ Les groupes de permissions tels que `crm.user` ou `invoicing.manager` sont réf�
 
 ## Classes de données et masquage
 
-Chaque champ déclare une classe de données (aucune, annuaire public, interne, RH confidentielle, catégorie particulière, financière, secrète) et s'il s'agit d'une donnée personnelle. Les personnes voient les valeurs selon leurs permissions. Les agents voient les données personnelles sous forme de jetons de substitution stables, et les classes sensibles pas du tout ; ils peuvent renvoyer des jetons pour désigner une valeur sans la voir. Voir [Classes de données et masquage](/docs/concepts/data-classes-and-masking/).
+Chaque champ déclare une classe de données (aucune, annuaire public, interne, RH confidentielle, catégorie particulière, financière, secrète) et s'il s'agit d'une donnée personnelle. Les personnes voient les valeurs selon leurs permissions, sauf les champs de classe secrète, qui ne sont jamais renvoyés. Les agents voient les données personnelles sous forme de jetons de substitution, et les classes sensibles pas du tout ; ils peuvent renvoyer des jetons pour désigner une valeur sans la voir. Voir [Classes de données et masquage](/docs/concepts/data-classes-and-masking/).
 
 ## Flux de travail et approbations
 
 Les changements d'état sont des actions nommées. Une action peut exiger un groupe plus strict et peut requérir une approbation. Un agent ne peut que proposer une action qui requiert une approbation : le serveur renvoie un plan et ne change rien tant qu'une personne ne l'a pas approuvé. La suppression d'enregistrements est également seulement proposée par les agents. Voir [Flux de travail et approbations](/docs/concepts/workflows-and-approvals/).
 
-## Trois interfaces, un seul jeu de commandes
+## Quatre points d'entrée, un seul jeu de commandes
 
 | Interface       | Pour                      | Comment                                                                                                   |
 | --------------- | ------------------------- | --------------------------------------------------------------------------------------------------------- |

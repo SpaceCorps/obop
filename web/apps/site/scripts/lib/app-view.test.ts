@@ -874,6 +874,11 @@ describe("an experimental app says in one plain line that it is still being test
     expect(view(withMaturity("experimental")).experimental).toBe(true);
     expect(view(withMaturity("beta")).experimental).toBe(false);
     expect(view(withMaturity("stable")).experimental).toBe(false);
+    // Pinned in English, so that a revert to the old, unverifiable wording ("Still being tested") fails
+    // here and not only in the languages that read the sentence back from the messages.
+    expect(messages.en.apps.store.experimentalNote).toBe(
+      "Marked experimental by its developers. Try it with sample data first.",
+    );
     for (const locale of LOCALES) {
       const s = messages[locale].apps.store;
       const md = appMirror(withMaturity("experimental"), locale, messages[locale], "", apps);

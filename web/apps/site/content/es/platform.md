@@ -1,7 +1,7 @@
 ---
 title: "Plataforma"
 description: "Cómo funciona la plataforma obop: instancias con una base de datos por negocio, módulos y marketplace, grupos de permisos, clases de datos y enmascarado, aprobaciones, y las superficies MCP, REST y CLI."
-lead: "Un programa, un modelo de datos, tres formas de entrar. Esta página explica cómo encajan las piezas."
+lead: "Un programa, un modelo de datos, cuatro formas de entrar. Esta página explica cómo encajan las piezas."
 eyebrow: "Cómo funciona"
 ---
 
@@ -27,13 +27,13 @@ Los grupos de permisos, como `crm.user` o `invoicing.manager`, se nombran en mod
 
 ## Clases de datos y enmascarado
 
-Cada campo declara una clase de datos (ninguna, directorio público, interna, RR. HH. confidencial, categoría especial, financiera, secreta) y si es un dato personal. Las personas ven los valores según sus permisos. Los agentes ven los datos personales como tokens marcadores estables y las clases sensibles no las ven en absoluto, y pueden devolver tokens para referirse a un valor sin verlo. Consulta [Clases de datos y enmascarado](/docs/concepts/data-classes-and-masking/).
+Cada campo declara una clase de datos (ninguna, directorio público, interna, RR. HH. confidencial, categoría especial, financiera, secreta) y si es un dato personal. Las personas ven los valores según sus permisos, salvo los campos de clase secreta, que nunca se devuelven. Los agentes ven los datos personales como tokens marcadores y las clases sensibles no las ven en absoluto, y pueden devolver tokens para referirse a un valor sin verlo. Consulta [Clases de datos y enmascarado](/docs/concepts/data-classes-and-masking/).
 
 ## Flujos de trabajo y aprobaciones
 
 Los cambios de estado son acciones con nombre. Una acción puede requerir un grupo más estricto y puede requerir aprobación. Un agente solo puede proponer una acción que requiera aprobación: el servidor devuelve un plan y no cambia nada hasta que una persona lo aprueba. Los agentes también solo pueden proponer la eliminación de registros. Consulta [Flujos de trabajo y aprobaciones](/docs/concepts/workflows-and-approvals/).
 
-## Tres superficies, un mismo conjunto de comandos
+## Cuatro formas de entrar, un mismo conjunto de comandos
 
 | Superficie     | Para                        | Cómo                                                                                                                |
 | -------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------- |

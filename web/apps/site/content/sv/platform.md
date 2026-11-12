@@ -1,7 +1,7 @@
 ---
 title: "Plattformen"
 description: "Så fungerar obop-plattformen: instanser med en databas per företag, moduler och marknadsplatsen, behörighetsgrupper, dataklasser och maskering, godkännanden samt gränssnitten MCP, REST och CLI."
-lead: "Ett program, en datamodell, tre vägar in. Den här sidan förklarar hur delarna hänger ihop."
+lead: "Ett program, en datamodell, fyra vägar in. Den här sidan förklarar hur delarna hänger ihop."
 eyebrow: "Så fungerar det"
 ---
 
@@ -27,13 +27,13 @@ Behörighetsgrupper som `crm.user` eller `invoicing.manager` anges av modeller, 
 
 ## Dataklasser och maskering
 
-Varje fält deklarerar en dataklass (ingen, offentlig katalog, intern, konfidentiell personal, särskild kategori, finansiell, hemlig) och om det är en personuppgift. Människor ser värden enligt sina behörigheter. Agenter ser personuppgifter som stabila platshållare och känsliga klasser inte alls, och kan skicka tillbaka platshållare för att hänvisa till ett värde utan att se det. Se [Dataklasser och maskering](/docs/concepts/data-classes-and-masking/).
+Varje fält deklarerar en dataklass (ingen, offentlig katalog, intern, konfidentiell personal, särskild kategori, finansiell, hemlig) och om det är en personuppgift. Människor ser värden enligt sina behörigheter, utom fält av klassen hemlig, som aldrig returneras. Agenter ser personuppgifter som platshållare och känsliga klasser inte alls, och kan skicka tillbaka platshållare för att hänvisa till ett värde utan att se det. Se [Dataklasser och maskering](/docs/concepts/data-classes-and-masking/).
 
 ## Arbetsflöden och godkännanden
 
 Tillståndsändringar är namngivna åtgärder. En åtgärd kan kräva en strängare grupp och kan kräva godkännande. En agent kan bara föreslå en åtgärd som kräver godkännande: servern returnerar en plan och ändrar ingenting förrän en person godkänner den. Att ta bort poster är också något agenter bara föreslår. Se [Arbetsflöden och godkännanden](/docs/concepts/workflows-and-approvals/).
 
-## Tre gränssnitt, en uppsättning kommandon
+## Fyra vägar in, en uppsättning kommandon
 
 | Gränssnitt | För                       | Hur                                                                                                         |
 | ---------- | ------------------------- | ----------------------------------------------------------------------------------------------------------- |
