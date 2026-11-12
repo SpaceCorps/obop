@@ -154,7 +154,13 @@ export async function postbuild(records: PageRecord[]): Promise<void> {
       `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n${urls.join("\n")}\n</urlset>\n`,
     );
   }
-  const index = [...LOCALES.map((l) => `sitemap-${l}.xml`), "community/sitemap.xml"];
+  // The forum is part of a control plane, not of the static files. A site served on its own
+  // (deploy/site.Dockerfile sets OBOP_SITE_FORUM=0) must not point crawlers at a sitemap it lacks.
+  const forum = process.env.OBOP_SITE_FORUM !== "0";
+  const index = [
+    ...LOCALES.map((l) => `sitemap-${l}.xml`),
+    ...(forum ? ["community/sitemap.xml"] : []),
+  ];
   write(
     "sitemap.xml",
     `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${index
@@ -175,7 +181,7 @@ export async function postbuild(records: PageRecord[]): Promise<void> {
       "",
       ...AI_AGENTS.flatMap((a) => [`User-agent: ${a}`, "Allow: /", ""]),
       `Sitemap: ${loc("/sitemap.xml")}`,
-      `Sitemap: ${loc("/community/sitemap.xml")}`,
+      ...(forum ? [`Sitemap: ${loc("/community/sitemap.xml")}`] : []),
       "",
     ].join("\n"),
   );
