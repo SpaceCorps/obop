@@ -2663,11 +2663,13 @@ test.describe("accessibility", () => {
                 reached.add(Number(stop.walk));
               }
             }
-            expect(stops, `${path} stops in main (${key})`).toBeGreaterThanOrEqual(atLeast);
+            // The controls the walk never stopped on come first: they are named, where the count that
+            // follows only says that there were fewer stops than the page has controls.
             expect(
               drawn.filter((_, i) => !reached.has(i)),
               `${path}${reach ? " with its folds open" : ""} at ${width}px (${key}): the controls of main that the walk never stopped on`,
             ).toEqual([]);
+            expect(stops, `${path} stops in main (${key})`).toBeGreaterThanOrEqual(atLeast);
             for (const control of reach ?? [])
               expect(
                 seen.some((what) => what.startsWith(control)),
