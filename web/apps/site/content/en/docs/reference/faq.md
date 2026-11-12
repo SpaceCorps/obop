@@ -29,7 +29,7 @@ Rust for the backend and Vite+ with React for the web apps. This website is buil
 
 ### How do I add an app?
 
-Open _Customize_, then _Marketplace_, and install one. From the command line: `obop modules install-from helpdesk`. You can also upload your own `obop.toml`. See [Apps and modules](/docs/concepts/apps-and-modules/).
+Open _Customize_, then _Modules_, then the _Marketplace_ tab, and install one. From the command line: `obop modules install-from helpdesk`. You can also upload your own `obop.toml`. See [Apps and modules](/docs/concepts/apps-and-modules/).
 
 ### Can I write my own app?
 
@@ -59,7 +59,7 @@ It can propose either; a person approves. See [The approval loop](/docs/agents/a
 
 ### Does obop work with Claude, ChatGPT, Cursor or other tools?
 
-obop has an MCP server over stdio, an MCP endpoint at `/mcp` on every instance (Streamable HTTP, with an agent token or a browser sign-in) and a REST API; see [Connect over MCP](/docs/agents/mcp/). The remote endpoint was tried with the MCP Inspector and our own automated tests. The browser sign-in for Claude Desktop, claude.ai and Claude Code has not been tried with those apps yet.
+obop has an MCP server over stdio, an MCP endpoint at `/mcp` on every instance (Streamable HTTP, with an agent token or a browser sign-in) and a REST API; see [Connect over MCP](/docs/agents/mcp/). The remote endpoint is covered by our own automated tests (Rust over HTTP and Playwright); no run with a real MCP client is recorded. The browser sign-in for Claude Desktop, claude.ai and Claude Code has not been tried with those apps yet.
 
 ### How do I stop an agent?
 
@@ -73,7 +73,7 @@ Hosted: in a database that belongs to your instance, on PostgreSQL. Self-hosted:
 
 ### How do I back up?
 
-Run `obop backup --db URL --out DIR`: a consistent copy taken while the server runs, sealed (encrypted) when a key is set, which `obop restore` reads back; see the [CLI reference](/docs/reference/cli/) and [Self-hosting and operations](/docs/reference/self-hosting/). `OBOP_BACKUP_SCHEDULE` makes `obop serve` take backups on a timer. Point-in-time recovery is not run by obop; your database server needs its own for that. The hosted service does not switch on scheduled backups of its databases yet.
+Run `obop backup --db URL --out DIR`: a consistent copy taken while the server runs, sealed (encrypted) when a key is set, which `obop restore` reads back; see the [CLI reference](/docs/reference/cli/) and [Self-hosting and operations](/docs/reference/self-hosting/). `OBOP_BACKUP_SCHEDULE` together with `OBOP_BACKUP_DIR` makes `obop serve` take backups on a timer. Point-in-time recovery is not run by obop; your database server needs its own for that. The hosted service does not switch on scheduled backups of its databases yet.
 
 ### Can I export everything?
 
@@ -81,7 +81,7 @@ Your database is yours. A list exports as CSV from the web app, and `obop backup
 
 ### Which languages is the website in?
 
-English, German, French, Polish, Finnish, Swedish and Spanish. The web app is available in the same seven languages. The translations on this site and the translated labels in the apps are machine-drafted, and no native speaker has reviewed the ones on this site yet; [you can help review one](/about/community/).
+The home page, the app pages (the translated app pages keep each app's description, some cards and most of the developer details in English), pricing, About, Platform and a few documentation pages are in English, German, French, Polish, Finnish, Swedish and Spanish; the other pages are shown in English. The web app is available in the same seven languages. The translations on this site and the translated labels in the apps are machine-drafted, and no native speaker has reviewed the ones on this site yet; [you can help review one](/about/community/).
 
 ## Contributing and contact
 

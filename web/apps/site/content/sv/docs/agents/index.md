@@ -1,6 +1,6 @@
 ---
 title: "AI-agenter"
-description: "Så ställer du in AI-agenter som arbetar med obop: agentmodellen, token med begränsad behörighet, maskerade personuppgifter och godkännanden som låter en person bestämma över allt som inte går att ångra."
+description: "Så ställer du in AI-agenter som arbetar med obop: agentmodellen, token med begränsad behörighet, maskerade personuppgifter och godkännanden som låter en person bestämma över de steg som är markerade som godkännandepliktiga."
 lead: "obop behandlar AI-agenter som förstklassiga användare, som medvetet är begränsade. Den här sidan förklarar modellen; nästa sidor visar hur du ställer in en agent."
 ---
 
@@ -10,7 +10,7 @@ En **agent** är allt som agerar i obop med en agenttoken: en MCP-klient som Cla
 
 1. **Begränsad.** En agenttoken har en lista med behörighetsgrupper (dess _scope_). Den kan bara snäva in vad ägaren får göra, aldrig vidga det. Om du ber om en grupp som ägaren inte har nekas det.
 2. **Maskerad.** Personuppgifter kommer tillbaka som stabila platshållare, till exempel `EMAIL_1`. Finansiella uppgifter, personaluppgifter och särskilda kategorier av uppgifter undanhålls. En agent kan ändå resonera om poster och skicka tillbaka platshållare, men ser aldrig de verkliga värdena. Se [Platshållare vid maskering](/docs/agents/masking/).
-3. **Föreslå, genomför inte.** En agent kan köra vanliga åtgärder inom sina scope, men för allt som inte går att ångra (bokföra en faktura, betala, återbetala, skicka, publicera, ta bort) kan den bara _föreslå_. Servern returnerar ett plan-id och ändrar ingenting. En person godkänner. Se [Godkännandeflödet](/docs/agents/approvals/).
+3. **Föreslå, genomför inte.** En agent kan köra vanliga åtgärder inom sina scope, men för de kommandon som är markerade som godkännandepliktiga (till exempel bokföra en faktura, återbetala, publicera och ta bort en post) kan den bara _föreslå_. Servern returnerar ett plan-id och ändrar ingenting. En person godkänner. Se [Godkännandeflödet](/docs/agents/approvals/).
 4. **Samma ingång.** REST, MCP och CLI går genom en och samma dispatcher, så en agent har exakt samma behörigheter, maskering och godkännanden oavsett hur den ansluter.
 
 ## Tre sätt att ansluta

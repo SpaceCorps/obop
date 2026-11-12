@@ -1,6 +1,6 @@
 ---
 title: "Agents"
-description: "Comment configurer des agents IA pour travailler avec obop : le modèle d'agent, les jetons à périmètre limité, les données personnelles masquées, et les approbations qui laissent une personne aux commandes de tout ce qui est irréversible."
+description: "Comment configurer des agents IA pour travailler avec obop : le modèle d'agent, les jetons à périmètre limité, les données personnelles masquées, et les approbations qui laissent une personne aux commandes des étapes marquées comme soumises à approbation."
 lead: "obop traite les agents IA comme des utilisateurs à part entière, volontairement limités. Cette page explique le modèle ; les suivantes montrent comment en configurer un."
 ---
 
@@ -10,7 +10,7 @@ Un **agent** est tout ce qui agit sur obop avec un jeton d'agent : un client MCP
 
 1. **Périmètre limité.** Un jeton d'agent porte une liste de groupes de permissions (ses _scopes_). Il ne peut que restreindre ce que son propriétaire est autorisé à faire, jamais l'élargir. Demander un groupe que le propriétaire ne détient pas est refusé.
 2. **Masqué.** Les données personnelles reviennent sous forme de jetons de substitution stables, comme `EMAIL_1`. Les champs financiers, RH et de catégorie particulière ne sont pas communiqués. Un agent peut tout de même raisonner sur les enregistrements et renvoyer des jetons, mais il ne voit jamais les valeurs réelles. Voir [Jetons de masquage](/docs/agents/masking/).
-3. **Proposer, ne pas valider.** Un agent peut exécuter les actions ordinaires dans ses scopes, mais pour tout ce qui est irréversible (valider une facture, payer, rembourser, envoyer, publier, supprimer), il ne peut que _proposer_. Le serveur renvoie un identifiant de plan et ne modifie rien. Une personne approuve. Voir [La boucle d'approbation](/docs/agents/approvals/).
+3. **Proposer, ne pas valider.** Un agent peut exécuter les actions ordinaires dans ses scopes, mais pour les commandes marquées comme soumises à approbation (par exemple valider une facture, rembourser, publier et supprimer un enregistrement), il ne peut que _proposer_. Le serveur renvoie un identifiant de plan et ne modifie rien. Une personne approuve. Voir [La boucle d'approbation](/docs/agents/approvals/).
 4. **Une seule porte.** REST, MCP et la CLI passent par un même répartiteur : un agent a donc exactement les mêmes permissions, le même masquage et les mêmes approbations, quel que soit son mode de connexion.
 
 ## Trois façons de se connecter

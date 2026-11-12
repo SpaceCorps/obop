@@ -51,7 +51,7 @@ Warto o tym wiedzieć, zanim się zdecydujesz:
 - Nie ma poziomów kodu poza pakietami deklaratywnymi (nie ma komponentów WebAssembly ani aplikacji zdalnych), więc pakiet aplikacji nie wykonuje własnego kodu i nie może deklarować wywołań innych systemów, może jednak deklarować obliczane sumy oraz akcje, które zmieniają inne rekordy w tej samej bazie danych.
 - Tylko niektóre aplikacje (na przykład Expenses, Timesheets, wnioski urlopowe w HR, Documents i Dashboards) ograniczają, które rekordy widzi dana osoba. CRM, Sales i Invoicing tego nie robią.
 - Dziennik bezpieczeństwa rejestruje na przykład zdarzenia dotyczące kont, logowania, ustawień bezpieczeństwa, modułów i podpisów, ale nie jest historią zmian w rekordach biznesowych.
-- Planowane zadanie eksportu danych całej firmy nie jest gotowe. Listę można wyeksportować do CSV z aplikacji webowej (do 20 000 rekordów), a `obop backup --plain` zapisuje rekordy i wgrane pliki bazy danych do niezaszyfrowanego pliku (wartości krótkotrwałe, takie jak sesje, są pominięte, a sekrety pozostają zaszyfrowane).
+- Planowane zadanie eksportu danych całej firmy nie jest gotowe. Listę można wyeksportować do CSV z aplikacji webowej (do 20 000 rekordów), a `obop backup --plain` zapisuje rekordy i wgrane pliki bazy danych do niezaszyfrowanego pliku (wartości krótkotrwałe, takie jak sesje, są pominięte; sekrety pozostają zaszyfrowane, ale jeśli nie ustawiono `OBOP_SECRET_KEY`, klucz wygenerowany dla nich przez obop jest w pliku).
 - Usługa hostowana nie włącza jeszcze zaplanowanych kopii zapasowych swoich baz danych (kto uruchamia obop samodzielnie, może je włączyć).
 
 [Plan rozwoju](/roadmap/) wymienia, co jest gotowe, a czego jeszcze nie ma.

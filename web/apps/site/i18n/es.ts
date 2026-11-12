@@ -115,7 +115,7 @@ export const es: Messages = {
     mockCaption: "Ilustración con datos de ejemplo",
     appsTitle: "Todas las aplicaciones de tu negocio. Una sola base de datos.",
     appsSub:
-      "Todas las aplicaciones comparten los mismos contactos, productos y permisos, así que no hay nada que integrar a mano. Algunas aplicaciones vienen incluidas; las demás se instalan desde el marketplace.",
+      "Todas las aplicaciones comparten una base de datos y un mismo conjunto de grupos de permisos, y ventas, facturación y compras usan los mismos contactos y productos. Algunas aplicaciones vienen incluidas; las demás se instalan desde el marketplace.",
     seeAllApps: "Explora todas las aplicaciones y sus modelos de datos",
     pillarsTitle: "Hecha para la forma en que se trabaja hoy",
     pillarsSub:
@@ -136,8 +136,8 @@ export const es: Messages = {
       {
         icon: "grid",
         title: "Un único modelo de datos",
-        body: "Las aplicaciones son módulos de un mismo registro, de modo que un contacto es el mismo contacto en CRM, ventas y facturación. Los permisos, la auditoría y la API vienen con cada modelo que añades.",
-        tag: "PostgreSQL por debajo",
+        body: "Las aplicaciones son módulos de un mismo registro, de modo que un contacto es el mismo contacto en ventas y facturación. Los permisos, las clases de datos y la API vienen con cada modelo que añades.",
+        tag: "PostgreSQL o SQLite por debajo",
       },
     ],
     flowLabel: "Cómo trabaja un agente contigo",
@@ -183,7 +183,7 @@ export const es: Messages = {
     stepsCta: "Empezar gratis",
     openTitle: "Código abierto y tuyo para alojar",
     openBody:
-      "obop está escrito en Rust y funciona en cualquier lugar donde funcione PostgreSQL. Usa el servicio alojado o ejecuta el mismo programa tú mismo con Docker. En ambos casos, cada negocio tiene su propia base de datos y los datos son tuyos.",
+      "El servidor de obop está escrito en Rust y funciona con SQLite o PostgreSQL. Usa el servicio alojado o ejecuta el mismo programa tú mismo con Docker. En ambos casos, cada negocio tiene su propia base de datos y los datos son tuyos.",
     openPoints: [
       {
         title: "Alojado por nosotros",
@@ -191,7 +191,7 @@ export const es: Messages = {
       },
       {
         title: "Autoalojado",
-        body: "Un binario o una imagen de Docker: SQLite para probar, PostgreSQL para un uso real.",
+        body: "Compílalo desde el código fuente y ejecútalo directamente o con Docker. SQLite para probar, PostgreSQL para un uso real.",
       },
       {
         title: "Código en GitHub",
@@ -207,7 +207,7 @@ export const es: Messages = {
     faq: [
       {
         q: "¿Qué es obop?",
-        a: "obop es una plataforma empresarial de código abierto. Ofrece a una empresa CRM, ventas, facturación, contactos y productos sobre un único modelo de datos, y permite instalar más aplicaciones desde un marketplace. Cada acción está disponible para las personas en el navegador y para los agentes de IA mediante REST, MCP y la línea de comandos.",
+        a: "obop es una plataforma empresarial de código abierto. Ofrece a una empresa CRM, ventas, facturación, contactos y productos sobre un único modelo de datos, y permite instalar más aplicaciones desde un marketplace. Las personas trabajan en el navegador, y los agentes de IA usan los comandos de obop mediante REST, MCP y la línea de comandos.",
       },
       {
         q: "¿Está obop listo para producción?",
@@ -227,7 +227,7 @@ export const es: Messages = {
       },
       {
         q: "¿Puede un agente leer los datos personales de mis clientes?",
-        a: "No en claro. Los datos personales se devuelven como tokens marcadores estables, como EMAIL_1, y los campos financieros, de RR. HH. y de categorías especiales se retienen por completo. El agente puede devolver un token para referirse a un valor sin llegar a verlo.",
+        a: "No en claro cuando un campo está marcado como dato personal. Los campos financieros, de RR. HH., de categorías especiales y secretos se retienen por completo, y los demás campos marcados como datos personales se devuelven como tokens marcadores estables, como EMAIL_1. El texto escrito en un campo que no está marcado como dato personal, como una descripción, no se sustituye. El agente puede devolver un token para referirse a un valor sin llegar a verlo.",
       },
       {
         q: "¿Puedo crear o añadir mis propias aplicaciones?",
@@ -239,8 +239,7 @@ export const es: Messages = {
       },
     ],
     ctaTitle: "Un negocio, una plataforma.",
-    ctaBody:
-      "Código abierto, escrita en Rust, funciona en cualquier lugar donde funcione PostgreSQL.",
+    ctaBody: "Código abierto, servidor escrito en Rust, funciona con SQLite o PostgreSQL.",
     ctaButton: "Obtén tu propia instancia",
   },
   pricing: {
@@ -255,7 +254,7 @@ export const es: Messages = {
         name: "Autoalojado",
         price: eur(0),
         period: "",
-        blurb: "El proyecto completo en tu propio servidor. Apache-2.0, gratis para siempre.",
+        blurb: "El proyecto completo en tu propio servidor. Apache-2.0, gratuito de usar.",
         features: [
           "Todas las apps incluidas",
           "API REST, MCP y línea de comandos",

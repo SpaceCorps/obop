@@ -115,7 +115,7 @@ export const de: Messages = {
     mockCaption: "Illustration mit Beispieldaten",
     appsTitle: "Alle Ihre Geschäfts-Apps. Eine Datenbank.",
     appsSub:
-      "Alle Apps teilen sich dieselben Kontakte, Produkte und Berechtigungen, sodass nichts zusammengeklebt werden muss. Einige Apps sind integriert; die anderen installieren Sie über den Marktplatz.",
+      "Alle Apps teilen sich eine Datenbank und einen Satz von Berechtigungsgruppen, und Vertrieb, Rechnungsstellung und Einkauf verwenden dieselben Kontakte und Produkte. Einige Apps sind integriert; die anderen installieren Sie über den Marktplatz.",
     seeAllApps: "Alle Apps und ihre Datenmodelle ansehen",
     pillarsTitle: "Gebaut für die heutige Arbeitsweise",
     pillarsSub:
@@ -136,8 +136,8 @@ export const de: Messages = {
       {
         icon: "grid",
         title: "Ein Datenmodell",
-        body: "Apps sind Module in einer gemeinsamen Registry, daher ist ein Kontakt in CRM, Vertrieb und Rechnungsstellung derselbe Kontakt. Berechtigungen, Audit und API gehören zu jedem Modell, das Sie hinzufügen.",
-        tag: "PostgreSQL darunter",
+        body: "Apps sind Module in einer gemeinsamen Registry, daher ist ein Kontakt in Vertrieb und Rechnungsstellung derselbe Kontakt. Berechtigungen, Datenklassen und API gehören zu jedem Modell, das Sie hinzufügen.",
+        tag: "PostgreSQL oder SQLite darunter",
       },
     ],
     flowLabel: "So arbeitet ein Agent mit Ihnen",
@@ -183,7 +183,7 @@ export const de: Messages = {
     stepsCta: "Kostenlos starten",
     openTitle: "Open Source, und Sie können es selbst betreiben",
     openBody:
-      "obop ist in Rust geschrieben und läuft überall, wo PostgreSQL läuft. Nutzen Sie den gehosteten Dienst oder betreiben Sie dasselbe Programm selbst mit Docker. In beiden Fällen hat jedes Unternehmen seine eigene Datenbank, und die Daten gehören Ihnen.",
+      "Der obop-Server ist in Rust geschrieben und läuft mit SQLite oder PostgreSQL. Nutzen Sie den gehosteten Dienst oder betreiben Sie dasselbe Programm selbst mit Docker. In beiden Fällen hat jedes Unternehmen seine eigene Datenbank, und die Daten gehören Ihnen.",
     openPoints: [
       {
         title: "Von uns gehostet",
@@ -191,7 +191,7 @@ export const de: Messages = {
       },
       {
         title: "Selbst gehostet",
-        body: "Eine Binärdatei oder ein Docker-Image, SQLite zum Ausprobieren, PostgreSQL für den echten Einsatz.",
+        body: "Aus dem Quellcode bauen und direkt oder mit Docker betreiben. SQLite zum Ausprobieren, PostgreSQL für den echten Einsatz.",
       },
       {
         title: "Quellcode auf GitHub",
@@ -207,7 +207,7 @@ export const de: Messages = {
     faq: [
       {
         q: "Was ist obop?",
-        a: "obop ist eine Open-Source-Geschäftsplattform. Sie bietet einem Unternehmen CRM, Vertrieb, Rechnungsstellung, Kontakte und Produkte auf einem Datenmodell und erlaubt es, weitere Apps aus einem Marktplatz zu installieren. Jede Aktion steht Menschen im Browser und KI-Agenten über REST, MCP und die Kommandozeile zur Verfügung.",
+        a: "obop ist eine Open-Source-Geschäftsplattform. Sie bietet einem Unternehmen CRM, Vertrieb, Rechnungsstellung, Kontakte und Produkte auf einem Datenmodell und erlaubt es, weitere Apps aus einem Marktplatz zu installieren. Menschen arbeiten im Browser, und KI-Agenten nutzen die Befehle von obop über REST, MCP und die Kommandozeile.",
       },
       {
         q: "Ist obop produktionsreif?",
@@ -227,7 +227,7 @@ export const de: Messages = {
       },
       {
         q: "Kann ein Agent die personenbezogenen Daten meiner Kunden lesen?",
-        a: "Nicht im Klartext. Personenbezogene Daten kommen als stabile Platzhalter wie EMAIL_1 zurück, und finanzielle, Personal- und besonders schützenswerte Felder werden vollständig zurückgehalten. Der Agent kann einen Platzhalter zurückgeben, um sich auf einen Wert zu beziehen, ohne ihn je zu sehen.",
+        a: "Nicht im Klartext, sofern ein Feld als personenbezogen gekennzeichnet ist. Finanzielle Felder, Personalfelder, besonders schützenswerte und geheime Felder werden vollständig zurückgehalten, und die übrigen als personenbezogen gekennzeichneten Felder kommen als stabile Platzhalter wie EMAIL_1 zurück. Text in einem Feld, das nicht als personenbezogen gekennzeichnet ist, etwa in einer Beschreibung, wird nicht ersetzt. Der Agent kann einen Platzhalter zurückgeben, um sich auf einen Wert zu beziehen, ohne ihn je zu sehen.",
       },
       {
         q: "Kann ich eigene Apps bauen oder hinzufügen?",
@@ -239,7 +239,7 @@ export const de: Messages = {
       },
     ],
     ctaTitle: "Ein Unternehmen, eine Plattform.",
-    ctaBody: "Open Source, in Rust gebaut, läuft überall, wo PostgreSQL läuft.",
+    ctaBody: "Open Source, Server in Rust gebaut, läuft mit SQLite oder PostgreSQL.",
     ctaButton: "Eigene Instanz erhalten",
   },
   pricing: {
@@ -254,7 +254,7 @@ export const de: Messages = {
         name: "Selbst gehostet",
         price: eur(0),
         period: "",
-        blurb: "Das ganze Projekt auf Ihrem eigenen Server. Apache-2.0, für immer kostenlos.",
+        blurb: "Das ganze Projekt auf Ihrem eigenen Server. Apache-2.0, kostenlos nutzbar.",
         features: [
           "Jede mitgelieferte App",
           "REST-API, MCP und Kommandozeile",

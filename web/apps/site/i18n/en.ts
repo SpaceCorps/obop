@@ -113,7 +113,7 @@ export const en: Messages = {
     mockCaption: "Illustration with sample data",
     appsTitle: "All your business apps. One database.",
     appsSub:
-      "Every app shares the same contacts, products and permissions, so nothing needs gluing together. Some apps are built in; the others install from the marketplace.",
+      "All apps share one database and one set of permission groups, and sales, invoicing and purchasing use the same contacts and products. Some apps are built in; the others install from the marketplace.",
     seeAllApps: "Browse all apps and their data models",
     pillarsTitle: "Built for the way work happens now",
     pillarsSub:
@@ -134,8 +134,8 @@ export const en: Messages = {
       {
         icon: "grid",
         title: "One data model",
-        body: "Apps are modules on one registry, so a contact is the same contact in CRM, sales and invoicing. Permissions, audit and the API come with every model you add.",
-        tag: "PostgreSQL underneath",
+        body: "Apps are modules on one registry, so a contact is the same contact in sales and invoicing. Permissions, data classes and the API come with every model you add.",
+        tag: "PostgreSQL or SQLite underneath",
       },
     ],
     flowLabel: "How an agent works with you",
@@ -175,7 +175,7 @@ export const en: Messages = {
     stepsCta: "Start free",
     openTitle: "Open source, and yours to host",
     openBody:
-      "obop is written in Rust and runs anywhere PostgreSQL does. Use the hosted service, or run the same program yourself with Docker. Either way each business has its own database, and the data is yours.",
+      "The obop server is written in Rust and runs on SQLite or PostgreSQL. Use the hosted service, or run the same program yourself with Docker. Either way each business has its own database, and the data is yours.",
     openPoints: [
       {
         title: "Hosted by us",
@@ -183,7 +183,7 @@ export const en: Messages = {
       },
       {
         title: "Self-hosted",
-        body: "One binary or one Docker image, SQLite for trying it out, PostgreSQL for real use.",
+        body: "Build it from source and run it directly or with Docker. SQLite for trying it out, PostgreSQL for real use.",
       },
       {
         title: "Source on GitHub",
@@ -199,7 +199,7 @@ export const en: Messages = {
     faq: [
       {
         q: "What is obop?",
-        a: "obop is an open-source business platform. It gives a company CRM, sales, invoicing, contacts and products on one data model, and lets you install more apps from a marketplace. Every action is available to people in the browser and to AI agents over REST, MCP and the command line.",
+        a: "obop is an open-source business platform. It gives a company CRM, sales, invoicing, contacts and products on one data model, and lets you install more apps from a marketplace. People work in the browser, and AI agents use its commands over REST, MCP and the command line.",
       },
       {
         q: "Is obop ready for production use?",
@@ -219,7 +219,7 @@ export const en: Messages = {
       },
       {
         q: "Can an agent read my customers' personal data?",
-        a: "Not in clear. Personal data comes back as stable placeholder tokens such as EMAIL_1, and financial, HR and special-category fields are withheld entirely. The agent can pass a token back to refer to a value without ever seeing it.",
+        a: "Not in clear where a field is marked as personal data. Financial, HR, special-category and secret fields are withheld entirely, and the other fields marked as personal data come back as stable placeholder tokens such as EMAIL_1. Text typed into a field that is not marked as personal data, such as a description, is not replaced. The agent can pass a token back to refer to a value without ever seeing it.",
       },
       {
         q: "Can I build or add my own apps?",
@@ -231,7 +231,7 @@ export const en: Messages = {
       },
     ],
     ctaTitle: "One business, one platform.",
-    ctaBody: "Open source, built in Rust, runs anywhere PostgreSQL does.",
+    ctaBody: "Open source, server built in Rust, runs on SQLite or PostgreSQL.",
     ctaButton: "Get your own instance",
   },
   pricing: {
@@ -246,7 +246,7 @@ export const en: Messages = {
         name: "Self-hosted",
         price: eur(0),
         period: "",
-        blurb: "The whole project on your own server. Apache-2.0, free for ever.",
+        blurb: "The whole project on your own server. Apache-2.0, free to use.",
         features: [
           "Every bundled app",
           "REST API, MCP and the command line",

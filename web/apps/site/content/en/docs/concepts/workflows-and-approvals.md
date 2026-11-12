@@ -5,7 +5,7 @@ description: "State changes in obop are named actions such as qualify or post. I
 
 ## Workflows are actions
 
-A workflow is a set of **actions** on a model. An action moves one `select` field, usually `state` or `stage`, from one option to another: `lead.qualify` moves `stage` from `new` to `qualified`. An action may name a stricter group than the model's write group and may require approval.
+A workflow is a set of **actions** on a model. An action usually moves one `select` field, such as `state` or `stage`, from one option to another: `lead.qualify` moves `stage` from `new` to `qualified`. An action may name a stricter group than the model's write group and may require approval.
 
 The field an action moves becomes **governed**. You cannot set it freely with `create` or `update`:
 
@@ -17,11 +17,11 @@ The field an action moves becomes **governed**. You cannot set it freely with `c
 
 An action can be marked `approval = true`. Mark anything irreversible or money-moving: posting an invoice, paying, refunding, sending to customers, publishing, closing a period.
 
-| Who runs it                      | What happens                                                                                            |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| A person with the action's group | It runs at once.                                                                                        |
-| An agent                         | Nothing changes. The server answers with a **plan id** (`202` over REST, `approval_required` over MCP). |
-| A person approving the plan      | The action runs, as that person.                                                                        |
+| Who runs it                      | What happens                                                                                                    |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| A person with the action's group | It runs at once.                                                                                                |
+| An agent                         | Nothing changes. The server answers with a **plan id** (`202` over REST, `approval_required` over MCP).         |
+| A person approving the plan      | The action runs with the proposing agent's permissions, and only if the approver also holds the action's group. |
 
 Deleting a record is also only proposed by agents. A proposal is checked again when it is approved, because the record may have changed in between.
 

@@ -10,7 +10,7 @@ lead: "An agent token is a bearer token that belongs to a person and carries a l
 - It is shown **once**. obop stores only a hash, so a lost token cannot be recovered; create a new one.
 - It starts with `obop_`. Treat it like a password.
 - Only a person can create tokens. An agent cannot mint another token.
-- It does not expire, and it stops working when its owner is deleted. There is no command to revoke a single token yet (see [Safety](/docs/agents/safety/)).
+- It does not expire. It stops working while its owner's account is disabled, and for good when the owner is offboarded. There is no command to revoke a single token yet (see [Safety](/docs/agents/safety/)).
 
 ## Choose the scopes
 
@@ -37,7 +37,7 @@ curl -s -X POST http://127.0.0.1:8080/api/auth/login \
   -d '{"username":"alice","password":"your password"}'
 ```
 
-The answer is `{"token":"obop_..."}`: a session token that lasts 12 hours. Use it as a bearer token to create the agent token:
+The answer is `{"token":"obop_..."}`: a session token that lasts 12 hours. If two-factor sign-in is on for the account, the answer is `{"mfa_required":true,"mfa_token":"..."}` instead; send `{"mfa_token":"...","code":"123456"}`, with a code from your authenticator app, to `POST /api/auth/login/mfa` to get the session token. Use the session token as a bearer token to create the agent token:
 
 ```bash
 curl -s -X POST http://127.0.0.1:8080/api/auth/agent-token \
@@ -50,7 +50,7 @@ curl -s -X POST http://127.0.0.1:8080/api/auth/agent-token \
 { "token": "obop_1e00c3..." }
 ```
 
-`scopes` is required and must name at least one group that you hold. `label` is free text. On a hosted instance use its address instead of `127.0.0.1:8080`, and sign in with your sign-up email as the username.
+`scopes` is required, must not be empty and may name only groups that are listed on your own account; `platform.admin` does not stand in for the other groups here. The first account of a new hosted instance holds only `platform.admin`, so give it the groups you want to hand over first, under Customize > Security > People. `label` is free text. On a hosted instance use its address instead of `127.0.0.1:8080`, and sign in with your sign-up email as the username.
 
 ## With the CLI
 
@@ -74,21 +74,22 @@ The same token connects an MCP client to the instance's remote MCP server, `http
 - Create a separate token per client and give it only the scopes that client needs. The MCP tool list is exactly the commands the scopes allow.
 - A session token from sign-in also works, but it expires after 12 hours; an agent token does not.
 - The token must be sent on every request, not only the first; clients do this once it is in their configuration.
-- Clients that offer a browser login (Claude Desktop, claude.ai, Claude Code) do not need a pasted token: they connect with a sign-in and get a short-lived token of this kind. See [Connect over MCP](/docs/agents/mcp/#connect-with-a-browser-sign-in-oauth).
+- Clients that support a browser sign-in (OAuth) do not need a pasted token: they connect with a sign-in and get a one-hour token that works on `/mcp` only. We have not yet tried this with Claude Desktop, claude.ai or Claude Code; see [Connect over MCP](/docs/agents/mcp/#connect-with-a-browser-sign-in-oauth).
 
 ## Store it safely
 
 - Put it in an environment variable or a secret store, not in a repository.
-- Prefer one token per agent and per task, so you can tell them apart and remove one without affecting the rest.
+- Prefer one token per agent and per task, each with only the scopes that agent needs.
 - Tokens in a client config file are readable by anything that can read the file.
 
 ## Errors
 
-| Answer                                                                         | Meaning                                     |
-| ------------------------------------------------------------------------------ | ------------------------------------------- |
-| `400 {"error":"an agent token needs at least one scope"}`                      | `scopes` was empty.                         |
-| `400 {"error":"you do not hold invoicing.manager, so you cannot delegate it"}` | You asked for a group you do not hold.      |
-| `400 {"error":"only a human user can issue agent tokens"}`                     | You used an agent token to ask for another. |
-| `401`                                                                          | Missing, wrong or expired session token.    |
+| Answer                                                                             | Meaning                                                                                        |
+| ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `400 {"error":"an agent token needs at least one scope"}`                          | `scopes` was empty.                                                                            |
+| `400 {"error":"you do not hold invoicing.manager, so you cannot delegate it"}`     | You asked for a group you do not hold.                                                         |
+| `400 {"error":"only a human user can issue agent tokens"}`                         | You used an agent token to ask for another.                                                    |
+| `401`                                                                              | Missing, wrong or expired session token.                                                       |
+| `403 {"error":"two-factor authentication must be set up before you can continue"}` | Your account must set up two-factor sign-in first; until then this session can only set it up. |
 
 Next: [connect over MCP](/docs/agents/mcp/) or [use the REST API](/docs/agents/rest/).

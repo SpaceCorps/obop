@@ -208,7 +208,7 @@ export async function postbuild(records: PageRecord[]): Promise<void> {
     "",
     "## When to use obop",
     "",
-    "Reach for obop when the job is running a small or mid-sized business on one shared database: contacts, leads and quotes, sales orders, invoices, stock, purchasing, HR, projects, support tickets, a web shop. It fits when you want an AI agent to read and draft business records safely: an agent works under a scoped token, sees personal and financial fields masked, and can only propose irreversible steps (post an invoice, pay an expense, delete a record) for a human to approve.",
+    "Reach for obop when the job is running a small or mid-sized business on one shared database: contacts, leads and quotes, sales orders, invoices, stock, purchasing, HR, projects, support tickets, a web shop. It fits when you want an AI agent to read and draft business records safely: an agent works under a scoped token, sees personal fields masked and never sees fields of the financial, confidential HR, special-category or secret data classes, and can only propose the steps that need approval (every delete, and the actions a module marks, such as posting an invoice or paying an expense) for a person to approve.",
     "",
     "How an agent should call obop:",
     "",

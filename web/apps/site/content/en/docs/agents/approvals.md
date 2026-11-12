@@ -1,22 +1,23 @@
 ---
 title: "The approval loop"
-description: "How obop keeps a person in charge: an agent proposes an irreversible step, the server returns a plan id and changes nothing, and a person approves it. Examples over REST and MCP."
+description: "How obop keeps a person in charge: an agent proposes a step that needs approval, the server returns a plan id and changes nothing, and a person approves it. Examples over REST and MCP."
 lead: "Agents propose. Humans approve. This page shows the loop end to end."
 ---
 
 ## Which steps need approval
 
-- Every action marked `approval = true` in its module. In the built-in apps that is `invoice.post` and `party.erase`; in bundled packages it includes posting accounting entries, refunds, sending campaigns, publishing website content, signing, and paying expenses. Each [app page](/apps/) lists them.
+- Every action marked `approval = true` in its module. In the built-in modules that is `invoice.post`, `party.erase`, `connection.connect`, `pause`, `resume`, `retry`, `revoke` and `sync`, `consent.withdraw`, `egress_policy.purge`, and `mileage_trip.confirm`, `reject`, `discard` and `discard_stuck`; in bundled packages it includes posting accounting entries, refunds, sending campaigns, publishing website content, signing, and paying expenses. Each [app page](/apps/) lists those of its app.
 - Every `delete`.
 - Installing, updating, rolling back and removing modules (`module.install`, `module.upgrade`, `module.upgrade_all`, `module.rollback`, `module.uninstall`, `marketplace_listing.install`), and updating the instance itself (`instance_update.start`, `instance_update.rollback`).
+- Administering accounts (`user_account.add`, `user_account.set_groups`, `user_account.offboard`, `user_account.disable`, `user_account.enable`, `user_account.bind_sso`, `user_account.unbind_sso`, `user_account.set_sso_only`) and revoking a signed-in device (`device.revoke`).
 
-`GET /api/commands` marks them with `"needs_approval": true`, and the MCP tool description ends with "(agents propose; a human approves)".
+`GET /api/commands` lists the commands your token may use and marks each one that needs approval with `"needs_approval": true`; the MCP description of such a tool says "Needs human approval".
 
 ## The loop
 
 1. **The agent calls the command.** Same call as any other.
-2. **The server answers with a plan.** Nothing is changed. Over REST it is `202 Accepted` with `{"approval_required":true,"plan_id":"..."}`. Over MCP the tool result is `{"status":"approval_required","plan_id":"..."}`. The CLI prints `ApprovalRequired { plan_id: ... }`.
-3. **The agent tells a person.** The plan id and a plain description of what it wanted to do and why. The agent cannot approve its own plan: an agent token asking to approve gets `404`.
+2. **The server answers with a plan.** Nothing is changed. Over REST it is `202 Accepted` with `{"approval_required":true,"plan_id":"..."}`. Over MCP the tool result is `{"status":"approval_required","plan_id":"...","instruction":"..."}`. The CLI prints `error: ApprovalRequired { plan_id: "..." }` on stderr and exits with status 1.
+3. **The agent tells a person.** The plan id and a plain description of what it wanted to do and why. The agent cannot approve its own plan: an agent token asking to approve gets `404` (a token from the MCP browser sign-in gets `401`, because it works on `/mcp` only).
 4. **A person approves.** They sign in and call `POST /api/approve/{plan_id}` with their own session token.
 5. **The action runs.** The server checks again that the approver holds the action's group, that the proposing agent was allowed to do it, and that the record still allows the change. The result comes back to the approver.
 
@@ -46,7 +47,7 @@ curl -si -X POST http://127.0.0.1:8080/api/approve/01a14662-bb99-74fe-bc64-1b98f
 ```text
 HTTP/1.1 200 OK
 
-{"denied":[],"value":{"id":"01a1464f-b0cb-7689-be17-2311cd62d24c","number":"INV-00001","state":"posted"}}
+{"denied":[],"value":{"id":"01a1464f-b0cb-7689-be17-2311cd62d24c","number":"INV-2026-00001","state":"posted"}}
 ```
 
 The invoice is posted and has its legal number. Approving the same plan again is `404`: a plan runs once.
@@ -77,9 +78,14 @@ If the database refuses the approval before anything was changed (`503` with `"a
     "content": [
       {
         "type": "text",
-        "text": "{\"plan_id\":\"01a14660-1971-733a-8a1e-19e32cc341b2\",\"status\":\"approval_required\"}"
+        "text": "{\"instruction\":\"Nothing has run. This step needs a human: ask a person with the right permissions to approve this plan in the back office (or POST /api/approve/<plan_id>), then check the record. Do not call this tool again for the same step.\",\"plan_id\":\"01a14660-1971-733a-8a1e-19e32cc341b2\",\"status\":\"approval_required\"}"
       }
     ],
+    "structuredContent": {
+      "instruction": "Nothing has run. This step needs a human: ask a person with the right permissions to approve this plan in the back office (or POST /api/approve/<plan_id>), then check the record. Do not call this tool again for the same step.",
+      "plan_id": "01a14660-1971-733a-8a1e-19e32cc341b2",
+      "status": "approval_required"
+    },
     "isError": false
   }
 }

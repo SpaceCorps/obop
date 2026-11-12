@@ -115,7 +115,7 @@ export const fr: Messages = {
     mockCaption: "Illustration avec des données d'exemple",
     appsTitle: "Toutes vos applications de gestion. Une seule base de données.",
     appsSub:
-      "Toutes les applications partagent les mêmes contacts, les mêmes produits et les mêmes permissions : rien à raccorder à la main. Certaines applications sont intégrées ; les autres s'installent depuis la place de marché.",
+      "Toutes les applications partagent une même base de données et un même ensemble de groupes de permissions, et les ventes, la facturation et les achats utilisent les mêmes contacts et les mêmes produits. Certaines applications sont intégrées ; les autres s'installent depuis la place de marché.",
     seeAllApps: "Parcourir toutes les applications et leurs modèles de données",
     pillarsTitle: "Pensée pour la façon dont on travaille aujourd'hui",
     pillarsSub:
@@ -136,8 +136,8 @@ export const fr: Messages = {
       {
         icon: "grid",
         title: "Un seul modèle de données",
-        body: "Les applications sont des modules d'un même registre : un contact est le même contact dans le CRM, les ventes et la facturation. Permissions, audit et API accompagnent chaque modèle que vous ajoutez.",
-        tag: "PostgreSQL en dessous",
+        body: "Les applications sont des modules d'un même registre : un contact est le même contact dans les ventes et la facturation. Permissions, classes de données et API accompagnent chaque modèle que vous ajoutez.",
+        tag: "PostgreSQL ou SQLite en dessous",
       },
     ],
     flowLabel: "Comment un agent travaille avec vous",
@@ -183,7 +183,7 @@ export const fr: Messages = {
     stepsCta: "Commencer gratuitement",
     openTitle: "Open source, et à héberger chez vous si vous le souhaitez",
     openBody:
-      "obop est écrit en Rust et fonctionne partout où PostgreSQL fonctionne. Utilisez le service hébergé, ou faites tourner le même programme vous-même avec Docker. Dans les deux cas, chaque entreprise a sa propre base de données, et les données vous appartiennent.",
+      "Le serveur obop est écrit en Rust et fonctionne avec SQLite ou PostgreSQL. Utilisez le service hébergé, ou faites tourner le même programme vous-même avec Docker. Dans les deux cas, chaque entreprise a sa propre base de données, et les données vous appartiennent.",
     openPoints: [
       {
         title: "Hébergé par nous",
@@ -191,7 +191,7 @@ export const fr: Messages = {
       },
       {
         title: "Auto-hébergé",
-        body: "Un seul binaire ou une seule image Docker, SQLite pour essayer, PostgreSQL pour un usage réel.",
+        body: "Compilez-le depuis les sources et exécutez-le directement ou avec Docker. SQLite pour essayer, PostgreSQL pour un usage réel.",
       },
       {
         title: "Code source sur GitHub",
@@ -207,7 +207,7 @@ export const fr: Messages = {
     faq: [
       {
         q: "Qu'est-ce que obop ?",
-        a: "obop est une plateforme de gestion open source. Elle offre à une entreprise un CRM, les ventes, la facturation, les contacts et les produits sur un seul modèle de données, et permet d'installer d'autres applications depuis une place de marché. Chaque action est accessible aux personnes dans le navigateur, et aux agents IA via REST, MCP et la ligne de commande.",
+        a: "obop est une plateforme de gestion open source. Elle offre à une entreprise un CRM, les ventes, la facturation, les contacts et les produits sur un seul modèle de données, et permet d'installer d'autres applications depuis une place de marché. Les personnes travaillent dans le navigateur, et les agents IA utilisent les commandes d'obop via REST, MCP et la ligne de commande.",
       },
       {
         q: "obop est-il prêt pour la production ?",
@@ -227,7 +227,7 @@ export const fr: Messages = {
       },
       {
         q: "Un agent peut-il lire les données personnelles de mes clients ?",
-        a: "Pas en clair. Les données personnelles reviennent sous forme de jetons de substitution stables, comme EMAIL_1, et les champs financiers, RH et de catégorie particulière ne sont pas communiqués du tout. L'agent peut renvoyer un jeton pour désigner une valeur sans jamais la voir.",
+        a: "Pas en clair lorsqu'un champ est marqué comme donnée personnelle. Les champs financiers, RH, de catégorie particulière et secrets ne sont pas communiqués du tout, et les autres champs marqués comme données personnelles reviennent sous forme de jetons de substitution stables, comme EMAIL_1. Le texte saisi dans un champ qui n'est pas marqué comme donnée personnelle, comme une description, n'est pas remplacé. L'agent peut renvoyer un jeton pour désigner une valeur sans jamais la voir.",
       },
       {
         q: "Puis-je créer ou ajouter mes propres applications ?",
@@ -239,7 +239,7 @@ export const fr: Messages = {
       },
     ],
     ctaTitle: "Une entreprise, une plateforme.",
-    ctaBody: "Open source, écrit en Rust, fonctionne partout où PostgreSQL fonctionne.",
+    ctaBody: "Open source, serveur écrit en Rust, fonctionne avec SQLite ou PostgreSQL.",
     ctaButton: "Obtenir votre instance",
   },
   pricing: {
@@ -254,7 +254,7 @@ export const fr: Messages = {
         name: "Auto-hébergé",
         price: eur(0),
         period: "",
-        blurb: "Le projet entier sur votre propre serveur. Apache-2.0, gratuit pour toujours.",
+        blurb: "Le projet entier sur votre propre serveur. Apache-2.0, gratuit à utiliser.",
         features: [
           "Toutes les applications fournies",
           "API REST, MCP et ligne de commande",

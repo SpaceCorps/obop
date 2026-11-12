@@ -1,7 +1,7 @@
 ---
 title: "Connectors and compliant data flows"
 description: "How obop connects other systems and lets people connect their own accounts: a recorded legal basis, a field allowlist, pseudonyms by default, withdrawable consent, a log without payloads and a generated processing register. Technical controls that support GDPR compliance, not legal advice."
-lead: "Connecting a system is where an instance can leak. The Connectors app puts one gate in front of every flow in or out, so the safe path is the only path."
+lead: "Connecting a system is where an instance can leak. The Connectors app sends its webhook, REST and CSV flows, in and out, through one gate."
 ---
 
 > **This supports compliance, it does not provide it.** The controls below help you meet the GDPR. They are not legal advice and not a certification. You still decide the purposes, the legal basis, the agreements with recipients and the assessments, and you are accountable for them.
@@ -10,18 +10,18 @@ lead: "Connecting a system is where an instance can leak. The Connectors app put
 
 Open **Connectors** from the app launcher. The **Catalog** lists every service and says how much of it exists:
 
-| Badge           | Meaning                                                                                                                                |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Working         | Implemented and tested end to end against a local counterpart: webhook (send), webhook (receive), REST API (pull), CSV export          |
-| Generic adapter | A generic engine configured for the service (Slack, Stripe, GitHub, Zapier, Make, n8n). Tested locally, not against the service itself |
-| Definition only | Metadata and setup notes (Google and Microsoft calendar and contacts, which need your own OAuth client). Nothing runs                  |
+| Badge           | Meaning                                                                                                                                                        |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Working         | Implemented and tested end to end against a local counterpart: webhook (send), webhook (receive), REST API (pull), CSV export                                  |
+| Generic adapter | A generic engine configured for the service (Slack, Stripe, GitHub, DocuSeal, Google Drive, Zapier, Make, n8n). Tested locally, not against the service itself |
+| Definition only | Metadata and setup notes (Google and Microsoft calendar and contacts, which need your own OAuth client). Nothing runs                                          |
 
-Facts about a recipient that were not checked say "verify with the provider". An administrator enables a service, and records where the agreement with the provider is kept, before anyone can connect it.
+Facts about a recipient that were not checked say "verify with the provider". An administrator enables a service before anyone can connect it, and can record where the agreement with the provider is kept. By default personal data, even as pseudonyms, goes only to a provider whose agreement is recorded.
 
 ## The Connect wizard
 
 1. **Service.** Pick one that is enabled.
-2. **Settings.** The address and the credentials. Credentials are write-only: they are stored encrypted and never shown again, not to you, not to an administrator, not to an agent.
+2. **Settings.** The address and the credentials. Credentials are write-only: they are stored encrypted and never returned. The connection shows only whether they are set and, for a long value, its last four characters.
 3. **Fields.** Choose the fields that may leave, model by model. Each field shows its data class and what happens to it: sent as a pseudonym, sent as is, or never sent. An empty choice sends nothing. The **privacy preview** shows one real record exactly as it would leave.
 4. **Purpose and legal basis.** Say what the data is used for, choose the basis, and see who receives it and which data classes would flow. Confirming records a consent record.
 5. **Test and connect.** A test sends no personal data. Connect starts the flows.
@@ -39,7 +39,7 @@ Record ids never leave; each row carries a pseudonym instead. Every flow writes 
 
 ## People's own accounts, and consent
 
-A person with the Connectors permission connects their own accounts from the services an administrator enabled for people. They see only their own connections. Withdrawing consent is one click: the connection is revoked and its credentials, tokens and pseudonym maps are removed. When a contact is erased, the pseudonym maps and tokens that pointed at it are dropped and the erasure is logged.
+A person with the Connectors permission connects their own accounts from the services an administrator enabled for people. They see only their own connections. Withdrawing consent is one button and a confirmation: the connection is revoked and its credentials, tokens and pseudonym maps are removed. When a contact is erased, the pseudonym maps and tokens that pointed at it are dropped and the erasure is logged.
 
 ## Agents
 

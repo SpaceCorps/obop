@@ -51,7 +51,7 @@ Tänk på det här innan du binder dig:
 - Det finns inga kodnivåer utöver deklarativa paket (inga WebAssembly-komponenter och inga fjärrappar), så ett apppaket kör ingen egen kod och kan inte deklarera anrop till andra system, men det kan deklarera beräknade summor och åtgärder som ändrar andra poster i samma databas.
 - Bara vissa appar (till exempel Expenses, Timesheets, ledighetsansökningar i HR, Documents och Dashboards) begränsar vilka poster en person ser. CRM, Sales och Invoicing gör det inte.
 - Säkerhetsloggen registrerar till exempel händelser för konton, inloggning, säkerhetsinställningar, moduler och signering, men är ingen historik över ändringar av affärsposter.
-- Det planerade exportjobbet för ett helt företags data är inte byggt. En lista kan exporteras som CSV från webbappen (upp till 20 000 poster), och `obop backup --plain` skriver databasens poster och uppladdade filer till en okrypterad fil (kortlivade värden som sessioner utelämnas, och hemligheter förblir förseglade).
+- Det planerade exportjobbet för ett helt företags data är inte byggt. En lista kan exporteras som CSV från webbappen (upp till 20 000 poster), och `obop backup --plain` skriver databasens poster och uppladdade filer till en okrypterad fil (kortlivade värden som sessioner utelämnas; hemligheter förblir förseglade, men om du inte har satt `OBOP_SECRET_KEY` finns nyckeln som obop skapade för dem i filen).
 - Den hostade tjänsten slår ännu inte på schemalagda säkerhetskopior av sina databaser (den som kör obop själv kan slå på dem).
 
 [Färdplanen](/roadmap/) listar vad som är byggt och vad som inte är det.

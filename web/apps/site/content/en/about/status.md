@@ -11,7 +11,7 @@ The live status page is at [/status](/status). It is served by the control plane
 
 ## What the status page covers
 
-- The control plane: sign-up, sign-in and the instance list.
+- The control plane: its API, the forum, the provisioning tool and, when the control plane serves it, the website.
 - The hosted instances the control plane provisions.
 
 ## What it does not promise

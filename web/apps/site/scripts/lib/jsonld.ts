@@ -40,9 +40,8 @@ const ORG = {
   contactPoint: [
     {
       "@type": "ContactPoint",
-      contactType: "customer support",
+      contactType: "bug reports and feature requests",
       url: `${GITHUB}/issues`,
-      availableLanguage: ["en", "de", "fr", "pl", "fi", "sv", "es"],
     },
     {
       "@type": "ContactPoint",
@@ -94,7 +93,6 @@ export function jsonLd(c: Ctx): object[] {
         "@type": "Offer",
         price: "0",
         priceCurrency: "EUR",
-        description: "Self-hosted open-source edition",
       },
     });
     out.push(faq(m.home.faq));

@@ -73,7 +73,7 @@ const openCards = computed(() =>
           <div class="mock-window">
             <div class="mock-side">
               <div class="mock-app"><Tile id="crm" name="CRM" :size="28" /><b>CRM</b></div>
-              <i class="on">Lead</i><i>Stage</i><i>Activity</i>
+              <i class="on">Lead</i>
             </div>
             <div class="mock-main">
               <div class="mock-head">
@@ -113,9 +113,8 @@ const openCards = computed(() =>
             <Icon name="sparkle" :size="18" />
             <div>
               <b>Waiting for a human to approve</b>
-              <span>post invoice INV-0042</span>
+              <span>post a draft invoice</span>
             </div>
-            <span class="mock-btn">Review</span>
           </div>
           <p class="mock-caption">{{ m.home.mockCaption }}</p>
         </div>

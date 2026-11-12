@@ -1631,6 +1631,12 @@ test.describe("crawlers and agents", () => {
         slug: "planning",
         text: "No action creates a shift from a template, and a shift has no field that names one.",
       },
+      // The one limit of a model card (Fleet's driver). Without the apostrophe of "driver's", which the
+      // HTML may write as an entity.
+      {
+        slug: "fleet",
+        text: "status and licence expiry are not checked when a vehicle is assigned.",
+      },
     ];
     for (const { slug, text } of folded) {
       const html = await (await request.get(`${base()}/apps/${slug}/`)).text();

@@ -115,7 +115,7 @@ export const fi: Messages = {
     mockCaption: "Havainnekuva esimerkkitiedoilla",
     appsTitle: "Kaikki yrityksen sovellukset. Yksi tietokanta.",
     appsSub:
-      "Kaikki sovellukset käyttävät samoja yhteystietoja, tuotteita ja käyttöoikeuksia, joten mitään ei tarvitse liimata yhteen. Osa sovelluksista on sisäänrakennettuja, ja muut asennetaan markkinapaikalta.",
+      "Kaikki sovellukset jakavat yhden tietokannan ja samat käyttöoikeusryhmät, ja myynti, laskutus ja osto käyttävät samoja yhteystietoja ja tuotteita. Osa sovelluksista on sisäänrakennettuja, ja muut asennetaan markkinapaikalta.",
     seeAllApps: "Selaa kaikkia sovelluksia ja niiden tietomalleja",
     pillarsTitle: "Tehty nykyiseen tapaan tehdä työtä",
     pillarsSub:
@@ -136,8 +136,8 @@ export const fi: Messages = {
       {
         icon: "grid",
         title: "Yksi tietomalli",
-        body: "Sovellukset ovat moduuleja samassa rekisterissä, joten yhteystieto on sama yhteystieto CRM:ssä, myynnissä ja laskutuksessa. Käyttöoikeudet, auditointi ja rajapinta tulevat jokaisen lisäämäsi mallin mukana.",
-        tag: "PostgreSQL pohjalla",
+        body: "Sovellukset ovat moduuleja samassa rekisterissä, joten yhteystieto on sama yhteystieto myynnissä ja laskutuksessa. Käyttöoikeudet, tietoluokat ja rajapinta tulevat jokaisen lisäämäsi mallin mukana.",
+        tag: "PostgreSQL tai SQLite pohjalla",
       },
     ],
     flowLabel: "Näin agentti työskentelee kanssasi",
@@ -183,7 +183,7 @@ export const fi: Messages = {
     stepsCta: "Aloita ilmaiseksi",
     openTitle: "Avoin lähdekoodi, ja voit ylläpitää sitä itse",
     openBody:
-      "obop on kirjoitettu Rustilla ja toimii kaikkialla, missä PostgreSQL toimii. Käytä isännöityä palvelua tai aja sama ohjelma itse Dockerilla. Kummassakin tapauksessa jokaisella yrityksellä on oma tietokanta, ja tiedot kuuluvat sinulle.",
+      "obopin palvelin on kirjoitettu Rustilla, ja se toimii SQLiten tai PostgreSQL:n kanssa. Käytä isännöityä palvelua tai aja sama ohjelma itse Dockerilla. Kummassakin tapauksessa jokaisella yrityksellä on oma tietokanta, ja tiedot kuuluvat sinulle.",
     openPoints: [
       {
         title: "Meidän isännöimänä",
@@ -191,7 +191,7 @@ export const fi: Messages = {
       },
       {
         title: "Omalla palvelimella",
-        body: "Yksi ajettava tiedosto tai yksi Docker-image: SQLite kokeiluun, PostgreSQL oikeaan käyttöön.",
+        body: "Käännä se lähdekoodista ja aja sitä suoraan tai Dockerilla. SQLite kokeiluun, PostgreSQL oikeaan käyttöön.",
       },
       {
         title: "Lähdekoodi GitHubissa",
@@ -207,7 +207,7 @@ export const fi: Messages = {
     faq: [
       {
         q: "Mikä obop on?",
-        a: "obop on avoimen lähdekoodin yritysalusta. Se tarjoaa yritykselle CRM:n, myynnin, laskutuksen, yhteystiedot ja tuotteet yhdellä tietomallilla, ja lisää sovelluksia voi asentaa markkinapaikalta. Jokainen toiminto on käytettävissä ihmisille selaimessa ja tekoälyagenteille REST-rajapinnan, MCP:n ja komentorivin kautta.",
+        a: "obop on avoimen lähdekoodin yritysalusta. Se tarjoaa yritykselle CRM:n, myynnin, laskutuksen, yhteystiedot ja tuotteet yhdellä tietomallilla, ja lisää sovelluksia voi asentaa markkinapaikalta. Ihmiset työskentelevät selaimessa, ja tekoälyagentit käyttävät obopin komentoja REST-rajapinnan, MCP:n ja komentorivin kautta.",
       },
       {
         q: "Onko obop valmis tuotantokäyttöön?",
@@ -227,7 +227,7 @@ export const fi: Messages = {
       },
       {
         q: "Voiko agentti lukea asiakkaideni henkilötietoja?",
-        a: "Ei selkoisena. Henkilötiedot palautetaan pysyvinä paikkamerkkeinä, kuten EMAIL_1, ja talous-, henkilöstö- ja erityisryhmien tietokentät pidätetään kokonaan. Agentti voi välittää paikkamerkin takaisin viitatakseen arvoon näkemättä sitä koskaan.",
+        a: "Ei selkoisena, kun kenttä on merkitty henkilötiedoksi. Taloustietojen, henkilöstötietojen, erityisryhmien tietojen ja salaisuuksien kentät pidätetään kokonaan, ja muut henkilötiedoiksi merkityt kentät palautetaan pysyvinä paikkamerkkeinä, kuten EMAIL_1. Kenttään, jota ei ole merkitty henkilötiedoksi, esimerkiksi kuvaukseen, kirjoitettua tekstiä ei korvata. Agentti voi välittää paikkamerkin takaisin viitatakseen arvoon näkemättä sitä koskaan.",
       },
       {
         q: "Voinko rakentaa tai lisätä omia sovelluksia?",
@@ -239,7 +239,8 @@ export const fi: Messages = {
       },
     ],
     ctaTitle: "Yksi yritys, yksi alusta.",
-    ctaBody: "Avointa lähdekoodia, tehty Rustilla, toimii kaikkialla, missä PostgreSQL toimii.",
+    ctaBody:
+      "Avointa lähdekoodia, palvelin tehty Rustilla, toimii SQLiten tai PostgreSQL:n kanssa.",
     ctaButton: "Hanki oma instanssi",
   },
   pricing: {
@@ -254,7 +255,7 @@ export const fi: Messages = {
         name: "Itse ajettu",
         price: eur(0),
         period: "",
-        blurb: "Koko projekti omalla palvelimellasi. Apache-2.0, ilmainen ikuisesti.",
+        blurb: "Koko projekti omalla palvelimellasi. Apache-2.0, ilmainen käyttää.",
         features: [
           "Kaikki mukana tulevat sovellukset",
           "REST-rajapinta, MCP ja komentorivi",
