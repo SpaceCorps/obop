@@ -1,12 +1,16 @@
 import type { Messages } from "../../i18n/types.ts";
-import type { App } from "./apps.ts";
+import { appName, type App } from "./apps.ts";
 
 /** Plain Markdown equivalents of the pages that are drawn from data (home, apps index, pricing). */
 export function homeMirror(m: Messages, prefix: string, apps: App[]): string {
   const h = m.home;
   const out: string[] = [];
   out.push(`**${h.titleA} ${h.titleB}**`, "", h.lead, "");
-  out.push(`- [${h.ctaPrimary}](/app/)`, `- [${h.ctaSecondary}](${prefix}/apps/)`, "");
+  out.push(
+    `- [${h.ctaPrimary}](${prefix}/docs/getting-started/)`,
+    `- [${h.ctaSecondary}](${prefix}/apps/)`,
+    "",
+  );
   out.push(`## ${h.appsTitle}`, "", h.appsSub, "");
   for (const a of apps) {
     out.push(
@@ -29,22 +33,30 @@ export function homeMirror(m: Messages, prefix: string, apps: App[]): string {
   out.push("", `*${h.pricingFine}*`, "", `[${h.pricingCta}](${prefix}/pricing/)`, "");
   out.push(`## ${h.faqTitle}`, "");
   for (const f of h.faq) out.push(`### ${f.q}`, "", f.a, "");
-  out.push(`## ${h.ctaTitle}`, "", h.ctaBody, "", `[${h.ctaButton}](/app/)`, "");
+  out.push(
+    `## ${h.ctaTitle}`,
+    "",
+    h.ctaBody,
+    "",
+    `[${h.ctaButton}](${prefix}/docs/getting-started/)`,
+    "",
+  );
   return out.join("\n");
 }
 
-export function appsIndexMirror(m: Messages, prefix: string, apps: App[]): string {
-  const out: string[] = [m.apps.lead, ""];
+/** The apps index as the page shows it: the built-in apps ("Ready to use"), then the rest by category. */
+export function appsIndexMirror(m: Messages, prefix: string, apps: App[], locale: string): string {
+  const link = (a: App) =>
+    `- [${appName(a, locale)}](${prefix}/apps/${a.slug}/): ${m.apps.taglines[a.id] ?? a.tagline}`;
+  const out: string[] = [m.apps.lead, "", `## ${m.apps.store.ready}`, ""];
+  for (const a of apps.filter((x) => x.builtin)) out.push(link(a));
+  out.push("", `## ${m.apps.store.more}`, "");
   const cats = Object.keys(m.apps.categories) as (keyof Messages["apps"]["categories"])[];
   for (const c of cats) {
-    const list = apps.filter((a) => a.category === c);
+    const list = apps.filter((a) => !a.builtin && a.category === c);
     if (list.length === 0) continue;
-    out.push(`## ${m.apps.categories[c]}`, "");
-    for (const a of list) {
-      out.push(
-        `- [${a.name}](${prefix}/apps/${a.slug}/): ${m.apps.taglines[a.id] ?? a.tagline} (${a.builtin ? m.apps.status.available : m.apps.status.marketplace})`,
-      );
-    }
+    out.push(`### ${m.apps.categories[c]}`, "");
+    for (const a of list) out.push(link(a));
     out.push("");
   }
   return out.join("\n");

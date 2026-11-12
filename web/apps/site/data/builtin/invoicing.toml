@@ -3,8 +3,8 @@
 id = "invoicing"
 version = "0.2.1"
 name = "Invoicing"
-description = "Customer invoices: drafts, posting with a gapless legal number, cancellation."
-summary = "Customer invoices with a draft, posted and paid life cycle."
+description = "Customer invoices with lines: drafts, posting with the next number of a gapless yearly series, cancellation."
+summary = "Customer invoices with a draft, posted and cancelled life cycle."
 author = "SpaceCorps"
 license = "Apache-2.0"
 homepage = "https://github.com/SpaceCorps/obop"
@@ -20,7 +20,7 @@ sales = "*"
 
 [[model]]
 name = "invoice"
-description = "A customer invoice; posted invoices are corrected only by credit notes"
+description = "A customer invoice; no action takes a posted invoice back to draft or cancels it"
 read_group = "invoicing.user"
 write_group = "invoicing.user"
 
@@ -32,6 +32,18 @@ kind = "ref"
 to = "sale_order"
 
 [[model.field]]
+name = "party_id"
+description = "Customer party id"
+class = "none"
+kind = "ref"
+to = "party"
+
+[[model.field]]
+name = "currency"
+description = "ISO 4217 currency code"
+class = "none"
+
+[[model.field]]
 name = "state"
 description = "Lifecycle: draft, posted or cancelled"
 class = "none"
@@ -40,18 +52,23 @@ options = ["draft", "posted", "cancelled"]
 
 [[model.field]]
 name = "total_minor"
-description = "Invoice total in minor units"
+description = "Invoice total in minor units, the sum of the lines"
 class = "none"
 kind = "money"
+computed = "sum(lines.amount_minor)"
 
 [[model.field]]
 name = "number"
-description = "Gapless legal number, set when posted"
+description = "Number from a gapless yearly series, such as INV-2026-00042, assigned when posted"
 class = "none"
+kind = "sequence"
+format = "INV-{year}-{seq:05}"
+assign_on = "post"
+gapless = true
 
 [[model.action]]
 name = "post"
-description = "Post a draft invoice and assign its legal number"
+description = "Post a draft invoice and give it the next number of the series"
 field = "state"
 from = "draft"
 to = "posted"
@@ -64,3 +81,50 @@ description = "Cancel a draft invoice"
 field = "state"
 from = "draft"
 to = "cancelled"
+
+[[model]]
+name = "invoice_line"
+description = "One product or service on an invoice"
+read_group = "invoicing.user"
+write_group = "invoicing.user"
+
+[[model.field]]
+name = "invoice_id"
+description = "The invoice the line belongs to"
+class = "none"
+kind = "ref"
+to = "invoice"
+required = true
+
+[[model.field]]
+name = "product_id"
+description = "The product invoiced"
+class = "none"
+kind = "ref"
+to = "product"
+
+[[model.field]]
+name = "description"
+description = "What is invoiced"
+class = "none"
+
+[[model.field]]
+name = "quantity"
+description = "Quantity invoiced"
+class = "none"
+kind = "number"
+required = true
+
+[[model.field]]
+name = "unit_price_minor"
+description = "Price of one unit in minor currency units"
+class = "none"
+kind = "money"
+required = true
+
+[[model.field]]
+name = "amount_minor"
+description = "Line amount in minor units: quantity times unit price"
+class = "none"
+kind = "money"
+computed = "quantity * unit_price_minor"

@@ -2013,7 +2013,7 @@ div[class*="language-"] button.copy {
   opacity: 0;
   cursor: pointer;
 }
-html:not(.js) div[class*="language-"] button.copy {
+html:not(.js-ready) div[class*="language-"] button.copy {
   display: none;
 }
 div[class*="language-"]:hover button.copy,
@@ -2167,58 +2167,6 @@ div[class*="language-"] button.copy.copied {
   text-align: end;
 }
 
-/* ---------- App page ---------- */
-.app-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2) var(--space-3);
-  margin-block-start: var(--space-5);
-}
-.chip {
-  display: inline-flex;
-  padding: 0.125rem 0.6rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  background: var(--surface-2);
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-medium);
-  text-decoration: none;
-}
-a.chip:hover {
-  border-color: var(--accent-fill);
-  color: var(--accent-ink);
-}
-.related {
-  margin-block-start: var(--space-12);
-}
-.related h2 {
-  font-size: var(--text-xl);
-}
-.related ul {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.related a {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.4rem 0.9rem 0.4rem 0.4rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  background: var(--surface);
-  color: var(--text);
-  text-decoration: none;
-}
-.related a:hover {
-  border-color: var(--accent-fill);
-}
-
 /* ---------- 404 ---------- */
 .notfound h1 {
   font-size: var(--text-5xl);
@@ -2289,9 +2237,6 @@ a.chip:hover {
     grid-template-columns: 14rem minmax(0, 1fr);
   }
   .docs-toc {
-    display: none;
-  }
-  .head-cta .btn.ghost {
     display: none;
   }
 }

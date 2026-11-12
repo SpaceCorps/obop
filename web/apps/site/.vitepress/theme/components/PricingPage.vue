@@ -2,7 +2,7 @@
 import { useSite } from "../composables.ts";
 import PageHeader from "./PageHeader.vue";
 
-const { m } = useSite();
+const { m, href } = useSite();
 </script>
 
 <template>
@@ -38,7 +38,7 @@ const { m } = useSite();
         </details>
       </div>
       <p>
-        <a class="btn primary large" href="/app/">{{ m.pricing.cta }}</a>
+        <a class="btn primary large" :href="href('/docs/getting-started/')">{{ m.pricing.cta }}</a>
       </p>
     </div>
   </div>

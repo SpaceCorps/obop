@@ -81,11 +81,13 @@ jobs:
           for app in apps/backoffice apps/platform apps/site apps/mileage-app packages/client packages/trip-core packages/ui; do
             (cd web/$app && vp check)
           done
-      - name: Unit tests (design system, client, trip logic and back office)
+      - name: Unit tests (design system, client, trip logic, back office and website)
         run: |
-          for app in packages/ui packages/client packages/trip-core apps/backoffice; do
+          for app in packages/ui packages/client packages/trip-core apps/backoffice apps/site; do
             (cd web/$app && vp test)
           done
+      - name: The website's translations keep the structure of the English text (every language)
+        run: cd web/apps/site && vp run i18n:check
       - name: Build every app and the shared packages
         run: |
           for app in backoffice platform site; do
