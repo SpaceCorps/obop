@@ -8,7 +8,9 @@
  *   to know to use it safely: a step that does not do what its name suggests ("By itself, this does not
  *   notify anyone"), an edit that is still possible after a step, a legal or privacy limit. It is true on
  *   its own, is not empty and is at least three words: a reader who never opens the fold is not misled
- *   by what is left. A caveat of that kind stays on top.
+ *   by what is left. A caveat of that kind stays on top, and the card that carries it has `keep`
+ *   (`CardCopy.keep`, or `AppCopy.keep` where the card has no words of its own here), so a "Show N
+ *   more" fold never hides it.
  * - A caveat that only a developer or an operator needs (how a check is made, what is not tested against
  *   a live service, a field nothing reads, a template that nothing links) goes under "For developers":
  *   on a card as `limit`, for the app as an entry of `limits`. A limit is one sentence that ends with
@@ -382,6 +384,7 @@ export const APP_COPY: AppCopy[] = [
       },
       "fleet_vehicle_driver.suspend": {
         text: "Mark a driver as suspended, for example after an expired licence. By itself, this does not stop the driver being assigned a vehicle.",
+        keep: true,
       },
       "fleet_vehicle_driver.reactivate": {
         text: "Mark a suspended driver as active again.",
@@ -434,6 +437,7 @@ export const APP_COPY: AppCopy[] = [
     cards: {
       "purchase_order.send": {
         text: "Mark the order as sent to the vendor. By itself, this does not contact the vendor.",
+        keep: true,
       },
       "purchase_order.confirm": {
         text: "Mark the order as confirmed with the vendor. By itself, this does not contact the vendor.",
@@ -521,6 +525,7 @@ export const APP_COPY: AppCopy[] = [
     cards: {
       "planning_shift.publish": {
         text: "Mark the shift as published. By itself, this does not notify anyone: everyone who can read shifts sees every shift, published or not.",
+        keep: true,
       },
       "planning_shift.confirm": {
         text: "Record that the employee confirmed they will work the shift. Only a planning manager can do this.",
@@ -753,9 +758,11 @@ export const APP_COPY: AppCopy[] = [
     cards: {
       email_marketing_campaign: {
         text: "One mailing to a list: its subject, sender, content and the day it should go out. By itself, obop does not send it.",
+        keep: true,
       },
       "email_marketing_campaign.schedule": {
         text: "Mark the campaign as scheduled for its day. By itself, this does not send it.",
+        keep: true,
       },
       "email_marketing_campaign.send": {
         text: "Record that the scheduled campaign has been sent (manager only). obop does not send the emails itself.",
@@ -959,6 +966,7 @@ export const APP_COPY: AppCopy[] = [
     cards: {
       "appointments_appointment.confirm": {
         text: "Mark a scheduled appointment as confirmed. By itself, this does not notify the attendee.",
+        keep: true,
       },
     },
   },

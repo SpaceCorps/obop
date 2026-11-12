@@ -121,9 +121,12 @@ const pathParts = (path: string) => path.split(new RegExp("(?<=/)"));
       What a visitor does not need on the first read: two closed rows (a store's information list and
       the part for developers). The heading is the label of its row, inside the summary, so its id,
       its size and its place in the heading order are what they were; everything is in the page, and
-      print opens both. With script a link to a row's heading opens the row (site.js); without script
-      it lands on the closed row. A link to anything inside a row is opened by the browsers that
-      reveal a closed details for a fragment (Chromium); in others it lands on the closed row.
+      print opens both. With script (site.js, `openTarget`, on load and on every hashchange) a link to
+      any id opens every closed details around that id, in every browser, and scrolls to it: the row's
+      own heading too, which is inside the summary and so is not something a browser reveals by
+      itself. Without script a link to a row's heading lands on the closed row, and a link to
+      anything inside a row is opened only by the browsers that reveal a closed details for a
+      fragment (Chromium); in others it lands on the closed row.
     -->
     <div class="app-rows">
       <section>

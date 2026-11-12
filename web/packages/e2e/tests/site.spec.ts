@@ -1201,18 +1201,18 @@ test.describe("website without JavaScript", () => {
     });
     expect(edge.cards).toBe(2);
     expect(edge.gap).toBeLessThan(2);
-    // CRM has four actions: all shown, no fold for a single card. Fleet has seven: four are shown
-    // (its one marked card, Retire, and the first three others: a store page shows a few cards, not
-    // the manual) and the other three are in a fold that counts them.
+    // CRM has four actions: all shown, no fold for a single card. Fleet has seven: five are shown
+    // (its two marked cards, Retire and Suspend, and the first three others: a store page shows a few
+    // cards, not the manual) and the other two are in a fold that counts them.
     await page.goto(`${base()}/apps/crm/`);
     await expect(page.locator("#can-do ~ .app-cards .app-card")).toHaveCount(4);
     await expect(page.locator("#can-do ~ .app-more")).toHaveCount(0);
     await page.goto(`${base()}/apps/fleet/`);
-    await expect(page.locator("#can-do ~ .app-cards .app-card")).toHaveCount(4);
+    await expect(page.locator("#can-do ~ .app-cards .app-card")).toHaveCount(5);
     await expect(page.locator("#can-do ~ .app-more > summary")).toHaveText(
-      messages.en.apps.store.showMoreActions.replace("{n}", "3"),
+      messages.en.apps.store.showMoreActions.replace("{n}", "2"),
     );
-    await expect(page.locator("#can-do ~ .app-more .app-card")).toHaveCount(3);
+    await expect(page.locator("#can-do ~ .app-more .app-card")).toHaveCount(2);
   });
 
   test("a card that needs a person's approval is never behind a tap, on any app page", async ({
@@ -1281,18 +1281,20 @@ test.describe("website without JavaScript", () => {
     request,
   }) => {
     // The cards that state what an AI agent may do without approval (Website's four), that a step
-    // starts no billing (Subscriptions), notifies no one (HR, Timesheets) or sends an event to the
-    // remote address (Connectors' Test), what Expenses' and Timesheets' approval does not do, and the
-    // log that keeps no content. Their text is English on every page (it
-    // is written for the card), so it is found by its words in all seven languages.
+    // starts no billing (Subscriptions), notifies no one (HR, Timesheets, Planning, Appointments),
+    // contacts no vendor (Purchase), does not stop a driver being assigned a vehicle (Fleet) or sends
+    // no email (Email Marketing's Schedule and its Campaign card), or sends an event to the remote
+    // address (Connectors' Test), what Expenses' and Timesheets' approval does not do, and the log
+    // that keeps no content. Their text is English on every page (it is written for the card), so it
+    // is found by its words in all seven languages.
     const kept = APP_COPY.flatMap((app) =>
       Object.values(app.cards ?? {})
         .filter((c) => c.keep)
         .map((c) => ({ slug: app.id.replaceAll("_", "-"), text: c.text })),
     );
-    // Eleven cards have words of their own and `keep`; the twelfth, Expenses "Submit", keeps the
+    // Seventeen cards have words of their own and `keep`; the eighteenth, Expenses "Submit", keeps the
     // manifest's translated words (`keep` of the app) and is on a page that has no fold.
-    expect(kept.length, "cards that have keep, with words of their own").toBe(11);
+    expect(kept.length, "cards that have keep, with words of their own").toBe(17);
     for (const locale of Object.keys(messages)) {
       const prefix = locale === "en" ? "" : `/${locale}`;
       for (const { slug, text } of kept) {
@@ -1334,9 +1336,11 @@ test.describe("website without JavaScript", () => {
     // without a fold). Where a fold exists, every marked card is open and the open cards that are not
     // marked are three while fewer than three cards are marked, and one from three marked cards on.
     await page.setViewportSize({ width: 390, height: 844 });
-    // Measured at 390x844: Accounting, with seven open cards, has it at 2.93 screens (2,476 px); the
-    // next are Hr (2.3), Subscriptions (2.2) and Pos (2.1). Three screens and a quarter is a ceiling,
-    // not a target: one more card on a page is caught by the numbers in cards.test.ts.
+    // Measured at 390x844 on the head that last changed a card: Accounting, with seven open cards,
+    // has it at 2.93 screens (2,476 px); the next are eCommerce (2.43, with five), Sign (2.29), Hr
+    // (2.27), Fleet (2.19, with five), Subscriptions (2.18), Website (2.16) and Pos (2.14). Three
+    // screens and a quarter is a ceiling, not a target: one more card on a page is caught by the
+    // numbers in cards.test.ts.
     const LIMIT_SCREENS = 3.25;
     const keptTexts = APP_COPY.flatMap((app) =>
       Object.values(app.cards ?? {})
@@ -2300,10 +2304,14 @@ test.describe("crawlers and agents", () => {
         return classes.includes(cls) ? [/\bhref="([^"]*)"/.exec(tag)?.[1]] : [];
       });
     let checked = 0;
+    let pills = 0;
     for (const locale of Object.keys(messages) as (keyof typeof messages)[]) {
       const s = messages[locale].apps.store;
       const prefix = locale === "en" ? "" : `/${locale}`;
       const start = `${prefix}/docs/getting-started/`;
+      // The sitemap of the language lists the 28 app pages: the loop below cannot be an empty one.
+      const listed = (await pagesOf(request, locale)).filter((u) => /\/apps\/[^/]+\/$/.test(u));
+      expect(listed.length, `${locale}: app pages in the sitemap`).toBe(28);
       for (const app of APP_COPY) {
         // The page's address: the two built-in apps with a plain name are Contacts and Products.
         const slug =
@@ -2314,6 +2322,7 @@ test.describe("crawlers and agents", () => {
               : app.id.replaceAll("_", "-");
         const builtin = (BUILTIN_IDS as readonly string[]).includes(app.id);
         const where = `${locale} ${slug}`;
+        expect(listed, `${where}: it is in the sitemap`).toContain(`${prefix}/apps/${slug}/`);
         const html = await (await request.get(`${base()}${prefix}/apps/${slug}/`)).text();
         expect(hrefs(html, "app-primary"), `${where}: the hero's button`).toEqual([
           builtin ? start : "#get",
@@ -2321,6 +2330,7 @@ test.describe("crawlers and agents", () => {
         expect(hrefs(html, "app-pill"), `${where}: the pill of the Get box`).toEqual(
           builtin ? [] : [start],
         );
+        if (!builtin) pills++;
         const md = await (await request.get(`${base()}${prefix}/apps/${slug}.md`)).text();
         expect(md, `${where}: the Markdown copy`).toContain(
           `[${builtin ? s.open : s.openObop}](${start})`,
@@ -2328,7 +2338,9 @@ test.describe("crawlers and agents", () => {
         checked++;
       }
     }
-    expect(checked, "app pages in all languages").toBe(APP_COPY.length * 7);
+    // 28 apps (6 built in, 22 from the marketplace) in 7 languages: 196 pages, and a Get pill on 154.
+    expect(checked, "app pages in all languages").toBe(28 * 7);
+    expect(pills, "pills of the Get box").toBe(22 * 7);
   });
 
   test("security.txt and humans.txt", async ({ request }) => {
@@ -2562,11 +2574,17 @@ test.describe("accessibility", () => {
     test("the apps pages show a focus ring on every stop of a Tab walk, forward and back, and the focused control is never under the header", async ({
       page,
     }) => {
+      // The site scrolls smoothly, and the walk waits for the page to stop moving before it reads
+      // where the focused control is: with reduced motion (which the site honours) the scroll is a
+      // jump, so what is read does not depend on how long a smooth scroll takes on a slow runner.
+      await page.emulateMedia({ reducedMotion: "reduce" });
       for (const width of [1440, 375]) {
         await page.setViewportSize({ width, height: 900 });
+        // The second number of each pass is the number of controls of main that are drawn on it (the
+        // same at both widths): the walk must make at least that many stops.
         for (const [path, atLeast, reach] of [
           ["/apps/", 28, null],
-          ["/apps/helpdesk/", 8, null],
+          ["/apps/helpdesk/", 10, null],
           ["/apps/accounting/", 11, null],
           // A second pass with everything outside the technical part opened (the "Information" row,
           // the folds of the cards): the walk above only stops on what is drawn, so the links of the
@@ -2579,7 +2597,7 @@ test.describe("accessibility", () => {
             13,
             ["A Apache-2.0", "A packages/accounting.toml", "BUTTON", "SUMMARY Show 3 more actions"],
           ],
-          ["/apps/invoicing/", 9, ["A Apache-2.0", "A crates/modules/invoicing"]],
+          ["/apps/invoicing/", 10, ["A Apache-2.0", "A crates/modules/invoicing"]],
         ] as const) {
           for (const key of ["Tab", "Shift+Tab"] as const) {
             await page.goto(`${base()}${path}`);

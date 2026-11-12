@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vite-plus/test";
 import { messages } from "../../i18n/index.ts";
 import { appView } from "./app-view.ts";
-import { loadApps } from "./apps.ts";
+import { type App, loadApps } from "./apps.ts";
 import { SHOWN_CARDS, drawsKicker, isMarked, splitCards } from "./cards.ts";
 import { technicalIn } from "./plain.ts";
 
@@ -190,8 +190,10 @@ describe("which cards a section shows and which it folds", () => {
   });
 
   test("the cards with `keep` are the ones that were chosen, and each reaches a card", () => {
-    // A card is given `keep` by hand, where its own words are a caveat that must not be missed, or
-    // speak of approval without the approval mark: a new one is a deliberate change of this list. The
+    // A card is given `keep` by hand, where its own words are a caveat that must not be missed (what an
+    // AI agent may do without approval; a step that does not do what its name suggests: "By itself,
+    // this does not notify anyone"), or speak of approval without the approval mark: a new one is a
+    // deliberate change of this list. The
     // flag is a card's own (`cards`) or, for a card that keeps the manifest's translated words, the
     // app's list of keys (`keep`).
     const chosen = apps.flatMap((a) => [
@@ -202,11 +204,17 @@ describe("which cards a section shows and which it folds", () => {
     ]);
     expect(chosen.sort()).toEqual(
       [
+        "appointments: appointments_appointment.confirm",
         "connectors: connection.test",
         "connectors: data_flow_log",
+        "email_marketing: email_marketing_campaign",
+        "email_marketing: email_marketing_campaign.schedule",
         "expenses: expenses_expense.approve",
         "expenses: expenses_expense.submit",
+        "fleet: fleet_vehicle_driver.suspend",
         "hr: hr_leave_request.request",
+        "planning: planning_shift.publish",
+        "purchase: purchase_order.send",
         "subscriptions: subscriptions_subscription.activate",
         "timesheets: timesheets_entry.approve",
         "timesheets: timesheets_entry.submit",
@@ -216,6 +224,7 @@ describe("which cards a section shows and which it folds", () => {
         "website: website_page_translation",
       ].sort(),
     );
+    expect(chosen, "cards that have keep").toHaveLength(18);
     // Each of them is a card of the page (a key that matches no card would hold nothing), in every
     // language: the flag comes with the source key and not with the words.
     for (const a of apps)
@@ -244,25 +253,42 @@ describe("which cards a section shows and which it folds", () => {
     }
   });
 
-  test("the cards whose words speak of an AI agent or of approval are never folded", () => {
-    // What proceeds without approval, what needs a person's approval and what an AI agent may do: the
-    // statements an owner must not miss. Matched on the English words of the card: every card whose
-    // text speaks of approval or of an AI agent carries the approval mark or `keep`, and is then
-    // checked in every language, since both are set by key.
-    const SPEAKS = /approv|\bAI agents?\b/i;
+  test("the cards whose words speak of approval, proposing or an AI agent, or say what they do not do, are never folded", () => {
+    // What proceeds without approval, what needs a person's approval, what an AI agent may do or only
+    // propose, and what a step does not do ("By itself, this does not notify anyone"): the statements
+    // an owner must not miss. Matched on the English title and text of the card: every card that
+    // speaks of approval, of proposing or of an AI agent, or says what it does not do, carries the
+    // approval mark or `keep`, and is then checked in every language, since both are set by key.
+    const SPEAKS = /approv|propos|\bAI\b/i;
+    const NOT_DONE = /\bBy itself, (?:this|obop) does not\b/i;
     expect(SPEAKS.test("Edits to a published page need no further approval.")).toBe(true);
     expect(SPEAKS.test("an AI agent included, can do that without approval")).toBe(true);
     expect(SPEAKS.test("Submit the claim for approval")).toBe(true);
     expect(SPEAKS.test("Mark the entry as submitted, for a manager to approve or reject.")).toBe(
       true,
     );
+    expect(SPEAKS.test("An AI agent can only propose it.")).toBe(true);
+    expect(SPEAKS.test("Propose a change for a person to confirm")).toBe(true);
     expect(SPEAKS.test("Create a lead")).toBe(false);
+    expect(NOT_DONE.test("Mark the campaign as scheduled. By itself, this does not send it.")).toBe(
+      true,
+    );
+    expect(NOT_DONE.test("By itself, obop does not send it.")).toBe(true);
+    expect(NOT_DONE.test("Create a lead")).toBe(false);
     const speaks: string[] = [];
+    let notDone = 0;
     for (const a of apps)
       for (const section of SECTIONS) {
         const english = view(a.id)[section];
         english.forEach((c, i) => {
-          if (!SPEAKS.test(c.text)) return;
+          if (NOT_DONE.test(c.text)) {
+            notDone++;
+            expect(
+              isMarked(c),
+              `${a.id}: "${c.title}" says what it does not do, and has neither the approval mark nor keep`,
+            ).toBe(true);
+          }
+          if (!SPEAKS.test(`${c.title} ${c.text}`)) return;
           speaks.push(`${a.id}: ${c.title}`);
           expect(
             isMarked(c),
@@ -289,7 +315,8 @@ describe("which cards a section shows and which it folds", () => {
       "website: Page translation",
     ])
       expect(speaks, name).toContain(name);
-    expect(speaks.length).toBeGreaterThan(8);
+    expect(speaks, "cards that speak of approval, proposing or an AI agent").toHaveLength(19);
+    expect(notDone, "cards that say what they do not do").toBe(14);
   });
 
   test("the cards a page opens with: the numbers on the pages that were named", () => {
@@ -335,6 +362,27 @@ describe("which cards a section shows and which it folds", () => {
       "Unpublish",
     ]);
     expect(at("hr", "actions")).toEqual([5, 0]);
+    // Fleet: Retire and Suspend are marked (the approval mark, and "By itself, this does not stop the
+    // driver being assigned a vehicle"), and the first three others are open beside them.
+    expect(at("fleet", "actions")).toEqual([5, 2]);
+    expect(titles(splitCards(view("fleet").actions).shown)).toEqual([
+      "Dispatch",
+      "Return to pool",
+      "Retire",
+      "Suspend",
+      "Reactivate",
+    ]);
+    // Email Marketing: three marked cards (Schedule, Send, Send now) would show one other, but a fold
+    // of one card is not made, so all five are open, as they were with two marked.
+    expect(at("email_marketing", "actions")).toEqual([5, 0]);
+    // The other pages whose cards say what they do not do keep all their cards open.
+    for (const [id, section, n] of [
+      ["purchase", "actions", 4],
+      ["planning", "actions", 3],
+      ["appointments", "actions", 4],
+      ["email_marketing", "models", 3],
+    ] as const)
+      expect(at(id, section), `${id} ${section}`).toEqual([n, 0]);
     // Nine marked cards and one other (three or more marked): the rule holds a long run to one other.
     expect(at("connectors", "actions")).toEqual([10, 3]);
     expect(at("accounting", "actions")).toEqual([7, 3]);
@@ -379,6 +427,101 @@ describe("which cards a section shows and which it folds", () => {
     expect(checked).toBeGreaterThan(100);
     // The rule can fail: a card with such a word is found.
     expect(technicalIn("Discount use A hash of the code")).not.toBeNull();
+  });
+});
+
+describe("the app's own list of keys to keep (`AppCopy.keep`), read in every branch of the card view", () => {
+  // Expenses has a model, "expenses_expense", and four actions: approve and pay have words of their
+  // own in data/apps.ts, submit and refuse have not. A synthetic copy of it gets the cards and the
+  // list each test needs, so each of the four places that read the list is run on its own.
+  const expenses = app("expenses");
+  const synthetic = (cards: App["cards"], keep: string[]): App => ({ ...expenses, cards, keep });
+  const actions = (a: App, locale: Locale = "en") =>
+    appView(a, messages[locale], apps, locale).actions;
+  const models = (a: App, locale: Locale = "en") =>
+    appView(a, messages[locale], apps, locale).models;
+  const byTitle = <T extends { title: string }>(cards: T[], title: string): T =>
+    cards.find((c) => c.title === title)!;
+  const own = { text: "Words of its own, written for the card." };
+
+  /** Every key a card of the app has: `model.action` for an action card, the model's name for a model card. */
+  const cardKeys = (a: App) =>
+    new Set([
+      ...a.models.flatMap((m) => m.actions.map((x) => `${m.name}.${x.name}`)),
+      ...a.models.map((m) => m.name),
+    ]);
+  /** The keys that data/apps.ts marks `keep` (on a card's own words, or in the app's list) and that no card of the app has. */
+  const keepWithoutCard = (a: App) =>
+    [
+      ...Object.entries(a.cards)
+        .filter(([, c]) => c.keep)
+        .map(([key]) => key),
+      ...a.keep,
+    ].filter((key) => !cardKeys(a).has(key));
+
+  test("an action card with words of its own is kept by the list alone", () => {
+    const withList = synthetic({ "expenses_expense.pay": own }, ["expenses_expense.pay"]);
+    expect(byTitle(actions(withList), "Pay").keep).toBe(true);
+    const without = synthetic({ "expenses_expense.pay": own }, []);
+    expect(byTitle(actions(without), "Pay").keep).toBeUndefined();
+    expect(byTitle(actions(without), "Pay").text).toBe(own.text);
+  });
+
+  test("an action card without words of its own is kept by the list, and keeps its translation", () => {
+    for (const locale of locales) {
+      // The fourth action of Expenses is "Refuse" (no words of its own, and no approval mark here).
+      const withList = actions(synthetic({}, ["expenses_expense.refuse"]), locale);
+      const without = actions(synthetic({}, []), locale);
+      expect(withList[3]!.keep, `${locale}: the fourth action is kept`).toBe(true);
+      expect(without[3]!.keep, `${locale}: and is not without the list`).toBeUndefined();
+      expect(withList[3]!.text, `${locale}: it keeps the product's words`).toBe(without[3]!.text);
+      expect(withList[3]!.lang, locale).toBe(without[3]!.lang);
+      // Only the action named in the list is kept.
+      expect(withList.filter((c) => c.keep)).toHaveLength(1);
+    }
+  });
+
+  test("a model card with words of its own is kept by the list alone", () => {
+    const withList = synthetic({ expenses_expense: own }, ["expenses_expense"]);
+    expect(models(withList)[0]!.keep).toBe(true);
+    const without = synthetic({ expenses_expense: own }, []);
+    expect(models(without)[0]!.keep).toBeUndefined();
+    expect(models(without)[0]!.text).toBe(own.text);
+  });
+
+  test("a model card without words of its own is kept by the list, and keeps its translation", () => {
+    for (const locale of locales) {
+      const withList = models(synthetic({}, ["expenses_expense"]), locale);
+      const without = models(synthetic({}, []), locale);
+      expect(withList[0]!.keep, `${locale}: the model card is kept`).toBe(true);
+      expect(without[0]!.keep, `${locale}: and is not without the list`).toBeUndefined();
+      expect(withList[0]!.text, `${locale}: it keeps the product's words`).toBe(without[0]!.text);
+      expect(withList[0]!.lang, locale).toBe(without[0]!.lang);
+    }
+  });
+
+  test("a key that matches no card is found, with the key in the message", () => {
+    expect(keepWithoutCard(synthetic({}, ["expenses_expense.sbumit"]))).toEqual([
+      "expenses_expense.sbumit",
+    ]);
+    expect(keepWithoutCard(synthetic({ expenses_expens: { ...own, keep: true } }, []))).toEqual([
+      "expenses_expens",
+    ]);
+    expect(keepWithoutCard(synthetic({}, ["expenses_expense.submit", "expenses_expense"]))).toEqual(
+      [],
+    );
+    // In the real data every key of `keep`, in a card's own words or in an app's list, is a card.
+    for (const a of apps)
+      for (const key of [
+        ...Object.entries(a.cards)
+          .filter(([, c]) => c.keep)
+          .map(([k]) => k),
+        ...a.keep,
+      ])
+        expect(
+          cardKeys(a).has(key),
+          `${a.id}: keep names "${key}", which is no card of the app`,
+        ).toBe(true);
   });
 });
 
