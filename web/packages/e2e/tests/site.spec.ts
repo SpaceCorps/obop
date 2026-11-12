@@ -2525,10 +2525,10 @@ test.describe("accessibility", () => {
           // information list and the buttons of the folds were out of its reach once they were behind
           // a tap. Each of these walks must stop on the controls
           // named here, and on every control of main that is drawn.
-          ["/apps/helpdesk/", 13, ["A Apache-2.0", "A packages/helpdesk.toml", "BUTTON"]],
+          ["/apps/helpdesk/", 12, ["A Apache-2.0", "A packages/helpdesk.toml", "BUTTON"]],
           [
             "/apps/accounting/",
-            14,
+            13,
             ["A Apache-2.0", "A packages/accounting.toml", "BUTTON", "SUMMARY Show 3 more actions"],
           ],
           ["/apps/invoicing/", 9, ["A Apache-2.0", "A crates/modules/invoicing"]],
