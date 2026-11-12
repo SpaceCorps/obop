@@ -31,6 +31,7 @@ const KNOWN_OMITTED: &[&str] = &[
     "setting.update",
     "sie_exchange.export",
     "sie_exchange.import",
+    "time_billing.create_invoice",
     "vat_computation.compute",
 ];
 

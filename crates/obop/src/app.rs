@@ -66,6 +66,7 @@ impl App {
         crate::sie::command::register(&d, &store);
         crate::vat::register(&d, &store);
         crate::invoice_posting::register(&d, &store);
+        crate::time_billing::register(&d, &store);
         // The shop's payments reuse the connectors' hardened egress client and read the Stripe
         // keys from the instance's own sealed `stripe` connection.
         let payments = obop_payments::Payments::new(

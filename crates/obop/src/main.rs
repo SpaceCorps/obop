@@ -97,6 +97,9 @@ mod sie;
 mod sie_tests;
 #[cfg(test)]
 mod sign_tests;
+mod time_billing;
+#[cfg(test)]
+mod time_billing_tests;
 mod vat;
 #[cfg(test)]
 mod vat_tests;
