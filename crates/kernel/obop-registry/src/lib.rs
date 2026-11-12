@@ -608,7 +608,7 @@ pub const RESERVED_MODELS: [&str; 5] = [
 /// some of these tables. Neither sees a name built at run time, and N17 lists the other gaps.
 /// (`obop_record` and `obop_record_change` are the SQL tables of the SQLite and PostgreSQL stores:
 /// not models, listed because the name is the program's.)
-pub const INTERNAL_TABLES: [&str; 58] = [
+pub const INTERNAL_TABLES: [&str; 59] = [
     "auth_mfa_token",
     "auth_passkey",
     "auth_sso_link",
@@ -666,6 +666,7 @@ pub const INTERNAL_TABLES: [&str; 58] = [
     "status_maint",
     "status_probe_api",
     "status_recent",
+    "time_billing",
     "vat_computation",
 ];
 
