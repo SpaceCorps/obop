@@ -4,7 +4,7 @@ description: "Use the obop command line as an agent: obop commands lists what a 
 lead: "The CLI is the third surface over the same commands. It is the simplest way for a shell script or a scheduled job to work with obop."
 ---
 
-The CLI opens the database directly, like `obop mcp`, so it runs where the database is reachable. For a hosted instance use [REST](/docs/agents/rest/).
+The CLI opens the database directly, like `obop mcp`, so it runs where the database is reachable. For an instance on another server, use [REST](/docs/agents/rest/).
 
 ## Set the token and database once
 
@@ -31,6 +31,8 @@ lead.search              Like list, but returns {rows, total} with the count bef
 lead.update              Update fields of a record
 ```
 
+This output is shortened. The real list has every command the token may use; for `lead` it also has `lead.bulk_create`, `lead.mark_lost`, `lead.mark_won` and `lead.reopen`.
+
 ## Call a command
 
 `obop call <model> <command> [key=value ...]`. Numbers, money and booleans are converted from text using the model's field types, so `expected_revenue_minor=5000` is an integer.
@@ -41,7 +43,7 @@ obop call lead create title="Spring campaign" expected_revenue_minor=5000
 obop call lead qualify id=01a14650-c0c4-72e3-bb4d-36d1f28fa20d
 ```
 
-The result is printed as indented JSON. Masking applies exactly as over REST:
+The result is printed as indented JSON. If fields were withheld from this token, a last line `withheld: model.field, ...` names them. Masking applies exactly as over REST:
 
 ```json
 {

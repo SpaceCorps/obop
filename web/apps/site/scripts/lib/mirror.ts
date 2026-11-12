@@ -6,7 +6,11 @@ export function homeMirror(m: Messages, prefix: string, apps: App[]): string {
   const h = m.home;
   const out: string[] = [];
   out.push(`**${h.titleA} ${h.titleB}**`, "", h.lead, "");
-  out.push(`- [${h.ctaPrimary}](/app/)`, `- [${h.ctaSecondary}](${prefix}/apps/)`, "");
+  out.push(
+    `- [${h.ctaPrimary}](${prefix}/docs/getting-started/)`,
+    `- [${h.ctaSecondary}](${prefix}/apps/)`,
+    "",
+  );
   out.push(`## ${h.appsTitle}`, "", h.appsSub, "");
   for (const a of apps) {
     out.push(
@@ -29,7 +33,14 @@ export function homeMirror(m: Messages, prefix: string, apps: App[]): string {
   out.push("", `*${h.pricingFine}*`, "", `[${h.pricingCta}](${prefix}/pricing/)`, "");
   out.push(`## ${h.faqTitle}`, "");
   for (const f of h.faq) out.push(`### ${f.q}`, "", f.a, "");
-  out.push(`## ${h.ctaTitle}`, "", h.ctaBody, "", `[${h.ctaButton}](/app/)`, "");
+  out.push(
+    `## ${h.ctaTitle}`,
+    "",
+    h.ctaBody,
+    "",
+    `[${h.ctaButton}](${prefix}/docs/getting-started/)`,
+    "",
+  );
   return out.join("\n");
 }
 

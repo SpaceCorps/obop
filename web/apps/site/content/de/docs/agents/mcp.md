@@ -6,18 +6,18 @@ lead: "Jede obop-Instanz hat einen MCP-Server unter /mcp. Richten Sie einen Clie
 
 ## Entfernter MCP: per URL verbinden
 
-Eine Instanz stellt das [Model Context Protocol](https://modelcontextprotocol.io/) über **Streamable HTTP** unter `https://YOUR-INSTANCE/mcp` bereit. Sowohl eine gehostete Instanz (zum Beispiel auf Sliplane) als auch ein lokales `obop serve` haben ihn; es muss nichts eingeschaltet werden.
+Eine Instanz stellt das [Model Context Protocol](https://modelcontextprotocol.io/) über **Streamable HTTP** unter `https://YOUR-INSTANCE/mcp` bereit. Sowohl eine Instanz auf einem Server (zum Beispiel auf Sliplane) als auch ein lokales `obop serve` haben ihn; es muss nichts eingeschaltet werden.
 
-- **Authentifizierung:** eine Anmeldung im Browser (OAuth, siehe unten) für Claude Desktop, claude.ai und Claude Code, oder `Authorization: Bearer <token>` bei jeder Anfrage mit einem Agent-Token. In beiden Fällen wird das Token wie bei REST geprüft. Fehlt es oder ist es ungültig, antwortet der Server mit `401` und `WWW-Authenticate: Bearer resource_metadata="https://YOUR-INSTANCE/.well-known/oauth-protected-resource/mcp"`, wie es die MCP-Autorisierungsspezifikation verlangt; dieses Dokument nennt den Autorisierungsserver der Instanz (`/.well-known/oauth-authorization-server`). Ein bei der Anmeldung ausgestelltes Token gilt nur für `/mcp`, nicht für `/api`.
+- **Authentifizierung:** eine Anmeldung im Browser (OAuth, siehe unten; noch nicht mit den echten Claude-Apps ausprobiert) für Claude Desktop, claude.ai und Claude Code, oder `Authorization: Bearer <token>` bei jeder Anfrage mit einem Agent-Token. In beiden Fällen wird das Token wie bei REST geprüft. Fehlt es oder ist es ungültig, antwortet der Server mit `401` und `WWW-Authenticate: Bearer resource_metadata="https://YOUR-INSTANCE/.well-known/oauth-protected-resource/mcp"`, wie es die MCP-Autorisierungsspezifikation verlangt; dieses Dokument nennt den Autorisierungsserver der Instanz (`/.well-known/oauth-authorization-server`). Ein bei der Anmeldung ausgestelltes Token gilt nur für `/mcp`, nicht für `/api`.
 - **Protokollversionen:** `2025-11-25`, `2025-06-18` und `2025-03-26`, ausgehandelt in `initialize`. Die neueste Version, `2026-07-28`, ist zustandslos und funktioniert anders; obop setzt sie noch nicht um. Ein Client, der beide spricht, fällt auf `initialize` zurück, wenn er ein schlichtes `400` sieht; das sendet obop bei einem nicht unterstützten Versions-Header.
 - **Sitzungen:** `initialize` liefert eine `Mcp-Session-Id`; senden Sie sie bei jeder weiteren Anfrage mit. Die Sitzung hält den Maskierungs-Tresor, sodass ein Maskierungs-Token wie `NAME_1` in jedem Aufruf der Sitzung dasselbe bedeutet und Sie es zurücksenden können. Eine andere Sitzung beginnt mit einem neuen Tresor. `DELETE /mcp` beendet eine Sitzung; eine unbekannte oder abgelaufene Sitzung beantwortet der Server mit `404`, und der Client beginnt erneut mit `initialize`. Eine Sitzung gehört dem Token, das sie geöffnet hat, und läuft nach zwei Stunden ohne Anfrage ab.
 - **Antworten sind schlichtes JSON.** Es gibt keinen SSE-Stream vom Server zum Client (`GET /mcp` antwortet mit `405`), und JSON-RPC-Batches werden nur in `2025-03-26` akzeptiert, der einzigen Version, die sie kennt.
-- **Grenzen:** Anfragekörper bis zu 1 MiB (`413`), 600 Anfragen pro Minute und Token (`429` mit `Retry-After`, einstellbar mit `OBOP_MCP_RATE_PER_MINUTE`), 25 offene Sitzungen pro Token.
+- **Grenzen:** Anfragekörper bis zu 1 MiB (`413`), 600 Anfragen pro Minute und Token (`429` mit `Retry-After`, einstellbar mit `OBOP_MCP_RATE_PER_MINUTE`), 25 offene Sitzungen pro Token (eine 26. beendet die am längsten nicht benutzte, die danach mit `404` antwortet).
 - **Browser:** Eine Anfrage mit einem `Origin`-Header wird mit `403` abgelehnt, es sei denn, der Origin ist die eigene öffentliche URL der Instanz (`OBOP_PUBLIC_URL`), derselbe Origin auf einem Loopback-Host oder in `OBOP_ALLOWED_ORIGINS` aufgeführt (kommagetrennt). Das schützt lokale Instanzen vor DNS-Rebinding. Clients, die keine Browser sind, senden keinen `Origin`. Setzen Sie hinter einem Proxy `OBOP_PUBLIC_URL` (zum Beispiel `https://acme.example.com`), damit die Discovery-Dokumente die öffentliche Adresse nennen.
 
 ### Mit einer Browser-Anmeldung verbinden (OAuth)
 
-Claude Desktop, claude.ai und Claude Code können sich ohne eingefügtes Token mit einer Instanz verbinden. Fügen Sie in der App einen Custom Connector mit der Adresse `https://YOUR-INSTANCE/mcp` hinzu (Claude Code: `claude mcp add --transport http obop https://YOUR-INSTANCE/mcp`, dann `/mcp` und die Authentifizierung wählen). Die App findet die Anmeldung selbst und öffnet im Browser eine Seite **Ihrer Instanz**. Dort:
+Claude Desktop, claude.ai und Claude Code sollen sich ohne eingefügtes Token mit einer Instanz verbinden können; mit den echten Apps haben wir das noch nicht ausprobiert. Fügen Sie in der App einen Custom Connector mit der Adresse `https://YOUR-INSTANCE/mcp` hinzu (Claude Code: `claude mcp add --transport http obop https://YOUR-INSTANCE/mcp`, dann `/mcp` und die Authentifizierung wählen). Die App sollte die Anmeldung selbst finden und im Browser eine Seite **Ihrer Instanz** öffnen. Dort:
 
 1. melden Sie sich mit Ihrem obop-Konto an und geben, falls das Konto es hat, Ihren Zwei-Faktor-Code ein (auch ein Passkey funktioniert, als zweiter Schritt oder allein, wenn Sie das unter Sicherheit erlaubt haben);
 2. sehen Sie, welche Anwendung anfragt und zu welcher Adresse der Browser zurückkehrt;
@@ -64,7 +64,7 @@ Kopieren Sie den Header `mcp-session-id` der Antwort, senden Sie dann `{"jsonrpc
 
 ### Konfiguration entfernter Clients
 
-Ersetzen Sie `https://YOUR-INSTANCE/mcp` und halten Sie das Token in einer Umgebungsvariablen oder einem Secret-Store. Die Formate unten wurden am 2026-10-17 der Dokumentation des jeweiligen Clients entnommen. Wir haben obop nur mit dem Kommandozeilen-Client des MCP Inspector (`vp dlx @modelcontextprotocol/inspector --cli URL --transport http --header "Authorization: Bearer ..." --method tools/list`) und mit unseren eigenen Playwright-Tests ausgeführt. Die anderen Clients haben wir nicht gestartet; jeder Ausschnitt ist daher **dokumentiert, nicht ausprobiert**.
+Ersetzen Sie `https://YOUR-INSTANCE/mcp` und halten Sie das Token in einer Umgebungsvariablen oder einem Secret-Store. Die Formate unten wurden am 2026-10-17 der Dokumentation des jeweiligen Clients entnommen. Der entfernte Endpunkt ist durch unsere eigenen automatisierten Tests abgedeckt (Rust über HTTP und Playwright). Diese Clients haben wir nicht gestartet; jeder Ausschnitt ist daher **dokumentiert, nicht ausprobiert**.
 
 #### Claude Code
 
@@ -180,15 +180,15 @@ oder `gemini mcp add --transport http --header "Authorization: Bearer $OBOP_TOKE
 
 ### Discovery
 
-Eine Instanz veröffentlicht Folgendes ohne Token:
+Eine Instanz veröffentlicht Folgendes ohne Token, außer `/api/meta`:
 
-| URL                                       | Was                                                                                                                                                                                          |
-| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/.well-known/oauth-protected-resource`   | Metadaten der OAuth-geschützten Ressource (RFC 9728) für `/mcp`; nennen den Autorisierungsserver. Auch unter `/.well-known/oauth-protected-resource/mcp`, worauf die `401`-Antwort verweist. |
-| `/.well-known/oauth-authorization-server` | Metadaten des OAuth-Autorisierungsservers (RFC 8414): die Endpunkte, nur PKCE `S256`, nur öffentliche Clients.                                                                               |
-| `/.well-known/mcp/server-card.json`       | MCP-Server-Card: Name, Version, der Endpunkt `streamable-http`, Protokollversionen, der Header `Authorization`. Auch unter `/mcp/server-card`.                                               |
-| `/.well-known/ai-catalog.json`            | Ein AI Catalog mit einem Eintrag, der auf die Server-Card verweist.                                                                                                                          |
-| `/api/openapi.json`, `/api/meta`          | Das OpenAPI-Dokument hat ein Feld `x-mcp` mit Endpunkt, Transport und Protokollversionen; `GET /api/meta` trägt einen `Link`-Header mit `rel="mcp"`.                                         |
+| URL                                       | Was                                                                                                                                                                                                                                              |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/.well-known/oauth-protected-resource`   | Metadaten der OAuth-geschützten Ressource (RFC 9728) für `/mcp`; nennen den Autorisierungsserver. Auch unter `/.well-known/oauth-protected-resource/mcp`, worauf die `401`-Antwort verweist.                                                     |
+| `/.well-known/oauth-authorization-server` | Metadaten des OAuth-Autorisierungsservers (RFC 8414): die Endpunkte, nur PKCE `S256`, nur öffentliche Clients.                                                                                                                                   |
+| `/.well-known/mcp/server-card.json`       | MCP-Server-Card: Name, Version, der Endpunkt `streamable-http`, Protokollversionen, der Header `Authorization`. Auch unter `/mcp/server-card`.                                                                                                   |
+| `/.well-known/ai-catalog.json`            | Ein AI Catalog mit einem Eintrag, der auf die Server-Card verweist.                                                                                                                                                                              |
+| `/api/openapi.json`, `/api/meta`          | Das OpenAPI-Dokument hat ein Feld `x-mcp` mit Endpunkt, Transport und Protokollversionen (ohne Token listet es nur die Anmeldung und die Discovery). `GET /api/meta` braucht ein Token; seine Antwort trägt einen `Link`-Header mit `rel="mcp"`. |
 
 Die Server-Card ist eine Erweiterung der MCP-Spezifikation, die noch entwickelt wird (SEP-2127, in einem Inkubations-Repository geführt); ihre Form kann sich daher ändern, was die Datei in ihrem `$comment` selbst sagt. Sie enthält außerdem die schlichten Felder `serverInfo`, `transport`, `endpoint` und `capabilities` aus einem früheren Entwurf, für Scanner, die danach suchen.
 
@@ -405,7 +405,7 @@ Zeigt der Client keine Tools oder einen Fehler, gehen Sie zu [Fehlerbehebung](/d
 
 Jedes Modell, das der Agent anlegen darf, hat außerdem ein Tool `<model>__bulk_create`: bis zu 1.000 Zeilen in einem Aufruf (`rows` oder `csv`-Text), standardmäßig ganz oder gar nicht, mit `mode: "partial"` werden die richtigen Zeilen angelegt und die fehlerhaften aufgelistet, `dry_run: true` prüft zuerst, und ein `idempotency_key` macht eine Wiederholung sicher. Maskierung, Scope und Genehmigung sind dieselben wie bei `create`.
 
-Ein Agent, dessen Eigentümer Administrator ist, sieht auch die `user_account`-Tools (`user_account__list`, `__get`, `__add`, `__set_groups`, `__offboard`, `__disable`, `__enable`). Die, die ein Konto ändern, liefern immer `approval_required`: Ein Administrator genehmigt den Plan, und er läuft als das aktuelle Konto dieses Administrators. `__add` braucht ein Passwort, das ein Mensch gewählt hat; der Server gibt einem Agenten nie ein erzeugtes Passwort.
+Ein Agent, dessen Eigentümer Administrator ist, sieht auch die `user_account`-Tools (`user_account__list`, `__get`, `__add`, `__set_groups`, `__offboard`, `__disable`, `__enable`, `__bind_sso`, `__unbind_sso`, `__set_sso_only`). Die, die ein Konto ändern, liefern immer `approval_required`: Ein Administrator genehmigt den Plan, und er läuft als der Eigentümer des Agenten, dessen Administratorrechte in diesem Moment erneut geprüft werden. `__add` braucht ein Passwort, das ein Mensch gewählt hat; der Server gibt einem Agenten nie ein erzeugtes Passwort.
 
 ## Geprüft und nicht geprüft
 
@@ -413,7 +413,7 @@ Ein Agent, dessen Eigentümer Administrator ist, sieht auch die `user_account`-T
 | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | `obop mcp`-Handshake, `tools/list`, `tools/call`, Freigabeergebnis                                       | Gegen eine echte lokale Instanz ausgeführt.                                                     |
 | Entferntes `/mcp`: Handshake, Tools, Maskierung, Freigabeablauf, Sitzungen, 401, Origin-Prüfung, Grenzen | Automatisierte Tests (Rust über HTTP, Playwright) gegen eine echte Instanz.                     |
-| Entferntes `/mcp` mit einem echten MCP-Client                                                            | Kommandozeilen-Client des MCP Inspector 2.11.0: `initialize` und `tools/list`, `tools/call`.    |
+| Entferntes `/mcp` mit einem echten MCP-Client                                                            | Nicht festgehalten; nur durch unsere eigenen automatisierten Tests abgedeckt.                   |
 | Offizielle MCP-Konformitätssuite                                                                         | Nicht aussagekräftig: Sie braucht einen Server ohne Authentifizierung und eigene Fixture-Tools. |
 | Entfernte Konfiguration von Claude Code, Cursor, VS Code, Windsurf, Codex CLI, Gemini CLI                | Der Dokumentation des jeweiligen Clients entnommen; die Clients wurden nicht gestartet.         |
 | Konfigurationsformate für stdio                                                                          | Der Dokumentation des jeweiligen Clients entnommen. Wir haben nicht jeden Client gestartet.     |

@@ -53,7 +53,7 @@ description = "Imię i nazwisko osoby, która musi podpisać"
 
 [labels.pl.model.sign_request.field.signer_email]
 label = "E-mail podpisującego"
-description = "Adres e-mail osoby podpisującej; opcjonalny, obop nie wysyła e-maili przy prośbie o dokument"
+description = "Adres e-mail osoby podpisującej; opcjonalny, przy prośbie o dokument nie jest wysyłany żaden e-mail"
 
 [labels.pl.model.sign_request.field.sent_on]
 label = "Data wysłania"

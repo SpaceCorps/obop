@@ -129,7 +129,7 @@ const settle = (page: import("@playwright/test").Page) =>
 
 /**
  * Opens what an app page keeps closed outside the technical part: the two rows ("Information", "For
- * developers"), the folds of the cards, "Read more" and the command line of the Get box. What is inside
+ * developers"), the folds of the cards and "Read more". What is inside
  * a closed fold has no box and no inner text, so a walk or a sweep that measures boxes or reads text
  * would see nothing there: the tests that must reach it call this first, and say so. With
  * `technical: false` the "For developers" row stays closed (its tables and permalinks have tests of
@@ -340,9 +340,9 @@ test.describe("website without JavaScript", () => {
     await page.goto(`${base()}/apps/invoicing/`);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Invoicing");
 
-    // The hero: the name, one line and one primary button; a built-in app is opened. There is no
-    // category line under the tagline (one more small line before the button): the category is a row
-    // of the Information list.
+    // The hero: the name, one line and one primary button; a built-in app comes with obop, so the
+    // button leads to Getting started. There is no category line under the tagline (one more small
+    // line before the button): the category is a row of the Information list.
     await expect(page.locator(".app-tagline")).toHaveText(messages.en.apps.taglines["invoicing"]!);
     await expect(page.locator(".app-category")).toHaveCount(0);
     await expect(page.locator(".app-hero-text > *")).toHaveCount(3); // the name, the line, the button
@@ -350,8 +350,6 @@ test.describe("website without JavaScript", () => {
     await expect(page.locator(".app-info dd", { hasText: "Finance" })).toHaveCount(1);
     const primary = page.locator(".app-hero .app-primary");
     await expect(primary).toHaveText(s.open);
-    // The button leads to Getting started, not to /app/: no page of the site sends a visitor to the
-    // sign-up app from here (the hosted beta is not live).
     await expect(primary).toHaveAttribute("href", "/docs/getting-started/");
     await expect(page.locator("main .app-primary")).toHaveCount(1);
 
@@ -553,9 +551,9 @@ test.describe("website without JavaScript", () => {
     await primary.click();
     await expect(page).toHaveURL(/\/apps\/helpdesk\/#get$/);
     await expect(page.getByRole("heading", { level: 2, name: s.get })).toBeInViewport();
-    // The box ends the jump with something to do: one plain sentence, the pill that opens obop
-    // (where Customize and its Marketplace are) and what it needs. The command line is for
-    // developers: it is in a closed fold of the box, one tap away.
+    // The box ends the jump with something to do: one plain sentence, the pill to Getting started
+    // (how to run obop, whose Customize app has the Marketplace), and the command line, shown, with
+    // what it needs.
     await expect(page.locator(".app-getbox > p").first()).toHaveText(s.getLead);
     const open = page.locator(".app-getbox a.app-pill");
     await expect(open).toHaveText(s.openObop);
@@ -574,7 +572,7 @@ test.describe("website without JavaScript", () => {
     });
     expect(order).toEqual({ afterCards: true, beforeKeeps: true });
     // The jump lands on a filled pill, not a grey one: with the hero's button off screen it is the
-    // one filled pill of that screen, and the header's "Start free" is the plain button.
+    // one filled pill of that screen, and the header's "Get started" is the plain button.
     const fill = (sel: string) =>
       page.locator(sel).evaluate((el) => {
         const cs = getComputedStyle(el);
@@ -583,27 +581,13 @@ test.describe("website without JavaScript", () => {
     expect(await fill(".app-getbox a.app-pill")).toEqual(await fill(".app-hero .app-primary"));
     await expect(page.locator(".app-hero .app-primary")).not.toBeInViewport();
     expect(await fill(".head-cta .btn.primary")).not.toEqual(await fill(".app-getbox a.app-pill"));
-    const cmd = page.locator(".app-getbox details");
-    await expect(cmd).toHaveCount(1);
-    await expect(cmd).toHaveJSProperty("open", false);
-    await expect(cmd.locator("summary")).toHaveText(s.commandLine);
-    // Its label is a quiet line of text under the filled pill, not a second pill: no fill, no
-    // rounded box, and not the pill's colours.
-    const quiet = await cmd.locator("summary").evaluate((el) => {
-      const cs = getComputedStyle(el);
-      return { background: cs.backgroundColor, radius: cs.borderTopLeftRadius };
-    });
-    expect(quiet).toEqual({ background: "rgba(0, 0, 0, 0)", radius: "0px" });
-    expect((await fill(".app-getbox details > summary")).color).not.toBe(
-      (await fill(".app-getbox a.app-pill")).color,
-    );
-    await expect(page.locator(".app-getbox pre code")).toBeHidden();
-    await cmd.locator("summary").click();
+    await expect(page.locator(".app-getbox .app-or")).toHaveText(s.commandLine);
     await expect(page.locator(".app-getbox pre code")).toBeVisible();
     await expect(page.locator(".app-getbox pre code")).toHaveText(
       "obop modules install-from helpdesk",
     );
     await expect(page.locator(".app-getbox .fine")).toHaveText(s.getNote);
+    await expect(page.locator(".app-getbox details")).toHaveCount(0);
     await expect(page.locator("details#developers")).toHaveJSProperty("open", false);
     await page.locator("details#developers summary").click();
     await expect(page.getByRole("cell", { name: "requester_email" })).toBeVisible();
@@ -1649,6 +1633,15 @@ test.describe("website without JavaScript", () => {
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Page not found");
     await expect(page.getByRole("search")).toHaveCount(2); // header and page
     await expect(page.getByRole("link", { name: "Getting started" }).first()).toBeVisible();
+    const list = page.locator(".notfound .linklist");
+    await expect(list.getByRole("link", { name: "Community" })).toHaveAttribute(
+      "href",
+      "/about/community/",
+    );
+    await expect(list.getByRole("link", { name: "Status" })).toHaveAttribute(
+      "href",
+      "/about/status/",
+    );
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex");
   });
 
@@ -1738,8 +1731,6 @@ test.describe("website behaviour with JavaScript", () => {
   test("the install box of a marketplace app has the copy button", async ({ page, context }) => {
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     await page.goto(`${base()}/apps/helpdesk/`);
-    // The command is in a closed fold of the box: one tap on its line shows it.
-    await page.locator(".app-getbox details > summary").click();
     const block = page.locator('.app-getbox div[class*="language-"]');
     await block.hover();
     await block.getByRole("button", { name: "Copy" }).click();
@@ -1840,10 +1831,6 @@ test.describe("website behaviour with JavaScript", () => {
       route.fulfill({ contentType: "text/javascript", body: "" }),
     );
     await page.goto(`${base()}/apps/helpdesk/`);
-    // The fold that holds the command is opened first: in a closed fold the button would be hidden
-    // whatever the script did.
-    await page.locator(".app-getbox details > summary").click();
-    await expect(page.locator(".app-getbox pre code")).toBeVisible();
     await expect(page.locator(".app-getbox button.copy")).toBeHidden();
   });
 
@@ -2011,43 +1998,6 @@ test.describe("crawlers and agents", () => {
     expect(crm).toContain("`crm.user`");
   });
 
-  test("no app page leads to /app/ from its own content: the Open and Get buttons go to Getting started, in every language, in the page and in its Markdown copy", async ({
-    request,
-  }) => {
-    // The header and the footer still link to /app/ (sign in, start free); the page's own content does
-    // not. Read from the HTML as built: what is between <main> and </main>, and the Markdown copy.
-    let pages = 0;
-    let pills = 0;
-    for (const locale of Object.keys(messages)) {
-      const prefix = locale === "en" ? "" : `/${locale}`;
-      const urls = (await pagesOf(request, locale)).filter((u) => /\/apps\/.+\/$/.test(u));
-      expect(urls, `${locale} app pages`).toHaveLength(28);
-      for (const url of urls) {
-        const html = await (await request.get(`${base()}${url}`)).text();
-        const main = /<main[\s>][\s\S]*<\/main>/.exec(html)?.[0] ?? "";
-        expect(main.length, `${url}: main found`).toBeGreaterThan(5000);
-        expect(main, `${url}: a link to /app/ in the page`).not.toMatch(/href="\/app\/?"/);
-        const md = await (await request.get(`${base()}${url.replace(/\/$/, ".md")}`)).text();
-        expect(md, `${url}: a link to /app/ in the Markdown copy`).not.toContain("](/app/");
-        // Built-in: the hero's button; marketplace: the Get box's pill. Both lead to the language's own.
-        const target = `${prefix}/docs/getting-started/`;
-        const hero = /<a class="app-primary" href="([^"]+)"/.exec(main)?.[1];
-        const pill = /<a class="app-pill" href="([^"]+)"/.exec(main)?.[1];
-        expect([hero === target, hero === "#get"], `${url}: the hero's button (${hero})`).toContain(
-          true,
-        );
-        if (pill) {
-          expect(pill, `${url}: the Get box's pill`).toBe(target);
-          expect(md, `${url}: the Markdown copy's Get link`).toContain(`](${target})`);
-          pills++;
-        }
-        pages++;
-      }
-    }
-    expect(pages).toBe(7 * 28);
-    expect(pills, "Get boxes read").toBe(7 * 22);
-  });
-
   test("the wordings on the list of false sentences are on no deployed apps page, Markdown copy or llms-full.txt", async ({
     request,
   }) => {
@@ -2169,6 +2119,12 @@ test.describe("crawlers and agents", () => {
         slug: "planning",
         text: "No action creates a shift from a template, and a shift has no field that names one.",
       },
+      // The one limit of a model card (Fleet's driver). Without the apostrophe of "driver's", which the
+      // HTML may write as an entity.
+      {
+        slug: "fleet",
+        text: "status and licence expiry are not checked when a vehicle is assigned.",
+      },
     ];
     for (const { slug, text } of folded) {
       const html = await (await request.get(`${base()}/apps/${slug}/`)).text();
@@ -2250,6 +2206,74 @@ test.describe("crawlers and agents", () => {
       const footer = /<\/a><p>([^<]*)<\/p><p class="fine"/.exec(html)?.[1];
       expect(footer, `${locale}: the footer note`).toBe(m.ui.betaNote);
       expect(footer, `${locale}: the footer note`).not.toMatch(old);
+    }
+  });
+
+  // SpaceCorps hosts no obop for other people today (OR-11; the owner confirmed in chat on 2026-11-11
+  // that the hosted beta is not live): the site offers no sign-up. The sign-up app under /app/ stays
+  // in the build, which a control plane serves, but no page links to it, and the header's button and
+  // the home page's calls to action lead to Getting started instead.
+  test("no page links to the sign-up app; the header, the home page and pricing lead to Getting started", async ({
+    request,
+  }) => {
+    const toApp = /(?:\bhref="|\]\()(?:https?:\/\/[^/"\s)]+)?(?:\/[a-z]{2})?\/app(?:[/"#?)]|$)/;
+    // The rule can fail: it finds a link to /app/ in HTML and in Markdown, in any language, relative
+    // or absolute, with or without a fragment.
+    expect('<a class="btn primary" href="/app/">Start free</a>').toMatch(toApp);
+    expect("- [Get your own instance](/de/app/)").toMatch(toApp);
+    expect('<a href="https://obop.dev/app/">x</a>').toMatch(toApp);
+    expect("[x](/app/#s)").toMatch(toApp);
+    expect('<a href="/apps/crm/">CRM</a> served under `/app/`').not.toMatch(toApp);
+    expect("[CRM](/apps/crm/)").not.toMatch(toApp);
+
+    // Every page, Markdown copy and text file (llms.txt, llms-full.txt) of the built site (the
+    // sign-up app's own files under /app/ aside).
+    const files: string[] = [];
+    const walk = (dir: string) => {
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        const path = join(dir, e.name);
+        if (e.isDirectory()) {
+          if (path !== join(siteDir, "app")) walk(path);
+        } else if (/\.(html|md|txt)$/.test(e.name)) files.push(path);
+      }
+    };
+    walk(siteDir);
+    // 7 x 72 pages, each with its Markdown copy.
+    expect(files.filter((f) => f.endsWith(".html")).length, "the pages").toBeGreaterThan(500);
+    expect(files.filter((f) => f.endsWith(".md")).length, "the Markdown copies").toBeGreaterThan(
+      500,
+    );
+    const linking = files.filter((f) => toApp.test(readFileSync(f, "utf8")));
+    expect(
+      linking.map((f) => f.slice(siteDir.length)),
+      "pages that link to /app/",
+    ).toEqual([]);
+
+    /** The `href` of every `<a>` whose class has all of `classes`, in the order of the page. */
+    const links = (html: string, ...classes: string[]) =>
+      [...html.matchAll(/<a\b[^>]*>/g)].flatMap(([tag]) => {
+        const cls = (/\bclass="([^"]*)"/.exec(tag)?.[1] ?? "").split(/\s+/);
+        return classes.every((c) => cls.includes(c)) ? [/\bhref="([^"]*)"/.exec(tag)?.[1]] : [];
+      });
+    for (const locale of Object.keys(messages) as (keyof typeof messages)[]) {
+      const prefix = locale === "en" ? "" : `/${locale}`;
+      const start = `${prefix}/docs/getting-started/`;
+      const home = await (await request.get(`${base()}${prefix}/`)).text();
+      const head = /<div class="head-cta"[^>]*>([\s\S]*?)<\/div>/.exec(home)?.[1];
+      expect(head, `${locale}: the header's buttons`).toBeDefined();
+      expect(
+        [...head!.matchAll(/\bhref="([^"]*)"/g)].map((h) => h[1]),
+        locale,
+      ).toEqual([start]);
+      // The hero's button, the one under the steps and the closing band.
+      expect(links(home, "btn", "primary", "large"), `${locale}: the home page`).toEqual([
+        start,
+        start,
+      ]);
+      expect(links(home, "btn", "large", "light"), `${locale}: the closing band`).toEqual([start]);
+      const pricing = await (await request.get(`${base()}${prefix}/pricing/`)).text();
+      expect(links(pricing, "btn", "primary", "large"), `${locale}: pricing`).toEqual([start]);
+      expect((await request.get(`${base()}${start}`)).status(), start).toBe(200);
     }
   });
 
@@ -2491,9 +2515,9 @@ test.describe("accessibility", () => {
           ["/apps/helpdesk/", 8, null],
           ["/apps/accounting/", 11, null],
           // A second pass with everything outside the technical part opened (the "Information" row,
-          // the folds of the cards, the command line): the walk above only stops on what is drawn, so
-          // the links of the information list, the copy button and the buttons of the folds were out
-          // of its reach once they were behind a tap. Each of these walks must stop on the controls
+          // the folds of the cards): the walk above only stops on what is drawn, so the links of the
+          // information list and the buttons of the folds were out of its reach once they were behind
+          // a tap. Each of these walks must stop on the controls
           // named here, and on every control of main that is drawn.
           ["/apps/helpdesk/", 13, ["A Apache-2.0", "A packages/helpdesk.toml", "BUTTON"]],
           [
@@ -2677,8 +2701,8 @@ test.describe("accessibility", () => {
     let measured = 0;
     const reached: string[] = [];
     // Each page twice: as it arrives, and with everything outside the technical part opened (the
-    // "Information" row, the folds of the cards, the command line), so that what is one tap away is
-    // held to 44 px as well: the links of the information list, the copy button, the cards' folds.
+    // "Information" row, the folds of the cards), so that what is one tap away is held to 44 px as
+    // well: the links of the information list and the cards' folds (the copy button is drawn).
     for (const folds of ["closed", "open"] as const)
       for (const path of ["/apps/", "/apps/helpdesk/", "/apps/invoicing/", "/apps/accounting/"]) {
         await page.goto(`${base()}${path}`);
@@ -2721,7 +2745,6 @@ test.describe("accessibility", () => {
       "/apps/helpdesk/ A Apache-2.0",
       "/apps/helpdesk/ A packages/helpdesk.toml",
       "/apps/helpdesk/ BUTTON",
-      "/apps/helpdesk/ SUMMARY Or use the command line",
       "/apps/invoicing/ A crates/modules/invoicing",
       "/apps/accounting/ SUMMARY Show 3 more actions",
       "/apps/accounting/ SUMMARY Show 5 more things it ke",
@@ -3051,13 +3074,12 @@ test.describe("accessibility", () => {
       "/de/apps/helpdesk/",
       "/fi/apps/",
     ];
-    // The controls whose colours change on hover: the folds, the two pills, the "Read more" fold, the
-    // two rows and the line that opens the command.
+    // The controls whose colours change on hover: the folds, the two pills, the "Read more" fold and
+    // the two rows.
     const hover = [
       ".app-more > summary",
       ".app-dev > summary",
       ".app-row > summary",
-      ".app-cmd > summary",
       ".app-read > summary",
       ".app-primary",
       ".app-getbox .app-pill",
@@ -3153,10 +3175,9 @@ test.describe("accessibility", () => {
       ).toBe("none");
     }
     await expect(page.locator(".app-more > summary").first()).toBeHidden();
-    // What the closed row and the closed folds hold is printed: the information list, the cards of
-    // the two card folds, and the command with the sentence that introduces it (as plain text: the
-    // colour of the text round it, not a link's).
-    for (const row of await page.locator("details.app-row, .app-more, .app-cmd").all())
+    // What the closed row and the closed folds hold is printed: the information list and the cards of
+    // the two card folds; the command is drawn on the page and so is printed.
+    for (const row of await page.locator("details.app-row, .app-more").all())
       await expect(row).toHaveJSProperty("open", false);
     await expect(page.locator(".app-info")).toBeVisible();
     await expect(page.locator(".app-info dd").last()).toBeVisible();
@@ -3164,15 +3185,7 @@ test.describe("accessibility", () => {
     await expect(page.locator("#can-do ~ .app-more .app-card").last()).toBeVisible();
     await expect(page.locator("#keeps ~ .app-more .app-card").last()).toBeVisible();
     await expect(page.locator(".app-getbox pre code")).toBeVisible();
-    const label = page.locator(".app-getbox details > summary");
-    await expect(label).toBeVisible();
-    await expect(label).toHaveText(messages.en.apps.store.commandLine);
-    expect(await label.evaluate((el) => getComputedStyle(el).color)).toBe(
-      await page
-        .locator(".app-getbox > p")
-        .first()
-        .evaluate((el) => getComputedStyle(el).color),
-    );
+    await expect(page.locator(".app-getbox .app-or")).toBeVisible();
     // A built-in app: the line under the facts strip, which says it is included, is printed too.
     await page.goto(`${base()}/apps/invoicing/`);
     await expect(page.locator(".app-info")).toBeVisible();
@@ -3456,7 +3469,7 @@ test.describe("accessibility", () => {
       page,
     }) => {
       // One filled pill per screen: on the apps pages (the index has none of its own) the header's
-      // "Start free" is the plain button, and on the home page it stays the filled one.
+      // "Get started" is the plain button, and on the home page it stays the filled one.
       const header = () =>
         page.locator(".head-cta .btn.primary").evaluate((el) => {
           const cs = getComputedStyle(el);
@@ -3696,10 +3709,8 @@ test.describe("accessibility", () => {
         [320, 200],
         [320, 150],
         [320, 125],
-        [360, 200],
         [375, 200],
         [375, 125],
-        [390, 200],
         [390, 100],
         [640, 200],
       ] as const) {
@@ -3709,27 +3720,11 @@ test.describe("accessibility", () => {
             "/apps/accounting/",
             "/fi/apps/email-marketing/",
             "/de/apps/field-service/",
-            "/sv/apps/helpdesk/",
           ]) {
             await page.goto(`${base()}${path}`);
             await page.waitForSelector("html.js-ready");
             await page.addStyleTag({ content: "* { hyphens: manual !important; }" });
             const where = `${path} at ${width}px with ${percent}% text`;
-            // The command is in a closed fold whose label is one line of text under the pill. As
-            // the visitor gets it, closed: no word of the label is drawn on two lines, at any of
-            // these sizes (at 200 percent "kommandoraden", "Kommandozeile" and "komentoriviltä" were
-            // wider than the room a pill left them, from 320 to 390 px). Not `allowWide`: a word
-            // wider than the box is exactly the defect.
-            const fold = page.locator(".app-getbox details");
-            await expect(fold, where).toHaveJSProperty("open", false);
-            const label = await brokenWords(page, ".app-getbox details > summary");
-            expect(label.cut, `${where}: a word of the command's label is cut`).toEqual([]);
-            expect(
-              await fold.locator("summary").evaluate((el) => el.getBoundingClientRect().width),
-              `${where}: the label is drawn`,
-            ).toBeGreaterThan(40);
-            // Then the command itself, with its fold open (closed, it has no box to measure).
-            await fold.evaluate((el) => ((el as HTMLDetailsElement).open = true));
             const m = await page.evaluate(() => {
               const code = document.querySelector(".app-getbox pre code")!;
               const range = document.createRange();

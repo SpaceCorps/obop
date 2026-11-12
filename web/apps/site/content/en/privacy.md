@@ -1,7 +1,7 @@
 ---
 title: "Privacy"
-description: "Draft privacy notice for the obop website and hosted beta: what is collected, why, how long, and your rights. A draft for review by counsel, not legal advice."
-lead: "A plain-language draft of how this website and the hosted beta handle personal data."
+description: "Draft privacy notice for the obop website and for the hosted service SpaceCorps plans, which is not offered yet: what is collected, why, how long, and your rights. A draft for review by counsel, not legal advice."
+lead: "A plain-language draft of how this website, and the hosted service SpaceCorps plans, handle personal data. That service is not offered yet."
 eyebrow: "Draft"
 ---
 
@@ -17,26 +17,26 @@ The obop project, run by SpaceCorps. There is no data protection officer or EU r
 - Your chosen colour theme and the dismissal of the language hint are stored in your own browser (local storage). They never leave your device.
 - Like any web server, the server that hosts this site processes your IP address and the pages you request to deliver them. We do not use that to build profiles.
 
-## Sign-up and the hosted beta
+## The planned hosted service
 
-When you create an account and an instance we process:
+SpaceCorps does not offer a hosted obop yet. When someone creates an account and an instance on a control plane, the control plane software processes:
 
 | Data                                    | Why                                             | Where                                           |
 | --------------------------------------- | ----------------------------------------------- | ----------------------------------------------- |
 | Email address                           | Sign in, and to identify the account            | The control plane's database                    |
 | Password                                | Sign in. Stored only as a one-way Argon2id hash | The control plane and, as a hash, your instance |
 | Instance name and address               | To provision and show your instance             | The control plane                               |
-| Everything you enter into your instance | To provide the service                          | A database belonging to your instance           |
+| Everything you enter into your instance | To run the instance                             | A database belonging to your instance           |
 
-We do not sell personal data. We do not use the data in your instance for anything but running it.
+We do not sell personal data. The table describes what the software does, not a service SpaceCorps offers; before the planned sandbox or hosting service opens, the final notice will say what SpaceCorps processes for it.
 
 ## Subprocessors
 
-The hosted beta runs on Sliplane. The list of subprocessors and the places data is processed will be set out in the final notice and in a data processing agreement. Do not use the beta for regulated or special-category data.
+The hosted service SpaceCorps plans would run on Sliplane servers. The list of subprocessors and the places data is processed will be set out in the final notice and in a data processing agreement.
 
 ## How long
 
-Account data is kept while the account exists. Deleting an instance deletes its database. Backups of the hosted databases do not exist yet.
+In the control plane software, account data is kept while the account exists, and deleting an instance deletes its database.
 
 ## Your rights
 

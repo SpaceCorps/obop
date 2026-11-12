@@ -15,7 +15,9 @@ services:
       db: { condition: service_healthy }
     environment:
       OBOP_DATABASE_URL: postgres://postgres:obop-local@db/postgres
-    command: ["obop", "serve", "--addr", "0.0.0.0:8080", "--static", "/srv/backoffice", "--demo"]
+    # The image builds the back office for /admin/, which obop serves only with --public-site; without it
+    # the page loads but its scripts come back as HTML.
+    command: ["obop", "serve", "--addr", "0.0.0.0:8080", "--static", "/srv/backoffice", "--demo", "--public-site"]
     ports: ["127.0.0.1:8080:8080"]
 volumes:
   pgdata:

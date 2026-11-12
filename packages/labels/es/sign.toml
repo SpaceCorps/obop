@@ -53,7 +53,7 @@ description = "Nombre de la persona que debe firmar"
 
 [labels.es.model.sign_request.field.signer_email]
 label = "Correo electrónico del firmante"
-description = "Correo electrónico de quien firma; opcional, obop no envía correo en una solicitud sobre un documento"
+description = "Correo electrónico de quien firma; opcional, no se envía correo en una solicitud sobre un documento"
 
 [labels.es.model.sign_request.field.sent_on]
 label = "Fecha de envío"

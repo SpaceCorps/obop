@@ -1,10 +1,10 @@
 [module]
 id = "email_marketing"
-version = "0.2.0"
+version = "0.2.1"
 name = "Email Marketing"
-description = "Mailing lists, the contacts on them with their consent status and date, and campaigns with a draft, scheduled, sent flow. Sending is irreversible and reaches real people, so it needs a human approval from a manager; agents may only propose it. Campaign statistics are numbers entered or imported, not computed. Contacts are personal data: keep consent_status and consent_date accurate and never mail a contact that is not opted_in."
+description = "Mailing lists, the contacts on them with their consent status and date, and campaigns with a draft, scheduled, sent flow. No email is sent: marking a campaign sent only records it as sent, and it needs a human approval from a manager; agents may only propose it. Campaign statistics are numbers entered or imported, not computed. Contacts are personal data: keep consent_status and consent_date accurate and never mail a contact that is not opted_in."
 author = "SpaceCorps"
-summary = "Mailing lists, contacts with consent, and campaigns. Sending needs a human approval."
+summary = "Mailing lists, contacts with consent, and campaigns. No email is sent; marking a campaign sent needs a human approval."
 license = "Apache-2.0"
 homepage = "https://github.com/SpaceCorps/obop"
 repository = "https://github.com/SpaceCorps/obop"
@@ -88,7 +88,7 @@ write_group = "email_marketing.user"
 
 [[model]]
 name = "email_marketing_campaign"
-description = "One mailing sent to a list"
+description = "One mailing to a list"
 read_group = "email_marketing.user"
 write_group = "email_marketing.user"
 
@@ -191,14 +191,14 @@ write_group = "email_marketing.user"
 
   [[model.action]]
   name = "schedule"
-  description = "Queue the campaign for its scheduled day"
+  description = "Mark the campaign as scheduled for its day"
   field = "state"
   from = "draft"
   to = "scheduled"
 
   [[model.action]]
   name = "send"
-  description = "Send the scheduled campaign to the whole list (manager only)"
+  description = "Mark the scheduled campaign as sent; no email is sent (manager only)"
   field = "state"
   from = "scheduled"
   to = "sent"
@@ -207,7 +207,7 @@ write_group = "email_marketing.user"
 
   [[model.action]]
   name = "send_now"
-  description = "Send a draft campaign immediately (manager only)"
+  description = "Mark a draft campaign as sent; no email is sent (manager only)"
   field = "state"
   from = "draft"
   to = "sent"

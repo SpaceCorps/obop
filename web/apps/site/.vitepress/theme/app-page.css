@@ -565,9 +565,9 @@
 }
 
 /*
- * Get: one plain sentence, the pill that opens obop (where Customize and its Marketplace are), the
- * command line in a fold and what it needs. The pill has the hero's look: the hero's button jumps
- * here, so at this point the page's one filled pill is this one, and the next step is obvious.
+ * Get: one plain sentence, the pill that leads to Getting started, the command line and what it
+ * needs. The pill has the hero's look: the hero's button jumps here, so at this point the page's one
+ * filled pill is this one, and the next step is obvious.
  */
 .app-getbox {
   /* The command below asks how much room the box has, in rem, so a larger text size asks for more. */
@@ -586,37 +586,11 @@
   margin-block-end: 0;
 }
 .app-pill {
-  margin-block-end: var(--space-3);
+  margin-block-end: var(--space-6);
 }
-/*
- * The command line is for developers: one quiet line to tap under the filled pill (the look of a text
- * link, not a second pill), with the command in its fold. Its type has a vw ceiling, which only bites at
- * a large text size on a phone: at 200 percent the longest word of the label ("kommandoraden",
- * "Kommandozeile", "komentoriviltä") was wider than the box and broke inside.
- */
-.app-cmd {
-  margin-block-end: var(--space-3);
-}
-.app-cmd > summary {
-  display: inline-flex;
-  align-items: center;
-  box-sizing: border-box;
-  min-block-size: 2.75rem;
-  max-inline-size: 100%;
-  color: var(--accent-ink);
-  font-size: min(0.9375rem, 7.5vw);
-  cursor: pointer;
-  list-style: none;
-}
-.app-cmd > summary::-webkit-details-marker {
-  display: none;
-}
-.app-cmd > summary:hover {
-  text-decoration: underline;
-  text-underline-offset: 0.2em;
-}
-.app-cmd[open] > summary {
-  margin-block-end: var(--space-1);
+.app-or {
+  color: var(--text-muted);
+  font-size: 0.9375rem;
 }
 .app-getbox div[class*="language-"] {
   margin-block: 0 var(--space-4);
@@ -871,12 +845,10 @@
   /*
    * A printed page keeps what the folds and the two rows hold: they print open. The buttons of the card
    * folds and of "Read more" are not printed (what they would open is already there). The summary of a
-   * row is its heading and the summary of the command fold is the sentence that introduces the command,
-   * so both are printed, as plain text: no chevron, no link colour.
+   * row is its heading, so it is printed, as plain text with no chevron.
    */
   @supports selector(::details-content) {
     .app-row:not([open])::details-content,
-    .app-cmd:not([open])::details-content,
     .app-more:not([open])::details-content,
     .app-read:not([open])::details-content {
       content-visibility: visible;
@@ -890,10 +862,6 @@
     display: none;
   }
   .app-row > summary {
-    break-after: avoid;
-  }
-  .app-cmd > summary {
-    color: inherit;
     break-after: avoid;
   }
 }

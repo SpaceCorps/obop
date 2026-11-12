@@ -53,7 +53,7 @@ description = "Namn på personen som ska signera"
 
 [labels.sv.model.sign_request.field.signer_email]
 label = "Undertecknarens e-post"
-description = "Signerarens e-postadress; valfri, obop skickar inget e-postmeddelande för en begäran om ett dokument"
+description = "Signerarens e-postadress; valfri, inget e-postmeddelande skickas för en begäran om ett dokument"
 
 [labels.sv.model.sign_request.field.sent_on]
 label = "Skickad den"

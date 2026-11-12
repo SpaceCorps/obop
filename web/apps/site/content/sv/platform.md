@@ -7,7 +7,7 @@ eyebrow: "Så fungerar det"
 
 ## En instans per företag
 
-Varje företag körs i sin egen **instans** med egen databas, egna användare och egen adress. På den hostade tjänsten skapar ett kontrollplan instansen åt dig efter registreringen och ger dig dess adress; den som registrerade sig blir instansens första administratör. Du kan också köra samma program själv. Se [Instanser](/docs/concepts/instances/).
+Varje företag körs i sin egen **instans** med egen databas, egna användare och egen adress. Du kör programmet själv: en `obop serve` är en instans. Samma program har ett andra läge, ett kontrollplan (`obop platform serve`), där man registrerar sig och skapar egna instanser; den som skapar en instans blir dess första administratör. SpaceCorps hostar ännu inte obop åt andra. Se [Instanser](/docs/concepts/instances/).
 
 Lagringen är SQLite för att prova och PostgreSQL för skarp användning. Poster lagras tills vidare som JSON-dokument; kommandolagret kontrollerar fälttyperna, och en schemahanterare är planerad.
 
@@ -51,7 +51,7 @@ Tänk på det här innan du binder dig:
 - Det finns inga kodnivåer utöver deklarativa paket (inga WebAssembly-komponenter och inga fjärrappar), så ett apppaket kör ingen egen kod och kan inte deklarera anrop till andra system, men det kan deklarera beräknade summor och åtgärder som ändrar andra poster i samma databas.
 - Bara vissa appar (till exempel Expenses, Timesheets, ledighetsansökningar i HR, Documents och Dashboards) begränsar vilka poster en person ser. CRM, Sales och Invoicing gör det inte.
 - Säkerhetsloggen registrerar till exempel händelser för konton, inloggning, säkerhetsinställningar, moduler och signering, men är ingen historik över ändringar av affärsposter.
-- Det planerade exportjobbet för ett helt företags data är inte byggt. En lista kan exporteras som CSV från webbappen (upp till 20 000 poster), och `obop backup --plain` skriver databasens poster och uppladdade filer till en okrypterad fil (kortlivade värden som sessioner utelämnas, och hemligheter förblir förseglade).
-- Den hostade tjänsten slår ännu inte på schemalagda säkerhetskopior av sina databaser (den som kör obop själv kan slå på dem).
+- Det planerade exportjobbet för ett helt företags data är inte byggt. En lista kan exporteras som CSV från webbappen (upp till 20 000 poster), och `obop backup --plain` skriver databasens poster och uppladdade filer till en okrypterad fil (kortlivade värden som sessioner utelämnas; hemligheter förblir förseglade, men om du inte har satt `OBOP_SECRET_KEY` finns nyckeln som obop skapade för dem i filen).
+- Ett kontrollplan slår inte på schemalagda säkerhetskopior av de instanser det skapar (den som kör en instans själv kan slå på dem).
 
 [Färdplanen](/roadmap/) listar vad som är byggt och vad som inte är det.

@@ -7,7 +7,7 @@ eyebrow: "Näin se toimii"
 
 ## Yksi instanssi yritystä kohti
 
-Jokainen yritys toimii omassa **instanssissaan**, jolla on oma tietokanta, omat käyttäjät ja oma osoite. Isännöidyssä palvelussa ohjaustaso luo instanssin rekisteröitymisen jälkeen ja antaa sinulle sen osoitteen; rekisteröityneestä henkilöstä tulee instanssin ensimmäinen ylläpitäjä. Voit myös ajaa samaa ohjelmaa itse. Katso [Instanssit](/docs/concepts/instances/).
+Jokainen yritys toimii omassa **instanssissaan**, jolla on oma tietokanta, omat käyttäjät ja oma osoite. Ajat ohjelmaa itse: yksi `obop serve` on yksi instanssi. Samalla ohjelmalla on toinen tila, ohjaustaso (`obop platform serve`), jossa ihmiset rekisteröityvät ja luovat omia instanssejaan; instanssin luojasta tulee sen ensimmäinen ylläpitäjä. SpaceCorps ei vielä isännöi obopia muille. Katso [Instanssit](/docs/concepts/instances/).
 
 Tallennuksena on SQLite kokeiluun ja PostgreSQL oikeaan käyttöön. Tietueet tallennetaan toistaiseksi JSON-dokumentteina; komentokerros tarkistaa kenttien tyypit, ja skeemanhallinta on suunnitteilla.
 
@@ -51,7 +51,7 @@ Tämä kannattaa tietää ennen sitoutumista:
 - Deklaratiivisten pakettien lisäksi koodiportaita ei ole (ei WebAssembly-komponentteja eikä etäsovelluksia), joten sovelluspaketti ei suorita omaa koodia eikä voi määritellä kutsuja muihin järjestelmiin, mutta se voi määritellä lasketut summat ja toiminnot, jotka muuttavat muita tietueita samassa tietokannassa.
 - Vain osa sovelluksista (esimerkiksi Expenses, Timesheets, HR:n lomapyynnöt, Documents ja Dashboards) rajaa, mitkä tietueet henkilö näkee. CRM, Sales ja Invoicing eivät tee niin.
 - Tietoturvaloki kirjaa esimerkiksi tili-, kirjautumis-, tietoturva-asetus-, moduuli- ja allekirjoitustapahtumat, mutta se ei ole historia liiketoimintatietueiden muutoksista.
-- Suunniteltua koko yrityksen tietojen vientitoimintoa ei ole rakennettu. Listan voi viedä CSV-tiedostona verkkosovelluksesta (enintään 20 000 tietuetta), ja `obop backup --plain` kirjoittaa tietokannan tietueet ja ladatut tiedostot salaamattomaan tiedostoon (lyhytikäiset arvot, kuten istunnot, jäävät pois, ja salaisuudet pysyvät sinetöityinä).
-- Isännöity palvelu ei ota vielä käyttöön tietokantojensa ajastettuja varmuuskopioita (jos ajat obopia itse, voit ottaa ne käyttöön).
+- Suunniteltua koko yrityksen tietojen vientitoimintoa ei ole rakennettu. Listan voi viedä CSV-tiedostona verkkosovelluksesta (enintään 20 000 tietuetta), ja `obop backup --plain` kirjoittaa tietokannan tietueet ja ladatut tiedostot salaamattomaan tiedostoon (lyhytikäiset arvot, kuten istunnot, jäävät pois; salaisuudet pysyvät sinetöityinä, mutta jos et asettanut `OBOP_SECRET_KEY`-avainta, obopin niille luoma avain on tiedostossa).
+- Ohjaustaso ei ota käyttöön luomiensa instanssien ajastettuja varmuuskopioita (jos ajat instanssia itse, voit ottaa ne käyttöön).
 
 [Tiekartta](/roadmap/) kertoo, mikä on valmista ja mikä ei.

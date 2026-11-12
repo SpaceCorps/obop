@@ -377,8 +377,8 @@ fn clear_logs_a_value_that_is_not_text_and_a_key_it_does_not_know_without_the_va
             "title_sv: \"Logga in\" -> removed".to_string(),
             "message_en: <not text> -> removed".to_string(),
             "logo_svg: <not text> -> removed".to_string(),
+            "hide_product_docs: true -> removed".to_string(),
             "a?b: <unknown> -> removed".to_string(),
-            "hide_product_docs: <unknown> -> removed".to_string(),
             format!("{}...: <unknown> -> removed", "k".repeat(40)),
             "zz-secret: <unknown> -> removed".to_string(),
         ]
@@ -394,7 +394,8 @@ fn clear_logs_a_value_that_is_not_text_and_a_key_it_does_not_know_without_the_va
         );
     }
     // The answer says which changes carry no value, and the command line prints the same lines.
-    assert_eq!(a.changes.iter().filter(|c| c.withheld).count(), 7);
+    // (The switch, a boolean that is stored, is written as `true`, so it is not one of them.)
+    assert_eq!(a.changes.iter().filter(|c| c.withheld).count(), 6);
     assert_eq!(
         a.changes
             .iter()
@@ -414,7 +415,25 @@ fn a_row_with_keys_and_no_text_value_writes_one_event_per_key() {
     for (row, expected) in [
         (
             vec![("hide_product_docs", serde_json::json!(true))],
-            vec!["hide_product_docs: <unknown> -> removed"],
+            vec!["hide_product_docs: true -> removed"],
+        ),
+        (
+            vec![("hide_product_docs", serde_json::json!(false))],
+            vec!["hide_product_docs: false -> removed"],
+        ),
+        // The switch holds something that is not a boolean: no value in the log.
+        (
+            vec![("hide_product_docs", s("true"))],
+            vec!["hide_product_docs: <not boolean> -> removed"],
+        ),
+        (
+            vec![("hide_product_docs", serde_json::json!(1))],
+            vec!["hide_product_docs: <not boolean> -> removed"],
+        ),
+        // A key a later binary will add is still unknown to this one.
+        (
+            vec![("future_switch", serde_json::json!(true))],
+            vec!["future_switch: <unknown> -> removed"],
         ),
         (
             vec![("name", serde_json::json!(5))],
@@ -556,7 +575,7 @@ fn a_dry_run_of_clear_lists_the_same_changes_and_writes_nothing() {
         [
             "name: \"MOHV\" -> removed",
             "title_en: <not text> -> removed",
-            "hide_product_docs: <unknown> -> removed",
+            "hide_product_docs: true -> removed",
         ]
     );
     assert_eq!(spy.get(MODEL, ROW_ID).unwrap(), before);

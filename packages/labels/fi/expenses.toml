@@ -1,6 +1,6 @@
 [labels.fi.module]
 name = "Kulut"
-description = "Työntekijöiden kulukorvaukset luonnos-, lähetetty-, hyväksytty- ja maksettu-kulussa. Maksaminen on oma käyttöoikeutensa ja vaatii ihmisen hyväksynnän. Korvauksella on vuosisarjan numero, ja työntekijä näkee ja muokkaa vain omia korvauksiaan; esihenkilöt ja talous näkevät kaikki."
+description = "Työntekijöiden kulukorvaukset luonnos-, lähetetty-, hyväksytty- ja maksettu-kulussa. Maksaminen on oma käyttöoikeutensa. Hyväksyminen, hylkääminen ja maksaminen vaativat ihmisen hyväksynnän; agentit voivat vain ehdottaa niitä. Korvauksella on vuosisarjan numero, ja työntekijä näkee ja muokkaa vain omia korvauksiaan; esihenkilöt ja talous näkevät kaikki."
 summary = "Työntekijöiden kulukorvaukset luonnos-, lähetetty-, hyväksytty- ja maksettu-kulussa."
 
 [labels.fi.model.expenses_expense]

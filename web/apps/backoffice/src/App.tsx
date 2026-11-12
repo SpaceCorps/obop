@@ -17,6 +17,13 @@ import { ErrorBoundary, OfflineBanner, OfflineNotice } from "./ErrorBoundary.tsx
 import { modelTitle } from "./labels.ts";
 import { ModelPage } from "./ModelPage.tsx";
 import { parseModulesRoute } from "./modules/route.ts";
+import {
+  PRODUCT_DOC_TABS,
+  isPersonalTab,
+  readProductDocsHidden,
+  setProductDocsHidden,
+  useProductDocsVisible,
+} from "./productDocs.ts";
 import { href, nav, useRoute } from "./route.ts";
 import { EnrolmentGate } from "./Security.tsx";
 import { PasswordGate } from "./SecurityAccount.tsx";
@@ -88,6 +95,8 @@ export function App() {
   // The session may only choose a new password (an administrator reset it, B7).
   const [mustChange, setMustChange] = useState(false);
   const [route, go] = useRoute();
+  // The Brand book and the Guide are hidden for an instance that asked for it (`productDocs.ts`).
+  const docsVisible = useProductDocsVisible();
   const [launcher, setLauncher] = useState(false);
   const [palette, setPalette] = useState(false);
   const [menu, setMenu] = useState(false);
@@ -107,6 +116,8 @@ export function App() {
     setReady(false);
     setLimited(false);
     setMustChange(false);
+    // The switch belonged to the instance the person signed in to; the next sign-in reads it again.
+    setProductDocsHidden(false);
     // The settings belonged to the person who signed in: the sign-in screen that follows speaks the
     // language of the server's default (or the browser's), not the one an administrator set.
     void setInstanceDefaults({});
@@ -114,7 +125,11 @@ export function App() {
 
   const refresh = useCallback(async () => {
     if (!token) return;
-    const [m, s] = await Promise.all([meta(token), loadSettings(token)]);
+    const [m, s, hideDocs] = await Promise.all([
+      meta(token),
+      loadSettings(token),
+      readProductDocsHidden(token),
+    ]);
     if (m === null) return signOut();
     if (m === "failed") {
       // Keep what is on screen after a failed refresh; show the recovery screen on a first load.
@@ -125,6 +140,9 @@ export function App() {
     setLimited(m === "enrolment");
     setMustChange(m === "password");
     if (m === "enrolment" || m === "password") return setReady(true);
+    // Before the first screen: the Brand book and the Guide are never drawn and then taken away. A
+    // read that failed changes nothing.
+    if (hideDocs !== undefined) setProductDocsHidden(hideDocs);
     setModules(m);
     setSettings(s);
     applyTheme(resolveTheme(s.theme));
@@ -179,6 +197,18 @@ export function App() {
   // The menu collapses on phones; picking something closes it.
   useEffect(() => setMenu(false), [route.app, route.model]);
 
+  // An address of the Brand book or the Guide, while they are hidden, opens the first tab that is
+  // shown (Theme) instead, and the address says so.
+  useEffect(() => {
+    if (
+      ready &&
+      !docsVisible &&
+      route.app === "customize" &&
+      PRODUCT_DOC_TABS.includes(route.tab || route.model)
+    )
+      go({ app: "customize", model: "theme", tab: "theme" }, { replace: true });
+  }, [ready, docsVisible, route.app, route.tab, route.model, go]);
+
   // The platform module is what Customize is made of. Everyone sees it now (the `device` model is
   // theirs to list), so an administrator is told by `module`, the list of installed modules, which
   // only an administrator may read.
@@ -195,9 +225,7 @@ export function App() {
   const app = apps.find((a) => a.id === route.app);
   // Everyone may set their own theme and read the brand book; the rest of Customize is for admins.
   const personalCustomize =
-    route.app === "customize" &&
-    !isAdmin &&
-    ["theme", "security", "brand", "guide"].includes(route.tab || route.model);
+    route.app === "customize" && !isAdmin && isPersonalTab(route.tab || route.model, docsVisible);
   const hasBoards = !!app?.module.models.some((m) => m.name === "dashboards_dashboard");
   const onBoard =
     app?.id === "dashboards" && hasBoards && (route.model === "" || route.model === BOARD);

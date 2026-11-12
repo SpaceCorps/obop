@@ -1,7 +1,7 @@
 [labels.pl.module]
 name = "Planowanie"
-description = "Zmiany dla pracowników, z rolami i szablonami wielokrotnego użytku. Zmiana ma dzień oraz początek i koniec w minutach od północy (0 do 1439; 540 to 09:00). Zmiana bez pracownika jest zmianą otwartą. Obieg: otwarte, opublikowane, potwierdzone przez pracownika. Wymaga pakietu Kadry."
-summary = "Zmiany pracowników z rolami i szablonami wielokrotnego użytku; zmiany otwarte są publikowane i potwierdzane."
+description = "Zmiany dla pracowników, z rolami i szablonami zmian. Szablon zapisuje tylko nazwę, rolę i godziny: żadna akcja nie tworzy z niego zmiany. Zmiana ma dzień oraz początek i koniec w minutach od północy (0 do 1439; 540 to 09:00). Zmiana bez pracownika jest zmianą otwartą. Obieg: otwarte, opublikowane, potwierdzone przez pracownika. Wymaga pakietu Kadry."
+summary = "Zmiany pracowników z rolami i szablonami zmian; zmiany otwarte są publikowane i potwierdzane."
 
 [labels.pl.model.planning_role]
 name = "Rola"
@@ -17,7 +17,7 @@ description = "Na czym polega rola"
 
 [labels.pl.model.planning_template]
 name = "Szablon"
-description = "Wzorzec zmiany wielokrotnego użytku, kopiowany do zmian"
+description = "Nazwany wzorzec zmiany z rolą oraz godziną rozpoczęcia i zakończenia; żadna akcja nie tworzy z niego zmian"
 
 [labels.pl.model.planning_template.field.name]
 label = "Nazwa"

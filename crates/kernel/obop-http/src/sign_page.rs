@@ -6,6 +6,14 @@
 //! for it; a page without it is the page it always was, byte for byte, and the stylesheet is not
 //! touched for it (it would change the hash in the policy and so every page).
 //!
+//! **The instance brand (docs/spec/branding.md, slice S1d).** Every page has the line above the card
+//! of the OAuth pages, `obop_oauth::page::brand_line`, and, with a brand set, the tab icon link and
+//! `img-src 'self'` at the end of the policy (`icon_link` and `img_src`, the same functions, so the
+//! two pages follow one predicate). The caller reads the brand once, first, and hands that one value
+//! to the page. The texts of the page name no product (the catalogue of `sign_text.rs` has none) and
+//! the brand never enters them: the words, and so the consent id that is hashed from them, are the
+//! same with a brand and without one. With no brand every page is what it was, byte for byte.
+//!
 //! The PDF is offered to the browser's own viewer in an `<object>` that falls back to the text
 //! "open it in full size", and a visible link opens it in a new tab (a phone shows one page of an
 //! embedded PDF at most, so on a coarse pointer the object is hidden and the link is the way to
@@ -13,8 +21,9 @@
 //! `default-src 'none'` would otherwise leave the box empty (spike of 2026-11-03, docs/SIGN.md).
 
 use crate::sign_text::{self as txt, text};
+use obop_commands::brand::Shown;
 use obop_commands::sign::History;
-use obop_oauth::page::esc;
+use obop_oauth::page::{brand_line, esc, icon_link, img_src};
 use obop_oauth::util::b64std;
 use sha2::{Digest, Sha256};
 
@@ -51,28 +60,36 @@ button:focus-visible,input:focus-visible,a.btn:focus-visible{outline:3px solid v
 @media (pointer:coarse){object.doc{display:none}}
 "#;
 
-fn csp() -> String {
+/// The policy of every page. With a brand set it ends with `img-src 'self'` for the tab icon, and
+/// is otherwise the policy it always was (the hash of the stylesheet does not change).
+fn csp(brand: &Shown) -> String {
     let hash = b64std(&Sha256::digest(CSS.as_bytes()));
+    let img = img_src(brand);
     format!(
-        "default-src 'none'; style-src 'sha256-{hash}'; object-src 'self'; frame-src 'self'; child-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
+        "default-src 'none'; style-src 'sha256-{hash}'; object-src 'self'; frame-src 'self'; child-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'{img}"
     )
 }
 
-fn shell(lang: &str, title: &str, body: &str) -> Page {
+fn shell(lang: &str, title: &str, body: &str, brand: &Shown) -> Page {
     let html = format!(
         "<!doctype html>\n<html lang=\"{lang}\"><head><meta charset=\"utf-8\">\
 <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\
 <meta name=\"color-scheme\" content=\"light dark\"><meta name=\"referrer\" content=\"same-origin\">\
-<meta name=\"robots\" content=\"noindex,nofollow\"><title>{title}</title><style>{CSS}</style></head>\
-<body><main><p class=\"brand\">obop</p><div class=\"card\">{body}</div></main></body></html>\n",
-        title = esc(title)
+<meta name=\"robots\" content=\"noindex,nofollow\"><title>{title}</title>{icon}<style>{CSS}</style></head>\
+<body><main>{line}<div class=\"card\">{body}</div></main></body></html>\n",
+        title = esc(title),
+        icon = icon_link(brand),
+        line = brand_line(brand, lang),
     );
-    Page { html, csp: csp() }
+    Page {
+        html,
+        csp: csp(brand),
+    }
 }
 
 /// A page with one message: the link is over, unknown, busy, or a post that did not come
 /// from the page.
-pub(crate) fn message(lang: &str, key: &str) -> Page {
+pub(crate) fn message(lang: &str, key: &str, brand: &Shown) -> Page {
     shell(
         lang,
         text(lang, "title"),
@@ -81,12 +98,13 @@ pub(crate) fn message(lang: &str, key: &str) -> Page {
             esc(text(lang, "title")),
             txt::html(lang, key, &[])
         ),
+        brand,
     )
 }
 
 /// The page after signing, and for a link that was used. `history` is the list of the signatures
 /// so far when the request asks for it, with the signer's own entry marked.
-pub(crate) fn done(lang: &str, at: &str, history: Option<&History>) -> Page {
+pub(crate) fn done(lang: &str, at: &str, history: Option<&History>, brand: &Shown) -> Page {
     shell(
         lang,
         text(lang, "done_title"),
@@ -96,6 +114,7 @@ pub(crate) fn done(lang: &str, at: &str, history: Option<&History>) -> Page {
             txt::html(lang, "done_body", &[("time", at)]),
             history.map_or_else(String::new, |h| history_block(lang, h))
         ),
+        brand,
     )
 }
 
@@ -153,7 +172,7 @@ pub(crate) struct Form<'a> {
     pub history: Option<&'a History>,
 }
 
-pub(crate) fn form(lang: &str, f: &Form<'_>) -> Page {
+pub(crate) fn form(lang: &str, f: &Form<'_>, brand: &Shown) -> Page {
     let base = format!("/sign/{}/{}", esc(f.rid), esc(f.token));
     let pdf = format!("{base}/document.pdf");
     let error = f.error.map_or_else(String::new, |k| {
@@ -216,6 +235,7 @@ pub(crate) fn form(lang: &str, f: &Form<'_>) -> Page {
         lang,
         &txt::fill(lang, "request", &[("title", f.title)]),
         &body,
+        brand,
     )
 }
 
@@ -223,6 +243,11 @@ pub(crate) fn form(lang: &str, f: &Form<'_>) -> Page {
 mod tests {
     use super::*;
     use obop_oauth::page::LANGS;
+
+    /// The brand of an instance with no row: the pages are what they were before the brand.
+    fn unbranded() -> Shown {
+        Shown::not_set(None)
+    }
 
     fn form_html(lang: &str) -> String {
         form(
@@ -239,6 +264,7 @@ mod tests {
                 error: None,
                 history: None,
             },
+            &unbranded(),
         )
         .html
     }
@@ -319,12 +345,12 @@ mod tests {
         for (lang, form_hash, done_hash, closed_hash) in BEFORE_THE_HISTORY {
             assert_eq!(sha(&form_html(lang)), form_hash, "{lang}: the form");
             assert_eq!(
-                sha(&done(lang, "2026-11-03T10:00:00.000000Z", None).html),
+                sha(&done(lang, "2026-11-03T10:00:00.000000Z", None, &unbranded()).html),
                 done_hash,
                 "{lang}: the page after signing"
             );
             assert_eq!(
-                sha(&message(lang, "closed").html),
+                sha(&message(lang, "closed", &unbranded()).html),
                 closed_hash,
                 "{lang}: a refusal"
             );
@@ -347,6 +373,7 @@ mod tests {
                 error: Some(error),
                 history,
             },
+            &unbranded(),
         )
         .html
     }
@@ -391,6 +418,11 @@ mod tests {
     }
 
     fn form_with(lang: &str, history: Option<&History>) -> Page {
+        form_in(lang, history, &unbranded())
+    }
+
+    /// The form again, for the brand a request read.
+    fn form_in(lang: &str, history: Option<&History>, brand: &Shown) -> Page {
         form(
             lang,
             &Form {
@@ -405,6 +437,7 @@ mod tests {
                 error: None,
                 history,
             },
+            brand,
         )
     }
 
@@ -470,7 +503,7 @@ mod tests {
             ],
             cut: true,
         };
-        let page = done("en", "2026-11-03T10:00:01.000000Z", Some(&h)).html;
+        let page = done("en", "2026-11-03T10:00:01.000000Z", Some(&h), &unbranded()).html;
         assert!(!page.contains("<script"), "{page}");
         assert!(
             page.contains(&esc(evil)) && esc(evil).contains("&lt;script&gt;"),
@@ -488,14 +521,15 @@ mod tests {
             "en",
             "2026-11-03T10:00:01.000000Z",
             Some(&History::default()),
+            &unbranded(),
         )
         .html;
         assert!(none.contains("Nobody has signed this file yet."));
         assert!(!none.contains("<ul>") && !none.contains("Only the earliest"));
         // The page after signing is the old one plus the block, in every language.
         for lang in LANGS {
-            let plain = done(lang, "2026-11-03T10:00:01.000000Z", None).html;
-            let with = done(lang, "2026-11-03T10:00:01.000000Z", Some(&h)).html;
+            let plain = done(lang, "2026-11-03T10:00:01.000000Z", None, &unbranded()).html;
+            let with = done(lang, "2026-11-03T10:00:01.000000Z", Some(&h), &unbranded()).html;
             let head = &plain[..plain.find("</div></main>").unwrap()];
             assert!(
                 with.starts_with(head),
@@ -564,11 +598,55 @@ mod tests {
         }
     }
 
+    /// The title of a request is staff text, and `fill` leaves it raw, so the `<title>` element of
+    /// the form is made safe by `shell` alone. A title that closes the element and opens a tag is
+    /// text in the head, with a brand and without, in every language.
+    #[test]
+    fn the_title_of_the_request_is_escaped_in_the_title_element_of_the_form() {
+        let hostile = "T</title><i>x</i>";
+        let escaped = "T&lt;/title&gt;&lt;i&gt;x&lt;/i&gt;";
+        let plain = unbranded();
+        let with = mohv();
+        for brand in [&plain, &*with] {
+            for lang in LANGS {
+                let html = form(
+                    lang,
+                    &Form {
+                        rid: "rid1",
+                        token: "tok1",
+                        title: hostile,
+                        message: "",
+                        signer_name: "Jane Test",
+                        document_title: "Test NDA",
+                        document_hash: &"ab".repeat(32),
+                        typed: "",
+                        error: None,
+                        history: None,
+                    },
+                    brand,
+                )
+                .html;
+                let open = html.find("<title>").expect("a title element") + "<title>".len();
+                let close = html.find("</title>").expect("a title element");
+                assert!(
+                    html[open..close].contains(escaped),
+                    "{lang}: {}",
+                    &html[open..close]
+                );
+                assert_eq!(html.matches("</title>").count(), 1, "{lang}");
+                assert!(
+                    !html.contains("<i>") && !html.contains("</title><i"),
+                    "{lang}: the title is a tag on the page"
+                );
+            }
+        }
+    }
+
     #[test]
     fn a_foreign_post_and_a_closed_request_show_their_own_texts_in_every_language() {
         for lang in LANGS {
             for key in ["forbidden", "closed"] {
-                let page = message(lang, key);
+                let page = message(lang, key, &unbranded());
                 assert!(
                     page.html.contains(&txt::html(lang, key, &[])),
                     "{lang}/{key}: the page does not hold the catalogue text"
@@ -730,34 +808,47 @@ fn late() { txt::html(lang, \"late_key\"); }
         }
     }
 
-    /// Every page the signer's door can send, in every language, with its policy header: the form,
-    /// the page after signing, the closed request, the same two with the history, and the eight
-    /// refusals (`refusal_parts` in `sign.rs`). 13 pages in each of the 7 languages.
+    /// Every page the signer's door can send, in one language, for the brand a request read: the
+    /// form, the page after signing, the closed request, the same two with the history, and the
+    /// eight refusals (`refusal_parts` in `sign.rs`). 13 pages, named as the pins name them.
+    fn every_page(lang: &str, brand: &Shown) -> Vec<(String, Page)> {
+        let history = pinned_history();
+        let mut out = Vec::new();
+        let mut add = |kind: &str, p: Page| out.push((kind.to_string(), p));
+        add("form", form_in(lang, None, brand));
+        add(
+            "done",
+            done(lang, "2026-11-03T10:00:00.000000Z", None, brand),
+        );
+        add("closed", message(lang, "closed", brand));
+        add("form_history", form_in(lang, Some(&history), brand));
+        add(
+            "done_history",
+            done(lang, "2026-11-03T10:00:00.000000Z", Some(&history), brand),
+        );
+        for key in [
+            "unknown",
+            "gone_expired",
+            "gone_revoked",
+            "changed",
+            "busy",
+            "unavailable",
+            "err_name",
+            "forbidden",
+        ] {
+            add(&format!("msg_{key}"), message(lang, key, brand));
+        }
+        out
+    }
+
+    /// Every page the signer's door can send, in every language, with its policy header. 13 pages in
+    /// each of the 7 languages.
     #[test]
     fn signer_pins_every_page_and_its_policy_is_what_it_was_before_the_brand() {
-        let history = pinned_history();
         let mut now = Vec::new();
         for lang in LANGS {
-            let mut add = |kind: &str, p: Page| now.push((format!("{kind}/{lang}"), pin_of(&p)));
-            add("form", form_with(lang, None));
-            add("done", done(lang, "2026-11-03T10:00:00.000000Z", None));
-            add("closed", message(lang, "closed"));
-            add("form_history", form_with(lang, Some(&history)));
-            add(
-                "done_history",
-                done(lang, "2026-11-03T10:00:00.000000Z", Some(&history)),
-            );
-            for key in [
-                "unknown",
-                "gone_expired",
-                "gone_revoked",
-                "changed",
-                "busy",
-                "unavailable",
-                "err_name",
-                "forbidden",
-            ] {
-                add(&format!("msg_{key}"), message(lang, key));
+            for (kind, p) in every_page(lang, &unbranded()) {
+                now.push((format!("{kind}/{lang}"), pin_of(&p)));
             }
         }
         assert_eq!(now.len(), 13 * 7, "13 pages in 7 languages");
@@ -859,4 +950,324 @@ fn late() { txt::html(lang, \"late_key\"); }
         ("msg_err_name/es", "288bb64e475a47886250e5a0cc0bc98f33f3132c4eb6951dc50216b2f68afcf1"),
         ("msg_forbidden/es", "0a6ac8acbc00597d3b05ab68c80902352bb36d1a189e12723024da5bb01a3838"),
     ];
+
+    // ---- With a brand (slice S1d) -----------------------------------------------------------------
+
+    /// The artwork of the placeholder logo (a plain "M") in the canonical form the writer prints.
+    const ARTWORK: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\"><rect width=\"64\" height=\"64\" rx=\"14\" fill=\"#495670\"/><path d=\"M 16 48 L 16 16 L 24 16 L 32 30 L 40 16 L 48 16 L 48 48 L 41 48 L 41 29 L 32 44 L 23 29 L 23 48 Z\" fill=\"#ffffff\"/></svg>";
+
+    /// A brand written through `brand::apply`, as `instance_brand.configure` writes it, and read back
+    /// through a reader (the only way a `Shown` is made).
+    fn branded(pairs: &[(&str, &str)]) -> std::sync::Arc<Shown> {
+        use obop_commands::brand::{self, Action, Reader};
+        let backend = obop_storage::open("memory:").unwrap();
+        let reader = Reader::with_bound(backend.clone(), std::time::Duration::ZERO);
+        let supplied = pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+        brand::apply(
+            &*backend,
+            Some(&reader),
+            "operator",
+            &Action::Configure(supplied),
+            false,
+        )
+        .unwrap_or_else(|e| panic!("the brand was refused: {e}"));
+        reader.current()
+    }
+
+    /// A row put into the store as it is, whatever it holds (a restore, an import, a direct edit),
+    /// read back through a reader: a row written around the command.
+    fn row_around(pairs: &[(&str, serde_json::Value)]) -> std::sync::Arc<Shown> {
+        use obop_commands::brand::{self, Reader};
+        use obop_storage::Op;
+        let backend = obop_storage::open("memory:").unwrap();
+        backend
+            .apply_checked(&[Op::Put {
+                model: brand::MODEL.into(),
+                id: brand::ROW_ID.into(),
+                fields: pairs
+                    .iter()
+                    .map(|(k, v)| (k.to_string(), v.clone()))
+                    .collect(),
+            }])
+            .unwrap();
+        Reader::with_bound(backend, std::time::Duration::ZERO).current()
+    }
+
+    fn mohv() -> std::sync::Arc<Shown> {
+        branded(&[("name", "MOHV"), ("logo_svg", ARTWORK)])
+    }
+
+    /// The tab icon link of a brand with version `v`.
+    fn icon_of(brand: &Shown) -> String {
+        format!(
+            "<link rel=\"icon\" href=\"/api/brand/logo.svg?v={}\" type=\"image/svg+xml\">",
+            brand.v()
+        )
+    }
+
+    /// What a person reads on a page: no style, no tag.
+    fn visible(html: &str) -> String {
+        let mut s = html.to_string();
+        while let Some(a) = s.find("<style") {
+            let b = s[a..].find("</style>").map_or(s.len(), |i| a + i + 8);
+            s.replace_range(a..b, " ");
+        }
+        let (mut out, mut in_tag) = (String::new(), false);
+        for c in s.chars() {
+            match c {
+                '<' => {
+                    in_tag = true;
+                    out.push(' ');
+                }
+                '>' if in_tag => in_tag = false,
+                c if !in_tag => out.push(c),
+                _ => {}
+            }
+        }
+        out
+    }
+
+    /// With a brand set, every state of the page in every language shows the line and the tab icon
+    /// and names no product anywhere, the policy is the policy of the page with no brand and
+    /// `; img-src 'self'`, and the page is the page with no brand in everything else: the brand line,
+    /// the icon link and the policy are the only three differences, so the texts, and with them the
+    /// consent sentence that the consent id is hashed from, are the ones of every instance.
+    #[test]
+    fn with_a_brand_every_state_in_every_language_differs_by_the_line_the_icon_and_the_policy() {
+        let brand = mohv();
+        assert!(brand.is_set() && !brand.v().is_empty());
+        let mut pages = 0;
+        for lang in LANGS {
+            let line = brand_line(&brand, lang);
+            assert!(
+                line.starts_with("<p class=\"brand\"><span aria-hidden=\"true\"><svg ")
+                    && line.ends_with("</svg></span> MOHV</p>"),
+                "{lang}: {line}"
+            );
+            let plain = every_page(lang, &unbranded());
+            let with = every_page(lang, &brand);
+            assert_eq!(plain.len(), 13);
+            for ((kind, p), (kind2, b)) in plain.iter().zip(&with) {
+                assert_eq!(kind, kind2);
+                pages += 1;
+                let expected = p
+                    .html
+                    .replacen("<p class=\"brand\">obop</p>", &line, 1)
+                    .replacen(
+                        "</title><style>",
+                        &format!("</title>{}<style>", icon_of(&brand)),
+                        1,
+                    );
+                assert_eq!(
+                    b.html, expected,
+                    "{lang}/{kind}: more than the line and the icon"
+                );
+                assert_eq!(
+                    b.csp,
+                    format!("{}; img-src 'self'", p.csp),
+                    "{lang}/{kind}: the policy"
+                );
+                assert!(!p.csp.contains("img-src"), "{lang}/{kind}");
+                // Nothing on the page names the product, in the text or in the markup.
+                assert!(
+                    !b.html.to_lowercase().contains("obop"),
+                    "{lang}/{kind}: {}",
+                    visible(&b.html)
+                );
+                assert!(visible(&b.html).contains("MOHV"), "{lang}/{kind}");
+                // One icon link, one brand line.
+                assert_eq!(b.html.matches("rel=\"icon\"").count(), 1, "{lang}/{kind}");
+                assert_eq!(
+                    b.html.matches("class=\"brand\"").count(),
+                    1,
+                    "{lang}/{kind}"
+                );
+                // Still no script and no style attribute, and the hash of the style sheet is the
+                // same: the stylesheet is not edited.
+                assert!(!b.html.contains("<script") && !b.html.contains(" style="));
+                assert_eq!(p.html.contains(CSS), b.html.contains(CSS));
+                assert!(b.html.contains(CSS), "{lang}/{kind}");
+            }
+        }
+        assert_eq!(pages, 13 * 7);
+    }
+
+    /// The title of the language, then the English title, then the name: the fallback chain of the
+    /// OAuth pages' brand line, on the signer's pages.
+    #[test]
+    fn the_line_is_the_title_of_the_language_then_the_english_title_then_the_name() {
+        let brand = branded(&[
+            ("name", "MOHV"),
+            ("title_en", "MOHV Mileage"),
+            ("title_sv", "MOHV Körjournal"),
+        ]);
+        let line_of = |lang: &str| {
+            let html = message(lang, "closed", &brand).html;
+            let a = html.find("<p class=\"brand\">").unwrap();
+            let end = html[a..].find("</p>").unwrap() + a;
+            html[a..end].to_string()
+        };
+        assert!(
+            line_of("sv").ends_with("MOHV Körjournal"),
+            "{}",
+            line_of("sv")
+        );
+        assert!(line_of("de").ends_with("MOHV Mileage"), "{}", line_of("de"));
+        assert!(line_of("en").ends_with("MOHV Mileage"), "{}", line_of("en"));
+        let name_only = mohv();
+        let html = message("fi", "closed", &name_only).html;
+        assert!(html.contains("</span> MOHV</p>"), "{html}");
+    }
+
+    /// The text of the line beside the logo on a page.
+    fn line_text(html: &str) -> String {
+        let a = html.find("<p class=\"brand\">").unwrap();
+        let end = html[a..].find("</p>").unwrap() + a;
+        let line = &html[a..end];
+        line[line.rfind("</span> ").unwrap() + "</span> ".len()..].to_string()
+    }
+
+    /// A brand with a title of its own in each of the seven languages shows that title, and no other,
+    /// on every kind of page in that language: the message pages (the refusals), the page after
+    /// signing and the form, with and without the list of the signatures so far. (A brand with the
+    /// titles of three languages cannot tell the language of a page from the English fallback in the
+    /// other four.)
+    #[test]
+    fn every_language_shows_its_own_title_on_the_message_the_done_and_the_form_page() {
+        let titles: Vec<(String, String)> = LANGS
+            .iter()
+            .map(|l| {
+                (
+                    format!("title_{l}"),
+                    format!("MOHV Title {}", l.to_uppercase()),
+                )
+            })
+            .collect();
+        let mut pairs: Vec<(&str, &str)> = vec![("name", "MOHV")];
+        pairs.extend(titles.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+        let brand = branded(&pairs);
+        assert!(brand.fallbacks().is_empty(), "{:?}", brand.fallbacks());
+        let history = pinned_history();
+        let mut seen = 0;
+        for lang in LANGS {
+            let want = format!("MOHV Title {}", lang.to_uppercase());
+            for (kind, page) in [
+                ("message", message(lang, "closed", &brand)),
+                (
+                    "done",
+                    done(lang, "2026-11-03T10:00:00.000000Z", None, &brand),
+                ),
+                (
+                    "done_history",
+                    done(lang, "2026-11-03T10:00:00.000000Z", Some(&history), &brand),
+                ),
+                ("form", form_in(lang, None, &brand)),
+                ("form_history", form_in(lang, Some(&history), &brand)),
+            ] {
+                assert_eq!(line_text(&page.html), want, "{lang}/{kind}");
+                seen += 1;
+            }
+        }
+        assert_eq!(seen, 5 * 7);
+        // An unknown language is shown in English, on the page and in the line alike.
+        assert_eq!(
+            line_text(&message("zz", "closed", &brand).html),
+            "MOHV Title EN"
+        );
+    }
+
+    /// A row written around the command: a name with every character that HTML needs escaped (the
+    /// read check lets `&`, `"` and `'` through, and refuses `<` and `>`), a title with a tag in it
+    /// (which falls back to the name). Neither reaches a page raw, in any state.
+    #[test]
+    fn a_hostile_name_and_title_written_around_the_command_are_escaped_on_every_page() {
+        let evil = "Acme & \"Sons\" 'x'";
+        let brand = row_around(&[
+            ("name", serde_json::json!(evil)),
+            ("title_sv", serde_json::json!("<script>alert(1)</script>")),
+            ("title_de", serde_json::json!("Tit & \"el\"")),
+            ("logo_svg", serde_json::json!(ARTWORK)),
+        ]);
+        assert!(brand.is_set());
+        let escaped = esc(evil);
+        assert_eq!(escaped, "Acme &amp; &quot;Sons&quot; &#39;x&#39;");
+        for lang in LANGS {
+            for (kind, p) in every_page(lang, &brand) {
+                assert!(!p.html.contains("<script"), "{lang}/{kind}");
+                assert!(!p.html.contains(evil), "{lang}/{kind}: the name raw");
+                let shown = match lang {
+                    "de" => esc("Tit & \"el\""),
+                    _ => escaped.clone(),
+                };
+                assert!(
+                    p.html.contains(&format!("</span> {shown}</p>")),
+                    "{lang}/{kind}: {}",
+                    brand_line(&brand, lang)
+                );
+            }
+        }
+        // A name that fails the read check altogether (a tag) is the default name, and the line
+        // says so rather than showing the tag.
+        let tag = row_around(&[("name", serde_json::json!("<b>Bold</b>"))]);
+        for lang in LANGS {
+            let html = message(lang, "closed", &tag).html;
+            assert!(
+                !html.contains("<b>") && !html.contains("&lt;b&gt;"),
+                "{html}"
+            );
+            assert!(html.contains("</span> obop</p>") || html.contains("class=\"brand\">obop</p>"));
+        }
+    }
+
+    /// The policy of a page differs from the policy of the page with no brand by `; img-src 'self'`
+    /// at the end and by nothing else, and it is that on the very predicate the OAuth pages use: a
+    /// brand that is not set (no row) leaves the policy and the head as they are.
+    #[test]
+    fn the_policy_gains_only_the_image_source_and_the_head_only_the_icon() {
+        let plain = message("en", "closed", &unbranded());
+        let with = message("en", "closed", &mohv());
+        assert!(!plain.csp.contains("img-src"));
+        assert!(with.csp.ends_with("; img-src 'self'"));
+        assert_eq!(
+            with.csp.strip_suffix("; img-src 'self'"),
+            Some(plain.csp.as_str())
+        );
+        assert_eq!(plain.html.matches("<link").count(), 0);
+        assert_eq!(with.html.matches("<link").count(), 1);
+        // The hash of the style sheet is in both.
+        let hash = b64std(&Sha256::digest(CSS.as_bytes()));
+        assert!(plain.csp.contains(&format!("style-src 'sha256-{hash}'")));
+        assert!(with.csp.contains(&format!("style-src 'sha256-{hash}'")));
+        // The frame, object and form directives of the page are the ones it had.
+        for d in [
+            "object-src 'self'",
+            "frame-src 'self'",
+            "form-action 'self'",
+            "frame-ancestors 'none'",
+            "base-uri 'none'",
+            "default-src 'none'",
+        ] {
+            assert!(with.csp.contains(d), "{d}");
+        }
+    }
+
+    /// The texts of the page are the ones of the catalogue, and the catalogue names no product in any
+    /// language: a brand has no word to replace, so it cannot change the consent id that eight of the
+    /// texts (nine with the history) are hashed into. (The id of a signature that was made with a
+    /// brand set is held at the door, in `crates/obop`.)
+    #[test]
+    fn the_texts_of_the_signer_name_no_product_in_any_language() {
+        for lang in LANGS {
+            for (key, _) in crate::sign_text::CATALOGUE {
+                let text = txt::fill(lang, key, &[("title", "x"), ("name", "x"), ("hash", "x")]);
+                assert!(
+                    !text.to_lowercase().contains("obop"),
+                    "{lang}/{key} names the product: {text}"
+                );
+            }
+        }
+    }
 }

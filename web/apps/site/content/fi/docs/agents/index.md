@@ -1,6 +1,6 @@
 ---
 title: "Agentit"
-description: "Näin tekoälyagentit otetaan käyttöön obopissa: agenttimalli, rajatut tunnisteet, maskatut henkilötiedot ja hyväksynnät, jotka pitävät ihmisen vastuussa kaikesta peruuttamattomasta."
+description: "Näin tekoälyagentit otetaan käyttöön obopissa: agenttimalli, rajatut tunnisteet, maskatut henkilötiedot ja hyväksynnät, jotka pitävät ihmisen vastuussa vaiheista, jotka on merkitty hyväksyntää vaativiksi."
 lead: "obop kohtelee tekoälyagentteja ensiluokkaisina käyttäjinä, joita rajoitetaan tarkoituksella. Tällä sivulla kuvataan malli; seuraavilla sivuilla näytetään, miten agentti otetaan käyttöön."
 ---
 
@@ -10,7 +10,7 @@ lead: "obop kohtelee tekoälyagentteja ensiluokkaisina käyttäjinä, joita rajo
 
 1. **Rajattu.** Agenttitunnisteeseen kuuluu lista käyttöoikeusryhmiä (sen _rajaukset_). Tunniste voi vain kaventaa omistajansa oikeuksia, ei koskaan laajentaa niitä. Ryhmän pyytäminen, jota omistajalla ei ole, evätään.
 2. **Maskattu.** Henkilötiedot palautetaan pysyvinä paikkamerkkeinä, kuten `EMAIL_1`. Talous-, henkilöstö- ja erityisryhmien tietokentät pidätetään. Agentti voi silti päätellä tietueista ja välittää paikkamerkkejä takaisin, mutta se ei koskaan näe oikeita arvoja. Katso [Maskauksen paikkamerkit](/docs/agents/masking/).
-3. **Ehdota, älä toteuta.** Agentti voi suorittaa tavallisia toimintoja rajaustensa puitteissa, mutta kaikesta peruuttamattomasta (laskun kirjaaminen, maksaminen, hyvittäminen, lähettäminen, julkaiseminen, poistaminen) se voi vain _ehdottaa_. Palvelin palauttaa suunnitelman tunnuksen eikä muuta mitään. Ihminen hyväksyy. Katso [Hyväksyntäkierros](/docs/agents/approvals/).
+3. **Ehdota, älä toteuta.** Agentti voi suorittaa tavallisia toimintoja rajaustensa puitteissa, mutta hyväksyntää vaativiksi merkityissä komennoissa (esimerkiksi laskun kirjaaminen, hyvittäminen, julkaiseminen ja tietueen poistaminen) se voi vain _ehdottaa_. Palvelin palauttaa suunnitelman tunnuksen eikä muuta mitään. Ihminen hyväksyy. Katso [Hyväksyntäkierros](/docs/agents/approvals/).
 4. **Sama ovi.** REST, MCP ja CLI kulkevat saman jakelijan kautta, joten agentilla on täsmälleen samat käyttöoikeudet, maskaus ja hyväksynnät riippumatta siitä, miten se yhdistää.
 
 ## Kolme tapaa yhdistää

@@ -10,7 +10,7 @@ lead: "Agenttitunniste on Bearer-tunniste, joka kuuluu henkilölle ja sisältä�
 - Se näytetään **kerran**. obop tallentaa vain tiivisteen, joten kadonnutta tunnistetta ei voi palauttaa; luo uusi.
 - Se alkaa merkkijonolla `obop_`. Kohtele sitä kuin salasanaa.
 - Vain henkilö voi luoda tunnisteita. Agentti ei voi luoda toista tunnistetta.
-- Se ei vanhene, ja se lakkaa toimimasta, kun omistaja poistetaan. Yksittäisen tunnisteen mitätöintikomentoa ei ole vielä (katso [Turvallisuus](/docs/agents/safety/)).
+- Se ei vanhene. Se ei toimi niin kauan kuin omistajan tili on poistettu käytöstä, ja se lakkaa toimimasta pysyvästi, kun omistajan käyttö lopetetaan pysyvästi (offboarding). Yksittäisen tunnisteen mitätöintikomentoa ei ole vielä (katso [Turvallisuus](/docs/agents/safety/)).
 
 ## Valitse rajaukset
 
@@ -37,7 +37,7 @@ curl -s -X POST http://127.0.0.1:8080/api/auth/login \
   -d '{"username":"alice","password":"your password"}'
 ```
 
-Vastaus on `{"token":"obop_..."}`: istuntotunniste, joka on voimassa 12 tuntia. Käytä sitä Bearer-tunnisteena agenttitunnisteen luomiseen:
+Vastaus on `{"token":"obop_..."}`: istuntotunniste, joka on voimassa 12 tuntia. Jos tilillä on kaksivaiheinen kirjautuminen käytössä, vastaus on sen sijaan `{"mfa_required":true,"mfa_token":"..."}`; lähetä `{"mfa_token":"...","code":"123456"}` todennussovelluksesi koodilla osoitteeseen `POST /api/auth/login/mfa`, niin saat istuntotunnisteen. Käytä istuntotunnistetta Bearer-tunnisteena agenttitunnisteen luomiseen:
 
 ```bash
 curl -s -X POST http://127.0.0.1:8080/api/auth/agent-token \
@@ -50,7 +50,7 @@ curl -s -X POST http://127.0.0.1:8080/api/auth/agent-token \
 { "token": "obop_1e00c3..." }
 ```
 
-Kenttä `scopes` on pakollinen, ja siinä on oltava vähintään yksi ryhmä, joka sinulla on. Kenttä `label` on vapaata tekstiä. Isännöidyssä instanssissa käytä sen osoitetta osoitteen `127.0.0.1:8080` sijaan ja kirjaudu sisään rekisteröitymisessä käyttämälläsi sähköpostiosoitteella käyttäjätunnuksena.
+Kenttä `scopes` on pakollinen, se ei saa olla tyhjä, ja siinä saa nimetä vain ryhmiä, jotka on merkitty omalle tilillesi; `platform.admin` ei tässä korvaa muita ryhmiä. Ohjaustason luoman instanssin ensimmäisellä tilillä on vain `platform.admin`, joten anna sille ensin ryhmät, jotka haluat luovuttaa, kohdassa _Mukauta, Tietoturva, Ihmiset_. Kenttä `label` on vapaata tekstiä. Tällaisessa instanssissa käytä sen osoitetta osoitteen `127.0.0.1:8080` sijaan ja kirjaudu sisään rekisteröitymisessä käyttämälläsi sähköpostiosoitteella käyttäjätunnuksena.
 
 ## CLI:llä
 
@@ -74,21 +74,22 @@ Sama tunniste yhdistää MCP-asiakkaan instanssin etä-MCP-palvelimeen `https://
 - Luo erillinen tunniste jokaista asiakasta varten ja anna sille vain ne rajaukset, joita asiakas tarvitsee. MCP-työkalulista on täsmälleen ne komennot, jotka rajaukset sallivat.
 - Myös sisäänkirjautumisen istuntotunniste toimii, mutta se vanhenee 12 tunnissa; agenttitunniste ei vanhene.
 - Tunniste on lähetettävä jokaisessa pyynnössä, ei vain ensimmäisessä; asiakkaat tekevät tämän, kun tunniste on niiden asetuksissa.
-- Asiakkaat, jotka tarjoavat selainkirjautumisen (Claude Desktop, claude.ai, Claude Code), eivät tarvitse liitettyä tunnistetta: ne yhdistävät kirjautumalla ja saavat tämänlaisen lyhytikäisen tunnisteen. Katso [Yhdistä MCP:n kautta](/docs/agents/mcp/).
+- Asiakkaat, jotka tukevat selainkirjautumista (OAuth), eivät tarvitse liitettyä tunnistetta: ne yhdistävät kirjautumalla ja saavat tunnisteen, joka on voimassa tunnin ja toimii vain osoitteessa `/mcp`. Emme ole vielä kokeilleet tätä Claude Desktopilla, claude.ai:lla tai Claude Codella; katso [Yhdistä MCP:n kautta](/docs/agents/mcp/).
 
 ## Säilytä se turvallisesti
 
 - Tallenna se ympäristömuuttujaan tai salaisuuksien hallintaan, älä repositorioon.
-- Käytä mieluiten yhtä tunnistetta agenttia ja tehtävää kohti, jotta ne voi erottaa toisistaan ja yhden voi poistaa muihin koskematta.
+- Käytä mieluiten yhtä tunnistetta agenttia ja tehtävää kohti, kussakin vain ne rajaukset, joita kyseinen agentti tarvitsee.
 - Asiakasohjelman asetustiedostossa oleva tunniste on luettavissa kaikilta, jotka voivat lukea tiedoston.
 
 ## Virheet
 
-| Vastaus                                                                        | Merkitys                                           |
-| ------------------------------------------------------------------------------ | -------------------------------------------------- |
-| `400 {"error":"an agent token needs at least one scope"}`                      | `scopes` oli tyhjä.                                |
-| `400 {"error":"you do not hold invoicing.manager, so you cannot delegate it"}` | Pyysit ryhmää, jota sinulla ei ole.                |
-| `400 {"error":"only a human user can issue agent tokens"}`                     | Käytit agenttitunnistetta pyytääksesi toista.      |
-| `401`                                                                          | Istuntotunniste puuttuu, on väärä tai vanhentunut. |
+| Vastaus                                                                            | Merkitys                                                                                                                  |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `400 {"error":"an agent token needs at least one scope"}`                          | `scopes` oli tyhjä.                                                                                                       |
+| `400 {"error":"you do not hold invoicing.manager, so you cannot delegate it"}`     | Pyysit ryhmää, jota sinulla ei ole.                                                                                       |
+| `400 {"error":"only a human user can issue agent tokens"}`                         | Käytit agenttitunnistetta pyytääksesi toista.                                                                             |
+| `401`                                                                              | Istuntotunniste puuttuu, on väärä tai vanhentunut.                                                                        |
+| `403 {"error":"two-factor authentication must be set up before you can continue"}` | Tilisi on ensin otettava kaksivaiheinen kirjautuminen käyttöön; siihen asti tällä istunnolla voi vain ottaa sen käyttöön. |
 
 Seuraavaksi: [yhdistä MCP:n kautta](/docs/agents/mcp/) tai [käytä REST-rajapintaa](/docs/agents/rest/).

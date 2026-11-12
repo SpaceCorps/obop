@@ -1,6 +1,6 @@
 ---
 title: "Agenci"
-description: "Jak skonfigurować agentów AI do pracy z obop: model agenta, tokeny o ograniczonym zakresie, zamaskowane dane osobowe oraz zatwierdzanie, dzięki któremu człowiek kontroluje wszystko, czego nie da się cofnąć."
+description: "Jak skonfigurować agentów AI do pracy z obop: model agenta, tokeny o ograniczonym zakresie, zamaskowane dane osobowe oraz zatwierdzanie, dzięki któremu człowiek kontroluje kroki oznaczone jako wymagające zatwierdzenia."
 lead: "obop traktuje agentów AI jak pełnoprawnych użytkowników, którzy są celowo ograniczeni. Ta strona opisuje model; kolejne pokazują, jak skonfigurować agenta."
 ---
 
@@ -10,7 +10,7 @@ lead: "obop traktuje agentów AI jak pełnoprawnych użytkowników, którzy są 
 
 1. **Ograniczony zakres.** Token agenta zawiera listę grup uprawnień (jego _zakresy_). Może tylko zawęzić to, co wolno jego właścicielowi, nigdy tego nie poszerza. Prośba o grupę, której właściciel nie posiada, zostanie odrzucona.
 2. **Maskowanie.** Dane osobowe wracają jako stałe tokeny zastępcze, takie jak `EMAIL_1`. Pola finansowe, kadrowe i należące do szczególnych kategorii danych są wstrzymane. Agent nadal może wnioskować o rekordach i przekazywać tokeny z powrotem, ale nigdy nie widzi prawdziwych wartości. Zobacz [Tokeny maskujące](/docs/agents/masking/).
-3. **Proponuj, nie zatwierdzaj.** Agent może uruchamiać zwykłe akcje w ramach swoich zakresów, ale w przypadku wszystkiego, czego nie da się cofnąć (księgowanie faktury, płatność, zwrot, wysyłka, publikacja, usunięcie), może jedynie _zaproponować_. Serwer zwraca identyfikator planu i niczego nie zmienia. Zatwierdza człowiek. Zobacz [Pętlę zatwierdzania](/docs/agents/approvals/).
+3. **Proponuj, nie zatwierdzaj.** Agent może uruchamiać zwykłe akcje w ramach swoich zakresów, ale w przypadku poleceń oznaczonych jako wymagające zatwierdzenia (na przykład księgowanie faktury, zwrot, publikacja i usunięcie rekordu) może jedynie _zaproponować_. Serwer zwraca identyfikator planu i niczego nie zmienia. Zatwierdza człowiek. Zobacz [Pętlę zatwierdzania](/docs/agents/approvals/).
 4. **Jedne drzwi.** REST, MCP i CLI przechodzą przez jeden dyspozytor, więc agent ma dokładnie te same uprawnienia, maskowanie i zatwierdzanie niezależnie od sposobu połączenia.
 
 ## Trzy sposoby połączenia

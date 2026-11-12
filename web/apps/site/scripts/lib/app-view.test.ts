@@ -997,6 +997,33 @@ describe("a card with plain words of its own (data/apps.ts)", () => {
     for (const key of ["ecommerce_order.refund", "ecommerce_order.refund_delivered"])
       expect(text("ecommerce", key), key).toContain("you pay it back yourself");
     expect(text("pos", "pos_order.refund")).toContain("By itself, this does not pay money back");
+    // refund runs only from paid (packages/ecommerce.toml:665-672): a shipped order has no refund.
+    expect(text("ecommerce", "ecommerce_order.refund")).toMatch(
+      /^Record the refund of an order that is paid and not yet shipped\./,
+    );
+    // The point of sale has no rules: its two flags are read by nothing (packages/pos.toml:44-60).
+    expect(text("pos", "pos_config")).not.toMatch(/\brules?\b/i);
+    // The tax rates are read by the public checkout only (crates/kernel/obop-site/src/checkout.rs:142-170).
+    expect(text("ecommerce", "ecommerce_tax_rate")).toContain("public checkout");
+  });
+
+  test("the technical text and the corrections of the package text say only what the packages do", () => {
+    const app = (id: string) => apps.find((a) => a.id === id)!;
+    // Nothing supports a custom storefront on the API (docs/STOREFRONT.md:127; docs/PRODUCT.md, Open).
+    expect(app("ecommerce").technical).toBeUndefined();
+    // The checkout takes stock only for these two policies (crates/kernel/obop-site/src/checkout.rs:318-322).
+    expect(app("ecommerce").description).toContain(
+      "whose stock policy is block_when_out or allow_backorder",
+    );
+    expect(app("ecommerce").description).not.toMatch(/Orders take stock off/);
+    // The stock moves of a till sale need a stock location, and the package needs Inventory (packages/pos.toml:16-19, :232).
+    expect(app("pos").description).toContain(
+      "When the sale has a stock location, paying also creates",
+    );
+    expect(app("pos").description).toContain("Needs the Products and Inventory packages.");
+    // Publishing is for knowledge.manager (packages/knowledge.toml:80-102), and nothing per article is promised.
+    expect(app("knowledge").purpose).toContain("managers publish, unpublish and archive them");
+    expect(app("knowledge").purpose).not.toMatch(/\byet\b|can write, arrange in a tree, publish/);
   });
 
   // A ratchet over the pages as they are drawn, not over the cards alone (claims.ts: each sentence
@@ -1060,7 +1087,10 @@ describe("a card with plain words of its own (data/apps.ts)", () => {
     const email = apps.find((a) => a.id === "email_marketing")!;
     const manifest = readFileSync(join(REPO, "packages/email_marketing.toml"), "utf8");
     const own = /^description = "([^"]+)"/m.exec(manifest)![1]!;
-    expect(own).toMatch(/irreversible and reaches real people/);
+    // The manifest no longer says that sending reaches people (pull request 114); the site's text adds what
+    // a Connectors connection can do, which the manifest does not know.
+    expect(own).toMatch(/No email is sent/);
+    expect(own).not.toMatch(/irreversible and reaches real people/);
     expect(email.description).not.toMatch(/irreversible and reaches real people/);
     for (const kept of [
       "Campaign statistics are numbers entered or imported, not computed.",
@@ -1467,6 +1497,7 @@ describe("a caveat that only a developer needs sits under 'For developers', move
         "base party.erase",
         "ecommerce ecommerce_order.refund",
         "ecommerce ecommerce_order.refund_delivered",
+        "fleet fleet_vehicle_driver",
         "planning (app)",
         "pos pos_order.pay",
         "pos pos_session.close",
@@ -1510,9 +1541,16 @@ describe("a caveat that only a developer needs sits under 'For developers', move
   test("the plain words that stay on top are still true on their own, and say what the limit does not", () => {
     const card = (id: string, key: string) => apps.find((a) => a.id === id)!.cards[key]!;
     const eco = card("ecommerce", "ecommerce_order.refund");
-    for (const key of ["ecommerce_order.refund", "ecommerce_order.refund_delivered"]) {
+    // A refusal leaves the order in the state the refund starts from (packages/ecommerce.toml:665-681;
+    // crates/kernel/obop-payments/src/lib.rs:843-875): paid for one, delivered for the other.
+    for (const [key, state] of [
+      ["ecommerce_order.refund", "paid"],
+      ["ecommerce_order.refund_delivered", "delivered"],
+    ] as const) {
       const c = card("ecommerce", key);
-      expect(c.text, key).toContain("the order stays paid if Stripe refuses. Otherwise you pay it");
+      expect(c.text, key).toContain(
+        `the order stays ${state} if Stripe refuses. Otherwise you pay it`,
+      );
       expect(c.text, key).not.toMatch(/stand-in|tested/);
       expect(c.limit, key).toBe(eco.limit);
     }
@@ -1540,6 +1578,35 @@ describe("a caveat that only a developer needs sits under 'For developers', move
     expect(card("pos", "pos_session.close").limit).toBe(
       "obop does not check that the drawer was counted.",
     );
+    // Nothing reads a driver's state or licence expiry (packages/fleet.toml:63-68, :77-82, :134-154): the
+    // suspend card says so on top, and the model card's limit adds the licence expiry, in the fold.
+    expect(card("fleet", "fleet_vehicle_driver.suspend").text).toContain(
+      "By itself, this does not stop the driver being assigned a vehicle.",
+    );
+    expect(card("fleet", "fleet_vehicle_driver").text).not.toMatch(/authori[sz]ed|checked/i);
+    // The fold that carries that limit also prints the model's description (app-page.ts), so it does not
+    // say it either.
+    const driverModel = apps
+      .find((a) => a.id === "fleet")!
+      .models.find((m) => m.name === "fleet_vehicle_driver")!;
+    expect(driverModel.description).toBe(
+      "A driver of fleet vehicles, with a status of active or suspended",
+    );
+    for (const mirror of [false, true])
+      expect(
+        developerBody(
+          apps.find((a) => a.id === "fleet")!,
+          "en",
+          messages.en,
+          mirror,
+          "",
+          apps,
+        ),
+      ).not.toMatch(/authori[sz]ed|drive again/i);
+    expect(card("fleet", "fleet_vehicle_driver").limit).toBe(
+      "A driver's status and licence expiry are not checked when a vehicle is assigned.",
+    );
+    expect(card("fleet", "fleet_vehicle_driver.reactivate").text).not.toMatch(/allow|drive again/i);
     expect(card("accounting", "accounting_move.post").text).toContain(
       "A posted entry can still be edited afterwards.",
     );
@@ -1635,7 +1702,8 @@ describe("a caveat that only a developer needs sits under 'For developers', move
   });
 
   test("limitsOf also takes the limit of a model card, headed by the card's title or the model's name", () => {
-    // No model card of data/apps.ts carries a limit today, so this is the only thing that reaches the branch.
+    // One model card of data/apps.ts carries a limit today (Fleet's driver, below); this synthetic app also
+    // tries the order after the app's own limit and a titled model card, which no real app has.
     const model = crm.models[0]!;
     const app = made({
       limits: ["A limit of the whole app."],
@@ -1671,6 +1739,11 @@ describe("a caveat that only a developer needs sits under 'For developers', move
     expect(lines.filter((l) => l.startsWith("- **Order: refund"))).toHaveLength(2);
     const planning = apps.find((a) => a.id === "planning")!;
     expect(limitsOf(planning)).toEqual([{ text: planning.limits[0]! }]);
+    // A model card's limit is headed by the card's title, the model's name without the app prefix.
+    const fleet = apps.find((a) => a.id === "fleet")!;
+    expect(limitsOf(fleet)).toEqual([
+      { head: "Vehicle driver", text: fleet.cards["fleet_vehicle_driver"]!.limit! },
+    ]);
     for (const locale of ["en", "de"] as const) {
       const m = messages[locale];
       for (const app of apps.filter((a) => limitsOf(a).some((l) => l.head))) {

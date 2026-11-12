@@ -53,7 +53,7 @@ description = "Name der Person, die unterzeichnen muss"
 
 [labels.de.model.sign_request.field.signer_email]
 label = "E-Mail Unterzeichner"
-description = "E-Mail-Adresse der unterzeichnenden Person; optional, obop versendet bei einer Anfrage zu einem Dokument keine E-Mail"
+description = "E-Mail-Adresse der unterzeichnenden Person; optional, bei einer Anfrage zu einem Dokument wird keine E-Mail versendet"
 
 [labels.de.model.sign_request.field.sent_on]
 label = "Gesendet am"

@@ -1,6 +1,6 @@
 [labels.pl.module]
 name = "Wydatki"
-description = "Wnioski o zwrot wydatków pracowników z obiegiem wersja robocza, przesłane, zatwierdzone i opłacone. Wypłata to osobne uprawnienie i wymaga zatwierdzenia przez człowieka. Wniosek ma numer z serii rocznej, a pracownik widzi i edytuje tylko własne wnioski; kierownicy i finanse widzą wszystkie."
+description = "Wnioski o zwrot wydatków pracowników z obiegiem wersja robocza, przesłane, zatwierdzone i opłacone. Wypłata to osobne uprawnienie. Zatwierdzenie, odrzucenie i wypłata wymagają akceptacji człowieka; agenci mogą je tylko zaproponować. Wniosek ma numer z serii rocznej, a pracownik widzi i edytuje tylko własne wnioski; kierownicy i finanse widzą wszystkie."
 summary = "Wnioski o zwrot wydatków pracowników z obiegiem wersja robocza, przesłane, zatwierdzone, opłacone."
 
 [labels.pl.model.expenses_expense]

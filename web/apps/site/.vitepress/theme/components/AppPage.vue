@@ -88,14 +88,11 @@ const pathParts = (path: string) => path.split(new RegExp("(?<=/)"));
       <div class="app-getbox">
         <p>{{ s.getLead }}</p>
         <a class="app-pill" :href="href('/docs/getting-started/')">{{ s.openObop }}</a>
-        <!-- The command is for developers: one quiet line to tap under the filled pill, not a second pill. -->
-        <details class="app-cmd">
-          <summary>{{ s.commandLine }}</summary>
-          <div class="language-bash">
-            <button class="copy" type="button" :aria-label="m.ui.copy"></button>
-            <pre><code>{{ view.command }}</code></pre>
-          </div>
-        </details>
+        <p class="app-or">{{ s.commandLine }}</p>
+        <div class="language-bash">
+          <button class="copy" type="button" :aria-label="m.ui.copy"></button>
+          <pre><code>{{ view.command }}</code></pre>
+        </div>
         <p class="fine">{{ s.getNote }}</p>
       </div>
     </section>

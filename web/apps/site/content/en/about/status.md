@@ -1,25 +1,27 @@
 ---
 title: "Status"
-description: "Service status for the hosted obop beta: where to see whether the control plane and instances are up, and what the status page does and does not promise."
-lead: "Is the hosted beta up? The live status page answers that; this page explains what it shows."
+description: "What the status page of an obop control plane checks. SpaceCorps does not host obop for other people yet, so there is no hosted service whose status this page could report."
+lead: "SpaceCorps does not host obop for other people yet, so there is no hosted service whose status to show. This page explains what the status page of a control plane checks."
 eyebrow: "Status"
 ---
 
-## Live status
+## The status page of a control plane
 
-The live status page is at [/status](/status). It is served by the control plane itself and reports the state of the service. If it does not load, that is a sign that the control plane is down.
+A control plane (`obop platform serve`) serves a status page at `/status`. It checks, from the control plane's own server:
 
-## What the status page covers
+- its own database (shown as the API and the forum);
+- with the `sliplane` provisioner, that the `sliplane` tool answers;
+- the website, when the control plane serves it;
+- the shared PostgreSQL server, when `OBOP_CELL_ADMIN_URL` is set;
+- the instances in its list that are marked as running (at most 200), both the ones it created and the ones registered with `obop platform register-instance`, by asking each one's https address (an instance whose address is not a plain `https://` host name, without a port or a path, or whose host name resolves to a private or other non-public address, is shown as not responding; so are the instances of the `local` provisioner, which have `http://127.0.0.1` addresses).
 
-- The control plane: sign-up, sign-in and the instance list.
-- The hosted instances the control plane provisions.
+It does not check an instance that is not in its list.
 
 ## What it does not promise
 
-The hosted service is a beta. There is no service level agreement, no uptime target and no support commitment yet. Instances may be restarted, upgraded or lost while the platform matures; the hosted service does not switch on scheduled backups of its databases yet (the program can take them, and a self-hosted instance can turn them on). Do not keep the only copy of important data in the hosted beta.
+There is no service level agreement, no uptime target and no support commitment. A control plane does not switch on scheduled backups of the instances it creates (the program can take them, and an instance you run yourself can turn them on).
 
 ## If something is down
 
-1. Check the [status page](/status).
-2. Look at the open issues in the [repository](https://github.com/SpaceCorps/obop/issues).
-3. Report it there if it is not already listed, without personal data or tokens.
+1. Look at the open issues in the [repository](https://github.com/SpaceCorps/obop/issues).
+2. Report it there if it is not already listed, without personal data or tokens.

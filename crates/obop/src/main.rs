@@ -19,6 +19,8 @@ mod brand_cmd_tests;
 #[cfg(test)]
 mod brand_commands_tests;
 #[cfg(test)]
+mod brand_docs_tests;
+#[cfg(test)]
 mod brand_enrol_tests;
 #[cfg(test)]
 mod brand_http_tests;
@@ -51,6 +53,9 @@ mod import_oas_tests;
 mod import_timeline;
 #[cfg(test)]
 mod internal_tables_scan_tests;
+mod invoice_posting;
+#[cfg(test)]
+mod invoice_posting_tests;
 #[cfg(test)]
 mod kinds_tests;
 #[cfg(test)]
@@ -83,11 +88,18 @@ mod public_site_tests;
 mod recorded_tables_tests;
 #[cfg(test)]
 mod settings_cmd_tests;
+#[cfg(test)]
+mod shell_pin_tests;
+#[cfg(test)]
+mod shell_tests;
 mod sie;
 #[cfg(test)]
 mod sie_tests;
 #[cfg(test)]
 mod sign_tests;
+mod vat;
+#[cfg(test)]
+mod vat_tests;
 // The reader of the Rust source that the scans of obop-http use, compiled here too (it is a file of
 // that crate's tests and uses nothing of it): the scan of the tables the program names needs the
 // real `App`, which only this crate has. What this crate's scan does not use is left alone.
@@ -158,9 +170,11 @@ const USAGE: &str = "usage: obop <command>
                                                 where each value comes from, the titles and messages that are stored, and any
                                                 stored field that fell back
   admin brand configure [--name N] [--slug S] [--title LANG=TEXT]... [--message LANG=TEXT]...
-                        [--logo-file FILE.svg | --clear-logo] [--from FILE.toml] [--dry-run]
+                        [--logo-file FILE.svg | --clear-logo] [--hide-product-docs on|off]
+                        [--from FILE.toml] [--dry-run]
                                                 set the fields given and keep the others (the first call needs --name); an empty text
-                                                clears a field (--title sv=); --from reads the [record] table of a values file;
+                                                clears a field (--title sv=); --hide-product-docs on hides the Brand book and the Guide
+                                                from the people of the instance; --from reads the [record] table of a values file;
                                                 --dry-run checks and writes nothing; every change is written to the security log
   admin brand clear [--dry-run]                 remove the branding
   admin brand check FILE.svg                    say whether FILE.svg is an artwork the branding accepts and its version, or every
@@ -2976,7 +2990,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("obop-check-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let bad = dir.join("bad.toml");
-        std::fs::write(&bad, fleet.replace("0.3.0", "2")).unwrap();
+        std::fs::write(&bad, fleet.replace("0.3.1", "2")).unwrap();
         let good = root.join("packages/fleet.toml");
         let (bad_s, good_s) = (
             bad.to_string_lossy().to_string(),

@@ -15,8 +15,8 @@ obop is below version 1.0. This page separates what runs today from what the pla
 - **Apps:** six built-in apps with a page (Contacts, Products, CRM, Sales, Invoicing, Connectors) and 24 declarative packages bundled in the marketplace (22 of them have a page in the [list of apps](/apps/)), installable and removable at runtime.
 - **Users:** Argon2id passwords, sessions, scoped agent tokens, two-factor sign-in (authenticator app or passkey).
 - **Web app:** generated screens: launcher, list, board, record panel, Customize (theme, apps, module builder), light and dark themes.
-- **Hosted beta:** a control plane that creates instances with their own database, on Sliplane.
-- **This website:** multi-page, static, in seven languages, with Markdown copies of every page.
+- **Control plane:** `obop platform serve`, where people sign up and create instances with their own database, locally or on Sliplane. SpaceCorps does not host obop for other people yet.
+- **This website:** multi-page, static, with Markdown copies of every page. The interface and the main pages are available in seven languages (machine-drafted); other pages show the English text.
 - **Languages of the web app:** English, German, French, Polish, Finnish, Swedish and Spanish. The six translations are machine-drafted.
 - **Tests:** Rust tests, and a Playwright end-to-end suite over the built app.
 
@@ -35,9 +35,10 @@ obop is below version 1.0. This page separates what runs today from what the pla
 - **Row rules in most apps.** A few apps have them; the others show every record to everyone who can read the model.
 - **Single sign-on** other than Microsoft Entra. Entra sign-in is built and has been tried only against a stand-in.
 - **A schema manager with typed columns**; records are JSON documents. Schema versions, the migration ledger (`obop migrate`) and the `[[migration]]` steps of module updates exist; the component that issues DDL and the check that the previous release runs against the new schema do not.
-- **Point-in-time recovery and a customer-facing export tool.** `obop backup` and `obop restore` exist (see above), but obop does not run point-in-time recovery (PostgreSQL does it, and it has not been tried on Sliplane), and the planned export job for a whole business is not built. The hosted service does not switch on scheduled backups of its databases yet.
-- **Country packs** (tax, e-invoicing, charts of accounts) and the e-invoicing formats the plan names. Germany is the first country and the only one the owner has decided; France second and Poland third are proposals.
+- **Point-in-time recovery and a customer-facing export tool.** `obop backup` and `obop restore` exist (see above), but obop does not run point-in-time recovery (PostgreSQL does it, and it has not been tried on Sliplane), and the planned export job for a whole business is not built. A control plane does not switch on scheduled backups of the instances it creates.
+- **Country packs** (tax, e-invoicing, charts of accounts) and the e-invoicing formats the plan names. The only bundled country package today is the experimental Accounting Sweden (voucher series, VAT codes and a VAT report; nothing in it has been checked against Skatteverket). Germany is the first country and the only one the owner has decided; France second and Poland third are proposals.
 - **Importers** for other systems such as Odoo, QuickBooks, Xero and ERPNext. A generic CSV import (`obop import` and the Import dialog) and a SIE file import for accounting exist.
+- **A hosted service.** SpaceCorps does not host obop for other people yet. A free sandbox with sample data only, run by SpaceCorps, is planned for the public beta; its details are still proposals.
 - **Billing.** Nothing is charged. The one planned paid service is dedicated hosting; it is not offered yet.
 
 ## The plan in waves

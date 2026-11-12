@@ -1,9 +1,9 @@
 ---
 title: "CLI reference"
-description: "Every obop command line command and option: serve, platform serve, mcp, call, commands, admin create, agent-token, modules, and operating a database: migrate, backup, restore, secrets rotate and upgrade-instances."
+description: "The main obop command line commands and options: serving, calling commands, users and tokens, modules, updating, and operating a database. `obop --help` prints the complete list."
 ---
 
-The `obop` binary has no subcommand help beyond one usage page (`obop --help`). This page restates it, with what each command does.
+The `obop` binary has no subcommand help beyond one usage page (`obop --help`). This page covers the commands an operator uses most; the usage page lists all of them.
 
 ```text
 obop <command> [options]
@@ -11,20 +11,20 @@ obop <command> [options]
 
 ## Global options
 
-| Option       | Meaning                                                                                                                                                                                          |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `--db URL`   | Where the data lives. `sqlite://obop.db` (default), `sqlite:///absolute/path.db`, `postgres://user:pass@host/db`, or `memory:` (gone when the process ends). Also read from `OBOP_DATABASE_URL`. |
-| `--demo`     | Add fake demo data. It is added automatically when a SQLite database is empty.                                                                                                                   |
-| `--dev-auth` | Use fixed tokens `dev-admin`, `dev-sales` and `dev-agent` instead of real sign-in. Refuses to bind to anything but localhost. For development only.                                              |
-| `--version`  | Print the version.                                                                                                                                                                               |
+| Option       | Meaning                                                                                                                                                                                                                                                   |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--db URL`   | Where the data lives. `sqlite://obop.db` (default; `sqlite://obop-platform.db` for the `platform` commands), `sqlite:///absolute/path.db`, `postgres://user:pass@host/db`, or `memory:` (gone when the process ends). Also read from `OBOP_DATABASE_URL`. |
+| `--demo`     | Add fake demo data. It is added automatically when a SQLite database is empty.                                                                                                                                                                            |
+| `--dev-auth` | Use fixed tokens `dev-admin`, `dev-sales` and `dev-agent` instead of real sign-in. Refuses to bind to anything but localhost. For development only.                                                                                                       |
+| `--version`  | Print the version.                                                                                                                                                                                                                                        |
 
 ## Serving
 
-| Command                                                                                                       | What it does                                                                                                                                                               |
-| ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `obop serve [--addr 127.0.0.1:8080] [--static DIR]`                                                           | Runs one instance: the REST API under `/api/` and, with `--static`, a directory of static files (the back office build). Unknown paths fall back to `DIR/index.html`.      |
-| `obop platform serve [--addr A] [--static DIR] [--provisioner local\|sliplane\|fake] [--instance-static DIR]` | Runs the control plane: sign-up, sign-in and instance management, plus the static website at `/`. `--instance-static` is the back office build that local instances serve. |
-| `obop mcp [--token TOKEN]`                                                                                    | MCP server on standard input and output for one token. Token from `--token` or `OBOP_TOKEN`. See [Connect over MCP](/docs/agents/mcp/).                                    |
+| Command                                                                                                                    | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `obop serve [--addr 127.0.0.1:8080] [--static DIR] [--public-site [--admin-prefix /admin]] [--trust-proxy]`                | Runs one instance: the REST API under `/api/`, MCP at `/mcp` and, with `--static`, a directory of static files (the back office build). Unknown paths fall back to `DIR/index.html`. `--public-site` (or `OBOP_PUBLIC_SITE=1`) serves the instance's public website at `/` and moves the back office to `--admin-prefix` (or `OBOP_ADMIN_PREFIX`, default `/admin`). Behind a proxy you control, add `--trust-proxy` (or `OBOP_TRUST_PROXY=1`) to take the client address from `X-Forwarded-For`; without it every visitor shares the proxy's address in the rate limits. |
+| `obop platform serve [--addr 127.0.0.1:8090] [--static DIR] [--provisioner local\|sliplane\|fake] [--instance-static DIR]` | Runs the control plane: sign-up, sign-in and instance management, plus the static website at `/`. `--instance-static` is the back office build that local instances serve.                                                                                                                                                                                                                                                                                                                                                                                                |
+| `obop mcp [--token TOKEN]`                                                                                                 | MCP server on standard input and output for one token. Token from `--token` or `OBOP_TOKEN`. See [Connect over MCP](/docs/agents/mcp/).                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 
 ## Calling commands
 
@@ -113,7 +113,7 @@ The commands above are command line only for now: none has a page or an API rout
 
 ## Exit status
 
-`0` on success. Anything else prints a line starting with `error:` on standard error. The backup commands have stable statuses: `3` a sealed backup's key is not configured (`restore_key_required`), `4` a plain backup where a key is configured (`backup_not_sealed`), `5` records restored but an uploaded file could not be written (`restore_files_failed`). `75` a call (`obop call`, `obop import`) met a refusal of the database (`storage_busy`, `storage_unavailable` or `storage_timeout`): the line says what became of the call's changes and how long to wait. Repeat the call only when the line says nothing was changed; when it says part of it was applied, or that a change in flight may or may not have been applied, read what the call touched first. A command that needs approval is reported as `error: ApprovalRequired { plan_id: ... }`.
+`0` on success; any failure exits non-zero. A command line that is not understood prints the usage page and exits `2`. The backup commands have stable statuses: `3` a sealed backup's key is not configured (`restore_key_required`), `4` a plain backup where a key is configured (`backup_not_sealed`), `5` records restored but an uploaded file could not be written (`restore_files_failed`). `75` a call (`obop call`, `obop import`) met a refusal of the database (`storage_busy`, `storage_unavailable` or `storage_timeout`): the line says what became of the call's changes and how long to wait. Repeat the call only when the line says nothing was changed; when it says part of it was applied, or that a change in flight may or may not have been applied, read what the call touched first. A command that needs approval is reported as `error: ApprovalRequired { plan_id: ... }`.
 
 ## Defaults worth knowing
 

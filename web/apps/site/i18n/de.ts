@@ -20,8 +20,7 @@ export const de: Messages = {
     docsNav: "Dokumentation",
     breadcrumb: "Brotkrumennavigation",
     home: "obop, Startseite",
-    signIn: "Anmelden",
-    startFree: "Kostenlos starten",
+    startFree: "Loslegen",
     search: "Suche",
     searchPlaceholder: "Website durchsuchen",
     searchEmpty: "Keine Ergebnisse. Versuchen Sie weniger oder andere Wörter.",
@@ -105,7 +104,7 @@ export const de: Messages = {
     titleA: "Ein Unternehmen.",
     titleB: "Eine Plattform.",
     lead: "CRM, Vertrieb, Rechnungsstellung und mehr auf einem einzigen Datenmodell. Gebaut für Menschen und für KI-Agenten, mit den Berechtigungen und dem Datenschutz, die beiden Vertrauen ermöglichen.",
-    ctaPrimary: "Eigene Instanz erhalten",
+    ctaPrimary: "Selbst betreiben",
     ctaSecondary: "Apps ansehen",
     heroPoints: [
       "Open Source",
@@ -115,7 +114,7 @@ export const de: Messages = {
     mockCaption: "Illustration mit Beispieldaten",
     appsTitle: "Alle Ihre Geschäfts-Apps. Eine Datenbank.",
     appsSub:
-      "Alle Apps teilen sich dieselben Kontakte, Produkte und Berechtigungen, sodass nichts zusammengeklebt werden muss. Einige Apps sind integriert; die anderen installieren Sie über den Marktplatz.",
+      "Alle Apps teilen sich eine Datenbank und einen Satz von Berechtigungsgruppen, und Vertrieb, Rechnungsstellung und Einkauf verwenden dieselben Kontakte und Produkte. Einige Apps sind integriert; die anderen installieren Sie über den Marktplatz.",
     seeAllApps: "Alle Apps und ihre Datenmodelle ansehen",
     pillarsTitle: "Gebaut für die heutige Arbeitsweise",
     pillarsSub:
@@ -136,8 +135,8 @@ export const de: Messages = {
       {
         icon: "grid",
         title: "Ein Datenmodell",
-        body: "Apps sind Module in einer gemeinsamen Registry, daher ist ein Kontakt in CRM, Vertrieb und Rechnungsstellung derselbe Kontakt. Berechtigungen, Audit und API gehören zu jedem Modell, das Sie hinzufügen.",
-        tag: "PostgreSQL darunter",
+        body: "Apps sind Module in einer gemeinsamen Registry, daher ist ein Kontakt in Vertrieb und Rechnungsstellung derselbe Kontakt. Berechtigungen, Datenklassen und API gehören zu jedem Modell, das Sie hinzufügen.",
+        tag: "PostgreSQL oder SQLite darunter",
       },
     ],
     flowLabel: "So arbeitet ein Agent mit Ihnen",
@@ -170,35 +169,35 @@ export const de: Messages = {
     marketCta: "Marktplatz entdecken",
     stepsTitle: "In drei Schritten startklar",
     steps: [
-      { title: "Registrieren", body: "Legen Sie ein Konto mit Ihrer E-Mail-Adresse an." },
       {
-        title: "Instanz erhalten",
-        body: "Ihre eigene Datenbank und Adresse, in wenigen Minuten bereit.",
+        title: "Starten",
+        body: "Starten Sie obop mit Docker oder bauen Sie es aus dem Quellcode.",
       },
+      { title: "Administrator anlegen", body: "Ein Befehl legt das erste Konto an." },
       {
         title: "Module hinzufügen",
-        body: "Melden Sie sich mit denselben Zugangsdaten an und installieren Sie die Apps, die Sie brauchen.",
+        body: "Melden Sie sich an und installieren Sie die Apps, die Sie brauchen, in der App Anpassen.",
       },
     ],
-    stepsCta: "Kostenlos starten",
+    stepsCta: "Loslegen",
     openTitle: "Open Source, und Sie können es selbst betreiben",
     openBody:
-      "obop ist in Rust geschrieben und läuft überall, wo PostgreSQL läuft. Nutzen Sie den gehosteten Dienst oder betreiben Sie dasselbe Programm selbst mit Docker. In beiden Fällen hat jedes Unternehmen seine eigene Datenbank, und die Daten gehören Ihnen.",
+      "Der obop-Server ist in Rust geschrieben und läuft mit SQLite oder PostgreSQL. Betreiben Sie ihn selbst mit Docker oder bauen Sie ihn aus dem Quellcode. Jedes Unternehmen hat seine eigene Datenbank, und die Daten gehören Ihnen.",
     openPoints: [
       {
-        title: "Von uns gehostet",
-        body: "Wir legen für Sie eine Instanz mit eigener Datenbank an. Während der Beta ist alles kostenlos.",
+        title: "Hosting, geplant",
+        body: "SpaceCorps plant eine kostenlose Sandbox nur mit Beispieldaten und kostenpflichtiges Hosting auf dedizierten Servern. Beides wird noch nicht angeboten.",
       },
       {
         title: "Selbst gehostet",
-        body: "Eine Binärdatei oder ein Docker-Image, SQLite zum Ausprobieren, PostgreSQL für den echten Einsatz.",
+        body: "Aus dem Quellcode bauen und direkt oder mit Docker betreiben. SQLite zum Ausprobieren, PostgreSQL für den echten Einsatz.",
       },
       {
         title: "Quellcode auf GitHub",
         body: "Lesen Sie den Code, die Entscheidungen und die Roadmap. Apache-2.0, frei nutzbar und selbst hostbar; siehe das Repository.",
       },
     ],
-    pricingTitle: "Kostenlos nutzbar. Hosting, wenn Sie es möchten.",
+    pricingTitle: "Kostenlos nutzbar. Hosting geplant.",
     pricingSub: `obop ist kostenlos und Open Source: Betreiben Sie es selbst auf Ihrem eigenen Server. Wenn Sie das lieber nicht tun, ist dediziertes Hosting ab ${eur(HOSTING.servers[0].eur)} im Monat geplant. Heute wird nichts berechnet.`,
     pricingFine:
       "Geplante Preise pro Server und Monat, zzgl. MwSt. Hosting wird noch nicht angeboten oder berechnet.",
@@ -207,11 +206,11 @@ export const de: Messages = {
     faq: [
       {
         q: "Was ist obop?",
-        a: "obop ist eine Open-Source-Geschäftsplattform. Sie bietet einem Unternehmen CRM, Vertrieb, Rechnungsstellung, Kontakte und Produkte auf einem Datenmodell und erlaubt es, weitere Apps aus einem Marktplatz zu installieren. Jede Aktion steht Menschen im Browser und KI-Agenten über REST, MCP und die Kommandozeile zur Verfügung.",
+        a: "obop ist eine Open-Source-Geschäftsplattform. Sie bietet einem Unternehmen CRM, Vertrieb, Rechnungsstellung, Kontakte und Produkte auf einem Datenmodell und erlaubt es, weitere Apps aus einem Marktplatz zu installieren. Menschen arbeiten im Browser, und KI-Agenten nutzen die Befehle von obop über REST, MCP und die Kommandozeile.",
       },
       {
         q: "Ist obop produktionsreif?",
-        a: "Noch nicht. obop hat die Version 1.0 noch nicht erreicht, daher kann eine neue Version noch etwas ändern. Der Kern funktioniert und ist getestet, die sechs integrierten Apps sind als Stabil gekennzeichnet, die übrigen Apps als Beta oder Experimentell, und viele mitgelieferte Apps sind bewusst einfach gehalten. Der gehostete Dienst schaltet zeitgesteuerte Sicherungen seiner Datenbanken noch nicht ein. Nutzen Sie obop vorerst zum Evaluieren und für unkritische Arbeit. Die Roadmap-Seite zeigt, was gebaut ist und was nicht.",
+        a: "Noch nicht. obop hat die Version 1.0 noch nicht erreicht, daher kann eine neue Version noch etwas ändern. Der Kern funktioniert und ist getestet, die sechs integrierten Apps sind als Stabil gekennzeichnet, die übrigen Apps als Beta oder Experimentell, und viele mitgelieferte Apps sind bewusst einfach gehalten. Nutzen Sie obop vorerst zum Evaluieren und für unkritische Arbeit. Die Roadmap-Seite zeigt, was gebaut ist und was nicht.",
       },
       {
         q: "Was kostet obop?",
@@ -219,7 +218,7 @@ export const de: Messages = {
       },
       {
         q: "Wo liegen meine Daten?",
-        a: "Jedes Unternehmen erhält eine eigene Datenbank, bei gehostetem und produktivem Betrieb in PostgreSQL. Wenn Sie selbst hosten, liegt sie dort, wo Sie obop betreiben. Datensätze werden als JSON-Dokumente gespeichert, bis der Schema-Manager existiert.",
+        a: "Auf dem Server, auf dem Sie obop betreiben: Jedes Unternehmen hat seine eigene Datenbank, SQLite zum Ausprobieren und PostgreSQL für den echten Einsatz. Hosting durch SpaceCorps wird noch nicht angeboten. Datensätze werden als JSON-Dokumente gespeichert, bis der Schema-Manager existiert.",
       },
       {
         q: "Wie arbeiten KI-Agenten mit obop?",
@@ -227,7 +226,7 @@ export const de: Messages = {
       },
       {
         q: "Kann ein Agent die personenbezogenen Daten meiner Kunden lesen?",
-        a: "Nicht im Klartext. Personenbezogene Daten kommen als stabile Platzhalter wie EMAIL_1 zurück, und finanzielle, Personal- und besonders schützenswerte Felder werden vollständig zurückgehalten. Der Agent kann einen Platzhalter zurückgeben, um sich auf einen Wert zu beziehen, ohne ihn je zu sehen.",
+        a: "Nicht im Klartext, sofern ein Feld als personenbezogen gekennzeichnet ist. Finanzielle Felder, Personalfelder, besonders schützenswerte und geheime Felder werden vollständig zurückgehalten, und die übrigen als personenbezogen gekennzeichneten Felder kommen als stabile Platzhalter wie EMAIL_1 zurück. Text in einem Feld, das nicht als personenbezogen gekennzeichnet ist, etwa in einer Beschreibung, wird nicht ersetzt. Der Agent kann einen Platzhalter zurückgeben, um sich auf einen Wert zu beziehen, ohne ihn je zu sehen.",
       },
       {
         q: "Kann ich eigene Apps bauen oder hinzufügen?",
@@ -239,8 +238,8 @@ export const de: Messages = {
       },
     ],
     ctaTitle: "Ein Unternehmen, eine Plattform.",
-    ctaBody: "Open Source, in Rust gebaut, läuft überall, wo PostgreSQL läuft.",
-    ctaButton: "Eigene Instanz erhalten",
+    ctaBody: "Open Source, Server in Rust gebaut, läuft mit SQLite oder PostgreSQL.",
+    ctaButton: "Loslegen",
   },
   pricing: {
     title: "Preise",
@@ -254,7 +253,7 @@ export const de: Messages = {
         name: "Selbst gehostet",
         price: eur(0),
         period: "",
-        blurb: "Das ganze Projekt auf Ihrem eigenen Server. Apache-2.0, für immer kostenlos.",
+        blurb: "Das ganze Projekt auf Ihrem eigenen Server. Apache-2.0, kostenlos nutzbar.",
         features: [
           "Jede mitgelieferte App",
           "REST-API, MCP und Kommandozeile",
@@ -276,7 +275,7 @@ export const de: Messages = {
     selfHostTitle: "Kostenlos, und Sie betreiben es selbst",
     selfHostBody:
       "obop hat keine kostenpflichtige Edition und keine zurückgehaltenen Funktionen: Jede App, die REST-API, MCP und die Kommandozeile sind in der kostenlosen Apache-2.0-Version enthalten. Sie betreiben es selbst mit SQLite oder PostgreSQL.",
-    hostingTitle: "Hosting, wenn Sie es möchten",
+    hostingTitle: "Hosting, geplant",
     hostingBody:
       "Ein geplanter Dienst: SpaceCorps betreibt einen dedizierten Server für Ihr Unternehmen auf der Infrastruktur von Sliplane, mit obop und PostgreSQL darauf. Der Preis richtet sich nach der Größe des Servers; es gibt keine Gebühren pro Nutzer.",
     faqTitle: "Fragen zu den Preisen",
@@ -287,14 +286,14 @@ export const de: Messages = {
       },
       {
         q: "Warum wird Hosting pro Server und nicht pro Nutzer berechnet?",
-        a: "Jedes gehostete Unternehmen erhält einen dedizierten Server, daher richtet sich der Preis nach der Größe des Servers und dem zusätzlichen Speicher. Weitere Personen kosten nichts extra.",
+        a: "Jedes gehostete Unternehmen würde einen dedizierten Server erhalten, daher würde sich der Preis nach der Größe des Servers und dem zusätzlichen Speicher richten. Weitere Personen würden nichts extra kosten.",
       },
       {
         q: "Kann ich gehen und meine Daten mitnehmen?",
         a: "Ja. obop steht unter Apache-2.0 und die Datenbank ist einfaches PostgreSQL, Sie können dieselbe Software also selbst betreiben; obop backup und obop restore sind eingebaut.",
       },
     ],
-    cta: "Eigene Instanz erhalten",
+    cta: "Selbst betreiben",
   },
   apps: {
     title: "Apps",
@@ -401,7 +400,7 @@ export const de: Messages = {
     store: {
       ready: "Bei obop dabei",
       more: "Weitere Apps",
-      open: "Öffnen",
+      open: "Loslegen",
       get: "Laden",
       canDo: "Was Sie damit tun können",
       keeps: "Was sie speichert",
@@ -426,7 +425,7 @@ export const de: Messages = {
       showMoreKeeps: "{n} weitere gespeicherte Dinge anzeigen",
       getLead: "Installieren Sie sie in der App Anpassen unter Marktplatz.",
       commandLine: "Oder über die Kommandozeile",
-      openObop: "obop öffnen",
+      openObop: "Loslegen",
       getNote: "Sie brauchen ein Administratorkonto.",
       included: "In jedem obop enthalten.",
       experimentalNote: "Noch in der Erprobung. Probieren Sie es zuerst mit Beispieldaten aus.",

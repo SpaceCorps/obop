@@ -20,8 +20,7 @@ export const es: Messages = {
     docsNav: "Documentación",
     breadcrumb: "Ruta de navegación",
     home: "obop, inicio",
-    signIn: "Iniciar sesión",
-    startFree: "Empezar gratis",
+    startFree: "Empezar",
     search: "Buscar",
     searchPlaceholder: "Buscar en el sitio",
     searchEmpty: "Sin resultados. Prueba con menos palabras o con otras distintas.",
@@ -105,7 +104,7 @@ export const es: Messages = {
     titleA: "Un negocio.",
     titleB: "Una plataforma.",
     lead: "CRM, ventas, facturación y más sobre un único modelo de datos. Pensada para personas y para agentes de IA, con los permisos y la privacidad necesarios para confiar en ambos.",
-    ctaPrimary: "Obtén tu propia instancia",
+    ctaPrimary: "Ejecútalo tú mismo",
     ctaSecondary: "Ver las aplicaciones",
     heroPoints: [
       "Código abierto",
@@ -115,7 +114,7 @@ export const es: Messages = {
     mockCaption: "Ilustración con datos de ejemplo",
     appsTitle: "Todas las aplicaciones de tu negocio. Una sola base de datos.",
     appsSub:
-      "Todas las aplicaciones comparten los mismos contactos, productos y permisos, así que no hay nada que integrar a mano. Algunas aplicaciones vienen incluidas; las demás se instalan desde el marketplace.",
+      "Todas las aplicaciones comparten una base de datos y un mismo conjunto de grupos de permisos, y ventas, facturación y compras usan los mismos contactos y productos. Algunas aplicaciones vienen incluidas; las demás se instalan desde el marketplace.",
     seeAllApps: "Explora todas las aplicaciones y sus modelos de datos",
     pillarsTitle: "Hecha para la forma en que se trabaja hoy",
     pillarsSub:
@@ -136,8 +135,8 @@ export const es: Messages = {
       {
         icon: "grid",
         title: "Un único modelo de datos",
-        body: "Las aplicaciones son módulos de un mismo registro, de modo que un contacto es el mismo contacto en CRM, ventas y facturación. Los permisos, la auditoría y la API vienen con cada modelo que añades.",
-        tag: "PostgreSQL por debajo",
+        body: "Las aplicaciones son módulos de un mismo registro, de modo que un contacto es el mismo contacto en ventas y facturación. Los permisos, las clases de datos y la API vienen con cada modelo que añades.",
+        tag: "PostgreSQL o SQLite por debajo",
       },
     ],
     flowLabel: "Cómo trabaja un agente contigo",
@@ -170,35 +169,32 @@ export const es: Messages = {
     marketCta: "Explorar el marketplace",
     stepsTitle: "Empieza en tres pasos",
     steps: [
-      { title: "Regístrate", body: "Crea una cuenta con tu correo electrónico." },
-      {
-        title: "Obtén tu instancia",
-        body: "Tu propia base de datos y dirección, listas en minutos.",
-      },
+      { title: "Inícialo", body: "Ejecuta obop con Docker o compílalo desde el código fuente." },
+      { title: "Crea tu administrador", body: "Un comando crea la primera cuenta." },
       {
         title: "Añade módulos",
-        body: "Inicia sesión con las mismas credenciales e instala las aplicaciones que necesites.",
+        body: "Inicia sesión e instala las aplicaciones que necesites desde Personalizar.",
       },
     ],
-    stepsCta: "Empezar gratis",
+    stepsCta: "Empezar",
     openTitle: "Código abierto y tuyo para alojar",
     openBody:
-      "obop está escrito en Rust y funciona en cualquier lugar donde funcione PostgreSQL. Usa el servicio alojado o ejecuta el mismo programa tú mismo con Docker. En ambos casos, cada negocio tiene su propia base de datos y los datos son tuyos.",
+      "El servidor de obop está escrito en Rust y funciona con SQLite o PostgreSQL. Ejecútalo tú mismo con Docker o compílalo desde el código fuente. Cada negocio tiene su propia base de datos y los datos son tuyos.",
     openPoints: [
       {
-        title: "Alojado por nosotros",
-        body: "Creamos para ti una instancia con su propia base de datos. Todo es gratis durante la beta.",
+        title: "Alojamiento, previsto",
+        body: "SpaceCorps prevé un entorno de pruebas gratuito, solo con datos de ejemplo, y un alojamiento de pago en servidores dedicados. Ninguno de los dos se ofrece todavía.",
       },
       {
         title: "Autoalojado",
-        body: "Un binario o una imagen de Docker: SQLite para probar, PostgreSQL para un uso real.",
+        body: "Compílalo desde el código fuente y ejecútalo directamente o con Docker. SQLite para probar, PostgreSQL para un uso real.",
       },
       {
         title: "Código en GitHub",
         body: "Lee el código, las decisiones y la hoja de ruta. Apache-2.0, de uso libre y autoalojable; consulta el repositorio.",
       },
     ],
-    pricingTitle: "Gratis de usar. Alojamiento si lo quieres.",
+    pricingTitle: "Gratis de usar. Alojamiento previsto.",
     pricingSub: `obop es gratuito y de código abierto: ejecútalo tú mismo en tu propio servidor. Si prefieres no hacerlo, el alojamiento dedicado está previsto desde ${eur(HOSTING.servers[0].eur)} al mes. Hoy no se cobra nada.`,
     pricingFine:
       "Precios previstos por servidor y mes, sin IVA. El alojamiento aún no se ofrece ni se cobra.",
@@ -207,11 +203,11 @@ export const es: Messages = {
     faq: [
       {
         q: "¿Qué es obop?",
-        a: "obop es una plataforma empresarial de código abierto. Ofrece a una empresa CRM, ventas, facturación, contactos y productos sobre un único modelo de datos, y permite instalar más aplicaciones desde un marketplace. Cada acción está disponible para las personas en el navegador y para los agentes de IA mediante REST, MCP y la línea de comandos.",
+        a: "obop es una plataforma empresarial de código abierto. Ofrece a una empresa CRM, ventas, facturación, contactos y productos sobre un único modelo de datos, y permite instalar más aplicaciones desde un marketplace. Las personas trabajan en el navegador, y los agentes de IA usan los comandos de obop mediante REST, MCP y la línea de comandos.",
       },
       {
         q: "¿Está obop listo para producción?",
-        a: "Todavía no. obop aún no ha llegado a la versión 1.0, así que una nueva versión todavía puede cambiar cosas. El núcleo funciona y está probado, las seis aplicaciones integradas figuran como Estable, las demás como Beta o Experimental, y muchas de las aplicaciones incluidas son deliberadamente sencillas. El servicio alojado aún no activa las copias de seguridad programadas de sus bases de datos. Por ahora, úsalo para evaluarlo y para trabajo no crítico. La página de la hoja de ruta indica qué está construido y qué no.",
+        a: "Todavía no. obop aún no ha llegado a la versión 1.0, así que una nueva versión todavía puede cambiar cosas. El núcleo funciona y está probado, las seis aplicaciones integradas figuran como Estable, las demás como Beta o Experimental, y muchas de las aplicaciones incluidas son deliberadamente sencillas. Por ahora, usa obop para evaluarlo y para trabajo no crítico. La página de la hoja de ruta indica qué está construido y qué no.",
       },
       {
         q: "¿Cuánto cuesta?",
@@ -219,7 +215,7 @@ export const es: Messages = {
       },
       {
         q: "¿Dónde se guardan mis datos?",
-        a: "Cada negocio tiene su propia base de datos, en PostgreSQL para el servicio alojado y para producción. Si lo autoalojas, los datos están donde lo ejecutes. Los registros se guardan como documentos JSON hasta que exista el gestor de esquemas.",
+        a: "En el servidor donde ejecutes obop: cada negocio tiene su propia base de datos, SQLite para probar y PostgreSQL para un uso real. SpaceCorps aún no ofrece alojamiento. Los registros se guardan como documentos JSON hasta que exista el gestor de esquemas.",
       },
       {
         q: "¿Cómo trabajan los agentes de IA con obop?",
@@ -227,7 +223,7 @@ export const es: Messages = {
       },
       {
         q: "¿Puede un agente leer los datos personales de mis clientes?",
-        a: "No en claro. Los datos personales se devuelven como tokens marcadores estables, como EMAIL_1, y los campos financieros, de RR. HH. y de categorías especiales se retienen por completo. El agente puede devolver un token para referirse a un valor sin llegar a verlo.",
+        a: "No en claro cuando un campo está marcado como dato personal. Los campos financieros, de RR. HH., de categorías especiales y secretos se retienen por completo, y los demás campos marcados como datos personales se devuelven como tokens marcadores estables, como EMAIL_1. El texto escrito en un campo que no está marcado como dato personal, como una descripción, no se sustituye. El agente puede devolver un token para referirse a un valor sin llegar a verlo.",
       },
       {
         q: "¿Puedo crear o añadir mis propias aplicaciones?",
@@ -239,9 +235,8 @@ export const es: Messages = {
       },
     ],
     ctaTitle: "Un negocio, una plataforma.",
-    ctaBody:
-      "Código abierto, escrita en Rust, funciona en cualquier lugar donde funcione PostgreSQL.",
-    ctaButton: "Obtén tu propia instancia",
+    ctaBody: "Código abierto, servidor escrito en Rust, funciona con SQLite o PostgreSQL.",
+    ctaButton: "Empezar",
   },
   pricing: {
     title: "Precios",
@@ -255,7 +250,7 @@ export const es: Messages = {
         name: "Autoalojado",
         price: eur(0),
         period: "",
-        blurb: "El proyecto completo en tu propio servidor. Apache-2.0, gratis para siempre.",
+        blurb: "El proyecto completo en tu propio servidor. Apache-2.0, gratuito de usar.",
         features: [
           "Todas las apps incluidas",
           "API REST, MCP y línea de comandos",
@@ -277,7 +272,7 @@ export const es: Messages = {
     selfHostTitle: "Gratis, y lo ejecutas tú",
     selfHostBody:
       "obop no tiene edición de pago ni funciones reservadas: cada app, la API REST, MCP y la línea de comandos están en la versión gratuita Apache-2.0. Lo ejecutas tú mismo con SQLite o PostgreSQL.",
-    hostingTitle: "Alojamiento, si lo quieres",
+    hostingTitle: "Alojamiento, previsto",
     hostingBody:
       "Un servicio previsto: SpaceCorps gestiona un servidor dedicado para tu empresa en la infraestructura de Sliplane, con obop y PostgreSQL en él. El precio sigue el tamaño del servidor; no hay tarifas por usuario.",
     faqTitle: "Preguntas sobre precios",
@@ -288,14 +283,14 @@ export const es: Messages = {
       },
       {
         q: "¿Por qué el alojamiento se cobra por servidor y no por usuario?",
-        a: "Cada empresa alojada recibe un servidor dedicado, así que el precio sigue el tamaño del servidor y el almacenamiento que añadas. Añadir personas no cuesta nada más.",
+        a: "Cada empresa alojada recibiría un servidor dedicado, así que el precio seguiría el tamaño del servidor y el almacenamiento que añadas. Añadir personas no costaría nada más.",
       },
       {
         q: "¿Puedo irme y llevarme mis datos?",
         a: "Sí. obop tiene licencia Apache-2.0 y su base de datos es PostgreSQL normal, así que puedes ejecutar el mismo software tú mismo; obop backup y obop restore vienen integrados.",
       },
     ],
-    cta: "Obtén tu propia instancia",
+    cta: "Ejecútalo tú mismo",
   },
   apps: {
     title: "Aplicaciones",
@@ -400,7 +395,7 @@ export const es: Messages = {
     store: {
       ready: "Incluidas en obop",
       more: "Más aplicaciones",
-      open: "Abrir",
+      open: "Empezar",
       get: "Obtener",
       canDo: "Qué puedes hacer",
       keeps: "Qué guarda",
@@ -425,7 +420,7 @@ export const es: Messages = {
       showMoreKeeps: "Mostrar {n} elementos guardados más",
       getLead: "Instálala desde la aplicación Personalizar, en Mercado.",
       commandLine: "O desde la línea de comandos",
-      openObop: "Abrir obop",
+      openObop: "Empezar",
       getNote: "Necesitas una cuenta de administrador.",
       included: "Incluida en cada obop.",
       experimentalNote: "Todavía en pruebas. Pruébala primero con datos de ejemplo.",

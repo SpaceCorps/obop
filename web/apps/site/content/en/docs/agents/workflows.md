@@ -28,17 +28,18 @@ These examples assume the agent is connected over [MCP](/docs/agents/mcp/) or [R
 
 **Prompt**
 
-> The lead "Warehouse pilot" has reached the qualified stage. The customer is the party with id 01a1464f-b0c8-700e-9f39-0cbf8e848c0b. Look up the list prices of the products I name below and create a draft sale order for that party with the matching total and currency EUR. Leave it in draft. Tell me the order id.
+> The lead "Warehouse pilot" has reached the qualified stage. The customer is the party with id 01a1464f-b0c8-700e-9f39-0cbf8e848c0b. Look up the list prices of the products I name below and create a draft sale order for that party in currency EUR with one line per product, at its list price. Leave it in draft. Tell me the order id.
 
 **What the agent does**
 
 1. `lead__search` to confirm the lead and its stage.
 2. `product__search` for list prices (`list_price_minor`, an integer in minor units).
-3. `sale_order__create` with `party_id`, `total_minor` and `currency`. The state starts at `draft` and the agent cannot set it to anything else.
+3. `sale_order__create` with `party_id` and `currency`. The state starts at `draft` and the agent cannot set it to anything else.
+4. `sale_order_line__create` once per product with `order_id`, `product_id`, `quantity` and `unit_price_minor`. The order total (`total_minor`) and each line amount are computed and cannot be set.
 
 The prompt gives the party id because masked contact details on a lead cannot be matched to a party: tokens differ per field, and an agent cannot search masked fields.
 
-**Where a person steps in:** confirming the order. The agent could run `sale_order__confirm` too, because Sales has no approval step; if you want a person to confirm, do not put `confirm` in the prompt, or keep the agent's scope to a read-only group.
+**Where a person steps in:** confirming the order. With these scopes `sale_order__confirm` is refused, because confirming also creates the draft invoice and needs `invoicing.user`. An agent that also holds `invoicing.user` could confirm, since Sales has no approval step; if you want a person to confirm, do not give the agent `invoicing.user` and do not put `confirm` in the prompt.
 
 ## Prepare invoices for approval
 
@@ -56,16 +57,16 @@ The prompt gives the party id because masked contact details on a lead cannot be
 
 **Prompt**
 
-> Find leads in `qualified` with no expected revenue and list them for me. Do not edit them. Then find leads in `new` that have no contact name and suggest which to archive. Do not delete anything; if you think a lead should go, say which and why.
+> Find leads in `qualified` with no expected revenue and list them for me. Do not edit them. Then find leads in `new` that have no contact name and suggest which to mark lost. Do not delete anything; if you think a lead should go, say which and why.
 
 An agent can only propose a delete, so even a mistaken instruction does no immediate harm. The plan appears as `approval_required`.
 
 ## A scheduled daily summary over the CLI
 
-**Scopes:** read-only groups such as `crm.user`.
+**Scopes:** `crm.user`. CRM has no read-only group, so this token can also create and change leads; only deleting waits for approval.
 
 ```bash
-export OBOP_TOKEN=obop_read_only_token
+export OBOP_TOKEN=obop_agent_token
 obop call lead search 'filter=[{"field":"stage","op":"eq","value":"won"}]' limit=50 > won.json
 ```
 

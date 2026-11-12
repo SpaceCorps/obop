@@ -7,7 +7,7 @@ eyebrow: "Cómo funciona"
 
 ## Una instancia por negocio
 
-Cada negocio funciona en su propia **instancia**, con su propia base de datos, sus propios usuarios y su propia dirección. En el servicio alojado, un plano de control crea la instancia por ti tras el registro y te da su dirección; la persona que se registró se convierte en su primer administrador. También puedes ejecutar el mismo programa tú mismo. Consulta [Instancias](/docs/concepts/instances/).
+Cada negocio funciona en su propia **instancia**, con su propia base de datos, sus propios usuarios y su propia dirección. El programa lo ejecutas tú: un `obop serve` es una instancia. El mismo programa tiene un segundo modo, un plano de control (`obop platform serve`), donde las personas se registran y crean sus propias instancias; quien crea una instancia es su primer administrador. SpaceCorps aún no aloja obop para otras personas. Consulta [Instancias](/docs/concepts/instances/).
 
 El almacenamiento es SQLite para probar y PostgreSQL para un uso real. Por ahora, los registros se guardan como documentos JSON; la capa de comandos comprueba los tipos de los campos y está previsto un gestor de esquemas.
 
@@ -51,7 +51,7 @@ Ten en cuenta esto antes de comprometerte:
 - No hay niveles de código más allá de los paquetes declarativos (ni componentes WebAssembly ni aplicaciones remotas), por lo que un paquete de aplicación no ejecuta código propio y no puede declarar llamadas a otros sistemas, aunque sí puede declarar totales calculados y acciones que cambian otros registros de la misma base de datos.
 - Solo algunas aplicaciones (por ejemplo Expenses, Timesheets, las solicitudes de ausencia de HR, Documents y Dashboards) limitan qué registros ve una persona. CRM, Sales e Invoicing no lo hacen.
 - El registro de seguridad recoge, por ejemplo, eventos de cuentas, de inicio de sesión, de ajustes de seguridad, de módulos y de firmas, pero no es un historial de los cambios en los registros del negocio.
-- La tarea de exportación prevista para todo un negocio no está construida. Una lista se exporta como CSV desde la aplicación web (hasta 20 000 registros), y `obop backup --plain` escribe los registros y los archivos subidos de una base de datos en un archivo sin cifrar (los valores de corta duración, como las sesiones, se dejan fuera, y los secretos siguen sellados).
-- El servicio alojado aún no activa las copias de seguridad programadas de sus bases de datos (quien ejecuta obop por su cuenta puede activarlas).
+- La tarea de exportación prevista para todo un negocio no está construida. Una lista se exporta como CSV desde la aplicación web (hasta 20 000 registros), y `obop backup --plain` escribe los registros y los archivos subidos de una base de datos en un archivo sin cifrar (los valores de corta duración, como las sesiones, se dejan fuera; los secretos siguen sellados, pero si no se definió `OBOP_SECRET_KEY`, la clave que obop generó para ellos está en el archivo).
+- Un plano de control no activa las copias de seguridad programadas de las instancias que crea (quien ejecuta una instancia por su cuenta puede activarlas).
 
 La [hoja de ruta](/roadmap/) indica qué está construido y qué no.

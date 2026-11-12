@@ -673,6 +673,40 @@ async fn the_title_of_the_document_is_escaped_on_the_page() {
     assert!(!html.contains("<i>x</i>"));
 }
 
+/// The title of the request is the one text the head of the page carries: staff chose it and the
+/// signer's browser shows it in the tab. One that closes the element and opens a tag is text there.
+#[tokio::test]
+async fn the_title_of_the_request_is_escaped_in_the_head_of_the_page() {
+    let f = fixture().await;
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_request/update",
+            json!({"id": f.req, "title": "T</title><i>x</i>"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_request/send_document",
+            json!({"id": f.req}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let (_, path) = f.mint("mia", &f.req.clone()).await;
+    let html = f.get(&path, &ip(37)).await.text();
+    let open = html.find("<title>").expect("a title element") + "<title>".len();
+    let close = html.find("</title>").expect("a title element");
+    assert!(
+        html[open..close].contains("T&lt;/title&gt;&lt;i&gt;x&lt;/i&gt;"),
+        "{}",
+        &html[open..close]
+    );
+    assert_eq!(html.matches("</title>").count(), 1, "{html}");
+    assert!(!html.contains("<i>x</i>") && !html.contains("</title><i"));
+}
+
 // ---- what the documents promise, pinned --------------------------------------------------
 
 #[tokio::test]

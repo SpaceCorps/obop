@@ -6,11 +6,13 @@
 //! whose precedence involves a surface that is not built yet would be untrue at the merge. It holds,
 //! from the first slice: `name`, `slug`, `logo`, `tile_accent`, `title_<lang>` and `message_<lang>`
 //! (seven languages each); since the slice that reads the record for the enrolment texts,
-//! `authenticator_issuer`; and, from the slice that reads the record for the public site (S1f), the
+//! `authenticator_issuer`; from the slice that reads the record for the public site (S1f), the
 //! entries `site.title`, `site.logo_url`, `site.accent` and `favicon`, decided by the same function
-//! that fills the site's settings (`site::view`), so that what `get` says is what the shop shows.
-//! `accent` arrives with the slice that reads the record for the back office (S2). Each of those adds
-//! its entries here and its cases to the tests.
+//! that fills the site's settings (`site::view`), so that what `get` says is what the shop shows;
+//! and, since the back office page reads the record (S2), `accent`: the accent the sign-in screens
+//! use, the theme's stored one (source `theme`) else the stock violet (source `default`); with no
+//! row the page carries no tag and the answer is the stock violet, whatever the theme stores. Each of
+//! those adds its entries here and its cases to the tests.
 //!
 //! **The source.** `record` when the value is the stored value of a field that passed the read check,
 //! or is derived from one (the effective slug from a stored name, a title that falls back to the
@@ -123,6 +125,17 @@ impl Fresh {
                 entry(chosen.value.as_str(), chosen.source.word()),
             );
         }
+        // The accent of the sign-in screens: the theme's, else the stock violet of the back office.
+        // The screens take the theme's only from the tag of a brand that is set (the page has no
+        // tag with no row), so with no row the accent in force is the stock one whatever the theme
+        // stores, as for every other value of an instance that sets nothing.
+        out.insert(
+            "accent".into(),
+            match shown.theme_accent().filter(|_| shown.is_set()) {
+                Some(a) => entry(a, THEME),
+                None => entry(tile::DEFAULT_VIOLET, DEFAULT),
+            },
+        );
         for lang in LANGS {
             let from_record = self.set()
                 && (!brand.stored_title(lang).is_empty()

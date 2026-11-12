@@ -215,6 +215,10 @@ pub(crate) fn same_origin(h: &HeaderMap, base: &str) -> bool {
 /// after this read, and `webauthn_ctx` asks the reader for the display name once more through
 /// `passkeys::rp_name` (S1e): within the two seconds of the reader's cell that is a hit that costs
 /// the store nothing, and the name it returns is shown by no page and emitted by no sign-in.)
+/// Slice S1d uses this one function for the other handlers that make a page and run on a blocking
+/// thread: the three of the signer's door (`sign.rs`: the page, the post that signs and the PDF,
+/// whose refusals are pages) and the OAuth callback of the connectors (`connectors.rs`), each once
+/// and first, so that no second implementation of the read exists; the scan pins those calls too.
 ///
 /// When the refill meets a store fault, the pool has noted it on this request: `ops::storage_faults`
 /// answers the request with the 503 of D74 whatever the handler sends, and `fault::before_write`
@@ -255,7 +259,7 @@ pub(crate) fn same_origin(h: &HeaderMap, base: &str) -> bool {
 /// it came for either. (Putting the counters under `before_write` would make "writes nothing"
 /// literal for them; that is a change in `obop-storage` and outside this slice. The log is let
 /// through on purpose and stays so.)
-fn read_brand(s: &HttpState) -> Arc<Shown> {
+pub(crate) fn read_brand(s: &HttpState) -> Arc<Shown> {
     s.dispatcher.brand().current()
 }
 
@@ -291,10 +295,12 @@ pub(crate) async fn authorization_server(State(s): Shared, h: HeaderMap) -> Resp
     if s.oauth.is_none() {
         return disabled();
     }
+    // An anonymous document: the brand is asked first and once, as the discovery documents do.
+    let brand = super::mcp::document_brand(&s).await;
     let base = s.mcp.base_url(&h);
     super::mcp::public_json(
         "application/json",
-        &obop_oauth::authorization_server_metadata(&base),
+        &obop_oauth::authorization_server_metadata(&base, &brand),
     )
 }
 

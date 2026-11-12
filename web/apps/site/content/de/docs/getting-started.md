@@ -1,23 +1,14 @@
 ---
 title: "Erste Schritte"
-description: "Ihre erste obop-Instanz: für die gehostete Beta registrieren, mit Docker und PostgreSQL selbst hosten oder lokal mit SQLite betreiben. Danach eine App installieren, Datensätze anlegen und einen KI-Agenten einladen."
-lead: "Drei Wege, obop zu betreiben. Wählen Sie die gehostete Beta, um es in wenigen Minuten auszuprobieren, Docker mit PostgreSQL für einen echten Einsatz oder einen lokalen Build für die Entwicklung."
+description: "Ihre erste obop-Instanz: mit Docker und PostgreSQL selbst hosten oder lokal mit SQLite betreiben. Danach eine App installieren, Datensätze anlegen und einen KI-Agenten einladen."
+lead: "Zwei Wege, obop zu betreiben: mit Docker und PostgreSQL oder als lokaler Build für die Entwicklung. SpaceCorps hostet obop noch nicht für andere."
 ---
 
-## Option 1: die gehostete Beta
+SpaceCorps hostet obop noch nicht für andere, Sie betreiben obop also selbst. Eine kostenlose Sandbox mit Beispieldaten und kostenpflichtiges Hosting auf dedizierten Servern sind geplant; beides ist noch nicht verfügbar, und kein Termin ist zugesagt. Siehe [Preise](/pricing/) und die [Roadmap](/roadmap/).
 
-Der gehostete Dienst gibt jedem Unternehmen eine eigene Instanz mit eigener Datenbank. Während der Beta ist er kostenlos.
+## Option 1: selbst hosten mit Docker und PostgreSQL
 
-1. **Registrieren.** Öffnen Sie [die Registrierungs-App](/app/), geben Sie Ihre E-Mail-Adresse und ein Passwort ein und wählen Sie _Create account_.
-2. **Instanz anlegen.** Vergeben Sie einen Namen mit 3 bis 30 Zeichen. Die Adresse wird aus dem Namen gebildet. Die Einrichtung dauert einen Moment; die Seite zeigt den Fortschritt.
-3. **Anmelden.** Folgen Sie dem Link zu Ihrer Instanz und melden Sie sich mit derselben E-Mail-Adresse und demselben Passwort an. Ihr Registrierungskonto wird der erste Administrator der Instanz.
-4. **Eine App installieren.** Öffnen Sie _Customize_, dann _Marketplace_, und installieren Sie eine App wie Helpdesk oder Projects. Zum Installieren und Entfernen von Apps ist die Administratorgruppe nötig. Die integrierten Apps (CRM, Sales, Invoicing, Products, Contacts und Connectors) sind bereits vorhanden.
-5. **Datensätze anlegen.** Öffnen Sie eine App, wählen Sie _New_ und füllen Sie das Formular aus. Listen, Boards und die Seitenleiste werden aus der Beschreibung der App erzeugt.
-6. **Einen Agenten einladen.** Für Agent-Tokens gibt es noch keine Oberfläche. Melden Sie sich über die REST-API an und [erstellen Sie ein Agent-Token](/docs/agents/tokens/), dann [verbinden Sie sich über MCP](/docs/agents/mcp/) oder nutzen [REST](/docs/agents/rest/).
-
-## Option 2: selbst hosten mit Docker und PostgreSQL
-
-Sie benötigen Docker. Das Repository enthält eine Compose-Datei, die PostgreSQL und obop gemeinsam startet und nur auf localhost veröffentlicht:
+Sie benötigen Docker. Das Repository enthält eine Compose-Datei zum lokalen Ausprobieren, die PostgreSQL und obop gemeinsam startet und nur auf localhost veröffentlicht:
 
 ```bash
 git clone https://github.com/SpaceCorps/obop.git
@@ -25,7 +16,7 @@ cd obop
 docker compose up --build
 ```
 
-Der erste Build kompiliert den Rust-Workspace und dauert eine Weile. Sobald alles läuft, öffnen Sie `http://127.0.0.1:8080`. Die Compose-Datei startet obop mit Demodaten (`--demo`) und ohne Benutzer, legen Sie also den ersten Administrator an:
+Der erste Build kompiliert den Rust-Workspace und dauert eine Weile. Sobald alles läuft, öffnen Sie `http://127.0.0.1:8080/admin/`. Die Compose-Datei startet obop mit Demodaten (`--demo`) und ohne Benutzer, legen Sie also den ersten Administrator an:
 
 ```bash
 docker compose exec obop obop admin create alice --all-groups
@@ -42,9 +33,9 @@ docker run -d --name obop -p 8080:8080 \
   obop
 ```
 
-Das Image betreibt standardmäßig eine Instanz. Sein Befehl lautet `obop serve --addr 0.0.0.0:8080 --static /srv/backoffice`. Unter [Selbsthosting und Betrieb](/docs/reference/self-hosting/) finden Sie die Control Plane, Backups und das, was noch fehlt.
+Das Image betreibt standardmäßig eine Instanz. Sein Befehl lautet `obop serve --addr 0.0.0.0:8080 --static /srv/backoffice --public-site --trust-proxy`: Die öffentliche Website liegt unter `/`, das Backoffice unter `/admin/`. `--trust-proxy` liest die Adresse des Clients aus `X-Forwarded-For`, betreiben Sie das Image also hinter einem Proxy, den Sie selbst kontrollieren. Den ersten Administrator legen Sie mit `docker exec -i obop obop admin create alice --all-groups` an. Unter [Selbsthosting und Betrieb](/docs/reference/self-hosting/) finden Sie die Control Plane, Backups und das, was noch fehlt.
 
-## Option 3: lokale Entwicklung mit SQLite
+## Option 2: lokale Entwicklung mit SQLite
 
 Sie benötigen die Rust-Toolchain aus `rust-toolchain.toml`, pnpm und Vite+ (`vp`). SQLite ist der Standardspeicher, ein Datenbankserver ist also nicht nötig.
 
@@ -62,9 +53,15 @@ cargo run -- serve --static web/apps/backoffice/dist
 
 `--dev-auth` ersetzt die echte Anmeldung durch feste Tokens namens `dev-admin`, `dev-sales` und `dev-agent`. Der Server weigert sich dabei, an etwas anderes als localhost zu binden.
 
+## Nach der Anmeldung
+
+1. **Eine App installieren.** Öffnen Sie _Anpassen, Module_ und dort den Reiter _Marktplatz_, und installieren Sie eine App wie Helpdesk oder Projekte. Zum Installieren und Entfernen von Apps ist die Administratorgruppe nötig. Die integrierten Apps sind bereits vorhanden, darunter Kontakte, Produkte, CRM, Verkauf, Rechnungsstellung und Konnektoren (die sechs mit einer App-Seite).
+2. **Datensätze anlegen.** Öffnen Sie eine App, wählen Sie _Neu_ und füllen Sie das Formular aus. Listen, Boards und die Seitenleiste werden aus der Beschreibung der App erzeugt.
+3. **Einen Agenten einladen.** Für Agent-Tokens gibt es noch keine Oberfläche. Melden Sie sich über die REST-API an und [erstellen Sie ein Agent-Token](/docs/agents/tokens/), dann [verbinden Sie sich über MCP](/docs/agents/mcp/) oder nutzen [REST](/docs/agents/rest/).
+
 ## Wie es weitergeht
 
 - Lernen Sie die Bausteine unter [Konzepte](/docs/concepts/) kennen.
-- Stöbern Sie in den [Apps](/apps/) und installieren Sie die, die Sie brauchen, über _Customize_ oder auf der Kommandozeile mit `obop modules install-from helpdesk`.
+- Stöbern Sie in den [Apps](/apps/) und installieren Sie die, die Sie brauchen, über _Anpassen_ oder auf der Kommandozeile mit `obop modules install-from helpdesk`.
 - Richten Sie einen Agenten ein: [Überblick über KI-Agenten](/docs/agents/).
 - Schreiben Sie Ihre eigene App: [Referenz zum Modul-Manifest](/docs/reference/module-manifest/).

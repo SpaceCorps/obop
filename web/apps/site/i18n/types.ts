@@ -35,7 +35,6 @@ export interface Messages {
     docsNav: string;
     breadcrumb: string;
     home: string;
-    signIn: string;
     startFree: string;
     search: string;
     searchPlaceholder: string;

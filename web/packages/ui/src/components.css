@@ -1152,6 +1152,28 @@ button.avatar {
   flex: none;
   overflow: visible;
 }
+.instance-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  color: var(--text);
+  font-size: calc(var(--instance-logo-size, 24px) * 0.75);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+.instance-logo-art {
+  flex: none;
+  inline-size: var(--instance-logo-size, 24px);
+  block-size: var(--instance-logo-size, 24px);
+  object-fit: contain;
+}
+.instance-logo-name {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
 
 @media (forced-colors: active) {
   .app-icon {

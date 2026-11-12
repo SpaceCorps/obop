@@ -1,10 +1,10 @@
 [labels.fi.module]
 name = "Laskutus"
-summary = "Asiakaslaskut luonnos-, kirjattu- ja maksettu-elinkaarella."
+summary = "Asiakaslaskut luonnos-, kirjattu- ja peruutettu-elinkaarella."
 
 [labels.fi.model.invoice]
 name = "Lasku"
-description = "Asiakaslasku; kirjattuja laskuja korjataan vain hyvityslaskuilla"
+description = "Asiakaslasku; mikään toiminto ei palauta kirjattua laskua luonnokseksi eikä peruuta sitä"
 
 [labels.fi.model.invoice.field.sale_order_id]
 label = "Myyntitilaus"
@@ -25,11 +25,11 @@ description = "Laskun loppusumma valuutan pienimmässä yksikössä, rivien summ
 
 [labels.fi.model.invoice.field.number]
 label = "Numero"
-description = "Katkeamaton lakisääteinen numero, esimerkiksi INV-2026-00042, jonka kirjaaminen antaa"
+description = "Numero katkeamattomasta vuosittaisesta sarjasta, esimerkiksi INV-2026-00042, jonka kirjaaminen antaa"
 
 [labels.fi.model.invoice.action.post]
 label = "Kirjaa"
-description = "Kirjaa luonnoslasku ja anna sille lakisääteinen numero"
+description = "Kirjaa luonnoslasku ja anna sille sarjan seuraava numero"
 
 [labels.fi.model.invoice.action.cancel]
 label = "Peruuta"

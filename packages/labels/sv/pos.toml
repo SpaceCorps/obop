@@ -1,11 +1,11 @@
 [labels.sv.module]
 name = "Kassa"
-description = "Butikskassor: kassakonfiguration, kassapass med kassakontroll, order med rader och betalningar per betalsätt. Återbetalning och stängning av kassapass kräver en chefs godkännande. Totaler beräknas från raderna, kvitton får ett årligt löpnummer, betalning nekas tills betalningarna täcker totalen och skapar lagerrörelseutkast. Kortnummer får aldrig lagras. Kräver paketet Produkter."
-summary = "Butikskassor: kassapass med kassakontroll, order med rader och betalningar. Återbetalning och stängning kräver godkännande."
+description = "Butikskassor: kassakonfiguration, kassapass, order med rader och betalningar. Återbetalning och stängning av pass kräver en chefs godkännande. Totaler beräknas, kvitton får ett årligt löpnummer, betalning nekas tills totalen är täckt och skapar lagerrörelseutkast. Inställningarna för kassakontroll och återbetalning sparas bara; inget kontrollerar dem. Lagra aldrig kortnummer. Kräver Produkter."
+summary = "Butikskassor: kassapass, order med rader och betalningar. Återbetalning och stängning kräver godkännande."
 
 [labels.sv.model.pos_config]
 name = "Kassa"
-description = "En försäljningsplats (en kassa eller en butik) och dess regler"
+description = "En försäljningsplats (en kassa eller en butik) och dess inställningar"
 
 [labels.sv.model.pos_config.field.name]
 label = "Namn"
@@ -21,7 +21,7 @@ description = "Text som skrivs ut överst på kvitton"
 
 [labels.sv.model.pos_config.field.cash_control]
 label = "Kassakontroll"
-description = "Om kassapass måste räkna kontanterna i kassalådan vid öppning och stängning"
+description = "Om kontanterna i kassalådan ska räknas vid öppning och stängning; sparas bara, inget kontrollerar det"
 
 [labels.sv.model.pos_config.field.default_opening_cash]
 label = "Ingående kassa (standard)"
@@ -29,7 +29,7 @@ description = "Kontanter som normalt lämnas kvar i kassalådan över natten (va
 
 [labels.sv.model.pos_config.field.allow_refunds]
 label = "Tillåt återbetalningar"
-description = "Om kassörer får föreslå återbetalningar vid den här kassan"
+description = "Om återbetalningar ska vara tillåtna vid den här kassan; sparas bara, inget kontrollerar det"
 
 [labels.sv.model.pos_config.field.active]
 label = "Aktiv"

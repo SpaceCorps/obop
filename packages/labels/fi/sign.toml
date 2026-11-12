@@ -53,7 +53,7 @@ description = "Allekirjoittavan henkilön nimi"
 
 [labels.fi.model.sign_request.field.signer_email]
 label = "Allekirjoittajan sähköposti"
-description = "Allekirjoittajan sähköpostiosoite; valinnainen, obop ei lähetä sähköpostia asiakirjaa koskevasta pyynnöstä"
+description = "Allekirjoittajan sähköpostiosoite; valinnainen, asiakirjaa koskevasta pyynnöstä ei lähetetä sähköpostia"
 
 [labels.fi.model.sign_request.field.sent_on]
 label = "Lähetetty"

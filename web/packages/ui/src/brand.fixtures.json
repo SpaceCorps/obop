@@ -1,0 +1,34 @@
+{
+  "about": "The message under the lead of the sign-in: the message of the language shown, else the English one, else none. Read by brand.test.ts (the page script, brandMessage) and by the Rust test the_page_script_and_the_server_choose_the_same_message (obop-commands, brand/tests/rows.rs, Brand::message). The same file holds the longest name, short name, title and message the policy of the record allows, in characters, and the largest artwork in bytes (`limits`), which the Identity tab counts against: read by identity.test.ts and by the Rust test the_longest_texts_of_the_form_are_those_of_the_policy (obop-commands, brand/tests/rows.rs). A case is the messages that are set, the language shown and the text it shows (empty: none).",
+  "limits": { "name": 40, "slug": 30, "title": 60, "message": 240, "logo_bytes": 16384 },
+  "message": [
+    { "messages": { "en": "Welcome back" }, "lang": "en", "want": "Welcome back" },
+    { "messages": { "en": "Welcome back" }, "lang": "sv", "want": "Welcome back" },
+    { "messages": { "en": "Welcome back" }, "lang": "de", "want": "Welcome back" },
+    { "messages": { "en": "Welcome back" }, "lang": "en-XA", "want": "Welcome back" },
+    { "messages": { "en": "Welcome back" }, "lang": "xx", "want": "Welcome back" },
+    {
+      "messages": { "en": "Welcome to the team", "fi": "Tervetuloa joukkoon" },
+      "lang": "fi",
+      "want": "Tervetuloa joukkoon"
+    },
+    {
+      "messages": { "en": "Welcome to the team", "fi": "Tervetuloa joukkoon" },
+      "lang": "sv",
+      "want": "Welcome to the team"
+    },
+    {
+      "messages": { "en": "Welcome to the team", "fi": "Tervetuloa joukkoon" },
+      "lang": "en",
+      "want": "Welcome to the team"
+    },
+    { "messages": { "sv": "Välkommen" }, "lang": "sv", "want": "Välkommen" },
+    { "messages": { "sv": "Välkommen" }, "lang": "en", "want": "" },
+    { "messages": { "sv": "Välkommen" }, "lang": "de", "want": "" },
+    { "messages": { "de": "Willkommen", "es": "Bienvenido" }, "lang": "es", "want": "Bienvenido" },
+    { "messages": { "de": "Willkommen", "es": "Bienvenido" }, "lang": "fr", "want": "" },
+    { "messages": {}, "lang": "en", "want": "" },
+    { "messages": {}, "lang": "sv", "want": "" },
+    { "messages": {}, "lang": "ar-XB", "want": "" }
+  ]
+}

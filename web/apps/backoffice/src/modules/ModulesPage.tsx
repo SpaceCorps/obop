@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Badge, Button, EmptyState, Icon, Notice, Select, Tabs, panelId, t } from "@obop/ui";
+import { productDocsVisible } from "../productDocs.ts";
 import { ModuleCard } from "./ModuleCard.tsx";
 import { DependencyOverview } from "./DependencyOverview.tsx";
 import { PlanDialog, UninstallDialog } from "./PlanDialog.tsx";
@@ -59,10 +60,15 @@ export function ModulesPage({
             {t(
               "Core {version} is the platform every module runs on. A module says which core versions it works with and which other modules it needs, so you see what an install brings along before you confirm it.",
               { version: core || "?" },
-            )}{" "}
-            <a className="reflink" href={guideHref}>
-              {t("How to write a custom module?")}
-            </a>
+            )}
+            {productDocsVisible() && (
+              <>
+                {" "}
+                <a className="reflink" href={guideHref}>
+                  {t("How to write a custom module?")}
+                </a>
+              </>
+            )}
           </p>
         </div>
         <Badge

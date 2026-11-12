@@ -7,7 +7,7 @@ eyebrow: "So funktioniert es"
 
 ## Eine Instanz pro Unternehmen
 
-Jedes Unternehmen läuft in einer eigenen **Instanz** mit eigener Datenbank, eigenen Benutzern und eigener Adresse. Beim gehosteten Dienst legt eine Control Plane die Instanz nach der Registrierung für Sie an und teilt Ihnen die Adresse mit; die Person, die sich registriert hat, wird ihr erster Administrator. Sie können dasselbe Programm auch selbst betreiben. Siehe [Instanzen](/docs/concepts/instances/).
+Jedes Unternehmen läuft in einer eigenen **Instanz** mit eigener Datenbank, eigenen Benutzern und eigener Adresse. Sie betreiben das Programm selbst: Ein `obop serve` ist eine Instanz. Dasselbe Programm hat einen zweiten Modus, eine Control Plane (`obop platform serve`), in der sich Personen registrieren und eigene Instanzen anlegen; wer eine Instanz anlegt, wird ihr erster Administrator. SpaceCorps hostet obop noch nicht für andere. Siehe [Instanzen](/docs/concepts/instances/).
 
 Als Speicher dient SQLite zum Ausprobieren und PostgreSQL für den echten Einsatz. Datensätze werden vorerst als JSON-Dokumente gespeichert; die Befehlsschicht prüft die Feldtypen, ein Schema-Manager ist geplant.
 
@@ -51,7 +51,7 @@ Bedenken Sie das, bevor Sie sich festlegen:
 - Es gibt keine Code-Stufen über deklarative Pakete hinaus (keine WebAssembly-Komponenten, keine Remote-Apps). Ein App-Paket führt also keinen eigenen Code aus und kann keine Aufrufe anderer Systeme deklarieren, kann aber berechnete Summen und Aktionen deklarieren, die andere Datensätze in derselben Datenbank ändern.
 - Nur manche Apps (zum Beispiel Expenses, Timesheets, HR-Urlaubsanträge, Documents und Dashboards) beschränken, welche Datensätze eine Person sieht. CRM, Sales und Invoicing tun das nicht.
 - Das Sicherheitslog erfasst zum Beispiel Ereignisse zu Konten, Anmeldungen, Sicherheitseinstellungen, Modulen und Signaturen, ist aber kein Verlauf der Änderungen an den Datensätzen des Unternehmens.
-- Der geplante Exportauftrag für die Daten eines ganzen Unternehmens ist nicht gebaut. Eine Liste lässt sich in der Web-App als CSV exportieren (bis zu 20.000 Datensätze), und `obop backup --plain` schreibt die Datensätze und hochgeladenen Dateien einer Datenbank in eine unverschlüsselte Datei (kurzlebige Werte wie Sitzungen fehlen, und Geheimnisse bleiben versiegelt).
-- Der gehostete Dienst schaltet zeitgesteuerte Sicherungen seiner Datenbanken noch nicht ein (wer obop selbst betreibt, kann sie einschalten).
+- Der geplante Exportauftrag für die Daten eines ganzen Unternehmens ist nicht gebaut. Eine Liste lässt sich in der Web-App als CSV exportieren (bis zu 20.000 Datensätze), und `obop backup --plain` schreibt die Datensätze und hochgeladenen Dateien einer Datenbank in eine unverschlüsselte Datei (kurzlebige Werte wie Sitzungen fehlen; Geheimnisse bleiben versiegelt, aber wenn Sie `OBOP_SECRET_KEY` nicht gesetzt haben, steht der Schlüssel, den obop für sie erzeugt hat, in der Datei).
+- Eine Control Plane schaltet zeitgesteuerte Sicherungen der Instanzen, die sie anlegt, nicht ein (wer eine Instanz selbst betreibt, kann sie einschalten).
 
 Die [Roadmap](/roadmap/) zeigt, was gebaut ist und was nicht.

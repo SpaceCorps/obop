@@ -1,6 +1,6 @@
 ---
 title: "KI-Agenten"
-description: "So richten Sie KI-Agenten für obop ein: das Agentenmodell, Tokens mit eingeschränktem Umfang, maskierte personenbezogene Daten und Freigaben, die einen Menschen bei allem Unumkehrbaren in der Verantwortung halten."
+description: "So richten Sie KI-Agenten für obop ein: das Agentenmodell, Tokens mit eingeschränktem Umfang, maskierte personenbezogene Daten und Freigaben, die einen Menschen bei den als freigabepflichtig markierten Schritten in der Verantwortung halten."
 lead: "obop behandelt KI-Agenten als gleichberechtigte Nutzer, die bewusst eingeschränkt sind. Diese Seite erklärt das Modell; die nächsten Seiten zeigen, wie Sie einen Agenten einrichten."
 ---
 
@@ -10,7 +10,7 @@ Ein **Agent** ist alles, was mit einem Agent-Token auf obop zugreift: ein MCP-Cl
 
 1. **Eingeschränkter Umfang.** Ein Agent-Token trägt eine Liste von Berechtigungsgruppen (seine _Scopes_). Es kann die Rechte seines Besitzers nur einschränken, nie erweitern. Die Anfrage nach einer Gruppe, die der Besitzer nicht hat, wird abgelehnt.
 2. **Maskiert.** Personenbezogene Daten kommen als stabile Platzhalter wie `EMAIL_1` zurück. Finanzielle, Personal- und besonders schützenswerte Felder werden zurückgehalten. Ein Agent kann trotzdem über Datensätze nachdenken und Platzhalter zurückgeben, sieht aber nie die echten Werte. Siehe [Maskierungs-Tokens](/docs/agents/masking/).
-3. **Vorschlagen, nicht ausführen.** Ein Agent kann gewöhnliche Aktionen innerhalb seiner Scopes ausführen, bei allem Unumkehrbaren (eine Rechnung buchen, bezahlen, erstatten, versenden, veröffentlichen, löschen) aber nur etwas _vorschlagen_. Der Server liefert eine Plan-ID zurück und ändert nichts. Eine Person gibt den Plan frei. Siehe [Der Freigabeablauf](/docs/agents/approvals/).
+3. **Vorschlagen, nicht ausführen.** Ein Agent kann gewöhnliche Aktionen innerhalb seiner Scopes ausführen, bei den Befehlen, die als freigabepflichtig markiert sind (zum Beispiel eine Rechnung buchen, erstatten, veröffentlichen und einen Datensatz löschen), aber nur etwas _vorschlagen_. Der Server liefert eine Plan-ID zurück und ändert nichts. Eine Person gibt den Plan frei. Siehe [Der Freigabeablauf](/docs/agents/approvals/).
 4. **Dieselbe Tür.** REST, MCP und die CLI laufen über einen gemeinsamen Dispatcher, ein Agent hat also genau dieselben Berechtigungen, dieselbe Maskierung und dieselben Freigaben, auf welchem Weg er sich auch verbindet.
 
 ## Drei Wege der Verbindung

@@ -23,6 +23,7 @@ mod race;
 mod rows;
 mod site;
 mod strict;
+mod switch;
 mod total;
 
 pub use double::{Spy, s};
