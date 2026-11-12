@@ -1276,61 +1276,101 @@ test.describe("website without JavaScript", () => {
     expect(folds, "pages that fold some of their actions").toBeGreaterThan(5);
   });
 
-  test("a card whose words are a caveat (`keep` in data/apps.ts) is never behind a tap, in any language", async ({
-    page,
-    request,
-  }) => {
-    // The cards that state what an AI agent may do without approval (Website's four), that a step
-    // starts no billing (Subscriptions), notifies no one (HR, Timesheets, Planning, Appointments),
-    // contacts no vendor (Purchase), does not stop a driver being assigned a vehicle (Fleet) or sends
-    // no email (Email Marketing's Schedule and its Campaign card), or sends an event to the remote
-    // address (Connectors' Test), what Expenses' and Timesheets' approval does not do, and the log
-    // that keeps no content. Their text is English on every page (it is written for the card), so it
-    // is found by its words in all seven languages.
-    // 7 languages x 11 pages with 1 to 4 such cards each (77 loads, a page loaded once per language
-    // and its cards read from it, not 17 loads per language), and the test gets 120 seconds, not the
-    // 30 of the others.
-    test.setTimeout(120_000);
-    const kept = APP_COPY.flatMap((app) =>
-      Object.values(app.cards ?? {})
-        .filter((c) => c.keep)
-        .map((c) => ({ slug: app.id.replaceAll("_", "-"), text: c.text })),
-    );
-    // Seventeen cards have words of their own and `keep`; the eighteenth, Expenses "Submit", keeps the
-    // manifest's translated words (`keep` of the app) and is on a page that has no fold.
-    expect(kept.length, "cards that have keep, with words of their own").toBe(17);
-    const bySlug = new Map<string, string[]>();
-    for (const { slug, text } of kept) bySlug.set(slug, [...(bySlug.get(slug) ?? []), text]);
-    for (const locale of Object.keys(messages)) {
-      const prefix = locale === "en" ? "" : `/${locale}`;
-      for (const [slug, texts] of bySlug) {
-        await page.goto(`${base()}${prefix}/apps/${slug}/`);
-        for (const text of texts) {
-          const where = `${locale} ${slug}: "${text.slice(0, 40)}"`;
-          const card = page.locator(".app-card-text", { hasText: text });
-          await expect(card, where).toHaveCount(1);
-          expect(
-            await card.evaluate((el) => !!el.closest("details")),
-            `${where} is behind a tap`,
-          ).toBe(false);
-          await expect(card, where).toBeVisible();
+  // The limit is set for the group (a limit set in a test's body does not cover its fixtures): the
+  // test loads 77 pages, which is more than the repository's 30 s a test where a machine is slow.
+  test.describe("the cards that keep", () => {
+    test.describe.configure({ timeout: 120_000 });
+
+    test("a card whose words are a caveat (`keep` in data/apps.ts) is never behind a tap, in any language", async ({
+      page,
+      request,
+    }) => {
+      // The cards that state what an AI agent may do without approval (Website's four), that a step
+      // starts no billing (Subscriptions), notifies no one (HR, Timesheets, Planning, Appointments),
+      // contacts no vendor (Purchase), does not stop a driver being assigned a vehicle (Fleet) or sends
+      // no email (Email Marketing's Schedule and its Campaign card), or sends an event to the remote
+      // address (Connectors' Test), what Expenses' and Timesheets' approval does not do, and the log
+      // that keeps no content. Their text is English on every page (it is written for the card), so it
+      // is found by its words in all seven languages.
+      // 7 languages x 11 pages with 1 to 4 such cards each (77 loads, a page loaded once per language
+      // and its cards read from it, not 17 loads per language); the limit is set for the group.
+      //
+      // The cards are the pinned list below, with their words read from `data/apps.ts` by key and not
+      // by the `keep` flag: a card that loses its flag is still looked for on its page, and where that
+      // leaves it in a fold the test fails on the page ("is behind a tap"), not on a count of the data.
+      // (A card that is among the first three ordinary cards of its section stays open without the flag,
+      // as Fleet "Suspend" does: the page cannot tell, the last assertion does, and the room-rule
+      // tests read the open count of the page.) Seventeen cards have words of their own and `keep`; the
+      // eighteenth, Expenses "Submit", keeps the manifest's translated words (`keep` of the app) and is
+      // on a page that has no fold.
+      const PINNED: [string, string][] = [
+        ["connectors", "connection.test"],
+        ["connectors", "data_flow_log"],
+        ["fleet", "fleet_vehicle_driver.suspend"],
+        ["purchase", "purchase_order.send"],
+        ["hr", "hr_leave_request.request"],
+        ["timesheets", "timesheets_entry.submit"],
+        ["timesheets", "timesheets_entry.approve"],
+        ["planning", "planning_shift.publish"],
+        ["website", "website_page"],
+        ["website", "website_menu_item"],
+        ["website", "website_page_translation"],
+        ["website", "website_blog_post_translation"],
+        ["email_marketing", "email_marketing_campaign"],
+        ["email_marketing", "email_marketing_campaign.schedule"],
+        ["subscriptions", "subscriptions_subscription.activate"],
+        ["appointments", "appointments_appointment.confirm"],
+        ["expenses", "expenses_expense.approve"],
+      ];
+      const kept = PINNED.map(([id, key]) => {
+        const text = APP_COPY.find((a) => a.id === id)?.cards?.[key]?.text;
+        if (!text)
+          throw new Error(`${id} ${key}: no such card with words of its own in data/apps.ts`);
+        return { slug: id.replaceAll("_", "-"), text };
+      });
+      const bySlug = new Map<string, string[]>();
+      for (const { slug, text } of kept) bySlug.set(slug, [...(bySlug.get(slug) ?? []), text]);
+      for (const locale of Object.keys(messages)) {
+        const prefix = locale === "en" ? "" : `/${locale}`;
+        for (const [slug, texts] of bySlug) {
+          await page.goto(`${base()}${prefix}/apps/${slug}/`);
+          for (const text of texts) {
+            const where = `${locale} ${slug}: "${text.slice(0, 40)}"`;
+            const card = page.locator(".app-card-text", { hasText: text });
+            await expect(card, where).toHaveCount(1);
+            expect(
+              await card.evaluate((el) => !!el.closest("details")),
+              `${where} is behind a tap`,
+            ).toBe(false);
+            await expect(card, where).toBeVisible();
+          }
         }
       }
-    }
-    // What an AI agent may do without approval is not in any "Show N more" fold of the Website page,
-    // in any language (the sentence is the same on all of them).
-    for (const locale of Object.keys(messages)) {
-      await page.goto(`${base()}${locale === "en" ? "" : `/${locale}`}/apps/website/`);
-      const folds = await page.locator("main details.app-more").allTextContents();
-      expect(folds.length, `${locale}: the Website page has folds to look in`).toBeGreaterThan(0);
-      expect(
-        folds.join(" "),
-        `${locale}: no fold of the Website page says what an AI agent may do`,
-      ).not.toMatch(/without approval|no further approval|AI agent/);
-    }
-    // The Markdown copy keeps all four in its list, as it keeps every card.
-    const md = await (await request.get(`${base()}/apps/website.md`)).text();
-    for (const { slug, text } of kept) if (slug === "website") expect(md).toContain(text);
+      // What an AI agent may do without approval is not in any "Show N more" fold of the Website page,
+      // in any language (the sentence is the same on all of them).
+      for (const locale of Object.keys(messages)) {
+        await page.goto(`${base()}${locale === "en" ? "" : `/${locale}`}/apps/website/`);
+        const folds = await page.locator("main details.app-more").allTextContents();
+        expect(folds.length, `${locale}: the Website page has folds to look in`).toBeGreaterThan(0);
+        expect(
+          folds.join(" "),
+          `${locale}: no fold of the Website page says what an AI agent may do`,
+        ).not.toMatch(/without approval|no further approval|AI agent/);
+      }
+      // The Markdown copy keeps all four in its list, as it keeps every card.
+      const md = await (await request.get(`${base()}/apps/website.md`)).text();
+      for (const { slug, text } of kept) if (slug === "website") expect(md).toContain(text);
+      // The flags themselves, last (the page above is what a visitor sees): the cards that have `keep`
+      // are the pinned ones, no more and no fewer.
+      const flagged = APP_COPY.flatMap((app) =>
+        Object.entries(app.cards ?? {})
+          .filter(([, c]) => c.keep)
+          .map(([key]) => key),
+      );
+      expect(flagged.sort(), "the cards that have keep, with words of their own").toEqual(
+        PINNED.map(([, key]) => key).sort(),
+      );
+    });
   });
 
   test("the room rule holds on every drawn app page: the marked cards, and three others beside fewer than three of them, one beside three or more", async ({
@@ -2585,6 +2625,9 @@ test.describe("accessibility", () => {
       // The site scrolls smoothly, and the walk waits for the page to stop moving before it reads
       // where the focused control is: with reduced motion (which the site honours) the scroll is a
       // jump, so what is read does not depend on how long a smooth scroll takes on a slow runner.
+      // So this walk never runs with smooth scrolling: whether a focused control is ever under the
+      // header while a smooth scroll is still moving, for a visitor who has not asked for reduced
+      // motion, is not tested by any test of this file.
       await page.emulateMedia({ reducedMotion: "reduce" });
       for (const width of [1440, 375]) {
         await page.setViewportSize({ width, height: 900 });
@@ -2948,8 +2991,11 @@ test.describe("accessibility", () => {
     // A value that does not fit beside its label goes under it, and at the normal text size no word
     // of the list is cut. At 200 percent text a file name or a maturity word ("Eksperymentalny")
     // can be wider than the whole line (360 px of 222 on a 320 px phone): it breaks inside, and every
-    // word that does fit stays whole. What no value may do, at any size, is end past the list: the
-    // next test measures that for the pages whose names are the longest.
+    // word that does fit stays whole. What no label or value may do, at any size, is end past the
+    // list (the label's room, `clamp(8rem, 32%, 10rem)`, is wider than the list at 200 percent on a
+    // 320 px phone: Finnish "Yhteensopivuus" ended 23 px past it and Spanish "Compatibilidad" 11 px):
+    // the next test measures that, and the break places of a file name, at 150 and 200 percent for
+    // the pages whose names are the longest.
     let values = 0;
     let wideWords = 0;
     const whole = async (
@@ -2966,18 +3012,18 @@ test.describe("accessibility", () => {
       const outside = await p.evaluate(() => {
         const list = document.querySelector<HTMLElement>(".app-info")!;
         const edge = list.getBoundingClientRect().right;
-        return [...list.querySelectorAll<HTMLElement>("dd")]
-          .filter((dd) => {
+        return [...list.querySelectorAll<HTMLElement>("dt, dd")]
+          .filter((el) => {
             const range = document.createRange();
-            range.selectNodeContents(dd);
+            range.selectNodeContents(el);
             const right = Math.max(...[...range.getClientRects()].map((r) => r.right));
-            return dd.scrollWidth > dd.clientWidth + 1 || right > edge + 0.5;
+            return el.scrollWidth > el.clientWidth + 1 || right > edge + 0.5;
           })
-          .map((dd) => (dd.textContent ?? "").trim());
+          .map((el) => (el.textContent ?? "").trim());
       });
       expect(
         outside,
-        `${where} ${path}: values wider than their box or ending past the list`,
+        `${where} ${path}: labels or values wider than their box or ending past the list`,
       ).toEqual([]);
       values += await p.locator(".app-info dd").count();
     };
@@ -3010,99 +3056,216 @@ test.describe("accessibility", () => {
     ).toBeGreaterThan(0);
   });
 
-  test("at 200 percent text, with the Information row open, no value leaves its card and the page does not scroll sideways", async ({
-    browser,
-  }) => {
-    // The hero test below measured the width of the page at this size when the information list was
-    // open on the page; the list is in a closed row now, so that test no longer sees a file name that
-    // runs out of its card. This one opens the row and measures the same two numbers (the page's
-    // content over its box, and over the screen) and each value's right edge against the list's, at
-    // 320, 360 and 390 px with 32 px text, on the pages whose names are the longest, and on the pages
-    // of the hero test at 320 px (the narrowest screen, where a 360 px name has 222 px of line).
-    // A name wider than the whole line may break inside; it may not end past the list or the screen.
-    test.setTimeout(120_000);
-    const long = [
-      "/apps/email-marketing/",
-      "/apps/subscriptions/",
-      "/apps/field-service/",
-      "/apps/manufacturing/",
-      "/apps/appointments/",
-      "/pl/apps/sign/",
-    ];
-    // The pages of the hero test at 320 px with 32 px text (its own list, copied: its body stays as it is).
-    const hero = [
-      "/apps/accounting/",
-      "/apps/helpdesk/",
-      "/apps/manufacturing/",
-      "/apps/appointments/",
-      "/apps/subscriptions/",
-      "/apps/connectors/",
-      "/apps/dashboards/",
-      "/apps/documents/",
-      "/apps/ecommerce/",
-      "/apps/knowledge/",
-      "/de/apps/accounting/",
-      "/fr/apps/accounting/",
-      "/pl/apps/accounting/",
-      "/fi/apps/email-marketing/",
-      "/fi/apps/website/",
-      "/pl/apps/projects/",
-      "/pl/apps/hr/",
-    ];
-    const offenders: string[] = [];
-    let measured = 0;
-    let values = 0;
-    for (const width of [320, 360, 390]) {
-      const large = await pageWithTextSize(browser, 200, { width, height: 844 });
-      try {
-        const paths = width === 320 ? [...new Set([...long, ...hero])] : long;
-        for (const path of paths) {
-          await large.page.goto(`${base()}${path}`);
-          // Hyphenation is switched off, as in the hero test, so that the result is the same on every browser.
-          await large.page.addStyleTag({ content: "* { hyphens: manual !important; }" });
-          await openFolds(large.page, false);
-          const m = await large.page.evaluate(() => {
-            const root = document.querySelector<HTMLElement>(".app-page")!;
-            const screen = document.documentElement.clientWidth;
-            const list = document.querySelector<HTMLElement>(".app-row-body .app-info")!;
-            const edge = list.getBoundingClientRect().right;
-            let past = 0;
-            let worst = "";
-            const dds = [...list.querySelectorAll<HTMLElement>("dd")];
-            for (const dd of dds) {
-              const range = document.createRange();
-              range.selectNodeContents(dd);
-              const right = Math.max(...[...range.getClientRects()].map((r) => r.right));
-              if (right - edge > past) {
-                past = Math.round(right - edge);
-                worst = (dd.textContent ?? "").trim();
+  // The limit is set for the group, as the file's own comment above the walks says (a limit set in a
+  // test's body does not cover its fixtures): 35 page loads at 200 percent and 18 at 150 percent
+  // are more than the repository's 30 s a test.
+  test.describe("the Information row at large text sizes", () => {
+    test.describe.configure({ timeout: 120_000 });
+
+    test("at 150 and 200 percent text, with the Information row open, no label or value leaves its card, a file name breaks only where it has a break place, and the page does not scroll sideways", async ({
+      browser,
+    }) => {
+      // The hero test below measured the width of the page at 200 percent when the information list was
+      // open on the page; the list is in a closed row now, so that test no longer sees what runs out of
+      // its card. This one opens the row and measures the same two numbers (the page's content over its
+      // box, and over the screen), and for every label and every value both its box and its text against
+      // the list's right edge (a label's room is `clamp(8rem, 32%, 10rem)`: 256 px at 200 percent, in a
+      // list of 222 px on a 320 px phone). At 200 percent (32 px text) that is 320, 360 and 390 px on the
+      // pages whose names are the longest, and on the 18 pages of the hero test at 320 px. At 150 percent
+      // (24 px) it is the same longest pages at the same three widths: a package file name is drawn in
+      // parts ("packages/", "email_marketing", ".toml", with a `<wbr>` between them) and no part of it may
+      // be cut across two lines unless the part is itself wider than the line (at 200 percent on a 320 px
+      // phone "email_marketing" is 270 px of 222). Without the break before ".toml" the name was drawn
+      // "email_marketing.t" and "oml" at 150 percent on 320 px. A copied file name is the name: the
+      // selection has no character the break places added.
+      const long = [
+        "/apps/email-marketing/",
+        "/apps/subscriptions/",
+        "/apps/field-service/",
+        "/apps/manufacturing/",
+        "/apps/appointments/",
+        "/pl/apps/sign/",
+      ];
+      // The pages of the hero test at 320 px with 32 px text (its own list, copied: its body stays as it is).
+      const hero = [
+        "/apps/accounting/",
+        "/apps/helpdesk/",
+        "/apps/manufacturing/",
+        "/apps/appointments/",
+        "/apps/subscriptions/",
+        "/apps/connectors/",
+        "/apps/dashboards/",
+        "/apps/documents/",
+        "/apps/ecommerce/",
+        "/apps/knowledge/",
+        "/de/apps/accounting/",
+        "/fr/apps/accounting/",
+        "/pl/apps/accounting/",
+        "/fi/apps/email-marketing/",
+        "/fi/apps/website/",
+        "/pl/apps/projects/",
+        "/pl/apps/hr/",
+        // The hero test's last page at 320 px (its other branch, for the sizes that are not 32 px at 390).
+        "/de/apps/field-service/",
+      ];
+      // The languages with the longest label words, at the narrowest screen: Finnish "Yhteensopivuus",
+      // Spanish "Compatibilidad".
+      const labels = ["/fi/apps/crm/", "/es/apps/crm/"];
+      const offenders: string[] = [];
+      let measured = 0;
+      let values = 0;
+      let wideParts = 0;
+      for (const [percent, widths] of [
+        [200, [320, 360, 390]],
+        [150, [320, 360, 390]],
+      ] as const) {
+        for (const width of widths) {
+          const large = await pageWithTextSize(browser, percent, { width, height: 844 });
+          try {
+            const pages =
+              percent === 200 && width === 320 ? [...new Set([...long, ...hero, ...labels])] : long;
+            for (const path of pages) {
+              await large.page.goto(`${base()}${path}`);
+              // Hyphenation is switched off, as in the hero test, so that the result is the same on every browser.
+              await large.page.addStyleTag({ content: "* { hyphens: manual !important; }" });
+              await openFolds(large.page, false);
+              const m = await large.page.evaluate(() => {
+                const root = document.querySelector<HTMLElement>(".app-page")!;
+                const screen = document.documentElement.clientWidth;
+                const list = document.querySelector<HTMLElement>(".app-row-body .app-info")!;
+                const edge = list.getBoundingClientRect().right;
+                const inkRight = (el: HTMLElement) => {
+                  const range = document.createRange();
+                  range.selectNodeContents(el);
+                  return Math.max(...[...range.getClientRects()].map((r) => r.right));
+                };
+                // The worst label and the worst value: how far its box, and how far its text, ends past the list.
+                const worst = {
+                  label: { box: 0, ink: 0, text: "" },
+                  value: { box: 0, ink: 0, text: "" },
+                };
+                const cells = [...list.querySelectorAll<HTMLElement>("dt, dd")];
+                for (const el of cells) {
+                  const w = worst[el.tagName === "DT" ? "label" : "value"];
+                  w.box = Math.max(w.box, el.getBoundingClientRect().right - edge);
+                  const ink = inkRight(el) - edge;
+                  if (ink > w.ink) {
+                    w.ink = ink;
+                    w.text = (el.textContent ?? "").trim();
+                  }
+                }
+                // A package file name in its parts: after each slash and before its extension. A part drawn
+                // on two lines is cut; it is allowed to be when it is wider than the line it is on.
+                const cutParts: { name: string; part: string; natural: number; room: number }[] =
+                  [];
+                let wide = 0;
+                let copied = "";
+                for (const a of list.querySelectorAll<HTMLElement>("a.mono")) {
+                  const nodes: Text[] = [];
+                  const walker = document.createTreeWalker(a, NodeFilter.SHOW_TEXT);
+                  for (let n = walker.nextNode(); n; n = walker.nextNode()) nodes.push(n as Text);
+                  const name = nodes.map((n) => n.data).join("");
+                  const room = a.closest("dd")!.clientWidth;
+                  let at = 0;
+                  for (const part of name.split(/(?<=\/)|(?=\.)/)) {
+                    const first = at;
+                    const last = at + part.length;
+                    at = last;
+                    let sn: Text | undefined;
+                    let so = 0;
+                    let en: Text | undefined;
+                    let eo = 0;
+                    let seen = 0;
+                    for (const n of nodes) {
+                      if (!sn && first < seen + n.data.length) {
+                        sn = n;
+                        so = first - seen;
+                      }
+                      if (!en && last <= seen + n.data.length) {
+                        en = n;
+                        eo = last - seen;
+                      }
+                      seen += n.data.length;
+                    }
+                    if (!sn || !en) continue;
+                    const range = document.createRange();
+                    range.setStart(sn, so);
+                    range.setEnd(en, eo);
+                    const tops = [...range.getClientRects()]
+                      .filter((r) => r.width > 0)
+                      .map((r) => r.top);
+                    if (tops.length < 2 || Math.max(...tops) - Math.min(...tops) <= 3) continue;
+                    const probe = document.createElement("span");
+                    probe.style.cssText = "position:absolute;visibility:hidden;white-space:nowrap";
+                    probe.textContent = part;
+                    a.appendChild(probe);
+                    const natural = probe.getBoundingClientRect().width;
+                    probe.remove();
+                    if (natural > room - 0.5) wide++;
+                    else cutParts.push({ name, part, natural: Math.round(natural), room });
+                  }
+                  // What a visitor copies from the name: the name, and no character the break places added.
+                  if (!copied) {
+                    const selection = window.getSelection()!;
+                    selection.selectAllChildren(a);
+                    copied = `${selection.toString()}|${(a as HTMLAnchorElement).href}`;
+                    selection.removeAllRanges();
+                  }
+                }
+                return {
+                  values: list.querySelectorAll("dd").length,
+                  worst,
+                  cutParts,
+                  wide,
+                  copied,
+                  page: root.scrollWidth - root.clientWidth,
+                  pageEnd: root.scrollWidth - screen,
+                };
+              });
+              measured++;
+              values += m.values;
+              wideParts += m.wide;
+              const where = `${width}px with ${(16 * percent) / 100}px text, ${path}`;
+              if (m.page > 0)
+                offenders.push(`${where}: the page's content scrolls sideways by ${m.page}px`);
+              if (m.pageEnd > 0)
+                offenders.push(`${where}: the content ends ${m.pageEnd}px past the screen`);
+              for (const kind of ["label", "value"] as const) {
+                const w = m.worst[kind];
+                if (w.box > 0.5)
+                  offenders.push(
+                    `${where}: the box of a ${kind} ends ${Math.round(w.box)}px past the list`,
+                  );
+                if (w.ink > 0.5)
+                  offenders.push(
+                    `${where}: the ${kind} "${w.text}" ends ${Math.round(w.ink)}px past the list`,
+                  );
               }
+              for (const c of m.cutParts)
+                offenders.push(
+                  `${where}: the part "${c.part}" of the file name "${c.name}" is drawn on two lines (${c.natural}px in a line of ${c.room}px)`,
+                );
+              const [text, href] = m.copied.split("|");
+              if (text && !href!.endsWith(`/${text}`))
+                offenders.push(`${where}: a copied file name is "${text}", not the end of ${href}`);
             }
-            return {
-              values: dds.length,
-              past,
-              worst,
-              page: root.scrollWidth - root.clientWidth,
-              pageEnd: root.scrollWidth - screen,
-            };
-          });
-          measured++;
-          values += m.values;
-          const where = `${width}px with 32px text, ${path}`;
-          if (m.page > 0)
-            offenders.push(`${where}: the page's content scrolls sideways by ${m.page}px`);
-          if (m.pageEnd > 0)
-            offenders.push(`${where}: the content ends ${m.pageEnd}px past the screen`);
-          if (m.past > 0) offenders.push(`${where}: "${m.worst}" ends ${m.past}px past the list`);
+          } finally {
+            await large.context.close();
+          }
         }
-      } finally {
-        await large.context.close();
       }
-    }
-    expect(offenders, "values or content that leave their card or the screen").toEqual([]);
-    // 6 pages at three widths, and the 14 pages of the hero test that are not among them, at 320 px.
-    expect(measured, "pages measured").toBe(6 * 3 + 14);
-    expect(values, "values of the list measured").toBeGreaterThan(200);
+      expect(offenders, "labels, values or content that leave their card or the screen").toEqual(
+        [],
+      );
+      // At 200 percent: 6 pages at three widths, the 18 pages of the hero test at 320 px (three of them are
+      // among the 6) and the 2 label pages; at 150 percent: the 6 pages at three widths.
+      expect(measured, "pages measured").toBe(6 * 3 + 15 + 2 + 6 * 3);
+      expect(values, "values of the list measured").toBeGreaterThan(300);
+      expect(
+        wideParts,
+        "parts of a file name wider than the line at 200 percent (they break inside)",
+      ).toBeGreaterThan(0);
+    });
   });
 
   test("the app hero keeps its size on a phone and stacks at a very large text size", async ({
