@@ -26,7 +26,7 @@ Two rules shape every stage.
 | 4. OAS importer | `obop import oas` reads the OAS SQLite file and documents directory | Built for company, accounts, vouchers with entries, customers and receipts (`crates/obop/src/import_oas/`, section 5.3); invoices, payroll, bank, time are listed as skipped; tested against generated data only, never against real books |
 | 5. Invoices | Customer invoices with the ledger voucher | First slice: `invoice_posting.create_move` books a posted invoice as a draft move (section 6); UNVERIFIED against Swedish invoice and VAT rules; credit notes, EU and export cases, payment matching not built |
 | 6. Payroll and AGI | Employees, pay runs, employer contributions, AGI file | Data model only, in `packages/contrib/payroll_se/payroll_se.toml` ([payroll-se.md](payroll-se.md); installable by upload, not bundled; every rate and rule UNVERIFIED, nothing seeded); no computation, no AGI XML |
-| 7. Receipts and bank | Receipt archive, bank lines, matching | Parts exist (`documents`, `accounting_bank_statement_line`); matching and booking not built |
+| 7. Receipts and bank | Receipt archive, bank lines, matching | First slice: `bank_matching.suggest` and `bank_matching.book` (section 7.1) match a bank line to a posted invoice by exact amount and book it as a draft move; UNVERIFIED; receipts matching, scoring, Swedish bank file import and reconciliation not built |
 | 8. Time tracking | Projects, time entries, billing | Parts exist (`timesheets` package); the link to invoices is not built |
 | 9. Immutability and hash chain | Vouchers that cannot change, with a verifiable chain | Not built; waits on K5 (see 9) |
 
@@ -166,8 +166,18 @@ Built in `crates/obop/src/invoice_posting.rs` (typed command on REST and MCP, li
 ## 7. Stage 6 to 8: payroll, receipts and bank, time
 
 - **Payroll and AGI.** OAS computes gross, preliminary tax (entered per person), employer contributions by age class, a locked pay run that proposes a voucher, and an AGI XML file it says validates against Skatteverket's published schema. Planned as a new later package. Every rate, age class and the XML layout are UNVERIFIED and must be checked by the owner. Taxable benefits, absence and holiday pay, and the tax tables are not built in OAS either.
-- **Receipts and bank.** OAS keeps receipts by content hash, imports a bank CSV, and proposes scored matches between bank lines and receipts. obop has `documents` and `accounting_bank_statement_line` with `match`, `reconcile` and `unmatch` actions. Not built: the scoring, the bank CSV import for Swedish formats and the booking of a bank line as a draft entry. A suggestion engine needs a command (X2), not a model.
+- **Receipts and bank.** OAS keeps receipts by content hash, imports a bank CSV, and proposes scored matches between bank lines and receipts. obop has `documents` and `accounting_bank_statement_line` with `match`, `reconcile` and `unmatch` actions. The suggestion and the booking of a bank line as a draft entry are the first slice (7.1). Not built: matching to receipts, fuzzy scoring, the bank CSV import for Swedish formats and the `reconcile` step. A suggestion engine needs a command (X2), not a model.
 - **Time tracking.** OAS has projects, activities, a timer and time entries billed once. The `timesheets` package covers time entries. Not built: the rule that an entry is billed at most once, and the invoice built from tracked hours.
+
+### 7.1 The first slice: `bank_matching.suggest` and `bank_matching.book`
+
+Built in `crates/obop/src/bank_matching.rs` (typed commands on REST and MCP, like `invoice_posting.create_move`).
+
+- `suggest` is read only. For each `accounting_bank_statement_line` that is `unmatched` and has no link row, it lists the posted invoices that are not yet matched and whose amount equals the line exactly, and flags whether the invoice number appears in the bank's label (case-insensitive); such matches come first. The invoice amount is the total debit of its `invoice_posting` move (gross) when that move is not cancelled, else the net of its lines (`basis` says which). Money in only; integer minor units, no fuzzy matching, at most 200 lines.
+- `book` creates a **draft** `accounting_move` in the line's journal: the bank account (`bank_account`, or the journal's `default_account_id`) against the `counter_account` you name, debit for money in and credit for money out. An optional `invoice` must be posted, unmatched and of exactly the line's amount, and sets the move's partner. Missing input, an unknown account, a line that is not `unmatched`, a second booking of the line or of the invoice are refused in words; nothing is built in (D34).
+- idempotent per line: a row of `bank_matching` (bank line id, invoice id, move id) is the link. The check and the link write are not one transaction (as K60).
+- governed: the move is a draft; posting is `accounting_move.post` (`accounting.approver`, approval). An agent may only `dry_run`. The bank line's own `state` is not changed (the `match` and `reconcile` actions stay separate).
+- UNVERIFIED: nothing is checked against Swedish bookkeeping rules; no partial or combined payments, credit notes, currencies, fees or receipts. Gaps in the surfaces: docs/ISSUES.md K61.
 
 ## 8. BAS: what the package takes later
 
