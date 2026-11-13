@@ -229,7 +229,7 @@ description = "Eine Buchung im Entwurf stornieren, die nie gebucht wurde"
 
 [labels.de.model.accounting_move.action.reverse]
 label = "Storno buchen"
-description = "Eine gebuchte Buchung als storniert kennzeichnen; die Gegenbuchung wird separat erfasst (nur Genehmigende)"
+description = "Eine gebuchte Buchung als storniert kennzeichnen und die Gegenbuchung als Entwurf anlegen, den eine genehmigende Person bucht (nur Genehmigende)"
 
 [labels.de.model.accounting_move_line]
 name = "Buchungszeile"

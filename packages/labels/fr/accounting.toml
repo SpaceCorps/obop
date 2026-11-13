@@ -229,7 +229,7 @@ description = "Annule une écriture en brouillon qui n’a jamais été comptabi
 
 [labels.fr.model.accounting_move.action.reverse]
 label = "Extourner"
-description = "Marque une écriture comptabilisée comme extournée ; l’écriture inverse est saisie séparément (approbateur uniquement)"
+description = "Marque une écriture comptabilisée comme extournée et crée l’écriture inverse en brouillon, à comptabiliser par un approbateur (approbateur uniquement)"
 
 [labels.fr.model.accounting_move_line]
 name = "Ligne d’écriture"

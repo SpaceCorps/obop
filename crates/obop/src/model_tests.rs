@@ -196,6 +196,162 @@ fn an_entry_posts_only_when_balanced_gets_a_gapless_number_and_totals_follow_the
     );
 }
 
+#[test]
+fn reversing_a_posted_entry_books_the_opposite_entry_as_a_draft_that_cancels_it() {
+    let app = app_with(&["accounting"]);
+    let clerk = user("clerk", &["accounting.user"]);
+    let approver = user("chief", &["accounting.user", "accounting.approver"]);
+    let manager = user("boss", &["accounting.user", "accounting.manager"]);
+    let journal = id(&ok(
+        &app,
+        &manager,
+        "accounting_journal.create",
+        json!({"name": "General", "code": "GEN", "kind": "general"}),
+    ));
+    let account = |code: &str| {
+        id(&ok(
+            &app,
+            &manager,
+            "accounting_account.create",
+            json!({"code": code, "name": code, "account_type": "asset_current"}),
+        ))
+    };
+    let (supplies, bank) = (account("6000"), account("1900"));
+    let original = id(&ok(
+        &app,
+        &clerk,
+        "accounting_move.create",
+        json!({"journal_id": journal, "date": "2026-09-14"}),
+    ));
+    for (account_id, debit, credit) in [(&supplies, 1000, 0), (&bank, 0, 1000)] {
+        ok(
+            &app,
+            &clerk,
+            "accounting_move_line.create",
+            json!({"move_id": original, "account_id": account_id, "label": "Office supplies",
+                   "debit": debit, "credit": credit}),
+        );
+    }
+    // A draft cannot be reversed; a posted entry can, and only by an approver.
+    assert!(
+        run(
+            &app,
+            &approver,
+            "accounting_move.reverse",
+            json!({"id": original})
+        )
+        .is_err()
+    );
+    ok(
+        &app,
+        &approver,
+        "accounting_move.post",
+        json!({"id": original}),
+    );
+    assert_eq!(
+        run(
+            &app,
+            &clerk,
+            "accounting_move.reverse",
+            json!({"id": original})
+        )
+        .unwrap_err(),
+        "forbidden"
+    );
+    // An agent for the chief only proposes: nothing is reversed and no entry is created yet.
+    let bot = Principal::agent(
+        "chief",
+        &["accounting.user", "accounting.approver"],
+        &["accounting.user", "accounting.approver"],
+    );
+    let plan = plan_of(run(
+        &app,
+        &bot,
+        "accounting_move.reverse",
+        json!({"id": original}),
+    ));
+    assert_eq!(list(&app, &clerk, "accounting_move").len(), 1);
+    assert_eq!(
+        get(&app, &clerk, "accounting_move", &original)["state"],
+        "posted"
+    );
+    // The human approves: the original is reversed and one opposite entry exists, as a draft.
+    approve(&app, &approver, &plan).unwrap();
+    let before = get(&app, &clerk, "accounting_move", &original);
+    assert_eq!(before["state"], "reversed");
+    let moves = list(&app, &clerk, "accounting_move");
+    assert_eq!(moves.len(), 2);
+    let reversal = moves.iter().find(|m| id(m) != original).unwrap();
+    assert_eq!(reversal["state"], "draft");
+    assert_eq!(reversal["number"], J::Null);
+    assert_eq!(reversal["journal_id"], journal.as_str());
+    assert_eq!(reversal["reference"], before["number"]);
+    assert_eq!(
+        (
+            reversal["total_debit"].as_i64(),
+            reversal["total_credit"].as_i64()
+        ),
+        (Some(1000), Some(1000))
+    );
+    // Its lines are the original lines with debit and credit swapped.
+    let reversal_id = id(reversal);
+    let lines: Vec<J> = list(&app, &clerk, "accounting_move_line")
+        .into_iter()
+        .filter(|l| l["move_id"] == reversal_id.as_str())
+        .collect();
+    assert_eq!(lines.len(), 2);
+    let on = |account_id: &str| {
+        lines
+            .iter()
+            .find(|l| l["account_id"] == account_id)
+            .unwrap()
+    };
+    assert_eq!(
+        (
+            on(&supplies)["debit"].as_i64(),
+            on(&supplies)["credit"].as_i64()
+        ),
+        (Some(0), Some(1000))
+    );
+    assert_eq!(
+        (on(&bank)["debit"].as_i64(), on(&bank)["credit"].as_i64()),
+        (Some(1000), Some(0))
+    );
+    assert_eq!(on(&bank)["label"], "Office supplies");
+    // Once the reversal is posted, every account nets to zero over the two entries.
+    ok(
+        &app,
+        &approver,
+        "accounting_move.post",
+        json!({"id": reversal_id}),
+    );
+    assert!(
+        get(&app, &clerk, "accounting_move", &reversal_id)["number"]
+            .as_str()
+            .is_some()
+    );
+    let all = list(&app, &clerk, "accounting_move_line");
+    for account_id in [&supplies, &bank] {
+        let net: i64 = all
+            .iter()
+            .filter(|l| l["account_id"] == account_id.as_str())
+            .map(|l| l["debit"].as_i64().unwrap() - l["credit"].as_i64().unwrap())
+            .sum();
+        assert_eq!(net, 0, "account {account_id} does not net to zero");
+    }
+    // The original cannot be reversed a second time, so it cannot be cancelled twice over.
+    assert!(
+        run(
+            &app,
+            &approver,
+            "accounting_move.reverse",
+            json!({"id": original})
+        )
+        .is_err()
+    );
+    assert_eq!(list(&app, &clerk, "accounting_move").len(), 2);
+}
+
 // ---- inventory and purchase ---------------------------------------------------------------
 
 fn stock_setup(app: &App) -> (String, String, String, String) {
