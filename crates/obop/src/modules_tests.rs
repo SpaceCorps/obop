@@ -295,8 +295,9 @@ fn the_check_command_applies_the_catalogue_rules_and_reports_warnings() {
     );
     // Without a licence, or with a core range that has no upper bound, a package passes `check`
     // (with warnings) but not `check --catalog`. No core range at all is refused everywhere.
-    let dir = std::env::temp_dir().join(format!("obop-catalog-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    // A directory of this run's own, removed when the test ends (after the stores are closed).
+    let _guard = obop_storage::testing::TempPath::dir("obop-catalog");
+    let dir = _guard.path().to_path_buf();
     let text = std::fs::read_to_string(pk.join("fleet.toml")).unwrap();
     let bare = text
         .replace("license = \"Apache-2.0\"\n", "")

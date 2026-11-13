@@ -1050,8 +1050,9 @@ fn a_project_shows_its_progress_and_tickets_are_numbered() {
 
 #[test]
 fn the_sale_flow_is_atomic_on_a_real_sqlite_file() {
-    let dir = std::env::temp_dir().join(format!("obop-model-{}.db", std::process::id()));
-    let url = format!("sqlite://{}", dir.display());
+    // A path of this run's own, removed again (with the side files of SQLite) when the test ends.
+    let file = obop_storage::testing::TempPath::new("obop-model");
+    let url = file.url();
     let store = obop_commands::Store::open(&url).unwrap();
     let app = App::with_store(store);
     app.dispatcher
@@ -1085,7 +1086,4 @@ fn the_sale_flow_is_atomic_on_a_real_sqlite_file() {
         "the invoice of effect 1 was rolled back"
     );
     assert!(list(&app, &admin(), "invoice_line").is_empty());
-    for ext in ["", "-wal", "-shm"] {
-        let _ = std::fs::remove_file(format!("{}{ext}", dir.display()));
-    }
 }

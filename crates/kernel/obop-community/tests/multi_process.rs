@@ -133,31 +133,20 @@ fn status_stays_consistent(a: Arc<dyn Backend>, b: Arc<dyn Backend>) {
     assert_eq!(leaders.iter().filter(|x| **x).count(), 1);
 }
 
-fn file_pair() -> (Arc<dyn Backend>, Arc<dyn Backend>, std::path::PathBuf) {
-    let path = std::env::temp_dir().join(
-        format!(
-            "obop-community-mp-{}-{:?}.db",
-            std::process::id(),
-            std::thread::current().id()
-        )
-        .replace(['(', ')'], ""),
-    );
-    let url = format!("sqlite://{}", path.display());
+/// Two handles on one SQLite file of this run's own. The file is removed when the returned path is
+/// dropped (bind it to a name, after the handles are gone), a failing test included.
+fn file_pair() -> (
+    Arc<dyn Backend>,
+    Arc<dyn Backend>,
+    obop_storage::testing::TempPath,
+) {
+    let path = obop_storage::testing::TempPath::new("obop-community-mp");
+    let url = path.url();
     (
         obop_storage::open(&url).unwrap(),
         obop_storage::open(&url).unwrap(),
         path,
     )
-}
-
-fn cleanup(path: &std::path::Path) {
-    let dir = path.parent().unwrap();
-    let stem = path.file_name().unwrap().to_string_lossy().to_string();
-    for e in std::fs::read_dir(dir).unwrap().flatten() {
-        if e.file_name().to_string_lossy().starts_with(&stem) {
-            let _ = std::fs::remove_file(e.path());
-        }
-    }
 }
 
 #[test]
@@ -168,16 +157,14 @@ fn the_forum_stays_consistent_across_two_handles_on_memory() {
 
 #[test]
 fn the_forum_stays_consistent_across_two_processes_on_one_sqlite_file() {
-    let (a, b, path) = file_pair();
+    let (a, b, _path) = file_pair();
     forum_stays_consistent(a, b);
-    cleanup(&path);
 }
 
 #[test]
 fn the_status_page_stays_consistent_across_two_processes_on_one_sqlite_file() {
-    let (a, b, path) = file_pair();
+    let (a, b, _path) = file_pair();
     status_stays_consistent(a, b);
-    cleanup(&path);
 }
 
 #[test]

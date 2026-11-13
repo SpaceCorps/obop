@@ -654,8 +654,10 @@ fn a_database_that_needs_migration_is_refused_by_postgres_servers_until_migrated
         );
         String::from_utf8_lossy(&o.stdout).to_string()
     };
-    let dir = std::env::temp_dir().join(format!("obop-mp-gates-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    // A directory of this run's own (not made yet: `backup --out` makes it), removed when the test
+    // ends, by a failed assertion too.
+    let guard = obop_storage::testing::TempPath::new("obop-mp-gates");
+    let dir = guard.path().to_path_buf();
     must(&["migrate", "plan", "--db", &db.url]);
     must(&["backup", "--db", &db.url, "--out", dir.to_str().unwrap()]);
     let backup = std::fs::read_dir(&dir)
@@ -696,7 +698,6 @@ fn a_database_that_needs_migration_is_refused_by_postgres_servers_until_migrated
         t.contains("core/0002") && t.contains("backup obop-backup-"),
         "{t}"
     );
-    let _ = std::fs::remove_dir_all(&dir);
     let s = start(&db.url, &[]);
     assert_eq!(
         http(s.port, "GET", "/api/openapi.json", None, &[], None).status,

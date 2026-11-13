@@ -505,9 +505,9 @@ mod tests {
 
     /// A platform database with one running instance, as `platform serve --provisioner fake`
     /// leaves it.
-    fn platform_db() -> (std::path::PathBuf, String) {
-        let path = std::env::temp_dir().join(format!("obop-ops-{}.db", std::process::id()));
-        let url = format!("sqlite://{}", path.display());
+    fn platform_db() -> (obop_storage::testing::TempPath, String) {
+        let path = obop_storage::testing::TempPath::new("obop-ops");
+        let url = path.url();
         let backend = obop_storage::open(&url).unwrap();
         let auth = Arc::new(obop_auth::Auth::with_test_params(backend.clone()));
         let p = obop_platform::Platform::new(
@@ -530,7 +530,8 @@ mod tests {
 
     #[test]
     fn upgrade_instances_runs_through_the_cli_and_checks_its_arguments() {
-        let (path, url) = platform_db();
+        // `_path` removes the database when the test ends.
+        let (_path, url) = platform_db();
         let base = [
             "platform",
             "upgrade-instances",
@@ -556,9 +557,6 @@ mod tests {
             dispatch(&args(&["platform", "serve"])).is_none(),
             "the rest of platform is main's"
         );
-        for ext in ["", "-wal", "-shm"] {
-            let _ = std::fs::remove_file(format!("{}{ext}", path.display()));
-        }
     }
 
     #[test]

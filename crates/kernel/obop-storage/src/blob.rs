@@ -1134,14 +1134,10 @@ mod tests {
     #[test]
     fn memory_directory_and_sqlite_bytes_meet_the_contract() {
         bytes_contract(&MemoryBytes::default());
-        let dir = std::env::temp_dir().join(format!("obop-blobs-{}", std::process::id()));
-        bytes_contract(&FsBytes::new(&dir).unwrap());
-        let _ = std::fs::remove_dir_all(&dir);
-        let db = std::env::temp_dir().join(format!("obop-blobdb-{}.db", std::process::id()));
-        bytes_contract(&DbBytes::open(&format!("sqlite://{}", db.display())).unwrap());
-        for ext in ["", "-wal", "-shm"] {
-            let _ = std::fs::remove_file(format!("{}{ext}", db.display()));
-        }
+        let dir = crate::testing::TempPath::new("obop-blobs");
+        bytes_contract(&FsBytes::new(dir.path()).unwrap());
+        let db = crate::testing::TempPath::new("obop-blobdb");
+        bytes_contract(&DbBytes::open(&db.url()).unwrap());
     }
 
     #[test]

@@ -15,7 +15,8 @@ struct Fixture {
     router: axum::Router,
     token: String,
     app: App,
-    _dir: std::path::PathBuf,
+    /// Last: the directory goes after the app and the router.
+    _dir: obop_storage::testing::TempPath,
 }
 
 async fn fixture(public: bool) -> Fixture {
@@ -37,12 +38,12 @@ async fn fixture_with(public: bool, cfg: obop_http::public::PublicConfig) -> Fix
         &["platform.admin".into()],
     )
     .unwrap();
-    let dir = std::env::temp_dir().join(format!(
-        "obop-admin-{}-{}{}",
-        std::process::id(),
+    let guard = obop_storage::testing::TempPath::dir(&format!(
+        "obop-admin-{}{}",
         if public { "p" } else { "o" },
         if cfg.trust_proxy { "t" } else { "" }
     ));
+    let dir = guard.path().to_path_buf();
     std::fs::create_dir_all(dir.join("assets")).unwrap();
     std::fs::write(dir.join("index.html"), "<html>BACKOFFICE-SHELL</html>").unwrap();
     std::fs::write(dir.join("assets/app.js"), "console.log('admin')").unwrap();
@@ -63,7 +64,7 @@ async fn fixture_with(public: bool, cfg: obop_http::public::PublicConfig) -> Fix
         router,
         token: String::new(),
         app,
-        _dir: dir,
+        _dir: guard,
     };
     let (_, b, _) = send(
         &f.router,
@@ -253,25 +254,17 @@ async fn an_order_placed_in_the_browser_shows_up_in_the_backoffice_api() {
     assert_eq!(f.app.store.count("ecommerce_order"), 1);
 }
 
-/// A back office build in a directory of its own, removed again when the guard is dropped.
-struct Build(std::path::PathBuf);
-
-impl Drop for Build {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
-
 #[tokio::test]
 async fn the_back_office_carries_the_default_language_where_it_is_mounted_and_nowhere_else() {
     const SHELL: &str =
         "<html><head><title>obop</title></head><body>BACKOFFICE-SHELL</body></html>";
     const TAG: &str = "<meta name=\"obop-default-language\" content=\"sv\">";
     const SCRIPT: &str = "console.log('admin')";
-    let build = Build(std::env::temp_dir().join(format!("obop-admin-lang-{}", std::process::id())));
-    std::fs::create_dir_all(build.0.join("assets")).unwrap();
-    std::fs::write(build.0.join("index.html"), SHELL).unwrap();
-    std::fs::write(build.0.join("assets/app.js"), SCRIPT).unwrap();
+    // A back office build in a directory of this run's own, removed when the test ends.
+    let build = obop_storage::testing::TempPath::dir("obop-admin-lang");
+    std::fs::create_dir_all(build.path().join("assets")).unwrap();
+    std::fs::write(build.path().join("index.html"), SHELL).unwrap();
+    std::fs::write(build.path().join("assets/app.js"), SCRIPT).unwrap();
     for (public, language) in [
         (true, Some("sv")),
         (false, Some("sv")),
@@ -282,7 +275,7 @@ async fn the_back_office_carries_the_default_language_where_it_is_mounted_and_no
         let auth = Arc::new(Auth::with_test_params(app.store.backend()));
         let state = obop_http::HttpState::new(app.dispatcher.clone(), auth);
         state.set_default_language(language);
-        let dir = build.0.to_str();
+        let dir = build.path().to_str();
         let (router, mount) = if public {
             let site = Arc::new(obop_site::Site::new(
                 obop_commands::PublicApi::new(app.dispatcher.clone(), app.store.clone()),

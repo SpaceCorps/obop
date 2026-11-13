@@ -106,9 +106,9 @@ fn entries(b: &Arc<dyn Backend>) -> Vec<(String, serde_json::Value)> {
 /// database answers the lookups and refuses to import the same keys again.
 #[test]
 fn the_import_map_is_part_of_a_backup_and_a_restore() {
-    let dir = std::env::temp_dir().join(format!("obop-importmap-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    // A directory of this run's own, removed when the test ends (after the stores are closed).
+    let _guard = obop_storage::testing::TempPath::dir("obop-importmap");
+    let dir = _guard.path().to_path_buf();
     let url = |n: &str| format!("sqlite://{}", dir.join(n).display());
 
     let src = open(&url("src.db"));
@@ -184,5 +184,4 @@ fn the_import_map_is_part_of_a_backup_and_a_restore() {
     );
     drop(back);
     drop(src);
-    let _ = std::fs::remove_dir_all(&dir);
 }

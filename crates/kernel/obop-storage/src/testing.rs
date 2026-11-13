@@ -24,6 +24,193 @@ pub fn time_budget(secs: u64) -> std::time::Duration {
     std::time::Duration::from_secs_f64(secs as f64 * factor)
 }
 
+// ---- a path in the temporary directory that belongs to one test ----------------------------
+
+/// A file or a directory in the temporary directory that belongs to one test: a SQLite database,
+/// or a directory that holds one. Tests used to build such a path from the process id alone and
+/// remove it at the end of the test, which went wrong in two ways: a recycled process id reused
+/// the database an earlier run had left, so the test saw somebody else's records, and a run that
+/// failed or was interrupted left the files behind for good (about 1,700 of them in a shared
+/// temporary directory).
+///
+/// - [`TempPath::new`] and [`TempPath::dir`] make a name that no other test, process or earlier
+///   run has used (the tag, the process id, a counter and the time).
+/// - Whatever is at the path is removed when the value is made ([`TempPath::named`] does the
+///   same for a fixed name) and again when it is dropped, a failing test included: the path, the
+///   `-wal` and `-shm` files of SQLite, the blob directory (`.blobs`) and the lock files
+///   (`.lock-*`) that the store keeps beside the database. A file that cannot be removed (a handle
+///   still open) is a leftover and nothing more.
+/// - On Windows a file that something still holds open cannot be removed, and an `App` of the
+///   binary crate is never dropped (the dispatcher and the connectors hold each other), so the
+///   database of a test that builds one stays until the process ends. [`TempPath::new`] therefore
+///   also removes what earlier runs of the same tag left behind more than an hour ago (only names
+///   in the form it makes itself, `<tag>-<pid>-<n>-<millis>` and its side files), so the leftovers
+///   of the last hour are all that can pile up. On Linux the files go at once.
+///
+/// Declare it before the store: locals are dropped in reverse order, so the store is closed first.
+pub struct TempPath {
+    path: std::path::PathBuf,
+}
+
+impl TempPath {
+    /// A path that does not exist yet, with a name of its own: `<tag>-<pid>-<n>-<millis>`.
+    pub fn new(tag: &str) -> TempPath {
+        let name = fresh_name(tag);
+        sweep_old(tag);
+        Self::named(&name)
+    }
+
+    /// A directory with a name of its own, made.
+    pub fn dir(tag: &str) -> TempPath {
+        let p = Self::new(tag);
+        std::fs::create_dir_all(&p.path).expect("a temporary directory");
+        p
+    }
+
+    /// The path for a fixed file name in the temporary directory, cleared of whatever an earlier
+    /// run left there. Prefer [`TempPath::new`]: a fixed name is for a test of this type. The name
+    /// must be one plain file name (not empty, not `.` or `..`, no path separator): clearing the
+    /// path removes a whole directory, and an empty name would be the temporary directory itself.
+    pub fn named(name: &str) -> TempPath {
+        Self::named_in(&std::env::temp_dir(), name)
+    }
+
+    /// [`TempPath::named`] under another base directory (the tests of the refusal use a private
+    /// one, so that a regression there costs them and not the machine's temporary directory).
+    fn named_in(base: &std::path::Path, name: &str) -> TempPath {
+        assert!(
+            is_plain_name(name),
+            "{name:?} is not a plain file name for a temporary path"
+        );
+        let p = TempPath {
+            path: base.join(name),
+        };
+        p.clear();
+        p
+    }
+
+    pub fn path(&self) -> &std::path::Path {
+        &self.path
+    }
+
+    /// The address of a SQLite database at this path.
+    pub fn url(&self) -> String {
+        format!("sqlite://{}", self.path.display())
+    }
+
+    /// Remove the path and what the store keeps beside it.
+    fn clear(&self) {
+        let remove = remove_any;
+        remove(&self.path);
+        let (Some(parent), Some(name)) = (self.path.parent(), self.path.file_name()) else {
+            return;
+        };
+        let name = name.to_string_lossy().to_string();
+        let Ok(entries) = std::fs::read_dir(parent) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let other = entry.file_name().to_string_lossy().to_string();
+            let beside = other
+                .strip_prefix(&name)
+                .is_some_and(|rest| rest == "-wal" || rest == "-shm" || rest.starts_with('.'));
+            if beside {
+                remove(&entry.path());
+            }
+        }
+    }
+}
+
+impl Drop for TempPath {
+    fn drop(&mut self) {
+        self.clear();
+    }
+}
+
+/// Is `name` one plain file name: something that joined to a directory stays inside it and
+/// names one entry (so not empty, not `.` or `..`, no slash or backslash, no drive prefix)?
+fn is_plain_name(name: &str) -> bool {
+    use std::path::Component;
+    !name.contains(['/', '\\'])
+        && matches!(
+            std::path::Path::new(name).components().collect::<Vec<_>>().as_slice(),
+            [Component::Normal(n)] if *n == std::ffi::OsStr::new(name)
+        )
+}
+
+/// Remove a file or a directory, if it can be removed.
+fn remove_any(p: &std::path::Path) {
+    if p.is_dir() {
+        let _ = std::fs::remove_dir_all(p);
+    } else {
+        let _ = std::fs::remove_file(p);
+    }
+}
+
+/// A name that no other test, process or earlier run has used: `<tag>-<pid>-<n>-<millis>`, the
+/// process id, a counter of this process and the time. [`is_made_by`] is the other half of it.
+fn fresh_name(tag: &str) -> String {
+    use std::sync::atomic::AtomicUsize;
+    static N: AtomicUsize = AtomicUsize::new(0);
+    let t = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis());
+    format!(
+        "{tag}-{}-{}-{t}",
+        std::process::id(),
+        N.fetch_add(1, SeqCst)
+    )
+}
+
+/// How old a leftover of an earlier run must be before a new path of the same tag removes it.
+const LEFTOVER_AGE: std::time::Duration = std::time::Duration::from_secs(3600);
+
+/// Is `name` a path (or a side file of a path) that [`TempPath::new`] makes for `tag`:
+/// `<tag>-<pid>-<n>-<millis>`, then nothing, `-wal`, `-shm`, or a `.` suffix? Nothing else is ever
+/// swept.
+fn is_made_by(tag: &str, name: &str) -> bool {
+    let Some(mut rest) = name.strip_prefix(tag).and_then(|r| r.strip_prefix('-')) else {
+        return false;
+    };
+    for i in 0..3 {
+        let digits = rest.bytes().take_while(u8::is_ascii_digit).count();
+        if digits == 0 {
+            return false;
+        }
+        rest = &rest[digits..];
+        if i < 2 {
+            match rest.strip_prefix('-') {
+                Some(r) => rest = r,
+                None => return false,
+            }
+        }
+    }
+    rest.is_empty() || rest == "-wal" || rest == "-shm" || rest.starts_with('.')
+}
+
+/// Remove what earlier runs of `tag` left in the temporary directory more than [`LEFTOVER_AGE`]
+/// ago (a file that something held open when its test ended, or a run that was killed).
+fn sweep_old(tag: &str) {
+    let Ok(entries) = std::fs::read_dir(std::env::temp_dir()) else {
+        return;
+    };
+    let now = std::time::SystemTime::now();
+    for entry in entries.flatten() {
+        if !is_made_by(tag, &entry.file_name().to_string_lossy()) {
+            continue;
+        }
+        let old = entry
+            .metadata()
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| now.duration_since(t).ok())
+            .is_some_and(|age| age >= LEFTOVER_AGE);
+        if old {
+            remove_any(&entry.path());
+        }
+    }
+}
+
 // ---- which way the lookup of a unique rule went --------------------------------------------
 
 /// What [`Backend::find_unique`] did on this thread: how often it ran its keyed statement, how
@@ -1413,5 +1600,243 @@ mod testdb_tests {
                 .get::<_, i32>(0),
             1
         );
+    }
+}
+
+#[cfg(test)]
+mod temp_path_tests {
+    use super::*;
+
+    fn exists(p: &str) -> bool {
+        std::path::Path::new(p).exists()
+    }
+
+    #[test]
+    fn two_paths_with_one_tag_differ_and_neither_exists_yet() {
+        let (a, b) = (TempPath::new("obop-tp"), TempPath::new("obop-tp"));
+        assert_ne!(a.path(), b.path());
+        assert!(!a.path().exists() && !b.path().exists());
+        assert!(
+            a.url().starts_with("sqlite://") && a.url().ends_with(&*a.path().to_string_lossy())
+        );
+    }
+
+    #[test]
+    fn a_fixed_name_is_cleared_of_what_an_earlier_run_left_and_so_is_everything_beside_it() {
+        // The state an interrupted run leaves: the database, its side files, the blob directory
+        // and a lock file, all under one fixed name (a recycled process id gave the old tests
+        // exactly this).
+        let name = format!("obop-tp-stale-{}", std::process::id());
+        let base = std::env::temp_dir().join(&name).display().to_string();
+        std::fs::write(&base, "stale").unwrap();
+        for ext in ["-wal", "-shm", ".lock-obop.migrate"] {
+            std::fs::write(format!("{base}{ext}"), "stale").unwrap();
+        }
+        std::fs::create_dir_all(format!("{base}.blobs")).unwrap();
+        std::fs::write(format!("{base}.blobs/x"), "stale").unwrap();
+        // A neighbour that merely starts with the same letters is not ours.
+        let neighbour = format!("{base}2");
+        std::fs::write(&neighbour, "keep").unwrap();
+
+        let p = TempPath::named(&name);
+        for ext in ["", "-wal", "-shm", ".lock-obop.migrate", ".blobs"] {
+            assert!(!exists(&format!("{base}{ext}")), "{ext} was left");
+        }
+        assert!(exists(&neighbour), "a different name is untouched");
+        drop(p);
+        std::fs::remove_file(&neighbour).unwrap();
+    }
+
+    #[test]
+    fn dropping_removes_the_database_its_side_files_and_the_directory_content() {
+        let db = TempPath::new("obop-tp-db");
+        let base = db.path().display().to_string();
+        // A real SQLite file with its side files, as the store makes them.
+        let b = crate::open(&db.url()).unwrap();
+        b.insert("m", "1", &Fields::new()).unwrap();
+        drop(b.lock("some-key").unwrap());
+        assert!(exists(&base), "the database is there");
+        assert!(
+            exists(&format!("{base}.lock-some-key")),
+            "and its lock file"
+        );
+        drop(b);
+        drop(db);
+        assert!(!exists(&base) && !exists(&format!("{base}.lock-some-key")));
+        assert!(!exists(&format!("{base}-wal")) && !exists(&format!("{base}-shm")));
+
+        let dir = TempPath::dir("obop-tp-dir");
+        assert!(dir.path().is_dir(), "`dir` makes the directory");
+        let inner = dir.path().join("deep/er");
+        std::fs::create_dir_all(&inner).unwrap();
+        std::fs::write(inner.join("f"), "x").unwrap();
+        let shown = dir.path().to_path_buf();
+        drop(dir);
+        assert!(!shown.exists());
+    }
+
+    #[test]
+    fn only_the_names_a_path_makes_for_its_tag_are_swept_and_only_when_they_are_old() {
+        assert!(is_made_by("obop-tpj", "obop-tpj-12-3-1793696487850"));
+        for ext in ["-wal", "-shm", ".blobs", ".lock-obop.migrate"] {
+            assert!(
+                is_made_by("obop-tpj", &format!("obop-tpj-12-3-9{ext}")),
+                "{ext}"
+            );
+        }
+        for no in [
+            "obop-tpj",
+            "obop-tpj-12-3",
+            "obop-tpj-a-3-4",
+            "obop-tpj-12-3-4x",
+            "obop-tpj-12-3-4-wal2",
+            "obop-tpjx-12-3-4",
+            "obop-tpj-x-12-3-4",
+            "xobop-tpj-12-3-4",
+        ] {
+            assert!(!is_made_by("obop-tpj", no), "{no}");
+        }
+
+        let tmp = std::env::temp_dir();
+        let old_time = std::time::SystemTime::now() - 2 * LEFTOVER_AGE;
+        let make = |name: &str, old: bool| {
+            let p = tmp.join(name);
+            std::fs::write(&p, "leftover").unwrap();
+            if old {
+                std::fs::File::options()
+                    .write(true)
+                    .open(&p)
+                    .unwrap()
+                    .set_modified(old_time)
+                    .unwrap();
+            }
+            p
+        };
+        // Names that `TempPath::new` itself made, not names written out by hand here: if `new`
+        // and `is_made_by` drift apart, the sweep matches nothing and this test says so. The
+        // owners stay alive to the end, so their drop is the last cleaning, as in a real test.
+        let (old_owner, young_owner) = (TempPath::new("obop-tpj"), TempPath::new("obop-tpj"));
+        let stale = old_owner.path().to_path_buf();
+        let stale_side = tmp.join(format!(
+            "{}-wal",
+            stale.file_name().unwrap().to_string_lossy()
+        ));
+        let young = young_owner.path().to_path_buf();
+        for (p, old) in [(&stale, true), (&stale_side, true), (&young, false)] {
+            make(&p.file_name().unwrap().to_string_lossy(), old);
+        }
+        let pid = std::process::id();
+        let other_tag = make(&format!("obop-tpjx-{pid}-7-1"), true);
+        let odd_name = make(&format!("obop-tpj-{pid}-seven"), true);
+
+        let fresh = TempPath::new("obop-tpj");
+        assert!(!stale.exists() && !stale_side.exists(), "old leftovers go");
+        assert!(young.exists(), "a leftover of the last hour stays");
+        assert!(other_tag.exists() && odd_name.exists(), "other names stay");
+        drop(fresh);
+        for p in [other_tag, odd_name] {
+            std::fs::remove_file(p).unwrap();
+        }
+        drop((old_owner, young_owner));
+        assert!(!young.exists(), "the owner's drop removes its own path");
+    }
+
+    #[test]
+    fn a_failing_test_still_cleans_up() {
+        let path = std::sync::Mutex::new(None);
+        let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let d = TempPath::dir("obop-tp-panic");
+            *path.lock().unwrap() = Some(d.path().to_path_buf());
+            // These come before the panic that is meant: if one of them fails, its own payload
+            // (a formatted string) is not the one the test waits for below.
+            assert!(d.path().is_dir(), "`dir` makes the directory");
+            std::fs::write(d.path().join("f"), "x").unwrap();
+            panic!("the test failed");
+        }));
+        let payload = r.expect_err("the closure must panic");
+        assert_eq!(
+            payload.downcast_ref::<&str>().copied(),
+            Some("the test failed"),
+            "it panicked, but not where the test meant it to"
+        );
+        let p = path.lock().unwrap().clone().unwrap();
+        assert!(!p.exists(), "{} was left behind", p.display());
+    }
+
+    #[test]
+    fn a_name_new_makes_is_the_one_the_sweep_recognises_and_it_carries_this_process_and_time() {
+        let millis = || {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis()
+        };
+        let before = millis();
+        let (a, b) = (TempPath::new("obop-tpn"), TempPath::new("obop-tpn"));
+        let after = millis();
+        let fields = |p: &TempPath| -> Vec<u128> {
+            let name = p.path().file_name().unwrap().to_string_lossy().to_string();
+            assert!(is_made_by("obop-tpn", &name), "{name}");
+            assert!(is_made_by("obop-tpn", &format!("{name}-wal")), "{name}");
+            let rest = name.strip_prefix("obop-tpn-").expect("the tag comes first");
+            let f: Vec<u128> = rest.split('-').map(|n| n.parse().unwrap()).collect();
+            assert_eq!(f.len(), 3, "process, counter, time: {name}");
+            f
+        };
+        let (fa, fb) = (fields(&a), fields(&b));
+        for f in [&fa, &fb] {
+            assert_eq!(f[0], u128::from(std::process::id()), "the process id");
+            assert!(
+                (before..=after).contains(&f[2]),
+                "the time in milliseconds: {f:?} not in {before}..={after}"
+            );
+        }
+        assert!(fb[1] > fa[1], "the counter goes up: {fa:?} then {fb:?}");
+    }
+
+    #[test]
+    fn names_made_at_the_same_moment_by_several_threads_all_differ() {
+        // `fresh_name` is the half of `new` that decides the name; `new` also walks the whole
+        // temporary directory, which on a crowded machine takes long enough to make this slow.
+        const THREADS: usize = 8;
+        const EACH: usize = 500;
+        let start = std::sync::Arc::new(std::sync::Barrier::new(THREADS));
+        let workers: Vec<_> = (0..THREADS)
+            .map(|_| {
+                let start = start.clone();
+                std::thread::spawn(move || {
+                    start.wait();
+                    (0..EACH)
+                        .map(|_| fresh_name("obop-tpm"))
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect();
+        let all: Vec<String> = workers
+            .into_iter()
+            .flat_map(|w| w.join().unwrap())
+            .collect();
+        let names: BTreeSet<_> = all.iter().collect();
+        assert_eq!(names.len(), THREADS * EACH, "two names were the same");
+    }
+
+    #[test]
+    fn a_name_that_is_not_one_plain_file_name_is_refused_before_anything_is_removed() {
+        assert!(is_plain_name("obop-tp-1-2-3.db"));
+        for no in [
+            "", ".", "..", "a/b", "a\\b", "/", "\\", "../x", "..\\x", "a/", "/abs", "C:\\x",
+        ] {
+            assert!(!is_plain_name(no), "{no:?}");
+        }
+        // The refusal must come before the clearing. The base is a private directory, so that a
+        // regression here costs this test its probe and not the machine its temporary directory.
+        let base = TempPath::dir("obop-tp-base");
+        let probe = base.path().join("probe");
+        std::fs::write(&probe, "x").unwrap();
+        for no in ["", ".", "a/b", "a\\b"] {
+            let r = std::panic::catch_unwind(|| TempPath::named_in(base.path(), no));
+            assert!(r.is_err(), "{no:?} was accepted");
+            assert!(probe.exists(), "{no:?} cleared the base directory");
+        }
     }
 }

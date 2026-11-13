@@ -451,7 +451,9 @@ fn an_unknown_key_in_a_label_table_is_refused_at_install() {
 /// template of `obop modules labels` carries the messages, and an unknown key is an error.
 #[test]
 fn the_check_command_and_the_template_know_the_assertion_messages() {
-    let dir = std::env::temp_dir().join(format!("obop-assert-lang-{}", std::process::id()));
+    // A directory of this run's own, removed when the test ends (after the stores are closed).
+    let _guard = obop_storage::testing::TempPath::dir("obop-assert-lang");
+    let dir = _guard.path().to_path_buf();
     let ldir = dir.join("labels").join("sv");
     std::fs::create_dir_all(&ldir).unwrap();
     let pkg = dir.join("ledger.toml");
@@ -571,5 +573,4 @@ message = \"An entry needs a positive amount\"
     // The template checks against the package.
     std::fs::write(&file, t.replace("labels.fi", "labels.sv")).unwrap();
     assert!(check(&t.replace("labels.fi", "labels.sv"), false).is_empty());
-    let _ = std::fs::remove_dir_all(dir);
 }
