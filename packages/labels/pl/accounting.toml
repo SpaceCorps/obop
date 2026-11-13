@@ -229,7 +229,7 @@ description = "Anuluje roboczą operację, która nigdy nie była zaksięgowana"
 
 [labels.pl.model.accounting_move.action.reverse]
 label = "Wystornuj"
-description = "Oznacza zaksięgowaną operację jako wystornowaną; operacja przeciwna jest księgowana osobno (tylko osoba zatwierdzająca)"
+description = "Oznacza zaksięgowaną operację jako wystornowaną i tworzy operację przeciwną jako wersję roboczą do zaksięgowania przez osobę zatwierdzającą (tylko osoba zatwierdzająca)"
 
 [labels.pl.model.accounting_move_line]
 name = "Pozycja operacji"

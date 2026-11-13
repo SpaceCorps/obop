@@ -1,6 +1,6 @@
 [module]
 id = "accounting"
-version = "0.3.0"
+version = "0.3.1"
 name = "Accounting"
 description = "Chart of accounts, journals, tax rates, journal entries with debit and credit lines, fiscal years and periods, and bank statement lines. Amounts are money fields in minor currency units and tax rates are numbers in basis points (2000 means 20.00 percent). An entry shows its total debit and total credit, and posting is refused unless they are equal; a posted entry gets the next number of a gapless yearly series. Tax amounts are still entered by whoever books the entry. Account and journal codes are unique. Posting an entry and closing a period or fiscal year need a human approval and the stricter accounting.approver group; agents may only propose them."
 author = "SpaceCorps"
@@ -354,12 +354,28 @@ write_group = "accounting.user"
 
   [[model.action]]
   name = "reverse"
-  description = "Mark a posted entry as reversed; the opposite entry is booked separately (approver only)"
+  description = "Mark a posted entry as reversed and create the opposite entry as a draft for an approver to post (approver only)"
   field = "state"
   from = "posted"
   to = "reversed"
   group = "accounting.approver"
   approval = true
+
+    # The reversal is a new draft entry in the same journal, dated today, that refers to the
+    # original by its number. Posting it is a separate step (`post`: approver, human approval).
+    [[model.action.effect]]
+    kind = "create"
+    model = "accounting_move"
+    as = "reversal"
+    map = { journal_id = "$self.journal_id", date = "$today", partner_id = "$self.partner_id", reference = "$self.number", narration = "Reversal entry: every line of the entry named in the reference with debit and credit swapped" }
+
+    # One line per original line with debit and credit swapped. The tax stays on the line, so a
+    # tax report that sums by tax sees the reversal cancel the original.
+    [[model.action.effect]]
+    kind = "create"
+    model = "accounting_move_line"
+    for_each = "lines"
+    map = { move_id = "$created.reversal", account_id = "$line.account_id", partner_id = "$line.partner_id", label = "$line.label", debit = "$line.credit", credit = "$line.debit", tax_id = "$line.tax_id" }
 
 [[model]]
 name = "accounting_move_line"

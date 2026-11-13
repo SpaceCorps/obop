@@ -229,7 +229,7 @@ description = "Peruuta luonnos, jota ei ole koskaan kirjattu"
 
 [labels.fi.model.accounting_move.action.reverse]
 label = "Vastakirjaa"
-description = "Merkitse kirjattu kirjaus vastakirjatuksi; vastakirjaus tehdään erikseen (vain hyväksyjä)"
+description = "Merkitse kirjattu kirjaus vastakirjatuksi ja luo vastakirjaus luonnoksena, jonka hyväksyjä kirjaa (vain hyväksyjä)"
 
 [labels.fi.model.accounting_move_line]
 name = "Kirjausrivi"

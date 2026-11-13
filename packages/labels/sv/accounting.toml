@@ -229,7 +229,7 @@ description = "Annullera en verifikation i utkast som aldrig bokförts"
 
 [labels.sv.model.accounting_move.action.reverse]
 label = "Återför"
-description = "Markera en bokförd verifikation som återförd; motverifikationen bokförs separat (endast godkännare)"
+description = "Markera en bokförd verifikation som återförd och skapa motverifikationen som utkast som en godkännare bokför (endast godkännare)"
 
 [labels.sv.model.accounting_move_line]
 name = "Verifikationsrad"

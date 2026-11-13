@@ -229,7 +229,7 @@ description = "Cancelar un asiento en borrador que nunca se contabilizó"
 
 [labels.es.model.accounting_move.action.reverse]
 label = "Revertir"
-description = "Marcar un asiento contabilizado como revertido; el asiento contrario se registra aparte (solo aprobadores)"
+description = "Marcar un asiento contabilizado como revertido y crear el asiento contrario como borrador para que lo contabilice un aprobador (solo aprobadores)"
 
 [labels.es.model.accounting_move_line]
 name = "Línea de movimiento"
