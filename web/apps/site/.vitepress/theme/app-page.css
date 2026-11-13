@@ -737,15 +737,31 @@
 /*
  * A path or a file name ("email_marketing.toml") has no room beside its label at 9rem: it was cut in
  * the middle of its name. Its value keeps the old 12rem and drops under its label, where it has the
- * whole line and fits whole at the normal text size. At a very large text size a name can be wider
- * than the whole line (200 percent on a 320 px phone: the name is 360 px, the line 222): then it
- * breaks inside the name, as every word of the list may (`overflow-wrap: anywhere` and no minimum
- * width, from the shared `.app-info dd`), and it never runs out of its card. Do not restore a
- * minimum width (`min-inline-size: auto`) with `overflow-wrap: break-word` here: the value's box then
- * grows with the word and the list ran 138 px past its card and the page 89 px past a 320 px screen.
+ * whole line. The name has break places after each slash and before ".toml" (`pathParts` in
+ * AppPage.vue, a `<wbr>`), so that where it does not fit the line it breaks into "packages/",
+ * "email_marketing" and ".toml" and not inside a word. On a 320 px phone the line is 254 px at the
+ * normal text size and 238 px at 150 percent: "packages/email_marketing.toml" is 261 px at the
+ * normal size and breaks after "packages/"; at 150 percent it is 392 px and breaks into "packages/",
+ * "email_marketing" (203 px) and ".toml" (68 px), on three lines with each part whole.
+ * At 200 percent a part can be wider than the whole line (the part "email_marketing" is 270 px; the
+ * line is 222 px at 320 and 258 px at 360): then it breaks inside the part, as every word of the list
+ * may (`overflow-wrap: anywhere` and no minimum width, from the shared `.app-info dd`), and it never
+ * runs out of its card. Do not restore a minimum width (`min-inline-size: auto`) with
+ * `overflow-wrap: break-word` here: the value's box then grows with the word and the list ran 138 px
+ * past its card and the page 89 px past a 320 px screen.
  */
 .app-row-body .app-info dd:has(.mono) {
   flex-basis: 12rem;
+}
+/*
+ * The label's own room is `clamp(8rem, 32%, 10rem)`, which is 256 px at 200 percent text and is more
+ * than the 222 px of the list on a 320 px phone: without the cap the box of a label is 34 px wider
+ * than the list, and the longest label word ("Yhteensopivuus" in Finnish) ends 23 px past it.
+ * Inside the row the label is never wider than the pair's line; a word wider than that breaks inside
+ * it (`overflow-wrap`).
+ */
+.app-row-body .app-info dt {
+  max-inline-size: 100%;
 }
 
 /* For developers: the last row, which holds everything technical. */

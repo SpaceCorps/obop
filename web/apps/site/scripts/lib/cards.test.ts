@@ -277,28 +277,37 @@ describe("which cards a section shows and which it folds", () => {
     expect(NOT_DONE.test("Create a lead")).toBe(false);
     const speaks: string[] = [];
     let notDone = 0;
+    let either = 0;
+    let checked = 0;
     for (const a of apps)
       for (const section of SECTIONS) {
         const english = view(a.id)[section];
         english.forEach((c, i) => {
-          if (NOT_DONE.test(c.text)) {
+          const says = NOT_DONE.test(c.text);
+          const speaksOf = SPEAKS.test(`${c.title} ${c.text}`);
+          if (says) {
             notDone++;
             expect(
               isMarked(c),
               `${a.id}: "${c.title}" says what it does not do, and has neither the approval mark nor keep`,
             ).toBe(true);
           }
-          if (!SPEAKS.test(`${c.title} ${c.text}`)) return;
-          speaks.push(`${a.id}: ${c.title}`);
-          expect(
-            isMarked(c),
-            `${a.id}: "${c.title}" speaks of approval or of an AI agent, and has neither the approval mark nor keep`,
-          ).toBe(true);
+          if (speaksOf) {
+            speaks.push(`${a.id}: ${c.title}`);
+            expect(
+              isMarked(c),
+              `${a.id}: "${c.title}" speaks of approval or of an AI agent, and has neither the approval mark nor keep`,
+            ).toBe(true);
+          }
+          // A card of either kind is shown and not folded in every language: both are set by key.
+          if (!says && !speaksOf) return;
+          either++;
           for (const locale of locales) {
+            checked++;
             const cards = view(a.id, locale)[section];
             expect(
               splitCards(cards).shown,
-              `${locale} ${a.id}: "${c.title}" speaks of approval and is folded`,
+              `${locale} ${a.id}: "${c.title}" ${says ? "says what it does not do" : "speaks of approval"} and is folded`,
             ).toContain(cards[i]);
           }
         });
@@ -317,6 +326,11 @@ describe("which cards a section shows and which it folds", () => {
       expect(speaks, name).toContain(name);
     expect(speaks, "cards that speak of approval, proposing or an AI agent").toHaveLength(19);
     expect(notDone, "cards that say what they do not do").toBe(14);
+    // The language loop ran for every card of either kind, in every language, and not for the first
+    // kind only: 4 cards are of both kinds, so the cards of either kind are 19 + 14 - 4. A card that is
+    // added or lost moves these numbers.
+    expect(either, "cards of either kind").toBe(29);
+    expect(checked, "checks of a card of either kind in a language").toBe(either * locales.length);
   });
 
   test("the cards a page opens with: the numbers on the pages that were named", () => {
