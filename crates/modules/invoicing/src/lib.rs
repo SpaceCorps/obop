@@ -68,6 +68,22 @@ pub fn module() -> Module {
                     )
                     .sequence("INV-{year}-{seq:05}", true, Reset::Year)
                     .assign_on("post"),
+                    F::new(
+                        "issue_date",
+                        "Date the invoice is issued (YYYY-MM-DD)",
+                        NoClass,
+                        false,
+                        "invoicing.user",
+                    )
+                    .kind(FieldKind::Date),
+                    F::new(
+                        "due_date",
+                        "Date the payment is due (YYYY-MM-DD); not before the issue date",
+                        NoClass,
+                        false,
+                        "invoicing.user",
+                    )
+                    .kind(FieldKind::Date),
                 ],
                 commands: vec![
                     CommandDef::new(
@@ -79,6 +95,10 @@ pub fn module() -> Module {
                     .assertion_msg(
                         "total_minor > 0",
                         "An invoice with no amount cannot be posted",
+                    )
+                    .assertion_msg(
+                        "!is_set(due_date) || !is_set(issue_date) || due_date >= issue_date",
+                        "The due date cannot be before the issue date",
                     )
                     .approval(),
                     CommandDef::new("cancel", "Cancel a draft invoice", "invoicing.user")
@@ -241,6 +261,64 @@ mod tests {
         assert_eq!(
             s.field("invoice", &id, "number"),
             Some(Value::text("INV-2026-00001"))
+        );
+    }
+
+    /// The dates are optional (an invoice without them still posts, as above); when both are set,
+    /// the due date may not be before the issue date.
+    #[test]
+    fn an_invoice_posts_only_when_its_due_date_is_not_before_its_issue_date() {
+        let (d, s) = (Dispatcher::new(), Store::new());
+        d.set_clock(std::sync::Arc::new(|| 1_790_000_000)); // September 2026
+        register(&d, &s);
+        let manager = Principal::user("m", &["invoicing.user", "invoicing.manager"]);
+        let mut v = Vault::new();
+        let mut call =
+            |cmd: &str, input: Value| d.call(Surface::Rest, &manager, &mut v, cmd, &input);
+        let dates = |id: &str, issue: &str, due: &str| {
+            Value::map([
+                ("id", Value::text(id)),
+                ("issue_date", Value::text(issue)),
+                ("due_date", Value::text(due)),
+            ])
+        };
+        let post = |id: &str| Value::map([("id", Value::text(id))]);
+
+        let id = seed(&s, "o1");
+        call("invoice.update", dates(&id, "2026-11-13", "2026-11-01")).unwrap();
+        let e = format!("{:?}", call("invoice.post", post(&id)).unwrap_err());
+        assert!(
+            e.contains("The due date cannot be before the issue date"),
+            "{e}"
+        );
+        assert_eq!(s.field("invoice", &id, "state"), Some(Value::text("draft")));
+
+        call("invoice.update", dates(&id, "2026-11-13", "2026-12-13")).unwrap();
+        call("invoice.post", post(&id)).unwrap();
+        assert_eq!(
+            s.field("invoice", &id, "state"),
+            Some(Value::text("posted"))
+        );
+        assert_eq!(
+            s.field("invoice", &id, "issue_date"),
+            Some(Value::text("2026-11-13"))
+        );
+        assert_eq!(
+            s.field("invoice", &id, "due_date"),
+            Some(Value::text("2026-12-13"))
+        );
+
+        // Due on the day it is issued is allowed.
+        let same_day = seed(&s, "o2");
+        call(
+            "invoice.update",
+            dates(&same_day, "2026-11-13", "2026-11-13"),
+        )
+        .unwrap();
+        call("invoice.post", post(&same_day)).unwrap();
+        assert_eq!(
+            s.field("invoice", &same_day, "state"),
+            Some(Value::text("posted"))
         );
     }
 

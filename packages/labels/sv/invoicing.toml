@@ -27,6 +27,14 @@ description = "Fakturans totalbelopp i valutans minsta enhet, summan av raderna"
 label = "Nummer"
 description = "Nummer ur en årlig nummerserie utan luckor, som INV-2026-00042, tilldelas vid bokföring"
 
+[labels.sv.model.invoice.field.issue_date]
+label = "Fakturadatum"
+description = "Datum då fakturan utfärdas (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.invoice.field.due_date]
+label = "Förfallodatum"
+description = "Datum då betalningen förfaller (ÅÅÅÅ-MM-DD); inte före fakturadatum"
+
 [labels.sv.model.invoice.action.post]
 label = "Bokför"
 description = "Bokför en faktura i utkast och ge den nästa nummer i serien"
