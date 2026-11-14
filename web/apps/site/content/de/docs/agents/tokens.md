@@ -1,6 +1,6 @@
 ---
 title: "Ein Agent-Token erstellen"
-description: "Erstellen Sie ein Agent-Token von obop mit eingeschränktem Umfang über REST (POST /api/auth/agent-token) oder mit der CLI (obop agent-token). Das Token wird einmal angezeigt und kann die Berechtigungsgruppen seines Besitzers nur einschränken."
+description: "Erstellen Sie ein Agent-Token von obop mit eingeschränktem Umfang im Backoffice, über REST (POST /api/auth/agent-token) oder mit der CLI (obop agent-token). Das Token wird einmal angezeigt und kann nur einschränken, was sein Besitzer darf."
 lead: "Ein Agent-Token ist ein Bearer-Token, das einer Person gehört und eine Liste von Berechtigungsgruppen trägt. Erstellen Sie pro Agent und pro Aufgabe eines."
 ---
 
@@ -10,7 +10,7 @@ lead: "Ein Agent-Token ist ein Bearer-Token, das einer Person gehört und eine L
 - Es wird **einmal** angezeigt. obop speichert nur einen Hash, ein verlorenes Token lässt sich also nicht wiederherstellen; erstellen Sie ein neues.
 - Es beginnt mit `obop_`. Behandeln Sie es wie ein Passwort.
 - Nur eine Person kann Tokens erstellen. Ein Agent kann kein weiteres Token ausstellen.
-- Es läuft nicht ab. Es funktioniert nicht, solange das Konto seines Besitzers deaktiviert ist, und endgültig nicht mehr, sobald der Besitzer ausgeschieden ist (Offboarding). Einen Befehl, um ein einzelnes Token zu widerrufen, gibt es noch nicht (siehe [Sicherheit](/docs/agents/safety/)).
+- Es läuft nicht ab. Sein Besitzer kann es jederzeit widerrufen (siehe [Auflisten und widerrufen](#auflisten-und-widerrufen)). Es funktioniert außerdem nicht, solange das Konto seines Besitzers deaktiviert ist, und endgültig nicht mehr, sobald der Besitzer ausgeschieden ist (Offboarding).
 
 ## Die Scopes wählen
 
@@ -26,6 +26,10 @@ Scopes sind [Berechtigungsgruppen](/docs/concepts/permission-groups/). Überlege
 | `product.user`      | Produkte und Preise lesen                                               |
 
 Installierte Pakete bringen eigene Gruppen mit, zum Beispiel `helpdesk.agent`. Die [App-Seiten](/apps/) listen die Gruppen jeder App auf.
+
+## Im Backoffice
+
+Öffnen Sie _Anpassen, Sicherheit_ und gehen Sie zu **Agent-Tokens**. Geben Sie eine Bezeichnung ein (das Programm oder den Agenten, der das Token verwenden wird), haken Sie die Gruppen an und wählen Sie **Agent-Token erstellen**. Das Token wird einmal angezeigt, mit einer Schaltfläche **Kopieren**; wählen Sie **Fertig**, wenn Sie es gespeichert haben. Der Abschnitt listet auch die von Ihnen erstellten Tokens auf, jedes mit **Widerrufen**.
 
 ## Über REST
 
@@ -50,7 +54,7 @@ curl -s -X POST http://127.0.0.1:8080/api/auth/agent-token \
 { "token": "obop_1e00c3..." }
 ```
 
-`scopes` ist erforderlich, darf nicht leer sein und darf nur Gruppen nennen, die in Ihrem eigenen Konto eingetragen sind; `platform.admin` steht hier nicht für die anderen Gruppen. Das erste Konto einer Instanz, die eine Control Plane angelegt hat, hat nur `platform.admin`; geben Sie ihm also zuerst die Gruppen, die Sie weitergeben wollen, unter _Anpassen, Sicherheit, Personal_. `label` ist freier Text. Bei einer solchen Instanz verwenden Sie deren Adresse statt `127.0.0.1:8080` und melden sich mit Ihrer Registrierungs-E-Mail-Adresse als Benutzernamen an.
+`scopes` ist erforderlich und darf nicht leer sein. Es nennt Gruppen, die in Ihrem eigenen Konto eingetragen sind. Ein Administrator (eine Person, die `platform.admin` hat) darf jede Gruppe nennen, die die Instanz hat, weil diese Gruppe bereits alle erlaubt. Das Token trägt trotzdem nur die Gruppen, die Sie nennen: `*` ist keine Gruppe und wird abgelehnt, und eine Gruppe, die kein installiertes Modul deklariert, wird ebenfalls abgelehnt. `label` darf höchstens 80 Zeichen lang sein und nur eine Zeile umfassen. Bei einer Instanz, die eine Control Plane angelegt hat, verwenden Sie deren Adresse statt `127.0.0.1:8080` und melden sich mit Ihrer Registrierungs-E-Mail-Adresse als Benutzernamen an.
 
 ## Mit der CLI
 
@@ -65,7 +69,39 @@ obop_1e00c32430532fdcef...
 shown once; store it like a password
 ```
 
-Fügen Sie `--db postgres://...` hinzu (oder setzen Sie `OBOP_DATABASE_URL`), wenn die Instanz nicht die Standarddatenbank `sqlite://obop.db` verwendet.
+Fügen Sie `--db postgres://...` hinzu (oder setzen Sie `OBOP_DATABASE_URL`), wenn die Instanz nicht die Standarddatenbank `sqlite://obop.db` verwendet. Die Scopes folgen derselben Regel wie über REST, und zwar für den Benutzer, den Sie nennen. Über die Kommandozeile lassen sich Tokens noch nicht auflisten oder widerrufen.
+
+## Auflisten und widerrufen
+
+Ihre eigenen Agent-Tokens sehen und widerrufen Sie unter _Anpassen, Sicherheit, Agent-Tokens_ oder über REST mit Ihrem Sitzungs-Token:
+
+```bash
+curl -s http://127.0.0.1:8080/api/auth/agent-tokens \
+  -H "Authorization: Bearer $SESSION_TOKEN"
+```
+
+```json
+{
+  "tokens": [
+    {
+      "id": "5f0c...",
+      "label": "triage-bot",
+      "scopes": ["base.user", "crm.user"],
+      "created_at": 1794650000
+    }
+  ],
+  "delegable": ["base.user", "crm.user"]
+}
+```
+
+`tokens` enthält nie ein Token, nur wie jedes heißt und was es darf. `delegable` ist die Liste der Gruppen, die Sie auf ein neues Token setzen dürfen. Um ein Token zu widerrufen, senden Sie eine POST-Anfrage an seine `id`:
+
+```bash
+curl -s -X POST http://127.0.0.1:8080/api/auth/agent-tokens/5f0c.../revoke \
+  -H "Authorization: Bearer $SESSION_TOKEN"
+```
+
+Das Token funktioniert sofort nicht mehr. Nur der Besitzer kann das tun: Ein Administrator kann die Tokens einer anderen Person nicht einzeln auflisten oder widerrufen (das Deaktivieren oder das Offboarding des Kontos beendet alle). Das Erstellen und das Widerrufen eines Tokens werden beide im Sicherheitsprotokoll festgehalten, ohne das Token.
 
 ## Das Token für MCP verwenden
 
@@ -87,7 +123,8 @@ Dasselbe Token verbindet einen MCP-Client mit dem entfernten MCP-Server der Inst
 | Antwort                                                                            | Bedeutung                                                                                                    |
 | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | `400 {"error":"an agent token needs at least one scope"}`                          | `scopes` war leer.                                                                                           |
-| `400 {"error":"you do not hold invoicing.manager, so you cannot delegate it"}`     | Sie haben eine Gruppe angefordert, die Sie nicht haben.                                                      |
+| `400 {"error":"you do not hold invoicing.manager, so you cannot delegate it"}`     | Sie haben eine Gruppe angefordert, die nicht in Ihrem Konto steht, und Sie sind kein Administrator.          |
+| `400 {"error":"nope.user is not a registered permission group, ..."}`              | Ein Administrator hat eine Gruppe angefordert, die kein installiertes Modul deklariert.                      |
 | `400 {"error":"only a human user can issue agent tokens"}`                         | Sie haben ein Agent-Token benutzt, um ein weiteres anzufordern.                                              |
 | `401`                                                                              | Sitzungs-Token fehlt, ist falsch oder abgelaufen.                                                            |
 | `403 {"error":"two-factor authentication must be set up before you can continue"}` | Ihr Konto muss zuerst die Zwei-Faktor-Anmeldung einrichten; bis dahin kann diese Sitzung nur sie einrichten. |
