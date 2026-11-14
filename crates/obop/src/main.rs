@@ -119,6 +119,9 @@ mod storage_cli;
 mod update_cmd;
 #[cfg(test)]
 mod update_tests;
+mod upload_cmd;
+#[cfg(test)]
+mod upload_cmd_tests;
 
 use app::{App, DevAuth};
 use obop_auth::Auth;
@@ -360,6 +363,14 @@ const USAGE: &str = "usage: obop <command>
   call [--token TOKEN] <model> <command> [k=v...]
                                                 values are text, converted by field type; for list and search
                                                 filter, order and aggregate are JSON text (in single quotes)
+  upload FILE --field MODEL.FIELD [--record ID] [--content-type TYPE] [--url URL] [--token TOKEN]
+                                                store FILE as an upload for the image or file field MODEL.FIELD, with the checks of
+                                                POST /api/blobs (type, size, the groups of the field), and print its id, type, size
+                                                and SHA-256 as JSON; --record ID then sets that field of the record (the `update`
+                                                command, as you). The type is taken from the file name unless --content-type says it.
+                                                With --url https://HOST (or OBOP_URL) the file goes to that running instance over
+                                                its REST API, not into the database of --db. An upload that no record takes is
+                                                removed after a day
 global options
   --db URL              sqlite://obop.db (default, local), postgres://user:pass@host/db, memory:
                         (or OBOP_DATABASE_URL)
@@ -447,6 +458,10 @@ fn main() -> ExitCode {
     let (sie_year, args) = take_opt(&args, "--year");
     let (sso_tenant, args) = take_opt(&args, "--tenant");
     let (sso_client, args) = take_opt(&args, "--client-id");
+    let (up_field, args) = take_opt(&args, "--field");
+    let (up_record, args) = take_opt(&args, "--record");
+    let (up_type, args) = take_opt(&args, "--content-type");
+    let (up_url, args) = take_opt(&args, "--url");
     let (flags, args): (Vec<&str>, Vec<&str>) = args.into_iter().partition(|a| {
         matches!(
             *a,
@@ -701,6 +716,27 @@ fn main() -> ExitCode {
         ["commands"] => commands(&opts),
         ["openapi"] => openapi_cmd::run(out_file),
         ["call", model, command, kv @ ..] => call(&opts, model, command, kv),
+        ["upload", file] => {
+            let url = up_url.map(String::from).or_else(|| {
+                std::env::var("OBOP_URL")
+                    .ok()
+                    .filter(|u| !u.trim().is_empty())
+            });
+            upload_cmd::run(
+                &opts,
+                &upload_cmd::Args {
+                    file,
+                    field: up_field,
+                    record: up_record,
+                    content_type: up_type,
+                    url: url.as_deref(),
+                },
+            )
+        }
+        ["upload", ..] => {
+            eprintln!("{}", upload_cmd::USAGE);
+            Err(ExitCode::from(2))
+        }
         _ => {
             eprintln!("{USAGE}");
             Err(ExitCode::from(2))
