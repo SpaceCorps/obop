@@ -745,6 +745,7 @@ Which answers block which gate ([ROADMAP.md s2.3](ROADMAP.md#23-gates)): the G0 
 | [LOCALIZATION.md](LOCALIZATION.md) | Country packs (free) and the compliance operating model |
 | [ENGINEERING.md](ENGINEERING.md) | Engineering practice: quality, CI/CD, release and support policy, documentation, community, brand and legal pack |
 | [GLOSSARY.md](GLOSSARY.md) | Terms |
+| [ODOO-STRENGTHS.md](ODOO-STRENGTHS.md) | Odoo's strong points (226, in 13 areas) mapped to what obop has built, packaged and planned, with the gaps; a draft, every action in it Proposed |
 | [spec/finance.md](spec/finance.md) | Accounting, invoicing, payments, tax, e-invoicing, assets |
 | [spec/sales-crm.md](spec/sales-crm.md) | Catalogue, pricing, CRM, sales, subscriptions, portal |
 | [spec/supply-chain.md](spec/supply-chain.md) | Inventory, purchase, manufacturing, quality |
