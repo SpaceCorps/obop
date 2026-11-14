@@ -266,6 +266,12 @@
 .searchfield:has(> .search-cancel) {
   padding-inline-end: 0.5rem;
 }
+/* The palette opens its Cancel right under the pointer that tapped search, so a hover box would
+   greet it at once; it stays a plain word as in the launcher, and only a press shows. */
+.searchfield > .btn.search-cancel:hover:not(:disabled, :active) {
+  background: transparent;
+  color: var(--accent-ink);
+}
 .launcher-body {
   display: flex;
   flex: 1;
@@ -420,8 +426,9 @@
   border-radius: var(--radius-md);
   background: var(--surface);
 }
+/* 38 px with a mouse at either density, like before; 44 px where a finger needs it (--control-h). */
 .home-head .searchfield input {
-  min-block-size: 2.25rem;
+  min-block-size: max(2.25rem, calc(var(--control-h) - 2px));
 }
 .home-body {
   display: flex;
@@ -537,6 +544,11 @@
   color: oklch(0.88 0.02 265);
   font-size: var(--text-sm);
   line-height: 1.6;
+}
+/* The module builder renders the preview one line to a block (no newline characters between them),
+   so every width needs the block; the hanging indent for a wrapped line is in the phone block. */
+.code-line {
+  display: block;
 }
 /* The module builder's secondary "Add field" keeps its own width; only the primary action may fill
    the row (on a phone, below). */
@@ -712,10 +724,11 @@
     inline-size: 20px;
     block-size: 20px;
   }
-  /* The avatar stays 34 px to look at; a ring around it takes the tap to about 44 px. */
+  /* The avatar stays 34 px to look at; a ring around it takes the tap to about 44 px. Its end
+     margin puts it on the page's 16 px gutter, level with the content below. */
   .avatar-btn {
     position: relative;
-    margin-inline: 0.3rem;
+    margin-inline: 0.3rem 0.75rem;
   }
   .avatar-btn::after {
     content: "";
@@ -770,6 +783,11 @@
   .home-head {
     gap: var(--space-3);
     padding-block: var(--space-5) var(--space-3);
+  }
+  /* The filter runs to the same gutter as the app cards under it; the desktop cap of 20rem left it
+     short of their edge on a phone wider than 320 px. */
+  .home-head .searchfield {
+    inline-size: 100%;
   }
   .home .app-grid,
   .app-grid.small {
@@ -854,6 +872,11 @@
     font-size: var(--text-xs);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
+  }
+  /* A wrapped line goes on 4ch in, so its tail does not read as a new key at column 0. */
+  .code-line {
+    padding-inline-start: 4ch;
+    text-indent: -4ch;
   }
   .build-actions > .btn.primary {
     flex: 1 1 100%;

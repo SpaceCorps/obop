@@ -25,7 +25,18 @@ function CopyLine({ text }: { text: string }) {
   const [done, setDone] = useState(false);
   return (
     <span className="upd-cmd">
-      <code>{text}</code>
+      {/* Each flag ("--out") in a span of its own that does not break (updates.css). */}
+      <code>
+        {text.split(/(\s+)/).map((w, i) =>
+          w.startsWith("-") ? (
+            <span key={i} className="upd-flag">
+              {w}
+            </span>
+          ) : (
+            w
+          ),
+        )}
+      </code>
       <IconButton
         icon="copy"
         label={done ? t("Copied") : t("Copy this line")}

@@ -116,6 +116,10 @@
   background: var(--surface-2);
   border: 1px solid var(--border);
 }
+/* A line may break at a hyphen, and "--" above "out" reads as another flag: a flag stays whole. */
+.upd-flag {
+  white-space: nowrap;
+}
 .upd-checks {
   display: flex;
   flex-direction: column;
@@ -136,13 +140,37 @@
 }
 
 @media (max-width: 40rem) {
-  /* The notice inside the card had a 170 px column: less padding around and inside it. */
+  /* The card's text starts where the release cards' does; the notice inside it takes a slimmer
+     pad, so its text keeps a usable column. */
   .upd-now {
-    padding: var(--space-4) var(--space-3);
+    padding: var(--space-4);
   }
   .upd-now .notice {
     padding: 0.6rem 0.7rem;
     gap: 0.5rem;
+  }
+  /* A badge that wraps (the backup path) keeps the corners of a one-line pill instead of turning
+     into a blob, and its icon stays level with the first line. */
+  .upd-now .mod-badge {
+    align-items: flex-start;
+    border-radius: calc(0.7em + 0.125rem);
+  }
+  .upd-now .mod-badge > svg {
+    margin-block-start: calc(0.7em - 6px);
+  }
+  /* The date always takes the second line, under the version rather than under the chevron, so
+     every release reads the same whether or not the date would fit. */
+  .upd-release summary > .hint {
+    flex-basis: 100%;
+    padding-inline-start: calc(16px + var(--space-3));
+  }
+  /* The release card is the frame; the module list inside it needs no second one. */
+  .upd-release .table-wrap {
+    border: 0;
+    border-radius: 0;
+  }
+  .upd-release .table.stack-sm > tbody > tr {
+    padding-inline: 0;
   }
   /* Full-width buttons, the primary one first. */
   .upd-buttons {

@@ -13,8 +13,10 @@
   border-radius: var(--radius-md);
   background: var(--surface);
 }
+/* Never under 40 px; where --control-h is the touch size (phones, touch screens) the field is
+   44 px with its border, like every other field there. */
 .guide-search input {
-  min-block-size: 2.5rem;
+  min-block-size: max(2.5rem, calc(var(--control-h) - 2px));
 }
 .guide-body {
   display: grid;
@@ -198,10 +200,11 @@
   .guide-body {
     grid-template-columns: minmax(0, 1fr);
   }
+  /* No block padding on the box: closed, it is just the 44 px summary, and all of it opens it. */
   .guide-toc {
     position: static;
     max-block-size: none;
-    padding: var(--space-3);
+    padding: 0;
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     background: var(--surface-2);
@@ -210,7 +213,11 @@
      disclosure marker. */
   .guide-toc summary {
     margin: 0;
+    padding-inline: var(--space-3);
     line-height: 2.75rem;
+  }
+  .guide-toc ol {
+    padding: 0 var(--space-3) var(--space-3);
   }
   .guide-toc a {
     padding-block: 0.6rem;
@@ -231,6 +238,13 @@
     white-space: pre-wrap;
     overflow-wrap: anywhere;
     font-size: var(--text-xs);
+  }
+  /* A wrapped line continues 2ch past its own indent (--ind, the line's leading spaces when
+     CodeBlock sets it), so it never reads as a new line at column 0. */
+  .guide-text .codeblock-line {
+    display: block;
+    padding-inline-start: calc(var(--ind, 0ch) + 2ch);
+    text-indent: calc(-1 * (var(--ind, 0ch) + 2ch));
   }
 }
 @media (hover: none) and (pointer: coarse) {

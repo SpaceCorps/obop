@@ -51,7 +51,7 @@ function LogoBlock() {
           <Logo size={44} />
           <figcaption>On the accent</figcaption>
         </figure>
-        <figure className="logo-tile mono">
+        <figure className="logo-tile onecolour">
           <Logo size={44} />
           <figcaption>One colour, print or stamp</figcaption>
         </figure>

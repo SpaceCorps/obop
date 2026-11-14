@@ -247,8 +247,8 @@ export function Cartesian({
   cur,
   onPick,
 }: ChartProps & { type: "bar" | "line" }) {
-  // The drawing is scaled to the screen. A phone gets a narrower one, so the 17-unit type of
-  // views.css comes out at about 13 px instead of 7.
+  // The drawing is scaled to the screen. A phone gets a narrower one, so the 15-unit type of
+  // views.css comes out at 12 to 15 px instead of 7.
   const narrow = useMedia(PHONE_QUERY);
   const W = narrow ? 360 : 640;
   const H = narrow ? 300 : 340;
@@ -268,10 +268,10 @@ export function Cartesian({
   const cut = narrow ? 9 : 13;
   const trunc = (s: string) => (s.length > cut + 1 ? `${s.slice(0, cut)}…` : s);
   // Labels slant when they would run into each other: past 6 on a wide chart; on a phone as soon
-  // as the longest one (about 9.5 units a character) is wider than its band. Values above the
+  // as the longest one (about 8.5 units a character) is wider than its band. Values above the
   // marks show only while they fit too.
   const widest = (texts: string[]) => Math.max(...texts.map((s) => s.length));
-  const rotate = narrow ? widest(data.map((x) => trunc(x.label))) * 9.5 > band : data.length > 6;
+  const rotate = narrow ? widest(data.map((x) => trunc(x.label))) * 8.5 > band : data.length > 6;
   const values = narrow
     ? widest(data.map((x) => compact(m, x.value, cur))) * 10 <= band
     : data.length <= 12;

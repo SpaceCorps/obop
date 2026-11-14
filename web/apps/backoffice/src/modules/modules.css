@@ -525,12 +525,30 @@
     overscroll-behavior: contain;
     animation: sheet var(--dur-3) var(--ease-out);
   }
+  /* The sheet keeps the one 16 px phone gutter: header, badges, the first tab's text (its button
+     has 0.6rem of its own) and the body all start on it. */
+  .record.mod-panel > header,
+  .mod-panel-top {
+    padding-inline: var(--space-4);
+  }
+  .mod-panel .tabs {
+    padding-inline: calc(var(--space-4) - 0.6rem);
+  }
+  .mod-panel-body {
+    padding: var(--space-4);
+  }
+  /* One control per line: two selects side by side had about 90 px for their text and cut off the
+     chosen category or sort. */
+  .mods-toolbar {
+    grid-template-columns: 1fr;
+  }
   .mod-grid {
     grid-template-columns: 1fr;
   }
   /* The page loses its frame on a phone (style.css), so the card is the one frame left and takes
-     a slimmer pad. */
+     a slimmer pad. In one column a card needs no common height, so it ends after its own text. */
   .card.mod-card {
+    min-block-size: 0;
     padding: var(--space-3) var(--space-4);
   }
   .meta-row {
@@ -553,10 +571,17 @@
     white-space: nowrap;
   }
   /* The dependency table stands in for the picture here (DependencyOverview): the module's link
-     fills its line. */
+     fills its line, in the link colour so it reads as one. */
   .dep-table-wrap th a {
     display: block;
     padding-block: 0.6rem;
     margin-block: -0.6rem;
+    color: var(--accent-ink);
+  }
+  /* Each status sits on its own line under its dependency, whether or not it would fit beside it. */
+  .dep-table-wrap td .status-chip {
+    display: flex;
+    inline-size: fit-content;
+    margin-block-start: 0.15rem;
   }
 }

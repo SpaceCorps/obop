@@ -150,7 +150,8 @@ export function ImportDialog({
                 fields: columns
                   .map((c) => {
                     const f = model.fields.find((x) => x.name === c);
-                    return f ? `${fieldTitle(f)} (${c})` : c;
+                    // A no-break space, so a line never ends between a field's name and its column.
+                    return f ? `${fieldTitle(f)}\u00a0(${c})` : c;
                   })
                   .join(", "),
               })}

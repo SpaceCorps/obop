@@ -63,6 +63,33 @@ export function ListView(p: ViewProps) {
   const grid = useRef<HTMLTableSectionElement>(null);
   // A phone shows one block per record (views.css): a tap opens it instead of editing in place.
   const phone = useMedia(PHONE_QUERY);
+  // There the column heads are a strip of sort buttons that scrolls sideways. As on the tab strips,
+  // each end that hides a button is marked (data-more) and views.css fades it, so a cut-off head
+  // reads as more to scroll to. scrollLeft is negative in right-to-left, hence Math.abs.
+  const sortStrip = useRef<HTMLTableRowElement>(null);
+  const colKey = cols.map((f) => f.name).join(" ");
+  useEffect(() => {
+    const s = sortStrip.current;
+    if (!s || !phone) return;
+    const mark = () => {
+      const max = s.scrollWidth - s.clientWidth;
+      const from = Math.abs(s.scrollLeft);
+      const more = [from > 1 && "start", from < max - 1 && "end"].filter(Boolean).join(" ");
+      if (more) s.dataset.more = more;
+      else delete s.dataset.more;
+    };
+    mark();
+    s.addEventListener("scroll", mark, { passive: true });
+    // The strip and its heads: a new language changes the heads' widths and not the strip's. jsdom
+    // has no ResizeObserver.
+    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(mark) : undefined;
+    for (const el of [s, ...s.children]) ro?.observe(el);
+    return () => {
+      s.removeEventListener("scroll", mark);
+      ro?.disconnect();
+      delete s.dataset.more;
+    };
+  }, [phone, colKey]);
 
   const live = useMemo(() => {
     const ids = new Set(rows.map((r) => r.id));
@@ -448,7 +475,7 @@ export function ListView(p: ViewProps) {
           aria-rowcount={p.total + 1}
         >
           <thead>
-            <tr role="row">
+            <tr role="row" ref={sortStrip}>
               <th className="selcol" role="columnheader" scope="col">
                 <input
                   type="checkbox"

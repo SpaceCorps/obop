@@ -321,6 +321,22 @@ input[type="color"] {
   background: var(--surface);
   cursor: pointer;
 }
+/* On a phone the well is finger-sized, and the browser's square, bordered swatch inside the rounded
+   frame reads as a box in a box: the colour fills the frame instead. Separate rules, because a
+   browser drops a whole rule with a pseudo-element it does not know. */
+@media (max-width: 40rem) {
+  input[type="color"]::-webkit-color-swatch-wrapper {
+    padding: 0;
+  }
+  input[type="color"]::-webkit-color-swatch {
+    border: 0;
+    border-radius: calc(var(--radius-md) - 3px);
+  }
+  input[type="color"]::-moz-color-swatch {
+    border: 0;
+    border-radius: calc(var(--radius-md) - 3px);
+  }
+}
 input[type="file"] {
   font-size: var(--text-sm);
   color: var(--text-muted);
@@ -905,12 +921,10 @@ button.avatar {
   .menu-item {
     min-block-size: 2.75rem;
   }
-  /* A one-line Checkbox centres its box in the taller row; one with a hint keeps it on the first line. */
+  /* A Checkbox without a hint is padded to 44 px around one line, so a one-line row has its box in
+     the middle and a label that wraps keeps the box beside its first line. */
   .check-row:not(:has(.hint)) {
-    align-items: center;
-  }
-  .check-row:not(:has(.hint)) .checkbox {
-    margin-block-start: 0;
+    padding-block: calc((2.75rem - 1lh) / 2);
   }
   :is(td, th) > input[type="checkbox"]:not([role="switch"])::before {
     content: "";
@@ -1074,8 +1088,25 @@ button.avatar {
     block-size: auto;
     max-block-size: 92dvh;
   }
-  /* The command palette hangs from the top edge, so its rounded corners are the lower ones. */
+  /* A sheet runs to the screen edges, so it has no hairline down the sides or along the edge it sits
+     on, and its content keeps the 16 px gutter of every page. */
+  .dialog {
+    border-inline: 0;
+  }
+  .overlay:not(.top) > .dialog {
+    border-block-end: 0;
+  }
+  .dialog-head {
+    padding-inline-start: var(--space-4);
+  }
+  .dialog-body,
+  .dialog-foot {
+    padding-inline: var(--space-4);
+  }
+  /* The command palette hangs from the top edge, so its rounded corners are the lower ones, and its
+     lower edge is the one that stays on the backdrop. */
   .overlay.top > .dialog {
+    border-block-start: 0;
     border-radius: 0 0 var(--radius-xl) var(--radius-xl);
   }
   /* A title on two lines keeps the close button beside its first line, not between the two. */
@@ -1181,6 +1212,13 @@ button.avatar {
 .table.dense td {
   padding-block: 0.3rem;
 }
+/* On a narrow table a start-aligned header floats away from its end-aligned numbers; .num on the
+   header lines it up with them. */
+@media (max-width: 40rem) {
+  .table th.num {
+    text-align: end;
+  }
+}
 /* A table that does not fit a phone becomes one block per row: the row header (th) or .cell-main on
    top, every other cell under its column name (data-label), .cell-actions last. Opt in with
    <Table stack> or the class stack-sm. A table-specific override needs more than (0,2,3), for example
@@ -1218,6 +1256,8 @@ button.avatar {
     background: none;
     white-space: normal;
     overflow-wrap: anywhere;
+    /* A value that wraps does not leave one word alone on its last line ("PM" under "5:37"). */
+    text-wrap: pretty;
     text-align: start;
   }
   .table.stack-sm > tbody > tr > :is(th, .cell-main) {

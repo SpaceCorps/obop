@@ -260,30 +260,44 @@ a.smartbtn:hover {
   gap: 0.5rem;
 }
 .frow > input,
-.frow > select {
+.frow > select,
+.frow > .dataclass > select {
   flex: 1;
   min-inline-size: 7rem;
+}
+/* Beside the description the data class needs no caption: its label lends the row nothing, so the
+   select lays out as before. On a phone the caption shows (below). */
+.dataclass {
+  display: contents;
+}
+.dataclass > .flabel {
+  display: none;
 }
 /* Add field is the secondary button: it keeps its own width instead of outgrowing the primary one. */
 .add-field {
   align-self: flex-start;
 }
 @media (max-width: 40rem) {
-  /* Name, kind and the remove button share the first line; every other input gets a line of its own
-     instead of two half lines that cut the description. */
+  /* Name and the remove button share the first line; the kind and every other input get a line of
+     their own, so none of them is cut. */
   /* A column that wraps makes each of its columns as wide as its widest line (517 px at 320), so the
      rows ran off the screen: one column, as wide as the field. */
   .row.wrap.fieldrow {
     flex-wrap: nowrap;
   }
-  .fieldrow > .frow:first-child {
-    flex-wrap: nowrap;
+  .fieldrow > .frow:first-child > select {
+    order: 1;
+    flex-basis: 100%;
   }
-  .fieldrow > .frow > :is(input, select) {
+  .fieldrow > .frow > :is(input, select, .dataclass) {
     min-inline-size: 0;
   }
-  .fieldrow > .frow:not(:first-child) > :is(input, select) {
+  .fieldrow > .frow:not(:first-child) > :is(input, select, .dataclass) {
     flex-basis: 100%;
+  }
+  .dataclass,
+  .dataclass > .flabel {
+    display: flex;
   }
   .fieldrow label.check {
     padding-inline-end: var(--space-2);
@@ -325,6 +339,27 @@ html.sheet-open body {
     box-shadow: var(--shadow-4);
   }
 }
+/* Pills and related-record buttons a finger can hit, on a phone and on any touch screen. A status
+   pill keeps a 36 px body that suits its small text and reaches 44 px through an invisible edge,
+   which fits in the 8 px gap between wrapped rows. */
+@media (max-width: 40rem), (pointer: coarse) {
+  .statusbar {
+    gap: var(--space-2);
+  }
+  .statusbar button {
+    position: relative;
+    min-block-size: 2.25rem;
+  }
+  /* Measured from the padding box, so 1px more covers the border. */
+  .statusbar button::after {
+    position: absolute;
+    inset: calc(-0.25rem - 1px) -1px;
+    content: "";
+  }
+  .smartbtn {
+    min-block-size: 2.75rem;
+  }
+}
 @media (max-width: 40rem) {
   .record.sheet {
     inset: 0;
@@ -347,11 +382,12 @@ html.sheet-open body {
     min-inline-size: 0;
   }
   /* The back button sits beside the title's first line, and a long title stops after two lines (the
-     Title field holds all of it), so the sticky header stays short. */
+     Title field holds all of it), so the sticky header stays short. The button's 44 px reach the
+     screen edge, which puts its chevron near the 16 px gutter and gives the title the room. */
   .record.phone > header {
     align-items: flex-start;
     padding-block: 0.5rem 0.75rem;
-    padding-inline: 0.5rem var(--space-4);
+    padding-inline: 0 var(--space-4);
   }
   .record.phone > header .back {
     inline-size: 2.75rem;
@@ -369,20 +405,13 @@ html.sheet-open body {
     font-size: var(--text-lg);
   }
   /* One 16 px gutter, as on every other phone page (the request's signing rows of signlinks.css
-     included), and pills and buttons a finger can hit. */
+     included). */
   .statusbar,
   .smart,
   .record .actionrow,
   .record .sign-links,
   .record .sign-by-link {
     padding-inline: var(--space-4);
-  }
-  .statusbar {
-    gap: var(--space-2);
-  }
-  .statusbar button,
-  .smartbtn {
-    min-block-size: 2.75rem;
   }
   .fields {
     padding: var(--space-4);
@@ -398,6 +427,12 @@ html.sheet-open body {
   }
   .formbar > .grow {
     display: none;
+  }
+  /* "Read only for you" reads as a note on its own line above the buttons, not squeezed beside them. */
+  .formbar > .hint:not(.kbd-hint) {
+    flex-basis: 100%;
+    order: -1;
+    text-align: center;
   }
   /* Delete moves from the action row to the end of the form on a phone (RecordPanel). */
   .record-delete {

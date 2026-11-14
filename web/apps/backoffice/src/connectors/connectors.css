@@ -46,10 +46,12 @@
   .cx .content.pad {
     padding: var(--space-4);
   }
-  /* Four figures in two rows of two, not one under another. */
+  /* Four figures in two rows of two, not one under another. A figure stays at the top of its cell:
+     stretched to the height of a neighbour with a hint, it slid down out of line with it. */
   .cx-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--space-4) var(--space-3);
+    align-items: start;
   }
   .cx-stats .stat-value {
     font-size: var(--text-3xl);

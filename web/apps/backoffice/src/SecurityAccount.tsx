@@ -264,7 +264,11 @@ export function SessionsSection({
                   {s.created_at ? fmt.dateTime(s.created_at) : t("Earlier")}
                 </td>
                 <td data-label={t("Ends")}>{s.expires_at ? fmt.dateTime(s.expires_at) : ""}</td>
-                <td>{s.current ? <Badge tone="success">{t("This session")}</Badge> : null}</td>
+                {/* Last and on a line of its own on a phone, so Signed in and Ends pair up in
+                    every row. */}
+                <td className="cell-actions">
+                  {s.current ? <Badge tone="success">{t("This session")}</Badge> : null}
+                </td>
               </tr>
             ))}
           </tbody>

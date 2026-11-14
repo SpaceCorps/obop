@@ -789,6 +789,11 @@ tr.current .opencol .icon-btn {
   .pivot-table {
     min-inline-size: calc(100% - 2 * var(--space-4));
   }
+  /* Total reads as strong as the rows it adds up, not as a small grey head. */
+  .pivot-table tfoot th {
+    color: var(--text);
+    font-size: var(--text-base);
+  }
   .chart {
     padding-inline: var(--space-4);
   }
@@ -813,17 +818,51 @@ tr.current .opencol .icon-btn {
   .list > tfoot {
     display: block;
   }
+  /* The strip's ground is on thead, so the fade at its ends (below) dims the buttons only. */
+  .list > thead {
+    border-block-end: 1px solid var(--border);
+    background: var(--surface-2);
+  }
   .list > thead > tr {
     display: flex;
     overflow-x: auto;
-    border-block-end: 1px solid var(--border);
-    background: var(--surface-2);
     scrollbar-width: none;
   }
   .list > thead th {
     flex: none;
     position: static;
     border-block-end: 0;
+  }
+  /* Finger-sized sort buttons, and the first one starts where the record titles start. */
+  .list > thead .thbtn {
+    min-block-size: 2.75rem;
+    padding-inline: 0.75rem;
+  }
+  .list > thead th.selcol + th .thbtn {
+    padding-inline-start: 0;
+  }
+  /* An end of the strip that hides sort buttons fades out (ListView sets data-more), as the tab
+     strips do, so a cut "Due" reads as more to scroll to. */
+  .list > thead > tr[data-more="end"] {
+    mask-image: linear-gradient(to right, #000 calc(100% - 2rem), transparent);
+  }
+  .list > thead > tr[data-more="start"] {
+    mask-image: linear-gradient(to left, #000 calc(100% - 2rem), transparent);
+  }
+  .list > thead > tr[data-more="start end"] {
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      #000 2rem,
+      #000 calc(100% - 2rem),
+      transparent
+    );
+  }
+  :dir(rtl) .list > thead > tr[data-more="end"] {
+    mask-image: linear-gradient(to left, #000 calc(100% - 2rem), transparent);
+  }
+  :dir(rtl) .list > thead > tr[data-more="start"] {
+    mask-image: linear-gradient(to right, #000 calc(100% - 2rem), transparent);
   }
   /* Select all sits over the checkboxes of the rows. */
   .list > thead th.selcol {
@@ -931,10 +970,16 @@ tr.current .opencol .icon-btn {
     scroll-snap-type: x mandatory;
     scroll-padding-inline: var(--space-4);
   }
-  /* One screen tall under the top bar, so a long column scrolls under its head. Only in the app:
-     the Brand book's sample keeps its own frame. */
+  /* At most one screen tall under the top bar, so a long column scrolls under its head, and a short
+     board stops at the screen's bottom instead of leaving empty board to scroll to. A percentage
+     does not resolve against a max height, so the column gets its own cap (the board's block
+     padding is var(--space-3)). Only in the app: the Brand book's sample keeps its own frame. */
   .main > .view-kanban > .kanban {
-    block-size: calc(100dvh - 3.5rem);
+    block-size: auto;
+    max-block-size: calc(100dvh - 3.5rem);
+  }
+  .main > .view-kanban .kcol {
+    max-block-size: calc(100dvh - 3.5rem - 2 * var(--space-3));
   }
   .kcol {
     flex-basis: 84%;
@@ -967,6 +1012,19 @@ tr.current .opencol .icon-btn {
   .calendar .viewbar > .inline-field {
     order: 1;
   }
+  /* Month and Week, or Bar, Line and Pie, fill the rest of their row (a row of their own at 320 px)
+     like the view switcher above, instead of a short control left on its own. */
+  .calendar .viewbar > .grow {
+    display: none;
+  }
+  .viewbar > .switcher {
+    display: flex;
+    flex: 1 0 auto;
+  }
+  .viewbar > .switcher > button {
+    flex: 1 1 0;
+    justify-content: center;
+  }
   .weeklist li {
     align-items: center;
     gap: var(--space-2);
@@ -990,9 +1048,11 @@ tr.current .opencol .icon-btn {
     white-space: normal;
   }
 
+  /* 15 units of the 360-unit phone drawing: about 12 px at 320 and 15 px at 390, under the chart's
+     15 px title. */
   .chartsvg .axis,
   .chartsvg .vlabel-t {
-    font-size: 17px;
+    font-size: 15px;
   }
   /* A slanted first x label may reach past the chart's start into the padding of .chart. */
   .chartsvg {

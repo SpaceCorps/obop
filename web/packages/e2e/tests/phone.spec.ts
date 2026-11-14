@@ -154,7 +154,13 @@ async function check(page: Page, name: string, width: number | string) {
   if (SHOTS) {
     mkdirSync(SHOTS, { recursive: true });
     // The whole page when the page itself scrolls (as it does on a phone), the screen otherwise.
-    await page.screenshot({ path: join(SHOTS, `${width}-${name}.png`), fullPage: true });
+    // (A page taller than about twenty screens, the Guide, is pictured by its first screens only.)
+    const tall = await page.evaluate(() => document.documentElement.scrollHeight > 16000);
+    await page.screenshot({
+      path: join(SHOTS, `${width}-${name}.png`),
+      fullPage: true,
+      ...(tall ? { clip: { x: 0, y: 0, width: Number(width) || 390, height: 8000 } } : {}),
+    });
     // A long screen scrolls inside its own box (the page itself does not): one more picture per
     // screenful, so a review sees all of it. The box is put back at its top afterwards.
     const steps = await page.evaluate(() => {
@@ -308,6 +314,11 @@ test.describe("phone widths", () => {
           "guide",
         ]) {
           await open(page, `/customize/${tab}?tab=${tab}`);
+          // The app shows "Loading" while it fetches what a tab needs; on a busy machine that can
+          // take longer than an assertion's default wait.
+          await expect(page.getByRole("region", { name: "Loading" })).toHaveCount(0, {
+            timeout: 20_000,
+          });
           await expect(page.getByRole("tab", { name: /./, selected: true }).first()).toBeVisible();
           await expect(page.locator(".content .skeleton")).toHaveCount(0);
           await check(page, `customize-${tab}`, label);

@@ -417,15 +417,20 @@ export function BuildTab({ token, modules, onModulesChanged, notify }: Props) {
                   placeholder={t("description")}
                   aria-label={t("Field description")}
                 />
-                <select
-                  value={f.class}
-                  onChange={(e) => upd(i, { class: e.target.value })}
-                  aria-label={t("Data class")}
-                >
-                  {CLASSES.map((c) => (
-                    <option key={c}>{c}</option>
-                  ))}
-                </select>
+                {/* The caption shows on a phone only, where the select has a line of its own and a
+                    bare "none" says nothing (record.css). */}
+                <label className="field dataclass">
+                  <span className="flabel">{t("Data class")}</span>
+                  <select
+                    value={f.class}
+                    onChange={(e) => upd(i, { class: e.target.value })}
+                    aria-label={t("Data class")}
+                  >
+                    {CLASSES.map((c) => (
+                      <option key={c}>{c}</option>
+                    ))}
+                  </select>
+                </label>
               </div>
               <div className="frow">
                 <label className="check">
@@ -498,7 +503,15 @@ export function BuildTab({ token, modules, onModulesChanged, notify }: Props) {
       </div>
       <div className="stack">
         <h3>obop.toml</h3>
-        <pre className="code">{text}</pre>
+        {/* One span per line, each keeping its newline (so the text and a copy of it stay the same),
+            lets a phone hang a wrapped line in from its key (style.css). */}
+        <pre className="code">
+          {text.split("\n").map((line, i, all) => (
+            <span key={i} className="code-line">
+              {i < all.length - 1 ? `${line}\n` : line}
+            </span>
+          ))}
+        </pre>
       </div>
     </div>
   );

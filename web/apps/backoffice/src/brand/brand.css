@@ -447,7 +447,8 @@
   background: var(--accent-fill);
   color: var(--on-accent);
 }
-.logo-tile.mono {
+/* Not .mono: that is the monospace utility, and it set the caption in code type. */
+.logo-tile.onecolour {
   background: #f3f4f8;
   color: #000000;
 }
@@ -1027,15 +1028,20 @@
   .bb-lead {
     font-size: var(--text-base);
   }
-  /* Accents in one row, each theme switch a full-width row of equal buttons. */
+  /* Accents in one row, each theme switch a full-width row of equal buttons. On the narrowest
+     phones the swatches shrink rather than touch, so a tap never lands on the neighbour. */
   .bb-strip .swatches {
     flex: 1 1 100%;
+    flex-wrap: nowrap;
     justify-content: space-between;
-    column-gap: 0;
+    column-gap: 0.25rem;
   }
   .bb-strip .swatch {
-    inline-size: 2.25rem;
-    block-size: 2.25rem;
+    flex: 0 1 2.25rem;
+    inline-size: auto;
+    block-size: auto;
+    min-inline-size: 0;
+    aspect-ratio: 1;
   }
   .bb-strip .switcher {
     flex: 1 1 100%;
@@ -1050,10 +1056,12 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.25rem;
   }
+  /* A label that wraps ("Voice and tone" at 320 px) still fits the 44 px row. */
   .bb-nav > ul > li > a {
     gap: 0.5rem;
     min-block-size: 2.75rem;
     padding-inline: 0.5rem;
+    line-height: var(--leading-snug);
   }
   .spec {
     padding: var(--space-4);
@@ -1083,9 +1091,20 @@
   .face {
     font-size: 3.25rem;
   }
-  /* The type scale stacks; the sample gets a line of its own. */
+  /* The type scale stacks; the sample gets a line of its own. Size, line height and weight share
+     one line from 320 px up (6rem each did not fit, and weight dropped onto a line alone). */
+  .table.scale.stack-sm > tbody > tr > td:not(:last-child) {
+    flex-basis: 4.5rem;
+  }
   .table.scale.stack-sm > tbody > tr > td:last-child {
     flex-basis: 100%;
+  }
+  /* A stacked sample starts at its label and sits on the line of the value beside it. */
+  .table.stack-sm .tok-sample {
+    min-inline-size: 0;
+    min-block-size: 0;
+    padding: 0;
+    place-items: start;
   }
   /* Narrower label columns, so the bars and the descriptions keep their room. */
   .space-list li {

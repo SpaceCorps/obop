@@ -237,9 +237,30 @@
   .customize .content.pad {
     padding: var(--space-4);
   }
-  /* The stacked contrast table then has two cells a line. */
+  /* The contrast check is one frame on a phone: the table inside it drops its own border, so a
+     pair's name lines up with the heading. */
   .contrast {
     padding: var(--space-3);
+  }
+  .contrast .table-wrap {
+    border: 0;
+    background: none;
+  }
+  .contrast .table.stack-sm > tbody > tr {
+    padding-inline: 0;
+  }
+  /* Light, Dark and Needs share one line under the pair's name; the stacked cell basis of the ui
+     kit would leave Needs alone on a second line. */
+  .contrast .table.stack-sm > tbody > tr > td {
+    flex: 1 1 0;
+  }
+  /* The four samples stay two by two at every phone width, never three and one. */
+  .contrast-sw {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  /* The buttons at the end of Theme fill their line, so the stack has one edge on both sides. */
+  .theme-tab .actionrow > .btn {
+    flex: 1 1 auto;
   }
   /* A phone has no sidebar either. */
   .mini-grid {
@@ -262,12 +283,14 @@
   .security-tab .table.stack-sm .cell-main .hint {
     font-weight: var(--weight-regular);
   }
-  /* Save stays in reach while the long form scrolls by (the page scrolls here, not the panel). */
+  /* Save stays in reach while the long form scrolls by (the page scrolls here, not the panel). The
+     bar crosses the 16 px gutter, so it reads as a toolbar at the foot of the screen. */
   .identity-tab > .stack > .actionrow {
     position: sticky;
     inset-block-end: 0;
     z-index: 1;
-    padding-block: var(--space-3);
+    margin-inline: calc(-1 * var(--space-4));
+    padding: var(--space-3) var(--space-4);
     border-block-start: 1px solid var(--border);
     background: var(--surface);
   }
