@@ -2130,5 +2130,22 @@
   "Workspace drive": "Arbetsenhet",
   "Workspace saved.": "Arbetsenheten sparades.",
   "Import into Documents": "Importera till Dokument",
-  "The files and folders of the Drive connected to this instance.": "Filerna och mapparna i den Drive som är ansluten till den här instansen."
+  "The files and folders of the Drive connected to this instance.": "Filerna och mapparna i den Drive som är ansluten till den här instansen.",
+  "Agent tokens": "Agenttokens",
+  "An agent token lets a program or an AI agent act for you with only the permission groups you pick. It is shown once.": "Med en agenttoken kan ett program eller en AI-agent agera åt dig, med bara de behörighetsgrupper du väljer. Den visas en gång.",
+  "No agent tokens.": "Inga agenttokens.",
+  "Label": "Etikett",
+  "Created": "Skapad",
+  "Agent token {name} revoked.": "Agenttoken {name} återkallad.",
+  "Could not revoke the agent token.": "Det gick inte att återkalla agenttoken.",
+  "The agent tokens could not be loaded. Try again.": "Agenttokens kunde inte läsas in. Försök igen.",
+  "The program or agent that will use the token. Up to {n} characters.": "Programmet eller agenten som ska använda token. Högst {n} tecken.",
+  "Create agent token": "Skapa agenttoken",
+  "Could not create the agent token.": "Det gick inte att skapa agenttoken.",
+  "This is the only time the token is shown. Store it like a password.": "Det här är enda gången token visas. Förvara den som ett lösenord.",
+  "Agent token": "Agenttoken",
+  "Could not copy. Select the token and copy it yourself.": "Det gick inte att kopiera. Markera token och kopiera den själv.",
+  "You have no permission groups to give to a token.": "Du har inga behörighetsgrupper att ge en token.",
+  "Agent token issued": "Agenttoken utfärdad",
+  "Agent token revoked": "Agenttoken återkallad"
 }

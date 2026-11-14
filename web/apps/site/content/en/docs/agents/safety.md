@@ -12,7 +12,7 @@ lead: "obop limits what an agent can do, but you choose the limits. These are th
 
 ## One token per agent and per task
 
-A token made with `obop agent-token` or the REST API has a label, but you cannot list or revoke those tokens yet. Separate tokens limit damage: each can carry only the scopes one agent needs.
+A token has a label, and its owner sees their tokens and can revoke each one under _Customize, Security, Agent tokens_. Separate tokens limit damage: each can carry only the scopes one agent needs, and each can be revoked without touching the others.
 
 - Create a fresh token for each agent and each unattended job.
 - Create short-lived work with a token you will stop using, and stop using it.
@@ -21,15 +21,15 @@ A token made with `obop agent-token` or the REST API has a label, but you cannot
 
 - Use environment variables or a secret store. Never commit a token, paste it into a chat, or put it in a prompt.
 - In an MCP client config, reference the environment where the client allows it (`${env:OBOP_TOKEN}`, `${input:...}`) so the file holds no secret.
-- Agent tokens do not expire. A leaked one stops working while its owner's account is disabled, and for good when the account is offboarded.
+- Agent tokens do not expire. A leaked one works until its owner revokes it; it also stops working while its owner's account is disabled, and for good when the account is offboarded.
 
 ## If a token leaks
 
-There is no command to revoke a single token made with `obop agent-token` or the REST API yet. To stop one today, have an administrator offboard the owning user (_Customize, Security, People_, or `obop admin offboard USER`). That disables the account and ends every session, agent token and connected app of that account for good. A plain disable stops the tokens only until the account is enabled again.
+The owner revokes the token under _Customize, Security, Agent tokens_, or over REST (see [List and revoke](/docs/agents/tokens/#list-and-revoke)); it stops working at once. If the owner cannot be reached, an administrator can offboard the owning user (_Customize, Security, People_, or `obop admin offboard USER`). That disables the account and ends every session, agent token and connected app of that account for good. A plain disable stops the tokens only until the account is enabled again. An administrator cannot revoke a single token of another person.
 
 An app that connected through the browser sign-in (see [MCP](/docs/agents/mcp/)) is listed under _Customize, Security, Connected apps_, where its owner can revoke it at once.
 
-Then review what the token did: records changed by an agent are not yet marked as such in the interface, so compare against your backups and the approvals you granted. A revoke command and an audit view are on the [roadmap](/roadmap/).
+Then review what the token did: records changed by an agent are not yet marked as such in the interface, so compare against your backups and the approvals you granted. The security log (for an administrator, under _Customize, Security_) shows when a token was created and revoked, with its label and groups. An audit view of what an agent did is on the [roadmap](/roadmap/).
 
 ## Review every approval
 

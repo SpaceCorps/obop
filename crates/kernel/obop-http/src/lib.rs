@@ -332,6 +332,11 @@ pub(crate) fn api_routes(state: Arc<HttpState>, not_found: brand::NotFound) -> R
             post(sso::exchange).layer(axum::extract::DefaultBodyLimit::max(sso::MAX_BODY)),
         )
         .route("/api/auth/agent-token", post(agent_token))
+        .route("/api/auth/agent-tokens", get(agent_tokens))
+        .route(
+            "/api/auth/agent-tokens/{id}/revoke",
+            post(revoke_agent_token),
+        )
         .route("/api/commands", get(commands))
         .route("/api/meta", get(meta))
         .route("/api/openapi.json", get(instance_openapi))
@@ -570,13 +575,69 @@ fn agent_token_blocking(s: Arc<HttpState>, h: HeaderMap, body: J) -> Response {
                 .collect()
         })
         .unwrap_or_default();
-    match s
-        .auth
-        .issue_agent_token(&p, &scopes, body["label"].as_str().unwrap_or("agent"))
-    {
+    // The groups the instance has registered: an administrator may hand on any of them (D69
+    // amendment of 2026-11-14), everybody else only what their account lists.
+    match s.auth.issue_agent_token_among(
+        &p,
+        &scopes,
+        body["label"].as_str().unwrap_or("agent"),
+        &s.dispatcher.known_groups(),
+    ) {
         Ok(token) => Json(json!({"token": token})).into_response(),
         Err(e) => (StatusCode::BAD_REQUEST, Json(json!({"error": e}))).into_response(),
     }
+}
+
+async fn agent_tokens(State(s): Shared, h: HeaderMap) -> Response {
+    blocking(move || agent_tokens_blocking(s, h)).await
+}
+
+/// The agent tokens the signed-in person issued that still work (never a token itself), and the
+/// groups they may put on a new one. An agent sees no such route.
+fn agent_tokens_blocking(s: Arc<HttpState>, h: HeaderMap) -> Response {
+    let (p, _) = match s.auth(&h) {
+        Ok(x) => x,
+        Err(c) => return c.into_response(),
+    };
+    let Some(tokens) = Some(&p)
+        .filter(|p| p.is_person())
+        .and_then(|p| s.auth.agent_tokens_of(p))
+    else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let mut delegable: std::collections::BTreeSet<String> = p
+        .groups
+        .iter()
+        .filter(|g| *g != obop_commands::ANY_GROUP)
+        .cloned()
+        .collect();
+    if p.groups.contains(obop_commands::ADMIN_GROUP) {
+        delegable.extend(s.dispatcher.known_groups());
+    }
+    let tokens: Vec<J> = tokens
+        .iter()
+        .map(|t| {
+            json!({
+                "id": t.id, "label": t.label, "scopes": t.scopes, "created_at": t.created_at,
+            })
+        })
+        .collect();
+    Json(json!({"tokens": tokens, "delegable": delegable})).into_response()
+}
+
+async fn revoke_agent_token(State(s): Shared, h: HeaderMap, Path(id): Path<String>) -> Response {
+    blocking(move || {
+        let (p, _) = match s.auth(&h) {
+            Ok(x) => x,
+            Err(c) => return c.into_response(),
+        };
+        if p.is_person() && s.auth.revoke_agent_token(&p, &id) {
+            Json(json!({"revoked": true})).into_response()
+        } else {
+            (StatusCode::NOT_FOUND, Json(json!({"error": "not found"}))).into_response()
+        }
+    })
+    .await
 }
 
 async fn meta(State(s): Shared, h: HeaderMap) -> Response {

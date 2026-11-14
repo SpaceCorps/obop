@@ -1483,6 +1483,41 @@ pub trait Authenticator: Send + Sync {
         scopes: &[String],
         label: &str,
     ) -> Result<String, String>;
+    /// As `issue_agent_token`, from a caller that knows the permission groups the instance has
+    /// registered (`Dispatcher::known_groups`): a person who holds the administrator group, and so
+    /// every group, may also put a group of `registered` on the token that their account does not
+    /// list by name (D69 amendment of 2026-11-14, PROPOSED). The token still lists concrete groups.
+    /// An authenticator that does not know the rule answers as `issue_agent_token`.
+    fn issue_agent_token_among(
+        &self,
+        owner: &Principal,
+        scopes: &[String],
+        label: &str,
+        _registered: &[String],
+    ) -> Result<String, String> {
+        self.issue_agent_token(owner, scopes, label)
+    }
+    /// The agent tokens `owner` issued that still work, newest first; never a token itself.
+    /// `None` when the authenticator keeps no such list.
+    fn agent_tokens_of(&self, _owner: &Principal) -> Option<Vec<AgentTokenInfo>> {
+        None
+    }
+    /// End one agent token of `owner` by its id. False when there is no such token of theirs.
+    fn revoke_agent_token(&self, _owner: &Principal, _id: &str) -> bool {
+        false
+    }
+}
+
+/// One agent token as its owner sees it in a list: what it is called and may do, never the token.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentTokenInfo {
+    /// The id of the stored record (a hash of the token), for `revoke_agent_token`.
+    pub id: String,
+    pub label: String,
+    /// The permission groups the token is narrowed to, sorted.
+    pub scopes: Vec<String>,
+    /// Unix seconds.
+    pub created_at: u64,
 }
 
 /// The few identity operations the OAuth authorization server (D64) needs. Tokens it issues are

@@ -1,6 +1,6 @@
 ---
 title: "Create an agent token"
-description: "Create a scoped obop agent token over REST (POST /api/auth/agent-token) or with the CLI (obop agent-token). The token is shown once and can only narrow its owner's permission groups."
+description: "Create a scoped obop agent token in the back office, over REST (POST /api/auth/agent-token) or with the CLI (obop agent-token). The token is shown once and can only narrow what its owner may do."
 lead: "An agent token is a bearer token that belongs to a person and carries a list of permission groups. Create one per agent and per task."
 ---
 
@@ -10,7 +10,7 @@ lead: "An agent token is a bearer token that belongs to a person and carries a l
 - It is shown **once**. obop stores only a hash, so a lost token cannot be recovered; create a new one.
 - It starts with `obop_`. Treat it like a password.
 - Only a person can create tokens. An agent cannot mint another token.
-- It does not expire. It stops working while its owner's account is disabled, and for good when the owner is offboarded. There is no command to revoke a single token yet (see [Safety](/docs/agents/safety/)).
+- It does not expire. Its owner can revoke it at any time (see [List and revoke](#list-and-revoke)). It also stops working while its owner's account is disabled, and for good when the owner is offboarded.
 
 ## Choose the scopes
 
@@ -26,6 +26,10 @@ Scopes are [permission groups](/docs/concepts/permission-groups/). Look at what 
 | `product.user`      | read products and prices                                |
 
 Installed packages add their own groups, for example `helpdesk.agent`. The [app pages](/apps/) list the groups of each app.
+
+## In the back office
+
+Open _Customize, Security_ and go to **Agent tokens**. Type a label (the program or agent that will use the token), tick the groups, and choose **Create agent token**. The token is shown once, with a **Copy** button; choose **Done** when you have stored it. The section also lists the tokens you created, each with **Revoke**.
 
 ## Over REST
 
@@ -50,7 +54,7 @@ curl -s -X POST http://127.0.0.1:8080/api/auth/agent-token \
 { "token": "obop_1e00c3..." }
 ```
 
-`scopes` is required, must not be empty and may name only groups that are listed on your own account; `platform.admin` does not stand in for the other groups here. The first account of an instance that a control plane created holds only `platform.admin`, so give it the groups you want to hand over first, under Customize > Security > People. `label` is free text. On such an instance use its address instead of `127.0.0.1:8080`, and sign in with your sign-up email as the username.
+`scopes` is required and must not be empty. It names groups that are listed on your own account. An administrator (a person who holds `platform.admin`) may name any group the instance has, because that group already allows all of them. The token still carries only the groups you name: `*` is not a group and is refused, and a group that no installed module declares is refused too. `label` is at most 80 characters on one line. On an instance that a control plane created, use its address instead of `127.0.0.1:8080`, and sign in with your sign-up email as the username.
 
 ## With the CLI
 
@@ -65,7 +69,39 @@ obop_1e00c32430532fdcef...
 shown once; store it like a password
 ```
 
-Add `--db postgres://...` (or set `OBOP_DATABASE_URL`) if the instance does not use the default `sqlite://obop.db`.
+Add `--db postgres://...` (or set `OBOP_DATABASE_URL`) if the instance does not use the default `sqlite://obop.db`. The scopes follow the same rule as over REST, for the user you name. The command line cannot list or revoke tokens yet.
+
+## List and revoke
+
+You see and revoke your own agent tokens under _Customize, Security, Agent tokens_, or over REST with your session token:
+
+```bash
+curl -s http://127.0.0.1:8080/api/auth/agent-tokens \
+  -H "Authorization: Bearer $SESSION_TOKEN"
+```
+
+```json
+{
+  "tokens": [
+    {
+      "id": "5f0c...",
+      "label": "triage-bot",
+      "scopes": ["base.user", "crm.user"],
+      "created_at": 1794650000
+    }
+  ],
+  "delegable": ["base.user", "crm.user"]
+}
+```
+
+`tokens` never contains a token, only what each is called and may do. `delegable` is the list of groups you may put on a new one. To revoke a token, post to its `id`:
+
+```bash
+curl -s -X POST http://127.0.0.1:8080/api/auth/agent-tokens/5f0c.../revoke \
+  -H "Authorization: Bearer $SESSION_TOKEN"
+```
+
+The token stops working at once. Only the owner can do this: an administrator cannot list or revoke another person's tokens one by one (disabling or offboarding the account ends all of them). Creating and revoking a token are both written to the security log, without the token.
 
 ## Use the token for MCP
 
@@ -87,7 +123,8 @@ The same token connects an MCP client to the instance's remote MCP server, `http
 | Answer                                                                             | Meaning                                                                                        |
 | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | `400 {"error":"an agent token needs at least one scope"}`                          | `scopes` was empty.                                                                            |
-| `400 {"error":"you do not hold invoicing.manager, so you cannot delegate it"}`     | You asked for a group you do not hold.                                                         |
+| `400 {"error":"you do not hold invoicing.manager, so you cannot delegate it"}`     | You asked for a group that is not on your account, and you are not an administrator.           |
+| `400 {"error":"nope.user is not a registered permission group, ..."}`              | An administrator asked for a group that no installed module declares.                          |
 | `400 {"error":"only a human user can issue agent tokens"}`                         | You used an agent token to ask for another.                                                    |
 | `401`                                                                              | Missing, wrong or expired session token.                                                       |
 | `403 {"error":"two-factor authentication must be set up before you can continue"}` | Your account must set up two-factor sign-in first; until then this session can only set it up. |

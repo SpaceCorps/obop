@@ -2130,5 +2130,22 @@
   "Workspace drive": "Dysk roboczy",
   "Workspace saved.": "Zapisano dysk roboczy.",
   "Import into Documents": "Importuj do Dokumentów",
-  "The files and folders of the Drive connected to this instance.": "Pliki i foldery Dysku połączonego z tą instancją."
+  "The files and folders of the Drive connected to this instance.": "Pliki i foldery Dysku połączonego z tą instancją.",
+  "Agent tokens": "Tokeny agentów",
+  "An agent token lets a program or an AI agent act for you with only the permission groups you pick. It is shown once.": "Token agenta pozwala programowi lub agentowi AI działać w Twoim imieniu, tylko z grupami uprawnień, które wybierzesz. Jest pokazywany tylko raz.",
+  "No agent tokens.": "Brak tokenów agentów.",
+  "Label": "Etykieta",
+  "Created": "Utworzono",
+  "Agent token {name} revoked.": "Token agenta {name} unieważniony.",
+  "Could not revoke the agent token.": "Nie udało się unieważnić tokenu agenta.",
+  "The agent tokens could not be loaded. Try again.": "Nie udało się wczytać tokenów agentów. Spróbuj ponownie.",
+  "The program or agent that will use the token. Up to {n} characters.": "Program lub agent, który będzie używać tokenu. Najwyżej {n} znaków.",
+  "Create agent token": "Utwórz token agenta",
+  "Could not create the agent token.": "Nie udało się utworzyć tokenu agenta.",
+  "This is the only time the token is shown. Store it like a password.": "Token jest pokazywany tylko ten jeden raz. Przechowuj go jak hasło.",
+  "Agent token": "Token agenta",
+  "Could not copy. Select the token and copy it yourself.": "Nie udało się skopiować. Zaznacz token i skopiuj go samodzielnie.",
+  "You have no permission groups to give to a token.": "Nie masz grup uprawnień, które można nadać tokenowi.",
+  "Agent token issued": "Wydano token agenta",
+  "Agent token revoked": "Unieważniono token agenta"
 }

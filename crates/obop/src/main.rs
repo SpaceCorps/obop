@@ -1174,7 +1174,12 @@ fn agent_token(o: &Opts, user: &str, scopes: Option<&str>, label: Option<&str>) 
         .principal(user)
         .ok_or_else(|| fail(&format!("no user {user}")))?;
     let t = auth
-        .issue_agent_token(&owner, &csv(scopes), label.unwrap_or("agent"))
+        .issue_agent_token_by_operator(
+            &owner,
+            &csv(scopes),
+            label.unwrap_or("agent"),
+            &app.dispatcher.known_groups(),
+        )
         .map_err(|e| fail(&e))?;
     println!("{t}");
     eprintln!("shown once; store it like a password");

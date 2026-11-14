@@ -219,7 +219,15 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
     );
     paths.insert(
         "/api/auth/agent-token".into(),
-        json!({"post": {"operationId": "issueAgentToken", "summary": "A signed-in human issues a scoped agent token", "security": sec.clone(), "requestBody": json_body(json!({"type": "object", "required": ["scopes"], "properties": {"scopes": {"type": "array", "items": {"type": "string"}, "description": "Permission groups, each one the issuer holds."}, "label": {"type": "string"}}})), "responses": {"200": ok(json!({"type": "object", "properties": {"token": {"type": "string"}}}), "The token, shown once."), "400": error_responses()["400"].clone()}}}),
+        json!({"post": {"operationId": "issueAgentToken", "summary": "A signed-in human issues a scoped agent token", "security": sec.clone(), "requestBody": json_body(json!({"type": "object", "required": ["scopes"], "properties": {"scopes": {"type": "array", "items": {"type": "string"}, "description": "Permission groups by name, each one the issuer holds; an administrator may name any registered group. Never `*`."}, "label": {"type": "string"}}})), "responses": {"200": ok(json!({"type": "object", "properties": {"token": {"type": "string"}}}), "The token, shown once."), "400": error_responses()["400"].clone()}}}),
+    );
+    paths.insert(
+        "/api/auth/agent-tokens".into(),
+        json!({"get": {"operationId": "listAgentTokens", "summary": "The agent tokens the signed-in human issued that still work, and the groups they may put on a new one", "security": sec.clone(), "responses": {"200": ok(json!({"type": "object", "properties": {"tokens": {"type": "array", "items": {"type": "object", "properties": {"id": {"type": "string"}, "label": {"type": "string"}, "scopes": {"type": "array", "items": {"type": "string"}}, "created_at": {"type": "integer", "description": "Unix seconds."}}}}, "delegable": {"type": "array", "items": {"type": "string"}, "description": "Permission groups the caller may delegate: their own, and every registered group for an administrator."}}}), "The tokens (never a token itself) and the groups."), "401": error_responses()["401"].clone(), "404": error_responses()["404"].clone()}}}),
+    );
+    paths.insert(
+        "/api/auth/agent-tokens/{id}/revoke".into(),
+        json!({"post": {"operationId": "revokeAgentToken", "summary": "End one agent token the signed-in human issued", "security": sec.clone(), "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": ok(json!({"type": "object", "properties": {"revoked": {"type": "boolean"}}}), "Revoked."), "401": error_responses()["401"].clone(), "404": error_responses()["404"].clone()}}}),
     );
     paths.insert(
         "/api/meta".into(),
