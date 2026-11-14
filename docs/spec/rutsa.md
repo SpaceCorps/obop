@@ -1,8 +1,8 @@
-# Mileage: product requirements (PROPOSED)
+# Rutsa: product requirements (PROPOSED)
 
-- **Status:** Draft 0.2. PROPOSED. This is the product view of Mileage: the problem, who it is for, what it must do, how it competes and what is still to decide. The technical design of the `mileage` package and the app stays in [mobile.md](mobile.md), which this document does not replace. Nothing here is ratified unless it cites an owner ruling (OR-n) in [DECISIONS.md](../DECISIONS.md). Section 11.1 lists product positions discussed with the owner on 2026-11-10 to 2026-11-12; they are relayed, not quoted, unconfirmed, and PROPOSED until each is recorded as an owner ruling (OR-n).
+- **Status:** Draft 0.2. PROPOSED. This is the product view of Rutsa (working name, 1.2), the phone app built on the `mileage` module: the problem, who it is for, what it must do, how it competes and what is still to decide. The technical design of the `mileage` package and the app stays in [mobile.md](mobile.md), which this document does not replace. Nothing here is ratified unless it cites an owner ruling (OR-n) in [DECISIONS.md](../DECISIONS.md). Section 11.1 lists product positions discussed with the owner on 2026-11-10 to 2026-11-12; they are relayed, not quoted, unconfirmed, and PROPOSED until each is recorded as an owner ruling (OR-n).
 - **Date:** 2026-11-12 (first draft 2026-11-11)
-- **Scope:** Mileage as a product built on obop: automatic recording of business trips, sorting them into business and private, approval, turning approved kilometres into money for the employee, and the logbook a tax authority accepts. Country rules are data, not code.
+- **Scope:** Rutsa as a product built on obop and its `mileage` module: automatic recording of business trips, sorting them into business and private, approval, turning approved kilometres into money for the employee, and the logbook a tax authority accepts. Country rules are data, not code.
 
 **Reading notes.** Decisions are cited by ID and owner rulings as OR-n. Facts are marked as in [mobile.md](mobile.md): **verified** means a page was read on the date above; **search** means it comes from a search result summary and the page itself was not opened; **general knowledge** means no source was checked and it must be verified before anything depends on it. Nothing here is legal or tax advice. Prices of other products come from third-party comparison sites, disagree with each other and must be checked on each vendor's site.
 
@@ -10,15 +10,21 @@
 
 Employers in Sweden, Germany and many other countries may pay employees a tax-free amount for every kilometre they drive for work in their own (or privately leased) car, and an employee with a company car pays less benefit tax when a logbook shows the private use. Both need a trip log that the tax authority accepts, and today most people keep it by hand, late and incomplete, and lose money.
 
-Mileage records trips on the phone without Start and Stop buttons, sorts them into business and private with the obop calendar, contacts and fleet, lets a manager approve them, and turns approved kilometres into an expense claim in the same obop instance. Private trips never leave the phone; the employer sees only business trips, and the raw route of those is deleted after a set time.
+Rutsa records trips on the phone without Start and Stop buttons, sorts them into business and private with the obop calendar, contacts and fleet, lets a manager approve them, and turns approved kilometres into an expense claim in the same obop instance. Private trips never leave the phone; the employer sees only business trips, and the raw route of those is deleted after a set time.
 
 ### 1.1 Product shape
 
 | Part | Who uses it | What it does | State |
 |---|---|---|---|
-| **obop phone app** with Mileage preinstalled | Employees (drivers) | One obop app for the phone: sign in to the company's obop instance, then the Mileage module records, classifies and sends trips. Further modules can be added to the same app later | Proposed (11.1); the host design in [mobile-host.md](mobile-host.md) is PROPOSED too. Sign-in, shared native components and Swedish texts exist on the branches `feat/mileage-app`, `feat/mileage-ios`, `feat/mileage-sv` |
+| **Rutsa**, the obop phone app with the `mileage` module preinstalled | Employees (drivers) | One obop app for the phone: sign in to the company's obop instance, then the `mileage` module records, classifies and sends trips. Further modules can be added to the same app later | Proposed (11.1); the host design in [mobile-host.md](mobile-host.md) is PROPOSED too. Sign-in, shared native components and Swedish texts exist on the branches `feat/mileage-app`, `feat/mileage-ios`, `feat/mileage-sv` |
 | **obop back office** (browser) | Approvers, finance, administrators | Approve trips, set rates and vehicles, pay claims, export the logbook. Its screens are generated from the module (D46); no separate desktop app | The Mileage app tile and the trip and point lists exist |
 | **obop server**, module `mileage` | Nobody directly | Stores trips, checks the distance, governs the states, computes totals. The only place where business logic lives | Built ([mobile.md](mobile.md) 8.6) |
+
+### 1.2 Name
+
+**Rutsa** is the working name of the product: the app in the stores and on the phone. It blends the Swedish *rutt* (route) and *ersättning* (allowance). The technical names stay as they are: the module, its models and its groups are `mileage`, and "Mileage" in [mobile.md](mobile.md) and [ISSUES.md](../ISSUES.md) means the module and the existing app spike. A separate product name avoids confusing the product with them, and "Mileage" is used by many store apps.
+
+Searched on 2026-11-14 (search): no app named Rutsa in the App Store or Google Play, and no mileage app with a similar name. Names checked and dropped: AutoMiles (a mileage tracker of the same name exists), Milo (three mileage trackers), Rutera (a mileage tracker with a trademark), Rutta (an existing app, and an unfortunate meaning in Italian). Before the name is used publicly: a trademark search (PRV and EUIPO, classes 9 and 42), the domains, and the owner's confirmation (11.1).
 
 ## 2. The problem
 
@@ -49,7 +55,7 @@ Mileage records trips on the phone without Start and Stop buttons, sorts them in
 
 **Non-goals**
 
-- Monitoring working time, performance or where an employee is outside working hours. The Swedish data-protection authority (IMY) does not accept GPS monitoring of working time or of position outside working time (search, imy.se and legal commentary); an electronic logbook for the tax authority is an accepted purpose. Mileage data is used for the logbook and the allowance only.
+- Monitoring working time, performance or where an employee is outside working hours. The Swedish data-protection authority (IMY) does not accept GPS monitoring of working time or of position outside working time (search, imy.se and legal commentary); an electronic logbook for the tax authority is an accepted purpose. Trip data is used for the logbook and the allowance only.
 - Fleet telematics, live vehicle tracking, route optimisation, dispatch maps.
 - A device in the car (OBD dongle) for now.
 - Filing anything with a tax authority directly.
@@ -179,7 +185,7 @@ The system chooses the presentation; the app has no switch for it.
 | BR-18 | Trips can be imported from a Google Timeline export | Built (`obop import timeline`) |
 | BR-19 | No limit on the number of trips per month | Should |
 | BR-20 | A published privacy notice tells employees what is stored, where, for how long and for which purpose, before recording starts | Must |
-| BR-21 | Mileage data is not used to monitor working time, performance or position outside working hours | Must |
+| BR-21 | Trip data is not used to monitor working time, performance or position outside working hours | Must |
 | BR-22 | A trip being recorded shows as a Live Activity on iOS with the presentations of 5.6 (compact, expanded on a long press, lock screen, minimal), with the time, the distance and Stop and Pause buttons; on Android the ongoing notification shows the same | Must for the release, after the first prototype |
 | BR-23 | The first prototype uses a minimal standard iOS look; the release uses the obop design system (the `ui-native` tokens and components) with Liquid Glass where the iOS version has it and a plain fallback elsewhere | Must for the release |
 | BR-24 | The app runs on iOS 17 and later (the first version with buttons in a Live Activity) | Must (proposed minimum) |
@@ -275,7 +281,7 @@ Amounts above the tax-free rate are taxable salary (general knowledge for all co
 | Finance and expense platforms | Pleo, Fortnox, Bokio | Part of their plans | Mileage, payment and accounting in one place; Pleo states it meets Skatteverket's requirements and has a GPS variant | Mainly start and end addresses typed in, not automatic recording |
 | Odoo (obop's reference) | Odoo Expenses | Part of Odoo | Mileage claims from a rate | No GPS mileage of its own; only third-party modules, at least one not available on Odoo Online |
 
-### 9.2 What Mileage has that they do not
+### 9.2 What Rutsa has that they do not
 
 1. **One system, no integration.** Trip, approval, expense claim and accounting in one database (the obop principle). The others glue a logbook to payroll through integrations.
 2. **Better classification.** Matching with the obop calendar, contacts and fleet, not only working hours and frequent places.
@@ -295,14 +301,14 @@ Amounts above the tax-free rate are taxable salary (general knowledge for all co
 
 ### 9.4 Verdict
 
-As a stand-alone app in the stores, Mileage would compete with products that have years of polish, automatic detection and many countries. As a part of obop for small and medium businesses, it fills a gap nobody else fills: from the trip to the payment and the books in one system, private by design, and free. The product is positioned as the second, and needs three things to be credible: automatic detection (or at least one-tap start from a calendar reminder), kilometres to money, and the Swedish logbook.
+As a stand-alone app in the stores, Rutsa would compete with products that have years of polish, automatic detection and many countries. As a part of obop for small and medium businesses, it fills a gap nobody else fills: from the trip to the payment and the books in one system, private by design, and free. The product is positioned as the second, and needs three things to be credible: automatic detection (or at least one-tap start from a calendar reminder), kilometres to money, and the Swedish logbook.
 
 ## 10. Phases
 
 | Phase | Content | Depends on |
 |---|---|---|
 | 0 (built) | Backend: trips, points, server distance, review, monthly totals; device sign-in; Google Timeline import | done ([mobile.md](mobile.md) 8.5, 8.6) |
-| 1 | The obop phone app on iOS with Mileage, in a minimal standard iOS look: sign-in to the instance, module list, manual Start and Stop, calendar reminder with one-tap start. Goal: prove that trips are recorded, sent and computed correctly. Android follows with the same features | OR-34 as it stands |
+| 1 | Rutsa (the obop phone app with the `mileage` module) on iOS, in a minimal standard iOS look: sign-in to the instance, module list, manual Start and Stop, calendar reminder with one-tap start. Goal: prove that trips are recorded, sent and computed correctly. Android follows with the same features | OR-34 as it stands |
 | 1b | The Live Activity of BR-22 (Dynamic Island and lock screen on iOS, the ongoing notification on Android) | The first working prototype of phase 1 |
 | 2 | Classification on the phone (calendar, contacts, fleet); daily confirmation; only business trips sent; retention of 5.4 | — |
 | 3 | Rate configuration with Swedish defaults; approved trips become expense claims with the tax-free and taxable split; the Swedish logbook export with odometer fields | — |
@@ -320,7 +326,8 @@ None of these rows is in DECISIONS.md, and the register treats a decision as mad
 | Topic | Proposal |
 |---|---|
 | Automatic start and stop | Allowed, under BR-5, BR-6, BR-14, BR-15, BR-20 and BR-21; data is minimised before any AI, what is stored is stated, and a public page sets out the data terms. A legal check comes before the first release, not before development (2026-11-10) |
-| Phone app | One obop phone app with Mileage preinstalled; the back office in the browser for approvers and finance (1.1) |
+| Name | Rutsa, a working name; the module stays `mileage` (1.2) |
+| Phone app | Rutsa, one obop phone app with the `mileage` module preinstalled; the back office in the browser for approvers and finance (1.1) |
 | Platforms | iOS first, Android follows (BR-16) |
 | Price | Free (OR-1, OR-2). The only planned paid service is SpaceCorps hosting (OR-22) |
 | Rates | Configurable, with the official rate of each country as default (8) |
