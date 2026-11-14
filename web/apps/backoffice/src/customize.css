@@ -164,12 +164,31 @@
 .security-tab .tf {
   max-inline-size: 44rem;
 }
+/* The section titles of Security read as the headings of two-factor and passkeys beside them, not
+   as small overlines. */
+.security-tab h3.overline {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  text-transform: none;
+  letter-spacing: var(--tracking-snug);
+  color: var(--text);
+}
 
-/* Identity: the form of the instance's name and logo, and its preview. */
+/* Identity: the form of the instance's name and logo, and its preview. The preview keeps the width
+   of its column: an align-self in this flex column would shrink it to its content. */
 .identity-tab .identity-preview {
   position: sticky;
   inset-block-start: var(--space-4);
-  align-self: start;
+}
+/* The six languages after English are folded away until one of them has a text (Identity.tsx). */
+.identity-langs > summary {
+  padding-block: 0.7rem;
+  color: var(--accent-ink);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+.identity-langs[open] > summary {
+  margin-block-end: var(--space-2);
 }
 .identity-card {
   display: flex;
@@ -211,4 +230,68 @@
 }
 .identity-error {
   color: var(--danger-ink, var(--text));
+}
+
+@media (max-width: 40rem) {
+  /* One 16 px gutter on a phone, for every tab of Customize. */
+  .customize .content.pad {
+    padding: var(--space-4);
+  }
+  /* The contrast check is one frame on a phone: the table inside it drops its own border, so a
+     pair's name lines up with the heading. */
+  .contrast {
+    padding: var(--space-3);
+  }
+  .contrast .table-wrap {
+    border: 0;
+    background: none;
+  }
+  .contrast .table.stack-sm > tbody > tr {
+    padding-inline: 0;
+  }
+  /* Light, Dark and Needs share one line under the pair's name; the stacked cell basis of the ui
+     kit would leave Needs alone on a second line. */
+  .contrast .table.stack-sm > tbody > tr > td {
+    flex: 1 1 0;
+  }
+  /* The four samples stay two by two at every phone width, never three and one. */
+  .contrast-sw {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  /* The buttons at the end of Theme fill their line, so the stack has one edge on both sides. */
+  .theme-tab .actionrow > .btn {
+    flex: 1 1 auto;
+  }
+  /* A phone has no sidebar either. */
+  .mini-grid {
+    grid-template-columns: 1fr;
+  }
+  .mini-side {
+    display: none;
+  }
+  /* Buttons of a section fill the line, so a stack of them has one edge. */
+  .security-tab > section > .actionrow > .btn,
+  .security-tab > section > form > .actionrow > .btn,
+  .security-tab .tf > .tf-actions > .btn {
+    flex: 1 1 100%;
+  }
+  /* A stacked row of the Security tables shows no label over a cell with nothing in it. */
+  .security-tab .table.stack-sm > tbody > tr > td:empty {
+    display: none;
+  }
+  /* The line under the name of an app or a device stays a hint, not part of the title. */
+  .security-tab .table.stack-sm .cell-main .hint {
+    font-weight: var(--weight-regular);
+  }
+  /* Save stays in reach while the long form scrolls by (the page scrolls here, not the panel). The
+     bar crosses the 16 px gutter, so it reads as a toolbar at the foot of the screen. */
+  .identity-tab > .stack > .actionrow {
+    position: sticky;
+    inset-block-end: 0;
+    z-index: 1;
+    margin-inline: calc(-1 * var(--space-4));
+    padding: var(--space-3) var(--space-4);
+    border-block-start: 1px solid var(--border);
+    background: var(--surface);
+  }
 }

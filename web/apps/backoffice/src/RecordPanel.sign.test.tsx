@@ -206,9 +206,17 @@ const actionButton = (name: string) => actionButtons().find((b) => flat(b) === n
 const steps = () => [...container.querySelectorAll<HTMLElement>("ol.statusbar button")];
 const step = (name: string) => steps().find((b) => flat(b).replace(/ \*$/, "") === name)!;
 const note = () => container.querySelector<HTMLElement>("p.sign-by-link");
-/** The words a tooltip shows once its control has the focus. */
-const tooltipOf = async (el: HTMLElement) => {
+/**
+ * Focus as the keyboard gives it: a tooltip opens on keyboard focus (`:focus-visible`) or hover, not
+ * on a focus a script or a click moves. A Tab key press first makes the next focus a keyboard one.
+ */
+const keyboardFocus = async (el: HTMLElement) => {
+  document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
   await act(async () => el.focus());
+};
+/** The words a tooltip shows once its control has the keyboard focus. */
+const tooltipOf = async (el: HTMLElement) => {
+  await keyboardFocus(el);
   return document.body.querySelector('[role="tooltip"]')?.textContent ?? "";
 };
 const disabled = (el: HTMLElement | undefined) => el?.getAttribute("aria-disabled") === "true";
@@ -330,7 +338,7 @@ describe("Send and Send document in the action row", () => {
     expect(disabled(actionButton("Send"))).toBe(true);
     expect(disabled(actionButton("Send document"))).toBe(false);
     const send = actionButton("Send")!;
-    await act(async () => send.focus());
+    await keyboardFocus(send);
     expect(document.body.querySelector('[role="tooltip"]')?.textContent).toBe(
       "This request is about a document. Use Send document.",
     );

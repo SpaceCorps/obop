@@ -34,6 +34,11 @@
   margin-bottom: var(--space-2);
   font-weight: var(--weight-medium);
 }
+/* The list is a capped column that scrolls: its rows keep their height (a two-line label needs
+   more than 44 px) instead of being squeezed into each other. */
+.group-list > .check-row {
+  flex-shrink: 0;
+}
 .group-list {
   display: flex;
   flex-direction: column;
@@ -63,29 +68,54 @@
   font-size: var(--text-sm);
 }
 @media (max-width: 40rem) {
-  /* Keep the person, the status and the actions in view; the rest is in the groups dialog. */
-  .people-table th:nth-child(2),
-  .people-table td:nth-child(2),
-  .people-table th:nth-child(3),
-  .people-table td:nth-child(3),
-  .people-table th:nth-child(4),
-  .people-table td:nth-child(4),
-  .people-table th:nth-child(5),
-  .people-table td:nth-child(5) {
+  /* A person is one stacked row (Table stack): the name with the status badge at the end of its
+     line, the role under it, two-factor and sessions under their column names, the actions last.
+     The selectors carry a third class or pseudo-class to beat the ui kit's stacked cell rule. */
+  .table.people-table > tbody > tr > td:first-child {
+    order: -2;
+    flex: 1 1 auto;
+    font-weight: var(--weight-semibold);
+  }
+  .table.people-table > tbody > tr > td:nth-child(6) {
+    order: -1;
+    flex: none;
+  }
+  /* The role has a line of its own, so it never rides beside the badge at a place that moves with
+     the length of the name. "Administrator" or "Member" needs no label: a quiet subtitle. */
+  .table.people-table > tbody > tr > td:nth-child(2) {
+    flex-basis: 100%;
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+  }
+  .table.people-table > tbody > tr > td:nth-child(2)::before {
+    content: none;
+  }
+  /* The Groups button shows them. */
+  .table.people-table > tbody > tr > td.group-cell {
     display: none;
   }
-  .people-table td:last-child {
-    white-space: normal;
-  }
+  /* The actions are a two by two block of equal buttons, the same at every phone width, rather
+     than lines that break at a different place for each width. */
   .people-table .actionrow {
-    flex-direction: column;
-    align-items: flex-start;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2);
+  }
+  /* A long translated label wraps inside its half instead of spilling over its neighbour. */
+  .people-table .actionrow > .btn {
+    white-space: normal;
+    text-align: center;
+  }
+  /* Offboard keeps its cell: record.css (0,4,0) pushes a ghost danger button to the row's end. */
+  .people-table .actionrow .btn.ghost.danger-text {
+    margin-inline-start: 0;
   }
   .people-table .badge {
     white-space: normal;
   }
-  .people-table td,
-  .people-table th {
-    padding-inline: 0.5rem;
+  /* A list inside the dialog would scroll inside a sheet that scrolls itself. */
+  .dialog .group-list {
+    max-block-size: none;
+    overflow: visible;
   }
 }

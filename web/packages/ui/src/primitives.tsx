@@ -401,18 +401,66 @@ export function Card({
 export function Table({
   caption,
   dense,
+  stack,
   className,
   children,
   ...rest
-}: HTMLAttributes<HTMLTableElement> & { caption?: string; dense?: boolean }) {
+}: HTMLAttributes<HTMLTableElement> & {
+  caption?: string;
+  dense?: boolean;
+  /** On a phone each row becomes a block, its cells under their `data-label` (components.css). */
+  stack?: boolean;
+}) {
+  const ref = useRef<HTMLTableElement>(null);
+  // Safari stops reading a table as a table once CSS changes its display, as a stacked table does on
+  // a phone. Explicit roles keep it one; the rows come from the caller, so they are marked whenever
+  // they change.
+  useEffect(() => {
+    const table = ref.current;
+    if (!stack || !table || typeof MutationObserver !== "function") return;
+    const mark = () => {
+      for (const el of table.querySelectorAll<HTMLElement>(
+        ":scope > :is(thead, tbody, tfoot), :scope > * > tr, :scope > * > tr > :is(td, th)",
+      )) {
+        if (!el.hasAttribute("role")) el.setAttribute("role", tableRole(el));
+      }
+    };
+    mark();
+    const watch = new MutationObserver(mark);
+    watch.observe(table, { childList: true, subtree: true });
+    return () => watch.disconnect();
+  }, [stack]);
   return (
     <div className="table-wrap">
-      <table className={cx("table", dense && "dense", className)} {...rest}>
+      <table
+        ref={ref}
+        role={stack ? "table" : undefined}
+        className={cx("table", dense && "dense", stack && "stack-sm", className)}
+        {...rest}
+      >
         {caption && <caption className="sr-only">{caption}</caption>}
         {children}
       </table>
     </div>
   );
+}
+
+/** The role a part of a table has by itself, written out for a table whose display CSS changes. */
+function tableRole(el: HTMLElement): string {
+  switch (el.localName) {
+    case "tr":
+      return "row";
+    case "td":
+      return "cell";
+    case "th": {
+      const scope = el.getAttribute("scope");
+      if (scope === "row") return "rowheader";
+      if (scope === "col") return "columnheader";
+      return el.parentElement?.parentElement?.localName === "thead" ? "columnheader" : "rowheader";
+    }
+    default:
+      return "rowgroup";
+  }
 }
 
 export function Skeleton({ rows = 6, cols = 5 }: { rows?: number; cols?: number }) {
@@ -485,8 +533,45 @@ export function Tabs<T extends string>({
   onChange: (v: T) => void;
   idPrefix: string;
 }) {
+  const strip = useRef<HTMLDivElement>(null);
+  // A strip that does not fit scrolls the selected tab to its middle. It moves by the distance between
+  // the rectangles, which works in both reading directions, and it scrolls only the strip:
+  // scrollIntoView would also scroll the page sideways.
+  useLayoutEffect(() => {
+    const s = strip.current;
+    const on = s?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!s || !on || s.scrollWidth <= s.clientWidth) return;
+    const sr = s.getBoundingClientRect();
+    const br = on.getBoundingClientRect();
+    s.scrollLeft += br.left - sr.left - (sr.width - br.width) / 2;
+  }, [value]);
+  // Each end that hides tabs is marked (data-more), and components.css fades it, so a tab off the
+  // screen is not a secret. scrollLeft is negative in right-to-left, hence Math.abs.
+  const ids = tabs.map((tab) => tab.id).join(" ");
+  useEffect(() => {
+    const s = strip.current;
+    if (!s) return;
+    const mark = () => {
+      const max = s.scrollWidth - s.clientWidth;
+      const from = Math.abs(s.scrollLeft);
+      const more = [from > 1 && "start", from < max - 1 && "end"].filter(Boolean).join(" ");
+      if (more) s.dataset.more = more;
+      else delete s.dataset.more;
+    };
+    mark();
+    s.addEventListener("scroll", mark, { passive: true });
+    // The strip and its tabs: a new language changes the tabs' widths and not the strip's. jsdom has
+    // no ResizeObserver.
+    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(mark) : undefined;
+    for (const el of [s, ...s.children]) ro?.observe(el);
+    return () => {
+      s.removeEventListener("scroll", mark);
+      ro?.disconnect();
+    };
+  }, [ids]);
   return (
     <div
+      ref={strip}
       className="tabs"
       role="tablist"
       aria-label={label}
@@ -759,7 +844,12 @@ export function Tooltip({
       className="tip"
       onMouseEnter={on}
       onMouseLeave={off}
-      onFocus={() => setShow(true)}
+      // Focus from the keyboard opens the tip, focus a script moves (a dialog's first control, the
+      // opener a closed dialog returns to) does not: on a phone nothing would close it again. :hover
+      // keeps the tip for a tap, which focuses and hovers at once (the reason a status step is greyed).
+      onFocus={(e) => {
+        if ((e.target as Element).matches(":focus-visible, :hover")) setShow(true);
+      }}
       onBlur={off}
       onKeyDown={(e) => e.key === "Escape" && off()}
     >
@@ -962,7 +1052,14 @@ export function Dialog({
             <h2 id={titleId} className={hideTitle ? "sr-only" : undefined}>
               {title}
             </h2>
-            <IconButton icon="close" label={t("Close")} size="sm" onClick={onClose} />
+            {/* No tip: the focus trap often lands here first, and the tip would cover the text. */}
+            <IconButton
+              icon="close"
+              label={t("Close")}
+              size="sm"
+              tooltip={false}
+              onClick={onClose}
+            />
           </header>
         )}
         <div className="dialog-body">{children}</div>

@@ -394,7 +394,9 @@ tr.current .opencol .icon-btn {
   min-block-size: var(--control-h-sm);
   margin-block-start: 0.2rem;
   margin-inline-start: -0.4rem;
-  padding: 0 1.6rem 0 0.4rem;
+  /* Logical, so the room for the arrow follows it to the left in right-to-left. */
+  padding-block: 0;
+  padding-inline: 0.4rem 1.6rem;
   border-color: transparent;
   background-color: transparent;
   box-shadow: none;
@@ -429,18 +431,31 @@ tr.current .opencol .icon-btn {
   margin: 0 1.25rem 1.25rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
+  /* clip rounds the corners without making the table a scroll container, so the row labels below
+     stick to the edge of the scrolling .tablewrap instead (hidden is the fallback). */
   overflow: hidden;
+  overflow: clip;
 }
 .pivot-table th,
 .pivot-table td {
   padding: 0.4rem 0.9rem;
   white-space: nowrap;
 }
+/* The row labels stay in view while wide columns scroll sideways. */
+.pivot-table :is(thead th:first-child, tbody th, tfoot th) {
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 1;
+}
+/* Opaque, so the scrolled cells pass under it; the row hover still reaches it. */
 .pivot-table tbody th {
-  background: none;
+  background: var(--surface);
   color: var(--text);
   font-size: var(--text-base);
   font-weight: var(--weight-semibold);
+}
+.pivot-table tbody tr:hover th {
+  background: var(--surface-2);
 }
 .pivot-table .total {
   background: var(--accent-soft);
@@ -512,6 +527,10 @@ tr.current .opencol .icon-btn {
   fill: var(--surface);
   stroke: var(--chart-1);
   stroke-width: 2.5;
+}
+/* The tap target around a line chart's 5-unit dot. */
+.chartsvg .hit {
+  fill: transparent;
 }
 .mark {
   cursor: pointer;
@@ -589,6 +608,13 @@ tr.current .opencol .icon-btn {
   margin: 0;
   font-size: var(--text-lg);
   text-transform: capitalize;
+}
+/* The month grid's own box, its sideways scroller up to 60rem (below). */
+.cal-scroll {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-inline-size: 0;
 }
 .monthgrid {
   display: grid;
@@ -742,35 +768,328 @@ tr.current .opencol .icon-btn {
   min-inline-size: 0;
 }
 
+/* Up to 60rem the document scrolls and .content clips sideways (style.css), so the month grid gets
+   its own sideways scroller: only the grid moves, never the bar with the date and the arrows. */
+@media (max-width: 60rem) {
+  .cal-scroll {
+    overflow-x: auto;
+  }
+}
 @media (max-width: 40rem) {
+  /* One 16 px gutter on every bar and block of the views. */
+  .listbar,
+  .viewbar {
+    padding-inline: var(--space-4);
+  }
+  .weeklist,
+  .monthgrid,
+  .pivot-table {
+    margin-inline: var(--space-4);
+  }
+  .pivot-table {
+    min-inline-size: calc(100% - 2 * var(--space-4));
+  }
+  /* Total reads as strong as the rows it adds up, not as a small grey head. */
+  .pivot-table tfoot th {
+    color: var(--text);
+    font-size: var(--text-base);
+  }
+  .chart {
+    padding-inline: var(--space-4);
+  }
+
+  /* The list is one block per record: the checkbox in a column of its own, the title, then four
+     fields under their names (the record has the rest). The column heads become a strip of sort
+     buttons, and the page scrolls instead of the table, so nothing is cut at the edge. */
+  .content.view-list {
+    overflow-x: clip;
+    overflow-y: visible;
+  }
+  .content.view-list > .listview {
+    block-size: auto;
+  }
+  /* The list's only: pivot and graph keep their scrolling .tablewrap. */
+  .listview > .tablewrap {
+    overflow: visible;
+  }
+  .list,
+  .list > thead,
+  .list > tbody,
+  .list > tfoot {
+    display: block;
+  }
+  /* The strip's ground is on thead, so the fade at its ends (below) dims the buttons only. */
+  .list > thead {
+    border-block-end: 1px solid var(--border);
+    background: var(--surface-2);
+  }
+  .list > thead > tr {
+    display: flex;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .list > thead th {
+    flex: none;
+    position: static;
+    border-block-end: 0;
+  }
+  /* Finger-sized sort buttons, and the first one starts where the record titles start. */
+  .list > thead .thbtn {
+    min-block-size: 2.75rem;
+    padding-inline: 0.75rem;
+  }
+  .list > thead th.selcol + th .thbtn {
+    padding-inline-start: 0;
+  }
+  /* An end of the strip that hides sort buttons fades out (ListView sets data-more), as the tab
+     strips do, so a cut "Due" reads as more to scroll to. */
+  .list > thead > tr[data-more="end"] {
+    mask-image: linear-gradient(to right, #000 calc(100% - 2rem), transparent);
+  }
+  .list > thead > tr[data-more="start"] {
+    mask-image: linear-gradient(to left, #000 calc(100% - 2rem), transparent);
+  }
+  .list > thead > tr[data-more="start end"] {
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      #000 2rem,
+      #000 calc(100% - 2rem),
+      transparent
+    );
+  }
+  :dir(rtl) .list > thead > tr[data-more="end"] {
+    mask-image: linear-gradient(to left, #000 calc(100% - 2rem), transparent);
+  }
+  :dir(rtl) .list > thead > tr[data-more="start"] {
+    mask-image: linear-gradient(to right, #000 calc(100% - 2rem), transparent);
+  }
+  /* Select all sits over the checkboxes of the rows. */
+  .list > thead th.selcol {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 2.75rem;
+    padding: 0;
+  }
+  .list > thead th.opencol {
+    display: none;
+  }
+  .list > tbody > tr {
+    display: grid;
+    grid-template-columns: 2.75rem minmax(0, 1fr);
+    padding-block: var(--space-2);
+    padding-inline-end: var(--space-4);
+    border-block-end: 1px solid var(--border);
+  }
+  /* The cell's own start padding (0.75rem plus the depth) makes up the rest of the gutter. */
+  .list > tbody > tr.ghead {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    padding-block: 0;
+    padding-inline: var(--space-1) var(--space-4);
+    background: var(--surface-2);
+  }
+  .list td {
+    display: block;
+    max-inline-size: none;
+    padding: 0;
+    border: 0;
+    white-space: normal;
+  }
+  .list td.selcol {
+    display: flex;
+    grid-row: 1 / span 6;
+    justify-content: center;
+    inline-size: auto;
+    padding: 0.2rem 0 0;
+  }
+  .list td:not(.selcol) {
+    grid-column: 2;
+  }
+  .list td[data-c="1"] {
+    font-size: var(--text-md);
+    overflow-wrap: anywhere;
+  }
+  .list td[data-label]:not([data-c="1"]) {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-3);
+    font-size: var(--text-sm);
+    text-align: end;
+    overflow-wrap: anywhere;
+  }
+  .list td[data-label]:not([data-c="1"])::before {
+    content: attr(data-label);
+    color: var(--text-muted);
+    text-align: start;
+  }
+  /* [data-c] on the second cell so this outranks the labelled-cell rule above. */
+  .list td[data-c="5"] ~ td[data-c],
+  .list td.opencol {
+    display: none;
+  }
+  /* Group heads and totals have a cell per column; the empty ones would only spread the sums. */
+  .list > tbody > tr.ghead > td:empty,
+  .list > tfoot td:empty {
+    display: none;
+  }
+  .list > tfoot > tr {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: var(--space-1) var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    background: var(--surface-2);
+  }
+  .list > tfoot td {
+    position: static;
+    padding: 0;
+    border: 0;
+    background: none;
+  }
+  .list > tfoot td[data-label]::before {
+    font-weight: var(--weight-regular);
+  }
+  /* The pager stays on the bottom edge while the records scroll under it. */
+  .listview > .pager {
+    position: sticky;
+    inset-block-end: 0;
+    z-index: 2;
+    padding: var(--space-2) var(--space-4) max(var(--space-2), env(safe-area-inset-bottom));
+  }
+  .gbtn {
+    min-block-size: 2.75rem;
+  }
+
   .kanban {
     gap: 10px;
-    padding: 0.75rem;
+    padding: var(--space-3) var(--space-4);
     scroll-snap-type: x mandatory;
+    scroll-padding-inline: var(--space-4);
+  }
+  /* At most one screen tall under the top bar, so a long column scrolls under its head, and a short
+     board stops at the screen's bottom instead of leaving empty board to scroll to. A percentage
+     does not resolve against a max height, so the column gets its own cap (the board's block
+     padding is var(--space-3)). Only in the app: the Brand book's sample keeps its own frame. */
+  .main > .view-kanban > .kanban {
+    block-size: auto;
+    max-block-size: calc(100dvh - 3.5rem);
+  }
+  .main > .view-kanban .kcol {
+    max-block-size: calc(100dvh - 3.5rem - 2 * var(--space-3));
   }
   .kcol {
     flex-basis: 84%;
-    scroll-snap-align: center;
+    scroll-snap-align: start;
   }
   .kcol.folded {
     flex-basis: 3.2rem;
-    scroll-snap-align: start;
   }
-  .listbar,
-  .viewbar {
-    padding-inline: 0.75rem;
+  /* The sum goes under the stage name, which was cut to "Nev", lined up after the fold button. */
+  .kcol header {
+    flex-wrap: wrap;
+    row-gap: 0;
   }
+  .kcol .sum {
+    order: 1;
+    flex-basis: 100%;
+    margin-inline-start: 0;
+    padding-inline-start: 2.65rem;
+    font-size: var(--text-xs);
+  }
+
   .monthgrid {
     min-inline-size: 34rem;
   }
-  .calendar {
-    overflow-x: auto;
+  /* The date range on top, then the arrows and Today, with Month and Week at the end. */
+  .calendar .calhead {
+    order: -1;
+    flex-basis: 100%;
   }
+  .calendar .viewbar > .inline-field {
+    order: 1;
+  }
+  /* Month and Week, or Bar, Line and Pie, fill the rest of their row (a row of their own at 320 px)
+     like the view switcher above, instead of a short control left on its own. */
+  .calendar .viewbar > .grow {
+    display: none;
+  }
+  .viewbar > .switcher {
+    display: flex;
+    flex: 1 0 auto;
+  }
+  .viewbar > .switcher > button {
+    flex: 1 1 0;
+    justify-content: center;
+  }
+  .weeklist li {
+    align-items: center;
+    gap: var(--space-2);
+    padding-block: var(--space-2);
+    padding-inline: var(--space-3) var(--space-2);
+  }
+  .wk-day {
+    flex: none;
+    inline-size: 3.25rem;
+  }
+  .weeklist .cal-ev {
+    min-block-size: 2.75rem;
+    font-size: var(--text-sm);
+  }
+  /* Two lines of the title instead of "A rathe…". */
+  .weeklist .evt {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    white-space: normal;
+  }
+
+  /* 15 units of the 360-unit phone drawing: about 12 px at 320 and 15 px at 390, under the chart's
+     15 px title. */
   .chartsvg .axis,
   .chartsvg .vlabel-t {
-    font-size: 17px;
+    font-size: 15px;
+  }
+  /* A slanted first x label may reach past the chart's start into the padding of .chart. */
+  .chartsvg {
+    overflow: visible;
   }
   .piesvg .axis {
     font-size: 14px;
+  }
+}
+/* No hover on a touch screen: "Move to…" is the only way to change a card's stage there, so it is
+   drawn as a control from the start, not as grey 12 px text. */
+@media (hover: none) {
+  .moveto {
+    min-block-size: 2.75rem;
+    margin-inline-start: 0;
+    padding-inline-start: 0.6rem;
+    border-color: var(--border);
+    background-color: var(--surface-2);
+    color: var(--text);
+  }
+}
+/* Touch targets the control height tokens do not reach. */
+@media (max-width: 40rem), (pointer: coarse) {
+  .foldbtn {
+    inline-size: 2.25rem;
+    block-size: 2.25rem;
+  }
+  .pivot-table td:has(> .cellbtn) {
+    padding-block: 0;
+  }
+  .pivot-table td .cellbtn {
+    display: block;
+    inline-size: 100%;
+    min-block-size: 2.75rem;
+    text-align: end;
+  }
+  .opencol .icon-btn {
+    opacity: 1;
   }
 }

@@ -2,6 +2,7 @@
   "{count, plural, one {# recovery code left.} other {# recovery codes left.}}": "{count, plural, one {# återställningskod kvar.} other {# återställningskoder kvar.}}",
   "{from}–{to} of {total}": "{from}–{to} av {total}",
   "{lang} example": "Exempel på {lang}",
+  "{size} per page": "{size} per sida",
   "6-digit code": "Sexsiffrig kod",
   "Accent fill against the canvas": "Accentfyllning mot bakgrunden",
   "Accent fill against the panel": "Accentfyllning mot panelen",

@@ -227,9 +227,12 @@
 .dialog.palette .dialog-body {
   padding: 0;
 }
-.dialog.launcher > h2 + .searchfield,
-.dialog.palette > h2 + .searchfield {
-  margin: 0;
+/* The search stays on top and only the apps scroll under it. */
+.dialog.launcher .dialog-body {
+  display: flex;
+  flex-direction: column;
+  min-block-size: 0;
+  overflow: hidden;
 }
 .searchfield {
   display: flex;
@@ -252,12 +255,38 @@
 .searchfield input::placeholder {
   color: var(--text-subtle);
 }
+/* Drawn only on a phone or a touch screen (Chrome.tsx): the launcher and the palette have no close
+   button, and there is no Escape key to press. */
+.searchfield > .search-cancel {
+  flex: none;
+  min-block-size: 2.75rem;
+  padding-inline: 0.5rem;
+  color: var(--accent-ink);
+}
+.searchfield:has(> .search-cancel) {
+  padding-inline-end: 0.5rem;
+}
+/* The palette opens its Cancel right under the pointer that tapped search, so a hover box would
+   greet it at once; it stays a plain word as in the launcher, and only a press shows. */
+.searchfield > .btn.search-cancel:hover:not(:disabled, :active) {
+  background: transparent;
+  color: var(--accent-ink);
+}
 .launcher-body {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: var(--space-5);
+  min-block-size: 0;
   padding: var(--space-4) var(--space-5) var(--space-5);
   overflow-y: auto;
+  /* A flick at the end of the list does not scroll the page behind. */
+  overscroll-behavior: contain;
+}
+/* On a touch screen focus starts here, so the keyboard does not cover the grid; a ring around the
+   whole grid would say nothing. */
+.launcher-body:focus {
+  outline: none;
 }
 .launcher-body h3,
 .home-body h2 {
@@ -339,6 +368,7 @@
   margin: 0;
   padding: 0.4rem;
   overflow-y: auto;
+  overscroll-behavior: contain;
   list-style: none;
 }
 .palette li {
@@ -396,8 +426,9 @@
   border-radius: var(--radius-md);
   background: var(--surface);
 }
+/* 38 px with a mouse at either density, like before; 44 px where a finger needs it (--control-h). */
 .home-head .searchfield input {
-  min-block-size: 2.25rem;
+  min-block-size: max(2.25rem, calc(var(--control-h) - 2px));
 }
 .home-body {
   display: flex;
@@ -513,6 +544,16 @@
   color: oklch(0.88 0.02 265);
   font-size: var(--text-sm);
   line-height: 1.6;
+}
+/* The module builder renders the preview one line to a block (no newline characters between them),
+   so every width needs the block; the hanging indent for a wrapped line is in the phone block. */
+.code-line {
+  display: block;
+}
+/* The module builder's secondary "Add field" keeps its own width; only the primary action may fill
+   the row (on a phone, below). */
+.add-field {
+  align-self: flex-start;
 }
 
 /* ---------- Sign-in ---------- */
@@ -633,14 +674,67 @@
   .home-body {
     padding-inline: var(--space-5);
   }
+  /* The document scrolls here, not the panel: a panel that can still scroll sideways only lets a
+     swipe or a focused field slide every line off the left edge (Customize > Security). Clip, not
+     hidden, so neither box is a scroll container (`.home` would otherwise make it one). Wide content
+     brings its own scroller or wraps. */
+  .main {
+    overflow: clip;
+  }
+  .content {
+    overflow-x: clip;
+    overflow-y: visible;
+  }
 }
 @media (max-width: 40rem) {
+  /* No frame on a phone: the panel is the page, with one 16 px gutter inside it. */
   .workspace {
-    gap: 0.5rem;
-    padding: 0 0.5rem 0.5rem;
+    gap: 0;
+    padding: 0;
   }
-  .brand-app {
-    max-inline-size: 36vw;
+  .main.panel {
+    min-block-size: calc(100dvh - 3.5rem);
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  /* The bar keeps every button at 44 px and gives the rest to the app's name: the logo and the
+     slash go (the name links home all the same), and Theme stays in the account menu. */
+  .topbar {
+    gap: 0;
+    padding-inline: 0.25rem;
+  }
+  .brand {
+    gap: 0.4rem;
+    margin-inline-start: 0;
+    padding-inline: 0.35rem;
+  }
+  .brand:has(.brand-app) > :is(.logo, .instance-logo),
+  .brand-sep {
+    display: none;
+  }
+  .systray {
+    gap: 0;
+  }
+  .systray > .tip:has(> .theme-btn) {
+    display: none;
+  }
+  /* One icon size in the bar (it mixed 16, 18 and 20); the account menu's items keep theirs. */
+  .topbar :is(.icon-btn, .searchpill) > .ico {
+    inline-size: 20px;
+    block-size: 20px;
+  }
+  /* The avatar stays 34 px to look at; a ring around it takes the tap to about 44 px. Its end
+     margin puts it on the page's 16 px gutter, level with the content below. */
+  .avatar-btn {
+    position: relative;
+    margin-inline: 0.3rem 0.75rem;
+  }
+  .avatar-btn::after {
+    content: "";
+    position: absolute;
+    inset: -0.3rem;
+    border-radius: 50%;
   }
   /* A phone shows search as an icon button beside the theme and account buttons, drawn like them. */
   .searchpill {
@@ -676,20 +770,116 @@
   }
   .sidebar.open {
     display: flex;
+    margin: 0 var(--space-2) var(--space-2);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     background: var(--surface);
     box-shadow: var(--shadow-1);
   }
-  .main {
-    min-block-size: 70vh;
+  .home-head,
+  .home-body {
+    padding-inline: var(--space-4);
+  }
+  .home-head {
+    gap: var(--space-3);
+    padding-block: var(--space-5) var(--space-3);
+  }
+  /* The filter runs to the same gutter as the app cards under it; the desktop cap of 20rem left it
+     short of their edge on a phone wider than 320 px. */
+  .home-head .searchfield {
+    inline-size: 100%;
   }
   .home .app-grid,
   .app-grid.small {
     grid-template-columns: 1fr;
   }
+  .home .app-grid {
+    gap: var(--space-2);
+  }
+  .home .app-tile.card {
+    gap: 0.75rem;
+    padding: 0.65rem 0.75rem;
+  }
+  /* Two lines of what an app holds, not one cut short. */
+  .app-tile-text small {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    white-space: normal;
+  }
   .home-head h1 {
     font-size: var(--text-2xl);
+  }
+  /* The launcher shows three apps a row at 320 px and four at 375. */
+  .launcher-body {
+    gap: var(--space-4);
+    padding-inline: var(--space-4);
+  }
+  .launcher .app-grid:not(.small) {
+    grid-template-columns: repeat(auto-fill, minmax(4.5rem, 1fr));
+    gap: var(--space-3) var(--space-1);
+  }
+  .launcher .app-tile:not(.row) {
+    gap: 0.35rem;
+    padding: var(--space-2) var(--space-1);
+  }
+  /* A long name (a German compound, say) breaks inside its tile instead of running into the next. */
+  .launcher .app-tile:not(.row) > span {
+    hyphens: auto;
+    overflow-wrap: break-word;
+  }
+  .palette li {
+    min-block-size: 2.75rem;
+  }
+  /* Customize > Apps: the icon and the name on the first line, colour, Shown and the arrows on the
+     second, every control big enough for a finger. */
+  .app-row {
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+  .app-row > input:not([type="checkbox"], [type="color"]) {
+    flex: 1 1 calc(100% - 36px - var(--space-2));
+  }
+  .app-row .btn.small {
+    min-inline-size: 2.75rem;
+    min-block-size: 2.75rem;
+    padding: 0;
+  }
+  .app-row .check {
+    padding-inline: var(--space-2);
+  }
+  .app-row > input[type="color"] {
+    inline-size: 2.75rem;
+    block-size: 2.75rem;
+  }
+  /* Theme colours: two even rows of four, each a finger wide. */
+  .theme-tab .swatches {
+    display: grid;
+    grid-template-columns: repeat(4, 2.75rem);
+    justify-content: space-between;
+    row-gap: var(--space-3);
+  }
+  .theme-tab .swatch {
+    inline-size: 2.75rem;
+    block-size: 2.75rem;
+  }
+  /* The obop.toml preview wraps instead of being a second scroller inside the page. */
+  .code {
+    max-block-size: none;
+    padding: var(--space-3);
+    overflow: visible;
+    font-size: var(--text-xs);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  /* A wrapped line goes on 4ch in, so its tail does not read as a new key at column 0. */
+  .code-line {
+    padding-inline-start: 4ch;
+    text-indent: -4ch;
+  }
+  .build-actions > .btn.primary {
+    flex: 1 1 100%;
   }
 }
 

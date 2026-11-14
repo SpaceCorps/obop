@@ -2,6 +2,7 @@
   "{count, plural, one {# recovery code left.} other {# recovery codes left.}}": "{count, plural, one {Queda # código de recuperación.} other {Quedan # códigos de recuperación.}}",
   "{from}–{to} of {total}": "{from}–{to} de {total}",
   "{lang} example": "Ejemplo de {lang}",
+  "{size} per page": "{size} por página",
   "6-digit code": "Código de 6 dígitos",
   "Accent fill against the canvas": "Relleno de acento sobre el lienzo",
   "Accent fill against the panel": "Relleno de acento sobre el panel",

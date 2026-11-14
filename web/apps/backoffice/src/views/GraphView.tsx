@@ -3,6 +3,7 @@ import { fmt as fmtLocale, getCurrency, t } from "@obop/ui";
 import type { FieldMeta } from "../api.ts";
 import { useData } from "../data.tsx";
 import { fieldTitle } from "../labels.ts";
+import { PHONE_QUERY, useMedia } from "../media.ts";
 import {
   condForKey,
   currencyOf,
@@ -29,9 +30,6 @@ import type { ViewProps } from "./types.ts";
 
 export type Datum = { key: string; label: string; value: number };
 
-const W = 640;
-const H = 340;
-const M = { l: 64, r: 16, t: 20, b: 64 };
 const color = (i: number) => `var(--chart-${(i % 8) + 1})`;
 
 const compact = (m: FieldMeta | undefined, n: number, currency?: string) => {
@@ -249,15 +247,34 @@ export function Cartesian({
   cur,
   onPick,
 }: ChartProps & { type: "bar" | "line" }) {
+  // The drawing is scaled to the screen. A phone gets a narrower one, so the 15-unit type of
+  // views.css comes out at 12 to 15 px instead of 7.
+  const narrow = useMedia(PHONE_QUERY);
+  const W = narrow ? 360 : 640;
+  const H = narrow ? 300 : 340;
   const max = Math.max(...data.map((x) => x.value), 0);
   const { top, ticks } = niceScale(max);
+  // At that size a fixed margin would cut money ticks such as "€7.5K", so a phone's left margin
+  // fits the longest tick label (about 10 units a character).
+  const tickChars = Math.max(...ticks.map((tick) => compact(m, tick, cur).length));
+  const M = narrow
+    ? { l: Math.min(Math.max(tickChars * 10 + 12, 32), 120), r: 8, t: 20, b: 72 }
+    : { l: 64, r: 16, t: 20, b: 64 };
   const iw = W - M.l - M.r;
   const ih = H - M.t - M.b;
   const band = iw / data.length;
   const y = (v: number) => M.t + ih - (Math.max(v, 0) / top) * ih;
   const cx = (i: number) => M.l + band * i + band / 2;
-  const rotate = data.length > 6;
-  const trunc = (s: string) => (s.length > 14 ? `${s.slice(0, 13)}…` : s);
+  const cut = narrow ? 9 : 13;
+  const trunc = (s: string) => (s.length > cut + 1 ? `${s.slice(0, cut)}…` : s);
+  // Labels slant when they would run into each other: past 6 on a wide chart; on a phone as soon
+  // as the longest one (about 8.5 units a character) is wider than its band. Values above the
+  // marks show only while they fit too.
+  const widest = (texts: string[]) => Math.max(...texts.map((s) => s.length));
+  const rotate = narrow ? widest(data.map((x) => trunc(x.label))) * 8.5 > band : data.length > 6;
+  const values = narrow
+    ? widest(data.map((x) => compact(m, x.value, cur))) * 10 <= band
+    : data.length <= 12;
   const pts = data.map((x, i) => `${cx(i)},${y(x.value)}`).join(" ");
   const mark = (x: Datum) =>
     t("{label}: {value}. Show records.", { label: x.label, value: fmt(m, x.value, cur) });
@@ -305,10 +322,12 @@ export function Cartesian({
           ) : (
             <g {...activate(() => onPick(x.key))} aria-label={mark(x)} className="mark">
               <title>{`${x.label}: ${fmt(m, x.value, cur)}`}</title>
+              {/* The 5-unit dot alone is too small to tap: a transparent target around it. */}
+              <circle cx={cx(i)} cy={y(x.value)} r={22} className="hit" />
               <circle cx={cx(i)} cy={y(x.value)} r={5} className="dot" />
             </g>
           )}
-          {data.length <= 12 && (
+          {values && (
             <text x={cx(i)} y={y(x.value) - 9} textAnchor="middle" className="vlabel-t">
               {compact(m, x.value, cur)}
             </text>
@@ -320,6 +339,7 @@ export function Cartesian({
             textAnchor={rotate ? "end" : "middle"}
             transform={rotate ? `rotate(-35 ${cx(i)} ${H - M.b + 18})` : undefined}
           >
+            {trunc(x.label) !== x.label && <title>{x.label}</title>}
             {trunc(x.label)}
           </text>
         </g>

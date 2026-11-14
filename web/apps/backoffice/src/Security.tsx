@@ -248,7 +248,7 @@ function EventLog({ token, refreshKey }: { token: string; refreshKey: number }) 
       {rows === null ? null : rows.length === 0 ? (
         <p className="hint">{t("Nothing has been recorded yet.")}</p>
       ) : (
-        <Table caption={t("Security log")} dense>
+        <Table caption={t("Security log")} dense stack>
           <thead>
             <tr>
               <th scope="col">{t("Time")}</th>
@@ -261,13 +261,13 @@ function EventLog({ token, refreshKey }: { token: string; refreshKey: number }) 
           <tbody>
             {rows.map((r) => (
               <tr key={r.id}>
-                <td>{fmt.dateTime(String(r.at))}</td>
-                <td>{String(r.user)}</td>
-                <td>
+                <td data-label={t("Time")}>{fmt.dateTime(String(r.at))}</td>
+                <td data-label={t("Person")}>{String(r.user)}</td>
+                <td className="cell-main">
                   {EVENT_KINDS[String(r.kind)] ? t(EVENT_KINDS[String(r.kind)]!) : String(r.kind)}
                 </td>
-                <td>{String(r.actor)}</td>
-                <td>{String(r.detail ?? "")}</td>
+                <td data-label={t("Done by")}>{String(r.actor)}</td>
+                <td data-label={t("Note")}>{String(r.detail ?? "")}</td>
               </tr>
             ))}
           </tbody>

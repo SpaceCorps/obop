@@ -65,9 +65,11 @@
   .pk-row {
     flex-wrap: wrap;
   }
+  /* Rename and Remove go under the name, past the 18 px key icon and its gap. */
   .pk-actions {
+    flex: 1 0 calc(100% - 18px - var(--space-3));
     justify-content: flex-start;
-    inline-size: 100%;
+    margin-inline-start: calc(18px + var(--space-3));
   }
 }
 .pk-confirmed {
