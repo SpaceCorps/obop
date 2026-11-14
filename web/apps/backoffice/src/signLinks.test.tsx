@@ -379,9 +379,10 @@ describe("the table of the links of a request", () => {
 
   it("shows each link's status, its first eight characters and never a link", () => {
     const h = html(true);
-    expect(h).toContain("Active");
-    expect(h).toContain("Used");
-    expect(h).toContain("Revoked");
+    // The badges themselves (the moments under each link use the words Used and Revoked too).
+    expect(h).toMatch(/<\/i>Active<\/span><code[^>]*>aaaaaaaa</);
+    expect(h).toMatch(/<\/i>Used<\/span><code[^>]*>bbbbbbbb</);
+    expect(h).toMatch(/<\/i>Revoked<\/span><code[^>]*>cccccccc</);
     expect(h).toContain("aaaaaaaa");
     expect(h).not.toContain("a".repeat(9));
     expect(h).not.toContain("/sign/");

@@ -87,6 +87,12 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* A touch screen has no ⌘K to press, so the search field does not show it. */
+@media (hover: none) and (pointer: coarse) {
+  .searchpill .kbd {
+    display: none;
+  }
+}
 .systray {
   display: flex;
   align-items: center;
@@ -609,13 +615,10 @@
   .two {
     grid-template-columns: 1fr;
   }
-  .searchpill span:not(.kbd) {
-    display: none;
-  }
+  /* A tablet keeps the search field with its words (they end in an ellipsis when the bar is short);
+     a box with only a magnifier and ⌘K in the middle of the bar read as neither a field nor a button. */
   .searchpill {
-    inline-size: auto;
-    flex: none;
-    margin-inline: auto 0;
+    max-inline-size: 22rem;
   }
   .signin-wrap {
     grid-template-columns: 1fr;
@@ -639,11 +642,26 @@
   .brand-app {
     max-inline-size: 36vw;
   }
+  /* A phone shows search as an icon button beside the theme and account buttons, drawn like them. */
   .searchpill {
-    inline-size: 2.25rem;
+    flex: none;
+    inline-size: var(--control-h);
+    block-size: var(--control-h);
+    margin-inline: auto 0;
     padding: 0;
     justify-content: center;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
   }
+  .searchpill:hover {
+    background: var(--surface-3);
+    color: var(--text);
+  }
+  .searchpill + .systray {
+    margin-inline-start: 0;
+  }
+  .searchpill span:not(.kbd),
   .searchpill .kbd {
     display: none;
   }

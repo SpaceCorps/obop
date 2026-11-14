@@ -421,7 +421,7 @@ describe("an answer to Create signing link that the page cannot show (W5)", () =
       expect(tone).toBe("error");
       expect(text).toContain("A signing link was made for this request");
       expect(text).toContain("nobody has it");
-      expect(text).toContain("Revoke it in the Signing links table and make another one.");
+      expect(text).toContain("Revoke it under Signing links and make another one.");
       expect(text).not.toContain("did not return");
     });
   }
@@ -465,7 +465,7 @@ describe("who may revoke a signing link (WEB3-5)", () => {
   it("shows the links and no Revoke to a person who may not update links, although they may make them", async () => {
     linkRows = [active];
     await mount(rows.document, { make: true, revoke: false });
-    expect(container.querySelector(".sign-links"), "the table is gone").not.toBeNull();
+    expect(container.querySelector(".sign-links"), "the list is gone").not.toBeNull();
     expect(flat(container.querySelector(".sign-links"))).toContain("Active");
     expect(revoke()).toHaveLength(0);
   });
@@ -479,7 +479,7 @@ describe("who may revoke a signing link (WEB3-5)", () => {
   it("shows no Revoke on a link that was used, whatever the right", async () => {
     linkRows = [used, active];
     await mount(rows.document, { make: true, revoke: true });
-    expect(container.querySelectorAll(".sign-links tbody tr")).toHaveLength(2);
+    expect(container.querySelectorAll(".sign-links .sign-link-item")).toHaveLength(2);
     expect(revoke()).toHaveLength(1);
   });
 });

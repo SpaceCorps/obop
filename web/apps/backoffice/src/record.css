@@ -116,8 +116,11 @@ a.smartbtn:hover {
 .record .actionrow {
   padding: 0.85rem 1.25rem 0;
 }
+/* The form fills the rest of the panel, so its bar of Save and Close sits at the bottom of the panel
+   even when the record has few fields (`.formbar`'s `margin-block-start: auto`). */
 .fields {
   display: flex;
+  flex: 1 0 auto;
   flex-direction: column;
   gap: 1rem;
   padding: 1.25rem;
@@ -214,15 +217,18 @@ a.smartbtn:hover {
   color: var(--danger-ink);
   font-weight: var(--weight-semibold);
 }
+/* The bar stays on the bottom edge of the panel while the fields scroll under it. Its negative margins
+   take it over the form's padding to the panel's edges; it sticks at 0, never below the edge (a
+   negative offset left the lower part of its buttons out of sight). */
 .formbar {
   position: sticky;
-  inset-block-end: -1.25rem;
+  inset-block-end: 0;
   z-index: 2;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
-  margin: 0.25rem -1.25rem -1.25rem;
+  margin: auto -1.25rem -1.25rem;
   padding: 0.85rem 1.25rem;
   border-block-start: 1px solid var(--border);
   background: var(--surface);
