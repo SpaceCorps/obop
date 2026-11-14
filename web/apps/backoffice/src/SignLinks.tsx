@@ -123,7 +123,7 @@ export function SignLinkAction({
       else
         d.notify(
           t(
-            "A signing link was made for this request, but the server's answer was not a link this page can show, so nobody has it. Revoke it in the Signing links table and make another one.",
+            "A signing link was made for this request, but the server's answer was not a link this page can show, so nobody has it. Revoke it under Signing links and make another one.",
           ),
           "error",
         );

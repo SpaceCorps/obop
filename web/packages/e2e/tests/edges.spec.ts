@@ -14,7 +14,10 @@ test.describe("edges of the screen", () => {
     uid,
     scratchModule,
   }) => {
-    const model = await scratchModule({ title: "Long form", fields: [{ name: "title", required: true }, ...many] });
+    const model = await scratchModule({
+      title: "Long form",
+      fields: [{ name: "title", required: true }, ...many],
+    });
     const r = await api.create("root", model, { title: uid("Long") });
     await signIn("root", `/${model}/${model}?view=list&id=${r.id}`);
     const panel = page.getByRole("complementary", { name: /record$/ });
@@ -45,7 +48,10 @@ test.describe("edges of the screen", () => {
     uid,
     scratchModule,
   }) => {
-    const model = await scratchModule({ title: "Short form", fields: [{ name: "title", required: true }] });
+    const model = await scratchModule({
+      title: "Short form",
+      fields: [{ name: "title", required: true }],
+    });
     const r = await api.create("root", model, { title: uid("Short") });
     await signIn("root", `/${model}/${model}?view=list&id=${r.id}`);
     const panel = page.getByRole("complementary", { name: /record$/ });
@@ -72,7 +78,8 @@ test.describe("edges of the screen", () => {
         { name: "state", kind: "select" as const, options: ["new", "won"] },
       ],
     });
-    for (let i = 0; i < 25; i++) await api.create("root", model, { title: uid("Card"), state: "won" });
+    for (let i = 0; i < 25; i++)
+      await api.create("root", model, { title: uid("Card"), state: "won" });
     await signIn("root", `/${model}/${model}?view=kanban`);
     const col = page.getByRole("region", { name: /^Won, 25 cards$/i });
     await expect(col.locator(".kcard")).toHaveCount(25);
@@ -99,11 +106,14 @@ test.describe("edges of the screen", () => {
     // The head stopped 0.5rem down, with no background, so the cards showed through above and behind it.
     expect(seen.headAtTop).toBeLessThan(1.5);
     expect(seen.topIsHead, "nothing of a card shows above the head").toBe(true);
-    expect(seen.endIsHead, "nothing of a card shows through the head").toBe(true);
+    expect(seen.endIsHead, "the head stays above the cards that pass under it").toBe(true);
     expect(seen.opaque).toBe(true);
   });
 
-  test("a tooltip of a button in the top-left corner stays inside the window", async ({ page, signIn }) => {
+  test("a tooltip of a button in the top-left corner stays inside the window", async ({
+    page,
+    signIn,
+  }) => {
     await signIn("root");
     const launcher = page.getByRole("button", { name: "Open the app launcher" });
     await launcher.hover();

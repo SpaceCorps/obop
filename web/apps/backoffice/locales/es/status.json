@@ -21,7 +21,7 @@
   "A reference or a place, for example “DPA signed 2026-10-01, folder Legal”. obop does not check the agreement.": "machine-drafted",
   "A request about a document is signed by the signer through the signing link. It cannot be marked signed by hand.": "machine-drafted",
   "A short reason for the security log. No passwords or secrets.": "machine-drafted",
-  "A signing link was made for this request, but the server's answer was not a link this page can show, so nobody has it. Revoke it in the Signing links table and make another one.": "machine-drafted",
+  "A signing link was made for this request, but the server's answer was not a link this page can show, so nobody has it. Revoke it under Signing links and make another one.": "machine-drafted",
   "A signing link was made for this request, but you left before it was shown. It cannot be shown again. Open the request, revoke that link and make another one.": "machine-drafted",
   "A starting point for your record of processing activities": "machine-drafted",
   "A sum needs a measure field": "machine-drafted",

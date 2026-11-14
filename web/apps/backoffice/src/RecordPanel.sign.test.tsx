@@ -421,7 +421,7 @@ describe("an answer to Create signing link that the page cannot show (W5)", () =
       expect(tone).toBe("error");
       expect(text).toContain("A signing link was made for this request");
       expect(text).toContain("nobody has it");
-      expect(text).toContain("Revoke it in the Signing links table and make another one.");
+      expect(text).toContain("Revoke it under Signing links and make another one.");
       expect(text).not.toContain("did not return");
     });
   }

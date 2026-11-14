@@ -40,10 +40,13 @@
 .sign-link-item + .sign-link-item {
   border-block-start: 1px solid var(--border);
 }
+/* The line wraps: a long status ("Anfrage geschlossen") with the code and Revoke is wider than a
+   360 px phone gives it; Revoke then goes to a line of its own and stays at the end. */
 .sign-link-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.3rem 0.5rem;
   min-block-size: var(--control-h-sm);
 }
 .sign-link-head .btn {

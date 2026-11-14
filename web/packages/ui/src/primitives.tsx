@@ -797,14 +797,19 @@ function visibleArea(el: HTMLElement): {
   for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
     const s = getComputedStyle(p);
     if (s.overflowX === "visible" && s.overflowY === "visible") continue;
+    // What it shows is its client box: inside its borders and its scrollbars (`clientLeft` counts a
+    // scrollbar on the left, as in a right-to-left page). The border box would let a tip end under
+    // the scrollbar of a scrolling panel.
     const r = p.getBoundingClientRect();
     if (s.overflowX !== "visible") {
-      area.left = Math.max(area.left, r.left);
-      area.right = Math.min(area.right, r.right);
+      const left = r.left + p.clientLeft;
+      area.left = Math.max(area.left, left);
+      area.right = Math.min(area.right, left + p.clientWidth);
     }
     if (s.overflowY !== "visible") {
-      area.top = Math.max(area.top, r.top);
-      area.bottom = Math.min(area.bottom, r.bottom);
+      const top = r.top + p.clientTop;
+      area.top = Math.max(area.top, top);
+      area.bottom = Math.min(area.bottom, top + p.clientHeight);
     }
   }
   return area;
