@@ -34,6 +34,11 @@
   margin-bottom: var(--space-2);
   font-weight: var(--weight-medium);
 }
+/* The list is a capped column that scrolls: its rows keep their height (a two-line label needs
+   more than 44 px) instead of being squeezed into each other. */
+.group-list > .check-row {
+  flex-shrink: 0;
+}
 .group-list {
   display: flex;
   flex-direction: column;
