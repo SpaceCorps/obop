@@ -1294,6 +1294,7 @@ dependencies = [
  "sha2",
  "tokio",
  "tower",
+ "ureq",
  "url",
 ]
 
