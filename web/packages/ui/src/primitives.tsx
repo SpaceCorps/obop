@@ -3,9 +3,11 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type ButtonHTMLAttributes,
+  type CSSProperties,
   type HTMLAttributes,
   type InputHTMLAttributes,
   type ReactElement,
@@ -738,6 +740,20 @@ export function Tooltip({
     setShow(false);
   };
   useEffect(() => () => window.clearTimeout(timer.current), []);
+  const body = useRef<HTMLSpanElement>(null);
+  // Where the tip has to go to stay readable: the other side when it would leave the visible area
+  // above or below, and a sideways shift when it would leave it at a side (a button in a corner).
+  const [fit, setFit] = useState<{ side: "top" | "bottom"; dx: number } | null>(null);
+  useLayoutEffect(() => {
+    if (!show) {
+      setFit(null);
+      return;
+    }
+    const el = body.current;
+    if (!el) return;
+    setFit(fitInside(el, side));
+  }, [show, side, label]);
+  const shown = fit?.side ?? side;
   return (
     <span
       className="tip"
@@ -749,12 +765,87 @@ export function Tooltip({
     >
       {cloneElement(children, show ? { "aria-describedby": id } : {})}
       {show && (
-        <span role="tooltip" id={id} className={cx("tip-body", side, align !== "center" && align)}>
+        <span
+          ref={body}
+          role="tooltip"
+          id={id}
+          className={cx("tip-body", shown, align !== "center" && align)}
+          style={fit?.dx ? ({ "--tip-dx": `${fit.dx}px` } as CSSProperties) : undefined}
+        >
           {label}
         </span>
       )}
     </span>
   );
+}
+
+/** Space kept between a tip and the edge of what can be seen. */
+const TIP_MARGIN = 8;
+
+/**
+ * The part of the screen a tip can be seen in: the window, cut down by every ancestor that clips
+ * what overflows it (a scrolling panel, a dialog).
+ */
+function visibleArea(el: HTMLElement): {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+} {
+  const root = document.documentElement;
+  const area = { top: 0, left: 0, right: root.clientWidth, bottom: root.clientHeight };
+  for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+    const s = getComputedStyle(p);
+    if (s.overflowX === "visible" && s.overflowY === "visible") continue;
+    const r = p.getBoundingClientRect();
+    if (s.overflowX !== "visible") {
+      area.left = Math.max(area.left, r.left);
+      area.right = Math.min(area.right, r.right);
+    }
+    if (s.overflowY !== "visible") {
+      area.top = Math.max(area.top, r.top);
+      area.bottom = Math.min(area.bottom, r.bottom);
+    }
+  }
+  return area;
+}
+
+/**
+ * Where a shown tip fits: the side it asked for unless that side has no room and the other one
+ * does, and how far to move it sideways so that it stays inside the visible area. Measured once
+ * when it opens, so it never moves under the pointer.
+ */
+function fitInside(
+  el: HTMLElement,
+  side: "top" | "bottom",
+): { side: "top" | "bottom"; dx: number } {
+  const area = visibleArea(el);
+  // Measure where the tip is without a shift it was given before (a new label while it is shown).
+  const was = parseFloat(el.style.getPropertyValue("--tip-dx")) || 0;
+  const r = el.getBoundingClientRect();
+  if (!r.width && !r.height) return { side, dx: 0 };
+  const tip = {
+    top: r.top,
+    bottom: r.bottom,
+    height: r.height,
+    width: r.width,
+    left: r.left - was,
+    right: r.right - was,
+  };
+  const target = (el.parentElement ?? el).getBoundingClientRect();
+  const gap = tip.top >= target.bottom ? tip.top - target.bottom : target.top - tip.bottom;
+  const roomBelow = area.bottom - target.bottom - gap - TIP_MARGIN;
+  const roomAbove = target.top - area.top - gap - TIP_MARGIN;
+  let to = side;
+  if (side === "bottom" && tip.height > roomBelow && roomAbove > roomBelow) to = "top";
+  if (side === "top" && tip.height > roomAbove && roomBelow > roomAbove) to = "bottom";
+  let dx = 0;
+  const min = area.left + TIP_MARGIN;
+  const max = area.right - TIP_MARGIN;
+  if (tip.width > max - min) dx = min - tip.left;
+  else if (tip.left < min) dx = min - tip.left;
+  else if (tip.right > max) dx = max - tip.right;
+  return { side: to, dx: Math.round(dx) };
 }
 
 /* ================= Dialog, Sheet, Toast ================= */

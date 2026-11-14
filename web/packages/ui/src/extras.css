@@ -210,7 +210,7 @@
 }
 .tip-body.start,
 .tip-body.end {
-  transform: none;
+  transform: translateX(var(--tip-dx, 0px));
 }
 .tip-body.start {
   inset-inline-start: 0;
@@ -221,5 +221,5 @@
 }
 :dir(rtl) .tip-body.start,
 :dir(rtl) .tip-body.end {
-  transform: none;
+  transform: translateX(var(--tip-dx, 0px));
 }

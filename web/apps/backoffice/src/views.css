@@ -262,13 +262,22 @@ tr.current .opencol .icon-btn {
 .kcol.folded .kname {
   writing-mode: vertical-rl;
 }
+/* The head stays at the top while the column scrolls, so it carries the column's own background
+   (`inherit` follows the drop-target tint of `.over` too) and sits above the cards that pass under it.
+   The negative margins and matching padding make it as wide as the column and as high as its top
+   padding, so nothing shows through at its sides or above it. A sticky box stops at the column's
+   padding edge, not at its border, so the offset is minus that padding: at 0 the head stopped 0.5rem
+   down and the cards showed through above it. */
 .kcol header {
   position: sticky;
-  inset-block-start: 0;
+  inset-block-start: -0.5rem;
+  z-index: 1;
+  margin: -0.5rem -0.5rem 0;
+  padding: 0.65rem 0.75rem 0.15rem;
+  background: inherit;
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.15rem 0.25rem;
 }
 .kname {
   overflow: hidden;

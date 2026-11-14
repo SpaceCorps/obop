@@ -1,8 +1,8 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { Badge, Button, Dialog, Input, Notice, Table, Tooltip, t } from "@obop/ui";
+import { Badge, Button, Dialog, Input, Notice, Tooltip, t } from "@obop/ui";
 import { search, type FieldMeta, type Row } from "./api.ts";
 import { useData } from "./data.tsx";
-import { instantText } from "./format.ts";
+import { instantShort, instantText } from "./format.ts";
 import { useLeaveHold } from "./leaveGuard.ts";
 import { serverMessage } from "./serverMessage.ts";
 import {
@@ -374,50 +374,58 @@ export function SignLinkTable({
   return (
     <section className="sign-links" aria-label={t("Signing links")}>
       <h3 className="overline">{t("Signing links")}</h3>
-      <Table caption={t("Signing links")} dense>
-        <thead>
-          <tr>
-            <th scope="col">{t("Status")}</th>
-            <th scope="col">{t("Expires")}</th>
-            <th scope="col">{t("Used or revoked")}</th>
-            <th scope="col" className="sr-only">
-              {t("Actions")}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => {
-            const st = linkStatus(r, nowMs, request);
-            const done = String(r.used_at || r.revoked_at || "");
-            return (
-              <tr key={r.id}>
-                <td>
-                  <Badge tone={TONE[st]}>{statusText(st)}</Badge>{" "}
-                  <code className="hint">{r.id.slice(0, 8)}</code>
-                </td>
-                <td>{r.expires_at ? instantText(r.expires_at) : ""}</td>
-                <td>{done ? instantText(done) : ""}</td>
-                <td>
-                  {canRevokeStatus(st) && canRevoke && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="danger-text"
-                      disabled={busy !== null}
-                      loading={busy === r.id}
-                      aria-label={t("Revoke signing link {id}", { id: r.id.slice(0, 8) })}
-                      onClick={() => onRevoke(r)}
-                    >
-                      {t("Revoke")}
-                    </Button>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </Table>
+      {/* A list, not a table: the panel is 28rem wide (the whole screen on a phone), and four columns
+          of a status, two moments and a button did not fit it without scrolling sideways or breaking
+          a date over four lines. Each link is one item: its status, its first characters and Revoke
+          on one line, its moments under them. */}
+      <ul className="sign-link-list">
+        {rows.map((r) => {
+          const st = linkStatus(r, nowMs, request);
+          return (
+            <li key={r.id} className="sign-link-item">
+              <div className="sign-link-head">
+                <Badge tone={TONE[st]}>{statusText(st)}</Badge>
+                <code className="hint">{r.id.slice(0, 8)}</code>
+                {canRevokeStatus(st) && canRevoke && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="danger-text"
+                    disabled={busy !== null}
+                    loading={busy === r.id}
+                    aria-label={t("Revoke signing link {id}", { id: r.id.slice(0, 8) })}
+                    onClick={() => onRevoke(r)}
+                  >
+                    {t("Revoke")}
+                  </Button>
+                )}
+              </div>
+              <dl className="sign-link-times">
+                <When label={t("Expires")} at={r.expires_at} />
+                <When label={t("Used")} at={r.used_at} />
+                <When label={t("Revoked")} at={r.revoked_at} />
+              </dl>
+            </li>
+          );
+        })}
+      </ul>
     </section>
+  );
+}
+
+/** One moment of a link, as a term and its value; nothing when the link has no such moment. */
+function When({ label, at }: { label: string; at: unknown }) {
+  const p = at ? instantShort(at) : null;
+  if (!p) return null;
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd>
+        <time dateTime={String(at)} title={p.full}>
+          {p.text}
+        </time>
+      </dd>
+    </div>
   );
 }
 

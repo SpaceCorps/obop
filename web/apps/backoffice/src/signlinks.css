@@ -14,3 +14,57 @@
   gap: 0.5rem;
   padding: 1rem 1.25rem 0;
 }
+/* The note on a request about a document sits in the panel's gutter like the rows around it; without
+   the padding it ran from the panel's very edge. */
+.sign-by-link {
+  margin: 0;
+  padding: 0.85rem 1.25rem 0;
+}
+
+/* One framed list, drawn like a table of the kit (`.table-wrap`): an item per link, its status line
+   on top (Revoke at the end) and its moments under it, which wrap as whole "term value" pairs. */
+.sign-link-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+.sign-link-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.6rem 0.75rem;
+}
+.sign-link-item + .sign-link-item {
+  border-block-start: 1px solid var(--border);
+}
+.sign-link-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-block-size: var(--control-h-sm);
+}
+.sign-link-head .btn {
+  margin-inline-start: auto;
+}
+.sign-link-times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 1rem;
+  margin: 0;
+  font-size: var(--text-sm);
+}
+.sign-link-times div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.35rem;
+}
+.sign-link-times dt {
+  color: var(--text-muted);
+}
+.sign-link-times dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}

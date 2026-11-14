@@ -212,5 +212,32 @@ export function formatInstant(iso: unknown, zone: string, locale: string): strin
   return f.format(new Date(p.ms));
 }
 
+const shortCache = new Map<string, Intl.DateTimeFormat>();
+
+/**
+ * An instant in a few words, for a narrow place: the date and the time to the minute in `zone`,
+ * with the whole value of `formatInstant` (seconds included) for a title.
+ */
+export function instantShort(
+  iso: unknown,
+  zone: string,
+  locale: string,
+): { text: string; full: string } | null {
+  if (typeof iso !== "string") return null;
+  const p = parseCanonical(iso);
+  if (!p) return null;
+  const key = `${locale}|${zone}`;
+  let f = shortCache.get(key);
+  if (!f) {
+    f = new Intl.DateTimeFormat(locale, {
+      timeZone: knownZone(zone) ? zone : "UTC",
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+    shortCache.set(key, f);
+  }
+  return { text: f.format(new Date(p.ms)), full: formatInstant(iso, zone, locale) };
+}
+
 /** Compare two canonical instants (they are fixed-width text, so text order is time order). */
 export const compareInstants = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);

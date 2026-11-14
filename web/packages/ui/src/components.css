@@ -838,11 +838,12 @@ button.avatar {
   white-space: nowrap;
   box-shadow: var(--shadow-3);
   pointer-events: none;
-  transform: translateX(-50%);
+  /* `--tip-dx` is the sideways shift the Tooltip measures when the tip would leave the screen. */
+  transform: translateX(calc(-50% + var(--tip-dx, 0px)));
   animation: ui-fade var(--dur-2) var(--ease-out);
 }
 :dir(rtl) .tip-body {
-  transform: translateX(50%);
+  transform: translateX(calc(50% + var(--tip-dx, 0px)));
 }
 .tip-body.bottom {
   inset-block-start: calc(100% + 6px);

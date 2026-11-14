@@ -146,9 +146,14 @@ export function TopBar(props: {
           </>
         )}
       </a>
-      <button className="searchpill" onClick={props.onPalette}>
+      <button
+        className="searchpill"
+        // The words are hidden on a phone; the name stays for a screen reader.
+        aria-label={t("Search apps, records and actions")}
+        onClick={props.onPalette}
+      >
         <Icon name="search" size={16} />
-        <span>{t("Search apps, records and actions")}</span>
+        <span aria-hidden="true">{t("Search apps, records and actions")}</span>
         <Kbd>⌘K</Kbd>
       </button>
       <div className="systray">

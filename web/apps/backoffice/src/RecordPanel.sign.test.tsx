@@ -465,7 +465,7 @@ describe("who may revoke a signing link (WEB3-5)", () => {
   it("shows the links and no Revoke to a person who may not update links, although they may make them", async () => {
     linkRows = [active];
     await mount(rows.document, { make: true, revoke: false });
-    expect(container.querySelector(".sign-links"), "the table is gone").not.toBeNull();
+    expect(container.querySelector(".sign-links"), "the list is gone").not.toBeNull();
     expect(flat(container.querySelector(".sign-links"))).toContain("Active");
     expect(revoke()).toHaveLength(0);
   });
@@ -479,7 +479,7 @@ describe("who may revoke a signing link (WEB3-5)", () => {
   it("shows no Revoke on a link that was used, whatever the right", async () => {
     linkRows = [used, active];
     await mount(rows.document, { make: true, revoke: true });
-    expect(container.querySelectorAll(".sign-links tbody tr")).toHaveLength(2);
+    expect(container.querySelectorAll(".sign-links .sign-link-item")).toHaveLength(2);
     expect(revoke()).toHaveLength(1);
   });
 });
