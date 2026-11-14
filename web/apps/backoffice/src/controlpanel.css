@@ -55,6 +55,11 @@
 .crumbs svg {
   color: var(--text-subtle);
 }
+/* Tabs (Customize, Dashboards) sit on the panel's bottom rule: one line, not two 12 px apart. */
+.controlpanel > .tabs {
+  margin-block-end: -0.85rem;
+  border-block-end: 0;
+}
 
 .searchwrap {
   position: relative;
@@ -182,6 +187,11 @@
   padding: 1.1rem;
   overflow-y: auto;
   border-radius: var(--radius-xl);
+}
+/* The backdrop and the head with Done belong to the bottom sheet a phone shows. */
+.fp-scrim,
+.fp-head {
+  display: none;
 }
 .fpanel {
   display: grid;
@@ -327,19 +337,98 @@
 }
 
 @media (max-width: 40rem) {
+  /* The 16 px phone gutter. The bar keeps to three rows: title and actions, search, views. */
   .controlpanel {
-    padding: 0.75rem;
+    padding: var(--space-3) var(--space-4);
+  }
+  /* Only the model bar: Dashboards in edit mode has five buttons there, which must wrap. */
+  .cp-top:has(> .cp-actions) {
+    flex-wrap: nowrap;
+  }
+  .crumbs {
+    flex: 1 1 auto;
+  }
+  /* The app name is in the top bar. */
+  .crumbs > span,
+  .crumbs > svg {
+    display: none;
+  }
+  .crumbs strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .cp-actions {
+    flex: none;
+    flex-wrap: nowrap;
+  }
+  /* Import shows its icon only; the button keeps its name in aria-label. */
+  .cp-label {
+    display: none;
   }
   .searchwrap {
     flex-basis: 100%;
     max-inline-size: none;
   }
+  .cp-bottom > .grow {
+    display: none;
+  }
+  /* Still announced; the pager and the kanban columns show the numbers. */
+  .cp-bottom > .count {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .cp-bottom > .switcher {
+    flex: 1 1 100%;
+  }
+  .cp-bottom > .switcher > button {
+    flex: 1;
+    justify-content: center;
+  }
+  /* Group by, Rows, Columns, Measure, Dimension, Date: one per row, the selects in one column. */
+  :is(.viewbar, .cp-bottom) > .inline-field {
+    display: grid;
+    flex: 1 1 100%;
+    grid-template-columns: 5.5rem minmax(0, 1fr);
+  }
+  :is(.viewbar, .cp-bottom) > .inline-field > :is(select, input) {
+    inline-size: 100%;
+  }
+  /* The filter panel is a bottom sheet over a backdrop, with a head that keeps Done in reach. */
+  .fp-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: calc(var(--z-overlay) - 1);
+    background: var(--overlay);
+  }
   .fp-wrap {
     position: fixed;
-    inset: auto 8px 8px;
+    inset: auto 0 0;
     z-index: var(--z-overlay);
     inline-size: auto;
-    max-block-size: 75vh;
+    max-block-size: 85dvh;
+    padding-block-end: max(1.1rem, env(safe-area-inset-bottom));
+    overscroll-behavior: contain;
+    border-end-start-radius: 0;
+    border-end-end-radius: 0;
+  }
+  /* The negative offset and margins take the head over the sheet's 1.1rem padding to its edges. */
+  .fp-head {
+    display: flex;
+    position: sticky;
+    inset-block-start: -1.1rem;
+    z-index: 1;
+    align-items: center;
+    justify-content: space-between;
+    margin: -1.1rem -1.1rem var(--space-3);
+    padding: var(--space-2) 1.1rem;
+    border-block-end: 1px solid var(--border);
+    background: var(--surface);
   }
   .fpanel {
     grid-template-columns: 1fr;
@@ -347,8 +436,34 @@
   .vlabel {
     display: none;
   }
-  .cp-bottom .count {
-    margin-inline-start: auto;
+  .controlpanel > .tabs {
+    margin: 0 calc(-1 * var(--space-4)) calc(-1 * var(--space-3));
+    padding-inline: var(--space-4);
+  }
+  /* The top bar and the selected tab already say "Customize" and which tab. */
+  .customize .controlpanel > .cp-top {
+    display: none;
+  }
+  .import-dialog > .hint {
+    font-size: var(--text-base);
+  }
+  .import-dialog .import-pick > .btn {
+    flex: 1 1 100%;
+  }
+}
+/* Touch targets. The facet's remove button grows; negative margins keep the chip as tall. */
+@media (max-width: 40rem), (pointer: coarse) {
+  .facet button {
+    inline-size: 2rem;
+    block-size: 2rem;
+    margin-block: -0.375rem;
+  }
+  .caretbtn {
+    inline-size: 2.25rem;
+    block-size: 2.25rem;
+  }
+  .fp-item {
+    min-block-size: 2.75rem;
   }
 }
 @media (max-width: 60rem) {

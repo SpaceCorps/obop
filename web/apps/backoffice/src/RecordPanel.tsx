@@ -137,6 +137,10 @@ export function RecordPanel({
   const shownActions = row
     ? model.actions.filter((a) => !hiddenForRecord(model, a, row))
     : model.actions;
+  // On a phone Delete sits at the end of the form instead, so it no longer holds the action row
+  // open, except on a request, where the row also carries the signing-link button.
+  const actionRow =
+    model.actions.length > 0 || (model.can_delete && (!phone || model.name === REQUEST_MODEL));
 
   // A governed field (D48) starts at its first option and then moves only through actions.
   const governed = (f: FieldMeta) => isGoverned(model, f);
@@ -335,9 +339,13 @@ export function RecordPanel({
       >
         <header>
           {phone && (
-            <Button size="sm" className="back" onClick={onClose}>
-              <Icon name="chevron-left" size={14} /> {t("Back to list")}
-            </Button>
+            <IconButton
+              icon="chevron-left"
+              label={t("Back to list")}
+              tooltip={false}
+              className="back"
+              onClick={onClose}
+            />
           )}
           <div>
             <h2>
@@ -430,7 +438,7 @@ export function RecordPanel({
             ))}
           </div>
         )}
-        {!creating && (model.actions.length > 0 || model.can_delete) && (
+        {!creating && actionRow && (
           <div className="actionrow">
             {shownActions.map((a, ai) => {
               const f = a.field ? fields.find((x) => x.name === a.field) : undefined;
@@ -477,7 +485,7 @@ export function RecordPanel({
             {model.name === REQUEST_MODEL && (
               <SignLinkAction row={row} fields={fields} disabled={busy} />
             )}
-            {model.can_delete && (
+            {model.can_delete && !phone && (
               <Button
                 variant="ghost"
                 className="danger-text"
@@ -652,6 +660,18 @@ export function RecordPanel({
             <p role="alert" className="error banner">
               {serverMessage(error.raw)}
             </p>
+          )}
+          {/* On a phone Delete waits at the end of the form, away from the status pills. */}
+          {!creating && phone && model.can_delete && (
+            <Button
+              variant="ghost"
+              className="danger-text record-delete"
+              icon="trash"
+              disabled={busy}
+              onClick={() => setDeleting(true)}
+            >
+              {t("Delete")}
+            </Button>
           )}
           <footer className="formbar">
             <Button

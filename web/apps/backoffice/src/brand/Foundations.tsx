@@ -258,7 +258,7 @@ function ColourBlock() {
         These ratios are measured in the browser against the current surface, so they change with
         the accent and the mode. Text needs 4.5:1, outlines and fills 3:1 (WCAG 2.2 AA).
       </p>
-      <Table caption="Semantic colour tokens and their contrast on the panel surface">
+      <Table caption="Semantic colour tokens and their contrast on the panel surface" stack>
         <thead>
           <tr>
             <th scope="col">Token</th>
@@ -276,8 +276,8 @@ function ColourBlock() {
               <th scope="row">
                 <code>--{r.t}</code>
               </th>
-              <td>{r.role}</td>
-              <td>
+              <td data-label="Used for">{r.role}</td>
+              <td data-label="Sample">
                 <span
                   className="tok-sample"
                   style={{ color: `var(--${r.t})`, background: "var(--surface)" }}
@@ -291,10 +291,10 @@ function ColourBlock() {
                   )}
                 </span>
               </td>
-              <td>
+              <td data-label="Value">
                 <code>{r.hex}</code>
               </td>
-              <td className="num">
+              <td className="num" data-label="Contrast">
                 <Ratio value={r.ratio} min={r.min} />
               </td>
             </tr>
@@ -401,34 +401,44 @@ function TypeBlock() {
         weight 600 and tighten tracking as they grow; overlines are uppercase with +0.06em.
       </p>
       <div className="table-wrap">
-        <table className="table scale">
+        <table className="table scale stack-sm" role="table">
           <caption className="sr-only">Type scale</caption>
-          <thead>
-            <tr>
-              <th scope="col">Token</th>
-              <th scope="col" className="num">
+          <thead role="rowgroup">
+            <tr role="row">
+              <th scope="col" role="columnheader">
+                Token
+              </th>
+              <th scope="col" role="columnheader" className="num">
                 Size
               </th>
-              <th scope="col" className="num">
+              <th scope="col" role="columnheader" className="num">
                 Line height
               </th>
-              <th scope="col" className="num">
+              <th scope="col" role="columnheader" className="num">
                 Weight
               </th>
-              <th scope="col">Sample</th>
+              <th scope="col" role="columnheader">
+                Sample
+              </th>
             </tr>
           </thead>
-          <tbody>
+          <tbody role="rowgroup">
             {SCALE.map(([t, px, lh, w, use]) => (
-              <tr key={t}>
-                <th scope="row">
+              <tr role="row" key={t}>
+                <th scope="row" role="rowheader">
                   <code>--text-{t}</code>
                   <span className="hint block">{use}</span>
                 </th>
-                <td className="num tabular">{px}px</td>
-                <td className="num tabular">{lh}</td>
-                <td className="num tabular">{w}</td>
-                <td>
+                <td role="cell" className="num tabular" data-label="Size">
+                  {px}px
+                </td>
+                <td role="cell" className="num tabular" data-label="Line height">
+                  {lh}
+                </td>
+                <td role="cell" className="num tabular" data-label="Weight">
+                  {w}
+                </td>
+                <td role="cell" data-label="Sample">
                   <span
                     className="scale-sample"
                     style={{

@@ -149,7 +149,7 @@ export function AgentTokensSection({ token, notify }: { token: string; notify: N
         <p className="hint">{t("No agent tokens.")}</p>
       )}
       {tokens.length > 0 && (
-        <Table caption={t("Agent tokens")} dense>
+        <Table caption={t("Agent tokens")} dense stack>
           <thead>
             <tr>
               <th scope="col">{t("Label")}</th>
@@ -163,12 +163,14 @@ export function AgentTokensSection({ token, notify }: { token: string; notify: N
           <tbody>
             {tokens.map((row) => (
               <tr key={row.id}>
-                <td>
+                <td className="cell-main">
                   <strong>{nameOf(row)}</strong>
                 </td>
-                <td>{row.scopes.join(", ")}</td>
-                <td>{row.created_at ? fmt.dateTime(row.created_at * 1000) : ""}</td>
-                <td>
+                <td data-label={t("Can act with")}>{row.scopes.join(", ")}</td>
+                <td data-label={t("Created")}>
+                  {row.created_at ? fmt.dateTime(row.created_at * 1000) : ""}
+                </td>
+                <td className="cell-actions">
                   <Button
                     variant="danger"
                     size="sm"

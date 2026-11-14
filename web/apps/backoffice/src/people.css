@@ -63,29 +63,32 @@
   font-size: var(--text-sm);
 }
 @media (max-width: 40rem) {
-  /* Keep the person, the status and the actions in view; the rest is in the groups dialog. */
-  .people-table th:nth-child(2),
-  .people-table td:nth-child(2),
-  .people-table th:nth-child(3),
-  .people-table td:nth-child(3),
-  .people-table th:nth-child(4),
-  .people-table td:nth-child(4),
-  .people-table th:nth-child(5),
-  .people-table td:nth-child(5) {
+  /* A person is one stacked row (Table stack): the name with the status badge beside it, role,
+     two-factor and sessions under their column names, the actions last. The selectors carry a
+     third class or pseudo-class to beat the stacked cell rule of the ui kit. */
+  .table.people-table > tbody > tr > td:first-child {
+    order: -2;
+    flex: 1 1 auto;
+    font-weight: var(--weight-semibold);
+  }
+  .table.people-table > tbody > tr > td:nth-child(6) {
+    order: -1;
+    flex: none;
+  }
+  /* The Groups button shows them. */
+  .table.people-table > tbody > tr > td.group-cell {
     display: none;
   }
-  .people-table td:last-child {
-    white-space: normal;
-  }
   .people-table .actionrow {
-    flex-direction: column;
-    align-items: flex-start;
+    flex-wrap: wrap;
+    align-items: center;
   }
   .people-table .badge {
     white-space: normal;
   }
-  .people-table td,
-  .people-table th {
-    padding-inline: 0.5rem;
+  /* A list inside the dialog would scroll inside a sheet that scrolls itself. */
+  .dialog .group-list {
+    max-block-size: none;
+    overflow: visible;
   }
 }

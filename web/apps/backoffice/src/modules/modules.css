@@ -118,9 +118,12 @@
   flex-wrap: wrap;
   gap: 0.35rem;
 }
+/* A badge may carry a path or a long name: it wraps anywhere rather than widen the panel. */
 .mod-badge {
   max-inline-size: 100%;
+  min-inline-size: 0;
   white-space: normal;
+  overflow-wrap: anywhere;
 }
 .card.mod-card .mod-deps {
   margin: 0;
@@ -370,7 +373,7 @@
   color: var(--accent-ink);
   font-weight: var(--weight-medium);
 }
-.dep-table-wrap .table-wrap {
+.dep-table-wrap > summary + .table-wrap {
   margin-block-start: var(--space-2);
 }
 .dep-table-wrap .plain {
@@ -511,21 +514,49 @@
   }
 }
 @media (max-width: 40rem) {
-  .mod-panel {
+  /* A full-screen sheet: no frame, and it rises from below in either direction (.record.mod-panel
+     outranks the sideways slide-rtl of :dir(rtl) .record). A scroll that hits its end stays here. */
+  .record.mod-panel {
     inset: 0;
     inline-size: auto;
-  }
-  .mods-toolbar {
-    grid-template-columns: 1fr;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    overscroll-behavior: contain;
+    animation: sheet var(--dur-3) var(--ease-out);
   }
   .mod-grid {
     grid-template-columns: 1fr;
+  }
+  /* The page loses its frame on a phone (style.css), so the card is the one frame left and takes
+     a slimmer pad. */
+  .card.mod-card {
+    padding: var(--space-3) var(--space-4);
   }
   .meta-row {
     grid-template-columns: 1fr;
     gap: 0.15rem;
   }
-  .customize .content.pad {
-    padding-inline: var(--space-4);
+  /* A finger-sized link that does not make its row taller. */
+  .meta-row dd .ext-link {
+    padding-block: 0.65rem;
+    margin-block: -0.65rem;
+  }
+  /* The selected tab already names the page; the heading stays for screen readers. clip-path
+     hides it and its overflow stays visible, so the phone layout check does not report cut text. */
+  .mods-head h2 {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    margin: -1px;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  /* The dependency table stands in for the picture here (DependencyOverview): the module's link
+     fills its line. */
+  .dep-table-wrap th a {
+    display: block;
+    padding-block: 0.6rem;
+    margin-block: -0.6rem;
   }
 }

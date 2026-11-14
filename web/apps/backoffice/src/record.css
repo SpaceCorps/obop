@@ -5,6 +5,8 @@
   flex-direction: column;
   inline-size: 28rem;
   overflow-y: auto;
+  /* A scroll that reaches the end of the record stops there, not in the list or page behind it. */
+  overscroll-behavior: contain;
   animation: slide var(--dur-3) var(--ease-out);
   scroll-padding-block: 5rem 5rem;
 }
@@ -262,6 +264,36 @@ a.smartbtn:hover {
   flex: 1;
   min-inline-size: 7rem;
 }
+/* Add field is the secondary button: it keeps its own width instead of outgrowing the primary one. */
+.add-field {
+  align-self: flex-start;
+}
+@media (max-width: 40rem) {
+  /* Name, kind and the remove button share the first line; every other input gets a line of its own
+     instead of two half lines that cut the description. */
+  /* A column that wraps makes each of its columns as wide as its widest line (517 px at 320), so the
+     rows ran off the screen: one column, as wide as the field. */
+  .row.wrap.fieldrow {
+    flex-wrap: nowrap;
+  }
+  .fieldrow > .frow:first-child {
+    flex-wrap: nowrap;
+  }
+  .fieldrow > .frow > :is(input, select) {
+    min-inline-size: 0;
+  }
+  .fieldrow > .frow:not(:first-child) > :is(input, select) {
+    flex-basis: 100%;
+  }
+  .fieldrow label.check {
+    padding-inline-end: var(--space-2);
+    gap: 0.6rem;
+    font-size: var(--text-base);
+  }
+  .build-actions > .btn.primary {
+    flex: 1 1 100%;
+  }
+}
 
 /* Up to 1024 px the record is a sheet over the list (D2): a right-side panel on a tablet, the whole
    screen on a phone. The list stays mounted underneath, so its selection and scroll come back. */
@@ -299,16 +331,77 @@ html.sheet-open body {
     inline-size: auto;
     border: 0;
     animation: sheet var(--dur-3) var(--ease-out);
+    /* Room for the sticky header (up to two lines of title) and the form bar. */
+    scroll-padding-block: 6.5rem 5.5rem;
   }
   .record > header .back {
     flex: none;
   }
+  /* The module sheet (modules/DetailPanel.tsx) shares `.record > header`; the record's own header is
+     `.record.phone` below. */
   .record > header {
     align-items: center;
   }
   .record > header > div {
     flex: 1;
     min-inline-size: 0;
+  }
+  /* The back button sits beside the title's first line, and a long title stops after two lines (the
+     Title field holds all of it), so the sticky header stays short. */
+  .record.phone > header {
+    align-items: flex-start;
+    padding-block: 0.5rem 0.75rem;
+    padding-inline: 0.5rem var(--space-4);
+  }
+  .record.phone > header .back {
+    inline-size: 2.75rem;
+    block-size: 2.75rem;
+  }
+  .record.phone > header > div {
+    padding-block-start: 0.55rem;
+  }
+  .record.phone h2 {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    font-size: var(--text-lg);
+  }
+  /* One 16 px gutter, as on every other phone page (the request's signing rows of signlinks.css
+     included), and pills and buttons a finger can hit. */
+  .statusbar,
+  .smart,
+  .record .actionrow,
+  .record .sign-links,
+  .record .sign-by-link {
+    padding-inline: var(--space-4);
+  }
+  .statusbar {
+    gap: var(--space-2);
+  }
+  .statusbar button,
+  .smartbtn {
+    min-block-size: 2.75rem;
+  }
+  .fields {
+    padding: var(--space-4);
+  }
+  /* Save and Close share the bar, which clears the home indicator. */
+  .formbar {
+    margin: auto calc(-1 * var(--space-4)) calc(-1 * var(--space-4));
+    padding: var(--space-3) var(--space-4) max(var(--space-3), env(safe-area-inset-bottom));
+  }
+  .formbar > .btn {
+    flex: 1;
+    min-block-size: 2.75rem;
+  }
+  .formbar > .grow {
+    display: none;
+  }
+  /* Delete moves from the action row to the end of the form on a phone (RecordPanel). */
+  .record-delete {
+    align-self: stretch;
   }
   .kbd-hint {
     display: none;

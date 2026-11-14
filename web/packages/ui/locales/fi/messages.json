@@ -2,6 +2,7 @@
   "{count, plural, one {# recovery code left.} other {# recovery codes left.}}": "{count, plural, one {# palautuskoodi jäljellä.} other {# palautuskoodia jäljellä.}}",
   "{from}–{to} of {total}": "{from}–{to} / {total}",
   "{lang} example": "Esimerkki: {lang}",
+  "{size} per page": "{size} sivulla",
   "6-digit code": "6-numeroinen koodi",
   "Accent fill against the canvas": "Korostustäyttö taustaa vasten",
   "Accent fill against the panel": "Korostustäyttö paneelia vasten",

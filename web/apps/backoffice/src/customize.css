@@ -164,12 +164,31 @@
 .security-tab .tf {
   max-inline-size: 44rem;
 }
+/* The section titles of Security read as the headings of two-factor and passkeys beside them, not
+   as small overlines. */
+.security-tab h3.overline {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  text-transform: none;
+  letter-spacing: var(--tracking-snug);
+  color: var(--text);
+}
 
-/* Identity: the form of the instance's name and logo, and its preview. */
+/* Identity: the form of the instance's name and logo, and its preview. The preview keeps the width
+   of its column: an align-self in this flex column would shrink it to its content. */
 .identity-tab .identity-preview {
   position: sticky;
   inset-block-start: var(--space-4);
-  align-self: start;
+}
+/* The six languages after English are folded away until one of them has a text (Identity.tsx). */
+.identity-langs > summary {
+  padding-block: 0.7rem;
+  color: var(--accent-ink);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+.identity-langs[open] > summary {
+  margin-block-end: var(--space-2);
 }
 .identity-card {
   display: flex;
@@ -211,4 +230,45 @@
 }
 .identity-error {
   color: var(--danger-ink, var(--text));
+}
+
+@media (max-width: 40rem) {
+  /* One 16 px gutter on a phone, for every tab of Customize. */
+  .customize .content.pad {
+    padding: var(--space-4);
+  }
+  /* The stacked contrast table then has two cells a line. */
+  .contrast {
+    padding: var(--space-3);
+  }
+  /* A phone has no sidebar either. */
+  .mini-grid {
+    grid-template-columns: 1fr;
+  }
+  .mini-side {
+    display: none;
+  }
+  /* Buttons of a section fill the line, so a stack of them has one edge. */
+  .security-tab > section > .actionrow > .btn,
+  .security-tab > section > form > .actionrow > .btn,
+  .security-tab .tf > .tf-actions > .btn {
+    flex: 1 1 100%;
+  }
+  /* A stacked row of the Security tables shows no label over a cell with nothing in it. */
+  .security-tab .table.stack-sm > tbody > tr > td:empty {
+    display: none;
+  }
+  /* The line under the name of an app or a device stays a hint, not part of the title. */
+  .security-tab .table.stack-sm .cell-main .hint {
+    font-weight: var(--weight-regular);
+  }
+  /* Save stays in reach while the long form scrolls by (the page scrolls here, not the panel). */
+  .identity-tab > .stack > .actionrow {
+    position: sticky;
+    inset-block-end: 0;
+    z-index: 1;
+    padding-block: var(--space-3);
+    border-block-start: 1px solid var(--border);
+    background: var(--surface);
+  }
 }

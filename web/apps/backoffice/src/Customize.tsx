@@ -219,9 +219,7 @@ function LanguageSection({ settings, isAdmin, token, onSettings, notify }: Props
       )}
       <div className="actionrow">
         {i18n.personal && (
-          <Button variant="ghost" onClick={() => void i18n.resetLanguage()}>
-            {t("Use the instance default")}
-          </Button>
+          <Button onClick={() => void i18n.resetLanguage()}>{t("Use the instance default")}</Button>
         )}
         {isAdmin && (
           <Button
@@ -404,7 +402,7 @@ function ThemeTab(props: Props) {
               )}
             </Notice>
             <div>
-              <Button variant="ghost" iconEnd="arrow-right" onClick={() => go("brand")}>
+              <Button iconEnd="arrow-right" onClick={() => go("brand")}>
                 {t("Open the Brand book")}
               </Button>
             </div>
@@ -448,7 +446,7 @@ function AppsTab({ apps, settings, isAdmin, token, onSettings, notify }: Props) 
       </p>
       <ul className="rows">
         {real.map((a, i) => (
-          <li key={a.id} className="row">
+          <li key={a.id} className="row app-row">
             <AppIcon app={a} size={36} />
             <input
               value={typed[a.id] ?? a.name}

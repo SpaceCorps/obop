@@ -6,6 +6,7 @@ import { appTitle, modelTitle } from "./labels.ts";
 import { serverMessage } from "./serverMessage.ts";
 import { href } from "./route.ts";
 import { productDocsVisible } from "./productDocs.ts";
+import { Icon } from "./ui.tsx";
 
 type Props = {
   token: string;
@@ -351,7 +352,7 @@ export function BuildTab({ token, modules, onModulesChanged, notify }: Props) {
                   onClick={() => setFields(fields.filter((_, j) => j !== i))}
                   aria-label={t("Remove field")}
                 >
-                  ×
+                  <Icon name="close" size={16} />
                 </button>
               </div>
               {f.kind === "select" && (
@@ -450,7 +451,7 @@ export function BuildTab({ token, modules, onModulesChanged, notify }: Props) {
             </li>
           ))}
         </ul>
-        <button className="btn" onClick={() => setFields([...fields, blank()])}>
+        <button className="btn add-field" onClick={() => setFields([...fields, blank()])}>
           {t("Add field")}
         </button>
         <label className="field">
@@ -471,7 +472,7 @@ export function BuildTab({ token, modules, onModulesChanged, notify }: Props) {
             {error}
           </p>
         )}
-        <div className="actionrow">
+        <div className="actionrow build-actions">
           <button
             className="btn primary"
             onClick={async () => {

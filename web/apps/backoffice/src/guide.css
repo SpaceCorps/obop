@@ -102,7 +102,11 @@
 .guide-text h4:focus {
   outline: none;
 }
+/* inline-flex: the icon is a block svg, which split an inline link and left a thin tap strip
+   under the heading. */
 .guide-anchor {
+  display: inline-flex;
+  align-items: center;
   margin-inline-start: var(--space-2);
   color: var(--text-subtle);
   opacity: 0;
@@ -111,6 +115,16 @@
 .guide-text :is(h2, h3, h4):hover .guide-anchor,
 .guide-anchor:focus-visible {
   opacity: 1;
+}
+/* A touch screen has no hover to reveal the link: show it, and give it a bigger target that
+   does not make the heading taller. */
+@media (hover: none) {
+  .guide-anchor {
+    margin-inline-start: 0;
+    margin-block: -0.5rem;
+    padding: 0.5rem;
+    opacity: 1;
+  }
 }
 .guide-text p,
 .guide-text ul,
@@ -173,6 +187,13 @@
   color: var(--text-muted);
   font-size: var(--text-sm);
 }
+/* Up to 60rem the page scrolls under the sticky top bar (3.5rem), so the contents stop below it. */
+@media (max-width: 60rem) {
+  .guide-toc {
+    inset-block-start: 4rem;
+    max-block-size: calc(100dvh - 5rem);
+  }
+}
 @media (max-width: 56rem) {
   .guide-body {
     grid-template-columns: minmax(0, 1fr);
@@ -184,5 +205,37 @@
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     background: var(--surface-2);
+  }
+  /* Finger-sized rows. The summary stays a list item (line-height, not flex) so it keeps its
+     disclosure marker. */
+  .guide-toc summary {
+    margin: 0;
+    line-height: 2.75rem;
+  }
+  .guide-toc a {
+    padding-block: 0.6rem;
+  }
+  .guide-toc .lvl3 a {
+    font-size: var(--text-sm);
+  }
+}
+@media (max-width: 40rem) {
+  /* A row per block, every cell on its own line. !important: the cells carry the column's
+     alignment inline. */
+  .guide-table .table.stack-sm > tbody > tr > td {
+    flex-basis: 100%;
+    text-align: start !important;
+  }
+  /* Code wraps instead of scrolling sideways; Copy still copies the exact text. */
+  .guide-text .codeblock pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-size: var(--text-xs);
+  }
+}
+@media (hover: none) and (pointer: coarse) {
+  /* No keyboard on a phone, so no "/" shortcut to show. */
+  .guide-search .kbd {
+    display: none;
   }
 }

@@ -220,20 +220,34 @@ export function ImportDialog({
               )}
             </p>
             {report.errors.length > 0 && (
-              <Table caption={t("Problems found")} dense>
+              // One block per problem on a phone, the message on top (stack). The explicit roles
+              // keep it a table for Safari, which drops the semantics once display changes.
+              <Table caption={t("Problems found")} dense stack role="table">
                 <thead>
-                  <tr>
-                    <th scope="col">{t("Row")}</th>
-                    <th scope="col">{t("Line")}</th>
-                    <th scope="col">{t("Problem")}</th>
+                  <tr role="row">
+                    <th scope="col" role="columnheader">
+                      {t("Row")}
+                    </th>
+                    <th scope="col" role="columnheader">
+                      {t("Line")}
+                    </th>
+                    <th scope="col" role="columnheader">
+                      {t("Problem")}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {report.errors.map((e) => (
-                    <tr key={e.row}>
-                      <td>{e.row}</td>
-                      <td>{e.line ?? ""}</td>
-                      <td>{serverMessage(e.error)}</td>
+                    <tr key={e.row} role="row">
+                      <td role="cell" data-label={t("Row")}>
+                        {e.row}
+                      </td>
+                      <td role="cell" data-label={t("Line")}>
+                        {e.line ?? ""}
+                      </td>
+                      <td role="cell" className="cell-main">
+                        {serverMessage(e.error)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

@@ -156,6 +156,7 @@ function ReleaseItem({ r, current }: { r: ReleaseInfo; current: string }) {
     <li className="upd-release">
       <details open={r.newer && r.installable}>
         <summary>
+          <Icon name="chevron-right" size={16} className="upd-caret" />
           <strong className="tabular">{r.version}</strong>
           {r.version === current ? (
             <Badge tone="success" dot={false} className="mod-badge">
@@ -204,27 +205,35 @@ function ReleaseItem({ r, current }: { r: ReleaseInfo; current: string }) {
           )}
           {r.newer && r.modules.length > 0 && (
             <div className="table-wrap">
-              <table className="table upd-modules">
+              {/* One block per module on a phone (stack-sm); the explicit roles keep it a table
+                  for Safari, which drops the semantics once display changes. */}
+              <table className="table upd-modules stack-sm" role="table">
                 <caption className="sr-only">
                   {t("Installed modules and core {version}", { version: r.version })}
                 </caption>
                 <thead>
-                  <tr>
-                    <th scope="col">{t("Module")}</th>
-                    <th scope="col">{t("Supports core")}</th>
-                    <th scope="col">{t("With {version}", { version: r.version })}</th>
+                  <tr role="row">
+                    <th scope="col" role="columnheader">
+                      {t("Module")}
+                    </th>
+                    <th scope="col" role="columnheader">
+                      {t("Supports core")}
+                    </th>
+                    <th scope="col" role="columnheader">
+                      {t("With {version}", { version: r.version })}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {r.modules.map((m) => (
-                    <tr key={m.id}>
-                      <td>
+                    <tr key={m.id} role="row">
+                      <td role="cell" className="cell-main">
                         {m.name} <span className="hint tabular">{m.version}</span>
                       </td>
-                      <td>
+                      <td role="cell" data-label={t("Supports core")}>
                         <code>{prettyReq(m.requires_core)}</code>
                       </td>
-                      <td>
+                      <td role="cell" data-label={t("With {version}", { version: r.version })}>
                         {m.compatible ? (
                           <Badge tone="success" dot={false} className="mod-badge">
                             <Icon name="check" size={12} />

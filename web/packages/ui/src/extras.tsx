@@ -97,10 +97,11 @@ export function Pager({
       {onSize && (
         <label className="pager-size">
           <span>{t("Rows per page")}</span>
+          {/* The options say what they count: a phone hides the "Rows per page" label. */}
           <select value={limit} onChange={(e) => onSize(Number(e.target.value))}>
             {sizes.map((s) => (
               <option key={s} value={s}>
-                {s}
+                {t("{size} per page", { size: nf.format(s) })}
               </option>
             ))}
           </select>

@@ -88,6 +88,12 @@
     display: none;
   }
 }
+/* A finger needs a taller page-size select than the compact one a mouse gets. */
+@media (max-width: 40rem), (pointer: coarse) {
+  .pager-size select {
+    min-block-size: var(--control-h-sm);
+  }
+}
 
 /* ---------- Stat ---------- */
 .stat {
@@ -162,6 +168,14 @@
 .codeblock-copy:hover {
   background: var(--surface);
   color: var(--text);
+}
+/* 36 px to tap; the negative margin keeps the bar from growing by as much. */
+@media (max-width: 40rem), (pointer: coarse) {
+  .codeblock-copy {
+    min-block-size: 2.25rem;
+    padding-inline: 0.75rem;
+    margin-block: -0.25rem;
+  }
 }
 .codeblock pre {
   margin: 0;
