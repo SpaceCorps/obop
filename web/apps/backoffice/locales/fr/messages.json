@@ -2129,5 +2129,22 @@
   "Workspace drive": "Lecteur de travail",
   "Workspace saved.": "Lecteur de travail enregistré.",
   "Import into Documents": "Importer dans Documents",
-  "The files and folders of the Drive connected to this instance.": "Les fichiers et dossiers du Drive connecté à cette instance."
+  "The files and folders of the Drive connected to this instance.": "Les fichiers et dossiers du Drive connecté à cette instance.",
+  "Agent tokens": "Jetons d’agent",
+  "An agent token lets a program or an AI agent act for you with only the permission groups you pick. It is shown once.": "Un jeton d’agent permet à un programme ou à un agent IA d’agir pour vous, avec seulement les groupes de permissions que vous choisissez. Il est affiché une seule fois.",
+  "No agent tokens.": "Aucun jeton d’agent.",
+  "Label": "Libellé",
+  "Created": "Créé",
+  "Agent token {name} revoked.": "Jeton d’agent {name} révoqué.",
+  "Could not revoke the agent token.": "Impossible de révoquer le jeton d’agent.",
+  "The agent tokens could not be loaded. Try again.": "Les jetons d’agent n’ont pas pu être chargés. Réessayez.",
+  "The program or agent that will use the token. Up to {n} characters.": "Le programme ou l’agent qui utilisera le jeton. {n} caractères au maximum.",
+  "Create agent token": "Créer un jeton d’agent",
+  "Could not create the agent token.": "Impossible de créer le jeton d’agent.",
+  "This is the only time the token is shown. Store it like a password.": "Le jeton n’est affiché que cette fois. Conservez-le comme un mot de passe.",
+  "Agent token": "Jeton d’agent",
+  "Could not copy. Select the token and copy it yourself.": "La copie a échoué. Sélectionnez le jeton et copiez-le vous-même.",
+  "You have no permission groups to give to a token.": "Vous n’avez aucun groupe de permissions à donner à un jeton.",
+  "Agent token issued": "Jeton d’agent émis",
+  "Agent token revoked": "Jeton d’agent révoqué"
 }

@@ -38,28 +38,34 @@ function sortGroups(all: string[]): string[] {
 }
 
 /** A checkbox list of permission groups with a filter. */
-function GroupPicker({
+export function GroupPicker({
   groups,
   value,
   onChange,
+  filterAbove,
 }: {
   groups: string[];
   value: string[];
   onChange: (next: string[]) => void;
+  /** Show the filter only when there are more groups than this. Not given: always. */
+  filterAbove?: number;
 }) {
   const [filter, setFilter] = useState("");
-  const shown = sortGroups([...groups, ...value]).filter((g) =>
-    g.toLowerCase().includes(filter.trim().toLowerCase()),
-  );
+  const all = sortGroups([...groups, ...value]);
+  const filtering = filterAbove === undefined || all.length > filterAbove;
+  const wanted = filtering ? filter.trim().toLowerCase() : "";
+  const shown = all.filter((g) => g.toLowerCase().includes(wanted));
   return (
     <fieldset className="group-picker">
       <legend>{t("Permission groups")}</legend>
-      <Input
-        label={t("Filter groups")}
-        value={filter}
-        onChange={(e) => setFilter(e.target.value)}
-        autoComplete="off"
-      />
+      {filtering && (
+        <Input
+          label={t("Filter groups")}
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          autoComplete="off"
+        />
+      )}
       <div className="group-list" role="group" aria-label={t("Permission groups")}>
         {shown.map((g) => (
           <Checkbox

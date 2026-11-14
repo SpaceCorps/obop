@@ -15,6 +15,7 @@ import {
 } from "@obop/ui";
 import { search, saveSettings, type Row, type Settings } from "./api.ts";
 import { Icon } from "./ui.tsx";
+import { AgentTokensSection } from "./AgentTokens.tsx";
 import { PasskeysSection } from "./Passkeys.tsx";
 import {
   ConnectedAppsSection,
@@ -80,6 +81,7 @@ export function SecurityTab({
         onSignOut={onSignOut ?? (() => location.reload())}
       />
       <ConnectedAppsSection token={token} notify={notify} />
+      <AgentTokensSection token={token} notify={notify} />
       <DevicesSection token={token} notify={notify} isAdmin={isAdmin} me={me} />
       {isAdmin && (
         <>

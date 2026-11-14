@@ -1,6 +1,6 @@
 ---
 title: "Créer un jeton d'agent"
-description: "Créez un jeton d'agent obop à périmètre limité via REST (POST /api/auth/agent-token) ou avec la CLI (obop agent-token). Le jeton n'est affiché qu'une fois et ne peut que restreindre les groupes de permissions de son propriétaire."
+description: "Créez un jeton d'agent obop à périmètre limité dans le back-office, via REST (POST /api/auth/agent-token) ou avec la CLI (obop agent-token). Le jeton n'est affiché qu'une fois et ne peut que restreindre ce que son propriétaire a le droit de faire."
 lead: "Un jeton d'agent est un jeton porteur qui appartient à une personne et porte une liste de groupes de permissions. Créez-en un par agent et par tâche."
 ---
 
@@ -10,7 +10,7 @@ lead: "Un jeton d'agent est un jeton porteur qui appartient à une personne et p
 - Il n'est affiché qu'**une seule fois**. obop n'en conserve qu'une empreinte : un jeton perdu ne peut pas être récupéré, il faut en créer un nouveau.
 - Il commence par `obop_`. Traitez-le comme un mot de passe.
 - Seule une personne peut créer des jetons. Un agent ne peut pas en émettre un autre.
-- Il n'expire pas. Il cesse de fonctionner tant que le compte de son propriétaire est désactivé, et définitivement lorsque le propriétaire est mis hors service (offboarding). Il n'existe pas encore de commande pour révoquer un jeton en particulier (voir [Sécurité](/docs/agents/safety/)).
+- Il n'expire pas. Son propriétaire peut le révoquer à tout moment (voir [Lister et révoquer](#lister-et-revoquer)). Il cesse aussi de fonctionner tant que le compte de son propriétaire est désactivé, et définitivement lorsque le propriétaire est mis hors service (offboarding).
 
 ## Choisir les scopes
 
@@ -26,6 +26,10 @@ Les scopes sont des [groupes de permissions](/docs/concepts/permission-groups/).
 | `product.user`      | lire les produits et les prix                                           |
 
 Les paquets installés ajoutent leurs propres groupes, par exemple `helpdesk.agent`. Les [pages des applications](/apps/) indiquent les groupes de chacune.
+
+## Dans le back-office
+
+Ouvrez _Personnaliser, Sécurité_ et allez à **Jetons d'agent**. Saisissez un libellé (le programme ou l'agent qui utilisera le jeton), cochez les groupes, puis choisissez **Créer un jeton d'agent**. Le jeton n'est affiché qu'une fois, avec un bouton **Copier** ; choisissez **Terminé** quand vous l'avez conservé. La section liste aussi les jetons que vous avez créés, chacun avec **Révoquer**.
 
 ## Via REST
 
@@ -50,7 +54,7 @@ curl -s -X POST http://127.0.0.1:8080/api/auth/agent-token \
 { "token": "obop_1e00c3..." }
 ```
 
-`scopes` est obligatoire, ne doit pas être vide et ne peut nommer que des groupes inscrits sur votre propre compte ; ici, `platform.admin` ne remplace pas les autres groupes. Le premier compte d'une instance créée par un plan de contrôle ne détient que `platform.admin` : donnez-lui donc d'abord les groupes que vous voulez déléguer, sous _Personnaliser, Sécurité, Personnes_. `label` est un texte libre. Sur une telle instance, utilisez son adresse à la place de `127.0.0.1:8080`, et connectez-vous avec votre adresse e-mail d'inscription comme nom d'utilisateur.
+`scopes` est obligatoire et ne doit pas être vide. Il nomme des groupes inscrits sur votre propre compte. Un administrateur (une personne qui détient `platform.admin`) peut nommer n'importe quel groupe de l'instance, car ce groupe les autorise déjà tous. Le jeton ne porte toutefois que les groupes que vous nommez : `*` n'est pas un groupe et est refusé, et un groupe qu'aucun module installé ne déclare est refusé lui aussi. `label` fait au plus 80 caractères, sur une seule ligne. Sur une instance créée par un plan de contrôle, utilisez son adresse à la place de `127.0.0.1:8080`, et connectez-vous avec votre adresse e-mail d'inscription comme nom d'utilisateur.
 
 ## Avec la CLI
 
@@ -65,7 +69,39 @@ obop_1e00c32430532fdcef...
 shown once; store it like a password
 ```
 
-Ajoutez `--db postgres://...` (ou définissez `OBOP_DATABASE_URL`) si l'instance n'utilise pas la valeur par défaut `sqlite://obop.db`.
+Ajoutez `--db postgres://...` (ou définissez `OBOP_DATABASE_URL`) si l'instance n'utilise pas la valeur par défaut `sqlite://obop.db`. Les scopes suivent la même règle que via REST, pour l'utilisateur que vous nommez. La ligne de commande ne permet pas encore de lister ni de révoquer des jetons.
+
+## Lister et révoquer
+
+Vous voyez et révoquez vos propres jetons d'agent sous _Personnaliser, Sécurité, Jetons d'agent_, ou via REST avec votre jeton de session :
+
+```bash
+curl -s http://127.0.0.1:8080/api/auth/agent-tokens \
+  -H "Authorization: Bearer $SESSION_TOKEN"
+```
+
+```json
+{
+  "tokens": [
+    {
+      "id": "5f0c...",
+      "label": "triage-bot",
+      "scopes": ["base.user", "crm.user"],
+      "created_at": 1794650000
+    }
+  ],
+  "delegable": ["base.user", "crm.user"]
+}
+```
+
+`tokens` ne contient jamais de jeton, seulement le nom de chacun et ce qu'il peut faire. `delegable` est la liste des groupes que vous pouvez mettre sur un nouveau jeton. Pour révoquer un jeton, envoyez un POST à son `id` :
+
+```bash
+curl -s -X POST http://127.0.0.1:8080/api/auth/agent-tokens/5f0c.../revoke \
+  -H "Authorization: Bearer $SESSION_TOKEN"
+```
+
+Le jeton cesse de fonctionner immédiatement. Seul le propriétaire peut le faire : un administrateur ne peut pas lister ni révoquer un à un les jetons d'une autre personne (désactiver le compte ou le mettre hors service met fin à tous). La création et la révocation d'un jeton sont toutes deux inscrites dans le journal de sécurité, sans le jeton.
 
 ## Utiliser le jeton pour MCP
 
@@ -87,7 +123,8 @@ Le même jeton connecte un client MCP au serveur MCP distant de l'instance, `htt
 | Réponse                                                                            | Signification                                                                                                          |
 | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `400 {"error":"an agent token needs at least one scope"}`                          | `scopes` était vide.                                                                                                   |
-| `400 {"error":"you do not hold invoicing.manager, so you cannot delegate it"}`     | Vous avez demandé un groupe que vous ne détenez pas.                                                                   |
+| `400 {"error":"you do not hold invoicing.manager, so you cannot delegate it"}`     | Vous avez demandé un groupe qui ne figure pas sur votre compte, et vous n'êtes pas administrateur.                     |
+| `400 {"error":"nope.user is not a registered permission group, ..."}`              | Un administrateur a demandé un groupe qu'aucun module installé ne déclare.                                             |
 | `400 {"error":"only a human user can issue agent tokens"}`                         | Vous avez utilisé un jeton d'agent pour en demander un autre.                                                          |
 | `401`                                                                              | Jeton de session manquant, incorrect ou expiré.                                                                        |
 | `403 {"error":"two-factor authentication must be set up before you can continue"}` | Votre compte doit d'abord configurer la connexion à deux facteurs ; d'ici là, cette session ne peut que la configurer. |

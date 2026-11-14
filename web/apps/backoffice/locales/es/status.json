@@ -2129,5 +2129,22 @@
   "Workspace drive": "machine-drafted",
   "Workspace saved.": "machine-drafted",
   "Import into Documents": "machine-drafted",
-  "The files and folders of the Drive connected to this instance.": "machine-drafted"
+  "The files and folders of the Drive connected to this instance.": "machine-drafted",
+  "Agent tokens": "machine-drafted",
+  "An agent token lets a program or an AI agent act for you with only the permission groups you pick. It is shown once.": "machine-drafted",
+  "No agent tokens.": "machine-drafted",
+  "Label": "machine-drafted",
+  "Created": "machine-drafted",
+  "Agent token {name} revoked.": "machine-drafted",
+  "Could not revoke the agent token.": "machine-drafted",
+  "The agent tokens could not be loaded. Try again.": "machine-drafted",
+  "The program or agent that will use the token. Up to {n} characters.": "machine-drafted",
+  "Create agent token": "machine-drafted",
+  "Could not create the agent token.": "machine-drafted",
+  "This is the only time the token is shown. Store it like a password.": "machine-drafted",
+  "Agent token": "machine-drafted",
+  "Could not copy. Select the token and copy it yourself.": "machine-drafted",
+  "You have no permission groups to give to a token.": "machine-drafted",
+  "Agent token issued": "machine-drafted",
+  "Agent token revoked": "machine-drafted"
 }

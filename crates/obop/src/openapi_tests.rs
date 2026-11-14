@@ -341,11 +341,14 @@ async fn pins_the_anonymous_openapi_document_as_an_instance_with_no_brand_sends_
     pin::check("OPENAPI_ANONYMOUS_PINS", OPENAPI_ANONYMOUS_PINS, &now);
 }
 
-// Printed by `OBOP_PRINT_PINS=1` on origin/main 12a59a79 and pasted here.
+// Printed by `OBOP_PRINT_PINS=1` and pasted here. First on origin/main 12a59a79; again on
+// `feat/agent-token-admin` (the D69 amendment of 2026-11-14), which moved the document on purpose:
+// the two paths `/api/auth/agent-tokens` and `/api/auth/agent-tokens/{id}/revoke`, the description
+// of the scopes of `issueAgentToken`, and two more kinds in the description of `security_event.kind`.
 #[rustfmt::skip]
 const OPENAPI_ANONYMOUS_PINS: &[(&str, &str)] = &[
-    ("dev/openapi", "dfb5fe807d7fdcba1a5a57aedb327f1f6fec2ffe6089d5ba2ce00405743a68f6"),
-    ("auth/openapi", "00ccf5de37ea58c660fe82c8033793864d1f7070ed4bc12bc0f5c486dfdf2162"),
+    ("dev/openapi", "4423020333aa7969f0a06700ac10cece7fd1303d978b4aacc21b5fba0ed122e8"),
+    ("auth/openapi", "2ec4c9097622e1639d8e4e279efb08920413cf5db53413bc56c5170d0ae0cce4"),
 ];
 
 /// With a brand row in the store the anonymous document is the one an instance with no row sends,

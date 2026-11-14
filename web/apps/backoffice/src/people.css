@@ -57,6 +57,11 @@
   overflow-wrap: anywhere;
   user-select: all;
 }
+/* The agent token that is shown once in Customize, Security (AgentTokens.tsx). */
+.agent-token-field input {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
 @media (max-width: 40rem) {
   /* Keep the person, the status and the actions in view; the rest is in the groups dialog. */
   .people-table th:nth-child(2),

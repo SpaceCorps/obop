@@ -2129,5 +2129,22 @@
   "Workspace drive": "Työskentelyasema",
   "Workspace saved.": "Työskentelyasema tallennettu.",
   "Import into Documents": "Tuo Asiakirjoihin",
-  "The files and folders of the Drive connected to this instance.": "Tähän instanssiin yhdistetyn Driven tiedostot ja kansiot."
+  "The files and folders of the Drive connected to this instance.": "Tähän instanssiin yhdistetyn Driven tiedostot ja kansiot.",
+  "Agent tokens": "Agenttitunnukset",
+  "An agent token lets a program or an AI agent act for you with only the permission groups you pick. It is shown once.": "Agenttitunnuksella ohjelma tai tekoälyagentti voi toimia puolestasi vain valitsemillasi käyttöoikeusryhmillä. Se näytetään kerran.",
+  "No agent tokens.": "Ei agenttitunnuksia.",
+  "Label": "Nimi",
+  "Created": "Luotu",
+  "Agent token {name} revoked.": "Agenttitunnus {name} peruutettu.",
+  "Could not revoke the agent token.": "Agenttitunnusta ei voitu peruuttaa.",
+  "The agent tokens could not be loaded. Try again.": "Agenttitunnuksia ei voitu ladata. Yritä uudelleen.",
+  "The program or agent that will use the token. Up to {n} characters.": "Ohjelma tai agentti, joka käyttää tunnusta. Enintään {n} merkkiä.",
+  "Create agent token": "Luo agenttitunnus",
+  "Could not create the agent token.": "Agenttitunnusta ei voitu luoda.",
+  "This is the only time the token is shown. Store it like a password.": "Tunnus näytetään vain tämän kerran. Säilytä se kuin salasana.",
+  "Agent token": "Agenttitunnus",
+  "Could not copy. Select the token and copy it yourself.": "Kopiointi ei onnistunut. Valitse tunnus ja kopioi se itse.",
+  "You have no permission groups to give to a token.": "Sinulla ei ole käyttöoikeusryhmiä, joita voisit antaa tunnukselle.",
+  "Agent token issued": "Agenttitunnus annettu",
+  "Agent token revoked": "Agenttitunnus peruutettu"
 }

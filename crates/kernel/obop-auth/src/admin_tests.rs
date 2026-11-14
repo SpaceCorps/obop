@@ -1420,3 +1420,59 @@ fn groups_edit_an_approved_agent_proposal_runs_as_the_agent_but_cannot_touch_its
         "a member is not an administrator"
     );
 }
+
+/// D69 amendment of 2026-11-14: a group handed on through the administrator group goes when that
+/// group goes, and the log names who issued the token and how the right to give it was held.
+#[test]
+fn an_agent_token_given_through_the_administrator_group_ends_with_it_and_is_logged() {
+    let r = rig();
+    let root = admin(&r, "root");
+    let eve = admin(&r, "eve");
+    let wanted = names(&["sales.manager"]);
+    let t =
+        r.a.issue_agent_token_among(&eve, &wanted, "sales bot", &known())
+            .unwrap();
+    assert!(r.a.resolve(&t).unwrap().allows("sales.manager"));
+    let log = events(&r, "agent_token_issued");
+    assert_eq!(log.len(), 1);
+    assert_eq!((log[0].0.as_str(), log[0].1.as_str()), ("eve", "eve"));
+    assert_eq!(
+        log[0].2,
+        "label \"sales bot\"; scopes sales.manager; held through platform.admin: sales.manager"
+    );
+    assert!(!log[0].2.contains(&t), "the log never holds the token");
+    // Eve stops being an administrator: the token is still hers and is allowed nothing.
+    r.a.set_user_groups(&root, "eve", &names(&["base.user"]), &known())
+        .unwrap();
+    assert!(
+        !r.a.resolve(&t).unwrap().allows("sales.manager"),
+        "a token cannot keep what its owner no longer holds"
+    );
+    // The operator's command follows the same rule, and the log names the operator.
+    user_with(&r.a, "ada", &["base.user"]);
+    let ada = r.a.principal("ada").unwrap();
+    assert_eq!(
+        r.a.issue_agent_token_by_operator(&ada, &wanted, "x", &known())
+            .unwrap_err(),
+        "you do not hold sales.manager, so you cannot delegate it"
+    );
+    let root_account = r.a.principal("root").unwrap();
+    r.a.issue_agent_token_by_operator(&root_account, &wanted, "ops", &known())
+        .unwrap();
+    let log = events(&r, "agent_token_issued");
+    assert_eq!(log.len(), 2, "a refused token is not logged");
+    assert!(log.iter().any(|e| e.0 == "root" && e.1 == "operator"));
+    // Ending a token is logged with its label.
+    let id = r.a.agent_tokens_of(&root).unwrap()[0].id.clone();
+    assert!(r.a.revoke_agent_token(&root, &id));
+    let ended = events(&r, "agent_token_revoked");
+    assert_eq!(ended.len(), 1);
+    assert_eq!(
+        (
+            ended[0].0.as_str(),
+            ended[0].1.as_str(),
+            ended[0].2.as_str()
+        ),
+        ("root", "root", "label \"ops\"")
+    );
+}
