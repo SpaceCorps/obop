@@ -1,10 +1,11 @@
 [labels.fi.module]
 name = "Kalusto"
-description = "Pienen kaluston ajoneuvot, kuljettajat ja huoltohistoria. Seuraa tilaa ja huoltotietoja; se ei laske käyttökustannuksia tai polttoaineen kulutusta."
+description = "Pienen kaluston ajoneuvot, kuljettajat ja huoltohistoria. Seuraa tilaa ja huoltotietoja; se ei laske käyttökustannuksia tai polttoaineen kulutusta. Kuljettajan tila ja ajokortin voimassaolo vain kirjataan: mikään ei tarkista niitä, ei myöskään kuljettajaa ajoneuvoon liitettäessä."
 summary = "Pienen kaluston ajoneuvot, kuljettajat ja huoltohistoria."
 
 [labels.fi.model.fleet_vehicle]
 name = "Ajoneuvo"
+plural = "Ajoneuvot"
 description = "Yrityksen käyttämä ajoneuvo"
 
 [labels.fi.model.fleet_vehicle.field.plate]
@@ -70,7 +71,8 @@ description = "Poista vapaana oleva ajoneuvo kalustosta pysyvästi (vaatii hyvä
 
 [labels.fi.model.fleet_vehicle_driver]
 name = "Kuljettaja"
-description = "Henkilö, jolla on lupa ajaa kaluston ajoneuvoja"
+plural = "Kuljettajat"
+description = "Kirjattu kuljettaja, jolla on ajokorttitiedot ja tila aktiivinen tai keskeytetty"
 
 [labels.fi.model.fleet_vehicle_driver.field.name]
 label = "Nimi"
@@ -98,14 +100,15 @@ suspended = "Keskeytetty"
 
 [labels.fi.model.fleet_vehicle_driver.action.suspend]
 label = "Keskeytä"
-description = "Keskeytä kuljettaja, esimerkiksi ajokortin vanhennuttua"
+description = "Merkitse kuljettaja keskeytetyksi, esimerkiksi ajokortin vanhennuttua"
 
 [labels.fi.model.fleet_vehicle_driver.action.reactivate]
 label = "Aktivoi uudelleen"
-description = "Salli keskeytetyn kuljettajan ajaa taas"
+description = "Palauta keskeytetty kuljettaja aktiiviseksi"
 
 [labels.fi.model.fleet_vehicle_service]
 name = "Ajoneuvohuolto"
+plural = "Ajoneuvohuollot"
 description = "Ajoneuvon huolto-, korjaus- tai tarkastustyö"
 
 [labels.fi.model.fleet_vehicle_service.field.vehicle_id]
@@ -159,3 +162,11 @@ description = "Merkitse suunniteltu työ valmiiksi"
 [labels.fi.model.fleet_vehicle_service.action.cancel]
 label = "Peruuta"
 description = "Peruuta suunniteltu työ"
+
+[labels.fi.model.fleet_vehicle.action.send_to_workshop]
+label = "Korjaamolle"
+description = "Lähettää vapaana oleva ajoneuvo korjaamolle huoltoon tai korjattavaksi"
+
+[labels.fi.model.fleet_vehicle.action.back_in_service]
+label = "Takaisin korjaamolta"
+description = "Palauttaa ajoneuvo korjaamolta vapaiden ajoneuvojen joukkoon"

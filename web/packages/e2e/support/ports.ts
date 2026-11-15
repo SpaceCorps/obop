@@ -11,6 +11,7 @@ export const PORT_VARIABLES = [
   "OBOP_E2E_LANGUAGE_PORT",
   "OBOP_E2E_SSO_PORT",
   "OBOP_E2E_IDP_PORT",
+  "OBOP_E2E_BRAND_PORT",
 ] as const;
 
 /**
@@ -44,7 +45,7 @@ export async function freePorts(count: number): Promise<number[]> {
 
 /**
  * Gives every variable in PORT_VARIABLES a port, keeping one that is already set (the workers a
- * runner spawns inherit the runner's choice). Throws if two of the eight end up equal.
+ * runner spawns inherit the runner's choice). Throws if two of them end up equal.
  */
 export async function assignPorts(env: NodeJS.ProcessEnv = process.env): Promise<void> {
   const missing = PORT_VARIABLES.filter((name) => !env[name]);

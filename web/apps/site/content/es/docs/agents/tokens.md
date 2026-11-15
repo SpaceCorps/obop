@@ -1,6 +1,6 @@
 ---
 title: "Crear un token de agente"
-description: "Crea un token de agente de obop con alcance limitado mediante REST (POST /api/auth/agent-token) o con la CLI (obop agent-token). El token se muestra una sola vez y solo puede reducir los grupos de permisos de su propietario."
+description: "Crea un token de agente de obop con alcance limitado en el back office, mediante REST (POST /api/auth/agent-token) o con la CLI (obop agent-token). El token se muestra una sola vez y solo puede reducir lo que su propietario puede hacer."
 lead: "Un token de agente es un bearer token que pertenece a una persona y lleva una lista de grupos de permisos. Crea uno por agente y por tarea."
 ---
 
@@ -10,7 +10,7 @@ lead: "Un token de agente es un bearer token que pertenece a una persona y lleva
 - Se muestra **una sola vez**. obop solo guarda un hash, así que un token perdido no se puede recuperar; crea uno nuevo.
 - Empieza por `obop_`. Trátalo como una contraseña.
 - Solo una persona puede crear tokens. Un agente no puede emitir otro token.
-- No caduca y deja de funcionar cuando se elimina a su propietario. Todavía no hay un comando para revocar un token concreto (consulta [Seguridad](/docs/agents/safety/)).
+- No caduca. Su propietario puede revocarlo en cualquier momento (consulta [Listar y revocar](#listar-y-revocar)). También deja de funcionar mientras la cuenta de su propietario está desactivada, y para siempre cuando se da de baja al propietario.
 
 ## Elige los scopes
 
@@ -27,6 +27,10 @@ Los scopes son [grupos de permisos](/docs/concepts/permission-groups/). Piensa e
 
 Los paquetes instalados añaden sus propios grupos, por ejemplo `helpdesk.agent`. Las [páginas de aplicaciones](/apps/) indican los grupos de cada una.
 
+## En el back office
+
+Abre _Personalizar, Seguridad_ y ve a **Tokens de agente**. Escribe una etiqueta (el programa o agente que usará el token), marca los grupos y elige **Crear token de agente**. El token se muestra una sola vez, con un botón **Copiar**; elige **Hecho** cuando lo hayas guardado. La sección también lista los tokens que creaste, cada uno con **Revocar**.
+
 ## Mediante REST
 
 Inicia sesión como persona y después pide un token. Esto requiere una instancia en marcha; los ejemplos usan una local en el puerto 8080.
@@ -37,7 +41,7 @@ curl -s -X POST http://127.0.0.1:8080/api/auth/login \
   -d '{"username":"alice","password":"your password"}'
 ```
 
-La respuesta es `{"token":"obop_..."}`: un token de sesión que dura 12 horas. Úsalo como bearer token para crear el token de agente:
+La respuesta es `{"token":"obop_..."}`: un token de sesión que dura 12 horas. Si la cuenta tiene activado el inicio de sesión en dos pasos, la respuesta es en cambio `{"mfa_required":true,"mfa_token":"..."}`; envía `{"mfa_token":"...","code":"123456"}`, con un código de tu aplicación de autenticación, a `POST /api/auth/login/mfa` para obtener el token de sesión. Usa el token de sesión como bearer token para crear el token de agente:
 
 ```bash
 curl -s -X POST http://127.0.0.1:8080/api/auth/agent-token \
@@ -50,7 +54,7 @@ curl -s -X POST http://127.0.0.1:8080/api/auth/agent-token \
 { "token": "obop_1e00c3..." }
 ```
 
-`scopes` es obligatorio y debe nombrar al menos un grupo que tú tengas. `label` es texto libre. En una instancia alojada, usa su dirección en lugar de `127.0.0.1:8080` e inicia sesión con el correo de tu registro como nombre de usuario.
+`scopes` es obligatorio y no puede estar vacío. Nombra grupos que figuran en tu propia cuenta. Un administrador (una persona que tiene `platform.admin`) puede nombrar cualquier grupo que tenga la instancia, porque ese grupo ya los permite todos. El token sigue llevando solo los grupos que nombres: `*` no es un grupo y se rechaza, y un grupo que ningún módulo instalado declara también se rechaza. `label` tiene como máximo 80 caracteres en una sola línea. En una instancia creada por un plano de control, usa su dirección en lugar de `127.0.0.1:8080` e inicia sesión con el correo de tu registro como nombre de usuario.
 
 ## Con la CLI
 
@@ -65,30 +69,64 @@ obop_1e00c32430532fdcef...
 shown once; store it like a password
 ```
 
-Añade `--db postgres://...` (o define `OBOP_DATABASE_URL`) si la instancia no usa el valor por defecto `sqlite://obop.db`.
+Añade `--db postgres://...` (o define `OBOP_DATABASE_URL`) si la instancia no usa el valor por defecto `sqlite://obop.db`. Los scopes siguen la misma regla que mediante REST, para el usuario que indiques. La línea de comandos todavía no puede listar ni revocar tokens.
+
+## Listar y revocar
+
+Ves y revocas tus propios tokens de agente en _Personalizar, Seguridad, Tokens de agente_, o mediante REST con tu token de sesión:
+
+```bash
+curl -s http://127.0.0.1:8080/api/auth/agent-tokens \
+  -H "Authorization: Bearer $SESSION_TOKEN"
+```
+
+```json
+{
+  "tokens": [
+    {
+      "id": "5f0c...",
+      "label": "triage-bot",
+      "scopes": ["base.user", "crm.user"],
+      "created_at": 1794650000
+    }
+  ],
+  "delegable": ["base.user", "crm.user"]
+}
+```
+
+`tokens` nunca contiene un token, solo cómo se llama cada uno y qué puede hacer. `delegable` es la lista de grupos que puedes poner en uno nuevo. Para revocar un token, envía un POST a su `id`:
+
+```bash
+curl -s -X POST http://127.0.0.1:8080/api/auth/agent-tokens/5f0c.../revoke \
+  -H "Authorization: Bearer $SESSION_TOKEN"
+```
+
+El token deja de funcionar al instante. Solo el propietario puede hacerlo: un administrador no puede listar ni revocar uno por uno los tokens de otra persona (desactivar o dar de baja la cuenta pone fin a todos). Crear y revocar un token quedan ambos en el registro de seguridad, sin el token.
 
 ## Usa el token para MCP
 
 El mismo token conecta un cliente MCP con el servidor MCP remoto de la instancia, `https://YOUR-INSTANCE/mcp`: envíalo como `Authorization: Bearer obop_...` (los clientes tienen un campo `headers` o una variable de bearer token para ello). Un token creado con la CLI o mediante REST sirve para ambos; no hay nada específico de MCP que crear. Ten en cuenta estos puntos:
 
 - Crea un token distinto por cliente y dale solo los scopes que ese cliente necesita. La lista de herramientas MCP son exactamente los comandos que permiten los scopes.
-- Un token de sesión obtenido al iniciar sesión también sirve, pero caduca a las 12 horas; un token de agente no.
+- Un token de sesión obtenido al iniciar sesión también sirve, pero caduca a las 12 horas (un token de agente no) y actúa como tú: los datos personales no se enmascaran y los comandos sujetos a aprobación se ejecutan sin ella. Usa un token de agente para un agente.
 - El token debe enviarse en cada petición, no solo en la primera; los clientes lo hacen una vez que está en su configuración.
-- Los clientes que ofrecen inicio de sesión en el navegador (Claude Desktop, claude.ai, Claude Code) no necesitan un token pegado: se conectan con un inicio de sesión y reciben un token de corta duración de este tipo. Consulta [Conectar mediante MCP](/docs/agents/mcp/).
+- Los clientes que admiten un inicio de sesión en el navegador (OAuth) no necesitan un token pegado: se conectan con un inicio de sesión y reciben un token que dura una hora y solo funciona en `/mcp`. Aún no lo hemos probado con Claude Desktop, claude.ai ni Claude Code; consulta [Conectar mediante MCP](/docs/agents/mcp/).
 
 ## Guárdalo de forma segura
 
 - Ponlo en una variable de entorno o en un almacén de secretos, no en un repositorio.
-- Es preferible un token por agente y por tarea, para distinguirlos y poder eliminar uno sin afectar a los demás.
+- Es preferible un token por agente y por tarea, cada uno solo con los scopes que necesita ese agente.
 - Los tokens en un archivo de configuración de cliente los puede leer cualquier cosa que pueda leer ese archivo.
 
 ## Errores
 
-| Respuesta                                                                      | Significado                                     |
-| ------------------------------------------------------------------------------ | ----------------------------------------------- |
-| `400 {"error":"an agent token needs at least one scope"}`                      | `scopes` estaba vacío.                          |
-| `400 {"error":"you do not hold invoicing.manager, so you cannot delegate it"}` | Pediste un grupo que no tienes.                 |
-| `400 {"error":"only a human user can issue agent tokens"}`                     | Usaste un token de agente para pedir otro.      |
-| `401`                                                                          | Token de sesión ausente, incorrecto o caducado. |
+| Respuesta                                                                          | Significado                                                                                                              |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `400 {"error":"an agent token needs at least one scope"}`                          | `scopes` estaba vacío.                                                                                                   |
+| `400 {"error":"you do not hold invoicing.manager, so you cannot delegate it"}`     | Pediste un grupo que no figura en tu cuenta y no eres administrador.                                                     |
+| `400 {"error":"nope.user is not a registered permission group, ..."}`              | Un administrador pidió un grupo que ningún módulo instalado declara.                                                     |
+| `400 {"error":"only a human user can issue agent tokens"}`                         | Usaste un token de agente para pedir otro.                                                                               |
+| `401`                                                                              | Token de sesión ausente, incorrecto o caducado.                                                                          |
+| `403 {"error":"two-factor authentication must be set up before you can continue"}` | Tu cuenta debe configurar primero el inicio de sesión en dos pasos; hasta entonces, esta sesión solo puede configurarlo. |
 
 Siguiente: [conectar mediante MCP](/docs/agents/mcp/) o [usar la API REST](/docs/agents/rest/).

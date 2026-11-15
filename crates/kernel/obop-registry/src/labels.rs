@@ -40,6 +40,9 @@ pub struct FieldTr {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ModelTr {
     pub entry: Entry,
+    /// The plural of the model's name per language (D95), `plural` under `[labels.<lang>.model.<m>]`;
+    /// English too, from `[labels.en...]`.
+    pub plurals: Texts,
     pub fields: BTreeMap<String, FieldTr>,
     pub actions: BTreeMap<String, Entry>,
     /// Action -> assertion key -> language -> the message of the refusal.
@@ -79,6 +82,8 @@ pub struct NameDesc {
 #[serde(deny_unknown_fields)]
 pub struct ModelLabels {
     pub name: Option<String>,
+    /// The plural of the name ("Journal entries"), D95.
+    pub plural: Option<String>,
     pub description: Option<String>,
     #[serde(default)]
     pub field: BTreeMap<String, FieldLabels>,
@@ -245,6 +250,7 @@ pub fn check_labels(labels: &BTreeMap<String, LangLabels>, shape: &Shape) -> Res
                 return Err(format!("labels.{at}: the package has no model {model:?}"));
             };
             val(format!("{at}.name"), &ml.name, MAX_LABEL_CHARS)?;
+            val(format!("{at}.plural"), &ml.plural, MAX_LABEL_CHARS)?;
             val(
                 format!("{at}.description"),
                 &ml.description,
@@ -327,6 +333,7 @@ impl Translations {
             for (model, ml) in &l.model {
                 let mt = t.models.entry(model.clone()).or_default();
                 put(&mut mt.entry.labels, lang, &ml.name);
+                put(&mut mt.plurals, lang, &ml.plural);
                 put(&mut mt.entry.descriptions, lang, &ml.description);
                 for (field, fl) in &ml.field {
                     let ft = mt.fields.entry(field.clone()).or_default();

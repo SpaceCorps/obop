@@ -36,7 +36,11 @@
 //! name: "MOHV" -> removed           clear: one event per key of the row, a text field with its
 //!                                   old value
 //! name: <not text> -> removed       a field whose stored value is not text: no value
-//! hide_product_docs: <unknown> -> removed   a key this binary does not know: no value
+//! hide_product_docs: false -> true     the switch is a boolean, written as the words true and false
+//!                                      (not quoted); a stored null reads as off and is false; any
+//!                                      other value that is not a boolean is the word not_boolean,
+//!                                      and a `clear` writes it as <not boolean>
+//! future_field: <unknown> -> removed   a key this binary does not know: no value
 //! ```
 //!
 //! `clear` accounts for every key the row holds: a row of only unknown keys writes one event per
@@ -52,8 +56,10 @@
 //! field is public by design (data class `none`), so no value is secret.
 
 use super::reader::Reader;
-use super::row::{accent_of, read_row, text_of};
-use super::{AUDIT_USER, LOCK_KEY, MODEL, ROW_ID, SETTING_ID, SETTING_MODEL, writable_fields};
+use super::row::{accent_of, read_row, switch_of, text_of};
+use super::{
+    AUDIT_USER, LOCK_KEY, MODEL, ROW_ID, SETTING_ID, SETTING_MODEL, SWITCH, writable_fields,
+};
 use crate::audit;
 use obop_brand::policy::{self, Kind};
 use obop_brand::{logo, slug, svg};
@@ -84,8 +90,8 @@ pub struct Refused {
 /// value that was written around the command whole, where the log line is cut (`LOG_CUT`).
 ///
 /// `withheld` is set only for a key that `clear` removed and whose value is not written down: a
-/// value that is not text, or a key this binary does not know (a newer binary's field, a switch of
-/// a later slice). `old` is then the marker (`<not text>` or `<unknown>`), `field` is the key as
+/// value that is not text, or a key this binary does not know (a field that a newer binary
+/// added). `old` is then the marker (`<not text>` or `<unknown>`), `field` is the key as
 /// [`show_key`] shows it, and the log line is `key: <marker> -> removed`, with no value.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Changed {
@@ -183,6 +189,7 @@ const LOG_CUT: usize = 300;
 /// What the log says in place of the value of a key that `clear` removed and does not write down
 /// (see [`Changed::withheld`]): a value that is not text, and a key this binary does not know.
 const LOG_NOT_TEXT: &str = "<not text>";
+const LOG_NOT_BOOLEAN: &str = "<not boolean>";
 const LOG_UNKNOWN: &str = "<unknown>";
 /// The most keys this binary does not know that `clear` accounts for one by one; the rest are one
 /// event with their number.
@@ -255,6 +262,13 @@ fn validate(field: &str, value: &str) -> Result<String, Vec<String>> {
                     .map_err(|rs| rs.into_iter().map(|r| r.message).collect())
             }
         }
+        // The switch: `true` is stored as the boolean true, `false` removes the key (off is the
+        // absence of the switch). The empty text is not a clear value of a boolean.
+        SWITCH => match value {
+            "true" => Ok("true".to_string()),
+            "false" => Ok(String::new()),
+            _ => Err(vec!["must be true or false".to_string()]),
+        },
         f if f.starts_with("title_") => policy::clean(Kind::Title, value).map_err(one),
         f if f.starts_with("message_") => policy::clean(Kind::Message, value).map_err(one),
         _ => Err(vec!["is not a field of the brand".to_string()]),
@@ -273,7 +287,7 @@ fn plan_configure(backend: &dyn Backend, supplied: &[(String, String)]) -> Resul
         if !fields.iter().any(|f| f == key) {
             refusals.push(Refused {
                 field: show_key(key),
-                rule: "is not a field of the brand; the fields are name, slug, title_<lang>, message_<lang> and logo_svg".into(),
+                rule: "is not a field of the brand; the fields are name, slug, title_<lang>, message_<lang>, logo_svg and hide_product_docs".into(),
             });
         }
     }
@@ -288,6 +302,32 @@ fn plan_configure(backend: &dyn Backend, supplied: &[(String, String)]) -> Resul
                 field: field.clone(),
                 rule,
             })),
+            Ok(stored) if field == SWITCH => {
+                // The switch is a boolean. A stored value that is not one reads as the word
+                // `not_boolean` and any supplied value replaces it, as for a text that is not text.
+                let (on, bad) = old.as_ref().map_or((false, None), switch_of);
+                let before = if bad.is_some() {
+                    "not_boolean"
+                } else if on {
+                    "true"
+                } else {
+                    "false"
+                };
+                let after = if stored.is_empty() { "false" } else { "true" };
+                if bad.is_some() || before != after {
+                    changes.push(Changed {
+                        field: field.clone(),
+                        old: before.to_string(),
+                        new: after.to_string(),
+                        withheld: false,
+                    });
+                }
+                if stored.is_empty() {
+                    row.remove(field);
+                } else {
+                    row.insert(field.clone(), J::Bool(true));
+                }
+            }
             Ok(stored) => {
                 // A stored value that is not text (a row written around the command) reads as the
                 // word `not_text` for the log, and any supplied value, an empty one included,
@@ -371,6 +411,26 @@ fn plan_clear(backend: &dyn Backend) -> Result<Plan, Failure> {
         if !row.contains_key(field) {
             continue;
         }
+        if field == SWITCH {
+            // As the read side reads it: a stored `null` is off, like a missing key, and is
+            // written down as `false`; only a value that is neither a boolean nor `null` is the
+            // marker with no value.
+            changes.push(match switch_of(&row) {
+                (on, None) => Changed {
+                    field: field.clone(),
+                    old: on.to_string(),
+                    new: String::new(),
+                    withheld: false,
+                },
+                (_, Some(_)) => Changed {
+                    field: field.clone(),
+                    old: LOG_NOT_BOOLEAN.to_string(),
+                    new: String::new(),
+                    withheld: true,
+                },
+            });
+            continue;
+        }
         changes.push(match text_of(&row, field) {
             Ok(text) => Changed {
                 field: field.clone(),
@@ -451,6 +511,10 @@ pub fn printable(field: &str, v: &str) -> String {
 
 /// A value for the log (see the module documentation).
 fn quoted(field: &str, v: &str) -> String {
+    if field == SWITCH {
+        // The words `true`, `false` and `not_boolean`: fixed by the code, never a stored value.
+        return v.to_string();
+    }
     if field == ARTWORK {
         return match v {
             "" => "none".to_string(),

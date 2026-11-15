@@ -3,7 +3,7 @@
 
 use crate::app::App;
 use crate::import_oas::source::{Voucher, canonical, sha256_hex};
-use crate::import_oas::{MAP_MODEL, Options, Report, import};
+use crate::import_oas::{LEGACY_MAP_MODEL, Options, Report, import};
 use obop_commands::{ADMIN_GROUP, Principal};
 use obop_pkg::{Bundled, Marketplace};
 use rusqlite::{Connection, params};
@@ -323,7 +323,7 @@ const MODELS: &[&str] = &[
     "accounting_se_company",
     "party",
     "documents_document",
-    MAP_MODEL,
+    "import_map",
     "oas_import_run",
 ];
 
@@ -692,4 +692,104 @@ fn the_oas_file_is_opened_read_only() {
     let before = std::fs::read(&f.oas).unwrap();
     ok(import(&f.app, &admin(), &f.oas, &opts(&f.docs)));
     assert_eq!(std::fs::read(&f.oas).unwrap(), before);
+}
+
+#[test]
+fn every_record_has_an_entry_in_the_shared_import_map_and_no_private_ledger_is_written() {
+    let f = fix();
+    ok(import(&f.app, &admin(), &f.oas, &opts(&f.docs)));
+    let entries = recs(&f.app, "import_map");
+    // company 1, accounts 7, journals 2, customers 2, vouchers 4, receipts 2.
+    assert_eq!(entries.len(), 18, "{entries:?}");
+    assert!(
+        entries
+            .iter()
+            .all(|(_, e)| e["source_system"].as_str().unwrap().starts_with("oas:"))
+    );
+    let tables = |t: &str| {
+        entries
+            .iter()
+            .filter(|(_, e)| e["source_table"] == t)
+            .count()
+    };
+    assert_eq!(
+        [
+            tables("company"),
+            tables("account"),
+            tables("journal"),
+            tables("voucher"),
+            tables("customer"),
+            tables("document")
+        ],
+        [1, 7, 2, 4, 2, 2]
+    );
+    // A voucher's source id carries the OAS hash, so a change in the file is noticed.
+    assert!(
+        entries
+            .iter()
+            .filter(|(_, e)| e["source_table"] == "voucher")
+            .all(|(_, e)| e["source_id"].as_str().unwrap().contains('#'))
+    );
+    assert!(recs(&f.app, LEGACY_MAP_MODEL).is_empty());
+}
+
+#[test]
+fn a_private_ledger_of_an_earlier_version_is_adopted_into_the_shared_map() {
+    let f = fix();
+    ok(import(&f.app, &admin(), &f.oas, &opts(&f.docs)));
+    let before = counts(&f.app);
+    // Turn the shared entries back into rows of the old private ledger.
+    let backend = f.app.store.backend();
+    for (id, e) in recs(&f.app, "import_map") {
+        let sid = e["source_id"].as_str().unwrap();
+        let (oas_id, hash) = sid.split_once('#').unwrap_or((sid, ""));
+        let mut row = obop_storage::Fields::new();
+        for (k, v) in [
+            ("source", e["source_system"].as_str().unwrap()),
+            ("table", e["source_table"].as_str().unwrap()),
+            ("oas_id", oas_id),
+            ("model", e["model"].as_str().unwrap()),
+            ("obop_id", e["record"].as_str().unwrap()),
+            ("hash", hash),
+        ] {
+            row.insert(k.into(), J::from(v));
+        }
+        backend
+            .insert(LEGACY_MAP_MODEL, &format!("old-{id}"), &row)
+            .unwrap();
+        backend.delete("import_map", &id).unwrap();
+    }
+    // A dry run already sees what is there and writes nothing.
+    let dry = Options {
+        dry_run: true,
+        ..opts(&f.docs)
+    };
+    let rep = ok(import(&f.app, &admin(), &f.oas, &dry));
+    assert!(rep.problems.is_empty(), "{rep}");
+    assert_eq!(recs(&f.app, LEGACY_MAP_MODEL).len(), 18);
+    assert!(recs(&f.app, "import_map").is_empty());
+    // A real run adopts the rows, creates nothing, and empties the private table.
+    let rep = ok(import(&f.app, &admin(), &f.oas, &opts(&f.docs)));
+    assert!(rep.to_string().contains("adopted 18 row(s)"), "{rep}");
+    assert_eq!(counts(&f.app), before);
+    assert!(recs(&f.app, LEGACY_MAP_MODEL).is_empty());
+}
+
+#[test]
+fn the_lines_of_an_interrupted_run_are_written_by_the_next_one() {
+    let f = fix();
+    ok(import(&f.app, &admin(), &f.oas, &opts(&f.docs)));
+    // The moves are in the import map but their lines are gone (a run that stopped in between).
+    let backend = f.app.store.backend();
+    for (id, _) in recs(&f.app, "accounting_move_line") {
+        backend.delete("accounting_move_line", &id).unwrap();
+    }
+    let rep = ok(import(&f.app, &admin(), &f.oas, &opts(&f.docs)));
+    assert_eq!(recs(&f.app, "accounting_move").len(), 4);
+    assert_eq!(recs(&f.app, "accounting_move_line").len(), 10);
+    assert!(
+        rep.verified
+            .unwrap()
+            .contains("trial balance equals OAS: 6 account(s), 4 move(s), 10 line(s)")
+    );
 }

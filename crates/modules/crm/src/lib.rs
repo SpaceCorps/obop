@@ -1,75 +1,119 @@
 //! `crm`: leads and opportunities.
 
 use obop_commands::{Dispatcher, Store, Value};
-use obop_registry::{CommandDef, FieldDef as F, FieldKind, ModelDef, Module, ModuleMeta};
+use obop_registry::ui::ReportUi;
+use obop_registry::{CommandDef, FieldDef as F, FieldKind, ModelDef, ModelUi, Module, ModuleMeta};
 use obop_types::DataClass::*;
 
 pub fn module() -> Module {
     let m = Module {
         id: "crm".into(),
         name: "CRM".into(),
-        models: vec![ModelDef {
-            name: "lead",
-            description: "A prospective deal with a contact",
-            read_group: "crm.user",
-            write_group: "crm.user",
-            access: Option::None,
-            fields: vec![
-                F::new(
-                    "title",
-                    "Short description of the opportunity",
-                    None,
-                    false,
-                    "crm.user",
-                )
-                .required(),
-                F::new(
-                    "contact_name",
-                    "Name of the contact person",
-                    PublicDirectory,
-                    true,
-                    "crm.user",
-                ),
-                F::new(
-                    "contact_email",
-                    "Email of the contact person",
-                    PublicDirectory,
-                    true,
-                    "crm.user",
-                ),
-                F::new(
-                    "expected_revenue_minor",
-                    "Expected revenue in minor units",
-                    None,
-                    false,
-                    "crm.user",
-                )
-                .kind(FieldKind::Money),
-                F::new(
-                    "stage",
-                    "Pipeline stage: new, qualified, won or lost",
-                    None,
-                    false,
-                    "crm.user",
-                )
-                .select(&["new", "qualified", "won", "lost"]),
-            ],
-            commands: vec![
-                CommandDef::new(
-                    "qualify",
-                    "Move a new lead to the qualified stage",
-                    "crm.user",
-                )
-                .transition("stage", Some("new"), "qualified"),
-                CommandDef::new("mark_won", "Move the lead to the won stage", "crm.user")
-                    .transition("stage", Option::None, "won"),
-                CommandDef::new("mark_lost", "Move the lead to the lost stage", "crm.user")
-                    .transition("stage", Option::None, "lost"),
-                CommandDef::new("reopen", "Move the lead back to the new stage", "crm.user")
-                    .transition("stage", Option::None, "new"),
-            ],
-            ext: Default::default(),
-        }],
+        models: vec![
+            ModelDef {
+                name: "lead",
+                description: "A prospective deal with a contact",
+                read_group: "crm.user",
+                write_group: "crm.user",
+                access: Option::None,
+                fields: vec![
+                    F::new(
+                        "title",
+                        "Short description of the opportunity",
+                        None,
+                        false,
+                        "crm.user",
+                    )
+                    .required(),
+                    F::new(
+                        "contact_name",
+                        "Name of the contact person",
+                        PublicDirectory,
+                        true,
+                        "crm.user",
+                    ),
+                    F::new(
+                        "contact_email",
+                        "Email of the contact person",
+                        PublicDirectory,
+                        true,
+                        "crm.user",
+                    )
+                    .display("email"),
+                    F::new(
+                        "expected_revenue_minor",
+                        "Expected revenue in minor units",
+                        None,
+                        false,
+                        "crm.user",
+                    )
+                    .kind(FieldKind::Money),
+                    F::new(
+                        "stage",
+                        "Pipeline stage: new, qualified, won or lost",
+                        None,
+                        false,
+                        "crm.user",
+                    )
+                    .select(&["new", "qualified", "won", "lost"])
+                    .tones(&[
+                        ("qualified", "info"),
+                        ("won", "ok"),
+                        ("lost", "bad"),
+                    ]),
+                ],
+                commands: vec![
+                    CommandDef::new(
+                        "qualify",
+                        "Move a new lead to the qualified stage",
+                        "crm.user",
+                    )
+                    .transition("stage", Some("new"), "qualified")
+                    .primary()
+                    .done("Lead qualified"),
+                    CommandDef::new("mark_won", "Move the lead to the won stage", "crm.user")
+                        .transition("stage", Option::None, "won")
+                        .primary()
+                        .done("Marked as won"),
+                    CommandDef::new("mark_lost", "Move the lead to the lost stage", "crm.user")
+                        .transition("stage", Option::None, "lost")
+                        .danger()
+                        .confirm("Mark this opportunity as lost?")
+                        .done("Marked as lost"),
+                    CommandDef::new("reopen", "Move the lead back to the new stage", "crm.user")
+                        .transition("stage", Option::None, "new"),
+                ],
+                ext: Default::default(),
+            }
+            .with_ui(ModelUi {
+                title: Some("{title}".into()),
+                subtitle: Some("{contact_name}".into()),
+                list: vec![
+                    "title".into(),
+                    "contact_name".into(),
+                    "expected_revenue_minor".into(),
+                    "stage".into(),
+                ],
+                card: vec![
+                    "title".into(),
+                    "contact_name".into(),
+                    "expected_revenue_minor".into(),
+                ],
+                card_sum: Some("expected_revenue_minor".into()),
+                quick_create: vec![
+                    "title".into(),
+                    "contact_name".into(),
+                    "expected_revenue_minor".into(),
+                ],
+                default_view: Some("kanban".into()),
+                report: Some(ReportUi {
+                    rows: Some("stage".into()),
+                    cols: Option::None,
+                    measure: Some("expected_revenue_minor".into()),
+                }),
+                ..Default::default()
+            }),
+        ],
         network_destinations: vec![],
         description: String::new(),
         translations: Default::default(),
@@ -79,9 +123,11 @@ pub fn module() -> Module {
             &["crm", "leads", "pipeline"],
             "crm",
             &["base"],
-        ),
+        )
+        .home("lead"),
     };
     m.translated(&[
+        include_str!("../../../../packages/labels/en/crm.toml"),
         include_str!("../../../../packages/labels/de/crm.toml"),
         include_str!("../../../../packages/labels/fr/crm.toml"),
         include_str!("../../../../packages/labels/pl/crm.toml"),

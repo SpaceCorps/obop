@@ -5,6 +5,7 @@ summary = "Un wiki : des articles en arborescence avec un flux brouillon, publi√
 
 [labels.fr.model.knowledge_article]
 name = "Article"
+plural = "Articles"
 description = "Un article de la base de connaissances"
 
 [labels.fr.model.knowledge_article.field.title]

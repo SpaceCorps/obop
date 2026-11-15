@@ -5,6 +5,7 @@ summary = "Koontinäytöt ja ruudut tallennettuna tietona, jotka käyttöliittym
 
 [labels.fi.model.dashboards_dashboard]
 name = "Koontinäyttö"
+plural = "Koontinäytöt"
 description = "Koontinäyttö: otsikoitu ja järjestetty ruutujen kokoelma"
 
 [labels.fi.model.dashboards_dashboard.field.title]
@@ -29,6 +30,7 @@ description = "Koontinäyttöjen järjestys, pienin ensin"
 
 [labels.fi.model.dashboards_widget]
 name = "Ruutu"
+plural = "Ruudut"
 description = "Yksi koontinäytön ruutu, joka määritellään sillä, mitä luetaan ja miten tiedot yhdistetään"
 
 [labels.fi.model.dashboards_widget.field.dashboard_id]

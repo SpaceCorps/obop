@@ -225,6 +225,8 @@ pub fn input_schema(model: &ModelInfo, cmd: &str) -> J {
                 .fields
                 .iter()
                 .filter(|f| f.required && !governed.contains(&f.name) && !f.computed)
+                // The server fills in a field that has a default (D95), so it need not be sent.
+                .filter(|f| f.hints.as_ref().is_none_or(|h| h.default.is_none()))
                 .map(|f| f.name.to_string())
                 .collect();
             object(J::Object(props), &required)
@@ -234,6 +236,8 @@ pub fn input_schema(model: &ModelInfo, cmd: &str) -> J {
                 .fields
                 .iter()
                 .filter(|f| f.required && !governed.contains(&f.name) && !f.computed)
+                // The server fills in a field that has a default (D95), so it need not be sent.
+                .filter(|f| f.hints.as_ref().is_none_or(|h| h.default.is_none()))
                 .map(|f| f.name.to_string())
                 .collect();
             // A decimal that rounds on import takes any number of fractional digits in a row.
@@ -416,6 +420,7 @@ mod tests {
             computed: false,
             unique: false,
             sequence: false,
+            gapless: false,
             shows_option_of: None,
             shows_option_when: None,
             max_length: None,
@@ -423,6 +428,7 @@ mod tests {
             min: None,
             max: None,
             limits_note: String::new(),
+            hints: None,
         }
     }
 
@@ -509,6 +515,7 @@ mod tests {
             computed: false,
             unique: false,
             sequence: false,
+            gapless: false,
             shows_option_of: None,
             shows_option_when: None,
             max_length: None,
@@ -516,6 +523,7 @@ mod tests {
             min: None,
             max: None,
             limits_note: String::new(),
+            hints: None,
         };
         ModelInfo {
             name: "doc".into(),
@@ -540,6 +548,7 @@ mod tests {
                 }),
                 labels: Default::default(),
                 descriptions: Default::default(),
+                ui: None,
             }],
             can_create: true,
             can_bulk_create: true,
@@ -548,6 +557,10 @@ mod tests {
             labels: Default::default(),
             descriptions: Default::default(),
             access: None,
+            ui: None,
+            children: Vec::new(),
+            plurals: Default::default(),
+            guard: None,
         }
     }
 

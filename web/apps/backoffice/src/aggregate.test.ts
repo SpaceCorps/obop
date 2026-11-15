@@ -3,7 +3,7 @@ import type { AggGroup, FieldMeta, Row } from "./api.ts";
 import { groupKey } from "./query.ts";
 import { toServer } from "./serverQuery.ts";
 import { groupByFor, keyOf, measuresFor, valueOfGroup } from "./useAggregate.ts";
-import { clientCells, serverCells } from "./views/PivotView.tsx";
+import { reportFromGroups, reportFromRows, type Dim, type ReportRow } from "./reports.ts";
 import { columnFilter, columnTotals } from "./views/KanbanView.tsx";
 
 const f = (name: string, kind: FieldMeta["kind"], options?: string[]): FieldMeta => ({
@@ -90,6 +90,12 @@ describe("group keys", () => {
 });
 
 describe("pivot cells: server groups equal the browser's own grouping", () => {
+  const dimOf = (f: FieldMeta): Dim =>
+    f.kind === "date" ? { field: f, bucket: "month" } : { field: f };
+  const norm = (rows: ReportRow[]) =>
+    Object.fromEntries(
+      rows.map((r) => [JSON.stringify([r.keys, r.currency ?? null]), [r.count, r.value]]),
+    );
   for (const seed of [1, 2, 3]) {
     for (const [name, rowF, colF, m] of [
       ["select x date", stage, due, undefined],
@@ -99,9 +105,15 @@ describe("pivot cells: server groups equal the browser's own grouping", () => {
     ] as [string, FieldMeta, FieldMeta | undefined, FieldMeta | undefined][]) {
       it(`${name} (seed ${seed})`, () => {
         const rows = random(300, seed);
-        const server = serverCells(oracle(rows, colF ? [rowF, colF] : [rowF], m), rowF, colF, m);
-        const client = clientCells(rows, rowF, colF, m);
-        expect(Object.fromEntries(server)).toEqual(Object.fromEntries(client));
+        const dims = colF ? [dimOf(rowF), dimOf(colF)] : [dimOf(rowF)];
+        const measure = m ? { field: m, op: "sum" as const } : null;
+        const server = reportFromGroups(
+          oracle(rows, colF ? [rowF, colF] : [rowF], m),
+          dims,
+          measure,
+        );
+        const client = reportFromRows(rows, dims, measure);
+        expect(norm(server)).toEqual(norm(client));
       });
     }
   }

@@ -400,14 +400,19 @@ fn check_one_script(text: &str) -> Result<(), Refusal> {
 
 /// The read-side check: the safety subset. The length limit (and, for a name, not empty), and
 /// none of a control, format, private-use or surrogate code point, a default-ignorable one, a
-/// space other than U+0020, or `<` and `>`. Unassigned code points pass: whether one is assigned
-/// depends on the Unicode tables of the binary, and a value stored by a newer binary must not
-/// fall back on an older one. On failure the answer is one of the fixed words of [`reason`].
+/// space other than U+0020, or `<` and `>`. A text of nothing but U+0020 is empty: it shows as a
+/// blank line next to the logo, and as a title it would win the fallback to the name (the write
+/// check refuses it, so it comes from a restore, an import, a direct edit or an older binary).
+/// Unassigned code points pass: whether one is assigned depends on the Unicode tables of the
+/// binary, and a value stored by a newer binary must not fall back on an older one. On failure
+/// the answer is one of the fixed words of [`reason`].
 pub fn safe(kind: Kind, text: &str) -> Result<(), &'static str> {
     let max = kind.max_chars();
     let mut n = 0usize;
+    let mut only_spaces = true;
     for c in text.chars() {
         n += 1;
+        only_spaces &= c == ' ';
         if n > max {
             return Err(reason::TOO_LONG);
         }
@@ -425,7 +430,7 @@ pub fn safe(kind: Kind, text: &str) -> Result<(), &'static str> {
             _ => {}
         }
     }
-    if n < kind.min_chars() {
+    if n < kind.min_chars() || (n > 0 && only_spaces) {
         return Err(reason::EMPTY);
     }
     Ok(())

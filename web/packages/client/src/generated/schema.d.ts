@@ -38,6 +38,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/agent-tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The agent tokens the signed-in human issued that still work, and the groups they may put on a new one */
+        get: operations["listAgentTokens"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/agent-tokens/{id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** End one agent token the signed-in human issued */
+        post: operations["revokeAgentToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/login": {
         parameters: {
             query?: never;
@@ -1033,7 +1067,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Post a draft invoice and assign its legal number
+         * Post a draft invoice and give it the next number of the series
          * @description Irreversible or money-moving: an agent token only proposes this and a human approves.
          */
         post: operations["invoice.post"];
@@ -1505,23 +1539,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/mileage_point/delete": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Delete a mileage_point (agents only propose) */
-        post: operations["mileage_point.delete"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/mileage_point/get": {
         parameters: {
             query?: never;
@@ -1567,23 +1584,6 @@ export interface paths {
         put?: never;
         /** Search mileage_point records with filter, order, limit and offset */
         post: operations["mileage_point.search"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/mileage_point/update": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Update a mileage_point; a status field only moves along a declared action */
-        post: operations["mileage_point.update"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1638,23 +1638,6 @@ export interface paths {
         put?: never;
         /** Create a mileage_trip */
         post: operations["mileage_trip.create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/mileage_trip/delete": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Delete a mileage_trip (agents only propose) */
-        post: operations["mileage_trip.delete"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3214,6 +3197,8 @@ export interface components {
             error: string;
             /** @description What to do next. */
             hint?: string;
+            /** @description Only on a 400 with code assertion_failed (D95): the package author's sentence alone, without the expression that error ends with, for a person to read; a generic sentence when the assertion has no message of its own. */
+            message?: string;
         };
         /** @description A link to one external system, with its credentials, field allowlist, policy and state */
         connection: {
@@ -3469,11 +3454,11 @@ export interface components {
             /** @description Output of the last command (checklist, purge); never stored */
             result?: string;
         };
-        /** @description A customer invoice; posted invoices are corrected only by credit notes */
+        /** @description A customer invoice; no action takes a posted invoice back to draft or cancels it */
         invoice: {
             /** @description ISO 4217 currency code */
             currency?: string;
-            /** @description Gapless legal number such as INV-2026-00042, assigned when posted (a number the system assigns; read-only) */
+            /** @description Number from a gapless yearly series, such as INV-2026-00042, assigned when posted (a number the system assigns; read-only) */
             readonly number?: string;
             /** @description Customer party id */
             party_id?: string;
@@ -3950,7 +3935,7 @@ export interface components {
             at?: string;
             /** @description A short note without any code or secret */
             detail?: string;
-            /** @description What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, device_limit, mileage_route_read, mileage_discard_stuck, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless, oidc_provider_configured, oidc_provider_cleared, oidc_bind, oidc_unbind, oidc_sso_only, oidc_start, oidc_login, oidc_refused, oidc_cancelled, oidc_error, sign_link_issued, sign_signed, sign_refused, plan_lost, user_create, user_groups, user_offboard, drive_connected, drive_connect_failed, drive_disconnected, drive_import, drive_import_failed, drive_create, drive_create_failed, drive_upload, drive_upload_failed, migration_run, migration_rollback, drill_recorded, storage_attested, brand_configured, brand_cleared */
+            /** @description What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, device_limit, mileage_route_read, mileage_discard_stuck, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless, oidc_provider_configured, oidc_provider_cleared, oidc_bind, oidc_unbind, oidc_sso_only, oidc_start, oidc_login, oidc_refused, oidc_cancelled, oidc_error, sign_link_issued, sign_signed, sign_refused, plan_lost, user_create, user_groups, user_offboard, agent_token_issued, agent_token_revoked, drive_connected, drive_connect_failed, drive_disconnected, drive_import, drive_import_failed, drive_create, drive_create_failed, drive_upload, drive_upload_failed, migration_run, migration_rollback, drill_recorded, storage_attested, brand_configured, brand_cleared */
             kind?: string;
             /** @description The account the event is about */
             user?: string;
@@ -4103,7 +4088,7 @@ export interface operations {
             content: {
                 "application/json": {
                     label?: string;
-                    /** @description Permission groups, each one the issuer holds. */
+                    /** @description Permission groups by name, each one the issuer holds; an administrator may name any registered group. Never `*`. */
                     scopes: string[];
                 };
             };
@@ -4122,6 +4107,122 @@ export interface operations {
             };
             /** @description The input was rejected; the error says which field and why. */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listAgentTokens: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The tokens (never a token itself) and the groups. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description Permission groups the caller may delegate: their own, and every registered group for an administrator. */
+                        delegable?: string[];
+                        tokens?: {
+                            /** @description Unix seconds. */
+                            created_at?: number;
+                            id?: string;
+                            label?: string;
+                            scopes?: string[];
+                        }[];
+                    };
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    revokeAgentToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        revoked?: boolean;
+                    };
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -11400,81 +11501,6 @@ export interface operations {
             };
         };
     };
-    "mileage_point.delete": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    id: string;
-                };
-            };
-        };
-        responses: {
-            /** @description Deleted. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": Record<string, never>;
-                };
-            };
-            /** @description Proposed; needs a human to approve. */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApprovalRequired"];
-                };
-            };
-            /** @description The input was rejected; the error says which field and why. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Missing, expired or revoked bearer token. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description No such command or record, or it is hidden from this token. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
-            503: {
-                headers: {
-                    /** @description Seconds to wait before trying again. */
-                    "Retry-After"?: number;
-                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
-                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
     "mileage_point.get": {
         parameters: {
             query?: never;
@@ -11699,116 +11725,6 @@ export interface operations {
                             rows?: components["schemas"]["mileage_point"][];
                             total?: number;
                         };
-                    };
-                };
-            };
-            /** @description Proposed; needs a human to approve. */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApprovalRequired"];
-                };
-            };
-            /** @description The input was rejected; the error says which field and why. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Missing, expired or revoked bearer token. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description No such command or record, or it is hidden from this token. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
-            503: {
-                headers: {
-                    /** @description Seconds to wait before trying again. */
-                    "Retry-After"?: number;
-                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
-                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    "mileage_point.update": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /**
-                     * @description Radius of the horizontal accuracy in metres, when the phone said (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 8 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
-                     * @example 12.33
-                     */
-                    accuracy_m?: string;
-                    /** @description Login of the driver of the trip; set by the server from the trip (personal data: agents see it masked) */
-                    driver?: string;
-                    id: string;
-                    /**
-                     * @description Latitude in degrees (WGS84), at most 7 decimals (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
-                     * @example 12.3333333
-                     */
-                    lat?: string;
-                    /**
-                     * @description Longitude in degrees (WGS84), at most 7 decimals (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
-                     * @example 12.3333333
-                     */
-                    lon?: string;
-                    /**
-                     * Format: date-time
-                     * @description When the phone recorded the position (personal data of a sensitive class: not given to agents at all) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
-                     * @example 2026-03-29T01:30:00.000000Z
-                     */
-                    recorded_at?: string;
-                    /** @description Position of the point in the trip, counted by the device; unique within the trip (unique) */
-                    seq?: number;
-                    /**
-                     * @description Speed over ground in metres per second, when the phone said (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 7 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
-                     * @example 12.33
-                     */
-                    speed_mps?: string;
-                    /** @description The trip the point belongs to (its server id) */
-                    trip?: string;
-                };
-            };
-        };
-        responses: {
-            /** @description A record. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        denied?: string[];
-                        value?: components["schemas"]["mileage_point"];
                     };
                 };
             };
@@ -12207,81 +12123,6 @@ export interface operations {
                         denied?: string[];
                         value?: components["schemas"]["mileage_trip"];
                     };
-                };
-            };
-            /** @description Proposed; needs a human to approve. */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApprovalRequired"];
-                };
-            };
-            /** @description The input was rejected; the error says which field and why. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Missing, expired or revoked bearer token. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description No such command or record, or it is hidden from this token. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
-            503: {
-                headers: {
-                    /** @description Seconds to wait before trying again. */
-                    "Retry-After"?: number;
-                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
-                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    "mileage_trip.delete": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    id: string;
-                };
-            };
-        };
-        responses: {
-            /** @description Deleted. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": Record<string, never>;
                 };
             };
             /** @description Proposed; needs a human to approve. */

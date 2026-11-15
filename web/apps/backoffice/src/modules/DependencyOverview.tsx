@@ -1,5 +1,6 @@
 import { useId } from "react";
 import { t } from "@obop/ui";
+import { PHONE_QUERY, useMedia } from "../media.ts";
 import { StatusChip } from "./badges.tsx";
 import { dependencyStatus, graphOf, prettyReq } from "./status.ts";
 import type { Row } from "./types.ts";
@@ -13,7 +14,9 @@ const PAD = 12;
 /**
  * Every installed module and what it needs, as a picture (built-in modules on the left, each
  * package one column right of what it needs) and, for anyone who cannot use a picture, the same
- * facts as a table. Both are always there; the table is the accessible name of the picture.
+ * facts as a table. Both are there on a wider screen; the table is the accessible name of the
+ * picture. A phone shows only the table, open and one block per module: the picture is wider
+ * than the screen and its boxes were cut off.
  */
 export function DependencyOverview({
   rows,
@@ -25,6 +28,7 @@ export function DependencyOverview({
   hrefFor: (id: string) => string;
 }) {
   const id = useId();
+  const phone = useMedia(PHONE_QUERY);
   const g = graphOf(rows);
   const maxRow = Math.max(0, ...g.nodes.map((n) => n.row));
   const width = PAD * 2 + (g.layers - 1) * COL + W;
@@ -35,6 +39,64 @@ export function DependencyOverview({
     y: PAD + n.row * ROW,
   });
   const needy = rows.filter((r) => r.dependencies.length > 0 || r.dependents.length > 0);
+  // stack-sm turns each row into a block on a phone (data-label names the cells there). The
+  // explicit roles keep it a table for Safari, which drops the semantics once display changes.
+  const table = (
+    <div className="table-wrap">
+      <table className="table stack-sm" role="table">
+        <caption className="sr-only">{t("Needs and required by, per installed module")}</caption>
+        <thead>
+          <tr role="row">
+            <th scope="col" role="columnheader">
+              {t("Module")}
+            </th>
+            <th scope="col" role="columnheader">
+              {t("Needs")}
+            </th>
+            <th scope="col" role="columnheader">
+              {t("Required by")}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {needy.map((r) => (
+            <tr key={r.id} role="row">
+              <th scope="row" role="rowheader">
+                <a href={hrefFor(r.id)}>{nameOf(r.id)}</a>
+              </th>
+              <td role="cell" data-label={t("Needs")}>
+                {r.dependencies.length === 0 ? (
+                  <span className="hint">{t("Nothing")}</span>
+                ) : (
+                  <ul className="plain">
+                    {r.dependencies.map((d) => (
+                      <li key={d.id}>
+                        {nameOf(d.id)} <code>{prettyReq(d.requirement)}</code>{" "}
+                        <StatusChip status={dependencyStatus(d)} />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </td>
+              <td role="cell" data-label={t("Required by")}>
+                {r.dependents.length === 0 ? (
+                  <span className="hint">{t("Nothing")}</span>
+                ) : (
+                  r.dependents.map(nameOf).join(", ")
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+  if (phone)
+    return (
+      <div className="dep-overview">
+        <div className="dep-table-wrap">{table}</div>
+      </div>
+    );
   return (
     <div className="dep-overview">
       <div className="dep-svg-wrap">
@@ -105,50 +167,7 @@ export function DependencyOverview({
       </div>
       <details className="dep-table-wrap">
         <summary>{t("Show the same as a table")}</summary>
-        <div className="table-wrap">
-          <table className="table">
-            <caption className="sr-only">
-              {t("Needs and required by, per installed module")}
-            </caption>
-            <thead>
-              <tr>
-                <th scope="col">{t("Module")}</th>
-                <th scope="col">{t("Needs")}</th>
-                <th scope="col">{t("Required by")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {needy.map((r) => (
-                <tr key={r.id}>
-                  <th scope="row">
-                    <a href={hrefFor(r.id)}>{nameOf(r.id)}</a>
-                  </th>
-                  <td>
-                    {r.dependencies.length === 0 ? (
-                      <span className="hint">{t("Nothing")}</span>
-                    ) : (
-                      <ul className="plain">
-                        {r.dependencies.map((d) => (
-                          <li key={d.id}>
-                            {nameOf(d.id)} <code>{prettyReq(d.requirement)}</code>{" "}
-                            <StatusChip status={dependencyStatus(d)} />
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </td>
-                  <td>
-                    {r.dependents.length === 0 ? (
-                      <span className="hint">{t("Nothing")}</span>
-                    ) : (
-                      r.dependents.map(nameOf).join(", ")
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {table}
       </details>
     </div>
   );

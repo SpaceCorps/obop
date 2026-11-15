@@ -21,6 +21,14 @@ use serde_json::{Value as J, json};
 /// The reason word of a field whose stored value is not text at all.
 pub(crate) const NOT_TEXT: &str = "not_text";
 
+/// The reason word of the switch whose stored value is not a boolean (the text `"true"`, the number
+/// `1`, a list): it reads as off.
+pub(crate) const NOT_BOOLEAN: &str = "not_boolean";
+
+/// The name of the switch that hides the Brand book and the Guide (spec section 2): a boolean, off
+/// when it is absent.
+pub const SWITCH: &str = "hide_product_docs";
+
 /// The largest instance setting text the theme is read from. The settings are refused above 64 KiB
 /// when they are written; a bigger one was put there around the command and is not parsed on every
 /// refill.
@@ -83,6 +91,10 @@ pub struct Shown {
     logo: Option<Logo>,
     theme_accent: Option<String>,
     fallbacks: Vec<Fallback>,
+    /// The switch `hide_product_docs`: a stored boolean, off in every other case.
+    hide_product_docs: bool,
+    /// This is the default standing in for a brand that could not be read (see [`Shown::unread`]).
+    unread: bool,
 }
 
 impl std::fmt::Debug for Shown {
@@ -92,6 +104,7 @@ impl std::fmt::Debug for Shown {
             .field("v", &self.v())
             .field("theme_accent", &self.theme_accent)
             .field("fallbacks", &self.fallbacks)
+            .field("hide_product_docs", &self.hide_product_docs)
             .finish()
     }
 }
@@ -104,7 +117,27 @@ impl Shown {
             logo: None,
             theme_accent,
             fallbacks: Vec::new(),
+            hide_product_docs: false,
+            unread: false,
         }
+    }
+
+    /// The default brand in the place of one that could not be read: what the reader hands out in a
+    /// process that never had a good read while the store fails. It looks like [`Shown::not_set`]
+    /// and is told apart from it by [`Shown::is_unread`], so that a cache above the reader does not
+    /// keep it as if the store had said "no brand".
+    pub(crate) fn unread() -> Shown {
+        Shown {
+            unread: true,
+            ..Shown::not_set(None)
+        }
+    }
+
+    /// Whether this is the stand-in of [`Shown::unread`]: the store could not be read and there was
+    /// no earlier good read to serve. False for a brand that was read, for the answer "no brand is
+    /// set" and for an inert reader.
+    pub fn is_unread(&self) -> bool {
+        self.unread
     }
 
     /// The brand: the default one when no row exists.
@@ -139,6 +172,14 @@ impl Shown {
     pub fn fallbacks(&self) -> &[Fallback] {
         &self.fallbacks
     }
+
+    /// Whether the Brand book and the Guide are hidden: the stored switch, read as a boolean only.
+    /// Any other stored value (the text `"true"`, the number `1`) reads as off and is listed under
+    /// the fallbacks. Not part of the public subset the shell carries: the signed-in app gets it
+    /// from `get`.
+    pub fn hide_product_docs(&self) -> bool {
+        self.hide_product_docs
+    }
 }
 
 /// The text a stored field holds: empty when absent or null, an error word when it is not text.
@@ -161,6 +202,24 @@ pub(crate) fn accent_of(setting: Option<&Fields>) -> Option<String> {
     }
     let v: J = serde_json::from_str(text).ok()?;
     tile::valid_accent(v.get("theme")?.get("accent")?.as_str()?)
+}
+
+/// The `site` object of the instance settings (the keys of the public site), when the settings
+/// parse and hold one; empty otherwise. Read with the theme, from the same row of settings, so that
+/// `get` reports on the `site.*` keys the public site is told about, and by the one door the public
+/// site reads its settings by (`PublicApi::site_settings_read`, which calls `site::site_settings`),
+/// where it is the read that door always made, with the same result for the same text. Total.
+pub(crate) fn site_of(setting: Option<&Fields>) -> serde_json::Map<String, J> {
+    let parsed = setting
+        .and_then(|s| s.get("value")?.as_str())
+        .and_then(|t| serde_json::from_str::<J>(t).ok());
+    match parsed {
+        Some(v) => match v.get("site") {
+            Some(J::Object(o)) => o.clone(),
+            _ => serde_json::Map::new(),
+        },
+        None => serde_json::Map::new(),
+    }
 }
 
 /// The text fields of a row as a [`Brand`], each checked by the safety subset, and the fields that
@@ -229,6 +288,16 @@ fn field_rank(field: &str) -> usize {
     2 + 2 * LANGS.len()
 }
 
+/// The switch of a stored row, read as a boolean only: absent and null are off, a boolean is itself,
+/// and anything else is off with the reason word `not_boolean`.
+pub(crate) fn switch_of(row: &Fields) -> (bool, Option<&'static str>) {
+    match row.get(SWITCH) {
+        None | Some(J::Null) => (false, None),
+        Some(J::Bool(b)) => (*b, None),
+        Some(_) => (false, Some(NOT_BOOLEAN)),
+    }
+}
+
 /// The whole read check of a row (or of no row) with the accent the theme stores. Total.
 pub(crate) fn read_row(row: Option<&Fields>, theme_accent: Option<String>) -> Shown {
     let Some(row) = row else {
@@ -246,10 +315,16 @@ pub(crate) fn read_row(row: Option<&Fields>, theme_accent: Option<String>) -> Sh
     if let Some(refusals) = logo.fallback() {
         fallbacks.push(Fallback::artwork(refusals));
     }
+    let (hide_product_docs, bad) = switch_of(row);
+    if let Some(code) = bad {
+        fallbacks.push(Fallback::word(SWITCH, code));
+    }
     Shown {
         brand,
         logo: Some(logo),
         theme_accent,
         fallbacks,
+        hide_product_docs,
+        unread: false,
     }
 }

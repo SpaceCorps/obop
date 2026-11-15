@@ -1,10 +1,11 @@
 [labels.sv.module]
 name = "Planering"
-description = "Arbetspass för anställda, med roller och återanvändbara mallar. Ett pass har en dag samt start och slut i minuter efter midnatt (0 till 1439; 540 är 09:00). Ett pass utan anställd är ett öppet pass. Flöde: öppet, publicerat, bekräftat av den anställde. Kräver paketet Personal."
-summary = "Arbetspass för anställda med roller och återanvändbara mallar; öppna pass publiceras och bekräftas."
+description = "Arbetspass för anställda, med roller och passmallar. En mall sparar bara ett namn, en roll och tider: ingen åtgärd skapar ett pass från den. Ett pass har en dag samt start och slut i minuter efter midnatt (0 till 1439; 540 är 09:00). Ett pass utan anställd är ett öppet pass. Flöde: öppet, publicerat, bekräftat av den anställde. Kräver paketet Personal."
+summary = "Arbetspass för anställda med roller och passmallar; öppna pass publiceras och bekräftas."
 
 [labels.sv.model.planning_role]
 name = "Roll"
+plural = "Roller"
 description = "En roll som ett pass planeras för, till exempel kassör eller elektriker"
 
 [labels.sv.model.planning_role.field.name]
@@ -17,7 +18,8 @@ description = "Vad rollen innebär"
 
 [labels.sv.model.planning_template]
 name = "Mall"
-description = "Ett återanvändbart passmönster som kan kopieras till arbetspass"
+plural = "Mallar"
+description = "Ett namngivet passmönster med roll samt start- och sluttid; ingen åtgärd skapar pass från det"
 
 [labels.sv.model.planning_template.field.name]
 label = "Namn"
@@ -37,6 +39,7 @@ description = "Slut i minuter efter midnatt (1020 är 17:00)"
 
 [labels.sv.model.planning_shift]
 name = "Arbetspass"
+plural = "Arbetspass"
 description = "Ett arbetspass en dag för en roll, som kan tilldelas en anställd"
 
 [labels.sv.model.planning_shift.field.name]
@@ -72,7 +75,7 @@ label = "Status"
 description = "Passets status: öppet, publicerat, bekräftat"
 
 [labels.sv.model.planning_shift.field.state.options]
-open = "Öppet"
+open = "Ej publicerat"
 published = "Publicerat"
 confirmed = "Bekräftat"
 

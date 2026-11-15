@@ -739,9 +739,18 @@ fn nobody_decides_their_own_trip() {
         let id = r.in_review(&rita);
         // The reviewer sees their own trip but decides none of it; another reviewer does.
         for a in ["confirm", "reject", "reopen"] {
-            let e = r.refused(&rita, &format!("mileage_trip.{a}"), json!({"id": id}));
+            let input = if a == "reject" {
+                json!({"id": id, "reject_reason": "x"})
+            } else {
+                json!({"id": id})
+            };
+            let e = r.refused(&rita, &format!("mileage_trip.{a}"), input);
+            // `confirm` and `reject` declare `not_by = "driver"` (D95), which the generated
+            // guard refuses first, in its own words.
             assert!(
-                e.contains("own trip") || e.contains("state must be"),
+                e.contains("own trip")
+                    || e.contains("state must be")
+                    || e.contains("someone else must"),
                 "{a}: {e}"
             );
         }
@@ -777,7 +786,10 @@ fn nobody_decides_their_own_trip() {
         let other = r.in_review(&rita);
         let ritas_agent = Principal::agent("rita/agent", &[DRIVER, REVIEWER], &[DRIVER, REVIEWER]);
         let e = r.refused(&ritas_agent, "mileage_trip.confirm", json!({"id": other}));
-        assert!(e.contains("own trip"), "{e}");
+        assert!(
+            e.contains("own trip") || e.contains("someone else must"),
+            "{e}"
+        );
     });
 }
 
@@ -2826,4 +2838,78 @@ fn a_read_of_ones_own_points_or_of_no_named_driver_is_logged_as_the_rules_say() 
             2
         );
     });
+}
+
+// ---- the D95 hints (B4, B30) ---------------------------------------------------------------------
+
+#[test]
+fn reject_and_discard_take_their_reason_in_the_same_call() {
+    each_rig(|r| {
+        let (ann, rev) = (driver("ann"), reviewer("rita"));
+        let id = r.in_review(&ann);
+        // The reason comes with the action: one call, as an agent or the form makes it.
+        r.ok(
+            &rev,
+            "mileage_trip.reject",
+            json!({"id": id, "reject_reason": "Wrong purpose"}),
+        );
+        let row = r.trip_row(&id);
+        assert_eq!(row["state"], "rejected");
+        assert_eq!(row["reject_reason"], "Wrong purpose");
+        // A reason that is not text is refused and changes nothing.
+        let other = r.in_review(&ann);
+        let e = r.refused(
+            &rev,
+            "mileage_trip.reject",
+            json!({"id": other, "reject_reason": 7}),
+        );
+        assert!(e.contains("reject_reason"), "{e}");
+        assert_eq!(r.state(&other), "in_review");
+        // The driver discards their own trip with its reason, also in one call (a plan, as the
+        // action needs approval for an agent only).
+        let ended = r.ended(&ann);
+        r.ok(
+            &ann,
+            "mileage_trip.discard",
+            json!({"id": ended, "discard_reason": "Test drive"}),
+        );
+        let row = r.trip_row(&ended);
+        assert_eq!(row["state"], "discarded");
+        assert_eq!(row["discard_reason"], "Test drive");
+    });
+}
+
+#[test]
+fn meta_says_what_the_server_does_with_a_trip() {
+    let (d, s) = (Dispatcher::new(), Store::new());
+    crate::register(&d, &s);
+    let meta = d.meta(Surface::Rest, &reviewer("rita"));
+    let trip = meta
+        .iter()
+        .flat_map(|m| m.models.iter())
+        .find(|m| m.name == "mileage_trip")
+        .unwrap();
+    assert!(!trip.can_delete, "a trip is never deleted");
+    let action = |n: &str| {
+        trip.actions
+            .iter()
+            .find(|a| a.id == format!("mileage_trip.{n}"))
+            .and_then(|a| a.ui.clone())
+            .unwrap_or_else(|| panic!("{n} has no ui"))
+    };
+    assert_eq!(action("confirm").not_by.as_deref(), Some("driver"));
+    assert_eq!(action("reject").needs, vec!["reject_reason".to_string()]);
+    let field = |n: &str| trip.fields.iter().find(|f| f.name == n).unwrap();
+    assert!(
+        field("distance_m")
+            .hints
+            .as_ref()
+            .is_some_and(|h| h.readonly)
+    );
+    assert!(
+        field("confirmed_at")
+            .hints
+            .as_ref()
+            .is_some_and(|h| h.readonly)
+    );
 }

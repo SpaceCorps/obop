@@ -5,6 +5,8 @@
   flex-direction: column;
   inline-size: 28rem;
   overflow-y: auto;
+  /* A scroll that reaches the end of the record stops there, not in the list or page behind it. */
+  overscroll-behavior: contain;
   animation: slide var(--dur-3) var(--ease-out);
   scroll-padding-block: 5rem 5rem;
 }
@@ -39,12 +41,46 @@
   background: var(--surface);
 }
 .record h2 {
+  display: -webkit-box;
+  overflow: hidden;
   font-size: var(--text-xl);
-  overflow-wrap: anywhere;
+  line-height: var(--leading-snug);
+  overflow-wrap: break-word;
+  text-wrap: balance;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+.rec-site {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-block-start: 0.15rem;
+  color: var(--accent-ink);
+  font-size: var(--text-sm);
+}
+.record.full h2 {
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+/* Beside the list the tools (pager, more, page, close) get a row of their own above the name, so
+   the name has the whole width and never breaks into a column of words. */
+.record:not(.full, .phone) > header {
+  flex-wrap: wrap;
+  row-gap: 0.15rem;
+  padding-block-start: 0.55rem;
+}
+.record:not(.full, .phone) > header > .rec-tools {
+  order: -1;
+  flex-basis: 100%;
+  justify-content: flex-end;
+}
+.record:not(.full, .phone) h2 {
+  font-size: var(--text-lg);
 }
 .record > header .hint {
   display: block;
-  margin-block-start: 0.1rem;
+  margin-block-end: 0.1rem;
 }
 
 .statusbar {
@@ -114,10 +150,17 @@ a.smartbtn:hover {
   opacity: 0.6;
 }
 .record .actionrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
   padding: 0.85rem 1.25rem 0;
 }
+/* The form fills the rest of the panel, so its bar of Save and Close sits at the bottom of the panel
+   even when the record has few fields (`.formbar`'s `margin-block-start: auto`). */
 .fields {
   display: flex;
+  flex: 1 0 auto;
   flex-direction: column;
   gap: 1rem;
   padding: 1.25rem;
@@ -214,15 +257,18 @@ a.smartbtn:hover {
   color: var(--danger-ink);
   font-weight: var(--weight-semibold);
 }
+/* The bar stays on the bottom edge of the panel while the fields scroll under it. Its negative margins
+   take it over the form's padding to the panel's edges; it sticks at 0, never below the edge (a
+   negative offset left the lower part of its buttons out of sight). */
 .formbar {
   position: sticky;
-  inset-block-end: -1.25rem;
+  inset-block-end: 0;
   z-index: 2;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
-  margin: 0.25rem -1.25rem -1.25rem;
+  margin: auto -1.25rem -1.25rem;
   padding: 0.85rem 1.25rem;
   border-block-start: 1px solid var(--border);
   background: var(--surface);
@@ -252,9 +298,53 @@ a.smartbtn:hover {
   gap: 0.5rem;
 }
 .frow > input,
-.frow > select {
+.frow > select,
+.frow > .dataclass > select {
   flex: 1;
   min-inline-size: 7rem;
+}
+/* Beside the description the data class needs no caption: its label lends the row nothing, so the
+   select lays out as before. On a phone the caption shows (below). */
+.dataclass {
+  display: contents;
+}
+.dataclass > .flabel {
+  display: none;
+}
+/* Add field is the secondary button: it keeps its own width instead of outgrowing the primary one. */
+.add-field {
+  align-self: flex-start;
+}
+@media (max-width: 40rem) {
+  /* Name and the remove button share the first line; the kind and every other input get a line of
+     their own, so none of them is cut. */
+  /* A column that wraps makes each of its columns as wide as its widest line (517 px at 320), so the
+     rows ran off the screen: one column, as wide as the field. */
+  .row.wrap.fieldrow {
+    flex-wrap: nowrap;
+  }
+  .fieldrow > .frow:first-child > select {
+    order: 1;
+    flex-basis: 100%;
+  }
+  .fieldrow > .frow > :is(input, select, .dataclass) {
+    min-inline-size: 0;
+  }
+  .fieldrow > .frow:not(:first-child) > :is(input, select, .dataclass) {
+    flex-basis: 100%;
+  }
+  .dataclass,
+  .dataclass > .flabel {
+    display: flex;
+  }
+  .fieldrow label.check {
+    padding-inline-end: var(--space-2);
+    gap: 0.6rem;
+    font-size: var(--text-base);
+  }
+  .build-actions > .btn.primary {
+    flex: 1 1 100%;
+  }
 }
 
 /* Up to 1024 px the record is a sheet over the list (D2): a right-side panel on a tablet, the whole
@@ -287,22 +377,104 @@ html.sheet-open body {
     box-shadow: var(--shadow-4);
   }
 }
+/* Pills and related-record buttons a finger can hit, on a phone and on any touch screen. A status
+   pill keeps a 36 px body that suits its small text and reaches 44 px through an invisible edge,
+   which fits in the 8 px gap between wrapped rows. */
+@media (max-width: 40rem), (pointer: coarse) {
+  .statusbar {
+    gap: var(--space-2);
+  }
+  .statusbar button {
+    position: relative;
+    min-block-size: 2.25rem;
+  }
+  /* Measured from the padding box, so 1px more covers the border. */
+  .statusbar button::after {
+    position: absolute;
+    inset: calc(-0.25rem - 1px) -1px;
+    content: "";
+  }
+  .smartbtn {
+    min-block-size: 2.75rem;
+  }
+}
 @media (max-width: 40rem) {
   .record.sheet {
     inset: 0;
     inline-size: auto;
     border: 0;
     animation: sheet var(--dur-3) var(--ease-out);
+    /* Room for the sticky header (up to two lines of title) and the form bar. */
+    scroll-padding-block: 6.5rem 5.5rem;
   }
   .record > header .back {
     flex: none;
   }
+  /* The module sheet (modules/DetailPanel.tsx) shares `.record > header`; the record's own header is
+     `.record.phone` below. */
   .record > header {
     align-items: center;
   }
   .record > header > div {
     flex: 1;
     min-inline-size: 0;
+  }
+  /* The back button sits beside the title's first line, and a long title stops after two lines (the
+     Title field holds all of it), so the sticky header stays short. The button's 44 px reach the
+     screen edge, which puts its chevron near the 16 px gutter and gives the title the room. */
+  .record.phone > header {
+    align-items: flex-start;
+    padding-block: 0.5rem 0.75rem;
+    padding-inline: 0 var(--space-4);
+  }
+  .record.phone > header .back {
+    inline-size: 2.75rem;
+    block-size: 2.75rem;
+  }
+  .record.phone > header > div {
+    padding-block-start: 0.55rem;
+  }
+  .record.phone h2 {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    font-size: var(--text-lg);
+  }
+  /* One 16 px gutter, as on every other phone page (the request's signing rows of signlinks.css
+     included). */
+  .statusbar,
+  .smart,
+  .record .actionrow,
+  .record .sign-links,
+  .record .sign-by-link {
+    padding-inline: var(--space-4);
+  }
+  .fields {
+    padding: var(--space-4);
+  }
+  /* Save and Close share the bar, which clears the home indicator. */
+  .formbar {
+    margin: auto calc(-1 * var(--space-4)) calc(-1 * var(--space-4));
+    padding: var(--space-3) var(--space-4) max(var(--space-3), env(safe-area-inset-bottom));
+  }
+  .formbar > .btn {
+    flex: 1;
+    min-block-size: 2.75rem;
+  }
+  .formbar > .grow {
+    display: none;
+  }
+  /* "Read only for you" reads as a note on its own line above the buttons, not squeezed beside them. */
+  .formbar > .hint:not(.kbd-hint) {
+    flex-basis: 100%;
+    order: -1;
+    text-align: center;
+  }
+  /* Delete moves from the action row to the end of the form on a phone (RecordPanel). */
+  .record-delete {
+    align-self: stretch;
   }
   .kbd-hint {
     display: none;
@@ -370,4 +542,386 @@ html.sheet-open body {
 }
 .moveto option:disabled {
   color: var(--text-subtle);
+}
+
+/* ---------- The record form of lane L5 (UI plan 2.6) ---------- */
+/* The title bar: picture, kicker (model or trail) over the name, then pager, page and close. */
+.record > header > .rec-title {
+  flex: 1;
+  min-inline-size: 0;
+}
+.rec-tools {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+}
+.rec-pager {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-inline-end: var(--space-1);
+}
+.rec-pos {
+  min-inline-size: 3.5rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  white-space: nowrap;
+}
+.rec-avatar {
+  display: inline-flex;
+  flex: none;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+}
+.rec-kind {
+  font-size: var(--text-sm);
+}
+.rec-crumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-1);
+  margin: 0 0 0.1rem;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+}
+.rec-crumbs li {
+  display: inline-flex;
+  min-inline-size: 0;
+  max-inline-size: 14rem;
+}
+.rec-crumbs li::after {
+  padding-inline-start: var(--space-1);
+  color: var(--text-subtle);
+  content: "\203A";
+}
+.rec-crumbs a {
+  overflow: hidden;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rec-crumbs a:hover {
+  color: var(--accent-ink);
+}
+
+/* The summary: what the record is about on the left, its figures on the right. */
+.rec-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-6);
+  padding: 0.85rem 1.25rem 0;
+}
+.rec-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.rec-chip {
+  max-inline-size: 100%;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rec-chips .rec-chip:not(:last-child)::after {
+  padding-inline-start: var(--space-2);
+  color: var(--text-subtle);
+  content: "\00B7";
+}
+.rec-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-6);
+  margin: 0 0 0 auto;
+}
+.rec-figure {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.rec-figure dt {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+.rec-figure dd {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+}
+.rec-figure:last-child dd {
+  font-size: var(--text-xl);
+}
+/* On a phone: the state, the total and the facts on one line under the title. */
+.rec-strip {
+  display: flex;
+  /* It clips its own overflow, so in the panel's column it must not shrink below its line. */
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  min-inline-size: 0;
+  padding: var(--space-3) var(--space-4) 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.rec-strip > * {
+  flex: none;
+}
+.rec-strip > .rec-chip {
+  flex: 0 1 auto;
+}
+.rec-strip .amount {
+  font-weight: var(--weight-semibold);
+}
+
+/* A governed status reads as steps; it moves through the actions below. */
+.statusbar.stepper {
+  gap: var(--space-1);
+}
+.statusbar.stepper li {
+  display: flex;
+  align-items: center;
+}
+.statusbar.stepper .step {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-block-size: 1.75rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--text-subtle);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+.statusbar.stepper li.done .step {
+  border-color: transparent;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.statusbar.stepper li.on .step {
+  border-color: var(--accent-fill);
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  font-weight: var(--weight-semibold);
+}
+.rec-starts {
+  padding: var(--space-3) var(--space-5) 0;
+}
+
+/* The lock of a frozen record, and what an action made. */
+.rec-lock,
+.rec-made {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0.85rem 1.25rem 0;
+  padding: 0.6rem 0.8rem;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+.rec-lock {
+  background: var(--warning-soft);
+  color: var(--text);
+}
+.rec-lock .icon {
+  flex: none;
+  margin-block-start: 0.1rem;
+  color: var(--warning-ink);
+}
+.rec-made {
+  flex-wrap: wrap;
+  background: var(--success-soft);
+}
+.rec-made a {
+  color: var(--accent-ink);
+  font-weight: var(--weight-semibold);
+}
+
+/* Actions: one primary, the other valid ones, then the menu at the end. */
+.approval-mark {
+  display: inline-flex;
+  margin-inline-start: 0.1rem;
+  opacity: 0.7;
+}
+.rec-tools .dropdown {
+  display: inline-flex;
+}
+
+/* Smart buttons: the name, then the number in a soft pill. */
+.smartbtn {
+  gap: var(--space-2);
+}
+.smart-n {
+  min-inline-size: 1.4rem;
+  padding: 0 0.35rem;
+  border-radius: var(--radius-pill);
+  background: var(--surface-3);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.smart-more {
+  border-style: dashed;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.smart-more:hover {
+  border-color: var(--accent-line);
+  color: var(--accent-ink);
+}
+
+/* Sections: a quiet heading that opens and closes, the fields in a grid. */
+.record > .fields {
+  container: recordform / inline-size;
+  gap: var(--space-2);
+}
+.fsec + .fsec {
+  padding-block-start: var(--space-2);
+  border-block-start: 1px solid var(--border);
+}
+.fsec-head {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+.fsec-head button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  inline-size: 100%;
+  min-block-size: 2.25rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-weight: var(--weight-semibold);
+  text-align: start;
+  cursor: pointer;
+}
+.fsec-head button:hover {
+  color: var(--text);
+}
+.fsec-count {
+  margin-inline-start: auto;
+  font-weight: var(--weight-regular);
+}
+.fsec-note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-3);
+}
+.fsec-note .icon {
+  color: var(--warning-ink);
+}
+.fgrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4) var(--space-6);
+  margin: 0 0 var(--space-3);
+}
+.fsec.plain .fgrid {
+  margin-block-start: var(--space-1);
+}
+@container recordform (min-width: 900px) {
+  .fgrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .fgrid > .field.wide {
+    grid-column: 1 / -1;
+  }
+}
+/* A value the person cannot write reads as text, not as a dashed input. */
+.field.ro .flabel {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+.field.ro .flabel[title] {
+  cursor: help;
+}
+.fvalue {
+  min-block-size: 1.5rem;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.fvalue.long {
+  white-space: pre-wrap;
+}
+.fgrid dt,
+.fgrid dd {
+  margin: 0;
+}
+.rec-readonly {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-block-start: auto;
+}
+
+/* The action's question. */
+.action-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.action-form .confirm-msg {
+  margin: 0;
+}
+
+/* The record as a page: the list steps aside, the form takes its place, centred. */
+.workspace:has(> .record.full) > .main {
+  display: none;
+}
+.record.full {
+  flex: 1;
+  inline-size: auto;
+  min-inline-size: 0;
+}
+.record.full > :not(.rec-lock, .rec-made) {
+  padding-inline: max(1.25rem, calc((100% - 68rem) / 2));
+}
+.record.full > :is(.rec-lock, .rec-made) {
+  margin-inline: max(1.25rem, calc((100% - 68rem) / 2));
+}
+@media (max-width: 64rem) {
+  .record.sheet.full {
+    inline-size: 100%;
+  }
+}
+@media (max-width: 40rem) {
+  .rec-summary {
+    padding-inline: var(--space-4);
+  }
+  .rec-lock,
+  .rec-made {
+    margin-inline: var(--space-4);
+  }
+  .rec-starts {
+    padding-inline: var(--space-4);
+  }
+  .record.full > :not(.rec-lock, .rec-made) {
+    padding-inline: var(--space-4);
+  }
+  .actionrow > .btn.primary {
+    flex: 1 1 auto;
+  }
+}
+.record > header > .rec-tools {
+  flex: none;
+}
+/* On a phone a record with nothing to save gives the bar's room back to the form. */
+@media (max-width: 40rem) {
+  .record.phone .formbar.clean {
+    display: none;
+  }
 }

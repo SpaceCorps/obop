@@ -5,6 +5,7 @@ summary = "Lieferanten, Bestellungen und Bestellpositionen mit dem Ablauf Entwur
 
 [labels.de.model.purchase_vendor]
 name = "Lieferant"
+plural = "Lieferanten"
 description = "Einkaufskonditionen für einen Kontakt, bei dem Sie einkaufen"
 
 [labels.de.model.purchase_vendor.field.party_id]
@@ -33,11 +34,12 @@ description = "Ob Sie noch bei diesem Lieferanten einkaufen"
 
 [labels.de.model.purchase_order]
 name = "Bestellung"
+plural = "Bestellungen"
 description = "Eine Anfrage an einen Lieferanten, Waren oder Dienstleistungen zu liefern"
 
 [labels.de.model.purchase_order.field.reference]
-label = "Referenz"
-description = "Auf dem Beleg gedruckte Bestellnummer"
+label = "Lieferantenreferenz"
+description = "Angebots- oder Referenznummer des Lieferanten für diese Bestellung, falls vorhanden"
 
 [labels.de.model.purchase_order.field.vendor_id]
 label = "Lieferant"
@@ -92,6 +94,7 @@ description = "Eine noch nicht gesendete Bestellung stornieren"
 
 [labels.de.model.purchase_order_line]
 name = "Bestellposition"
+plural = "Bestellpositionen"
 description = "Ein Produkt oder eine Dienstleistung einer Bestellung"
 
 [labels.de.model.purchase_order_line.field.order_id]

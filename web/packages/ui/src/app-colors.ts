@@ -29,21 +29,36 @@ const ALIASES: Record<string, AppIconName> = {
   document: "documents",
   kb: "knowledge",
   wiki: "knowledge",
+  trip: "mileage",
 };
 
-/** The icon for an app, from its module id first and its name second; unknown apps get the generic one. */
-export function appIconName(id: string, name = ""): AppIconName {
+/**
+ * The icon for an app and how it was found: from its module id, then its name, then the part of the
+ * id before the first underscore (`accounting_se` is an Accounting app, `sign_docuseal` a Sign
+ * app); unknown apps get the generic one.
+ */
+function iconMatch(id: string, name: string): { icon: AppIconName; byPrefix: boolean } {
   const key = id.toLowerCase();
   const slug = name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
-  for (const k of [key, slug]) {
+  const known = (k: string): AppIconName | undefined => {
     if (k in APP_ICONS && k !== "app") return k as AppIconName;
-    const a = ALIASES[k.replace(/-/g, "_")] ?? ALIASES[k.replace(/-/g, "")];
-    if (a) return a;
+    return ALIASES[k.replace(/-/g, "_")] ?? ALIASES[k.replace(/-/g, "")];
+  };
+  for (const k of [key, slug]) {
+    const found = known(k);
+    if (found) return { icon: found, byPrefix: false };
   }
-  return "app";
+  const prefix = key.split("_")[0] ?? "";
+  const found = prefix && prefix !== key ? known(prefix) : undefined;
+  return found ? { icon: found, byPrefix: true } : { icon: "app", byPrefix: false };
+}
+
+/** The icon for an app, from its module id first and its name second; unknown apps get the generic one. */
+export function appIconName(id: string, name = ""): AppIconName {
+  return iconMatch(id, name).icon;
 }
 
 /** Brand tile colours as OKLCH: lightness 0.52 to 0.6 keeps the white glyph above 3:1 everywhere. */
@@ -76,6 +91,7 @@ const TILE: Record<string, [number, number, number]> = {
   appointments: [0.55, 0.13, 215],
   expenses: [0.58, 0.12, 92],
   connectors: [0.53, 0.12, 192],
+  mileage: [0.56, 0.12, 105],
   customize: [0.5, 0.04, 265],
   app: [0.5, 0.04, 265],
 };
@@ -83,10 +99,12 @@ const TILE: Record<string, [number, number, number]> = {
 /** The default tile colour (hex) for an app. */
 export function appColor(id: string, name = "", chosen?: string): string {
   if (chosen) return chosen;
-  const icon = appIconName(id, name);
+  const { icon, byPrefix } = iconMatch(id, name);
   if (icon !== "app") {
     const [l, c, h] = TILE[icon]!;
-    return oklchToHex({ l, c, h });
+    // An app that borrows the glyph of the app it extends (Accounting Sweden) gets a nearby hue,
+    // so the two tiles are told apart.
+    return oklchToHex({ l, c, h: byPrefix ? (h + 28) % 360 : h });
   }
   // Unknown modules get a stable hue from their id.
   let n = 0;

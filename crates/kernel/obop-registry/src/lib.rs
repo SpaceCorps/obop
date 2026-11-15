@@ -8,10 +8,12 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 pub mod expr;
 pub mod ext;
+pub mod guard;
 pub mod labels;
 pub mod limits;
 pub mod rules;
 pub mod template;
+pub mod ui;
 pub use ext::{
     CondOp, Exit, Guard, History, IndexCond, IndexDef, IndexKind, LockDate, ModelExt, StateSet,
 };
@@ -23,6 +25,9 @@ pub use limits::{
 pub use rules::{
     Access, Assertion, Computed, Effect, EffectKind, Lit, Locator, Reset, SeqFormat, SequenceSpec,
     ShowsOption, ShowsWhen, Src, Target, Unique,
+};
+pub use ui::{
+    ActionUi, ChildDecl, DefaultLit, DefaultSpec, FieldHints, FieldUi, Filter, ModelUi, ModuleUi,
 };
 
 /// Registry metadata uses `&'static str`. Modules installed at runtime build their names from
@@ -262,6 +267,9 @@ pub struct FieldDef {
     /// Length and range limits (D90); `None`: none declared (a text field still has the default
     /// length, see [`FieldDef::effective_max_length`]).
     pub limits: Option<Arc<Limits>>,
+    /// UI hints and the rules that come with them (D95): `default`, `fill_from`, `readonly`,
+    /// `ref_filter` and `[model.field.ui]`; `None`: none declared.
+    pub hints: Option<Arc<FieldHints>>,
 }
 
 #[derive(Debug, Clone)]
@@ -281,6 +289,9 @@ pub struct CommandDef {
     pub effects: Vec<Effect>,
     /// Conditions that must hold before the action runs (D56).
     pub asserts: Vec<Assertion>,
+    /// `[model.action.ui]` (D95): how the interface offers the action, the fields its input may
+    /// carry (`needs`) and who may not run it (`not_by`); `None`: none declared.
+    pub ui: Option<Arc<ActionUi>>,
 }
 
 /// A declared state transition: set `field` to `to`, only when it currently equals `from` (if
@@ -314,6 +325,7 @@ impl CommandDef {
             transition: None,
             effects: Vec::new(),
             asserts: Vec::new(),
+            ui: None,
         }
     }
 
@@ -355,6 +367,7 @@ impl FieldDef {
             sequence: None,
             shows_option: None,
             limits: None,
+            hints: None,
         }
     }
 
@@ -608,13 +621,14 @@ pub const RESERVED_MODELS: [&str; 5] = [
 /// some of these tables. Neither sees a name built at run time, and N17 lists the other gaps.
 /// (`obop_record` and `obop_record_change` are the SQL tables of the SQLite and PostgreSQL stores:
 /// not models, listed because the name is the program's.)
-pub const INTERNAL_TABLES: [&str; 55] = [
+pub const INTERNAL_TABLES: [&str; 59] = [
     "auth_mfa_token",
     "auth_passkey",
     "auth_sso_link",
     "auth_sso_provider",
     "auth_token",
     "auth_user",
+    "bank_matching",
     "bulk_idempotency",
     "community_audit",
     "community_category",
@@ -634,6 +648,7 @@ pub const INTERNAL_TABLES: [&str; 55] = [
     "connector_seen",
     "connector_vault",
     "import_map",
+    "invoice_posting",
     "oas_import_map",
     "oas_import_run",
     "oauth_client",
@@ -664,6 +679,8 @@ pub const INTERNAL_TABLES: [&str; 55] = [
     "status_maint",
     "status_probe_api",
     "status_recent",
+    "time_billing",
+    "vat_computation",
 ];
 
 /// The built-in model of a reserved name, by the module that owns it: the one place a reserved
@@ -786,6 +803,8 @@ pub struct ModuleMeta {
     pub maturity: String,
     /// Module id and semver requirement, in declaration order.
     pub dependencies: Vec<(String, String)>,
+    /// `[module] home` and `launcher` (D95).
+    pub ui: ModuleUi,
 }
 
 impl ModuleMeta {
@@ -821,6 +840,7 @@ impl ModuleMeta {
                 .iter()
                 .map(|d| (d.to_string(), format!("^{major}.{minor}")))
                 .collect(),
+            ui: ModuleUi::default(),
         }
     }
 }
@@ -858,6 +878,8 @@ pub fn check_module(m: &Module) -> Vec<Violation> {
     // Rules (D56 to D58). Effects on models outside the module cannot be resolved here; the
     // install checks them against the dependencies (`check_module_in`).
     v.extend(rules::check_rules(m, &|_| None, false));
+    v.extend(ui::check(m, &|_| None, false));
+    v.extend(guard::check(m, &|_| None, false));
     v
 }
 
@@ -869,6 +891,8 @@ pub fn check_module(m: &Module) -> Vec<Violation> {
 pub fn check_installed_module(m: &Module) -> Vec<Violation> {
     let mut v = check_basics(m, false);
     v.extend(rules::check_rules(m, &|_| None, false));
+    v.extend(ui::check(m, &|_| None, false));
+    v.extend(guard::check(m, &|_| None, false));
     v
 }
 
@@ -880,6 +904,8 @@ pub fn check_module_in(
 ) -> Vec<Violation> {
     let mut v = check_basics(m, true);
     v.extend(rules::check_rules(m, lookup, true));
+    v.extend(ui::check(m, lookup, true));
+    v.extend(guard::check(m, lookup, true));
     v
 }
 
@@ -1122,6 +1148,7 @@ mod tests {
             sequence: None,
             shows_option: None,
             limits: None,
+            hints: None,
         }
     }
 
@@ -1182,6 +1209,7 @@ mod tests {
             transition: None,
             effects: vec![],
             asserts: vec![],
+            ui: None,
         });
         assert_eq!(check_module(&m).len(), 1);
     }
@@ -1753,10 +1781,12 @@ mod tests {
             no_delete_when: None,
             lock_date: Some(LockDate {
                 field: "date",
-                setting: "accounting.lock_date",
+                setting: Some("accounting.lock_date"),
+                closed_by: None,
             }),
             children_of: None,
             append_only: false,
+            message: None,
         };
         assert_eq!(guard("posted"), guard("posted"));
         assert_ne!(guard("posted"), guard("paid"));

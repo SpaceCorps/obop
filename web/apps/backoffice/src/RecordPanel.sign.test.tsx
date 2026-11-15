@@ -98,8 +98,6 @@ const modulesFor = (can: { make: boolean; revoke: boolean }): ModuleMeta[] => {
   return m;
 };
 
-const REASON =
-  "A request about a document is signed by the signer through the signing link. It cannot be marked signed by hand.";
 const base = { id: "r1", title: "NDA with Ada Example", signer_name: "Ada Example" };
 const rows = {
   document: { ...base, state: "sent", document_id: "d1", document_hash: "ab12" },
@@ -203,13 +201,22 @@ const flat = (el: Element | null | undefined) =>
 const actionRow = () => container.querySelector(".actionrow")!;
 const actionButtons = () => [...actionRow().querySelectorAll<HTMLElement>("button")];
 const actionButton = (name: string) => actionButtons().find((b) => flat(b) === name);
-const steps = () => [...container.querySelectorAll<HTMLElement>("ol.statusbar button")];
-const step = (name: string) => steps().find((b) => flat(b).replace(/ \*$/, "") === name)!;
+/** The governed status is a stepper of words, not buttons: it moves through the actions. */
+const stepButtons = () => [...container.querySelectorAll<HTMLElement>("ol.statusbar button")];
+const stepWords = () => [...container.querySelectorAll<HTMLElement>("ol.statusbar li")].map(flat);
+/** The items of the More actions menu, once it is opened. */
+const openMenu = async () => {
+  await click(container.querySelector('[aria-label="More actions"]'));
+  return [...document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+};
 const note = () => container.querySelector<HTMLElement>("p.sign-by-link");
-/** The words a tooltip shows once its control has the focus. */
-const tooltipOf = async (el: HTMLElement) => {
+/**
+ * Focus as the keyboard gives it: a tooltip opens on keyboard focus (`:focus-visible`) or hover, not
+ * on a focus a script or a click moves. A Tab key press first makes the next focus a keyboard one.
+ */
+const keyboardFocus = async (el: HTMLElement) => {
+  document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
   await act(async () => el.focus());
-  return document.body.querySelector('[role="tooltip"]')?.textContent ?? "";
 };
 const disabled = (el: HTMLElement | undefined) => el?.getAttribute("aria-disabled") === "true";
 
@@ -250,8 +257,9 @@ describe("a request about a Document", () => {
     await mount(rows.document);
     const names = actionButtons().map(flat);
     expect(names, "a button to mark it signed by hand").not.toContain("Sign");
-    expect(names).toContain("Decline");
     expect(names).toContain("Create signing link");
+    // Declining ends the request: it waits in the More actions menu.
+    expect((await openMenu()).map(flat)).toContain("Decline");
   });
 
   it("says in the panel that the signer signs it through the link", async () => {
@@ -260,27 +268,31 @@ describe("a request about a Document", () => {
     expect(flat(note())).toContain("It cannot be marked signed by hand.");
   });
 
-  it("greys out the Signed step of the status bar and gives the reason", async () => {
+  it("shows the status as steps that cannot be pressed", async () => {
     await mount(rows.document);
-    expect(disabled(step("Signed"))).toBe(true);
-    expect(await tooltipOf(step("Signed"))).toBe(REASON);
-    // The steps it may take are untouched.
-    expect(disabled(step("Declined"))).toBe(false);
+    expect(stepButtons()).toEqual([]);
+    // A bad end the request is not in is no step to reach.
+    expect(stepWords()).toEqual(["Draft", "Sent", "Signed"]);
   });
 
-  it("sends nothing when the greyed-out step is pressed", async () => {
+  it("declines only after the question is answered", async () => {
     await mount(rows.document);
-    await click(step("Signed"));
+    const decline = (await openMenu()).find((b) => flat(b) === "Decline");
+    await click(decline);
+    const dialog = document.body.querySelector('[role="alertdialog"]')!;
+    expect(flat(dialog)).toContain("NDA with Ada Example");
+    expect(sent("sign_request/decline")).toEqual([]);
+    await click([...dialog.querySelectorAll("button")].find((b) => flat(b) === "Decline"));
     await settle();
-    expect(sent("sign_request/sign")).toEqual([]);
-    expect(sent("sign_request/update")).toEqual([]);
+    expect(sent("sign_request/decline")).toEqual([
+      { url: "/api/sign_request/decline", body: { id: "r1" } },
+    ]);
   });
 
   it("is the same for a request that was left holding only the hash of a Document", async () => {
     await mount(rows.cleared);
     expect(actionButtons().map(flat)).not.toContain("Sign");
     expect(note()).not.toBeNull();
-    expect(disabled(step("Signed"))).toBe(true);
   });
 
   it("says so while it is a draft too, but not once it is signed", async () => {
@@ -297,7 +309,6 @@ describe("a request made from a template", () => {
     expect(actionButtons().map(flat)).toContain("Sign");
     expect(disabled(actionButton("Sign"))).toBe(false);
     expect(note()).toBeNull();
-    expect(disabled(step("Signed"))).toBe(false);
   });
 
   it("is marked signed by hand when the Sign button is pressed", async () => {
@@ -309,18 +320,10 @@ describe("a request made from a template", () => {
     ]);
   });
 
-  it("is marked signed by hand when the Signed step is pressed", async () => {
-    await mount(rows.template);
-    await click(step("Signed"));
-    await settle();
-    expect(sent("sign_request/sign")).toHaveLength(1);
-  });
-
   it("is still closed by hand when a hash was typed in under the old package", async () => {
     await mount(rows.typedHash);
     expect(actionButtons().map(flat)).toContain("Sign");
     expect(note()).toBeNull();
-    expect(disabled(step("Signed"))).toBe(false);
   });
 });
 
@@ -330,7 +333,7 @@ describe("Send and Send document in the action row", () => {
     expect(disabled(actionButton("Send"))).toBe(true);
     expect(disabled(actionButton("Send document"))).toBe(false);
     const send = actionButton("Send")!;
-    await act(async () => send.focus());
+    await keyboardFocus(send);
     expect(document.body.querySelector('[role="tooltip"]')?.textContent).toBe(
       "This request is about a document. Use Send document.",
     );
@@ -421,7 +424,7 @@ describe("an answer to Create signing link that the page cannot show (W5)", () =
       expect(tone).toBe("error");
       expect(text).toContain("A signing link was made for this request");
       expect(text).toContain("nobody has it");
-      expect(text).toContain("Revoke it in the Signing links table and make another one.");
+      expect(text).toContain("Revoke it under Signing links and make another one.");
       expect(text).not.toContain("did not return");
     });
   }
@@ -465,7 +468,7 @@ describe("who may revoke a signing link (WEB3-5)", () => {
   it("shows the links and no Revoke to a person who may not update links, although they may make them", async () => {
     linkRows = [active];
     await mount(rows.document, { make: true, revoke: false });
-    expect(container.querySelector(".sign-links"), "the table is gone").not.toBeNull();
+    expect(container.querySelector(".sign-links"), "the list is gone").not.toBeNull();
     expect(flat(container.querySelector(".sign-links"))).toContain("Active");
     expect(revoke()).toHaveLength(0);
   });
@@ -479,7 +482,7 @@ describe("who may revoke a signing link (WEB3-5)", () => {
   it("shows no Revoke on a link that was used, whatever the right", async () => {
     linkRows = [used, active];
     await mount(rows.document, { make: true, revoke: true });
-    expect(container.querySelectorAll(".sign-links tbody tr")).toHaveLength(2);
+    expect(container.querySelectorAll(".sign-links .sign-link-item")).toHaveLength(2);
     expect(revoke()).toHaveLength(1);
   });
 });

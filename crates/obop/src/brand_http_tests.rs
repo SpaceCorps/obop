@@ -397,7 +397,7 @@ async fn with_a_brand_the_stored_artwork_is_served_with_the_fixed_headers_in_eve
         );
         assert_eq!(a.header("content-security-policy"), SPEC_CSP, "{}", l.name);
         assert_eq!(a.header("cache-control"), SPEC_CACHE_CONTROL, "{}", l.name);
-        // The constants that the shop favicon is to share (slice S1f, not built) say the same.
+        // The constants that the shop's tab icon shares (`obop-site`, `seo.rs`) say the same.
         assert_eq!(SPEC_CONTENT_TYPE, LOGO_CONTENT_TYPE);
         assert_eq!(SPEC_NOSNIFF, LOGO_NOSNIFF);
         assert_eq!(SPEC_CSP, LOGO_CSP);
@@ -1081,8 +1081,16 @@ async fn under_the_admin_prefix_the_route_is_still_at_the_root() {
         under.text()
     );
     assert!(!under.header("content-type").contains("svg"));
-    // The public site's own pages are not shadowed either.
-    assert_ne!(get(&l.router, "/favicon.svg").await.text(), artwork());
+    // The public site's own pages are not shadowed either: robots.txt is the shop's. Since slice S1f
+    // the shop's tab icon, `/favicon.svg`, is the record's artwork too, answered by the shop itself
+    // with the headers and the ETag of the logo route.
+    let robots = get(&l.router, "/robots.txt").await;
+    assert_eq!(robots.status, 200);
+    assert!(robots.text().contains("User-agent"), "{}", robots.text());
+    let tab = get(&l.router, "/favicon.svg").await;
+    assert_eq!(tab.status, 200);
+    assert_eq!(tab.text(), artwork());
+    assert_eq!(tab.header("etag"), at_root.header("etag"));
 }
 
 // ---- The store that fails (D74) -------------------------------------------------------------------
@@ -1124,15 +1132,11 @@ async fn while_the_cell_is_fresh_a_failing_store_is_not_met() {
 }
 
 /// The bound of the reader's cell: the constant `DEFAULT_BOUND` of
-/// `crates/kernel/obop-commands/src/brand/reader.rs` (not exported, and pinned at two seconds by
+/// `crates/kernel/obop-commands/src/brand/reader.rs`, itself (pinned at two seconds by
 /// `brand/tests/cache.rs`). The dispatcher's reader has this bound, and a test in this crate cannot
-/// make it shorter or expire the cell by hand. If the constant grows, the tests below that wait
-/// for the cell to go stale fail loudly (the request they expect to be refused is answered 200, or
-/// the wait is far too long), not silently. If it shrinks they do not notice: what they wait for is
-/// two seconds, and a shorter cell is stale by then, so every one of them still passes (with one
-/// second all of this module passes). A shorter bound is held by the pin in
-/// `brand/tests/cache.rs` (`the_bound_is_two_seconds`) alone.
-const READER_BOUND: std::time::Duration = std::time::Duration::from_secs(2);
+/// make it shorter or expire the cell by hand. The tests below that wait for the cell to go stale
+/// wait for the bound the reader has, and not for a copy of it that could drift.
+const READER_BOUND: std::time::Duration = obop_commands::brand::DEFAULT_BOUND;
 
 /// A `GET /healthz` that the runtime's worker must poll, answered within `bound`, and the answer.
 /// The test body runs on the thread that drives the runtime (`block_on`), not on a worker, so a

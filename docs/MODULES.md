@@ -18,18 +18,19 @@ X1 packages cannot run anything, so an administrator can install one from an upl
 
 ### What ships
 
-Built-in modules (Rust crates, not removable): `base` (model `party`), `product` (`product`), `crm`, `sales` (`sale_order`), `invoicing` (`invoice`), `connectors` (`connection`, `consent`, the provider catalogue and the other records of docs/CONNECTORS.md), `mileage` (`mileage_trip`, `mileage_point`: trips recorded by the Mileage app and reviewed in the back office, docs/spec/mobile.md 8.6). Bundled packages in `packages/*.toml` (installed from the Customize app or `obop modules install-from ID`). Built-in modules version with the core (the version of the running core, D55); every bundled package declares `license = "AGPL-3.0-or-later"`, `requires_core = "^0.2"`, its own version and its dependencies with ranges:
+Built-in modules (Rust crates, not removable): `base` (model `party`), `product` (`product`), `crm`, `sales` (`sale_order`), `invoicing` (`invoice`), `connectors` (`connection`, `consent`, the provider catalogue and the other records of docs/CONNECTORS.md), `mileage` (`mileage_trip`, `mileage_point`: trips recorded by the Mileage app and reviewed in the back office, docs/spec/mobile.md 8.6). Bundled packages in `packages/*.toml` (installed from the Customize app or `obop modules install-from ID`). Built-in modules version with the core (the version of the running core, D55); every bundled package declares `license = "Apache-2.0"`, a `requires_core` range (`"^0.2"`, or `"^0.2.1"` for `accounting_se`), its own version and its dependencies with ranges:
 
 | Package | Needs | What it holds |
 |---|---|---|
 | `accounting` | base | Chart of accounts, journals, taxes (basis points), fiscal years and periods, journal entries and lines, bank statement lines. Posting and closing need approval and `accounting.approver` |
+| `accounting_se` | accounting | Swedish company data, voucher series, VAT codes, VAT return boxes and a VAT report per period; all VAT mappings are unverified |
 | `appointments`, `documents`, `expenses`, `fleet`, `helpdesk`, `manufacturing`, `projects`, `purchase`, `inventory`, `subscriptions`, `timesheets`, `hr` | varies | Services, supply chain and people apps |
 | `planning` | hr | Roles, shift templates, shifts (open, published, confirmed) |
 | `field_service` | base, product, hr | Jobs with site, technician, parts used, signature flag |
-| `pos` | base, product | Point-of-sale config, cash-controlled sessions, orders, lines, payments; refunds and session close need approval |
+| `pos` | base, product, inventory | Point-of-sale config, sessions, orders, lines, payments; refunds and session close need approval |
 | `ecommerce` | base, product | Categories, listings and translations, shipping methods, discount codes, web orders and lines; public shop and checkout when the site is enabled; refunds need approval |
 | `website` | none | Pages, menu items, blog posts, form submissions and translations; served publicly when the site is enabled (docs/STOREFRONT.md) |
-| `email_marketing` | none | Lists, contacts with consent, campaigns with statistics; sending needs approval |
+| `email_marketing` | none | Lists, contacts with consent, campaigns with statistics; marking a campaign sent needs approval, and no email is sent |
 | `sign` | documents (from 0.2.1, D92) | Templates and signature requests; a request about a Document is signed through a link (docs/SIGN.md) |
 | `sign_docuseal` | sign | DocuSeal signing events next to the requests; needs the DocuSeal connector (docs/SIGN-DOCUSEAL.md) |
 | `dashboards` | none | Dashboards and widgets as data (schema in section 9) |
@@ -596,6 +597,7 @@ message = "Verifikationen balanserar inte"
 | `create` | `map = { field = value }` | Creates a record of `model`; governed fields start at their first option, a sequence is numbered, `own` defaults to the caller. |
 | `update` | `set = { field = value }`, and `ref = "field"` or `children = true` (`via = "field"` if several) | Sets fields on the record a ref field of this record names, or on every `model` record that refers to this one. |
 | `adjust` | `field`, `op = "add"/"subtract"`, `by`, and `ref = "field"` or `match = { field = value }`; `create_missing`, `min` | Adds to or subtracts from a number or money field. `match` finds the one record whose fields equal the values (several is an error; none is an error unless `create_missing`, which creates it from the match values and the amount); `min` is a floor the result may not go below. |
+| `set` | `set`, optionally `when` | D95, see 3.10: sets fields of the record the action runs on, after the transition (no `model`, `ref` or `children`). |
 | `set_state` | `action`, and `ref` or `children` | Runs an action of `model` on the related records. That action's group, from-state, required fields, assertions, sequences, effects and the caller's visibility of the record all apply; a chain is at most 4 deep and may not loop. |
 
 ```toml
@@ -646,7 +648,176 @@ write_group = "hr.user"
   see_all_group = "hr.manager"
 ```
 
-Limits, stated plainly: the rules are about whole records, not fields (use `group` for columns); aggregates and computed totals ignore them, so give the children `via` the parent; uniqueness is global, so a refused duplicate reveals that some record holds the value; a record whose owner field is empty or is not a login is visible to the managers only; existing records get no owner when a model gains `own`.
+Limits, stated plainly: the rules are about whole records, not fields (use `group` for columns); computed totals ignore them (a computed `sum(lines.x)` reads every child), so give the children `via` the parent; the `aggregate` option of `search` counts only the records the caller may see; uniqueness is global, so a refused duplicate reveals that some record holds the value; a record whose owner field is empty or is not a login is visible to the managers only; existing records get no owner when a model gains `own`.
+
+### 3.10 UI hints (D95)
+
+PROPOSED (D95). Every key is optional; a package that uses one writes `requires_core = "^0.2.2"`. The display hints are only checked and served (`/api/meta`, `obop__meta`); the rules marked **server** are enforced on every surface (REST, MCP, the CLI, `bulk_create` and imports, and records an effect creates). Field names in every key are checked against the model; a ref path `a.b` against the model the ref points at.
+
+```toml
+[module]
+home = "projects_task"          # where the app opens: a model of the module, or "overview"
+launcher = false                # not on the launcher (it lives under another app)
+
+[model.ui]
+title = "{code} {name} | {name}"     # placeholders {field} and {ref.field}; | separates alternatives
+subtitle = "{project_id.name}"
+list = ["name", "project_id", "due", "amount_minor", "state"]   # list columns, in order (at most 20)
+card = ["name", "amount_minor"]      # kanban card fields (at most 12)
+card_sum = "amount_minor"            # the number, money or decimal field a column adds up
+quick_create = ["name", "project_id"]
+order = "due desc, name asc"         # at most 4 fields, asc or desc
+default_view = "kanban"              # list, kanban, calendar, pivot, graph, gallery, grid, timeline, tree
+menu = "main"                        # main, configuration, reporting, hidden
+menu_section = "Work"
+menu_order = 2                       # -1000 to 1000
+calendar = { start = "due", end = "due", color = "project_id" }   # date or datetime; select or ref
+report = { rows = "project_id", cols = "state", measure = "amount_minor" }
+public_url = "/blog/{slug}"          # where a record is seen on the public site
+
+[[model.ui.section]]                 # a titled group of fields in the form (at most 20)
+label = "Billing"
+fields = ["amount_minor", "currency"]
+collapsed = true
+show_in = ["done"]                   # only while the state is one of these options
+
+[[model.ui.filter]]                  # a saved filter of the control panel (at most 20)
+label = "Due this week"
+where = "due <= today+7 && state != done"
+
+[[model.child]]                      # a model drawn inside this form, besides <model>_<x>
+model = "projects_task_note"
+via = "task_id"                      # its ref to this model
+shape = "list"                       # lines, list, images or translations
+
+[[model.field]]
+name = "due"
+description = "When it is due"
+class = "none"
+kind = "date"
+default = "today+7"                  # server: filled on create when the field is left out
+[model.field.ui]
+warn_before_days = 3                 # amber this many days before, red once past (date, datetime)
+
+[[model.field]]
+name = "unit_price_minor"
+description = "Price per unit"
+class = "financial"
+kind = "money"
+fill_from = "product_id.list_price_minor"   # server: copied on create when the ref is set
+[model.field.ui]
+aggregate = "none"                   # sum, avg or none (number, money, decimal)
+currency_from = "order_id.currency"  # a text field, of this record or through a ref
+
+[[model.field]]
+name = "product_id"
+description = "The product"
+class = "none"
+kind = "ref"
+to = "product"
+ref_filter = "active = true"         # server: a picked record must satisfy it
+
+[[model.field]]
+name = "recorded_by"
+description = "Who recorded it"
+class = "public_directory"
+personal_data = true
+default = "$user"
+readonly = true                      # server: only the server writes it
+
+[[model.action]]
+name = "reject"
+description = "Reject the request"
+field = "state"
+from = "submitted"
+to = "rejected"
+[model.action.ui]
+danger = true                        # to the overflow menu, behind a confirm
+confirm = "Reject this request?"
+done = "Rejected"
+group = "close"                      # actions with the same group show as one entry
+needs = ["reject_reason"]            # server: may come in the action's input, written first
+not_by = "submitted_by"              # server: the person in this text field may not run it
+```
+
+| Key | Where | Values and rules |
+|---|---|---|
+| `home`, `launcher` | `[module]` | `home`: a model of the module or `"overview"`. `launcher = false` keeps the app off the launcher. |
+| `title`, `subtitle` | `[model.ui]` | A template of at most 200 characters: `{field}`, `{ref.field}`; ` \| ` separates alternatives and the first whose placeholders are all set wins. No markup. |
+| `list`, `card`, `quick_create` | `[model.ui]` | Field names of the model, no repeats (at most 20, 12 and 12). |
+| `card_sum` | `[model.ui]` | A number, money or decimal field. |
+| `order` | `[model.ui]` | `field [asc\|desc]`, comma separated, at most 4. |
+| `default_view`, `menu` | `[model.ui]` | One of the values in the example. |
+| `menu_section`, `menu_order` | `[model.ui]` | A label of at most 40 characters; a whole number from -1000 to 1000. |
+| `calendar` | `[model.ui]` | `start` (required) and `end`: date or datetime fields; `color`: a select or ref field. |
+| `report` | `[model.ui]` | `rows`, `cols`: fields; `measure`: a number, money or decimal field. |
+| `[[model.ui.section]]` | | `label` (at most 80 characters), `fields` (at least one, at most 40), `collapsed`, `show_in` (options of a field the model's actions move). |
+| `[[model.ui.filter]]` | | `label` and `where`, a filter (below) on the model's own fields; `$field` is not allowed here. |
+| `public_url` | `[model.ui]` | A path starting with `/`, placeholders of the model's own fields. |
+| `[[model.child]]` | | `model` (a model with the ref `via` to this one), `shape`. The meta `children` lists these and the models `<model>_<x>` with exactly one ref to the model (the rule of `for_each`), each only when the caller may list it. |
+| `default` | field | **Server.** A literal of the field's kind (text, a whole number, true/false, a date `"2026-01-01"`, a select option, a decimal as text), `"today"` or `"today+N"` (N from 1 to 3660; date fields), `"$user"` (the person; text fields), `"$instance.currency"` (`OBOP_CURRENCY`, EUR by default; text fields), `"$open:<model>"` (a ref to `<model>`, which must have a state field with the option `open`: the one record in `open` the caller sees, none when there are none or several). `"$$"` starts a literal dollar sign. Not on a computed, numbered, state or file field. Applied on create only, to a field the input leaves out; a value sent, `null` included, is kept. |
+| `fill_from` | field | **Server.** `ref.field`: on create, when the ref is set and the field is left out, the value of the field of the record the ref points at (computed fields included), when the caller reads it in clear (holds the field's group and sees the record, and, for an agent, the class is not masked). Otherwise the field stays empty. Applied after the defaults, so it can follow a defaulted ref. The kinds must fit (text from text or select, number and money from each other, the same kind otherwise). |
+| `readonly` | field | **Server.** `true`: a create that sends a value, or an update that changes it, is refused with 400 `readonly_field`. Sending the stored value back is fine. Defaults, `fill_from` and effects still write it. A required readonly field needs a `default` or a `fill_from`. |
+| `ref_filter` | ref field | **Server.** A filter (below) on the target model. Checked on create, and on update when the ref or a `$field` it reads changes (a record that stopped fitting does not lock the ones that name it); refused with 400 `ref_not_allowed`. Served for the picker. |
+| `display` | `[model.field.ui]` | `time_of_day`, `duration_minutes`, `percent`, `percent_bp`, `km_from_m`, `epoch_seconds` (number, money, decimal); `markdown`, `tel`, `email`, `url`, `address` (text, longtext). |
+| `aggregate`, `tones`, `warn_before_days`, `hidden`, `currency_from` | `[model.field.ui]` | `sum`, `avg`, `none`; option to `ok`, `bad`, `warn`, `info`, `neutral`; 1 to 365 days on a date or datetime; `true` keeps the field out of lists, cards and the form (still in the API); a text field path, on a money or decimal field. |
+| `primary`, `danger`, `confirm`, `done`, `group` | `[model.action.ui]` | Not both `primary` and `danger`; texts of at most 200 characters; a lowercase name. |
+| `needs` | `[model.action.ui]` | **Server.** At most 8 stored fields of the model (not computed, numbered, state or file). The action's input may carry them; they are checked like an update and written in the same unit before the assertions, so the assertions see them. While one is still empty the action is refused (`<model>.<action> needs <field>: give it in the input of the action`). |
+| `not_by` | `[model.action.ui]` | **Server.** A text field holding a user id: the person named there may not run the action (403 `denied`), administrators included, also when another action starts it. |
+
+**Filters** (`ref_filter`, `where`): clauses `field op value` joined by `&&` (at most 8), `op` one of `=`, `!=`, `<`, `<=`, `>`, `>=`; a value is `true`, `false` or `null` (with `=` and `!=` only), a whole number, `"quoted text"`, a bare word (an option, a code), `today` or `today+N`, `$user`, or, in a `ref_filter` only, `$field` (a field of the record being written). A missing value equals `null` and, for a true/false field, `false`. Numbers and decimals compare as numbers, dates and texts as text.
+
+**The effect `set`** (3.8): `kind = "set"` with `set = { field = value }` and usually a `when` changes fields of the record the action runs on, after the transition (`set = { published_on = "$today" }`, `when = "!is_set(published_on)"`). It takes no `model` (or the model's own name), `ref`, `children` or `for_each`; the values are those of 3.8.
+
+**Plurals and English names** (3.7): `[labels.<lang>.model.<m>] plural = "..."`, and `packages/labels/en/<id>.toml` for the bundled packages: `[labels.en.model.<m>] name = "Journal entry"`, `plural = "Journal entries"`. `/api/meta` serves `plural` (English) and `plural_labels` (every language).
+
+**Errors.** `readonly_field` and `ref_not_allowed` (400) carry `error`, `code` and `hint`; a refusal by an assertion carries `message`, the author's sentence without the expression, on REST and MCP.
+
+**In Rust** (built-in modules): `FieldDef::default_value("today+7")`, `default_int(n)`, `default_bool(b)`, `fill_from("ref.field")`, `readonly()`, `ref_filter("...")`, `display("...")`, `aggregate("...")`, `tones(&[("lost", "bad")])`, `warn_before_days(n)`, `hidden()`, `currency_from("...")`; `CommandDef::primary()`, `danger()`, `confirm("...")`, `done("...")`, `in_group("...")`, `needs(&["..."])`, `not_by("...")`, `ui(ActionUi {..})`; `ModelDef::with_ui(ModelUi {..})` (children in `ModelUi::children`); `ModuleMeta::home("...")`, `off_launcher()`; `Effect::set_self(model, &[("field", "$today")]).when("...")`; `Dispatcher::refuse_always(module, "model.command", reason)` for a command that is refused for everyone, so `can_*` in meta says so.
+
+### 3.11 `[model.guard]`: records that are frozen (D77)
+
+PROPOSED (D77, the command-layer part). A guard says when a record can no longer be changed: a posted invoice, a confirmed order, an entry in a closed month, the lines of any of them, a log. The command layer checks it on every write of every surface (the generated update and delete, `bulk_create`, the fields an action `needs`, every effect) and refuses with **409 `immutable_record`** and a sentence. A package that uses it writes `requires_core = "^0.2.2"`. `/api/meta` serves `guard`, so the interface can show the lock.
+
+```toml
+[model.guard]
+immutable_when = ["posted", "cancelled"]     # states of the model's governed select (or { field, values })
+mutable_fields = ["note"]                    # still editable on a frozen record
+exit_to = ["reversed"]                       # the one action that moves a frozen record there
+# exit_to = [{ to = "cancelled", action = "cancel", may_change = ["cancel_reason"] }]
+no_delete_when = ["cancelled"]               # never deleted in these states (frozen ones never are)
+lock_date = { field = "date", closed_by = "accounting_period" }   # or setting = "accounting.lock_date"
+message = "A posted entry cannot be changed. Reverse it to correct it."
+
+[[model]]
+name = "accounting_move_line"
+# ...
+[model.guard]
+children_of = "move_id"                      # frozen while the move is
+```
+
+A record is **frozen** when its state is in `immutable_when`, when its `lock_date` field falls on or before the date in the setting (or inside a period of the `closed_by` model whose select says `closed`), or when the parent named in `children_of` is frozen (up to four parents). Frozenness is decided by the record as it was stored when the call began, so an action that posts a record may still write what posting writes. On a frozen record:
+
+- `update` may change only `mutable_fields`; sending the record back unchanged is fine;
+- its state moves only along an `exit_to` edge, by that edge's action, which may also change its `may_change` fields (the fields it `needs` included);
+- `delete` is refused; so is deleting a record in a `no_delete_when` state;
+- its children cannot be added, changed, moved or deleted, and no record can be moved onto it;
+- a new or changed `lock_date` field may not fall in the locked range.
+
+`append_only = true` stands alone: records are created and read, never changed or deleted.
+
+| Key | Rules (the gate refuses with `<module>.<model>.guard.<key>`) |
+|---|---|
+| `immutable_when`, `no_delete_when` | A select that an action of the model moves; values among its options; for `immutable_when`, not the first option (a record is born unfrozen). The list form needs exactly one governed select. |
+| `mutable_fields` | Stored fields (not computed, numbered, governed, the lock field or the `children_of` field). |
+| `exit_to` | Needs `immutable_when`. The action is a declared action that moves the same field to `to` and starts in an immutable state or in any state. Every action that can start in an immutable state must be listed, so no action is refused at run time for a reason the package could state. `may_change`: stored fields. |
+| `lock_date` | `field`: a date field (not a datetime). Exactly one of `setting` (one to four dotted lowercase words; the value in the instance settings is a date `YYYY-MM-DD`) and `closed_by` (a model with date fields `start_on`, `end_on` and a select with the option `closed`). |
+| `children_of` | A ref field of this model whose target model has a guard; at most four parents, no cycle. |
+| `message` | Plain text of at most 200 characters; what the interface says about a frozen record. Display only. |
+
+**In Rust** (built-in modules): `ModelDef::with_guard(Guard::frozen_in("state", &["posted"]).exit("cancelled", "cancel", &[]).mutable(&["note"]).lock_by_closed("date", "accounting_period").message("..."))`, `Guard::child_of("order_id")`, `Guard::append_only()`, `.no_delete_in(..)`, `.lock_by_setting(..)`.
+
+Not built yet (D77): the database trigger that holds the same rule for writes outside the command layer, the guard rows and the role split. A handler that writes the store directly is not held to the guard.
 
 ## 4. Field kinds and their JSON
 
@@ -841,7 +1012,7 @@ index.json                 [{"id":"assets","name":"Assets","version":"0.1.0","de
 packages/assets.toml       the obop.toml of each package listed
 ```
 
-`index.json` is an array of objects with `id`, `name`, `version`, `description` and optional `author`. Since D55 a listing may also carry the catalogue metadata of the manifest, so the Modules page can show cards, badges, compatibility and dependencies without fetching every manifest: `summary`, `authors` (array), `license`, `homepage`, `repository`, `documentation`, `support`, `keywords` (array), `categories` (array), `icon`, `requires_core`, `maturity` and `dependencies` (an object, module id to requirement). Every key after `author` is optional and unknown keys are ignored, so an index written before D55 keeps working (its modules show without badges). An entry whose `id`, `version` or any requirement does not parse is left out rather than failing the whole catalogue. The manifest remains the authority: an install fetches it and checks it exactly as an upload, and for a marketplace package `license` and `requires_core` must be declared in the manifest itself. Package ids may contain only lowercase letters, digits and `_` (anything else is refused before a request is made). Point an instance at it with the environment variable `OBOP_MARKETPLACE_URL=https://host/path` (no trailing slash needed). The instance shows the bundled catalogue first and your host after it; if the same id exists in both, the bundled one wins. Every download is validated exactly like an upload, and responses are limited to 1 MiB. The bundled catalogue itself is `packages/*.toml`, compiled into the binary by `crates/kernel/obop-pkg/src/marketplace.rs`. Package signing and paid listings are not built (D45).
+`index.json` is an array of objects with `id`, `name`, `version`, `description` and optional `author`. Since D55 a listing may also carry the catalogue metadata of the manifest, so the Modules page can show cards, badges, compatibility and dependencies without fetching every manifest: `summary`, `authors` (array), `license`, `homepage`, `repository`, `documentation`, `support`, `keywords` (array), `categories` (array), `icon`, `requires_core`, `maturity` and `dependencies` (an object, module id to requirement). Every key after `author` is optional and unknown keys are ignored, so an index written before D55 keeps working (its modules show without badges). An entry whose `id`, `version` or any requirement does not parse is left out rather than failing the whole catalogue. The manifest remains the authority: an install fetches it and checks it exactly as an upload, and for a marketplace package `license` and `requires_core` must be declared in the manifest itself. Package ids may contain only lowercase letters, digits and `_` (anything else is refused before a request is made). Point an instance at it with the environment variable `OBOP_MARKETPLACE_URL=https://host/path` (no trailing slash needed). The instance shows the bundled catalogue first and your host after it; if the same id exists in both, the bundled one wins. Every download is validated exactly like an upload, and responses are limited to 1 MiB. The bundled catalogue itself is `packages/*.toml`, compiled into the binary by `crates/kernel/obop-pkg/src/marketplace.rs`. Package signing is not built (D45); there are no paid listings (OR-3, D81).
 
 ## 9. Packages as data: the dashboards widget schema
 
@@ -868,14 +1039,14 @@ The `dashboards` package stores dashboards as records so a UI can render them la
 Declarative X1 deliberately cannot do the following. Plan around them or wait for X2 and X3.
 
 - **Computed fields are small on purpose.** Integers, exact decimals, text, booleans and instants; sums, counts, minimums and maximums over child records; no floats, no date or instant arithmetic (an SLA "elapsed" cannot be computed: there is no difference of two instants yet), no function that turns an instant into a date in a zone (use a filter or aggregate `bucket` with a `zone`), no aggregate over grandchildren, no joins. They are computed when read, so they cost a look at the children, cannot be indexed, and sorting by one reads every row. They ignore row-level access (3.9).
-- **Sequences are per database and per process.** The counter is transactional, so numbers are gapless against failures and parallel calls inside one server (the dispatcher holds one lock for writes of models with rules). Two servers on one PostgreSQL database could still race on a counter; one process per database is the rule (D30). A gapless series can still have a hole if somebody edits the database by hand. Existing records are numbered only by `obop sequences backfill`.
+- **Sequences are numbered under the write lock.** The counter is transactional, so numbers are gapless against failures and parallel calls (the dispatcher holds one lock for writes of models with rules, and with several server processes on one database that lock is the database's own, D59). A gapless series can still have a hole if somebody edits the database by hand. Existing records are numbered only by `obop sequences backfill`.
 - **Uniqueness is global per model** (optionally scoped by `unique_with`); it is enforced on every command write and by a database index where one can be created, not on seeds or imports, and it reveals that a value exists. Case is significant.
-- **Row-level access is by whole record**, in the command layer; see 3.9. It does not hide a record from aggregates or from computed totals, does not apply to the public site layer (D50, its own whitelist), and does not apply to data written outside the commands.
+- **Row-level access is by whole record**, in the command layer; see 3.9. It does not hide a record from computed totals (the `aggregate` option of `search` does honour it), does not apply to the public site layer (D50, its own whitelist), and does not apply to data written outside the commands.
 - **Effects change records in the same database only.** They do not send email, call a payment provider or run on a schedule; the email, sign, eCommerce and POS packages record what happened or should happen. Effects need the caller to hold the groups of everything they touch (so confirming a sale needs `invoicing.user`, receiving a purchase `inventory.user`); at most 12 per action, 500 records per operation, 4 nested actions; an effect cannot set a governed field except through its action, and plain create and update never run effects.
-- **Governed state, but not locked records.** A state field is protected (section 6.1), but every other field of a posted or signed record can still be edited by anyone who holds the `write_group`; "immutable once posted" is not enforced (a numbered record cannot be deleted, though, and a posted invoice keeps its lines only by convention). Data written outside the commands bypasses the rules. Nothing stops two servers racing on one PostgreSQL database between the check and the write of a transition (one server serialises them).
+- **Governed state, but not locked records.** A state field is protected (section 6.1), but every other field of a posted or signed record can still be edited by anyone who holds the `write_group`; "immutable once posted" is not enforced (a numbered record cannot be deleted, though, and a posted invoice keeps its lines only by convention). Data written outside the commands bypasses the rules.
 - **Delete is plain**: `delete` removes the record for good and refuses while another record refers to it through a `ref` (the error lists the referencing models, counts and up to five ids of records the caller can see) or while it holds a gapless number. There is no cascade, no soft delete and no tombstone; the check sees only models that are installed now. Personal-data erasure still uses the dedicated `erase` command of the owning module (`party.erase`), which anonymises in place and keeps the references valid; `delete` is not a substitute for it. There is no validation across records beyond assertions on actions. Proposed (D88 and D89, not built): model rules would add a check across records on create and update, and `on_delete` would add `cascade` and `set_null`.
-- **No migrations**: see section 7. Turning a free text field into a `sequence`, or adding `own` to a model, does not touch old records.
-- **Search is evaluated in memory**: `list`/`search` filter, sort and page on the server (section 4.1), but the server reads the model's records from the store to do it, on all three backends, so a very large table is slow; there are no indexes beyond the unique ones, no full-text search and no grouping or aggregation on the server. Filtering and sorting on a field the caller cannot read in clear (not permitted, withheld, or masked for an agent) is refused.
+- **Migrations are declarative and limited** (section 7.1: rename, set a default, drop, reformat a decimal or datetime field). Turning a free text field into a `sequence`, or adding `own` to a model, does not touch old records.
+- **Search is evaluated in memory**: `list`/`search` filter, sort and page on the server (section 4.1), but the server reads the model's records from the store to do it, on all three backends, so a very large table is slow; no index speeds up a filter or a sort and there is no full-text search; grouping and totals (`aggregate`, section 4.1) are also computed by reading the model's records. Filtering and sorting on a field the caller cannot read in clear (not permitted, withheld, or masked for an agent) is refused.
 - Limits: 256 KiB for the whole document including its translations, 50 models, 200 fields per package; no floats; one state field per action; at most 50 filter conditions, 5 order keys and 5000 rows per call.
 
 ## 11. FAQ
@@ -908,7 +1079,7 @@ Declarative X1 deliberately cannot do the following. Plan around them or wait fo
 
 ## 12. The bundled workflows
 
-What the bundled modules do with sections 3.8 and 3.9 (each is exercised by a test in `crates/obop/src/model_tests.rs`):
+What the bundled modules do with sections 3.8 to 3.10 (each is exercised by a test in `crates/obop/src/model_tests.rs`, or for the D95 rules of hr, fleet, documents, knowledge, sign and dashboards in `crates/obop/src/people_collab_hints_tests.rs`):
 
 | Module | Does |
 |---|---|
@@ -920,9 +1091,12 @@ What the bundled modules do with sections 3.8 and 3.9 (each is exercised by a te
 | `purchase` | Orders are numbered `PO-00042`; the total is the sum of the line amounts; `receive` creates a draft stock move per line to the receiving location (the caller needs `inventory.user`). |
 | `pos` | Subtotals and the order total are computed; `pay` is refused until the payments cover the total and creates draft stock moves from the order's stock location; receipts are numbered gapless per year. |
 | `expenses` | Claims are numbered `EXP-2026-0042`; an employee sees only their own, managers and finance see all. |
-| `hr` | Leave requests: employees see their own (`requested_by`), `hr.manager` sees all. |
+| `hr` | Leave requests: employees see their own (`requested_by`), `hr.manager` sees all. `request` and `approve` are refused when the last day is before the first or no working days are given (keys `dates_in_order`, `days_given`); a new request is paid leave unless it says otherwise. |
 | `documents` | Confidential and restricted documents are visible to their owner and `documents.manager`; the rest to every reader (`open_to_all` is computed from `confidentiality`). |
+| `knowledge` | `publish` stamps `published_on` with the day, once (a `set` effect, 3.10); the field is `readonly`. A new article is for the workspace and names its writer in `author_name`. |
+| `fleet` | `send_to_workshop` and `back_in_service` move a vehicle to and from `maintenance`; a new service is dated today and takes the vehicle's `odometer_km` (`fill_from`) when none is given. |
+| `sign` | `send` (from a template) stamps `sent_on` and the hand-marked `sign` stamps `signed_on`, each only when empty; a new template is `active`. |
 | `timesheets` | Entries are private to their worker; `timesheets.manager` sees all. |
 | `projects` | `progress` (percent of non-cancelled tasks that are done) and `estimate_minutes` are computed. |
 | `helpdesk` | Tickets are numbered `TCK-00042`. |
-| `dashboards` | A dashboard is visible to its owner, to `dashboards.manager` and, when `shared`, to every reader; its tiles follow it. |
+| `dashboards` | A dashboard is visible to its owner, to `dashboards.manager` and, when `shared`, to every reader; its tiles follow it. A new tile counts records unless it says `sum`. |

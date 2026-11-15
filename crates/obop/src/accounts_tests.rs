@@ -550,3 +550,130 @@ fn cli_import_checks_first_writes_a_private_password_file_and_never_overwrites()
     crate::accounts_cmd::users(&o).unwrap();
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// D69 amendment of 2026-11-14: an administrator issues an agent token for groups the account
+/// does not list by name, and every person lists and ends their own agent tokens.
+#[tokio::test]
+async fn rest_an_administrator_issues_lists_and_ends_agent_tokens() {
+    let a = rig();
+    let r = &a.rig.r;
+    let root = token(r, "root").await;
+    let ada = token(r, "ada").await;
+
+    // What each may put on a token: every registered group for the administrator, the groups of
+    // the account for everybody else, and `*` for nobody.
+    let (s, b) = get(r, &root, "/api/auth/agent-tokens").await;
+    assert_eq!(s, 200, "{b}");
+    assert_eq!(b["tokens"], json!([]));
+    let delegable: Vec<&str> = b["delegable"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|g| g.as_str().unwrap())
+        .collect();
+    assert!(delegable.contains(&"product.manager") && delegable.contains(&"platform.admin"));
+    assert!(!delegable.contains(&"*"));
+    let (s, b) = get(r, &ada, "/api/auth/agent-tokens").await;
+    assert_eq!(s, 200, "{b}");
+    assert_eq!(b["delegable"], json!(["base.user"]));
+
+    // The account of root lists `platform.admin` alone; the token is for the product groups.
+    let (s, b) = post(
+        r,
+        Some(&root),
+        "/api/auth/agent-token",
+        json!({"scopes": ["product.user", "product.manager"], "label": "catalogue bot"}),
+    )
+    .await;
+    assert_eq!(s, 200, "{b}");
+    let bot = b["token"].as_str().unwrap().to_string();
+    let (s, b) = post(
+        r,
+        Some(&bot),
+        "/api/product/create",
+        json!({"name": "Made by the bot"}),
+    )
+    .await;
+    assert_eq!(s, 200, "{b}");
+    // The token is its scopes and not the administrator: no contacts, no account routes.
+    let (s, _) = post(r, Some(&bot), "/api/party/create", json!({"name": "X"})).await;
+    assert_ne!(s, 200);
+    assert_eq!(get(r, &bot, "/api/auth/groups").await.0, 404);
+    assert_eq!(get(r, &bot, "/api/auth/agent-tokens").await.0, 404);
+
+    // The refusals.
+    for (scopes, words) in [
+        (json!(["nope.user"]), "is not a registered permission group"),
+        (json!(["*"]), "names no group"),
+        (json!([]), "at least one scope"),
+    ] {
+        let (s, b) = post(
+            r,
+            Some(&root),
+            "/api/auth/agent-token",
+            json!({"scopes": scopes}),
+        )
+        .await;
+        assert_eq!(s, 400, "{b}");
+        assert!(b["error"].as_str().unwrap().contains(words), "{b}");
+    }
+    let (s, b) = post(
+        r,
+        Some(&ada),
+        "/api/auth/agent-token",
+        json!({"scopes": ["product.user"]}),
+    )
+    .await;
+    assert_eq!(s, 400, "{b}");
+    assert_eq!(
+        b["error"],
+        "you do not hold product.user, so you cannot delegate it"
+    );
+
+    // The list says what the token is called and may do, never the token.
+    let (s, b) = get(r, &root, "/api/auth/agent-tokens").await;
+    assert_eq!(s, 200, "{b}");
+    let list = b["tokens"].as_array().unwrap();
+    assert_eq!(list.len(), 1, "{b}");
+    assert_eq!(list[0]["label"], "catalogue bot");
+    assert_eq!(
+        list[0]["scopes"],
+        json!(["product.manager", "product.user"])
+    );
+    assert!(list[0]["created_at"].as_u64().unwrap() > 0);
+    assert!(!b.to_string().contains(&bot));
+    let revoke = format!(
+        "/api/auth/agent-tokens/{}/revoke",
+        list[0]["id"].as_str().unwrap()
+    );
+
+    // Only its owner ends it: another person and the token itself are answered as for no token.
+    assert_eq!(post(r, Some(&ada), &revoke, json!({})).await.0, 404);
+    assert_eq!(post(r, Some(&bot), &revoke, json!({})).await.0, 404);
+    let (s, b) = post(r, Some(&root), &revoke, json!({})).await;
+    assert_eq!(s, 200, "{b}");
+    assert_eq!(b["revoked"], true);
+    let (s, _) = post(
+        r,
+        Some(&bot),
+        "/api/product/create",
+        json!({"name": "After the end"}),
+    )
+    .await;
+    assert_eq!(s, 401);
+    assert_eq!(post(r, Some(&root), &revoke, json!({})).await.0, 404);
+    let (_, b) = get(r, &root, "/api/auth/agent-tokens").await;
+    assert_eq!(b["tokens"], json!([]));
+
+    // The security log says who gave what and how the right to give it was held.
+    let issued = events(r, &root, "agent_token_issued").await;
+    assert_eq!(issued.len(), 1, "{issued:?}");
+    let detail = issued[0]["detail"].as_str().unwrap();
+    assert!(detail.contains("catalogue bot"), "{detail}");
+    assert!(
+        detail.contains("held through platform.admin: product.user, product.manager"),
+        "{detail}"
+    );
+    assert!(!detail.contains(&bot));
+    assert_eq!(events(r, &root, "agent_token_revoked").await.len(), 1);
+}

@@ -1,0 +1,632 @@
+/* Field inputs (lane L6): the ref picker's list, dates and their calendar, units, Markdown, the
+   avatar uploader and value links. Only tokens of tokens.css; no colour literals. */
+
+/* ---------- The picker list and the calendar float in the top layer (inputs/popover.ts) ---------- */
+.rp-pop,
+.cal-pop {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-3);
+}
+.rp-pop {
+  display: flex;
+  flex-direction: column;
+}
+.rp-pop ul {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  margin: 0;
+  padding: 0.3rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+}
+.rp-pop li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-block-size: 2.25rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.rp-pop li[aria-selected="true"] {
+  background: var(--accent-soft);
+}
+.rp-pop li > svg {
+  flex: none;
+  color: var(--accent-ink);
+}
+.rp-main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-inline-size: 0;
+}
+.rp-title,
+.rp-second {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rp-title {
+  color: var(--text);
+}
+li[data-current] .rp-title {
+  font-weight: var(--weight-semibold);
+}
+.rp-second {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+.rp-none,
+.rp-empty {
+  color: var(--text-muted);
+}
+.rp-empty {
+  cursor: default !important;
+}
+.rp-action {
+  color: var(--accent-ink);
+  font-weight: var(--weight-medium);
+}
+.rp-pop li.rp-action:first-of-type,
+.rp-pop li:not(.rp-action) + .rp-action {
+  margin-block-start: 0.25rem;
+  border-block-start: 1px solid var(--border);
+  border-start-start-radius: 0;
+  border-start-end-radius: 0;
+}
+.rp-foot {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.45rem 0.75rem;
+  border-block-start: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+.refpicker.compact input {
+  min-block-size: var(--control-h-sm);
+}
+/* The full form of a new record, above the form that asked for it. */
+.rp-stack.dialog {
+  inline-size: min(32rem, calc(100vw - 2rem));
+  max-block-size: calc(100dvh - 2rem);
+  padding: 0;
+  overflow: hidden;
+}
+.rp-stack .dialog-body {
+  display: flex;
+  max-block-size: calc(100dvh - 2rem);
+  padding: 0;
+  overflow: hidden;
+}
+.rp-stack .record {
+  flex: 1 1 auto;
+  inline-size: auto;
+  max-block-size: calc(100dvh - 2rem);
+  border: 0;
+  box-shadow: none;
+  animation: none;
+}
+
+/* On a phone the new record takes the whole screen, as every record does there. */
+@media (max-width: 40rem) {
+  .rp-stack.dialog,
+  .rp-stack .dialog-body,
+  .rp-stack .record {
+    inline-size: 100vw;
+    max-block-size: 100dvh;
+    block-size: 100dvh;
+    border-radius: 0;
+  }
+}
+
+/* ---------- Units: a sign after the number ---------- */
+.unitin {
+  position: relative;
+}
+.unitin input {
+  padding-inline-end: 2.4rem;
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+.unitin > span {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-end: 0.75rem;
+  color: var(--text-muted);
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+.durationfield,
+.percentfield {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.durationfield input,
+.timein {
+  font-variant-numeric: tabular-nums;
+}
+.timein {
+  max-inline-size: 10rem;
+}
+.pctbar {
+  display: block;
+  flex: none;
+  inline-size: 100%;
+  block-size: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--surface-3);
+}
+.pctbar > span {
+  display: block;
+  block-size: 100%;
+  border-radius: inherit;
+  background: var(--accent-fill);
+}
+.pctcell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-inline-size: 6rem;
+}
+.pctcell .pctbar {
+  inline-size: 3.5rem;
+}
+
+/* ---------- Dates ---------- */
+.datefield {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.datefield input {
+  padding-inline-end: 2.5rem;
+  font-variant-numeric: tabular-nums;
+}
+.datefield.datetime:has(.zone) input {
+  padding-inline-end: 9rem;
+}
+.datefield .calbtn {
+  position: absolute;
+  inset-inline-end: 0.2rem;
+  inline-size: calc(var(--control-h) - 0.4rem);
+  block-size: calc(var(--control-h) - 0.4rem);
+}
+.datefield .zone {
+  position: absolute;
+  inset-inline-end: 2.6rem;
+  max-inline-size: 6.5rem;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.datefield.compact .calbtn {
+  inline-size: var(--control-h-sm);
+  block-size: var(--control-h-sm);
+}
+.cal-pop {
+  padding: 0.75rem;
+}
+.calgrid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  inline-size: 16.5rem;
+}
+.calhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.calhead strong {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+.calweek,
+.caldays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.calweek span {
+  padding-block: 0.2rem;
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+  text-align: center;
+}
+.caldays button {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.caldays button.out {
+  color: var(--text-subtle);
+}
+.caldays button:hover {
+  background: var(--surface-3);
+}
+.caldays button[aria-current="date"] {
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+  color: var(--accent-ink);
+  font-weight: var(--weight-semibold);
+}
+.caldays button[aria-pressed="true"] {
+  background: var(--accent-fill);
+  color: var(--on-accent);
+}
+.caldays button:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+.calfoot {
+  display: flex;
+  justify-content: space-between;
+  padding-block-start: 0.2rem;
+}
+.caltime {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-block-start: 0.6rem;
+  padding-block-start: 0.6rem;
+  border-block-start: 1px solid var(--border);
+}
+.caltime label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+.caltime input {
+  inline-size: 8rem;
+}
+
+/* ---------- Currency, links beside a value ---------- */
+.withlink {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+.withlink > input,
+.withlink > textarea {
+  flex: 1 1 auto;
+}
+.valuebtn {
+  flex: none;
+  color: var(--accent-ink);
+}
+.valuelink {
+  color: var(--accent-ink);
+  text-decoration: none;
+}
+.valuelink:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ---------- Markdown ---------- */
+.mdfield {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  container-type: inline-size;
+}
+.mdfield:focus-within {
+  border-color: var(--accent-fill);
+  box-shadow: var(--ring);
+}
+.mdbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 0.25rem;
+  border-block-end: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.mdbar .grow {
+  flex: 1 1 auto;
+}
+.mdtool {
+  display: inline-grid;
+  place-items: center;
+  min-inline-size: 2rem;
+  block-size: 2rem;
+  padding: 0 0.4rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+.mdtool:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+.mdtabs {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: var(--radius-md);
+  background: var(--surface-3);
+}
+.mdtabs button {
+  padding: 0.2rem 0.6rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+.mdtabs button[aria-selected="true"] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-1);
+}
+.mdpanes {
+  display: grid;
+  grid-template-columns: 1fr;
+  min-block-size: 0;
+}
+.mdpanes textarea {
+  min-block-size: 12rem;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+.mdpanes textarea:focus {
+  box-shadow: none;
+}
+.mdpreview {
+  min-block-size: 12rem;
+  max-block-size: 28rem;
+  padding: 0.75rem 1rem;
+  overflow-y: auto;
+}
+.mdfield[data-tab="write"] .mdpreview,
+.mdfield[data-tab="preview"] .mdpanes textarea {
+  display: none;
+}
+.mdfield.wide .mdpanes textarea,
+.mdfield.wide .mdpreview {
+  display: block;
+}
+@container (min-width: 40rem) {
+  .mdpanes {
+    grid-template-columns: 1fr 1fr;
+  }
+  .mdfield[data-tab] .mdpanes textarea,
+  .mdfield[data-tab] .mdpreview {
+    display: block;
+  }
+  .mdpreview {
+    border-inline-start: 1px solid var(--border);
+  }
+  .mdtabs {
+    display: none;
+  }
+}
+.mdfull.dialog {
+  inline-size: min(72rem, calc(100vw - 2rem));
+  max-inline-size: none;
+}
+.mdfull .mdpanes textarea,
+.mdfull .mdpreview {
+  min-block-size: min(60dvh, 40rem);
+  max-block-size: none;
+}
+.md {
+  color: var(--text);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+  overflow-wrap: break-word;
+}
+.md > :first-child {
+  margin-block-start: 0;
+}
+.md > :last-child {
+  margin-block-end: 0;
+}
+.md :is(h3, h4, h5, h6) {
+  margin: 1em 0 0.4em;
+  line-height: var(--leading-snug);
+}
+.md .md-h1 {
+  font-size: var(--text-lg);
+}
+.md .md-h2 {
+  font-size: var(--text-md);
+}
+.md :is(p, ul, ol, blockquote, pre) {
+  margin: 0 0 0.75em;
+}
+.md :is(ul, ol) {
+  padding-inline-start: 1.4em;
+}
+.md blockquote {
+  padding-inline-start: 0.8em;
+  border-inline-start: 3px solid var(--border-strong);
+  color: var(--text-muted);
+}
+.md code {
+  padding: 0.05em 0.3em;
+  border-radius: var(--radius-xs);
+  background: var(--surface-3);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+.md pre {
+  padding: 0.6rem 0.8rem;
+  overflow-x: auto;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+.md pre code {
+  padding: 0;
+  background: none;
+}
+.md a {
+  color: var(--accent-ink);
+}
+.md .md-table {
+  overflow-x: auto;
+}
+.md table {
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+.md :is(th, td) {
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--border);
+}
+.mdread {
+  padding: 0.6rem 0.8rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+/* ---------- Images: a small avatar that is its own upload button ---------- */
+.avatarfield {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.25rem;
+  border-radius: var(--radius-lg);
+  transition: background-color var(--dur-1) var(--ease-out);
+}
+.avatarfield[data-over] {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+}
+.avatarbtn {
+  position: relative;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: none;
+  cursor: pointer;
+}
+.avatarbtn .blobthumb {
+  border-radius: var(--radius-lg);
+}
+.avatarbtn .blobthumb.preview img {
+  object-fit: cover;
+}
+.avatarbtn:hover .blobthumb {
+  border-color: var(--accent-line);
+}
+.avatarbtn:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+.avatar-badge {
+  position: absolute;
+  inset-block-end: -4px;
+  inset-inline-end: -4px;
+  display: grid;
+  place-items: center;
+  inline-size: 1.35rem;
+  block-size: 1.35rem;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  background: var(--accent-fill);
+  color: var(--on-accent);
+}
+.avatarside {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-inline-size: 0;
+}
+.avatarside .blobactions {
+  gap: 0.9rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  .avatarfield {
+    transition: none;
+  }
+}
+.blobthumb.preview.vacant {
+  border-style: dashed;
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+}
+.avatarbtn:hover .blobthumb.vacant {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+}
+
+/* ---------- A value read one way and typed another (TypedBox) ---------- */
+.typedbox {
+  position: relative;
+  display: block;
+  min-inline-size: 0;
+}
+.typedbox.showing input {
+  color: transparent;
+}
+.typedshow {
+  position: absolute;
+  inset: 1px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 0.75rem;
+  overflow: hidden;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.moneyin .typedshow {
+  padding-inline-end: 1.9rem;
+}
+.unitin .typedshow {
+  padding-inline-end: 2.4rem;
+}

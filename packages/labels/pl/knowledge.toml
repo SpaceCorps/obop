@@ -5,6 +5,7 @@ summary = "Wiki: artykuły w drzewie z obiegiem wersja robocza, opublikowany, za
 
 [labels.pl.model.knowledge_article]
 name = "Artykuł"
+plural = "Artykuły"
 description = "Artykuł bazy wiedzy"
 
 [labels.pl.model.knowledge_article.field.title]

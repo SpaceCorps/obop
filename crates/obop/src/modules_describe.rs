@@ -66,7 +66,7 @@ mod tests {
         let v: Value = serde_json::from_str(&out).unwrap();
         assert_eq!(v["schema_version"], 1);
         assert_eq!(v["packages"][0]["id"], "accounting");
-        assert_eq!(v["packages"][0]["requires_core"], "^0.2");
+        assert_eq!(v["packages"][0]["requires_core"], "^0.2.2");
         let code = field(&v, "accounting_account", "code");
         assert_eq!(code["unique"], true);
         assert_eq!(code["required"], true);

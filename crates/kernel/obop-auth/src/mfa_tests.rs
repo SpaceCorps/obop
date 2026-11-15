@@ -722,25 +722,38 @@ fn pins_the_otpauth_label_and_issuer_of_an_enrolment() {
     );
 }
 
-/// The issuer a server starts with when `OBOP_MFA_ISSUER` is not set. The variable is read from
-/// the process environment, so a run that sets it does not hold the default: the test fails
-/// loudly with a message that says so, and never passes without having checked anything.
+/// The issuer a server starts with when `OBOP_MFA_ISSUER` is not set: none, so an enrolment reads
+/// the instance brand and, with no record, says `obop`. The variable is read from the process
+/// environment, so a run that sets it does not hold the default: the test fails loudly with a
+/// message that says so, and never passes without having checked anything.
 #[test]
 fn pins_the_default_issuer_of_a_server() {
     assert!(
         std::env::var_os("OBOP_MFA_ISSUER").is_none(),
-        "OBOP_MFA_ISSUER is set in the environment of this run, so `AuthConfig::from_env` does not \
-         give the default issuer and this pin cannot check it. Unset the variable and run again."
+        "OBOP_MFA_ISSUER is set in the environment of this run, so this pin cannot check the default issuer. Unset the variable and run again."
     );
-    assert_eq!(AuthConfig::from_env().issuer, "obop");
-    assert_eq!(AuthConfig::insecure_dev().issuer, "obop");
+    assert_eq!(AuthConfig::from_env().issuer, None);
+    assert_eq!(AuthConfig::insecure_dev().issuer, None);
+    // The output that the default has always had: the label prefix and `issuer=` are `obop`.
+    let r = rig();
+    user_with(&r.a, "ada", &["base.user"]);
+    let (_, p) = session(&r.a, "ada");
+    let begun = r.a.begin(&p).unwrap();
+    let secret = begun["secret"].as_str().unwrap();
+    assert_eq!(
+        begun["uri"].as_str().unwrap().replace(secret, "SECRET"),
+        "otpauth://totp/obop:ada?secret=SECRET&issuer=obop&algorithm=SHA1&digits=6&period=30"
+    );
+    assert_eq!(begun["issuer"], json!("obop"));
 }
 
-/// S1a: with a brand row in the store, an enrolment is still given the label `obop:ada` and the
-/// issuer `obop` (the pin above): `begin` does not read the row yet, and `OBOP_MFA_ISSUER` is not
-/// set. The slice that makes the authenticator entry show the name moves this assertion.
+/// With a brand row in the store an enrolment is given the name of the row as the label prefix and
+/// as `issuer=` (S1e of the branding work; the pin above holds what it is without a row). In S1a
+/// this test held the label `obop` with a row present, because `begin` did not read the row; it
+/// moves here with the slice that does. `OBOP_MFA_ISSUER` is not set in the config of this rig; the
+/// precedence with it is in `brand_enrol_tests`.
 #[test]
-fn with_a_brand_row_the_otpauth_label_and_issuer_of_an_enrolment_are_what_they_were() {
+fn with_a_brand_row_the_otpauth_label_and_issuer_of_an_enrolment_are_the_name() {
     let r = rig();
     user_with(&r.a, "ada", &["base.user"]);
     obop_commands::brand::apply(
@@ -763,6 +776,7 @@ fn with_a_brand_row_the_otpauth_label_and_issuer_of_an_enrolment_are_what_they_w
     let secret = begun["secret"].as_str().unwrap();
     assert_eq!(
         begun["uri"].as_str().unwrap().replace(secret, "SECRET"),
-        "otpauth://totp/obop:ada?secret=SECRET&issuer=obop&algorithm=SHA1&digits=6&period=30"
+        "otpauth://totp/MOHV:ada?secret=SECRET&issuer=MOHV&algorithm=SHA1&digits=6&period=30"
     );
+    assert_eq!(begun["issuer"], json!("MOHV"));
 }

@@ -357,6 +357,34 @@ pub fn check_action(
     }
 }
 
+/// The reason an action may carry in its input (D95 `needs`: `reject_reason` for reject,
+/// `discard_reason` for discard), checked as `update` checks a long text; `None` when the input
+/// has none, and the trip's stored reason counts.
+pub fn reason_in(action: &str, input: &Value) -> Result<Option<(&'static str, String)>, String> {
+    let field = match action {
+        "reject" => "reject_reason",
+        "discard" => "discard_reason",
+        _ => return Ok(None),
+    };
+    let Value::Map(input) = input else {
+        return Ok(None);
+    };
+    match input.get(field) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::Text(t)) => {
+            let n = t.chars().count() as u64;
+            if n > u64::from(obop_registry::DEFAULT_LONGTEXT_MAX) {
+                return Err(format!(
+                    "{TRIP}.{field} is longer than {} characters",
+                    obop_registry::DEFAULT_LONGTEXT_MAX
+                ));
+            }
+            Ok(Some((field, t.clone())))
+        }
+        Some(_) => Err(format!("{TRIP}.{field} must be a string")),
+    }
+}
+
 /// The fields `who` may change on `trip` by `update`, or why they may not. The caller has
 /// already been shown that they may see the trip.
 pub fn writable_fields(who: &Who, trip: &Fields) -> Result<&'static [&'static str], String> {

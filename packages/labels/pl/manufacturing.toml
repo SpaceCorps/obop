@@ -1,10 +1,11 @@
 [labels.pl.module]
 name = "Produkcja"
-description = "Zestawienia materiałów i zlecenia produkcyjne z obiegiem wersja robocza, potwierdzone, w toku i wykonane. Zużycie składników z magazynu nie jest księgowane automatycznie."
+description = "Zestawienia materiałów i zlecenia produkcyjne z obiegiem wersja robocza, potwierdzone, w toku i wykonane. Zużycie składników z magazynu nie jest księgowane automatycznie. Wykonane i anulowane zlecenia są zablokowane."
 summary = "Zestawienia materiałów i zlecenia produkcyjne z obiegiem wersja robocza, potwierdzone, w toku, wykonane."
 
 [labels.pl.model.manufacturing_bom]
 name = "Zestawienie materiałów"
+plural = "Zestawienia materiałów"
 description = "Receptura: składniki potrzebne do wytworzenia produktu"
 
 [labels.pl.model.manufacturing_bom.field.product_id]
@@ -29,6 +30,7 @@ description = "Czy recepturę można stosować w nowych zleceniach"
 
 [labels.pl.model.manufacturing_bom_line]
 name = "Pozycja zestawienia materiałów"
+plural = "Składniki"
 description = "Jeden składnik zestawienia materiałów"
 
 [labels.pl.model.manufacturing_bom_line.field.bom_id]
@@ -45,6 +47,7 @@ description = "Liczba sztuk składnika zużywana w jednym cyklu"
 
 [labels.pl.model.manufacturing_order]
 name = "Zlecenie produkcyjne"
+plural = "Zlecenia produkcyjne"
 description = "Polecenie wyprodukowania określonej ilości produktu"
 
 [labels.pl.model.manufacturing_order.field.reference]

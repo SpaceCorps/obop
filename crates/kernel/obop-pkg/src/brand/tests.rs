@@ -18,6 +18,7 @@ mod ids;
 mod labels;
 mod owned;
 mod routes;
+mod switch;
 
 struct Rig {
     d: Arc<Dispatcher>,
@@ -134,14 +135,15 @@ fn model() -> ModelDef {
 }
 
 #[test]
-fn the_model_has_17_stored_and_8_answer_fields_all_public_with_data_class_none() {
+fn the_model_has_18_stored_and_8_answer_fields_all_public_with_data_class_none() {
     let m = model();
     let names: Vec<&str> = m.fields.iter().map(|f| f.name).collect();
     let mut stored = vec!["name".to_string(), "slug".to_string()];
     stored.extend(LANGUAGES.iter().map(|(c, _)| format!("title_{c}")));
     stored.extend(LANGUAGES.iter().map(|(c, _)| format!("message_{c}")));
     stored.push("logo_svg".into());
-    assert_eq!(stored.len(), 17);
+    stored.push("hide_product_docs".into());
+    assert_eq!(stored.len(), 18);
     assert_eq!(
         stored,
         brand::writable_fields(),
@@ -159,18 +161,19 @@ fn the_model_has_17_stored_and_8_answer_fields_all_public_with_data_class_none()
     ];
     let mut want: Vec<&str> = stored.iter().map(String::as_str).collect();
     want.extend(answers);
-    assert_eq!(names, want, "17 stored fields, then the 8 declared answers");
-    assert_eq!(names.len(), 25);
+    assert_eq!(names, want, "18 stored fields, then the 8 declared answers");
+    assert_eq!(names.len(), 26);
     for f in &m.fields {
         assert_eq!(f.class, Some(DataClass::None), "{}", f.name);
         assert_eq!(f.permission_group, ANY_GROUP, "{}", f.name);
         assert!(!f.personal_data, "{}", f.name);
         assert!(!f.description.is_empty(), "{}", f.name);
     }
-    // The kinds: the artwork is a long text, the bool inputs and answers are bools, the rest text.
+    // The kinds: the artwork is a long text, the switch and the bool inputs and answers are bools,
+    // the rest text.
     let kind = |n: &str| m.fields.iter().find(|f| f.name == n).unwrap().kind.clone();
     assert_eq!(kind("logo_svg"), FieldKind::LongText);
-    for b in ["dry_run", "set", "cleared"] {
+    for b in ["hide_product_docs", "dry_run", "set", "cleared"] {
         assert_eq!(kind(b), FieldKind::Bool, "{b}");
     }
     for t in [
@@ -184,10 +187,6 @@ fn the_model_has_17_stored_and_8_answer_fields_all_public_with_data_class_none()
     ] {
         assert_eq!(kind(t), FieldKind::Text, "{t}");
     }
-    assert!(
-        !names.contains(&"hide_product_docs"),
-        "the switch arrives with the back office slice"
-    );
 }
 
 #[test]
@@ -231,14 +230,14 @@ fn the_language_fields_follow_the_languages_of_the_record() {
 }
 
 #[test]
-fn the_model_has_56_label_slots_two_for_the_model_two_per_field_and_two_per_action() {
+fn the_model_has_58_label_slots_two_for_the_model_two_per_field_and_two_per_action() {
     let module = admin_module();
     let slots: Vec<_> = obop_registry::template::slots(&module)
         .into_iter()
         .filter(|s| s.model == MODEL)
         .collect();
-    assert_eq!(slots.len(), 2 + 25 * 2 + 2 * 2);
-    assert_eq!(slots.len(), 56);
+    assert_eq!(slots.len(), 2 + 26 * 2 + 2 * 2);
+    assert_eq!(slots.len(), 58);
 }
 
 #[test]
@@ -251,21 +250,42 @@ fn the_descriptions_name_the_input_keys_and_say_nothing_of_pages() {
         "title_<lang>",
         "message_<lang>",
         "logo_svg",
+        "hide_product_docs",
         "dry_run",
         "changes",
         "refusals",
     ] {
         assert!(configure.description.contains(key), "configure: {key}");
     }
+    let switch = m
+        .fields
+        .iter()
+        .find(|f| f.name == "hide_product_docs")
+        .unwrap();
+    // The whole text: what it hides, where, when it is on, and that it is not secret from the people
+    // who are signed in (it is the one value of the record that is not public).
+    assert_eq!(
+        switch.description,
+        "true or false: hide the Brand book and the Guide in Customize, the account menu and the command palette. Off unless a boolean true is stored. Not shown before sign-in; any signed-in person can read it"
+    );
     let clear = m.commands.iter().find(|c| c.name == "clear").unwrap();
     for key in ["dry_run", "cleared"] {
         assert!(clear.description.contains(key), "clear: {key}");
     }
-    // What the record holds, not which pages show it: no page is built yet to show it.
-    let mut texts = vec![m.description.to_string()];
-    texts.extend(m.fields.iter().map(|f| f.description.to_string()));
-    texts.extend(m.commands.iter().map(|c| c.description.to_string()));
-    for t in texts {
+    // What the record holds, not which pages show it: no description uses a word below, which names
+    // a page or a screen (the switch says where it hides the two documents, in the words of the menus).
+    let mut texts = vec![("the model".to_string(), m.description.to_string())];
+    texts.extend(
+        m.fields
+            .iter()
+            .map(|f| (f.name.to_string(), f.description.to_string())),
+    );
+    texts.extend(
+        m.commands
+            .iter()
+            .map(|c| (c.name.to_string(), c.description.to_string())),
+    );
+    for (item, t) in texts {
         let low = t.to_lowercase();
         for word in [
             "oauth",
@@ -277,7 +297,12 @@ fn the_descriptions_name_the_input_keys_and_say_nothing_of_pages() {
             "tab icon",
             "consent",
         ] {
-            assert!(!low.contains(word), "{word:?} in {t:?}");
+            // `favicon` is a key of the answer `effective` since the shop reads the record: the
+            // name of an entry, listed in the description of that one field, and not a page.
+            if word == "favicon" && item == "effective" {
+                continue;
+            }
+            assert!(!low.contains(word), "{word:?} in {item}: {t:?}");
         }
     }
 }
@@ -477,6 +502,44 @@ fn get_with_no_row_answers_the_defaults_and_set_false_which_is_not_an_error() {
     want.sort();
     assert_eq!(keys, want.iter().map(String::as_str).collect::<Vec<_>>());
     assert!(r.events().is_empty(), "a read writes nothing");
+}
+
+/// `get` says what an enrolment would write into an authenticator and which source won: the
+/// variable `OBOP_MFA_ISSUER` (read with `brand::env_issuer`, the function the authenticator's
+/// configuration reads it with), else the stored name, else `obop`. The expectation is built from
+/// that same function, so the test holds in a run that sets the variable as well; the cases with a
+/// value for it are in `obop-commands` (`effective_json_with`) and in the binary's tests, which
+/// start the program with the variable in its environment.
+#[test]
+fn get_names_the_authenticator_issuer_and_the_source_that_won() {
+    let variable = brand::env_issuer();
+    let issuer = |record: Option<&str>| -> J {
+        match (&variable, record) {
+            (Some(v), _) => json!({"value": v, "source": "env"}),
+            (None, Some(name)) => json!({"value": name, "source": "record"}),
+            (None, None) => json!({"value": "obop", "source": "default"}),
+        }
+    };
+    let r = rig();
+    let g = r.get();
+    assert_eq!(
+        parsed(&g, "effective")["authenticator_issuer"],
+        issuer(None)
+    );
+    r.configure(&[("name", "MOHV")]).unwrap();
+    let g = r.get();
+    assert_eq!(
+        parsed(&g, "effective")["authenticator_issuer"],
+        issuer(Some("MOHV"))
+    );
+    // A change made through the command shows in the next `get`, with no wait: it reads the row
+    // itself.
+    r.configure(&[("name", "Other")]).unwrap();
+    let g = r.get();
+    assert_eq!(
+        parsed(&g, "effective")["authenticator_issuer"],
+        issuer(Some("Other"))
+    );
 }
 
 #[test]
@@ -808,7 +871,7 @@ fn an_input_key_that_is_not_a_writable_field_or_dry_run_is_refused_by_name() {
         "refusals",
         "cleared",
         "bogus",
-        "hide_product_docs",
+        "future_switch",
         "logo",
         "title_xx",
         "message_",
@@ -1184,7 +1247,7 @@ fn a_values_file_refuses_every_key_that_is_not_a_writable_field_the_answer_field
         "cleared",
         "id",
         "bogus",
-        "hide_product_docs",
+        "future_switch",
         "title_xx",
     ] {
         let reasons = file_err(&format!("[record]\nname = \"MOHV\"\n{key} = \"x\"\n"));
@@ -1221,6 +1284,10 @@ fn a_values_file_refuses_another_table_a_key_outside_a_table_and_a_value_that_is
     assert!(
         r[0].contains("the key phone is not a field of the brand"),
         "{r:?}"
+    );
+    assert!(
+        r[0].ends_with("title_<lang>, message_<lang>, logo_svg and hide_product_docs"),
+        "the values file names the switch among the fields: {r:?}"
     );
     let r = file_err("phone = 3\n[record]\nname = \"MOHV\"\n");
     assert!(r[0].contains("[phone] must be a table"), "{r:?}");
@@ -1634,7 +1701,7 @@ fn get_returns_every_stored_text_exactly_as_it_is_stored() {
 /// answer fields, and the field and data-class counters of the row grow by 25. Pinned here so that
 /// a later change to the model's fields is a deliberate act.
 #[test]
-fn the_platform_module_row_lists_the_model_with_its_twenty_five_fields() {
+fn the_platform_module_row_lists_the_model_with_its_twenty_six_fields() {
     let r = rig();
     let row = r
         .call(
@@ -1658,8 +1725,8 @@ fn the_platform_module_row_lists_the_model_with_its_twenty_five_fields() {
         .iter()
         .find(|m| m["name"] == MODEL)
         .unwrap_or_else(|| panic!("no entry for the model: {row}"));
-    assert_eq!(entry["fields"], 25, "17 stored and 8 answer fields");
-    assert_eq!(model().fields.len(), 25);
+    assert_eq!(entry["fields"], 26, "18 stored and 8 answer fields");
+    assert_eq!(model().fields.len(), 26);
     assert_eq!(
         (entry["read_group"].as_str(), entry["write_group"].as_str()),
         (Some("*"), Some("platform.admin"))

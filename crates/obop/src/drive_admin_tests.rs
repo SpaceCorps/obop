@@ -401,6 +401,28 @@ impl Rig {
 }
 
 async fn rig() -> Rig {
+    rig_with(None).await
+}
+
+/// The brand an instance of the rig has (docs/spec/branding.md, slice S1d). The plain rig builds its
+/// dispatcher with no `register_admin`, so its reader is inert and could never see a row; the rig of
+/// the brand tests installs a real one and writes the row the way it is written.
+enum Brand<'a> {
+    /// A reader over the store and no row: an instance that sets nothing.
+    NoRow,
+    /// The row `instance_brand.configure` writes for these fields.
+    Configured(&'a [(&'a str, &'a str)]),
+    /// A row put into the store as it is, whatever it holds: written around the command.
+    Around(&'a [(&'a str, J)]),
+}
+
+async fn rig_with(brand: Option<Brand<'_>>) -> Rig {
+    rig_over(Store::new(), brand).await
+}
+
+/// The rig over a store the caller made (one whose reads can be refused, say), on a dispatcher that
+/// has a real reader of the instance brand when `brand` is given.
+async fn rig_over(store: Store, brand: Option<Brand<'_>>) -> Rig {
     let f = fake();
     {
         let mut g = f.state.lock().unwrap();
@@ -409,10 +431,40 @@ async fn rig() -> Rig {
             ..Google::default()
         };
     }
-    let store = Store::new();
     let d = Arc::new(Dispatcher::new());
     let ring = obop_keys::KeyRing::for_backend(&store.backend()).unwrap();
     d.set_shared(store.backend(), ring);
+    if let Some(brand) = brand {
+        let reader = d.install_brand(store.backend());
+        match brand {
+            Brand::NoRow => {}
+            Brand::Configured(fields) => {
+                let supplied = fields
+                    .iter()
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect();
+                obop_commands::brand::apply(
+                    &*store.backend(),
+                    Some(&reader),
+                    "operator",
+                    &obop_commands::brand::Action::Configure(supplied),
+                    false,
+                )
+                .unwrap_or_else(|e| panic!("the brand was refused: {e}"));
+            }
+            Brand::Around(fields) => store
+                .backend()
+                .apply_checked(&[obop_storage::Op::Put {
+                    model: obop_commands::brand::MODEL.into(),
+                    id: obop_commands::brand::ROW_ID.into(),
+                    fields: fields
+                        .iter()
+                        .map(|(k, v)| (k.to_string(), v.clone()))
+                        .collect(),
+                }])
+                .unwrap(),
+        }
+    }
     base::register(&d, &store);
     product::register(&d, &store);
     let rt = Runtime::with_providers(
@@ -495,6 +547,9 @@ async fn the_google_drive_page_end_to_end_against_a_fake_google() {
     a_sign_in_that_did_not_grant_writing_cannot_create_and_says_how_to_fix_it().await;
     // A pin: `cargo test --locked -p obop -- pins the_google_drive_page_end_to_end` selects this test.
     pins_the_return_page_after_a_drive_sign_in().await;
+    with_a_brand_the_return_page_after_a_drive_sign_in_says_the_name().await;
+    a_hostile_name_written_around_the_command_is_escaped_on_the_drive_return_page().await;
+    a_drive_sign_in_whose_first_brand_read_fails_spends_no_state_and_is_a_503().await;
     the_google_addresses_cannot_be_pointed_anywhere_but_loopback();
 }
 
@@ -984,21 +1039,7 @@ fn the_google_addresses_cannot_be_pointed_anywhere_but_loopback() {
 /// above, which shares that fake. It is what an instance with no brand sends today.
 async fn pins_the_return_page_after_a_drive_sign_in() {
     use crate::mfa_tests::pin;
-    let r = rig().await;
-    let g = fake();
-    let (_id, q) = r.start("product.manager").await;
-    g.state
-        .lock()
-        .unwrap()
-        .codes
-        .insert("code-pin".into(), q["code_challenge"].clone());
-    let req = Request::get(format!(
-        "/oauth/callback?state={}&code=code-pin",
-        q["state"]
-    ))
-    .body(Body::empty())
-    .unwrap();
-    let answer = pin::answer(r.router.clone().oneshot(req).await.unwrap()).await;
+    let answer = drive_return_page(&rig().await).await;
     assert!(
         answer.contains("Connected") && answer.contains("href=\"/#/connectors/google_drive\""),
         "{answer}"
@@ -1008,6 +1049,144 @@ async fn pins_the_return_page_after_a_drive_sign_in() {
         CONNECTOR_DRIVE_PINS,
         &[("connected_drive".to_string(), pin::sha(&answer))],
     );
+}
+
+/// The address of `GET /oauth/callback` after a good Google sign-in on `r`: the administrator's steps
+/// up to the link, and the code the fake Google takes for it.
+async fn drive_return_uri(r: &Rig) -> String {
+    let g = fake();
+    let (_id, q) = r.start("product.manager").await;
+    g.state
+        .lock()
+        .unwrap()
+        .codes
+        .insert("code-pin".into(), q["code_challenge"].clone());
+    format!("/oauth/callback?state={}&code=code-pin", q["state"])
+}
+
+/// The whole answer of `GET uri` on `r`, as the pin holds it.
+async fn answer_of(r: &Rig, uri: &str) -> String {
+    use crate::mfa_tests::pin;
+    let req = Request::get(uri).body(Body::empty()).unwrap();
+    pin::answer(r.router.clone().oneshot(req).await.unwrap()).await
+}
+
+/// The whole answer of `GET /oauth/callback` after a good Google sign-in on `r`, as the pin holds it.
+async fn drive_return_page(r: &Rig) -> String {
+    answer_of(r, &drive_return_uri(r).await).await
+}
+
+/// S1d, the fifth output of the callback: with a brand the page after a Google sign-in says `MOHV` in
+/// the sentence and in the link, in English, and is otherwise the page of an instance with no
+/// brand; the address it takes the browser back to has no name in it. The instance with no brand is
+/// held twice: the plain rig, whose reader is inert, and a rig with a real reader and no row.
+async fn with_a_brand_the_return_page_after_a_drive_sign_in_says_the_name() {
+    let plain = drive_return_page(&rig().await).await;
+    let no_row = drive_return_page(&rig_with(Some(Brand::NoRow)).await).await;
+    assert_eq!(no_row, plain, "a reader with no row changed the page");
+    let branded = drive_return_page(
+        &rig_with(Some(Brand::Configured(&crate::brand_row_tests::FIELDS))).await,
+    )
+    .await;
+    assert!(plain.contains("Taking you back to obop."), "{plain}");
+    assert_eq!(
+        branded,
+        plain
+            .replace("Back to obop", "Back to MOHV")
+            .replace("Taking you back to obop.", "Taking you back to MOHV."),
+        "more than the name moved"
+    );
+    assert!(
+        branded.contains("The account is authorised. Taking you back to MOHV.")
+            && branded.contains("<a href=\"/#/connectors/google_drive\">Back to MOHV</a>")
+            && branded.contains("content=\"3;url=/#/connectors/google_drive\""),
+        "{branded}"
+    );
+    assert!(!branded.to_lowercase().contains("obop"), "{branded}");
+}
+
+/// A row written around the command with a name that has every character HTML needs escaped and
+/// that the read check lets through: the page after a Google sign-in shows it escaped once in the
+/// sentence and in the link, and the address of the way back (the link and the refresh) has none of it.
+async fn a_hostile_name_written_around_the_command_is_escaped_on_the_drive_return_page() {
+    let name = "Acme & \"Sons\" 'x'";
+    let row = [("name", json!(name))];
+    let page = drive_return_page(&rig_with(Some(Brand::Around(&row))).await).await;
+    assert!(!page.contains(name), "the name raw: {page}");
+    assert!(
+        !page.contains("&amp;amp;") && !page.contains("&amp;#39;"),
+        "escaped twice: {page}"
+    );
+    assert!(
+        page.contains(
+            "<p>The account is authorised. Taking you back to Acme &amp; &quot;Sons&quot; &#39;x&#39;.</p>"
+        ),
+        "the sentence: {page}"
+    );
+    assert!(
+        page.contains(
+            "<a href=\"/#/connectors/google_drive\">Back to Acme &amp; &quot;Sons&quot; &#39;x&#39;</a>"
+        ),
+        "the link: {page}"
+    );
+    assert!(
+        page.contains("content=\"3;url=/#/connectors/google_drive\"") && !page.contains("Acme/"),
+        "the way back holds no name: {page}"
+    );
+}
+
+/// The callback writes (it spends the single-use state and stores the sealed tokens), so it reads the
+/// brand before it does anything. With the first read refused the sign-in ends in the 503 of D74, the
+/// state is not spent and nothing is stored; once the store answers, the same address connects the
+/// account and the page says the name.
+async fn a_drive_sign_in_whose_first_brand_read_fails_spends_no_state_and_is_a_503() {
+    use obop_storage::testing::{Flaky, Mode};
+    let (flaky, backend) = Flaky::memory();
+    // The row is put into the store before anything has asked the reader, so that the reader has no
+    // cell yet and the first page request has to read the store.
+    let row = [("name", json!("MOHV"))];
+    let r = rig_over(Store::over(backend), Some(Brand::Around(&row))).await;
+    let uri = drive_return_uri(&r).await;
+    let stored = |r: &Rig| {
+        let b = r.store.backend();
+        (
+            b.list("connection").unwrap(),
+            b.list("connector_oauth_state").unwrap(),
+            b.list("connector_vault").unwrap(),
+        )
+    };
+    let before = stored(&r);
+    let writes = flaky.seen_writes().len();
+
+    flaky.refuse_model(obop_commands::brand::MODEL, Mode::Reads);
+    let refused_before = flaky.refused();
+    let answer = answer_of(&r, &uri).await;
+    assert!(answer.starts_with("503\n"), "{answer}");
+    assert!(answer.to_lowercase().contains("retry-after: 1"), "{answer}");
+    assert!(
+        !answer.contains("Connected") && !answer.contains("Back to"),
+        "not a page of the callback: {answer}"
+    );
+    assert!(
+        flaky.refused() > refused_before,
+        "the brand's read was refused"
+    );
+    assert_eq!(stored(&r), before, "nothing was stored or spent");
+    assert_eq!(
+        flaky.seen_writes().len(),
+        writes,
+        "no batch reached the store"
+    );
+
+    // The store answers: the same address, the same state, connects the account.
+    flaky.allow_models();
+    let answer = answer_of(&r, &uri).await;
+    assert!(answer.starts_with("200\n"), "{answer}");
+    assert!(
+        answer.contains("The account is authorised. Taking you back to MOHV."),
+        "{answer}"
+    );
+    assert_ne!(stored(&r), before, "it stored the tokens");
 }
 
 // Printed by `OBOP_PRINT_PINS=1` on origin/main 12a59a79 and pasted here.

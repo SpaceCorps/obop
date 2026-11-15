@@ -5,6 +5,7 @@ summary = "Einsätze vor Ort bei Kunden durch einen Techniker, mit verwendeten T
 
 [labels.de.model.field_service_job]
 name = "Einsatz"
+plural = "Einsätze"
 description = "Ein Einsatz vor Ort bei einem Kunden"
 
 [labels.de.model.field_service_job.field.name]
@@ -118,6 +119,7 @@ description = "Einen noch nicht begonnenen Einsatz stornieren"
 
 [labels.de.model.field_service_part]
 name = "Teil"
+plural = "Teile"
 description = "Ein bei einem Einsatz verwendetes Teil oder Produkt"
 
 [labels.de.model.field_service_part.field.job_id]
@@ -139,3 +141,6 @@ description = "Dem Kunden berechneter Preis pro Stück (kleinste Währungseinhei
 [labels.de.model.field_service_part.field.note]
 label = "Notiz"
 description = "Anmerkung zum Teil, zum Beispiel die Seriennummer"
+
+[labels.de.model.field_service_job.action.complete.assert.signed]
+message = "Der Kunde muss diesen Einsatz zuerst abzeichnen: Tragen Sie ein, wer wann unterschrieben hat"

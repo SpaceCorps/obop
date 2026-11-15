@@ -5,6 +5,7 @@ summary = "Toimittajat, ostotilaukset ja tilausrivit luonnos-, lähetetty-, vahv
 
 [labels.fi.model.purchase_vendor]
 name = "Toimittaja"
+plural = "Toimittajat"
 description = "Ostoehdot yhteystiedolle, jolta ostat"
 
 [labels.fi.model.purchase_vendor.field.party_id]
@@ -33,11 +34,12 @@ description = "Ostatko edelleen tältä toimittajalta"
 
 [labels.fi.model.purchase_order]
 name = "Ostotilaus"
+plural = "Ostotilaukset"
 description = "Pyyntö toimittajalle toimittaa tavaroita tai palveluja"
 
 [labels.fi.model.purchase_order.field.reference]
-label = "Viite"
-description = "Asiakirjaan tulostettava tilausnumero"
+label = "Toimittajan viite"
+description = "Toimittajan tarjous- tai viitenumero tälle tilaukselle, jos sellainen on"
 
 [labels.fi.model.purchase_order.field.vendor_id]
 label = "Toimittaja"
@@ -92,6 +94,7 @@ description = "Peruuta tilaus, jota ei ole vielä lähetetty"
 
 [labels.fi.model.purchase_order_line]
 name = "Ostotilauksen rivi"
+plural = "Ostotilauksen rivit"
 description = "Ostotilauksen yksi tuote tai palvelu"
 
 [labels.fi.model.purchase_order_line.field.order_id]

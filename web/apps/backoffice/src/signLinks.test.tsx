@@ -122,7 +122,7 @@ describe("the dialog that shows the link once", () => {
     expect(h).toContain("Anyone who has this link can sign for Ada Example.");
     expect(h).toContain("It cannot be shown again.");
     expect(h).toContain("If you lose it, create another link for this request.");
-    expect(h).toContain("obop sends no email");
+    expect(h).toContain("No email is sent");
   });
 
   it("shows the link in a read-only field next to a Copy button and a Done button", () => {
@@ -379,9 +379,10 @@ describe("the table of the links of a request", () => {
 
   it("shows each link's status, its first eight characters and never a link", () => {
     const h = html(true);
-    expect(h).toContain("Active");
-    expect(h).toContain("Used");
-    expect(h).toContain("Revoked");
+    // The badges themselves (the moments under each link use the words Used and Revoked too).
+    expect(h).toMatch(/<\/i>Active<\/span><code[^>]*>aaaaaaaa</);
+    expect(h).toMatch(/<\/i>Used<\/span><code[^>]*>bbbbbbbb</);
+    expect(h).toMatch(/<\/i>Revoked<\/span><code[^>]*>cccccccc</);
     expect(h).toContain("aaaaaaaa");
     expect(h).not.toContain("a".repeat(9));
     expect(h).not.toContain("/sign/");

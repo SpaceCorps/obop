@@ -5,6 +5,7 @@ summary = "Dostawcy, zamówienia zakupu i ich pozycje z obiegiem wersja robocza,
 
 [labels.pl.model.purchase_vendor]
 name = "Dostawca"
+plural = "Dostawcy"
 description = "Warunki zakupu od kontaktu, u którego firma kupuje"
 
 [labels.pl.model.purchase_vendor.field.party_id]
@@ -33,11 +34,12 @@ description = "Czy nadal kupujesz od tego dostawcy"
 
 [labels.pl.model.purchase_order]
 name = "Zamówienie zakupu"
+plural = "Zamówienia zakupu"
 description = "Zlecenie dla dostawcy na dostarczenie towarów lub usług"
 
 [labels.pl.model.purchase_order.field.reference]
-label = "Referencja"
-description = "Numer zamówienia drukowany na dokumencie"
+label = "Referencja dostawcy"
+description = "Numer oferty lub referencja dostawcy dla tego zamówienia, jeśli jest"
 
 [labels.pl.model.purchase_order.field.vendor_id]
 label = "Dostawca"
@@ -92,6 +94,7 @@ description = "Anuluje zamówienie, które nie zostało jeszcze wysłane"
 
 [labels.pl.model.purchase_order_line]
 name = "Pozycja zamówienia"
+plural = "Pozycje zamówienia"
 description = "Jeden produkt lub usługa w zamówieniu zakupu"
 
 [labels.pl.model.purchase_order_line.field.order_id]

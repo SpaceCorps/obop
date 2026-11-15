@@ -1,10 +1,11 @@
 [labels.fr.module]
 name = "Marketing par e-mail"
-description = "Listes de diffusion, contacts avec statut et date de consentement, et campagnes (brouillon, planifiée, envoyée). L’envoi est irréversible et exige l’approbation d’un responsable ; les agents peuvent seulement le proposer. Les statistiques sont saisies, pas calculées. Les contacts sont des données personnelles : n’écrivez jamais à un contact qui n’est pas opted_in."
-summary = "Listes de diffusion, contacts avec consentement et campagnes. L’envoi exige une approbation humaine."
+description = "Listes de diffusion, contacts avec statut et date de consentement, et campagnes (brouillon, planifiée, envoyée). Aucun e-mail n’est envoyé : marquer une campagne comme envoyée ne fait que l’enregistrer et exige l’approbation d’un responsable ; les agents peuvent seulement le proposer. Statistiques saisies, pas calculées. Données personnelles : n’écrivez jamais à un contact non opted_in."
+summary = "Listes, contacts avec consentement et campagnes. Aucun e-mail n’est envoyé ; marquer une campagne comme envoyée exige une approbation."
 
 [labels.fr.model.email_marketing_list]
 name = "Liste"
+plural = "Listes"
 description = "Une liste de diffusion à laquelle des contacts peuvent appartenir"
 
 [labels.fr.model.email_marketing_list.field.name]
@@ -21,6 +22,7 @@ description = "Indique si les visiteurs peuvent s’abonner eux-mêmes"
 
 [labels.fr.model.email_marketing_contact]
 name = "Contact"
+plural = "Contacts"
 description = "Une personne figurant sur une liste de diffusion"
 
 [labels.fr.model.email_marketing_contact.field.list_id]
@@ -55,6 +57,7 @@ description = "Où le consentement a été recueilli, par exemple formulaire d�
 
 [labels.fr.model.email_marketing_campaign]
 name = "Campagne"
+plural = "Campagnes"
 description = "Un envoi adressé à une liste"
 
 [labels.fr.model.email_marketing_campaign.field.name]
@@ -129,15 +132,15 @@ cancelled = "Annulée"
 
 [labels.fr.model.email_marketing_campaign.action.schedule]
 label = "Planifier"
-description = "Met la campagne en file d’attente pour le jour prévu"
+description = "Marque la campagne comme planifiée pour le jour prévu"
 
 [labels.fr.model.email_marketing_campaign.action.send]
-label = "Envoyer"
-description = "Envoie la campagne planifiée à toute la liste (responsable uniquement)"
+label = "Marquer comme envoyée"
+description = "Marque la campagne planifiée comme envoyée ; aucun e-mail n’est envoyé (responsable uniquement)"
 
 [labels.fr.model.email_marketing_campaign.action.send_now]
-label = "Envoyer maintenant"
-description = "Envoie immédiatement une campagne en brouillon (responsable uniquement)"
+label = "Marquer comme envoyée"
+description = "Marque une campagne en brouillon comme envoyée ; aucun e-mail n’est envoyé (responsable uniquement)"
 
 [labels.fr.model.email_marketing_campaign.action.unschedule]
 label = "Déplanifier"

@@ -1,3 +1,5 @@
+import { isLang, isPseudo } from "./locales.ts";
+import { pseudo } from "./pseudo.ts";
 import { getLang } from "./store.ts";
 
 /** What a server record of metadata (module, model, field) may carry: language code -> display label. */
@@ -17,6 +19,13 @@ export function labelFor(
   fallback?: string,
 ): string {
   const l = obj?.labels;
+  // A pseudo-locale (en-XA, ar-XB) is accented English: the English label, accented like the rest.
+  if (isLang(lang) && isPseudo(lang)) {
+    const en = l?.en;
+    return typeof en === "string" && en.trim()
+      ? pseudo(en)
+      : (fallback ?? obj?.description ?? obj?.name ?? "");
+  }
   const hit = l?.[lang] ?? l?.[lang.split("-")[0]!];
   if (typeof hit === "string" && hit.trim()) return hit;
   return fallback ?? obj?.description ?? obj?.name ?? "";

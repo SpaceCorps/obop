@@ -18,7 +18,7 @@ async function seed(api: Api, scratchModule: (s: any) => Promise<string>) {
       { name: "amount_minor", kind: "money" },
     ],
   });
-  // One after the other: the default order of a list is insertion order.
+  // A model with no workflow and no date is master data: its list is in title order (listOrder).
   for (let n = 1; n <= COUNT; n++)
     await api.create("root", model, {
       title: `Row ${pad(n)}`,
@@ -174,7 +174,7 @@ test.describe("server-side list: paging, filter, sort", () => {
     await expect(page.getByText(/unknown field party\.name/)).toBeVisible();
 
     await page.getByRole("button", { name: "Clear filters and sorting" }).click();
-    await expect(page.getByRole("grid", { name: "Party list" })).toBeVisible();
+    await expect(page.getByRole("grid", { name: "Contact list" })).toBeVisible();
     await expect(page.locator(".facet")).toHaveCount(0);
   });
 });

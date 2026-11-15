@@ -1,0 +1,525 @@
+/* Value rendering and the list view (split from views.css; badges, chips, empty and loading states
+   are @obop/ui). The phone rules of every view are at the end of each view's own file. */
+.amount {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.yes {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--success-ink);
+  font-weight: var(--weight-medium);
+}
+.reflink {
+  color: var(--accent-ink);
+  font-weight: var(--weight-medium);
+}
+.reflink:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.reflink.small {
+  font-size: var(--text-sm);
+}
+.confirm-msg {
+  color: var(--text);
+}
+.dialog.confirm .dialog-body {
+  padding-block-start: var(--space-5);
+}
+
+/* ---------- List ---------- */
+/* One row per record. The whole row opens it (ListView); the first column is the record's title,
+   other refs are text with an arrow that follows them on hover. On a phone each record is a card
+   (.listview.phone below): title and status, then number, ref and date with the amount. */
+.listview {
+  display: flex;
+  flex-direction: column;
+  min-block-size: 100%;
+}
+.listbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  min-block-size: 2.75rem;
+  padding: 0.4rem 1.25rem;
+}
+.bulkbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+.edittoggle[aria-pressed="true"] {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.btn.icon-only {
+  inline-size: var(--control-h-sm);
+  padding-inline: 0;
+  justify-content: center;
+}
+.tablewrap {
+  flex: 1;
+  min-block-size: 0;
+  overflow: auto;
+}
+/* The list scrolls inside, so the pager stays in view under it. */
+.content.view-list {
+  overflow: hidden;
+}
+.content.view-list > .listview {
+  block-size: 100%;
+  min-block-size: 0;
+}
+.listview > .pager {
+  flex: none;
+}
+.list {
+  border-block-start: 1px solid var(--border);
+}
+.list th {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 1;
+  padding: 0;
+  background: var(--surface-2);
+}
+.thbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  inline-size: 100%;
+  padding: 0.6rem 1rem;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: var(--weight-semibold);
+  text-align: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.thbtn:hover {
+  color: var(--text);
+}
+.num .thbtn {
+  flex-direction: row-reverse;
+}
+.sortmark {
+  font-size: 0.6rem;
+  opacity: 0;
+}
+.sortmark.on {
+  color: var(--accent-ink);
+  opacity: 1;
+}
+/* The default order: shown, but quieter than an order the person chose. */
+.sortmark.dflt {
+  opacity: 0.45;
+}
+.thbtn:hover .sortmark {
+  opacity: 0.5;
+}
+.thbtn:hover .sortmark.on {
+  opacity: 1;
+}
+.list td {
+  max-inline-size: 22rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.list td.titlecol {
+  max-inline-size: 26rem;
+  font-weight: var(--weight-medium);
+}
+.list td.refcol {
+  max-inline-size: 14rem;
+}
+/* Fixed layout: every column has its width (colgroup, from ListView), the room left over is shared
+   in proportion, and a value longer than its column ends in an ellipsis. */
+.list.fitted {
+  table-layout: fixed;
+}
+.list.fitted td {
+  max-inline-size: none;
+}
+.list.fitted th {
+  overflow: hidden;
+}
+.thlabel {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.list .selcol {
+  inline-size: 3.25rem;
+  max-inline-size: none;
+  padding-inline: 1.25rem 0.75rem;
+}
+.list tbody tr {
+  transition: background-color var(--dur-1) var(--ease-out);
+}
+.list tbody tr:not(.ghead) td:not(.selcol) {
+  cursor: pointer;
+}
+.list tbody tr[aria-selected="true"] {
+  background: var(--accent-soft);
+}
+.list tbody tr.current {
+  background: var(--accent-soft-strong);
+  box-shadow: inset 3px 0 0 var(--accent-fill);
+}
+.list td:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+/* The title and the refs read as text: the row is the target, not the words. */
+.rowlink,
+.reftext {
+  color: inherit;
+  text-decoration: none;
+}
+.rowlink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  max-inline-size: 100%;
+  vertical-align: middle;
+}
+.rowtitle {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.row-avatar {
+  flex: none;
+  border-radius: var(--radius-sm);
+}
+.reftext {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  max-inline-size: 100%;
+  vertical-align: middle;
+}
+.reftext-label {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.refgo {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  border-radius: var(--radius-xs);
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity var(--dur-1) var(--ease-out);
+}
+tr:hover .refgo,
+.reftext:focus-visible .refgo {
+  opacity: 0.7;
+}
+.refgo:hover {
+  background: var(--surface-3);
+  color: var(--accent-ink);
+  opacity: 1;
+}
+/* Deadlines: past is red, close is amber (ui.warn_before_days, 7 days by default). */
+.due {
+  font-weight: var(--weight-medium);
+}
+.due.past {
+  color: var(--danger-ink);
+}
+.due.soon {
+  color: var(--warning-ink);
+}
+/* "Edit in list": cells that change in place say so on hover. */
+.list.editmode td.editable {
+  cursor: text;
+}
+.list.editmode td.editable:hover {
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+.list td.editing {
+  padding: 0.25rem 0.5rem;
+  overflow: visible;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 2px var(--accent-fill);
+}
+.ghead td {
+  padding-block: 0.4rem;
+  background: var(--surface-2);
+  font-weight: var(--weight-semibold);
+}
+.gbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.15rem 0.3rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+.gbtn:hover {
+  background: var(--surface-3);
+}
+.caret {
+  display: inline-grid;
+  color: var(--text-muted);
+  transition: transform var(--dur-2) var(--ease-out);
+}
+.caret.down {
+  transform: rotate(90deg);
+}
+.agg {
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.list tfoot td {
+  position: sticky;
+  inset-block-end: 0;
+  border-block-start: 1px solid var(--border);
+  border-block-end: 0;
+  background: var(--surface-2);
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+}
+.list tfoot td.agg {
+  vertical-align: top;
+}
+/* Totals in several currencies: one line each. */
+.sums {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1rem;
+}
+.inline-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-inline-size: 8rem;
+  white-space: normal;
+}
+.inline-edit input:not([type="checkbox"]),
+.inline-edit select,
+.inline-edit textarea {
+  min-block-size: var(--control-h-sm);
+  font-size: var(--text-sm);
+}
+.ie-error {
+  color: var(--danger-ink);
+  font-size: var(--text-xs);
+}
+/* The columns menu: fields withheld from this person are listed, greyed, with a lock. */
+.colmenu .fp-item.withheld {
+  color: var(--text-subtle);
+  cursor: not-allowed;
+}
+.colmenu .fp-item.withheld:hover {
+  background: none;
+}
+.colmenu .colreset {
+  margin: 0.35rem 0.4rem 0.15rem;
+}
+.sortmenu {
+  display: flex;
+  flex-direction: column;
+}
+.sortmenu > button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-block-size: 2.5rem;
+  padding: 0.4rem 0.6rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text);
+  text-align: start;
+  cursor: pointer;
+}
+.sortmenu > button[aria-pressed="true"] {
+  font-weight: var(--weight-semibold);
+}
+.sortmenu > button:hover {
+  background: var(--surface-3);
+}
+.sortbtn .sortmark {
+  margin-inline-start: 0.1rem;
+}
+
+/* ---------- The list on a phone: one card per record ---------- */
+.listview.phone .listbar {
+  gap: var(--space-2);
+  min-block-size: 3rem;
+  padding: var(--space-2) var(--space-4);
+}
+.phone-all {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: var(--control-h-sm);
+  padding-inline: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+}
+.listview.phone .list,
+.listview.phone .list > tbody,
+.listview.phone .list > tfoot {
+  display: block;
+}
+.listview.phone .list > tbody > tr {
+  display: flex;
+  align-items: stretch;
+  border-block-end: 1px solid var(--border);
+}
+.listview.phone .list td {
+  display: block;
+  max-inline-size: none;
+  padding: 0;
+  border: 0;
+  overflow: visible;
+  white-space: normal;
+}
+.listview.phone .list td.selcol {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  inline-size: 2.75rem;
+  padding-inline-start: var(--space-2);
+}
+.listview.phone .list td.lcard {
+  flex: 1;
+  min-inline-size: 0;
+  padding: var(--space-3) var(--space-4);
+}
+.listview.phone .list td.selcol + td.lcard {
+  padding-inline-start: var(--space-1);
+}
+.lc-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.lc-title {
+  flex: 1;
+  min-inline-size: 0;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-snug);
+}
+.lc-title .rowlink {
+  display: flex;
+  align-items: flex-start;
+}
+/* Two lines at most, then an ellipsis: a long description does not make a tall card. */
+.lc-title .rowtitle {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: break-word;
+}
+.lc-top .badge {
+  flex: none;
+  margin-block-start: 0.1rem;
+}
+.lc-sub {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-block-start: 0.3rem;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+.lc-meta {
+  flex: 1;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lc-money {
+  flex: none;
+  color: var(--text);
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+}
+.listview.phone .list > tbody > tr.ghead {
+  align-items: center;
+  background: var(--surface-2);
+}
+.listview.phone .list > tbody > tr.ghead > td {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-block: 0;
+  padding-inline-end: var(--space-4);
+}
+.listview.phone .gbtn {
+  min-block-size: 2.75rem;
+}
+.gsum {
+  font-weight: var(--weight-semibold);
+}
+.listview.phone .list > tfoot > tr {
+  display: block;
+}
+.listview.phone .list > tfoot td {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-2);
+}
+.foot-sum {
+  margin-inline-start: auto;
+  font-weight: var(--weight-semibold);
+}
+
+@media (max-width: 40rem) {
+  /* The page scrolls instead of the table, so nothing is cut at the edge. */
+  .content.view-list {
+    overflow-x: clip;
+    overflow-y: visible;
+  }
+  .content.view-list > .listview {
+    block-size: auto;
+  }
+  /* The list's only: pivot and graph keep their scrolling .tablewrap. */
+  .listview > .tablewrap {
+    overflow: visible;
+  }
+  .list > tfoot td {
+    position: static;
+  }
+  /* The pager stays on the bottom edge while the records scroll under it. */
+  .listview > .pager {
+    position: sticky;
+    inset-block-end: 0;
+    z-index: 2;
+    padding: var(--space-2) var(--space-4) max(var(--space-2), env(safe-area-inset-bottom));
+  }
+}
+/* Without hover (touch), the arrow of a ref is not offered: a tap opens the row. */
+@media (hover: none) {
+  .refgo {
+    display: none;
+  }
+}

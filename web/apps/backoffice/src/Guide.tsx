@@ -5,6 +5,7 @@ import { href } from "./route.ts";
 import {
   headingNumber,
   parseMarkdown,
+  plain,
   searchSections,
   sections,
   toc,
@@ -138,12 +139,15 @@ function BlockView({
         </Tag>
       );
     }
-    case "table":
+    case "table": {
+      // On a phone each row becomes a block: the first cell is its title, the others carry
+      // their column name.
+      const labels = b.head.map(plain);
       return (
         <div className="table-wrap guide-table">
-          <table className="table dense">
-            <thead>
-              <tr>
+          <table className="table dense stack-sm" role="table">
+            <thead role="rowgroup">
+              <tr role="row">
                 {b.head.map((h, i) => (
                   <th key={i} scope="col" style={{ textAlign: b.align[i] ?? undefined }}>
                     <Inlines c={h} go={go} />
@@ -151,11 +155,17 @@ function BlockView({
                 ))}
               </tr>
             </thead>
-            <tbody>
+            <tbody role="rowgroup">
               {b.rows.map((r, i) => (
-                <tr key={i}>
+                <tr role="row" key={i}>
                   {r.map((c, j) => (
-                    <td key={j} style={{ textAlign: b.align[j] ?? undefined }}>
+                    <td
+                      role="cell"
+                      key={j}
+                      className={j === 0 ? "cell-main" : undefined}
+                      data-label={j === 0 ? undefined : labels[j]}
+                      style={{ textAlign: b.align[j] ?? undefined }}
+                    >
                       <Inlines c={c} go={go} />
                     </td>
                   ))}
@@ -165,6 +175,7 @@ function BlockView({
           </table>
         </div>
       );
+    }
     case "code":
       return <CodeBlock code={b.text} lang={b.lang} />;
     case "quote":
@@ -185,7 +196,7 @@ export function Guide({ anchor, goAnchor, notify }: Props) {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(anchor || TOC[0]?.id || "");
   // The contents sit beside the text on wide screens and fold away on phones.
-  const wide = () => matchMedia("(min-width: 57rem)").matches;
+  const wide = () => typeof matchMedia === "function" && matchMedia("(min-width: 57rem)").matches;
   const [tocOpen, setTocOpen] = useState(wide);
   const root = useRef<HTMLDivElement>(null);
   const search = useRef<HTMLInputElement>(null);

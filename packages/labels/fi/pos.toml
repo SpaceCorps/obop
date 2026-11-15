@@ -1,11 +1,12 @@
 [labels.fi.module]
 name = "Kassa"
-description = "Myymälän kassat: kassapisteen asetukset, kassavuorot kassan täsmäytyksellä, myynnit riveineen ja maksurivit maksutavoittain. Hyvitys ja vuoron sulkeminen vaativat esihenkilön hyväksynnän. Rivien välisummat ja summa lasketaan, kuiteilla on katkeamaton vuosinumero, ja maksu luo rivikohtaisen luonnossiirron. Korttinumeroita ei saa tallentaa. Vaatii Tuotteet-paketin."
+description = "Myymälän kassat: kassapisteen asetukset, kassavuorot, myynnit riveineen ja maksurivit maksutavoittain. Hyvitys ja vuoron sulkeminen vaativat esihenkilön hyväksynnän. Summat lasketaan, kuiteilla on katkeamaton vuosinumero, ja maksu luo rivikohtaisen luonnossiirron. Täsmäytys- ja hyvitysasetukset vain tallennetaan; mikään ei tarkista niitä. Korttinumeroita ei saa tallentaa. Vaatii Tuotteet-paketin."
 summary = "Myymälän kassat: kassavuorot, myynnit riveineen ja maksut. Hyvitys ja sulkeminen vaativat hyväksynnän."
 
 [labels.fi.model.pos_config]
 name = "Kassapiste"
-description = "Kassapiste (kassa tai myymälä) ja sen säännöt"
+plural = "Kassapisteet"
+description = "Kassapiste (kassa tai myymälä) ja sen asetukset"
 
 [labels.fi.model.pos_config.field.name]
 label = "Nimi"
@@ -21,7 +22,7 @@ description = "Kuittien yläreunaan tulostettava teksti"
 
 [labels.fi.model.pos_config.field.cash_control]
 label = "Kassan täsmäytys"
-description = "Pitääkö kassavuoron laskea kassalaatikon käteinen avattaessa ja suljettaessa"
+description = "Onko kassalaatikon käteinen tarkoitus laskea avattaessa ja suljettaessa; vain tallennetaan, mikään ei tarkista sitä"
 
 [labels.fi.model.pos_config.field.default_opening_cash]
 label = "Oletusalkukassa"
@@ -29,7 +30,7 @@ description = "Käteinen, joka tavallisesti jätetään laatikkoon yöksi (valuu
 
 [labels.fi.model.pos_config.field.allow_refunds]
 label = "Salli hyvitykset"
-description = "Saavatko kassanhoitajat ehdottaa hyvityksiä tässä kassapisteessä"
+description = "Onko hyvitysten tarkoitus olla sallittuja tässä kassapisteessä; vain tallennetaan, mikään ei tarkista sitä"
 
 [labels.fi.model.pos_config.field.active]
 label = "Aktiivinen"
@@ -37,6 +38,7 @@ description = "Onko kassapiste käytössä"
 
 [labels.fi.model.pos_session]
 name = "Kassavuoro"
+plural = "Kassavuorot"
 description = "Yksi myyntivuoro kassapisteessä, kassalaatikon avaamisesta sulkemiseen"
 
 [labels.fi.model.pos_session.field.config_id]
@@ -89,6 +91,7 @@ description = "Sulje kassavuoro, kun laatikko on laskettu (vain esihenkilö)"
 
 [labels.fi.model.pos_order]
 name = "Kassamyynti"
+plural = "Kassamyynnit"
 description = "Kassapisteessä tehty myynti"
 
 [labels.fi.model.pos_order.field.session_id]
@@ -143,6 +146,7 @@ description = "Hyvitä maksettu myynti asiakkaalle (vain esihenkilö)"
 
 [labels.fi.model.pos_order_line]
 name = "Kassamyynnin rivi"
+plural = "Kassamyynnin rivit"
 description = "Myynnin yksi tuoterivi"
 
 [labels.fi.model.pos_order_line.field.order_id]
@@ -175,6 +179,7 @@ description = "Rivin summa alennuksen jälkeen: määrä kertaa yksikköhinta mi
 
 [labels.fi.model.pos_payment]
 name = "Maksu"
+plural = "Maksut"
 description = "Myynnistä saatu maksu; myynti voidaan maksaa usealla maksutavalla"
 
 [labels.fi.model.pos_payment.field.order_id]
@@ -207,3 +212,6 @@ description = "Korttipäätteen tai maksupalvelun viite; ei koskaan korttinumero
 [labels.fi.model.pos_order.field.stock_location_id]
 label = "Varastopaikka"
 description = "Mistä tavarat poistuvat varastosta; maksu luo varastosiirrot tästä paikasta"
+
+[labels.fi.model.pos_order.action.pay.assert.covered]
+message = "Maksut eivät kata myynnin summaa: lisää maksu loppusummalle"

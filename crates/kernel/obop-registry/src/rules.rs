@@ -351,6 +351,9 @@ pub enum Target {
     /// Every record of the target model that refers to this record (through `via`, or its only
     /// ref to this model).
     Children(Option<&'static str>),
+    /// The record the action runs on (D95: `kind = "set"`, a field of the record itself, such
+    /// as `published_on = "$today"`).
+    This,
 }
 
 /// How an `adjust` effect finds its record.
@@ -407,6 +410,10 @@ impl Effect {
     pub fn kind_name(&self) -> &'static str {
         match self.kind {
             EffectKind::Create { .. } => "create",
+            EffectKind::Update {
+                target: Target::This,
+                ..
+            } => "set",
             EffectKind::Update { .. } => "update",
             EffectKind::Adjust { .. } => "adjust",
             EffectKind::SetState { .. } => "set_state",
@@ -635,6 +642,16 @@ impl Effect {
         Self::new(EffectKind::Update {
             model: intern(model),
             target: Target::Children(None),
+            set: pairs(set),
+        })
+    }
+
+    /// Set fields of the record the action runs on (D95, `kind = "set"`); combine with `when`
+    /// (`set_self("published_on", &[("published_on", "$today")]).when("!is_set(published_on)")`).
+    pub fn set_self(model: &str, set: &[(&str, &str)]) -> Self {
+        Self::new(EffectKind::Update {
+            model: intern(model),
+            target: Target::This,
             set: pairs(set),
         })
     }
@@ -928,6 +945,11 @@ impl Ctx<'_> {
                 )),
                 None => Err(format!("{what}: {} has no field {f}", self.this.name)),
             },
+            Target::This if model.name == self.this.name => Ok(()),
+            Target::This => Err(format!(
+                "{what}: a set effect changes the record itself, so its model is {}, not {}",
+                self.this.name, model.name
+            )),
             Target::Children(via) => {
                 let refs: Vec<&str> = model
                     .fields

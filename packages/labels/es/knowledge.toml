@@ -5,6 +5,7 @@ summary = "Una wiki: artículos en árbol con un flujo de borrador, publicado y 
 
 [labels.es.model.knowledge_article]
 name = "Artículo"
+plural = "Artículos"
 description = "Un artículo de la base de conocimiento"
 
 [labels.es.model.knowledge_article.field.title]

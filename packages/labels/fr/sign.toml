@@ -5,6 +5,7 @@ summary = "Modèles de documents et demandes de signature ; un PDF de Documents 
 
 [labels.fr.model.sign_template]
 name = "Modèle"
+plural = "Modèles"
 description = "Un document qui peut être envoyé pour signature"
 
 [labels.fr.model.sign_template.field.name]
@@ -29,6 +30,7 @@ description = "Indique si de nouvelles demandes peuvent utiliser le modèle"
 
 [labels.fr.model.sign_request]
 name = "Demande"
+plural = "Demandes de signature"
 description = "Une demande faite à une personne de signer un document"
 
 [labels.fr.model.sign_request.field.template_id]
@@ -53,7 +55,7 @@ description = "Nom de la personne qui doit signer"
 
 [labels.fr.model.sign_request.field.signer_email]
 label = "E-mail du signataire"
-description = "Adresse e-mail du signataire ; facultative, obop n'envoie pas d'e-mail pour une demande portant sur un document"
+description = "Adresse e-mail du signataire ; facultative, aucun e-mail n'est envoyé pour une demande portant sur un document"
 
 [labels.fr.model.sign_request.field.sent_on]
 label = "Envoyé le"
@@ -139,6 +141,7 @@ description = "Envoyer une demande portant sur un document de Documents : prend 
 
 [labels.fr.model.sign_link]
 name = "Lien de signature"
+plural = "Liens de signature"
 description = "Un lien à usage unique qui permet à une personne de signer une demande ; seule une empreinte du secret est conservée, le lien n'est donc affiché qu'une fois à sa création"
 
 [labels.fr.model.sign_link.field.request_id]

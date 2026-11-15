@@ -1,7 +1,23 @@
 import { expect, open, test } from "../support/fixtures.ts";
+import { commandUrl } from "../support/urls.ts";
 
 const leadRow = (page: import("@playwright/test").Page, title: string) =>
   page.getByRole("grid", { name: "Lead list" }).getByRole("row", { name: new RegExp(title) });
+
+/** Let a request reach the server, and keep the answer from the page until `release` is called. */
+async function holdAnswer(page: import("@playwright/test").Page, url: RegExp) {
+  let release = () => {};
+  const released = new Promise<void>((done) => (release = done));
+  let reached = () => {};
+  const atServer = new Promise<void>((done) => (reached = done));
+  await page.route(url, async (route) => {
+    const response = await route.fetch();
+    reached();
+    await released;
+    await route.fulfill({ response });
+  });
+  return { atServer, release };
+}
 
 test.describe("records in a built-in module (CRM leads)", () => {
   test("create a lead: required field is validated, then the record appears in the list", async ({
@@ -24,32 +40,28 @@ test.describe("records in a built-in module (CRM leads)", () => {
     await panel.getByLabel("Title").fill(title);
     await panel.getByLabel("Contact name").fill("Dana Example");
     await panel.getByLabel("Expected revenue").fill("1234.50");
-    // The stage is governed (D48): a new lead starts as New and the form offers no other choice.
+    // The stage is governed (D48): a new lead starts as New, and the steps only show the way.
     const bar = panel.getByRole("list", { name: "Stage" });
-    await expect(bar.getByRole("button", { name: "New" })).toHaveAttribute("aria-current", "step");
-    for (const other of ["Qualified", "Won", "Lost"])
-      await expect(bar.getByRole("button", { name: other })).toHaveAttribute(
-        "aria-disabled",
-        "true",
-      );
+    await expect(bar.locator("li[aria-current=step]")).toHaveText("New");
+    await expect(bar.getByRole("button")).toHaveCount(0);
     await panel.getByRole("button", { name: "Create" }).click();
 
     await expect(page.locator(".toast").filter({ hasText: "Lead created" })).toBeVisible();
     const row = leadRow(page, title);
     await expect(row).toBeVisible();
-    await expect(row).toContainText("Dana Example");
+    // Beside the open panel the list keeps its title, amount and stage columns.
+    await expect(panel.getByLabel("Contact name")).toHaveValue("Dana Example");
     await expect(row).toContainText("€1,234.50");
     await expect(row).toContainText("New");
     // The panel stays open on the saved record, now in edit mode.
     await expect(panel.getByRole("heading", { name: title })).toBeVisible();
     await expect(panel.getByRole("button", { name: "Save" })).toBeDisabled();
 
-    // Then the lead moves on through the status bar, which runs the qualify action.
-    await panel
-      .getByRole("list", { name: "Stage" })
-      .getByRole("button", { name: "Qualified" })
-      .click();
-    await expect(page.locator(".toast").filter({ hasText: "Stage: Qualified" })).toBeVisible();
+    // Then the lead moves on through its next step, the one filled button.
+    const qualify = panel.locator(".actionrow").getByRole("button", { name: "Qualify" });
+    await expect(qualify).toHaveClass(/primary/);
+    await qualify.click();
+    await expect(page.locator(".toast").filter({ hasText: "Lead qualified" })).toBeVisible();
     await expect(row).toContainText("Qualified");
   });
 
@@ -74,9 +86,10 @@ test.describe("records in a built-in module (CRM leads)", () => {
     // The form accepts this amount, but it does not fit the server's integer: its message lands on the field.
     await panel.getByLabel("Expected revenue").fill("99999999999999999999.99");
     await panel.getByRole("button", { name: "Create" }).click();
-    const inline = panel.getByRole("alert").filter({ hasText: "lead.expected_revenue_minor" });
+    // It names the field by its label, not by the server's name for it (B12).
+    const inline = panel.getByRole("alert").filter({ hasText: /^Expected revenue must be/ });
     await expect(inline).toBeVisible();
-    await expect(inline).toContainText("integer");
+    await expect(inline).not.toContainText("lead.");
     await expect(panel.getByLabel("Expected revenue")).toHaveAttribute("aria-invalid", "true");
     await expect(leadRow(page, title)).toHaveCount(0);
 
@@ -141,19 +154,74 @@ test.describe("records in a built-in module (CRM leads)", () => {
     await expect(panel).toHaveCount(0);
   });
 
+  test("Escape while the record is being saved asks nothing: the form closes once it is saved", async ({
+    page,
+    signIn,
+    api,
+    uid,
+  }) => {
+    const title = uid("Saved on the way");
+    await signIn("root", "/crm/lead?view=list");
+    await page.getByRole("button", { name: "New", exact: true }).click();
+    const panel = page.getByRole("complementary", { name: "Lead record" });
+    await panel.getByLabel("Title").fill(title);
+
+    // The server has the lead before the page hears of it, as on a slow line or a busy machine.
+    const answer = await holdAnswer(page, commandUrl("lead", "create"));
+    await panel.getByRole("button", { name: "Create" }).click();
+    await answer.atServer;
+    expect((await api.list("root", "lead")).filter((l) => l.title === title)).toHaveLength(1);
+
+    // The form is still the new one, and it is saving (the button that had the focus is off).
+    await expect(panel.getByRole("button", { name: "Create" })).toBeDisabled();
+    await page.keyboard.press("Escape");
+    // "Leave and discard them?" would be a question about changes that are already stored.
+    await expect(panel.getByRole("button", { name: "Create" })).toBeDisabled();
+    await expect(page.getByRole("alertdialog")).toHaveCount(0);
+
+    answer.release();
+    await expect(panel).toHaveCount(0);
+    await expect(page.locator(".toast").filter({ hasText: "Lead created" })).toBeVisible();
+    await expect(leadRow(page, title)).toBeVisible();
+    await expect(page.getByRole("alertdialog")).toHaveCount(0);
+    // Nothing is left over the page.
+    await page.getByRole("button", { name: "New", exact: true }).click();
+    await expect(panel.getByRole("heading", { name: "New lead" })).toBeVisible();
+    await page.unrouteAll({ behavior: "wait" });
+  });
+
+  test("Escape closes the open record wherever the focus is", async ({
+    page,
+    signIn,
+    api,
+    uid,
+  }) => {
+    const title = uid("Closed from outside");
+    await api.create("root", "lead", { title });
+    await signIn("root", "/crm/lead?view=list");
+    await leadRow(page, title).getByRole("gridcell").nth(1).click();
+    const panel = page.getByRole("complementary", { name: "Lead record" });
+    await expect(panel.getByRole("heading", { name: title })).toBeVisible();
+
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+    await page.keyboard.press("Escape");
+    await expect(panel).toHaveCount(0);
+  });
+
   test("an action button runs a command on the record", async ({ page, signIn, api, uid }) => {
     const title = uid("Won lead");
     const lead = await api.create("root", "lead", { title, stage: "new" });
     await signIn("root", `/crm/lead?view=list&id=${lead.id}`);
     const panel = page.getByRole("complementary", { name: "Lead record" });
     await panel.getByRole("button", { name: "Mark won" }).click();
-    await expect(page.locator(".toast").filter({ hasText: "Mark won done" })).toBeVisible();
+    await expect(page.locator(".toast").filter({ hasText: "Marked as won" })).toBeVisible();
     await expect(leadRow(page, title)).toContainText("Won");
   });
 });
 
 test.describe("inline edit in the list", () => {
-  test("click a cell, type, Enter saves; Escape cancels; a bad value shows an inline error", async ({
+  test("with Edit in list, click a cell, type, Enter saves; Escape cancels; a bad value shows an inline error", async ({
     page,
     signIn,
     api,
@@ -166,23 +234,25 @@ test.describe("inline edit in the list", () => {
       expected_revenue_minor: 1000,
     });
     await signIn("root", "/crm/lead?view=list");
+    // A click on a cell opens the record; "Edit in list" makes it edit the cell in place.
+    await page.getByRole("button", { name: "Edit in list" }).click();
     const row = leadRow(page, title);
-    const cell = (n: number) => row.locator(`td[data-c="${n}"]`);
-    await expect(cell(2)).toHaveText("Original Name");
+    const cell = (f: string) => row.locator(`td[data-f="${f}"]`);
+    await expect(cell("contact_name")).toHaveText("Original Name");
 
-    await cell(2).click();
+    await cell("contact_name").click();
     const input = page.locator("td.editing input");
     await expect(input).toBeFocused();
     await input.fill("Edited Name");
     await page.keyboard.press("Enter");
-    await expect(cell(2)).toHaveText("Edited Name");
+    await expect(cell("contact_name")).toHaveText("Edited Name");
 
-    await cell(2).click();
+    await cell("contact_name").click();
     await page.locator("td.editing input").fill("Never saved");
     await page.keyboard.press("Escape");
-    await expect(cell(2)).toHaveText("Edited Name");
+    await expect(cell("contact_name")).toHaveText("Edited Name");
 
-    await cell(4).click();
+    await cell("expected_revenue_minor").click();
     await page.locator("td.editing input").fill("not money");
     await page.keyboard.press("Enter");
     await expect(page.locator(".ie-error")).toBeVisible();
@@ -193,5 +263,7 @@ test.describe("inline edit in the list", () => {
     const stored = (await api.list("root", "lead")).find((l) => l.title === title);
     expect(stored?.contact_name).toBe("Edited Name");
     expect(stored?.expected_revenue_minor).toBe(1000);
+    // The choice is kept for the next visit; turn it off again.
+    await page.getByRole("button", { name: "Edit in list" }).click();
   });
 });

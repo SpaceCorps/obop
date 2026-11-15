@@ -5,6 +5,7 @@ summary = "Un registre des documents de l’entreprise avec propriétaire, expir
 
 [labels.fr.model.documents_folder]
 name = "Dossier"
+plural = "Dossiers"
 description = "Un dossier qui regroupe des documents"
 
 [labels.fr.model.documents_folder.field.name]
@@ -21,6 +22,7 @@ description = "Ce qui a sa place dans le dossier"
 
 [labels.fr.model.documents_document]
 name = "Document"
+plural = "Documents"
 description = "Un contrat, une politique, un certificat ou un autre document enregistré"
 
 [labels.fr.model.documents_document.field.title]

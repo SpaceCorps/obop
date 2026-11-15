@@ -1,10 +1,11 @@
 [labels.pl.module]
 name = "Flota"
-description = "Pojazdy, kierowcy i historia serwisowa małej floty. Śledzi status i wpisy serwisowe; nie oblicza kosztów eksploatacji ani zużycia paliwa."
+description = "Pojazdy, kierowcy i historia serwisowa małej floty. Śledzi status i wpisy serwisowe; nie oblicza kosztów eksploatacji ani zużycia paliwa. Status kierowcy i data ważności prawa jazdy są tylko zapisywane: nic ich nie sprawdza, także przy przypisaniu kierowcy do pojazdu."
 summary = "Pojazdy, kierowcy i historia serwisowa małej floty."
 
 [labels.pl.model.fleet_vehicle]
 name = "Pojazd"
+plural = "Pojazdy"
 description = "Pojazd użytkowany przez firmę"
 
 [labels.pl.model.fleet_vehicle.field.plate]
@@ -70,7 +71,8 @@ description = "Trwale usuwa dostępny pojazd z floty (wymaga osoby zatwierdzają
 
 [labels.pl.model.fleet_vehicle_driver]
 name = "Kierowca"
-description = "Osoba uprawniona do prowadzenia pojazdów floty"
+plural = "Kierowcy"
+description = "Zapisany kierowca z danymi prawa jazdy i statusem aktywny lub zawieszony"
 
 [labels.pl.model.fleet_vehicle_driver.field.name]
 label = "Nazwa"
@@ -98,14 +100,15 @@ suspended = "Zawieszone"
 
 [labels.pl.model.fleet_vehicle_driver.action.suspend]
 label = "Zawieś"
-description = "Zawiesza kierowcę, na przykład po wygaśnięciu prawa jazdy"
+description = "Oznacza kierowcę jako zawieszonego, na przykład po wygaśnięciu prawa jazdy"
 
 [labels.pl.model.fleet_vehicle_driver.action.reactivate]
 label = "Aktywuj ponownie"
-description = "Pozwala zawieszonemu kierowcy ponownie prowadzić pojazdy"
+description = "Przywraca zawieszonemu kierowcy status aktywny"
 
 [labels.pl.model.fleet_vehicle_service]
 name = "Serwis pojazdu"
+plural = "Serwisy pojazdów"
 description = "Konserwacja, naprawa lub przegląd pojazdu"
 
 [labels.pl.model.fleet_vehicle_service.field.vehicle_id]
@@ -159,3 +162,11 @@ description = "Oznacza zaplanowane prace jako wykonane"
 [labels.pl.model.fleet_vehicle_service.action.cancel]
 label = "Anuluj"
 description = "Anuluje zaplanowane prace"
+
+[labels.pl.model.fleet_vehicle.action.send_to_workshop]
+label = "Do warsztatu"
+description = "Wysłać dostępny pojazd do warsztatu na przegląd lub naprawę"
+
+[labels.pl.model.fleet_vehicle.action.back_in_service]
+label = "Powrót z warsztatu"
+description = "Przywrócić pojazd z warsztatu do puli dostępnych"

@@ -12,8 +12,8 @@ const links = [
   { label: "Set up agents", href: "/docs/agents/" },
   { label: "Pricing", href: "/pricing/" },
   { label: "Changelog", href: "/changelog/" },
-  { label: "Community", href: "/community/" },
-  { label: "Status", href: "/status/" },
+  { label: "Community", href: "/about/community/" },
+  { label: "Status", href: "/about/status/" },
 ];
 const other = ["de", "fr", "pl", "fi", "sv", "es"] as const;
 </script>

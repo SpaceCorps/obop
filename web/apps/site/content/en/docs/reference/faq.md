@@ -7,11 +7,11 @@ description: "Frequently asked questions about obop: status, licence, pricing, d
 
 ### What is obop?
 
-An open-source business platform with CRM, sales, invoicing, products and contacts built in, 22 more apps in a marketplace, and a REST API, MCP server and command line generated from the same definitions. See [Platform](/platform/).
+An open-source business platform with CRM, sales, invoicing, products, contacts and connectors built in, 24 more apps bundled as packages in a marketplace (22 of them have a page on this site), and a REST API, MCP server and command line generated from the same definitions. See [Platform](/platform/).
 
 ### Is it ready for production?
 
-Not yet. obop is in beta. Read the [roadmap](/roadmap/) and the limits on [Security and privacy](/docs/reference/security/) before you rely on it.
+Not yet. obop is below version 1.0, so a release can still change things. The built-in apps are marked Stable, the other apps Beta or Experimental. Read the [roadmap](/roadmap/) and the limits on [Security and privacy](/docs/reference/security/) before you rely on it.
 
 ### What does it cost?
 
@@ -29,15 +29,15 @@ Rust for the backend and Vite+ with React for the web apps. This website is buil
 
 ### How do I add an app?
 
-Open _Customize_, then _Marketplace_, and install one. From the command line: `obop modules install-from helpdesk`. You can also upload your own `obop.toml`. See [Apps and modules](/docs/concepts/apps-and-modules/).
+Open _Customize_, then _Modules_, then the _Marketplace_ tab, and install one. From the command line: `obop modules install-from helpdesk`. You can also upload your own `obop.toml`. See [Apps and modules](/docs/concepts/apps-and-modules/).
 
 ### Can I write my own app?
 
-Yes, as one text file. There is no code tier yet, so apps cannot compute totals, generate numbers or call other systems. See the [module manifest reference](/docs/reference/module-manifest/).
+Yes, as one text file. A package can declare computed totals, numbered fields and actions that change other records. There is no code tier yet, so it runs no code of its own and cannot declare calls to other systems. See the [module manifest reference](/docs/reference/module-manifest/).
 
-### Why can't my app calculate totals?
+### Can my app calculate totals?
 
-Packages are declarative on purpose, so administrators can install them safely. Expressions and WebAssembly extensions are planned.
+Yes, simple ones. A field can be computed from the record's own fields and its lines, for example `sum(lines.amount)` or `quantity * unit_price`, and cannot then be edited. Packages are declarative on purpose, so administrators can install them safely: the expression language is deliberately small and cannot call anything. CEL expressions and WebAssembly extensions are planned.
 
 ### What happens to my data if I uninstall an app?
 
@@ -45,7 +45,7 @@ The commands and screens go away and the data stays in the database. Installing 
 
 ### Can I change an installed app?
 
-Raise its `version` and install the file again. There are no migrations: add optional fields rather than renaming.
+Raise its `version` and install the file again. Adding optional fields needs nothing more. To rename or drop a field, or to fill a value into existing records, declare a `[[migration]]` step in the new version; see [Apps and modules](/docs/concepts/apps-and-modules/).
 
 ## Agents
 
@@ -59,29 +59,29 @@ It can propose either; a person approves. See [The approval loop](/docs/agents/a
 
 ### Does obop work with Claude, ChatGPT, Cursor or other tools?
 
-obop has an MCP server over stdio and a REST API. Any MCP client that can start a local process works; see [Connect over MCP](/docs/agents/mcp/). There is no remote MCP endpoint yet, so hosted instances are reached over REST.
+obop has an MCP server over stdio, an MCP endpoint at `/mcp` on every instance (Streamable HTTP, with an agent token or a browser sign-in) and a REST API; see [Connect over MCP](/docs/agents/mcp/). The remote endpoint is covered by our own automated tests (Rust over HTTP and Playwright); no run with a real MCP client is recorded. The browser sign-in for Claude Desktop, claude.ai and Claude Code has not been tried with those apps yet.
 
 ### How do I stop an agent?
 
-There is no revoke command yet. Remove the owning user, or stop giving the token to the agent. See [Safety](/docs/agents/safety/).
+There is no command to revoke a single token made with `obop agent-token` or the REST API yet: remove or disable the owning user (their tokens stop working at once), or stop giving the token to the agent. An app that connected through the browser sign-in is listed under _Customize, Security, Connected apps_, where its owner can revoke it at once. See [Safety](/docs/agents/safety/).
 
 ## Hosting and data
 
 ### Where is my data?
 
-Hosted: in a database that belongs to your instance, on PostgreSQL. Self-hosted: wherever you run it.
+Where you run obop: each instance keeps its records in its own database (SQLite or PostgreSQL). SpaceCorps does not host obop for other people yet.
 
 ### How do I back up?
 
-Use your database's tools (`pg_dump`, snapshots) or copy the SQLite file while the server is stopped. obop has no built-in backup yet.
+Run `obop backup --db URL --out DIR`: a consistent copy taken while the server runs, sealed (encrypted) when a key is set, which `obop restore` reads back; see the [CLI reference](/docs/reference/cli/) and [Self-hosting and operations](/docs/reference/self-hosting/). `OBOP_BACKUP_SCHEDULE` together with `OBOP_BACKUP_DIR` makes `obop serve` take backups on a timer. Point-in-time recovery is not run by obop; your database server needs its own for that. A control plane does not switch on scheduled backups of the instances it creates.
 
 ### Can I export everything?
 
-Your database is yours. A built-in full export is planned but not built.
+Your database is yours. A list exports as CSV from the web app, and `obop backup --plain` writes every record of a database as gzip JSON Lines. The planned export job for a whole business is not built.
 
 ### Which languages is the website in?
 
-English, German, French, Polish, Finnish, Swedish and Spanish. The application itself is in English for now. The translations on this site are machine-drafted and are being reviewed by native speakers.
+The home page, the app pages (the translated app pages keep each app's description, some cards and most of the developer details in English), pricing, About, Platform and a few documentation pages are in English, German, French, Polish, Finnish, Swedish and Spanish; the other pages are shown in English. The web app is available in the same seven languages. The translations on this site and the translated labels in the apps are machine-drafted, and no native speaker has reviewed the ones on this site yet; [you can help review one](/about/community/).
 
 ## Contributing and contact
 

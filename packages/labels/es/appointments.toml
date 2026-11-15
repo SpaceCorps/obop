@@ -5,6 +5,7 @@ summary = "Recursos reservables (personas, salas y equipos) y citas con inicio, 
 
 [labels.es.model.appointments_resource]
 name = "Recurso"
+plural = "Recursos"
 description = "Algo o alguien que se puede reservar"
 
 [labels.es.model.appointments_resource.field.name]
@@ -30,6 +31,7 @@ description = "Indica si el recurso se puede reservar"
 
 [labels.es.model.appointments_appointment]
 name = "Cita"
+plural = "Citas"
 description = "Una reserva de un recurso en un momento dado"
 
 [labels.es.model.appointments_appointment.field.resource_id]
@@ -94,3 +96,6 @@ description = "Cancelar una cita programada"
 [labels.es.model.appointments_appointment.action.mark_no_show]
 label = "Marcar como no presentado"
 description = "Registrar que el asistente no se presentó"
+
+[labels.es.model.appointments_appointment.action.confirm.assert.ends_after_start]
+message = "La cita termina antes de empezar: indique una hora de fin posterior al inicio"

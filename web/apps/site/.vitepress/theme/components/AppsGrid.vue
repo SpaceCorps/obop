@@ -3,6 +3,9 @@ import apps from "../../../.generated/apps.json";
 import { useSite } from "../composables.ts";
 import Tile from "./Tile.vue";
 
+// The home page is the only caller and uses the grouped mode. The flat mode (with the category
+// filter and its #cat-* CSS in style.css) has no caller since the apps index became a store; it is
+// kept on purpose until the start page is redesigned, which replaces this component.
 withDefaults(defineProps<{ categories?: boolean; grouped?: boolean }>(), {
   categories: false,
   grouped: false,

@@ -1,0 +1,12 @@
+# English names and plurals of the built-in Mileage module (D52, D95).
+
+[labels.en.model.mileage_trip]
+name = "Trip"
+plural = "Trips"
+
+[labels.en.model.mileage_trip.action.discard_stuck]
+label = "Discard stuck trip"
+
+[labels.en.model.mileage_point]
+name = "GPS point"
+plural = "GPS points"

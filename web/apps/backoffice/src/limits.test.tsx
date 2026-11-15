@@ -298,10 +298,10 @@ describe("the server's own refusals", () => {
     },
   ] as unknown as Parameters<typeof registerMeta>[0];
 
-  it("are shown exactly as received in English", () => {
+  it("name the field by its label in English (B12)", () => {
     registerMeta(meta);
     const m = "party.name must be at most 2000 characters; this has 2001";
-    expect(serverMessage(m)).toBe(m);
+    expect(serverMessage(m)).toBe("Name must be at most 2,000 characters; this has 2,001");
   });
 
   it("are shown in the language of the person, from the real catalogues", async () => {

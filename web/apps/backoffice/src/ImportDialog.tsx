@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { Badge, Button, Dialog, Notice, Select, Table, fmt, t } from "@obop/ui";
 import { call, type ModelMeta } from "./api.ts";
 import { useData } from "./data.tsx";
+import { csvCell, download } from "./format.ts";
 import { fieldTitle } from "./labels.ts";
 import { serverMessage } from "./serverMessage.ts";
 
@@ -150,7 +151,8 @@ export function ImportDialog({
                 fields: columns
                   .map((c) => {
                     const f = model.fields.find((x) => x.name === c);
-                    return f ? `${fieldTitle(f)} (${c})` : c;
+                    // A no-break space, so a line never ends between a field's name and its column.
+                    return f ? `${fieldTitle(f)}\u00a0(${c})` : c;
                   })
                   .join(", "),
               })}
@@ -167,6 +169,18 @@ export function ImportDialog({
               <Button icon="upload" disabled={busy} onClick={() => input.current?.click()}>
                 {fileName ? t("Choose another file") : t("Choose a CSV file")}
               </Button>
+              {!fileName && (
+                // An empty file with the right first line: fill it in a spreadsheet and pick it.
+                <Button
+                  variant="ghost"
+                  icon="download"
+                  onClick={() =>
+                    download(`${model.name}-template.csv`, `${columns.map(csvCell).join(",")}\r\n`)
+                  }
+                >
+                  {t("Download a template")}
+                </Button>
+              )}
               {fileName && <span className="mono import-file">{fileName}</span>}
             </div>
             <Select
@@ -220,20 +234,34 @@ export function ImportDialog({
               )}
             </p>
             {report.errors.length > 0 && (
-              <Table caption={t("Problems found")} dense>
+              // One block per problem on a phone, the message on top (stack). The explicit roles
+              // keep it a table for Safari, which drops the semantics once display changes.
+              <Table caption={t("Problems found")} dense stack role="table">
                 <thead>
-                  <tr>
-                    <th scope="col">{t("Row")}</th>
-                    <th scope="col">{t("Line")}</th>
-                    <th scope="col">{t("Problem")}</th>
+                  <tr role="row">
+                    <th scope="col" role="columnheader">
+                      {t("Row")}
+                    </th>
+                    <th scope="col" role="columnheader">
+                      {t("Line")}
+                    </th>
+                    <th scope="col" role="columnheader">
+                      {t("Problem")}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {report.errors.map((e) => (
-                    <tr key={e.row}>
-                      <td>{e.row}</td>
-                      <td>{e.line ?? ""}</td>
-                      <td>{serverMessage(e.error)}</td>
+                    <tr key={e.row} role="row">
+                      <td role="cell" data-label={t("Row")}>
+                        {e.row}
+                      </td>
+                      <td role="cell" data-label={t("Line")}>
+                        {e.line ?? ""}
+                      </td>
+                      <td role="cell" className="cell-main">
+                        {serverMessage(e.error)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

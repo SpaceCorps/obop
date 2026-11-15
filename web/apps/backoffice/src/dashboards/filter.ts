@@ -1,5 +1,6 @@
 import { fmt, minorToDecimal, msg, t } from "@obop/ui";
 import type { FieldMeta, ModelMeta, ServerFilter } from "../api.ts";
+import { optionLabel } from "../format.ts";
 import { fieldTitle } from "../labels.ts";
 import type { Cond } from "../query.ts";
 
@@ -300,4 +301,62 @@ export function toFacets(conds: Condition[], model: ModelMeta): Cond[] {
     }
   }
   return out;
+}
+
+/**
+ * A condition in words, for a tile's caption and the live sentence of the tile form: "Stage is
+ * Won", "Amount is at least €10.00", "Customer is Baumann Bau GmbH". The field and the operator
+ * are words; values read as the list shows them (an option's label, a ref's name, money with its
+ * symbol). A field the model does not have keeps its technical name.
+ */
+export function conditionText(
+  c: Condition,
+  model: ModelMeta,
+  refText: (model: string, id: string) => string,
+): string {
+  const f = model.fields.find((x) => x.name === c.field);
+  const field = f ? fieldTitle(f) : c.field;
+  if (c.op === "empty" || c.op === "set")
+    return t("{field} {operator}", { field, operator: t(OP_NAME[c.op]) });
+  const one = (raw: string): string => {
+    if (!f) return raw;
+    switch (f.kind) {
+      case "select":
+        return optionLabel(raw, f);
+      case "bool":
+        return raw === "true" ? t("Yes") : t("No");
+      case "money":
+        return /^-?\d+$/.test(raw) ? fmt.money(Number(raw)) : raw;
+      case "number":
+        return /^-?\d+$/.test(raw) ? fmt.integer(Number(raw)) : raw;
+      case "date":
+        return fmt.date(raw) || raw;
+      case "ref":
+        return f.to ? refText(f.to, raw) : raw;
+      default:
+        return raw;
+    }
+  };
+  const value =
+    c.op === "in"
+      ? fmt.list(
+          c.value.split("|").map((s) => one(s.trim())),
+          "disjunction",
+        )
+      : c.op === "contains"
+        ? `“${c.value}”`
+        : one(c.value);
+  return t("{field} {operator} {value}", { field, operator: t(OP_NAME[c.op]), value });
+}
+
+/** Several conditions in words, joined with "and". */
+export function conditionsText(
+  conds: Condition[],
+  model: ModelMeta,
+  refText: (model: string, id: string) => string,
+): string {
+  return fmt.list(
+    conds.map((c) => conditionText(c, model, refText)),
+    "conjunction",
+  );
 }

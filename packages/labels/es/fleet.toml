@@ -1,10 +1,11 @@
 [labels.es.module]
 name = "Flota"
-description = "Vehículos, conductores e historial de mantenimiento de una flota pequeña. Registra el estado y los servicios; no calcula costes de uso ni consumo de combustible."
+description = "Vehículos, conductores e historial de mantenimiento de una flota pequeña. Registra el estado y los servicios; no calcula costes de uso ni consumo de combustible. El estado de un conductor y la caducidad de su permiso solo se registran: nada los comprueba, tampoco al asignar un conductor a un vehículo."
 summary = "Vehículos, conductores e historial de mantenimiento de una flota pequeña."
 
 [labels.es.model.fleet_vehicle]
 name = "Vehículo"
+plural = "Vehículos"
 description = "Un vehículo que utiliza la empresa"
 
 [labels.es.model.fleet_vehicle.field.plate]
@@ -70,7 +71,8 @@ description = "Retirar definitivamente de la flota un vehículo disponible (requ
 
 [labels.es.model.fleet_vehicle_driver]
 name = "Conductor"
-description = "Una persona autorizada para conducir los vehículos de la flota"
+plural = "Conductores"
+description = "Un conductor registrado, con los datos de su permiso y un estado activo o suspendido"
 
 [labels.es.model.fleet_vehicle_driver.field.name]
 label = "Nombre"
@@ -98,14 +100,15 @@ suspended = "Suspendido"
 
 [labels.es.model.fleet_vehicle_driver.action.suspend]
 label = "Suspender"
-description = "Suspender a un conductor, por ejemplo por un permiso caducado"
+description = "Marcar a un conductor como suspendido, por ejemplo por un permiso caducado"
 
 [labels.es.model.fleet_vehicle_driver.action.reactivate]
 label = "Reactivar"
-description = "Permitir que un conductor suspendido vuelva a conducir"
+description = "Volver a poner como activo a un conductor suspendido"
 
 [labels.es.model.fleet_vehicle_service]
 name = "Servicio de vehículo"
+plural = "Servicios de vehículo"
 description = "Un trabajo de mantenimiento, reparación o inspección de un vehículo"
 
 [labels.es.model.fleet_vehicle_service.field.vehicle_id]
@@ -159,3 +162,11 @@ description = "Marcar un trabajo planificado como hecho"
 [labels.es.model.fleet_vehicle_service.action.cancel]
 label = "Cancelar"
 description = "Cancelar un trabajo planificado"
+
+[labels.es.model.fleet_vehicle.action.send_to_workshop]
+label = "Enviar al taller"
+description = "Enviar un vehículo disponible al taller para mantenimiento o reparación"
+
+[labels.es.model.fleet_vehicle.action.back_in_service]
+label = "De vuelta del taller"
+description = "Devolver un vehículo del taller a los vehículos disponibles"

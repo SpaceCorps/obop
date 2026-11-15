@@ -2,7 +2,8 @@
 
 use obop_commands::{Dispatcher, Store, Value};
 use obop_registry::{
-    CommandDef, Effect, FieldDef as F, FieldKind, ModelDef, Module, ModuleMeta, Reset,
+    CommandDef, Effect, FieldDef as F, FieldKind, Guard, ModelDef, ModelUi, Module, ModuleMeta,
+    Reset,
 };
 use obop_types::DataClass::None as NoClass;
 
@@ -41,7 +42,8 @@ pub fn module() -> Module {
                         false,
                         "sales.user",
                     )
-                    .select(&["draft", "confirmed", "cancelled"]),
+                    .select(&["draft", "confirmed", "cancelled"])
+                    .tones(&[("confirmed", "ok"), ("cancelled", "bad")]),
                     F::new(
                         "total_minor",
                         "Order total in minor units, the sum of the lines",
@@ -57,11 +59,22 @@ pub fn module() -> Module {
                         NoClass,
                         false,
                         "sales.user",
-                    ),
+                    )
+                    .default_value("$instance.currency"),
                 ],
                 commands: vec![
                     CommandDef::new("confirm", "Confirm a draft order", "sales.user")
                         .transition("state", Some("draft"), "confirmed")
+                        .assertion_msg(
+                            "is_set(party_id)",
+                            "Choose a customer before confirming the order.",
+                        )
+                        .assertion_msg(
+                            "count(lines) > 0",
+                            "Add at least one line before confirming the order.",
+                        )
+                        .primary()
+                        .done("Order confirmed; a draft invoice is ready")
                         // A confirmed order has a draft invoice with the same lines, ready for
                         // accounting to post (D56). The caller needs `invoicing.user` for it.
                         .effect(
@@ -88,11 +101,11 @@ pub fn module() -> Module {
                             )
                             .for_each("lines"),
                         ),
-                    CommandDef::new("cancel", "Cancel an order", "sales.user").transition(
-                        "state",
-                        None,
-                        "cancelled",
-                    ),
+                    CommandDef::new("cancel", "Cancel an order", "sales.user")
+                        .transition("state", None, "cancelled")
+                        .danger()
+                        .confirm("Cancel this order?")
+                        .done("Order cancelled"),
                     CommandDef::new(
                         "reset_to_draft",
                         "Put a cancelled order back to draft",
@@ -101,7 +114,29 @@ pub fn module() -> Module {
                     .transition("state", Some("cancelled"), "draft"),
                 ],
                 ext: Default::default(),
-            },
+            }
+            .with_ui(ModelUi {
+                title: Some("{number} | Quotation".into()),
+                subtitle: Some("{party_id.name}".into()),
+                list: vec![
+                    "number".into(),
+                    "party_id".into(),
+                    "state".into(),
+                    "total_minor".into(),
+                ],
+                card: vec!["number".into(), "party_id".into(), "total_minor".into()],
+                card_sum: Some("total_minor".into()),
+                quick_create: vec!["party_id".into()],
+                order: Some("number desc".into()),
+                default_view: Some("list".into()),
+                ..Default::default()
+            })
+            // A confirmed order is fixed; cancelling it is the way out (D77).
+            .with_guard(
+                Guard::frozen_in("state", &["confirmed"])
+                    .exit("cancelled", "cancel", &[])
+                    .message("A confirmed order cannot be changed. Cancel it to correct it."),
+            ),
             ModelDef {
                 name: "sale_order_line",
                 description: "One product or service on a sale order",
@@ -132,10 +167,12 @@ pub fn module() -> Module {
                         NoClass,
                         false,
                         "sales.user",
-                    ),
+                    )
+                    .fill_from("product_id.name"),
                     F::new("quantity", "Quantity sold", NoClass, false, "sales.user")
                         .kind(FieldKind::Number)
-                        .required(),
+                        .required()
+                        .default_int(1),
                     F::new(
                         "unit_price_minor",
                         "Price of one unit in minor currency units",
@@ -144,7 +181,9 @@ pub fn module() -> Module {
                         "sales.user",
                     )
                     .kind(FieldKind::Money)
-                    .required(),
+                    .required()
+                    .fill_from("product_id.list_price_minor")
+                    .aggregate("none"),
                     F::new(
                         "amount_minor",
                         "Line amount in minor units: quantity times unit price",
@@ -157,7 +196,21 @@ pub fn module() -> Module {
                 ],
                 commands: vec![],
                 ext: Default::default(),
-            },
+            }
+            .with_ui(ModelUi {
+                title: Some("{description} | {product_id.name}".into()),
+                list: vec![
+                    "product_id".into(),
+                    "description".into(),
+                    "quantity".into(),
+                    "unit_price_minor".into(),
+                    "amount_minor".into(),
+                ],
+                menu: Some("hidden".into()),
+                ..Default::default()
+            })
+            // The lines of a confirmed order are fixed with it.
+            .with_guard(Guard::child_of("order_id")),
         ],
         network_destinations: vec![],
         description: String::new(),
@@ -168,9 +221,11 @@ pub fn module() -> Module {
             &["quotations", "orders"],
             "sales",
             &["base", "product"],
-        ),
+        )
+        .home("sale_order"),
     };
     m.translated(&[
+        include_str!("../../../../packages/labels/en/sales.toml"),
         include_str!("../../../../packages/labels/de/sales.toml"),
         include_str!("../../../../packages/labels/fr/sales.toml"),
         include_str!("../../../../packages/labels/pl/sales.toml"),
@@ -280,9 +335,15 @@ mod tests {
             Value::map([("state", Value::text("confirmed"))]),
         ));
         assert!(e.contains("starts as \"draft\""), "{e}");
+        let party = s
+            .insert("party", [("name".to_string(), Value::text("Acme"))].into())
+            .unwrap();
         let Value::Map(o) = call(
             "sale_order.create",
-            Value::map([("currency", Value::text("EUR"))]),
+            Value::map([
+                ("currency", Value::text("EUR")),
+                ("party_id", Value::text(&party)),
+            ]),
         )
         .unwrap()
         .value
@@ -292,6 +353,15 @@ mod tests {
         let Value::Text(id) = o["id"].clone() else {
             panic!()
         };
+        call(
+            "sale_order_line.create",
+            Value::map([
+                ("order_id", Value::text(&id)),
+                ("quantity", Value::Int(1)),
+                ("unit_price_minor", Value::Int(100)),
+            ]),
+        )
+        .unwrap();
         assert_eq!(
             s.field("sale_order", &id, "state"),
             Some(Value::text("draft"))
@@ -383,7 +453,7 @@ mod tests {
         ) else {
             panic!()
         };
-        assert!(e.contains("no amount"), "{e}");
+        assert!(e.contains("Add at least one line"), "{e}");
         // Without the invoicing group the confirmation is refused and nothing happens.
         let order2 = seed(&s, &party);
         let plain = Principal::user("p", &["sales.user"]);
@@ -396,5 +466,131 @@ mod tests {
             Some(Value::text("draft"))
         );
         assert_eq!(s.count("invoice"), 2);
+    }
+
+    /// B26: an order confirms only with a customer and at least one line; confirmed, it and its
+    /// lines are fixed until it is cancelled (D77); a line takes its price and text from the
+    /// product (D95 fill_from); the currency defaults to the instance's.
+    #[test]
+    fn an_order_needs_a_customer_and_a_line_and_is_fixed_once_confirmed() {
+        let (d, s) = (Dispatcher::new(), Store::new());
+        register(&d, &s);
+        invoicing::register(&d, &s);
+        product::register(&d, &s);
+        // A line copies from the product only what its author may read (product.user).
+        let u = Principal::user("u", &["sales.user", "invoicing.user", "product.user"]);
+        let call = |cmd: &str, i: Value| d.call(Surface::Rest, &u, &mut Vault::new(), cmd, &i);
+        let err = |cmd: &str, i: Value| match call(cmd, i) {
+            Err(e) => obop_commands::errors::classify(&e),
+            Ok(r) => panic!("{cmd}: expected a refusal, got {:?}", r.value),
+        };
+        let id_of = |v: Value| match v {
+            Value::Map(m) => match &m["id"] {
+                Value::Text(t) => t.clone(),
+                _ => panic!(),
+            },
+            _ => panic!(),
+        };
+        let by_id = |id: &str| Value::map([("id", Value::text(id))]);
+        let order = id_of(call("sale_order.create", Value::map([])).unwrap().value);
+        assert_eq!(
+            s.field("sale_order", &order, "currency"),
+            Some(Value::text("EUR"))
+        );
+        // (The REST layer names the code and the bare message; here the text carries it.)
+        let k = err("sale_order.confirm", by_id(&order));
+        let says = |k: &obop_commands::errors::Classified, m: &str| {
+            k.body["error"].as_str().is_some_and(|e| e.starts_with(m))
+        };
+        assert!(
+            says(&k, "Choose a customer before confirming the order."),
+            "{:?}",
+            k.body
+        );
+        let party = s
+            .insert("party", [("name".to_string(), Value::text("Acme"))].into())
+            .unwrap();
+        call(
+            "sale_order.update",
+            Value::map([
+                ("id", Value::text(&order)),
+                ("party_id", Value::text(&party)),
+            ]),
+        )
+        .unwrap();
+        let k = err("sale_order.confirm", by_id(&order));
+        assert!(
+            says(&k, "Add at least one line before confirming the order."),
+            "{:?}",
+            k.body
+        );
+        let product = s
+            .insert(
+                "product",
+                [
+                    ("name".to_string(), Value::text("Consulting day")),
+                    ("list_price_minor".to_string(), Value::Int(120_000)),
+                ]
+                .into(),
+            )
+            .unwrap();
+        let line = id_of(
+            call(
+                "sale_order_line.create",
+                Value::map([
+                    ("order_id", Value::text(&order)),
+                    ("product_id", Value::text(&product)),
+                ]),
+            )
+            .unwrap()
+            .value,
+        );
+        assert_eq!(
+            s.field("sale_order_line", &line, "unit_price_minor"),
+            Some(Value::Int(120_000))
+        );
+        assert_eq!(
+            s.field("sale_order_line", &line, "description"),
+            Some(Value::text("Consulting day"))
+        );
+        assert_eq!(
+            s.field("sale_order_line", &line, "quantity"),
+            Some(Value::Int(1))
+        );
+        call("sale_order.confirm", by_id(&order)).unwrap();
+        // Fixed: the order, its lines, a new line.
+        let k = err(
+            "sale_order.update",
+            Value::map([
+                ("id", Value::text(&order)),
+                ("currency", Value::text("USD")),
+            ]),
+        );
+        assert_eq!((k.code, k.status), ("immutable_record", 409));
+        let k = err(
+            "sale_order_line.update",
+            Value::map([("id", Value::text(&line)), ("quantity", Value::Int(3))]),
+        );
+        assert_eq!(k.code, "immutable_record");
+        let k = err(
+            "sale_order_line.create",
+            Value::map([
+                ("order_id", Value::text(&order)),
+                ("product_id", Value::text(&product)),
+            ]),
+        );
+        assert_eq!(k.code, "immutable_record");
+        assert_eq!(
+            err("sale_order.delete", by_id(&order)).code,
+            "immutable_record"
+        );
+        // Cancelling is the way out, and a cancelled order can go back to a quotation.
+        call("sale_order.cancel", by_id(&order)).unwrap();
+        call("sale_order.reset_to_draft", by_id(&order)).unwrap();
+        call(
+            "sale_order_line.update",
+            Value::map([("id", Value::text(&line)), ("quantity", Value::Int(3))]),
+        )
+        .unwrap();
     }
 }

@@ -5,6 +5,7 @@ summary = "Dokumentmallar och signeringsbegäranden; en PDF i Dokument kan signe
 
 [labels.sv.model.sign_template]
 name = "Mall"
+plural = "Mallar"
 description = "Ett dokument som kan skickas ut för signering"
 
 [labels.sv.model.sign_template.field.name]
@@ -29,6 +30,7 @@ description = "Om nya begäranden kan använda mallen"
 
 [labels.sv.model.sign_request]
 name = "Signeringsbegäran"
+plural = "Signeringsbegäranden"
 description = "En begäran om att en person ska signera ett dokument"
 
 [labels.sv.model.sign_request.field.template_id]
@@ -53,7 +55,7 @@ description = "Namn på personen som ska signera"
 
 [labels.sv.model.sign_request.field.signer_email]
 label = "Undertecknarens e-post"
-description = "Signerarens e-postadress; valfri, obop skickar inget e-postmeddelande för en begäran om ett dokument"
+description = "Signerarens e-postadress; valfri, inget e-postmeddelande skickas för en begäran om ett dokument"
 
 [labels.sv.model.sign_request.field.sent_on]
 label = "Skickad den"
@@ -139,6 +141,7 @@ description = "Skicka en begäran om ett dokument i Dokument: tar PDF:ens SHA-25
 
 [labels.sv.model.sign_link]
 name = "Signeringslänk"
+plural = "Signeringslänkar"
 description = "En engångslänk som låter en person signera en begäran; bara en hash av hemligheten sparas, så länken visas en gång när den skapas"
 
 [labels.sv.model.sign_link.field.request_id]

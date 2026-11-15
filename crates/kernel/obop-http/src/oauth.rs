@@ -11,6 +11,7 @@ use axum::{
     http::{HeaderMap, HeaderValue, StatusCode, header, request::Parts},
     response::{IntoResponse, Response},
 };
+use obop_commands::brand::Shown;
 use obop_oauth::flow::AuthorizeParams;
 use obop_oauth::page::{self, Rendered};
 use obop_oauth::{
@@ -205,18 +206,79 @@ pub(crate) fn same_origin(h: &HeaderMap, base: &str) -> bool {
     }
 }
 
-fn flow_failure(e: FlowError, lang: &str) -> Response {
+/// The brand every page of this request shows. A handler asks for it once, first, in the four places
+/// where a request of the authorization flow begins (`authorize_blocking`, `step`,
+/// `microsoft_blocking` and `microsoft_return`), and hands that one value to every page it
+/// renders, so the name and the logo of a page come from one read (docs/spec/branding.md,
+/// section 4). The handlers run on a blocking thread, where the reader may read the store. (The two
+/// passkey routes, `passkey_options` and `passkey`, build the ceremony site of the passkey step
+/// after this read, and `webauthn_ctx` asks the reader for the display name once more through
+/// `passkeys::rp_name` (S1e): within the two seconds of the reader's cell that is a hit that costs
+/// the store nothing, and the name it returns is shown by no page and emitted by no sign-in.)
+/// Slice S1d uses this one function for the other handlers that make a page and run on a blocking
+/// thread: the three of the signer's door (`sign.rs`: the page, the post that signs and the PDF,
+/// whose refusals are pages) and the OAuth callback of the connectors (`connectors.rs`), each once
+/// and first, so that no second implementation of the read exists; the scan pins those calls too.
+///
+/// When the refill meets a store fault, the pool has noted it on this request: `ops::storage_faults`
+/// answers the request with the 503 of D74 whatever the handler sends, and `fault::before_write`
+/// refuses the writes it would make. So a sign-in or a decision whose first brand read fails makes
+/// no session and no token, issues no code and leaves the flow and the short-lived values of the
+/// store as they were, and is answered 503; one whose read succeeds writes as it always did.
+///
+/// Two kinds of write are the exception, because the guard of the store does not cover them
+/// (`obop-storage/src/guard.rs`).
+///
+/// The expiring counters, because `Backend::counter_add` has no `before_write` and the handler goes
+/// on to the steps that count: a request of this kind still spends one hit of the window of its
+/// address. A start spends `oauth:rl:authz` (60 in ten minutes); a password step, a second step and
+/// a passkey post spend `oauth:rl:login` (30 in ten minutes); on a secure site (`ceremony_site_ok`)
+/// a passkey post also spends `auth.pk:verify` (40 in ten minutes), and the options request of a
+/// passkey spends `auth.pk:options` (60 in ten minutes) and no `oauth:rl:login`; the Microsoft link
+/// spends `rl:sso:oauth_start` (30 in a minute); and there is the housekeeping lease of the OAuth
+/// server. A wrong password, a wrong code or a wrong passkey answer at the second step counts toward
+/// the lockout of the account, as every wrong guess does; the right password and the right code
+/// count no failure. So while the store refuses, every retry of a person, a right password
+/// included, uses a hit of the window of their address, and the allowance is back when the window
+/// ends (the answer of a spent window is the 429 with `Retry-After`).
+///
+/// And the security log, because `Guarded::insert` lets the model `security_event` through (an
+/// entry about a change that committed must not be lost). The password step writes no entry, but a
+/// wrong code at the second step writes `code_failed` and a wrong passkey answer there writes
+/// `passkey_failed`, the first of each ten seconds for the account, although the request is
+/// refused; the guess that reaches the lockout writes `lockout` as well (`Auth::check_second_factor`
+/// and `login_second`; no test reaches that one here).
+///
+/// Four tests pin this, in both directions:
+/// `a_sign_in_whose_first_brand_read_fails_leaves_the_store_as_it_was_and_is_a_503` and
+/// `a_wrong_password_under_a_failing_first_read_still_counts_toward_the_lockout` (the password step),
+/// `a_second_step_under_a_failing_first_read_spends_a_hit_and_a_wrong_code_counts_a_failure` and
+/// `a_passkey_post_and_its_options_under_a_failing_first_read_spend_the_windows_they_are_said_to`
+/// (the second step, the passkey post and the options request of a passkey). The read is not run
+/// inside `fault::detached` to hide any of this: a request that cannot read the store cannot do what
+/// it came for either. (Putting the counters under `before_write` would make "writes nothing"
+/// literal for them; that is a change in `obop-storage` and outside this slice. The log is let
+/// through on purpose and stays so.)
+pub(crate) fn read_brand(s: &HttpState) -> Arc<Shown> {
+    s.dispatcher.brand().current()
+}
+
+fn flow_failure(e: FlowError, lang: &str, brand: &Shown) -> Response {
     match e {
-        FlowError::Gone => html(StatusCode::GONE, page::error_page(lang, "err.gone"), None),
+        FlowError::Gone => html(
+            StatusCode::GONE,
+            page::error_page_with(brand, lang, "err.gone"),
+            None,
+        ),
         FlowError::Forbidden => html(
             StatusCode::FORBIDDEN,
-            page::error_page(lang, "err.forbidden"),
+            page::error_page_with(brand, lang, "err.forbidden"),
             None,
         ),
         FlowError::Busy(wait) => {
             let mut r = html(
                 StatusCode::TOO_MANY_REQUESTS,
-                page::error_page(lang, "err.busy"),
+                page::error_page_with(brand, lang, "err.busy"),
                 None,
             );
             if let Ok(v) = HeaderValue::from_str(&wait.to_string()) {
@@ -233,10 +295,12 @@ pub(crate) async fn authorization_server(State(s): Shared, h: HeaderMap) -> Resp
     if s.oauth.is_none() {
         return disabled();
     }
+    // An anonymous document: the brand is asked first and once, as the discovery documents do.
+    let brand = super::mcp::document_brand(&s).await;
     let base = s.mcp.base_url(&h);
     super::mcp::public_json(
         "application/json",
-        &obop_oauth::authorization_server_metadata(&base),
+        &obop_oauth::authorization_server_metadata(&base, &brand),
     )
 }
 
@@ -380,20 +444,25 @@ fn authorize_blocking(s: &HttpState, parts: &Parts) -> Response {
     let Some(o) = s.oauth.clone() else {
         return disabled();
     };
+    let brand = read_brand(s);
     let base = s.mcp.base_url(&parts.headers);
     let pairs = parts.uri.query().and_then(parse_pairs).unwrap_or_default();
     let lang = lang_of(&parts.headers, pair(&pairs, "lang"));
     let Ok(p) = params_of(&pairs) else {
         return html(
             StatusCode::BAD_REQUEST,
-            page::error_page(lang, "err.client"),
+            page::error_page_with(&brand, lang, "err.client"),
             None,
         );
     };
     let v = match o.validate_authorize(&base, &p) {
         Ok(v) => v,
         Err(AuthzError::Page { key }) => {
-            return html(StatusCode::BAD_REQUEST, page::error_page(lang, key), None);
+            return html(
+                StatusCode::BAD_REQUEST,
+                page::error_page_with(&brand, lang, key),
+                None,
+            );
         }
         Err(AuthzError::Redirect {
             redirect_uri,
@@ -415,7 +484,7 @@ fn authorize_blocking(s: &HttpState, parts: &Parts) -> Response {
         Err(e) => {
             return html(
                 StatusCode::from_u16(e.status).unwrap_or(StatusCode::TOO_MANY_REQUESTS),
-                page::error_page(lang, "err.busy"),
+                page::error_page_with(&brand, lang, "err.busy"),
                 None,
             );
         }
@@ -430,9 +499,9 @@ fn authorize_blocking(s: &HttpState, parts: &Parts) -> Response {
         cookie_name(&id),
         o.config().flow_ttl_secs
     );
-    match flow_view(s, &o, &id, &binder) {
+    match flow_view(s, &o, &id, &binder, &brand) {
         Ok(ctx) => html(StatusCode::OK, page::login_page(&ctx, None), Some(cookie)),
-        Err(e) => flow_failure(e, lang),
+        Err(e) => flow_failure(e, lang, &brand),
     }
 }
 
@@ -443,9 +512,16 @@ pub(crate) fn microsoft_offered(s: &HttpState) -> bool {
 }
 
 /// The page context of a flow, with the Microsoft step offered when the flow is a mobile app's and
-/// the instance has it. (`obop-oauth` cannot see the provider; an MCP client is never offered it.)
-fn flow_view(s: &HttpState, o: &OAuth, id: &str, binder: &str) -> Result<FlowCtx, FlowError> {
-    let mut ctx = o.view(id, binder)?;
+/// the instance has it, and with the brand the handler read at the start of its request.
+/// (`obop-oauth` cannot see the provider or the reader; an MCP client is never offered the step.)
+fn flow_view(
+    s: &HttpState,
+    o: &OAuth,
+    id: &str,
+    binder: &str,
+    brand: &Arc<Shown>,
+) -> Result<FlowCtx, FlowError> {
+    let mut ctx = o.view(id, binder, brand)?;
     ctx.microsoft = ctx.class.is_mobile() && microsoft_offered(s);
     Ok(ctx)
 }
@@ -460,6 +536,8 @@ struct Step {
     binder: String,
     ip: String,
     lang: &'static str,
+    /// What the request read at its start; every page of the request shows this one value.
+    brand: Arc<Shown>,
 }
 
 fn step(s: &HttpState, parts: &Parts, body: &Bytes) -> Result<Step, Box<Response>> {
@@ -467,11 +545,12 @@ fn step(s: &HttpState, parts: &Parts, body: &Bytes) -> Result<Step, Box<Response
     let Some(o) = s.oauth.clone() else {
         return Err(Box::new(disabled()));
     };
+    let brand = read_brand(s);
     let base = s.mcp.base_url(&parts.headers);
     if !same_origin(&parts.headers, &base) {
         return Err(Box::new(html(
             StatusCode::FORBIDDEN,
-            page::error_page(lang, "err.forbidden"),
+            page::error_page_with(&brand, lang, "err.forbidden"),
             None,
         )));
     }
@@ -489,7 +568,7 @@ fn step(s: &HttpState, parts: &Parts, body: &Bytes) -> Result<Step, Box<Response
     let Some(pairs) = pairs else {
         return Err(Box::new(html(
             StatusCode::BAD_REQUEST,
-            page::error_page(lang, "err.forbidden"),
+            page::error_page_with(&brand, lang, "err.forbidden"),
             None,
         )));
     };
@@ -505,13 +584,14 @@ fn step(s: &HttpState, parts: &Parts, body: &Bytes) -> Result<Step, Box<Response
         binder,
         ip: client_ip(s, parts),
         lang,
+        brand,
     })
 }
 
 fn consent_or_gone(st: &Step, error: Option<&str>) -> Response {
-    match st.o.view(&st.flow, &st.binder) {
+    match st.o.view(&st.flow, &st.binder, &st.brand) {
         Ok(ctx) => html(StatusCode::OK, page::consent_page(&ctx, error), None),
-        Err(e) => flow_failure(e, st.lang),
+        Err(e) => flow_failure(e, st.lang, &st.brand),
     }
 }
 
@@ -520,7 +600,7 @@ fn login_again(ctx: &FlowCtx, error: Option<&str>) -> Response {
 }
 
 fn after_login(s: &HttpState, st: &Step, out: Result<LoginOut, FlowError>) -> Response {
-    finish_login(s, &st.o, &st.flow, &st.binder, st.lang, out)
+    finish_login(s, &st.o, &st.flow, &st.binder, st.lang, &st.brand, out)
 }
 
 /// The page that follows a sign-in step, for the flow and the browser it was made for. Shared by
@@ -531,11 +611,12 @@ fn finish_login(
     flow: &str,
     binder: &str,
     fallback_lang: &str,
+    brand: &Arc<Shown>,
     out: Result<LoginOut, FlowError>,
 ) -> Response {
-    let ctx = match flow_view(s, o, flow, binder) {
+    let ctx = match flow_view(s, o, flow, binder, brand) {
         Ok(c) => c,
-        Err(e) => return flow_failure(e, fallback_lang),
+        Err(e) => return flow_failure(e, fallback_lang, brand),
     };
     let lang = ctx.lang.clone();
     match out {
@@ -553,7 +634,7 @@ fn finish_login(
             )
         }
         Ok(LoginOut::Failed(key)) => login_again(&ctx, Some(key)),
-        Err(e) => flow_failure(e, &lang),
+        Err(e) => flow_failure(e, &lang, brand),
     }
 }
 
@@ -603,11 +684,11 @@ pub(crate) async fn decision(State(s): Shared, parts: Parts, body: Bytes) -> Res
         };
         match pair(&st.pairs, "decision").unwrap_or("") {
             "switch" => match st.o.switch_user(&st.flow, &st.binder, &st.csrf) {
-                Ok(()) => match flow_view(&s, &st.o, &st.flow, &st.binder) {
+                Ok(()) => match flow_view(&s, &st.o, &st.flow, &st.binder, &st.brand) {
                     Ok(ctx) => html(StatusCode::OK, page::login_page(&ctx, None), None),
-                    Err(e) => flow_failure(e, st.lang),
+                    Err(e) => flow_failure(e, st.lang, &st.brand),
                 },
-                Err(e) => flow_failure(e, st.lang),
+                Err(e) => flow_failure(e, st.lang, &st.brand),
             },
             d @ ("allow" | "deny") => {
                 let groups: Vec<String> = st
@@ -630,12 +711,12 @@ pub(crate) async fn decision(State(s): Shared, parts: Parts, body: Bytes) -> Res
                 ) {
                     Ok(DecideOut::Redirect(loc)) => see_other(&loc),
                     Ok(DecideOut::Retry(key)) => consent_or_gone(&st, Some(key)),
-                    Err(e) => flow_failure(e, st.lang),
+                    Err(e) => flow_failure(e, st.lang, &st.brand),
                 }
             }
             _ => html(
                 StatusCode::BAD_REQUEST,
-                page::error_page(st.lang, "err.forbidden"),
+                page::error_page_with(&st.brand, st.lang, "err.forbidden"),
                 None,
             ),
         }
@@ -653,11 +734,12 @@ fn login_with_word(
     flow: &str,
     binder: &str,
     lang: &str,
+    brand: &Arc<Shown>,
     word: &str,
 ) -> Response {
-    match flow_view(s, o, flow, binder) {
+    match flow_view(s, o, flow, binder, brand) {
         Ok(ctx) => login_again(&ctx, Some(microsoft_key(word))),
-        Err(e) => flow_failure(e, lang),
+        Err(e) => flow_failure(e, lang, brand),
     }
 }
 
@@ -676,6 +758,7 @@ fn microsoft_blocking(s: &HttpState, parts: &Parts) -> Response {
     let Some(o) = s.oauth.clone() else {
         return disabled();
     };
+    let brand = read_brand(s);
     if !super::sso::is_navigation(parts) {
         return super::sso::not_a_navigation();
     }
@@ -684,21 +767,21 @@ fn microsoft_blocking(s: &HttpState, parts: &Parts) -> Response {
     let binder = cookie_value(&parts.headers, &cookie_name(flow)).unwrap_or_default();
     let lang = match o.microsoft_start(flow, &binder) {
         Ok(l) => page::pick_lang(Some(&l), None),
-        Err(e) => return flow_failure(e, lang),
+        Err(e) => return flow_failure(e, lang, &brand),
     };
     let ip = super::sso::source_of(s, parts);
     s.shared.maybe_purge();
     // Its own windows, so that phones signing in from one address do not use up the allowance of
     // the back office's link.
     if super::sso::limited(s, "oauth_start", &ip, 30) {
-        return login_with_word(s, &o, flow, &binder, lang, "busy");
+        return login_with_word(s, &o, flow, &binder, lang, &brand, "busy");
     }
     let (Some(api), Some(rt)) = (s.auth.sso(), s.connectors.get()) else {
-        return login_with_word(s, &o, flow, &binder, lang, "unavailable");
+        return login_with_word(s, &o, flow, &binder, lang, &brand, "unavailable");
     };
     let leg = match api.leg() {
         Ok(Some(l)) => l,
-        Ok(None) => return login_with_word(s, &o, flow, &binder, lang, "unavailable"),
+        Ok(None) => return login_with_word(s, &o, flow, &binder, lang, &brand, "unavailable"),
         Err(e) => {
             api.audit_throttled(
                 &ip,
@@ -706,14 +789,14 @@ fn microsoft_blocking(s: &HttpState, parts: &Parts) -> Response {
                 obop_commands::AnonLine::Settings,
                 &format!("start (app): {}", super::sso::describe(&e)),
             );
-            return login_with_word(s, &o, flow, &binder, lang, "unavailable");
+            return login_with_word(s, &o, flow, &binder, lang, &brand, "unavailable");
         }
     };
     let ep = match super::sso::discover(s, api, rt, &leg, "start (app)") {
         Ok(ep) => ep,
         Err(r) => {
             let word = r.log(api, &ip);
-            return login_with_word(s, &o, flow, &binder, lang, word);
+            return login_with_word(s, &o, flow, &binder, lang, &brand, word);
         }
     };
     let redirect_uri = format!("{}/api/auth/oidc/callback", s.mcp.base_url(&parts.headers));
@@ -724,7 +807,7 @@ fn microsoft_blocking(s: &HttpState, parts: &Parts) -> Response {
         &redirect_uri,
         Some(json!({"purpose": "oauth", "oauth_flow": flow})),
     ) else {
-        return login_with_word(s, &o, flow, &binder, lang, "unavailable");
+        return login_with_word(s, &o, flow, &binder, lang, &brand, "unavailable");
     };
     api.audit_throttled(
         &ip,
@@ -746,6 +829,7 @@ pub(crate) async fn microsoft_return(State(s): Shared, parts: Parts) -> Response
         let Some(o) = s.oauth.clone() else {
             return disabled();
         };
+        let brand = read_brand(&s);
         if !super::sso::is_navigation(&parts) {
             return super::sso::not_a_navigation();
         }
@@ -753,7 +837,7 @@ pub(crate) async fn microsoft_return(State(s): Shared, parts: Parts) -> Response
         let flow = pair(&pairs, "flow").unwrap_or("");
         let binder = cookie_value(&parts.headers, &cookie_name(flow)).unwrap_or_default();
         let out = o.microsoft_return(flow, &binder, &client_ip(&s, &parts));
-        finish_login(&s, &o, flow, &binder, lang, out)
+        finish_login(&s, &o, flow, &binder, lang, &brand, out)
     })
     .await
 }
@@ -810,7 +894,7 @@ fn webauthn_ctx(s: &HttpState, parts: &Parts, st: &Step) -> Option<obop_commands
     Some(obop_commands::WebauthnCtx {
         rp_id,
         origin,
-        rp_name: "obop".into(),
+        rp_name: super::passkeys::rp_name(s),
         ip: st.ip.clone(),
     })
 }
@@ -861,7 +945,7 @@ pub(crate) async fn passkey(State(s): Shared, parts: Parts, body: Bytes) -> Resp
         let Some(c) = webauthn_ctx(&s, &parts, &st) else {
             return html(
                 StatusCode::SERVICE_UNAVAILABLE,
-                page::error_page(st.lang, "err.busy"),
+                page::error_page_with(&st.brand, st.lang, "err.busy"),
                 None,
             );
         };
@@ -987,6 +1071,7 @@ mod tests {
             binder: String::new(),
             ip: "198.51.100.7".into(),
             lang: "en",
+            brand: Arc::new(Shown::not_set(None)),
         };
         let parts = axum::http::Request::builder()
             .uri("/oauth/authorize/passkey/options")
@@ -999,5 +1084,164 @@ mod tests {
         assert_eq!(ctx.rp_id, "inst.test");
         assert_eq!(ctx.origin, "https://inst.test");
         assert_eq!(ctx.ip, "198.51.100.7");
+    }
+
+    /// The ceremony site of the OAuth pages' passkey steps (S1e), over a dispatcher whose reader is
+    /// installed over `backend`.
+    fn site_over(backend: &Arc<dyn obop_storage::Backend>) -> String {
+        sites_over(backend, 1).remove(0)
+    }
+
+    /// The ceremony sites of `calls` requests to the OAuth pages' passkey step, over one state: the
+    /// relying party name of each.
+    fn sites_over(backend: &Arc<dyn obop_storage::Backend>, calls: usize) -> Vec<String> {
+        let d = Arc::new(obop_commands::Dispatcher::new());
+        d.install_brand(backend.clone());
+        let state = crate::HttpState::with_mcp(
+            d,
+            Arc::new(Idp),
+            crate::mcp::McpConfig {
+                public_url: Some("https://inst.test".into()),
+                ..crate::mcp::McpConfig::default()
+            },
+        );
+        let st = Step {
+            o: state.oauth.clone().expect("the OAuth server exists"),
+            base: "https://inst.test".into(),
+            pairs: Vec::new(),
+            flow: String::new(),
+            csrf: String::new(),
+            binder: String::new(),
+            ip: "198.51.100.7".into(),
+            lang: "en",
+            brand: Arc::new(Shown::not_set(None)),
+        };
+        let parts = axum::http::Request::builder()
+            .uri("/oauth/authorize/passkey/options")
+            .body(())
+            .unwrap()
+            .into_parts()
+            .0;
+        (0..calls)
+            .map(|_| {
+                webauthn_ctx(&state, &parts, &st)
+                    .expect("a ceremony site")
+                    .rp_name
+            })
+            .collect()
+    }
+
+    /// The relying party name of the OAuth pages' ceremony site is the instance brand's name as the
+    /// reader shows it, asserted directly: that builder serves the sign-in ceremony, which emits no
+    /// name, so the value is visible in no output. With no row, or with a stored name that cannot be
+    /// shown, it is `obop` (a bad stored name stops nothing here: only the registration options,
+    /// which use `strict()`, refuse it).
+    #[test]
+    fn the_oauth_pages_ceremony_site_carries_the_name_of_the_instance_brand() {
+        use obop_commands::brand::{Action, apply};
+        let backend = obop_storage::open("memory:").unwrap();
+        assert_eq!(site_over(&backend), "obop", "no row");
+
+        let backend = obop_storage::open("memory:").unwrap();
+        apply(
+            &*backend,
+            None,
+            "operator",
+            &Action::Configure(vec![("name".into(), "MOHV".into())]),
+            false,
+        )
+        .unwrap();
+        assert_eq!(site_over(&backend), "MOHV", "a brand");
+
+        let backend = obop_storage::open("memory:").unwrap();
+        let mut row = obop_storage::Fields::new();
+        row.insert("name".into(), json!("a<b"));
+        backend
+            .apply_checked(&[obop_storage::Op::Put {
+                model: "instance_brand".into(),
+                id: "instance".into(),
+                fields: row,
+            }])
+            .unwrap();
+        assert_eq!(site_over(&backend), "obop", "a name that cannot be shown");
+
+        // A name the display accepts and `strict()` refuses (a colon): shown as it is, not replaced
+        // by `obop` as a site built on `strict()` with a fallback would.
+        let backend = obop_storage::open("memory:").unwrap();
+        let mut row = obop_storage::Fields::new();
+        row.insert("name".into(), json!("a:b"));
+        backend
+            .apply_checked(&[obop_storage::Op::Put {
+                model: "instance_brand".into(),
+                id: "instance".into(),
+                fields: row,
+            }])
+            .unwrap();
+        assert_eq!(
+            site_over(&backend),
+            "a:b",
+            "a name only the display accepts"
+        );
+    }
+
+    /// The cache of the reader applies to the OAuth pages' ceremony site as to the passkey routes
+    /// (the Cache bullet of the spec, section 13): a hundred calls cost the store one read of the row
+    /// and one of the theme, the unit of one refill. The bound of the cell is two seconds, so the
+    /// count allowed is one per two seconds the loop took, plus the first. (The same leniency as
+    /// the test of the passkey routes: the dispatcher builds its reader with the default bound, so
+    /// the allowance comes from the clock and a cache that broke only in a slow loop would pass.)
+    #[test]
+    fn a_hundred_oauth_sites_cost_the_store_one_read_of_the_row_and_one_of_the_theme() {
+        let (flaky, backend) = obop_storage::testing::Flaky::memory();
+        let mut row = obop_storage::Fields::new();
+        row.insert("name".into(), json!("MOHV"));
+        backend
+            .apply_checked(&[obop_storage::Op::Put {
+                model: "instance_brand".into(),
+                id: "instance".into(),
+                fields: row,
+            }])
+            .unwrap();
+        let (row_reads, theme_reads) = (
+            flaky.gets_of("instance_brand"),
+            flaky.gets_of("obop_setting"),
+        );
+        let started = std::time::Instant::now();
+        let names = sites_over(&backend, 100);
+        let refills = 1 + started.elapsed().as_millis() as u64 / 2000;
+        assert!(names.iter().all(|n| n == "MOHV"));
+        let (row_reads, theme_reads) = (
+            flaky.gets_of("instance_brand") - row_reads,
+            flaky.gets_of("obop_setting") - theme_reads,
+        );
+        assert!(
+            (1..=refills).contains(&row_reads),
+            "the row was read {row_reads} times"
+        );
+        assert!(
+            (1..=refills).contains(&theme_reads),
+            "the theme was read {theme_reads} times"
+        );
+    }
+
+    /// The display read of the OAuth pages' ceremony site is held against the request as any display
+    /// read is (docs/spec/branding.md, section 4, "The display read and D74"): the site is built, and
+    /// the fault the read met is noted on the thread, so the layer above answers 503 with
+    /// `Retry-After`. The page cannot do what it came for without the same store, so this is the
+    /// rule of the other pages too; `fault::detached` around the read is the named alternative
+    /// (15.3 (f)), and a change to it flips this test, which is its purpose.
+    #[test]
+    fn the_display_read_of_the_oauth_pages_site_meets_the_fault_of_the_store() {
+        let (flaky, backend) = obop_storage::testing::Flaky::memory();
+        // A request scope, as `blocking` opens one: a read run inside `fault::detached` would leave
+        // no trace in it.
+        obop_storage::fault::begin_request(obop_storage::fault::Outcome::default());
+        flaky.refuse_model("obop_setting", obop_storage::testing::Mode::Reads);
+        assert_eq!(sites_over(&backend, 1), ["obop"]);
+        let outcome = obop_storage::fault::end_request();
+        assert!(
+            outcome.fault.is_some(),
+            "the fault of the read was not noted in the request"
+        );
     }
 }

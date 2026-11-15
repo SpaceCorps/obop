@@ -1,0 +1,12 @@
+# English names and plurals of knowledge (D52, D95): [labels.en.model.<model>] name = "...", plural = "...".
+# The manifest stays the English source; this file only adds the display names it does not have.
+
+[labels.en.model.knowledge_article]
+name = "Article"
+plural = "Articles"
+
+[labels.en.model.knowledge_article.field.parent_id]
+label = "Parent article"
+
+[labels.en.model.knowledge_article.field.author_name]
+label = "Author"
