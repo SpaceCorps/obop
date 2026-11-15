@@ -2,7 +2,15 @@ import { InsetsProvider, ThemeProvider, WordsProvider, type Words } from "@obop/
 import { StatusBar } from "expo-status-bar";
 import * as SystemUI from "expo-system-ui";
 import { useEffect, useMemo, useRef, useSyncExternalStore, type ReactNode } from "react";
-import { AppState, BackHandler, StyleSheet, useColorScheme, View } from "react-native";
+import {
+  AppState,
+  BackHandler,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  useColorScheme,
+  View,
+} from "react-native";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { identity } from "./config/identity.ts";
 import { hostAndPort, startAddress } from "./src/core/address.ts";
@@ -242,7 +250,16 @@ export default function App() {
       <ThemeProvider>
         <WordsProvider words={WORDS}>
           <Insets>
-            <Shell />
+            {/* Android draws the app edge to edge and does not resize the window for the keyboard,
+                so the app makes room itself: the Connect button and the page stay above it. On iOS
+                the native screens pad themselves and the WebView scrolls its own field into view. */}
+            <KeyboardAvoidingView
+              style={styles.fill}
+              behavior="padding"
+              enabled={Platform.OS === "android"}
+            >
+              <Shell />
+            </KeyboardAvoidingView>
           </Insets>
         </WordsProvider>
       </ThemeProvider>
