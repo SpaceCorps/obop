@@ -1,7 +1,7 @@
 # Snapshot of crates/modules/invoicing/src/lib.rs (built-in).
 [module]
 id = "invoicing"
-version = "0.2.1"
+version = "0.2.2"
 name = "Invoicing"
 description = "Customer invoices with lines: drafts, posting with the next number of a gapless yearly series, cancellation."
 summary = "Customer invoices with a draft, posted and cancelled life cycle."

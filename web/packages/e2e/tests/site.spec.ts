@@ -364,7 +364,7 @@ test.describe("website without JavaScript", () => {
     // What it works with is a count (the names are the "Works with" section below the strip).
     await expect(page.locator(".app-facts dd")).toHaveText([
       "Stable",
-      "0.2.1",
+      "0.2.2",
       "2 apps",
       "Apache-2.0",
     ]);
@@ -472,7 +472,7 @@ test.describe("website without JavaScript", () => {
     await expect(page.locator(".app-info")).not.toContainText("^0.2");
     // A built-in app's version moves with obop itself, said so without the word "core".
     await expect(page.locator(".app-info")).toContainText(
-      s.sameAsObop.replace("{version}", "0.2.1"),
+      s.sameAsObop.replace("{version}", "0.2.2"),
     );
     await expect(page.locator(".app-info")).not.toContainText(/core/i);
     await expect(page.locator(".app-info dt", { hasText: s.source })).toBeVisible();

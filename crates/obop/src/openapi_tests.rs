@@ -14,7 +14,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tower::ServiceExt;
 
-/// Commands of models that have no `list` command: registered on REST, absent from the document.
+/// Commands of models that have no `list` command, and the commands a module refuses for everyone
+/// (`Dispatcher::refuse_always`, D95: `can_delete` / `can_update` false in the metadata): registered
+/// on REST, absent from the document.
 const KNOWN_OMITTED: &[&str] = &[
     "bank_matching.book",
     "bank_matching.suggest",
@@ -28,6 +30,9 @@ const KNOWN_OMITTED: &[&str] = &[
     "instance_update.start",
     "instance_update.status",
     "invoice_posting.create_move",
+    "mileage_point.delete",
+    "mileage_point.update",
+    "mileage_trip.delete",
     "module_plan.preview",
     "setting.get",
     "setting.update",
@@ -345,10 +350,12 @@ async fn pins_the_anonymous_openapi_document_as_an_instance_with_no_brand_sends_
 // `feat/agent-token-admin` (the D69 amendment of 2026-11-14), which moved the document on purpose:
 // the two paths `/api/auth/agent-tokens` and `/api/auth/agent-tokens/{id}/revoke`, the description
 // of the scopes of `issueAgentToken`, and two more kinds in the description of `security_event.kind`.
+// Again on `feat/ui-L9` (D95, 2026-11-15), on purpose: `info.version` 0.2.2 and the `message` key of
+// the error schema.
 #[rustfmt::skip]
 const OPENAPI_ANONYMOUS_PINS: &[(&str, &str)] = &[
-    ("dev/openapi", "4423020333aa7969f0a06700ac10cece7fd1303d978b4aacc21b5fba0ed122e8"),
-    ("auth/openapi", "2ec4c9097622e1639d8e4e279efb08920413cf5db53413bc56c5170d0ae0cce4"),
+    ("dev/openapi", "d1b7773e2f91902681b0db0b9ca338701d5adc59e4a6461dfdf3e7aa78d377b3"),
+    ("auth/openapi", "616e8ce32ec207981409617e50638069128fed26e16f13ed87a3684d305aba73"),
 ];
 
 /// With a brand row in the store the anonymous document is the one an instance with no row sends,

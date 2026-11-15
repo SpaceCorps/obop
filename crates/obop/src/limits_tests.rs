@@ -446,7 +446,7 @@ async fn meta_says_the_limit_of_every_field_that_has_one() {
 async fn the_openapi_document_has_the_keywords_on_inputs_and_not_on_records() {
     let rig = Rig::new().await;
     let doc = rig.get("/api/openapi.json").await;
-    assert_eq!(doc["info"]["version"], "0.2.1");
+    assert_eq!(doc["info"]["version"], "0.2.2");
     let input = |op: &str| -> J {
         doc["paths"][format!("/api/lim_note/{op}")]["post"]["requestBody"]["content"]
             ["application/json"]["schema"]
@@ -583,7 +583,7 @@ async fn mcp_session(rig: &Rig) -> String {
     )
     .await;
     assert_eq!(s, 200, "{b}");
-    assert_eq!(b["result"]["serverInfo"]["version"], "0.2.1", "{b}");
+    assert_eq!(b["result"]["serverInfo"]["version"], "0.2.2", "{b}");
     let (s, _, _) = mcp(
         &rig.r,
         &rig.token,
