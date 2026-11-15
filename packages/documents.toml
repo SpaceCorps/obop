@@ -80,6 +80,10 @@ write_group = "documents.user"
   report = { rows = "folder_id", cols = "kind" }
 
   [[model.ui.section]]
+  label = "Document"
+  fields = ["attachment", "title", "folder_id", "kind", "confidentiality", "owner", "expires_on", "summary"]
+
+  [[model.ui.section]]
   label = "Where it is kept"
   fields = ["reference", "location"]
   collapsed = true

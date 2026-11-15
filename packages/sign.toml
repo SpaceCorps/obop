@@ -85,6 +85,10 @@ write_group = "sign.user"
   report = { rows = "state", cols = "template_id" }
 
   [[model.ui.section]]
+  label = "Request"
+  fields = ["document_id", "template_id", "title", "signer_name", "signer_email", "message", "expires_on"]
+
+  [[model.ui.section]]
   label = "Options"
   fields = ["show_history"]
   collapsed = true

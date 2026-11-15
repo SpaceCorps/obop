@@ -72,6 +72,10 @@ write_group = "hr.manager"
   report = { rows = "department_id", cols = "state" }
 
   [[model.ui.section]]
+  label = "Work"
+  fields = ["name", "photo", "job_title", "department_id", "reports_to_id", "work_email", "work_phone"]
+
+  [[model.ui.section]]
   label = "Employment"
   fields = ["hired_on", "contract_type"]
 
@@ -328,6 +332,10 @@ write_group = "hr.user"
   menu_order = 2
   calendar = { start = "start_on", end = "end_on", color = "state" }
   report = { rows = "employee_id", cols = "leave_kind", measure = "days" }
+
+  [[model.ui.section]]
+  label = "Leave"
+  fields = ["employee_id", "leave_kind", "start_on", "end_on", "days", "reason"]
 
   [[model.ui.section]]
   label = "Sick leave"
