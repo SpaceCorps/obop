@@ -83,7 +83,7 @@ export function useStaleFileNote(rt: Runtime): { recoveredAt: string | null; dis
   const [recoveredAt, setRecoveredAt] = useState<string | null>(null);
   useEffect(() => {
     let alive = true;
-    staleFileRecoveredAt(rt.store).then(
+    staleFileRecoveredAt(rt.hostState).then(
       (value) => alive && setRecoveredAt(value),
       () => undefined,
     );
@@ -93,7 +93,7 @@ export function useStaleFileNote(rt: Runtime): { recoveredAt: string | null; dis
   }, [rt]);
   const dismiss = useCallback(() => {
     setRecoveredAt(null);
-    void dismissStaleFileNote(rt.store).catch(() => undefined);
+    void dismissStaleFileNote(rt.hostState).catch(() => undefined);
   }, [rt]);
   return { recoveredAt, dismiss };
 }

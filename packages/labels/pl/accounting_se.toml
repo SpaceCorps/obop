@@ -1,0 +1,345 @@
+[labels.pl.module]
+name = "Księgowość Szwecja"
+description = "Szwedzka lokalizacja księgowości: dane firmy, serie dowodów, kody i pola VAT oraz raport VAT za okres zatwierdzany przez grupę accounting.approver. NIEZWERYFIKOWANE: nic nie sprawdzono w Skatteverket (SKV 4700) ani w SIE. Plan kont BAS nie jest dołączony; konta wybiera użytkownik. Kwoty w öre, stawki w punktach bazowych. Stąd nic nie jest składane."
+
+[labels.pl.model.accounting_se_company]
+name = "Firma"
+description = "Szwedzka firma, do której należą księgi; zwykle jeden rekord"
+
+[labels.pl.model.accounting_se_company.field.name]
+label = "Nazwa"
+description = "Pełna nazwa prawna firmy"
+
+[labels.pl.model.accounting_se_company.field.org_number]
+label = "Numer organizacji"
+description = "Numer organizacji, dziesięć cyfr jak 556000-0000; dla jednoosobowej działalności jest to numer osobisty, a więc dana osobowa"
+
+[labels.pl.model.accounting_se_company.field.vat_number]
+label = "Numer VAT"
+description = "Numer VAT jak SE556000000001; puste, gdy firma nie jest zarejestrowana jako podatnik VAT"
+
+[labels.pl.model.accounting_se_company.field.f_skatt]
+label = "F-skatt"
+description = "Czy firma ma zatwierdzony status F-skatt (F-tax)"
+
+[labels.pl.model.accounting_se_company.field.fiscal_year_start_month]
+label = "Miesiąc początku roku obrotowego"
+description = "Miesiąc, w którym zaczyna się rok obrotowy, od 1 do 12; 1 oznacza rok kalendarzowy"
+
+[labels.pl.model.accounting_se_company.field.vat_period]
+label = "Okres VAT"
+description = "Jak często składana jest deklaracja VAT: monthly, quarterly, yearly"
+
+[labels.pl.model.accounting_se_company.field.vat_period.options]
+monthly = "Miesięcznie"
+quarterly = "Kwartalnie"
+yearly = "Rocznie"
+
+[labels.pl.model.accounting_se_company.field.currency]
+label = "Waluta"
+description = "Kod waluty ISO 4217 dla ksiąg, zwykle SEK"
+
+[labels.pl.model.accounting_se_company.field.address]
+label = "Adres"
+description = "Adres siedziby"
+
+[labels.pl.model.accounting_se_company.field.contact_email]
+label = "E-mail kontaktowy"
+description = "E-mail kontaktowy w sprawach księgowości"
+
+[labels.pl.model.accounting_se_voucher_series]
+name = "Seria dowodów"
+description = "Seria dowodów, litera jak A, która grupuje dowody jednego rodzaju"
+
+[labels.pl.model.accounting_se_voucher_series.field.code]
+label = "Kod"
+description = "Kod serii, od jednej do trzech liter, na przykład A; żadne dwie serie nie mają tego samego kodu"
+
+[labels.pl.model.accounting_se_voucher_series.field.name]
+label = "Nazwa"
+description = "Co zawiera seria, na przykład Dowody ręczne"
+
+[labels.pl.model.accounting_se_voucher_series.field.journal_id]
+label = "Dziennik"
+description = "Dziennik księgowy, którego dowody należą do serii"
+
+[labels.pl.model.accounting_se_voucher_series.field.is_default]
+label = "Domyślna"
+description = "Czy seria jest używana, gdy nie podano żadnej"
+
+[labels.pl.model.accounting_se_voucher_series.field.active]
+label = "Aktywna"
+description = "Czy serii można jeszcze używać"
+
+[labels.pl.model.accounting_se_voucher_series.field.note]
+label = "Notatka"
+description = "Uwagi o tym, jak używana jest seria"
+
+[labels.pl.model.accounting_se_vat_box]
+name = "Pole VAT"
+description = "Pole szwedzkiej deklaracji VAT. NIEZWERYFIKOWANE, dopóki nie sprawdzono go z SKV 4700"
+
+[labels.pl.model.accounting_se_vat_box.field.box]
+label = "Pole"
+description = "Numer pola jak na formularzu, na przykład 05; żadne dwa pola nie mają tego samego numeru"
+
+[labels.pl.model.accounting_se_vat_box.field.label]
+label = "Nagłówek"
+description = "Nagłówek pola po szwedzku, jak na formularzu"
+
+[labels.pl.model.accounting_se_vat_box.field.kind]
+label = "Rodzaj"
+description = "Co zawiera pole: base (podstawa opodatkowania), output (VAT należny), input (VAT naliczony), result (VAT do zapłaty lub zwrotu)"
+
+[labels.pl.model.accounting_se_vat_box.field.kind.options]
+base = "Podstawa"
+output = "VAT należny"
+input = "VAT naliczony"
+result = "Wynik"
+
+[labels.pl.model.accounting_se_vat_box.field.not_used]
+label = "Nieużywane"
+description = "Czy firma nie używa pola; kwota trafiająca do nieużywanego pola jest błędem"
+
+[labels.pl.model.accounting_se_vat_box.field.review]
+label = "Weryfikacja"
+description = "Stan weryfikacji pola: unverified, verified. Zaczyna jako niezweryfikowane; weryfikuje tylko zatwierdzający, po sprawdzeniu z SKV 4700"
+
+[labels.pl.model.accounting_se_vat_box.field.review.options]
+unverified = "Niezweryfikowane"
+verified = "Zweryfikowane"
+
+[labels.pl.model.accounting_se_vat_box.field.verified]
+label = "Zweryfikowane"
+description = "Czy pole zweryfikował właściciel; do tego czasu fałsz"
+
+[labels.pl.model.accounting_se_vat_box.field.verified_by]
+label = "Zweryfikował"
+description = "Nazwa logowania osoby, która zweryfikowała"
+
+[labels.pl.model.accounting_se_vat_box.field.verified_on]
+label = "Zweryfikowano dnia"
+description = "Data weryfikacji (RRRR-MM-DD)"
+
+[labels.pl.model.accounting_se_vat_box.field.source]
+label = "Źródło"
+description = "Skąd pochodzi pole i co sprawdzono, na przykład wydanie SKV 4700; puste oznacza, że nie sprawdzono żadnego źródła"
+
+[labels.pl.model.accounting_se_vat_box.action.verify]
+label = "Zweryfikuj"
+description = "Oznacz pole jako sprawdzone z SKV 4700 (tylko zatwierdzający)"
+
+[labels.pl.model.accounting_se_vat_box.action.unverify]
+label = "Cofnij weryfikację"
+description = "Wycofaj weryfikację pola (tylko zatwierdzający)"
+
+[labels.pl.model.accounting_se_vat_code]
+name = "Kod VAT"
+description = "Kod VAT, który może nosić wiersz księgi głównej, powiązany z polem podstawy, polem VAT i kontami. NIEZWERYFIKOWANY, dopóki nie sprawdzono go z SKV 4700"
+
+[labels.pl.model.accounting_se_vat_code.field.code]
+label = "Kod"
+description = "Krótki kod jak S25 (sprzedaż z 25 procentami); żadne dwa kody nie mają tej samej wartości"
+
+[labels.pl.model.accounting_se_vat_code.field.label]
+label = "Opis"
+description = "Co kod oznacza słowami"
+
+[labels.pl.model.accounting_se_vat_code.field.treatment]
+label = "Traktowanie"
+description = "Rodzaj transakcji: sale_domestic, purchase_domestic, reverse_charge_eu, reverse_charge_non_eu, sale_eu_goods, sale_eu_services, export, exempt, none"
+
+[labels.pl.model.accounting_se_vat_code.field.treatment.options]
+sale_domestic = "Sprzedaż w Szwecji"
+purchase_domestic = "Zakup w Szwecji"
+reverse_charge_eu = "Odwrotne obciążenie, UE"
+reverse_charge_non_eu = "Odwrotne obciążenie, poza UE"
+sale_eu_goods = "Sprzedaż towarów do UE"
+sale_eu_services = "Sprzedaż usług do UE"
+export = "Sprzedaż eksportowa"
+exempt = "Zwolnione"
+none = "Bez VAT"
+
+[labels.pl.model.accounting_se_vat_code.field.rate_bp]
+label = "Stawka VAT (punkty bazowe)"
+description = "Stawka VAT w punktach bazowych: 2500 oznacza 25,00 procent, 1200 12,00, 600 6,00, 0 brak"
+
+[labels.pl.model.accounting_se_vat_code.field.base_box_id]
+label = "Pole podstawy"
+description = "Pole, które przyjmuje kwotę netto wierszy z tym kodem; puste, gdy brak"
+
+[labels.pl.model.accounting_se_vat_code.field.base_side]
+label = "Strona podstawy"
+description = "Która strona wiersza liczy się jako podstawa: credit lub debit"
+
+[labels.pl.model.accounting_se_vat_code.field.base_side.options]
+credit = "Ma"
+debit = "Wn"
+
+[labels.pl.model.accounting_se_vat_code.field.vat_box_id]
+label = "Pole VAT"
+description = "Pole, które przyjmuje kwotę VAT zaksięgowaną na koncie VAT; puste, gdy brak"
+
+[labels.pl.model.accounting_se_vat_code.field.vat_account_id]
+label = "Konto VAT"
+description = "Konto, na którym księgowana jest kwota VAT. Wybiera je użytkownik z własnego planu kont; pakiet nie dostarcza żadnego"
+
+[labels.pl.model.accounting_se_vat_code.field.vat_side]
+label = "Strona konta VAT"
+description = "Która strona konta VAT liczy się jako VAT dla pola: credit lub debit"
+
+[labels.pl.model.accounting_se_vat_code.field.vat_side.options]
+credit = "Ma"
+debit = "Wn"
+
+[labels.pl.model.accounting_se_vat_code.field.tax_id]
+label = "Podatek"
+description = "Księgowa stawka podatku, której odpowiada kod, jeśli istnieje"
+
+[labels.pl.model.accounting_se_vat_code.field.active]
+label = "Aktywny"
+description = "Czy kod można jeszcze ustawiać na nowych wierszach"
+
+[labels.pl.model.accounting_se_vat_code.field.review]
+label = "Weryfikacja"
+description = "Stan weryfikacji kodu: unverified, verified. Zaczyna jako niezweryfikowany; weryfikuje tylko zatwierdzający, po sprawdzeniu z SKV 4700"
+
+[labels.pl.model.accounting_se_vat_code.field.review.options]
+unverified = "Niezweryfikowany"
+verified = "Zweryfikowany"
+
+[labels.pl.model.accounting_se_vat_code.field.verified]
+label = "Zweryfikowany"
+description = "Czy kod zweryfikował właściciel; do tego czasu fałsz"
+
+[labels.pl.model.accounting_se_vat_code.field.verified_by]
+label = "Zweryfikował"
+description = "Nazwa logowania osoby, która zweryfikowała"
+
+[labels.pl.model.accounting_se_vat_code.field.verified_on]
+label = "Zweryfikowano dnia"
+description = "Data weryfikacji (RRRR-MM-DD)"
+
+[labels.pl.model.accounting_se_vat_code.field.source]
+label = "Źródło"
+description = "Skąd pochodzi kod i co sprawdzono, na przykład wydanie SKV 4700; puste oznacza, że nie sprawdzono żadnego źródła"
+
+[labels.pl.model.accounting_se_vat_code.action.verify]
+label = "Zweryfikuj"
+description = "Oznacz kod jako sprawdzony z SKV 4700 (tylko zatwierdzający)"
+
+[labels.pl.model.accounting_se_vat_code.action.unverify]
+label = "Cofnij weryfikację"
+description = "Wycofaj weryfikację kodu (tylko zatwierdzający)"
+
+[labels.pl.model.accounting_se_vat_report]
+name = "Raport VAT"
+description = "Raport VAT za okres, przygotowany z księgi głównej i zatwierdzony przez osobę przed użyciem. NIEZWERYFIKOWANY: ten pakiet nie porównał go z SKV 4700"
+
+[labels.pl.model.accounting_se_vat_report.field.name]
+label = "Nazwa"
+description = "Nazwa okresu, na przykład 2026-Q3"
+
+[labels.pl.model.accounting_se_vat_report.field.period_kind]
+label = "Długość okresu"
+description = "Długość okresu: month, quarter, year"
+
+[labels.pl.model.accounting_se_vat_report.field.period_kind.options]
+month = "Miesiąc"
+quarter = "Kwartał"
+year = "Rok"
+
+[labels.pl.model.accounting_se_vat_report.field.start_on]
+label = "Pierwszy dzień"
+description = "Pierwszy dzień okresu (RRRR-MM-DD)"
+
+[labels.pl.model.accounting_se_vat_report.field.end_on]
+label = "Ostatni dzień"
+description = "Ostatni dzień okresu (RRRR-MM-DD)"
+
+[labels.pl.model.accounting_se_vat_report.field.due_on]
+label = "Termin"
+description = "Dzień, do którego deklaracja musi wpłynąć; podaje go przygotowujący, pakiet go nie oblicza"
+
+[labels.pl.model.accounting_se_vat_report.field.company_id]
+label = "Firma"
+description = "Firma, której dotyczy raport"
+
+[labels.pl.model.accounting_se_vat_report.field.output_vat]
+label = "VAT należny"
+description = "VAT należny za okres w öre, suma wierszy VAT należnego"
+
+[labels.pl.model.accounting_se_vat_report.field.input_vat]
+label = "VAT naliczony"
+description = "Podlegający odliczeniu VAT naliczony za okres w öre, suma wierszy VAT naliczonego"
+
+[labels.pl.model.accounting_se_vat_report.field.vat_to_pay]
+label = "VAT do zapłaty"
+description = "VAT należny minus VAT naliczony w öre; ujemny oznacza zwrot (pole 49)"
+
+[labels.pl.model.accounting_se_vat_report.field.boxes_confirmed]
+label = "Pola potwierdzone"
+description = "Zatwierdzający potwierdza, że każde pole raportu porównano z formularzem SKV 4700 i że użyte powiązania są zweryfikowane"
+
+[labels.pl.model.accounting_se_vat_report.field.notes]
+label = "Notatki"
+description = "Uwagi przygotowującego lub zatwierdzającego"
+
+[labels.pl.model.accounting_se_vat_report.field.state]
+label = "Stan"
+description = "Stan raportu: draft, proposed, approved, filed"
+
+[labels.pl.model.accounting_se_vat_report.field.state.options]
+draft = "Szkic"
+proposed = "Zaproponowany"
+approved = "Zatwierdzony"
+filed = "Złożony"
+
+[labels.pl.model.accounting_se_vat_report.action.propose]
+label = "Zaproponuj"
+description = "Zaproponuj raport do zatwierdzenia; agenci mogą to robić"
+
+[labels.pl.model.accounting_se_vat_report.action.withdraw]
+label = "Wycofaj"
+description = "Cofnij zaproponowany raport do szkicu"
+
+[labels.pl.model.accounting_se_vat_report.action.approve]
+label = "Zatwierdź"
+description = "Zatwierdź raport (tylko zatwierdzający; pola muszą być potwierdzone jako sprawdzone z SKV 4700)"
+
+[labels.pl.model.accounting_se_vat_report.action.approve.assert.boxes_checked]
+message = "Pola nie zostały potwierdzone jako sprawdzone z SKV 4700"
+
+[labels.pl.model.accounting_se_vat_report.action.record_filed]
+label = "Zapisz złożenie"
+description = "Zapisz, że deklarację złożono w Skatteverket poza tym systemem (tylko zatwierdzający)"
+
+[labels.pl.model.accounting_se_vat_report_line]
+name = "Wiersz raportu VAT"
+description = "Pole raportu VAT z jego kwotą"
+
+[labels.pl.model.accounting_se_vat_report_line.field.report_id]
+label = "Raport"
+description = "Raport, do którego należy wiersz"
+
+[labels.pl.model.accounting_se_vat_report_line.field.box_id]
+label = "Pole"
+description = "Pole VAT"
+
+[labels.pl.model.accounting_se_vat_report_line.field.kind]
+label = "Rodzaj"
+description = "Rodzaj pola, skopiowany przez przygotowującego: base, output, input, result"
+
+[labels.pl.model.accounting_se_vat_report_line.field.kind.options]
+base = "Podstawa"
+output = "VAT należny"
+input = "VAT naliczony"
+result = "Wynik"
+
+[labels.pl.model.accounting_se_vat_report_line.field.amount]
+label = "Kwota"
+description = "Kwota pola w öre"
+
+[labels.pl.model.accounting_se_vat_report_line.field.vouchers]
+label = "Dowody"
+description = "Odniesienia do dowodów składających się na kwotę, po jednym w wierszu, aby kontrolujący mógł ją prześledzić"

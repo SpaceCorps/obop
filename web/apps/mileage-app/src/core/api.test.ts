@@ -88,6 +88,7 @@ describe("the calls of the outbox", () => {
       lon: "13.0000000",
     };
     await api.createPoints([row], "points:c1:1-1");
+    expect(sent[0]!.path).toBe("/api/mileage_point/bulk_create");
     expect(sent[0]!.body).toEqual({
       rows: [row],
       mode: "all_or_nothing",
@@ -141,12 +142,12 @@ describe("the calls of the outbox", () => {
       lastSeq: 120,
     });
     await api.updateTrip("t-1", { discardReason: "Private" });
-    expect(sent.map((s) => [s.path.split("/").pop(), s.body])).toEqual([
+    expect(sent.map((s) => [s.path, s.body])).toEqual([
       [
-        "update",
+        "/api/mileage_trip/update",
         { id: "t-1", ended_at: "2026-10-15T09:10:00.000Z", expected_points: 120, last_seq: 120 },
       ],
-      ["update", { id: "t-1", discard_reason: "Private" }],
+      ["/api/mileage_trip/update", { id: "t-1", discard_reason: "Private" }],
     ]);
   });
 
@@ -171,9 +172,9 @@ describe("the calls of the outbox", () => {
       }[command];
       const trip = await call("t-1");
       expect(trip).toMatchObject({ id: "t-1", clientTripId: "c1", state });
-      expect(sent.map((s) => [s.path.split("/").pop(), s.body])).toEqual([
-        [command, { id: "t-1" }],
-        ["get", { id: "t-1" }],
+      expect(sent.map((s) => [s.path, s.body])).toEqual([
+        [`/api/mileage_trip/${command}`, { id: "t-1" }],
+        ["/api/mileage_trip/get", { id: "t-1" }],
       ]);
     },
   );

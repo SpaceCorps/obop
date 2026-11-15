@@ -1,6 +1,6 @@
 [labels.es.module]
 name = "Gastos"
-description = "Notas de gastos de empleados con un flujo de borrador, enviada, aprobada y pagada. Pagar es un permiso aparte y requiere aprobación humana; los justificantes se referencian por nota, no se guardan. Una nota tiene un número de una serie anual, y cada empleado ve y edita solo sus propias notas; los responsables y finanzas ven todas."
+description = "Notas de gastos de empleados con un flujo de borrador, enviada, aprobada y pagada. Pagar es un permiso aparte. Aprobar, rechazar y pagar requieren aprobación humana; los agentes solo pueden proponerlo. Los justificantes se referencian por nota, no se guardan. Una nota tiene un número de una serie anual, y cada empleado ve y edita solo sus propias notas; los responsables y finanzas ven todas."
 summary = "Notas de gastos de empleados con un flujo de borrador, enviada, aprobada y pagada."
 
 [labels.es.model.expenses_expense]

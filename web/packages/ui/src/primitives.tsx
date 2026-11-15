@@ -3,9 +3,11 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type ButtonHTMLAttributes,
+  type CSSProperties,
   type HTMLAttributes,
   type InputHTMLAttributes,
   type ReactElement,
@@ -399,18 +401,66 @@ export function Card({
 export function Table({
   caption,
   dense,
+  stack,
   className,
   children,
   ...rest
-}: HTMLAttributes<HTMLTableElement> & { caption?: string; dense?: boolean }) {
+}: HTMLAttributes<HTMLTableElement> & {
+  caption?: string;
+  dense?: boolean;
+  /** On a phone each row becomes a block, its cells under their `data-label` (components.css). */
+  stack?: boolean;
+}) {
+  const ref = useRef<HTMLTableElement>(null);
+  // Safari stops reading a table as a table once CSS changes its display, as a stacked table does on
+  // a phone. Explicit roles keep it one; the rows come from the caller, so they are marked whenever
+  // they change.
+  useEffect(() => {
+    const table = ref.current;
+    if (!stack || !table || typeof MutationObserver !== "function") return;
+    const mark = () => {
+      for (const el of table.querySelectorAll<HTMLElement>(
+        ":scope > :is(thead, tbody, tfoot), :scope > * > tr, :scope > * > tr > :is(td, th)",
+      )) {
+        if (!el.hasAttribute("role")) el.setAttribute("role", tableRole(el));
+      }
+    };
+    mark();
+    const watch = new MutationObserver(mark);
+    watch.observe(table, { childList: true, subtree: true });
+    return () => watch.disconnect();
+  }, [stack]);
   return (
     <div className="table-wrap">
-      <table className={cx("table", dense && "dense", className)} {...rest}>
+      <table
+        ref={ref}
+        role={stack ? "table" : undefined}
+        className={cx("table", dense && "dense", stack && "stack-sm", className)}
+        {...rest}
+      >
         {caption && <caption className="sr-only">{caption}</caption>}
         {children}
       </table>
     </div>
   );
+}
+
+/** The role a part of a table has by itself, written out for a table whose display CSS changes. */
+function tableRole(el: HTMLElement): string {
+  switch (el.localName) {
+    case "tr":
+      return "row";
+    case "td":
+      return "cell";
+    case "th": {
+      const scope = el.getAttribute("scope");
+      if (scope === "row") return "rowheader";
+      if (scope === "col") return "columnheader";
+      return el.parentElement?.parentElement?.localName === "thead" ? "columnheader" : "rowheader";
+    }
+    default:
+      return "rowgroup";
+  }
 }
 
 export function Skeleton({ rows = 6, cols = 5 }: { rows?: number; cols?: number }) {
@@ -483,8 +533,45 @@ export function Tabs<T extends string>({
   onChange: (v: T) => void;
   idPrefix: string;
 }) {
+  const strip = useRef<HTMLDivElement>(null);
+  // A strip that does not fit scrolls the selected tab to its middle. It moves by the distance between
+  // the rectangles, which works in both reading directions, and it scrolls only the strip:
+  // scrollIntoView would also scroll the page sideways.
+  useLayoutEffect(() => {
+    const s = strip.current;
+    const on = s?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!s || !on || s.scrollWidth <= s.clientWidth) return;
+    const sr = s.getBoundingClientRect();
+    const br = on.getBoundingClientRect();
+    s.scrollLeft += br.left - sr.left - (sr.width - br.width) / 2;
+  }, [value]);
+  // Each end that hides tabs is marked (data-more), and components.css fades it, so a tab off the
+  // screen is not a secret. scrollLeft is negative in right-to-left, hence Math.abs.
+  const ids = tabs.map((tab) => tab.id).join(" ");
+  useEffect(() => {
+    const s = strip.current;
+    if (!s) return;
+    const mark = () => {
+      const max = s.scrollWidth - s.clientWidth;
+      const from = Math.abs(s.scrollLeft);
+      const more = [from > 1 && "start", from < max - 1 && "end"].filter(Boolean).join(" ");
+      if (more) s.dataset.more = more;
+      else delete s.dataset.more;
+    };
+    mark();
+    s.addEventListener("scroll", mark, { passive: true });
+    // The strip and its tabs: a new language changes the tabs' widths and not the strip's. jsdom has
+    // no ResizeObserver.
+    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(mark) : undefined;
+    for (const el of [s, ...s.children]) ro?.observe(el);
+    return () => {
+      s.removeEventListener("scroll", mark);
+      ro?.disconnect();
+    };
+  }, [ids]);
   return (
     <div
+      ref={strip}
       className="tabs"
       role="tablist"
       aria-label={label}
@@ -738,23 +825,122 @@ export function Tooltip({
     setShow(false);
   };
   useEffect(() => () => window.clearTimeout(timer.current), []);
+  const body = useRef<HTMLSpanElement>(null);
+  // Where the tip has to go to stay readable: the other side when it would leave the visible area
+  // above or below, and a sideways shift when it would leave it at a side (a button in a corner).
+  const [fit, setFit] = useState<{ side: "top" | "bottom"; dx: number } | null>(null);
+  useLayoutEffect(() => {
+    if (!show) {
+      setFit(null);
+      return;
+    }
+    const el = body.current;
+    if (!el) return;
+    setFit(fitInside(el, side));
+  }, [show, side, label]);
+  const shown = fit?.side ?? side;
   return (
     <span
       className="tip"
       onMouseEnter={on}
       onMouseLeave={off}
-      onFocus={() => setShow(true)}
+      // Focus from the keyboard opens the tip, focus a script moves (a dialog's first control, the
+      // opener a closed dialog returns to) does not: on a phone nothing would close it again. :hover
+      // keeps the tip for a tap, which focuses and hovers at once (the reason a status step is greyed).
+      onFocus={(e) => {
+        if ((e.target as Element).matches(":focus-visible, :hover")) setShow(true);
+      }}
       onBlur={off}
       onKeyDown={(e) => e.key === "Escape" && off()}
     >
       {cloneElement(children, show ? { "aria-describedby": id } : {})}
       {show && (
-        <span role="tooltip" id={id} className={cx("tip-body", side, align !== "center" && align)}>
+        <span
+          ref={body}
+          role="tooltip"
+          id={id}
+          className={cx("tip-body", shown, align !== "center" && align)}
+          style={fit?.dx ? ({ "--tip-dx": `${fit.dx}px` } as CSSProperties) : undefined}
+        >
           {label}
         </span>
       )}
     </span>
   );
+}
+
+/** Space kept between a tip and the edge of what can be seen. */
+const TIP_MARGIN = 8;
+
+/**
+ * The part of the screen a tip can be seen in: the window, cut down by every ancestor that clips
+ * what overflows it (a scrolling panel, a dialog).
+ */
+function visibleArea(el: HTMLElement): {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+} {
+  const root = document.documentElement;
+  const area = { top: 0, left: 0, right: root.clientWidth, bottom: root.clientHeight };
+  for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+    const s = getComputedStyle(p);
+    if (s.overflowX === "visible" && s.overflowY === "visible") continue;
+    // What it shows is its client box: inside its borders and its scrollbars (`clientLeft` counts a
+    // scrollbar on the left, as in a right-to-left page). The border box would let a tip end under
+    // the scrollbar of a scrolling panel.
+    const r = p.getBoundingClientRect();
+    if (s.overflowX !== "visible") {
+      const left = r.left + p.clientLeft;
+      area.left = Math.max(area.left, left);
+      area.right = Math.min(area.right, left + p.clientWidth);
+    }
+    if (s.overflowY !== "visible") {
+      const top = r.top + p.clientTop;
+      area.top = Math.max(area.top, top);
+      area.bottom = Math.min(area.bottom, top + p.clientHeight);
+    }
+  }
+  return area;
+}
+
+/**
+ * Where a shown tip fits: the side it asked for unless that side has no room and the other one
+ * does, and how far to move it sideways so that it stays inside the visible area. Measured once
+ * when it opens, so it never moves under the pointer.
+ */
+function fitInside(
+  el: HTMLElement,
+  side: "top" | "bottom",
+): { side: "top" | "bottom"; dx: number } {
+  const area = visibleArea(el);
+  // Measure where the tip is without a shift it was given before (a new label while it is shown).
+  const was = parseFloat(el.style.getPropertyValue("--tip-dx")) || 0;
+  const r = el.getBoundingClientRect();
+  if (!r.width && !r.height) return { side, dx: 0 };
+  const tip = {
+    top: r.top,
+    bottom: r.bottom,
+    height: r.height,
+    width: r.width,
+    left: r.left - was,
+    right: r.right - was,
+  };
+  const target = (el.parentElement ?? el).getBoundingClientRect();
+  const gap = tip.top >= target.bottom ? tip.top - target.bottom : target.top - tip.bottom;
+  const roomBelow = area.bottom - target.bottom - gap - TIP_MARGIN;
+  const roomAbove = target.top - area.top - gap - TIP_MARGIN;
+  let to = side;
+  if (side === "bottom" && tip.height > roomBelow && roomAbove > roomBelow) to = "top";
+  if (side === "top" && tip.height > roomAbove && roomBelow > roomAbove) to = "bottom";
+  let dx = 0;
+  const min = area.left + TIP_MARGIN;
+  const max = area.right - TIP_MARGIN;
+  if (tip.width > max - min) dx = min - tip.left;
+  else if (tip.left < min) dx = min - tip.left;
+  else if (tip.right > max) dx = max - tip.right;
+  return { side: to, dx: Math.round(dx) };
 }
 
 /* ================= Dialog, Sheet, Toast ================= */
@@ -780,6 +966,20 @@ export type DialogProps = {
   describedBy?: string;
 };
 
+/**
+ * The dialogs that are open, in the order they are drawn on the page: the last one is on top. Several
+ * can be open at once: the shell asks a question above whatever is open (leaving with unsaved work),
+ * and the command palette and the app launcher open above anything. Escape belongs to the last one
+ * only; every dialog listens on the window, so without this one keypress would answer the question
+ * and also reach the dialog underneath. A dialog is added when it opens, in the same commit order
+ * that puts its element on the page, so the two orders agree: also for a dialog written inside
+ * another dialog's children and open with it, which React commits first, before its parent (it is
+ * then underneath its parent on the page and in the stack; dialogStack.test.tsx pins this).
+ */
+const openDialogs: object[] = [];
+/** The Escape presses a dialog has taken, so a second dialog's listener cannot take the same one. */
+const takenEscapes = new WeakSet<Event>();
+
 /** A modal: focus trap, Escape and backdrop close, focus returns to the opener. */
 export function Dialog({
   open = true,
@@ -799,13 +999,26 @@ export function Dialog({
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
   useFocusTrap(ref, open);
+  // Its place in the stack is the moment it opened. This effect does not depend on `onClose`, which
+  // is usually a fresh function on every render: the place must not move when the dialog re-renders.
+  const place = useRef<object>({});
+  useEffect(() => {
+    if (!open) return;
+    const mine = place.current;
+    openDialogs.push(mine);
+    return () => {
+      const at = openDialogs.indexOf(mine);
+      if (at >= 0) openDialogs.splice(at, 1);
+    };
+  }, [open]);
   useEffect(() => {
     if (!open) return;
     const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        onClose();
-      }
+      if (e.key !== "Escape" || takenEscapes.has(e)) return;
+      if (openDialogs[openDialogs.length - 1] !== place.current) return;
+      takenEscapes.add(e);
+      e.stopPropagation();
+      onClose();
     };
     addEventListener("keydown", key, true);
     return () => removeEventListener("keydown", key, true);
@@ -839,7 +1052,14 @@ export function Dialog({
             <h2 id={titleId} className={hideTitle ? "sr-only" : undefined}>
               {title}
             </h2>
-            <IconButton icon="close" label={t("Close")} size="sm" onClick={onClose} />
+            {/* No tip: the focus trap often lands here first, and the tip would cover the text. */}
+            <IconButton
+              icon="close"
+              label={t("Close")}
+              size="sm"
+              tooltip={false}
+              onClick={onClose}
+            />
           </header>
         )}
         <div className="dialog-body">{children}</div>

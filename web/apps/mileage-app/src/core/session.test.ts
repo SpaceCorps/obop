@@ -296,6 +296,57 @@ describe("the session", () => {
     );
   });
 
+  test("a client registers again when the app asks for groups it was not registered with", () => {
+    const now = 1_000_000_000_000;
+    const mileage = ["mileage.driver"];
+    // A config that an earlier build stored: no list. It was registered with what every earlier
+    // build asked for, and the app says what that was.
+    const installed = { baseUrl: "http://h", clientId: "c", usedAt: now - 1000 };
+    const declared = { current: mileage, legacy: mileage };
+    expect(needsRegistration(installed, "http://h", now, declared)).toBe(false);
+    // A build that asks for one more: the client the instance knows was registered without it.
+    expect(
+      needsRegistration(installed, "http://h", now, {
+        current: [...mileage, "fleet.driver"],
+        legacy: mileage,
+      }),
+    ).toBe(true);
+    // The list that the app stored when it registered: the order does not matter.
+    const stored = { ...installed, groups: ["fleet.driver", "mileage.driver"] };
+    expect(
+      needsRegistration(stored, "http://h", now, { current: ["mileage.driver", "fleet.driver"] }),
+    ).toBe(false);
+    expect(needsRegistration(stored, "http://h", now, { current: mileage, legacy: mileage })).toBe(
+      true,
+    );
+    expect(
+      needsRegistration(stored, "http://h", now, { current: ["mileage.driver", "other.user"] }),
+    ).toBe(true);
+    // Nothing is known about a config without a list and no legacy list: register again.
+    expect(needsRegistration(installed, "http://h", now, { current: mileage })).toBe(true);
+    // Something that is not a list of names counts as no list.
+    expect(
+      needsRegistration(
+        { ...installed, groups: "mileage.driver" as never },
+        "http://h",
+        now,
+        declared,
+      ),
+    ).toBe(false);
+    expect(
+      needsRegistration({ ...installed, groups: [1] as never }, "http://h", now, {
+        current: mileage,
+      }),
+    ).toBe(true);
+    // The other reasons to register again still count, with or without the groups.
+    expect(needsRegistration({ ...stored, usedAt: undefined }, "http://h", now, declared)).toBe(
+      true,
+    );
+    expect(needsRegistration(stored, "http://other", now, { current: stored.groups })).toBe(true);
+    // Without the argument the answer is the one it always was.
+    expect(needsRegistration(installed, "http://h", now)).toBe(false);
+  });
+
   test("only the 400 error page of the authorization page means that the instance does not know the client", () => {
     expect(clientUnknown(400)).toBe(true);
     // The sign-in page (200), a redirect to it, a server in trouble, or no answer at all: go on.

@@ -1,11 +1,11 @@
 [labels.es.module]
 name = "Punto de venta"
-description = "Cajas de tienda: sesiones con control de efectivo, pedidos con líneas y pagos por método. Un reembolso y el cierre de una sesión requieren aprobación humana de un responsable. Los totales se calculan desde las líneas, los tiques tienen un número anual, pagar se rechaza hasta cubrir el total y crea movimientos de stock en borrador. Nunca se guardan números de tarjeta. Requiere Productos."
-summary = "Cajas de tienda: sesiones con control de efectivo, pedidos con líneas y pagos. Reembolsos y cierre requieren aprobación."
+description = "Cajas de tienda: sesiones, pedidos con líneas y pagos. Un reembolso y el cierre de sesión requieren aprobación de un responsable. Los totales se calculan, los tiques tienen un número anual, pagar se rechaza hasta cubrir el total y crea movimientos de stock en borrador. Los ajustes de efectivo y de reembolsos solo se registran; nada los comprueba. No guarde números de tarjeta. Requiere Productos."
+summary = "Cajas de tienda: sesiones, pedidos con líneas y pagos. Reembolsos y cierre requieren aprobación."
 
 [labels.es.model.pos_config]
 name = "Configuración"
-description = "Un punto de venta (una caja o una tienda) y sus reglas"
+description = "Un punto de venta (una caja o una tienda) y sus ajustes"
 
 [labels.es.model.pos_config.field.name]
 label = "Nombre"
@@ -21,7 +21,7 @@ description = "Texto impreso en la parte superior de los tickets"
 
 [labels.es.model.pos_config.field.cash_control]
 label = "Control de efectivo"
-description = "Indica si las sesiones deben contar el efectivo del cajón al abrir y al cerrar"
+description = "Indica si el efectivo del cajón debe contarse al abrir y al cerrar; solo se registra, nada lo comprueba"
 
 [labels.es.model.pos_config.field.default_opening_cash]
 label = "Efectivo de apertura predeterminado"
@@ -29,7 +29,7 @@ description = "Efectivo que normalmente se deja en el cajón por la noche (unida
 
 [labels.es.model.pos_config.field.allow_refunds]
 label = "Permitir reembolsos"
-description = "Indica si los cajeros pueden proponer reembolsos en este punto de venta"
+description = "Indica si los reembolsos deben estar permitidos en este punto de venta; solo se registra, nada lo comprueba"
 
 [labels.es.model.pos_config.field.active]
 label = "Activo"

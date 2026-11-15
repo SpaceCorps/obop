@@ -1,11 +1,11 @@
 [labels.fr.module]
 name = "Point de vente"
-description = "Caisses de magasin : configuration, sessions avec contrôle de caisse, commandes avec lignes et paiements par mode. Un remboursement et la clôture d’une session exigent l’approbation d’un responsable. Les totaux sont calculés, les tickets numérotés sans rupture, et le paiement crée des mouvements de stock en brouillon. Ne stockez jamais de numéro de carte. Nécessite le package Produits."
-summary = "Caisses de magasin : sessions avec contrôle de caisse, commandes et paiements. Remboursements et clôture exigent une approbation."
+description = "Caisses de magasin : sessions, commandes avec lignes et paiements. Un remboursement et la clôture de session exigent l’approbation d’un responsable. Totaux calculés, tickets numérotés sans rupture ; le paiement crée des mouvements de stock en brouillon. Les réglages de caisse et de remboursement sont seulement enregistrés ; rien ne les vérifie. Ne stockez aucun numéro de carte. Nécessite Produits."
+summary = "Caisses de magasin : sessions, commandes et paiements. Remboursements et clôture exigent une approbation."
 
 [labels.fr.model.pos_config]
 name = "Configuration"
-description = "Un point de vente (une caisse ou un magasin) et ses règles"
+description = "Un point de vente (une caisse ou un magasin) et ses réglages"
 
 [labels.fr.model.pos_config.field.name]
 label = "Nom"
@@ -21,7 +21,7 @@ description = "Texte imprimé en haut des tickets"
 
 [labels.fr.model.pos_config.field.cash_control]
 label = "Contrôle de caisse"
-description = "Indique si les sessions doivent compter l’argent du tiroir-caisse à l’ouverture et à la clôture"
+description = "Indique si l’argent du tiroir-caisse doit être compté à l’ouverture et à la clôture ; seulement enregistré, rien ne le vérifie"
 
 [labels.fr.model.pos_config.field.default_opening_cash]
 label = "Fond de caisse par défaut"
@@ -29,7 +29,7 @@ description = "Espèces normalement laissées dans le tiroir pendant la nuit (pl
 
 [labels.fr.model.pos_config.field.allow_refunds]
 label = "Autoriser les remboursements"
-description = "Indique si les caissiers peuvent proposer des remboursements à ce point de vente"
+description = "Indique si les remboursements doivent être permis à ce point de vente ; seulement enregistré, rien ne le vérifie"
 
 [labels.fr.model.pos_config.field.active]
 label = "Actif"

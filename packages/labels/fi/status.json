@@ -1,5 +1,6 @@
 {
   "accounting": "machine-drafted",
+  "accounting_se": "machine-drafted",
   "appointments": "machine-drafted",
   "base": "machine-drafted",
   "connectors": "machine-drafted",

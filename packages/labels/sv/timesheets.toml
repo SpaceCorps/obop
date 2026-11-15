@@ -1,6 +1,6 @@
 [labels.sv.module]
 name = "Tidrapporter"
-description = "Tid som lagts på projektuppgifter, angiven i minuter, med en markering för fakturerbar tid och ett godkännandesteg. Kräver paketet Projekt. En medarbetare ser och ändrar bara sina egna poster; timesheets.manager ser alla."
+description = "Tid som lagts på projektuppgifter, angiven i minuter, med en markering för fakturerbar tid och ett godkännandesteg. Att godkänna eller avvisa en post kräver mänskligt godkännande; agenter får bara föreslå det. Kräver paketet Projekt. En medarbetare ser och ändrar bara sina egna poster; timesheets.manager ser alla."
 summary = "Tid som lagts på projektuppgifter, i minuter, med en markering för fakturerbar tid och ett godkännandesteg."
 
 [labels.sv.model.timesheets_entry]
@@ -50,7 +50,7 @@ description = "Skicka in registreringen för godkännande"
 
 [labels.sv.model.timesheets_entry.action.approve]
 label = "Godkänn"
-description = "Godkänn en inskickad registrering så att den kan faktureras (endast chef)"
+description = "Godkänn en inskickad registrering (endast chef)"
 
 [labels.sv.model.timesheets_entry.action.reject]
 label = "Avvisa"

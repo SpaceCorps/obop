@@ -1,33 +1,16 @@
 import { mkdtempSync } from "node:fs";
-import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { defineConfig } from "@playwright/test";
 import { requireBuilt } from "./support/env.ts";
-
-async function freePort(): Promise<number> {
-  return new Promise((ok, fail) => {
-    const s = createServer();
-    s.once("error", fail);
-    s.listen(0, "127.0.0.1", () => {
-      const { port } = s.address() as { port: number };
-      s.close(() => ok(port));
-    });
-  });
-}
+import { assignPorts } from "./support/ports.ts";
 
 // The first process to load this file (the runner) picks a fresh temp directory and free ports and
-// exports them; the workers it spawns inherit the variables, so everyone agrees on them.
+// exports them; the workers it spawns inherit the variables, so everyone agrees on them. The ports
+// are picked together (see support/ports.ts), so no two servers of the run can be given the same one.
 requireBuilt();
 process.env.OBOP_E2E_DIR ??= mkdtempSync(join(tmpdir(), "obop-e2e-"));
-process.env.OBOP_E2E_APP_PORT ??= String(await freePort());
-process.env.OBOP_E2E_PLATFORM_PORT ??= String(await freePort());
-process.env.OBOP_E2E_SHOP_PORT ??= String(await freePort());
-process.env.OBOP_E2E_MARKET_PORT ??= String(await freePort());
-process.env.OBOP_E2E_PASSKEY_PORT ??= String(await freePort());
-process.env.OBOP_E2E_LANGUAGE_PORT ??= String(await freePort());
-process.env.OBOP_E2E_SSO_PORT ??= String(await freePort());
-process.env.OBOP_E2E_IDP_PORT ??= String(await freePort());
+await assignPorts();
 const app = `http://127.0.0.1:${process.env.OBOP_E2E_APP_PORT}`;
 const platform = `http://127.0.0.1:${process.env.OBOP_E2E_PLATFORM_PORT}`;
 const shop = `http://127.0.0.1:${process.env.OBOP_E2E_SHOP_PORT}`;
@@ -96,6 +79,17 @@ export default defineConfig({
       // sign-in screens that come before the instance settings can be read.
       command: "node support/serve.ts language",
       url: `http://127.0.0.1:${process.env.OBOP_E2E_LANGUAGE_PORT}/`,
+      reuseExistingServer: false,
+      gracefulShutdown: { signal: "SIGTERM", timeout: 5_000 },
+      stdout: "pipe",
+      stderr: "pipe",
+      timeout: 60_000,
+    },
+    {
+      // An instance with a brand set (name, message and logo), for the OAuth pages: the logo,
+      // the tab icon and the content security policy that has to allow them.
+      command: "node support/serve.ts brand",
+      url: `http://127.0.0.1:${process.env.OBOP_E2E_BRAND_PORT}/`,
       reuseExistingServer: false,
       gracefulShutdown: { signal: "SIGTERM", timeout: 5_000 },
       stdout: "pipe",

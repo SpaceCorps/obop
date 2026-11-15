@@ -317,9 +317,12 @@ export function Overview(props: {
       <section aria-label={t("Your connections")}>
         <div className="cx-head">
           <h2>{props.isAdmin ? t("Connections") : t("Your connections")}</h2>
-          <Button variant="primary" icon="plus" onClick={props.onConnect}>
-            {t("Connect a service")}
-          </Button>
+          {/* With nothing connected the empty state below has the same button. */}
+          {mine.length > 0 && (
+            <Button variant="primary" icon="plus" onClick={props.onConnect}>
+              {t("Connect a service")}
+            </Button>
+          )}
         </div>
         {mine.length === 0 ? (
           <EmptyState
@@ -360,27 +363,47 @@ export function Overview(props: {
         {lastRuns.length === 0 ? (
           <p className="hint">{t("Nothing has run yet.")}</p>
         ) : (
-          <Table dense caption={t("Latest runs")}>
+          // One block per run on a phone, the connection on top (stack). The explicit roles keep
+          // it a table for Safari, which drops the semantics once display changes.
+          <Table dense stack role="table" caption={t("Latest runs")}>
             <thead>
-              <tr>
-                <th scope="col">{t("Connection")}</th>
-                <th scope="col">{t("Direction")}</th>
-                <th scope="col">{t("Started")}</th>
-                <th scope="col">{t("Status")}</th>
-                <th scope="col">{t("Records")}</th>
+              <tr role="row">
+                <th scope="col" role="columnheader">
+                  {t("Connection")}
+                </th>
+                <th scope="col" role="columnheader">
+                  {t("Direction")}
+                </th>
+                <th scope="col" role="columnheader">
+                  {t("Started")}
+                </th>
+                <th scope="col" role="columnheader">
+                  {t("Status")}
+                </th>
+                <th scope="col" role="columnheader">
+                  {t("Records")}
+                </th>
               </tr>
             </thead>
             <tbody>
               {lastRuns.map((r) => (
-                <tr key={r.id}>
-                  <th scope="row">{cname(r.connection)}</th>
-                  <td>{directionLabel(r.direction)}</td>
-                  <td>{when(r.started_at)}</td>
-                  <td>
+                <tr key={r.id} role="row">
+                  <th scope="row" role="rowheader">
+                    {cname(r.connection)}
+                  </th>
+                  <td role="cell" data-label={t("Direction")}>
+                    {directionLabel(r.direction)}
+                  </td>
+                  <td role="cell" data-label={t("Started")}>
+                    {when(r.started_at)}
+                  </td>
+                  <td role="cell" data-label={t("Status")}>
                     {r.status}
                     {r.error_summary && <span className="hint block">{r.error_summary}</span>}
                   </td>
-                  <td>{fmt.integer(Number(r.records))}</td>
+                  <td role="cell" data-label={t("Records")}>
+                    {fmt.integer(Number(r.records))}
+                  </td>
                 </tr>
               ))}
             </tbody>

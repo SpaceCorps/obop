@@ -1,16 +1,10 @@
 import { Banner, Button, Field, Screen, Text } from "@obop/ui-native";
-import Constants from "expo-constants";
 import { useEffect, useState } from "react";
 import { t, type MessageKey } from "../../i18n/index.ts";
 import { SignInError, signIn, type SignInFailure } from "../../native/auth.ts";
+import { defaultServer } from "../../native/default-server.ts";
 import type { Runtime } from "../../native/runtime.ts";
 import { useSignOutUntold } from "../hooks.ts";
-
-/** A build made for a test instance may carry the address to start from (`extra.defaultServer`). */
-const defaultServer = (): string => {
-  const value: unknown = Constants.expoConfig?.extra?.defaultServer;
-  return typeof value === "string" ? value : "";
-};
 
 /**
  * `onBack` is given while a trip is still being recorded: the driver may go back to the recording

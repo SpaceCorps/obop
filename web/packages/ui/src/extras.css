@@ -72,9 +72,20 @@
   gap: var(--space-1);
 }
 @media (max-width: 40rem) {
+  /* One row of controls: a long range or a translated page size must not push the arrows onto a
+     second line of the sticky bar. The range gives way and wraps inside its own box. */
+  /* A 4 px gap leaves "1–6 of 6" room for one line at 320 px; a longer range splits evenly
+     ("1–100" over "of 1,234") instead of leaving the total alone on a line. */
   .pager {
+    flex-wrap: nowrap;
     justify-content: space-between;
-    gap: var(--space-2);
+    gap: var(--space-1);
+  }
+  .pager-range {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    text-align: center;
+    text-wrap: balance;
   }
   .pager-size > span {
     position: absolute;
@@ -86,6 +97,12 @@
   }
   .pager-page {
     display: none;
+  }
+}
+/* A finger needs a taller page-size select than the compact one a mouse gets. */
+@media (max-width: 40rem), (pointer: coarse) {
+  .pager-size select {
+    min-block-size: var(--control-h-sm);
   }
 }
 
@@ -163,6 +180,14 @@
   background: var(--surface);
   color: var(--text);
 }
+/* 36 px to tap; the negative margin keeps the bar from growing by as much. */
+@media (max-width: 40rem), (pointer: coarse) {
+  .codeblock-copy {
+    min-block-size: 2.25rem;
+    padding-inline: 0.75rem;
+    margin-block: -0.25rem;
+  }
+}
 .codeblock pre {
   margin: 0;
   padding: var(--space-3) var(--space-4);
@@ -210,7 +235,7 @@
 }
 .tip-body.start,
 .tip-body.end {
-  transform: none;
+  transform: translateX(var(--tip-dx, 0px));
 }
 .tip-body.start {
   inset-inline-start: 0;
@@ -221,5 +246,5 @@
 }
 :dir(rtl) .tip-body.start,
 :dir(rtl) .tip-body.end {
-  transform: none;
+  transform: translateX(var(--tip-dx, 0px));
 }

@@ -1,0 +1,21 @@
+[package]
+name = "obop-brand"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Instance branding rules: the character policy, the slug, the strict SVG reader and writer, the generated tile and the colour maths (a leaf crate: no I/O)"
+
+[dependencies]
+# The Unicode tables of the character policy (general category, Script_Extensions,
+# Default_Ignorable_Code_Point, NFC, NFKC, NFKD) come from ICU4X; the lock holds 2.3.0 already, as
+# a dependency of icu_collator. Unicode-3.0.
+icu_normalizer = "2.3"
+icu_properties = "2.3"
+# `v`, the version of a logo: the first 16 hex digits of the SHA-256 of the bytes served.
+sha2 = "0.11"
+
+[lints]
+workspace = true

@@ -1,6 +1,6 @@
 import { type TokenSet } from "@obop/client";
+import type { StorageNames } from "../core/host-config.ts";
 import type { ServerConfig, SessionStorage } from "../core/session.ts";
-import { SERVER_KEY_NAME, TOKENS_KEY_NAME } from "./config.ts";
 import { keychain } from "./keychain.ts";
 
 async function read<T>(key: string, valid: (v: unknown) => v is T): Promise<T | null> {
@@ -34,11 +34,16 @@ const isTokens = (v: unknown): v is TokenSet =>
 
 /**
  * The session in the Android Keystore or the iOS Keychain (expo-secure-store, through
- * `keychain.ts`: after first unlock, this device only). The tokens are never logged.
+ * `keychain.ts`: after first unlock, this device only), under the names the app gives. The tokens
+ * are never logged.
  */
-export const secureStorage: SessionStorage = {
-  loadConfig: () => read(SERVER_KEY_NAME, isConfig),
-  saveConfig: (config) => write(SERVER_KEY_NAME, config),
-  loadTokens: () => read(TOKENS_KEY_NAME, isTokens),
-  saveTokens: (tokens) => write(TOKENS_KEY_NAME, tokens),
-};
+export function createSecureStorage(
+  names: Pick<StorageNames, "server" | "tokens">,
+): SessionStorage {
+  return {
+    loadConfig: () => read(names.server, isConfig),
+    saveConfig: (config) => write(names.server, config),
+    loadTokens: () => read(names.tokens, isTokens),
+    saveTokens: (tokens) => write(names.tokens, tokens),
+  };
+}

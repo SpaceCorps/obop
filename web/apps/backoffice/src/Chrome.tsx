@@ -2,16 +2,18 @@ import { useEffect, useMemo, useState } from "react";
 import {
   AppIcon as TileIcon,
   Avatar,
+  Button,
   Dialog,
   Icon,
   IconButton,
+  InstanceLogo,
   Kbd,
   LANGS,
   LANG_INFO,
-  Logo,
   Menu,
   compareText,
   inSentence,
+  pageBrand,
   t,
   tx,
   useI18n,
@@ -22,9 +24,18 @@ import { appColor } from "./theme.ts";
 import { modulesHref } from "./modules/route.ts";
 import { href } from "./route.ts";
 import { boardHref } from "./dashboards/route.ts";
+import { productDocsVisible } from "./productDocs.ts";
 import { appTitle, modelTitle } from "./labels.ts";
 
 export type App = { id: string; name: string; color: string; module: ModuleMeta };
+
+/** A phone or a touch screen: no Escape key, so a dialog without a close button needs a Cancel. */
+const NO_ESCAPE_QUERY = "(max-width: 40rem), (hover: none) and (pointer: coarse)";
+
+/** Whether a media query matches as a dialog opens; false where it cannot be asked (tests). */
+function matchesNow(query: string): boolean {
+  return typeof matchMedia === "function" && matchMedia(query).matches;
+}
 
 /** Apply the instance's launcher layout: order, hidden apps, renamed apps and chosen colours. */
 export function buildApps(modules: ModuleMeta[], settings: Settings, isAdmin: boolean): App[] {
@@ -100,6 +111,7 @@ export function TopBar(props: {
 }) {
   const { current } = props;
   const i18n = useI18n();
+  const docs = productDocsVisible();
   const languages: MenuItem[] = [
     { heading: t("Language") },
     ...LANGS.map((l) => ({
@@ -126,10 +138,10 @@ export function TopBar(props: {
           onClick={props.onMenu}
         />
       )}
-      <a className="brand" href="#/">
+      <a className="brand" href="#/" title={current ? undefined : pageBrand()?.name}>
         {current ? (
           <>
-            <Logo variant="mark" size={22} title="" />
+            <InstanceLogo variant="mark" size={22} title="" />
             <span className="brand-sep" aria-hidden="true">
               /
             </span>
@@ -137,18 +149,30 @@ export function TopBar(props: {
           </>
         ) : (
           <>
-            <Logo variant="full" size={24} title="" />
-            <span className="sr-only">obop</span>
+            <InstanceLogo variant="full" size={24} title="" />
+            {/* With a brand the logo shows its name as text; without one the link is named like this. */}
+            {pageBrand() ? null : <span className="sr-only">obop</span>}
           </>
         )}
       </a>
-      <button className="searchpill" onClick={props.onPalette}>
+      <button
+        className="searchpill"
+        // The words are hidden on a phone; the name stays for a screen reader.
+        aria-label={t("Search apps, records and actions")}
+        onClick={props.onPalette}
+      >
         <Icon name="search" size={16} />
-        <span>{t("Search apps, records and actions")}</span>
+        <span aria-hidden="true">{t("Search apps, records and actions")}</span>
         <Kbd>⌘K</Kbd>
       </button>
       <div className="systray">
-        <IconButton icon="settings" label={t("Theme")} onClick={props.onTheme} />
+        {/* Hidden on a phone, where the account menu's Theme leaves the bar's room to the app name. */}
+        <IconButton
+          className="theme-btn"
+          icon="settings"
+          label={t("Theme")}
+          onClick={props.onTheme}
+        />
         <Menu
           ariaLabel={t("Account")}
           align="end"
@@ -158,7 +182,9 @@ export function TopBar(props: {
             { heading: props.email || t("Signed in") },
             { label: t("Theme"), icon: "sun", onSelect: props.onTheme },
             { label: t("Security"), icon: "shield-check", onSelect: props.onSecurity },
-            { label: t("Brand book"), icon: "sparkle", onSelect: props.onBrand },
+            ...(docs
+              ? [{ label: t("Brand book"), icon: "sparkle" as const, onSelect: props.onBrand }]
+              : []),
             "separator",
             ...languages,
             "separator",
@@ -180,6 +206,10 @@ export function Launcher({
   onClose: () => void;
 }) {
   const [q, setQ] = useState("");
+  // On a touch screen focus starts on the grid, so the keyboard does not cover the apps the launcher
+  // was opened to tap; with a mouse and keyboard the search takes the first key at once.
+  const [touch] = useState(() => matchesNow("(pointer: coarse)"));
+  const [cancel] = useState(() => matchesNow(NO_ESCAPE_QUERY));
   const shown = apps.filter((a) => a.name.toLowerCase().includes(q.toLowerCase()));
   const recents = recent
     .map((id) => apps.find((a) => a.id === id))
@@ -191,14 +221,23 @@ export function Launcher({
       <div className="searchfield">
         <Icon name="search" size={16} />
         <input
-          data-autofocus
+          data-autofocus={touch ? undefined : true}
           placeholder={t("Search apps")}
           value={q}
           onChange={(e) => setQ(e.target.value)}
           aria-label={t("Search apps")}
         />
+        {cancel && (
+          <Button variant="ghost" className="search-cancel" onClick={onClose}>
+            {t("Cancel")}
+          </Button>
+        )}
       </div>
-      <div className="launcher-body">
+      <div
+        className="launcher-body"
+        data-autofocus={touch || undefined}
+        tabIndex={touch ? -1 : undefined}
+      >
         {!q && recents.length > 0 && (
           <section aria-label={t("Recent apps")}>
             <h3 className="overline">{t("Recent")}</h3>
@@ -234,7 +273,11 @@ type Hit = { key: string; title: string; hint: string; to: string; app?: App };
 export function Palette({ apps, onClose }: { apps: App[]; onClose: () => void }) {
   const [q, setQ] = useState("");
   const [sel, setSel] = useState(0);
+  // A Cancel only where it is needed: hidden with CSS instead, it would stay the trap's last stop
+  // and a desktop Tab would leave the palette.
+  const [cancel] = useState(() => matchesNow(NO_ESCAPE_QUERY));
   const { lang } = useI18n();
+  const guideShown = productDocsVisible();
   const hits = useMemo<Hit[]>(() => {
     const all: Hit[] = [];
     for (const a of apps) {
@@ -264,6 +307,14 @@ export function Palette({ apps, onClose }: { apps: App[]; onClose: () => void })
           });
       }
     }
+    const docs = apps.find((a) => a.id === "documents");
+    if (docs)
+      all.push({
+        key: "drive",
+        title: `${docs.name} › ${t("Google Drive")}`,
+        hint: t("List"),
+        to: href({ app: "documents", model: "drive" }),
+      });
     if (apps.some((a) => a.id === "customize")) {
       all.push(
         {
@@ -298,17 +349,18 @@ export function Palette({ apps, onClose }: { apps: App[]; onClose: () => void })
       hint: t("Customize"),
       to: href({ app: "customize", model: "theme", tab: "theme" }),
     });
-    all.push({
-      key: "guide",
-      title: t("How to write a custom module"),
-      hint: t("Guide"),
-      to: href({ app: "customize", model: "guide", tab: "guide" }),
-    });
+    if (guideShown)
+      all.push({
+        key: "guide",
+        title: t("How to write a custom module"),
+        hint: t("Guide"),
+        to: href({ app: "customize", model: "guide", tab: "guide" }),
+      });
     const needle = q.toLowerCase().trim();
     // Every word has to match somewhere in the title, so "write module" finds "How to write a custom module".
     const words = needle.split(/\s+/).filter(Boolean);
     return all.filter((h) => words.every((w) => h.title.toLowerCase().includes(w))).slice(0, 12);
-  }, [apps, q, lang]);
+  }, [apps, q, lang, guideShown]);
   useEffect(() => setSel(0), [q]);
   const go = (h: Hit | undefined) => {
     if (!h) return;
@@ -337,7 +389,14 @@ export function Palette({ apps, onClose }: { apps: App[]; onClose: () => void })
             if (e.key === "Enter") go(hits[sel]);
           }}
         />
-        <Kbd>Esc</Kbd>
+        {/* "Esc" means nothing on a phone. */}
+        {cancel ? (
+          <Button variant="ghost" className="search-cancel" onClick={onClose}>
+            {t("Cancel")}
+          </Button>
+        ) : (
+          <Kbd>Esc</Kbd>
+        )}
       </div>
       <ul role="listbox" aria-label={t("Results")}>
         {hits.map((h, i) => (

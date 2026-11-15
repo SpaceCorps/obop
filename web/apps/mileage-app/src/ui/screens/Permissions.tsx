@@ -1,5 +1,6 @@
 import { Banner, Button, Screen, Text } from "@obop/ui-native";
 import { useEffect, useState } from "react";
+import { DISCLOSURE_META } from "../../core/host-state.ts";
 import type { Purpose } from "../../core/types.ts";
 import { t } from "../../i18n/index.ts";
 import { CannotRecord, startTrip } from "../../native/actions.ts";
@@ -14,9 +15,6 @@ import type { Runtime } from "../../native/runtime.ts";
 import { tOs } from "../os-text.ts";
 import { firstStep, stepAfterAccess, type Step } from "../permission-step.ts";
 import type { Nav } from "../router.ts";
-
-/** The key under which the outbox remembers that the driver has read the disclosure. */
-export const DISCLOSURE_META = "location_disclosure_accepted";
 
 /**
  * Before the first Start: the disclosure in the app, in plain words, before the system dialog
@@ -57,7 +55,7 @@ export function Permissions({ rt, nav, purpose }: { rt: Runtime; nav: Nav; purpo
   useEffect(() => {
     let alive = true;
     (async () => {
-      const accepted = (await rt.store.getMeta(DISCLOSURE_META)) !== null;
+      const accepted = (await rt.hostState.getMeta(DISCLOSURE_META)) !== null;
       const access = await locationAccess();
       if (!alive) return;
       const first = firstStep(accepted, access);
@@ -72,7 +70,7 @@ export function Permissions({ rt, nav, purpose }: { rt: Runtime; nav: Nav; purpo
   }, [rt]);
 
   const accept = async () => {
-    await rt.store.setMeta(DISCLOSURE_META, new Date().toISOString());
+    await rt.hostState.setMeta(DISCLOSURE_META, new Date().toISOString());
     afterAccess(await requestLocation());
     setNotificationsOff(!(await requestNotifications()));
   };

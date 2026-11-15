@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { pageBrand, recoveryFileName } from "./brand.ts";
 import { Icon } from "./icons.tsx";
 import { QrCode } from "./qr.tsx";
 import { Badge, Button, Checkbox, Input, Notice } from "./primitives.tsx";
@@ -86,6 +87,15 @@ export function twoFactorMessage(f: { status: number; code: string }): string {
     case "mfa_unavailable":
       return t(
         "Two-factor authentication is not set up on this server. Ask the operator to set the server key.",
+      );
+    case "brand_unavailable":
+      // The branding record could not be read (docs/spec/branding.md, section 4), so the
+      // authenticator entry cannot be written into the person's device (and the passkey cannot be
+      // registered: `passkeyMessage` of the back office returns this same string). Waiting does not
+      // repair a stored name, so the wording says that trying again will not help; the repair is an
+      // administrator's, at the terminal (`obop admin brand status`, docs/DEPLOY.md).
+      return t(
+        "The branding of this server could not be read, so nothing was set up. An administrator has to repair it; trying again will not help.",
       );
     case "network":
       return t("Could not reach the server.");
@@ -399,7 +409,8 @@ export function TwoFactorPanel({
               const url = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
               const a = document.createElement("a");
               a.href = url;
-              a.download = "obop-recovery-codes.txt";
+              // With a brand the file is named by its slug; the control-plane app has none and keeps obop.
+              a.download = recoveryFileName(pageBrand());
               a.click();
               setTimeout(() => URL.revokeObjectURL(url), 1000);
             }}

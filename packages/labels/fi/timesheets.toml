@@ -1,6 +1,6 @@
 [labels.fi.module]
 name = "Tuntiseuranta"
-description = "Projektitehtäviin käytetty aika minuutteina, laskutettavuusmerkintä ja hyväksyntävaihe. Vaatii Projektit-paketin. Tekijä näkee ja muokkaa vain omia kirjauksiaan; timesheets.manager näkee kaikki."
+description = "Projektitehtäviin käytetty aika minuutteina, laskutettavuusmerkintä ja hyväksyntävaihe. Kirjauksen hyväksyminen ja hylkääminen vaativat ihmisen hyväksynnän; agentit voivat vain ehdottaa niitä. Vaatii Projektit-paketin. Tekijä näkee ja muokkaa vain omia kirjauksiaan; timesheets.manager näkee kaikki."
 summary = "Projektitehtäviin käytetty aika minuutteina, laskutettavuusmerkintä ja hyväksyntävaihe."
 
 [labels.fi.model.timesheets_entry]
@@ -50,7 +50,7 @@ description = "Lähetä tuntikirjaus hyväksyttäväksi"
 
 [labels.fi.model.timesheets_entry.action.approve]
 label = "Hyväksy"
-description = "Hyväksy lähetetty tuntikirjaus laskutettavaksi (vain esihenkilö)"
+description = "Hyväksy lähetetty tuntikirjaus (vain esihenkilö)"
 
 [labels.fi.model.timesheets_entry.action.reject]
 label = "Hylkää"

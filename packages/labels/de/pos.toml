@@ -1,11 +1,11 @@
 [labels.de.module]
 name = "Kassensystem"
-description = "Kassen im Laden: Kassenkonfiguration, kassengeprüfte Sitzungen, Aufträge mit Positionen und Zahlungen je Zahlungsart. Erstattungen und Sitzungsabschluss brauchen die Genehmigung einer Führungskraft. Summen werden berechnet, Belege lückenlos nummeriert, und das Bezahlen erzeugt Lagerbewegungen als Entwurf. Keine Kartennummern speichern. Benötigt das Paket Produkte."
-summary = "Ladenkassen: kassengeprüfte Sitzungen, Aufträge mit Positionen und Zahlungen. Erstattungen und Abschluss brauchen Genehmigung."
+description = "Ladenkassen: Konfiguration, Sitzungen, Aufträge mit Positionen und Zahlungen. Erstattungen und Abschluss brauchen die Genehmigung einer Führungskraft. Summen berechnet, Belege lückenlos nummeriert, Bezahlen erzeugt Lagerbewegungen im Entwurf. „Kassenkontrolle“ und „Erstattungen erlauben“ sind nur gespeicherte Einstellungen; nichts prüft sie. Keine Kartennummern speichern. Benötigt Produkte."
+summary = "Ladenkassen: Sitzungen, Aufträge mit Positionen und Zahlungen. Erstattungen und Abschluss brauchen Genehmigung."
 
 [labels.de.model.pos_config]
 name = "Kasse"
-description = "Eine Verkaufsstelle (eine Kasse oder ein Laden) und ihre Regeln"
+description = "Eine Verkaufsstelle (eine Kasse oder ein Laden) und ihre Einstellungen"
 
 [labels.de.model.pos_config.field.name]
 label = "Name"
@@ -21,7 +21,7 @@ description = "Text am Anfang der Belege"
 
 [labels.de.model.pos_config.field.cash_control]
 label = "Kassenkontrolle"
-description = "Ob Sitzungen das Bargeld in der Kassenschublade beim Öffnen und Schließen zählen müssen"
+description = "Ob das Bargeld in der Kassenschublade beim Öffnen und Schließen gezählt werden soll; wird nur gespeichert, nichts prüft es"
 
 [labels.de.model.pos_config.field.default_opening_cash]
 label = "Standard-Anfangsbestand"
@@ -29,7 +29,7 @@ description = "Bargeld, das üblicherweise über Nacht in der Schublade bleibt (
 
 [labels.de.model.pos_config.field.allow_refunds]
 label = "Erstattungen erlauben"
-description = "Ob Kassierer an dieser Verkaufsstelle Erstattungen vorschlagen dürfen"
+description = "Ob an dieser Verkaufsstelle Erstattungen erlaubt sein sollen; wird nur gespeichert, nichts prüft es"
 
 [labels.de.model.pos_config.field.active]
 label = "Aktiv"

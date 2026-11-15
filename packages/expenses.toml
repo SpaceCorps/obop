@@ -1,10 +1,11 @@
 [module]
 id = "expenses"
-version = "0.3.0"
+version = "0.3.1"
 name = "Expenses"
-description = "Employee expense claims with a draft, submitted, approved and paid flow. Paying is a separate permission and needs a human approval; receipts are referenced by note, not stored. A claim has a number from a yearly series, and an employee sees and edits only their own claims; managers and finance see all."
+description = "Employee expense claims with a draft, submitted, approved and paid flow. Paying is a separate permission. Approving, refusing and paying need a human approval; agents may only propose them. Receipts are referenced by note, not stored. A claim has a number from a yearly series, and an employee sees and edits only their own claims; managers and finance see all."
 author = "SpaceCorps"
 summary = "Employee expense claims with a draft, submitted, approved and paid flow."
+changelog = "Approving and refusing a claim now need a human approval, like paying: an AI agent can only propose them. People are not affected."
 license = "Apache-2.0"
 homepage = "https://github.com/SpaceCorps/obop"
 repository = "https://github.com/SpaceCorps/obop"
@@ -115,6 +116,7 @@ write_group = "expenses.user"
   from = "submitted"
   to = "approved"
   group = "expenses.manager"
+  approval = true
 
   [[model.action]]
   name = "pay"
@@ -132,3 +134,4 @@ write_group = "expenses.user"
   from = "submitted"
   to = "refused"
   group = "expenses.manager"
+  approval = true

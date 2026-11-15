@@ -4,6 +4,7 @@ import type { FieldMeta } from "./api.ts";
 import type { Favorite } from "./favorites.ts";
 import { FilterPanel } from "./FilterPanel.tsx";
 import { fieldTitleByName, fieldTitle } from "./labels.ts";
+import { PHONE_QUERY, useMedia, useScrollLock } from "./media.ts";
 import { describeCond, type Cond, type Lookup, type ViewState } from "./query.ts";
 import { Button, Icon, Segmented, useDismiss } from "./ui.tsx";
 
@@ -42,6 +43,9 @@ export function ControlPanel(p: Props) {
   const listId = useId();
   const panelId = useId();
   useDismiss(root, open, () => setOpen(false));
+  // On a phone the filter panel is a bottom sheet: the list behind it stays still.
+  const phone = useMedia(PHONE_QUERY);
+  useScrollLock(open && phone);
 
   const searchable = fields.filter((f) => ["text", "longtext", "select", "ref"].includes(f.kind));
   const options = useMemo(() => {
@@ -113,8 +117,9 @@ export function ControlPanel(p: Props) {
         </div>
         <div className="cp-actions">
           {p.onImport && (
-            <Button icon="upload" onClick={p.onImport}>
-              {t("Import")}
+            // A phone shows the icon only (controlpanel.css), so the name is also in aria-label.
+            <Button icon="upload" aria-label={t("Import")} onClick={p.onImport}>
+              <span className="cp-label">{t("Import")}</span>
             </Button>
           )}
           {p.canCreate && (
@@ -226,19 +231,30 @@ export function ControlPanel(p: Props) {
             </ul>
           )}
           {open && (
-            <div id={panelId} className="fp-wrap panel">
-              <FilterPanel
-                model={p.model}
-                fields={fields}
-                state={state}
-                view={p.view}
-                setState={setState}
-                applyFavorite={(f) => {
-                  p.applyFavorite(f);
-                  setOpen(false);
-                }}
-              />
-            </div>
+            <>
+              {/* Inside the dismiss root, so a tap on the backdrop closes the sheet and never
+                  reaches the list underneath. Shown on a phone only (controlpanel.css). */}
+              <div className="fp-scrim" aria-hidden="true" onClick={() => setOpen(false)} />
+              <div id={panelId} className="fp-wrap panel">
+                <div className="fp-head">
+                  <strong>{t("Filters")}</strong>
+                  <Button size="sm" onClick={() => setOpen(false)}>
+                    {t("Done")}
+                  </Button>
+                </div>
+                <FilterPanel
+                  model={p.model}
+                  fields={fields}
+                  state={state}
+                  view={p.view}
+                  setState={setState}
+                  applyFavorite={(f) => {
+                    p.applyFavorite(f);
+                    setOpen(false);
+                  }}
+                />
+              </div>
+            </>
           )}
         </div>
         {p.extra}

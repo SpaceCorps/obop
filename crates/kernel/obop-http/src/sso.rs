@@ -14,18 +14,28 @@
 //! - `GET /oidc/callback`: the provider's redirect. The flow is spent first (one try per flow),
 //!   the cookie must be the one of the flow, the code is exchanged at the token endpoint, the id
 //!   token is verified and dropped (nothing the provider sends is stored), and the browser is
-//!   sent to the fixed address `/#oidc=<one-time code>`. Every failure is a redirect to
-//!   `/#oidc_error=<cancelled|unavailable|busy|failed>` and nothing else: the reason is in the
-//!   security log, not in the address bar.
+//!   sent to the fixed address `/#oidc=<one-time code>`. For the back office, every failure is a
+//!   redirect to `/#oidc_error=<cancelled|unavailable|busy|failed>` and nothing else: the reason
+//!   is in the security log, not in the address bar. (An app's round trip ends at its return
+//!   address instead, see below.)
 //! - `POST /oidc/exchange`: `{"code"}` for the answer of the password step (a bearer token, or the
 //!   demand for an obop second factor). The code is single use, lives 60 seconds and is worth
 //!   something only to the browser that holds the `obop_sso_done` cookie the callback set.
 //!
+//! A round trip that an app's sign-in page began (`GET /oauth/authorize/microsoft`, in `oauth.rs`)
+//! uses the same start-up, the same registered redirect address and this callback. Its stored row
+//! says `purpose: "oauth"` and names the OAuth flow, and the callback then ends differently: it
+//! hands the verified identity to the OAuth flow by id (`OAuth::microsoft_done`: the person, or one
+//! of a fixed set of words, never a code, a token or a claim) and sends the browser to
+//! `/oauth/authorize/return?flow=<id>`. The back office's fragment, its one-time code and its
+//! cookies are not used for it.
+//!
 //! There is no cookie session: the bearer token goes to the page and stays in `sessionStorage`
-//! as after a password. There is no `next` or return address; the target of the redirect is the
-//! root of this origin and cannot be chosen by a request.
+//! as after a password. There is no `next` or return address; for the back office the target of
+//! the redirect is the root of this origin and cannot be chosen by a request, and for an app it is
+//! the return address of the flow that the stored row names, never a parameter of the request.
 
-use super::oauth::{client_ip, cookie_value, harden, pair, parse_pairs, see_other};
+use super::oauth::{client_ip, cookie_value, harden, pair, parse_pairs, see_other, with_cookies};
 use super::{HttpState, api_error, blocking, mfa};
 use axum::{
     body::Bytes,
@@ -33,10 +43,11 @@ use axum::{
     http::{HeaderValue, StatusCode, header, request::Parts},
     response::{IntoResponse, Response},
 };
-use obop_commands::{AnonLine, MfaError, SsoApi, SsoEndpoints, SsoError, SsoLeg};
+use obop_commands::{AnonLine, MfaError, SsoApi, SsoEndpoints, SsoError, SsoIdentity, SsoLeg};
 use obop_connectors::net::Request;
 use obop_connectors::oauth::pkce_pair;
 use obop_keys::{hex, random};
+use obop_oauth::MicrosoftOutcome;
 use obop_oauth::util::{ct_eq, pct};
 use serde_json::{Value as J, json};
 use sha2::{Digest, Sha256};
@@ -196,7 +207,7 @@ fn cache_key(leg: &SsoLeg) -> String {
 
 /// The host of an authority, as the egress client's allow-list wants it: no scheme, no port, no
 /// brackets of an IPv6 literal.
-fn host_of(authority: &str) -> String {
+pub(crate) fn host_of(authority: &str) -> String {
     let rest = authority.split("://").nth(1).unwrap_or("");
     let hostport = rest.split('/').next().unwrap_or("");
     let host = match hostport.strip_prefix('[') {
@@ -228,7 +239,7 @@ const KNOWN_ERRORS: [&str; 12] = [
 /// What the log keeps of an `error` that came back to the callback or from the token endpoint: one
 /// word out of [`KNOWN_ERRORS`], or `other`. The code in the query of the callback is whatever
 /// the caller wrote, so no text of it reaches a line or a key; the description is never read.
-fn error_class(code: &str) -> &'static str {
+pub(crate) fn error_class(code: &str) -> &'static str {
     KNOWN_ERRORS
         .iter()
         .find(|k| **k == code)
@@ -251,11 +262,11 @@ fn source_bucket(addr: &str) -> String {
     }
 }
 
-fn source_of(s: &HttpState, parts: &Parts) -> String {
+pub(crate) fn source_of(s: &HttpState, parts: &Parts) -> String {
     source_bucket(&client_ip(s, parts))
 }
 
-fn describe(e: &SsoError) -> String {
+pub(crate) fn describe(e: &SsoError) -> String {
     match e {
         SsoError::Refused(m) | SsoError::Invalid(m) | SsoError::Unavailable(m) => m.clone(),
         SsoError::UnknownKey => "the signing key is not known".into(),
@@ -321,7 +332,7 @@ impl Cache {
         }
     }
 
-    fn discovery(
+    pub(crate) fn discovery(
         &self,
         api: &dyn SsoApi,
         rt: &obop_connectors::Runtime,
@@ -370,7 +381,7 @@ impl Cache {
         }
     }
 
-    fn jwks(
+    pub(crate) fn jwks(
         &self,
         rt: &obop_connectors::Runtime,
         backend: &dyn obop_storage::Backend,
@@ -423,7 +434,7 @@ impl Cache {
         }
     }
 
-    fn forget_jwks(&self) {
+    pub(crate) fn forget_jwks(&self) {
         if let Ok(mut g) = self.jwks.lock() {
             *g = None;
         }
@@ -456,7 +467,7 @@ fn fetch(
     Ok(r.body)
 }
 
-fn limited(s: &HttpState, what: &str, ip: &str, max: u64) -> bool {
+pub(crate) fn limited(s: &HttpState, what: &str, ip: &str, max: u64) -> bool {
     obop_storage::limit::hit(
         &*s.shared.backend,
         &format!("rl:sso:{what}:{ip}"),
@@ -466,45 +477,36 @@ fn limited(s: &HttpState, what: &str, ip: &str, max: u64) -> bool {
     .is_err()
 }
 
-fn flow_key(flow: &str) -> String {
+pub(crate) fn flow_key(flow: &str) -> String {
     format!("{FLOW_PREFIX}{}", hex(&Sha256::digest(flow.as_bytes())))
 }
 
-fn hash_of(secret: &str) -> String {
+pub(crate) fn hash_of(secret: &str) -> String {
     hex(&Sha256::digest(
         format!("obop-sso-verifier\n{secret}").as_bytes(),
     ))
 }
 
-fn flow_cookie(flow: &str) -> String {
+pub(crate) fn flow_cookie(flow: &str) -> String {
     format!("{FLOW_COOKIE}{}", flow.get(..12).unwrap_or("x"))
 }
 
-fn set_cookie(name: &str, value: &str, max_age: u64, secure: bool) -> String {
+pub(crate) fn set_cookie(name: &str, value: &str, max_age: u64, secure: bool) -> String {
     format!(
         "{name}={value}; Max-Age={max_age}; Path={COOKIE_PATH}; HttpOnly; SameSite=Lax{}",
         if secure { "; Secure" } else { "" }
     )
 }
 
-fn with_cookies(mut r: Response, cookies: &[String]) -> Response {
-    for c in cookies {
-        if let Ok(v) = HeaderValue::from_str(c) {
-            r.headers_mut().append(header::SET_COOKIE, v);
-        }
-    }
-    r
-}
-
 /// The redirect of every failure: the root of this origin and a fixed word.
-fn back(s: &HttpState, error: &str, cookies: &[String]) -> Response {
+pub(crate) fn back(s: &HttpState, error: &str, cookies: &[String]) -> Response {
     with_cookies(
         see_other(&format!("{}#oidc_error={error}", s.sso_return())),
         cookies,
     )
 }
 
-fn secure_of(redirect_uri: &str) -> bool {
+pub(crate) fn secure_of(redirect_uri: &str) -> bool {
     redirect_uri.starts_with("https://")
 }
 
@@ -512,13 +514,13 @@ fn secure_of(redirect_uri: &str) -> bool {
 /// not an image, a script or a `fetch` that some page made. A browser says so in `Sec-Fetch-Mode`
 /// and `Sec-Fetch-Dest`; a client that sends neither (a script, an older browser) passes, as it
 /// could not be told from the person's own click.
-fn is_navigation(parts: &Parts) -> bool {
+pub(crate) fn is_navigation(parts: &Parts) -> bool {
     let get = |n: &str| parts.headers.get(n).and_then(|v| v.to_str().ok());
     get("sec-fetch-mode").is_none_or(|m| m == "navigate")
         && get("sec-fetch-dest").is_none_or(|d| d == "document")
 }
 
-fn not_a_navigation() -> Response {
+pub(crate) fn not_a_navigation() -> Response {
     let mut r = (
         StatusCode::BAD_REQUEST,
         "this address is for the sign-in page only\n",
@@ -529,7 +531,7 @@ fn not_a_navigation() -> Response {
     r
 }
 
-fn is_flow_id(s: &str) -> bool {
+pub(crate) fn is_flow_id(s: &str) -> bool {
     s.len() == 64 && s.bytes().all(|c| c.is_ascii_hexdigit())
 }
 
@@ -544,6 +546,316 @@ pub(crate) async fn status(State(s): Shared) -> Response {
         r
     })
     .await
+}
+
+// ---- the round trip, in pieces both callers use -----------------------------------------------
+
+/// A step of the round trip that ended it: the one word the person is told (the fixed words of
+/// the redirect: `cancelled`, `unavailable`, `busy`, `failed`) and the line the security log gets.
+/// The text is fixed or built from a word out of a fixed set, never from what the caller sent; the
+/// sort is one of the closed set of [`AnonLine`], which decides the budget the line is counted
+/// against. Built here, written by [`Refusal::log`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Refusal {
+    pub(crate) word: &'static str,
+    pub(crate) kind: &'static str,
+    pub(crate) line: AnonLine,
+    pub(crate) text: String,
+}
+
+impl Refusal {
+    fn new(word: &'static str, kind: &'static str, line: AnonLine, text: String) -> Self {
+        Self {
+            word,
+            kind,
+            line,
+            text,
+        }
+    }
+
+    /// Write the line (at most one per address, kind and sort in ten minutes) and hand back the
+    /// word for the person.
+    pub(crate) fn log(&self, api: &dyn SsoApi, ip: &str) -> &'static str {
+        api.audit_throttled(ip, self.kind, self.line, &self.text);
+        self.word
+    }
+}
+
+/// The address of the provider's page that begins a sign-in. Fixed: `openid profile` and nothing
+/// else, the PKCE challenge, and no `prompt`, `max_age` or `login_hint` (D91).
+pub(crate) fn authorization_url(
+    authorization: &str,
+    client_id: &str,
+    redirect_uri: &str,
+    flow: &str,
+    nonce: &str,
+    challenge: &str,
+) -> String {
+    format!(
+        "{authorization}?client_id={}&response_type=code&redirect_uri={}&response_mode=query&scope=openid%20profile&state={flow}&nonce={nonce}&code_challenge={challenge}&code_challenge_method=S256",
+        pct(client_id),
+        pct(redirect_uri),
+    )
+}
+
+/// A flow that was begun: where the browser goes, and the cookie that holds the PKCE verifier.
+pub(crate) struct Begun {
+    pub(crate) url: String,
+    pub(crate) cookie: String,
+}
+
+/// Begin a flow: the state, nonce and a hash of the verifier are kept in the shared store for ten
+/// minutes under the hash of the flow id; the verifier itself is the value of the cookie.
+/// `extra` adds fields to the stored row (the OAuth leg names its purpose and flow there; the
+/// back office's own flow has none). `None` when the store refused the row.
+pub(crate) fn begin_flow(
+    s: &HttpState,
+    leg: &SsoLeg,
+    ep: &SsoEndpoints,
+    redirect_uri: &str,
+    extra: Option<J>,
+) -> Option<Begun> {
+    let (verifier, challenge) = pkce_pair();
+    let flow = hex(&random::<32>());
+    let nonce = hex(&random::<24>());
+    // The row expires in the store after ten minutes and says so itself: a store that keeps an
+    // expired row (a lazy clean-up) does not make an old flow good again.
+    let mut rec = json!({
+        "nonce": nonce,
+        "redirect_uri": redirect_uri,
+        "verifier_hash": hash_of(&verifier),
+        "expires_at_ms": now_ms() + u128::from(FLOW_TTL_MS),
+    });
+    if let (Some(J::Object(more)), Some(row)) = (extra, rec.as_object_mut()) {
+        for (k, v) in more {
+            row.insert(k, v);
+        }
+    }
+    s.shared
+        .backend
+        .kv_put(&flow_key(&flow), &rec.to_string(), Some(FLOW_TTL_MS))
+        .ok()?;
+    Some(Begun {
+        url: authorization_url(
+            &ep.authorization,
+            &leg.client_id,
+            redirect_uri,
+            &flow,
+            &nonce,
+            &challenge,
+        ),
+        cookie: set_cookie(
+            &flow_cookie(&flow),
+            &verifier,
+            FLOW_TTL_MS / 1000,
+            secure_of(redirect_uri),
+        ),
+    })
+}
+
+/// The discovery document of the pinned tenant, through the process-wide cache. `what` names the
+/// caller in the log line (`start`, `callback`).
+pub(crate) fn discover(
+    s: &HttpState,
+    api: &dyn SsoApi,
+    rt: &obop_connectors::Runtime,
+    leg: &SsoLeg,
+    what: &str,
+) -> Result<SsoEndpoints, Refusal> {
+    s.sso.discovery(api, rt, leg).map_err(|e| {
+        Refusal::new(
+            "unavailable",
+            "oidc_error",
+            AnonLine::Discovery,
+            format!("{what}: the discovery document could not be used: {e}"),
+        )
+    })
+}
+
+/// The provider's own `error` on the redirect to the callback. Only the person's refusal is a
+/// cancellation; any other answer is the provider's error, and is logged and worded as one.
+pub(crate) fn provider_answer(code: &str) -> Refusal {
+    let err = error_class(code);
+    let cancelled = err == "access_denied";
+    Refusal::new(
+        if cancelled { "cancelled" } else { "failed" },
+        if cancelled {
+            "oidc_cancelled"
+        } else {
+            "oidc_error"
+        },
+        AnonLine::Provider,
+        format!("the provider ended the sign-in with {err:?}"),
+    )
+}
+
+/// The provider's settings for a callback: switched off meanwhile, or unreadable.
+pub(crate) fn callback_leg(got: Result<Option<SsoLeg>, SsoError>) -> Result<SsoLeg, Refusal> {
+    match got {
+        Ok(Some(l)) => Ok(l),
+        Ok(None) => Err(Refusal::new(
+            "failed",
+            "oidc_refused",
+            AnonLine::SwitchedOff,
+            "the provider was switched off during the sign-in".into(),
+        )),
+        Err(e) => Err(Refusal::new(
+            "unavailable",
+            "oidc_error",
+            AnonLine::Settings,
+            format!("callback: {}", describe(&e)),
+        )),
+    }
+}
+
+/// What the token endpoint answered, as the id token it carried or the reason there is none. 429
+/// and 5xx: the provider is not well, it has not said no. Like the other outages (the fetches, an
+/// endpoint that cannot be reached) that is "try again", not "ask the administrator".
+pub(crate) fn id_token_of(status: u16, body: &[u8]) -> Result<String, Refusal> {
+    if status == 429 || status >= 500 {
+        return Err(Refusal::new(
+            "unavailable",
+            "oidc_error",
+            AnonLine::TokenUnwell,
+            format!("the token endpoint answered {status}"),
+        ));
+    }
+    let answer: J = serde_json::from_slice(body).unwrap_or(J::Null);
+    let id_token = answer["id_token"].as_str().unwrap_or("");
+    if status != 200 || id_token.is_empty() {
+        return Err(Refusal::new(
+            "failed",
+            "oidc_refused",
+            AnonLine::TokenRefused,
+            format!(
+                "the token endpoint answered {status}{}",
+                answer["error"]
+                    .as_str()
+                    .map(|e| format!(" {:?}", error_class(e)))
+                    .unwrap_or_default()
+            ),
+        ));
+    }
+    Ok(id_token.to_string())
+}
+
+/// Redeem the code at the token endpoint: from this server, with the client secret and the
+/// verifier. Returns the id token; nothing else of the answer is read.
+pub(crate) fn redeem(
+    s: &HttpState,
+    rt: &obop_connectors::Runtime,
+    leg: &SsoLeg,
+    ep: &SsoEndpoints,
+    code: &str,
+    redirect_uri: &str,
+    verifier: &str,
+) -> Result<String, Refusal> {
+    let form = format!(
+        "grant_type=authorization_code&code={}&redirect_uri={}&client_id={}&client_secret={}&code_verifier={}",
+        pct(code),
+        pct(redirect_uri),
+        pct(&leg.client_id),
+        pct(&leg.client_secret),
+        pct(verifier),
+    );
+    // The place among the calls in the air is held for this call only: the key set, which may
+    // need a place of its own, is fetched after it is given back.
+    let resp = {
+        let Ok(_permit) = s.sso.permit() else {
+            return Err(Refusal::new(
+                "busy",
+                "oidc_error",
+                AnonLine::Busy,
+                "too many calls to the provider are in the air; this sign-in was not tried".into(),
+            ));
+        };
+        rt.client.send_within(
+            Request {
+                method: "POST",
+                url: &ep.token,
+                headers: vec![
+                    (
+                        "Content-Type".into(),
+                        "application/x-www-form-urlencoded".into(),
+                    ),
+                    ("Accept".into(), "application/json".into()),
+                ],
+                body: Some(form.into_bytes()),
+                allowed_hosts: &[host_of(&leg.authority)],
+            },
+            s.sso.timeout(),
+        )
+    };
+    let resp = resp.map_err(|e| {
+        Refusal::new(
+            "unavailable",
+            "oidc_error",
+            AnonLine::TokenUnreachable,
+            format!("the token endpoint could not be reached: {e}"),
+        )
+    })?;
+    id_token_of(resp.status, &resp.body)
+}
+
+/// Verify an id token against a key set, fetching the key set again once when the token names a
+/// key the cached one lacks (the provider rotated its keys). The three closures are what this
+/// needs of the world: `fetch(force)` gives the key set (`force`: not from the cache), `verify`
+/// checks a token against one, `forget` drops the cached one (it could not be used).
+pub(crate) fn verify_with_refetch(
+    mut fetch: impl FnMut(bool) -> Result<Vec<u8>, String>,
+    verify: impl Fn(&[u8]) -> Result<SsoIdentity, SsoError>,
+    forget: impl Fn(),
+) -> Result<SsoIdentity, Refusal> {
+    let key_set = |text: String| Refusal::new("unavailable", "oidc_error", AnonLine::KeySet, text);
+    let mut jwks =
+        fetch(false).map_err(|e| key_set(format!("the key set could not be fetched: {e}")))?;
+    let mut verified = verify(&jwks);
+    if verified == Err(SsoError::UnknownKey) {
+        // The provider rotated its keys: fetch the set again, once, and look again.
+        jwks = fetch(true)
+            .map_err(|e| key_set(format!("the key set could not be fetched again: {e}")))?;
+        verified = verify(&jwks);
+    }
+    match verified {
+        Ok(i) => Ok(i),
+        Err(SsoError::Unavailable(m)) => {
+            forget();
+            Err(Refusal::new(
+                "unavailable",
+                "oidc_error",
+                AnonLine::KeySetUnusable,
+                format!("the key set could not be used: {m}"),
+            ))
+        }
+        Err(e) => Err(Refusal::new(
+            "failed",
+            "oidc_refused",
+            AnonLine::IdToken,
+            format!("the id token was refused: {}", describe(&e)),
+        )),
+    }
+}
+
+/// Everything between the redirect of the provider and a verified identity: the token endpoint,
+/// the key set, the checks of the id token.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn identity_of(
+    s: &HttpState,
+    api: &dyn SsoApi,
+    rt: &obop_connectors::Runtime,
+    leg: &SsoLeg,
+    ep: &SsoEndpoints,
+    code: &str,
+    redirect_uri: &str,
+    verifier: &str,
+    nonce: &str,
+) -> Result<SsoIdentity, Refusal> {
+    let id_token = redeem(s, rt, leg, ep, code, redirect_uri, verifier)?;
+    verify_with_refetch(
+        |force| s.sso.jwks(rt, &*s.shared.backend, leg, ep, force),
+        |jwks| api.verify(&id_token, jwks, nonce),
+        || s.sso.forget_jwks(),
+    )
 }
 
 // ---- GET /api/auth/oidc/start ---------------------------------------------------------------
@@ -577,46 +889,14 @@ fn start_blocking(s: &HttpState, parts: &Parts) -> Response {
             return back(s, "unavailable", &[]);
         }
     };
-    let ep = match s.sso.discovery(api, rt, &leg) {
+    let ep = match discover(s, api, rt, &leg, "start") {
         Ok(ep) => ep,
-        Err(e) => {
-            api.audit_throttled(
-                &ip,
-                "oidc_error",
-                AnonLine::Discovery,
-                &format!("start: the discovery document could not be used: {e}"),
-            );
-            return back(s, "unavailable", &[]);
-        }
+        Err(r) => return back(s, r.log(api, &ip), &[]),
     };
-    let (verifier, challenge) = pkce_pair();
-    let flow = hex(&random::<32>());
-    let nonce = hex(&random::<24>());
     let redirect_uri = format!("{}/api/auth/oidc/callback", s.mcp.base_url(&parts.headers));
-    // The row expires in the store after ten minutes and says so itself: a store that keeps an
-    // expired row (a lazy clean-up) does not make an old flow good again.
-    let rec = json!({
-        "nonce": nonce,
-        "redirect_uri": redirect_uri,
-        "verifier_hash": hash_of(&verifier),
-        "expires_at_ms": now_ms() + u128::from(FLOW_TTL_MS),
-    });
-    if s.shared
-        .backend
-        .kv_put(&flow_key(&flow), &rec.to_string(), Some(FLOW_TTL_MS))
-        .is_err()
-    {
+    let Some(begun) = begin_flow(s, &leg, &ep, &redirect_uri, None) else {
         return back(s, "unavailable", &[]);
-    }
-    let url = format!(
-        "{}?client_id={}&response_type=code&redirect_uri={}&response_mode=query&scope=openid%20profile&state={}&nonce={}&code_challenge={}&code_challenge_method=S256",
-        ep.authorization,
-        pct(&leg.client_id),
-        pct(&redirect_uri),
-        flow,
-        nonce,
-        challenge,
-    );
+    };
     // One line per address and ten minutes, not one per request: a start is a free call.
     api.audit_throttled(
         &ip,
@@ -624,15 +904,7 @@ fn start_blocking(s: &HttpState, parts: &Parts) -> Response {
         AnonLine::Start,
         "a sign-in with Microsoft was begun",
     );
-    with_cookies(
-        see_other(&url),
-        &[set_cookie(
-            &flow_cookie(&flow),
-            &verifier,
-            FLOW_TTL_MS / 1000,
-            secure_of(&redirect_uri),
-        )],
-    )
+    with_cookies(see_other(&begun.url), &[begun.cookie])
 }
 
 // ---- GET /api/auth/oidc/callback ------------------------------------------------------------
@@ -642,13 +914,13 @@ pub(crate) async fn callback(State(s): Shared, parts: Parts) -> Response {
 }
 
 /// Spend the flow: read it and delete it, and trust it only if the delete was ours.
-fn take_flow(s: &HttpState, flow: &str) -> Option<J> {
+pub(crate) fn take_flow(s: &HttpState, flow: &str) -> Option<J> {
     take_flow_from(&*s.shared.backend, flow)
 }
 
 /// [`take_flow`] on a store: the delete is the claim, so of several processes that read the same
 /// row (D59) exactly one is told it spent the flow.
-fn take_flow_from(backend: &dyn obop_storage::Backend, flow: &str) -> Option<J> {
+pub(crate) fn take_flow_from(backend: &dyn obop_storage::Backend, flow: &str) -> Option<J> {
     let key = flow_key(flow);
     let raw = backend.kv_get(&key).ok().flatten();
     let claimed = backend.kv_delete(&key).unwrap_or(false);
@@ -661,10 +933,43 @@ fn take_flow_from(backend: &dyn obop_storage::Backend, flow: &str) -> Option<J> 
     (until > now_ms()).then_some(rec)
 }
 
-fn now_ms() -> u128 {
+pub(crate) fn now_ms() -> u128 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_millis())
+}
+
+/// Where a callback ends: the back office (a fixed word in the fragment of its root) or, for a
+/// round trip that an app's sign-in page began, the return address of that flow after the word has
+/// been written into it.
+struct Ending<'a> {
+    s: &'a HttpState,
+    /// The OAuth flow of an app's round trip (`purpose == "oauth"`), `None` for the back office.
+    oauth_flow: Option<&'a str>,
+}
+
+impl Ending<'_> {
+    /// The ending of a round trip that did not sign anyone in, for one of the fixed words.
+    fn fail(&self, word: &str, cookies: &[String]) -> Response {
+        match self.oauth_flow {
+            None => back(self.s, word, cookies),
+            Some(flow) => {
+                if let Some(o) = self.s.oauth.as_ref() {
+                    // A flow that is gone is found out at the return address. A write that lost
+                    // its three tries leaves the record as it was, and the return address shows
+                    // that.
+                    let _ = o.microsoft_done(flow, MicrosoftOutcome::Failed(word.to_string()));
+                }
+                with_cookies(see_other(&return_address(flow)), cookies)
+            }
+        }
+    }
+}
+
+/// The address an app's round trip returns to. The flow id is the 32 hex digits the OAuth server
+/// made (checked before it is stored in the row, and again by `microsoft_done`).
+fn return_address(flow: &str) -> String {
+    format!("/oauth/authorize/return?flow={flow}")
 }
 
 fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
@@ -698,10 +1003,31 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
         );
         return back(s, "failed", &[clear_flow]);
     };
+    // What the row says the round trip is for. The row is the server's own record, written by one
+    // of the two start routes. It has no `purpose` (the back office's) or `purpose: "oauth"` (an
+    // app's, which also names the flow); any other row is treated as the back office's.
+    let oauth_flow = (flow["purpose"].as_str() == Some("oauth"))
+        .then(|| flow["oauth_flow"].as_str())
+        .flatten()
+        .filter(|f| f.len() == 32 && f.bytes().all(|c| c.is_ascii_hexdigit()));
+    if flow["purpose"].as_str() == Some("oauth") && oauth_flow.is_none() {
+        // A row for an app's round trip that names no flow cannot be finished anywhere.
+        return back(s, "failed", &[clear_flow]);
+    }
+    let end = Ending { s, oauth_flow };
     // Only a callback that spent a flow of this server counts against the address: it is the one
-    // that goes on to call Microsoft.
-    if limited(s, "cb", &ip, 60) {
-        return back(s, "busy", &[clear_flow]);
+    // that goes on to call Microsoft. An app's round trips have a window of their own.
+    if limited(
+        s,
+        if oauth_flow.is_some() {
+            "oauth_cb"
+        } else {
+            "cb"
+        },
+        &ip,
+        60,
+    ) {
+        return end.fail("busy", &[clear_flow]);
     }
     let redirect_uri = flow["redirect_uri"].as_str().unwrap_or("").to_string();
     let clear_flow = set_cookie(&flow_cookie(state), "", 0, secure_of(&redirect_uri));
@@ -719,25 +1045,10 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
             AnonLine::Browser,
             "the browser that came back is not the one that began the sign-in",
         );
-        return back(s, "failed", &[clear_flow]);
+        return end.fail("failed", &[clear_flow]);
     }
     if let Some(err) = pair(&pairs, "error") {
-        let err = error_class(err);
-        // Only the person's own refusal is a cancellation; any other answer is the provider's
-        // error, and is logged and worded as one.
-        let cancelled = err == "access_denied";
-        api.audit_throttled(
-            &ip,
-            if cancelled {
-                "oidc_cancelled"
-            } else {
-                "oidc_error"
-            },
-            AnonLine::Provider,
-            &format!("the provider ended the sign-in with {err:?}"),
-        );
-        let word = if cancelled { "cancelled" } else { "failed" };
-        return back(s, word, &[clear_flow]);
+        return end.fail(provider_answer(err).log(api, &ip), &[clear_flow]);
     }
     let Some(code) = pair(&pairs, "code").filter(|c| !c.is_empty() && c.len() <= 4096) else {
         api.audit_throttled(
@@ -746,174 +1057,29 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
             AnonLine::NoCode,
             "the provider's redirect carried no code",
         );
-        return back(s, "failed", &[clear_flow]);
+        return end.fail("failed", &[clear_flow]);
     };
-    let leg = match api.leg() {
-        Ok(Some(l)) => l,
-        Ok(None) => {
-            api.audit_throttled(
-                &ip,
-                "oidc_refused",
-                AnonLine::SwitchedOff,
-                "the provider was switched off during the sign-in",
-            );
-            return back(s, "failed", &[clear_flow]);
-        }
-        Err(e) => {
-            api.audit_throttled(
-                &ip,
-                "oidc_error",
-                AnonLine::Settings,
-                &format!("callback: {}", describe(&e)),
-            );
-            return back(s, "unavailable", &[clear_flow]);
-        }
-    };
-    let ep = match s.sso.discovery(api, rt, &leg) {
-        Ok(ep) => ep,
-        Err(e) => {
-            api.audit_throttled(
-                &ip,
-                "oidc_error",
-                AnonLine::Discovery,
-                &format!("callback: the discovery document could not be used: {e}"),
-            );
-            return back(s, "unavailable", &[clear_flow]);
-        }
-    };
-    // The code for the id token: from this server, with the client secret and the verifier.
-    let form = format!(
-        "grant_type=authorization_code&code={}&redirect_uri={}&client_id={}&client_secret={}&code_verifier={}",
-        pct(code),
-        pct(&redirect_uri),
-        pct(&leg.client_id),
-        pct(&leg.client_secret),
-        pct(&verifier),
-    );
-    // The place among the calls in the air is held for this call only: the key set, which may
-    // need a place of its own, is fetched after it is given back.
-    let resp = {
-        let Ok(_permit) = s.sso.permit() else {
-            api.audit_throttled(
-                &ip,
-                "oidc_error",
-                AnonLine::Busy,
-                "too many calls to the provider are in the air; this sign-in was not tried",
-            );
-            return back(s, "busy", &[clear_flow]);
-        };
-        rt.client.send_within(
-            Request {
-                method: "POST",
-                url: &ep.token,
-                headers: vec![
-                    (
-                        "Content-Type".into(),
-                        "application/x-www-form-urlencoded".into(),
-                    ),
-                    ("Accept".into(), "application/json".into()),
-                ],
-                body: Some(form.into_bytes()),
-                allowed_hosts: &[host_of(&leg.authority)],
-            },
-            s.sso.timeout(),
+    let identity = callback_leg(api.leg()).and_then(|leg| {
+        let ep = discover(s, api, rt, &leg, "callback")?;
+        identity_of(
+            s,
+            api,
+            rt,
+            &leg,
+            &ep,
+            code,
+            &redirect_uri,
+            &verifier,
+            flow["nonce"].as_str().unwrap_or(""),
         )
-    };
-    let resp = match resp {
-        Ok(r) => r,
-        Err(e) => {
-            api.audit_throttled(
-                &ip,
-                "oidc_error",
-                AnonLine::TokenUnreachable,
-                &format!("the token endpoint could not be reached: {e}"),
-            );
-            return back(s, "unavailable", &[clear_flow]);
-        }
-    };
-    // 429 and 5xx: the provider is not well, it has not said no. Like the other outages (the
-    // fetches, an endpoint that cannot be reached) that is "try again", not "ask the administrator".
-    if resp.status == 429 || resp.status >= 500 {
-        api.audit_throttled(
-            &ip,
-            "oidc_error",
-            AnonLine::TokenUnwell,
-            &format!("the token endpoint answered {}", resp.status),
-        );
-        return back(s, "unavailable", &[clear_flow]);
-    }
-    let answer: J = serde_json::from_slice(&resp.body).unwrap_or(J::Null);
-    let id_token = answer["id_token"].as_str().unwrap_or("");
-    if resp.status != 200 || id_token.is_empty() {
-        api.audit_throttled(
-            &ip,
-            "oidc_refused",
-            AnonLine::TokenRefused,
-            &format!(
-                "the token endpoint answered {}{}",
-                resp.status,
-                answer["error"]
-                    .as_str()
-                    .map(|e| format!(" {:?}", error_class(e)))
-                    .unwrap_or_default()
-            ),
-        );
-        return back(s, "failed", &[clear_flow]);
-    }
-    let nonce = flow["nonce"].as_str().unwrap_or("");
-    let mut jwks = match s.sso.jwks(rt, &*s.shared.backend, &leg, &ep, false) {
-        Ok(d) => d,
-        Err(e) => {
-            api.audit_throttled(
-                &ip,
-                "oidc_error",
-                AnonLine::KeySet,
-                &format!("the key set could not be fetched: {e}"),
-            );
-            return back(s, "unavailable", &[clear_flow]);
-        }
-    };
-    let mut verified = api.verify(id_token, &jwks, nonce);
-    if verified == Err(SsoError::UnknownKey) {
-        // The provider rotated its keys: fetch the set again, once, and look again.
-        match s.sso.jwks(rt, &*s.shared.backend, &leg, &ep, true) {
-            Ok(d) => {
-                jwks = d;
-                verified = api.verify(id_token, &jwks, nonce);
-            }
-            Err(e) => {
-                api.audit_throttled(
-                    &ip,
-                    "oidc_error",
-                    AnonLine::KeySet,
-                    &format!("the key set could not be fetched again: {e}"),
-                );
-                return back(s, "unavailable", &[clear_flow]);
-            }
-        }
-    }
-    let identity = match verified {
+    });
+    let identity = match identity {
         Ok(i) => i,
-        Err(SsoError::Unavailable(m)) => {
-            s.sso.forget_jwks();
-            api.audit_throttled(
-                &ip,
-                "oidc_error",
-                AnonLine::KeySetUnusable,
-                &format!("the key set could not be used: {m}"),
-            );
-            return back(s, "unavailable", &[clear_flow]);
-        }
-        Err(e) => {
-            api.audit_throttled(
-                &ip,
-                "oidc_refused",
-                AnonLine::IdToken,
-                &format!("the id token was refused: {}", describe(&e)),
-            );
-            return back(s, "failed", &[clear_flow]);
-        }
+        Err(r) => return end.fail(r.log(api, &ip), &[clear_flow]),
     };
+    if let Some(oauth_flow) = oauth_flow {
+        return app_ending(s, api, &ip, oauth_flow, &identity, clear_flow);
+    }
     // From here only this browser can spend the one-time code.
     let done = hex(&random::<32>());
     match api.begin(&identity, &done) {
@@ -935,6 +1101,39 @@ fn callback_blocking(s: &HttpState, parts: &Parts) -> Response {
             back(s, "unavailable", &[clear_flow])
         }
         Err(_) => back(s, "failed", &[clear_flow]),
+    }
+}
+
+/// The end of an app's round trip: the verified identity is signed in for the OAuth flow (no code
+/// is made, nothing of the identity is kept) and the browser goes to the return address. Anything
+/// that is not a person ends as one of the fixed words; the reason is in the security log already.
+fn app_ending(
+    s: &HttpState,
+    api: &dyn SsoApi,
+    ip: &str,
+    oauth_flow: &str,
+    identity: &SsoIdentity,
+    clear_flow: String,
+) -> Response {
+    let end = Ending {
+        s,
+        oauth_flow: Some(oauth_flow),
+    };
+    let Some(o) = s.oauth.as_ref() else {
+        return back(s, "failed", &[clear_flow]);
+    };
+    match api.sign_in_for_flow(identity) {
+        Ok(signed) => {
+            // A flow that is gone, or that someone else changed three times in a row, is found out
+            // at the return address.
+            let _ = o.microsoft_done(oauth_flow, MicrosoftOutcome::SignedIn(signed));
+            with_cookies(see_other(&return_address(oauth_flow)), &[clear_flow])
+        }
+        Err(MfaError::Unavailable(m)) => {
+            api.audit_throttled(ip, "oidc_error", AnonLine::Begin, &format!("callback: {m}"));
+            end.fail("unavailable", &[clear_flow])
+        }
+        Err(_) => end.fail("failed", &[clear_flow]),
     }
 }
 
@@ -1207,6 +1406,337 @@ mod tests {
         ] {
             assert!(!is_navigation(&parts(&bad)), "{bad:?}");
         }
+    }
+
+    // ---- the pieces of the round trip (WP1): each has its word and its sort ----------------------
+
+    /// A `SsoApi` that records the lines written to the anonymous log and nothing else.
+    #[derive(Default)]
+    struct Recorder(Mutex<Vec<(String, String, AnonLine, String)>>);
+
+    impl SsoApi for Recorder {
+        fn offered(&self) -> bool {
+            unimplemented!()
+        }
+        fn provider(&self) -> Result<Option<obop_commands::SsoProvider>, SsoError> {
+            unimplemented!()
+        }
+        fn leg(&self) -> Result<Option<SsoLeg>, SsoError> {
+            unimplemented!()
+        }
+        fn endpoints(&self, _: &[u8]) -> Result<SsoEndpoints, SsoError> {
+            unimplemented!()
+        }
+        fn verify(&self, _: &str, _: &[u8], _: &str) -> Result<SsoIdentity, SsoError> {
+            unimplemented!()
+        }
+        fn begin(&self, _: &SsoIdentity, _: &str) -> Result<String, SsoError> {
+            unimplemented!()
+        }
+        fn exchange(
+            &self,
+            _: &str,
+            _: &str,
+        ) -> Result<(String, obop_commands::LoginOutcome), MfaError> {
+            unimplemented!()
+        }
+        fn sign_in_for_flow(
+            &self,
+            _: &SsoIdentity,
+        ) -> Result<obop_commands::SsoFlowSignIn, MfaError> {
+            unimplemented!()
+        }
+        fn second_step_for_flow(&self, _: &str, _: Option<&str>) -> Result<String, MfaError> {
+            unimplemented!()
+        }
+        fn audit(&self, _: &str, _: &str, _: &str) {
+            unimplemented!()
+        }
+        fn audit_throttled(&self, source: &str, kind: &str, line: AnonLine, detail: &str) {
+            self.0
+                .lock()
+                .unwrap()
+                .push((source.into(), kind.into(), line, detail.into()));
+        }
+        fn configure(
+            &self,
+            _: &obop_commands::Principal,
+            _: &str,
+            _: &str,
+            _: Option<&str>,
+            _: Option<bool>,
+        ) -> Result<obop_commands::SsoProvider, SsoError> {
+            unimplemented!()
+        }
+        fn clear(&self, _: &obop_commands::Principal) -> Result<(), SsoError> {
+            unimplemented!()
+        }
+        fn bind(&self, _: &obop_commands::Principal, _: &str, _: &str) -> Result<J, SsoError> {
+            unimplemented!()
+        }
+        fn unbind(&self, _: &obop_commands::Principal, _: &str) -> Result<J, SsoError> {
+            unimplemented!()
+        }
+        fn set_sso_only(
+            &self,
+            _: &obop_commands::Principal,
+            _: &str,
+            _: bool,
+        ) -> Result<J, SsoError> {
+            unimplemented!()
+        }
+        fn bindings(&self, _: &obop_commands::Principal) -> Result<J, SsoError> {
+            unimplemented!()
+        }
+    }
+
+    fn shape(r: &Refusal) -> (&'static str, &'static str, AnonLine) {
+        (r.word, r.kind, r.line)
+    }
+
+    #[test]
+    fn a_refusal_writes_its_one_line_under_its_kind_and_sort_and_hands_back_its_word() {
+        let api = Recorder::default();
+        let r = Refusal::new(
+            "unavailable",
+            "oidc_error",
+            AnonLine::TokenUnwell,
+            "the token endpoint answered 503".into(),
+        );
+        assert_eq!(r.log(&api, "203.0.113.9"), "unavailable");
+        assert_eq!(
+            api.0.lock().unwrap().as_slice(),
+            [(
+                "203.0.113.9".to_string(),
+                "oidc_error".to_string(),
+                AnonLine::TokenUnwell,
+                "the token endpoint answered 503".to_string()
+            )]
+        );
+    }
+
+    #[test]
+    fn the_address_of_the_provider_is_fixed_and_asks_for_nothing_else() {
+        let url = authorization_url(
+            "https://login.example/tenant/oauth2/v2.0/authorize",
+            "client id",
+            "https://obop.test/api/auth/oidc/callback",
+            "STATE",
+            "NONCE",
+            "CHALLENGE",
+        );
+        assert_eq!(
+            url,
+            "https://login.example/tenant/oauth2/v2.0/authorize?client_id=client%20id&response_type=code&redirect_uri=https%3A%2F%2Fobop.test%2Fapi%2Fauth%2Foidc%2Fcallback&response_mode=query&scope=openid%20profile&state=STATE&nonce=NONCE&code_challenge=CHALLENGE&code_challenge_method=S256"
+        );
+        for never in [
+            "prompt",
+            "max_age",
+            "login_hint",
+            "offline_access",
+            "User.Read",
+        ] {
+            assert!(!url.contains(never), "{never}");
+        }
+    }
+
+    #[test]
+    fn the_providers_own_error_is_a_cancellation_only_when_the_person_said_no() {
+        let no = provider_answer("access_denied");
+        assert_eq!(
+            shape(&no),
+            ("cancelled", "oidc_cancelled", AnonLine::Provider)
+        );
+        assert!(no.text.contains("\"access_denied\""));
+        for other in ["server_error", "interaction_required", "invalid_scope"] {
+            let r = provider_answer(other);
+            assert_eq!(
+                shape(&r),
+                ("failed", "oidc_error", AnonLine::Provider),
+                "{other}"
+            );
+            assert!(r.text.contains(other), "{other}");
+        }
+        // Whatever else the caller wrote is the word "other": none of it reaches a line.
+        let r = provider_answer("access_denied\nforged: line <b>");
+        assert_eq!(shape(&r), ("failed", "oidc_error", AnonLine::Provider));
+        assert!(r.text.contains("\"other\"") && !r.text.contains("forged"));
+    }
+
+    #[test]
+    fn a_provider_switched_off_or_unreadable_during_the_callback_has_its_word_and_sort() {
+        let off = callback_leg(Ok(None)).unwrap_err();
+        assert_eq!(
+            shape(&off),
+            ("failed", "oidc_refused", AnonLine::SwitchedOff)
+        );
+        let bad = callback_leg(Err(SsoError::Unavailable("no key ring".into()))).unwrap_err();
+        assert_eq!(
+            shape(&bad),
+            ("unavailable", "oidc_error", AnonLine::Settings)
+        );
+        assert_eq!(bad.text, "callback: no key ring");
+        let leg = SsoLeg {
+            authority: "http://127.0.0.1:1".into(),
+            tenant: "t".into(),
+            client_id: "c".into(),
+            client_secret: "s".into(),
+        };
+        assert_eq!(callback_leg(Ok(Some(leg))).unwrap().client_id, "c");
+    }
+
+    #[test]
+    fn the_token_endpoint_is_unwell_or_says_no_or_gives_the_id_token_and_nothing_else_is_read() {
+        for status in [429, 500, 502, 503, 599] {
+            let r = id_token_of(status, b"{}").unwrap_err();
+            assert_eq!(
+                shape(&r),
+                ("unavailable", "oidc_error", AnonLine::TokenUnwell),
+                "{status}"
+            );
+            assert_eq!(r.text, format!("the token endpoint answered {status}"));
+        }
+        // A 200 without an id token, a 4xx with or without an error: the provider said no.
+        for (status, body) in [
+            (200, r#"{"access_token":"a"}"#),
+            (200, r#"{"id_token":""}"#),
+            (200, "not json"),
+            (400, r#"{"error":"invalid_grant"}"#),
+            (401, ""),
+        ] {
+            let r = id_token_of(status, body.as_bytes()).unwrap_err();
+            assert_eq!(
+                shape(&r),
+                ("failed", "oidc_refused", AnonLine::TokenRefused),
+                "{status} {body}"
+            );
+        }
+        let r = id_token_of(
+            400,
+            br#"{"error":"invalid_grant","error_description":"AADSTS70000 secret text"}"#,
+        )
+        .unwrap_err();
+        assert_eq!(r.text, "the token endpoint answered 400 \"invalid_grant\"");
+        let r = id_token_of(400, br#"{"error":"made up by <someone>"}"#).unwrap_err();
+        assert_eq!(r.text, "the token endpoint answered 400 \"other\"");
+        // An id token on a 4xx is not taken; on a 200 it is the only thing that is read.
+        assert!(id_token_of(400, br#"{"id_token":"x.y.z"}"#).is_err());
+        assert_eq!(
+            id_token_of(200, br#"{"id_token":"x.y.z","access_token":"never read"}"#).unwrap(),
+            "x.y.z"
+        );
+    }
+
+    fn who() -> SsoIdentity {
+        SsoIdentity {
+            issuer: "i".into(),
+            tenant: "t".into(),
+            oid: "o".into(),
+            amr: vec![],
+            auth_time: None,
+        }
+    }
+
+    #[test]
+    fn an_unknown_key_fetches_the_key_set_again_once_and_not_twice() {
+        use std::cell::{Cell, RefCell};
+        // A rotated key: the first look fails on the key name, the second succeeds.
+        let fetched = RefCell::new(Vec::<bool>::new());
+        let looks = Cell::new(0);
+        let got = verify_with_refetch(
+            |force| {
+                fetched.borrow_mut().push(force);
+                Ok(b"{}".to_vec())
+            },
+            |_| {
+                looks.set(looks.get() + 1);
+                if looks.get() == 1 {
+                    Err(SsoError::UnknownKey)
+                } else {
+                    Ok(who())
+                }
+            },
+            || panic!("a usable key set is not forgotten"),
+        );
+        assert_eq!(got.unwrap(), who());
+        assert_eq!(
+            *fetched.borrow(),
+            [false, true],
+            "once from the cache, once forced"
+        );
+        // A key that stays unknown is refused as an id token, after one forced fetch and no more.
+        let fetched = RefCell::new(Vec::<bool>::new());
+        let r = verify_with_refetch(
+            |force| {
+                fetched.borrow_mut().push(force);
+                Ok(vec![])
+            },
+            |_| Err(SsoError::UnknownKey),
+            || {},
+        )
+        .unwrap_err();
+        assert_eq!(shape(&r), ("failed", "oidc_refused", AnonLine::IdToken));
+        assert_eq!(
+            r.text,
+            "the id token was refused: the signing key is not known"
+        );
+        assert_eq!(*fetched.borrow(), [false, true]);
+    }
+
+    #[test]
+    fn a_key_set_that_cannot_be_fetched_or_used_is_unavailable_and_a_bad_token_is_failed() {
+        use std::cell::Cell;
+        // The first fetch fails.
+        let r = verify_with_refetch(|_| Err("503".into()), |_| unreachable!(), || {}).unwrap_err();
+        assert_eq!(shape(&r), ("unavailable", "oidc_error", AnonLine::KeySet));
+        assert_eq!(r.text, "the key set could not be fetched: 503");
+        // The fetch again (after an unknown key) fails.
+        let n = Cell::new(0);
+        let r = verify_with_refetch(
+            |_| {
+                n.set(n.get() + 1);
+                if n.get() == 1 {
+                    Ok(vec![])
+                } else {
+                    Err("429".into())
+                }
+            },
+            |_| Err(SsoError::UnknownKey),
+            || {},
+        )
+        .unwrap_err();
+        assert_eq!(shape(&r), ("unavailable", "oidc_error", AnonLine::KeySet));
+        assert_eq!(r.text, "the key set could not be fetched again: 429");
+        // A key set that is not one: dropped from the cache, and unavailable.
+        let forgot = Cell::new(0);
+        let r = verify_with_refetch(
+            |_| Ok(vec![]),
+            |_| Err(SsoError::Unavailable("no keys".into())),
+            || forgot.set(forgot.get() + 1),
+        )
+        .unwrap_err();
+        assert_eq!(
+            shape(&r),
+            ("unavailable", "oidc_error", AnonLine::KeySetUnusable)
+        );
+        assert_eq!(r.text, "the key set could not be used: no keys");
+        assert_eq!(forgot.get(), 1);
+        // A token that fails a check: failed, and the key set stays.
+        let r = verify_with_refetch(
+            |_| Ok(vec![]),
+            |_| {
+                Err(SsoError::Refused(
+                    "the nonce is not the one of this sign-in".into(),
+                ))
+            },
+            || panic!("a good key set is not forgotten"),
+        )
+        .unwrap_err();
+        assert_eq!(shape(&r), ("failed", "oidc_refused", AnonLine::IdToken));
+        assert_eq!(
+            r.text,
+            "the id token was refused: the nonce is not the one of this sign-in"
+        );
     }
 
     #[test]

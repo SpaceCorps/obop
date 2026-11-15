@@ -14,7 +14,27 @@ export interface ServerConfig {
   user?: string;
   /** When a sign-in last finished with this client (ms). The instance forgets a client that no sign-in used. */
   usedAt?: number;
+  /**
+   * The groups the client was registered with. The instance offers a phone only the groups that its
+   * client declared, so a build that asks for another group has to register again. A config that an
+   * earlier build stored has no list; see `DeclaredGroups.legacy`. Older builds keep the field when
+   * they write the config back (they spread what they read) and ignore it otherwise.
+   */
+  groups?: readonly string[];
 }
+
+/** The groups the app asks for now, and what a config without a stored list is taken to have registered with. */
+export interface DeclaredGroups {
+  current: readonly string[];
+  legacy?: readonly string[];
+}
+
+const groupList = (value: unknown): readonly string[] | null =>
+  Array.isArray(value) && value.every((g) => typeof g === "string") ? (value as string[]) : null;
+
+/** The same groups, in any order. */
+const sameGroups = (a: readonly string[], b: readonly string[]): boolean =>
+  new Set(a).size === new Set(b).size && a.every((g) => b.includes(g));
 
 /** The instance forgets a registered client that nothing has used for a day, and a used one after about 180 idle days. */
 export const CLIENT_FRESH_MS = 30 * 24 * 3600 * 1000;
@@ -28,8 +48,15 @@ export function needsRegistration(
   config: ServerConfig | null,
   baseUrl: string,
   nowMs: number,
+  declared?: DeclaredGroups,
 ): boolean {
   if (config === null || config.baseUrl !== baseUrl) return true;
+  if (declared !== undefined) {
+    // The groups the client was registered with: the stored list, or for a config without one what
+    // every build before the list was stored registered with. With neither, register again.
+    const registered = groupList(config.groups) ?? declared.legacy ?? null;
+    if (registered === null || !sameGroups(registered, declared.current)) return true;
+  }
   return config.usedAt === undefined || nowMs - config.usedAt > CLIENT_FRESH_MS;
 }
 

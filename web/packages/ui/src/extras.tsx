@@ -1,5 +1,5 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { highlight } from "./highlight.ts";
+import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { highlight, type Token } from "./highlight.ts";
 import { Icon } from "./icons.tsx";
 import { Button, Dialog, IconButton } from "./primitives.tsx";
 import { fmt, t } from "./i18n/store.ts";
@@ -97,10 +97,11 @@ export function Pager({
       {onSize && (
         <label className="pager-size">
           <span>{t("Rows per page")}</span>
+          {/* The options say what they count: a phone hides the "Rows per page" label. */}
           <select value={limit} onChange={(e) => onSize(Number(e.target.value))}>
             {sizes.map((s) => (
               <option key={s} value={s}>
-                {s}
+                {t("{size} per page", { size: nf.format(s) })}
               </option>
             ))}
           </select>
@@ -160,6 +161,16 @@ export function Stat({
 }
 
 /**
+ * A line's own indent as `--ind`, so a page that wraps code can hang a wrapped part under the line's
+ * text instead of at column 0 (a tab counts as the block's tab-size, 2).
+ */
+function indent(toks: Token[]): CSSProperties | undefined {
+  const lead = /^[ \t]*/.exec(toks.map((t) => t.text).join(""))?.[0] ?? "";
+  const n = lead.replace(/\t/g, "  ").length;
+  return n ? ({ "--ind": `${n}ch` } as CSSProperties) : undefined;
+}
+
+/**
  * A block of code with a copy button. Highlighted from tokens (never from markup), so the text
  * is always rendered as text.
  */
@@ -199,7 +210,7 @@ export function CodeBlock({ code, lang = "" }: { code: string; lang?: string }) 
       <pre tabIndex={0} aria-label={lang ? t("{lang} example", { lang }) : t("Code example")}>
         <code>
           {lines.map((toks, i) => (
-            <span key={i} className="codeblock-line">
+            <span key={i} className="codeblock-line" style={indent(toks)}>
               {toks.map((t, j) => (
                 <span key={j} className={t.cls ? `tok-${t.cls}` : undefined}>
                   {t.text}

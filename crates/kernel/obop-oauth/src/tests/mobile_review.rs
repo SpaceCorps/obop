@@ -34,7 +34,7 @@ fn hold(r: &Rig, groups: &[&str]) {
 fn open_flow(r: &Rig, p: &AuthorizeParams) -> (String, String, String) {
     let v = r.o.validate_authorize(BASE, p).unwrap();
     let (id, binder) = r.o.begin(&v, "10.0.0.2", "en").unwrap();
-    let csrf = r.o.view(&id, &binder).unwrap().csrf;
+    let csrf = r.o.view_plain(&id, &binder).unwrap().csrf;
     assert_eq!(
         r.o.login(&id, &binder, &csrf, "10.0.0.2", &r.user, PW)
             .unwrap(),
@@ -118,7 +118,7 @@ fn a_mobile_client_takes_no_web_address_and_the_page_says_where_the_result_goes(
     let c = r.mobile_client();
     let page = |uri: &str| {
         let flow = open_flow(&r, &r.mobile_params(&c, uri));
-        crate::page::consent_page(&r.o.view(&flow.0, &flow.1).unwrap(), None).html
+        crate::page::consent_page(&r.o.view_plain(&flow.0, &flow.1).unwrap(), None).html
     };
     let phone = page(APP);
     assert!(
@@ -162,7 +162,7 @@ fn a_mobile_app_is_offered_only_the_groups_it_declared_and_none_is_ticked_unaske
     let c = r.mobile_declaring(&[APP], "base.user crm.user").unwrap();
     let ctx_of = |p: &AuthorizeParams| {
         let flow = open_flow(&r, p);
-        r.o.view(&flow.0, &flow.1).unwrap()
+        r.o.view_plain(&flow.0, &flow.1).unwrap()
     };
     // What is offered is what the app declared and the person holds: not the other groups the
     // person has, and nothing that is ticked because it is allowed.
@@ -302,7 +302,7 @@ fn a_mobile_client_that_declares_nothing_is_offered_nothing_and_signs_in_with_no
     let empty = r.mobile_declaring(&[APP], "").unwrap();
     for c in [&silent, &empty] {
         let flow = open_flow(&r, &r.mobile_params(c, APP));
-        let ctx = r.o.view(&flow.0, &flow.1).unwrap();
+        let ctx = r.o.view_plain(&flow.0, &flow.1).unwrap();
         assert!(ctx.groups.is_empty() && ctx.preselected.is_empty());
         let html = crate::page::consent_page(&ctx, None).html;
         assert!(html.contains("asked for no permission groups"), "{html}");

@@ -199,6 +199,21 @@ description = "Permission group that may use it; empty means connectors.user"
 class = "none"
 
 [[model.field]]
+name = "workspace_id"
+description = "Google Drive: the drive the instance works in (root is My Drive, empty is none)"
+class = "none"
+
+[[model.field]]
+name = "workspace_name"
+description = "Google Drive: the name of that drive, for display"
+class = "none"
+
+[[model.field]]
+name = "write_group"
+description = "Google Drive: permission group that may create folders, Docs and uploads there; empty means platform.admin"
+class = "none"
+
+[[model.field]]
 name = "legal_basis"
 description = "Legal basis recorded for connections of this provider"
 class = "none"

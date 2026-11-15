@@ -41,6 +41,13 @@ describe("the kinds of the security log", () => {
     for (const k of oidc) expect(EVENT_KINDS[k], `no label for ${k}`).toBeDefined();
   });
 
+  it("lists the kinds of the instance identity and has words for both", () => {
+    for (const k of ["brand_configured", "brand_cleared"]) {
+      expect(listed, k).toContain(k);
+      expect(EVENT_KINDS[k], `no label for ${k}`).toBeDefined();
+    }
+  });
+
   it("has words for every device kind", () => {
     const device = listed.filter((k) => k.startsWith("device_"));
     expect(device.length).toBeGreaterThanOrEqual(4);

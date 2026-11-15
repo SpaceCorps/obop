@@ -1,3 +1,5 @@
+import { HOST_SCHEMA } from "./host-state.ts";
+import { ensureModules, type SchemaModule } from "./schema.ts";
 import type { SqlDb, SqlTx, SqlValue } from "./sql.ts";
 import { TripAlreadyActive, type OutboxStore, type TripPatch } from "./store.ts";
 import { keepFix, RECORDING_THINNING, type Anchor, type Thinning } from "./thin.ts";
@@ -15,13 +17,14 @@ import {
 } from "./types.ts";
 import { plausible, STALE_FIX_MS, toStored } from "./values.ts";
 
-/** Bump with a migration step in `migrate` when a table changes. */
-export const SCHEMA_VERSION = 1;
-
 const ACTIVE = "active_trip";
 
-const SCHEMA = `
-CREATE TABLE IF NOT EXISTS trip (
+/**
+ * The three tables of the first layout, each with the text of its first definition: the file keeps
+ * this text, so it is written out the way it always was. The fourth table of that layout, `meta`,
+ * is the host's (`host-state.ts`).
+ */
+const CREATE_TRIP = `CREATE TABLE IF NOT EXISTS trip (
   client_trip_id TEXT PRIMARY KEY NOT NULL,
   server_id TEXT,
   origin TEXT NOT NULL DEFAULT 'device',
@@ -46,8 +49,8 @@ CREATE TABLE IF NOT EXISTS trip (
   problem_code TEXT,
   problem_message TEXT,
   created_ms INTEGER NOT NULL
-);
-CREATE TABLE IF NOT EXISTS point (
+);`;
+const CREATE_POINT = `CREATE TABLE IF NOT EXISTS point (
   client_trip_id TEXT NOT NULL,
   seq INTEGER NOT NULL,
   t INTEGER NOT NULL,
@@ -56,33 +59,42 @@ CREATE TABLE IF NOT EXISTS point (
   accuracy_m TEXT,
   speed_mps TEXT,
   PRIMARY KEY (client_trip_id, seq)
-) WITHOUT ROWID;
-CREATE TABLE IF NOT EXISTS batch (
+) WITHOUT ROWID;`;
+const CREATE_BATCH = `CREATE TABLE IF NOT EXISTS batch (
   client_trip_id TEXT NOT NULL,
   first_seq INTEGER NOT NULL,
   last_seq INTEGER NOT NULL,
   sent INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (client_trip_id, first_seq)
-) WITHOUT ROWID;
-CREATE TABLE IF NOT EXISTS meta (
-  key TEXT PRIMARY KEY NOT NULL,
-  value TEXT NOT NULL
-) WITHOUT ROWID;
-`;
+) WITHOUT ROWID;`;
 
-/** Creates the tables on a new database. A database of a newer app is refused, not changed. */
-export async function migrate(db: SqlDb): Promise<void> {
-  const row = await db.one<{ user_version: number }>("PRAGMA user_version");
-  const version = Number(row?.user_version ?? 0);
-  if (version > SCHEMA_VERSION) {
-    throw new Error(`The database is from a newer version of the app (schema ${version})`);
-  }
-  if (version < 1) {
-    await db.transaction(async (tx) => {
-      await tx.exec(SCHEMA);
-      await tx.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
-    });
-  }
+/**
+ * The tables of the trip outbox in the schema manager (`schema.ts`). They are named `trip`,
+ * `point` and `batch`, as the first build named them, and `active_trip` is the one row of `meta`
+ * the outbox keeps. A new table of this module is named `mileage_*` and a new key `mileage.*`.
+ * Version 1 is the version every file of layout 1 has. It needs the host's table `meta`, so the
+ * host's module is listed before it.
+ */
+export const MILEAGE_SCHEMA: SchemaModule = {
+  id: "mileage",
+  version: 1,
+  legacyVersion: 1,
+  requires: ["host"],
+  legacyTables: ["trip", "point", "batch"],
+  legacyDefinitions: { trip: CREATE_TRIP, point: CREATE_POINT, batch: CREATE_BATCH },
+  legacyMetaKeys: [ACTIVE],
+  async migrate(tx, from) {
+    if (from < 1) await tx.exec([CREATE_TRIP, CREATE_POINT, CREATE_BATCH].join("\n"));
+  },
+};
+
+/**
+ * Creates the tables of the host and of the outbox on a new database. A database of a newer app
+ * is refused, not changed. A database of an earlier build is read and not written when it has
+ * nothing to change.
+ */
+export function migrate(db: SqlDb): Promise<void> {
+  return ensureModules(db, [HOST_SCHEMA, MILEAGE_SCHEMA]);
 }
 
 interface TripRow {

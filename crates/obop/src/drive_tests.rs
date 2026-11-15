@@ -145,13 +145,13 @@ async fn status_says_whether_a_drive_is_connected_and_whether_you_may_browse() {
         (s, &v),
         (
             200,
-            &json!({"connected": true, "may_browse": true, "may_configure": true})
+            &json!({"connected": true, "may_browse": true, "may_configure": true, "may_write": false, "workspace": null})
         )
     );
     let (_, v) = get(&f.router, Some(&f.other), "/api/drive/status").await;
     assert_eq!(
         v,
-        json!({"connected": true, "may_browse": false, "may_configure": false})
+        json!({"connected": true, "may_browse": false, "may_configure": false, "may_write": false, "workspace": null})
     );
     let (_, v) = get(&f.router, Some(&f.agent), "/api/drive/status").await;
     assert_eq!(v["may_browse"], false, "an agent never browses");
@@ -160,7 +160,7 @@ async fn status_says_whether_a_drive_is_connected_and_whether_you_may_browse() {
     let (_, v) = get(&off.router, Some(&off.admin), "/api/drive/status").await;
     assert_eq!(
         v,
-        json!({"connected": false, "may_browse": false, "may_configure": true})
+        json!({"connected": false, "may_browse": false, "may_configure": true, "may_write": false, "workspace": null})
     );
 }
 

@@ -1,6 +1,6 @@
 [labels.de.module]
 name = "Spesen"
-description = "Spesenabrechnungen von Mitarbeitern mit dem Ablauf Entwurf, eingereicht, genehmigt und bezahlt. Das Bezahlen braucht eine eigene Berechtigung und eine menschliche Genehmigung; Belege werden per Notiz referenziert. Nummer aus einer Jahresserie; Mitarbeiter sehen nur ihre eigenen Abrechnungen, Führungskräfte und Finanzen alle."
+description = "Spesenabrechnungen von Mitarbeitern mit dem Ablauf Entwurf, eingereicht, genehmigt und bezahlt. Das Bezahlen braucht eine eigene Berechtigung. Genehmigen, Ablehnen und Bezahlen brauchen eine menschliche Genehmigung; Agenten dürfen sie nur vorschlagen. Belege werden per Notiz referenziert. Nummer aus einer Jahresserie; Mitarbeiter sehen nur eigene Abrechnungen, Führungskräfte und Finanzen alle."
 summary = "Spesenabrechnungen von Mitarbeitern mit dem Ablauf Entwurf, eingereicht, genehmigt und bezahlt."
 
 [labels.de.model.expenses_expense]

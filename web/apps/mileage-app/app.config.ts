@@ -5,6 +5,7 @@ import {
   withInfoPlist,
   type ConfigPlugin,
 } from "expo/config-plugins";
+import { identity } from "./config/identity.ts";
 import {
   iosBundleId,
   recordThinningOff,
@@ -21,7 +22,7 @@ import {
 // an App ID that was first signed in a free personal team can later not be registered by the
 // SpaceCorps team, so a test build must not take the id that the store build will have (lead
 // decision of the iOS port; the owner can override it, Q37).
-const APPLICATION_ID = "org.obop.mileage";
+const APPLICATION_ID = identity.applicationId;
 const IOS_BUNDLE_ID = iosBundleId(process.env.OBOP_IOS_BUNDLE_ID, APPLICATION_ID);
 
 // A build for a test instance on the same network (the emulator reaches the host as 10.0.2.2, a
@@ -37,7 +38,7 @@ const IOS_BUNDLE_ID = iosBundleId(process.env.OBOP_IOS_BUNDLE_ID, APPLICATION_ID
 // Xcode build phase of expo-constants evaluates this file again with the environment of that build,
 // so a forgotten .env.local can turn it on).
 const CLEARTEXT = process.env.OBOP_ALLOW_CLEARTEXT === "1";
-const DEFAULT_SERVER = process.env.OBOP_DEFAULT_SERVER ?? "";
+const DEFAULT_SERVER = process.env.OBOP_DEFAULT_SERVER ?? identity.defaultServer;
 
 // A test build made with OBOP_RECORD_THINNING=off does not thin the fixes the phone delivers
 // (src/core/thin.ts), so that one drive shows the cadence of the system and the thinning rules can
@@ -92,8 +93,8 @@ const config: ExpoConfig = {
   slug: "obop-mileage",
   // The redirect of the sign-in is `<scheme>:/oauth`, a private-use scheme in reverse domain form
   // (RFC 8252 section 7.1): the instance refuses any other form for a mobile client.
-  scheme: APPLICATION_ID,
-  version: "0.1.0",
+  scheme: identity.scheme,
+  version: identity.version,
   orientation: "portrait",
   userInterfaceStyle: "automatic",
   android: {
