@@ -257,7 +257,11 @@ describe("a move that is tried anyway", () => {
 });
 
 describe("the state cell of a row in the list of sign requests", () => {
-  beforeEach(() => mount(ListView));
+  // "Edit in list" is on, so a click on a cell edits it in place (without it a click opens the record).
+  beforeEach(() => {
+    localStorage.setItem("obop-list-edit:sign_request", "true");
+    return mount(ListView);
+  });
 
   /** Click the State cell of the row, which edits it in place, and read the options of its menu. */
   const states = async (title: string) => {

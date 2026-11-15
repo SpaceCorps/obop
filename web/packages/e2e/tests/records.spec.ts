@@ -37,7 +37,8 @@ test.describe("records in a built-in module (CRM leads)", () => {
     await expect(page.locator(".toast").filter({ hasText: "Lead created" })).toBeVisible();
     const row = leadRow(page, title);
     await expect(row).toBeVisible();
-    await expect(row).toContainText("Dana Example");
+    // Beside the open panel the list keeps its title, amount and stage columns.
+    await expect(panel.getByLabel("Contact name")).toHaveValue("Dana Example");
     await expect(row).toContainText("€1,234.50");
     await expect(row).toContainText("New");
     // The panel stays open on the saved record, now in edit mode.
@@ -153,7 +154,7 @@ test.describe("records in a built-in module (CRM leads)", () => {
 });
 
 test.describe("inline edit in the list", () => {
-  test("click a cell, type, Enter saves; Escape cancels; a bad value shows an inline error", async ({
+  test("with Edit in list, click a cell, type, Enter saves; Escape cancels; a bad value shows an inline error", async ({
     page,
     signIn,
     api,
@@ -166,23 +167,25 @@ test.describe("inline edit in the list", () => {
       expected_revenue_minor: 1000,
     });
     await signIn("root", "/crm/lead?view=list");
+    // A click on a cell opens the record; "Edit in list" makes it edit the cell in place.
+    await page.getByRole("button", { name: "Edit in list" }).click();
     const row = leadRow(page, title);
-    const cell = (n: number) => row.locator(`td[data-c="${n}"]`);
-    await expect(cell(2)).toHaveText("Original Name");
+    const cell = (f: string) => row.locator(`td[data-f="${f}"]`);
+    await expect(cell("contact_name")).toHaveText("Original Name");
 
-    await cell(2).click();
+    await cell("contact_name").click();
     const input = page.locator("td.editing input");
     await expect(input).toBeFocused();
     await input.fill("Edited Name");
     await page.keyboard.press("Enter");
-    await expect(cell(2)).toHaveText("Edited Name");
+    await expect(cell("contact_name")).toHaveText("Edited Name");
 
-    await cell(2).click();
+    await cell("contact_name").click();
     await page.locator("td.editing input").fill("Never saved");
     await page.keyboard.press("Escape");
-    await expect(cell(2)).toHaveText("Edited Name");
+    await expect(cell("contact_name")).toHaveText("Edited Name");
 
-    await cell(4).click();
+    await cell("expected_revenue_minor").click();
     await page.locator("td.editing input").fill("not money");
     await page.keyboard.press("Enter");
     await expect(page.locator(".ie-error")).toBeVisible();
@@ -193,5 +196,7 @@ test.describe("inline edit in the list", () => {
     const stored = (await api.list("root", "lead")).find((l) => l.title === title);
     expect(stored?.contact_name).toBe("Edited Name");
     expect(stored?.expected_revenue_minor).toBe(1000);
+    // The choice is kept for the next visit; turn it off again.
+    await page.getByRole("button", { name: "Edit in list" }).click();
   });
 });

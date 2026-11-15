@@ -1,21 +1,62 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { describeFor, fmt, inSentence, t } from "@obop/ui";
-import { call, type FieldMeta, type Row } from "../api.ts";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactNode,
+} from "react";
+import { Badge as UiBadge, describeFor, fmt, getCurrency, inSentence, t } from "@obop/ui";
+import { call, getTime, type FieldMeta, type ModelMeta, type Row } from "../api.ts";
+import { BlobThumb } from "../BlobFields.tsx";
 import { BulkDialog } from "../BulkDialog.tsx";
 import { BULK_CAP, EXPORT_CAP, outcomeOf } from "../bulk.ts";
 import { Cell } from "../fields.tsx";
 import { useData } from "../data.tsx";
 import { readPref, writePref } from "../favorites.ts";
-import { csvCell, download, isState, optionLabel, plainText, rowCurrency } from "../format.ts";
-import { fieldTitle } from "../labels.ts";
+import {
+  csvCell,
+  download,
+  formatDate,
+  instantText,
+  isEmpty,
+  optionLabel,
+  plainText,
+} from "../format.ts";
+import { dayInZone } from "../instants.ts";
+import { fieldTitle, fieldTitleByName } from "../labels.ts";
 import { PHONE_QUERY, useMedia } from "../media.ts";
-import { buildGroups, formatSumRows, type Group } from "../query.ts";
+import {
+  currencyOf,
+  listColumns,
+  stateFieldOf,
+  titleOf,
+  toneClassOf,
+  type PresentCtx,
+} from "../presentation.ts";
+import { buildGroups, formatSumRows, sumByCurrency, type Group, type Sort } from "../query.ts";
 import { DeleteDialog } from "../DeleteDialog.tsx";
 import { nounFor } from "../remove.ts";
 import { serverMessage } from "../serverMessage.ts";
 import { Pager, Popover, Icon } from "../ui.tsx";
 import { canMove, isGoverned } from "../workflow.ts";
 import { InlineEdit } from "./InlineEdit.tsx";
+import {
+  cardMeta,
+  cardRoles,
+  chooseColumns,
+  dueLevel,
+  editableField,
+  firstColumnMode,
+  isMaskedValue,
+  listOrder,
+  listSummable,
+  nextSort,
+  fitColumns,
+  type CardRoles,
+} from "./listLayout.ts";
 import type { ViewProps } from "./types.ts";
 
 type Item = { t: "group"; g: Group } | { t: "row"; row: Row; ri: number };
@@ -29,28 +70,102 @@ function flatten(groups: Group[], collapsed: Set<string>, out: Item[], counter: 
   }
 }
 
-/** Everything but long text, up to 8 columns, and the status field always makes it. */
-function defaultColumns(fields: FieldMeta[]): string[] {
-  const short = fields.filter((f) => f.kind !== "longtext");
-  const status = short.find(isState);
-  const picked = short.slice(0, status ? 7 : 8);
-  if (status && !picked.includes(status)) picked.push(status);
-  return picked.map((f) => f.name);
+const isNum = (f: FieldMeta) => f.kind === "number" || f.kind === "money" || f.kind === "decimal";
+
+/** The selection column, in pixels (list.css .list .selcol). */
+const SELECT_COL_PX = 52;
+
+/** How long a click on an editable cell waits for a second click, which edits it in place. */
+const DOUBLE_MS = 250;
+
+/** A plain click on a link inside a row opens the row; Ctrl, Cmd or Shift leave it to the browser. */
+function rowLinkClick(e: MouseEvent) {
+  if (e.ctrlKey || e.metaKey || e.shiftKey) e.stopPropagation();
+  else e.preventDefault();
 }
 
-const isAgg = (f: FieldMeta) => f.kind === "number" || f.kind === "money" || f.kind === "decimal";
+/** What a tap or click on a record means: open it, or tick it while a phone is selecting. */
+type Open = (row: Row) => void;
 
 export function ListView(p: ViewProps) {
   const d = useData();
   const { fields, rows, state, setState } = p;
-  const prefKey = `obop-cols:${p.model.name}`;
-  const [colNames, setColNames] = useState<string[]>(() =>
-    readPref<string[]>(prefKey, defaultColumns(fields)),
+  const model = p.model;
+  // A phone shows one card per record (list.css); a device without hover never waits for a
+  // second tap, so a tap opens the record at once.
+  const phone = useMedia(PHONE_QUERY);
+  const touch = useMedia("(hover: none)");
+
+  // The width the table has decides how many columns it shows (presentation.ts listColumns).
+  const root = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(1200);
+  useLayoutEffect(() => {
+    const el = root.current;
+    if (!el) return;
+    const measure = () => {
+      // The box of the table without its scroll bar. jsdom measures nothing; 16 px steps (down, so
+      // the columns never overflow) keep a resize from redrawing the table at every pixel.
+      const w = Math.floor(el.clientWidth / 16) * 16;
+      if (w > 0) setWidth((old) => (old === w ? old : w));
+    };
+    measure();
+    if (typeof ResizeObserver !== "function") return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Columns the person picked themselves; null keeps the ranking of presentation.ts.
+  const prefKey = `obop-list-cols:${model.name}`;
+  const [custom, setCustom] = useState<string[] | null>(() =>
+    readPref<string[] | null>(prefKey, null),
   );
-  const cols = fields.filter((f) => colNames.includes(f.name));
+  // Every column has a width by its kind and head (listLayout.ts columnWidth) and the table is laid
+  // out fixed, so the columns that fit are known before anything is drawn: low-ranked ones go
+  // until the rest fit, never the title, the first amount or the status. Columns the person picked
+  // all stay; the table then scrolls sideways inside its box.
+  const stateName = stateFieldOf(model)?.name;
+  const { cols, widths } = useMemo(() => {
+    const ranked = chooseColumns(model, fields, 100_000, rows, custom);
+    return fitColumns(ranked, custom ? Infinity : width, fieldTitle, stateName);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model, fields, width, rows, custom, stateName, d.lang]);
+  const mode = firstColumnMode(model, cols);
+  const roles = useMemo(() => cardRoles(model, fields, rows), [model, fields, rows]);
+  const order = useMemo(() => listOrder(model, fields), [model, fields]);
+  // Withheld from this person (the page leaves them out of `fields`): shown greyed among the columns.
+  const withheld = useMemo(
+    () =>
+      model.fields.filter((f) => f.class !== "secret" && !fields.some((x) => x.name === f.name)),
+    [model, fields],
+  );
+
+  const ctx = useMemo<PresentCtx>(
+    () => ({
+      refText: d.refText,
+      rowOf: (m, id) => d.store.peek(m)?.find((r) => r.id === id),
+      modelOf: (m) => d.models.get(m)?.model,
+      moduleId: d.models.get(model.name)?.module.id,
+      instanceCurrency: getCurrency(),
+    }),
+    [d, model.name],
+  );
+  const currencyFor = (row: Row) => currencyOf(row, model, ctx);
+  const today = dayInZone(new Date().toISOString(), getTime().zone);
+
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<{ id: string; field: string } | null>(null);
+  // "Edit in list": a click on a cell edits it in place instead of opening the record.
+  const editKey = `obop-list-edit:${model.name}`;
+  const [editMode, setEditModeState] = useState(() => readPref<boolean>(editKey, false));
+  const setEditMode = (on: boolean) => {
+    setEditModeState(on);
+    writePref(editKey, on);
+    if (!on) setEditing(null);
+  };
+  // A phone selects records only after "Select", as a phone's own lists do.
+  const [selecting, setSelecting] = useState(false);
   const [pos, setPos] = useState({ r: 0, c: 1 });
   const [deleting, setDeleting] = useState(false);
   // "Select all N matching" (D1): the selection is the whole search, not only this page.
@@ -61,35 +176,8 @@ export function ListView(p: ViewProps) {
   const [exporting, setExporting] = useState<{ done: number; total: number } | null>(null);
   const cancelExport = useRef(false);
   const grid = useRef<HTMLTableSectionElement>(null);
-  // A phone shows one block per record (list.css): a tap opens it instead of editing in place.
-  const phone = useMedia(PHONE_QUERY);
-  // There the column heads are a strip of sort buttons that scrolls sideways. As on the tab strips,
-  // each end that hides a button is marked (data-more) and list.css fades it, so a cut-off head
-  // reads as more to scroll to. scrollLeft is negative in right-to-left, hence Math.abs.
-  const sortStrip = useRef<HTMLTableRowElement>(null);
-  const colKey = cols.map((f) => f.name).join(" ");
-  useEffect(() => {
-    const s = sortStrip.current;
-    if (!s || !phone) return;
-    const mark = () => {
-      const max = s.scrollWidth - s.clientWidth;
-      const from = Math.abs(s.scrollLeft);
-      const more = [from > 1 && "start", from < max - 1 && "end"].filter(Boolean).join(" ");
-      if (more) s.dataset.more = more;
-      else delete s.dataset.more;
-    };
-    mark();
-    s.addEventListener("scroll", mark, { passive: true });
-    // The strip and its heads: a new language changes the heads' widths and not the strip's. jsdom
-    // has no ResizeObserver.
-    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(mark) : undefined;
-    for (const el of [s, ...s.children]) ro?.observe(el);
-    return () => {
-      s.removeEventListener("scroll", mark);
-      ro?.disconnect();
-      delete s.dataset.more;
-    };
-  }, [phone, colKey]);
+  const pending = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(pending.current), []);
 
   const live = useMemo(() => {
     const ids = new Set(rows.map((r) => r.id));
@@ -118,30 +206,46 @@ export function ListView(p: ViewProps) {
   const searchKey = JSON.stringify(state.facets);
   useEffect(() => {
     setAllMatching(false);
-  }, [searchKey, p.model.name]);
+  }, [searchKey, model.name]);
   const pageOn = rows.length > 0 && live.size === rows.length;
   const allOn = rows.length > 0 && (allMatching || pageOn);
   const selCount = allMatching ? p.total : live.size;
   const hasSelection = live.size > 0 || allMatching;
   const offerAll = pageOn && !allMatching && p.total > rows.length;
-  const nCols = cols.length + 2;
-  const firstAgg = cols.findIndex(isAgg);
-  const span = firstAgg < 0 ? nCols : firstAgg + 1;
+  // Phone: the checkboxes show while selecting; elsewhere always.
+  const showSelect = !phone || selecting || hasSelection;
+  const sums = cols.map((f) => listSummable(f, model));
+  const firstSum = sums.indexOf(true);
+  const phoneSum = roles.money && listSummable(roles.money, model) ? roles.money : undefined;
+  const nCols = (phone ? 1 : cols.length) + 1;
+
+  // The list's order: the person's sort, else the default order (marked, not chosen).
+  const shownSort: (Sort & { chosen: boolean }) | undefined = state.sort
+    ? { ...state.sort, chosen: true }
+    : order[0] && order[0].field !== "id"
+      ? { f: order[0].field, dir: order[0].dir, chosen: false }
+      : undefined;
+  const sortBy = (f: FieldMeta) =>
+    setState({ ...state, sort: nextSort(state.sort, f.name, order) });
 
   const setColumns = (names: string[]) => {
-    setColNames(names);
+    setCustom(names);
     writePref(prefKey, names);
+    setEditing(null);
   };
-  const sortBy = (f: FieldMeta) => {
-    const s = state.sort;
-    const next =
-      !s || s.f !== f.name
-        ? { f: f.name, dir: "asc" as const }
-        : s.dir === "asc"
-          ? { f: f.name, dir: "desc" as const }
-          : undefined;
-    setState({ ...state, sort: next });
+  const resetColumns = () => {
+    setCustom(null);
+    writePref(prefKey, null);
   };
+  const toggleColumn = (f: FieldMeta, on: boolean) => {
+    const names = cols.map((c) => c.name);
+    if (!on) return setColumns(names.filter((n) => n !== f.name));
+    // A new column goes before the status, which stays last.
+    const last = cols.at(-1);
+    const keepLast = last && last.kind === "select" && last.name === roles.state?.name;
+    setColumns(keepLast ? [...names.slice(0, -1), f.name, last.name] : [...names, f.name]);
+  };
+
   const toggle = (id: string) => {
     if (allMatching) {
       // Unticking one record leaves "all matching": what is on this page stays selected.
@@ -156,9 +260,24 @@ export function ListView(p: ViewProps) {
       return n;
     });
   };
+  const clearSelection = () => {
+    setSelected(new Set());
+    setAllMatching(false);
+  };
 
   function cellText(f: FieldMeta, r: Row) {
-    return plainText(f, r[f.name], d.refText, rowCurrency(r));
+    return plainText(f, r[f.name], d.refText, f.kind === "money" ? currencyFor(r) : undefined);
+  }
+  /** A value as a phone card's second line reads it: dates in the region's words, refs by name. */
+  function shortText(f: FieldMeta, r: Row): string {
+    const v = r[f.name];
+    if (isEmpty(v)) return "";
+    if (f.kind === "ref" && f.to) return d.refText(f.to, String(v));
+    if (f.kind === "date") return formatDate(v);
+    if (f.kind === "datetime") return instantText(v);
+    if (f.kind === "money") return fmt.money(v, currencyFor(r));
+    if (f.kind === "select") return optionLabel(String(v), f);
+    return cellText(f, r);
   }
   async function exportCsv() {
     // Selected rows of this page, else everything the search matches, fetched page by page.
@@ -184,9 +303,11 @@ export function ListView(p: ViewProps) {
           "info",
         );
     }
-    const head = cols.map((f) => csvCell(fieldTitle(f))).join(",");
-    const body = pick.map((r) => cols.map((f) => csvCell(cellText(f, r))).join(","));
-    download(`${p.model.name}.csv`, [head, ...body].join("\r\n") + "\r\n");
+    // A phone shows cards, not columns: its export has every column the desktop would show.
+    const out = phone ? listColumns(model, 100_000, { fields }) : cols;
+    const head = out.map((f) => csvCell(fieldTitle(f))).join(",");
+    const body = pick.map((r) => out.map((f) => csvCell(cellText(f, r))).join(","));
+    download(`${model.name}.csv`, [head, ...body].join("\r\n") + "\r\n");
     d.notify(
       t("{count, plural, one {Exported # record} other {Exported # records}}", {
         count: pick.length,
@@ -212,6 +333,11 @@ export function ListView(p: ViewProps) {
       failed.length ? "error" : "ok",
     );
   }
+
+  const canEditCell = (row: Row, f: FieldMeta) =>
+    !phone && p.canUpdate && editableField(f) && !isMaskedValue(row[f.name]);
+  // The editable cells of a row in column order, for Tab and Shift+Tab while editing.
+  const editableCols = (row: Row) => cols.filter((f, i) => i > 0 && canEditCell(row, f));
 
   const focusCell = (r: number, c: number) => {
     const el = grid.current?.querySelector<HTMLElement>(`td[data-r="${r}"][data-c="${c}"]`);
@@ -240,27 +366,64 @@ export function ListView(p: ViewProps) {
     } else if (e.key === " " && row) {
       e.preventDefault();
       toggle(row.row.id);
-    } else if (e.key === "F2" && row && p.canUpdate && c >= 1 && c <= cols.length) {
+    } else if (e.key === "F2" && row && !phone && c >= 1 && c <= cols.length) {
       e.preventDefault();
       const f = cols[c - 1]!;
-      if (!isMaskedVal(row.row[f.name])) setEditing({ id: row.row.id, field: f.name });
+      if (canEditCell(row.row, f)) setEditing({ id: row.row.id, field: f.name });
     }
   };
 
-  function clickCell(r: Row, f: FieldMeta, ci: number) {
-    // The first column opens the record; other cells edit in place when allowed, except on a phone.
-    if (!phone && p.canUpdate && ci > 0 && !isMaskedVal(r[f.name]) && !f.computed && !f.sequence)
-      setEditing({ id: r.id, field: f.name });
-    else p.onOpen(r.id);
+  const recordHref = (row: Row) => d.linkTo(model.name, { id: row.id });
+  const openInTab = (row: Row) => {
+    const href = recordHref(row);
+    if (href) window.open(href, "_blank", "noopener");
+  };
+  // Where the mouse went down: a click that ends elsewhere with text selected was a drag to
+  // select that text (to copy it), not a click on the record.
+  const down = useRef<{ x: number; y: number } | null>(null);
+  const draggedToSelect = (e: MouseEvent) => {
+    const d0 = down.current;
+    if (!d0 || Math.hypot(e.clientX - d0.x, e.clientY - d0.y) < 5) return false;
+    const s = window.getSelection();
+    return !!s && !s.isCollapsed;
+  };
+  const open: Open = (row) => (phone && selecting ? toggle(row.id) : p.onOpen(row.id));
+
+  /**
+   * A click anywhere in a row opens the record. "Edit in list" turns a click on an editable cell
+   * into editing it; without it a double-click (or F2) does, so a click on such a cell waits a moment
+   * for the second one. The first column always opens the record, at once.
+   */
+  function clickCell(e: MouseEvent<HTMLElement>, row: Row, f: FieldMeta, ci: number) {
+    window.clearTimeout(pending.current);
+    // The cell, not the words in it, holds the focus: the arrow keys go on from there, and closing
+    // the record comes back to it.
+    e.currentTarget.focus({ preventScroll: true });
+    const editable = ci > 0 && canEditCell(row, f);
+    const edit = () => {
+      // A double-click also selected the word under the mouse; the input takes over from it.
+      window.getSelection()?.removeAllRanges();
+      setEditing({ id: row.id, field: f.name });
+    };
+    if (editable && e.detail >= 2 && !editMode) return edit();
+    if (draggedToSelect(e)) return;
+    if (e.ctrlKey || e.metaKey || e.shiftKey) return openInTab(row);
+    if (editable && editMode) return edit();
+    const tap = (e.nativeEvent as PointerEvent).pointerType === "touch" || touch;
+    if (!editable || tap) return open(row);
+    pending.current = window.setTimeout(() => open(row), DOUBLE_MS);
   }
+  const auxCell = (e: MouseEvent, row: Row) => {
+    if (e.button === 1) openInTab(row);
+  };
 
   // A governed field moves through its actions, so it is not set in bulk.
-  const settableFields = p.fields.filter(
-    (f) => (f.kind === "select" || f.kind === "bool") && !isGoverned(p.model, f),
+  const settableFields = fields.filter(
+    (f) => (f.kind === "select" || f.kind === "bool") && !isGoverned(model, f),
   );
   const selectedRecords = rows
     .filter((r) => live.has(r.id))
-    .map((r) => ({ id: r.id, label: d.recordLabel(p.model.name, r) }));
+    .map((r) => ({ id: r.id, label: titleOf(model, r, ctx) }));
 
   // The dialog lives in the model page: a bulk delete can empty the list, which replaces this view
   // while the dialog still has its results to show.
@@ -298,14 +461,14 @@ export function ListView(p: ViewProps) {
           : t("{count, plural, one {Change # record} other {Change # records}}", { count: n })
       }
       collect={(o) => p.fetchAll(o)}
-      labelOf={(row) => d.recordLabel(p.model.name, row)}
+      labelOf={(row) => titleOf(model, row, ctx)}
       noun={(n) => nounFor(inSentence(p.title), n)}
       apply={async (row) => {
-        const label = d.recordLabel(p.model.name, row);
+        const label = titleOf(model, row, ctx);
         const r =
           bulk.kind === "delete"
-            ? await call(d.token, `${p.model.name}.delete`, { id: row.id })
-            : await call(d.token, `${p.model.name}.update`, {
+            ? await call(d.token, `${model.name}.delete`, { id: row.id })
+            : await call(d.token, `${model.name}.update`, {
                 id: row.id,
                 [bulk.field.name]: bulk.value,
               });
@@ -316,9 +479,8 @@ export function ListView(p: ViewProps) {
         p.setDialog(null);
       }}
       onDone={() => {
-        setSelected(new Set());
-        setAllMatching(false);
-        void d.changed(p.model.name);
+        clearSelection();
+        void d.changed(model.name);
       }}
     />
   ) : null;
@@ -329,245 +491,449 @@ export function ListView(p: ViewProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bulk]);
 
-  return (
-    <div className="listview">
-      <div className="listbar">
-        {hasSelection ? (
-          <div className="bulkbar" role="toolbar" aria-label={t("Bulk actions")}>
-            <strong>{t("{count} selected", { count: fmt.integer(selCount) })}</strong>
-            {offerAll && (
-              <button className="linkbtn" onClick={() => setAllMatching(true)}>
-                {t("Select all {total} matching", { total: fmt.integer(p.total) })}
-              </button>
-            )}
-            {allMatching && (
-              <span className="hint" role="status">
-                {p.total > BULK_CAP
-                  ? t(
-                      "All {total} matching records are selected; bulk actions use the first {cap}.",
-                      {
-                        total: fmt.integer(p.total),
-                        cap: fmt.integer(BULK_CAP),
-                      },
-                    )
-                  : t("All {total} matching records are selected.", {
-                      total: fmt.integer(p.total),
-                    })}
-              </span>
-            )}
-            {p.canUpdate && settableFields.length > 0 && (
-              <Popover label={t("Set…")} ariaLabel={t("Set a field on the selected records")}>
-                {(close) => (
-                  <div className="menu-list">
-                    {settableFields.map((f) => (
-                      <div key={f.name} role="group" aria-label={fieldTitle(f)}>
-                        <h4>{fieldTitle(f)}</h4>
-                        {(f.kind === "bool" ? ["true", "false"] : (f.options ?? [])).map((o) => (
-                          <button
-                            key={o}
-                            onClick={() => {
-                              close();
-                              void bulkSet(f, f.kind === "bool" ? o === "true" : o);
-                            }}
-                          >
-                            {f.kind === "bool"
-                              ? o === "true"
-                                ? t("Yes")
-                                : t("No")
-                              : optionLabel(o, f)}
-                          </button>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </Popover>
-            )}
-            <button className="btn small" disabled={!!exporting} onClick={() => void exportCsv()}>
-              <Icon name="download" size={13} /> {t("Export selected")}
-            </button>
-            {p.canDelete && (
-              <button
-                className="btn small danger-text"
-                onClick={() => (allMatching ? setBulk({ kind: "delete" }) : setDeleting(true))}
-              >
-                <Icon name="trash" size={13} /> {t("Delete")}
-              </button>
-            )}
-            <button
-              className="linkbtn"
-              onClick={() => {
-                setSelected(new Set());
-                setAllMatching(false);
-              }}
-            >
-              {t("Clear")}
-            </button>
-          </div>
-        ) : (
-          !phone && (
-            <span className="hint">
-              {p.canUpdate ? t("Click a cell to edit it, the first column opens the record.") : ""}
-            </span>
-          )
-        )}
-        {exporting && (
-          <span className="hint" role="status" aria-live="polite">
-            {t("Exporting {done} of {total}…", {
-              done: fmt.integer(exporting.done),
-              total: fmt.integer(exporting.total),
-            })}{" "}
-            <button className="linkbtn" onClick={() => (cancelExport.current = true)}>
-              {t("Cancel")}
-            </button>
-          </span>
-        )}
-        <span className="grow" />
-        <button
-          className="btn small"
-          onClick={() => void exportCsv()}
-          aria-label={t("Export all as CSV")}
-          hidden={hasSelection}
-          disabled={!!exporting}
-        >
-          <Icon name="download" size={13} /> {t("Export CSV")}
+  /** The value of a cell, as the list draws it. */
+  function cellValue(row: Row, f: FieldMeta): ReactNode {
+    const v = row[f.name];
+    if (isEmpty(v) || isMaskedValue(v)) return <Cell field={f} value={v} />;
+    if (f.kind === "ref" && f.to) return <RefText field={f} id={String(v)} />;
+    if (f.kind === "select")
+      return (
+        <UiBadge tone={toneClassOf(f, String(v), model) as `t-${string}`}>
+          {optionLabel(String(v), f)}
+        </UiBadge>
+      );
+    const cell = (
+      <Cell
+        field={f}
+        value={v}
+        currency={f.kind === "money" ? currencyFor(row) : undefined}
+        row={row}
+        link={false}
+      />
+    );
+    return <Due level={dueLevel(model, f, row, today)}>{cell}</Due>;
+  }
+
+  /**
+   * The first column, and the title of a phone card: the record's title (titleOf), or the column's
+   * own value where the rest of the title has columns of its own. Never a link to another record.
+   */
+  function firstCell(row: Row, f: FieldMeta | undefined, asTitle = mode === "title"): ReactNode {
+    const v = f ? row[f.name] : undefined;
+    const text: ReactNode =
+      asTitle || !f ? (
+        titleOf(model, row, ctx)
+      ) : isEmpty(v) ? (
+        ""
+      ) : f.kind === "ref" && f.to ? (
+        d.refText(f.to, String(v))
+      ) : (
+        <Cell
+          field={f}
+          value={v}
+          row={row}
+          link={false}
+          currency={f.kind === "money" ? currencyFor(row) : undefined}
+        />
+      );
+    const img = roles.image && !isEmpty(row[roles.image.name]) ? row[roles.image.name] : null;
+    const href = recordHref(row);
+    // A record without its own value in the column yet (a draft without its number) is named by
+    // the rest of its title, greyed: "Draft · Payroll · 31 Dec".
+    const unset = asTitle && !!f && isEmpty(v);
+    const body = (
+      <>
+        {img !== null && <BlobThumb id={String(img)} alt="" size={28} className="row-avatar" />}
+        <span className={`rowtitle${unset ? " dim" : ""}`}>
+          {text === "" ? <span className="dim">—</span> : text}
+        </span>
+      </>
+    );
+    return href ? (
+      <a
+        className="rowlink"
+        href={href}
+        tabIndex={-1}
+        onClick={rowLinkClick}
+        onAuxClick={(e) => e.stopPropagation()}
+      >
+        {body}
+      </a>
+    ) : (
+      <span className="rowlink">{body}</span>
+    );
+  }
+
+  const selectAll = (
+    <input
+      type="checkbox"
+      aria-label={t("Select all records")}
+      checked={allOn}
+      ref={(el) => {
+        if (el) el.indeterminate = hasSelection && !allOn;
+      }}
+      onChange={() => {
+        setAllMatching(false);
+        setSelected(allOn ? new Set() : new Set(rows.map((r) => r.id)));
+      }}
+    />
+  );
+
+  const bulkbar = (
+    <div className="bulkbar" role="toolbar" aria-label={t("Bulk actions")}>
+      <strong>{t("{count} selected", { count: fmt.integer(selCount) })}</strong>
+      {offerAll && (
+        <button className="linkbtn" onClick={() => setAllMatching(true)}>
+          {t("Select all {total} matching", { total: fmt.integer(p.total) })}
         </button>
-        <Popover
-          label={
-            <>
-              <Icon name="columns" size={14} /> {t("Columns")}
-            </>
-          }
-          ariaLabel={t("Choose columns")}
-          align="end"
-          className="btn small"
-        >
-          {() => (
+      )}
+      {allMatching && (
+        <span className="hint" role="status">
+          {p.total > BULK_CAP
+            ? t("All {total} matching records are selected; bulk actions use the first {cap}.", {
+                total: fmt.integer(p.total),
+                cap: fmt.integer(BULK_CAP),
+              })
+            : t("All {total} matching records are selected.", {
+                total: fmt.integer(p.total),
+              })}
+        </span>
+      )}
+      {p.canUpdate && settableFields.length > 0 && (
+        <Popover label={t("Set…")} ariaLabel={t("Set a field on the selected records")}>
+          {(close) => (
             <div className="menu-list">
-              {fields.map((f) => (
-                <label key={f.name} className="fp-item">
-                  <input
-                    type="checkbox"
-                    checked={colNames.includes(f.name)}
-                    disabled={colNames.length === 1 && colNames.includes(f.name)}
-                    onChange={(e) =>
-                      setColumns(
-                        e.target.checked
-                          ? fields
-                              .filter((x) => colNames.includes(x.name) || x.name === f.name)
-                              .map((x) => x.name)
-                          : colNames.filter((n) => n !== f.name),
-                      )
-                    }
-                  />
-                  <span>{fieldTitle(f)}</span>
-                </label>
+              {settableFields.map((f) => (
+                <div key={f.name} role="group" aria-label={fieldTitle(f)}>
+                  <h4>{fieldTitle(f)}</h4>
+                  {(f.kind === "bool" ? ["true", "false"] : (f.options ?? [])).map((o) => (
+                    <button
+                      key={o}
+                      onClick={() => {
+                        close();
+                        void bulkSet(f, f.kind === "bool" ? o === "true" : o);
+                      }}
+                    >
+                      {f.kind === "bool" ? (o === "true" ? t("Yes") : t("No")) : optionLabel(o, f)}
+                    </button>
+                  ))}
+                </div>
               ))}
             </div>
           )}
         </Popover>
+      )}
+      {/* A phone has room for icons only; "Done" there ends the selection. */}
+      <button
+        className={`btn small${phone ? " icon-only" : ""}`}
+        disabled={!!exporting}
+        onClick={() => void exportCsv()}
+        aria-label={phone ? t("Export selected") : undefined}
+        title={phone ? t("Export selected") : undefined}
+      >
+        <Icon name="download" size={13} />
+        {!phone && <> {t("Export selected")}</>}
+      </button>
+      {p.canDelete && (
+        <button
+          className={`btn small danger-text${phone ? " icon-only" : ""}`}
+          onClick={() => (allMatching ? setBulk({ kind: "delete" }) : setDeleting(true))}
+          aria-label={phone ? t("Delete") : undefined}
+          title={phone ? t("Delete") : undefined}
+        >
+          <Icon name="trash" size={13} />
+          {!phone && <> {t("Delete")}</>}
+        </button>
+      )}
+      {!phone && (
+        <button className="linkbtn" onClick={clearSelection}>
+          {t("Clear")}
+        </button>
+      )}
+    </div>
+  );
+
+  const exportStatus = exporting && (
+    <span className="hint" role="status" aria-live="polite">
+      {t("Exporting {done} of {total}…", {
+        done: fmt.integer(exporting.done),
+        total: fmt.integer(exporting.total),
+      })}{" "}
+      <button className="linkbtn" onClick={() => (cancelExport.current = true)}>
+        {t("Cancel")}
+      </button>
+    </span>
+  );
+
+  const exportButton = (
+    <button
+      className={`btn small${phone ? " icon-only" : ""}`}
+      onClick={() => void exportCsv()}
+      aria-label={t("Export all as CSV")}
+      title={phone ? t("Export all as CSV") : undefined}
+      disabled={!!exporting}
+    >
+      <Icon name="download" size={13} />
+      {!phone && <> {t("Export CSV")}</>}
+    </button>
+  );
+
+  const columnsMenu = (
+    <Popover
+      label={
+        <>
+          <Icon name="columns" size={14} /> {t("Columns")}
+        </>
+      }
+      ariaLabel={t("Choose columns")}
+      align="end"
+      className="btn small"
+    >
+      {() => (
+        <div className="menu-list colmenu">
+          {fields.map((f) => {
+            const on = cols.some((c) => c.name === f.name);
+            return (
+              <label key={f.name} className="fp-item">
+                <input
+                  type="checkbox"
+                  checked={on}
+                  disabled={on && cols.length === 1}
+                  onChange={(e) => toggleColumn(f, e.target.checked)}
+                />
+                <span>{fieldTitle(f)}</span>
+              </label>
+            );
+          })}
+          {withheld.map((f) => (
+            <label key={f.name} className="fp-item withheld" title={t("Withheld from you")}>
+              <input type="checkbox" checked={false} disabled />
+              <span>{fieldTitle(f)}</span>
+              <Icon name="lock" size={12} />
+              <span className="sr-only">{t("Withheld from you")}</span>
+            </label>
+          ))}
+          {custom && (
+            <button className="linkbtn colreset" onClick={resetColumns}>
+              {t("Reset columns")}
+            </button>
+          )}
+        </div>
+      )}
+    </Popover>
+  );
+
+  const sortable = useMemo(() => listColumns(model, 100_000, { fields }), [model, fields]);
+  const sortMenu = (
+    <Popover
+      label={
+        <>
+          <Icon name="sort" size={14} />{" "}
+          {shownSort ? fieldTitleByName(shownSort.f, fields) : t("Sort")}
+          {shownSort && (
+            <span className="sortmark on" aria-hidden="true">
+              {shownSort.dir === "desc" ? "▼" : "▲"}
+            </span>
+          )}
+        </>
+      }
+      ariaLabel={t("Sort by")}
+      className="btn small sortbtn"
+    >
+      {(close) => (
+        <div className="menu-list sortmenu" role="group" aria-label={t("Sort by")}>
+          <button
+            aria-pressed={!state.sort}
+            onClick={() => {
+              close();
+              setState({ ...state, sort: undefined });
+            }}
+          >
+            {t("Default order")}
+          </button>
+          {sortable.map((f) => {
+            const on = state.sort?.f === f.name;
+            return (
+              <button
+                key={f.name}
+                aria-pressed={on}
+                onClick={() => {
+                  close();
+                  // Numbers and dates start with the largest, words with A.
+                  const first = isNum(f) || f.kind === "date" || f.kind === "datetime";
+                  setState({
+                    ...state,
+                    sort: on
+                      ? { f: f.name, dir: state.sort!.dir === "asc" ? "desc" : "asc" }
+                      : { f: f.name, dir: first ? "desc" : "asc" },
+                  });
+                }}
+              >
+                <span>{fieldTitle(f)}</span>
+                {on && (
+                  <span className="sortmark on" aria-hidden="true">
+                    {state.sort!.dir === "desc" ? "▼" : "▲"}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </Popover>
+  );
+
+  const selCell = (row: Row, ri: number) => (
+    <td
+      role="gridcell"
+      className="selcol"
+      data-r={ri}
+      data-c={0}
+      tabIndex={pos.r === ri && pos.c === 0 ? 0 : -1}
+      onFocus={() => setPos({ r: ri, c: 0 })}
+      // The whole cell selects, not only the 17 px box (the box itself has onChange).
+      onClick={(e) => {
+        if (e.target === e.currentTarget) toggle(row.id);
+      }}
+    >
+      <input
+        type="checkbox"
+        tabIndex={-1}
+        aria-label={t("Select record")}
+        checked={allMatching || live.has(row.id)}
+        onChange={() => toggle(row.id)}
+      />
+    </td>
+  );
+
+  return (
+    <div className={`listview${phone ? " phone" : ""}`}>
+      <div className="listbar">
+        {phone && selecting && (
+          <label className="phone-all">
+            {selectAll}
+            <span>{t("All")}</span>
+          </label>
+        )}
+        {hasSelection
+          ? bulkbar
+          : phone
+            ? sortMenu
+            : p.canUpdate && (
+                <button
+                  className={`btn small edittoggle${editMode ? " on" : ""}`}
+                  aria-pressed={editMode}
+                  onClick={() => setEditMode(!editMode)}
+                  title={t("Click a cell to change it in place; the first column opens the record")}
+                >
+                  <Icon name="edit" size={13} /> {t("Edit in list")}
+                </button>
+              )}
+        {exportStatus}
+        <span className="grow" />
+        {phone && (
+          <button
+            className="btn small"
+            aria-pressed={selecting}
+            onClick={() => {
+              if (selecting) clearSelection();
+              setSelecting(!selecting);
+            }}
+          >
+            {selecting ? t("Done") : t("Select")}
+          </button>
+        )}
+        {!hasSelection && exportButton}
+        {!phone && columnsMenu}
       </div>
-      <div className="tablewrap">
+      <div className="tablewrap" ref={root}>
         <table
-          className="table list"
+          className={`table list${editMode && !phone ? " editmode" : ""}${phone ? "" : " fitted"}`}
           role="grid"
           aria-label={t("{model} list", { model: p.title })}
           aria-rowcount={p.total + 1}
+          style={
+            phone
+              ? undefined
+              : { minInlineSize: `${widths.reduce((a, b) => a + b, SELECT_COL_PX)}px` }
+          }
         >
-          <thead>
-            <tr role="row" ref={sortStrip}>
-              <th className="selcol" role="columnheader" scope="col">
-                <input
-                  type="checkbox"
-                  aria-label={t("Select all records")}
-                  checked={allOn}
-                  ref={(el) => {
-                    if (el) el.indeterminate = hasSelection && !allOn;
-                  }}
-                  onChange={() => {
-                    setAllMatching(false);
-                    setSelected(allOn ? new Set() : new Set(rows.map((r) => r.id)));
-                  }}
-                />
-              </th>
-              {cols.map((f) => {
-                const s = state.sort?.f === f.name ? state.sort.dir : undefined;
-                return (
-                  <th
-                    key={f.name}
-                    role="columnheader"
-                    scope="col"
-                    aria-sort={s === "asc" ? "ascending" : s === "desc" ? "descending" : "none"}
-                    className={isAgg(f) ? "num" : ""}
-                    title={describeFor(f)}
-                  >
-                    <button className="thbtn" onClick={() => sortBy(f)}>
-                      {fieldTitle(f)}
-                      {f.required && (
-                        <span className="req" aria-hidden="true">
-                          {" "}
-                          *
+          {!phone && (
+            <colgroup>
+              {showSelect && <col style={{ inlineSize: `${SELECT_COL_PX}px` }} />}
+              {cols.map((f, i) => (
+                <col key={f.name} style={{ inlineSize: `${widths[i]}px` }} />
+              ))}
+            </colgroup>
+          )}
+          <thead className={phone ? "sr-only" : undefined}>
+            <tr role="row">
+              {showSelect && (
+                <th className="selcol" role="columnheader" scope="col">
+                  {/* A phone has its own "All" above the cards. */}
+                  {!phone && selectAll}
+                </th>
+              )}
+              {phone ? (
+                <th role="columnheader" scope="col">
+                  {p.title}
+                </th>
+              ) : (
+                cols.map((f, ci) => {
+                  const s = shownSort?.f === f.name ? shownSort : undefined;
+                  return (
+                    <th
+                      key={f.name}
+                      role="columnheader"
+                      scope="col"
+                      aria-sort={
+                        s?.dir === "asc" ? "ascending" : s?.dir === "desc" ? "descending" : "none"
+                      }
+                      className={`${isNum(f) ? "num" : ""}${ci === 0 ? " titlecol" : ""}`}
+                      title={describeFor(f)}
+                    >
+                      <button className="thbtn" onClick={() => sortBy(f)}>
+                        <span className="thlabel">{fieldTitle(f)}</span>
+                        <span
+                          className={`sortmark${s ? (s.chosen ? " on" : " dflt") : ""}`}
+                          aria-hidden="true"
+                        >
+                          {s?.dir === "desc" ? "▼" : "▲"}
                         </span>
-                      )}
-                      <span className={`sortmark${s ? " on" : ""}`} aria-hidden="true">
-                        {s === "desc" ? "▼" : "▲"}
-                      </span>
-                    </button>
-                  </th>
-                );
-              })}
-              <th className="opencol" role="columnheader" scope="col">
-                <span className="sr-only">{t("Open")}</span>
-              </th>
+                      </button>
+                    </th>
+                  );
+                })
+              )}
             </tr>
           </thead>
-          <tbody ref={grid} onKeyDown={onGridKey}>
+          <tbody
+            ref={grid}
+            onKeyDown={onGridKey}
+            onMouseDown={(e) => (down.current = { x: e.clientX, y: e.clientY })}
+          >
             {items.map((it) =>
               it.t === "group" ? (
-                <tr key={it.g.path} role="row" className="ghead">
-                  <td
-                    colSpan={span}
-                    role="gridcell"
-                    style={{ paddingInlineStart: `${0.75 + it.g.depth * 1.25}rem` }}
-                  >
-                    <button
-                      className="gbtn"
-                      aria-expanded={!collapsed.has(it.g.path)}
-                      onClick={() =>
-                        setCollapsed((c) => {
-                          const n = new Set(c);
-                          if (n.has(it.g.path)) n.delete(it.g.path);
-                          else n.add(it.g.path);
-                          return n;
-                        })
-                      }
-                    >
-                      <span className={`caret${collapsed.has(it.g.path) ? "" : " down"}`}>
-                        <Icon name="chevron-right" size={13} />
-                      </span>
-                      <span className="gname">
-                        {it.g.field.kind === "select" && it.g.key ? (
-                          <Cell field={it.g.field} value={it.g.key} />
-                        ) : (
-                          it.g.label
-                        )}
-                      </span>
-                      <span className="chip">{it.g.rows.length}</span>
-                    </button>
-                  </td>
-                  {firstAgg >= 0 &&
-                    cols.slice(firstAgg).map((f) => (
-                      <td
-                        key={f.name}
-                        role="gridcell"
-                        className="num agg"
-                        data-label={isAgg(f) ? fieldTitle(f) : undefined}
-                      >
-                        {isAgg(f) ? formatSumRows(f, it.g.rows) : ""}
-                      </td>
-                    ))}
-                  {firstAgg >= 0 && <td role="gridcell" />}
-                </tr>
+                <GroupRow
+                  key={it.g.path}
+                  g={it.g}
+                  phone={phone}
+                  showSelect={showSelect}
+                  cols={cols}
+                  sums={sums}
+                  firstSum={firstSum}
+                  phoneSum={phoneSum}
+                  collapsed={collapsed.has(it.g.path)}
+                  sumOf={(f, rs) => <Sum field={f} rows={rs} currencyFor={currencyFor} />}
+                  onToggle={() =>
+                    setCollapsed((c) => {
+                      const n = new Set(c);
+                      if (n.has(it.g.path)) n.delete(it.g.path);
+                      else n.add(it.g.path);
+                      return n;
+                    })
+                  }
+                />
               ) : (
                 <tr
                   key={it.row.id}
@@ -575,126 +941,146 @@ export function ListView(p: ViewProps) {
                   aria-rowindex={it.ri + 2}
                   aria-selected={allMatching || live.has(it.row.id)}
                   aria-current={it.row.id === p.selectedId || undefined}
-                  className={it.row.id === p.selectedId ? "current" : ""}
+                  className={`${it.row.id === p.selectedId ? "current" : ""}${phone ? " lc-row" : ""}`}
                 >
-                  <td
-                    role="gridcell"
-                    className="selcol"
-                    data-r={it.ri}
-                    data-c={0}
-                    tabIndex={pos.r === it.ri && pos.c === 0 ? 0 : -1}
-                    onFocus={() => setPos({ r: it.ri, c: 0 })}
-                    // The whole cell selects, not only the 17 px box (the box itself has onChange).
-                    onClick={(e) => {
-                      if (e.target === e.currentTarget) toggle(it.row.id);
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      tabIndex={-1}
-                      aria-label={t("Select record")}
-                      checked={allMatching || live.has(it.row.id)}
-                      onChange={() => toggle(it.row.id)}
-                    />
-                  </td>
-                  {cols.map((f, ci) => {
-                    const edit = editing?.id === it.row.id && editing.field === f.name;
-                    return (
-                      <td
-                        key={f.name}
-                        role="gridcell"
-                        data-r={it.ri}
-                        data-c={ci + 1}
-                        data-label={fieldTitle(f)}
-                        tabIndex={pos.r === it.ri && pos.c === ci + 1 ? 0 : -1}
-                        className={`${isAgg(f) ? "num" : ""}${edit ? " editing" : ""}${!phone && p.canUpdate && ci > 0 ? " editable" : ""}`}
-                        onFocus={() => setPos({ r: it.ri, c: ci + 1 })}
-                        onClick={() => !edit && clickCell(it.row, f, ci)}
-                      >
-                        {edit ? (
-                          <InlineEdit
-                            field={f}
-                            row={it.row}
-                            update={
-                              isGoverned(p.model, f)
-                                ? (id, patch) => p.moveState(id, f.name, String(patch[f.name]))
-                                : p.update
-                            }
-                            optionState={
-                              isGoverned(p.model, f)
-                                ? (o) => {
-                                    const m = canMove(
-                                      p.model,
-                                      f,
-                                      it.row[f.name] as string,
-                                      o,
-                                      p.title,
-                                      it.row,
-                                    );
-                                    return {
-                                      disabled: !m.allowed && !m.current,
-                                      title: m.reason || undefined,
-                                    };
-                                  }
-                                : undefined
-                            }
-                            done={() => {
-                              setEditing(null);
-                              focusCell(it.ri, ci + 1);
-                            }}
-                          />
-                        ) : (
-                          <Cell
-                            field={f}
-                            value={it.row[f.name]}
-                            currency={rowCurrency(it.row)}
-                            row={it.row}
-                          />
-                        )}
-                      </td>
-                    );
-                  })}
-                  <td
-                    role="gridcell"
-                    className="opencol"
-                    data-r={it.ri}
-                    data-c={cols.length + 1}
-                    tabIndex={pos.r === it.ri && pos.c === cols.length + 1 ? 0 : -1}
-                    onFocus={() => setPos({ r: it.ri, c: cols.length + 1 })}
-                  >
-                    <button
-                      className="icon-btn"
-                      tabIndex={-1}
-                      aria-label={t("Open record")}
-                      onClick={() => p.onOpen(it.row.id)}
+                  {showSelect && selCell(it.row, it.ri)}
+                  {phone ? (
+                    <td
+                      role="gridcell"
+                      className="lcard"
+                      data-r={it.ri}
+                      data-c={1}
+                      tabIndex={pos.r === it.ri && pos.c === 1 ? 0 : -1}
+                      onFocus={() => setPos({ r: it.ri, c: 1 })}
+                      onClick={(e) => {
+                        if (e.ctrlKey || e.metaKey || e.shiftKey) return openInTab(it.row);
+                        open(it.row);
+                      }}
                     >
-                      <Icon name="external" size={14} />
-                    </button>
-                  </td>
+                      <PhoneCard
+                        model={model}
+                        row={it.row}
+                        roles={roles}
+                        title={firstCell(it.row, roles.title, true)}
+                        text={(f) => shortText(f, it.row)}
+                        money={(f) =>
+                          f.kind === "money"
+                            ? fmt.money(it.row[f.name], currencyFor(it.row))
+                            : cellText(f, it.row)
+                        }
+                        today={today}
+                      />
+                    </td>
+                  ) : (
+                    cols.map((f, ci) => {
+                      const edit = editing?.id === it.row.id && editing.field === f.name;
+                      const editable = ci > 0 && canEditCell(it.row, f);
+                      return (
+                        <td
+                          key={f.name}
+                          role="gridcell"
+                          data-r={it.ri}
+                          data-c={ci + 1}
+                          data-f={f.name}
+                          tabIndex={pos.r === it.ri && pos.c === ci + 1 ? 0 : -1}
+                          className={[
+                            isNum(f) ? "num" : "",
+                            ci === 0 ? "titlecol" : "",
+                            f.kind === "ref" ? "refcol" : "",
+                            edit ? "editing" : "",
+                            editable && editMode ? "editable" : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                          onFocus={() => setPos({ r: it.ri, c: ci + 1 })}
+                          onClick={(e) => !edit && clickCell(e, it.row, f, ci)}
+                          onAuxClick={(e) => auxCell(e, it.row)}
+                        >
+                          {edit ? (
+                            <InlineEdit
+                              field={f}
+                              row={it.row}
+                              update={
+                                isGoverned(model, f)
+                                  ? (id, patch) => p.moveState(id, f.name, String(patch[f.name]))
+                                  : p.update
+                              }
+                              optionState={
+                                isGoverned(model, f)
+                                  ? (o) => {
+                                      const m = canMove(
+                                        model,
+                                        f,
+                                        it.row[f.name] as string,
+                                        o,
+                                        p.title,
+                                        it.row,
+                                      );
+                                      return {
+                                        disabled: !m.allowed && !m.current,
+                                        title: m.reason || undefined,
+                                      };
+                                    }
+                                  : undefined
+                              }
+                              advance={(dir) => {
+                                const list = editableCols(it.row);
+                                const next = list[list.indexOf(f) + dir];
+                                setEditing(next ? { id: it.row.id, field: next.name } : null);
+                                if (!next) focusCell(it.ri, ci + 1);
+                              }}
+                              done={() => {
+                                setEditing(null);
+                                focusCell(it.ri, ci + 1);
+                              }}
+                            />
+                          ) : ci === 0 ? (
+                            firstCell(it.row, f)
+                          ) : (
+                            cellValue(it.row, f)
+                          )}
+                        </td>
+                      );
+                    })
+                  )}
                 </tr>
               ),
             )}
           </tbody>
-          {cols.some(isAgg) && (
+          {(phone ? !!phoneSum : firstSum >= 0) && (
             <tfoot>
               <tr role="row">
-                <td colSpan={span} role="gridcell">
+                <td
+                  colSpan={
+                    phone ? (showSelect ? 2 : 1) : (showSelect ? 1 : 0) + Math.max(1, firstSum)
+                  }
+                  role="gridcell"
+                  className="foot-label"
+                >
                   <strong>
                     {p.pager && p.total > rows.length ? t("Total on this page") : t("Total")}
                   </strong>{" "}
-                  <span className="hint">({rows.length})</span>
+                  <span className="hint">({fmt.integer(rows.length)})</span>
+                  {phone && phoneSum && (
+                    <span className="foot-sum amount">
+                      <Sum field={phoneSum} rows={rows} currencyFor={currencyFor} />
+                    </span>
+                  )}
                 </td>
-                {cols.slice(firstAgg).map((f) => (
-                  <td
-                    key={f.name}
-                    role="gridcell"
-                    className="num agg"
-                    data-label={isAgg(f) ? fieldTitle(f) : undefined}
-                  >
-                    {isAgg(f) ? formatSumRows(f, rows) : ""}
-                  </td>
-                ))}
-                <td role="gridcell" />
+                {!phone &&
+                  cols.slice(Math.max(1, firstSum)).map((f, i) => {
+                    const on = sums[i + Math.max(1, firstSum)];
+                    return (
+                      <td
+                        key={f.name}
+                        role="gridcell"
+                        className={`${isNum(f) ? "num" : ""} agg`}
+                        data-f={f.name}
+                      >
+                        {on ? <Sum field={f} rows={rows} currencyFor={currencyFor} /> : ""}
+                      </td>
+                    );
+                  })}
               </tr>
             </tfoot>
           )}
@@ -712,7 +1098,7 @@ export function ListView(p: ViewProps) {
       )}
       {deleting && (
         <DeleteDialog
-          model={p.model}
+          model={model}
           noun={inSentence(p.title)}
           records={selectedRecords}
           onClose={() => setDeleting(false)}
@@ -723,4 +1109,152 @@ export function ListView(p: ViewProps) {
   );
 }
 
-const isMaskedVal = (v: unknown) => typeof v === "string" && /^[A-Z][A-Z0-9]*_\d+$/.test(v);
+/** A group head of a grouped list: the value, its count, and the sums of the columns that add up. */
+function GroupRow(p: {
+  g: Group;
+  phone: boolean;
+  showSelect: boolean;
+  cols: FieldMeta[];
+  sums: boolean[];
+  firstSum: number;
+  phoneSum?: FieldMeta;
+  collapsed: boolean;
+  sumOf: (f: FieldMeta, rows: Row[]) => ReactNode;
+  onToggle: () => void;
+}) {
+  const { g } = p;
+  const lead = p.phone ? 1 : p.firstSum < 0 ? p.cols.length : Math.max(1, p.firstSum);
+  return (
+    <tr role="row" className="ghead">
+      <td
+        colSpan={lead + (p.showSelect ? 1 : 0)}
+        role="gridcell"
+        style={{ paddingInlineStart: `${0.75 + g.depth * 1.25}rem` }}
+      >
+        <button className="gbtn" aria-expanded={!p.collapsed} onClick={p.onToggle}>
+          <span className={`caret${p.collapsed ? "" : " down"}`}>
+            <Icon name="chevron-right" size={13} />
+          </span>
+          <span className="gname">
+            {g.field.kind === "select" && g.key ? <Cell field={g.field} value={g.key} /> : g.label}
+          </span>
+          <span className="chip">{g.rows.length}</span>
+        </button>
+        {p.phone && p.phoneSum && (
+          <span className="gsum amount">{p.sumOf(p.phoneSum, g.rows)}</span>
+        )}
+      </td>
+      {!p.phone &&
+        p.firstSum >= 0 &&
+        p.cols.slice(lead).map((f, i) => (
+          <td key={f.name} role="gridcell" className={`${isNum(f) ? "num" : ""} agg`}>
+            {p.sums[i + lead] ? p.sumOf(f, g.rows) : ""}
+          </td>
+        ))}
+    </tr>
+  );
+}
+
+/**
+ * The total of a column. Amounts in several currencies are never added together: each currency
+ * is a line of its own, largest group first, so a narrow column still shows every one.
+ */
+function Sum(p: { field: FieldMeta; rows: Row[]; currencyFor: (row: Row) => string | undefined }) {
+  if (p.field.kind !== "money") return <>{formatSumRows(p.field, p.rows)}</>;
+  const parts = sumByCurrency(p.rows, p.field.name, p.currencyFor);
+  if (parts.length === 1) return <>{fmt.money(parts[0]![1], parts[0]![0])}</>;
+  return (
+    <span className="sums">
+      {parts.map(([c, n]) => (
+        <span key={c}>{fmt.money(n, c)}</span>
+      ))}
+    </span>
+  );
+}
+
+/** A ref in a list cell: its label as text, with an arrow that follows it on hover. */
+function RefText({ field, id }: { field: FieldMeta; id: string }) {
+  const d = useData();
+  const to = field.to ?? "";
+  const text = d.refText(to, id);
+  const target = d.linkTo(to, { id });
+  if (!target) return <span className="reftext">{text}</span>;
+  return (
+    <a
+      className="reftext"
+      href={target}
+      tabIndex={-1}
+      onClick={(e) => {
+        // The arrow follows the ref, and so do Ctrl, Cmd and Shift; a plain click opens the row.
+        if ((e.target as Element).closest(".refgo") || e.ctrlKey || e.metaKey || e.shiftKey)
+          e.stopPropagation();
+        else e.preventDefault();
+      }}
+      onAuxClick={(e) => e.stopPropagation()}
+    >
+      <span className="reftext-label">{text}</span>
+      <span className="refgo" title={t("Open {name}", { name: text })} aria-hidden="true">
+        <Icon name="external" size={12} />
+      </span>
+    </a>
+  );
+}
+
+/** A date that is a deadline: red when past, amber when close (`ui.warn_before_days`). */
+function Due({ level, children }: { level: "past" | "soon" | null; children: ReactNode }) {
+  if (!level) return <>{children}</>;
+  return (
+    <span className={`due ${level}`}>
+      {children}
+      <span className="sr-only"> ({level === "past" ? t("overdue") : t("due soon")})</span>
+    </span>
+  );
+}
+
+/**
+ * A record on a phone: the title in bold with the status on the right; under it the number, the
+ * main ref and the date, muted, with the amount on the right.
+ */
+function PhoneCard(p: {
+  model: ModelMeta;
+  row: Row;
+  roles: CardRoles;
+  title: ReactNode;
+  text: (f: FieldMeta) => string;
+  money: (f: FieldMeta) => string;
+  today: string;
+}) {
+  const { row, roles } = p;
+  const state = roles.state && !isEmpty(row[roles.state.name]) ? roles.state : undefined;
+  // A title made of the ref and the date (a draft without its number) already says them.
+  const bare = !!roles.title && isEmpty(row[roles.title.name]);
+  const meta = cardMeta(roles, row).filter(
+    (f) => !bare || (f.kind !== "ref" && f.kind !== "date" && f.kind !== "datetime"),
+  );
+  const amount = roles.money && !isEmpty(row[roles.money.name]) ? p.money(roles.money) : "";
+  return (
+    <div className="lc">
+      <div className="lc-top">
+        <span className="lc-title">{p.title}</span>
+        {state && (
+          <UiBadge tone={toneClassOf(state, String(row[state.name]), p.model) as `t-${string}`}>
+            {optionLabel(String(row[state.name]), state)}
+          </UiBadge>
+        )}
+      </div>
+      {(meta.length > 0 || amount) && (
+        <div className="lc-sub">
+          <span className="lc-meta">
+            {meta.map((f, i) => (
+              <span key={f.name}>
+                {i > 0 && <span aria-hidden="true"> · </span>}
+                <Due level={dueLevel(p.model, f, row, p.today)}>{p.text(f)}</Due>
+              </span>
+            ))}
+          </span>
+          {amount && <span className="lc-money amount">{amount}</span>}
+        </div>
+      )}
+    </div>
+  );
+}
