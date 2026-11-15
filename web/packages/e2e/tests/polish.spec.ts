@@ -328,7 +328,7 @@ test.describe("views over many records do not load the table", () => {
     await fill(api, child, 45, (i) => ({ title: `Kid ${i}`, parent_id: p.id }));
     const sent = searches(page, child);
     await signIn("root", `/${parent}/${parent}?id=${p.id}`);
-    await expect(page.getByRole("link", { name: /\(45\)/ })).toBeVisible();
+    await expect(page.locator("a.smartbtn", { hasText: "45" })).toBeVisible();
     expect(sent.some((b) => b.aggregate)).toBe(true);
     expect(sent.some((b) => b.limit === 5000)).toBe(false);
   });

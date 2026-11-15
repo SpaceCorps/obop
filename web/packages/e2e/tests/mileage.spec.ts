@@ -127,7 +127,10 @@ test.describe("mileage review", () => {
     );
     expect(byDriver.status).toBeGreaterThanOrEqual(400);
 
-    await record.getByRole("button", { name: "Confirm *", exact: true }).click();
+    await record
+      .locator(".actionrow")
+      .getByRole("button", { name: /^Confirm/ })
+      .click();
     await expect(record.locator("[aria-current=step]")).toContainText("Confirmed");
 
     // The totals now hold the distance the server computed, and not before.

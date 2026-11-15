@@ -35,10 +35,10 @@ test.describe("the data model", () => {
 
     await signIn("root", `/sales/sale_order?view=list&id=${order.id}`);
     const panel = panelOf(page, "Quotation / Order");
-    await expect(panel.getByLabel("Total")).toHaveValue(/1,?525\.00/);
-    await expect(panel.getByLabel("Total")).toHaveAttribute("readonly", "");
-    await panel.getByRole("button", { name: "Confirm", exact: true }).click();
-    await expect(page.locator(".toast").filter({ hasText: "Confirm done" })).toBeVisible();
+    // The computed total is a key figure of the header, as text.
+    await expect(panel.locator(".rec-figures")).toContainText(/1,?525\.00/);
+    await panel.locator(".actionrow").getByRole("button", { name: "Confirm", exact: true }).click();
+    await expect(page.locator(".toast").filter({ hasText: "is now confirmed" })).toBeVisible();
 
     const invoices = (await api.list("root", "invoice")).filter(
       (i) => i.sale_order_id === order.id,
@@ -50,14 +50,18 @@ test.describe("the data model", () => {
 
     await page.goto(`/#/invoicing/invoice?view=list&id=${invoices[0].id}`);
     const inv = panelOf(page, "Customer invoice");
-    await expect(inv.getByLabel("Total")).toHaveValue(/1,?525\.00/);
-    await inv.getByRole("button", { name: "Post *", exact: true }).click();
-    await expect(page.locator(".toast").filter({ hasText: "Post done" })).toBeVisible();
+    await expect(inv.locator(".rec-figures")).toContainText(/1,?525\.00/);
+    // Post needs a person's approval when an agent runs it: a shield, not an asterisk.
+    const post = inv.locator(".actionrow").getByRole("button", { name: /^Post/ });
+    await expect(post.locator(".approval-mark")).toBeVisible();
+    await post.click();
+    await expect(page.locator(".toast").filter({ hasText: "is now posted" })).toBeVisible();
     const posted = await api.run("root", "invoice.get", { id: invoices[0].id });
     expect(posted.state).toBe("posted");
     expect(posted.number).toMatch(/^INV-\d{4}-\d{5}$/);
-    await expect(inv.getByLabel("Number")).toHaveValue(posted.number);
-    await expect(inv.getByLabel("Number")).toHaveAttribute("readonly", "");
+    // The number is the server's: the header names the invoice by it, and the form shows it as text.
+    await expect(inv.locator("h2")).toHaveText(posted.number);
+    await expect(inv.locator(".field.ro", { hasText: "Number" })).toContainText(posted.number);
   });
 
   test("a second posted invoice gets the next number of the series", async ({ api, uid }) => {

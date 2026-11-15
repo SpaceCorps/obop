@@ -285,7 +285,11 @@ test.describe("switching the language with the account menu, on a screen that st
     const party = await api.create("root", "party", { name: uid("Related") });
     await signIn("root", `/base/party?id=${party.id}`);
     const smart = async () => {
-      const buttons = page.locator(".smart .smartbtn");
+      const buttons = page.locator(".smart .smartbtn:not(.smart-more)");
+      // A new party has no related records yet: the buttons at zero wait behind the last button.
+      const more = page.locator(".smart .smart-more");
+      await expect(more).toBeVisible();
+      if ((await more.getAttribute("aria-expanded")) !== "true") await more.click();
       await expect(buttons.first()).toBeVisible();
       // The counts come from the server; wait until they are all in.
       await expect(buttons.filter({ hasText: "…" })).toHaveCount(0);
@@ -493,12 +497,13 @@ test.describe("a record panel that stays open while the language changes", () =>
     // is Swedish by then, which nothing words in English again (a kept English one would be worded
     // in Swedish, because the server's English is what the rules match).
     await pickInAccountMenu(page, "en", "sv");
-    const steps = panelOf(page).locator("ol.statusbar button");
-    await expect(steps.nth(1)).not.toHaveAttribute("aria-disabled", "true");
+    // The move the page offers is its next step, the action button.
+    const start = panelOf(page).locator(".actionrow button").first();
+    await expect(start).not.toHaveAttribute("aria-disabled", "true");
 
     // Someone else moves it on while this page is open; the move the page offers is refused.
     await api.run("root", `${model}.start`, { id: rec.id });
-    await steps.nth(1).click();
+    await start.click();
     const banner = panelOf(page).locator("p.error.banner");
     await expect(banner).toBeVisible();
     const refusal = "{field} must be {from} to do this, it is {current}";
@@ -693,8 +698,9 @@ write_group = "base.user"
     const alert = page.locator(`#f-${model}-code-err`);
     await expect(alert).toBeVisible();
 
-    // The server's words are English: shown as they came in English, worded by the catalogue in Swedish.
-    const english = `${model}.code must be at most 10 characters; this has 11`;
+    // The server's words are English: in English they name the field by its label (B12), and the
+    // catalogue words them in Swedish.
+    const english = "Code must be at most 10 characters; this has 11";
     await expect(alert).not.toContainText("must be at most");
     await expect(alert).toContainText("10");
     const swedish = (await alert.textContent())!;
@@ -773,8 +779,9 @@ write_group = "base.user"
 
     // Deleted from the panel, which closes.
     await panelOf(page)
-      .getByRole("button", { name: say("en", "Delete") })
+      .getByRole("button", { name: say("en", "More actions") })
       .click();
+    await page.getByRole("menuitem", { name: say("en", "Delete") }).click();
     await page
       .getByRole("alertdialog")
       .getByRole("button", { name: say("en", "Delete"), exact: true })

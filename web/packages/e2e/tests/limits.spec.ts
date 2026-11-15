@@ -210,11 +210,11 @@ test.describe("field limits", () => {
     await panel(page).getByLabel("Code").fill("abcdefghijk");
     await expect(counter(page)).toHaveCount(0);
     await panel(page).getByRole("button", { name: "Create" }).click();
-    // The server's sentence, on the field, in the words it sent.
+    // The server's sentence, on the field, naming the field by its label (B12).
     await expect(
       panel(page)
         .getByRole("alert")
-        .filter({ hasText: `${model}.code must be at most 10 characters; this has 11` }),
+        .filter({ hasText: "Code must be at most 10 characters; this has 11" }),
     ).toBeVisible();
     expect((await api.list("root", model)).length).toBe(0);
   });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { remember, remembered, type Last } from "./lastRecord.ts";
+import { extendTrail, remember, remembered, type Last } from "./lastRecord.ts";
 
 const row = (id: string, title = id) => ({ id, title });
 const a: Last = { model: "note", id: "A", row: row("A", "old A") };
@@ -34,5 +34,18 @@ describe("the row useRecord keeps for the open record", () => {
     expect(remembered(a, "note", "B")).toBeUndefined();
     expect(remembered(a, "other", "A")).toBeUndefined();
     expect(remembered(null, "note", "A")).toBeUndefined();
+  });
+});
+
+describe("the trail of records", () => {
+  const c = (key: string) => ({ key, label: key, href: `#${key}` });
+  it("grows through links followed inside a panel and starts again otherwise", () => {
+    let trail = extendTrail([], c("so1"), null);
+    trail = extendTrail(trail, c("ada"), "so1");
+    expect(trail.map((x) => x.key)).toEqual(["so1", "ada"]);
+    // Back to a record on the trail cuts it there.
+    expect(extendTrail(trail, c("so1"), null).map((x) => x.key)).toEqual(["so1"]);
+    // A record opened from a list starts a new trail.
+    expect(extendTrail(trail, c("inv"), null).map((x) => x.key)).toEqual(["inv"]);
   });
 });

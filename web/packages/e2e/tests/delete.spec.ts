@@ -6,6 +6,11 @@ const rowOf = (page: Page, name: string, text: string) =>
   grid(page, name).getByRole("row", { name: new RegExp(text) });
 const panelOf = (page: Page, name: string) =>
   page.getByRole("complementary", { name: `${name} record` });
+/** Delete waits in the record's More actions menu (record form, plan 2.6). */
+const deleteFrom = async (panel: ReturnType<Page["locator"]>) => {
+  await panel.getByRole("button", { name: "More actions" }).click();
+  await panel.page().getByRole("menuitem", { name: "Delete" }).click();
+};
 
 test.describe("delete", () => {
   test("a record is deleted from its panel after an in-app confirmation", async ({
@@ -20,7 +25,7 @@ test.describe("delete", () => {
     await api.create("root", "lead", { title: keep });
     await signIn("root", `/crm/lead?view=list&id=${lead.id}`);
     const panel = panelOf(page, "Lead");
-    await panel.getByRole("button", { name: "Delete" }).click();
+    await deleteFrom(panel);
 
     // The dialog names the record; Cancel (the default focus) keeps it.
     const dialog = page.getByRole("alertdialog", { name: "Delete lead?" });
@@ -30,7 +35,7 @@ test.describe("delete", () => {
     await expect(dialog).toHaveCount(0);
     expect((await api.list("root", "lead")).some((l) => l.id === lead.id)).toBe(true);
 
-    await panel.getByRole("button", { name: "Delete" }).click();
+    await deleteFrom(panel);
     await dialog.getByRole("button", { name: "Delete", exact: true }).click();
     await expect(page.locator(".toast").filter({ hasText: "Lead deleted" })).toBeVisible();
     await expect(panel).toHaveCount(0);
@@ -51,7 +56,7 @@ test.describe("delete", () => {
     const party = await api.create("root", "party", { name });
     const order = await api.create("root", "sale_order", { party_id: party.id });
     await signIn("root", `/base/party?view=list&id=${party.id}`);
-    await panelOf(page, "Contact").getByRole("button", { name: "Delete" }).click();
+    await deleteFrom(panelOf(page, "Contact"));
     const dialog = page.getByRole("alertdialog", { name: "Delete contact?" });
     await dialog.getByRole("button", { name: "Delete", exact: true }).click();
 
@@ -72,7 +77,7 @@ test.describe("delete", () => {
     // Once nothing refers to it any more, the delete goes through.
     await api.run("root", "sale_order.delete", { id: order.id });
     await page.goto(`/#/base/party?view=list&id=${party.id}`);
-    await panelOf(page, "Contact").getByRole("button", { name: "Delete" }).click();
+    await deleteFrom(panelOf(page, "Contact"));
     await dialog.getByRole("button", { name: "Delete", exact: true }).click();
     await expect(page.locator(".toast").filter({ hasText: "Contact deleted" })).toBeVisible();
     expect((await api.list("root", "party")).some((p) => p.id === party.id)).toBe(false);
@@ -178,10 +183,7 @@ test.describe("delete", () => {
       [issued.json.token, "agent"],
     );
     await page.goto(`/#/${model}/${model}?view=list&id=${rec.id}`);
-    await page
-      .getByRole("complementary", { name: /record$/ })
-      .getByRole("button", { name: "Delete" })
-      .click();
+    await deleteFrom(page.getByRole("complementary", { name: /record$/ }));
     await page
       .getByRole("alertdialog", { name: /^Delete/ })
       .getByRole("button", { name: "Delete", exact: true })
