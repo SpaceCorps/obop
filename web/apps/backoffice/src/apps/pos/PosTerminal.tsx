@@ -54,8 +54,8 @@ const SESSION = "pos_session";
 const CONFIG = "pos_config";
 const PRODUCT = "product";
 /** Which open session this browser tab works in (a per-viewer convenience). */
-const PICKED = "obop-pos-session";
-const CART = "obop-pos-cart:";
+const PICKED = "pos-register-session";
+const CART = "pos-register-cart:";
 
 const NARROW = "(max-width: 64rem)";
 
@@ -151,7 +151,7 @@ function OpenRegister(p: {
       p.configs
         .filter((c) => c.active !== false)
         .sort((a, b) => compareText(str(a.name), str(b.name))),
-    [p.configs],
+    [p.configs, d.lang],
   );
   const busyTills = new Set(p.open.map((s) => str(s.config_id)));
   const free = tills.filter((c) => !busyTills.has(c.id));
@@ -335,7 +335,7 @@ function Terminal(p: {
           image: str(r.image),
         }))
         .sort((a, b) => compareText(a.name, b.name)),
-    [products.rows],
+    [products.rows, d.lang],
   );
   const shown = useMemo(() => list.filter((x) => matches(x, q)), [list, q]);
   const total = cartTotal(cart);
