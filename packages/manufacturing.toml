@@ -13,7 +13,7 @@ categories = ["supply-chain"]
 maturity = "experimental"
 requires_core = "^0.2.2"
 home = "manufacturing_order"
-changelog = "0.3.0: an order is numbered MO-00001 and onwards, names the product it makes (taken from the bill of materials) and a production location, and lists its components. Finishing the order makes the stock moves that take the components out at that location and put the finished product there, with the order number as their source document, for the warehouse to validate (finishing needs the inventory.user group); an order without a location makes no moves. 0.2.1: done and cancelled manufacturing orders are frozen. A new order starts today and makes one run of its bill of materials unless a quantity is given; inactive bills of materials are no longer offered for new orders, new ones start active, and those whose active flag was never set become active. The app opens on the manufacturing orders, and components are edited inside their bill of materials. English names, list, card, calendar and form hints."
+changelog = "0.3.0: an order is numbered in the series MO-00001, going on after the highest number typed by hand in the old reference (MO-0018 makes the next order MO-00019), names the product it makes (taken from the bill of materials) and a production location, and lists its components. Finishing the order makes the stock moves that take the components out at that location and put the finished product there, with the order number as their source document, for the warehouse to validate (finishing needs the inventory.user group); an order without a location makes no moves. The person in charge stays a name typed in. 0.2.1: done and cancelled manufacturing orders are frozen. A new order starts today and makes one run of its bill of materials unless a quantity is given; inactive bills of materials are no longer offered for new orders, new ones start active, and those whose active flag was never set become active. The app opens on the manufacturing orders, and components are edited inside their bill of materials. English names, list, card, calendar and form hints."
 
 [module.dependencies]
 product = "^0.2"
@@ -120,8 +120,8 @@ read_group = "manufacturing.user"
 write_group = "manufacturing.user"
 
   [model.ui]
-  title = "{number} · {product_id} × {quantity} | {number} · {bom_id} × {quantity} | {number}"
-  subtitle = "{location_id} · {planned_on} | {planned_on}"
+  title = "{number}"
+  subtitle = "{product_id} × {quantity} | {bom_id} × {quantity}"
   list = ["number", "bom_id", "quantity", "location_id", "planned_on", "deadline", "state"]
   card = ["number", "product_id", "quantity", "deadline"]
   quick_create = ["bom_id", "quantity", "location_id"]
@@ -342,4 +342,4 @@ op = "rename_field"
 model = "manufacturing_order"
 field = "reference"
 to = "number"
-description = "The order numbers typed by hand become the numbers of the orders; new orders are numbered MO-00001 and onwards"
+description = "The order numbers typed by hand become the numbers of the orders; new orders are numbered after the highest of them that is written as MO- and digits"
