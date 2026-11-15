@@ -22,7 +22,7 @@ import {
   compareText,
   t,
 } from "@obop/ui";
-import { call, type Reply, type Row } from "../../api.ts";
+import { call, search, type Reply, type Row } from "../../api.ts";
 import { BlobThumb } from "../../BlobFields.tsx";
 import type { App } from "../../Chrome.tsx";
 import { useData, useRows } from "../../data.tsx";
@@ -161,9 +161,28 @@ function OpenRegister(p: {
   const cur = str(chosen?.currency) || undefined;
   const [cash, setCash] = useState<string>("");
   const [busy, setBusy] = useState(false);
+  // The drawer holds what was counted when the till last closed; the till's default only when it
+  // never closed.
   useEffect(() => {
+    let live = true;
     setCash(chosen ? majorString(num(chosen.default_opening_cash), cur) : "");
-  }, [chosen, cur]);
+    if (chosen)
+      void search(d.token, SESSION, {
+        filter: [
+          { field: "config_id", op: "eq", value: chosen.id },
+          { field: "state", op: "eq", value: "closed" },
+        ],
+        order: [{ field: "closed_on", dir: "desc" }],
+        limit: 1,
+      }).then((r) => {
+        const last = "error" in r ? undefined : r.rows[0];
+        if (live && last && typeof last.closing_cash === "number")
+          setCash(majorString(last.closing_cash, cur));
+      });
+    return () => {
+      live = false;
+    };
+  }, [chosen, cur, d.token]);
   const minor = parseMoney(cash, cur);
 
   const openIt = async () => {
