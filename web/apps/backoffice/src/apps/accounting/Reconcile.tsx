@@ -31,7 +31,14 @@ const ACCOUNT = "accounting_account";
 /** A proposal for one bank transaction. */
 type Proposal =
   | { kind: "item"; item: Row; move?: Row; onBank: boolean }
-  | { kind: "invoice"; invoiceId: string; number: string; reference: boolean };
+  | {
+      kind: "invoice";
+      invoiceId: string;
+      number: string;
+      reference: boolean;
+      /** The invoice has a ledger move, so its receivable item is there to be paid. */
+      inLedger: boolean;
+    };
 
 type Loaded<T> =
   | { state: "loading" }
@@ -376,6 +383,10 @@ function LineDetail(p: {
   const accountById = useMemo(() => new Map(p.accounts.map((a) => [a.id, a])), [p.accounts]);
   const receivable = p.accounts.find((a) => a.account_type === "asset_receivable");
   const [account, setAccount] = useState("");
+  // An invoice that is not in the ledger is paid to an account the person chooses below (the
+  // server refuses a receivable that was never booked).
+  const [forInvoice, setForInvoice] = useState<{ id: string; number: string } | null>(null);
+  useEffect(() => setForInvoice(null), [line.id]);
 
   useEffect(() => {
     let live = true;
@@ -442,6 +453,7 @@ function LineDetail(p: {
             invoiceId: String(c.invoice_id),
             number: String(c.number ?? ""),
             reference: c.reference_match === true,
+            inLedger: c.basis === "move",
           });
       }
       setProposals({ state: "ok", value: out });
@@ -461,6 +473,9 @@ function LineDetail(p: {
     if (x.kind === "item") {
       if (x.onBank) p.onMatch(x.item);
       else p.onBook(String(x.item.account_id), "", x.item.id);
+    } else if (!x.inLedger) {
+      setForInvoice({ id: x.invoiceId, number: x.number });
+      document.getElementById(`acc-book-${line.id}`)?.focus();
     } else if (receivable) p.onBook(receivable.id, x.invoiceId);
   };
   p.runRef.current = () => {
@@ -547,17 +562,29 @@ function LineDetail(p: {
                           ? t("The amount and the invoice number match.")
                           : t("The amount matches.")}
                       </span>
+                      {!x.inLedger && (
+                        <span className="acc-prop-warn">
+                          <Icon name="warning" size={12} />
+                          {t(
+                            "This invoice is not in the ledger yet, so there is no receivable to pay. Choose the account the payment goes to, such as revenue.",
+                          )}
+                        </span>
+                      )}
                     </>
                   )}
                 </div>
                 <span className="acc-prop-amount tabular">{money(amount, p.currency)}</span>
                 <Button
                   variant={i === 0 ? "primary" : "secondary"}
-                  disabled={p.busy || (x.kind === "invoice" && !receivable)}
+                  disabled={p.busy || (x.kind === "invoice" && x.inLedger && !receivable)}
                   loading={p.busy && i === 0}
                   onClick={() => run(x)}
                 >
-                  {x.kind === "item" && x.onBank ? t("Match") : t("Book and match")}
+                  {x.kind === "item" && x.onBank
+                    ? t("Match")
+                    : x.kind === "invoice" && !x.inLedger
+                      ? t("Choose account")
+                      : t("Book and match")}
                 </Button>
               </li>
             ))}
@@ -573,10 +600,19 @@ function LineDetail(p: {
           className="acc-book-form"
           onSubmit={(e) => {
             e.preventDefault();
-            if (account) p.onBook(account);
+            if (account) p.onBook(account, forInvoice?.id);
           }}
         >
+          {forInvoice && (
+            <p className="acc-book-for">
+              <span>{t("Paying invoice {number}", { number: forInvoice.number })}</span>
+              <Button variant="ghost" size="sm" onClick={() => setForInvoice(null)}>
+                {t("Not this invoice")}
+              </Button>
+            </p>
+          )}
           <Select
+            id={`acc-book-${line.id}`}
             label={t("Account")}
             value={account}
             onChange={(e) => setAccount(e.target.value)}

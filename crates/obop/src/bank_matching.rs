@@ -484,6 +484,15 @@ pub fn plan(env: Env<'_>, p: &Principal, i: &Input) -> Result<Planned, String> {
             ));
         }
         if c.basis != "move" {
+            // No receivable was ever debited for an invoice that is not in the ledger: crediting
+            // one with its payment would leave a credit that matches nothing, while the revenue
+            // and the VAT are never booked.
+            if text(&ctr, "account_type") == "asset_receivable" {
+                return Err(format!(
+                    "the invoice is not in the ledger yet (it has no move), so no receivable was booked for it and {} cannot be credited with its payment; book the invoice first (invoice_posting.create_move) and match its receivable item, or book the payment to a revenue account (nothing was written)",
+                    text(&ctr, "code")
+                ));
+            }
             notes.push("the invoice has no ledger move (invoice_posting.create_move), so its amount is the net of its lines; choose the counter account with that in mind".into());
         }
         party_id = text(&inv, "party_id");

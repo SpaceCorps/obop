@@ -66,6 +66,7 @@ fn fixture() -> Fx {
     };
     let bank = acc("1930", "asset_cash");
     acc("1510", "asset_receivable");
+    acc("3010", "income");
     acc("6570", "expense");
     let journal = create(
         &app,
@@ -169,8 +170,10 @@ fn it_books_money_in_as_a_balanced_draft_move_once_per_line_and_invoice() {
     let f = fixture();
     let (inv, num) = f.invoice(&[12_345]);
     let l = f.line(12_345, &format!("Betalning {num}"));
+    // The invoice is not in the ledger (no move), so its payment goes to revenue, not to a
+    // receivable that was never booked.
     let r = f
-        .book(json!({"bank_line": l, "invoice": num, "counter_account": "1510"}))
+        .book(json!({"bank_line": l, "invoice": num, "counter_account": "3010"}))
         .unwrap();
     assert_eq!(r["written"], json!(true));
     let mid = r["move_id"].as_str().unwrap();
@@ -195,9 +198,27 @@ fn it_books_money_in_as_a_balanced_draft_move_once_per_line_and_invoice() {
     let m = refusal(f.book(json!({"bank_line": l, "counter_account": "1510"})));
     assert!(m.contains("already has a move"), "{m}");
     let l2 = f.line(12_345, "Second payment");
-    let m = refusal(f.book(json!({"bank_line": l2, "invoice": inv, "counter_account": "1510"})));
+    let m = refusal(f.book(json!({"bank_line": l2, "invoice": inv, "counter_account": "3010"})));
     assert!(m.contains("already matched"), "{m}");
     assert_eq!(rows(&f.app, "accounting_move").len(), 1);
+}
+
+#[test]
+fn an_invoice_not_in_the_ledger_is_not_paid_against_a_receivable() {
+    let f = fixture();
+    let (_, num) = f.invoice(&[49_800]);
+    let l = f.line(49_800, &format!("Payment {num}"));
+    let m = refusal(f.book(json!({"bank_line": l, "invoice": num, "counter_account": "1510"})));
+    assert!(
+        m.contains("not in the ledger") && m.contains("1510") && m.contains("create_move"),
+        "{m}"
+    );
+    assert!(rows(&f.app, "accounting_move").is_empty());
+    assert!(rows(&f.app, "bank_matching").is_empty());
+    // The suggestion says what the proposal rests on, so a screen can tell before it books.
+    let s = f.suggest();
+    let c = &s["suggestions"][0]["candidates"][0];
+    assert_eq!(c["basis"], json!("net_of_lines"));
 }
 
 #[test]
