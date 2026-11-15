@@ -1,6 +1,6 @@
 [labels.de.module]
 name = "Lager"
-description = "Lager, Lagerorte, Bestände und Lagerbewegungen. Das Validieren einer Bewegung zieht die Menge am Quellort ab und bucht sie in einem Schritt am Zielort zu; ein fehlender Bestand wird angelegt. Ein Bestand je Produkt, Lagerort und Charge; negative Mengen sind erlaubt. Die Menge ändert sich nur durch Bewegungen; erledigte und stornierte Bewegungen sind gesperrt."
+description = "Lager, Lagerorte, Bestände und Lagerbewegungen. Das Validieren einer Bewegung zieht die Menge am Quellort ab und bucht sie in einem Schritt am Zielort zu; ein fehlender Bestand wird angelegt. Ein Bestand je Produkt, Lagerort und Charge; negative Mengen sind erlaubt. Die Menge ändert sich nur durch Bewegungen; erledigte und stornierte Bewegungen sind gesperrt. Produkt und Ort sind je Bestand fest."
 summary = "Lager, Lagerorte, Bestände und Lagerbewegungen."
 
 [labels.de.model.inventory_warehouse]
@@ -96,7 +96,7 @@ description = "Von wo es abgeht; leer bei einem Wareneingang vom Lieferanten"
 
 [labels.de.model.inventory_move.field.to_location_id]
 label = "Zielort"
-description = "Wo es ankommt; leer bei einer Lieferung an einen Kunden"
+description = "Wo es ankommt; leer bei einer Lieferung an einen Kunden oder bei Ausschuss"
 
 [labels.de.model.inventory_move.field.quantity]
 label = "Menge"
@@ -124,7 +124,7 @@ label = "Stornieren"
 description = "Eine Bewegung im Entwurf stornieren"
 
 [labels.de.model.inventory_item.field.below_reorder]
-description = "Ob die Menge den Meldebestand erreicht oder unterschritten hat (nein, wenn kein Meldebestand gesetzt ist)"
+description = "Ob der Bestand Aufmerksamkeit braucht: die Menge ist unter null oder erreicht oder unterschreitet den Meldebestand"
 label = "Niedriger Bestand"
 
 [labels.de.model.inventory_move.field.kind]
