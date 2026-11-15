@@ -1,6 +1,6 @@
 [module]
 id = "pos"
-version = "0.4.1"
+version = "0.5.0"
 name = "Point of Sale"
 description = "Shop tills: a point-of-sale configuration, sessions that are opened and closed, orders with lines, and payment lines per method. A refund and the closing of a session need a human approval from a manager; agents may only propose them. Line subtotals and the order total are computed from the lines, receipts get a gapless yearly number, and paying is refused until the payments cover the total; change and cash differences are still entered, and the cash control and refund settings of a point of sale are only recorded: nothing checks them. Paying also creates a draft stock move per line from the order's stock location, for the warehouse to validate. Card numbers must never be stored; keep only the payment provider's reference. Needs the Products package."
 author = "SpaceCorps"
