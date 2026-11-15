@@ -4,6 +4,7 @@ summary = "Factures clients avec un cycle de vie brouillon, comptabilisée et an
 
 [labels.fr.model.invoice]
 name = "Facture"
+plural = "Factures clients"
 description = "Une facture client ; aucune action ne remet une facture comptabilisée en brouillon ni ne l’annule"
 
 [labels.fr.model.invoice.guard]
@@ -48,6 +49,7 @@ description = "Code de devise ISO 4217"
 
 [labels.fr.model.invoice_line]
 name = "Ligne de facture"
+plural = "Lignes de facture"
 description = "Un produit ou un service d’une facture"
 
 [labels.fr.model.invoice_line.field.invoice_id]

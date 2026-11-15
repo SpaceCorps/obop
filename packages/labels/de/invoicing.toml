@@ -4,6 +4,7 @@ summary = "Kundenrechnungen mit dem Lebenszyklus Entwurf, gebucht und storniert.
 
 [labels.de.model.invoice]
 name = "Rechnung"
+plural = "Ausgangsrechnungen"
 description = "Eine Kundenrechnung; keine Aktion setzt eine gebuchte Rechnung auf Entwurf zurück oder storniert sie"
 
 [labels.de.model.invoice.guard]
@@ -48,6 +49,7 @@ description = "Währungscode nach ISO 4217"
 
 [labels.de.model.invoice_line]
 name = "Rechnungsposition"
+plural = "Rechnungspositionen"
 description = "Ein Produkt oder eine Dienstleistung auf einer Rechnung"
 
 [labels.de.model.invoice_line.field.invoice_id]

@@ -4,6 +4,7 @@ summary = "Facturas de cliente con un ciclo de vida de borrador, contabilizada y
 
 [labels.es.model.invoice]
 name = "Factura"
+plural = "Facturas de cliente"
 description = "Una factura de cliente; ninguna acción devuelve una factura contabilizada a borrador ni la cancela"
 
 [labels.es.model.invoice.guard]
@@ -48,6 +49,7 @@ description = "Código de moneda ISO 4217"
 
 [labels.es.model.invoice_line]
 name = "Línea de factura"
+plural = "Líneas de factura"
 description = "Un producto o servicio de una factura"
 
 [labels.es.model.invoice_line.field.invoice_id]
