@@ -1,6 +1,6 @@
 [module]
 id = "subscriptions"
-version = "0.3.0"
+version = "0.3.1"
 name = "Subscriptions"
 description = "Recurring plans and customer subscriptions with a trial, active, past due and cancelled flow. It records the next invoice date; it does not create invoices on its own."
 author = "SpaceCorps"
@@ -12,7 +12,7 @@ keywords = ["subscriptions", "recurring", "plans"]
 categories = ["sales", "finance"]
 maturity = "beta"
 requires_core = "^0.2.2"
-changelog = "The app opens on Subscriptions and names each one after its customer and plan. A new subscription starts today with one seat and takes the plan's price and the instance currency; the three cancel actions show as one Cancel subscription. A cancelled subscription can no longer be changed, except for the reason."
+changelog = "The app opens on Subscriptions and names each one after its customer and plan. A new subscription starts today with one seat and takes the plan's price and the instance currency; the three cancel actions show as one Cancel subscription. A cancelled subscription can no longer be changed, except for the reason. Mark past due sits in the menu, so an active subscription has no dunning step as its main action."
 home = "subscriptions_subscription"
 
 [module.dependencies]
@@ -208,6 +208,8 @@ write_group = "subscriptions.manager"
   field = "state"
   from = "active"
   to = "past_due"
+  [model.action.ui]
+  danger = true
 
   [[model.action]]
   name = "recover"
