@@ -16,6 +16,8 @@ pub(super) struct Dir(PathBuf);
 impl Dir {
     pub(super) fn new() -> Dir {
         let d = std::env::temp_dir().join(unique("obop-ops"));
+        // A recycled process id must not meet what an earlier run left in the directory.
+        let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         Dir(d)
     }

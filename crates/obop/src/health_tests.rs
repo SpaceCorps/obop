@@ -346,8 +346,9 @@ async fn metrics_on_loopback_is_for_direct_loopback_callers_only() {
 
 #[tokio::test]
 async fn health_and_metrics_are_not_shadowed_by_the_backoffice_or_the_public_site() {
-    let dir = std::env::temp_dir().join(format!("obop-health-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    // A directory of this run's own, removed when the test ends (after the stores are closed).
+    let _guard = obop_storage::testing::TempPath::dir("obop-health");
+    let dir = _guard.path().to_path_buf();
     std::fs::write(dir.join("index.html"), "<html>BACKOFFICE-SHELL</html>").unwrap();
     for public in [false, true] {
         let app = App::new();
