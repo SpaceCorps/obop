@@ -76,7 +76,12 @@ export function canvasColour(doc: Document): ColourReader {
   const canvas = doc.createElement("canvas");
   canvas.width = 1;
   canvas.height = 1;
-  const context = canvas.getContext("2d", { willReadFrequently: true });
+  let context: CanvasRenderingContext2D | null = null;
+  try {
+    context = canvas.getContext("2d", { willReadFrequently: true });
+  } catch {
+    // A page without a canvas reads no colour and reports none.
+  }
   return (css) => {
     if (context === null || css === "") return null;
     context.fillStyle = "#010203";

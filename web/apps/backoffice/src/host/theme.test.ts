@@ -5,6 +5,7 @@
 // report is sent.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import {
+  canvasColour,
   hex,
   luminance,
   measureTheme,
@@ -98,6 +99,53 @@ describe("what is measured", () => {
     expect(measureTheme(document, colour)).toBeNull();
     page("not a colour", null);
     expect(measureTheme(document, colour)).toBeNull();
+  });
+});
+
+describe("the reader of a real page", () => {
+  /** A canvas context as far as the reader uses it: a fill style that keeps only a colour. */
+  function fakeContext() {
+    let style = "#000000";
+    let painted: Rgba = [0, 0, 0, 0];
+    return {
+      get fillStyle() {
+        return style;
+      },
+      set fillStyle(css: string) {
+        if (css.startsWith("#") || css in TABLE) style = css;
+      },
+      clearRect: () => {
+        painted = [0, 0, 0, 0];
+      },
+      fillRect: () => {
+        painted = TABLE[style] ?? [0, 0, 0, 255];
+      },
+      getImageData: () => ({ data: Uint8ClampedArray.from(painted) }),
+    };
+  }
+  const canvasGives = (context: () => unknown) =>
+    vi
+      .spyOn(document.defaultView!.HTMLCanvasElement.prototype, "getContext")
+      .mockImplementation(context as () => null);
+
+  it("reads a colour as the canvas paints it, and nothing for a text that is not a colour", () => {
+    canvasGives(fakeContext);
+    const read = canvasColour(document);
+    expect(read(LIGHT)).toEqual([243, 244, 247, 255]);
+    expect(read(VEIL)).toEqual([0, 0, 0, 128]);
+    expect(read("not a colour")).toBeNull();
+    expect(read("")).toBeNull();
+    // The text before does not stay behind as the colour of the next one.
+    expect(read(DARK)).toEqual([10, 11, 16, 255]);
+  });
+
+  it("reads nothing where the page has no canvas, also when asking for one throws", () => {
+    canvasGives(() => null);
+    expect(canvasColour(document)(LIGHT)).toBeNull();
+    canvasGives(() => {
+      throw new Error("no canvas here");
+    });
+    expect(canvasColour(document)(LIGHT)).toBeNull();
   });
 });
 
