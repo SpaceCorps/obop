@@ -118,6 +118,9 @@ fn module(p: &str) -> Module {
                 ],
             ),
             model(n("log"), vec![f("line")], vec![]).with_guard(Guard::append_only()),
+            // Fixed once created: only the level changes afterwards.
+            model(n("stock"), vec![f("product"), f("level")], vec![])
+                .with_guard(Guard::default().mutable(&["level"])),
         ],
         network_destinations: vec![],
         description: String::new(),
@@ -371,6 +374,27 @@ fn an_effect_writer_is_held_to_the_guard() {
         r.act("task", "touch", &task);
         let got = r.ok("order", "get", m(vec![("id", t(&draft))]));
         assert_eq!(text(&got, "name"), "touched");
+    });
+}
+
+#[test]
+fn a_guard_of_mutable_fields_alone_fixes_the_rest_once_created() {
+    each(|r| {
+        let id = r.create("stock", vec![("product", t("drill")), ("level", t("3"))]);
+        let v = r.ok(
+            "stock",
+            "update",
+            m(vec![("id", t(&id)), ("level", t("5"))]),
+        );
+        assert_eq!(text(&v, "level"), "5");
+        let why = r.frozen(
+            "stock",
+            "update",
+            m(vec![("id", t(&id)), ("product", t("saw"))]),
+        );
+        assert!(why.contains("keeps what it was created with"), "{why}");
+        assert!(why.contains("only level can still change"), "{why}");
+        r.frozen("stock", "delete", m(vec![("id", t(&id))]));
     });
 }
 

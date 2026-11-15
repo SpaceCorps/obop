@@ -1,6 +1,6 @@
 [labels.es.module]
 name = "Inventario"
-description = "Almacenes, ubicaciones, niveles y movimientos de stock. Al validar un movimiento, la cantidad sale del origen y se suma al destino en un solo paso; si el artículo no existe, se crea. Un artículo por producto, ubicación y lote; se permiten cantidades negativas. La cantidad solo cambia con movimientos; los hechos o cancelados quedan bloqueados."
+description = "Almacenes, ubicaciones, niveles y movimientos de stock. Al validar un movimiento, la cantidad sale del origen y se suma al destino en un solo paso; si el artículo no existe, se crea. Un artículo por producto, ubicación y lote; se permiten cantidades negativas. La cantidad solo cambia con movimientos; los hechos o cancelados quedan bloqueados. Producto y ubicación de un artículo son fijos."
 summary = "Almacenes, ubicaciones de stock, niveles de stock y movimientos de stock."
 
 [labels.es.model.inventory_warehouse]
@@ -96,7 +96,7 @@ description = "De dónde sale; vacío para una recepción de un proveedor"
 
 [labels.es.model.inventory_move.field.to_location_id]
 label = "Ubicación de destino"
-description = "A dónde llega; vacío para una entrega a un cliente"
+description = "A dónde llega; vacío para una entrega a un cliente o para desecho"
 
 [labels.es.model.inventory_move.field.quantity]
 label = "Cantidad"
@@ -124,5 +124,21 @@ label = "Cancelar"
 description = "Cancelar un movimiento en borrador"
 
 [labels.es.model.inventory_item.field.below_reorder]
-description = "Si la cantidad está en el nivel de reposición o por debajo (no, si no hay nivel definido)"
+description = "Si el artículo necesita atención: la cantidad es negativa, o está en el nivel de reposición o por debajo"
 label = "Stock bajo"
+
+[labels.es.model.inventory_move.field.kind]
+label = "Tipo"
+description = "Qué es el movimiento: una recepción de un proveedor, una entrega a un cliente, un traslado interno, desecho, un ajuste tras un recuento de inventario o producción (componentes consumidos y productos fabricados)"
+
+[labels.es.model.inventory_move.field.kind.options]
+receipt = "Recepción"
+delivery = "Entrega"
+internal = "Interno"
+scrap = "Desecho"
+adjustment = "Ajuste de inventario"
+production = "Producción"
+
+[labels.es.model.inventory_move.field.origin]
+label = "Origen"
+description = "El documento del que procede el movimiento, por ejemplo un número de pedido de compra como PO-00042 o una orden de fabricación"

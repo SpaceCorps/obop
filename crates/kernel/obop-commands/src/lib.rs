@@ -1597,8 +1597,11 @@ impl Dispatcher {
                         // definition for it is what a field of that name left behind in records
                         // written before the model dropped it (`connection.created_at`): it is
                         // withheld too, but nobody was denied it, so it is not reported as denied.
+                        // An empty value is what a `rename_field` or `drop_field` step leaves under
+                        // the old name (`manufacturing_order.reference`): nothing is withheld, so
+                        // it is not reported as denied either.
                         if k != "id" {
-                            if !obop_registry::is_system_name(&k) {
+                            if !obop_registry::is_system_name(&k) && !matches!(v, Value::Null) {
                                 denied.push(format!("{model}.{k}"));
                             }
                             continue;

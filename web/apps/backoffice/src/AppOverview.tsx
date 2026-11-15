@@ -1,7 +1,7 @@
 // The generated home of an app (`#/<app>/overview`): what needs the person, counted on the server.
 // Every number comes from `<model>.search` with `aggregate` (D4), the command an agent calls, under
 // the same access rules; each card opens the list that shows exactly the records it counts.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Button, Icon, fmt, getCurrency, t, tx, useI18n } from "@obop/ui";
 import { aggregate, list, type ModelMeta, type ServerFilter } from "./api.ts";
 import { KpiStrip, KpiTile } from "./charts/KpiTile.tsx";
@@ -25,7 +25,16 @@ import { currencyGroupOf } from "./views/board.ts";
 import { recentRecords } from "./recent.ts";
 import { href, type Go, type Route } from "./route.ts";
 
-export type AppOverviewProps = { app: App; route: Route; go: Go };
+export type AppOverviewProps = {
+  app: App;
+  route: Route;
+  go: Go;
+  /**
+   * The buttons of the header, in place of the generated "New ..." (an app page that wraps the
+   * overview, such as Inventory's "Receive goods", "Move stock" and "Scrap").
+   */
+  actions?: ReactNode;
+};
 
 /** One "what needs me" card. */
 type Tile = {
@@ -243,7 +252,7 @@ async function tilesOf(
 
 const newHref = (app: App, m: ModelMeta) => href({ app: app.id, model: m.name, id: "new" });
 
-export function AppOverview({ app }: AppOverviewProps) {
+export function AppOverview({ app, actions }: AppOverviewProps) {
   const d = useData();
   const { lang } = useI18n();
   const user = signedIn();
@@ -296,16 +305,20 @@ export function AppOverview({ app }: AppOverviewProps) {
             <h1>{app.name}</h1>
             <p className="hint">{appBlurb(app)}</p>
           </div>
-          {first && (
-            <div className="ov-actions">
-              <Button
-                variant="primary"
-                icon="plus"
-                onClick={() => (location.hash = newHref(app, first))}
-              >
-                {t("New {model}", { model: modelTitle(first, app.module.id) })}
-              </Button>
-            </div>
+          {actions ? (
+            <div className="ov-actions">{actions}</div>
+          ) : (
+            first && (
+              <div className="ov-actions">
+                <Button
+                  variant="primary"
+                  icon="plus"
+                  onClick={() => (location.hash = newHref(app, first))}
+                >
+                  {t("New {model}", { model: modelTitle(first, app.module.id) })}
+                </Button>
+              </div>
+            )
           )}
         </header>
 

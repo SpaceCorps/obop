@@ -119,7 +119,7 @@ description = "Överenskommet pris per enhet (valutans minsta enhet, till exempe
 
 [labels.sv.model.purchase_order_line.field.received_quantity]
 label = "Mottaget antal"
-description = "Antal enheter som mottagits hittills"
+description = "Antal enheter som faktiskt kom, om det skiljer sig från beställningen; tomt betyder att det beställda antalet kom. Ange det innan ordern tas emot"
 
 [labels.sv.model.purchase_order.field.number]
 label = "Nummer"
@@ -132,3 +132,7 @@ description = "Var varorna ska tas emot; när ordern tas emot skapas lagerrörel
 [labels.sv.model.purchase_order_line.field.amount]
 label = "Belopp"
 description = "Radbelopp: antal gånger styckpris (valutans minsta enhet)"
+
+[labels.sv.model.purchase_order_line.field.receipt_quantity]
+label = "Antal att ta emot"
+description = "Antal enheter som inleveransen lägger i lager: det mottagna antalet om det anges, annars det beställda antalet"

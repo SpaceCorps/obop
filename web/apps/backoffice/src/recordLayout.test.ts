@@ -176,6 +176,16 @@ describe("locks", () => {
     expect(deleteBlocked(m, row({ state: "draft" }))).toBe(false);
   });
 
+  it("locks every saved record of a guard of mutable fields alone, but those fields", () => {
+    const item = model("stock_item", [f("product_id", "text"), f("reorder_level", "number")], {
+      guard: { mutable_fields: ["reorder_level"] },
+    });
+    const lock = lockOf(item, row({ product_id: "p1" }))!;
+    expect(lock.mutable.has("reorder_level")).toBe(true);
+    expect(lock.mutable.has("product_id")).toBe(false);
+    expect(lockOf(item, null)).toBeNull();
+  });
+
   it("locks nothing without a guard", () => {
     expect(lockOf(model("x", [state]), row({ state: "posted" }))).toBeNull();
   });

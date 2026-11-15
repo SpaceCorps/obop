@@ -1,6 +1,6 @@
 [labels.fi.module]
 name = "Varastonhallinta"
-description = "Varastot, varastopaikat, varastosaldot ja varastosiirrot. Siirron vahvistaminen vähentää määrän lähtöpaikan saldosta ja lisää sen kohdepaikan saldoon yhdellä kertaa; puuttuva saldorivi luodaan. Yksi rivi per tuote, paikka ja erä; negatiiviset määrät sallitaan. Määrä muuttuu vain siirroilla; valmiit ja perutut siirrot lukitaan."
+description = "Varastot, varastopaikat, varastosaldot ja varastosiirrot. Siirron vahvistaminen vähentää määrän lähtöpaikan saldosta ja lisää sen kohdepaikan saldoon yhdellä kertaa; puuttuva saldorivi luodaan. Yksi rivi per tuote, paikka ja erä; negatiiviset määrät sallitaan. Määrä muuttuu vain siirroilla; valmiit ja perutut siirrot lukitaan. Rivin tuote ja paikka ovat kiinteät."
 summary = "Varastot, varastopaikat, varastosaldot ja varastosiirrot."
 
 [labels.fi.model.inventory_warehouse]
@@ -96,7 +96,7 @@ description = "Mistä tuote lähtee; tyhjä toimittajalta tulevassa vastaanotoss
 
 [labels.fi.model.inventory_move.field.to_location_id]
 label = "Kohdesijainti"
-description = "Minne tuote saapuu; tyhjä asiakkaalle menevässä toimituksessa"
+description = "Minne tuote saapuu; tyhjä asiakkaalle menevässä toimituksessa tai romutuksessa"
 
 [labels.fi.model.inventory_move.field.quantity]
 label = "Määrä"
@@ -124,5 +124,21 @@ label = "Peruuta"
 description = "Peruuta luonnossiirto"
 
 [labels.fi.model.inventory_item.field.below_reorder]
-description = "Onko määrä tilauspisteessä tai sen alla (ei, jos tilauspistettä ei ole asetettu)"
+description = "Tarvitseeko rivi huomiota: määrä on alle nollan tai tilauspisteessä tai sen alla"
 label = "Vähissä"
+
+[labels.fi.model.inventory_move.field.kind]
+label = "Tyyppi"
+description = "Mitä siirto on: vastaanotto toimittajalta, toimitus asiakkaalle, sisäinen siirto, hävikki, inventaarion jälkeinen korjaus tai tuotanto (käytetyt komponentit ja valmistetut tuotteet)"
+
+[labels.fi.model.inventory_move.field.kind.options]
+receipt = "Vastaanotto"
+delivery = "Toimitus"
+internal = "Sisäinen"
+scrap = "Hävikki"
+adjustment = "Inventaariokorjaus"
+production = "Tuotanto"
+
+[labels.fi.model.inventory_move.field.origin]
+label = "Lähdeasiakirja"
+description = "Asiakirja, josta siirto on peräisin, esimerkiksi ostotilauksen numero kuten PO-00042 tai valmistustilaus"

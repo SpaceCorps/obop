@@ -1,6 +1,6 @@
 [labels.pl.module]
 name = "Produkcja"
-description = "Zestawienia materiałów i zlecenia produkcyjne z obiegiem wersja robocza, potwierdzone, w toku i wykonane. Zużycie składników z magazynu nie jest księgowane automatycznie. Wykonane i anulowane zlecenia są zablokowane."
+description = "Zestawienia materiałowe i zlecenia produkcyjne z przebiegiem: szkic, potwierdzone, w toku i zakończone. Zlecenie wymienia zużywane komponenty; zakończenie zlecenia tworzy ruchy magazynowe, które zdejmują te komponenty w lokalizacji produkcji i przyjmują tam wyrób gotowy. Zlecenia zakończone i anulowane są zablokowane."
 summary = "Zestawienia materiałów i zlecenia produkcyjne z obiegiem wersja robocza, potwierdzone, w toku, wykonane."
 
 [labels.pl.model.manufacturing_bom]
@@ -50,9 +50,9 @@ name = "Zlecenie produkcyjne"
 plural = "Zlecenia produkcyjne"
 description = "Polecenie wyprodukowania określonej ilości produktu"
 
-[labels.pl.model.manufacturing_order.field.reference]
-label = "Referencja"
-description = "Numer zlecenia, na przykład MO-0042"
+[labels.pl.model.manufacturing_order.field.number]
+label = "Numer"
+description = "Numer zlecenia, na przykład MO-00042, nadawany przy tworzeniu zlecenia"
 
 [labels.pl.model.manufacturing_order.field.bom_id]
 label = "Zestawienie materiałów"
@@ -95,8 +95,33 @@ description = "Rozpoczyna produkcję dla potwierdzonego zlecenia"
 
 [labels.pl.model.manufacturing_order.action.finish]
 label = "Zakończ"
-description = "Oznacza produkcję jako zakończoną"
+description = "Oznacza produkcję jako zakończoną: przy podanej lokalizacji produkcji powstaje szkic ruchu magazynowego zdejmującego tam każdy komponent i jeden przyjmujący wyrób gotowy, z numerem zlecenia jako dokumentem źródłowym, do zatwierdzenia przez magazyn (wymaga grupy inventory.user)"
 
 [labels.pl.model.manufacturing_order.action.cancel]
 label = "Anuluj"
 description = "Anuluje zlecenie, które nie zostało potwierdzone"
+
+[labels.pl.model.manufacturing_order.field.product_id]
+label = "Produkt"
+description = "Wytwarzany wyrób gotowy; przejmowany z zestawienia materiałowego, gdy nie podano"
+
+[labels.pl.model.manufacturing_order.field.location_id]
+label = "Lokalizacja produkcji"
+description = "Lokalizacja produkcji: zakończenie zlecenia tworzy ruchy magazynowe, które pobierają stąd komponenty i odkładają tu wyrób gotowy; puste nie tworzy ruchów"
+
+[labels.pl.model.manufacturing_order_line]
+name = "Komponent zlecenia"
+plural = "Komponenty zlecenia"
+description = "Komponent zużywany przez zlecenie produkcyjne, z liczbą sztuk na całe zlecenie"
+
+[labels.pl.model.manufacturing_order_line.field.order_id]
+label = "Zlecenie produkcyjne"
+description = "Zlecenie produkcyjne, które zużywa komponent"
+
+[labels.pl.model.manufacturing_order_line.field.component_id]
+label = "Komponent"
+description = "Zużywany produkt"
+
+[labels.pl.model.manufacturing_order_line.field.quantity]
+label = "Ilość"
+description = "Liczba sztuk komponentu zużywana przez całe zlecenie"

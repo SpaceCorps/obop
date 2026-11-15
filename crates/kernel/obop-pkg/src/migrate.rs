@@ -489,8 +489,69 @@ fn shape_of(f: &FieldM) -> Option<J> {
             "unique": f.unique,
             "unique_with": f.unique_with,
         })),
+        // Numbers typed by hand that a rename moves into a numbered field: the counter goes on
+        // after the highest of them (`counter_after_rename`).
+        "sequence" => Some(json!({
+            "kind": "sequence",
+            "format": f.format,
+            "reset": f.reset,
+        })),
         _ => None,
     }
+}
+
+/// The counter record a numbered field takes its numbers from (`obop_commands` `engine/seq.rs`:
+/// the model `sequence_counter`, one record per model and field when the series never resets).
+const SEQUENCE_COUNTER: &str = "sequence_counter";
+
+/// The number `v` holds in the series `format` (`MO-{seq:05}`), when `v` is written in it: the
+/// text before and after `{seq}` (or `{seq:N}`) as written, and digits in between. A format with
+/// `{year}` or `{month}` gives none: such a series is counted per period.
+fn number_in(format: &str, v: &str) -> Option<u64> {
+    let start = format.find("{seq")?;
+    let end = start + format[start..].find('}')? + 1;
+    let (before, after) = (&format[..start], &format[end..]);
+    if before.contains('{') || after.contains('{') {
+        return None;
+    }
+    let digits = v.strip_prefix(before)?.strip_suffix(after)?;
+    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    digits.parse().ok()
+}
+
+/// After a rename into a numbered field that never resets, the counter of that field is set to
+/// the highest number the moved values hold in its format (`MO-0018` in `MO-{seq:05}` is 18), so
+/// the next record is numbered after them instead of starting at 1 beside them. A counter that
+/// is already higher is left as it is.
+fn counter_after_rename(
+    backend: &dyn Backend,
+    s: &Step,
+    highest: u64,
+) -> Result<Option<Op>, String> {
+    let to = s.to.as_deref().unwrap_or_default();
+    let key = format!("{}.{to}", s.model);
+    let had = backend
+        .get(SEQUENCE_COUNTER, &key)
+        .map_err(|e| format!("reading the counter of {key}: {e}"))?;
+    let now = had
+        .as_ref()
+        .and_then(|f| f.get("value"))
+        .and_then(J::as_u64)
+        .unwrap_or(0);
+    if highest <= now {
+        return Ok(None);
+    }
+    let mut fields = had.unwrap_or_default();
+    fields.insert("value".into(), J::from(highest));
+    fields.insert("model".into(), J::from(s.model.as_str()));
+    fields.insert("field".into(), J::from(to));
+    Ok(Some(Op::Put {
+        model: SEQUENCE_COUNTER.into(),
+        id: key,
+        fields,
+    }))
 }
 
 fn carry_shape(new: &Manifest, s: &mut Step) {
@@ -864,10 +925,19 @@ pub fn check_stored_shapes(backend: &dyn Backend, new: &Manifest) -> Result<(), 
 pub fn build_ops(backend: &dyn Backend, steps: &[Step]) -> Result<Vec<Op>, String> {
     let mut edits: BTreeMap<(String, String), Edit> = BTreeMap::new();
     let mut order: Vec<(String, String)> = Vec::new();
+    let mut counters: Vec<Op> = Vec::new();
     for s in steps {
         let rows = backend
             .list(&s.model)
             .map_err(|e| format!("reading {}: {e}", s.model))?;
+        // A rename into a numbered field that never resets: the format its numbers are read in.
+        let series = s
+            .value
+            .as_ref()
+            .filter(|v| s.op == "rename_field" && v["kind"] == "sequence")
+            .filter(|v| v["reset"].as_str().is_none_or(|r| r == "never"))
+            .and_then(|v| v["format"].as_str());
+        let mut highest = 0u64;
         for (id, orig) in rows {
             let rec_id = id.clone();
             let key = (s.model.clone(), id);
@@ -888,7 +958,11 @@ pub fn build_ops(backend: &dyn Backend, steps: &[Step]) -> Result<Vec<Op>, Strin
                     let to = s.to.as_deref().ok_or("rename_field without a target")?;
                     if let Some(v) = e.cur.get(&s.field).cloned().filter(|v| !v.is_null()) {
                         // Into a decimal or datetime field a value goes in its canonical text.
+                        if let Some(n) = series.zip(v.as_str()).and_then(|(f, t)| number_in(f, t)) {
+                            highest = highest.max(n);
+                        }
                         let moved = match &s.value {
+                            Some(shape) if shape["kind"] == "sequence" => Some(v),
                             Some(shape) => in_shape(shape, &v).map_err(|why| {
                                 format!("{} {}: {} -> {to}: {why}", s.model, rec_id, s.field)
                             })?,
@@ -926,9 +1000,15 @@ pub fn build_ops(backend: &dyn Backend, steps: &[Step]) -> Result<Vec<Op>, Strin
                 other => return Err(format!("unknown migration op {other}")),
             }
         }
+        if series.is_some()
+            && highest > 0
+            && let Some(op) = counter_after_rename(backend, s, highest)?
+        {
+            counters.push(op);
+        }
     }
     check_unique(steps, &order, &edits)?;
-    Ok(order
+    let records: Vec<Op> = order
         .into_iter()
         .filter_map(|key| {
             let e = edits.remove(&key)?;
@@ -947,12 +1027,68 @@ pub fn build_ops(backend: &dyn Backend, steps: &[Step]) -> Result<Vec<Op>, Strin
                 expect,
             })
         })
-        .collect())
+        .collect();
+    Ok(records.into_iter().chain(counters).collect())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_number_is_read_in_its_series_only_when_written_in_it() {
+        assert_eq!(number_in("MO-{seq:05}", "MO-0018"), Some(18));
+        assert_eq!(number_in("MO-{seq:05}", "MO-00042"), Some(42));
+        assert_eq!(number_in("{seq}/A", "7/A"), Some(7));
+        assert_eq!(number_in("MO-{seq:05}", "MO-12a"), None);
+        assert_eq!(number_in("MO-{seq:05}", "WO-0001"), None);
+        assert_eq!(number_in("MO-{seq:05}", "MO-"), None);
+        assert_eq!(number_in("MO-{year}-{seq}", "MO-2026-0001"), None);
+    }
+
+    #[test]
+    fn a_rename_into_a_numbered_field_moves_the_counter_past_the_moved_numbers() {
+        let new = m(
+            "0.3.0",
+            "[[model.field]]\nname = \"number\"\ndescription = \"d\"\nclass = \"none\"\nkind = \"sequence\"\nformat = \"MO-{seq:05}\"",
+            "[[migration]]\nfrom = \"<0.3.0\"\nop = \"rename_field\"\nmodel = \"mig_item\"\nfield = \"reference\"\nto = \"number\"\ndescription = \"d\"",
+        );
+        let steps = steps_for(&new, &Version::new(0, 2, 0));
+        let b = obop_storage::open("memory:").unwrap();
+        for (id, r) in [
+            ("1", "MO-0003"),
+            ("2", "MO-0018"),
+            ("3", "by hand"),
+            ("4", ""),
+        ] {
+            let mut f = Fields::new();
+            f.insert("reference".into(), J::from(r));
+            b.apply_checked(&[Op::Insert {
+                model: "mig_item".into(),
+                id: id.into(),
+                fields: f,
+            }])
+            .unwrap();
+        }
+        b.apply_checked(&build_ops(&*b, &steps).unwrap()).unwrap();
+        let c = b.get(SEQUENCE_COUNTER, "mig_item.number").unwrap().unwrap();
+        assert_eq!(c["value"], 18);
+        assert_eq!(
+            b.get("mig_item", "2").unwrap().unwrap()["number"],
+            "MO-0018"
+        );
+        // Run again (a retried update): a counter already past them stays where it is.
+        let mut f = c.clone();
+        f.insert("value".into(), J::from(25));
+        b.apply_checked(&[Op::Put {
+            model: SEQUENCE_COUNTER.into(),
+            id: "mig_item.number".into(),
+            fields: f,
+        }])
+        .unwrap();
+        let again = build_ops(&*b, &steps).unwrap();
+        assert!(again.iter().all(|o| !matches!(o, Op::Put { .. })));
+    }
 
     fn m(version: &str, fields: &str, migrations: &str) -> Manifest {
         Manifest::parse(&format!(

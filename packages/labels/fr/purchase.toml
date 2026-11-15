@@ -119,7 +119,7 @@ description = "Prix convenu par unité (plus petite unité monétaire, par exemp
 
 [labels.fr.model.purchase_order_line.field.received_quantity]
 label = "Quantité reçue"
-description = "Unités reçues jusqu’à présent"
+description = "Unités réellement arrivées, si elles diffèrent de la commande ; vide signifie que la quantité commandée est arrivée. À renseigner avant la réception de la commande"
 
 [labels.fr.model.purchase_order.field.number]
 label = "Numéro"
@@ -132,3 +132,7 @@ description = "Où les marchandises doivent être reçues ; la réception de la 
 [labels.fr.model.purchase_order_line.field.amount]
 label = "Montant"
 description = "Montant de la ligne : quantité multipliée par le prix unitaire (plus petite unité monétaire)"
+
+[labels.fr.model.purchase_order_line.field.receipt_quantity]
+label = "Quantité à réceptionner"
+description = "Unités que la réception met en stock : la quantité reçue si elle est indiquée, sinon la quantité commandée"
