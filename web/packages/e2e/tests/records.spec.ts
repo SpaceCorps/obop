@@ -69,9 +69,10 @@ test.describe("records in a built-in module (CRM leads)", () => {
     // The form accepts this amount, but it does not fit the server's integer: its message lands on the field.
     await panel.getByLabel("Expected revenue").fill("99999999999999999999.99");
     await panel.getByRole("button", { name: "Create" }).click();
-    const inline = panel.getByRole("alert").filter({ hasText: "lead.expected_revenue_minor" });
+    // It names the field by its label, not by the server's name for it (B12).
+    const inline = panel.getByRole("alert").filter({ hasText: /^Expected revenue must be/ });
     await expect(inline).toBeVisible();
-    await expect(inline).toContainText("integer");
+    await expect(inline).not.toContainText("lead.");
     await expect(panel.getByLabel("Expected revenue")).toHaveAttribute("aria-invalid", "true");
     await expect(leadRow(page, title)).toHaveCount(0);
 

@@ -34,6 +34,8 @@ test.describe("Customize: marketplace, module builder and theme", () => {
       await panel.getByRole("button", { name: "Create" }).click();
       // Wait for the save: switching views while the form is still dirty would ask to discard it.
       await expect(page.locator(".toast").filter({ hasText: "created" })).toBeVisible();
+      // A vehicle has many fields, so it opened as a page over the list: close it first.
+      await page.getByRole("button", { name: "Close record" }).click();
       await page.getByRole("button", { name: "List", exact: true }).click();
       await expect(page.getByRole("row", { name: new RegExp(plate) })).toContainText("120,000");
 

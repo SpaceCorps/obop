@@ -110,7 +110,7 @@ test.describe("mileage review", () => {
     const record = page.getByRole("complementary", { name: /record$/ });
     await expect(record).toBeVisible();
     // The distance is the server's; the status bar says where the trip stands.
-    await expect(record.locator(".field.ro", { hasText: "Distance m" })).toContainText("200.15");
+    await expect(record.getByLabel("Distance m")).toHaveValue("200.15");
     await expect(record.locator("[aria-current=step]")).toContainText("In review");
     const hidden = await api.post(
       "/api/mileage_trip/get",

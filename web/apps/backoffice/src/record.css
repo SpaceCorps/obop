@@ -629,6 +629,8 @@ html.sheet-open body {
 /* On a phone: the state, the total and the facts on one line under the title. */
 .rec-strip {
   display: flex;
+  /* It clips its own overflow, so in the panel's column it must not shrink below its line. */
+  flex: none;
   align-items: center;
   gap: var(--space-2);
   min-inline-size: 0;
@@ -648,19 +650,11 @@ html.sheet-open body {
 
 /* A governed status reads as steps; it moves through the actions below. */
 .statusbar.stepper {
-  gap: 0;
-  row-gap: var(--space-1);
+  gap: var(--space-1);
 }
 .statusbar.stepper li {
   display: flex;
   align-items: center;
-}
-.statusbar.stepper li + li::before {
-  inline-size: 0.9rem;
-  block-size: 1px;
-  margin-inline: 2px;
-  background: var(--border-strong);
-  content: "";
 }
 .statusbar.stepper .step {
   display: inline-flex;
