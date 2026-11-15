@@ -196,10 +196,7 @@ fn frozen_sentence(def: &ModelDef, id: &str, why: &Frozen) -> String {
         Frozen::State(None) => format!("{} {id} is in a state that is final", def.name),
         Frozen::Locked => format!("{} {id} is dated in a locked period", def.name),
         Frozen::Parent(pm, pid) => {
-            format!(
-                "{} {id} belongs to {pm} {pid}, which can no longer be changed",
-                def.name
-            )
+            format!("{} {id} belongs to {pm} {pid}, which is locked", def.name)
         }
     }
 }

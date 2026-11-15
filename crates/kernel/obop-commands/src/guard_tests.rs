@@ -403,3 +403,20 @@ fn meta_serves_the_guard() {
         assert_eq!(line.guard.as_ref().unwrap().children_of, Some("order_id"));
     });
 }
+
+#[test]
+fn every_surface_gets_the_same_refusal() {
+    each(|r| {
+        let id = r.order("confirmed");
+        let cmd = format!("{}_order.update", r.p);
+        let input = m(vec![("id", t(&id)), ("name", t("X"))]);
+        for surface in [Surface::Rest, Surface::Mcp, Surface::Cli] {
+            let e =
+                r.d.call(surface, &r.who, &mut Vault::new(), &cmd, &input)
+                    .err()
+                    .unwrap_or_else(|| panic!("{surface:?}: the update went through"));
+            let k = errors::classify(&e);
+            assert_eq!((k.code, k.status), ("immutable_record", 409), "{surface:?}");
+        }
+    });
+}
