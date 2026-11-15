@@ -1244,6 +1244,14 @@ button.avatar {
 .toast-action:hover {
   background: var(--accent-soft);
 }
+/* A toast's action is 44 px to tap on a phone or a touch screen, like its Dismiss. */
+@media (max-width: 40rem), (pointer: coarse) {
+  .toast-action {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 2.75rem;
+  }
+}
 
 /* ---------- Table ---------- */
 /* position: relative makes the wrapper hold its visually hidden captions and headers (.sr-only is
