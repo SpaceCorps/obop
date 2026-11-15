@@ -5,6 +5,7 @@ summary = "Tilikartta, päiväkirjat, verokannat, tilikaudet ja kirjaukset. Kirj
 
 [labels.fi.model.accounting_account]
 name = "Tili"
+plural = "Tilikartta"
 description = "Tilikartan tili"
 
 [labels.fi.model.accounting_account.field.code]
@@ -47,6 +48,7 @@ description = "Sisäisiä huomioita tilin käytöstä"
 
 [labels.fi.model.accounting_journal]
 name = "Päiväkirja"
+plural = "Päiväkirjat"
 description = "Päiväkirja, johon ryhmitellään yhden lajin kirjaukset (myynti, osto, pankki, kassa, muut)"
 
 [labels.fi.model.accounting_journal.field.name]
@@ -82,6 +84,7 @@ description = "Voiko päiväkirjaan vielä tehdä kirjauksia"
 
 [labels.fi.model.accounting_tax]
 name = "Vero"
+plural = "Verot"
 description = "Verokanta, johon kirjausrivit voivat viitata"
 
 [labels.fi.model.accounting_tax.field.name]
@@ -115,6 +118,7 @@ description = "Voiko veron vielä valita uusille riveille"
 
 [labels.fi.model.accounting_fiscal_year]
 name = "Tilikausi"
+plural = "Tilikaudet"
 description = "Tilikausi, joka avataan ja suljetaan kokonaisuutena"
 
 [labels.fi.model.accounting_fiscal_year.field.name]
@@ -147,6 +151,7 @@ description = "Avaa suljettu tilikausi uudelleen korjausta varten (vain hyväksy
 
 [labels.fi.model.accounting_period]
 name = "Jakso"
+plural = "Jaksot"
 description = "Kirjanpitojakso (yleensä kuukausi) tilikauden sisällä"
 
 [labels.fi.model.accounting_period.field.fiscal_year_id]
@@ -183,6 +188,7 @@ description = "Avaa suljettu jakso uudelleen (vain hyväksyjä)"
 
 [labels.fi.model.accounting_move]
 name = "Kirjaus"
+plural = "Kirjaukset"
 description = "Päiväkirjan kirjaus: päivätty joukko debet- ja kredit-rivejä yhdessä päiväkirjassa"
 
 [labels.fi.model.accounting_move.field.journal_id]
@@ -221,7 +227,7 @@ reversed = "Vastakirjattu"
 
 [labels.fi.model.accounting_move.action.post]
 label = "Kirjaa"
-description = "Kirjaa luonnoksen pääkirjaan ja numeroi sen (vain hyväksyjä; evätään, ellei debet ole yhtä suuri kuin kredit)"
+description = "Kirjaa luonnoksen pääkirjaan ja numeroi sen (vain hyväksyjä; evätään ilman summaa tai ellei debet ole yhtä suuri kuin kredit)"
 
 [labels.fi.model.accounting_move.action.cancel]
 label = "Peruuta"
@@ -233,6 +239,7 @@ description = "Merkitse kirjattu kirjaus vastakirjatuksi; vastakirjaus tehdään
 
 [labels.fi.model.accounting_move_line]
 name = "Kirjausrivi"
+plural = "Kirjausrivit"
 description = "Kirjauksen yksi debet- tai kredit-rivi"
 
 [labels.fi.model.accounting_move_line.field.move_id]
@@ -273,6 +280,7 @@ description = "Onko rivi kohdistettu maksuun"
 
 [labels.fi.model.accounting_bank_statement_line]
 name = "Tiliotteen rivi"
+plural = "Tiliotteen rivit"
 description = "Tiliotteen rivi, joka odottaa kohdistamista kirjauksiin"
 
 [labels.fi.model.accounting_bank_statement_line.field.journal_id]
@@ -314,7 +322,7 @@ reconciled = "Täsmäytetty"
 
 [labels.fi.model.accounting_bank_statement_line.action.match]
 label = "Kohdista"
-description = "Merkitse, että rivi vastaa kirjausriviä"
+description = "Merkitse, että rivi vastaa kentässä move_line_id annettua kirjausriviä"
 
 [labels.fi.model.accounting_bank_statement_line.action.reconcile]
 label = "Täsmäytä"
@@ -331,3 +339,12 @@ description = "Kirjauksen rivien debet-summien summa (valuutan pienin yksikkö)"
 [labels.fi.model.accounting_move.field.total_credit]
 label = "Kredit yhteensä"
 description = "Kirjauksen rivien kredit-summien summa (valuutan pienin yksikkö)"
+
+[labels.fi.model.accounting_move.action.post.assert.has_amount]
+message = "Kirjauksella ei ole summaa: lisää debet- ja kredit-rivit ennen kirjaamista"
+
+[labels.fi.model.accounting_move.action.post.assert.balanced]
+message = "Kirjaus ei täsmää: debetin ja kreditin summien on oltava yhtä suuret"
+
+[labels.fi.model.accounting_bank_statement_line.action.match.assert.has_line]
+message = "Valitse kirjausrivi, johon tämä pankkitapahtuma kuuluu"

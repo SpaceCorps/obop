@@ -29,6 +29,27 @@ fn root() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
+/// Whether a package uses a key of core 0.2.2: the UI hints (D95) or the guard (D77).
+fn uses_hints_or_guards(m: &Manifest) -> bool {
+    m.module.home.is_some()
+        || m.module.launcher.is_some()
+        || m.model.iter().any(|x| {
+            x.ui.is_some()
+                || !x.child.is_empty()
+                || x.guard.is_some()
+                || x.field.iter().any(|f| {
+                    f.default.is_some()
+                        || f.fill_from.is_some()
+                        || f.readonly
+                        || f.ref_filter.is_some()
+                        || f.ui.is_some()
+                })
+                || x.action
+                    .iter()
+                    .any(|a| a.ui.is_some() || a.effect.iter().any(|e| e.kind == "set"))
+        })
+}
+
 /// Every model that exists today, built in or parsed from a bundled package, carries the default
 /// per-model extensions: no history setting, no declared index. The record history and index
 /// features read `ModelDef::ext`; until each lands, nothing may set it. The UI hints (D95) and the
@@ -92,9 +113,12 @@ fn every_bundled_package_declares_its_metadata() {
         let id = &x.id;
         assert_eq!(x.license, "Apache-2.0", "{id}: first-party licence (OR-1)");
         assert!(obop_pkg::spdx::check(&x.license).is_ok(), "{id}");
-        // The bundled packages keep `^0.2` (OR-35 h, OR-37 b). The one exception is a package that
-        // uses the field-limit keys (D90), which only core 0.2.1 parses: it writes `^0.2.1`.
-        let expected = if id == "accounting_se" {
+        // The bundled packages keep `^0.2` (OR-35 h, OR-37 b), except a package that uses keys a
+        // patch release added: the UI hints and guards (D95, D77) need `^0.2.2`, the field limits
+        // (D90) `^0.2.1`.
+        let expected = if uses_hints_or_guards(m) {
+            "^0.2.2"
+        } else if id == "accounting_se" {
             "^0.2.1"
         } else {
             "^0.2"

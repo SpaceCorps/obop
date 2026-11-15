@@ -5,6 +5,7 @@ summary = "Kontenplan, Journale, Steuern, Perioden und Buchungen. Buchen und Abs
 
 [labels.de.model.accounting_account]
 name = "Konto"
+plural = "Kontenplan"
 description = "Ein Konto des Kontenplans"
 
 [labels.de.model.accounting_account.field.code]
@@ -47,6 +48,7 @@ description = "Interne Hinweise zur Verwendung des Kontos"
 
 [labels.de.model.accounting_journal]
 name = "Journal"
+plural = "Journale"
 description = "Ein Journal, das Buchungen einer Art zusammenfasst (Verkauf, Einkauf, Bank, Kasse, Sonstiges)"
 
 [labels.de.model.accounting_journal.field.name]
@@ -82,6 +84,7 @@ description = "Ob das Journal noch Buchungen aufnehmen kann"
 
 [labels.de.model.accounting_tax]
 name = "Steuer"
+plural = "Steuern"
 description = "Ein Steuersatz, auf den Buchungszeilen verweisen können"
 
 [labels.de.model.accounting_tax.field.name]
@@ -115,6 +118,7 @@ description = "Ob die Steuer in neuen Zeilen noch gewählt werden kann"
 
 [labels.de.model.accounting_fiscal_year]
 name = "Geschäftsjahr"
+plural = "Geschäftsjahre"
 description = "Ein Geschäftsjahr, das als Ganzes eröffnet und abgeschlossen wird"
 
 [labels.de.model.accounting_fiscal_year.field.name]
@@ -147,6 +151,7 @@ description = "Ein abgeschlossenes Geschäftsjahr zur Korrektur wieder öffnen (
 
 [labels.de.model.accounting_period]
 name = "Periode"
+plural = "Perioden"
 description = "Eine Buchungsperiode (normalerweise ein Monat) innerhalb eines Geschäftsjahres"
 
 [labels.de.model.accounting_period.field.fiscal_year_id]
@@ -183,6 +188,7 @@ description = "Eine abgeschlossene Periode wieder öffnen (nur Genehmigende)"
 
 [labels.de.model.accounting_move]
 name = "Buchung"
+plural = "Buchungen"
 description = "Eine Journalbuchung: eine datierte Menge von Soll- und Haben-Zeilen in einem Journal"
 
 [labels.de.model.accounting_move.field.journal_id]
@@ -221,7 +227,7 @@ reversed = "Storno gebucht"
 
 [labels.de.model.accounting_move.action.post]
 label = "Buchen"
-description = "Eine Buchung ins Hauptbuch buchen und nummerieren (nur Genehmiger; abgelehnt, wenn Soll und Haben nicht gleich sind)"
+description = "Eine Buchung ins Hauptbuch buchen und nummerieren (nur Genehmiger; abgelehnt ohne Betrag oder wenn Soll und Haben nicht gleich sind)"
 
 [labels.de.model.accounting_move.action.cancel]
 label = "Stornieren"
@@ -233,6 +239,7 @@ description = "Eine gebuchte Buchung als storniert kennzeichnen; die Gegenbuchun
 
 [labels.de.model.accounting_move_line]
 name = "Buchungszeile"
+plural = "Buchungszeilen"
 description = "Eine Soll- oder Haben-Zeile einer Journalbuchung"
 
 [labels.de.model.accounting_move_line.field.move_id]
@@ -273,6 +280,7 @@ description = "Ob die Zeile mit einer Zahlung abgeglichen wurde"
 
 [labels.de.model.accounting_bank_statement_line]
 name = "Kontoauszugszeile"
+plural = "Kontoauszugszeilen"
 description = "Eine Zeile eines Kontoauszugs, die auf die Zuordnung zu Buchungen wartet"
 
 [labels.de.model.accounting_bank_statement_line.field.journal_id]
@@ -314,7 +322,7 @@ reconciled = "Abgeglichen"
 
 [labels.de.model.accounting_bank_statement_line.action.match]
 label = "Zuordnen"
-description = "Festhalten, dass die Zeile einer Buchungszeile entspricht"
+description = "Festhalten, dass die Zeile der in move_line_id genannten Buchungszeile entspricht"
 
 [labels.de.model.accounting_bank_statement_line.action.reconcile]
 label = "Abgleichen"
@@ -331,3 +339,12 @@ description = "Summe der Sollbeträge der Buchungszeilen (kleinste Währungseinh
 [labels.de.model.accounting_move.field.total_credit]
 label = "Summe Haben"
 description = "Summe der Habenbeträge der Buchungszeilen (kleinste Währungseinheit)"
+
+[labels.de.model.accounting_move.action.post.assert.has_amount]
+message = "Die Buchung hat keinen Betrag: vor dem Buchen Soll- und Haben-Zeilen hinzufügen"
+
+[labels.de.model.accounting_move.action.post.assert.balanced]
+message = "Die Buchung ist nicht ausgeglichen: Summe Soll und Summe Haben müssen gleich sein"
+
+[labels.de.model.accounting_bank_statement_line.action.match.assert.has_line]
+message = "Wählen Sie die Buchungszeile, zu der diese Banktransaktion gehört"

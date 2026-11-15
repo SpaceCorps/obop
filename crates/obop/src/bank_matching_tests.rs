@@ -253,13 +253,14 @@ fn it_refuses_in_words_and_posting_stays_governed() {
     assert!(m.contains("default_account_id"), "{m}");
     f.book(json!({"bank_line": l3, "counter_account": "1510", "bank_account": "1930"}))
         .unwrap();
-    // A line that is already matched is refused.
+    // A line that is already matched is refused (a match names its journal item, accounting 0.3.1).
     let done = f.line(7, "w");
+    let item = rows(&f.app, "accounting_move_line")[0].0.clone();
     call(
         &f.app,
         &admin(),
         "accounting_bank_statement_line.match",
-        json!({"id": done}),
+        json!({"id": done, "move_line_id": item}),
     )
     .unwrap();
     let m = refusal(f.book(json!({"bank_line": done, "counter_account": "1510"})));

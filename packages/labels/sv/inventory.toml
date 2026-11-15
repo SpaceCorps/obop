@@ -1,10 +1,11 @@
 [labels.sv.module]
 name = "Lager"
-description = "Lagerställen, lagerplatser, lagersaldon och lagerrörelser. När en rörelse valideras tas antalet från lagerposten på källplatsen och läggs till posten på målplatsen, i ett enda steg; en post som ännu inte finns skapas. Det finns en post per produkt, plats och parti. Negativa antal är tillåtna, till exempel för virtuella platser som leverantörer."
+description = "Lagerställen, lagerplatser, lagersaldon och lagerrörelser. När en rörelse valideras tas antalet från källplatsen och läggs till på målplatsen i ett steg; en post som saknas skapas. En post per produkt, plats och parti; negativa antal är tillåtna. Antalet ändras bara genom rörelser; klara och avbrutna rörelser är låsta."
 summary = "Lagerställen, lagerplatser, lagersaldon och lagerrörelser."
 
 [labels.sv.model.inventory_warehouse]
 name = "Lagerställe"
+plural = "Lagerställen"
 description = "En byggnad eller plats där varor lagras"
 
 [labels.sv.model.inventory_warehouse.field.name]
@@ -25,6 +26,7 @@ description = "Om lagerstället används"
 
 [labels.sv.model.inventory_location]
 name = "Lagerplats"
+plural = "Lagerplatser"
 description = "En plats i ett lagerställe där varor kan stå"
 
 [labels.sv.model.inventory_location.field.name]
@@ -52,6 +54,7 @@ description = "Om lagerplatsen används"
 
 [labels.sv.model.inventory_item]
 name = "Lagerartikel"
+plural = "Lagersaldo"
 description = "Antalet av en produkt på en lagerplats"
 
 [labels.sv.model.inventory_item.field.product_id]
@@ -64,7 +67,7 @@ description = "Var den lagras"
 
 [labels.sv.model.inventory_item.field.quantity]
 label = "Antal"
-description = "Antal enheter i lager"
+description = "Antal enheter i lager; ändras bara av validerade lagerrörelser"
 
 [labels.sv.model.inventory_item.field.reorder_level]
 label = "Beställningspunkt"
@@ -76,6 +79,7 @@ description = "Parti- eller batchnummer, om det spåras"
 
 [labels.sv.model.inventory_move]
 name = "Lagerrörelse"
+plural = "Lagerrörelser"
 description = "En förflyttning av en produkt mellan lagerplatser, eller in i eller ut ur verksamheten"
 
 [labels.sv.model.inventory_move.field.reference]
@@ -118,3 +122,7 @@ description = "Bekräfta att varorna verkligen flyttats: antalet lämnar posten 
 [labels.sv.model.inventory_move.action.cancel]
 label = "Annullera"
 description = "Annullera en rörelse i utkast"
+
+[labels.sv.model.inventory_item.field.below_reorder]
+description = "Om antalet är på eller under beställningspunkten (nej när ingen beställningspunkt är satt)"
+label = "Lågt lager"

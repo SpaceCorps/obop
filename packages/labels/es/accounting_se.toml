@@ -4,6 +4,7 @@ description = "Localización sueca de la contabilidad: datos de la empresa, seri
 
 [labels.es.model.accounting_se_company]
 name = "Empresa"
+plural = "Empresa"
 description = "La empresa sueca a la que pertenecen los libros; normalmente un registro"
 
 [labels.es.model.accounting_se_company.field.name]
@@ -49,6 +50,7 @@ description = "Correo de contacto para la contabilidad"
 
 [labels.es.model.accounting_se_voucher_series]
 name = "Serie de asientos"
+plural = "Series de asientos"
 description = "Una serie de asientos, una letra como A que agrupa asientos de un mismo tipo"
 
 [labels.es.model.accounting_se_voucher_series.field.code]
@@ -77,6 +79,7 @@ description = "Observaciones sobre cómo se usa la serie"
 
 [labels.es.model.accounting_se_vat_box]
 name = "Casilla de IVA"
+plural = "Casillas de IVA"
 description = "Una casilla de la declaración de IVA sueca. SIN VERIFICAR hasta que se compruebe con SKV 4700"
 
 [labels.es.model.accounting_se_vat_box.field.box]
@@ -115,11 +118,11 @@ description = "Si el propietario ha verificado la casilla; falso hasta entonces"
 
 [labels.es.model.accounting_se_vat_box.field.verified_by]
 label = "Verificada por"
-description = "Nombre de usuario de la persona que verificó"
+description = "Nombre de usuario de la persona que verificó; lo registra la acción Verificar"
 
 [labels.es.model.accounting_se_vat_box.field.verified_on]
 label = "Verificada el"
-description = "Fecha de la verificación (AAAA-MM-DD)"
+description = "Fecha de la verificación (AAAA-MM-DD); la registra la acción Verificar"
 
 [labels.es.model.accounting_se_vat_box.field.source]
 label = "Fuente"
@@ -127,7 +130,7 @@ description = "De dónde procede la casilla y qué se comprobó, por ejemplo la 
 
 [labels.es.model.accounting_se_vat_box.action.verify]
 label = "Verificar"
-description = "Marcar la casilla como comprobada con SKV 4700 (solo aprobadores)"
+description = "Marcar la casilla como comprobada con SKV 4700 (solo aprobadores); registra quién verificó y cuándo"
 
 [labels.es.model.accounting_se_vat_box.action.unverify]
 label = "Quitar verificación"
@@ -135,6 +138,7 @@ description = "Retirar la verificación de la casilla (solo aprobadores)"
 
 [labels.es.model.accounting_se_vat_code]
 name = "Código de IVA"
+plural = "Códigos de IVA"
 description = "Un código de IVA que puede llevar una línea del libro mayor, vinculado a una casilla de base, una casilla de IVA y cuentas. SIN VERIFICAR hasta que se compruebe con SKV 4700"
 
 [labels.es.model.accounting_se_vat_code.field.code]
@@ -214,11 +218,11 @@ description = "Si el propietario ha verificado el código; falso hasta entonces"
 
 [labels.es.model.accounting_se_vat_code.field.verified_by]
 label = "Verificado por"
-description = "Nombre de usuario de la persona que verificó"
+description = "Nombre de usuario de la persona que verificó; lo registra la acción Verificar"
 
 [labels.es.model.accounting_se_vat_code.field.verified_on]
 label = "Verificado el"
-description = "Fecha de la verificación (AAAA-MM-DD)"
+description = "Fecha de la verificación (AAAA-MM-DD); la registra la acción Verificar"
 
 [labels.es.model.accounting_se_vat_code.field.source]
 label = "Fuente"
@@ -226,7 +230,7 @@ description = "De dónde procede el código y qué se comprobó, por ejemplo la 
 
 [labels.es.model.accounting_se_vat_code.action.verify]
 label = "Verificar"
-description = "Marcar el código como comprobado con SKV 4700 (solo aprobadores)"
+description = "Marcar el código como comprobado con SKV 4700 (solo aprobadores); registra quién verificó y cuándo"
 
 [labels.es.model.accounting_se_vat_code.action.unverify]
 label = "Quitar verificación"
@@ -234,6 +238,7 @@ description = "Retirar la verificación del código (solo aprobadores)"
 
 [labels.es.model.accounting_se_vat_report]
 name = "Informe de IVA"
+plural = "Informes de IVA"
 description = "Un informe de IVA de un periodo, preparado a partir del libro mayor y aprobado por una persona antes de usarse. SIN VERIFICAR: este paquete no lo ha comparado con SKV 4700"
 
 [labels.es.model.accounting_se_vat_report.field.name]
@@ -316,6 +321,7 @@ description = "Registrar que la declaración se presentó a Skatteverket fuera d
 
 [labels.es.model.accounting_se_vat_report_line]
 name = "Línea de informe de IVA"
+plural = "Líneas de informe de IVA"
 description = "Una casilla de un informe de IVA con su importe"
 
 [labels.es.model.accounting_se_vat_report_line.field.report_id]

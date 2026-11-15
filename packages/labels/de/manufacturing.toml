@@ -1,10 +1,11 @@
 [labels.de.module]
 name = "Fertigung"
-description = "Stücklisten und Fertigungsaufträge mit dem Ablauf Entwurf, bestätigt, in Bearbeitung und erledigt. Der Bestand der Komponenten wird nicht automatisch verbraucht."
+description = "Stücklisten und Fertigungsaufträge mit dem Ablauf Entwurf, bestätigt, in Bearbeitung und erledigt. Der Bestand der Komponenten wird nicht automatisch verbraucht. Erledigte und stornierte Aufträge sind gesperrt."
 summary = "Stücklisten und Fertigungsaufträge mit dem Ablauf Entwurf, bestätigt, in Bearbeitung und erledigt."
 
 [labels.de.model.manufacturing_bom]
 name = "Stückliste"
+plural = "Stücklisten"
 description = "Eine Rezeptur: die Komponenten, die zur Herstellung eines Produkts nötig sind"
 
 [labels.de.model.manufacturing_bom.field.product_id]
@@ -29,6 +30,7 @@ description = "Ob die Stückliste für neue Aufträge verwendet werden kann"
 
 [labels.de.model.manufacturing_bom_line]
 name = "Stücklistenposition"
+plural = "Komponenten"
 description = "Eine Komponente einer Stückliste"
 
 [labels.de.model.manufacturing_bom_line.field.bom_id]
@@ -45,6 +47,7 @@ description = "Stückzahl der Komponente pro Durchlauf"
 
 [labels.de.model.manufacturing_order]
 name = "Fertigungsauftrag"
+plural = "Fertigungsaufträge"
 description = "Eine Anweisung, eine Menge eines Produkts herzustellen"
 
 [labels.de.model.manufacturing_order.field.reference]

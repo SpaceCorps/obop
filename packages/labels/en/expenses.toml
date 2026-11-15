@@ -1,2 +1,12 @@
 # English names and plurals of expenses (D52, D95): [labels.en.model.<model>] name = "...", plural = "...".
 # The manifest stays the English source; this file only adds the display names it does not have.
+
+[labels.en.model.expenses_expense]
+name = "Expense"
+plural = "Expenses"
+
+[labels.en.model.expenses_expense.field.spent_on]
+label = "Date"
+
+[labels.en.model.expenses_expense.field.receipt_note]
+label = "Receipt notes"
