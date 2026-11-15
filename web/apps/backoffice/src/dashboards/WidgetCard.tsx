@@ -1,22 +1,30 @@
-import { useEffect, useId, useMemo, useState } from "react";
-import { inSentence, t } from "@obop/ui";
+import { useEffect, useMemo, useState } from "react";
+import { fmt, inSentence, t } from "@obop/ui";
+import type { ModelMeta, Row } from "../api.ts";
+import { Chart, OTHER_KEY } from "../charts/Chart.tsx";
+import { KpiTile } from "../charts/KpiTile.tsx";
 import { useData } from "../data.tsx";
 import { integer } from "../format.ts";
-import { fieldTitle } from "../labels.ts";
-import { serverMessage } from "../serverMessage.ts";
-import { condForKey, encodeState, formatSum } from "../query.ts";
-import { Cell } from "../fields.tsx";
-import { Button, EmptyState, Icon, IconButton, Notice, Skeleton, Stat } from "../ui.tsx";
-import { Cartesian, Pie } from "../views/GraphView.tsx";
-import { toFacets } from "./filter.ts";
+import { fieldTitle, modelTitle } from "../labels.ts";
+import { currencyOf as presentCurrency } from "../presentation.ts";
+import { encodeState, type Cond } from "../query.ts";
 import {
-  buildPoints,
-  fetchWidget,
-  resolve,
-  type Fetched,
-  type Widget,
-  type WidgetData,
-} from "./widget.ts";
+  compactMeasure,
+  currenciesOf,
+  dimCond,
+  dimTitle,
+  formatMeasure,
+  isDated,
+  reportFromGroups,
+  type ReportRow,
+} from "../reports.ts";
+import { serverMessage } from "../serverMessage.ts";
+import { Cell } from "../fields.tsx";
+import { Button, EmptyState, Icon, IconButton, Notice, Skeleton } from "../ui.tsx";
+import { usePresentCtx, useTitleLookup } from "../useAggregate.ts";
+import { chartPoints, otherCond, tonedDim } from "../views/GraphView.tsx";
+import { conditionsText, toFacets } from "./filter.ts";
+import { fetchWidget, resolve, type Fetched, type Widget, type WidgetData } from "./widget.ts";
 
 /** A widget's data: resolved against what this person may see, then fetched from the server. */
 export function useWidgetData(w: Widget) {
@@ -53,6 +61,9 @@ export function useWidgetData(w: Widget) {
   return { r, state, retry: () => setAttempt((n) => n + 1) };
 }
 
+type Resolved = Extract<ReturnType<typeof resolve>, { ok: true }>;
+type ReportData = Extract<WidgetData, { kind: "report" }>;
+
 type Props = {
   widget: Widget;
   edit: boolean;
@@ -66,16 +77,18 @@ type Props = {
 export function WidgetCard({ widget: w, edit, first, last, onEdit, onRemove, onMove }: Props) {
   const d = useData();
   const { r, state, retry } = useWidgetData(w);
-  const id = useId();
 
-  const drillTo = (extra: ReturnType<typeof condForKey>[] = []) => {
+  const drillTo = (extra: Cond[] = []) => {
     if (!r.ok) return null;
     const facets = [...toFacets(r.conds, r.model), ...extra];
     return d.linkTo(r.model.name, { st: encodeState({ facets, group: [] }) });
   };
 
+  const ready = state !== "loading" && state.state === "ready";
   let body;
-  if (state === "loading") body = <Skeleton rows={3} cols={2} />;
+  if (state === "loading")
+    body =
+      w.kind === "kpi" ? <KpiTile plain label={w.title} loading /> : <Skeleton rows={3} cols={2} />;
   else if (state.state === "noaccess")
     body = (
       <div className="wstate" role="status">
@@ -101,9 +114,10 @@ export function WidgetCard({ widget: w, edit, first, last, onEdit, onRemove, onM
         </Button>
       </div>
     );
-  else if (r.ok) body = <Ready w={w} data={state.data} r={r} drillTo={drillTo} id={id} />;
+  else if (r.ok) body = <Ready w={w} data={state.data} r={r} drillTo={drillTo} />;
 
-  const kpi = w.kind === "kpi" && state !== "loading" && "data" in (state as object);
+  // A number tile names itself; the others have a heading with a link to their list.
+  const kpi = w.kind === "kpi" && (ready || state === "loading");
   return (
     <article
       className={`wcard kind-${w.kind}${edit ? " editing" : ""}`}
@@ -113,7 +127,7 @@ export function WidgetCard({ widget: w, edit, first, last, onEdit, onRemove, onM
       {!kpi && (
         <header>
           <h3>{w.title}</h3>
-          {r.ok && drillTo() && !edit && state !== "loading" && "data" in (state as object) && (
+          {r.ok && ready && !edit && drillTo() && (
             <a className="wopen" href={drillTo()!}>
               {t("Open list")}
             </a>
@@ -155,45 +169,58 @@ export function WidgetCard({ widget: w, edit, first, last, onEdit, onRemove, onM
   );
 }
 
+/** What a number tile counts, in words: "Deal records where Stage is Won". */
+export function kpiCaption(
+  r: Pick<Resolved, "model" | "conds" | "measure">,
+  moduleId: string,
+  refText: (model: string, id: string) => string,
+): string {
+  const model = modelTitle(r.model, moduleId);
+  const conds = r.conds.length ? conditionsText(r.conds, r.model, refText) : "";
+  if (r.measure) {
+    const field = inSentence(fieldTitle(r.measure));
+    return conds
+      ? t("Sum of {field} where {conditions}", { field, conditions: conds })
+      : t("Sum of {field} over all {model} records", { field, model: inSentence(model) });
+  }
+  return conds
+    ? t("{model} records where {conditions}", { model, conditions: conds })
+    : t("All {model} records", { model: inSentence(model) });
+}
+
+/** The rows of a widget's report, one per currency for money. */
+function useReportOf(data: ReportData, model: ModelMeta): ReportRow[] {
+  const d = useData();
+  const ctx = usePresentCtx();
+  return useMemo(() => {
+    const field = data.measure?.field;
+    const toCurrency = (v: unknown) =>
+      data.split
+        ? presentCurrency({ id: "", [data.split]: v } as Row, model, ctx, field)
+        : ctx.instanceCurrency;
+    return reportFromGroups(
+      data.answer.groups,
+      data.dim ? [data.dim] : [],
+      data.measure,
+      toCurrency,
+    );
+    // `version` brings the rows a `currency_from` path reads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, model, d.version]);
+}
+
 function Ready({
   w,
   data,
   r,
   drillTo,
-  id,
 }: {
   w: Widget;
   data: WidgetData;
-  r: Extract<ReturnType<typeof resolve>, { ok: true }>;
-  drillTo: (extra?: ReturnType<typeof condForKey>[]) => string | null;
-  id: string;
+  r: Resolved;
+  drillTo: (extra?: Cond[]) => string | null;
 }) {
   const d = useData();
-  if (data.kind === "kpi") {
-    const shown = data.measure ? formatSum(data.measure, data.value) : integer(data.value);
-    const to = drillTo();
-    const hint = (
-      <>
-        {data.measure
-          ? t("Sum of {field}", { field: inSentence(fieldTitle(data.measure)) })
-          : t("Records")}
-        {r.conds.length > 0 && ` ${t("(filtered)")}`}
-        {data.truncated && `, ${t("first 5,000 of {total}", { total: integer(data.total) })}`}
-      </>
-    );
-    return to ? (
-      <a
-        className="kpi-link"
-        href={to}
-        aria-label={t("{title}: {value}. Open the list.", { title: w.title, value: shown })}
-      >
-        <Stat label={w.title} value={shown} hint={hint} />
-      </a>
-    ) : (
-      <Stat label={w.title} value={shown} hint={hint} />
-    );
-  }
-
   if (data.kind === "rows") {
     const labelF = r.model.fields.find((f) => f.kind === "text");
     const more = r.model.fields
@@ -234,40 +261,97 @@ function Ready({
       </>
     );
   }
+  return w.kind === "kpi" ? (
+    <Kpi w={w} data={data} r={r} drillTo={drillTo} />
+  ) : (
+    <Series w={w} data={data} r={r} drillTo={drillTo} />
+  );
+}
 
-  return <Series w={w} data={data} drillTo={drillTo} id={id} />;
+function Kpi({
+  w,
+  data,
+  r,
+  drillTo,
+}: {
+  w: Widget;
+  data: ReportData;
+  r: Resolved;
+  drillTo: (extra?: Cond[]) => string | null;
+}) {
+  const d = useData();
+  const rows = useReportOf(data, r.model);
+  const curs = currenciesOf(rows);
+  const text = (cur: string | undefined) => {
+    const mine = rows.filter((x) => x.currency === cur);
+    const n = data.measure
+      ? mine.reduce((s, x) => s + x.value, 0)
+      : mine.reduce((s, x) => s + x.count, 0);
+    return formatMeasure(data.measure, n, cur);
+  };
+  const value = rows.length ? text(curs[0]) : formatMeasure(data.measure, 0);
+  const more = rows.length ? curs.slice(1).map(text) : [];
+  const moduleId = d.models.get(r.model.name)?.module.id ?? "";
+  return (
+    <KpiTile
+      plain
+      label={w.title}
+      value={value}
+      more={more}
+      caption={kpiCaption(r, moduleId, d.refText)}
+      href={drillTo() ?? undefined}
+    />
+  );
 }
 
 function Series({
   w,
   data,
+  r,
   drillTo,
-  id,
 }: {
   w: Widget;
-  data: Extract<WidgetData, { kind: "series" }>;
-  drillTo: (extra?: ReturnType<typeof condForKey>[]) => string | null;
-  id: string;
+  data: ReportData;
+  r: Resolved;
+  drillTo: (extra?: Cond[]) => string | null;
 }) {
   const d = useData();
-  const { dim, measure } = data;
+  const rows = useReportOf(data, r.model);
+  const dim = data.dim!;
+  const m = data.measure;
+  const curs = currenciesOf(rows);
+  const cur = curs[0];
+  const lk = useTitleLookup();
   const points = useMemo(
-    () => buildPoints(data.groups, dim, d.lookup),
+    () =>
+      chartPoints(
+        r.model,
+        dim,
+        m,
+        rows.filter((x) => x.currency === cur),
+        lk,
+      ),
     // ref labels arrive after the groups do
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [data.groups, dim, d.version, d.lang],
+    [rows, cur, lk, d.lang],
   );
-  const fmt = (n: number) => (measure ? formatSum(measure, n) : integer(n));
+  const format = (n: number) => formatMeasure(m, n, cur);
+  const keep = w.kind === "pie" ? 7 : 8;
   const go = (key: string) => {
-    const to = drillTo([condForKey(dim, key)]);
+    const c = key === OTHER_KEY ? otherCond(dim, points, keep) : dimCond(dim, key);
+    const to = c && drillTo([c]);
     if (to) location.hash = to;
   };
-  const total = points.reduce((n, p) => n + Math.max(p.value, 0), 0);
+  const others = curs.slice(1).filter((c): c is string => !!c);
   const note =
-    data.truncated &&
-    t("Based on the first 5,000 of {total} records.", { total: integer(data.total) });
+    others.length > 0 && cur
+      ? t("Amounts in {currency}; records in {others} are not included.", {
+          currency: cur,
+          others: fmt.list(others, "conjunction"),
+        })
+      : null;
 
-  if (points.length === 0 || data.total === 0) return <p className="hint">{t("No data yet.")}</p>;
+  if (rows.length === 0 || points.length === 0) return <p className="hint">{t("No data yet.")}</p>;
 
   if (w.kind === "table")
     return (
@@ -276,19 +360,20 @@ function Series({
           <caption className="sr-only">{w.title}</caption>
           <thead>
             <tr>
-              <th scope="col">{fieldTitle(dim)}</th>
+              <th scope="col">{dimTitle(dim)}</th>
               <th scope="col" className="num">
-                {measure ? fieldTitle(measure) : t("Records")}
+                {m ? fieldTitle(m.field) : t("Records")}
               </th>
             </tr>
           </thead>
           <tbody>
             {points.map((p) => {
-              const to = drillTo([condForKey(dim, p.key)]);
+              const to = drillTo([dimCond(dim, p.key)]);
+              const label = p.full ?? p.label;
               return (
                 <tr key={p.key || "none"}>
-                  <th scope="row">{to ? <a href={to}>{p.label}</a> : p.label}</th>
-                  <td className="num tabular">{fmt(p.value)}</td>
+                  <th scope="row">{to ? <a href={to}>{label}</a> : label}</th>
+                  <td className="num tabular">{format(p.value)}</td>
                 </tr>
               );
             })}
@@ -300,31 +385,27 @@ function Series({
 
   const summary = t("{title}. {values}.", {
     title: w.title,
-    values: points.map((p) => `${p.label} ${fmt(p.value)}`).join(", "),
+    values: points.map((p) => `${p.full ?? p.label} ${format(p.value)}`).join(", "),
   });
+  const kind = w.kind === "pie" ? "pie" : w.kind === "line" ? "line" : "bar";
+  const toned = tonedDim(r.model, dim.field);
+  const distinct = new Set(points.map((p) => p.tone)).size === points.length;
+  const colors =
+    toned && (kind !== "pie" || distinct) ? "tone" : kind === "pie" ? "palette" : "single";
   return (
     <figure className="chart wchart">
-      {w.kind === "pie" ? (
-        <Pie
-          data={points}
-          m={measure}
-          total={total}
-          id={id}
-          title={w.title}
-          summary={summary}
-          onPick={go}
-        />
-      ) : (
-        <Cartesian
-          data={points}
-          m={measure}
-          type={w.kind === "line" ? "line" : "bar"}
-          id={id}
-          title={w.title}
-          summary={summary}
-          onPick={go}
-        />
-      )}
+      <Chart
+        kind={kind}
+        data={points}
+        format={format}
+        compact={(n) => compactMeasure(m, n, cur)}
+        title={w.title}
+        summary={summary}
+        onPick={go}
+        ordered={isDated(dim.field)}
+        colors={colors}
+        maxHeight={230}
+      />
       {note && <figcaption className="wnote">{note}</figcaption>}
     </figure>
   );
