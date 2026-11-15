@@ -297,6 +297,15 @@ tr:hover .refgo,
 .list tfoot td.agg {
   vertical-align: top;
 }
+/* A total wider than its column (amounts in several currencies) reaches into the empty footer cell
+   before it, where the totals line has room, instead of ending in an ellipsis. */
+.list tfoot td.agg {
+  overflow: visible;
+}
+.list tfoot td.agg > .sums {
+  display: flex;
+  inline-size: 100%;
+}
 /* Totals in several currencies: one line each. */
 .sums {
   display: inline-flex;
