@@ -11,6 +11,8 @@ import { assignScript } from "../core/nav-policy.ts";
 import { newSince, type ServerRecord } from "../core/server-record.ts";
 import {
   answering,
+  coverOpaque,
+  pageWaiting,
   requestVerdict,
   webViewMounted,
   windowVerdict,
@@ -159,9 +161,9 @@ export function WebScreen({ state, store, ground, covered, webRef }: WebScreenPr
   const { server } = state;
   const host = hostAndPort(server.origin);
   // An opaque cover while a foreign document is or was on top; a spinner alone until the first
-  // load of a mount has ended.
-  const foreign = state.top === "foreign";
-  const waiting = foreign || !state.loadedOnce;
+  // load of a mount has ended and the page has reported its theme.
+  const foreign = coverOpaque(state);
+  const waiting = pageWaiting(state);
   return (
     <View
       style={[

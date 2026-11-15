@@ -12,6 +12,7 @@
 //     every route change of the page is reported as a load start with no load end after it.
 //   - A foreign document on top silences the bridge. After the first load of a mount it also gets
 //     the WebView mounted again; before it, the error screen says where the address forwards to.
+//     A new mount starts with the instance on top, and its page is answered from its first message.
 import { originOf } from "@obop/host-bridge";
 import {
   addressText,
@@ -37,6 +38,12 @@ export const WATCHDOG_MS = 30_000;
  * is there.
  */
 export const SETTLE_MS = 300;
+/**
+ * How long the spinner waits for the page's first `host.theme` after a mount. The page reports its
+ * ground once it paints one, which on a slow phone is some seconds after the load end; a page that
+ * never reports is shown after this.
+ */
+export const FIRST_WORD_MS = 5_000;
 /** The longest text of the WebView's own error description that the error screen shows. */
 const MAX_DETAIL_CHARS = 200;
 
@@ -92,6 +99,12 @@ export interface ShellState {
   readonly committed: boolean;
   /** A load of the instance has ended in this mount, and no load error came since. */
   readonly loadedOnce: boolean;
+  /** A foreign document was on top, and the WebView mounted after it has not loaded yet. */
+  readonly cover: boolean;
+  /** The page of this mount reported its theme, or `FIRST_WORD_MS` passed without one. */
+  readonly spoke: boolean;
+  /** The ticket of the timer that waits for the first theme, or `null`. */
+  readonly quiet: number | null;
   readonly canGoBack: boolean;
   /** The ticket of the armed watchdog, or `null`. */
   readonly watchdog: number | null;
@@ -154,6 +167,8 @@ export type ShellEvent =
   | { readonly type: "content_terminated"; readonly mount: number }
   | { readonly type: "watchdog_fired"; readonly ticket: number }
   | { readonly type: "settled"; readonly ticket: number }
+  /** `FIRST_WORD_MS` passed after a mount. */
+  | { readonly type: "quiet_elapsed"; readonly ticket: number }
   /** Retry was tapped on the error screen. */
   | { readonly type: "retry" }
   /** The person touched the page (the wrapper of the WebView saw a touch start). */
@@ -182,6 +197,9 @@ export function initialState(build: Build): ShellState {
     top: "instance",
     committed: false,
     loadedOnce: false,
+    cover: false,
+    spoke: false,
+    quiet: null,
     canGoBack: false,
     watchdog: null,
     reloads: 0,
@@ -224,18 +242,29 @@ function arm(state: ShellState): ShellState {
   return { ...state, ticket, watchdog: ticket };
 }
 
-/** A new WebView at the start address. `top` is left as it is: only a load end makes it `instance` again. */
+/**
+ * A new WebView at the start address. Its document on top is the instance's again from the start,
+ * as at the first mount: every event of the old WebView carries the old mount number and changes
+ * nothing, and a navigation of the new one to another origin makes `top` foreign again. Waiting
+ * for a load end instead would drop the page's one `host.info`, which it sends before Android
+ * reports the load as ended.
+ */
 function remount(state: ShellState): ShellState {
-  return showBar(
+  const armed = showBar(
     arm({
       ...state,
       mount: state.mount + 1,
+      top: "instance",
       committed: false,
       loadedOnce: false,
+      cover: false,
+      spoke: false,
       canGoBack: false,
       theme: null,
     }),
   );
+  const quiet = armed.ticket + 1;
+  return { ...armed, ticket: quiet, quiet };
 }
 
 function fail(state: ShellState, problem: WebProblem): ShellState {
@@ -349,14 +378,11 @@ export function reduce(state: ShellState, event: ShellEvent): ShellState {
           { kind: "forwards", to: destinationOf(event.url) },
         );
       }
-      const again = remount({
-        ...state,
-        top: "foreign",
-        screen: "web",
-        problem: null,
-        retrying: false,
-        settle: null,
-      });
+      // The old WebView goes, and the new one lies under an opaque cover until it has loaded.
+      const again: ShellState = {
+        ...remount({ ...state, screen: "web", problem: null, retrying: false, settle: null }),
+        cover: true,
+      };
       if (!isHttp(event.url)) return again;
       const id = again.ticket + 1;
       return { ...again, ticket: id, external: { id, url: event.url } };
@@ -365,7 +391,13 @@ export function reduce(state: ShellState, event: ShellEvent): ShellState {
       if (!live(state, event.mount)) return state;
       const cleared: ShellState = { ...state, watchdog: null };
       if (originOf(event.url) !== state.server.origin) return cleared;
-      const loaded: ShellState = { ...cleared, top: "instance", committed: true, loadedOnce: true };
+      const loaded: ShellState = {
+        ...cleared,
+        top: "instance",
+        committed: true,
+        loadedOnce: true,
+        cover: false,
+      };
       if (state.screen !== "error" || !state.retrying) return loaded;
       const ticket = loaded.ticket + 1;
       return { ...loaded, ticket, settle: ticket };
@@ -399,6 +431,9 @@ export function reduce(state: ShellState, event: ShellEvent): ShellState {
     case "watchdog_fired":
       if (!onWeb(state) || state.watchdog !== event.ticket) return state;
       return fail(state, { kind: "timeout" });
+    case "quiet_elapsed":
+      if (state.quiet !== event.ticket) return state;
+      return { ...state, spoke: true, quiet: null };
     case "settled":
       if (state.screen !== "error" || state.settle !== event.ticket) return state;
       return { ...state, screen: "web", problem: null, retrying: false, settle: null };
@@ -422,7 +457,7 @@ export function reduce(state: ShellState, event: ShellEvent): ShellState {
       return onWeb(state) ? showBar(state) : state;
     case "theme":
       if (!onWeb(state) || state.top !== "instance") return state;
-      return { ...state, theme: event.theme };
+      return { ...state, theme: event.theme, spoke: true, quiet: null };
     case "open_settings":
       return onWeb(state) ? { ...state, settingsOpen: true } : state;
     case "close_settings":
@@ -431,6 +466,19 @@ export function reduce(state: ShellState, event: ShellEvent): ShellState {
       if (!onWeb(state)) return state;
       return toAddress(state, state.build.defaultServer, null);
   }
+}
+
+/**
+ * Whether the spinner lies over the page: until the first load of the mount has ended and the page
+ * has reported its theme (or `FIRST_WORD_MS` passed), and while a foreign document is or was on top.
+ */
+export function pageWaiting(state: ShellState): boolean {
+  return coverOpaque(state) || !state.loadedOnce || !state.spoke;
+}
+
+/** Whether the cover hides the WebView: a foreign document is on top, or was until a new mount loads. */
+export function coverOpaque(state: ShellState): boolean {
+  return state.top === "foreign" || state.cover;
 }
 
 /** The WebView is on the screen tree: always on the web screens, except under "forwards to". */

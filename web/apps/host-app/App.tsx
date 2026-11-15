@@ -17,7 +17,7 @@ import { hostAndPort, startAddress } from "./src/core/address.ts";
 import { backAction } from "./src/core/back.ts";
 import { probeVerdict } from "./src/core/probe.ts";
 import { encodeServerRecord, makeServerRecord } from "./src/core/server-record.ts";
-import { BAR_MIN_MS, SETTLE_MS, WATCHDOG_MS } from "./src/core/shell.ts";
+import { BAR_MIN_MS, FIRST_WORD_MS, SETTLE_MS, WATCHDOG_MS } from "./src/core/shell.ts";
 import { createShellStore } from "./src/core/store.ts";
 import { barStyle, groundOf, schemeOfSystem, startGround } from "./src/core/theme.ts";
 import { t } from "./src/i18n/index.ts";
@@ -115,6 +115,17 @@ function Shell() {
     const timer = setTimeout(() => dispatch({ type: "settled", ticket: settle }), SETTLE_MS);
     return () => clearTimeout(timer);
   }, [settle, dispatch]);
+
+  // The spinner of a new WebView waits this long for the page's first theme report.
+  const quiet = state.quiet;
+  useEffect(() => {
+    if (quiet === null) return undefined;
+    const timer = setTimeout(
+      () => dispatch({ type: "quiet_elapsed", ticket: quiet }),
+      FIRST_WORD_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [quiet, dispatch]);
 
   // The host bar stays at least two seconds.
   const barShown = state.bar.shown;

@@ -2,8 +2,11 @@ import { describe, expect, test } from "vite-plus/test";
 import type { Build } from "./build.ts";
 import { encodeServerRecord, makeServerRecord, type ServerRecord } from "./server-record.ts";
 import {
+  FIRST_WORD_MS,
   answering,
+  coverOpaque,
   initialState,
+  pageWaiting,
   reduce,
   requestVerdict,
   webViewMounted,
@@ -418,7 +421,8 @@ describe("a foreign document on top", () => {
     const state = reduce(before, { type: "nav", mount: 1, url: FOREIGN, canGoBack: true });
     expect(state).toMatchObject({
       screen: "web",
-      top: "foreign",
+      top: "instance",
+      cover: true,
       mount: 2,
       committed: false,
       loadedOnce: false,
@@ -427,23 +431,34 @@ describe("a foreign document on top", () => {
     });
     expect(state.watchdog).not.toBeNull();
     expect(answering(state, 1)).toBe(false);
-    expect(answering(state, 2)).toBe(false);
+    expect(answering(state, 2)).toBe(true);
     expect(webViewMounted(state)).toBe(true);
+    expect(coverOpaque(state)).toBe(true);
+    // The cover goes when the new WebView has loaded the instance, and not before.
+    const starting = reduce(state, { type: "nav", mount: 2, url: START, canGoBack: false });
+    expect(coverOpaque(starting)).toBe(true);
+    expect(coverOpaque(reduce(state, { type: "load_end", mount: 2, url: FOREIGN }))).toBe(true);
+    expect(coverOpaque(reduce(state, { type: "load_end", mount: 2, url: START }))).toBe(false);
   });
 
-  test("`top` returns to the instance only when a load of the stored origin has ended in the new WebView", () => {
+  test("the new WebView answers its page's first message, before its load has ended", () => {
     const foreign = reduce(loaded(), { type: "nav", mount: 1, url: FOREIGN, canGoBack: true });
+    // The cover and the mount: the old WebView is silent, the new one is on the start address.
+    expect(foreign).toMatchObject({ top: "instance", mount: 2, loadedOnce: false });
+    expect(answering(foreign, 1)).toBe(false);
     // Events of the old WebView are nothing.
     expect(reduce(foreign, { type: "load_end", mount: 1, url: START })).toBe(foreign);
-    // A load start of the instance in the new one is not enough.
-    const committed = reduce(foreign, { type: "nav", mount: 2, url: START, canGoBack: false });
-    expect(committed.top).toBe("foreign");
-    expect(answering(committed, 2)).toBe(false);
-    // Nor is a load end of anything else.
-    expect(reduce(committed, { type: "load_end", mount: 2, url: FOREIGN }).top).toBe("foreign");
-    const back = reduce(committed, { type: "load_end", mount: 2, url: START });
-    expect(back).toMatchObject({ top: "instance", loadedOnce: true });
-    expect(answering(back, 2)).toBe(true);
+    expect(reduce(foreign, { type: "nav", mount: 1, url: FOREIGN, canGoBack: true })).toBe(foreign);
+    // The page posts host.info while its script runs, before Android reports the load as ended.
+    const starting = reduce(foreign, { type: "nav", mount: 2, url: START, canGoBack: false });
+    expect(answering(starting, 2)).toBe(true);
+    const theme = { scheme: "dark", background: "#0a0c11" } as const;
+    expect(reduce(starting, { type: "theme", theme }).theme).toEqual(theme);
+    // A foreign document in the new WebView makes it silent again and mounts another one.
+    const again = reduce(starting, { type: "load_end", mount: 2, url: START });
+    const away = reduce(again, { type: "nav", mount: 2, url: FOREIGN, canGoBack: true });
+    expect(answering(away, 2)).toBe(false);
+    expect(away.mount).toBe(3);
   });
 
   test("only an http or https address is handed to the system browser", () => {
@@ -453,7 +468,7 @@ describe("a foreign document on top", () => {
       url: "data:text/html,<script>1</script>",
       canGoBack: false,
     });
-    expect(state).toMatchObject({ top: "foreign", mount: 2, external: null });
+    expect(state).toMatchObject({ cover: true, mount: 2, external: null });
   });
 
   test("the suffix attack is foreign", () => {
@@ -463,7 +478,14 @@ describe("a foreign document on top", () => {
       url: "https://erp.example.com.evil.net/",
       canGoBack: false,
     });
-    expect(state.top).toBe("foreign");
+    expect(state).toMatchObject({ cover: true, mount: 2 });
+    const early = reduce(started(), {
+      type: "nav",
+      mount: 1,
+      url: "https://erp.example.com.evil.net/",
+      canGoBack: false,
+    });
+    expect(early.top).toBe("foreign");
   });
 
   test("before the first load has ended: the error screen, and nothing is mounted again", () => {
@@ -479,10 +501,27 @@ describe("a foreign document on top", () => {
     expect(answering(state, 1)).toBe(false);
     // The foreign document is not kept running under the error screen.
     expect(webViewMounted(state)).toBe(false);
-    // Retry starts over in a new WebView; the bridge stays silent until the instance has loaded.
+    // Retry starts over in a new WebView under the error screen, which answers its page.
     const retry = reduce(state, { type: "retry" });
-    expect(retry).toMatchObject({ mount: 2, top: "foreign", retrying: true, reloads: 0 });
-    expect(webViewMounted(retry)).toBe(false);
+    expect(retry).toMatchObject({ mount: 2, top: "instance", retrying: true, reloads: 0 });
+    expect(webViewMounted(retry)).toBe(true);
+    expect(answering(retry, 1)).toBe(false);
+    expect(answering(retry, 2)).toBe(true);
+    // The start address leads away again: the error screen stays, and nothing is mounted.
+    const still = reduce(retry, { type: "nav", mount: 2, url: FOREIGN, canGoBack: false });
+    expect(still).toMatchObject({ screen: "error", top: "foreign", mount: 2 });
+    expect(webViewMounted(still)).toBe(false);
+    // It loads this time: the error screen goes once the load has stood.
+    const ok = run(
+      retry,
+      { type: "nav", mount: 2, url: START, canGoBack: false },
+      { type: "load_end", mount: 2, url: START },
+    );
+    expect(ok.settle).not.toBeNull();
+    expect(reduce(ok, { type: "settled", ticket: ok.settle ?? -1 })).toMatchObject({
+      screen: "web",
+      problem: null,
+    });
   });
 
   test("Android's own page for a failed load and an empty document are not foreign", () => {
@@ -667,6 +706,41 @@ describe("the bridge", () => {
     const foreign = reduce(started(), { type: "nav", mount: 1, url: FOREIGN, canGoBack: false });
     expect(reduce(foreign, { type: "theme", theme })).toBe(foreign);
     expect(reduce(initialState(PLAIN), { type: "theme", theme }).theme).toBeNull();
+  });
+});
+
+describe("the spinner of the first paint", () => {
+  const theme = { scheme: "light", background: "#f1f2f6" } as const;
+
+  test("stays after the load end until the page reports its theme", () => {
+    const state = loaded();
+    expect(pageWaiting(started())).toBe(true);
+    expect(pageWaiting(state)).toBe(true);
+    expect(pageWaiting(reduce(state, { type: "theme", theme }))).toBe(false);
+    // A theme before the load end is kept; the load end then ends the wait.
+    const early = reduce(started(), { type: "theme", theme });
+    expect(pageWaiting(early)).toBe(true);
+    expect(pageWaiting(reduce(early, { type: "load_end", mount: 1, url: START }))).toBe(false);
+  });
+
+  test("a page that never reports is shown after FIRST_WORD_MS", () => {
+    expect(FIRST_WORD_MS).toBe(5_000);
+    const state = loaded();
+    expect(state.quiet).not.toBeNull();
+    expect(reduce(state, { type: "quiet_elapsed", ticket: -1 })).toBe(state);
+    const shown = reduce(state, { type: "quiet_elapsed", ticket: state.quiet ?? -1 });
+    expect(pageWaiting(shown)).toBe(false);
+    expect(shown.quiet).toBeNull();
+  });
+
+  test("every new WebView waits again, and an old timer does nothing to it", () => {
+    const spoken = reduce(loaded(), { type: "theme", theme });
+    const old = loaded().quiet;
+    const again = reduce(spoken, { type: "process_gone", mount: 1 });
+    expect(again).toMatchObject({ spoke: false, mount: 2 });
+    expect(again.quiet).not.toBeNull();
+    expect(again.quiet).not.toBe(old);
+    expect(reduce(again, { type: "quiet_elapsed", ticket: old ?? -1 })).toBe(again);
   });
 });
 
