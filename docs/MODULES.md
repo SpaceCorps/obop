@@ -597,6 +597,7 @@ message = "Verifikationen balanserar inte"
 | `create` | `map = { field = value }` | Creates a record of `model`; governed fields start at their first option, a sequence is numbered, `own` defaults to the caller. |
 | `update` | `set = { field = value }`, and `ref = "field"` or `children = true` (`via = "field"` if several) | Sets fields on the record a ref field of this record names, or on every `model` record that refers to this one. |
 | `adjust` | `field`, `op = "add"/"subtract"`, `by`, and `ref = "field"` or `match = { field = value }`; `create_missing`, `min` | Adds to or subtracts from a number or money field. `match` finds the one record whose fields equal the values (several is an error; none is an error unless `create_missing`, which creates it from the match values and the amount); `min` is a floor the result may not go below. |
+| `set` | `set`, optionally `when` | D95, see 3.10: sets fields of the record the action runs on, after the transition (no `model`, `ref` or `children`). |
 | `set_state` | `action`, and `ref` or `children` | Runs an action of `model` on the related records. That action's group, from-state, required fields, assertions, sequences, effects and the caller's visibility of the record all apply; a chain is at most 4 deep and may not loop. |
 
 ```toml
@@ -648,6 +649,131 @@ write_group = "hr.user"
 ```
 
 Limits, stated plainly: the rules are about whole records, not fields (use `group` for columns); computed totals ignore them (a computed `sum(lines.x)` reads every child), so give the children `via` the parent; the `aggregate` option of `search` counts only the records the caller may see; uniqueness is global, so a refused duplicate reveals that some record holds the value; a record whose owner field is empty or is not a login is visible to the managers only; existing records get no owner when a model gains `own`.
+
+### 3.10 UI hints (D95)
+
+PROPOSED (D95). Every key is optional; a package that uses one writes `requires_core = "^0.2.2"`. The display hints are only checked and served (`/api/meta`, `obop__meta`); the rules marked **server** are enforced on every surface (REST, MCP, the CLI, `bulk_create` and imports, and records an effect creates). Field names in every key are checked against the model; a ref path `a.b` against the model the ref points at.
+
+```toml
+[module]
+home = "projects_task"          # where the app opens: a model of the module, or "overview"
+launcher = false                # not on the launcher (it lives under another app)
+
+[model.ui]
+title = "{code} {name} | {name}"     # placeholders {field} and {ref.field}; | separates alternatives
+subtitle = "{project_id.name}"
+list = ["name", "project_id", "due", "amount_minor", "state"]   # list columns, in order (at most 20)
+card = ["name", "amount_minor"]      # kanban card fields (at most 12)
+card_sum = "amount_minor"            # the number, money or decimal field a column adds up
+quick_create = ["name", "project_id"]
+order = "due desc, name asc"         # at most 4 fields, asc or desc
+default_view = "kanban"              # list, kanban, calendar, pivot, graph, gallery, grid, timeline, tree
+menu = "main"                        # main, configuration, reporting, hidden
+menu_section = "Work"
+menu_order = 2                       # -1000 to 1000
+calendar = { start = "due", end = "due", color = "project_id" }   # date or datetime; select or ref
+report = { rows = "project_id", cols = "state", measure = "amount_minor" }
+public_url = "/blog/{slug}"          # where a record is seen on the public site
+
+[[model.ui.section]]                 # a titled group of fields in the form (at most 20)
+label = "Billing"
+fields = ["amount_minor", "currency"]
+collapsed = true
+show_in = ["done"]                   # only while the state is one of these options
+
+[[model.ui.filter]]                  # a saved filter of the control panel (at most 20)
+label = "Due this week"
+where = "due <= today+7 && state != done"
+
+[[model.child]]                      # a model drawn inside this form, besides <model>_<x>
+model = "projects_task_note"
+via = "task_id"                      # its ref to this model
+shape = "list"                       # lines, list, images or translations
+
+[[model.field]]
+name = "due"
+description = "When it is due"
+class = "none"
+kind = "date"
+default = "today+7"                  # server: filled on create when the field is left out
+[model.field.ui]
+warn_before_days = 3                 # amber this many days before, red once past (date, datetime)
+
+[[model.field]]
+name = "unit_price_minor"
+description = "Price per unit"
+class = "financial"
+kind = "money"
+fill_from = "product_id.list_price_minor"   # server: copied on create when the ref is set
+[model.field.ui]
+aggregate = "none"                   # sum, avg or none (number, money, decimal)
+currency_from = "order_id.currency"  # a text field, of this record or through a ref
+
+[[model.field]]
+name = "product_id"
+description = "The product"
+class = "none"
+kind = "ref"
+to = "product"
+ref_filter = "active = true"         # server: a picked record must satisfy it
+
+[[model.field]]
+name = "recorded_by"
+description = "Who recorded it"
+class = "public_directory"
+personal_data = true
+default = "$user"
+readonly = true                      # server: only the server writes it
+
+[[model.action]]
+name = "reject"
+description = "Reject the request"
+field = "state"
+from = "submitted"
+to = "rejected"
+[model.action.ui]
+danger = true                        # to the overflow menu, behind a confirm
+confirm = "Reject this request?"
+done = "Rejected"
+group = "close"                      # actions with the same group show as one entry
+needs = ["reject_reason"]            # server: may come in the action's input, written first
+not_by = "submitted_by"              # server: the person in this text field may not run it
+```
+
+| Key | Where | Values and rules |
+|---|---|---|
+| `home`, `launcher` | `[module]` | `home`: a model of the module or `"overview"`. `launcher = false` keeps the app off the launcher. |
+| `title`, `subtitle` | `[model.ui]` | A template of at most 200 characters: `{field}`, `{ref.field}`; ` \| ` separates alternatives and the first whose placeholders are all set wins. No markup. |
+| `list`, `card`, `quick_create` | `[model.ui]` | Field names of the model, no repeats (at most 20, 12 and 12). |
+| `card_sum` | `[model.ui]` | A number, money or decimal field. |
+| `order` | `[model.ui]` | `field [asc\|desc]`, comma separated, at most 4. |
+| `default_view`, `menu` | `[model.ui]` | One of the values in the example. |
+| `menu_section`, `menu_order` | `[model.ui]` | A label of at most 40 characters; a whole number from -1000 to 1000. |
+| `calendar` | `[model.ui]` | `start` (required) and `end`: date or datetime fields; `color`: a select or ref field. |
+| `report` | `[model.ui]` | `rows`, `cols`: fields; `measure`: a number, money or decimal field. |
+| `[[model.ui.section]]` | | `label` (at most 80 characters), `fields` (at least one, at most 40), `collapsed`, `show_in` (options of a field the model's actions move). |
+| `[[model.ui.filter]]` | | `label` and `where`, a filter (below) on the model's own fields; `$field` is not allowed here. |
+| `public_url` | `[model.ui]` | A path starting with `/`, placeholders of the model's own fields. |
+| `[[model.child]]` | | `model` (a model with the ref `via` to this one), `shape`. The meta `children` lists these and the models `<model>_<x>` with exactly one ref to the model (the rule of `for_each`), each only when the caller may list it. |
+| `default` | field | **Server.** A literal of the field's kind (text, a whole number, true/false, a date `"2026-01-01"`, a select option, a decimal as text), `"today"` or `"today+N"` (N from 1 to 3660; date fields), `"$user"` (the person; text fields), `"$instance.currency"` (`OBOP_CURRENCY`, EUR by default; text fields), `"$open:<model>"` (a ref to `<model>`, which must have a state field with the option `open`: the one record in `open` the caller sees, none when there are none or several). `"$$"` starts a literal dollar sign. Not on a computed, numbered, state or file field. Applied on create only, to a field the input leaves out; a value sent, `null` included, is kept. |
+| `fill_from` | field | **Server.** `ref.field`: on create, when the ref is set and the field is left out, the value of the field of the record the ref points at (computed fields included), when the caller reads it in clear (holds the field's group and sees the record, and, for an agent, the class is not masked). Otherwise the field stays empty. Applied after the defaults, so it can follow a defaulted ref. The kinds must fit (text from text or select, number and money from each other, the same kind otherwise). |
+| `readonly` | field | **Server.** `true`: a create that sends a value, or an update that changes it, is refused with 400 `readonly_field`. Sending the stored value back is fine. Defaults, `fill_from` and effects still write it. A required readonly field needs a `default` or a `fill_from`. |
+| `ref_filter` | ref field | **Server.** A filter (below) on the target model. Checked on create, and on update when the ref or a `$field` it reads changes (a record that stopped fitting does not lock the ones that name it); refused with 400 `ref_not_allowed`. Served for the picker. |
+| `display` | `[model.field.ui]` | `time_of_day`, `duration_minutes`, `percent`, `percent_bp`, `km_from_m`, `epoch_seconds` (number, money, decimal); `markdown`, `tel`, `email`, `url`, `address` (text, longtext). |
+| `aggregate`, `tones`, `warn_before_days`, `hidden`, `currency_from` | `[model.field.ui]` | `sum`, `avg`, `none`; option to `ok`, `bad`, `warn`, `info`, `neutral`; 1 to 365 days on a date or datetime; `true` keeps the field out of lists, cards and the form (still in the API); a text field path, on a money or decimal field. |
+| `primary`, `danger`, `confirm`, `done`, `group` | `[model.action.ui]` | Not both `primary` and `danger`; texts of at most 200 characters; a lowercase name. |
+| `needs` | `[model.action.ui]` | **Server.** At most 8 stored fields of the model (not computed, numbered, state or file). The action's input may carry them; they are checked like an update and written in the same unit before the assertions, so the assertions see them. While one is still empty the action is refused (`<model>.<action> needs <field>: give it in the input of the action`). |
+| `not_by` | `[model.action.ui]` | **Server.** A text field holding a user id: the person named there may not run the action (403 `denied`), administrators included, also when another action starts it. |
+
+**Filters** (`ref_filter`, `where`): clauses `field op value` joined by `&&` (at most 8), `op` one of `=`, `!=`, `<`, `<=`, `>`, `>=`; a value is `true`, `false` or `null` (with `=` and `!=` only), a whole number, `"quoted text"`, a bare word (an option, a code), `today` or `today+N`, `$user`, or, in a `ref_filter` only, `$field` (a field of the record being written). A missing value equals `null` and, for a true/false field, `false`. Numbers and decimals compare as numbers, dates and texts as text.
+
+**The effect `set`** (3.8): `kind = "set"` with `set = { field = value }` and usually a `when` changes fields of the record the action runs on, after the transition (`set = { published_on = "$today" }`, `when = "!is_set(published_on)"`). It takes no `model` (or the model's own name), `ref`, `children` or `for_each`; the values are those of 3.8.
+
+**Plurals and English names** (3.7): `[labels.<lang>.model.<m>] plural = "..."`, and `packages/labels/en/<id>.toml` for the bundled packages: `[labels.en.model.<m>] name = "Journal entry"`, `plural = "Journal entries"`. `/api/meta` serves `plural` (English) and `plural_labels` (every language).
+
+**Errors.** `readonly_field` and `ref_not_allowed` (400) carry `error`, `code` and `hint`; a refusal by an assertion carries `message`, the author's sentence without the expression, on REST and MCP.
+
+**In Rust** (built-in modules): `FieldDef::default_value("today+7")`, `default_int(n)`, `default_bool(b)`, `fill_from("ref.field")`, `readonly()`, `ref_filter("...")`, `display("...")`, `aggregate("...")`, `tones(&[("lost", "bad")])`, `warn_before_days(n)`, `hidden()`, `currency_from("...")`; `CommandDef::primary()`, `danger()`, `confirm("...")`, `done("...")`, `in_group("...")`, `needs(&["..."])`, `not_by("...")`, `ui(ActionUi {..})`; `ModelDef::with_ui(ModelUi {..})` (children in `ModelUi::children`); `ModuleMeta::home("...")`, `off_launcher()`; `Effect::set_self(model, &[("field", "$today")]).when("...")`; `Dispatcher::refuse_always(module, "model.command", reason)` for a command that is refused for everyone, so `can_*` in meta says so.
 
 ## 4. Field kinds and their JSON
 
