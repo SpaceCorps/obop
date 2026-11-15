@@ -6,6 +6,9 @@ summary = "Tarjoukset ja myyntitilaukset asiakkaillesi."
 name = "Myyntitilaus"
 description = "Asiakkaalle tehty tarjous tai vahvistettu tilaus"
 
+[labels.fi.model.sale_order.guard]
+message = "Vahvistettua tilausta ei voi muuttaa. Peru se korjataksesi sen."
+
 [labels.fi.model.sale_order.field.party_id]
 label = "Asiakas"
 description = "Tarjouksen tai tilauksen asiakas"

@@ -8,6 +8,9 @@ name = "Wydatek"
 plural = "Wydatki"
 description = "Kwota wydana przez pracownika na potrzeby firmy, o której zwrot się on ubiega"
 
+[labels.pl.model.expenses_expense.guard]
+message = "Zatwierdzonego, wypłaconego lub odrzuconego wniosku nie można zmienić, z wyjątkiem paragonu i danych płatności."
+
 [labels.pl.model.expenses_expense.field.description]
 label = "Opis"
 description = "Na co wydano pieniądze"

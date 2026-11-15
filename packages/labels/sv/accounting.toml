@@ -121,6 +121,9 @@ name = "Räkenskapsår"
 plural = "Räkenskapsår"
 description = "Ett räkenskapsår som öppnas och stängs som en helhet"
 
+[labels.sv.model.accounting_fiscal_year.guard]
+message = "Ett stängt räkenskapsår kan inte ändras. Öppna det igen för att rätta det."
+
 [labels.sv.model.accounting_fiscal_year.field.name]
 label = "Namn"
 description = "Räkenskapsårets namn, till exempel RÅ2026"
@@ -153,6 +156,9 @@ description = "Öppna ett stängt räkenskapsår för att rätta det (endast god
 name = "Period"
 plural = "Perioder"
 description = "En bokföringsperiod (vanligtvis en månad) inom ett räkenskapsår"
+
+[labels.sv.model.accounting_period.guard]
+message = "En stängd period kan inte ändras. Öppna den igen för att rätta den."
 
 [labels.sv.model.accounting_period.field.fiscal_year_id]
 label = "Räkenskapsår"
@@ -190,6 +196,9 @@ description = "Öppna en stängd period (endast godkännare)"
 name = "Verifikation"
 plural = "Verifikationer"
 description = "En verifikation: en daterad uppsättning debet- och kreditrader i en verifikationsserie"
+
+[labels.sv.model.accounting_move.guard]
+message = "Bokförda, makulerade och återförda verifikationer, och verifikationer daterade i en stängd period, kan inte ändras. Återför en bokförd verifikation för att rätta den."
 
 [labels.sv.model.accounting_move.field.journal_id]
 label = "Verifikationsserie"
@@ -242,6 +251,9 @@ name = "Verifikationsrad"
 plural = "Verifikationsrader"
 description = "En debet- eller kreditrad i en verifikation"
 
+[labels.sv.model.accounting_move_line.guard]
+message = "Raderna i en bokförd, makulerad eller återförd verifikation, eller i en verifikation daterad i en stängd period, kan inte ändras."
+
 [labels.sv.model.accounting_move_line.field.move_id]
 label = "Verifikation"
 description = "Verifikationen som raden tillhör"
@@ -282,6 +294,9 @@ description = "Om raden har matchats mot en betalning"
 name = "Kontoutdragsrad"
 plural = "Kontoutdragsrader"
 description = "En rad i ett kontoutdrag som väntar på att matchas mot verifikationer"
+
+[labels.sv.model.accounting_bank_statement_line.guard]
+message = "En avstämd banktransaktion kan inte ändras."
 
 [labels.sv.model.accounting_bank_statement_line.field.journal_id]
 label = "Verifikationsserie"

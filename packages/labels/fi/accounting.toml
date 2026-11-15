@@ -121,6 +121,9 @@ name = "Tilikausi"
 plural = "Tilikaudet"
 description = "Tilikausi, joka avataan ja suljetaan kokonaisuutena"
 
+[labels.fi.model.accounting_fiscal_year.guard]
+message = "Suljettua tilikautta ei voi muuttaa. Avaa se uudelleen korjataksesi sen."
+
 [labels.fi.model.accounting_fiscal_year.field.name]
 label = "Nimi"
 description = "Tilikauden nimi, esimerkiksi TK2026"
@@ -153,6 +156,9 @@ description = "Avaa suljettu tilikausi uudelleen korjausta varten (vain hyväksy
 name = "Jakso"
 plural = "Jaksot"
 description = "Kirjanpitojakso (yleensä kuukausi) tilikauden sisällä"
+
+[labels.fi.model.accounting_period.guard]
+message = "Suljettua jaksoa ei voi muuttaa. Avaa se uudelleen korjataksesi sen."
 
 [labels.fi.model.accounting_period.field.fiscal_year_id]
 label = "Tilikausi"
@@ -190,6 +196,9 @@ description = "Avaa suljettu jakso uudelleen (vain hyväksyjä)"
 name = "Kirjaus"
 plural = "Kirjaukset"
 description = "Päiväkirjan kirjaus: päivätty joukko debet- ja kredit-rivejä yhdessä päiväkirjassa"
+
+[labels.fi.model.accounting_move.guard]
+message = "Kirjattuja, peruttuja ja käännettyjä vientejä sekä suljetulle jaksolle päivättyjä vientejä ei voi muuttaa. Käännä kirjattu vienti korjataksesi sen."
 
 [labels.fi.model.accounting_move.field.journal_id]
 label = "Päiväkirja"
@@ -242,6 +251,9 @@ name = "Kirjausrivi"
 plural = "Kirjausrivit"
 description = "Kirjauksen yksi debet- tai kredit-rivi"
 
+[labels.fi.model.accounting_move_line.guard]
+message = "Kirjatun, perutun tai käännetyn viennin tai suljetulle jaksolle päivätyn viennin rivejä ei voi muuttaa."
+
 [labels.fi.model.accounting_move_line.field.move_id]
 label = "Kirjaus"
 description = "Kirjaus, johon rivi kuuluu"
@@ -282,6 +294,9 @@ description = "Onko rivi kohdistettu maksuun"
 name = "Tiliotteen rivi"
 plural = "Tiliotteen rivit"
 description = "Tiliotteen rivi, joka odottaa kohdistamista kirjauksiin"
+
+[labels.fi.model.accounting_bank_statement_line.guard]
+message = "Täsmäytettyä pankkitapahtumaa ei voi muuttaa."
 
 [labels.fi.model.accounting_bank_statement_line.field.journal_id]
 label = "Päiväkirja"

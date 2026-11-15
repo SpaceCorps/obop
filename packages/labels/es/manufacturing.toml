@@ -50,6 +50,9 @@ name = "Orden de fabricación"
 plural = "Órdenes de fabricación"
 description = "Una instrucción para producir una cantidad de un producto"
 
+[labels.es.model.manufacturing_order.guard]
+message = "Una orden de fabricación terminada o cancelada no se puede modificar."
+
 [labels.es.model.manufacturing_order.field.number]
 label = "Número"
 description = "Número de orden como MO-00042, asignado al crear la orden"
@@ -119,6 +122,9 @@ description = "La ubicación de producción: al terminar la orden se crean los m
 name = "Componente de la orden"
 plural = "Componentes de la orden"
 description = "Un componente que usa una orden de fabricación, con las unidades para toda la orden"
+
+[labels.es.model.manufacturing_order_line.guard]
+message = "Los componentes de una orden de fabricación terminada o cancelada no se pueden modificar."
 
 [labels.es.model.manufacturing_order_line.field.order_id]
 label = "Orden de fabricación"

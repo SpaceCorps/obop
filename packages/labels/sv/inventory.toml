@@ -57,6 +57,9 @@ name = "Lagerartikel"
 plural = "Lagersaldo"
 description = "Antalet av en produkt på en lagerplats"
 
+[labels.sv.model.inventory_item.guard]
+message = "En lagerpost behåller sin produkt, sin plats och sitt parti. Flytta lagret för att ändra var det finns."
+
 [labels.sv.model.inventory_item.field.product_id]
 label = "Produkt"
 description = "Produkten som lagras; det finns en post per produkt, plats och parti"
@@ -81,6 +84,9 @@ description = "Parti- eller batchnummer, om det spåras"
 name = "Lagerrörelse"
 plural = "Lagerrörelser"
 description = "En förflyttning av en produkt mellan lagerplatser, eller in i eller ut ur verksamheten"
+
+[labels.sv.model.inventory_move.guard]
+message = "En klar eller avbruten flytt kan inte ändras. Gör en ny flytt för att rätta lagret."
 
 [labels.sv.model.inventory_move.field.reference]
 label = "Referens"

@@ -50,6 +50,9 @@ name = "Zlecenie produkcyjne"
 plural = "Zlecenia produkcyjne"
 description = "Polecenie wyprodukowania określonej ilości produktu"
 
+[labels.pl.model.manufacturing_order.guard]
+message = "Zakończonego lub anulowanego zlecenia produkcyjnego nie można zmienić."
+
 [labels.pl.model.manufacturing_order.field.number]
 label = "Numer"
 description = "Numer zlecenia, na przykład MO-00042, nadawany przy tworzeniu zlecenia"
@@ -119,6 +122,9 @@ description = "Lokalizacja produkcji: zakończenie zlecenia tworzy ruchy magazyn
 name = "Komponent zlecenia"
 plural = "Komponenty zlecenia"
 description = "Komponent zużywany przez zlecenie produkcyjne, z liczbą sztuk na całe zlecenie"
+
+[labels.pl.model.manufacturing_order_line.guard]
+message = "Komponentów zakończonego lub anulowanego zlecenia produkcyjnego nie można zmienić."
 
 [labels.pl.model.manufacturing_order_line.field.order_id]
 label = "Zlecenie produkcyjne"

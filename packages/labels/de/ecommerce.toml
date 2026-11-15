@@ -208,6 +208,9 @@ name = "Web-Bestellung"
 plural = "Web-Bestellungen"
 description = "Eine online aufgegebene Bestellung"
 
+[labels.de.model.ecommerce_order.guard]
+message = "Eine gelieferte, stornierte oder erstattete Bestellung kann nicht geändert werden, nur ihr Kontakt und ihre Sendungsnummer."
+
 [labels.de.model.ecommerce_order.field.number]
 label = "Nummer"
 description = "Bestellnummer, die dem Kunden angezeigt wird. Freitext: Pakete können keine Nummernkreise erzeugen; die öffentliche Kasse vergibt eine Zufallsnummer"
@@ -320,6 +323,9 @@ description = "Das Geld für eine gelieferte Bestellung zurückzahlen, zum Beisp
 name = "Auftragsposition"
 plural = "Auftragspositionen"
 description = "Eine Produktposition einer Webbestellung"
+
+[labels.de.model.ecommerce_order_line.guard]
+message = "Die Zeilen einer gelieferten, stornierten oder erstatteten Bestellung können nicht geändert werden."
 
 [labels.de.model.ecommerce_order_line.field.order_id]
 label = "Auftrag"

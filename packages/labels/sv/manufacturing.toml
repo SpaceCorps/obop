@@ -50,6 +50,9 @@ name = "Tillverkningsorder"
 plural = "Tillverkningsorder"
 description = "En instruktion att tillverka ett antal av en produkt"
 
+[labels.sv.model.manufacturing_order.guard]
+message = "En klar eller avbruten tillverkningsorder kan inte ändras."
+
 [labels.sv.model.manufacturing_order.field.number]
 label = "Nummer"
 description = "Ordernummer som MO-00042, tilldelas när ordern skapas"
@@ -119,6 +122,9 @@ description = "Produktionsplatsen: när ordern avslutas skapas de lagerrörelser
 name = "Orderkomponent"
 plural = "Orderkomponenter"
 description = "En komponent som en tillverkningsorder förbrukar, med antalet för hela ordern"
+
+[labels.sv.model.manufacturing_order_line.guard]
+message = "Komponenterna i en klar eller avbruten tillverkningsorder kan inte ändras."
 
 [labels.sv.model.manufacturing_order_line.field.order_id]
 label = "Tillverkningsorder"

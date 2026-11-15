@@ -37,6 +37,9 @@ name = "Bestellung"
 plural = "Bestellungen"
 description = "Eine Anfrage an einen Lieferanten, Waren oder Dienstleistungen zu liefern"
 
+[labels.de.model.purchase_order.guard]
+message = "Eine empfangene oder stornierte Bestellung kann nicht geändert werden, nur ihre Notizen."
+
 [labels.de.model.purchase_order.field.reference]
 label = "Lieferantenreferenz"
 description = "Angebots- oder Referenznummer des Lieferanten für diese Bestellung, falls vorhanden"
@@ -96,6 +99,9 @@ description = "Eine noch nicht gesendete Bestellung stornieren"
 name = "Bestellposition"
 plural = "Bestellpositionen"
 description = "Ein Produkt oder eine Dienstleistung einer Bestellung"
+
+[labels.de.model.purchase_order_line.guard]
+message = "Die Zeilen einer empfangenen oder stornierten Bestellung können nicht geändert werden."
 
 [labels.de.model.purchase_order_line.field.order_id]
 label = "Bestellung"

@@ -6,6 +6,9 @@ summary = "Asiakaslaskut luonnos-, kirjattu- ja peruutettu-elinkaarella."
 name = "Lasku"
 description = "Asiakaslasku; mikään toiminto ei palauta kirjattua laskua luonnokseksi eikä peruuta sitä"
 
+[labels.fi.model.invoice.guard]
+message = "Kirjattua laskua ei voi muuttaa."
+
 [labels.fi.model.invoice.field.sale_order_id]
 label = "Myyntitilaus"
 description = "Lähteenä olevan myyntitilauksen tunniste"

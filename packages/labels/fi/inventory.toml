@@ -57,6 +57,9 @@ name = "Varastosaldo"
 plural = "Varastosaldot"
 description = "Yhden tuotteen määrä yhdessä varastopaikassa"
 
+[labels.fi.model.inventory_item.guard]
+message = "Varastonimike säilyttää tuotteensa, sijaintinsa ja eränsä. Siirrä varastoa muuttaaksesi sen paikkaa."
+
 [labels.fi.model.inventory_item.field.product_id]
 label = "Tuote"
 description = "Varastoitu tuote; yksi rivi per tuote, paikka ja erä"
@@ -81,6 +84,9 @@ description = "Erän tai eränumero, jos sitä seurataan"
 name = "Varastosiirto"
 plural = "Varastosiirrot"
 description = "Tuotteen siirto varastopaikkojen välillä tai yritykseen tai sieltä pois"
+
+[labels.fi.model.inventory_move.guard]
+message = "Valmista tai peruttua siirtoa ei voi muuttaa. Tee uusi siirto korjataksesi varaston."
 
 [labels.fi.model.inventory_move.field.reference]
 label = "Viite"

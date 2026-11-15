@@ -6,6 +6,9 @@ summary = "Kundenrechnungen mit dem Lebenszyklus Entwurf, gebucht und storniert.
 name = "Rechnung"
 description = "Eine Kundenrechnung; keine Aktion setzt eine gebuchte Rechnung auf Entwurf zurück oder storniert sie"
 
+[labels.de.model.invoice.guard]
+message = "Eine gebuchte Rechnung kann nicht geändert werden."
+
 [labels.de.model.invoice.field.sale_order_id]
 label = "Verkaufsauftrag"
 description = "ID des zugrunde liegenden Verkaufsauftrags"

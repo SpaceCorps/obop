@@ -57,6 +57,9 @@ name = "Bestand"
 plural = "Bestand"
 description = "Die Menge eines Produkts an einem Lagerort"
 
+[labels.de.model.inventory_item.guard]
+message = "Ein Bestandsposten behält sein Produkt, seinen Lagerort und seine Charge. Bewegen Sie den Bestand, um seinen Ort zu ändern."
+
 [labels.de.model.inventory_item.field.product_id]
 label = "Produkt"
 description = "Das gelagerte Produkt; es gibt einen Bestand je Produkt, Lagerort und Charge"
@@ -81,6 +84,9 @@ description = "Chargen- oder Losnummer, falls geführt"
 name = "Lagerbewegung"
 plural = "Lagerbewegungen"
 description = "Eine Bewegung eines Produkts zwischen Lagerorten oder in das Unternehmen hinein oder aus ihm heraus"
+
+[labels.de.model.inventory_move.guard]
+message = "Eine erledigte oder stornierte Bewegung kann nicht geändert werden. Legen Sie eine neue Bewegung an, um den Bestand zu korrigieren."
 
 [labels.de.model.inventory_move.field.reference]
 label = "Referenz"

@@ -60,6 +60,9 @@ name = "Kampagne"
 plural = "Kampagnen"
 description = "Ein Mailing an eine Liste"
 
+[labels.de.model.email_marketing_campaign.guard]
+message = "Eine versendete oder abgebrochene Kampagne kann nicht geändert werden; nur ihre Statistik kann noch eingetragen werden."
+
 [labels.de.model.email_marketing_campaign.field.name]
 label = "Name"
 description = "Interner Kampagnenname"

@@ -8,6 +8,9 @@ name = "Zlecenie"
 plural = "Zlecenia"
 description = "Zlecenie wykonywane u klienta na miejscu"
 
+[labels.pl.model.field_service_job.guard]
+message = "Zakończonego lub anulowanego zlecenia nie można zmienić. Zaplanuj zamiast tego zlecenie uzupełniające."
+
 [labels.pl.model.field_service_job.field.name]
 label = "Nazwa"
 description = "Krótki tytuł zlecenia, na przykład Wymiana pompy kotła"
@@ -121,6 +124,9 @@ description = "Anuluje zlecenie, którego nie rozpoczęto"
 name = "Część"
 plural = "Części"
 description = "Część lub produkt użyty przy zleceniu"
+
+[labels.pl.model.field_service_part.guard]
+message = "Części zakończonego lub anulowanego zlecenia nie można zmienić."
 
 [labels.pl.model.field_service_part.field.job_id]
 label = "Zlecenie"

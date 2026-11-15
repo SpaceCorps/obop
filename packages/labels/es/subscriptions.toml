@@ -42,6 +42,9 @@ name = "Suscripción"
 plural = "Suscripciones"
 description = "La suscripción recurrente de un cliente a un plan"
 
+[labels.es.model.subscriptions_subscription.guard]
+message = "Una suscripción cancelada no se puede modificar. Inicie una suscripción nueva en su lugar."
+
 [labels.es.model.subscriptions_subscription.field.customer_id]
 label = "Cliente"
 description = "El cliente que se suscribió"

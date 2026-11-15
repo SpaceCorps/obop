@@ -8,6 +8,9 @@ name = "Tuntikirjaus"
 plural = "Tuntikirjaukset"
 description = "Yhden henkilön yhdelle tehtävälle yhtenä päivänä käyttämä aika"
 
+[labels.fi.model.timesheets_entry.guard]
+message = "Hyväksyttyä aikakirjausta ei voi muuttaa. Pyydä esihenkilöä kirjaamaan korjaava merkintä."
+
 [labels.fi.model.timesheets_entry.field.task_id]
 label = "Tehtävä"
 description = "Tehtävä, jota työstettiin"

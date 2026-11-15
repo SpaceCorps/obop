@@ -8,6 +8,9 @@ name = "Sivu"
 plural = "Sivut"
 description = "Verkkosivuston sivu"
 
+[labels.fi.model.website_page.guard]
+message = "Arkistoitu sivu on poistettu käytöstä lopullisesti. Tee uusi sivu sen tilalle."
+
 [labels.fi.model.website_page.field.title]
 label = "Otsikko"
 description = "Sivun otsikko"
@@ -86,6 +89,9 @@ description = "Aukeaako linkki uuteen ikkunaan"
 name = "Blogikirjoitus"
 plural = "Blogikirjoitukset"
 description = "Blogikirjoitus"
+
+[labels.fi.model.website_blog_post.guard]
+message = "Arkistoitu kirjoitus on poistettu käytöstä lopullisesti. Kirjoita uusi kirjoitus sen tilalle."
 
 [labels.fi.model.website_blog_post.field.title]
 label = "Otsikko"

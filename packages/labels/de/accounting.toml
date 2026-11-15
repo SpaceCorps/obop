@@ -121,6 +121,9 @@ name = "Geschäftsjahr"
 plural = "Geschäftsjahre"
 description = "Ein Geschäftsjahr, das als Ganzes eröffnet und abgeschlossen wird"
 
+[labels.de.model.accounting_fiscal_year.guard]
+message = "Ein abgeschlossenes Geschäftsjahr kann nicht geändert werden. Öffnen Sie es wieder, um es zu korrigieren."
+
 [labels.de.model.accounting_fiscal_year.field.name]
 label = "Name"
 description = "Bezeichnung des Geschäftsjahres, zum Beispiel GJ2026"
@@ -153,6 +156,9 @@ description = "Ein abgeschlossenes Geschäftsjahr zur Korrektur wieder öffnen (
 name = "Periode"
 plural = "Perioden"
 description = "Eine Buchungsperiode (normalerweise ein Monat) innerhalb eines Geschäftsjahres"
+
+[labels.de.model.accounting_period.guard]
+message = "Eine abgeschlossene Periode kann nicht geändert werden. Öffnen Sie sie wieder, um sie zu korrigieren."
 
 [labels.de.model.accounting_period.field.fiscal_year_id]
 label = "Geschäftsjahr"
@@ -190,6 +196,9 @@ description = "Eine abgeschlossene Periode wieder öffnen (nur Genehmigende)"
 name = "Buchung"
 plural = "Buchungen"
 description = "Eine Journalbuchung: eine datierte Menge von Soll- und Haben-Zeilen in einem Journal"
+
+[labels.de.model.accounting_move.guard]
+message = "Gebuchte, stornierte und umgekehrte Buchungen sowie Buchungen in einer abgeschlossenen Periode können nicht geändert werden. Kehren Sie eine gebuchte Buchung um, um sie zu korrigieren."
 
 [labels.de.model.accounting_move.field.journal_id]
 label = "Journal"
@@ -242,6 +251,9 @@ name = "Buchungszeile"
 plural = "Buchungszeilen"
 description = "Eine Soll- oder Haben-Zeile einer Journalbuchung"
 
+[labels.de.model.accounting_move_line.guard]
+message = "Die Zeilen einer gebuchten, stornierten oder umgekehrten Buchung oder einer Buchung in einer abgeschlossenen Periode können nicht geändert werden."
+
 [labels.de.model.accounting_move_line.field.move_id]
 label = "Buchung"
 description = "Die Journalbuchung, zu der die Zeile gehört"
@@ -282,6 +294,9 @@ description = "Ob die Zeile mit einer Zahlung abgeglichen wurde"
 name = "Kontoauszugszeile"
 plural = "Kontoauszugszeilen"
 description = "Eine Zeile eines Kontoauszugs, die auf die Zuordnung zu Buchungen wartet"
+
+[labels.de.model.accounting_bank_statement_line.guard]
+message = "Eine abgeglichene Banktransaktion kann nicht geändert werden."
 
 [labels.de.model.accounting_bank_statement_line.field.journal_id]
 label = "Journal"

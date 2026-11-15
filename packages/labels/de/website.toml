@@ -8,6 +8,9 @@ name = "Seite"
 plural = "Seiten"
 description = "Eine Seite der Website"
 
+[labels.de.model.website_page.guard]
+message = "Eine archivierte Seite ist endgültig außer Betrieb. Erstellen Sie eine neue Seite als Ersatz."
+
 [labels.de.model.website_page.field.title]
 label = "Titel"
 description = "Seitentitel"
@@ -86,6 +89,9 @@ description = "Ob der Link in einem neuen Fenster geöffnet wird"
 name = "Blogbeitrag"
 plural = "Blogbeiträge"
 description = "Ein Beitrag im Blog"
+
+[labels.de.model.website_blog_post.guard]
+message = "Ein archivierter Beitrag ist endgültig außer Betrieb. Schreiben Sie einen neuen Beitrag als Ersatz."
 
 [labels.de.model.website_blog_post.field.title]
 label = "Titel"

@@ -37,6 +37,9 @@ name = "Zamówienie zakupu"
 plural = "Zamówienia zakupu"
 description = "Zlecenie dla dostawcy na dostarczenie towarów lub usług"
 
+[labels.pl.model.purchase_order.guard]
+message = "Przyjętego lub anulowanego zamówienia nie można zmienić, z wyjątkiem jego notatek."
+
 [labels.pl.model.purchase_order.field.reference]
 label = "Referencja dostawcy"
 description = "Numer oferty lub referencja dostawcy dla tego zamówienia, jeśli jest"
@@ -96,6 +99,9 @@ description = "Anuluje zamówienie, które nie zostało jeszcze wysłane"
 name = "Pozycja zamówienia"
 plural = "Pozycje zamówienia"
 description = "Jeden produkt lub usługa w zamówieniu zakupu"
+
+[labels.pl.model.purchase_order_line.guard]
+message = "Pozycji przyjętego lub anulowanego zamówienia nie można zmienić."
 
 [labels.pl.model.purchase_order_line.field.order_id]
 label = "Zamówienie"

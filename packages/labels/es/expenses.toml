@@ -8,6 +8,9 @@ name = "Gasto"
 plural = "Gastos"
 description = "Un importe que un empleado gastó por la empresa y quiere que se le reembolse"
 
+[labels.es.model.expenses_expense.guard]
+message = "Un gasto aprobado, pagado o rechazado no se puede modificar, salvo su recibo y los datos del pago."
+
 [labels.es.model.expenses_expense.field.description]
 label = "Descripción"
 description = "En qué se gastó el dinero"

@@ -13,6 +13,7 @@ import {
   type ServerOrder,
 } from "./api.ts";
 import { isEmpty } from "./format.ts";
+import { guardMessage } from "./labels.ts";
 import { isIdLike, stateFieldOf, summable } from "./presentation.ts";
 import { initialOption, isGoverned } from "./workflow.ts";
 
@@ -345,7 +346,7 @@ export function linesFrozen(
   if (!parentRow) return { frozen: false };
   if (parent.guard || child.guard) {
     const frozen = child.guard?.children_of === via && guardFreezes(parent.guard, parentRow);
-    return { frozen, message: frozen ? parent.guard?.message : undefined };
+    return { frozen, message: frozen ? guardMessage(parent.guard) : undefined };
   }
   const st = stateFieldOf(parent);
   if (!st || !isGoverned(parent, st)) return { frozen: false };

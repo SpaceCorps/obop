@@ -8,6 +8,9 @@ name = "Strona"
 plural = "Strony"
 description = "Strona witryny internetowej"
 
+[labels.pl.model.website_page.guard]
+message = "Zarchiwizowana strona jest wycofana na stałe. Utwórz nową stronę w jej miejsce."
+
 [labels.pl.model.website_page.field.title]
 label = "Tytuł"
 description = "Tytuł strony"
@@ -86,6 +89,9 @@ description = "Czy link otwiera się w nowym oknie"
 name = "Wpis na blogu"
 plural = "Wpisy na blogu"
 description = "Wpis na blogu"
+
+[labels.pl.model.website_blog_post.guard]
+message = "Zarchiwizowany wpis jest wycofany na stałe. Napisz nowy wpis w jego miejsce."
 
 [labels.pl.model.website_blog_post.field.title]
 label = "Tytuł"

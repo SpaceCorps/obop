@@ -208,6 +208,9 @@ name = "Commande en ligne"
 plural = "Commandes en ligne"
 description = "Une commande passée en ligne"
 
+[labels.fr.model.ecommerce_order.guard]
+message = "Une commande livrée, annulée ou remboursée ne peut pas être modifiée, sauf son contact et son numéro de suivi."
+
 [labels.fr.model.ecommerce_order.field.number]
 label = "Numéro"
 description = "Numéro de commande montré au client. Texte libre : les packages ne peuvent pas générer de séquences ; le paiement public en crée un au hasard"
@@ -320,6 +323,9 @@ description = "Rend l’argent d’une commande livrée, par exemple après un r
 name = "Ligne de commande"
 plural = "Lignes de commande"
 description = "Une ligne de produit d’une commande web"
+
+[labels.fr.model.ecommerce_order_line.guard]
+message = "Les lignes d’une commande livrée, annulée ou remboursée ne peuvent pas être modifiées."
 
 [labels.fr.model.ecommerce_order_line.field.order_id]
 label = "Commande"

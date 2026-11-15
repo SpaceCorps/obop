@@ -60,6 +60,9 @@ name = "Campagne"
 plural = "Campagnes"
 description = "Un envoi adressé à une liste"
 
+[labels.fr.model.email_marketing_campaign.guard]
+message = "Une campagne envoyée ou annulée ne peut pas être modifiée ; seules ses statistiques peuvent encore être saisies."
+
 [labels.fr.model.email_marketing_campaign.field.name]
 label = "Nom"
 description = "Nom interne de la campagne"

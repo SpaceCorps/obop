@@ -8,6 +8,9 @@ name = "Saisie de temps"
 plural = "Saisies de temps"
 description = "Le temps qu’une personne a passé sur une tâche un jour donné"
 
+[labels.fr.model.timesheets_entry.guard]
+message = "Une saisie de temps approuvée ne peut pas être modifiée. Demandez à un responsable d’enregistrer une saisie de correction."
+
 [labels.fr.model.timesheets_entry.field.task_id]
 label = "Tâche"
 description = "La tâche sur laquelle on a travaillé"

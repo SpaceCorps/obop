@@ -8,6 +8,9 @@ name = "Sida"
 plural = "Sidor"
 description = "En sida på webbplatsen"
 
+[labels.sv.model.website_page.guard]
+message = "En arkiverad sida är tagen ur bruk för gott. Skapa en ny sida som ersätter den."
+
 [labels.sv.model.website_page.field.title]
 label = "Titel"
 description = "Sidans titel"
@@ -86,6 +89,9 @@ description = "Om länken öppnas i ett nytt fönster"
 name = "Blogginlägg"
 plural = "Blogginlägg"
 description = "Ett blogginlägg"
+
+[labels.sv.model.website_blog_post.guard]
+message = "Ett arkiverat inlägg är taget ur bruk för gott. Skriv ett nytt inlägg som ersätter det."
 
 [labels.sv.model.website_blog_post.field.title]
 label = "Titel"

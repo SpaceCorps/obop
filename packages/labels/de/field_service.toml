@@ -8,6 +8,9 @@ name = "Einsatz"
 plural = "Einsätze"
 description = "Ein Einsatz vor Ort bei einem Kunden"
 
+[labels.de.model.field_service_job.guard]
+message = "Ein erledigter oder stornierter Einsatz kann nicht geändert werden. Planen Sie stattdessen einen Folgeeinsatz."
+
 [labels.de.model.field_service_job.field.name]
 label = "Name"
 description = "Kurztitel des Einsatzes, zum Beispiel Heizungspumpe austauschen"
@@ -121,6 +124,9 @@ description = "Einen noch nicht begonnenen Einsatz stornieren"
 name = "Teil"
 plural = "Teile"
 description = "Ein bei einem Einsatz verwendetes Teil oder Produkt"
+
+[labels.de.model.field_service_part.guard]
+message = "Die Teile eines erledigten oder stornierten Einsatzes können nicht geändert werden."
 
 [labels.de.model.field_service_part.field.job_id]
 label = "Einsatz"

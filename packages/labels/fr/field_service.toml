@@ -8,6 +8,9 @@ name = "Intervention"
 plural = "Interventions"
 description = "Une intervention sur site pour un client"
 
+[labels.fr.model.field_service_job.guard]
+message = "Une intervention terminée ou annulée ne peut pas être modifiée. Planifiez plutôt une intervention de suivi."
+
 [labels.fr.model.field_service_job.field.name]
 label = "Nom"
 description = "Titre court de l’intervention, par exemple Remplacer la pompe de la chaudière"
@@ -121,6 +124,9 @@ description = "Annule une intervention qui n’a pas commencé"
 name = "Pièce"
 plural = "Pièces"
 description = "Une pièce ou un produit utilisé lors d’une intervention"
+
+[labels.fr.model.field_service_part.guard]
+message = "Les pièces d’une intervention terminée ou annulée ne peuvent pas être modifiées."
 
 [labels.fr.model.field_service_part.field.job_id]
 label = "Intervention"

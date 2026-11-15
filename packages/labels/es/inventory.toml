@@ -57,6 +57,9 @@ name = "Existencia"
 plural = "Existencias"
 description = "La cantidad de un producto que hay en una ubicación"
 
+[labels.es.model.inventory_item.guard]
+message = "Un artículo de stock conserva su producto, su ubicación y su lote. Mueva el stock para cambiar dónde está."
+
 [labels.es.model.inventory_item.field.product_id]
 label = "Producto"
 description = "El producto almacenado; hay un artículo por producto, ubicación y lote"
@@ -81,6 +84,9 @@ description = "Número de lote, si se controla"
 name = "Movimiento"
 plural = "Movimientos de stock"
 description = "Un movimiento de un producto entre ubicaciones, o hacia dentro o fuera de la empresa"
+
+[labels.es.model.inventory_move.guard]
+message = "Un movimiento hecho o cancelado no se puede modificar. Cree un movimiento nuevo para corregir el stock."
 
 [labels.es.model.inventory_move.field.reference]
 label = "Referencia"

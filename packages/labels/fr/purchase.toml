@@ -37,6 +37,9 @@ name = "Commande"
 plural = "Commandes d’achat"
 description = "Une demande faite à un fournisseur de livrer des biens ou des services"
 
+[labels.fr.model.purchase_order.guard]
+message = "Une commande reçue ou annulée ne peut pas être modifiée, sauf ses notes."
+
 [labels.fr.model.purchase_order.field.reference]
 label = "Référence fournisseur"
 description = "Numéro de devis ou de référence du fournisseur pour cette commande, le cas échéant"
@@ -96,6 +99,9 @@ description = "Annule une commande qui n’a pas encore été envoyée"
 name = "Ligne de commande"
 plural = "Lignes de commande"
 description = "Un produit ou un service d’une commande d’achat"
+
+[labels.fr.model.purchase_order_line.guard]
+message = "Les lignes d’une commande reçue ou annulée ne peuvent pas être modifiées."
 
 [labels.fr.model.purchase_order_line.field.order_id]
 label = "Commande"

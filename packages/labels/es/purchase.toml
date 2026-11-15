@@ -37,6 +37,9 @@ name = "Pedido"
 plural = "Pedidos de compra"
 description = "Una solicitud a un proveedor para que suministre bienes o servicios"
 
+[labels.es.model.purchase_order.guard]
+message = "Un pedido recibido o cancelado no se puede modificar, salvo sus notas."
+
 [labels.es.model.purchase_order.field.reference]
 label = "Referencia del proveedor"
 description = "Número de presupuesto o referencia del proveedor para este pedido, si lo hay"
@@ -96,6 +99,9 @@ description = "Cancelar un pedido que aún no se envió"
 name = "Línea de pedido"
 plural = "Líneas de pedido"
 description = "Un producto o servicio de un pedido de compra"
+
+[labels.es.model.purchase_order_line.guard]
+message = "Las líneas de un pedido recibido o cancelado no se pueden modificar."
 
 [labels.es.model.purchase_order_line.field.order_id]
 label = "Pedido"

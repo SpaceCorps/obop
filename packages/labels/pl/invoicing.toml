@@ -6,6 +6,9 @@ summary = "Faktury klientów z cyklem życia wersja robocza, zaksięgowana, anul
 name = "Faktura"
 description = "Faktura sprzedaży dla klienta; żadna akcja nie przywraca zaksięgowanej faktury do wersji roboczej ani jej nie anuluje"
 
+[labels.pl.model.invoice.guard]
+message = "Zaksięgowanej faktury nie można zmienić."
+
 [labels.pl.model.invoice.field.sale_order_id]
 label = "Zamówienie sprzedaży"
 description = "Identyfikator źródłowego zamówienia sprzedaży"

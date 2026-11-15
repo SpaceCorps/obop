@@ -885,6 +885,7 @@ impl Manifest {
                                     )
                                 })
                                 .collect(),
+                            guard_message: m.guard.as_ref().is_some_and(|g| g.message.is_some()),
                         },
                     )
                 })

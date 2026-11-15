@@ -6,6 +6,9 @@ summary = "Devis et commandes client pour vos clients."
 name = "Commande client"
 description = "Un devis ou une commande confirmée pour un client"
 
+[labels.fr.model.sale_order.guard]
+message = "Une commande confirmée ne peut pas être modifiée. Annulez-la pour la corriger."
+
 [labels.fr.model.sale_order.field.party_id]
 label = "Client"
 description = "Le client du devis ou de la commande"

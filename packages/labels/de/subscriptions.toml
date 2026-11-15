@@ -42,6 +42,9 @@ name = "Abonnement"
 plural = "Abonnements"
 description = "Das wiederkehrende Abonnement eines Kunden für einen Tarif"
 
+[labels.de.model.subscriptions_subscription.guard]
+message = "Ein gekündigtes Abonnement kann nicht geändert werden. Schließen Sie stattdessen ein neues ab."
+
 [labels.de.model.subscriptions_subscription.field.customer_id]
 label = "Kunde"
 description = "Der Kunde, der abonniert hat"

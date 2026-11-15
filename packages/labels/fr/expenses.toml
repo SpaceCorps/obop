@@ -8,6 +8,9 @@ name = "Dépense"
 plural = "Dépenses"
 description = "Un montant qu’un employé a dépensé pour l’entreprise et dont il demande le remboursement"
 
+[labels.fr.model.expenses_expense.guard]
+message = "Une note de frais approuvée, payée ou refusée ne peut pas être modifiée, sauf son justificatif et les détails du paiement."
+
 [labels.fr.model.expenses_expense.field.description]
 label = "Description"
 description = "Ce pour quoi l’argent a été dépensé"

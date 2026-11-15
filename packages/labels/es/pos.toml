@@ -41,6 +41,9 @@ name = "Sesión"
 plural = "Sesiones"
 description = "Un turno de ventas en un punto de venta, desde la apertura hasta el cierre del cajón de caja"
 
+[labels.es.model.pos_session.guard]
+message = "Una sesión cerrada no se puede modificar; solo su nota puede aún explicar una diferencia de caja."
+
 [labels.es.model.pos_session.field.config_id]
 label = "Configuración"
 description = "El punto de venta al que pertenece la sesión"
@@ -97,6 +100,9 @@ name = "Venta"
 plural = "Ventas"
 description = "Una venta registrada en un punto de venta"
 
+[labels.es.model.pos_order.guard]
+message = "Una venta pagada, reembolsada o cancelada no se puede modificar. Reembólsela para revertirla."
+
 [labels.es.model.pos_order.field.session_id]
 label = "Sesión"
 description = "La sesión en la que se hizo la venta"
@@ -152,6 +158,9 @@ name = "Línea de venta"
 plural = "Líneas de venta"
 description = "Una línea de producto de una venta"
 
+[labels.es.model.pos_order_line.guard]
+message = "Las líneas de una venta pagada, reembolsada o cancelada no se pueden modificar."
+
 [labels.es.model.pos_order_line.field.order_id]
 label = "Pedido"
 description = "La venta a la que pertenece la línea"
@@ -184,6 +193,9 @@ description = "Total de la línea tras el descuento: cantidad por precio unitari
 name = "Pago"
 plural = "Pagos"
 description = "Un pago recibido por una venta; una venta puede pagarse con varios métodos"
+
+[labels.es.model.pos_payment.guard]
+message = "Los pagos de una venta pagada, reembolsada o cancelada no se pueden modificar."
 
 [labels.es.model.pos_payment.field.order_id]
 label = "Pedido"

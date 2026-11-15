@@ -6,6 +6,9 @@ summary = "Angebote und Verkaufsaufträge für Ihre Kunden."
 name = "Verkaufsauftrag"
 description = "Ein Angebot oder bestätigter Auftrag für einen Kunden"
 
+[labels.de.model.sale_order.guard]
+message = "Ein bestätigter Auftrag kann nicht geändert werden. Stornieren Sie ihn, um ihn zu korrigieren."
+
 [labels.de.model.sale_order.field.party_id]
 label = "Kunde"
 description = "Der Kunde des Angebots oder Auftrags"

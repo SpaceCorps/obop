@@ -6,7 +6,7 @@
 import { t } from "@obop/ui";
 import { fixedOnceCreated, type Command, type FieldMeta, type ModelMeta, type Row } from "./api.ts";
 import { isEmpty, optionLabel } from "./format.ts";
-import { actionTitle } from "./labels.ts";
+import { actionTitle, guardMessage } from "./labels.ts";
 import { childrenOf, titleFieldsOf, toneOf, type MetaIndex } from "./presentation.ts";
 
 /** A group of fields on the form. */
@@ -250,7 +250,7 @@ export function lockOf(model: ModelMeta, row: Row | null): Lock | null {
   const hit = w && w.values.includes(String(row[w.field] ?? ""));
   if (!hit && !g.append_only && !fixedOnceCreated(g)) return null;
   const message =
-    g.message ??
+    guardMessage(g) ??
     (hit && w
       ? t("This record is {state} and can no longer be changed.", {
           state: optionLabel(String(row[w.field] ?? ""), field),

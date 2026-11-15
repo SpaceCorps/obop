@@ -42,6 +42,9 @@ name = "Subskrypcja"
 plural = "Subskrypcje"
 description = "Cykliczna subskrypcja planu przez klienta"
 
+[labels.pl.model.subscriptions_subscription.guard]
+message = "Anulowanej subskrypcji nie można zmienić. Rozpocznij zamiast tego nową subskrypcję."
+
 [labels.pl.model.subscriptions_subscription.field.customer_id]
 label = "Klient"
 description = "Klient, który zawarł subskrypcję"

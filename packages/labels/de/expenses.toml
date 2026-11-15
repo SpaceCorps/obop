@@ -8,6 +8,9 @@ name = "Ausgabe"
 plural = "Ausgaben"
 description = "Ein Betrag, den ein Mitarbeiter für das Unternehmen ausgegeben hat und erstattet haben möchte"
 
+[labels.de.model.expenses_expense.guard]
+message = "Eine genehmigte, bezahlte oder abgelehnte Spesenabrechnung kann nicht geändert werden, außer ihrem Beleg und den Zahlungsangaben."
+
 [labels.de.model.expenses_expense.field.description]
 label = "Beschreibung"
 description = "Wofür das Geld ausgegeben wurde"

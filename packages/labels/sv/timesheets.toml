@@ -8,6 +8,9 @@ name = "Tidsregistrering"
 plural = "Tidsregistreringar"
 description = "Tid som en person lagt på en uppgift en dag"
 
+[labels.sv.model.timesheets_entry.guard]
+message = "En godkänd tidrapport kan inte ändras. Be en chef att registrera en rättelse."
+
 [labels.sv.model.timesheets_entry.field.task_id]
 label = "Uppgift"
 description = "Uppgiften som arbetet gäller"

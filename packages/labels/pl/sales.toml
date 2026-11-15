@@ -6,6 +6,9 @@ summary = "Oferty i zamówienia sprzedaży dla Twoich klientów."
 name = "Zamówienie sprzedaży"
 description = "Oferta lub potwierdzone zamówienie dla klienta"
 
+[labels.pl.model.sale_order.guard]
+message = "Potwierdzonego zamówienia nie można zmienić. Anuluj je, aby je poprawić."
+
 [labels.pl.model.sale_order.field.party_id]
 label = "Klient"
 description = "Klient oferty lub zamówienia"

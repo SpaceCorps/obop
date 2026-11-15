@@ -42,6 +42,9 @@ name = "Abonnemang"
 plural = "Abonnemang"
 description = "En kunds återkommande abonnemang på en plan"
 
+[labels.sv.model.subscriptions_subscription.guard]
+message = "Ett avslutat abonnemang kan inte ändras. Starta ett nytt abonnemang i stället."
+
 [labels.sv.model.subscriptions_subscription.field.customer_id]
 label = "Kund"
 description = "Kunden som tecknade abonnemanget"

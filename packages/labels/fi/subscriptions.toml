@@ -42,6 +42,9 @@ name = "Kestotilaus"
 plural = "Kestotilaukset"
 description = "Asiakkaan toistuva tilaus pakettiin"
 
+[labels.fi.model.subscriptions_subscription.guard]
+message = "Peruttua tilausta ei voi muuttaa. Aloita sen sijaan uusi tilaus."
+
 [labels.fi.model.subscriptions_subscription.field.customer_id]
 label = "Asiakas"
 description = "Tilauksen tehnyt asiakas"

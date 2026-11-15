@@ -41,6 +41,9 @@ name = "Kassavuoro"
 plural = "Kassavuorot"
 description = "Yksi myyntivuoro kassapisteessä, kassalaatikon avaamisesta sulkemiseen"
 
+[labels.fi.model.pos_session.guard]
+message = "Suljettua istuntoa ei voi muuttaa; vain sen muistiinpano voi vielä selittää kassaeron."
+
 [labels.fi.model.pos_session.field.config_id]
 label = "Kassapiste"
 description = "Kassapiste, johon kassavuoro kuuluu"
@@ -97,6 +100,9 @@ name = "Kassamyynti"
 plural = "Kassamyynnit"
 description = "Kassapisteessä tehty myynti"
 
+[labels.fi.model.pos_order.guard]
+message = "Maksettua, hyvitettyä tai peruttua myyntiä ei voi muuttaa. Hyvitä se peruaksesi sen."
+
 [labels.fi.model.pos_order.field.session_id]
 label = "Kassavuoro"
 description = "Kassavuoro, jossa myynti tehtiin"
@@ -152,6 +158,9 @@ name = "Kassamyynnin rivi"
 plural = "Kassamyynnin rivit"
 description = "Myynnin yksi tuoterivi"
 
+[labels.fi.model.pos_order_line.guard]
+message = "Maksetun, hyvitetyn tai perutun myynnin rivejä ei voi muuttaa."
+
 [labels.fi.model.pos_order_line.field.order_id]
 label = "Kassamyynti"
 description = "Myynti, johon rivi kuuluu"
@@ -184,6 +193,9 @@ description = "Rivin summa alennuksen jälkeen: määrä kertaa yksikköhinta mi
 name = "Maksu"
 plural = "Maksut"
 description = "Myynnistä saatu maksu; myynti voidaan maksaa usealla maksutavalla"
+
+[labels.fi.model.pos_payment.guard]
+message = "Maksetun, hyvitetyn tai perutun myynnin maksuja ei voi muuttaa."
 
 [labels.fi.model.pos_payment.field.order_id]
 label = "Kassamyynti"

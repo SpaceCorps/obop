@@ -8,6 +8,9 @@ name = "Kulu"
 plural = "Kulut"
 description = "Summa, jonka työntekijä on käyttänyt yrityksen lukuun ja jonka hän haluaa korvattavaksi"
 
+[labels.fi.model.expenses_expense.guard]
+message = "Hyväksyttyä, maksettua tai hylättyä kulukorvausta ei voi muuttaa, paitsi sen kuittia ja maksutietoja."
+
 [labels.fi.model.expenses_expense.field.description]
 label = "Kuvaus"
 description = "Mihin rahat käytettiin"

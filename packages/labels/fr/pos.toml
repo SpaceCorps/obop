@@ -41,6 +41,9 @@ name = "Session"
 plural = "Sessions"
 description = "Une période de vente à un point de vente, de l’ouverture à la fermeture du tiroir-caisse"
 
+[labels.fr.model.pos_session.guard]
+message = "Une session clôturée ne peut pas être modifiée ; seule sa note peut encore expliquer un écart de caisse."
+
 [labels.fr.model.pos_session.field.config_id]
 label = "Configuration"
 description = "Le point de vente auquel appartient la session"
@@ -97,6 +100,9 @@ name = "Vente"
 plural = "Ventes"
 description = "Une vente enregistrée à un point de vente"
 
+[labels.fr.model.pos_order.guard]
+message = "Une vente payée, remboursée ou annulée ne peut pas être modifiée. Remboursez-la pour l’annuler."
+
 [labels.fr.model.pos_order.field.session_id]
 label = "Session"
 description = "La session pendant laquelle la vente a été faite"
@@ -152,6 +158,9 @@ name = "Ligne de vente"
 plural = "Lignes de vente"
 description = "Une ligne de produit d’une vente"
 
+[labels.fr.model.pos_order_line.guard]
+message = "Les lignes d’une vente payée, remboursée ou annulée ne peuvent pas être modifiées."
+
 [labels.fr.model.pos_order_line.field.order_id]
 label = "Commande"
 description = "La vente à laquelle appartient la ligne"
@@ -184,6 +193,9 @@ description = "Total de la ligne après remise : quantité multipliée par le pr
 name = "Paiement"
 plural = "Paiements"
 description = "Un paiement reçu pour une vente ; une vente peut être réglée avec plusieurs modes de paiement"
+
+[labels.fr.model.pos_payment.guard]
+message = "Les paiements d’une vente payée, remboursée ou annulée ne peuvent pas être modifiés."
 
 [labels.fr.model.pos_payment.field.order_id]
 label = "Commande"

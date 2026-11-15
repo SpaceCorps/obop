@@ -57,6 +57,9 @@ name = "Stock"
 plural = "Stock"
 description = "La quantité d’un produit conservée à un emplacement"
 
+[labels.fr.model.inventory_item.guard]
+message = "Un article de stock garde son produit, son emplacement et son lot. Déplacez le stock pour changer son emplacement."
+
 [labels.fr.model.inventory_item.field.product_id]
 label = "Produit"
 description = "Le produit détenu ; il y a un article par produit, emplacement et lot"
@@ -81,6 +84,9 @@ description = "Numéro de lot, s’il est suivi"
 name = "Mouvement"
 plural = "Mouvements de stock"
 description = "Un déplacement de produit entre emplacements, ou vers l’entreprise ou hors de celle-ci"
+
+[labels.fr.model.inventory_move.guard]
+message = "Un mouvement effectué ou annulé ne peut pas être modifié. Créez un nouveau mouvement pour corriger le stock."
 
 [labels.fr.model.inventory_move.field.reference]
 label = "Référence"

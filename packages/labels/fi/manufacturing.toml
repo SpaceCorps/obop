@@ -50,6 +50,9 @@ name = "Valmistustilaus"
 plural = "Valmistustilaukset"
 description = "Ohje valmistaa tietty määrä tuotetta"
 
+[labels.fi.model.manufacturing_order.guard]
+message = "Valmista tai peruttua valmistustilausta ei voi muuttaa."
+
 [labels.fi.model.manufacturing_order.field.number]
 label = "Numero"
 description = "Tilausnumero kuten MO-00042, annetaan kun tilaus luodaan"
@@ -119,6 +122,9 @@ description = "Tuotantopaikka: tilauksen päättäminen luo varastosiirrot, jotk
 name = "Tilauksen komponentti"
 plural = "Tilauksen komponentit"
 description = "Komponentti, jota valmistustilaus käyttää, ja sen määrä koko tilaukselle"
+
+[labels.fi.model.manufacturing_order_line.guard]
+message = "Valmiin tai perutun valmistustilauksen komponentteja ei voi muuttaa."
 
 [labels.fi.model.manufacturing_order_line.field.order_id]
 label = "Valmistustilaus"

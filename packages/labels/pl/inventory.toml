@@ -57,6 +57,9 @@ name = "Stan magazynowy"
 plural = "Stany magazynowe"
 description = "Ilość jednego produktu przechowywana w jednej lokalizacji"
 
+[labels.pl.model.inventory_item.guard]
+message = "Pozycja magazynowa zachowuje swój produkt, lokalizację i partię. Przesuń zapas, aby zmienić jego miejsce."
+
 [labels.pl.model.inventory_item.field.product_id]
 label = "Produkt"
 description = "Przechowywany produkt; jest jedna pozycja na produkt, lokalizację i partię"
@@ -81,6 +84,9 @@ description = "Numer partii, jeśli jest śledzona"
 name = "Operacja magazynowa"
 plural = "Operacje magazynowe"
 description = "Przemieszczenie produktu między lokalizacjami albo do firmy lub z firmy"
+
+[labels.pl.model.inventory_move.guard]
+message = "Wykonanego lub anulowanego ruchu nie można zmienić. Utwórz nowy ruch, aby poprawić zapas."
 
 [labels.pl.model.inventory_move.field.reference]
 label = "Referencja"

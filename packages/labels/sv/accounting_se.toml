@@ -241,6 +241,9 @@ name = "Momsrapport"
 plural = "Momsrapporter"
 description = "En momsrapport för en period, framtagen ur huvudboken och godkänd av en person innan den används. OVERIFIERAD: inte jämförd med SKV 4700 av det här paketet"
 
+[labels.sv.model.accounting_se_vat_report.guard]
+message = "En godkänd eller inlämnad momsrapport kan inte ändras, bara dess anteckningar."
+
 [labels.sv.model.accounting_se_vat_report.field.name]
 label = "Namn"
 description = "Periodens namn, till exempel 2026-Q3"
@@ -323,6 +326,9 @@ description = "Registrera att deklarationen lämnats in till Skatteverket utanf�
 name = "Momsrapportrad"
 plural = "Momsrapportrader"
 description = "En ruta i en momsrapport med sitt belopp"
+
+[labels.sv.model.accounting_se_vat_report_line.guard]
+message = "Raderna i en godkänd eller inlämnad momsrapport kan inte ändras."
 
 [labels.sv.model.accounting_se_vat_report_line.field.report_id]
 label = "Rapport"

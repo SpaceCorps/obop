@@ -39,6 +39,9 @@ name = "Ticket"
 plural = "Tickets"
 description = "Una solicitud de atención al cliente"
 
+[labels.es.model.helpdesk_ticket.guard]
+message = "Un ticket cerrado no se puede modificar. Abra un ticket nuevo si el problema vuelve."
+
 [labels.es.model.helpdesk_ticket.field.subject]
 label = "Asunto"
 description = "Resumen del problema en una línea"

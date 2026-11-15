@@ -34,6 +34,9 @@ name = "Rendez-vous"
 plural = "Rendez-vous"
 description = "La réservation d’une ressource à un moment donné"
 
+[labels.fr.model.appointments_appointment.guard]
+message = "Un rendez-vous tenu, annulé ou manqué ne peut pas être modifié. Réservez-en plutôt un nouveau."
+
 [labels.fr.model.appointments_appointment.field.resource_id]
 label = "Ressource"
 description = "La ressource réservée"

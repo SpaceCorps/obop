@@ -130,6 +130,8 @@ export type ModelGuard = {
   append_only?: boolean;
   /** What the lock banner says ("Posted entries cannot be changed. Reverse it to correct it."). */
   message?: string;
+  /** The message per language, from `[labels.<lang>.model.<m>.guard]` (D52). */
+  message_labels?: Record<string, string>;
 };
 
 /**

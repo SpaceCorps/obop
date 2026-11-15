@@ -540,6 +540,7 @@ description = "Ein verfügbares Fahrzeug in Betrieb nehmen"
 | `labels.<lang>.model.<model>.field.<field>.options` | `<option> = "label"` | select values, badges, status bar, filters, groups |
 | `labels.<lang>.model.<model>.action.<action>` | `label`, `description` | action button; tooltip |
 | `labels.<lang>.model.<model>.action.<action>.assert.<key>` | `message` | the refusal of the assertion with that `key`, in a REST answer (3.8) |
+| `labels.<lang>.model.<model>.guard` | `message` | the lock banner of a record the guard freezes (3.11); in `/api/meta` as `guard.message_labels`. Only a model whose guard has a `message` takes it |
 
 - **Label versus description.** A label is the short name (at most 80 characters) a person scans: a column header, a button. A description is a sentence (at most 400) that explains it. English has no `label`: the interface derives it from the technical name (`odometer_km` is "Odometer km"); a `[labels.en...]` table overrides that when the derived English reads badly ("Odometer (km)").
 - **Language codes** are two or three lowercase letters with an optional region: `de`, `fi`, `pt-BR`. The seven the interface ships are en, de, fr, pl, fi, sv, es. Anything else matching the pattern is stored and delivered; the client uses it when the active language is that code, or its base language.

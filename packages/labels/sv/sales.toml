@@ -6,6 +6,9 @@ summary = "Offerter och försäljningsorder för dina kunder."
 name = "Försäljningsorder"
 description = "En offert eller bekräftad order till en kund"
 
+[labels.sv.model.sale_order.guard]
+message = "En bekräftad order kan inte ändras. Avbryt den för att rätta den."
+
 [labels.sv.model.sale_order.field.party_id]
 label = "Kund"
 description = "Offertens eller orderns kund"

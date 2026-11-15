@@ -208,6 +208,9 @@ name = "Pedido web"
 plural = "Pedidos web"
 description = "Un pedido hecho online"
 
+[labels.es.model.ecommerce_order.guard]
+message = "Un pedido entregado, cancelado o reembolsado no se puede modificar, salvo su contacto y su número de seguimiento."
+
 [labels.es.model.ecommerce_order.field.number]
 label = "Número"
 description = "Número de pedido que se muestra al comprador. Texto libre: los paquetes no pueden generar secuencias; la compra pública genera uno aleatorio"
@@ -320,6 +323,9 @@ description = "Devolver el dinero de un pedido entregado, por ejemplo tras una d
 name = "Línea de pedido"
 plural = "Líneas de pedido"
 description = "Una línea de producto de un pedido web"
+
+[labels.es.model.ecommerce_order_line.guard]
+message = "Las líneas de un pedido entregado, cancelado o reembolsado no se pueden modificar."
 
 [labels.es.model.ecommerce_order_line.field.order_id]
 label = "Pedido"

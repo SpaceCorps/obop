@@ -8,6 +8,9 @@ name = "Trabajo"
 plural = "Trabajos"
 description = "Un trabajo in situ para un cliente"
 
+[labels.es.model.field_service_job.guard]
+message = "Un trabajo terminado o cancelado no se puede modificar. Programe un trabajo de seguimiento en su lugar."
+
 [labels.es.model.field_service_job.field.name]
 label = "Nombre"
 description = "Título breve del trabajo, por ejemplo Cambiar la bomba de la caldera"
@@ -121,6 +124,9 @@ description = "Cancelar un trabajo que no ha empezado"
 name = "Pieza"
 plural = "Piezas"
 description = "Una pieza o producto usado en un trabajo"
+
+[labels.es.model.field_service_part.guard]
+message = "Las piezas de un trabajo terminado o cancelado no se pueden modificar."
 
 [labels.es.model.field_service_part.field.job_id]
 label = "Trabajo"

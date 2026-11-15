@@ -6,6 +6,9 @@ summary = "Facturas de cliente con un ciclo de vida de borrador, contabilizada y
 name = "Factura"
 description = "Una factura de cliente; ninguna acción devuelve una factura contabilizada a borrador ni la cancela"
 
+[labels.es.model.invoice.guard]
+message = "Una factura contabilizada no se puede modificar."
+
 [labels.es.model.invoice.field.sale_order_id]
 label = "Pedido de venta"
 description = "Identificador del pedido de venta de origen"

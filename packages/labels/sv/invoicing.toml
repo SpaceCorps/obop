@@ -6,6 +6,9 @@ summary = "Kundfakturor med livscykeln utkast, bokförd och annullerad."
 name = "Faktura"
 description = "En kundfaktura; ingen åtgärd återför en bokförd faktura till utkast eller annullerar den"
 
+[labels.sv.model.invoice.guard]
+message = "En bokförd faktura kan inte ändras."
+
 [labels.sv.model.invoice.field.sale_order_id]
 label = "Försäljningsorder"
 description = "Id för den ursprungliga försäljningsordern"

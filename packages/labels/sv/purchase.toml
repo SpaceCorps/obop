@@ -37,6 +37,9 @@ name = "Inköpsorder"
 plural = "Inköpsorder"
 description = "En beställning hos en leverantör av varor eller tjänster"
 
+[labels.sv.model.purchase_order.guard]
+message = "En mottagen eller avbruten order kan inte ändras, bara dess anteckningar."
+
 [labels.sv.model.purchase_order.field.reference]
 label = "Leverantörens referens"
 description = "Leverantörens offert- eller referensnummer för ordern, om det finns"
@@ -96,6 +99,9 @@ description = "Annullera en order som ännu inte skickats"
 name = "Inköpsorderrad"
 plural = "Inköpsorderrader"
 description = "En produkt eller tjänst på en inköpsorder"
+
+[labels.sv.model.purchase_order_line.guard]
+message = "Raderna i en mottagen eller avbruten order kan inte ändras."
 
 [labels.sv.model.purchase_order_line.field.order_id]
 label = "Order"
