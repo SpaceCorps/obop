@@ -3,7 +3,7 @@
 //
 //   vp run emulator:check                       # the defaults below
 //   node scripts/emulator/check.mjs [--serial emulator-5580] [--server http://localhost:18180]
-//                                   [--account FILE] [--shots DIR]
+//                                   [--account FILE] [--shots DIR] [--responder PORT]
 //
 // What it needs:
 //   - an emulator (ANDROID_SERIAL or --serial; default emulator-5580) with a TEST build of the app
@@ -12,7 +12,9 @@
 //   - a THROWAWAY obop instance on this computer at --server (the emulator reaches it through
 //     `adb reverse`, as `localhost`, which is a secure context);
 //   - its account: --account FILE or OBOP_HOST_ACCOUNT=FILE (lines `user=` and `password=`), or
-//     OBOP_HOST_USER and OBOP_HOST_PASSWORD.
+//     OBOP_HOST_USER and OBOP_HOST_PASSWORD;
+//   - a free port on this computer for the script's own responder of E1 (--responder; default
+//     18181), which must not be the port of the instance.
 //
 // What it does to the emulator: it clears the app's data (E1 needs the first launch), types into
 // the address screen, signs in, and for E12 takes the `adb reverse` of the server's port away and
@@ -47,8 +49,6 @@ const PACKAGE = "org.obop.app.test";
 const ACTIVITY = `${PACKAGE}/.MainActivity`;
 /** The local port the DevTools socket of the WebView is forwarded to. */
 const DEVTOOLS_PORT = 9333;
-/** The script's own responder for E1: something that answers, and is no obop server. */
-const RESPONDER_PORT = 18181;
 /** Another origin, for E7. The site need not answer. */
 const FOREIGN = "https://example.com/";
 const DUMP_FILE = "/sdcard/obop-host-ui.xml";
@@ -63,7 +63,7 @@ function stop(message) {
 // ---- options ----------------------------------------------------------------------------------
 
 const args = process.argv.slice(2);
-const OPTIONS = new Set(["--serial", "--server", "--account", "--shots"]);
+const OPTIONS = new Set(["--serial", "--server", "--account", "--shots", "--responder"]);
 for (let i = 0; i < args.length; i += 2) {
   if (!OPTIONS.has(args[i])) stop(`unknown option ${args[i]}`);
   if (args[i + 1] === undefined || args[i + 1].startsWith("--")) stop(`${args[i]} takes a value`);
@@ -84,6 +84,14 @@ if (!serverMatch) {
 const serverPort = Number(serverMatch[1]);
 const serverHost = `localhost:${serverPort}`;
 const shots = option("--shots");
+/** The script's own responder for E1: something that answers, and is no obop server. */
+const RESPONDER_PORT = Number(option("--responder") ?? 18181);
+if (!Number.isInteger(RESPONDER_PORT) || RESPONDER_PORT < 1024 || RESPONDER_PORT > 65535) {
+  stop("--responder must be a port from 1024 to 65535");
+}
+if (RESPONDER_PORT === serverPort) {
+  stop(`--responder ${RESPONDER_PORT} is the port of the instance: give another one`);
+}
 
 const sdk = process.env.ANDROID_HOME ?? process.env.ANDROID_SDK_ROOT;
 if (!sdk) stop("ANDROID_HOME is not set");
