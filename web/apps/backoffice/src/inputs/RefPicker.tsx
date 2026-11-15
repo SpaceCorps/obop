@@ -119,6 +119,13 @@ function archivedMatches(
   ).length;
 }
 
+/** The text field that names a record of `model` (its title), if one does. */
+function textTitleOf(model: ModelMeta): string | undefined {
+  return titleFieldsOf(model)
+    .map((n) => model.fields.find((f) => f.name === n))
+    .find((f) => f?.kind === "text" && !f.computed && !f.sequence)?.name;
+}
+
 export function RefPicker(p: RefPickerProps) {
   const { field, value, onChange, readOnly } = p;
   const d = useData();
@@ -238,11 +245,21 @@ export function RefPicker(p: RefPickerProps) {
     [hasActive, target, serverMode, rows, q, ctx, d.lang],
   );
 
+  const titleFields = target
+    ? titleFieldsOf(target).map((n) => target.fields.find((f) => f.name === n))
+    : [];
+  // A record named by a ref (a vendor is its contact): the typed name is the name of that record,
+  // made or found first, never another text field of this one ("Our customer number").
+  const viaRef = (() => {
+    const f = titleFields[0];
+    if (!target || f?.kind !== "ref" || !f.to) return undefined;
+    const other = d.models.get(f.to)?.model;
+    const name = other ? textTitleOf(other) : undefined;
+    return other?.can_create && name ? { field: f.name, to: f.to, name } : undefined;
+  })();
   const labelName = target
-    ? (titleFieldsOf(target)
-        .map((n) => target.fields.find((f) => f.name === n))
-        .find((f) => f?.kind === "text" && !f.computed && !f.sequence)?.name ??
-      labelField(target)?.name)
+    ? (titleFields.find((f) => f?.kind === "text" && !f.computed && !f.sequence)?.name ??
+      (titleFields[0]?.kind === "ref" ? undefined : labelField(target)?.name))
     : undefined;
   const canCreate = !!target?.can_create && !ACTION_ONLY_MODELS.has(to) && !readOnly;
   const exact = options.some((o) => fold(o.title) === fold(q));
@@ -250,10 +267,10 @@ export function RefPicker(p: RefPickerProps) {
     const list: Item[] = [];
     if (!field.required && !q) list.push({ kind: "none" });
     for (const o of options) list.push({ kind: "rec", ...o });
-    if (canCreate && q && labelName && !exact) list.push({ kind: "create", text: q });
+    if (canCreate && q && (labelName || viaRef) && !exact) list.push({ kind: "create", text: q });
     if (canCreate) list.push({ kind: "edit", text: q });
     return list;
-  }, [options, q, canCreate, labelName, exact, field.required]);
+  }, [options, q, canCreate, labelName, viaRef, exact, field.required]);
 
   // One highlighted option: the current value when it is listed, else the first record.
   useEffect(() => {
@@ -324,10 +341,34 @@ export function RefPicker(p: RefPickerProps) {
     return out;
   }
 
+  /** The record a ref-named model points at: the one of that exact name, else a new one. */
+  async function refFor(text: string): Promise<string | null> {
+    if (!viaRef) return null;
+    const found = await search(d.token, viaRef.to, {
+      filter: [{ field: viaRef.name, op: "eq", value: text }],
+      limit: 2,
+    });
+    if (!("error" in found) && found.rows.length === 1) return found.rows[0]!.id;
+    const made = await d.run(`${viaRef.to}.create`, { [viaRef.name]: text });
+    if (made.kind === "ok") return String((made.value as Row).id ?? "") || null;
+    if (made.kind === "error") d.notify(serverMessage(made.message), "error");
+    return null;
+  }
+
   async function quickCreate(text: string) {
-    if (!labelName || making) return;
+    if ((!labelName && !viaRef) || making) return;
     setMaking(true);
-    const r = await d.run(`${to}.create`, startValues(text));
+    const start = startValues(text);
+    if (viaRef) {
+      const rid = await refFor(text);
+      if (!rid) {
+        setMaking(false);
+        openStacked(text);
+        return;
+      }
+      start[viaRef.field] = rid;
+    }
+    const r = await d.run(`${to}.create`, start);
     setMaking(false);
     if (r.kind === "ok") {
       const id = String((r.value as Row).id ?? "");
@@ -342,7 +383,8 @@ export function RefPicker(p: RefPickerProps) {
     } else {
       // Something else is required: the full form takes it from here.
       d.notify(serverMessage(r.message), "error");
-      openStacked(text);
+      setStacked(start);
+      setOpen(false);
     }
   }
 
