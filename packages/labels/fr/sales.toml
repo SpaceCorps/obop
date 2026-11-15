@@ -7,8 +7,12 @@ name = "Commande client"
 description = "Un devis ou une commande confirmée pour un client"
 
 [labels.fr.model.sale_order.field.party_id]
-label = "Tiers"
-description = "Identifiant du tiers client"
+label = "Client"
+description = "Le client du devis ou de la commande"
+
+[labels.fr.model.sale_order.field.lead_id]
+label = "Opportunité"
+description = "L’opportunité CRM pour laquelle le devis a été créé ; son client si aucun n’est indiqué"
 
 [labels.fr.model.sale_order.field.state]
 label = "Statut"

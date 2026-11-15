@@ -1,2 +1,18 @@
 # English names and plurals of the built-in CRM module (D52, D95): [labels.en.model.<model>] name = "...",
 # plural = "...". The humanised names (Lead, Leads) are the business names, so nothing is added yet.
+
+[labels.en.model.lead]
+name = "Opportunity"
+plural = "Opportunities"
+
+[labels.en.model.lead.field.party_id]
+label = "Customer"
+
+[labels.en.model.lead.field.contact_name]
+label = "Contact"
+
+[labels.en.model.lead.field.expected_revenue_minor]
+label = "Expected revenue"
+
+[labels.en.model.lead.field.expected_close]
+label = "Expected closing"

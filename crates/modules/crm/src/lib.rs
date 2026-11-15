@@ -1,7 +1,7 @@
 //! `crm`: leads and opportunities.
 
 use obop_commands::{Dispatcher, Store, Value};
-use obop_registry::ui::ReportUi;
+use obop_registry::ui::{ReportUi, UiSection};
 use obop_registry::{CommandDef, FieldDef as F, FieldKind, ModelDef, ModelUi, Module, ModuleMeta};
 use obop_types::DataClass::*;
 
@@ -26,6 +26,14 @@ pub fn module() -> Module {
                     )
                     .required(),
                     F::new(
+                        "party_id",
+                        "The customer: the contact record that a quotation made from the lead is for",
+                        None,
+                        false,
+                        "crm.user",
+                    )
+                    .reference("party"),
+                    F::new(
                         "contact_name",
                         "Name of the contact person",
                         PublicDirectory,
@@ -48,6 +56,22 @@ pub fn module() -> Module {
                         "crm.user",
                     )
                     .kind(FieldKind::Money),
+                    F::new(
+                        "expected_close",
+                        "Day the deal is expected to close (YYYY-MM-DD)",
+                        None,
+                        false,
+                        "crm.user",
+                    )
+                    .kind(FieldKind::Date),
+                    F::new(
+                        "lost_reason",
+                        "Why the opportunity was lost",
+                        None,
+                        false,
+                        "crm.user",
+                    )
+                    .kind(FieldKind::LongText),
                     F::new(
                         "stage",
                         "Pipeline stage: new, qualified, won or lost",
@@ -79,6 +103,7 @@ pub fn module() -> Module {
                         .transition("stage", Option::None, "lost")
                         .danger()
                         .confirm("Mark this opportunity as lost?")
+                        .needs(&["lost_reason"])
                         .done("Marked as lost"),
                     CommandDef::new("reopen", "Move the lead back to the new stage", "crm.user")
                         .transition("stage", Option::None, "new"),
@@ -90,14 +115,17 @@ pub fn module() -> Module {
                 subtitle: Some("{contact_name}".into()),
                 list: vec![
                     "title".into(),
+                    "party_id".into(),
                     "contact_name".into(),
                     "expected_revenue_minor".into(),
+                    "expected_close".into(),
                     "stage".into(),
                 ],
                 card: vec![
                     "title".into(),
                     "contact_name".into(),
                     "expected_revenue_minor".into(),
+                    "expected_close".into(),
                 ],
                 card_sum: Some("expected_revenue_minor".into()),
                 quick_create: vec![
@@ -105,6 +133,12 @@ pub fn module() -> Module {
                     "contact_name".into(),
                     "expected_revenue_minor".into(),
                 ],
+                sections: vec![UiSection {
+                    label: "Why it was lost".into(),
+                    fields: vec!["lost_reason".into()],
+                    collapsed: false,
+                    show_in: vec!["lost".into()],
+                }],
                 default_view: Some("kanban".into()),
                 report: Some(ReportUi {
                     rows: Some("stage".into()),
@@ -236,11 +270,30 @@ mod tests {
                 Value::map([("id", Value::text(&id)), ("stage", Value::text(stage))]),
             )
         };
-        // Kanban moves: new -> qualified -> won -> new (reopen) -> lost.
-        for stage in ["qualified", "won", "new", "lost"] {
+        // Kanban moves: new -> qualified -> won -> new (reopen).
+        for stage in ["qualified", "won", "new"] {
             set(stage).unwrap_or_else(|e| panic!("{stage}: {e:?}"));
             assert_eq!(s.field("lead", &id, "stage"), Some(Value::text(stage)));
         }
+        // Losing a deal needs a reason (`needs = ["lost_reason"]`): refused without one, and
+        // accepted once the record has it.
+        let e = set("lost");
+        assert!(
+            matches!(&e, Err(obop_commands::CallError::Handler(m)) if m.contains("needs lost_reason")),
+            "{e:?}"
+        );
+        call(
+            &d,
+            &u,
+            "lead.update",
+            Value::map([
+                ("id", Value::text(&id)),
+                ("lost_reason", Value::text("Chose a cheaper offer")),
+            ]),
+        )
+        .unwrap();
+        set("lost").unwrap();
+        assert_eq!(s.field("lead", &id, "stage"), Some(Value::text("lost")));
         // qualified is only reachable from new.
         let e = set("qualified");
         assert!(

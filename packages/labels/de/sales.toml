@@ -7,8 +7,12 @@ name = "Verkaufsauftrag"
 description = "Ein Angebot oder bestätigter Auftrag für einen Kunden"
 
 [labels.de.model.sale_order.field.party_id]
-label = "Geschäftspartner"
-description = "ID des Geschäftspartners (Kunde)"
+label = "Kunde"
+description = "Der Kunde des Angebots oder Auftrags"
+
+[labels.de.model.sale_order.field.lead_id]
+label = "Verkaufschance"
+description = "Die CRM-Verkaufschance, für die das Angebot erstellt wurde; ihr Kunde, wenn keiner angegeben ist"
 
 [labels.de.model.sale_order.field.state]
 label = "Status"

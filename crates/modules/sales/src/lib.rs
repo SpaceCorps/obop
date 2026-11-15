@@ -34,7 +34,16 @@ pub fn module() -> Module {
                         false,
                         "sales.user",
                     )
-                    .reference("party"),
+                    .reference("party")
+                    .fill_from("lead_id.party_id"),
+                    F::new(
+                        "lead_id",
+                        "The CRM opportunity the quotation was made for; its customer unless one is given",
+                        NoClass,
+                        false,
+                        "sales.user",
+                    )
+                    .reference("lead"),
                     F::new(
                         "state",
                         "Lifecycle: draft, confirmed or cancelled",
@@ -220,7 +229,7 @@ pub fn module() -> Module {
             &["sales"],
             &["quotations", "orders"],
             "sales",
-            &["base", "product"],
+            &["base", "product", "crm"],
         )
         .home("sale_order"),
     };
@@ -592,5 +601,56 @@ mod tests {
             Value::map([("id", Value::text(&line)), ("quantity", Value::Int(3))]),
         )
         .unwrap();
+    }
+
+    /// A quotation made from a CRM opportunity takes the opportunity's customer, unless one is
+    /// given (UI plan 3.3: "New quotation" on a lead is `sale_order.create` with `lead_id`).
+    #[test]
+    fn a_quotation_from_an_opportunity_takes_its_customer() {
+        let (d, s) = (Dispatcher::new(), Store::new());
+        register(&d, &s);
+        crm::register(&d, &s);
+        let u = Principal::user("u", &["sales.user", "crm.user"]);
+        let call = |cmd: &str, i: Value| d.call(Surface::Rest, &u, &mut Vault::new(), cmd, &i);
+        let id_of = |r: Result<obop_commands::Response, CallError>| match r.unwrap().value {
+            Value::Map(m) => match m["id"].clone() {
+                Value::Text(id) => id,
+                other => panic!("{other:?}"),
+            },
+            other => panic!("{other:?}"),
+        };
+        let acme = s
+            .insert("party", [("name".to_string(), Value::text("Acme"))].into())
+            .unwrap();
+        let other = s
+            .insert("party", [("name".to_string(), Value::text("Other"))].into())
+            .unwrap();
+        let lead = id_of(call(
+            "lead.create",
+            Value::map([
+                ("title", Value::text("Tools for 25 crews")),
+                ("party_id", Value::text(&acme)),
+            ]),
+        ));
+        let quote = id_of(call(
+            "sale_order.create",
+            Value::map([("lead_id", Value::text(&lead))]),
+        ));
+        assert_eq!(
+            s.field("sale_order", &quote, "party_id"),
+            Some(Value::text(&acme))
+        );
+        // A customer given on the quotation wins.
+        let given = id_of(call(
+            "sale_order.create",
+            Value::map([
+                ("lead_id", Value::text(&lead)),
+                ("party_id", Value::text(&other)),
+            ]),
+        ));
+        assert_eq!(
+            s.field("sale_order", &given, "party_id"),
+            Some(Value::text(&other))
+        );
     }
 }

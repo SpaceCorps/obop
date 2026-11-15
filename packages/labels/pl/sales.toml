@@ -7,8 +7,12 @@ name = "Zamówienie sprzedaży"
 description = "Oferta lub potwierdzone zamówienie dla klienta"
 
 [labels.pl.model.sale_order.field.party_id]
-label = "Kontrahent"
-description = "Identyfikator kontrahenta będącego klientem"
+label = "Klient"
+description = "Klient oferty lub zamówienia"
+
+[labels.pl.model.sale_order.field.lead_id]
+label = "Szansa sprzedaży"
+description = "Szansa sprzedaży z CRM, dla której utworzono ofertę; jej klient, jeśli nie podano innego"
 
 [labels.pl.model.sale_order.field.state]
 label = "Status"

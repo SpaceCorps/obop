@@ -22,6 +22,18 @@ description = "Kontaktpersonens e-postadress"
 label = "Förväntade intäkter"
 description = "Förväntade intäkter i valutans minsta enhet"
 
+[labels.sv.model.lead.field.party_id]
+label = "Kund"
+description = "Kunden: kontakten som en offert från leadet gäller"
+
+[labels.sv.model.lead.field.expected_close]
+label = "Förväntad avslutsdag"
+description = "Dag då affären väntas avslutas (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.lead.field.lost_reason]
+label = "Orsak till förlust"
+description = "Varför affärsmöjligheten förlorades"
+
 [labels.sv.model.lead.field.stage]
 label = "Fas"
 description = "Fas i säljtratten: ny, kvalificerad, vunnen eller förlorad"
