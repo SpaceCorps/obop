@@ -1,48 +1,105 @@
 // The record panel: the state of one record's form and the commands it runs. What it draws is in
-// RecordHeader.tsx (title, status, actions), RelatedChips.tsx and FormBody.tsx (F2 of the UI plan);
-// what an app adds to it is registered in extensions.ts.
-import { useEffect, useRef, useState } from "react";
-import { inSentence, t, useFocusTrap } from "@obop/ui";
-import type { FieldMeta, ModelMeta, Row } from "./api.ts";
+// RecordHeader.tsx (title, summary, status, actions), RelatedChips.tsx and FormBody.tsx (F2 of the
+// UI plan); what an app adds to it is registered in extensions.ts. Lane L5 (plan 2.6): the header
+// from presentation.ts, actions that save first and ask what they need, sections, the full page,
+// the pager and the trail, locks and read-only values.
+import { useEffect, useMemo, useRef, useState } from "react";
+import { getCurrency, inSentence, t, useFocusTrap } from "@obop/ui";
+import type { Command, FieldMeta, ModelMeta, Row } from "./api.ts";
+import { ActionDialog } from "./ActionDialog.tsx";
 import { useData } from "./data.tsx";
 import { fromEdit, toEdit, validate, type Edit } from "./edit.ts";
 import { recordExtensionOf } from "./extensions.ts";
 import { FormBody } from "./FormBody.tsx";
 import { isMasked, isState, optionLabel, rowCurrency } from "./format.ts";
 import { actionTitle, fieldTitle } from "./labels.ts";
+import { extendTrail, trailStore } from "./lastRecord.ts";
 import { serverMessage } from "./serverMessage.ts";
 import { DeleteDialog } from "./DeleteDialog.tsx";
 import { PHONE_QUERY, SHEET_QUERY, useMedia, useScrollLock } from "./media.ts";
+import {
+  indexModels,
+  newDefaults,
+  nextActions,
+  subtitleOf,
+  titleOf,
+  type NextActions,
+  type PresentCtx,
+} from "./presentation.ts";
+import {
+  actionLabelFor,
+  avatarField,
+  copyValues,
+  createdRefs,
+  deleteBlocked,
+  keyFigures,
+  lockOf,
+  sectionsOf,
+  serverSet,
+} from "./recordLayout.ts";
 import { RecordHeader } from "./RecordHeader.tsx";
 import { RelatedChips } from "./RelatedChips.tsx";
 import { nav } from "./route.ts";
 import "./registrations.ts";
-import { hiddenForRecord, initialOption, isGoverned, moveRecord } from "./workflow.ts";
+import { initialOption, isGoverned, moveRecord } from "./workflow.ts";
 
 type Props = {
   model: ModelMeta;
   fields: FieldMeta[];
   row: Row | null;
+  /** The values a new record starts with (the page's context); presentation's defaults fill the rest. */
   defaults: Record<string, unknown>;
   withheld: string[];
   title: string;
   onClose: () => void;
   onSaved: (id: string) => void;
+  /** The ids of the list the record was opened from, in its order, for the pager. */
+  siblings?: readonly string[];
+  /** Open another record of the same model (the pager). */
+  onOpen?: (id: string) => void;
+  /** Whether the record fills the page (`&full=1`), and how to switch. */
+  full?: boolean;
+  onFull?: (on: boolean) => void;
+  /** Open a new record with these values (Duplicate). */
+  onDuplicate?: (values: Record<string, unknown>) => void;
 };
 
 const without = <V,>(m: Record<string, V>, name: string): Record<string, V> =>
   Object.fromEntries(Object.entries(m).filter(([k]) => k !== name));
 
-/** The record opens in a floating side panel, so the list stays in view (docs/spec/ux.md 4.1). */
+const NO_ACTIONS: NextActions = { secondary: [], danger: [] };
+
+/**
+ * A record link whose record is gone or hidden from the person says so and drops the id, instead
+ * of showing the list without a word (B17). `found` is what `useRecord` answered: null when the
+ * server did not return the record.
+ */
+export function useMissingRecord(found: Row | null | undefined, id: string, close: () => void) {
+  const d = useData();
+  const closeRef = useRef(close);
+  closeRef.current = close;
+  useEffect(() => {
+    if (!id || id === "new" || found !== null) return;
+    d.notify(t("This record no longer exists, or you may not see it"), "error");
+    closeRef.current();
+  }, [found, id]);
+}
+
+/** The record opens in a floating side panel, or as a page (docs/spec/ux.md 4.1). */
 export function RecordPanel({
   model,
   fields,
   row,
-  defaults,
+  defaults: given,
   withheld,
   title,
   onClose,
   onSaved,
+  siblings,
+  onOpen,
+  full = false,
+  onFull,
+  onDuplicate,
 }: Props) {
   const d = useData();
   const creating = row === null;
@@ -59,6 +116,10 @@ export function RecordPanel({
   };
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // An action waiting for its question to be answered (ActionDialog).
+  const [asking, setAsking] = useState<Command | null>(null);
+  // What the last action made, to open it ("Draft invoice created · Open").
+  const [made, setMade] = useState<{ field: FieldMeta; id: string }[]>([]);
   const panel = useRef<HTMLElement>(null);
   // Up to 1024 px the record is a sheet over the list, full-screen on a phone (D2).
   const sheet = useMedia(SHEET_QUERY);
@@ -69,19 +130,30 @@ export function RecordPanel({
   const canEdit = creating ? model.can_create : model.can_update;
   // What the model's registrations add (extensions.ts): the Sign app's signing links.
   const ext = recordExtensionOf(model.name);
-  // An action that is not for this record at all has no button (a Document request is not marked
-  // signed by hand); `notForRecord` greys out the ones that are only wrong for now.
-  const shownActions = row
-    ? model.actions.filter((a) => !hiddenForRecord(model, a, row))
-    : model.actions;
-  // On a phone Delete sits at the end of the form instead, so it no longer holds the action row
-  // open, except where a registration adds a button to the row (the signing link of a request).
-  const actionRow =
-    model.actions.length > 0 || (model.can_delete && (!phone || ext.actions.length > 0));
+  const moduleId = d.models.get(model.name)?.module.id ?? "";
+  const index = useMemo(() => indexModels(d.modules), [d.modules]);
+  const ctx: PresentCtx = {
+    refText: d.refText,
+    rowOf: (m, id) => d.store.cached(m)?.find((r) => r.id === id),
+    modelOf: (m) => index.get(m),
+    moduleId,
+    instanceCurrency: getCurrency(),
+  };
+
+  // A new record starts with the page's values over the presentation's defaults (today for a
+  // required date, the instance's currency, the hints of the package).
+  const defaults = useMemo(
+    () =>
+      creating
+        ? newDefaults({ ...model, fields }, { instanceCurrency: getCurrency(), route: given })
+        : given,
+    // The panel is keyed by the record and its defaults: they are read once.
+    [],
+  );
 
   // A governed field (D48) starts at its first option and then moves only through actions.
   const governed = (f: FieldMeta) => isGoverned(model, f);
-  const currency = rowCurrency(row ?? (defaults as Record<string, unknown>));
+  const currency = rowCurrency(row ?? defaults);
   const baseline = (f: FieldMeta): Edit =>
     creating && governed(f)
       ? initialOption(f)
@@ -92,6 +164,63 @@ export function RecordPanel({
   const dirty = fields.some(changed);
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
+
+  // A frozen record (meta `guard`) keeps only its mutable fields; the server says the same.
+  const lock = lockOf(model, row);
+  const fixed = (f: FieldMeta) => !canEdit || serverSet(f) || (!!lock && !lock.mutable.has(f.name));
+  const editable = fields.some((f) => !fixed(f) && !governed(f) && f !== statusField);
+  const writable = (f: FieldMeta) => !fixed(f) && !masked(f);
+
+  const label = row ? titleOf(model, row, ctx) : "";
+  const figures = keyFigures(model, fields, row);
+  const shownInHeader = new Set(figures.filter((f) => f.computed).map((f) => f.name));
+  const bodyFields = fields.filter(
+    (f) => f !== statusField && !(creating && serverSet(f)) && !shownInHeader.has(f.name),
+  );
+  const sections = sectionsOf(model, bodyFields, {
+    creating,
+    row,
+    state: statusField ? String(value(statusField)) : undefined,
+    filled: (f) => {
+      const v = value(f);
+      return v !== "" && v !== false;
+    },
+  });
+  const chips = row ? subtitleOf(model, row, ctx).split(" · ").filter(Boolean).slice(0, 3) : [];
+  const actions = row ? nextActions(model, row) : NO_ACTIONS;
+  const mayDelete = !!row && model.can_delete && !deleteBlocked(model, row);
+
+  // The trail of records: a link followed inside this panel makes the next panel a step deeper.
+  const key = row ? `${model.name}:${row.id}` : "";
+  const [crumbs, setCrumbs] = useState(trailStore.trail);
+  useEffect(() => {
+    if (!row) return;
+    const href = d.linkTo(model.name, { id: row.id }) ?? "";
+    trailStore.trail = extendTrail(trailStore.trail, { key, label, href }, trailStore.from);
+    trailStore.from = null;
+    setCrumbs(trailStore.trail);
+    // The label is read again when it changes (a number assigned); the trail is made once.
+  }, [key]);
+  useEffect(() => {
+    if (!row || !label) return;
+    trailStore.trail = trailStore.trail.map((c) => (c.key === key ? { ...c, label } : c));
+    setCrumbs(trailStore.trail);
+  }, [label]);
+  const shownCrumbs = crumbs.length > 1 && crumbs[crumbs.length - 1]?.key === key ? crumbs : [];
+
+  // The pager: the neighbours in the list's order.
+  const at = row && siblings ? siblings.indexOf(row.id) : -1;
+  const pager =
+    at >= 0 && siblings && siblings.length > 1 && onOpen
+      ? {
+          index: at,
+          total: siblings.length,
+          prev: at > 0 ? () => onOpen(siblings[at - 1]!) : undefined,
+          next: at < siblings.length - 1 ? () => onOpen(siblings[at + 1]!) : undefined,
+        }
+      : undefined;
+  const pagerRef = useRef(pager);
+  pagerRef.current = pager;
 
   // Leaving with unsaved edits asks first (hash navigation, tab close).
   useEffect(() => {
@@ -122,6 +251,12 @@ export function RecordPanel({
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
         if (dirtyRef.current || creating) saveRef.current();
+      } else if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+        const go = e.key === "ArrowUp" ? pagerRef.current?.prev : pagerRef.current?.next;
+        if (go) {
+          e.preventDefault();
+          go();
+        }
       } else if (e.key === "Escape" && !e.defaultPrevented && !document.querySelector(".overlay")) {
         onClose();
       }
@@ -143,7 +278,7 @@ export function RecordPanel({
   /** Save or create; the id of the saved record, or null when nothing was saved. */
   async function save(): Promise<string | null> {
     setError(null);
-    const editable = fields.filter((f) => !masked(f));
+    const editable = fields.filter(writable);
     const errs = validate(
       editable,
       value,
@@ -162,8 +297,6 @@ export function RecordPanel({
     for (const f of editable) {
       const r = fromEdit(f, value(f), currency);
       if ("error" in r) continue;
-      // Computed values and numbers are the server's: they are shown, never sent.
-      if (f.computed || f.sequence) continue;
       if (creating) {
         if (governed(f)) continue; // the server starts it at the first option
         if (r.value !== null && (f.kind !== "bool" || r.value === true || f.name in draft))
@@ -204,10 +337,7 @@ export function RecordPanel({
     const out = await moveRecord(d.run, model, statusField, row, s, title);
     setBusy(false);
     if (out.kind === "ok") {
-      setDraft((x) => {
-        const { [statusField.name]: _, ...rest } = x;
-        return rest;
-      });
+      setDraft((x) => without(x, statusField.name));
       d.notify(
         t("{field}: {values}", {
           field: fieldTitle(statusField),
@@ -222,16 +352,45 @@ export function RecordPanel({
     }
   }
 
-  async function act(id: string, needsApproval: boolean) {
+  const needsOf = (a: Command): FieldMeta[] =>
+    (a.ui?.needs ?? [])
+      .map((n) => model.fields.find((f) => f.name === n))
+      .filter((f): f is FieldMeta => !!f);
+
+  /** An action button was pressed: ask first when it needs words or a confirm, else run it. */
+  function requestAction(a: Command) {
+    if (!row || busy) return;
+    if (needsOf(a).length || a.ui?.confirm || actions.danger.includes(a)) setAsking(a);
+    else void runAction(a, {});
+  }
+
+  /** Run an action; unsaved input is saved first, so nothing typed is lost (B4). */
+  async function runAction(a: Command, extra: Record<string, unknown>) {
     if (!row) return;
+    setAsking(null);
+    if (dirtyRef.current && (await save()) === null) return;
     setBusy(true);
     setError(null);
-    const r = await d.run(id, { id: row.id });
+    setMade([]);
+    const r = await d.run(a.id, { id: row.id, ...extra });
     setBusy(false);
-    const act = model.actions.find((a) => a.id === id);
-    const name = act ? actionTitle(act) : actionTitle({ id });
-    if (r.kind === "ok") d.notify(t("{name} done", { name }));
-    else if (r.kind === "approval")
+    const name = actionTitle(a);
+    if (r.kind === "ok") {
+      const after = (r.value ?? {}) as Record<string, unknown>;
+      const f = a.field ? model.fields.find((x) => x.name === a.field) : undefined;
+      const now = { ...row, ...after } as Row;
+      d.notify(
+        a.ui?.done ??
+          (f && a.to
+            ? t("{model} {name} is now {state}", {
+                model: title,
+                name: titleOf(model, now, ctx),
+                state: inSentence(optionLabel(a.to, f)),
+              })
+            : t("{name} done", { name })),
+      );
+      setMade(createdRefs(model, row, after).map((x) => ({ field: x, id: String(after[x.name]) })));
+    } else if (r.kind === "approval")
       d.notify(
         t(
           "Approval needed: “{name}” was proposed (plan {plan}). Nothing changes until a human approves it.",
@@ -243,7 +402,7 @@ export function RecordPanel({
       const message = serverMessage(r.message);
       setError({ raw: r.message });
       d.notify(
-        needsApproval ? t("{name} was refused: {reason}", { name, reason: message }) : message,
+        a.needs_approval ? t("{name} was refused: {reason}", { name, reason: message }) : message,
         "error",
       );
     }
@@ -251,6 +410,7 @@ export function RecordPanel({
 
   async function moveField(f: FieldMeta, to: string) {
     if (!row) return;
+    if (dirtyRef.current && (await save()) === null) return;
     setBusy(true);
     setError(null);
     const out = await moveRecord(d.run, model, f, row, to, title);
@@ -273,19 +433,23 @@ export function RecordPanel({
     <>
       {sheet && <div className="record-scrim" aria-hidden="true" onClick={onClose} />}
       <aside
-        className={`record panel${sheet ? " sheet" : ""}${phone ? " phone" : ""}`}
+        className={`record panel${sheet ? " sheet" : ""}${phone ? " phone" : ""}${full ? " full" : ""}`}
         aria-label={t("{model} record", { model: title })}
         role={sheet ? "dialog" : undefined}
         aria-modal={sheet || undefined}
         ref={panel}
         tabIndex={-1}
+        onClickCapture={(e) => {
+          // A link to another record followed from here continues the trail.
+          if (row && (e.target as HTMLElement).closest("a[href^='#/']")) trailStore.from = key;
+        }}
       >
         <RecordHeader
           model={model}
           fields={fields}
           row={row}
           title={title}
-          label={row ? d.recordLabel(model.name, row) : ""}
+          label={label}
           phone={phone}
           busy={busy}
           statusField={statusField}
@@ -295,14 +459,45 @@ export function RecordPanel({
             if (statusField) setDraft({ ...draft, [statusField.name]: s });
           }}
           setStatus={(s) => void setStatus(s)}
-          act={(id, needsApproval) => void act(id, needsApproval)}
-          actionRow={actionRow}
-          shownActions={shownActions}
+          actions={actions}
+          runAction={requestAction}
           extensions={ext}
-          onDelete={() => setDeleting(true)}
+          onDelete={mayDelete ? () => setDeleting(true) : undefined}
+          onDuplicate={
+            row && onDuplicate && model.can_create
+              ? () => onDuplicate(copyValues(model, fields, row, governed))
+              : undefined
+          }
           onClose={onClose}
           between={!creating && <RelatedChips model={model} id={row.id} />}
+          figures={figures}
+          currency={currency}
+          chips={chips}
+          avatar={avatarField(fields)}
+          crumbs={shownCrumbs}
+          pager={pager}
+          full={full}
+          onFull={onFull}
+          lock={lock}
         />
+        {made.length > 0 && (
+          <p className="rec-made" role="status">
+            {made.map(({ field: f, id }) => {
+              const href = f.to ? d.linkTo(f.to, { id }) : null;
+              return (
+                <span key={f.name}>
+                  {t("{name} created", { name: fieldTitle(f) })}
+                  {href && (
+                    <>
+                      {" · "}
+                      <a href={href}>{t("Open")}</a>
+                    </>
+                  )}
+                </span>
+              );
+            })}
+          </p>
+        )}
         {!creating &&
           ext.panels.map((Panel, i) => (
             <Panel key={i} model={model} fields={fields} row={row} busy={busy} />
@@ -326,6 +521,9 @@ export function RecordPanel({
           masked={masked}
           changed={changed}
           governed={governed}
+          sections={sections}
+          fixed={fixed}
+          editable={editable}
           onEdit={(name, v) => setDraft({ ...draft, [name]: v })}
           clearField={clearField}
           onMove={(f, to) => void moveField(f, to)}
@@ -338,14 +536,33 @@ export function RecordPanel({
               setError(null);
             } else onClose();
           }}
-          onDelete={() => setDeleting(true)}
           save={save}
         />
+        {asking && (
+          <ActionDialog
+            action={asking}
+            label={actionLabelFor(asking, inSentence(title))}
+            needs={needsOf(asking)}
+            question={
+              asking.ui?.confirm ??
+              (actions.danger.includes(asking)
+                ? t("{action} “{name}”?", {
+                    action: actionLabelFor(asking, inSentence(title)),
+                    name: label,
+                  })
+                : undefined)
+            }
+            danger={actions.danger.includes(asking)}
+            currency={currency}
+            onCancel={() => setAsking(null)}
+            onConfirm={(values) => void runAction(asking, values)}
+          />
+        )}
         {deleting && row && (
           <DeleteDialog
             model={model}
             noun={inSentence(title)}
-            records={[{ id: row.id, label: d.recordLabel(model.name, row) }]}
+            records={[{ id: row.id, label: label || d.recordLabel(model.name, row) }]}
             onClose={() => setDeleting(false)}
             onDone={() => onClose()}
           />

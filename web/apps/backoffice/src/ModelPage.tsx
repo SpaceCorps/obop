@@ -19,8 +19,10 @@ import {
   type Cond,
   type ViewState,
 } from "./query.ts";
-import { RecordPanel } from "./RecordPanel.tsx";
-import type { Go, Route } from "./route.ts";
+import { RecordPanel, useMissingRecord } from "./RecordPanel.tsx";
+import { prefersFullPage } from "./recordLayout.ts";
+import { indexModels } from "./presentation.ts";
+import { isFull, type Go, type Route } from "./route.ts";
 import { isWithheldError, onServer, toServer } from "./serverQuery.ts";
 import { EmptyState, Skeleton } from "./ui.tsx";
 import { useRecord, useServerRows } from "./useServer.ts";
@@ -159,7 +161,10 @@ export function ModelPage({
 
   const base = useMemo(() => ({ app: route.app, model: route.model }), [route.app, route.model]);
   const put = useCallback(
-    (patch: { view?: string; id?: string; st?: string; page?: string }, replace = false) =>
+    (
+      patch: { view?: string; id?: string; st?: string; page?: string; full?: string },
+      replace = false,
+    ) =>
       go(
         {
           ...base,
@@ -167,10 +172,12 @@ export function ModelPage({
           id: patch.id ?? route.id,
           st: patch.st ?? route.st,
           page: patch.page ?? route.page,
+          // The record as a page (`&full=1`) stays while a record is open; closing it ends it.
+          full: patch.full ?? ((patch.id ?? route.id) ? route.full : ""),
         },
         { replace },
       ),
-    [go, base, route.view, route.id, route.st, route.page],
+    [go, base, route.view, route.id, route.st, route.page, route.full],
   );
   // A new search starts on the first page.
   const setState = useCallback((s: ViewState) => put({ st: encodeState(s), page: "" }), [put]);
@@ -232,15 +239,18 @@ export function ModelPage({
     put,
   ]);
 
-  const open = (id: string) => put({ id });
-  const close = useCallback(() => put({ id: "" }), [put]);
+  // A record with lines or many fields opens as a page (record form, plan 2.6).
+  const asPage = useMemo(() => prefersFullPage(model, indexModels(d.modules)), [model, d.modules]);
+  const open = (id: string) => put({ id, full: asPage ? "1" : "" });
+  const close = useCallback(() => put({ id: "", full: "" }), [put]);
   const openNew = (defaults: Record<string, unknown> = {}) => {
     if (onNew) return onNew();
     setNewDefaults(defaults);
-    put({ id: "new" });
+    put({ id: "new", full: asPage ? "1" : "" });
   };
   const found = useRecord(model.name, route.id, serverMode || aggMode ? srv.rows : rows);
   const selected = route.id === "new" ? "new" : found;
+  useMissingRecord(found, route.id, () => put({ id: "", full: "" }, true));
 
   const governed = useMemo(() => governedNames(model), [model]);
   const approval = (what: "change" | "create", planId: string) => {
@@ -486,6 +496,11 @@ export function ModelPage({
           withheld={denied}
           title={title}
           onClose={close}
+          siblings={shown.map((r) => r.id)}
+          onOpen={(id) => put({ id })}
+          full={isFull(route)}
+          onFull={(on) => put({ full: on ? "1" : "" }, true)}
+          onDuplicate={(values) => openNew(values)}
           onSaved={(id) =>
             // A new record sits at the end of an unsorted list: show the page it is on.
             route.id === "new" && paging && !state.sort

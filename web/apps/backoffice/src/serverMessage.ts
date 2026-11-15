@@ -116,7 +116,11 @@ const STORAGE_FAULTS: Record<string, () => string> = {
 
 type Rule = [RegExp, (m: RegExpExecArray) => string];
 
-const RULES: Rule[] = [
+/**
+ * The rules that name a field as `model.field`: they are applied in English too, so a refusal reads
+ * "Customer is required" and not "sale_order.customer_id is required" (B12).
+ */
+const FIELD_RULES: Rule[] = [
   [
     /^(\w+)\.(\w+) is required and must be set before (\w+) can change to "([^"]*)"$/,
     (m) =>
@@ -203,6 +207,9 @@ const RULES: Rule[] = [
         to: optionLabel(m[4]!, named(m)),
       }),
   ],
+];
+
+const RULES: Rule[] = [
   [
     /^unknown field (\w+)\.(\w+)$/,
     (m) => t("Unknown field: {field}", { field: fieldName(m[1]!, m[2]!) }),
@@ -439,17 +446,34 @@ const RULES: Rule[] = [
   [/^not found$/, () => t("Not found")],
 ];
 
+/**
+ * The refusal of an assertion without the engine's suffix: the server writes
+ * `<message> (assertion <expression> failed)` (B12), and a person needs only the message.
+ */
+export function withoutAssertion(raw: string): string {
+  const m = /^(.+?) \(assertion .+ failed\)$/s.exec(raw);
+  return m ? m[1]! : raw;
+}
+
 /** Translate a server message when its pattern is known, else return it unchanged. */
 export function serverMessage(raw: string | undefined | null): string {
   if (!raw) return "";
   // A refused database call is a code word (D74), a sentence in every language, English too.
   const fault = STORAGE_FAULTS[raw];
   if (fault) return fault();
-  // The server's own words are English: in English they are shown exactly as received.
-  if (getLang() === "en") return raw;
-  for (const [re, fn] of RULES) {
-    const m = re.exec(raw);
+  // A step of an action that failed says which step; the person needs what was wrong.
+  const step = /^\w+\.\w+: effect \d+ \([\w ]+\) failed, nothing was changed: (.+)$/s.exec(raw);
+  if (step) return serverMessage(step[1]);
+  const text = withoutAssertion(raw);
+  for (const [re, fn] of FIELD_RULES) {
+    const m = re.exec(text);
     if (m) return fn(m);
   }
-  return raw;
+  // The server's own words are English: in English the rest is shown as received.
+  if (getLang() === "en") return text;
+  for (const [re, fn] of RULES) {
+    const m = re.exec(text);
+    if (m) return fn(m);
+  }
+  return text;
 }

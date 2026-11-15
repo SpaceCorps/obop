@@ -46,7 +46,7 @@
 }
 .record > header .hint {
   display: block;
-  margin-block-start: 0.1rem;
+  margin-block-end: 0.1rem;
 }
 
 .statusbar {
@@ -116,6 +116,10 @@ a.smartbtn:hover {
   opacity: 0.6;
 }
 .record .actionrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
   padding: 0.85rem 1.25rem 0;
 }
 /* The form fills the rest of the panel, so its bar of Save and Close sits at the bottom of the panel
@@ -504,4 +508,388 @@ html.sheet-open body {
 }
 .moveto option:disabled {
   color: var(--text-subtle);
+}
+
+/* ---------- The record form of lane L5 (UI plan 2.6) ---------- */
+/* The title bar: picture, kicker (model or trail) over the name, then pager, page and close. */
+.record > header > .rec-title {
+  flex: 1;
+  min-inline-size: 0;
+}
+.rec-tools {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+}
+.rec-pager {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-inline-end: var(--space-1);
+}
+.rec-pos {
+  min-inline-size: 3.5rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  white-space: nowrap;
+}
+.rec-avatar {
+  display: inline-flex;
+  flex: none;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+}
+.rec-kind {
+  font-size: var(--text-sm);
+}
+.rec-crumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-1);
+  margin: 0 0 0.1rem;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+}
+.rec-crumbs li {
+  display: inline-flex;
+  min-inline-size: 0;
+  max-inline-size: 14rem;
+}
+.rec-crumbs li::after {
+  padding-inline-start: var(--space-1);
+  color: var(--text-subtle);
+  content: "\203A";
+}
+.rec-crumbs a {
+  overflow: hidden;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rec-crumbs a:hover {
+  color: var(--accent-ink);
+}
+
+/* The summary: what the record is about on the left, its figures on the right. */
+.rec-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-6);
+  padding: 0.85rem 1.25rem 0;
+}
+.rec-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.rec-chip {
+  max-inline-size: 100%;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rec-chips .rec-chip:not(:last-child)::after {
+  padding-inline-start: var(--space-2);
+  color: var(--text-subtle);
+  content: "\00B7";
+}
+.rec-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-6);
+  margin: 0 0 0 auto;
+}
+.rec-figure {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.rec-figure dt {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+.rec-figure dd {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+}
+.rec-figure:last-child dd {
+  font-size: var(--text-xl);
+}
+/* On a phone: the state, the total and the facts on one line under the title. */
+.rec-strip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-inline-size: 0;
+  padding: var(--space-3) var(--space-4) 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.rec-strip > * {
+  flex: none;
+}
+.rec-strip > .rec-chip {
+  flex: 0 1 auto;
+}
+.rec-strip .amount {
+  font-weight: var(--weight-semibold);
+}
+
+/* A governed status reads as steps; it moves through the actions below. */
+.statusbar.stepper {
+  gap: 0;
+  row-gap: var(--space-1);
+}
+.statusbar.stepper li {
+  display: flex;
+  align-items: center;
+}
+.statusbar.stepper li + li::before {
+  inline-size: 0.9rem;
+  block-size: 1px;
+  margin-inline: 2px;
+  background: var(--border-strong);
+  content: "";
+}
+.statusbar.stepper .step {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-block-size: 1.75rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--text-subtle);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+.statusbar.stepper li.done .step {
+  border-color: transparent;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.statusbar.stepper li.on .step {
+  border-color: var(--accent-fill);
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  font-weight: var(--weight-semibold);
+}
+.rec-starts {
+  padding: var(--space-3) var(--space-5) 0;
+}
+
+/* The lock of a frozen record, and what an action made. */
+.rec-lock,
+.rec-made {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0.85rem 1.25rem 0;
+  padding: 0.6rem 0.8rem;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+.rec-lock {
+  background: var(--warning-soft);
+  color: var(--text);
+}
+.rec-lock .icon {
+  flex: none;
+  margin-block-start: 0.1rem;
+  color: var(--warning-ink);
+}
+.rec-made {
+  flex-wrap: wrap;
+  background: var(--success-soft);
+}
+.rec-made a {
+  color: var(--accent-ink);
+  font-weight: var(--weight-semibold);
+}
+
+/* Actions: one primary, the other valid ones, then the menu at the end. */
+.approval-mark {
+  display: inline-flex;
+  margin-inline-start: 0.1rem;
+  opacity: 0.7;
+}
+.actionrow-more {
+  margin-inline-start: auto;
+}
+.actionrow-more > .dropdown > .btn {
+  justify-content: center;
+  inline-size: 2.25rem;
+  padding: 0;
+}
+
+/* Smart buttons: the name, then the number in a soft pill. */
+.smartbtn {
+  gap: var(--space-2);
+}
+.smart-n {
+  min-inline-size: 1.4rem;
+  padding: 0 0.35rem;
+  border-radius: var(--radius-pill);
+  background: var(--surface-3);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.smart-more {
+  border-style: dashed;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.smart-more:hover {
+  border-color: var(--accent-line);
+  color: var(--accent-ink);
+}
+
+/* Sections: a quiet heading that opens and closes, the fields in a grid. */
+.record > .fields {
+  container: recordform / inline-size;
+  gap: var(--space-2);
+}
+.fsec + .fsec {
+  padding-block-start: var(--space-2);
+  border-block-start: 1px solid var(--border);
+}
+.fsec-head {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+.fsec-head button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  inline-size: 100%;
+  min-block-size: 2.25rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-weight: var(--weight-semibold);
+  text-align: start;
+  cursor: pointer;
+}
+.fsec-head button:hover {
+  color: var(--text);
+}
+.fsec-count {
+  margin-inline-start: auto;
+  font-weight: var(--weight-regular);
+}
+.fsec-note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-3);
+}
+.fsec-note .icon {
+  color: var(--warning-ink);
+}
+.fgrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4) var(--space-6);
+  margin: 0 0 var(--space-3);
+}
+.fsec.plain .fgrid {
+  margin-block-start: var(--space-1);
+}
+@container recordform (min-width: 900px) {
+  .fgrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .fgrid > .field.wide {
+    grid-column: 1 / -1;
+  }
+}
+/* A value the person cannot write reads as text, not as a dashed input. */
+.field.ro .flabel {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+.field.ro .flabel[title] {
+  cursor: help;
+}
+.fvalue {
+  min-block-size: 1.5rem;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.fvalue.long {
+  white-space: pre-wrap;
+}
+.fgrid dt,
+.fgrid dd {
+  margin: 0;
+}
+.rec-readonly {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-block-start: auto;
+}
+
+/* The action's question. */
+.action-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.action-form .confirm-msg {
+  margin: 0;
+}
+
+/* The record as a page: the list steps aside, the form takes its place, centred. */
+.workspace:has(> .record.full) > .main {
+  display: none;
+}
+.record.full {
+  flex: 1;
+  inline-size: auto;
+  min-inline-size: 0;
+}
+.record.full > :not(.rec-lock, .rec-made) {
+  padding-inline: max(1.25rem, calc((100% - 68rem) / 2));
+}
+.record.full > :is(.rec-lock, .rec-made) {
+  margin-inline: max(1.25rem, calc((100% - 68rem) / 2));
+}
+@media (max-width: 64rem) {
+  .record.sheet.full {
+    inline-size: 100%;
+  }
+}
+@media (max-width: 40rem) {
+  .rec-summary {
+    padding-inline: var(--space-4);
+  }
+  .rec-lock,
+  .rec-made {
+    margin-inline: var(--space-4);
+  }
+  .rec-starts {
+    padding-inline: var(--space-4);
+  }
+  .record.full > :not(.rec-lock, .rec-made) {
+    padding-inline: var(--space-4);
+  }
+  .actionrow > .btn.primary {
+    flex: 1 1 auto;
+  }
 }

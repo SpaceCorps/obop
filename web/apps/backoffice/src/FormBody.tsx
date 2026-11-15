@@ -1,15 +1,19 @@
-// The form of the record panel: every field, the sections an app registers (<SectionSlot>), the
-// lines of a document (<LinesSlot>), the messages and the Save bar. Split from RecordPanel.tsx
-// (F2); lane L5 owns this file, lane L7 owns what <LinesSlot> draws (LinesSection.tsx).
+// The form of the record panel (lane L5, plan 2.6 items 4 and 5): the fields in sections (two
+// columns where the panel is wide), values the person cannot write as formatted text, the sections
+// an app registers (<SectionSlot>), the lines of a document (<LinesSlot>), the messages and the
+// Save bar. Lane L7 owns what <LinesSlot> draws (LinesSection.tsx).
+import { useState } from "react";
 import { rich, t } from "@obop/ui";
 import type { FieldMeta, ModelMeta, Row } from "./api.ts";
 import { useData } from "./data.tsx";
 import { fromEdit, type Edit } from "./edit.ts";
 import { recordExtensionOf, type RecordSectionProps } from "./extensions.ts";
-import { FieldInput, RefLabel } from "./fields.tsx";
+import { Cell, FieldInput, RefLabel } from "./fields.tsx";
 import { optionLabel, shownLabel } from "./format.ts";
+import { shortcut } from "./keys.ts";
 import { fieldTitle, fieldTitleByName } from "./labels.ts";
 import { LinesSection } from "./LinesSection.tsx";
+import type { FormSection } from "./recordLayout.ts";
 import { serverMessage } from "./serverMessage.ts";
 import { Badge, Button, Icon, Kbd, Menu } from "./ui.tsx";
 import { canMove, initialOption } from "./workflow.ts";
@@ -60,6 +64,7 @@ export type FormBodyProps = {
   row: Row | null;
   /** The model's name for one record. */
   title: string;
+  /** The person may write this model (create for a new record, update otherwise). */
   canEdit: boolean;
   phone: boolean;
   busy: boolean;
@@ -76,6 +81,12 @@ export type FormBodyProps = {
   masked: (f: FieldMeta) => boolean;
   changed: (f: FieldMeta) => boolean;
   governed: (f: FieldMeta) => boolean;
+  /** The groups of fields to draw (recordLayout.ts `sectionsOf`). */
+  sections: FormSection[];
+  /** A field the person cannot write here: shown as text (server-set, locked, read only). */
+  fixed: (f: FieldMeta) => boolean;
+  /** Some field can be written: the Save bar is drawn. */
+  editable: boolean;
   /** A field was edited. */
   onEdit: (name: string, v: Edit) => void;
   /** The error of a field is cleared once it is edited again. */
@@ -84,138 +95,187 @@ export type FormBodyProps = {
   onMove: (f: FieldMeta, to: string) => void;
   /** Save or create. */
   onSubmit: () => void;
-  /** Discard the draft, or close when there is none. */
+  /** Discard the draft (a new record with nothing typed closes). */
   onDiscard: () => void;
-  onDelete: () => void;
   save: () => Promise<string | null>;
 };
 
+/** Why a value is the server's, for the label's tooltip. */
+function setBy(f: FieldMeta): string | undefined {
+  if (f.computed) return t("Calculated by the server; it cannot be edited");
+  if (f.sequence) return t("A number the server assigns; it cannot be edited");
+  if (f.readonly) return t("Set by the server; it cannot be edited");
+  return undefined;
+}
+
 export function FormBody(p: FormBodyProps) {
   const d = useData();
-  const { model, fields, row, title, canEdit, busy, statusField, currency, value } = p;
+  const { model, fields, row, title, canEdit, busy, currency, value } = p;
   const creating = row === null;
+  // The person's own choice of open and closed sections, by key; else the layout's.
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  const wrong = (f: FieldMeta) => !!p.invalid[f.name] || p.refused[f.name] !== undefined;
+  // A record the person may not change at all reads as a description list.
+  const asList = !p.editable;
+
+  const field = (f: FieldMeta) => {
+    const isMasked_ = p.masked(f);
+    const fid = `f-${model.name}-${f.name}`;
+    const wide =
+      f.kind === "longtext" || f.kind === "image" || f.kind === "file" || p.governed(f)
+        ? " wide"
+        : "";
+    if (p.fixed(f) && !isMasked_ && !p.governed(f)) {
+      const v = row ? row[f.name] : undefined;
+      const Label = asList ? "dt" : "span";
+      const Value = asList ? "dd" : "div";
+      return (
+        <div key={f.name} className={`field ro${wide}`}>
+          <Label className="flabel" id={fid} title={setBy(f)}>
+            {fieldTitle(f)}
+          </Label>
+          <Value
+            className={`fvalue${f.kind === "longtext" ? " long" : ""}`}
+            aria-labelledby={asList ? undefined : fid}
+          >
+            <Cell field={f} value={v} currency={currency} row={row ?? undefined} />
+          </Value>
+        </div>
+      );
+    }
+    const err = p.invalid[f.name]
+      ? errorOf(fromEdit(f, value(f), currency, !creating && !p.changed(f)))
+      : p.refused[f.name] !== undefined
+        ? serverMessage(p.refused[f.name]!)
+        : undefined;
+    return (
+      <div key={f.name} className={`field${f.kind === "bool" ? " inline" : ""}${wide}`}>
+        <label className="flabel" htmlFor={fid} title={setBy(f)}>
+          {fieldTitle(f)}
+          {f.required && (
+            <span className="req" title={t("Required")} aria-hidden="true">
+              *
+            </span>
+          )}
+        </label>
+        {isMasked_ ? (
+          <div className="maskedfield">
+            <span className="masked" id={fid}>
+              {String(row?.[f.name])}
+            </span>
+            <span className="hint">{t("Masked for this session")}</span>
+            {canEdit && (
+              <button type="button" className="linkbtn" onClick={() => p.onEdit(f.name, "")}>
+                {t("Replace")}
+              </button>
+            )}
+          </div>
+        ) : p.governed(f) ? (
+          <GovernedValue
+            model={model}
+            field={f}
+            row={row}
+            title={title}
+            id={fid}
+            busy={busy}
+            onMove={(to) => p.onMove(f, to)}
+          />
+        ) : (
+          <FieldInput
+            field={f}
+            id={fid}
+            value={value(f)}
+            readOnly={p.fixed(f)}
+            shown={row ? shownLabel(f, row[f.name], row) : undefined}
+            altHint={(() => {
+              const alt = model.fields.find((x) => x.name === `${f.name}_alt`);
+              return alt
+                ? { title: fieldTitle(alt), empty: !String(value(alt)).trim() }
+                : undefined;
+            })()}
+            currency={currency}
+            invalid={!!err}
+            describedBy={err ? `${fid}-err` : undefined}
+            unchanged={!creating && !p.changed(f)}
+            onChange={(v) => {
+              p.onEdit(f.name, v);
+              if (err) p.clearField(f.name);
+            }}
+          />
+        )}
+        {f.kind === "ref" &&
+          !isMasked_ &&
+          String(value(f)) &&
+          d.linkTo(f.to ?? "", { id: String(value(f)) }) && (
+            <a className="reflink small" href={d.linkTo(f.to ?? "", { id: String(value(f)) })!}>
+              {rich("Open {name}", {
+                name: <RefLabel field={f} id={String(value(f))} link={false} />,
+              })}
+            </a>
+          )}
+        {err && (
+          <p id={`${fid}-err`} role="alert" className="error">
+            {err}
+          </p>
+        )}
+      </div>
+    );
+  };
+
   return (
     <form
-      className="fields"
+      className={`fields${asList ? " readonly" : ""}`}
       noValidate
       onSubmit={(e) => {
         e.preventDefault();
         if (p.dirty || creating) p.onSubmit();
       }}
     >
-      {fields
-        // A computed value or a number does not exist before the record is saved.
-        .filter((f) => f !== statusField && !(creating && (f.computed || f.sequence)))
-        .map((f) => {
-          const isMasked_ = p.masked(f);
-          const fid = `f-${model.name}-${f.name}`;
-          const err = p.invalid[f.name]
-            ? errorOf(fromEdit(f, value(f), currency, !creating && !p.changed(f)))
-            : p.refused[f.name] !== undefined
-              ? serverMessage(p.refused[f.name]!)
-              : undefined;
+      {p.sections.map((s) => {
+        const shown = s.fields.some(wrong) || (open[s.key] ?? !s.collapsed);
+        const Grid = asList ? "dl" : "div";
+        const body = (
+          <>
+            {s.personal && (
+              <p className="hint fsec-note">
+                <Icon name="shield" size={13} />
+                {t("Contains personal data. Agents see it masked.")}
+              </p>
+            )}
+            <Grid className="fgrid">{s.fields.map(field)}</Grid>
+          </>
+        );
+        if (!s.label)
           return (
-            <div key={f.name} className={`field${f.kind === "bool" ? " inline" : ""}`}>
-              <label className="flabel" htmlFor={fid}>
-                {fieldTitle(f)}
-                {f.required && (
-                  <span className="req" title={t("Required")} aria-hidden="true">
-                    *
-                  </span>
-                )}
-                {f.personal_data && (
-                  <span
-                    className="shield"
-                    title={t("Personal data ({class}). Agents see it masked.", {
-                      class: f.class,
-                    })}
-                    role="img"
-                    aria-label={t("Personal data, {class}", { class: f.class })}
-                  >
-                    <Icon name="shield" size={13} />
-                  </span>
-                )}
-                {f.class === "financial" && <span className="chip">{t("financial")}</span>}
-                {f.computed && (
-                  <span className="chip" title={t("Calculated by the server; it cannot be edited")}>
-                    {t("calculated")}
-                  </span>
-                )}
-                {f.sequence && (
-                  <span
-                    className="chip"
-                    title={t("A number the server assigns; it cannot be edited")}
-                  >
-                    {t("numbered")}
-                  </span>
-                )}
-              </label>
-              {isMasked_ ? (
-                <div className="maskedfield">
-                  <span className="masked" id={fid}>
-                    {String(row?.[f.name])}
-                  </span>
-                  <span className="hint">{t("Masked for this session")}</span>
-                  {canEdit && (
-                    <button type="button" className="linkbtn" onClick={() => p.onEdit(f.name, "")}>
-                      {t("Replace")}
-                    </button>
-                  )}
-                </div>
-              ) : p.governed(f) ? (
-                <GovernedValue
-                  model={model}
-                  field={f}
-                  row={row}
-                  title={title}
-                  id={fid}
-                  busy={busy}
-                  onMove={(to) => p.onMove(f, to)}
-                />
-              ) : (
-                <FieldInput
-                  field={f}
-                  id={fid}
-                  value={value(f)}
-                  readOnly={!canEdit || !!f.computed || !!f.sequence}
-                  shown={row ? shownLabel(f, row[f.name], row) : undefined}
-                  altHint={(() => {
-                    const alt = model.fields.find((x) => x.name === `${f.name}_alt`);
-                    return alt
-                      ? { title: fieldTitle(alt), empty: !String(value(alt)).trim() }
-                      : undefined;
-                  })()}
-                  currency={currency}
-                  invalid={!!err}
-                  describedBy={err ? `${fid}-err` : undefined}
-                  unchanged={!creating && !p.changed(f)}
-                  onChange={(v) => {
-                    p.onEdit(f.name, v);
-                    if (err) p.clearField(f.name);
-                  }}
-                />
-              )}
-              {f.kind === "ref" &&
-                !isMasked_ &&
-                String(value(f)) &&
-                d.linkTo(f.to ?? "", { id: String(value(f)) }) && (
-                  <a
-                    className="reflink small"
-                    href={d.linkTo(f.to ?? "", { id: String(value(f)) })!}
-                  >
-                    {rich("Open {name}", {
-                      name: <RefLabel field={f} id={String(value(f))} link={false} />,
-                    })}
-                  </a>
-                )}
-              {err && (
-                <p id={`${fid}-err`} role="alert" className="error">
-                  {err}
-                </p>
-              )}
-            </div>
+            <section key={s.key} className="fsec plain">
+              {body}
+            </section>
           );
-        })}
+        const head = `fsec-${model.name}-${s.key}`;
+        return (
+          <section key={s.key} className="fsec" aria-labelledby={head}>
+            <h3 className="fsec-head">
+              <button
+                type="button"
+                id={head}
+                aria-expanded={shown}
+                onClick={() => setOpen({ ...open, [s.key]: !shown })}
+              >
+                <Icon name={shown ? "chevron-down" : "chevron-right"} size={16} />
+                {s.label}
+                {!shown && (
+                  <span className="hint fsec-count">
+                    {t("{count, plural, one {# field} other {# fields}}", {
+                      count: s.fields.length,
+                    })}
+                  </span>
+                )}
+              </button>
+            </h3>
+            {shown && body}
+          </section>
+        );
+      })}
       <SectionSlot
         model={model}
         fields={fields}
@@ -234,13 +294,11 @@ export function FormBody(p: FormBodyProps) {
         save={p.save}
       />
       {p.withheld.length > 0 && (
-        <p className="hint withheld">
-          <Icon name="shield" size={13} />{" "}
-          {t("Withheld from you: {fields}", {
-            fields: p.withheld
-              .map((w) => fieldTitleByName(w.split(".")[1] ?? w, fields))
-              .join(", "),
-          })}
+        <p
+          className="hint withheld"
+          title={p.withheld.map((w) => fieldTitleByName(w.split(".")[1] ?? w, fields)).join(", ")}
+        >
+          <Icon name="shield" size={13} /> {t("Some private fields are hidden from you")}
         </p>
       )}
       {p.error && (
@@ -248,34 +306,30 @@ export function FormBody(p: FormBodyProps) {
           {serverMessage(p.error.raw)}
         </p>
       )}
-      {/* On a phone Delete waits at the end of the form, away from the status pills. */}
-      {!creating && p.phone && model.can_delete && (
-        <Button
-          variant="ghost"
-          className="danger-text record-delete"
-          icon="trash"
-          disabled={busy}
-          onClick={p.onDelete}
-        >
-          {t("Delete")}
-        </Button>
+      {p.editable ? (
+        <footer className="formbar">
+          <Button type="submit" variant="primary" loading={busy} disabled={!p.dirty && !creating}>
+            {creating ? t("Create") : t("Save")}
+          </Button>
+          <Button onClick={p.onDiscard} disabled={!p.dirty && !creating}>
+            {t("Discard")}
+          </Button>
+          <span className="grow" />
+          <span className="hint kbd-hint">
+            {rich(
+              "<kbd>{key}</kbd> save <kbd>Esc</kbd> close",
+              { key: shortcut("S") },
+              { kbd: (c) => <Kbd>{c}</Kbd> },
+            )}
+          </span>
+        </footer>
+      ) : (
+        !creating && (
+          <p className="hint rec-readonly">
+            <Icon name="lock" size={13} /> {t("Read only for you")}
+          </p>
+        )
       )}
-      <footer className="formbar">
-        <Button
-          type="submit"
-          variant="primary"
-          loading={busy}
-          disabled={(!p.dirty && !creating) || !canEdit}
-        >
-          {creating ? t("Create") : t("Save")}
-        </Button>
-        <Button onClick={p.onDiscard}>{p.dirty ? t("Discard") : t("Close")}</Button>
-        {!canEdit && <span className="hint">{t("Read only for you")}</span>}
-        <span className="grow" />
-        <span className="hint kbd-hint">
-          {rich("<kbd>⌘S</kbd> save <kbd>Esc</kbd> close", {}, { kbd: (c) => <Kbd>{c}</Kbd> })}
-        </span>
-      </footer>
     </form>
   );
 }
@@ -305,9 +359,11 @@ function GovernedValue(p: {
             .map((o) => {
               const mv = canMove(model, f, current, o, p.title, row ?? undefined);
               return {
-                label: `${optionLabel(o, f)}${mv.needsApproval ? " *" : ""}`,
+                label: optionLabel(o, f),
                 disabled: p.busy || !mv.allowed,
-                description: mv.reason || undefined,
+                description:
+                  mv.reason ||
+                  (mv.needsApproval ? t("An agent needs a person's approval for this") : undefined),
                 onSelect: () => p.onMove(o),
               };
             })}
