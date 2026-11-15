@@ -1,14 +1,17 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { fmt, inSentence, t } from "@obop/ui";
-import { search, type ModelMeta, type Row } from "./api.ts";
-import { collect } from "./bulk.ts";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { fmt, getCurrency, inSentence, t } from "@obop/ui";
+import { search, type FieldMeta, type ModelMeta, type Row, type ServerOrder } from "./api.ts";
+import { collect, EXPORT_CAP } from "./bulk.ts";
 import type { App } from "./Chrome.tsx";
 import { ControlPanel, type ViewDef } from "./ControlPanel.tsx";
 import { useData, useRows } from "./data.tsx";
 import { loadFavorites, readPref, writePref, type Favorite } from "./favorites.ts";
-import { isState, visibleFields } from "./format.ts";
+import { csvCell, download, plainText, rowCurrency, visibleFields } from "./format.ts";
 import { ImportDialog } from "./ImportDialog.tsx";
 import { fieldTitle, fieldTitleByName, modelTitle } from "./labels.ts";
+import { PHONE_QUERY, useMedia } from "./media.ts";
+import { pluralTitle } from "./plural.ts";
+import { defaultOrder, defaultView, listColumns, newDefaults } from "./presentation.ts";
 import { serverMessage } from "./serverMessage.ts";
 import {
   applyFacets,
@@ -17,6 +20,7 @@ import {
   groupable,
   sortRows,
   type Cond,
+  type Lookup,
   type ViewState,
 } from "./query.ts";
 import { RecordPanel } from "./RecordPanel.tsx";
@@ -68,6 +72,36 @@ function storedView(model: string): string {
   }
 }
 
+/** The signed-in user name (App keeps it in the session), for "Mine" and `$user` defaults. */
+function signedInUser(): string {
+  try {
+    return sessionStorage.getItem("obop-user") ?? "";
+  } catch {
+    return "";
+  }
+}
+
+/** Rows in the default order, for searches the browser answers (D49 orders on the server). */
+function inOrder(rows: Row[], order: ServerOrder[], fields: FieldMeta[], lk: Lookup): Row[] {
+  const first = order[0];
+  if (!first) return rows;
+  if (first.field === "id") {
+    // Ids are UUIDv7: their text order is the order they were made in.
+    const sign = first.dir === "desc" ? -1 : 1;
+    return [...rows].sort((a, b) => (a.id < b.id ? -sign : a.id > b.id ? sign : 0));
+  }
+  return sortRows(rows, { f: first.field, dir: first.dir }, fields, lk);
+}
+
+/** A single-value `is` facet on a ref: the parent a list of children is opened from. */
+function parentFacet(facets: Cond[], fields: FieldMeta[]) {
+  if (facets.length !== 1) return undefined;
+  const c = facets[0]!;
+  if (c.op !== "is" || c.v.length !== 1 || !c.v[0]) return undefined;
+  const f = fields.find((x) => x.name === c.f);
+  return f?.kind === "ref" && f.to ? { field: f, id: c.v[0] } : undefined;
+}
+
 export function ModelPage({
   app,
   model,
@@ -80,15 +114,23 @@ export function ModelPage({
 }: Props) {
   const d = useData();
   const title = modelTitle(model, app.module.id);
+  const plural = pluralTitle(model, title);
+  const user = useMemo(signedInUser, []);
+  const phone = useMedia(PHONE_QUERY);
   const state = useMemo(() => decodeState(route.st), [route.st]);
+  // The search text as it is typed (ControlPanel, 250 ms after the last key), before it becomes a
+  // chip: it narrows the records at once, and is not part of the address.
+  const [live, setLive] = useState("");
+  const liveCond = useMemo<Cond | null>(() => (live ? { op: "search", v: live } : null), [live]);
+  const query = useMemo<ViewState>(
+    () => (liveCond ? { ...state, facets: [...state.facets, liveCond] } : state),
+    [state, liveCond],
+  );
   // The dialogs a view opens (bulk edit and delete) share one slot, which the list view rewrites
   // whenever it mounts. The import dialog is the page's own, so it has a slot of its own: the first
   // import into an empty model turns the empty state into the list, and that mount must not close it.
   const [extraDialog, setExtraDialog] = useState<ReactNode>(null);
   const [importing, setImporting] = useState(false);
-  const [newDefaults, setNewDefaults] = useState<Record<string, unknown>>(
-    () => (route.id === "new" ? takeNewDefaults?.() : null) ?? {},
-  );
   const [pageSize, setPageSizeState] = useState(() => {
     const n = readPref<number>("obop-pagesize", 100);
     return PAGE_SIZES.includes(n) ? n : 100;
@@ -113,14 +155,13 @@ export function ModelPage({
     if (canGroup) ids.push("kanban");
     if (dateFields(fields).length) ids.push("calendar");
     if (canGroup) ids.push("pivot", "graph");
+    // Cards with the record's picture: a model with an image (Products, Contacts, Listings).
+    const pictured = fields.some((f) => f.kind === "image" && f.class !== "special_category");
+    if (pictured || model.ui?.default_view === "gallery") ids.push("gallery");
     return ids;
-  }, [fields]);
+  }, [fields, model]);
   const preferred = route.view || storedView(model.name);
-  const view = available.includes(preferred)
-    ? preferred
-    : fields.some(isState) && available.includes("kanban")
-      ? "kanban"
-      : "list";
+  const view = available.includes(preferred) ? preferred : defaultView(model, available);
 
   // The list pages on the server (D49) whenever the server can answer the whole search. Kanban,
   // pivot, graph and calendar ask the server for counts, sums and pages (D4, `aggregate`) whenever
@@ -130,9 +171,17 @@ export function ModelPage({
   // i18n-memo-ok: a range bound is read the same in every language and region (a dot or a comma is
   // taken as the decimal mark); the only reader of the i18n store is fmt.exponent(), the digits of
   // the instance currency, which a change of language or region does not change
-  const plan = useMemo(() => toServer(state, fields), [state, fields]);
-  const grouped = state.group.length > 0;
-  const serverMode = view === "list" && onServer(plan, state);
+  const plan = useMemo(() => toServer(query, fields), [query, fields]);
+  // Without a sort of its own the search keeps the model's order (presentation.ts `defaultOrder`):
+  // newest first, by the main date, the number or the id. A field the person cannot read is skipped.
+  const fallbackOrder = useMemo(
+    () =>
+      defaultOrder(model).filter((o) => o.field === "id" || fields.some((f) => f.name === o.field)),
+    [model, fields],
+  );
+  const order = query.sort ? plan.order : fallbackOrder;
+  const grouped = query.group.length > 0;
+  const serverMode = view === "list" && onServer(plan, query);
   const aggMode = view !== "list" && plan.rest.length === 0;
   const page = Math.max(1, parseInt(route.page, 10) || 1);
   const offset = (page - 1) * pageSize;
@@ -144,9 +193,14 @@ export function ModelPage({
     enabled: serverMode || aggMode,
     model: model.name,
     filter: plan.filter,
-    order: aggMode ? [] : plan.order,
+    order: aggMode ? [] : order,
     offset: aggMode ? 0 : offset,
     limit: aggMode ? 1 : pageSize,
+    // Only an order by text follows the language (the server collates it in the locale).
+    collated: order.some((o) => {
+      const k = fields.find((f) => f.name === o.field)?.kind;
+      return k === "text" || k === "longtext" || k === "select" || k === "ref";
+    }),
   });
   useEffect(() => {
     if (srv.denied.length || serverDenied.length) setServerDenied(srv.denied);
@@ -159,21 +213,41 @@ export function ModelPage({
 
   const base = useMemo(() => ({ app: route.app, model: route.model }), [route.app, route.model]);
   const put = useCallback(
-    (patch: { view?: string; id?: string; st?: string; page?: string }, replace = false) =>
+    (patch: { view?: string; id?: string; st?: string; page?: string }, replace = false) => {
+      const id = patch.id ?? route.id;
       go(
         {
           ...base,
           view: patch.view ?? route.view,
-          id: patch.id ?? route.id,
+          id,
           st: patch.st ?? route.st,
           page: patch.page ?? route.page,
+          // A record shown as a page stays one while the view or the search changes; closing it
+          // goes back to the list.
+          full: id ? route.full : "",
         },
         { replace },
-      ),
-    [go, base, route.view, route.id, route.st, route.page],
+      );
+    },
+    [go, base, route.view, route.id, route.st, route.page, route.full],
   );
   // A new search starts on the first page.
   const setState = useCallback((s: ViewState) => put({ st: encodeState(s), page: "" }), [put]);
+  // What a view hands back carries the live text as a facet: it stays out of the address.
+  const setViewState = useCallback(
+    (s: ViewState) =>
+      setState(liveCond ? { ...s, facets: s.facets.filter((c) => c !== liveCond) } : s),
+    [setState, liveCond],
+  );
+  // Typing narrows from the first page on, as a new search does.
+  const onLive = useCallback(
+    (text: string) => {
+      if (text === live) return;
+      setLive(text);
+      if (route.page && route.page !== "1") put({ page: "" }, true);
+    },
+    [live, put, route.page],
+  );
 
   // A favorite marked default applies when the model opens without any search of its own.
   useEffect(() => {
@@ -198,10 +272,17 @@ export function ModelPage({
     () =>
       serverMode || aggMode
         ? []
-        : sortRows(applyFacets(rows, state.facets, fields, d.lookup), state.sort, fields, d.lookup),
+        : query.sort
+          ? sortRows(
+              applyFacets(rows, query.facets, fields, d.lookup),
+              query.sort,
+              fields,
+              d.lookup,
+            )
+          : inOrder(applyFacets(rows, query.facets, fields, d.lookup), order, fields, d.lookup),
     // lookup changes when ref labels load
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [serverMode, aggMode, rows, state.facets, state.sort, fields, d.version, d.lang],
+    [serverMode, aggMode, rows, query.facets, query.sort, order, fields, d.version, d.lang],
   );
   const paging = view === "list" && !grouped;
   const shown: Row[] = aggMode
@@ -232,11 +313,44 @@ export function ModelPage({
     put,
   ]);
 
+  /**
+   * The values a new record starts with (UI plan 2.9, B5): what the caller gives (a kanban column,
+   * a calendar day, a quick-create title) over the single-value filters of the search (the parent
+   * a list of lines was opened from), over the defaults of presentation.ts `newDefaults` (today,
+   * the instance currency, `active`, the package's `default` hints).
+   */
+  const startValues = useCallback(
+    (given: Record<string, unknown> = {}) =>
+      newDefaults(model, {
+        facets: state.facets,
+        route: given,
+        user,
+        instanceCurrency: getCurrency(),
+      }),
+    [model, state.facets, user],
+  );
+  const [newValues, setNewValues] = useState<Record<string, unknown>>(() =>
+    route.id === "new" ? startValues(takeNewDefaults?.() ?? {}) : {},
+  );
+  // `id=new` reached without openNew (the palette, a link): start from the search all the same.
+  const openedHere = useRef(route.id === "new");
+  useEffect(() => {
+    if (route.id !== "new") {
+      openedHere.current = false;
+      return;
+    }
+    if (!openedHere.current) setNewValues(startValues());
+    openedHere.current = true;
+    // only when the route turns to a new record
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route.id]);
+
   const open = (id: string) => put({ id });
   const close = useCallback(() => put({ id: "" }), [put]);
-  const openNew = (defaults: Record<string, unknown> = {}) => {
+  const openNew = (given: Record<string, unknown> = {}) => {
     if (onNew) return onNew();
-    setNewDefaults(defaults);
+    openedHere.current = true;
+    setNewValues(startValues(given));
     put({ id: "new" });
   };
   const found = useRecord(model.name, route.id, serverMode || aggMode ? srv.rows : rows);
@@ -264,8 +378,9 @@ export function ModelPage({
     return serverMessage(r.message);
   };
   const create: ViewProps["create"] = async (body) => {
+    // A quick create (a kanban card) starts from the same values as the full form.
+    const clean = startValues(body);
     // A governed field starts at its first option; the server refuses anything else.
-    const clean = { ...body };
     for (const g of governed) delete clean[g];
     // Computed values and numbers are the server's.
     for (const f of model.fields) if (f.computed || f.sequence) delete clean[f.name];
@@ -309,12 +424,47 @@ export function ModelPage({
       async (offset, limit) => {
         const q: Record<string, unknown> = { offset, limit };
         if (plan.filter.length) q.filter = plan.filter;
-        if (plan.order.length) q.order = plan.order;
+        if (order.length) q.order = order;
         const r = await search(d.token, model.name, q);
         return "error" in r ? { error: r.error } : { rows: r.rows, total: r.total };
       },
       o.cap,
       o,
+    );
+  };
+
+  /**
+   * The phone's Export (its ⋯ menu): every record the search matches, with the list's columns.
+   * In aggregate views the page holds no rows, so the records are fetched from the server.
+   */
+  const exportCsv = async () => {
+    const got = !aggMode
+      ? await fetchAll({ cap: EXPORT_CAP })
+      : await collect(async (offset, limit) => {
+          const q: Record<string, unknown> = { offset, limit, order };
+          if (plan.filter.length) q.filter = plan.filter;
+          const r = await search(d.token, model.name, q);
+          return "error" in r ? { error: r.error } : { rows: r.rows, total: r.total };
+        }, EXPORT_CAP);
+    if ("error" in got) return d.notify(serverMessage(got.error), "error");
+    const chosen = readPref<string[] | null>(`obop-cols:${model.name}`, null);
+    const cols = chosen
+      ? fields.filter((f) => chosen.includes(f.name))
+      : listColumns(model, 1920, { fields });
+    const head = cols.map((f) => csvCell(fieldTitle(f))).join(",");
+    const body = got.rows.map((r) =>
+      cols.map((f) => csvCell(plainText(f, r[f.name], d.refText, rowCurrency(r)))).join(","),
+    );
+    download(`${model.name}.csv`, [head, ...body].join("\r\n") + "\r\n");
+    d.notify(
+      got.truncated
+        ? t("Exported the first {count} of {total} records only", {
+            count: fmt.integer(got.rows.length),
+            total: fmt.integer(got.total),
+          })
+        : t("{count, plural, one {Exported # record} other {Exported # records}}", {
+            count: got.rows.length,
+          }),
     );
   };
 
@@ -324,9 +474,9 @@ export function ModelPage({
     fields,
     rows: shown,
     setDialog: setExtraDialog,
-    server: aggMode ? { filter: plan.filter, order: plan.order } : undefined,
-    state,
-    setState,
+    server: aggMode ? { filter: plan.filter, order } : undefined,
+    state: query,
+    setState: setViewState,
     selectedId: route.id,
     onOpen: open,
     canCreate: model.can_create,
@@ -354,17 +504,85 @@ export function ModelPage({
       : undefined,
   };
 
-  const filtering = state.facets.length > 0;
   const View = viewOf(view).component;
   const kf = view === "kanban" ? kanbanField(fields, state.group[0]) : undefined;
   const loaded = serverMode || aggMode ? srv.loaded : store.loaded;
   const error = serverMode || aggMode ? srv.error : store.error;
   const withheldError = !!error && isWithheldError(error);
-  const modelEmpty =
-    serverMode || aggMode
-      ? srv.loaded && !srv.error && srv.total === 0 && plan.filter.length === 0
-      : store.loaded && rows.length === 0;
   const truncated = !serverMode && !aggMode && store.loaded && store.total > rows.length;
+  const canImport = !!model.can_bulk_create;
+  const parent = parentFacet(state.facets, fields);
+  const clearSearch = () => {
+    setLive("");
+    setState({ ...state, facets: [] });
+  };
+
+  /** What the page shows when nothing matches: the first record, a child's first, or no match. */
+  const empty = (): ReactNode => {
+    if (query.facets.length === 0)
+      return (
+        <EmptyState
+          icon="sparkle"
+          title={t("No {model} yet", { model: inSentence(plural) })}
+          hint={
+            model.access
+              ? t("You see only the records that are yours or shared with you.")
+              : model.can_create
+                ? canImport
+                  ? t("Create the first one, or bring them in from a spreadsheet.")
+                  : t("Create the first one to get started.")
+                : t("Records you create show up here.")
+          }
+          action={
+            model.can_create
+              ? {
+                  label: t("Create the first {model}", { model: inSentence(title) }),
+                  onClick: () => openNew(),
+                }
+              : undefined
+          }
+          secondary={
+            canImport
+              ? { label: t("Import a CSV file"), onClick: () => setImporting(true) }
+              : undefined
+          }
+        />
+      );
+    if (parent && !liveCond) {
+      const owner = d.refText(parent.field.to!, parent.id);
+      return (
+        <EmptyState
+          icon="plus"
+          title={t("No {model} on {parent} yet", { model: inSentence(plural), parent: owner })}
+          hint={t("Add the first one here; it is linked to {parent}.", { parent: owner })}
+          action={
+            model.can_create
+              ? {
+                  label: t("Add {model}", { model: inSentence(title) }),
+                  onClick: () => openNew(),
+                }
+              : undefined
+          }
+          secondary={{
+            label: t("Show all {model}", { model: inSentence(plural) }),
+            onClick: clearSearch,
+          }}
+        />
+      );
+    }
+    return (
+      <EmptyState
+        icon="search"
+        title={t("No matches")}
+        hint={
+          live
+            ? t("Nothing fits “{text}” with the current filters.", { text: live })
+            : t("No record fits the current search.")
+        }
+        action={{ label: t("Clear filters"), onClick: clearSearch }}
+      />
+    );
+  };
 
   return (
     <>
@@ -372,11 +590,14 @@ export function ModelPage({
         <ControlPanel
           appName={app.name}
           title={title}
+          heading={plural}
           model={model.name}
+          meta={model}
           fields={fields}
           canCreate={model.can_create}
           onNew={() => openNew()}
-          onImport={model.can_bulk_create ? () => setImporting(true) : undefined}
+          onImport={canImport ? () => setImporting(true) : undefined}
+          onExport={() => void exportCsv()}
           state={state}
           setState={setState}
           lookup={d.lookup}
@@ -385,9 +606,11 @@ export function ModelPage({
           setView={setView}
           applyFavorite={applyFavorite}
           count={total}
+          onLive={onLive}
+          user={user}
           extra={
             <>
-              {kf && (
+              {kf && !phone && (
                 <label className="inline-field">
                   <span>{t("Group by")}</span>
                   <select
@@ -432,40 +655,18 @@ export function ModelPage({
               hint={serverMessage(error)}
               action={{
                 label: t("Clear filters and sorting"),
-                onClick: () => put({ st: "", page: "" }),
+                onClick: () => {
+                  setLive("");
+                  put({ st: "", page: "" });
+                },
               }}
             />
           ) : error ? (
             <EmptyState title={t("Could not load records")} hint={serverMessage(error)} />
           ) : !loaded ? (
             <Skeleton rows={8} cols={Math.min(fields.length, 5)} />
-          ) : modelEmpty ? (
-            <EmptyState
-              title={t("No {model} yet", { model: inSentence(title) })}
-              hint={
-                model.access
-                  ? t("You see only the records that are yours or shared with you.")
-                  : t("Records you create show up here.")
-              }
-              action={
-                model.can_create
-                  ? {
-                      label: t("Create the first {model}", { model: inSentence(title) }),
-                      onClick: () => openNew(),
-                    }
-                  : undefined
-              }
-            />
-          ) : total === 0 && view !== "calendar" ? (
-            <EmptyState
-              title={t("No matches")}
-              hint={t("No record fits the current search.")}
-              action={
-                filtering
-                  ? { label: t("Clear filters"), onClick: () => setState({ ...state, facets: [] }) }
-                  : undefined
-              }
-            />
+          ) : total === 0 && (view !== "calendar" || query.facets.length === 0) ? (
+            empty()
           ) : (
             <View {...vp} />
           )}
@@ -478,19 +679,17 @@ export function ModelPage({
       )}
       {selected && (
         <RecordPanel
-          key={route.id === "new" ? `new-${JSON.stringify(newDefaults)}` : route.id}
+          key={route.id === "new" ? `new-${JSON.stringify(newValues)}` : route.id}
           model={model}
           fields={fields}
           row={selected === "new" ? null : selected}
-          defaults={newDefaults}
+          defaults={newValues}
           withheld={denied}
           title={title}
           onClose={close}
           onSaved={(id) =>
-            // A new record sits at the end of an unsorted list: show the page it is on.
-            route.id === "new" && paging && !state.sort
-              ? put({ id, page: String(Math.max(1, Math.ceil((total + 1) / pageSize))) })
-              : put({ id })
+            // Without a sort of its own the list shows the newest first: a new record is on page one.
+            route.id === "new" && paging && !state.sort ? put({ id, page: "" }) : put({ id })
           }
         />
       )}

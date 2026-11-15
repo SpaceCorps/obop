@@ -65,6 +65,8 @@ const ALLOWED: Allowed[] = [
   { file: `${BO}/favorites.ts`, text: "obop-fav:", why: STORAGE },
   { file: `${BO}/ModelPage.tsx`, text: "obop-view-", why: STORAGE },
   { file: `${BO}/ModelPage.tsx`, text: "obop-pagesize", why: STORAGE },
+  { file: `${BO}/ModelPage.tsx`, text: "obop-user", why: STORAGE },
+  { file: `${BO}/ModelPage.tsx`, text: "obop-cols:", why: STORAGE },
   { file: `${BO}/theme.ts`, text: "obop-theme", why: STORAGE },
   { file: `${BO}/views/KanbanView.tsx`, text: "obop-fold:", why: STORAGE },
   { file: `${BO}/views/ListView.tsx`, text: "obop-cols:", why: STORAGE },
