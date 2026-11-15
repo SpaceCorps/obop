@@ -5,6 +5,7 @@ summary = "Szablony dokumentów i prośby o podpis; PDF z Dokumentów można pod
 
 [labels.pl.model.sign_template]
 name = "Szablon"
+plural = "Szablony"
 description = "Dokument, który można wysłać do podpisu"
 
 [labels.pl.model.sign_template.field.name]
@@ -29,6 +30,7 @@ description = "Czy nowe wnioski mogą używać szablonu"
 
 [labels.pl.model.sign_request]
 name = "Wniosek o podpis"
+plural = "Wnioski o podpis"
 description = "Prośba, aby jedna osoba podpisała jeden dokument"
 
 [labels.pl.model.sign_request.field.template_id]
@@ -139,6 +141,7 @@ description = "Wyślij prośbę o dokument z Dokumentów: pobiera SHA-256 pliku 
 
 [labels.pl.model.sign_link]
 name = "Link do podpisu"
+plural = "Linki do podpisu"
 description = "Jednorazowy link, dzięki któremu jedna osoba może podpisać jedną prośbę; zapisywany jest tylko skrót sekretu, więc link pokazywany jest raz, przy tworzeniu"
 
 [labels.pl.model.sign_link.field.request_id]

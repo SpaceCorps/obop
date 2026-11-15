@@ -4283,7 +4283,7 @@ label = "Ota käyttöön"
 
     fn fleet_with_labels(version: &str, labels: &str) -> String {
         Manifest::combine(
-            &include_str!("../../../../packages/fleet.toml").replace("0.3.1", version),
+            &include_str!("../../../../packages/fleet.toml").replace("0.3.2", version),
             labels,
         )
     }

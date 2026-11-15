@@ -5,6 +5,7 @@ summary = "Pracownicy, działy i wnioski urlopowe; dane o wynagrodzeniu i zdrowi
 
 [labels.pl.model.hr_department]
 name = "Dział"
+plural = "Działy"
 description = "Zespół lub dział firmy"
 
 [labels.pl.model.hr_department.field.name]
@@ -21,6 +22,7 @@ description = "Kod centrum kosztów używany przez dział finansów"
 
 [labels.pl.model.hr_employee]
 name = "Pracownik"
+plural = "Pracownicy"
 description = "Osoba zatrudniona w firmie"
 
 [labels.pl.model.hr_employee.field.name]
@@ -124,6 +126,7 @@ description = "Kończy kartotekę zatrudnienia; cofnąć można tylko decyzją d
 
 [labels.pl.model.hr_leave_request]
 name = "Wniosek urlopowy"
+plural = "Urlopy"
 description = "Wniosek o czas wolny od pracy"
 
 [labels.pl.model.hr_leave_request.field.employee_id]
@@ -194,3 +197,15 @@ description = "Zdjęcie osoby (PNG, JPEG, WebP lub GIF; metadane, takie jak loka
 [labels.pl.model.hr_leave_request.field.requested_by]
 label = "Wnioskujący"
 description = "Nazwa użytkownika osoby, która prosi o urlop; domyślnie osoba składająca wniosek. Widzą go tylko ona i hr.manager"
+
+[labels.pl.model.hr_leave_request.action.request.assert.dates_in_order]
+message = "Ostatni dzień urlopu przypada przed jego pierwszym dniem"
+
+[labels.pl.model.hr_leave_request.action.request.assert.days_given]
+message = "Podaj liczbę dni roboczych urlopu"
+
+[labels.pl.model.hr_leave_request.action.approve.assert.dates_in_order]
+message = "Ostatni dzień urlopu przypada przed jego pierwszym dniem"
+
+[labels.pl.model.hr_leave_request.action.approve.assert.days_given]
+message = "Podaj liczbę dni roboczych urlopu"

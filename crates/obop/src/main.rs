@@ -86,6 +86,8 @@ mod passkey_tests;
 #[cfg(test)]
 mod payments_tests;
 #[cfg(test)]
+mod people_collab_hints_tests;
+#[cfg(test)]
 mod public_site_tests;
 #[cfg(test)]
 mod recorded_tables_tests;
@@ -3037,7 +3039,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("obop-check-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let bad = dir.join("bad.toml");
-        std::fs::write(&bad, fleet.replace("0.3.1", "2")).unwrap();
+        std::fs::write(&bad, fleet.replace("0.3.2", "2")).unwrap();
         let good = root.join("packages/fleet.toml");
         let (bad_s, good_s) = (
             bad.to_string_lossy().to_string(),
@@ -3566,8 +3568,8 @@ mod bundled_packages {
             let fields: Vec<FieldInfo> = self.meta[model].fields.clone();
             let mut m = BTreeMap::new();
             for f in fields {
-                // Computed values and numbers are the system's to give.
-                if f.computed || f.sequence {
+                // Computed values, numbers and readonly fields (D95) are the system's to give.
+                if f.computed || f.sequence || f.hints.as_ref().is_some_and(|h| h.readonly) {
                     continue;
                 }
                 let v = match f.kind {

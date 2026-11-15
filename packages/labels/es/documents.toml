@@ -5,6 +5,7 @@ summary = "Un registro de documentos de empresa con propietario, caducidad y con
 
 [labels.es.model.documents_folder]
 name = "Carpeta"
+plural = "Carpetas"
 description = "Una carpeta que agrupa documentos"
 
 [labels.es.model.documents_folder.field.name]
@@ -21,6 +22,7 @@ description = "Qué debe ir en la carpeta"
 
 [labels.es.model.documents_document]
 name = "Documento"
+plural = "Documentos"
 description = "Un contrato, política, certificado u otro documento registrado"
 
 [labels.es.model.documents_document.field.title]

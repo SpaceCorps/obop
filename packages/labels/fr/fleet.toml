@@ -5,6 +5,7 @@ summary = "Véhicules, conducteurs et historique d’entretien pour un petit par
 
 [labels.fr.model.fleet_vehicle]
 name = "Véhicule"
+plural = "Véhicules"
 description = "Un véhicule exploité par l’entreprise"
 
 [labels.fr.model.fleet_vehicle.field.plate]
@@ -70,6 +71,7 @@ description = "Retire définitivement un véhicule disponible du parc (nécessit
 
 [labels.fr.model.fleet_vehicle_driver]
 name = "Conducteur"
+plural = "Conducteurs"
 description = "Un conducteur enregistré, avec les données de son permis et un statut actif ou suspendu"
 
 [labels.fr.model.fleet_vehicle_driver.field.name]
@@ -106,6 +108,7 @@ description = "Remet un conducteur suspendu au statut actif"
 
 [labels.fr.model.fleet_vehicle_service]
 name = "Intervention sur véhicule"
+plural = "Interventions"
 description = "Une opération d’entretien, de réparation ou de contrôle sur un véhicule"
 
 [labels.fr.model.fleet_vehicle_service.field.vehicle_id]
@@ -159,3 +162,11 @@ description = "Marque une opération prévue comme terminée"
 [labels.fr.model.fleet_vehicle_service.action.cancel]
 label = "Annuler"
 description = "Annule une opération prévue"
+
+[labels.fr.model.fleet_vehicle.action.send_to_workshop]
+label = "Envoyer à l'atelier"
+description = "Envoyer un véhicule disponible à l'atelier pour un entretien ou une réparation"
+
+[labels.fr.model.fleet_vehicle.action.back_in_service]
+label = "Retour de l'atelier"
+description = "Remettre un véhicule revenu de l'atelier parmi les véhicules disponibles"

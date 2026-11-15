@@ -1,6 +1,6 @@
 [module]
 id = "dashboards"
-version = "0.3.0"
+version = "0.3.1"
 name = "Dashboards"
 description = "Dashboards and their widgets stored as data, for a UI to render. A dashboard has a title and an owner and is private to them (and to dashboards.manager) unless it is shared; its tiles follow it. A widget describes one tile with these fields: kind (kpi, bar, line, pie or table), model_name (the model to read, for example sale_order), measure_field (the field to aggregate; empty for count), aggregate (count or sum; sum needs a number or money measure_field), group_by (field to split by, for bar, line, pie and table; empty for a single kpi value), filter (a JSON object of field names to exact values, for example {\"state\":\"paid\"}; empty means all records) and position (order on the dashboard, lowest first). The package only stores the definition; it does not check that the model or fields exist and it computes nothing."
 author = "SpaceCorps"
@@ -11,7 +11,8 @@ repository = "https://github.com/SpaceCorps/obop"
 keywords = ["dashboards", "kpi", "reporting"]
 categories = ["productivity"]
 maturity = "experimental"
-requires_core = "^0.2"
+requires_core = "^0.2.2"
+changelog = "Business names for dashboards and tiles, which now sit under Manage, list columns in the order of the board, and sensible starting values: a new dashboard belongs to the person who makes it and a new tile counts records."
 
 [[model]]
 name = "dashboards_dashboard"
@@ -23,6 +24,22 @@ write_group = "dashboards.manager"
   own = "owner"
   public_field = "shared"
   see_all_group = "dashboards.manager"
+
+  [model.ui]
+  title = "{title}"
+  subtitle = "{owner}"
+  list = ["title", "owner", "shared", "position"]
+  quick_create = ["title", "description"]
+  order = "position asc, title asc"
+  default_view = "list"
+  menu = "configuration"
+  menu_section = "Manage"
+  menu_order = 1
+
+  [[model.child]]
+  model = "dashboards_widget"
+  via = "dashboard_id"
+  shape = "list"
 
   [[model.field]]
   name = "title"
@@ -36,6 +53,7 @@ write_group = "dashboards.manager"
   class = "internal"
   personal_data = true
   required = true
+  default = "$user"
 
   [[model.field]]
   name = "description"
@@ -55,6 +73,9 @@ write_group = "dashboards.manager"
   class = "none"
   kind = "number"
 
+    [model.field.ui]
+    aggregate = "none"
+
 [[model]]
 name = "dashboards_widget"
 description = "One tile on a dashboard, defined by what to read and how to aggregate it"
@@ -63,6 +84,17 @@ write_group = "dashboards.manager"
 
   [model.access]
   via = "dashboard_id"
+
+  [model.ui]
+  title = "{title}"
+  subtitle = "{dashboard_id}"
+  list = ["title", "dashboard_id", "kind", "model_name", "aggregate", "position"]
+  quick_create = ["title", "dashboard_id", "kind", "model_name"]
+  order = "position asc, title asc"
+  default_view = "list"
+  menu = "configuration"
+  menu_section = "Manage"
+  menu_order = 2
 
   [[model.field]]
   name = "dashboard_id"
@@ -104,6 +136,7 @@ write_group = "dashboards.manager"
   kind = "select"
   options = ["count", "sum"]
   required = true
+  default = "count"
 
   [[model.field]]
   name = "group_by"
@@ -121,3 +154,6 @@ write_group = "dashboards.manager"
   description = "Order of the tile on the dashboard, lowest first"
   class = "none"
   kind = "number"
+
+    [model.field.ui]
+    aggregate = "none"

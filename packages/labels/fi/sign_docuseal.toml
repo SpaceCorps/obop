@@ -5,6 +5,7 @@ summary = "Vastaanottaa DocuSealin allekirjoitustapahtumat pyyntöjen rinnalle. 
 
 [labels.fi.model.sign_docuseal_event]
 name = "DocuSeal-tapahtuma"
+plural = "DocuSeal-tapahtumat"
 description = "DocuSealin ilmoittama tapahtuma allekirjoituspyynnöstä, DocuSeal-liittimen kirjoittama"
 
 [labels.fi.model.sign_docuseal_event.field.event]

@@ -1,6 +1,6 @@
 [module]
 id = "hr"
-version = "0.3.0"
+version = "0.3.1"
 name = "Human Resources"
 description = "Employees, departments and leave requests. Personal data is classified strictly: pay, bank and national id are visible to managers only, and health and union data to the special reader group. An employee sees and files only their own leave requests; hr.manager sees all of them."
 author = "SpaceCorps"
@@ -11,13 +11,30 @@ repository = "https://github.com/SpaceCorps/obop"
 keywords = ["hr", "employees", "leave"]
 categories = ["people"]
 maturity = "beta"
-requires_core = "^0.2"
+requires_core = "^0.2.2"
+home = "hr_employee"
+changelog = "Clearer screens: the app opens on Employees, with business names, list and card columns, form sections for private, pay and sensitive data, saved filters, a leave calendar and safer action buttons. A leave request now needs its last day on or after its first day and a number of working days before it is requested or approved."
 
 [[model]]
 name = "hr_department"
 description = "A team or department of the company"
 read_group = "hr.user"
 write_group = "hr.manager"
+
+  [model.ui]
+  title = "{name}"
+  subtitle = "{head}"
+  list = ["name", "head", "cost_centre"]
+  quick_create = ["name", "head"]
+  order = "name asc"
+  default_view = "list"
+  menu = "configuration"
+  menu_order = 1
+
+  [[model.child]]
+  model = "hr_employee"
+  via = "department_id"
+  shape = "list"
 
   [[model.field]]
   name = "name"
@@ -42,6 +59,50 @@ description = "A person employed by the company"
 read_group = "hr.user"
 write_group = "hr.manager"
 
+  [model.ui]
+  title = "{name}"
+  subtitle = "{job_title} · {department_id} | {job_title} | {department_id}"
+  list = ["name", "job_title", "department_id", "reports_to_id", "work_email", "work_phone", "state"]
+  card = ["photo", "name", "job_title", "department_id", "reports_to_id"]
+  quick_create = ["name", "job_title", "department_id"]
+  order = "name asc"
+  default_view = "gallery"
+  menu = "main"
+  menu_order = 1
+  report = { rows = "department_id", cols = "state" }
+
+  [[model.ui.section]]
+  label = "Employment"
+  fields = ["hired_on", "contract_type"]
+
+  [[model.ui.section]]
+  label = "Private"
+  fields = ["private_email", "private_phone", "home_address", "birth_date", "national_id", "emergency_contact"]
+  collapsed = true
+
+  [[model.ui.section]]
+  label = "Pay"
+  fields = ["salary", "bank_iban"]
+  collapsed = true
+
+  [[model.ui.section]]
+  label = "Sensitive"
+  fields = ["union_member", "work_permit_expiry", "health_note"]
+  collapsed = true
+
+  [[model.ui.filter]]
+  label = "Active"
+  where = "state = active"
+
+  [[model.ui.filter]]
+  label = "Onboarding"
+  where = "state = onboarding"
+
+  [[model.child]]
+  model = "hr_leave_request"
+  via = "employee_id"
+  shape = "list"
+
   [[model.field]]
   name = "name"
   description = "Full name"
@@ -61,11 +122,17 @@ write_group = "hr.manager"
   class = "public_directory"
   personal_data = true
 
+    [model.field.ui]
+    display = "email"
+
   [[model.field]]
   name = "work_phone"
   description = "Work phone number"
   class = "public_directory"
   personal_data = true
+
+    [model.field.ui]
+    display = "tel"
 
   [[model.field]]
   name = "photo"
@@ -112,12 +179,18 @@ write_group = "hr.manager"
   personal_data = true
   group = "hr.manager"
 
+    [model.field.ui]
+    display = "email"
+
   [[model.field]]
   name = "private_phone"
   description = "Private phone number"
   class = "confidential_hr"
   personal_data = true
   group = "hr.manager"
+
+    [model.field.ui]
+    display = "tel"
 
   [[model.field]]
   name = "home_address"
@@ -126,6 +199,9 @@ write_group = "hr.manager"
   personal_data = true
   kind = "longtext"
   group = "hr.manager"
+
+    [model.field.ui]
+    display = "address"
 
   [[model.field]]
   name = "birth_date"
@@ -157,6 +233,9 @@ write_group = "hr.manager"
   kind = "money"
   group = "hr.manager"
 
+    [model.field.ui]
+    aggregate = "none"
+
   [[model.field]]
   name = "bank_iban"
   description = "Bank account salary is paid into"
@@ -180,6 +259,9 @@ write_group = "hr.manager"
   kind = "date"
   group = "hr.special_reader"
 
+    [model.field.ui]
+    warn_before_days = 60
+
   [[model.field]]
   name = "health_note"
   description = "Health condition or disability relevant to the workplace"
@@ -196,12 +278,19 @@ write_group = "hr.manager"
   options = ["onboarding", "active", "offboarded"]
   required = true
 
+    [model.field.ui]
+    tones = { onboarding = "info", active = "ok", offboarded = "neutral" }
+
   [[model.action]]
   name = "activate"
   description = "Complete onboarding and mark the employee as active"
   field = "state"
   from = "onboarding"
   to = "active"
+
+    [model.action.ui]
+    primary = true
+    done = "The employee is now active"
 
   [[model.action]]
   name = "offboard"
@@ -210,6 +299,11 @@ write_group = "hr.manager"
   from = "active"
   to = "offboarded"
   approval = true
+
+    [model.action.ui]
+    danger = true
+    confirm = "Offboard this employee? The record and its details stay, and no step moves it back."
+    done = "The employee is offboarded"
 
 [[model]]
 name = "hr_leave_request"
@@ -221,11 +315,45 @@ write_group = "hr.user"
   own = "requested_by"
   see_all_group = "hr.manager"
 
+  [model.ui]
+  title = "{employee_id} · {leave_kind} · {start_on} | {employee_id} · {start_on} | {employee_id}"
+  subtitle = "{start_on} – {end_on}"
+  list = ["employee_id", "leave_kind", "start_on", "end_on", "days", "state"]
+  card = ["employee_id", "leave_kind", "start_on", "end_on", "days"]
+  card_sum = "days"
+  quick_create = ["employee_id", "leave_kind", "start_on", "end_on", "days"]
+  order = "start_on desc"
+  default_view = "list"
+  menu = "main"
+  menu_order = 2
+  calendar = { start = "start_on", end = "end_on", color = "state" }
+  report = { rows = "employee_id", cols = "leave_kind", measure = "days" }
+
+  [[model.ui.section]]
+  label = "Sick leave"
+  fields = ["is_sick_leave", "medical_note"]
+  collapsed = true
+
+  [[model.ui.filter]]
+  label = "To approve"
+  where = "state = requested"
+
+  [[model.ui.filter]]
+  label = "Away today"
+  where = "state = approved && start_on <= today && end_on >= today"
+
+  [[model.ui.filter]]
+  label = "Upcoming"
+  where = "state = approved && start_on > today"
+
   [[model.field]]
   name = "requested_by"
   description = "User name of the person who asked for the leave; the person who files the request unless set otherwise. Only they and hr.manager see the request"
   class = "internal"
   personal_data = true
+
+    [model.field.ui]
+    hidden = true
 
   [[model.field]]
   name = "employee_id"
@@ -243,6 +371,7 @@ write_group = "hr.user"
   kind = "select"
   options = ["paid", "unpaid", "parental", "study", "other"]
   required = true
+  default = "paid"
 
   [[model.field]]
   name = "start_on"
@@ -266,6 +395,9 @@ write_group = "hr.user"
   class = "none"
   kind = "number"
   required = true
+
+    [model.field.ui]
+    aggregate = "sum"
 
   [[model.field]]
   name = "reason"
@@ -299,12 +431,23 @@ write_group = "hr.user"
   options = ["draft", "requested", "approved", "refused"]
   required = true
 
+    [model.field.ui]
+    tones = { draft = "neutral", requested = "warn", approved = "ok", refused = "bad" }
+
   [[model.action]]
   name = "request"
   description = "Submit the request to the manager"
   field = "state"
   from = "draft"
   to = "requested"
+  assert = [
+    { expr = "end_on >= start_on", message = "The last day of the leave is before its first day", key = "dates_in_order" },
+    { expr = "days > 0", message = "Give the number of working days the leave takes", key = "days_given" },
+  ]
+
+    [model.action.ui]
+    primary = true
+    done = "Sent for approval"
 
   [[model.action]]
   name = "approve"
@@ -314,6 +457,14 @@ write_group = "hr.user"
   to = "approved"
   group = "hr.manager"
   approval = true
+  assert = [
+    { expr = "end_on >= start_on", message = "The last day of the leave is before its first day", key = "dates_in_order" },
+    { expr = "days > 0", message = "Give the number of working days the leave takes", key = "days_given" },
+  ]
+
+    [model.action.ui]
+    primary = true
+    done = "Leave approved"
 
   [[model.action]]
   name = "refuse"
@@ -323,3 +474,8 @@ write_group = "hr.user"
   to = "refused"
   group = "hr.manager"
   approval = true
+
+    [model.action.ui]
+    danger = true
+    confirm = "Refuse this leave request?"
+    done = "Leave refused"

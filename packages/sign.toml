@@ -1,6 +1,6 @@
 [module]
 id = "sign"
-version = "0.2.3"
+version = "0.2.4"
 name = "Sign"
 description = "Document templates and signature requests with a draft, sent, signed, declined, expired flow. A request names the signer (personal data) and keeps the signature evidence. A request can point at a PDF in Documents: sending it takes the SHA-256 of the file and keeps an exact copy, and a person with the manager role creates a one-time signing link that the signer opens without an account to read that copy, type their full name and agree. This is a simple electronic signature only: a typed name does not prove who typed it, the time is the server clock, and the address is the one the proxy chain reports. At signing the evidence is stored on the request and an entry is written to the security log (the log has only read commands, so no caller can write or change an entry through a command; the server writes the entries, and the database does not stop someone who can write it). A manager can switch on a history for files that several named people sign together: the signer then sees the typed names and the times of the others who signed the same file. A signed request can be changed or deleted only by an administrator, who can still change any record. Sending and recording a signature need a human approval for agents, and agents cannot create signing links."
 author = "SpaceCorps"
@@ -11,7 +11,9 @@ repository = "https://github.com/SpaceCorps/obop"
 keywords = ["signature", "e-sign", "contracts"]
 categories = ["productivity"]
 maturity = "experimental"
-requires_core = "^0.2"
+requires_core = "^0.2.2"
+home = "sign_request"
+changelog = "Clearer screens: the app opens on Signature requests, with business names, list columns, saved filters, status colours and the evidence and sent file in their own folded sections, shown once a request is sent or signed. Signing links stay on their request. A new template can be used at once, sending a request from a template stamps the day it was sent, and marking a request signed by hand stamps the day it was signed."
 
 [module.dependencies]
 documents = ">=0.3, <1"
@@ -21,6 +23,16 @@ name = "sign_template"
 description = "A document that can be sent out for signature"
 read_group = "sign.user"
 write_group = "sign.manager"
+
+  [model.ui]
+  title = "{name}"
+  subtitle = "{signer_role}"
+  list = ["name", "signer_role", "active"]
+  quick_create = ["name", "signer_role"]
+  order = "name asc"
+  default_view = "list"
+  menu = "configuration"
+  menu_order = 1
 
   [[model.field]]
   name = "name"
@@ -40,6 +52,9 @@ write_group = "sign.manager"
   class = "none"
   kind = "longtext"
 
+    [model.field.ui]
+    display = "markdown"
+
   [[model.field]]
   name = "signer_role"
   description = "Role of the person who signs, for example Customer"
@@ -50,12 +65,53 @@ write_group = "sign.manager"
   description = "Whether new requests can use the template"
   class = "none"
   kind = "bool"
+  default = true
 
 [[model]]
 name = "sign_request"
 description = "A request for one person to sign one document"
 read_group = "sign.user"
 write_group = "sign.user"
+
+  [model.ui]
+  title = "{title}"
+  subtitle = "{signer_name}"
+  list = ["title", "signer_name", "document_id", "sent_on", "expires_on", "state"]
+  card = ["title", "signer_name", "document_id", "expires_on"]
+  quick_create = ["title", "document_id", "signer_name"]
+  default_view = "kanban"
+  menu = "main"
+  menu_order = 1
+  report = { rows = "state", cols = "template_id" }
+
+  [[model.ui.section]]
+  label = "Options"
+  fields = ["show_history"]
+  collapsed = true
+
+  [[model.ui.section]]
+  label = "Sent file"
+  fields = ["sent_on", "document_hash", "document_file"]
+  collapsed = true
+  show_in = ["sent", "signed", "declined", "expired"]
+
+  [[model.ui.section]]
+  label = "Evidence"
+  fields = ["signed_on", "signed_at", "signed_name", "signer_ip", "signer_user_agent", "signature_reference", "consent_version"]
+  collapsed = true
+  show_in = ["signed"]
+
+  [[model.ui.filter]]
+  label = "Waiting for signature"
+  where = "state = sent"
+
+  [[model.ui.filter]]
+  label = "Signed"
+  where = "state = signed"
+
+  [[model.ui.filter]]
+  label = "Expiring soon"
+  where = "state = sent && expires_on != null && expires_on <= today+3"
 
   [[model.field]]
   name = "template_id"
@@ -96,6 +152,9 @@ write_group = "sign.user"
   class = "internal"
   personal_data = true
 
+    [model.field.ui]
+    display = "email"
+
   [[model.field]]
   name = "sent_on"
   description = "Day the request was sent (YYYY-MM-DD)"
@@ -107,6 +166,9 @@ write_group = "sign.user"
   description = "Last day the request can be signed (YYYY-MM-DD)"
   class = "none"
   kind = "date"
+
+    [model.field.ui]
+    warn_before_days = 3
 
   [[model.field]]
   name = "show_history"
@@ -183,6 +245,9 @@ write_group = "sign.user"
   options = ["draft", "sent", "signed", "declined", "expired"]
   required = true
 
+    [model.field.ui]
+    tones = { draft = "neutral", sent = "info", signed = "ok", declined = "bad", expired = "bad" }
+
   [[model.action]]
   name = "send"
   description = "Send the request to the signer"
@@ -190,6 +255,14 @@ write_group = "sign.user"
   from = "draft"
   to = "sent"
   approval = true
+
+    [model.action.ui]
+    done = "Sent to the signer"
+
+    [[model.action.effect]]
+    kind = "set"
+    set = { sent_on = "$today" }
+    when = "!is_set(sent_on)"
 
   [[model.action]]
   name = "sign"
@@ -201,6 +274,15 @@ write_group = "sign.user"
   approval = true
   assert = [{ expr = "!is_set(document_id) && !is_set(document_file) && (!is_set(document_hash) || is_set(template_id))", message = "A request about a Document is signed by the signer through the signing link; it cannot be marked signed by hand", key = "document_request" }]
 
+    [model.action.ui]
+    confirm = "Record that the signer signed? A request about a document is signed through its signing link instead."
+    done = "Marked as signed"
+
+    [[model.action.effect]]
+    kind = "set"
+    set = { signed_on = "$today" }
+    when = "!is_set(signed_on)"
+
   [[model.action]]
   name = "decline"
   description = "Record that the signer declined"
@@ -208,12 +290,22 @@ write_group = "sign.user"
   from = "sent"
   to = "declined"
 
+    [model.action.ui]
+    danger = true
+    confirm = "Record that the signer declined?"
+    done = "Marked as declined"
+
   [[model.action]]
   name = "expire"
   description = "Record that the request ran out unsigned"
   field = "state"
   from = "sent"
   to = "expired"
+
+    [model.action.ui]
+    danger = true
+    confirm = "Record that the request ran out unsigned?"
+    done = "Marked as expired"
 
   [[model.action]]
   name = "send_document"
@@ -223,11 +315,21 @@ write_group = "sign.user"
   to = "sent"
   approval = true
 
+    [model.action.ui]
+    done = "Sent. Create the signing link next."
+
 [[model]]
 name = "sign_link"
 description = "A one-time link that lets one person sign one request; only a hash of the secret is kept, so the link is shown once when it is created"
 read_group = "sign.user"
 write_group = "sign.manager"
+
+  [model.ui]
+  title = "{request_id}"
+  list = ["request_id", "expires_at", "used_at", "revoked_at"]
+  order = "expires_at desc"
+  default_view = "list"
+  menu = "hidden"
 
   [[model.field]]
   name = "request_id"
@@ -260,3 +362,6 @@ write_group = "sign.manager"
   description = "The link itself: in the answer to create only, shown once, never stored and never returned by get, list or search"
   class = "internal"
   group = "sign.manager"
+
+    [model.field.ui]
+    hidden = true

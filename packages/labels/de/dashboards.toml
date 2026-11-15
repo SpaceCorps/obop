@@ -5,6 +5,7 @@ summary = "Dashboards und Kacheln als Daten gespeichert, damit das Backoffice si
 
 [labels.de.model.dashboards_dashboard]
 name = "Dashboard"
+plural = "Dashboards"
 description = "Ein Dashboard: eine betitelte, geordnete Sammlung von Kacheln"
 
 [labels.de.model.dashboards_dashboard.field.title]
@@ -29,6 +30,7 @@ description = "Reihenfolge unter den Dashboards, niedrigste zuerst"
 
 [labels.de.model.dashboards_widget]
 name = "Kachel"
+plural = "Kacheln"
 description = "Eine Kachel auf einem Dashboard, festgelegt durch das zu lesende Modell und die Art der Aggregation"
 
 [labels.de.model.dashboards_widget.field.dashboard_id]

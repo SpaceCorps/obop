@@ -1,2 +1,38 @@
 # English names and plurals of fleet (D52, D95): [labels.en.model.<model>] name = "...", plural = "...".
 # The manifest stays the English source; this file only adds the display names it does not have.
+
+[labels.en.model.fleet_vehicle]
+name = "Vehicle"
+plural = "Vehicles"
+
+[labels.en.model.fleet_vehicle.field.model]
+label = "Make and model"
+
+[labels.en.model.fleet_vehicle.field.vin]
+label = "VIN"
+
+[labels.en.model.fleet_vehicle.field.odometer_km]
+label = "Odometer (km)"
+
+[labels.en.model.fleet_vehicle.field.driver]
+label = "Driver name (free text)"
+
+[labels.en.model.fleet_vehicle.field.driver_id]
+label = "Driver"
+
+[labels.en.model.fleet_vehicle.action.back_in_service]
+label = "Back from the workshop"
+
+[labels.en.model.fleet_vehicle_driver]
+name = "Driver"
+plural = "Drivers"
+
+[labels.en.model.fleet_vehicle_service]
+name = "Service"
+plural = "Services"
+
+[labels.en.model.fleet_vehicle_service.field.service_on]
+label = "Date"
+
+[labels.en.model.fleet_vehicle_service.field.odometer_km]
+label = "Odometer (km)"

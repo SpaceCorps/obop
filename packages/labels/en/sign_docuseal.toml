@@ -1,2 +1,12 @@
 # English names and plurals of sign_docuseal (D52, D95): [labels.en.model.<model>] name = "...", plural = "...".
 # The manifest stays the English source; this file only adds the display names it does not have.
+
+[labels.en.model.sign_docuseal_event]
+name = "DocuSeal event"
+plural = "DocuSeal events"
+
+[labels.en.model.sign_docuseal_event.field.request_ref]
+label = "Request reference"
+
+[labels.en.model.sign_docuseal_event.field.document_url]
+label = "Document address"

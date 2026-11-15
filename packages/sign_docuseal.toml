@@ -1,6 +1,6 @@
 [module]
 id = "sign_docuseal"
-version = "0.2.0"
+version = "0.2.1"
 name = "Sign with DocuSeal"
 description = "Receives the events of a DocuSeal server (viewed, signed, declined, expired) as records, next to the Sign app's requests. A signature request is sent to DocuSeal by the DocuSeal connector when sign_request.send runs; DocuSeal keeps the signed document and its audit trail, and the event here names the request by its reference and links to the document. The event does not move the request: a person still records the signature with the sign action, which needs approval."
 author = "SpaceCorps"
@@ -11,7 +11,10 @@ repository = "https://github.com/SpaceCorps/obop"
 keywords = ["signature", "e-sign", "docuseal", "contracts", "nda"]
 categories = ["productivity"]
 maturity = "experimental"
-requires_core = "^0.2"
+requires_core = "^0.2.2"
+home = "sign_docuseal_event"
+launcher = false
+changelog = "The DocuSeal events live under the Sign app instead of a launcher tile of their own, with business names, list columns and the document address as a link."
 
 [module.dependencies]
 sign = "^0.2"
@@ -21,6 +24,14 @@ name = "sign_docuseal_event"
 description = "One event DocuSeal reported about a signing request, written by the DocuSeal connector"
 read_group = "sign_docuseal.user"
 write_group = "sign_docuseal.manager"
+
+  [model.ui]
+  title = "{event} · {completed_at} | {event}"
+  subtitle = "{status}"
+  list = ["event", "status", "request_ref", "completed_at", "submission_id"]
+  default_view = "list"
+  menu = "main"
+  menu_order = 1
 
   [[model.field]]
   name = "event"
@@ -47,6 +58,9 @@ write_group = "sign_docuseal.manager"
   name = "document_url"
   description = "Address of the signed document on the DocuSeal server; opening it needs access to DocuSeal"
   class = "internal"
+
+    [model.field.ui]
+    display = "url"
 
   [[model.field]]
   name = "completed_at"
