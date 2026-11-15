@@ -806,6 +806,8 @@ A record is **frozen** when its state is in `immutable_when`, when its `lock_dat
 
 `append_only = true` stands alone: records are created and read, never changed or deleted.
 
+A guard of `mutable_fields` alone (no `immutable_when`, `lock_date`, `children_of` or `append_only`) freezes every saved record: once created, only those fields change, and the record is not deleted. A stock item keeps its product, location and lot, while its quantity and reorder level move (`inventory`).
+
 | Key | Rules (the gate refuses with `<module>.<model>.guard.<key>`) |
 |---|---|
 | `immutable_when`, `no_delete_when` | A select that an action of the model moves; values among its options; for `immutable_when`, not the first option (a record is born unfrozen). The list form needs exactly one governed select. |

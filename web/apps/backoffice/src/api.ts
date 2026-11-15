@@ -132,6 +132,18 @@ export type ModelGuard = {
   message?: string;
 };
 
+/**
+ * A guard of `mutable_fields` alone (no `immutable_when`, `lock_date`, `children_of` or
+ * `append_only`) freezes every saved record: only those fields change once it is created, as the
+ * server holds it (`obop_commands` `engine/frozen.rs`, `Frozen::Created`).
+ */
+export const fixedOnceCreated = (g: ModelGuard): boolean =>
+  !!g.mutable_fields?.length &&
+  !g.immutable_when &&
+  !g.lock_date &&
+  !g.children_of &&
+  !g.append_only;
+
 /** A child model drawn inside its parent's form (lines, a compact list, images, translations). */
 export type ChildMeta = {
   model: string;

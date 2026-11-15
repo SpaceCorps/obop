@@ -13,6 +13,8 @@
 //! - A frozen record changes only in `mutable_fields`, or along an `exit_to` edge by the action
 //!   that the unit runs on it (the ticket `Unit::ticket` records), with that edge's `may_change`;
 //!   it is never deleted, nor is a record in a `no_delete_when` state.
+//! - A guard that names only `mutable_fields` freezes every saved record: after it is created only
+//!   those fields change (`Frozen::Created`).
 //! - A new or changed lock-date field may not fall on or before the lock date (or inside a closed
 //!   period); a new or changed parent may not be frozen; a child of a frozen parent is not added,
 //!   changed or deleted.
@@ -37,6 +39,20 @@ pub(crate) enum Frozen {
     Locked,
     /// Its parent (model, id) is frozen.
     Parent(&'static str, String),
+    /// The guard names only `mutable_fields`: every saved record keeps what it was created with
+    /// but those (a stock item's product and location, while its quantity and reorder level move).
+    Created,
+}
+
+/// A guard that declares `mutable_fields` and no rule that freezes (no `immutable_when`,
+/// `lock_date`, `children_of` or `append_only`) freezes every saved record: only the mutable
+/// fields change after it is created.
+fn fixed_once_created(g: &Guard) -> bool {
+    !g.mutable_fields.is_empty()
+        && g.immutable_when.is_none()
+        && g.lock_date.is_none()
+        && g.children_of.is_none()
+        && !g.append_only
 }
 
 /// The definitions a check needs.
@@ -158,6 +174,9 @@ pub(crate) fn frozen_by(
     {
         return Ok(Some(Frozen::State(shown_state(rec.get(s.field)))));
     }
+    if fixed_once_created(g) {
+        return Ok(Some(Frozen::Created));
+    }
     if locked(u, look, g, rec)? {
         return Ok(Some(Frozen::Locked));
     }
@@ -195,6 +214,7 @@ fn frozen_sentence(def: &ModelDef, id: &str, why: &Frozen) -> String {
         Frozen::State(Some(s)) => format!("{} {id} is {s}", def.name),
         Frozen::State(None) => format!("{} {id} is in a state that is final", def.name),
         Frozen::Locked => format!("{} {id} is dated in a locked period", def.name),
+        Frozen::Created => format!("{} {id} keeps what it was created with", def.name),
         Frozen::Parent(pm, pid) => {
             format!("{} {id} belongs to {pm} {pid}, which is locked", def.name)
         }
