@@ -197,10 +197,12 @@ export function ModelPage({
     offset: aggMode ? 0 : offset,
     limit: aggMode ? 1 : pageSize,
     // Only an order by text follows the language (the server collates it in the locale).
-    collated: order.some((o) => {
-      const k = fields.find((f) => f.name === o.field)?.kind;
-      return k === "text" || k === "longtext" || k === "select" || k === "ref";
-    }),
+    collated:
+      !aggMode &&
+      order.some((o) => {
+        const k = fields.find((f) => f.name === o.field)?.kind;
+        return k === "text" || k === "longtext" || k === "select" || k === "ref";
+      }),
   });
   useEffect(() => {
     if (srv.denied.length || serverDenied.length) setServerDenied(srv.denied);
@@ -474,7 +476,9 @@ export function ModelPage({
     fields,
     rows: shown,
     setDialog: setExtraDialog,
-    server: aggMode ? { filter: plan.filter, order } : undefined,
+    // A board's cards and a calendar keep the server's order unless the search sorts them; the
+    // list's default order (newest first) is the list's.
+    server: aggMode ? { filter: plan.filter, order: plan.order } : undefined,
     state: query,
     setState: setViewState,
     selectedId: route.id,

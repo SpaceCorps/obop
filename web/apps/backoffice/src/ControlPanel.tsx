@@ -379,7 +379,7 @@ export function ControlPanel(p: Props) {
               aria-autocomplete="list"
               aria-label={t("Search {model}", { model: inSentence(p.title) })}
               aria-activedescendant={showList ? `${listId}-${active}` : undefined}
-              placeholder={filtersOn ? "" : t("Search {model}…", { model: inSentence(p.title) })}
+              placeholder={filtersOn ? "" : t("Search {model}…", { model: inSentence(heading) })}
               value={text}
               enterKeyHint="search"
               onChange={(e) => {
