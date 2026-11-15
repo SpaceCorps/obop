@@ -1,7 +1,6 @@
+import { META_STALE_FILE_RECOVERED, createHostState, type HostState } from "./host-state.ts";
+import { ensureModules, type SchemaModule } from "./schema.ts";
 import { createSqlDb, type RawDb, type SqlDb } from "./sql.ts";
-import { createSqlStore, migrate } from "./sql-store.ts";
-import type { OutboxStore } from "./store.ts";
-import { instant } from "./values.ts";
 
 /**
  * Opening the encrypted database: the key, the file, and the two things that are only true on iOS.
@@ -26,17 +25,16 @@ import { instant } from "./values.ts";
  *   installation, so the stored sign-in is dropped and the app starts signed out.
  */
 
-/** The note in the outbox that says a database file was found that no key fits and was replaced. */
-export const META_STALE_FILE_RECOVERED = "stale_file_recovered_at";
+export { META_STALE_FILE_RECOVERED };
 
 /** When the file of a restored backup was replaced, or `null` when there is nothing to tell (or the driver has read it). */
-export function staleFileRecoveredAt(store: Pick<OutboxStore, "getMeta">): Promise<string | null> {
-  return store.getMeta(META_STALE_FILE_RECOVERED);
+export function staleFileRecoveredAt(state: Pick<HostState, "getMeta">): Promise<string | null> {
+  return state.getMeta(META_STALE_FILE_RECOVERED);
 }
 
 /** The driver has read the note about the replaced file. */
-export function dismissStaleFileNote(store: Pick<OutboxStore, "setMeta">): Promise<void> {
-  return store.setMeta(META_STALE_FILE_RECOVERED, null);
+export function dismissStaleFileNote(state: Pick<HostState, "setMeta">): Promise<void> {
+  return state.setMeta(META_STALE_FILE_RECOVERED, null);
 }
 
 /** An open database file. */
@@ -115,7 +113,11 @@ async function closeQuietly(file: FileHandle): Promise<void> {
   }
 }
 
-async function openWithKey(ports: OpenPorts, key: string): Promise<OpenFile> {
+async function openWithKey(
+  ports: OpenPorts,
+  key: string,
+  modules: readonly SchemaModule[],
+): Promise<OpenFile> {
   const file = await ports.openFile();
   try {
     // The key goes first; nothing else may read the file before it.
@@ -132,7 +134,7 @@ async function openWithKey(ports: OpenPorts, key: string): Promise<OpenFile> {
     // A wrong key shows here as "file is not a database".
     const row = await db.one<{ user_version: number }>("PRAGMA user_version");
     const fresh = Number(row?.user_version ?? 0) === 0;
-    await migrate(db);
+    await ensureModules(db, modules);
     return { file, db, cipherVersion, fresh };
   } catch (error) {
     await closeQuietly(file);
@@ -152,10 +154,16 @@ async function openWithKey(ports: OpenPorts, key: string): Promise<OpenFile> {
  */
 const PENDING = /^pending:([0-9a-f]{64})$/;
 
+/**
+ * `modules` are the parts of the app that keep tables in the file, the host's first (`schema.ts`):
+ * the file is brought to what they need after the key has been checked, or refused when it is
+ * newer than they know.
+ */
 export async function openOutbox(
   ports: OpenPorts,
   names: OpenNames,
   policy: OpenPolicy,
+  modules: readonly SchemaModule[],
 ): Promise<Opened> {
   const known = await ports.secrets.get(names.databaseKey);
   let key: string;
@@ -176,12 +184,12 @@ export async function openOutbox(
   let opened: OpenFile;
   let recoveredStaleFile = false;
   try {
-    opened = await openWithKey(ports, key);
+    opened = await openWithKey(ports, key, modules);
   } catch (error) {
     if (!(generated && policy.recoverStaleFile && isNotADatabase(error))) throw error;
     await ports.deleteFile();
     recoveredStaleFile = true;
-    opened = await openWithKey(ports, key);
+    opened = await openWithKey(ports, key, modules);
   }
 
   try {
@@ -189,7 +197,10 @@ export async function openOutbox(
       for (const name of names.session) await ports.secrets.delete(name);
     }
     if (recoveredStaleFile) {
-      await createSqlStore(opened.db).setMeta(META_STALE_FILE_RECOVERED, instant(ports.now()));
+      await createHostState(opened.db).setMeta(
+        META_STALE_FILE_RECOVERED,
+        new Date(ports.now()).toISOString(),
+      );
     }
     // The key is proven now: it opened a file. Last, so that a kill before this line is met again.
     if (generated && policy.recoverStaleFile) await ports.secrets.set(names.databaseKey, key);

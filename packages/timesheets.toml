@@ -1,10 +1,11 @@
 [module]
 id = "timesheets"
-version = "0.3.0"
+version = "0.3.1"
 name = "Timesheets"
-description = "Time spent on project tasks, entered in minutes, with a billable flag and an approval step. Needs the Projects package. A worker sees and edits only their own entries; timesheets.manager sees all."
+description = "Time spent on project tasks, entered in minutes, with a billable flag and an approval step. Approving and rejecting an entry need a human approval; agents may only propose them. Needs the Projects package. A worker sees and edits only their own entries; timesheets.manager sees all."
 author = "SpaceCorps"
 summary = "Time spent on project tasks in minutes, with a billable flag and an approval step."
+changelog = "Approving and rejecting a time entry now need a human approval: an AI agent can only propose them. People are not affected."
 license = "Apache-2.0"
 homepage = "https://github.com/SpaceCorps/obop"
 repository = "https://github.com/SpaceCorps/obop"
@@ -91,11 +92,12 @@ write_group = "timesheets.user"
 
   [[model.action]]
   name = "approve"
-  description = "Approve a submitted entry so it can be billed (manager only)"
+  description = "Approve a submitted entry (manager only)"
   field = "state"
   from = "submitted"
   to = "approved"
   group = "timesheets.manager"
+  approval = true
 
   [[model.action]]
   name = "reject"
@@ -104,3 +106,4 @@ write_group = "timesheets.user"
   from = "submitted"
   to = "draft"
   group = "timesheets.manager"
+  approval = true

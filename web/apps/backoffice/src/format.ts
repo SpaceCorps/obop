@@ -9,7 +9,7 @@ import {
 } from "@obop/ui";
 import { getTime, type FieldMeta } from "./api.ts";
 import { formatDecimal } from "./decimals.ts";
-import { formatInstant } from "./instants.ts";
+import { formatInstant, instantShort as shortInstant } from "./instants.ts";
 import { shownOptionTarget } from "./shownOption.ts";
 
 /**
@@ -118,6 +118,11 @@ export function decimalText(v: unknown, f: Pick<FieldMeta, "scale">): string {
 /** An instant (D72) as it reads on the wall clock of the instance's time zone. */
 export function instantText(v: unknown): string {
   return formatInstant(v, getTime().zone, fmt.locale);
+}
+
+/** An instant to the minute, for a narrow place, with the full value for a title (`instantShort`). */
+export function instantShort(v: unknown): { text: string; full: string } | null {
+  return shortInstant(v, getTime().zone, fmt.locale);
 }
 
 export function formatDate(s: unknown): string {

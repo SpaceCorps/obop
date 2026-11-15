@@ -15,7 +15,9 @@ use serde_json::{Value as J, json};
 use std::sync::Arc;
 
 mod accounts;
+mod addr;
 pub mod blobs;
+mod brand;
 pub mod community;
 pub mod connectors;
 pub mod cors;
@@ -30,11 +32,22 @@ pub mod payments;
 pub mod public;
 pub(crate) mod shared;
 pub mod shell;
+mod sign;
+mod sign_page;
+pub mod sign_text;
 pub(crate) mod sso;
 pub mod website;
 
 #[cfg(test)]
+mod addr_scan_tests;
+#[cfg(test)]
+mod audit_kind_tests;
+#[cfg(test)]
+mod brand_scan_tests;
+#[cfg(test)]
 mod error_tests;
+#[cfg(test)]
+mod src_scan;
 
 pub struct HttpState {
     dispatcher: Arc<Dispatcher>,
@@ -69,6 +82,8 @@ pub struct HttpState {
     /// back office's own address under a public site. Set by the composition root, never by a
     /// request.
     sso_return: std::sync::OnceLock<String>,
+    /// The log line about a post to the signer door that was refused for its origin (D92).
+    sign_origin_log: sign::OriginLog,
 }
 
 impl HttpState {
@@ -104,7 +119,20 @@ impl HttpState {
             default_language: std::sync::OnceLock::new(),
             sso: sso::Cache::default(),
             sso_return: std::sync::OnceLock::new(),
+            sign_origin_log: sign::OriginLog::default(),
         })
+    }
+
+    /// For tests: replace the clock (seconds) and the sink of the line this server writes about a
+    /// post to the signer door that was refused for its origin (at most one every sixty seconds
+    /// of that clock, D92). False when it was set before. The default is the time since the server
+    /// started on a monotonic clock, and standard error.
+    pub fn set_sign_origin_log(
+        &self,
+        clock: impl Fn() -> u64 + Send + Sync + 'static,
+        sink: impl Fn(&str) + Send + Sync + 'static,
+    ) -> bool {
+        self.sign_origin_log.set_hooks(clock, sink)
     }
 
     /// Why a limited session is refused: it owes a new password (an administrator reset it) or
@@ -288,8 +316,9 @@ async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> 
     out
 }
 
-/// The REST routes under `/api`, without any static or public fallback.
-pub(crate) fn api_routes(state: Arc<HttpState>) -> Router {
+/// The REST routes under `/api`, without any static or public fallback. `not_found` is what the
+/// layout answers a path of the API that is no route; the logo route sends it when no brand is set.
+pub(crate) fn api_routes(state: Arc<HttpState>, not_found: brand::NotFound) -> Router {
     Router::new()
         .route("/healthz", get(ops::healthz))
         .route("/readyz", get(ops::readyz))
@@ -303,6 +332,11 @@ pub(crate) fn api_routes(state: Arc<HttpState>) -> Router {
             post(sso::exchange).layer(axum::extract::DefaultBodyLimit::max(sso::MAX_BODY)),
         )
         .route("/api/auth/agent-token", post(agent_token))
+        .route("/api/auth/agent-tokens", get(agent_tokens))
+        .route(
+            "/api/auth/agent-tokens/{id}/revoke",
+            post(revoke_agent_token),
+        )
         .route("/api/commands", get(commands))
         .route("/api/meta", get(meta))
         .route("/api/openapi.json", get(instance_openapi))
@@ -326,6 +360,14 @@ pub(crate) fn api_routes(state: Arc<HttpState>) -> Router {
         .route("/api/drive/status", get(drive::status))
         .route("/api/drive/files", get(drive::files))
         .route("/api/drive/import", post(drive::import))
+        .route("/api/drive/drives", get(drive::drives))
+        .route("/api/drive/folders", post(drive::create_folder))
+        .route("/api/drive/docs", post(drive::create_doc))
+        .route(
+            "/api/drive/upload",
+            post(drive::upload).layer(axum::extract::DefaultBodyLimit::disable()),
+        )
+        .merge(brand::routes(not_found))
         .route("/api/{model}/{command}", post(call))
         .route("/mcp", any(mcp::endpoint))
         .route("/mcp/server-card", get(mcp::server_card_canonical))
@@ -364,7 +406,16 @@ pub(crate) fn api_routes(state: Arc<HttpState>) -> Router {
                 .options(oauth::preflight)
                 .layer(body_limit()),
         )
+        .route(
+            "/sign/{rid}/{token}",
+            get(sign::page)
+                .post(sign::submit)
+                .layer(axum::extract::DefaultBodyLimit::max(sign::MAX_BODY)),
+        )
+        .route("/sign/{rid}/{token}/document.pdf", get(sign::document))
         .route("/oauth/authorize", get(oauth::authorize))
+        .route("/oauth/authorize/microsoft", get(oauth::microsoft))
+        .route("/oauth/authorize/return", get(oauth::microsoft_return))
         .route(
             "/oauth/authorize/login",
             post(oauth::login).layer(body_limit()),
@@ -399,6 +450,11 @@ fn body_limit() -> axum::extract::DefaultBodyLimit {
 
 /// Unknown API paths answer JSON, never the HTML shell, so agents can parse the error.
 async fn api_not_found() -> Response {
+    api_not_found_response()
+}
+
+/// The answer of `api_not_found`, for the one route that sends it when it has nothing to serve.
+fn api_not_found_response() -> Response {
     api_error(
         StatusCode::NOT_FOUND,
         "not found",
@@ -416,12 +472,20 @@ fn api_error(status: StatusCode, message: &str, code: &str, hint: &str) -> Respo
 }
 
 async fn instance_openapi(State(s): Shared, h: HeaderMap) -> Response {
-    blocking(move || instance_openapi_blocking(s, h)).await
+    // The brand is asked first and once (docs/spec/branding.md, section 4), also for a caller with
+    // no token: the title of the document is the instance's own.
+    let brand = mcp::document_brand(&s).await;
+    blocking(move || instance_openapi_blocking(s, h, brand)).await
 }
 
 /// The instance's OpenAPI document for the caller: with a valid token it lists the commands that
-/// token may use; without one it lists only sign-in and the discovery endpoints.
-fn instance_openapi_blocking(s: Arc<HttpState>, h: HeaderMap) -> Response {
+/// token may use; without one it lists only sign-in and the discovery endpoints. `brand` is the
+/// one the handler read for this request.
+fn instance_openapi_blocking(
+    s: Arc<HttpState>,
+    h: HeaderMap,
+    brand: obop_brand::Brand,
+) -> Response {
     let base = s.mcp.base_url(&h);
     let modules = match s.auth_api(&h) {
         Ok((p, _)) => s.dispatcher.meta(Surface::Rest, &p),
@@ -431,6 +495,7 @@ fn instance_openapi_blocking(s: Arc<HttpState>, h: HeaderMap) -> Response {
     if s.oauth.is_some() {
         openapi::describe_oauth(&mut doc, &base);
     }
+    openapi::describe_brand(&mut doc, &brand);
     let mut r = Json(doc).into_response();
     r.headers_mut().insert(
         axum::http::header::VARY,
@@ -440,9 +505,9 @@ fn instance_openapi_blocking(s: Arc<HttpState>, h: HeaderMap) -> Response {
 }
 
 pub fn router(state: Arc<HttpState>, static_dir: Option<&str>) -> Router {
-    let api = api_routes(state.clone());
+    let api = api_routes(state.clone(), api_not_found_response);
     let app = match static_dir {
-        Some(dir) => api.fallback_service(spa_with_json_api_404(dir, state.default_language())),
+        Some(dir) => api.fallback_service(spa_with_json_api_404(dir, &state)),
         None => api.fallback(api_not_found),
     };
     instrument(app, state)
@@ -460,8 +525,8 @@ pub(crate) fn instrument(app: Router, state: Arc<HttpState>) -> Router {
 
 /// The back office single-page app, except that an unknown `/api/...` path answers JSON (agents
 /// cannot parse the HTML shell) instead of falling through to it.
-fn spa_with_json_api_404(dir: &str, language: Option<&'static str>) -> Router {
-    let shell = shell::Shell::new(dir, language);
+fn spa_with_json_api_404(dir: &str, state: &HttpState) -> Router {
+    let shell = shell::Shell::for_state(dir, state);
     Router::new().fallback(move |req: axum::extract::Request| {
         let shell = shell.clone();
         async move {
@@ -510,13 +575,69 @@ fn agent_token_blocking(s: Arc<HttpState>, h: HeaderMap, body: J) -> Response {
                 .collect()
         })
         .unwrap_or_default();
-    match s
-        .auth
-        .issue_agent_token(&p, &scopes, body["label"].as_str().unwrap_or("agent"))
-    {
+    // The groups the instance has registered: an administrator may hand on any of them (D69
+    // amendment of 2026-11-14), everybody else only what their account lists.
+    match s.auth.issue_agent_token_among(
+        &p,
+        &scopes,
+        body["label"].as_str().unwrap_or("agent"),
+        &s.dispatcher.known_groups(),
+    ) {
         Ok(token) => Json(json!({"token": token})).into_response(),
         Err(e) => (StatusCode::BAD_REQUEST, Json(json!({"error": e}))).into_response(),
     }
+}
+
+async fn agent_tokens(State(s): Shared, h: HeaderMap) -> Response {
+    blocking(move || agent_tokens_blocking(s, h)).await
+}
+
+/// The agent tokens the signed-in person issued that still work (never a token itself), and the
+/// groups they may put on a new one. An agent sees no such route.
+fn agent_tokens_blocking(s: Arc<HttpState>, h: HeaderMap) -> Response {
+    let (p, _) = match s.auth(&h) {
+        Ok(x) => x,
+        Err(c) => return c.into_response(),
+    };
+    let Some(tokens) = Some(&p)
+        .filter(|p| p.is_person())
+        .and_then(|p| s.auth.agent_tokens_of(p))
+    else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let mut delegable: std::collections::BTreeSet<String> = p
+        .groups
+        .iter()
+        .filter(|g| *g != obop_commands::ANY_GROUP)
+        .cloned()
+        .collect();
+    if p.groups.contains(obop_commands::ADMIN_GROUP) {
+        delegable.extend(s.dispatcher.known_groups());
+    }
+    let tokens: Vec<J> = tokens
+        .iter()
+        .map(|t| {
+            json!({
+                "id": t.id, "label": t.label, "scopes": t.scopes, "created_at": t.created_at,
+            })
+        })
+        .collect();
+    Json(json!({"tokens": tokens, "delegable": delegable})).into_response()
+}
+
+async fn revoke_agent_token(State(s): Shared, h: HeaderMap, Path(id): Path<String>) -> Response {
+    blocking(move || {
+        let (p, _) = match s.auth(&h) {
+            Ok(x) => x,
+            Err(c) => return c.into_response(),
+        };
+        if p.is_person() && s.auth.revoke_agent_token(&p, &id) {
+            Json(json!({"revoked": true})).into_response()
+        } else {
+            (StatusCode::NOT_FOUND, Json(json!({"error": "not found"}))).into_response()
+        }
+    })
+    .await
 }
 
 async fn meta(State(s): Shared, h: HeaderMap) -> Response {
@@ -650,7 +771,9 @@ fn approve_blocking(
 /// its code word is a storage fault and answers as one (`errors::of_storage_text`); anything else
 /// is a lock that was not granted in time.
 fn unavailable(why: &str) -> Response {
-    eprintln!("shared state unavailable: {why}");
+    // `log_safe`, as in the lines below: `why` is normally the store's own text, but a handler
+    // error that starts with a code word of the store reaches here through `err` as it was.
+    log_line(&format!("shared state unavailable: {}", log_safe(why)));
     if let Some(c) = errors::of_storage_text(why) {
         return classified(c);
     }
@@ -668,12 +791,76 @@ fn unavailable(why: &str) -> Response {
     r
 }
 
-/// A text for one line of the log: no control characters, no more than 300 characters.
+/// A text for one line of the log: no control characters (the line and paragraph separators U+2028
+/// and U+2029 are not control characters and are blanked too), no more than 300 characters.
 fn log_safe(text: &str) -> String {
     text.chars()
-        .map(|c| if c.is_control() { ' ' } else { c })
+        .map(|c| {
+            if c.is_control() || matches!(c, '\u{2028}' | '\u{2029}') {
+                ' '
+            } else {
+                c
+            }
+        })
         .take(300)
         .collect()
+}
+
+/// One line to the log of the server. Not `eprintln!`, which panics when stderr cannot be written
+/// (a closed pipe to a log collector): the panic of a handler becomes "handler panicked" in
+/// `blocking` and the caller would get a dropped connection instead of the answer the line is
+/// about.
+pub(crate) fn log_line(line: &str) {
+    use std::io::Write;
+    // A test that asks to see the lines (`captured`) gets them and the real stderr stays quiet;
+    // everything else writes. The write itself is held by the process test `brand_enrol_process`
+    // of the binary, which runs a server whose stderr is closed.
+    if taken_by_a_test(line) {
+        return;
+    }
+    let _ = writeln!(std::io::stderr(), "{line}");
+}
+
+/// Whether a test that collects the lines of this thread took this one. Written as two functions
+/// and not as a `#[cfg(test)]` on a statement, which the scan of `addr_scan_tests` lists.
+#[cfg(test)]
+fn taken_by_a_test(line: &str) -> bool {
+    log_capture::take(line)
+}
+
+#[cfg(not(test))]
+fn taken_by_a_test(_line: &str) -> bool {
+    false
+}
+
+/// The lines `log_line` is given on a thread while a test collects them. A module, because the
+/// scan of `addr_scan_tests` lists a `#[cfg(test)]` on anything that is not an item or a module.
+#[cfg(test)]
+mod log_capture {
+    use std::cell::RefCell;
+
+    thread_local! {
+        static LOGGED: RefCell<Option<Vec<String>>> = const { RefCell::new(None) };
+    }
+
+    /// Keeps the line when this thread collects, and says so.
+    pub(super) fn take(line: &str) -> bool {
+        LOGGED.with(|l| match l.borrow_mut().as_mut() {
+            Some(lines) => {
+                lines.push(line.to_string());
+                true
+            }
+            None => false,
+        })
+    }
+
+    /// Runs `f` and returns, with its result, the lines it gave to `log_line` on this thread.
+    pub(crate) fn captured<T>(f: impl FnOnce() -> T) -> (T, Vec<String>) {
+        LOGGED.with(|l| *l.borrow_mut() = Some(Vec::new()));
+        let out = f();
+        let lines = LOGGED.with(|l| l.borrow_mut().take().unwrap_or_default());
+        (out, lines)
+    }
 }
 
 fn respond(r: Result<obop_commands::Response, CallError>) -> Response {
@@ -691,7 +878,7 @@ fn respond(r: Result<obop_commands::Response, CallError>) -> Response {
                     &e,
                     CallError::Handler(m) if obop_storage::fault::Fault::of_message(m).is_some()
                 );
-                eprintln!(
+                log_line(&format!(
                     "storage fault on a call: {} {}",
                     c.code,
                     if genuine {
@@ -699,7 +886,7 @@ fn respond(r: Result<obop_commands::Response, CallError>) -> Response {
                     } else {
                         String::new()
                     }
-                );
+                ));
             }
             classified(c)
         }
@@ -1069,7 +1256,8 @@ mod fault_answers {
 
 #[cfg(test)]
 mod log_tests {
-    use super::log_safe;
+    use super::log_capture::captured;
+    use super::{CallError, StatusCode, log_safe, respond, unavailable};
 
     #[test]
     fn a_line_of_the_log_has_no_control_characters_and_a_bound() {
@@ -1077,10 +1265,84 @@ mod log_tests {
             log_safe("a\nstorage fault on a call: forged\r\tb"),
             "a storage fault on a call: forged  b"
         );
+        // The line and paragraph separators are not control characters and start a line in a
+        // viewer that follows the Unicode rule: blanked as well.
+        assert_eq!(
+            log_safe("a\u{2028}forged\u{2029}b\u{85}c"),
+            "a forged b c",
+            "U+2028, U+2029 and the next-line control"
+        );
         assert_eq!(log_safe(&"x".repeat(1000)).chars().count(), 300);
         assert_eq!(
             log_safe("all database connections are in use"),
             "all database connections are in use"
         );
+    }
+
+    #[test]
+    fn a_shared_state_that_is_unavailable_writes_one_line_that_cannot_forge_another() {
+        // A lock that was not granted: the 503 with a time to wait, and its line.
+        let (r, lines) = captured(|| unavailable("lock wait expired for marker-lock"));
+        assert_eq!(r.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert!(r.headers().contains_key(axum::http::header::RETRY_AFTER));
+        assert_eq!(
+            lines,
+            vec!["shared state unavailable: lock wait expired for marker-lock".to_string()]
+        );
+        // A text that starts with a code word of the store and holds line breaks (it reaches
+        // `unavailable` through `err` as it came): one line, the breaks blanked, the answer as before.
+        let (r, lines) = captured(|| {
+            unavailable("storage_busy: every connection is in use\nobop: forged\u{2028}line")
+        });
+        assert_eq!(r.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(
+            lines,
+            vec![
+                "shared state unavailable: storage_busy: every connection is in use obop: forged line"
+                    .to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn a_storage_fault_on_a_call_writes_a_line_with_the_stores_text_and_never_the_callers() {
+        use obop_storage::fault::{self, Fault};
+        // The store's own refusal: its text is the operator's, with the breaks blanked.
+        fault::clear();
+        fault::note(Fault::Busy);
+        let (r, lines) = captured(|| {
+            respond(Err(CallError::Handler(
+                "storage_busy: every connection is in use\nobop: forged".into(),
+            )))
+        });
+        fault::clear();
+        assert_eq!(r.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(lines.len(), 1, "{lines:?}");
+        assert!(
+            lines[0].starts_with("storage fault on a call: storage_busy"),
+            "{lines:?}"
+        );
+        assert!(
+            lines[0].ends_with("every connection is in use obop: forged"),
+            "{lines:?}"
+        );
+        // A call that failed of its own after a fault was noted: the line has the code and none of
+        // what the caller sent.
+        fault::note(Fault::Busy);
+        let (r, lines) = captured(|| {
+            respond(Err(CallError::Handler(
+                "name Ada Lovelace is taken\nobop: forged".into(),
+            )))
+        });
+        fault::clear();
+        assert_eq!(r.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(
+            lines,
+            vec!["storage fault on a call: storage_busy ".to_string()]
+        );
+        // No fault, no line.
+        let (r, lines) = captured(|| respond(Err(CallError::Handler("name is required".into()))));
+        assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+        assert!(lines.is_empty(), "{lines:?}");
     }
 }

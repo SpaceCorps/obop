@@ -23,7 +23,7 @@ import {
   type ServerConfig,
   type Session,
 } from "../core/session.ts";
-import { CLIENT_NAME, REDIRECT_URI, SCOPE } from "./config.ts";
+import type { StartupConfig } from "../core/startup-config.ts";
 import { languageStore } from "./language.ts";
 import { deviceInfo, oauthDeps } from "./platform-deps.ts";
 
@@ -76,6 +76,8 @@ function failure(error: unknown): SignInError {
 
 /** What a sign-in needs from the runtime. */
 export interface SignInHost {
+  /** The identity and the groups of the app: the redirect, the name of the client, what it asks for. */
+  startup: StartupConfig;
   session: Session;
   /** Decides about the trips already on the phone, before anything is uploaded. */
   bindIdentity(owner: Owner): Promise<Binding>;
@@ -128,22 +130,24 @@ async function probeAuthorize(url: string): Promise<number | null> {
  */
 export async function signIn(host: SignInHost, input: string): Promise<void> {
   const { session } = host;
+  const { identity, groups } = host.startup;
   try {
     const baseUrl = checkAddress(input);
     const register = async (): Promise<ServerConfig> => {
       const clientId = await registerMobileClient(oauthDeps, {
         baseUrl,
-        redirectUri: REDIRECT_URI,
-        name: CLIENT_NAME,
-        scope: SCOPE,
+        redirectUri: identity.redirectUri,
+        name: identity.clientName,
+        scope: groups,
       });
-      const fresh = { baseUrl, clientId };
+      const fresh = { baseUrl, clientId, groups: [...groups] };
       await session.setConfig(fresh);
       return fresh;
     };
     let config = session.config();
     let registeredNow = false;
-    if (needsRegistration(config, baseUrl, Date.now())) {
+    const declared = { current: groups, legacy: host.startup.legacyGroups };
+    if (needsRegistration(config, baseUrl, Date.now(), declared)) {
       config = await register();
       registeredNow = true;
     }
@@ -154,10 +158,10 @@ export async function signIn(host: SignInHost, input: string): Promise<void> {
       buildAuthorizeUrl({
         baseUrl,
         clientId,
-        redirectUri: REDIRECT_URI,
+        redirectUri: identity.redirectUri,
         challenge: pkce.challenge,
         state,
-        scope: SCOPE,
+        scope: groups,
         // The sign-in and consent pages of the instance (it has them in en, de, fr, pl, fi, sv and
         // es) are asked for the language the app positively knows: the chosen one, or the phone's
         // first language when the app has a catalogue for it. A phone set to German is NOT sent as
@@ -173,13 +177,13 @@ export async function signIn(host: SignInHost, input: string): Promise<void> {
       config = await register();
       url = authorizeUrl(config.clientId);
     }
-    const result = await WebBrowser.openAuthSessionAsync(url, REDIRECT_URI);
+    const result = await WebBrowser.openAuthSessionAsync(url, identity.redirectUri);
     if (result.type !== "success") throw new SignInError("cancelled");
     const code = parseAuthorizationResponse(result.url, { state, baseUrl });
     const tokens = await exchangeCode(oauthDeps, {
       baseUrl,
       clientId: config.clientId,
-      redirectUri: REDIRECT_URI,
+      redirectUri: identity.redirectUri,
       code,
       verifier: pkce.verifier,
       device: deviceInfo(),

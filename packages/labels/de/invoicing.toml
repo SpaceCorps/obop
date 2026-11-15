@@ -1,10 +1,10 @@
 [labels.de.module]
 name = "Rechnungsstellung"
-summary = "Kundenrechnungen mit dem Lebenszyklus Entwurf, gebucht und bezahlt."
+summary = "Kundenrechnungen mit dem Lebenszyklus Entwurf, gebucht und storniert."
 
 [labels.de.model.invoice]
 name = "Rechnung"
-description = "Eine Kundenrechnung; gebuchte Rechnungen werden nur durch Gutschriften korrigiert"
+description = "Eine Kundenrechnung; keine Aktion setzt eine gebuchte Rechnung auf Entwurf zurück oder storniert sie"
 
 [labels.de.model.invoice.field.sale_order_id]
 label = "Verkaufsauftrag"
@@ -25,11 +25,11 @@ description = "Rechnungssumme in der kleinsten Währungseinheit, die Summe der P
 
 [labels.de.model.invoice.field.number]
 label = "Nummer"
-description = "Lückenlose gesetzliche Rechnungsnummer, wird beim Buchen vergeben"
+description = "Nummer aus einer lückenlosen jährlichen Folge, zum Beispiel INV-2026-00042, wird beim Buchen vergeben"
 
 [labels.de.model.invoice.action.post]
 label = "Buchen"
-description = "Einen Rechnungsentwurf buchen und die gesetzliche Nummer vergeben"
+description = "Einen Rechnungsentwurf buchen und ihm die nächste Nummer der Folge geben"
 
 [labels.de.model.invoice.action.cancel]
 label = "Stornieren"

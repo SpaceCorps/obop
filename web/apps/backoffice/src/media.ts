@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 
 /** Whether a media query matches now, and keeps matching as the window changes. */
 export function useMedia(query: string): boolean {
-  const [on, setOn] = useState(() => matchMedia(query).matches);
+  const [on, setOn] = useState(() => matches(query));
   useEffect(() => {
+    // Not every place a component renders has media queries (jsdom in the unit tests has none).
+    if (typeof matchMedia !== "function") return;
     const m = matchMedia(query);
     const change = () => setOn(m.matches);
     change();
@@ -11,6 +13,11 @@ export function useMedia(query: string): boolean {
     return () => m.removeEventListener("change", change);
   }, [query]);
   return on;
+}
+
+/** Whether a media query matches now; false where there are no media queries (jsdom). */
+export function matches(query: string): boolean {
+  return typeof matchMedia === "function" && matchMedia(query).matches;
 }
 
 /** The record opens as a sheet over the list up to this width (D2): tablets and phones. */

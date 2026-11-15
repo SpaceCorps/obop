@@ -1,7 +1,7 @@
 [labels.pl.module]
 name = "Marketing e-mailowy"
-description = "Listy mailingowe, kontakty na nich ze statusem i datą zgody oraz kampanie z obiegiem wersja robocza, zaplanowane, wysłane. Wysyłka jest nieodwracalna i dociera do realnych osób, więc wymaga zatwierdzenia przez kierownika; agenci mogą ją tylko zaproponować. Statystyki kampanii są wpisywane lub importowane, nie obliczane. Kontakty to dane osobowe: nie wysyłaj do kontaktu bez wyrażonej zgody."
-summary = "Listy mailingowe, kontakty ze zgodą i kampanie. Wysyłka wymaga zatwierdzenia przez człowieka."
+description = "Listy mailingowe, kontakty ze statusem i datą zgody oraz kampanie z obiegiem wersja robocza, zaplanowane, wysłane. Żaden e-mail nie jest wysyłany: oznaczenie kampanii jako wysłanej tylko to odnotowuje i wymaga zatwierdzenia przez kierownika; agenci mogą je tylko zaproponować. Statystyki są wpisywane lub importowane, nie obliczane. Kontakty to dane osobowe: nie wysyłaj do kontaktu bez zgody."
+summary = "Listy mailingowe, kontakty ze zgodą i kampanie. Żaden e-mail nie jest wysyłany; oznaczenie kampanii jako wysłanej wymaga zatwierdzenia."
 
 [labels.pl.model.email_marketing_list]
 name = "Lista"
@@ -129,15 +129,15 @@ cancelled = "Anulowane"
 
 [labels.pl.model.email_marketing_campaign.action.schedule]
 label = "Zaplanuj"
-description = "Kolejkuje kampanię na zaplanowany dzień"
+description = "Oznacza kampanię jako zaplanowaną na wyznaczony dzień"
 
 [labels.pl.model.email_marketing_campaign.action.send]
 label = "Wyślij"
-description = "Wysyła zaplanowaną kampanię do całej listy (tylko kierownik)"
+description = "Oznacza zaplanowaną kampanię jako wysłaną; żaden e-mail nie jest wysyłany (tylko kierownik)"
 
 [labels.pl.model.email_marketing_campaign.action.send_now]
 label = "Wyślij teraz"
-description = "Wysyła roboczą kampanię natychmiast (tylko kierownik)"
+description = "Oznacza roboczą kampanię jako wysłaną; żaden e-mail nie jest wysyłany (tylko kierownik)"
 
 [labels.pl.model.email_marketing_campaign.action.unschedule]
 label = "Cofnij planowanie"

@@ -16,13 +16,25 @@ use tower::ServiceExt;
 
 /// Commands of models that have no `list` command: registered on REST, absent from the document.
 const KNOWN_OMITTED: &[&str] = &[
+    "bank_matching.book",
+    "bank_matching.suggest",
+    "import_map.get",
+    "import_map.search",
+    "instance_brand.clear",
+    "instance_brand.configure",
+    "instance_brand.get",
     "instance_update.check",
     "instance_update.rollback",
     "instance_update.start",
     "instance_update.status",
+    "invoice_posting.create_move",
     "module_plan.preview",
     "setting.get",
     "setting.update",
+    "sie_exchange.export",
+    "sie_exchange.import",
+    "time_billing.create_invoice",
+    "vat_computation.compute",
 ];
 
 /// The committed copy: `web/packages/client/openapi.json`, from the root of the workspace.
@@ -142,7 +154,7 @@ fn it_lists_every_command_of_an_account_with_every_group() {
     }
     missing.sort();
     // The document is made from `Dispatcher::meta`, which skips a model that has no `list`
-    // command, so these seven commands (REST ones included) have no operation, in the document
+    // command, so these fourteen commands (REST ones included) have no operation, in the document
     // an instance serves as well (docs/ISSUES.md K26). A new omission fails here; when one of
     // these gains an operation, remove its id from the list.
     assert_eq!(
@@ -307,4 +319,56 @@ fn a_bulk_row_does_not_offer_the_image_and_file_fields_that_bulk_create_refuses(
         }
     }
     assert!(checked > 5, "{checked}");
+}
+
+// ---- Golden pins of the anonymous OpenAPI document (S1a-0 of the branding work) ------------------
+
+/// `GET /api/openapi.json` with no token: the document an instance with no brand row sends to
+/// anyone (sign-in and the discovery endpoints), on an instance without an OAuth server (`dev`)
+/// and on one with it (`auth`). The host is `inst.test`, the protocol https, and the version of
+/// this build is written `<CORE_VERSION>` before hashing. (The document of a signed-in account is
+/// the committed `openapi.json`, held by `the_committed_openapi_document_is_current`.)
+#[tokio::test]
+async fn pins_the_anonymous_openapi_document_as_an_instance_with_no_brand_sends_it() {
+    use crate::mfa_tests::pin;
+    let mut now = Vec::new();
+    for inst in pin::instances().await {
+        now.push((
+            format!("{}/openapi", inst.name),
+            pin::sha(&pin::document(&inst.router, "/api/openapi.json").await),
+        ));
+    }
+    pin::check("OPENAPI_ANONYMOUS_PINS", OPENAPI_ANONYMOUS_PINS, &now);
+}
+
+// Printed by `OBOP_PRINT_PINS=1` and pasted here. First on origin/main 12a59a79; again on
+// `feat/agent-token-admin` (the D69 amendment of 2026-11-14), which moved the document on purpose:
+// the two paths `/api/auth/agent-tokens` and `/api/auth/agent-tokens/{id}/revoke`, the description
+// of the scopes of `issueAgentToken`, and two more kinds in the description of `security_event.kind`.
+#[rustfmt::skip]
+const OPENAPI_ANONYMOUS_PINS: &[(&str, &str)] = &[
+    ("dev/openapi", "4423020333aa7969f0a06700ac10cece7fd1303d978b4aacc21b5fba0ed122e8"),
+    ("auth/openapi", "2ec4c9097622e1639d8e4e279efb08920413cf5db53413bc56c5170d0ae0cce4"),
+];
+
+/// With a brand row in the store the anonymous document is the one an instance with no row sends,
+/// byte for byte, headers included, but for its title (slice S3: `{name} API`, in place of
+/// "obop instance API"; `brand_docs_tests.rs` holds the difference member by member). With the
+/// title put back, the digest is the pinned one: nothing else of the document moved.
+#[tokio::test]
+async fn with_a_brand_row_the_anonymous_openapi_document_is_what_it_was_but_for_its_title() {
+    use crate::mfa_tests::pin;
+    let mut now = Vec::new();
+    for inst in pin::instances().await {
+        crate::brand_row_tests::set_brand(&inst.app);
+        let text = pin::document(&inst.router, "/api/openapi.json").await;
+        let put_back = text.replacen(
+            "\"title\":\"MOHV API\"",
+            "\"title\":\"obop instance API\"",
+            1,
+        );
+        assert_ne!(text, put_back, "{}: the title is the name's", inst.name);
+        now.push((format!("{}/openapi", inst.name), pin::sha(&put_back)));
+    }
+    pin::check("OPENAPI_ANONYMOUS_PINS", OPENAPI_ANONYMOUS_PINS, &now);
 }

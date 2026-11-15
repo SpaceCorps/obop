@@ -103,6 +103,12 @@ export type ModelMeta = {
   can_create: boolean;
   /** Whether this principal may create many records at once (bulk_create, D70). */
   can_bulk_create?: boolean;
+  /**
+   * Set by the back office, not by the server: the person may create records of this model, but
+   * only through the button of another screen (`ACTION_ONLY_MODELS`), so `can_create` and
+   * `can_bulk_create` are turned off here and the generic New and Import are not offered.
+   */
+  via_action?: boolean;
   can_update: boolean;
   /** Whether this principal may delete records of the model (its write group). */
   can_delete: boolean;
@@ -142,6 +148,26 @@ export type Reply =
   | { kind: "ok"; value: unknown; denied: string[] }
   | { kind: "approval"; planId: string }
   | { kind: "error"; status: number; message: string };
+
+/**
+ * Models whose records are made only by a command that returns something the generic form would
+ * throw away. `sign_link.create` mints a one-time link and returns it once, and the server keeps
+ * only its hash: made from the generic New form, the link is lost and an active link nobody has
+ * stays behind (D92, docs/SIGN.md). The button "Create signing link" on a sign request is the one
+ * place that shows it. No registry flag says this yet, so the back office names the model.
+ */
+export const ACTION_ONLY_MODELS: ReadonlySet<string> = new Set(["sign_link"]);
+
+/** Turn off the generic New and Import of the models in `ACTION_ONLY_MODELS`, and remember the right. */
+export function markActionOnly(modules: ModuleMeta[]): void {
+  for (const m of modules)
+    for (const model of m.models)
+      if (ACTION_ONLY_MODELS.has(model.name)) {
+        model.via_action = model.can_create;
+        model.can_create = false;
+        model.can_bulk_create = false;
+      }
+}
 
 export async function call(token: string, id: string, body: object = {}): Promise<Reply> {
   const [model, command] = id.split(".");
@@ -199,6 +225,7 @@ export async function meta(
       model.can_delete ??= false;
       model.actions ??= [];
     }
+  markActionOnly(modules);
   resolveShownOptions(modules);
   return modules;
 }

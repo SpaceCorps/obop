@@ -1,3 +1,5 @@
+import { META_OWNER } from "./host-state.ts";
+import type { MetaAccess } from "./schema.ts";
 import type { ServerConfig } from "./session.ts";
 import { holdsUnsent, type OutboxStore } from "./store.ts";
 
@@ -17,8 +19,6 @@ export interface Owner {
   origin: string;
   user: string;
 }
-
-const OWNER_KEY = "owner";
 
 export function parseOwner(text: string | null): Owner | null {
   if (text === null) return null;
@@ -72,30 +72,41 @@ export type Binding =
   | { kind: "foreign"; unsent: Unsent };
 
 /**
+ * The owner is kept in the host's rows of the file (`meta` is the host's way in, `host-state.ts`);
+ * by default the outbox's store is used, which reaches the same row.
+ *
  * Called when a sign-in has finished and before anything is uploaded. An outbox with no owner is
  * adopted (the phone has never had another sign-in; a build that kept no owner is treated the
  * same). An outbox of another owner that holds nothing unsent is emptied (what is left is a copy of
  * the other person's list of trips) and adopted. One that holds unsent trips stays untouched.
  */
-export async function bindOwner(store: OutboxStore, current: Owner): Promise<Binding> {
-  const stored = parseOwner(await store.getMeta(OWNER_KEY));
+export async function bindOwner(
+  store: OutboxStore,
+  current: Owner,
+  meta: MetaAccess = store,
+): Promise<Binding> {
+  const stored = parseOwner(await meta.getMeta(META_OWNER));
   if (stored === null || sameOwner(stored, current)) {
-    await store.setMeta(OWNER_KEY, JSON.stringify(current));
+    await meta.setMeta(META_OWNER, JSON.stringify(current));
     return { kind: "own" };
   }
   const unsent = await unsentOf(store);
   if (unsent.trips === 0) {
     await store.clearAll();
-    await store.setMeta(OWNER_KEY, JSON.stringify(current));
+    await meta.setMeta(META_OWNER, JSON.stringify(current));
     return { kind: "own" };
   }
   return { kind: "foreign", unsent };
 }
 
 /** The same decision when the app starts: the session says who is signed in, the outbox who owns it. */
-export async function bindingOf(store: OutboxStore, config: ServerConfig | null): Promise<Binding> {
+export async function bindingOf(
+  store: OutboxStore,
+  config: ServerConfig | null,
+  meta: Pick<MetaAccess, "getMeta"> = store,
+): Promise<Binding> {
   if (config?.user === undefined) return { kind: "own" };
-  const stored = parseOwner(await store.getMeta(OWNER_KEY));
+  const stored = parseOwner(await meta.getMeta(META_OWNER));
   if (stored === null || sameOwner(stored, { origin: config.baseUrl, user: config.user })) {
     return { kind: "own" };
   }
@@ -103,7 +114,11 @@ export async function bindingOf(store: OutboxStore, config: ServerConfig | null)
 }
 
 /** The driver chose to delete the other sign-in's trips and go on: everything goes, the owner is the new one. */
-export async function takeOver(store: OutboxStore, current: Owner): Promise<void> {
+export async function takeOver(
+  store: OutboxStore,
+  current: Owner,
+  meta: MetaAccess = store,
+): Promise<void> {
   await store.clearAll();
-  await store.setMeta(OWNER_KEY, JSON.stringify(current));
+  await meta.setMeta(META_OWNER, JSON.stringify(current));
 }

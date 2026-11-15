@@ -139,6 +139,16 @@ impl OAuthTokens for Auth {
             .and_then(|u| crate::epoch_of(&J::Object(u))))
     }
 
+    fn is_microsoft_only(&self, user: &str) -> Result<bool, String> {
+        let name = user.trim().to_lowercase();
+        // A lookup the store refused is an error, and so is an account that is not there: the
+        // answer restricts (the 30-day limit), so it is never guessed.
+        match self.backend.get("auth_user", &name)? {
+            Some(u) => Ok(u.get("sso_only").and_then(J::as_bool) == Some(true)),
+            None => Err("no such account".into()),
+        }
+    }
+
     fn revoke_token_id(&self, id: &str) -> bool {
         self.try_revoke_token_id(id).unwrap_or(false)
     }

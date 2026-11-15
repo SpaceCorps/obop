@@ -48,6 +48,40 @@ export function requireBuilt(): void {
   ] as const)
     if (!existsSync(resolve(dir, "index.html")))
       throw new Error(`${dir} is missing; run ${how} first`);
+  const problem = adminBuildProblem(
+    readFileSync(resolve(backofficeAdminDist, "index.html"), "utf8"),
+  );
+  if (problem) throw new Error(`${backofficeAdminDist}/index.html ${problem}`);
+}
+
+/** The `attribute` values of the `element` tags of `html`, in the order they are written. */
+function references(html: string, element: "script" | "link", attribute: "src" | "href"): string[] {
+  return [...html.matchAll(new RegExp(String.raw`<${element}\b[^>]*>`, "gi"))].flatMap(([tag]) =>
+    [...tag.matchAll(new RegExp(String.raw`\b${attribute}="([^"]*)"`, "gi"))].map(([, url]) => url),
+  );
+}
+
+/**
+ * Why the document of the /admin/ build is not one, or `null`. Git Bash on Windows rewrites an
+ * argument or a variable that looks like a path, so `OBOP_ADMIN_BASE=/admin/ vp build` writes
+ * `/Program Files/Git/admin/assets/...` into the page: a blank screen, and one failing test that
+ * hides the six after it. `MSYS_NO_PATHCONV=1` in front of the command stops the rewriting.
+ *
+ * The page is right when it has a script from /admin/assets/ and every `src` of a `<script>` and
+ * every `href` of a `<link>` that points into `assets/` starts with /admin/assets/: one good
+ * reference beside a wrong one, or the string in a piece of text, does not make it so.
+ */
+export function adminBuildProblem(html: string): string | null {
+  const scripts = references(html, "script", "src");
+  const wrong = [...scripts, ...references(html, "link", "href")].filter(
+    (url) => url.includes("assets/") && !url.startsWith("/admin/assets/"),
+  );
+  if (wrong.length === 0 && scripts.some((url) => url.startsWith("/admin/assets/"))) return null;
+  return (
+    (wrong.length > 0 ? `loads ${wrong[0]}` : "has no script from /admin/assets/") +
+    ", and does not load its files from /admin/assets/ (built without OBOP_ADMIN_BASE=/admin/? " +
+    "In Git Bash on Windows put MSYS_NO_PATHCONV=1 in front of the command)"
+  );
 }
 
 /** Test accounts, created with the CLI before the instance starts. Test values only. */
@@ -145,6 +179,18 @@ export const appUrl = () => `http://127.0.0.1:${process.env.OBOP_E2E_APP_PORT}`;
 export const shopUrl = () => `http://127.0.0.1:${process.env.OBOP_E2E_SHOP_PORT}`;
 /** The instance with `OBOP_DEFAULT_LANGUAGE=sv` (tests/default-language.spec.ts). */
 export const languageUrl = () => `http://127.0.0.1:${process.env.OBOP_E2E_LANGUAGE_PORT}`;
+/**
+ * The instance with a brand (tests/brand-oauth.spec.ts, docs/spec/branding.md): the name MOHV, a
+ * message under the lead of the sign-in page and the placeholder "M" as its logo, set with
+ * `obop admin brand configure` before the server starts.
+ */
+export const brand = {
+  name: "MOHV",
+  message: "Welcome to the team",
+  artwork:
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#495670"/><path d="M 16 48 L 16 16 L 24 16 L 32 30 L 40 16 L 48 16 L 48 48 L 41 48 L 41 29 L 32 44 L 23 29 L 23 48 Z" fill="#ffffff"/></svg>',
+} as const;
+export const brandUrl = () => `http://127.0.0.1:${process.env.OBOP_E2E_BRAND_PORT}`;
 export const platformUrl = () => `http://127.0.0.1:${process.env.OBOP_E2E_PLATFORM_PORT}`;
 /** A small marketplace the specs fill (D63): packages the app instance can update to. */
 export const marketUrl = () => `http://127.0.0.1:${process.env.OBOP_E2E_MARKET_PORT}`;

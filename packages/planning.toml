@@ -1,10 +1,10 @@
 [module]
 id = "planning"
-version = "0.2.0"
+version = "0.2.1"
 name = "Planning"
-description = "Shifts for employees, with roles and reusable templates. A shift has a day and a start and end in minutes since midnight (0 to 1439; 540 is 09:00). A shift with no employee is an open shift. Workflow: open, published, confirmed by the employee. Needs the Human Resources package."
+description = "Shifts for employees, with roles and shift templates. A template only records a name, a role and times: no action creates a shift from it. A shift has a day and a start and end in minutes since midnight (0 to 1439; 540 is 09:00). A shift with no employee is an open shift. Workflow: open, published, confirmed by the employee. Needs the Human Resources package."
 author = "SpaceCorps"
-summary = "Shifts for employees with roles and reusable templates; open shifts are published and confirmed."
+summary = "Shifts for employees with roles and shift templates; open shifts are published and confirmed."
 license = "Apache-2.0"
 homepage = "https://github.com/SpaceCorps/obop"
 repository = "https://github.com/SpaceCorps/obop"
@@ -36,7 +36,7 @@ write_group = "planning.manager"
 
 [[model]]
 name = "planning_template"
-description = "A reusable shift pattern to copy into shifts"
+description = "A named shift pattern with a role and start and end times; no action creates shifts from it"
 read_group = "planning.user"
 write_group = "planning.manager"
 

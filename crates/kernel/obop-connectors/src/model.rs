@@ -246,6 +246,11 @@ pub struct ProviderPolicy {
     pub default_policy: String,
     pub oauth_client_id: String,
     pub oauth_client_secret: String,
+    /// Google Drive: the one drive the instance works in (`root` is My Drive, empty is none).
+    pub workspace_id: String,
+    pub workspace_name: String,
+    /// Google Drive: the group that may create things in the workspace.
+    pub write_group: String,
 }
 
 /// What the admin recorded about `provider`; a store that cannot be read says so (`Err`): it is not
@@ -269,6 +274,9 @@ pub fn try_provider_policy(
             default_policy: str_of(&f, "default_policy").into(),
             oauth_client_id: str_of(&f, "oauth_client_id").into(),
             oauth_client_secret: str_of(&f, "oauth_client_secret").into(),
+            workspace_id: str_of(&f, "workspace_id").into(),
+            workspace_name: str_of(&f, "workspace_name").into(),
+            write_group: str_of(&f, "write_group").into(),
         }))
 }
 

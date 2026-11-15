@@ -71,16 +71,26 @@ impl Pending {
                     .collect()
             })
         };
+        let kind = match p["kind"].as_str()? {
+            "user" => PrincipalKind::User,
+            "agent" => PrincipalKind::Agent,
+            _ => return None,
+        };
+        // An agent always carries scopes (`Principal::agent` sets them), and `None` means
+        // unrestricted. A stored plan of an agent with no scopes list would otherwise rebuild a
+        // principal that has every group of its owner; it gets the empty set, which allows
+        // nothing, so a plan that cannot say what the agent was narrowed to runs as an agent
+        // narrowed to nothing.
+        let scopes = match (kind, set(&p["scopes"])) {
+            (PrincipalKind::Agent, None) => Some(HashSet::new()),
+            (_, scopes) => scopes,
+        };
         Some(Pending {
             principal: Principal {
                 id: p["id"].as_str()?.to_string(),
-                kind: match p["kind"].as_str()? {
-                    "user" => PrincipalKind::User,
-                    "agent" => PrincipalKind::Agent,
-                    _ => return None,
-                },
+                kind,
                 groups: set(&p["groups"])?,
-                scopes: set(&p["scopes"]),
+                scopes,
                 mfa_limited: p["mfa_limited"].as_bool().unwrap_or(false),
                 // A mobile app's token is never refused for approval, so it is never in a plan.
                 device: None,
@@ -199,6 +209,59 @@ mod tests {
         assert_eq!(back.principal.kind, PrincipalKind::Agent);
         assert_eq!(back.principal.groups, p.principal.groups);
         assert_eq!(back.principal.scopes, p.principal.scopes);
+    }
+
+    /// Only a user who is not narrowed is a person. An agent whose scopes are `None` (no
+    /// constructor makes one; a stored plan could describe one) is not a person, so the checks that
+    /// are for a person alone (the branding commands, the approval, the account routes) refuse it.
+    #[test]
+    fn an_agent_with_no_scopes_is_not_a_person() {
+        let mut agent = Principal::agent("ada/agent", &["platform.admin"], &["platform.admin"]);
+        assert!(!agent.is_person());
+        agent.scopes = None;
+        assert!(
+            !agent.is_person(),
+            "an unrestricted agent is still an agent"
+        );
+        assert!(Principal::user("ada", &["platform.admin"]).is_person());
+        let mut narrowed = Principal::user("ada", &["platform.admin"]);
+        narrowed.scopes = Some(HashSet::new());
+        assert!(
+            !narrowed.is_person(),
+            "a narrowed user is not a person either"
+        );
+    }
+
+    /// A stored plan of an agent with no scopes list is rebuilt as an agent narrowed to nothing,
+    /// never as a principal that holds everything its owner holds and looks like a person.
+    #[test]
+    fn a_stored_plan_of_an_agent_without_scopes_is_rebuilt_narrowed_to_nothing() {
+        for scopes in [Some(J::Null), Some(json!("sales.user")), None] {
+            let mut j = pending().to_json();
+            match scopes {
+                Some(v) => j["principal"]["scopes"] = v,
+                None => {
+                    j["principal"].as_object_mut().unwrap().remove("scopes");
+                }
+            }
+            let back = Pending::from_json(&j).unwrap();
+            assert_eq!(back.principal.kind, PrincipalKind::Agent);
+            assert_eq!(back.principal.scopes, Some(HashSet::new()), "{j}");
+            assert!(!back.principal.is_person());
+            assert!(!back.principal.allows("sales.user"), "holds nothing: {j}");
+        }
+        // A user's plan keeps the scopes it has: none, and a list.
+        let user = Pending {
+            principal: Principal::user("ada", &["sales.user"]),
+            ..pending()
+        };
+        let back = Pending::from_json(&user.to_json()).unwrap();
+        assert_eq!(back.principal.scopes, None);
+        assert!(back.principal.is_person());
+        let mut scoped = user.clone();
+        scoped.principal.scopes = Some(["sales.user".to_string()].into_iter().collect());
+        let back = Pending::from_json(&scoped.to_json()).unwrap();
+        assert_eq!(back.principal.scopes, scoped.principal.scopes);
     }
 
     #[test]

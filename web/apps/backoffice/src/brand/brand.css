@@ -447,7 +447,8 @@
   background: var(--accent-fill);
   color: var(--on-accent);
 }
-.logo-tile.mono {
+/* Not .mono: that is the monospace utility, and it set the caption in code type. */
+.logo-tile.onecolour {
   background: #f3f4f8;
   color: #000000;
 }
@@ -654,9 +655,11 @@
   font-size: var(--text-sm);
   line-height: 1.6;
 }
+/* Bottom-aligned, so the figures still line up when one overline wraps. */
 .num-compare {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  align-items: end;
   gap: var(--space-4);
 }
 .num-compare p {
@@ -932,6 +935,13 @@
 .list-frame .content {
   max-block-size: 28rem;
 }
+/* On a phone the real list lets the page scroll (views.css); the demo is a frame of fixed height
+   inside the page, so it scrolls itself. */
+@media (max-width: 40rem) {
+  .list-frame .content.view-list {
+    overflow-y: auto;
+  }
+}
 .record-demo {
   display: grid;
   grid-template-columns: minmax(0, 28rem) minmax(0, 1fr);
@@ -990,7 +1000,8 @@
     flex-direction: row;
     flex-wrap: wrap;
   }
-  .bb-anchors {
+  /* Scoped to .bb-nav, or ".bb-nav ul { display: flex }" wins and the anchors stay. */
+  .bb-nav .bb-anchors {
     display: none;
   }
   .record-demo {
@@ -1004,17 +1015,116 @@
   .customize .content.pad {
     padding: var(--space-4);
   }
+  /* The crumb already names the page; the title stays for screen readers. */
+  .bb-title {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .bb-lead {
+    font-size: var(--text-base);
+  }
+  /* Accents in one row, each theme switch a full-width row of equal buttons. On the narrowest
+     phones the swatches shrink rather than touch, so a tap never lands on the neighbour. */
+  .bb-strip .swatches {
+    flex: 1 1 100%;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    column-gap: 0.25rem;
+  }
+  .bb-strip .swatch {
+    flex: 0 1 2.25rem;
+    inline-size: auto;
+    block-size: auto;
+    min-inline-size: 0;
+    aspect-ratio: 1;
+  }
+  .bb-strip .switcher {
+    flex: 1 1 100%;
+  }
+  .bb-strip .switcher > button {
+    flex: 1;
+    justify-content: center;
+  }
+  /* Six sections in two columns of finger-sized links instead of one long list. */
+  .bb-nav > ul {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.25rem;
+  }
+  /* A label that wraps ("Voice and tone" at 320 px) still fits the 44 px row. */
+  .bb-nav > ul > li > a {
+    gap: 0.5rem;
+    min-block-size: 2.75rem;
+    padding-inline: 0.5rem;
+    line-height: var(--leading-snug);
+  }
+  .spec {
+    padding: var(--space-4);
+  }
   .ramp ol {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  /* 11 steps in rows of 4: the last one fills the hole. */
+  .ramp li:last-child {
+    grid-column: span 2;
   }
   .dodont {
     grid-template-columns: 1fr;
   }
-  .bb-title {
-    font-size: var(--text-2xl);
+  .logo-variants,
+  .logo-min {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-5) var(--space-4);
+    align-items: start;
+  }
+  .logo-tile {
+    min-block-size: 7rem;
+    padding: var(--space-4);
+    gap: var(--space-2);
   }
   .face {
     font-size: 3.25rem;
+  }
+  /* The type scale stacks; the sample gets a line of its own. Size, line height and weight share
+     one line from 320 px up (6rem each did not fit, and weight dropped onto a line alone). */
+  .table.scale.stack-sm > tbody > tr > td:not(:last-child) {
+    flex-basis: 4.5rem;
+  }
+  .table.scale.stack-sm > tbody > tr > td:last-child {
+    flex-basis: 100%;
+  }
+  /* A stacked sample starts at its label and sits on the line of the value beside it. */
+  .table.stack-sm .tok-sample {
+    min-inline-size: 0;
+    min-block-size: 0;
+    padding: 0;
+    place-items: start;
+  }
+  /* Narrower label columns, so the bars and the descriptions keep their room. */
+  .space-list li {
+    grid-template-columns: 4.75rem minmax(0, 1fr) 2.5rem;
+    gap: var(--space-2);
+  }
+  .radius-list li {
+    grid-template-columns: 3.25rem minmax(0, 1fr);
+    column-gap: var(--space-3);
+    row-gap: 0;
+  }
+  .radius-list .radius-box {
+    grid-row: span 2;
+  }
+  .motion-row > .hint {
+    grid-column: 1 / -1;
+    margin-block-start: 0;
+  }
+  .elev-box {
+    inline-size: 7rem;
   }
   .record.static {
     position: static;

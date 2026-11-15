@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { startIdp } from "./idp.ts";
 import {
   backofficeAdminDist,
+  brand,
   backofficeDist,
   nextMinor,
   nextPatch,
@@ -20,6 +21,7 @@ import {
   updateToken,
   users,
 } from "./env.ts";
+import { register } from "./shutdown.ts";
 
 const [kind] = process.argv.slice(2);
 const dir = process.env.OBOP_E2E_DIR;
@@ -50,16 +52,32 @@ if (kind === "market") {
     res.end(readFileSync(file));
   });
   server.listen(Number(process.env.OBOP_E2E_MARKET_PORT), "127.0.0.1");
-  for (const sig of ["SIGTERM", "SIGINT"] as const)
-    process.on(sig, () => server.close(() => process.exit(0)));
+  const stop = () => {
+    server.close();
+    server.closeAllConnections();
+  };
+  const stopped = register(dir, kind, stop);
+  server.on("close", () => {
+    stopped();
+    process.exit(0);
+  });
+  for (const sig of ["SIGTERM", "SIGINT"] as const) process.on(sig, stop);
   await new Promise(() => {});
 }
 
 // A stand-in for Microsoft Entra on loopback for the Microsoft sign-in specs (D91).
 if (kind === "idp") {
   const server = startIdp(Number(process.env.OBOP_E2E_IDP_PORT));
-  for (const sig of ["SIGTERM", "SIGINT"] as const)
-    process.on(sig, () => server.close(() => process.exit(0)));
+  const stop = () => {
+    server.close();
+    server.closeAllConnections();
+  };
+  const stopped = register(dir, kind, stop);
+  server.on("close", () => {
+    stopped();
+    process.exit(0);
+  });
+  for (const sig of ["SIGTERM", "SIGINT"] as const) process.on(sig, stop);
   await new Promise(() => {});
 }
 
@@ -70,16 +88,18 @@ function run(args: string[], input?: string, env?: Record<string, string>) {
 
 let args: string[];
 const extraEnv: Record<string, string> = {};
-if (kind === "app" || kind === "passkeys" || kind === "language") {
+if (kind === "app" || kind === "passkeys" || kind === "language" || kind === "brand") {
   const db = `sqlite://${join(dir, `${kind}.sqlite`)}`;
-  // The language instance needs an administrator and a restricted person, nobody else.
-  const accounts = kind === "language" ? [users.root, users.sam] : Object.values(users);
+  // The language and brand instances need an administrator and a restricted person, nobody else.
+  const accounts =
+    kind === "language" || kind === "brand" ? [users.root, users.sam] : Object.values(users);
   for (const u of accounts)
     run(["admin", "create", u.name, "--groups", u.groups, "--db", db], `${u.password}\n`);
   const port = {
     app: process.env.OBOP_E2E_APP_PORT,
     passkeys: process.env.OBOP_E2E_PASSKEY_PORT,
     language: process.env.OBOP_E2E_LANGUAGE_PORT,
+    brand: process.env.OBOP_E2E_BRAND_PORT,
   }[kind];
   args = ["serve", "--addr", `127.0.0.1:${port}`, "--db", db, "--static", backofficeDist];
   if (kind === "passkeys") {
@@ -87,6 +107,25 @@ if (kind === "app" || kind === "passkeys" || kind === "language") {
     extraEnv.OBOP_PUBLIC_URL = `http://localhost:${process.env.OBOP_E2E_PASSKEY_PORT}`;
   } else if (kind === "language") {
     extraEnv.OBOP_PUBLIC_URL = `http://127.0.0.1:${process.env.OBOP_E2E_LANGUAGE_PORT}`;
+  } else if (kind === "brand") {
+    // The instance brand (docs/spec/branding.md): the name, a message and the logo are set at the
+    // terminal, as an operator sets them before anyone signs in, and the OAuth pages show them.
+    extraEnv.OBOP_PUBLIC_URL = `http://127.0.0.1:${process.env.OBOP_E2E_BRAND_PORT}`;
+    const logo = join(dir, "brand-logo.svg");
+    writeFileSync(logo, brand.artwork);
+    run([
+      "admin",
+      "brand",
+      "configure",
+      "--name",
+      brand.name,
+      "--message",
+      `en=${brand.message}`,
+      "--logo-file",
+      logo,
+      "--db",
+      db,
+    ]);
   } else {
     // Updating the instance (D63): it holds the update token of an instance the control plane
     // knows, a directory for the backup before an update, and a marketplace the specs fill.
@@ -226,7 +265,7 @@ if (kind === "app" || kind === "passkeys" || kind === "language") {
     "--static",
     siteDir,
   ];
-} else throw new Error("usage: serve.ts app|passkeys|language|sso|idp|shop|platform|market");
+} else throw new Error("usage: serve.ts app|passkeys|language|brand|sso|idp|shop|platform|market");
 
 // Connectors: the specs run a receiver on loopback, which is refused unless the operator allows it.
 // The secret key is a 32-byte key in the form two-factor authentication and connectors both accept.
@@ -249,5 +288,10 @@ const child = spawn(bin, args, {
     ...extraEnv,
   },
 });
+// Stops when Playwright signals it, or when the global teardown asks (see support/shutdown.ts).
+const stopped = register(dir, kind, () => child.kill("SIGTERM"));
 for (const sig of ["SIGTERM", "SIGINT"] as const) process.on(sig, () => child.kill(sig));
-child.on("exit", (code) => process.exit(code ?? 0));
+child.on("exit", (code) => {
+  stopped();
+  process.exit(code ?? 0);
+});

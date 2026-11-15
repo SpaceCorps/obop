@@ -1,11 +1,11 @@
 [labels.fi.module]
 name = "Kassa"
-description = "Myymälän kassat: kassapisteen asetukset, kassavuorot kassan täsmäytyksellä, myynnit riveineen ja maksurivit maksutavoittain. Hyvitys ja vuoron sulkeminen vaativat esihenkilön hyväksynnän. Rivien välisummat ja summa lasketaan, kuiteilla on katkeamaton vuosinumero, ja maksu luo rivikohtaisen luonnossiirron. Korttinumeroita ei saa tallentaa. Vaatii Tuotteet-paketin."
+description = "Myymälän kassat: kassapisteen asetukset, kassavuorot, myynnit riveineen ja maksurivit maksutavoittain. Hyvitys ja vuoron sulkeminen vaativat esihenkilön hyväksynnän. Summat lasketaan, kuiteilla on katkeamaton vuosinumero, ja maksu luo rivikohtaisen luonnossiirron. Täsmäytys- ja hyvitysasetukset vain tallennetaan; mikään ei tarkista niitä. Korttinumeroita ei saa tallentaa. Vaatii Tuotteet-paketin."
 summary = "Myymälän kassat: kassavuorot, myynnit riveineen ja maksut. Hyvitys ja sulkeminen vaativat hyväksynnän."
 
 [labels.fi.model.pos_config]
 name = "Kassapiste"
-description = "Kassapiste (kassa tai myymälä) ja sen säännöt"
+description = "Kassapiste (kassa tai myymälä) ja sen asetukset"
 
 [labels.fi.model.pos_config.field.name]
 label = "Nimi"
@@ -21,7 +21,7 @@ description = "Kuittien yläreunaan tulostettava teksti"
 
 [labels.fi.model.pos_config.field.cash_control]
 label = "Kassan täsmäytys"
-description = "Pitääkö kassavuoron laskea kassalaatikon käteinen avattaessa ja suljettaessa"
+description = "Onko kassalaatikon käteinen tarkoitus laskea avattaessa ja suljettaessa; vain tallennetaan, mikään ei tarkista sitä"
 
 [labels.fi.model.pos_config.field.default_opening_cash]
 label = "Oletusalkukassa"
@@ -29,7 +29,7 @@ description = "Käteinen, joka tavallisesti jätetään laatikkoon yöksi (valuu
 
 [labels.fi.model.pos_config.field.allow_refunds]
 label = "Salli hyvitykset"
-description = "Saavatko kassanhoitajat ehdottaa hyvityksiä tässä kassapisteessä"
+description = "Onko hyvitysten tarkoitus olla sallittuja tässä kassapisteessä; vain tallennetaan, mikään ei tarkista sitä"
 
 [labels.fi.model.pos_config.field.active]
 label = "Aktiivinen"

@@ -1,10 +1,10 @@
 [labels.fr.module]
 name = "Facturation"
-summary = "Factures clients avec un cycle de vie brouillon, comptabilisée et payée."
+summary = "Factures clients avec un cycle de vie brouillon, comptabilisée et annulée."
 
 [labels.fr.model.invoice]
 name = "Facture"
-description = "Une facture client ; une facture comptabilisée ne se corrige que par un avoir"
+description = "Une facture client ; aucune action ne remet une facture comptabilisée en brouillon ni ne l’annule"
 
 [labels.fr.model.invoice.field.sale_order_id]
 label = "Commande client"
@@ -25,11 +25,11 @@ description = "Total de la facture en plus petite unité monétaire, somme des l
 
 [labels.fr.model.invoice.field.number]
 label = "Numéro"
-description = "Numéro légal sans rupture de séquence, attribué à la comptabilisation"
+description = "Numéro d’une série annuelle sans rupture, par exemple INV-2026-00042, attribué à la comptabilisation"
 
 [labels.fr.model.invoice.action.post]
 label = "Comptabiliser"
-description = "Comptabilise une facture en brouillon et lui attribue son numéro légal"
+description = "Comptabilise une facture en brouillon et lui attribue le numéro suivant de la série"
 
 [labels.fr.model.invoice.action.cancel]
 label = "Annuler"
