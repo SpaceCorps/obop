@@ -2105,7 +2105,9 @@ test.describe("crawlers and agents", () => {
       for (const { re, why } of CLAIMS) expect(text, `${url} ${re}: ${why}`).not.toMatch(re);
     // And the HTML of the pages that carried the worst of them says what is true.
     const html = await (await request.get(`${base()}/apps/accounting/`)).text();
-    expect(html).toContain("This is a label only: entries can still be posted into it.");
+    expect(html).toContain(
+      "Entries dated in a closed period can no longer be created or changed until it is reopened.",
+    );
     expect(await (await request.get(`${base()}/apps/purchase/`)).text()).toContain(
       "By itself, this does not contact the vendor.",
     );
@@ -2174,10 +2176,6 @@ test.describe("crawlers and agents", () => {
       { slug: "pos", text: "The payments are checked only when the sale is paid." },
       { slug: "pos", text: "obop does not check that the drawer was counted." },
       {
-        slug: "accounting",
-        text: "An entry with no lines has debits and credits of zero, which are equal, so it can be posted.",
-      },
-      {
         slug: "contacts",
         text: "The erase does not touch the list of placeholders an AI agent holds;",
       },
@@ -2216,7 +2214,7 @@ test.describe("crawlers and agents", () => {
     );
     const pos = await (await request.get(`${base()}/apps/pos.md`)).text();
     expect(pos.slice(0, pos.indexOf("\n## For developers\n"))).toContain(
-      "a paid sale can still be edited afterwards",
+      "a paid sale and its lines can no longer be changed, only refunded",
     );
     // On a translated page the list is English, inside the English note.
     const de = await (await request.get(`${base()}/de/apps/pos/`)).text();
