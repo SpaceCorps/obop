@@ -511,9 +511,17 @@ fn a_purchase_line_takes_the_cost_and_a_received_order_is_frozen() {
 
 #[test]
 fn a_manufacturing_order_makes_one_run_and_a_done_order_is_frozen() {
-    let app = app_with(&["manufacturing"]);
+    let app = app_with(&["inventory", "manufacturing"]);
     let root = admin();
-    let lead = user("leo", &["manufacturing.user", "manufacturing.manager"]);
+    // Finishing makes stock moves, so production staff hold the inventory.user group.
+    let lead = user(
+        "leo",
+        &[
+            "manufacturing.user",
+            "manufacturing.manager",
+            "inventory.user",
+        ],
+    );
     let product = id(&ok(
         &app,
         &root,
@@ -537,15 +545,17 @@ fn a_manufacturing_order_makes_one_run_and_a_done_order_is_frozen() {
         &app,
         &lead,
         "manufacturing_order.create",
-        json!({"reference": "MO-0001", "bom_id": retired}),
+        json!({"bom_id": retired}),
         "ref_not_allowed",
     );
     let mo = ok(
         &app,
         &lead,
         "manufacturing_order.create",
-        json!({"reference": "MO-0001", "bom_id": id(&bom)}),
+        json!({"bom_id": id(&bom)}),
     );
+    assert_eq!(mo["number"], "MO-00001");
+    assert_eq!(mo["product_id"], product.as_str());
     assert_eq!(mo["quantity"], 4);
     assert_eq!(mo["planned_on"], TODAY);
     let mo = id(&mo);
@@ -657,5 +667,239 @@ fn verifying_records_who_and_when_and_an_approved_vat_report_is_frozen() {
         &ann,
         "accounting_se_vat_report.record_filed",
         json!({ "id": report }),
+    );
+}
+
+/// The stock of `product` at `location`, 0 when there is no stock item.
+fn on_hand(app: &App, product: &str, location: &str) -> i64 {
+    let r = ok(
+        app,
+        &admin(),
+        "inventory_item.search",
+        json!({"filter": [
+            {"field": "product_id", "op": "eq", "value": product},
+            {"field": "location_id", "op": "eq", "value": location}
+        ]}),
+    );
+    r["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|x| x["quantity"].as_i64().unwrap_or(0))
+        .sum()
+}
+
+fn location(app: &App, kind: &str) -> String {
+    let wh = id(&ok(
+        app,
+        &admin(),
+        "inventory_warehouse.create",
+        json!({"name": "Hamburg", "code": format!("H{kind}")}),
+    ));
+    id(&ok(
+        app,
+        &admin(),
+        "inventory_location.create",
+        json!({"name": format!("HH/{kind}"), "warehouse_id": wh, "kind": kind}),
+    ))
+}
+
+#[test]
+fn a_short_delivery_receives_what_arrived_and_the_moves_name_the_order() {
+    let app = app_with(&["inventory", "purchase"]);
+    let root = admin();
+    let product = id(&ok(
+        &app,
+        &root,
+        "product.create",
+        json!({"name": "Gloves", "cost_minor": 300}),
+    ));
+    let other = id(&ok(
+        &app,
+        &root,
+        "product.create",
+        json!({"name": "Goggles", "cost_minor": 900}),
+    ));
+    let party = id(&ok(
+        &app,
+        &root,
+        "party.create",
+        json!({"name": "PSA GmbH"}),
+    ));
+    let vendor = id(&ok(
+        &app,
+        &root,
+        "purchase_vendor.create",
+        json!({ "party_id": party }),
+    ));
+    let dock = location(&app, "receiving");
+    let po = ok(
+        &app,
+        &root,
+        "purchase_order.create",
+        json!({"vendor_id": vendor, "receive_location_id": dock}),
+    );
+    let number = po["number"].as_str().unwrap().to_string();
+    let po = id(&po);
+    let short = id(&ok(
+        &app,
+        &root,
+        "purchase_order_line.create",
+        json!({"order_id": po, "product_id": product, "quantity": 10}),
+    ));
+    ok(
+        &app,
+        &root,
+        "purchase_order_line.create",
+        json!({"order_id": po, "product_id": other, "quantity": 4}),
+    );
+    for action in ["send", "confirm"] {
+        ok(
+            &app,
+            &root,
+            &format!("purchase_order.{action}"),
+            json!({ "id": po }),
+        );
+    }
+    // Seven of the ten gloves came: the line says so before the order is received.
+    let line = ok(
+        &app,
+        &root,
+        "purchase_order_line.update",
+        json!({"id": short, "received_quantity": 7}),
+    );
+    assert_eq!(line["receipt_quantity"], 7);
+    ok(&app, &root, "purchase_order.receive", json!({ "id": po }));
+    let moves = ok(
+        &app,
+        &root,
+        "inventory_move.search",
+        json!({"filter": [{"field": "origin", "op": "eq", "value": number}]}),
+    );
+    let rows = moves["rows"].as_array().unwrap();
+    assert_eq!(rows.len(), 2);
+    for m in rows {
+        assert_eq!(m["kind"], "receipt");
+        assert_eq!(m["state"], "draft");
+        assert_eq!(m["to_location_id"], dock.as_str());
+        let want = if m["product_id"] == product.as_str() {
+            7
+        } else {
+            4
+        };
+        assert_eq!(m["quantity"], want);
+        ok(
+            &app,
+            &root,
+            "inventory_move.validate",
+            json!({"id": m["id"]}),
+        );
+    }
+    assert_eq!(on_hand(&app, &product, &dock), 7);
+    assert_eq!(on_hand(&app, &other, &dock), 4);
+}
+
+#[test]
+fn finishing_a_manufacturing_order_uses_its_components_and_adds_the_product() {
+    let app = app_with(&["inventory", "manufacturing"]);
+    let root = admin();
+    let kit = id(&ok(
+        &app,
+        &root,
+        "product.create",
+        json!({"name": "Tool kit"}),
+    ));
+    let case = id(&ok(&app, &root, "product.create", json!({"name": "Case"})));
+    let bits = id(&ok(
+        &app,
+        &root,
+        "product.create",
+        json!({"name": "Bit set"}),
+    ));
+    let floor = location(&app, "internal");
+    // 20 cases on the floor, from a receipt.
+    let m = id(&ok(
+        &app,
+        &root,
+        "inventory_move.create",
+        json!({"product_id": case, "to_location_id": floor, "quantity": 20, "kind": "receipt"}),
+    ));
+    ok(&app, &root, "inventory_move.validate", json!({ "id": m }));
+    let bom = id(&ok(
+        &app,
+        &root,
+        "manufacturing_bom.create",
+        json!({"product_id": kit, "name": "Standard", "quantity": 1}),
+    ));
+    let mo = ok(
+        &app,
+        &root,
+        "manufacturing_order.create",
+        json!({"bom_id": bom, "quantity": 5, "location_id": floor}),
+    );
+    assert_eq!(mo["product_id"], kit.as_str());
+    let mo = id(&mo);
+    ok(
+        &app,
+        &root,
+        "manufacturing_order_line.bulk_create",
+        json!({"rows": [
+            {"order_id": mo, "component_id": case, "quantity": 5},
+            {"order_id": mo, "component_id": bits, "quantity": 10}
+        ]}),
+    );
+    for action in ["confirm", "start", "finish"] {
+        ok(
+            &app,
+            &root,
+            &format!("manufacturing_order.{action}"),
+            json!({ "id": mo }),
+        );
+    }
+    // Finishing made a draft move per component and one for the product, named after the order;
+    // the stock changes when the warehouse validates them.
+    let number = get(&app, &root, "manufacturing_order", &mo)["number"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let moves = ok(
+        &app,
+        &root,
+        "inventory_move.search",
+        json!({"filter": [{"field": "origin", "op": "eq", "value": number}]}),
+    );
+    let moves = moves["rows"].as_array().unwrap();
+    assert_eq!(moves.len(), 3);
+    assert_eq!(on_hand(&app, &kit, &floor), 0);
+    for m in moves {
+        assert_eq!(m["kind"], "production");
+        assert_eq!(m["state"], "draft");
+        ok(
+            &app,
+            &root,
+            "inventory_move.validate",
+            json!({"id": m["id"]}),
+        );
+    }
+    assert_eq!(on_hand(&app, &kit, &floor), 5);
+    assert_eq!(on_hand(&app, &case, &floor), 15);
+    // Bits were not in stock: the floor now owes ten (negative stock is allowed, as in moves).
+    assert_eq!(on_hand(&app, &bits, &floor), -10);
+    // The components of a done order are frozen with it.
+    let line = ok(
+        &app,
+        &root,
+        "manufacturing_order_line.search",
+        json!({"filter": [{"field": "order_id", "op": "eq", "value": mo}]}),
+    )["rows"][0]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    refused(
+        &app,
+        &root,
+        "manufacturing_order_line.update",
+        json!({"id": line, "quantity": 1}),
+        "immutable_record",
     );
 }

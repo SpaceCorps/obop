@@ -126,3 +126,19 @@ description = "Cancelar un movimiento en borrador"
 [labels.es.model.inventory_item.field.below_reorder]
 description = "Si la cantidad está en el nivel de reposición o por debajo (no, si no hay nivel definido)"
 label = "Stock bajo"
+
+[labels.es.model.inventory_move.field.kind]
+label = "Tipo"
+description = "Qué es el movimiento: una recepción de un proveedor, una entrega a un cliente, un traslado interno, desecho, un ajuste tras un recuento de inventario o producción (componentes consumidos y productos fabricados)"
+
+[labels.es.model.inventory_move.field.kind.options]
+receipt = "Recepción"
+delivery = "Entrega"
+internal = "Interno"
+scrap = "Desecho"
+adjustment = "Ajuste de inventario"
+production = "Producción"
+
+[labels.es.model.inventory_move.field.origin]
+label = "Origen"
+description = "El documento del que procede el movimiento, por ejemplo un número de pedido de compra como PO-00042 o una orden de fabricación"

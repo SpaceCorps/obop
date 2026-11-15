@@ -119,7 +119,7 @@ description = "Vereinbarter Preis pro Stück (kleinste Währungseinheit, z. B. C
 
 [labels.de.model.purchase_order_line.field.received_quantity]
 label = "Erhaltene Menge"
-description = "Bisher erhaltene Stückzahl"
+description = "Tatsächlich angekommene Stückzahl, wenn sie von der Bestellung abweicht; leer bedeutet, dass die bestellte Menge angekommen ist. Vor dem Wareneingang der Bestellung setzen"
 
 [labels.de.model.purchase_order.field.number]
 label = "Nummer"
@@ -132,3 +132,7 @@ description = "Wo die Ware eingehen soll; der Wareneingang der Bestellung erzeug
 [labels.de.model.purchase_order_line.field.amount]
 label = "Betrag"
 description = "Positionsbetrag: Menge mal Stückpreis (kleinste Währungseinheit)"
+
+[labels.de.model.purchase_order_line.field.receipt_quantity]
+label = "Eingangsmenge"
+description = "Stückzahl, die der Wareneingang ins Lager bucht: die erhaltene Menge, wenn angegeben, sonst die bestellte Menge"

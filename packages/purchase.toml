@@ -1,6 +1,6 @@
 [module]
 id = "purchase"
-version = "0.3.1"
+version = "0.4.0"
 name = "Purchase"
 description = "Vendors, purchase orders and order lines with a draft, sent, confirmed, received and cancelled flow. An order has a number from a series, its total is the sum of its lines, and receiving the goods creates a draft stock move per line at the receiving location (the warehouse validates them)."
 author = "SpaceCorps"
@@ -13,12 +13,12 @@ categories = ["supply-chain"]
 maturity = "beta"
 requires_core = "^0.2.2"
 home = "purchase_order"
-changelog = "Received and cancelled orders and their lines are frozen. The vendor reference of an order is optional; a new order is dated today in the instance currency, and a line takes the cost of its product as its unit price when none is given. New vendors start active, and inactive vendors and locations are no longer offered for new orders; vendors whose active flag was never set become active. English names, list, card and form hints."
+changelog = "0.4.0: goods can arrive short: give a line the units that arrived (received quantity) before receiving the order, and its stock move takes that quantity instead of the quantity ordered. The stock moves of a receipt carry the order number as their source document and are marked as receipts, so an order shows its receipts. 0.3.1: received and cancelled orders and their lines are frozen. The vendor reference of an order is optional; a new order is dated today in the instance currency, and a line takes the cost of its product as its unit price when none is given. New vendors start active, and inactive vendors and locations are no longer offered for new orders; vendors whose active flag was never set become active. English names, list, card and form hints."
 
 [module.dependencies]
 base = "^0.2"
 product = "^0.2"
-inventory = ">=0.3, <1"
+inventory = ">=0.5, <1"
 
 [[model]]
 name = "purchase_vendor"
@@ -227,7 +227,7 @@ write_group = "purchase.user"
 
   [[model.action]]
   name = "receive"
-  description = "Record that the goods arrived: a draft stock move per line is created for the warehouse to validate (needs the inventory.user group)"
+  description = "Record that the goods arrived: a draft stock move per line is created at the receiving location for the warehouse to validate, for the received quantity of the line when one is given and else for the quantity ordered; the moves carry the order number as their source document (needs the inventory.user group)"
   field = "state"
   from = "confirmed"
   to = "received"
@@ -237,7 +237,7 @@ write_group = "purchase.user"
     model = "inventory_move"
     for_each = "lines"
     when = "is_set(receive_location_id)"
-    map = { product_id = "$line.product_id", to_location_id = "$self.receive_location_id", quantity = "$line.quantity", scheduled_on = "$self.expected_on" }
+    map = { product_id = "$line.product_id", to_location_id = "$self.receive_location_id", quantity = "$line.receipt_quantity", scheduled_on = "$self.expected_on", kind = "receipt", origin = "$self.number" }
 
     [model.action.ui]
     primary = true
@@ -265,7 +265,7 @@ write_group = "purchase.user"
   [model.ui]
   title = "{product_id} × {quantity}"
   subtitle = "{order_id}"
-  list = ["product_id", "description", "quantity", "unit_price", "amount", "received_quantity"]
+  list = ["product_id", "description", "quantity", "received_quantity", "unit_price", "amount"]
   quick_create = ["product_id", "quantity", "unit_price"]
   default_view = "list"
   menu = "hidden"
@@ -327,9 +327,23 @@ write_group = "purchase.user"
 
   [[model.field]]
   name = "received_quantity"
-  description = "Units received so far"
+  description = "Units that arrived, when fewer or more than ordered; empty means the quantity ordered arrived. Set it before the order is received"
   class = "none"
   kind = "number"
+  min = 0
+
+    [model.field.ui]
+    aggregate = "none"
+
+  [[model.field]]
+  name = "receipt_quantity"
+  description = "Units the receipt moves into stock: the received quantity when one is given, else the quantity ordered"
+  class = "none"
+  kind = "number"
+  computed = "if(is_set(received_quantity), received_quantity, quantity)"
+
+    [model.field.ui]
+    hidden = true
 
 [[migration]]
 from = "<0.3.1"

@@ -126,3 +126,19 @@ description = "Anuluje roboczą operację"
 [labels.pl.model.inventory_item.field.below_reorder]
 description = "Czy ilość jest równa poziomowi ponownego zamówienia lub niższa (nie, gdy poziom nie jest ustawiony)"
 label = "Niski stan"
+
+[labels.pl.model.inventory_move.field.kind]
+label = "Rodzaj"
+description = "Czym jest ruch: przyjęcie od dostawcy, wydanie do klienta, przesunięcie wewnętrzne, złom, korekta po inwentaryzacji lub produkcja (zużyte komponenty i wytworzone produkty)"
+
+[labels.pl.model.inventory_move.field.kind.options]
+receipt = "Przyjęcie"
+delivery = "Wydanie"
+internal = "Wewnętrzny"
+scrap = "Złom"
+adjustment = "Korekta inwentaryzacyjna"
+production = "Produkcja"
+
+[labels.pl.model.inventory_move.field.origin]
+label = "Dokument źródłowy"
+description = "Dokument, z którego pochodzi ruch, na przykład numer zamówienia zakupu jak PO-00042 lub zlecenie produkcyjne"

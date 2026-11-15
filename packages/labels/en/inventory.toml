@@ -34,3 +34,12 @@ label = "To"
 
 [labels.en.model.inventory_move.field.scheduled_on]
 label = "Scheduled date"
+
+[labels.en.model.inventory_move.field.kind]
+label = "Type"
+
+[labels.en.model.inventory_move.field.kind.options]
+adjustment = "Stock count"
+
+[labels.en.model.inventory_move.field.origin]
+label = "Source document"

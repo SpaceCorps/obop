@@ -119,7 +119,7 @@ description = "Sovittu yksikköhinta (valuutan pienin yksikkö, esimerkiksi sent
 
 [labels.fi.model.purchase_order_line.field.received_quantity]
 label = "Vastaanotettu määrä"
-description = "Tähän mennessä vastaanotetut yksiköt"
+description = "Todellisuudessa saapuneet yksiköt, jos määrä poikkeaa tilatusta; tyhjä tarkoittaa, että tilattu määrä saapui. Aseta ennen tilauksen vastaanottoa"
 
 [labels.fi.model.purchase_order.field.number]
 label = "Numero"
@@ -132,3 +132,7 @@ description = "Mihin tavarat vastaanotetaan; tilauksen vastaanotto luo varastosi
 [labels.fi.model.purchase_order_line.field.amount]
 label = "Summa"
 description = "Rivin summa: määrä kertaa yksikköhinta (valuutan pienin yksikkö)"
+
+[labels.fi.model.purchase_order_line.field.receipt_quantity]
+label = "Vastaanotettava määrä"
+description = "Yksiköt, jotka vastaanotto vie varastoon: vastaanotettu määrä, jos se on annettu, muuten tilattu määrä"

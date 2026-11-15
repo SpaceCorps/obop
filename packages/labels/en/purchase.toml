@@ -45,3 +45,12 @@ plural = "Purchase order lines"
 
 [labels.en.model.purchase_order_line.field.order_id]
 label = "Purchase order"
+
+[labels.en.model.purchase_order_line.field.quantity]
+label = "Ordered"
+
+[labels.en.model.purchase_order_line.field.received_quantity]
+label = "Received"
+
+[labels.en.model.purchase_order_line.field.receipt_quantity]
+label = "To receive"

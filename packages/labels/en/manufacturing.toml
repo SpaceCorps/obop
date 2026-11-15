@@ -27,3 +27,16 @@ label = "Bill of materials"
 
 [labels.en.model.manufacturing_order.field.planned_on]
 label = "Planned start"
+
+[labels.en.model.manufacturing_order.field.location_id]
+label = "Production location"
+
+[labels.en.model.manufacturing_order_line]
+name = "Component"
+plural = "Components"
+
+[labels.en.model.manufacturing_order_line.field.order_id]
+label = "Manufacturing order"
+
+[labels.en.model.manufacturing_order_line.field.component_id]
+label = "Component"

@@ -126,3 +126,19 @@ description = "Peruuta luonnossiirto"
 [labels.fi.model.inventory_item.field.below_reorder]
 description = "Onko määrä tilauspisteessä tai sen alla (ei, jos tilauspistettä ei ole asetettu)"
 label = "Vähissä"
+
+[labels.fi.model.inventory_move.field.kind]
+label = "Tyyppi"
+description = "Mitä siirto on: vastaanotto toimittajalta, toimitus asiakkaalle, sisäinen siirto, hävikki, inventaarion jälkeinen korjaus tai tuotanto (käytetyt komponentit ja valmistetut tuotteet)"
+
+[labels.fi.model.inventory_move.field.kind.options]
+receipt = "Vastaanotto"
+delivery = "Toimitus"
+internal = "Sisäinen"
+scrap = "Hävikki"
+adjustment = "Inventaariokorjaus"
+production = "Tuotanto"
+
+[labels.fi.model.inventory_move.field.origin]
+label = "Lähdeasiakirja"
+description = "Asiakirja, josta siirto on peräisin, esimerkiksi ostotilauksen numero kuten PO-00042 tai valmistustilaus"

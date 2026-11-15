@@ -1,6 +1,6 @@
 [labels.sv.module]
 name = "Tillverkning"
-description = "Stycklistor och tillverkningsorder med flödet utkast, bekräftad, pågår och klar. Komponenternas lagersaldo förbrukas inte automatiskt. Klara och avbrutna order är låsta."
+description = "Stycklistor och tillverkningsorder med flödet utkast, bekräftad, pågår och klar. En order listar komponenterna den förbrukar; när ordern avslutas skapas de lagerrörelser som tar komponenterna ur lager på produktionsplatsen och lägger in den färdiga produkten där. Klara och avbrutna order är låsta."
 summary = "Stycklistor och tillverkningsorder med flödet utkast, bekräftad, pågår och klar."
 
 [labels.sv.model.manufacturing_bom]
@@ -50,9 +50,9 @@ name = "Tillverkningsorder"
 plural = "Tillverkningsorder"
 description = "En instruktion att tillverka ett antal av en produkt"
 
-[labels.sv.model.manufacturing_order.field.reference]
-label = "Referens"
-description = "Ordernummer, till exempel TO-0042"
+[labels.sv.model.manufacturing_order.field.number]
+label = "Nummer"
+description = "Ordernummer som MO-00042, tilldelas när ordern skapas"
 
 [labels.sv.model.manufacturing_order.field.bom_id]
 label = "Stycklista"
@@ -95,8 +95,33 @@ description = "Starta tillverkningen av en bekräftad order"
 
 [labels.sv.model.manufacturing_order.action.finish]
 label = "Avsluta"
-description = "Markera tillverkningen som avslutad"
+description = "Markera tillverkningen som avslutad: med en produktionsplats skapas en lagerrörelse i utkast per komponent som tar den därifrån och en som lägger in den färdiga produkten där, med ordernumret som ursprung, för lagret att validera (kräver gruppen inventory.user)"
 
 [labels.sv.model.manufacturing_order.action.cancel]
 label = "Annullera"
 description = "Annullera en order som inte har bekräftats"
+
+[labels.sv.model.manufacturing_order.field.product_id]
+label = "Produkt"
+description = "Den färdiga produkt som tillverkas; hämtas från stycklistan när den inte anges"
+
+[labels.sv.model.manufacturing_order.field.location_id]
+label = "Produktionsplats"
+description = "Produktionsplatsen: när ordern avslutas skapas de lagerrörelser som tar komponenterna härifrån och lägger den färdiga produkten här; tomt skapar inga rörelser"
+
+[labels.sv.model.manufacturing_order_line]
+name = "Orderkomponent"
+plural = "Orderkomponenter"
+description = "En komponent som en tillverkningsorder förbrukar, med antalet för hela ordern"
+
+[labels.sv.model.manufacturing_order_line.field.order_id]
+label = "Tillverkningsorder"
+description = "Tillverkningsordern som förbrukar komponenten"
+
+[labels.sv.model.manufacturing_order_line.field.component_id]
+label = "Komponent"
+description = "Produkten som förbrukas"
+
+[labels.sv.model.manufacturing_order_line.field.quantity]
+label = "Antal"
+description = "Antal enheter av komponenten som hela ordern förbrukar"

@@ -126,3 +126,19 @@ description = "Eine Bewegung im Entwurf stornieren"
 [labels.de.model.inventory_item.field.below_reorder]
 description = "Ob die Menge den Meldebestand erreicht oder unterschritten hat (nein, wenn kein Meldebestand gesetzt ist)"
 label = "Niedriger Bestand"
+
+[labels.de.model.inventory_move.field.kind]
+label = "Art"
+description = "Was die Bewegung ist: Wareneingang von einem Lieferanten, Lieferung an einen Kunden, interne Umlagerung, Ausschuss, Korrektur nach einer Inventur oder Produktion (verbrauchte Komponenten und hergestellte Produkte)"
+
+[labels.de.model.inventory_move.field.kind.options]
+receipt = "Wareneingang"
+delivery = "Lieferung"
+internal = "Intern"
+scrap = "Ausschuss"
+adjustment = "Inventurkorrektur"
+production = "Produktion"
+
+[labels.de.model.inventory_move.field.origin]
+label = "Herkunftsbeleg"
+description = "Der Beleg, aus dem die Bewegung stammt, zum Beispiel eine Bestellnummer wie PO-00042 oder ein Fertigungsauftrag"

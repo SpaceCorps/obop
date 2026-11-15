@@ -126,3 +126,19 @@ description = "Annule un mouvement en brouillon"
 [labels.fr.model.inventory_item.field.below_reorder]
 description = "Indique si la quantité est au niveau de réapprovisionnement ou en dessous (non si aucun niveau n’est défini)"
 label = "Stock bas"
+
+[labels.fr.model.inventory_move.field.kind]
+label = "Type"
+description = "Nature du mouvement : réception d’un fournisseur, livraison à un client, transfert interne, rebut, ajustement après un inventaire ou production (composants consommés et produits fabriqués)"
+
+[labels.fr.model.inventory_move.field.kind.options]
+receipt = "Réception"
+delivery = "Livraison"
+internal = "Interne"
+scrap = "Rebut"
+adjustment = "Ajustement d’inventaire"
+production = "Production"
+
+[labels.fr.model.inventory_move.field.origin]
+label = "Origine"
+description = "Le document d’origine du mouvement, par exemple un numéro de commande fournisseur comme PO-00042 ou un ordre de fabrication"
