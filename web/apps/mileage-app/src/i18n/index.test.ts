@@ -17,6 +17,14 @@ describe("sentences with a count", () => {
     expect(tp("unit.trips", 2)).toBe("2 trips");
     expect(tp("unit.points", 1)).toBe("1 point");
     expect(tp("recording.quiet.message", 1)).toContain("1 minute old");
+    expect(tp("recording.signal.detail", 1, { total: 3 })).toBe("1 of 3 positions was left out");
+    expect(tp("recording.signal.detail", 2, { total: 3 })).toBe("2 of 3 positions were left out");
+    expect(tp("recording.signal.detail.last", 1, { total: 3, accuracy: "150 m" })).toBe(
+      "1 of 3 positions was left out (the last one was only known to within 150 m)",
+    );
+    expect(tp("recording.signal.detail.last", 5, { total: 9, accuracy: "150 m" })).toBe(
+      "5 of 9 positions were left out (the last one was only known to within 150 m)",
+    );
   });
 
   test("the count is written the way the language writes numbers", () => {
