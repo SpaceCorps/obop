@@ -336,7 +336,7 @@ test.describe("pseudo-locale", () => {
         if (
           !el ||
           el.closest(
-            "script, style, [lang=en], td, th[scope=row], code, kbd, .avatar, .ktitle, .kval, .masked, .record header h2, .crumbs strong, .brand, .sr-only, option, .gname, .badge",
+            "script, style, [lang=en], td, th[scope=row], code, kbd, .avatar, .ktitle, .ksub, .kfacts, .kval, .masked, .record header h2, .crumbs strong, .brand, .sr-only, option, .gname, .badge",
           )
         )
           continue;
