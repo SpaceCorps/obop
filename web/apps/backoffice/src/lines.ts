@@ -100,7 +100,8 @@ export function lineColumns(model: ModelMeta, via: string, fields = model.fields
 
 /** The narrowest a column can be and stay usable, in pixels. */
 export function minWidth(f: FieldMeta): number {
-  if (f.computed) return f.kind === "money" || f.kind === "decimal" ? 84 : 72;
+  // An amount needs room for "31,050.00 €" (its value and its currency mark).
+  if (f.computed) return f.kind === "money" || f.kind === "decimal" ? 108 : 72;
   switch (f.kind) {
     case "ref":
       return 128;
@@ -111,7 +112,7 @@ export function minWidth(f: FieldMeta): number {
     case "decimal":
       return 84;
     case "money":
-      return 92;
+      return 124;
     case "date":
       return 128;
     case "select":

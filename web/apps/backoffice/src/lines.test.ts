@@ -204,7 +204,7 @@ describe("fitColumns", () => {
   });
 
   it("drops switches, dates and optional refs first, and keeps the required columns", () => {
-    const fit = fitColumns(cols, 420);
+    const fit = fitColumns(cols, 460);
     expect(fit.fits).toBe(true);
     expect(names(fit.shown)).toEqual(["account_id", "debit", "credit"]);
     expect(names(fit.hidden)).toEqual(["partner_id", "tax_id", "label", "due_on", "reconciled"]);
