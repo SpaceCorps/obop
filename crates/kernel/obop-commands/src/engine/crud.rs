@@ -5,6 +5,7 @@ use super::access::{Gate, creator_blocked};
 use super::computed::Computer;
 use super::effects::{lookup_fn, run_action};
 use super::hints::{self, FillCtx};
+use super::implied;
 use super::seq;
 use super::unit::{Plain, R, Reads, Unit};
 use super::{Actor, Engine};
@@ -13,7 +14,7 @@ use crate::guards;
 use crate::kinds::{self, Path};
 use crate::query::Query;
 use crate::store::{declared_fields, id_of};
-use obop_registry::{FieldDef, FieldKind, ModelDef, is_valid_date};
+use obop_registry::{CommandDef, FieldDef, FieldKind, ModelDef, is_valid_date};
 use obop_storage::Fields;
 use serde_json::Value as J;
 use std::collections::BTreeMap;
@@ -425,7 +426,13 @@ fn row_after_commit(eng: &Engine, def: &ModelDef, id: &str, written: &Fields) ->
     }
 }
 
+/// The generated `update`. When the call also moves a governed field, the dispatcher has taken
+/// that field out of the input and hands over the action the move implies (D48,
+/// `engine::implied`): the fields that are left are edits of the record as it was, so they are
+/// checked and written first, and the action then runs in the same unit of work, on the record
+/// as edited. All of it is stored together or none of it.
 pub(crate) fn update(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Value> {
+    let steps = implied::take_steps();
     let id = id_of(input)?;
     let actor = Actor::from_input(input);
     let given = declared_fields(def, input)?;
@@ -461,8 +468,9 @@ pub(crate) fn update(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Valu
         .filter(|(k, v)| cur.get(*k) != Some(*v))
         .map(|(k, v)| (k.clone(), v.clone()))
         .collect();
-    if !changed.is_empty() {
-        let mut after = cur.clone();
+    let edited = !changed.is_empty();
+    let mut after = cur.clone();
+    if edited {
         after.extend(changed.clone());
         let today = hints::today(eng);
         let cx = FillCtx {
@@ -479,11 +487,36 @@ pub(crate) fn update(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Valu
         }
         unit.merge(def.name, &id, changed)?;
         seq::check_unique(&unit, &look)?;
-        commit(eng, unit)?;
-        crate::blobs::hold_updated(&eng.store, def, &id, &cur, &after);
-        return row_after_commit(eng, def, &id, &after);
     }
-    row(eng, def, &id)
+    if steps.is_empty() {
+        if !edited {
+            return row(eng, def, &id);
+        }
+        commit(eng, unit)?;
+    } else {
+        // The move. Every check of the edits has passed and they are written in the unit, not
+        // in the store: each action takes the unit up, runs on the record as edited and commits
+        // the edits with its own writes. A refusal ends the call here with nothing stored.
+        let (left, answers) = implied::run(&steps, def.name, &id, unit.hold())?;
+        // What no action committed (a handler written by hand does not take the unit up).
+        if let Some(held) = left {
+            commit(eng, eng.unit().resume(held))?;
+        }
+        // What the actions wrote, should the record not be readable for the answer below.
+        for answer in answers {
+            if let Value::Map(m) = answer {
+                after.extend(
+                    m.iter()
+                        .filter(|(k, _)| k.as_str() != "id")
+                        .map(|(k, v)| (k.clone(), v.to_json())),
+                );
+            }
+        }
+    }
+    if edited {
+        crate::blobs::hold_updated(&eng.store, def, &id, &cur, &after);
+    }
+    row_after_commit(eng, def, &id, &after)
 }
 
 pub(crate) fn gapless_message(def: &ModelDef, id: &str, field: &str) -> String {
@@ -527,18 +560,62 @@ pub(crate) fn transition(
         .iter()
         .find(|c| c.name == command)
         .ok_or_else(|| format!("{}.{command} is not declared", def.name))?;
+    // An action that an `update` implies (D48) goes on in the unit of that update, where the
+    // other fields of the call are already written: it runs on the record as edited, and the
+    // edits and the action are stored together or not at all (`engine::implied`).
+    let (mut unit, joined) = match implied::adopt(def.name, &id) {
+        Some(a) => (eng.unit().resume(a.held), Some(a.hand_on)),
+        None => (eng.unit(), None),
+    };
+    let mark = unit.mark();
+    let patch = match act(eng, def, cmd, &id, &actor, input, &mut unit) {
+        Ok(patch) => patch,
+        Err(e) => {
+            // The update's unit goes back as it came: the refusal ends the update, unless the
+            // wrapper of this action answers for it.
+            if joined.is_some() {
+                unit.rewind(mark);
+                implied::give_back(def.name, &id, unit.hold());
+            }
+            return Err(e);
+        }
+    };
+    match joined {
+        // Another action of the same update follows: it, or the update, commits for all.
+        Some(true) => implied::give_back(def.name, &id, unit.hold()),
+        _ => commit(eng, unit)?,
+    }
+    let mut out: BTreeMap<String, Value> = patch
+        .iter()
+        .map(|(k, v)| (k.clone(), Value::from_json(v)))
+        .collect();
+    out.insert("id".into(), Value::text(&id));
+    Ok(Value::Map(out))
+}
+
+/// What an action does in its unit: the fields it needs, its assertions, the new state, the
+/// numbers and the effects, and the uniqueness of everything the unit has written. Returns what
+/// the action changed on its record.
+fn act(
+    eng: &Engine,
+    def: &Arc<ModelDef>,
+    cmd: &CommandDef,
+    id: &str,
+    actor: &Actor,
+    input: &Value,
+    unit: &mut Unit<'_>,
+) -> R<Fields> {
     let look = lookup_fn(eng);
-    let mut unit = eng.unit();
     // The action's ticket on this record comes first, so the fields it needs may be written on a
     // frozen record that it takes out along an `exit_to` edge with them in `may_change` (D77).
-    unit.ticket(def.name, &id, cmd.name);
+    unit.ticket(def.name, id, cmd.name);
     // The fields the action needs (D95 `needs`), from its input, are written first in the same
     // unit, so the assertions and the transition see them and an agent needs one call.
     let mut needs = hints::needs_of(cmd, input);
     if !needs.is_empty() {
-        let cur = Gate::new(&unit, &look, &actor).load(def, &id)?;
+        let cur = Gate::new(&*unit, &look, actor).load(def, id)?;
         kinds::canonicalise(def, &mut needs, Path::Write)?;
-        check_fields_against(&unit, &look, &actor, def, &needs, false, Some(&cur))?;
+        check_fields_against(&*unit, &look, actor, def, &needs, false, Some(&cur))?;
         let changed: Fields = needs
             .into_iter()
             .filter(|(k, v)| cur.get(k) != Some(v))
@@ -549,28 +626,22 @@ pub(crate) fn transition(
             let today = hints::today(eng);
             let cx = FillCtx {
                 eng,
-                reads: &unit,
+                reads: &*unit,
                 look: &look,
-                actor: &actor,
+                actor,
                 today: &today,
             };
             hints::check_ref_filters(&cx, def, &after, Some(&changed))?;
-            unit.merge(def.name, &id, changed)?;
+            unit.merge(def.name, id, changed)?;
         }
     }
     {
-        let rec = Gate::new(&unit, &look, &actor).load(def, &id)?;
+        let rec = Gate::new(&*unit, &look, actor).load(def, id)?;
         if let Some(n) = hints::need_missing(cmd, &rec) {
             return Err(hints::need_message(def, cmd, n));
         }
     }
-    let patch = run_action(eng, &actor, &mut unit, def, cmd, &id, 0)?;
-    seq::check_unique(&unit, &look)?;
-    commit(eng, unit)?;
-    let mut out: BTreeMap<String, Value> = patch
-        .iter()
-        .map(|(k, v)| (k.clone(), Value::from_json(v)))
-        .collect();
-    out.insert("id".into(), Value::text(&id));
-    Ok(Value::Map(out))
+    let patch = run_action(eng, actor, unit, def, cmd, id, 0)?;
+    seq::check_unique(unit, &look)?;
+    Ok(patch)
 }

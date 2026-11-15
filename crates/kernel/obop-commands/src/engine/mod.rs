@@ -9,6 +9,7 @@
 //! - `seq`: sequence numbers, counters and uniqueness.
 //! - `effects`: running an action: assertions, the transition, sequences and effects.
 //! - `crud`: the generated create, update and delete, built from the above.
+//! - `implied`: the actions an update of a governed field implies, in the unit of the update.
 
 pub(crate) mod access;
 pub(crate) mod bulk;
@@ -17,6 +18,7 @@ pub(crate) mod crud;
 pub(crate) mod effects;
 pub(crate) mod frozen;
 pub(crate) mod hints;
+pub(crate) mod implied;
 pub(crate) mod seq;
 pub(crate) mod unit;
 

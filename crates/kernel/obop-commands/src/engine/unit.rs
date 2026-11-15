@@ -130,6 +130,21 @@ pub(crate) struct Mark {
     tickets: usize,
 }
 
+/// The writes of a unit that has not committed, apart from the store the unit borrows: what one
+/// handler hands to the next when two of them make one unit of work (`Unit::hold`,
+/// `Unit::resume`). The generated `update` hands its edits to the action that a move of a
+/// governed field implies this way (`engine::implied`). Dropped, it leaves no trace.
+pub(crate) struct Held {
+    overlay: HashMap<Key, Option<Fields>>,
+    inserted: HashMap<String, Vec<String>>,
+    ops: Vec<Op>,
+    written: usize,
+    touched: Vec<Key>,
+    undo: Vec<Undo>,
+    keyed: HashMap<String, Vec<Keyed>>,
+    tickets: Vec<(String, String, &'static str)>,
+}
+
 pub(crate) struct Unit<'a> {
     backend: &'a dyn Backend,
     /// `None`: deleted in this unit.
@@ -179,6 +194,37 @@ impl<'a> Unit<'a> {
     /// insert, merge and delete.
     pub fn guarded(mut self, look: DefLook<'a>) -> Self {
         self.guards = Some(look);
+        self
+    }
+
+    /// Stop here without committing: everything the unit has done so far, for another handler to
+    /// go on with (`resume`). The frozen checks of what follows still ask about the records as
+    /// they are stored, so the two handlers are one unit for the guard of D77 too.
+    pub fn hold(self) -> Held {
+        Held {
+            overlay: self.overlay,
+            inserted: self.inserted,
+            ops: self.ops,
+            written: self.written,
+            touched: self.touched,
+            undo: self.undo,
+            keyed: self.keyed.into_inner(),
+            tickets: self.tickets,
+        }
+    }
+
+    /// This unit, which has done nothing yet, going on from where another stopped (`hold`): it
+    /// reads the other's writes, counts them against its own cap and commits them with its own.
+    pub fn resume(mut self, held: Held) -> Self {
+        debug_assert!(self.ops.is_empty(), "a unit resumes before its first write");
+        self.overlay = held.overlay;
+        self.inserted = held.inserted;
+        self.ops = held.ops;
+        self.written = held.written;
+        self.touched = held.touched;
+        self.undo = held.undo;
+        self.keyed = RefCell::new(held.keyed);
+        self.tickets = held.tickets;
         self
     }
 

@@ -122,6 +122,8 @@ mod sso_tests;
 mod storage_cli;
 mod update_cmd;
 #[cfg(test)]
+mod update_move_tests;
+#[cfg(test)]
 mod update_tests;
 mod upload_cmd;
 #[cfg(test)]

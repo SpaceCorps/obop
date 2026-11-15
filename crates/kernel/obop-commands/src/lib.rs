@@ -1382,32 +1382,47 @@ impl Dispatcher {
         pre: Vec<Pre>,
     ) -> Result<Response, CallError> {
         let mut input = input;
+        // The actions an `update` of a governed field implies (D48). They do not run here, ahead
+        // of the update: the handler of the update runs them in its own unit of work, after the
+        // other fields of the call are checked and written, so the edits and the move are stored
+        // together or not at all (`engine::implied`).
+        // A refusal is read against everything the caller sent, also the fields that go to an
+        // action below and so leave the input of the update.
+        let asked = (!pre.is_empty()).then(|| input.clone());
+        let mut steps = Vec::with_capacity(pre.len());
         for step in pre {
             let action = self.commands.read().unwrap().get(&step.command).cloned();
-            if let Some(action) = action {
-                let mut i = step.input;
-                // The fields the action needs (D95) travel with it and are written by it.
-                let carried: Vec<String> = match &i {
-                    Value::Map(m) => m.keys().filter(|k| *k != "id").cloned().collect(),
-                    _ => Vec::new(),
-                };
-                if let Value::Map(m) = &mut i {
-                    m.insert("_caller".into(), Value::text(&p.id));
-                    if action.actor {
-                        Actor::of(p).stamp(m);
-                    }
-                }
-                // Through the action's own wrapper, like a call of the action: a drag of an order
-                // to "refunded" must return the money exactly as the refund action does.
-                self.invoke(&action, p, &i).map_err(|m| refusal(m, &i))?;
-                if let Value::Map(m) = &mut input {
-                    m.remove(step.field);
-                    for k in &carried {
-                        m.remove(k.as_str());
-                    }
+            let Some(action) = action else { continue };
+            let mut i = step.input;
+            // The fields the action needs (D95) travel with it and are written by it; the
+            // governed field is set by it, and the update would only repeat the write.
+            if let (Value::Map(of_update), Value::Map(of_action)) = (&mut input, &i) {
+                of_update.remove(step.field);
+                for k in of_action.keys().filter(|k| *k != "id") {
+                    of_update.remove(k.as_str());
                 }
             }
+            if let Value::Map(m) = &mut i {
+                m.insert("_caller".into(), Value::text(&p.id));
+                if action.actor {
+                    Actor::of(p).stamp(m);
+                }
+            }
+            // Through the action's own wrapper, like a call of the action (`invoke`): a drag of
+            // an order to "refunded" must return the money exactly as the refund action does.
+            let wrapper = self.around.read().unwrap().get(&action.id).cloned();
+            let who = p.clone();
+            steps.push(engine::implied::Step {
+                wrapped: wrapper.is_some(),
+                run: Box::new(move || match &wrapper {
+                    Some(w) => w(&who, &i, &|x| (action.handler)(x)),
+                    None => (action.handler)(&i),
+                }),
+            });
         }
+        // One scope per run of a command, also when it implies nothing: a command that a wrapper
+        // calls through the dispatcher must not see the actions or the unit of the call around it.
+        let _scope = engine::implied::open(steps);
         // Handlers that need to know who is calling (audit trails) read `_caller`. The dispatcher
         // sets it after discarding anything a client sent under that name.
         if let Value::Map(m) = &mut input {
@@ -1416,7 +1431,14 @@ impl Dispatcher {
                 Actor::of(p).stamp(m);
             }
         }
-        let out = self.invoke(c, p, &input).map_err(|m| refusal(m, &input))?;
+        let sent = asked.as_ref().unwrap_or(&input);
+        let out = self.invoke(c, p, &input).map_err(|m| refusal(m, sent))?;
+        // An `update` written by hand does not know of the actions and has not taken them. They
+        // run now, after it: the edits are stored by then, so a refusal of an action leaves them
+        // (two units of work), and never a moved record with its edits refused.
+        for step in engine::implied::take_steps() {
+            (step.run)().map_err(|m| refusal(m, sent))?;
+        }
         let observers: Vec<Arc<Observer>> = self
             .observers
             .read()
@@ -2040,6 +2062,8 @@ mod engine_tests;
 mod guard_tests;
 #[cfg(test)]
 mod hints_tests;
+#[cfg(test)]
+mod implied_tests;
 #[cfg(test)]
 mod import_map_tests;
 #[cfg(test)]

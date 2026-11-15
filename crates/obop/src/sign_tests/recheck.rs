@@ -817,12 +817,14 @@ async fn the_log_keeps_the_end_of_a_long_header_and_a_bar_cannot_imitate_a_secon
 // ---- what is known and written down ------------------------------------------------------
 
 #[tokio::test]
-async fn a_refused_update_that_moves_the_state_has_already_moved_it() {
-    // Known and documented (docs/ISSUES.md O33): `update` with a state moves the state first, by
-    // the action, and then the sign guards refuse the other fields of the call. The answer is a
-    // 400 and the state has moved. Nothing is gained that the action did not allow anyway: no
-    // evidence is written. If this ever changes (a guard before the action), update O33.
+async fn a_refused_update_that_moves_the_state_moves_nothing() {
+    // `update` with a state and another field is one unit of work (D48): the sign guards refuse
+    // the other field of the call before the action the move implies has run, so the answer is a
+    // 400 and the request is as it was. Until 2026-11-15 the action ran first and the state had
+    // moved when the refusal came (docs/ISSUES.md O33, done).
     let (f, _, path, _) = sent().await;
+    let before = f.record("sign_request", &f.req)["state"].clone();
+    assert_ne!(before, "declined");
     let (s, v) = f
         .api(
             "sam",
@@ -833,10 +835,10 @@ async fn a_refused_update_that_moves_the_state_has_already_moved_it() {
     assert_eq!(s, 400, "{v}");
     assert!(err(&v).contains("signing process"), "{v}");
     let after = f.record("sign_request", &f.req);
-    assert_eq!(after["state"], "declined");
+    assert_eq!(after["state"], before);
     assert!(after.get("signed_name").is_none_or(J::is_null));
-    // The links of a declined request answer as such.
-    assert_eq!(f.get(&path, &ip(84)).await.status, 410);
+    // The link of the request still opens its page.
+    assert_eq!(f.get(&path, &ip(84)).await.status, 200);
 
     // The same for a request without a Document, which is still signed by hand.
     let f = fixture().await;
@@ -872,7 +874,7 @@ async fn a_refused_update_that_moves_the_state_has_already_moved_it() {
         .await;
     assert_eq!(s, 400, "{v}");
     let after = f.record("sign_request", &id);
-    assert_eq!(after["state"], "signed");
+    assert_eq!(after["state"], "sent");
     assert!(after.get("signed_name").is_none_or(J::is_null));
     assert_eq!(signed_count(&f), 0, "and nothing was logged as a signature");
 }
