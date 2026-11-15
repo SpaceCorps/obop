@@ -100,17 +100,17 @@ export type SectionCtx = {
  * refs, selects, dates, required), Amounts (money), groups by name prefix (site_, requester_,
  * attendee_, signed_, seo_), Details, Notes (long text), Private (HR and financial details),
  * Sensitive (special category, closed) and Set by the system (numbers, read-only and computed
- * values, closed). A form of fewer than eight fields is one group without a heading. An optional
- * group whose fields are all empty is closed; on a new record every group without a required
- * field is, and the fields an action asks for later wait in a closed More group.
+ * values, closed). A form of fewer than eight fields is one group without a heading. On a saved
+ * record an optional group whose fields are all empty is closed; on a new record the groups are
+ * open, and the fields an action asks for later wait in a closed More group.
  */
 export function sectionsOf(model: ModelMeta, fields: FieldMeta[], c: SectionCtx): FormSection[] {
   const byName = new Map(fields.map((f) => [f.name, f]));
   const used = new Set<string>();
   const out: FormSection[] = [];
   const personal = (fs: FieldMeta[]) => fs.some((f) => f.personal_data);
-  const closedWhenEmpty = (fs: FieldMeta[]) =>
-    c.creating ? !fs.some((f) => f.required || c.filled(f)) : !fs.some(c.filled);
+  // A new record is being filled in: its groups stay open. A saved one folds what is empty.
+  const closedWhenEmpty = (fs: FieldMeta[]) => !c.creating && !fs.some(c.filled);
 
   for (const [i, s] of (model.ui?.section ?? []).entries()) {
     const fs = s.fields.map((n) => byName.get(n)).filter((f): f is FieldMeta => !!f);

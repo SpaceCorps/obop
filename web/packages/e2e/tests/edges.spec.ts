@@ -18,7 +18,11 @@ test.describe("edges of the screen", () => {
       title: "Long form",
       fields: [{ name: "title", required: true }, ...many],
     });
-    const r = await api.create("root", model, { title: uid("Long") });
+    // Filled in, so no section of the form starts folded (an empty optional section does).
+    const r = await api.create("root", model, {
+      title: uid("Long"),
+      ...Object.fromEntries(many.map((f) => [f.name, "filled"])),
+    });
     await signIn("root", `/${model}/${model}?view=list&id=${r.id}`);
     const panel = page.getByRole("complementary", { name: /record$/ });
     const save = panel.getByRole("button", { name: "Save" });

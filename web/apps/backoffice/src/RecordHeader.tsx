@@ -168,8 +168,18 @@ export function RecordHeader(p: RecordHeaderProps) {
       btn
     );
   };
-  const actionRow =
-    !creating && (shown.length > 0 || menu.length > 0 || p.extensions.actions.length > 0);
+  const actionRow = !creating && (shown.length > 0 || p.extensions.actions.length > 0);
+  // The rest (danger actions, Duplicate, Delete) waits in one menu at the top, beside Close.
+  const more =
+    !creating && menu.length > 0 ? (
+      <Menu
+        ariaLabel={t("More actions")}
+        triggerClassName="icon-btn rec-more"
+        align="end"
+        trigger={<Icon name="more" size={18} />}
+        items={menu}
+      />
+    ) : null;
   const lastFigure = p.figures[p.figures.length - 1];
 
   return (
@@ -189,6 +199,7 @@ export function RecordHeader(p: RecordHeaderProps) {
           {kicker}
           <h2>{creating ? t("New {model}", { model: noun }) : p.label}</h2>
         </div>
+        {phone && more && <div className="rec-tools">{more}</div>}
         {!phone && (
           <div className="rec-tools">
             {p.pager && (
@@ -215,6 +226,7 @@ export function RecordHeader(p: RecordHeaderProps) {
                 />
               </div>
             )}
+            {more}
             {p.onFull && (
               <IconButton
                 icon={p.full ? "panel-left" : "external"}
@@ -318,17 +330,6 @@ export function RecordHeader(p: RecordHeaderProps) {
           {p.extensions.actions.map((Ext, i) => (
             <Ext key={`ext-${i}`} model={model} fields={fields} row={row} busy={busy} />
           ))}
-          {menu.length > 0 && (
-            <span className="actionrow-more">
-              <Menu
-                ariaLabel={t("More actions")}
-                triggerClassName="btn icon-only"
-                align="end"
-                trigger={<Icon name="more" size={18} />}
-                items={menu}
-              />
-            </span>
-          )}
         </div>
       )}
     </>

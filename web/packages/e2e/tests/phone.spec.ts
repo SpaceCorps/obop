@@ -284,7 +284,8 @@ test.describe("phone widths", () => {
 
         const rows = await api.list("root", model);
         await open(page, `/${model}/${model}?view=list&id=${rows[0].id}`);
-        await expect(page.getByRole("button", { name: "Save" })).toBeVisible();
+        // A record with nothing to save gives a phone's form bar back to the form (record form).
+        await expect(page.locator("aside.record h2")).toBeVisible();
         await check(page, "record", label);
         // On a phone the record is a sheet (a dialog), so it is found by its class.
         await page.locator("aside.record").evaluate((el) => el.scrollTo(0, el.scrollHeight));

@@ -131,12 +131,13 @@ export function FormBody(p: FormBodyProps) {
       const Value = asList ? "dd" : "div";
       return (
         <div key={f.name} className={`field ro${wide}`}>
-          <Label className="flabel" id={fid} title={setBy(f)}>
+          <Label className="flabel" id={`${fid}-label`} title={setBy(f)}>
             {fieldTitle(f)}
           </Label>
           <Value
+            id={fid}
             className={`fvalue${f.kind === "longtext" ? " long" : ""}`}
-            aria-labelledby={asList ? undefined : fid}
+            aria-labelledby={asList ? undefined : `${fid}-label`}
           >
             <Cell field={f} value={v} currency={currency} row={row ?? undefined} />
           </Value>
@@ -307,7 +308,7 @@ export function FormBody(p: FormBodyProps) {
         </p>
       )}
       {p.editable ? (
-        <footer className="formbar">
+        <footer className={`formbar${!p.dirty && !creating ? " clean" : ""}`}>
           <Button type="submit" variant="primary" loading={busy} disabled={!p.dirty && !creating}>
             {creating ? t("Create") : t("Save")}
           </Button>

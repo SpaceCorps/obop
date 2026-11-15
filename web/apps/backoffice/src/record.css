@@ -724,13 +724,8 @@ html.sheet-open body {
   margin-inline-start: 0.1rem;
   opacity: 0.7;
 }
-.actionrow-more {
-  margin-inline-start: auto;
-}
-.actionrow-more > .dropdown > .btn {
-  justify-content: center;
-  inline-size: 2.25rem;
-  padding: 0;
+.rec-tools .dropdown {
+  display: inline-flex;
 }
 
 /* Smart buttons: the name, then the number in a soft pill. */
@@ -891,5 +886,14 @@ html.sheet-open body {
   }
   .actionrow > .btn.primary {
     flex: 1 1 auto;
+  }
+}
+.record > header > .rec-tools {
+  flex: none;
+}
+/* On a phone a record with nothing to save gives the bar's room back to the form. */
+@media (max-width: 40rem) {
+  .record.phone .formbar.clean {
+    display: none;
   }
 }

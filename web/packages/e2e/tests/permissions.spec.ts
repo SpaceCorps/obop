@@ -45,7 +45,10 @@ test.describe("a restricted user (sam: base, crm, sales, product)", () => {
     await row.getByRole("gridcell").nth(1).click();
     const panel = page.getByRole("complementary", { name: "Product record" });
     await expect(panel.getByLabel("Cost")).toHaveCount(0);
-    await expect(panel.getByText(/Withheld from you: Cost/)).toBeVisible();
+    // One quiet line in the record, with the fields in its tooltip.
+    const hidden = panel.getByText("Some private fields are hidden from you");
+    await expect(hidden).toBeVisible();
+    await expect(panel.locator(".withheld")).toHaveAttribute("title", /Cost/);
 
     // The same list for the admin carries the cost.
     const admin = await api.run("root", "product.list");

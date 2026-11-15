@@ -24,14 +24,10 @@ test.describe("records in a built-in module (CRM leads)", () => {
     await panel.getByLabel("Title").fill(title);
     await panel.getByLabel("Contact name").fill("Dana Example");
     await panel.getByLabel("Expected revenue").fill("1234.50");
-    // The stage is governed (D48): a new lead starts as New and the form offers no other choice.
+    // The stage is governed (D48): a new lead starts as New, and the steps only show the way.
     const bar = panel.getByRole("list", { name: "Stage" });
-    await expect(bar.getByRole("button", { name: "New" })).toHaveAttribute("aria-current", "step");
-    for (const other of ["Qualified", "Won", "Lost"])
-      await expect(bar.getByRole("button", { name: other })).toHaveAttribute(
-        "aria-disabled",
-        "true",
-      );
+    await expect(bar.locator("li[aria-current=step]")).toHaveText("New");
+    await expect(bar.getByRole("button")).toHaveCount(0);
     await panel.getByRole("button", { name: "Create" }).click();
 
     await expect(page.locator(".toast").filter({ hasText: "Lead created" })).toBeVisible();
@@ -44,12 +40,11 @@ test.describe("records in a built-in module (CRM leads)", () => {
     await expect(panel.getByRole("heading", { name: title })).toBeVisible();
     await expect(panel.getByRole("button", { name: "Save" })).toBeDisabled();
 
-    // Then the lead moves on through the status bar, which runs the qualify action.
-    await panel
-      .getByRole("list", { name: "Stage" })
-      .getByRole("button", { name: "Qualified" })
-      .click();
-    await expect(page.locator(".toast").filter({ hasText: "Stage: Qualified" })).toBeVisible();
+    // Then the lead moves on through its next step, the one filled button.
+    const qualify = panel.locator(".actionrow").getByRole("button", { name: "Qualify" });
+    await expect(qualify).toHaveClass(/primary/);
+    await qualify.click();
+    await expect(page.locator(".toast").filter({ hasText: "is now qualified" })).toBeVisible();
     await expect(row).toContainText("Qualified");
   });
 
@@ -147,7 +142,9 @@ test.describe("records in a built-in module (CRM leads)", () => {
     await signIn("root", `/crm/lead?view=list&id=${lead.id}`);
     const panel = page.getByRole("complementary", { name: "Lead record" });
     await panel.getByRole("button", { name: "Mark won" }).click();
-    await expect(page.locator(".toast").filter({ hasText: "Mark won done" })).toBeVisible();
+    await expect(
+      page.locator(".toast").filter({ hasText: `Lead ${title} is now won` }),
+    ).toBeVisible();
     await expect(leadRow(page, title)).toContainText("Won");
   });
 });
