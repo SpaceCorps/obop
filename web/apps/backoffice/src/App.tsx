@@ -34,7 +34,9 @@ import {
   pluralTitle,
 } from "./nav.ts";
 import { titleOf } from "./presentation.ts";
-import { quickFilters, quickState } from "./quickFilters.ts";
+import { quickFilters, quickState, today } from "./quickFilters.ts";
+import { quickFilters as listFilters, withoutCovered } from "./filters.ts";
+import type { Cond } from "./query.ts";
 import { rememberRecord } from "./recent.ts";
 import { SetupCard } from "./SetupCard.tsx";
 import { parseModulesRoute } from "./modules/route.ts";
@@ -546,6 +548,33 @@ function NavEntry({ link }: { link: NavLink }) {
  * single-model app, Reporting, and Configuration folded away. Child models (order lines, BOM lines)
  * are reached through their parent and are not listed, unless one is open now.
  */
+
+/**
+ * The quick searches of a one-list app's sidebar: the package's saved filters the browser can
+ * read, then Open, Overdue, Mine and This month where no saved filter already covers them.
+ */
+function sidebarFilters(
+  model: ModuleMeta["models"][number],
+  user: string,
+): { key: string; label: string; facets: Cond[]; saved?: boolean }[] {
+  const saved = listFilters(model, model.fields, { user, today: today() })
+    .filter((q) => q.kind === "saved")
+    .map((q) => ({ key: q.key, label: q.label, facets: q.conds, conds: q.conds, kind: "saved" }));
+  const generated = quickFilters(model, user).map((q) => ({
+    key: q.key,
+    label: q.label,
+    facets: q.facets,
+    conds: q.facets,
+    kind: q.key,
+  }));
+  return withoutCovered([...saved, ...generated]).map((q) => ({
+    key: q.key,
+    label: q.label,
+    facets: q.facets,
+    ...(q.kind === "saved" ? { saved: true } : {}),
+  }));
+}
+
 function AppNav({
   app,
   route,
@@ -570,7 +599,8 @@ function AppNav({
   }, [inConfig]);
   // A single list: its quick searches stand in for the one lonely link of the sidebar.
   const single = !withOverview && menu.main.length === 1 ? menu.main[0] : undefined;
-  const quick = single ? quickFilters(single, user) : [];
+  // The package's saved filters first (D95 `ui.filter`), then the generated ones they leave open.
+  const quick = single ? sidebarFilters(single, user) : [];
   const quickOn = single && route.model === single.name ? route.st : "";
   const onQuick = quick.some((q) => quickState(q) === quickOn);
   const link = (m: ModuleMeta["models"][number]) => (
@@ -606,7 +636,7 @@ function AppNav({
                 href={href({ app: app.id, model: single.name, st })}
                 aria-current={current === single.name && quickOn === st ? "page" : undefined}
               >
-                {tx("filter", q.label)}
+                {q.saved ? q.label : tx("filter", q.label)}
               </a>
             );
           })}

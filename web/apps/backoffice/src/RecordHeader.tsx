@@ -77,6 +77,29 @@ function ApprovalMark() {
   );
 }
 
+/**
+ * Where the public site shows a record: `ui.public_url` filled from the row ("/blog/{slug}"), once
+ * the record is published (its status reads "published", or it has no status); null otherwise.
+ */
+function publicUrlOf(model: ModelMeta, row: Row): string | null {
+  const tpl = model.ui?.public_url;
+  if (!tpl) return null;
+  const state = model.fields.find((f) => f.name === "state" && f.kind === "select");
+  if (state && row.state !== "published") return null;
+  let ok = true;
+  const path = tpl.replace(/\{(\w+)\}/g, (_, n: string) => {
+    const v = row[n];
+    if (v === null || v === undefined || v === "") ok = false;
+    return encodeURIComponent(String(v ?? ""));
+  });
+  if (!ok) return null;
+  try {
+    return new URL(path, location.origin).href;
+  } catch {
+    return null;
+  }
+}
+
 /** The title bar, the summary, the status, `between`, the lock and the action row. */
 export function RecordHeader(p: RecordHeaderProps) {
   const { model, fields, row, title, phone, busy, statusField, value, governed } = p;
@@ -101,8 +124,14 @@ export function RecordHeader(p: RecordHeaderProps) {
       !creating && <span className="hint rec-kind">{title}</span>
     );
 
+  // A picture when there is one; initials only stand in for a person's photo (a page's cover
+  // image that is not set is no reason for "SW").
+  const personPhoto =
+    !!p.avatar && /(^|_)(photo|avatar|portrait|headshot)(_|$)/.test(p.avatar.name);
+  // A published page or post links to where the public site shows it (D95 `ui.public_url`).
+  const siteUrl = row ? publicUrlOf(model, row) : null;
   const pic =
-    p.avatar && row ? (
+    p.avatar && row && (row[p.avatar.name] || personPhoto) ? (
       <span className="rec-avatar">
         {row[p.avatar.name] ? (
           <BlobThumb id={String(row[p.avatar.name])} alt={fieldTitle(p.avatar)} size={48} />
@@ -197,7 +226,15 @@ export function RecordHeader(p: RecordHeaderProps) {
         {pic}
         <div className="rec-title">
           {kicker}
-          <h2>{creating ? t("New {model}", { model: noun }) : p.label}</h2>
+          <h2 title={creating ? undefined : p.label}>
+            {creating ? t("New {model}", { model: noun }) : p.label}
+          </h2>
+          {siteUrl && (
+            <a className="rec-site" href={siteUrl} target="_blank" rel="noopener">
+              {t("View on site")}
+              <Icon name="external" size={12} />
+            </a>
+          )}
         </div>
         {phone && more && <div className="rec-tools">{more}</div>}
         {!phone && (

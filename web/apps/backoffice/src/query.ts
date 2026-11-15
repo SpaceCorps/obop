@@ -17,6 +17,7 @@ import {
   validDate,
 } from "./format.ts";
 import { fieldTitle } from "./labels.ts";
+import { displayOf } from "./presentation.ts";
 
 /** One search condition. A list of them is the "facets"; the facets are ANDed. */
 export type Cond =
@@ -209,15 +210,17 @@ export function formatSumRows(
   currencyFor: (row: Row) => string | undefined = rowCurrency,
 ): string {
   if (!f) return "";
-  if (f.kind === "decimal") return decimalText(sumDecimalRows(rows, f.name), f);
-  if (f.kind !== "money") {
-    const n = sumOf(rows, f.name);
-    // A total of minutes reads as hours, of metres as km (D95 `ui.display`).
-    const shown = f.ui?.display;
-    if (shown === "duration_minutes" || shown === "km_from_m")
-      return shownNumber(shown, n) ?? integer(n);
-    return integer(n);
+  // A total of minutes reads as hours, of metres as km (D95 `ui.display`), decimals too.
+  const shown = displayOf(f);
+  if (
+    (f.kind === "number" || f.kind === "decimal") &&
+    (shown === "duration_minutes" || shown === "km_from_m")
+  ) {
+    const n = f.kind === "decimal" ? Number(sumDecimalRows(rows, f.name)) : sumOf(rows, f.name);
+    return shownNumber(shown, n) ?? integer(n);
   }
+  if (f.kind === "decimal") return decimalText(sumDecimalRows(rows, f.name), f);
+  if (f.kind !== "money") return integer(sumOf(rows, f.name));
   return fmt.list(
     sumByCurrency(rows, f.name, currencyFor).map(([c, n]) => money(n, c)),
     "conjunction",

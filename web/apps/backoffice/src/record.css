@@ -41,8 +41,41 @@
   background: var(--surface);
 }
 .record h2 {
+  display: -webkit-box;
+  overflow: hidden;
   font-size: var(--text-xl);
-  overflow-wrap: anywhere;
+  line-height: var(--leading-snug);
+  overflow-wrap: break-word;
+  text-wrap: balance;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+.rec-site {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-block-start: 0.15rem;
+  font-size: var(--text-sm);
+}
+.record.full h2 {
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+/* Beside the list the tools (pager, more, page, close) get a row of their own above the name, so
+   the name has the whole width and never breaks into a column of words. */
+.record:not(.full, .phone) > header {
+  flex-wrap: wrap;
+  row-gap: 0.15rem;
+  padding-block-start: 0.55rem;
+}
+.record:not(.full, .phone) > header > .rec-tools {
+  order: -1;
+  flex-basis: 100%;
+  justify-content: flex-end;
+}
+.record:not(.full, .phone) h2 {
+  font-size: var(--text-lg);
 }
 .record > header .hint {
   display: block;

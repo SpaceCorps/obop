@@ -126,6 +126,7 @@ export function sectionsOf(model: ModelMeta, fields: FieldMeta[], c: SectionCtx)
     });
   }
 
+  const hinted = out.length;
   const rest = fields.filter((f) => !used.has(f.name));
   const later = c.creating ? laterFields(model) : new Set<string>();
   const now = rest.filter((f) => !later.has(f.name) || f.required);
@@ -174,6 +175,17 @@ export function sectionsOf(model: ModelMeta, fields: FieldMeta[], c: SectionCtx)
           (!first && g.bucket !== "main" && closedWhenEmpty(g.fields)),
         personal: personal(g.fields),
       });
+    }
+  }
+  // The record's name and what it is about come first: a Main group the hints left out (the
+  // customer and plan of a subscription, the till of a session) goes before the hinted sections.
+  const main = out.findIndex((x, i) => i >= hinted && x.key === "main");
+  if (hinted > 0 && main > 0) {
+    const title = new Set(titleFieldsOf(model));
+    const m = out[main]!;
+    if (m.fields.some((f) => title.has(f.name) || (f.required && f.kind === "ref"))) {
+      out.splice(main, 1);
+      out.unshift({ ...m, collapsed: false });
     }
   }
   if (waiting.length)
@@ -281,7 +293,9 @@ const CLASHES = new Set(["close", "cancel", "delete", "save", "discard", "open",
 export function actionLabelFor(a: Command, noun: string): string {
   const label = actionTitle(a);
   const short = a.id.slice(a.id.indexOf(".") + 1);
-  return CLASHES.has(short) ? t("{action} {noun}", { action: label, noun }) : label;
+  // Only a bare verb gets the noun: "Close session" and "Cancel subscription" already have one.
+  const bare = !/\s/.test(label.trim()) && !label.toLowerCase().includes(noun.toLowerCase());
+  return CLASHES.has(short) && bare ? t("{action} {noun}", { action: label, noun }) : label;
 }
 
 /**

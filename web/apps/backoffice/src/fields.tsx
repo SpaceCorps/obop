@@ -226,10 +226,13 @@ export function useRefTitle(to: string, id: string): string {
 
 /**
  * The order of the fields on a form: a picture first (it heads the record, like an avatar), then a
- * file with its preview, then the rest as declared.
+ * required file with its preview, then the rest as declared, then an optional file.
  */
 export function formOrder(fields: readonly FieldMeta[]): FieldMeta[] {
-  const rank = (f: FieldMeta) => (f.kind === "image" ? 0 : f.kind === "file" ? 1 : 2);
+  // A required file (a document is its file) comes first; an optional one (an expense's receipt)
+  // waits after what is typed.
+  const rank = (f: FieldMeta) =>
+    f.kind === "image" ? 0 : f.kind === "file" ? (f.required ? 1 : 3) : 2;
   return [...fields].sort((a, b) => rank(a) - rank(b));
 }
 

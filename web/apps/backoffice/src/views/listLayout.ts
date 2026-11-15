@@ -70,6 +70,8 @@ export type CardRoles = {
   others: FieldMeta[];
   /** An image drawn as the card's avatar. */
   image?: FieldMeta;
+  /** More than one amount is shown (debit and credit): each is named. */
+  namedMoney?: boolean;
 };
 
 const DUE = /^(due_on|due_date|deadline|expires_on|expires_at|valid_until|expected_on|close_on)$/;
@@ -94,7 +96,8 @@ export function cardRoles(model: ModelMeta, fields: FieldMeta[], rows: readonly 
   if (title) titleNames.add(title.name);
   const rest = ranked.filter((f) => f !== state && !titleNames.has(f.name));
   const moneys = rest.filter((f) => f.kind === "money");
-  const money = moneys.find((f) => summable(f, model)) ?? moneys[0];
+  // Without an amount, the number the record is about (hours, km, days) takes the amount's place.
+  const money = moneys.find((f) => summable(f, model)) ?? moneys[0] ?? measureColumn(model, rest);
   const number = fields.find((f) => f.sequence && !titleNames.has(f.name));
   const isDate = (f: FieldMeta) => f.kind === "date" || f.kind === "datetime";
   const dates = [...rest.filter(isDueLike), ...rest.filter((f) => isDate(f) && !isDueLike(f))];
@@ -112,6 +115,7 @@ export function cardRoles(model: ModelMeta, fields: FieldMeta[], rows: readonly 
     dates,
     others,
     ...(image ? { image } : {}),
+    ...(moneys.length > 1 ? { namedMoney: true } : {}),
   };
 }
 
@@ -156,11 +160,18 @@ export function isMasterData(model: ModelMeta): boolean {
  * and the status (last) always stay. ListView drops one more while the table is wider than its box,
  * since the widths presentation.ts estimates cannot know the words in the cells.
  */
-export function trimColumns(cols: readonly FieldMeta[], n: number, state?: string): FieldMeta[] {
+export function trimColumns(
+  cols: readonly FieldMeta[],
+  n: number,
+  state?: string,
+  measure?: FieldMeta,
+): FieldMeta[] {
   const keep = new Set<FieldMeta>();
   if (cols[0]) keep.add(cols[0]);
   const money = cols.find((f) => f.kind === "money");
   if (money) keep.add(money);
+  // The number a list is about when it has no amount: hours, km, days.
+  if (measure && cols.includes(measure)) keep.add(measure);
   const last = cols.at(-1);
   if (last && last.name === state) keep.add(last);
   const out = [...cols];
@@ -173,8 +184,27 @@ export function trimColumns(cols: readonly FieldMeta[], n: number, state?: strin
 }
 
 /** How many columns `trimColumns` may still take away. */
-export const droppable = (cols: readonly FieldMeta[], state?: string) =>
-  cols.length - trimColumns(cols, cols.length, state).length;
+export const droppable = (cols: readonly FieldMeta[], state?: string, measure?: FieldMeta) =>
+  cols.length - trimColumns(cols, cols.length, state, measure).length;
+
+/**
+ * The first summed number of the columns (`ui.aggregate = "sum"`, a duration, km, a quantity),
+ * kept like the first amount when the width shrinks; none when an amount is among the columns.
+ */
+export function measureColumn(model: ModelMeta, cols: readonly FieldMeta[]): FieldMeta | undefined {
+  if (cols.some((f) => f.kind === "money")) return undefined;
+  const sum = model.ui?.card_sum;
+  return (
+    cols.find((f) => f.name === sum && (f.kind === "number" || f.kind === "decimal")) ??
+    cols.find((f) => (f.kind === "number" || f.kind === "decimal") && listSummable(f, model))
+  );
+}
+
+/** A column whose values are words of any length (a name, a subject, a ref): it takes the slack. */
+const wordy = (f: FieldMeta) =>
+  !f.sequence &&
+  f.name !== "code" &&
+  (f.kind === "text" || f.kind === "longtext" || f.kind === "ref");
 
 /** The base width of a column by kind, in pixels: wide enough for its usual values. */
 const KIND_WIDTH: Partial<Record<FieldMeta["kind"], number>> = {
@@ -204,6 +234,9 @@ const SELECT_WIDTH = 52;
 export function columnWidth(f: FieldMeta, head: string, first = false): number {
   // A number or a code is short ("SO-00027"); a name or a description is long.
   const short = f.sequence || f.name === "code";
+  // A first column that is a date or a number is as wide as its kind, not as a name.
+  if (first && !short && f.kind !== "ref" && f.kind !== "text" && f.kind !== "longtext")
+    return Math.round(Math.max(KIND_WIDTH[f.kind] ?? 160, head.length * 7.2 + 44));
   if (first) return short ? 160 : f.kind === "ref" ? 200 : TITLE_WIDTH;
   const base = short ? 150 : (KIND_WIDTH[f.kind] ?? 160);
   return Math.round(Math.min(260, Math.max(base, head.length * 7.2 + 44)));
@@ -219,24 +252,32 @@ export function fitColumns(
   width: number,
   head: (f: FieldMeta) => string,
   state?: string,
+  measure?: FieldMeta,
 ): { cols: FieldMeta[]; widths: number[] } {
   const widthsOf = (cs: readonly FieldMeta[]) => cs.map((f, i) => columnWidth(f, head(f), i === 0));
   let cols = [...ranked];
   let widths = widthsOf(cols);
   const total = () => widths.reduce((a, b) => a + b, SELECT_WIDTH);
-  while (total() > width && droppable(cols, state) > 0) {
-    cols = trimColumns(cols, 1, state);
+  while (total() > width && droppable(cols, state, measure) > 0) {
+    cols = trimColumns(cols, 1, state, measure);
     widths = widthsOf(cols);
   }
-  // Room left over: half goes to the title (at most 400 px more), the rest to every column in
-  // proportion, so a short list of columns spreads out evenly instead of leaving a gap.
+  // Room left over: a first column that is a name takes half (at most 400 px more); the rest goes
+  // to the columns of words (names, subjects, refs) in proportion, else to every column, so a
+  // short number ("MO-0018") never gets the room a description needs.
   const extra = Number.isFinite(width) ? Math.floor(width - total()) : 0;
   if (extra > 0 && widths.length) {
-    const toTitle = widths.length === 1 ? extra : Math.min(Math.floor(extra / 2), 400);
+    const titleTakes = widths.length > 1 && wordy(cols[0]!);
+    const toTitle =
+      widths.length === 1 ? extra : titleTakes ? Math.min(Math.floor(extra / 2), 400) : 0;
     const rest = extra - toTitle;
-    const others = widths.slice(1).reduce((a, b) => a + b, 0);
-    widths = widths.map((w, i) =>
-      i === 0 ? w + toTitle : w + (others ? Math.floor((rest * w) / others) : 0),
+    const takers = cols.map((f, i) => i > 0 && wordy(f));
+    const anyTaker = takers.some(Boolean);
+    const share = (i: number) => (anyTaker ? takers[i] : i > 0 || !titleTakes);
+    const pool = widths.reduce((a, w, i) => a + (share(i) ? w : 0), 0);
+    widths = widths.map(
+      (w, i) =>
+        w + (i === 0 ? toTitle : 0) + (share(i) && pool ? Math.floor((rest * w) / pool) : 0),
     );
   }
   return { cols, widths };
@@ -323,8 +364,10 @@ export function listOrder(model: ModelMeta, fields: readonly FieldMeta[]): Serve
   const ok = (name: string) => name === "id" || fields.some((f) => f.name === name && sortable(f));
   const base = defaultOrder(model);
   const onlyId = !model.ui?.order && base.length === 1 && base[0]?.field === "id";
+  // A model with any date (journal items have a due date) is not looked up by name.
+  const dated = model.fields.some((f) => f.kind === "date" || f.kind === "datetime");
   if (onlyId) {
-    if (isMasterData(model)) {
+    if (isMasterData(model) && !dated) {
       const text = (n: string) =>
         fields.find((f) => f.name === n && f.kind === "text" && sortable(f));
       const by =

@@ -39,7 +39,32 @@ export type LinesSlotProps = {
    * is pending, the server refused).
    */
   save: () => Promise<string | null>;
+  /** Where each lines section says whether it holds unsaved lines and saves them on request. */
+  lines?: LinesRegistry;
 };
+
+/**
+ * The line sections of one form: each registers whether it holds a line edit that is not saved yet,
+ * and how to save it, so leaving asks first and Save (Ctrl+S) also saves the lines.
+ */
+export type LinesRegistry = {
+  dirty: Map<string, () => boolean>;
+  flush: Map<string, () => Promise<boolean>>;
+};
+
+/** A new, empty registry. */
+export const newLinesRegistry = (): LinesRegistry => ({ dirty: new Map(), flush: new Map() });
+
+/** Whether any section of the registry holds an unsaved line. */
+export const linesDirty = (r: LinesRegistry | undefined): boolean =>
+  !!r && [...r.dirty.values()].some((f) => f());
+
+/** Save every unsaved line; false when one could not be saved. */
+export async function flushLines(r: LinesRegistry | undefined): Promise<boolean> {
+  if (!r) return true;
+  const out = await Promise.all([...r.flush.values()].map((f) => f()));
+  return out.every(Boolean);
+}
 
 /** Where an app's sections go inside the form (extensions.ts `sections`); empty by default. */
 export function SectionSlot(p: RecordSectionProps) {
@@ -59,6 +84,8 @@ export function LinesSlot(p: LinesSlotProps) {
 }
 
 export type FormBodyProps = {
+  /** The line sections' registry (unsaved lines), shared with the panel. */
+  lines?: LinesRegistry;
   model: ModelMeta;
   fields: FieldMeta[];
   row: Row | null;
@@ -231,6 +258,9 @@ export function FormBody(p: FormBodyProps) {
       noValidate
       onSubmit={(e) => {
         e.preventDefault();
+        // A form drawn in a portal inside this one (a record made from a picker, a line's sheet)
+        // reaches here through React: only this form's own submit saves this record.
+        if (e.target !== e.currentTarget) return;
         if (p.dirty || creating) p.onSubmit();
       }}
     >
@@ -248,12 +278,14 @@ export function FormBody(p: FormBodyProps) {
           },
         }}
       >
-        {p.sections.map((s) => {
+        {p.sections.map((s, si) => {
           const shown = s.fields.some(wrong) || (open[s.key] ?? !s.collapsed);
+          // The note about personal data is said once, in the first section that holds some.
+          const firstPersonal = p.sections.findIndex((x) => x.personal) === si;
           const Grid = asList ? "dl" : "div";
           const body = (
             <>
-              {s.personal && (
+              {s.personal && firstPersonal && (
                 <p className="hint fsec-note">
                   <Icon name="shield" size={13} />
                   {t("Contains personal data. Agents see it masked.")}
@@ -310,6 +342,7 @@ export function FormBody(p: FormBodyProps) {
         canEdit={canEdit}
         busy={busy}
         save={p.save}
+        lines={p.lines}
       />
       {p.withheld.length > 0 && (
         <p

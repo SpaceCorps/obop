@@ -113,6 +113,8 @@ const literal = (s: string, peek: (name: string) => Edit | undefined): unknown =
   const q = /^(["'])(.*)\1$/.exec(v);
   if (q) return q[2];
   if (v.startsWith("$")) return peek(v.slice(1));
+  // A bare word is an option name, as the server reads it ("state = open").
+  if (/^[A-Za-z_]\w*$/.test(v) && v !== "null") return v;
   return undefined;
 };
 

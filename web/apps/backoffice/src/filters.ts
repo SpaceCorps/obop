@@ -303,7 +303,29 @@ export function quickFilters(model: ModelMeta, fields: FieldMeta[], ctx: QuickCt
       conds: [{ op: "bool", f: "active", v: false }],
       kind: "archived",
     });
-  return out;
+  return withoutCovered(out);
+}
+
+/**
+ * Generated filters the package already saves are left out: one with the same conditions, or
+ * whose name starts a saved one's ("Mine" beside a saved "Mine", "Open" beside "Open shifts").
+ */
+export function withoutCovered<T extends { kind?: string; label: string; conds: Cond[] }>(
+  list: readonly T[],
+): T[] {
+  const saved = list.filter((q) => q.kind === "saved");
+  const same = (a: Cond[], b: Cond[]) => JSON.stringify(a) === JSON.stringify(b);
+  const word = (s: string) => s.trim().toLowerCase();
+  return list.filter(
+    (q) =>
+      q.kind === "saved" ||
+      !saved.some(
+        (s) =>
+          same(s.conds, q.conds) ||
+          word(s.label) === word(q.label) ||
+          word(s.label).startsWith(`${word(q.label)} `),
+      ),
+  );
 }
 
 /** The select fields offered as option filters: the status first, then up to two more. */
@@ -455,7 +477,18 @@ export function parseWhere(where: string, model: ModelMeta, ctx: QuickCtx): Cond
     if (next?.t === "op" && ["==", "!=", "<", "<=", ">", ">="].includes(next.v)) {
       if (neg) return null;
       i++;
-      const v = literal(toks[i++], ctx);
+      const tok = toks[i++];
+      // `field = null` is empty, `field != null` is set.
+      if (tok?.t === "id" && tok.v === "null") {
+        if (next.v === "==") return { op: "empty", f: f.name };
+        if (next.v === "!=" && (f.kind === "select" || f.kind === "ref" || f.kind === "text"))
+          return { op: "isnot", f: f.name, v: [""] };
+        return null;
+      }
+      // A bare word on a select is one of its options ("state = in_review").
+      if (tok?.t === "id" && f.kind === "select" && f.options?.includes(tok.v))
+        return compare(f, next.v, tok.v);
+      const v = literal(tok, ctx);
       return v === null ? null : compare(f, next.v, v);
     }
     return f.kind === "bool" ? { op: "bool", f: f.name, v: !neg } : null;

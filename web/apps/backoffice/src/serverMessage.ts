@@ -209,6 +209,39 @@ const FIELD_RULES: Rule[] = [
   ],
 ];
 
+/**
+ * Guard refusals (D77, D95) that name a model and an id: a person needs the field and what to do,
+ * never a model name or a uuid. Applied in English too.
+ */
+const GUARD_RULES: Rule[] = [
+  [
+    /^(\w+)\.(\w+) falls in a locked period; choose a later date$/,
+    (m) =>
+      t("{field} is in a closed period. Choose a date in an open period, or reopen the period.", {
+        field: fieldName(m[1]!, m[2]!),
+      }),
+  ],
+  [
+    /^(\w+) \S+ can no longer be changed, so no (\w+) can be (added to|moved to) it$/,
+    (m) =>
+      m[3] === "added to"
+        ? t("This {parent} can no longer be changed, so nothing can be added to it.", {
+            parent: modelName(m[1]!),
+          })
+        : t("This {parent} can no longer be changed, so nothing can be moved to it.", {
+            parent: modelName(m[1]!),
+          }),
+  ],
+  [
+    /^(\w+)\.(\w+): the (\w+) \S+ cannot be picked here; it must satisfy .+$/,
+    (m) =>
+      t("This {model} cannot be picked for {field}. Pick another one.", {
+        model: modelName(m[3]!),
+        field: fieldName(m[1]!, m[2]!),
+      }),
+  ],
+];
+
 const RULES: Rule[] = [
   [
     /^unknown field (\w+)\.(\w+)$/,
@@ -465,7 +498,7 @@ export function serverMessage(raw: string | undefined | null): string {
   const step = /^\w+\.\w+: effect \d+ \([\w ]+\) failed, nothing was changed: (.+)$/s.exec(raw);
   if (step) return serverMessage(step[1]);
   const text = withoutAssertion(raw);
-  for (const [re, fn] of FIELD_RULES) {
+  for (const [re, fn] of [...FIELD_RULES, ...GUARD_RULES]) {
     const m = re.exec(text);
     if (m) return fn(m);
   }

@@ -35,9 +35,12 @@ export function appHome(module: ModuleMeta): string {
   return menu.main[0]?.name ?? homeOf(module, indexModels([module]));
 }
 
-/** Whether the app has a generated overview page (two or more main models, or the hint says so). */
+/**
+ * Whether the app has a generated overview page: two or more main models, or the hint says so. A
+ * `home` hint decides only where the app lands, never whether its overview can be reached.
+ */
 export function hasOverview(module: ModuleMeta): boolean {
-  return module.home === OVERVIEW || (!module.home && appMenu(module).main.length >= 2);
+  return module.home === OVERVIEW || appMenu(module).main.length >= 2;
 }
 
 /** The address of an app's home. */

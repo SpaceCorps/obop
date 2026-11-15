@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { fmt, getLang, labelFor, t } from "@obop/ui";
 import { aggregate, type FieldMeta, type ModelMeta } from "./api.ts";
 import { useData } from "./data.tsx";
-import { appTitle, fieldTitleByName, modelTitle } from "./labels.ts";
+import { appTitle, fieldTitle, fieldTitleByName, modelTitle } from "./labels.ts";
 import { childrenOf, indexModels } from "./presentation.ts";
 import { encodeState } from "./query.ts";
 
@@ -15,15 +15,21 @@ const SHOWN = 4;
 
 type Rel = { model: string; module: string; field: string; title: string; app: string };
 
-/** A quantity a related record holds (stock on hand): the button shows its sum, not a count. */
+/**
+ * A quantity a related record holds (stock on hand): the button shows its sum, not a count. Only a
+ * model without a workflow whose package sums a quantity on its cards (`ui.card_sum`) holds stock;
+ * order lines and moves are always counted.
+ */
 function sumField(model: ModelMeta | undefined): FieldMeta | undefined {
   if (!model) return undefined;
   const hasState = model.fields.some(
     (f) => f.kind === "select" && /^(state|stage|status)$/.test(f.name),
   );
   if (hasState) return undefined;
+  const sum = model.ui?.card_sum;
   return model.fields.find(
     (f) =>
+      f.name === sum &&
       (f.kind === "number" || f.kind === "decimal") &&
       /^(quantity|qty|quantity_on_hand|on_hand)$/.test(f.name),
   );
@@ -106,7 +112,9 @@ function SmartLink({ rel: r, id, n }: { rel: Rel; id: string; n: number | undefi
   const sum = sumField(d.models.get(r.model)?.model);
   const body = (
     <>
-      <span className="smart-name">{r.title}</span>
+      <span className="smart-name">
+        {sum ? t("{field} in {model}", { field: fieldTitle(sum), model: r.title }) : r.title}
+      </span>
       <span className="smart-n">{n === undefined ? "…" : fmt.integer(n)}</span>
     </>
   );
@@ -164,11 +172,14 @@ export function RelatedChips({ model, id }: { model: ModelMeta; id: string }) {
           aria-expanded={more}
           onClick={() => setMore(!more)}
         >
+          {/* Never a number of empty relations: "More (2)" counts relations that hold records. */}
           {more
             ? t("Fewer")
-            : top.length
-              ? t("More ({count})", { count: rest.length })
-              : t("Related records ({count})", { count: rest.length })}
+            : rest.some((r) => (n(r) ?? 0) > 0)
+              ? t("More ({count})", { count: rest.filter((r) => (n(r) ?? 0) > 0).length })
+              : top.length
+                ? t("More links")
+                : t("Nothing linked yet")}
         </button>
       )}
     </div>

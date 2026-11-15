@@ -55,6 +55,7 @@ import {
   listSummable,
   nextSort,
   fitColumns,
+  measureColumn,
   type CardRoles,
 } from "./listLayout.ts";
 import type { ViewProps } from "./types.ts";
@@ -127,7 +128,13 @@ export function ListView(p: ViewProps) {
   const stateName = stateFieldOf(model)?.name;
   const { cols, widths } = useMemo(() => {
     const ranked = chooseColumns(model, fields, 100_000, rows, custom);
-    return fitColumns(ranked, custom ? Infinity : width, fieldTitle, stateName);
+    return fitColumns(
+      ranked,
+      custom ? Infinity : width,
+      fieldTitle,
+      stateName,
+      measureColumn(model, ranked),
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model, fields, width, rows, custom, stateName, d.lang]);
   const mode = firstColumnMode(model, cols);
@@ -1232,7 +1239,10 @@ function PhoneCard(p: {
   const meta = cardMeta(roles, row).filter(
     (f) => !bare || (f.kind !== "ref" && f.kind !== "date" && f.kind !== "datetime"),
   );
-  const amount = roles.money && !isEmpty(row[roles.money.name]) ? p.money(roles.money) : "";
+  const named = (f: FieldMeta, text: string) =>
+    roles.namedMoney && f.kind === "money" ? `${fieldTitle(f)} ${text}` : text;
+  const amount =
+    roles.money && !isEmpty(row[roles.money.name]) ? named(roles.money, p.money(roles.money)) : "";
   return (
     <div className="lc">
       <div className="lc-top">
@@ -1249,7 +1259,7 @@ function PhoneCard(p: {
             {meta.map((f, i) => (
               <span key={f.name}>
                 {i > 0 && <span aria-hidden="true"> · </span>}
-                <Due level={dueLevel(p.model, f, row, p.today)}>{p.text(f)}</Due>
+                <Due level={dueLevel(p.model, f, row, p.today)}>{named(f, p.text(f))}</Due>
               </span>
             ))}
           </span>
