@@ -1,11 +1,11 @@
 [module]
 id = "expenses"
-version = "0.4.1"
+version = "0.4.2"
 name = "Expenses"
 description = "Employee expense claims with a draft, submitted, approved and paid flow. Paying is a separate permission. Approving, refusing and paying need a human approval; agents may only propose them. A claim can carry a photo or scan of its receipt. An approved, paid or refused claim can no longer be changed, except its receipt and the payment details. A claim has a number from a yearly series, and an employee sees and edits only their own claims; managers and finance see all."
 author = "SpaceCorps"
 summary = "Employee expense claims with a draft, submitted, approved and paid flow."
-changelog = "The form puts what you fill in first: what you spent, the amount, the category and the date, then the receipt in the same group (it stays open once the claim is saved), then who claims it. A claim can carry its receipt as a file (a photo or a scan). Approved, paid and refused claims are frozen: only the receipt, the receipt note and the payment details can still change. A new claim starts with you as the employee, today as the date and the instance currency; paying records today as the paid date when none was given. English names, list, card and form hints, and the filters My claims, To approve and To pay."
+changelog = "The receipt comes right after the date on the form, and the receipt notes have their own group under it. The form puts what you fill in first: what you spent, the amount, the category and the date, then the receipt in the same group (it stays open once the claim is saved), then who claims it. A claim can carry its receipt as a file (a photo or a scan). Approved, paid and refused claims are frozen: only the receipt, the receipt note and the payment details can still change. A new claim starts with you as the employee, today as the date and the instance currency; paying records today as the paid date when none was given. English names, list, card and form hints, and the filters My claims, To approve and To pay."
 license = "Apache-2.0"
 homepage = "https://github.com/SpaceCorps/obop"
 repository = "https://github.com/SpaceCorps/obop"
@@ -40,7 +40,11 @@ write_group = "expenses.user"
 
   [[model.ui.section]]
   label = "Expense"
-  fields = ["description", "amount", "category", "spent_on", "receipt", "receipt_note"]
+  fields = ["description", "amount", "category", "spent_on", "receipt"]
+
+  [[model.ui.section]]
+  label = "Notes"
+  fields = ["receipt_note"]
 
   [[model.ui.section]]
   label = "Claimed by"
