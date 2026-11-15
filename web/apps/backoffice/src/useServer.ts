@@ -32,6 +32,11 @@ export function useServerRows(opts: {
   order: ServerOrder[];
   offset: number;
   limit: number;
+  /**
+   * Whether the order compares text, which the server collates in the locale it is told. Default:
+   * any order. A list in its default order (a date, a number, the id) passes false.
+   */
+  collated?: boolean;
 }): ServerRows {
   const d = useData();
   const { locale } = useI18n();
@@ -42,7 +47,8 @@ export function useServerRows(opts: {
   // adds the `lang` that picks the collation only with an `order`, so the locale is part of this
   // query for a sort and for nothing else: an unsorted list does not ask again for a new locale.
   // (`aggregate()` always adds it; that is not asked again either, see the docs on the language.)
-  const key = JSON.stringify([model, filter, order, offset, limit, order.length ? locale : null]);
+  const collated = opts.collated ?? order.length > 0;
+  const key = JSON.stringify([model, filter, order, offset, limit, collated ? locale : null]);
 
   useEffect(() => {
     if (!enabled) return;

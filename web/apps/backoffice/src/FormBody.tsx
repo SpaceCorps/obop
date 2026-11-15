@@ -237,7 +237,8 @@ export function FormBody(p: FormBodyProps) {
         value={{
           model,
           peek: (name) => {
-            const f = (fields.find((x) => x.name === name) ?? model.fields.find((x) => x.name === name));
+            const f =
+              fields.find((x) => x.name === name) ?? model.fields.find((x) => x.name === name);
             return f ? value(f) : undefined;
           },
           fill: (values) => {
@@ -245,51 +246,51 @@ export function FormBody(p: FormBodyProps) {
           },
         }}
       >
-      {p.sections.map((s) => {
-        const shown = s.fields.some(wrong) || (open[s.key] ?? !s.collapsed);
-        const Grid = asList ? "dl" : "div";
-        const body = (
-          <>
-            {s.personal && (
-              <p className="hint fsec-note">
-                <Icon name="shield" size={13} />
-                {t("Contains personal data. Agents see it masked.")}
-              </p>
-            )}
-            <Grid className="fgrid">{formOrder(s.fields).map(field)}</Grid>
-          </>
-        );
-        if (!s.label)
+        {p.sections.map((s) => {
+          const shown = s.fields.some(wrong) || (open[s.key] ?? !s.collapsed);
+          const Grid = asList ? "dl" : "div";
+          const body = (
+            <>
+              {s.personal && (
+                <p className="hint fsec-note">
+                  <Icon name="shield" size={13} />
+                  {t("Contains personal data. Agents see it masked.")}
+                </p>
+              )}
+              <Grid className="fgrid">{formOrder(s.fields).map(field)}</Grid>
+            </>
+          );
+          if (!s.label)
+            return (
+              <section key={s.key} className="fsec plain">
+                {body}
+              </section>
+            );
+          const head = `fsec-${model.name}-${s.key}`;
           return (
-            <section key={s.key} className="fsec plain">
-              {body}
+            <section key={s.key} className="fsec" aria-labelledby={head}>
+              <h3 className="fsec-head">
+                <button
+                  type="button"
+                  id={head}
+                  aria-expanded={shown}
+                  onClick={() => setOpen({ ...open, [s.key]: !shown })}
+                >
+                  <Icon name={shown ? "chevron-down" : "chevron-right"} size={16} />
+                  {s.label}
+                  {!shown && (
+                    <span className="hint fsec-count">
+                      {t("{count, plural, one {# field} other {# fields}}", {
+                        count: s.fields.length,
+                      })}
+                    </span>
+                  )}
+                </button>
+              </h3>
+              {shown && body}
             </section>
           );
-        const head = `fsec-${model.name}-${s.key}`;
-        return (
-          <section key={s.key} className="fsec" aria-labelledby={head}>
-            <h3 className="fsec-head">
-              <button
-                type="button"
-                id={head}
-                aria-expanded={shown}
-                onClick={() => setOpen({ ...open, [s.key]: !shown })}
-              >
-                <Icon name={shown ? "chevron-down" : "chevron-right"} size={16} />
-                {s.label}
-                {!shown && (
-                  <span className="hint fsec-count">
-                    {t("{count, plural, one {# field} other {# fields}}", {
-                      count: s.fields.length,
-                    })}
-                  </span>
-                )}
-              </button>
-            </h3>
-            {shown && body}
-          </section>
-        );
-      })}
+        })}
       </FieldFormProvider>
       <SectionSlot
         model={model}

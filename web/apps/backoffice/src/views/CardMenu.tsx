@@ -151,7 +151,7 @@ export function CardMenu({
                 <div key={`h${i}`} className="menu-head" role="presentation">
                   {it.heading}
                 </div>
-              ) : (
+              ) : "items" in it ? null /* a card's menu has no submenus */ : (
                 <button
                   key={`${i}:${it.label}`}
                   type="button"
