@@ -80,11 +80,17 @@ export function href(r: Partial<Route>): string {
 /**
  * Unsaved work registers here; leaving the page asks first. So does anything that is lost for good
  * when the person leaves (`leaveGuard.ts`, a signing link that was not copied).
+ *
+ * `saving` is the save that is on its way, if any: a promise that settles when the save is over,
+ * whatever came of it. Its changes are still `dirty`, yet they are being saved, so "leave and
+ * discard them?" would be a question about nothing (Create, then Escape before the server has
+ * answered). Leaving waits for the save instead, and what the save left decides what is asked.
  */
 export const nav: {
   dirty: (() => boolean) | null;
+  saving: (() => Promise<void> | null) | null;
   ask: ((message: string, leave: string, stay: string) => Promise<boolean>) | null;
-} = { dirty: null, ask: null };
+} = { dirty: null, saving: null, ask: null };
 
 /**
  * What to ask before the address changes, in order; nothing to ask means go ahead. Unsaved changes
@@ -129,6 +135,17 @@ export function useRoute(): [Route, Go] {
         setRoute(parse(location.hash));
         return;
       }
+      const saving = nav.saving?.();
+      if (saving) {
+        const target = location.hash;
+        // Put the old address back until the save is over, then go there again: asked then, if
+        // the save was refused and the changes are unsaved after all.
+        history.replaceState(null, "", last.current || "#/");
+        void saving.then(() => {
+          if (location.hash !== target) location.hash = target;
+        });
+        return;
+      }
       const questions = nav.ask ? leaveQuestions() : [];
       if (questions.length) {
         const target = location.hash;
@@ -149,7 +166,7 @@ export function useRoute(): [Route, Go] {
   }, []);
 
   // Navigating from code updates the route at once (no wait for the hashchange event).
-  const go = useCallback<Go>((r, opts) => {
+  const go = useCallback<Go>(function go(r, opts) {
     const h = href(r);
     const apply = () => {
       if (opts?.replace) history.replaceState(null, "", h);
@@ -159,7 +176,14 @@ export function useRoute(): [Route, Go] {
     };
     // Going to the address that is already shown (saving a record goes to its own address) leaves
     // nothing behind, so nothing is asked.
-    const questions = nav.ask && !sameRoute(h, location.hash) ? leaveQuestions() : [];
+    const leaving = !sameRoute(h, location.hash);
+    // A save is on its way: go when it is over (see `nav.saving`).
+    const saving = leaving ? nav.saving?.() : null;
+    if (saving) {
+      void saving.then(() => go(r, opts));
+      return;
+    }
+    const questions = nav.ask && leaving ? leaveQuestions() : [];
     if (questions.length) {
       void askAll(questions).then((leave) => {
         if (leave) apply();

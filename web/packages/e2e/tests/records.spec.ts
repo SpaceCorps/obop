@@ -1,7 +1,23 @@
 import { expect, open, test } from "../support/fixtures.ts";
+import { commandUrl } from "../support/urls.ts";
 
 const leadRow = (page: import("@playwright/test").Page, title: string) =>
   page.getByRole("grid", { name: "Lead list" }).getByRole("row", { name: new RegExp(title) });
+
+/** Let a request reach the server, and keep the answer from the page until `release` is called. */
+async function holdAnswer(page: import("@playwright/test").Page, url: RegExp) {
+  let release = () => {};
+  const released = new Promise<void>((done) => (release = done));
+  let reached = () => {};
+  const atServer = new Promise<void>((done) => (reached = done));
+  await page.route(url, async (route) => {
+    const response = await route.fetch();
+    reached();
+    await released;
+    await route.fulfill({ response });
+  });
+  return { atServer, release };
+}
 
 test.describe("records in a built-in module (CRM leads)", () => {
   test("create a lead: required field is validated, then the record appears in the list", async ({
@@ -134,6 +150,61 @@ test.describe("records in a built-in module (CRM leads)", () => {
     await expect(panel.getByLabel("Title")).toHaveValue("Unsaved change");
 
     await page.getByRole("button", { name: "Discard" }).click();
+    await page.keyboard.press("Escape");
+    await expect(panel).toHaveCount(0);
+  });
+
+  test("Escape while the record is being saved asks nothing: the form closes once it is saved", async ({
+    page,
+    signIn,
+    api,
+    uid,
+  }) => {
+    const title = uid("Saved on the way");
+    await signIn("root", "/crm/lead?view=list");
+    await page.getByRole("button", { name: "New", exact: true }).click();
+    const panel = page.getByRole("complementary", { name: "Lead record" });
+    await panel.getByLabel("Title").fill(title);
+
+    // The server has the lead before the page hears of it, as on a slow line or a busy machine.
+    const answer = await holdAnswer(page, commandUrl("lead", "create"));
+    await panel.getByRole("button", { name: "Create" }).click();
+    await answer.atServer;
+    expect((await api.list("root", "lead")).filter((l) => l.title === title)).toHaveLength(1);
+
+    // The form is still the new one, and it is saving (the button that had the focus is off).
+    await expect(panel.getByRole("button", { name: "Create" })).toBeDisabled();
+    await page.keyboard.press("Escape");
+    // "Leave and discard them?" would be a question about changes that are already stored.
+    await expect(panel.getByRole("button", { name: "Create" })).toBeDisabled();
+    await expect(page.getByRole("alertdialog")).toHaveCount(0);
+
+    answer.release();
+    await expect(panel).toHaveCount(0);
+    await expect(page.locator(".toast").filter({ hasText: "Lead created" })).toBeVisible();
+    await expect(leadRow(page, title)).toBeVisible();
+    await expect(page.getByRole("alertdialog")).toHaveCount(0);
+    // Nothing is left over the page.
+    await page.getByRole("button", { name: "New", exact: true }).click();
+    await expect(panel.getByRole("heading", { name: "New lead" })).toBeVisible();
+    await page.unrouteAll({ behavior: "wait" });
+  });
+
+  test("Escape closes the open record wherever the focus is", async ({
+    page,
+    signIn,
+    api,
+    uid,
+  }) => {
+    const title = uid("Closed from outside");
+    await api.create("root", "lead", { title });
+    await signIn("root", "/crm/lead?view=list");
+    await leadRow(page, title).getByRole("gridcell").nth(1).click();
+    const panel = page.getByRole("complementary", { name: "Lead record" });
+    await expect(panel.getByRole("heading", { name: title })).toBeVisible();
+
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
     await page.keyboard.press("Escape");
     await expect(panel).toHaveCount(0);
   });

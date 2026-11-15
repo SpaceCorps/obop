@@ -183,6 +183,8 @@ export function RecordPanel({
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
   const unsaved = () => dirtyRef.current || linesDirty(lines);
+  // The save that is on its way: leaving waits for it instead of asking about it (`nav.saving`).
+  const saving = useRef<Promise<void> | null>(null);
 
   // A frozen record (meta `guard`) keeps only its mutable fields; the server says the same.
   const lock = lockOf(model, row);
@@ -247,12 +249,16 @@ export function RecordPanel({
     const below = nav.dirty;
     const mine = () => unsaved() || !!below?.();
     nav.dirty = mine;
+    const belowSaving = nav.saving;
+    const mineSaving = () => saving.current ?? belowSaving?.() ?? null;
+    nav.saving = mineSaving;
     const before = (e: BeforeUnloadEvent) => {
       if (unsaved()) e.preventDefault();
     };
     addEventListener("beforeunload", before);
     return () => {
       if (nav.dirty === mine) nav.dirty = below ?? null;
+      if (nav.saving === mineSaving) nav.saving = belowSaving ?? null;
       removeEventListener("beforeunload", before);
     };
   }, []);
@@ -340,29 +346,43 @@ export function RecordPanel({
       } else if (changed(f)) body[f.name] = r.value;
     }
     setBusy(true);
-    const r = creating
-      ? await d.run(`${model.name}.create`, body)
-      : await d.run(`${model.name}.update`, { id: row.id, ...body });
-    setBusy(false);
-    if (r.kind === "ok") {
-      d.notify(creating ? t("{model} created", { model: title }) : t("Saved"));
-      setDraft({});
-      dirtyRef.current = false;
-      const id = String((r.value as Row).id ?? row?.id);
-      onSaved(id);
-      return id;
-    } else if (r.kind === "approval") {
-      d.notify(
-        t(
-          "Approval needed: the change was proposed (plan {plan}). A human must approve it first.",
-          {
-            plan: r.planId.slice(0, 8),
-          },
-        ),
-        "info",
-      );
-    } else failure(r.message);
-    return null;
+    // Until the server has answered, a way out (Escape, a link, Back) waits; it goes on when this
+    // function is over, so after `onSaved` has put the saved record in the address.
+    let over = () => {};
+    const sent = new Promise<void>((done) => (over = done));
+    const answered = () => {
+      if (saving.current === sent) saving.current = null;
+    };
+    saving.current = sent;
+    try {
+      const r = creating
+        ? await d.run(`${model.name}.create`, body)
+        : await d.run(`${model.name}.update`, { id: row.id, ...body });
+      answered();
+      setBusy(false);
+      if (r.kind === "ok") {
+        d.notify(creating ? t("{model} created", { model: title }) : t("Saved"));
+        setDraft({});
+        dirtyRef.current = false;
+        const id = String((r.value as Row).id ?? row?.id);
+        onSaved(id);
+        return id;
+      } else if (r.kind === "approval") {
+        d.notify(
+          t(
+            "Approval needed: the change was proposed (plan {plan}). A human must approve it first.",
+            {
+              plan: r.planId.slice(0, 8),
+            },
+          ),
+          "info",
+        );
+      } else failure(r.message);
+      return null;
+    } finally {
+      answered();
+      over();
+    }
   }
 
   async function setStatus(s: string) {
