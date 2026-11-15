@@ -3,7 +3,7 @@
 
 use super::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 fn unique(tag: &str) -> String {
     static N: AtomicUsize = AtomicUsize::new(0);
@@ -12,6 +12,26 @@ fn unique(tag: &str) -> String {
         std::process::id(),
         N.fetch_add(1, Ordering::Relaxed)
     )
+}
+
+/// What a measured gap between two calls may eat of an expiry window before the step does not
+/// trust the expectation any more.
+const MARGIN: Duration = Duration::from_millis(50);
+
+/// Runs `attempt` until it reports `true`: the steps of `attempt` that depend on the calls
+/// following each other within a window were not held up, and its assertions held. `false` means a
+/// gap was too long to say anything about the code; the attempt is made again, at most 40 times,
+/// and then it fails with that as its message (a machine that holds a thread up 40 times in a
+/// row is a finding).
+fn unless_held_up(what: &str, mut attempt: impl FnMut() -> bool) {
+    for _ in 0..40 {
+        if attempt() {
+            return;
+        }
+    }
+    panic!(
+        "{what}: a gap between two calls was longer than the expiry window in 40 attempts in a row"
+    );
 }
 
 fn fields(n: i64) -> Fields {
@@ -34,26 +54,55 @@ pub(crate) fn shared_contract(a: Arc<dyn Backend>, b: Arc<dyn Backend>, destruct
     assert!(left > 50_000 && left <= 60_000, "{left}");
     b.counter_reset(&k).unwrap();
     assert_eq!(a.counter_get(&k).unwrap(), 0);
-    let k = unique("ctr-exp");
-    // The windows are wide against the gaps between calls, so a loaded machine that stalls a
-    // thread for a few hundred milliseconds cannot expire a counter the test still counts on.
-    assert_eq!(a.counter_add(&k, 400, false).unwrap(), 1);
-    assert_eq!(b.counter_add(&k, 400, false).unwrap(), 2);
-    std::thread::sleep(Duration::from_millis(600));
-    assert_eq!(a.counter_get(&k).unwrap(), 0, "expired reads as zero");
-    assert_eq!(
-        b.counter_add(&k, 400, false).unwrap(),
-        1,
-        "and starts again"
-    );
+    // Expiry reads the clock of the database (the wall clock, on every backend), so these two steps
+    // need the calls of a step to follow each other faster than the window. A test thread that a
+    // loaded machine holds up for longer than that makes the expectation false, not the code
+    // wrong: the step measures its own gaps with a clock it can trust (`Instant`), asserts
+    // nothing about an attempt in which a gap was too long, and goes again with a key of its own.
+    let window = Duration::from_millis(400);
+    unless_held_up("ctr-exp", || {
+        let k = unique("ctr-exp");
+        let started = Instant::now();
+        let first = a.counter_add(&k, 400, false).unwrap();
+        let second = b.counter_add(&k, 400, false).unwrap();
+        // The second call came less than the window after the first: it cannot have expired.
+        if started.elapsed() >= window - MARGIN {
+            return false;
+        }
+        assert_eq!((first, second), (1, 2));
+        // Waiting longer than the window can only make the expiry more certain.
+        std::thread::sleep(Duration::from_millis(600));
+        assert_eq!(a.counter_get(&k).unwrap(), 0, "expired reads as zero");
+        assert_eq!(
+            b.counter_add(&k, 400, false).unwrap(),
+            1,
+            "and starts again"
+        );
+        true
+    });
     // `extend` pushes the expiry out on every hit: four hits 250 ms apart span 750 ms, longer
-    // than the 600 ms window, and every gap is shorter than it.
-    let k = unique("ctr-ext");
-    for _ in 0..4 {
-        a.counter_add(&k, 600, true).unwrap();
-        std::thread::sleep(Duration::from_millis(250));
-    }
-    assert_eq!(a.counter_get(&k).unwrap(), 4);
+    // than the 600 ms window (the sleeps guarantee that), and every gap is shorter than it (the
+    // measured gaps say so: from the start of a hit to the end of the next call).
+    let window = Duration::from_millis(600);
+    unless_held_up("ctr-ext", || {
+        let k = unique("ctr-ext");
+        let mut starts = Vec::new();
+        let mut ends = Vec::new();
+        for _ in 0..4 {
+            starts.push(Instant::now());
+            a.counter_add(&k, 600, true).unwrap();
+            ends.push(Instant::now());
+            std::thread::sleep(Duration::from_millis(250));
+        }
+        starts.push(Instant::now());
+        let count = a.counter_get(&k).unwrap();
+        ends.push(Instant::now());
+        if (0..4).any(|i| ends[i + 1].duration_since(starts[i]) >= window - MARGIN) {
+            return false;
+        }
+        assert_eq!(count, 4);
+        true
+    });
     // 0 never expires.
     let k = unique("ctr-seq");
     assert_eq!(a.counter_add(&k, 0, false).unwrap(), 1);
@@ -413,15 +462,10 @@ fn memory_shared_contract() {
 
 #[test]
 fn sqlite_shared_contract_between_two_handles_on_one_file() {
-    let path = std::env::temp_dir().join(unique("obop-shared").replace('/', "_") + ".db");
-    let url = format!("sqlite://{}", path.display());
+    // Removed with everything beside it (lock files included), also when the contract fails.
+    let path = crate::testing::TempPath::new("obop-shared");
+    let url = path.url();
     shared_contract(open(&url).unwrap(), open(&url).unwrap(), true);
-    for entry in std::fs::read_dir(std::env::temp_dir()).unwrap().flatten() {
-        let name = entry.file_name().to_string_lossy().to_string();
-        if name.starts_with(path.file_name().unwrap().to_str().unwrap()) {
-            let _ = std::fs::remove_file(entry.path());
-        }
-    }
 }
 
 #[test]

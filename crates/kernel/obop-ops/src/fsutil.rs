@@ -169,16 +169,15 @@ pub fn sweep_parts(dir: &Path, older_than: Duration) -> Vec<String> {
 mod tests {
     use super::*;
 
-    fn tmp(tag: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("obop-fsutil-{tag}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&d);
-        std::fs::create_dir_all(&d).unwrap();
-        d
+    /// A directory of this run's own, removed when the guard is dropped (a failing test included).
+    fn tmp(tag: &str) -> obop_storage::testing::TempPath {
+        obop_storage::testing::TempPath::dir(&format!("obop-fsutil-{tag}"))
     }
 
     #[test]
     fn part_names_are_unique_and_a_name_is_published_once() {
-        let d = tmp("publish");
+        let _guard = tmp("publish");
+        let d = _guard.path().to_path_buf();
         let to = d.join("obop-backup-x.obbk");
         let (a, b) = (part_name(&to), part_name(&to));
         assert_ne!(a, b);
@@ -191,12 +190,12 @@ mod tests {
         let e = publish_new(&b, &to).unwrap_err();
         assert!(e.contains("never overwritten"), "{e}");
         assert_eq!(std::fs::read(&to).unwrap(), b"first", "not replaced");
-        let _ = std::fs::remove_dir_all(&d);
     }
 
     #[test]
     fn an_atomic_write_replaces_whole_or_not_at_all_and_leaves_no_part_file() {
-        let d = tmp("atomic");
+        let _guard = tmp("atomic");
+        let d = _guard.path().to_path_buf();
         let f = d.join("m.json");
         write_atomic_private(&f, b"one").unwrap();
         write_atomic_private(&f, b"two").unwrap();
@@ -207,12 +206,12 @@ mod tests {
             .map(|e| e.file_name().to_string_lossy().to_string())
             .collect();
         assert_eq!(left, ["m.json"]);
-        let _ = std::fs::remove_dir_all(&d);
     }
 
     #[test]
     fn only_idle_part_files_of_backups_are_swept() {
-        let d = tmp("sweep");
+        let _guard = tmp("sweep");
+        let d = _guard.path().to_path_buf();
         std::fs::write(d.join("obop-backup-20260101T000000Z.obbk.1-0.part"), b"x").unwrap();
         std::fs::write(d.join("notes.part"), b"x").unwrap();
         std::fs::write(d.join("obop-backup-20260101T000000Z.obbk"), b"x").unwrap();
@@ -223,14 +222,14 @@ mod tests {
         assert_eq!(gone, ["obop-backup-20260101T000000Z.obbk.1-0.part"]);
         assert!(d.join("notes.part").exists());
         assert!(d.join("obop-backup-20260101T000000Z.obbk").exists());
-        let _ = std::fs::remove_dir_all(&d);
     }
 
     #[cfg(unix)]
     #[test]
     fn files_and_directories_made_here_are_private() {
         use std::os::unix::fs::PermissionsExt;
-        let d = tmp("mode");
+        let _guard = tmp("mode");
+        let d = _guard.path().to_path_buf();
         let dir = d.join("a").join("b");
         create_dir_private(&dir).unwrap();
         for p in [d.join("a"), dir.clone()] {
@@ -253,6 +252,5 @@ mod tests {
             std::fs::metadata(&part).unwrap().permissions().mode() & 0o777,
             0o600
         );
-        let _ = std::fs::remove_dir_all(&d);
     }
 }

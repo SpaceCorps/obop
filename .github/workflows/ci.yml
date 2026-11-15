@@ -20,6 +20,9 @@ jobs:
           --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 12
     env:
       OBOP_TEST_POSTGRES_URL: postgres://postgres:obop-test@127.0.0.1:5432/postgres
+      # The TLS tests of obop-storage start a throwaway postgres:17 container on the runner's Docker;
+      # they run only when asked for (crates/kernel/obop-storage/src/tls_tests.rs), so ask here.
+      OBOP_TEST_DOCKER_TLS: "1"
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: Toolchain from rust-toolchain.toml
