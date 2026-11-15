@@ -178,7 +178,7 @@ function KanbanDemo({ props }: { props: ViewProps }) {
   return (
     <Specimen
       title="Kanban column and card"
-      note="Drag a card to another column, or focus it and press Shift and the arrow keys; every card also has a Move to select, so nothing needs a drag (WCAG 2.5.7)."
+      note="Drag a card to another column, or focus it and press Shift and the arrow keys; every card also has a ⋯ Move to menu (a long press on a touch screen), so nothing needs a drag (WCAG 2.5.7)."
       wide
     >
       <div className="bb-frame panel kanban-frame">

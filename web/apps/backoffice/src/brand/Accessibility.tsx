@@ -187,7 +187,7 @@ export function Accessibility() {
           </table>
         </div>
         <Notice tone="info" title="Every drag has a twin">
-          Dragging a card has the Move to select and Shift plus arrows; reordering apps has Move up
+          Dragging a card has the ⋯ Move to menu and Shift plus arrows; reordering apps has Move up
           and Move down. No function depends on dragging (WCAG 2.5.7).
         </Notice>
       </Block>

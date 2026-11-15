@@ -25,6 +25,7 @@ import { isWithheldError, onServer, toServer } from "./serverQuery.ts";
 import { EmptyState, Skeleton } from "./ui.tsx";
 import { useRecord, useServerRows } from "./useServer.ts";
 import { dateFields } from "./views/CalendarView.tsx";
+import { hasGallery } from "./views/GalleryView.tsx";
 import { kanbanField } from "./views/KanbanView.tsx";
 import { listOrder } from "./views/listLayout.ts";
 import { VIEW_REGISTRY, viewOf } from "./views/registry.ts";
@@ -112,6 +113,7 @@ export function ModelPage({
     const ids = ["list"];
     const canGroup = groupable(fields).length > 0;
     if (canGroup) ids.push("kanban");
+    if (hasGallery(fields)) ids.push("gallery");
     if (dateFields(fields).length) ids.push("calendar");
     if (canGroup) ids.push("pivot", "graph");
     return ids;
