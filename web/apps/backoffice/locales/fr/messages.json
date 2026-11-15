@@ -2359,5 +2359,9 @@
   "Could not copy. Select the token and copy it yourself.": "La copie a échoué. Sélectionnez le jeton et copiez-le vous-même.",
   "You have no permission groups to give to a token.": "Vous n’avez aucun groupe de permissions à donner à un jeton.",
   "Agent token issued": "Jeton d’agent émis",
-  "Agent token revoked": "Jeton d’agent révoqué"
+  "Agent token revoked": "Jeton d’agent révoqué",
+  "This app": "Cette application",
+  "Downloads are not available in the app yet.": "Les téléchargements ne sont pas encore disponibles dans l’application.",
+  "Copy the codes or write them down.": "Copiez les codes ou notez-les.",
+  "Sign-in with Microsoft is not available in this app yet. To sign in that way, use your browser.": "La connexion avec Microsoft n’est pas encore disponible dans cette application. Pour vous connecter ainsi, utilisez votre navigateur."
 }

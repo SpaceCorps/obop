@@ -23,6 +23,7 @@ import {
 import { DataProvider, useData, type Tone } from "./data.tsx";
 import { ErrorBoundary, OfflineBanner, OfflineNotice } from "./ErrorBoundary.tsx";
 import { modelPageOf, useAppPages, type NavLink } from "./extensions.ts";
+import { useHostNotices } from "./host/notices.ts";
 import { ModelPage } from "./ModelPage.tsx";
 import {
   appHome,
@@ -227,6 +228,7 @@ export function App() {
     },
     [dismiss],
   );
+  useHostNotices(notify);
   // A new page clears what an older one said; a toast from the last moment (the save that moved
   // here) stays.
   useEffect(() => {
