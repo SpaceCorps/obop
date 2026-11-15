@@ -1236,8 +1236,8 @@ impl Dispatcher {
             }
         }
         if (c.needs_approval || guard_approval) && p.kind == PrincipalKind::Agent {
-            // A call that the run can only refuse gets no plan: the plan would be refused when
-            // a person approves it, and spent by that. The agent hears it now.
+            // A call that mixes what cannot be stored as a whole gets no plan: the plan would
+            // be refused when a person approves it, and spent by that. The agent hears it now.
             if let Some(why) = self.mixed(&c, p, &input, &pre) {
                 return Err(refusal(why, &input));
             }
@@ -1448,8 +1448,10 @@ impl Dispatcher {
     /// Why the run of this `update` would refuse the call for what it puts together, asked
     /// without running anything: a move through an `update` that a module wrote by hand
     /// (`implied::by_hand`), or an action that is run by itself together with an edit or with
-    /// another move (`implied::not_mixed`). For the second the generated `update` is asked,
-    /// since whether another field changes is read against the record.
+    /// another move (`implied::not_mixed`). For the second the generated `update` is asked
+    /// (`implied::ask`). It answers by the fields that were sent, not by their values: this is
+    /// asked for an agent, ahead of the wrapper of the update, and the answer must not tell
+    /// whether a value equals the stored one.
     fn mixed(&self, c: &Registered, p: &Principal, input: &Value, pre: &[Pre]) -> Option<String> {
         if pre.is_empty() {
             return None;
@@ -1465,10 +1467,8 @@ impl Dispatcher {
             return None;
         }
         Self::stamp_caller(c, p, &mut input);
-        engine::implied::ask(steps, || {
-            // Not through the wrapper of the update: only the generated handler is asked.
-            let _ = (c.handler)(&input);
-        })
+        // Not through the wrapper of the update: only the generated handler is asked.
+        engine::implied::ask(steps, || (c.handler)(&input))
     }
 
     fn run(

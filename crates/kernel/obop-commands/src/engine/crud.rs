@@ -440,6 +440,15 @@ pub(crate) fn update(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Valu
     let mut unit = eng.unit();
     let cur = Gate::new(&unit, &look, &actor).load(def, &id)?;
     let mut patch = to_fields(&given);
+    if implied::asking() {
+        // The dispatcher only asks whether the call is mixed (`implied::ask`): before it stores
+        // the plan of an agent, and ahead of the wrapper of this update. The answer goes by
+        // what was sent, never by a comparison with what is stored: the agent may be shown a
+        // field masked, and a right guess must not be answered differently from a wrong one.
+        // So every other field of the call counts here, whatever its value.
+        implied::answer(implied::not_mixed(&steps, !patch.is_empty()));
+        return Ok(Value::Null);
+    }
     // A computed or numbered field may be sent back unchanged (a form saves the whole record);
     // any other value is refused.
     let system: Vec<String> = patch
@@ -471,18 +480,14 @@ pub(crate) fn update(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Valu
     let edited = !changed.is_empty();
     // An action that a module wraps or binds to a handler of its own is run by itself: it is
     // not mixed with an edit or with another action (`engine::implied`). Nothing is written yet.
-    // A null for a field the record never had is written as before, but it is no edit here (the
-    // rule of the frozen guard, `frozen::changed_keys`): a form that saves the whole record
-    // sends one for every empty field, and that is the move by itself.
+    // A null for a field the record never had is no edit here (the rule of the frozen guard,
+    // `frozen::changed_keys`): a form that saves the whole record sends one for every empty
+    // field, and that is the move by itself. What an update with edits of its own writes is
+    // as before.
     let alters = changed
         .iter()
         .any(|(k, v)| cur.contains_key(k) || !v.is_null());
-    let mixed = implied::not_mixed(&steps, alters);
-    if implied::answer(&mixed) {
-        // The dispatcher only asked (`implied::ask`).
-        return Ok(Value::Null);
-    }
-    if let Some(why) = mixed {
+    if let Some(why) = implied::not_mixed(&steps, alters) {
         return Err(why);
     }
     let mut after = cur.clone();

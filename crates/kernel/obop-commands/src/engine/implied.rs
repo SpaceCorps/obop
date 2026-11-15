@@ -60,8 +60,8 @@ struct Scope {
     /// The scope of a question, not of a run ([`ask`]): the generated `update` says whether
     /// the call is mixed and stops before it writes.
     asking: bool,
-    /// What the update answered to the question.
-    answer: Option<String>,
+    /// What the update answered to the question, once it has.
+    answer: Option<Option<String>>,
 }
 
 thread_local! {
@@ -109,12 +109,12 @@ pub(crate) fn take_steps() -> Vec<Step> {
 }
 
 /// Ask the generated `update` whether a call with these actions is one it refuses as mixed
-/// ([`not_mixed`]). `update` calls its handler, which reads the record, decides and stops:
-/// nothing is written and no action runs. The dispatcher asks before it stores the plan of an
-/// agent: a plan for a call that can only be refused would be refused when a person approves
-/// it, and spent by that. `None` also when the handler was refused before it could say (what
-/// refused it refuses the run too).
-pub(crate) fn ask(steps: Vec<Step>, update: impl FnOnce()) -> Option<String> {
+/// ([`not_mixed`]). `update` calls its handler, which answers and stops before it compares or
+/// writes anything: no action runs. The dispatcher asks before it stores the plan of an agent:
+/// a plan for a call that can only be refused would be refused when a person approves it, and
+/// spent by that. When the handler was refused before it could answer (no such record, a field
+/// the model does not have), that refusal is the answer: it refuses the run too.
+pub(crate) fn ask(steps: Vec<Step>, update: impl FnOnce() -> R<Value>) -> Option<String> {
     let scope = Scope {
         steps,
         asking: true,
@@ -124,20 +124,27 @@ pub(crate) fn ask(steps: Vec<Step>, update: impl FnOnce()) -> Option<String> {
         previous: CURRENT.with(|c| c.borrow_mut().replace(scope)),
         _not_send: PhantomData,
     };
-    update();
-    CURRENT.with(|c| c.borrow_mut().as_mut().and_then(|s| s.answer.take()))
+    let out = update();
+    let said = CURRENT.with(|c| c.borrow_mut().as_mut().and_then(|s| s.answer.take()));
+    match said {
+        Some(mixed) => mixed,
+        None => out.err(),
+    }
 }
 
-/// For the generated `update`, with what [`not_mixed`] said: true when the dispatcher only
-/// asks ([`ask`]). The answer is kept for it, and the update stops here.
-pub(crate) fn answer(mixed: &Option<String>) -> bool {
-    CURRENT.with(|c| match c.borrow_mut().as_mut() {
-        Some(s) if s.asking => {
-            s.answer.clone_from(mixed);
-            true
+/// For the generated `update`: the dispatcher only asks whether the call is mixed ([`ask`]).
+/// The update then answers ([`answer`]) and stops.
+pub(crate) fn asking() -> bool {
+    CURRENT.with(|c| c.borrow().as_ref().is_some_and(|s| s.asking))
+}
+
+/// The answer of the generated `update` to [`ask`]: what [`not_mixed`] said.
+pub(crate) fn answer(mixed: Option<String>) {
+    CURRENT.with(|c| {
+        if let Some(s) = c.borrow_mut().as_mut() {
+            s.answer = Some(mixed);
         }
-        _ => false,
-    })
+    });
 }
 
 /// The refusal of an update whose handler a module wrote by hand and that moves a governed

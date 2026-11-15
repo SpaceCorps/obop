@@ -185,6 +185,7 @@ fn module(p: &str) -> Module {
                 ],
                 vec![
                     CommandDef::new("file", "File", U)
+                        .approval()
                         .transition("state", Some("open"), "filed")
                         .assertion_msg("size > 0", "Nothing to file"),
                 ],
@@ -1109,57 +1110,46 @@ fn an_agent_gets_no_plan_for_an_update_that_can_only_be_refused() {
             Box::new(|_, input, inner| inner(input)),
         );
         let id = r.doc(5);
-        let e = r.err(
-            &bot(),
-            "doc",
-            "update",
-            r.update(&id, vec![("state", t("posted")), ("name", t("X"))]),
-        );
-        not_mixed(&e, "state", "doc.post");
+        // The answer goes by the fields the agent sent, not by their values: a value equal to
+        // the stored one (the agent may be shown the field masked, so this would be a guess
+        // that is right) is answered like any other, and so is a value the update would have
+        // refused in its own words (a number the system assigns).
+        for other in [
+            ("name", t("X")),
+            ("name", t("Doc")),
+            ("note", Value::Null),
+            ("number", t("D-9999")),
+        ] {
+            let e = r.err(
+                &bot(),
+                "doc",
+                "update",
+                r.update(&id, vec![("state", t("posted")), other]),
+            );
+            not_mixed(&e, "state", "doc.post");
+        }
         r.untouched(&id, 5);
-        // The whole record with nothing changed but the state is the move alone: a plan, which
-        // does the move when a person approves it.
+        // The move by itself: a plan, which does the move when a person approves it.
         let plan = plan_of(r.call(
             &bot(),
             "doc",
             "update",
-            r.update(
-                &id,
-                vec![
-                    ("state", t("posted")),
-                    ("name", t("Doc")),
-                    ("amount", n(5)),
-                    ("note", Value::Null),
-                ],
-            ),
+            r.update(&id, vec![("state", t("posted"))]),
         ));
         r.untouched(&id, 5);
         r.d.approve(&approver(), &mut Vault::new(), &plan)
             .unwrap_or_else(|e| panic!("the approval: {e:?}"));
         assert_eq!(r.field("doc", &id, "state"), t("posted"));
         assert_eq!(r.field("doc", &id, "number"), t("D-0001"));
-        // A plan that was good when it was made and is mixed when it is approved (the name
-        // changed since) is refused then, with nothing stored.
-        let id = r.doc(5);
-        let plan = plan_of(r.call(
+        // A record the agent cannot be asked about (there is none) is refused in those words,
+        // and no plan is made either.
+        let e = r.err(
             &bot(),
             "doc",
             "update",
-            r.update(&id, vec![("state", t("posted")), ("name", t("Doc"))]),
-        ));
-        r.ok(
-            &user(),
-            "doc",
-            "update",
-            r.update(&id, vec![("name", t("Renamed"))]),
+            r.update("none", vec![("state", t("posted")), ("name", t("X"))]),
         );
-        match r.d.approve(&approver(), &mut Vault::new(), &plan) {
-            Err(CallError::Handler(e)) => not_mixed(&e, "state", "doc.post"),
-            other => panic!("expected a refusal, got {other:?}"),
-        }
-        assert_eq!(r.field("doc", &id, "state"), t("draft"));
-        assert_eq!(r.field("doc", &id, "name"), t("Renamed"));
-        assert_eq!(r.field("doc", &id, "number"), Value::Null);
+        assert!(!e.contains("cannot be changed together"), "{e}");
     });
 }
 
@@ -1188,8 +1178,7 @@ fn an_update_written_by_hand_takes_no_move() {
             r.update(&id, vec![("state", t("filed")), ("title", t("no"))]),
         );
         by_hand(&e, "state", &update, &file);
-        // Also the move alone, and also when a wrapper of the update would refuse the caller:
-        // the action has not run.
+        // Also the move alone: the action has not run.
         let e = r.err(
             &user(),
             "memo",
@@ -1221,6 +1210,30 @@ fn an_update_written_by_hand_takes_no_move() {
             r.update(&id, vec![("title", t("no"))]),
         );
         assert!(e.contains("the memo says no"), "{e}");
+
+        // An agent, whose `file` needs approval, gets no plan for a move through this update:
+        // the handler, which writes, is never asked. Nothing is stored.
+        let other = r.create("memo", vec![("title", t("O")), ("size", n(1))]);
+        for sent in [
+            vec![("state", t("filed"))],
+            vec![("state", t("filed")), ("title", t("P"))],
+        ] {
+            let e = r.err(&bot(), "memo", "update", r.update(&other, sent));
+            by_hand(&e, "state", &update, &file);
+        }
+        assert_eq!(r.field("memo", &other, "state"), t("open"));
+        assert_eq!(r.field("memo", &other, "title"), t("O"));
+        // A wrapper of the update that refuses the caller comes after this refusal, so the
+        // move has not run when the wrapper speaks.
+        r.d.around(&update, Box::new(|_, _, _| Err("not you".into())));
+        let e = r.err(
+            &user(),
+            "memo",
+            "update",
+            r.update(&other, vec![("state", t("filed"))]),
+        );
+        by_hand(&e, "state", &update, &file);
+        assert_eq!(r.field("memo", &other, "state"), t("open"));
     });
 }
 
