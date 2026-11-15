@@ -4,12 +4,6 @@
 name = "Trip"
 plural = "Trips"
 
-[labels.en.model.mileage_trip.field.distance_m]
-label = "Distance"
-
-[labels.en.model.mileage_trip.field.state.options]
-in_review = "To review"
-
 [labels.en.model.mileage_trip.action.discard_stuck]
 label = "Discard stuck trip"
 

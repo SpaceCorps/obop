@@ -13,12 +13,6 @@ label = "Sales order"
 [labels.en.model.invoice.field.total_minor]
 label = "Total"
 
-[labels.en.model.invoice.action.post]
-label = "Post"
-
-[labels.en.model.invoice.action.cancel]
-label = "Cancel invoice"
-
 [labels.en.model.invoice_line]
 name = "Invoice line"
 plural = "Invoice lines"

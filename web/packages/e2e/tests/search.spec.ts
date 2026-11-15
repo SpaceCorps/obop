@@ -174,7 +174,7 @@ test.describe("server-side list: paging, filter, sort", () => {
     await expect(page.getByText(/unknown field party\.name/)).toBeVisible();
 
     await page.getByRole("button", { name: "Clear filters and sorting" }).click();
-    await expect(page.getByRole("grid", { name: "Party list" })).toBeVisible();
+    await expect(page.getByRole("grid", { name: "Contact list" })).toBeVisible();
     await expect(page.locator(".facet")).toHaveCount(0);
   });
 });

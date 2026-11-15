@@ -51,14 +51,14 @@ test.describe("delete", () => {
     const party = await api.create("root", "party", { name });
     const order = await api.create("root", "sale_order", { party_id: party.id });
     await signIn("root", `/base/party?view=list&id=${party.id}`);
-    await panelOf(page, "Party").getByRole("button", { name: "Delete" }).click();
-    const dialog = page.getByRole("alertdialog", { name: "Delete party?" });
+    await panelOf(page, "Contact").getByRole("button", { name: "Delete" }).click();
+    const dialog = page.getByRole("alertdialog", { name: "Delete contact?" });
     await dialog.getByRole("button", { name: "Delete", exact: true }).click();
 
     // The server's refusal is explained in the dialog, which names the model and links to the record.
-    const failed = page.getByRole("alertdialog", { name: "Could not delete party" });
+    const failed = page.getByRole("alertdialog", { name: "Could not delete contact" });
     await expect(failed.getByRole("alert")).toContainText("still used by other records");
-    await expect(failed).toContainText("Sale order (1)");
+    await expect(failed).toContainText("Quotation / Order (1)");
     const link = failed.getByRole("link");
     await expect(link).toHaveAttribute("href", new RegExp(`#/sales/sale_order\\?.*id=${order.id}`));
     expect((await api.list("root", "party")).some((p) => p.id === party.id)).toBe(true);
@@ -67,14 +67,14 @@ test.describe("delete", () => {
     await link.click();
     await expect(failed).toHaveCount(0);
     await expect(page).toHaveURL(new RegExp(`#/sales/sale_order.*id=${order.id}`));
-    await expect(panelOf(page, "Sale order")).toBeVisible();
+    await expect(panelOf(page, "Quotation / Order")).toBeVisible();
 
     // Once nothing refers to it any more, the delete goes through.
     await api.run("root", "sale_order.delete", { id: order.id });
     await page.goto(`/#/base/party?view=list&id=${party.id}`);
-    await panelOf(page, "Party").getByRole("button", { name: "Delete" }).click();
+    await panelOf(page, "Contact").getByRole("button", { name: "Delete" }).click();
     await dialog.getByRole("button", { name: "Delete", exact: true }).click();
-    await expect(page.locator(".toast").filter({ hasText: "Party deleted" })).toBeVisible();
+    await expect(page.locator(".toast").filter({ hasText: "Contact deleted" })).toBeVisible();
     expect((await api.list("root", "party")).some((p) => p.id === party.id)).toBe(false);
   });
 
@@ -130,14 +130,14 @@ test.describe("delete", () => {
     await search.fill(stem);
     await search.press("Enter");
     await expect(page.locator(".controlpanel .count")).toHaveText("2 records");
-    await grid(page, "Party").getByRole("checkbox", { name: "Select all records" }).check();
+    await grid(page, "Contact").getByRole("checkbox", { name: "Select all records" }).check();
     await page
       .getByRole("toolbar", { name: "Bulk actions" })
       .getByRole("button", { name: "Delete" })
       .click();
     await page
-      .getByRole("alertdialog", { name: "Delete 2 parties?" })
-      .getByRole("button", { name: "Delete 2 parties" })
+      .getByRole("alertdialog", { name: "Delete 2 contacts?" })
+      .getByRole("button", { name: "Delete 2 contacts" })
       .click();
 
     const done = page.getByRole("alertdialog", { name: "Delete finished" });

@@ -15,15 +15,6 @@ draft = "Quotation"
 confirmed = "Sales order"
 cancelled = "Cancelled"
 
-[labels.en.model.sale_order.action.confirm]
-label = "Confirm order"
-
-[labels.en.model.sale_order.action.cancel]
-label = "Cancel order"
-
-[labels.en.model.sale_order.action.reset_to_draft]
-label = "Back to quotation"
-
 [labels.en.model.sale_order_line]
 name = "Order line"
 plural = "Order lines"
