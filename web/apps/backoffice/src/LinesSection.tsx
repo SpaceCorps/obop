@@ -1202,6 +1202,9 @@ function ImageGrid(p: {
                 size="sm"
                 className="lines-tile-del"
                 label={t("Delete image {n}", { n: i + 1 })}
+                // The tip's wrapper would become the button's positioned box, off the tile.
+                tooltip={false}
+                title={t("Delete image {n}", { n: i + 1 })}
                 disabled={p.busy(id)}
                 onClick={() => p.onDelete(id)}
               />
