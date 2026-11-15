@@ -63,7 +63,7 @@ description = "Datum, an dem die kostenlose Testphase endet (YYYY-MM-DD)"
 
 [labels.de.model.subscriptions_subscription.field.next_invoice_on]
 label = "Nächste Rechnung am"
-description = "Datum, an dem die nächste Rechnung fällig wird (YYYY-MM-DD)"
+description = "Datum, an dem die nächste Rechnung fällig wird (YYYY-MM-DD), von Hand eingetragen: Aus einem Abonnement wird noch keine Rechnung erstellt, erstellen Sie sie in Rechnungen"
 
 [labels.de.model.subscriptions_subscription.field.recurring_amount]
 label = "Wiederkehrender Betrag"

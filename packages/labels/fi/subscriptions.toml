@@ -63,7 +63,7 @@ description = "Päivä, jona ilmainen kokeilu päättyy (YYYY-MM-DD)"
 
 [labels.fi.model.subscriptions_subscription.field.next_invoice_on]
 label = "Seuraava lasku"
-description = "Päivä, jona seuraava lasku erääntyy laskutettavaksi (YYYY-MM-DD)"
+description = "Päivä, jona seuraava lasku erääntyy laskutettavaksi (YYYY-MM-DD), kirjataan käsin: tilauksesta ei vielä tehdä laskua, joten tee se Laskutuksessa"
 
 [labels.fi.model.subscriptions_subscription.field.recurring_amount]
 label = "Toistuva summa"

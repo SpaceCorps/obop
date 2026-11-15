@@ -150,7 +150,7 @@ write_group = "subscriptions.manager"
 
   [[model.field]]
   name = "next_invoice_on"
-  description = "Date the next invoice is due (YYYY-MM-DD)"
+  description = "Date the next invoice is due (YYYY-MM-DD), typed in by hand: no invoice is made from a subscription yet, so make it in Invoicing"
   class = "none"
   kind = "date"
   [model.field.ui]

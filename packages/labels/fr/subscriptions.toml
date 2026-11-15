@@ -63,7 +63,7 @@ description = "Date de fin de l’essai gratuit (YYYY-MM-DD)"
 
 [labels.fr.model.subscriptions_subscription.field.next_invoice_on]
 label = "Prochaine facture le"
-description = "Date d’échéance de la prochaine facture (YYYY-MM-DD)"
+description = "Date d’échéance de la prochaine facture (YYYY-MM-DD), saisie à la main : aucune facture n’est encore créée depuis un abonnement, créez-la dans Facturation"
 
 [labels.fr.model.subscriptions_subscription.field.recurring_amount]
 label = "Montant récurrent"

@@ -63,7 +63,7 @@ description = "Data zakończenia bezpłatnego okresu próbnego (YYYY-MM-DD)"
 
 [labels.pl.model.subscriptions_subscription.field.next_invoice_on]
 label = "Data następnej faktury"
-description = "Data wystawienia następnej faktury (YYYY-MM-DD)"
+description = "Data wystawienia następnej faktury (YYYY-MM-DD), wpisywana ręcznie: z subskrypcji nie powstaje jeszcze żadna faktura, utwórz ją w Fakturowaniu"
 
 [labels.pl.model.subscriptions_subscription.field.recurring_amount]
 label = "Kwota cykliczna"

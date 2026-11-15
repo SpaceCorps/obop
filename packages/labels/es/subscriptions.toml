@@ -63,7 +63,7 @@ description = "Fecha en que termina la prueba gratuita (YYYY-MM-DD)"
 
 [labels.es.model.subscriptions_subscription.field.next_invoice_on]
 label = "Fecha de la próxima factura"
-description = "Fecha en que vence la próxima factura (YYYY-MM-DD)"
+description = "Fecha en que vence la próxima factura (YYYY-MM-DD), introducida a mano: aún no se crea ninguna factura desde una suscripción, créela en Facturación"
 
 [labels.es.model.subscriptions_subscription.field.recurring_amount]
 label = "Importe recurrente"
