@@ -138,6 +138,23 @@ export const sv: Translation<"one"> = {
   "recording.points.one": "{count} punkt sparad på den här telefonen",
   "recording.points.other": "{count} punkter sparade på den här telefonen",
   "recording.nofix": "Väntar på den första positionen. Gå ut eller vänta en stund.",
+  // The note about a distance of 0 m (added on 2026-11-15, machine-drafted like the rest and read by
+  // no native speaker). As in English the words of the banner are fixed per kind and the counts are
+  // the line below it; the note names no satellite system and says nothing about a cause.
+  "recording.weak.title": "Platssignalen är för svag för att mäta en sträcka",
+  "recording.weak.message":
+    "Positioner med för låg noggrannhet räknas inte med i sträckan. Om du är inomhus, gå till ett fönster eller gå ut.",
+  "recording.jumpy.title": "Positionerna stämmer inte överens",
+  "recording.jumpy.message":
+    "Positioner som inte stämmer överens med den första medräknade positionen räknas inte med i sträckan. Om sträckan står kvar på 0 m, stoppa den här resan, kassera den och starta en ny.",
+  // A Swedish verb has one form for one and for several, and "positioner" follows {total}, so the
+  // two forms of each line are the same sentence.
+  "recording.signal.detail.one": "{count} av {total} positioner räknades inte med",
+  "recording.signal.detail.other": "{count} av {total} positioner räknades inte med",
+  "recording.signal.detail.last.one":
+    "{count} av {total} positioner räknades inte med (den senaste kunde bara bestämmas på {accuracy} när)",
+  "recording.signal.detail.last.other":
+    "{count} av {total} positioner räknades inte med (den senaste kunde bara bestämmas på {accuracy} när)",
   "recording.stop": "Stopp",
   "recording.stop.title": "Stoppa resan?",
   "recording.stop.message": "Resan slutar här och laddas upp.",
