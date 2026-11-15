@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from "vite-plus/test";
 import { fmt, provideCatalogue, setInstanceDefaults, setLanguage } from "@obop/ui";
 import type { Command, FieldMeta, ModelMeta, Row } from "../api.ts";
 import { formatSumRows, sortRows, type Lookup } from "../query.ts";
+import { toServer } from "../serverQuery.ts";
 import {
   cardMeta,
   cardRoles,
@@ -328,6 +329,20 @@ describe("the default order", () => {
     });
     expect(nextSort({ f: "spent_on", dir: "desc" }, "spent_on", order)).toBeUndefined();
     expect(nextSort(undefined, "number", order)).toEqual({ f: "number", dir: "asc" });
+  });
+});
+
+describe("the order the server is asked for (serverQuery.ts)", () => {
+  it("is the default order without a sort of the person's own, and theirs with one", () => {
+    const order = listOrder(expense, expense.fields);
+    const none = toServer({ facets: [], group: [] }, expense.fields, order);
+    expect(none.order).toEqual([{ field: "spent_on", dir: "desc" }]);
+    const own = toServer(
+      { facets: [], group: [], sort: { f: "number", dir: "asc" } },
+      expense.fields,
+      order,
+    );
+    expect(own.order).toEqual([{ field: "number", dir: "asc" }]);
   });
 });
 
