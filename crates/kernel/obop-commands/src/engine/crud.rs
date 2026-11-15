@@ -469,6 +469,11 @@ pub(crate) fn update(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Valu
         .map(|(k, v)| (k.clone(), v.clone()))
         .collect();
     let edited = !changed.is_empty();
+    // An action that a module wraps or binds to a handler of its own is run by itself: it is
+    // not mixed with an edit or with another action (`engine::implied`). Nothing is written yet.
+    if let Some(why) = implied::not_mixed(&steps, edited) {
+        return Err(why);
+    }
     let mut after = cur.clone();
     if edited {
         after.extend(changed.clone());
@@ -494,27 +499,24 @@ pub(crate) fn update(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Valu
         }
         commit(eng, unit)?;
     } else {
-        // The move. Every check of the edits has passed and they are written in the unit, not
-        // in the store: each action takes the unit up, runs on the record as edited and commits
-        // the edits with its own writes. A refusal ends the call here with nothing stored.
-        let ran = match implied::run(&steps, def.name, &id, unit.hold()) {
-            Ok(ran) => ran,
-            Err(refused) => {
-                // The one refusal that comes after the store was written: the wrapper of the
-                // last action refused when its handler had stored the edits with the move. The
-                // files the edits name are then held like those of any stored edit.
-                if refused.stored && edited {
-                    crate::blobs::hold_updated(&eng.store, def, &id, &cur, &after);
-                }
-                return Err(refused.why);
+        let answers = if steps.iter().all(|s| s.joins) {
+            // The move. Every check of the edits has passed and they are written in the unit,
+            // not in the store: each action takes the unit up and runs on the record as edited,
+            // and the last one commits the edits with every action's writes. A refusal ends the
+            // call here with nothing stored.
+            let (left, answers) = implied::run(&steps, def.name, &id, unit.hold())?;
+            // What no action committed (none took the unit up; this does not happen).
+            if let Some(held) = left {
+                commit(eng, eng.unit().resume(held))?;
             }
+            answers
+        } else {
+            // The one action that is run by itself (`implied::not_mixed`): the update has no
+            // edit of its own to store, and the action runs as a call of the action runs it.
+            vec![(steps[0].run)()?]
         };
-        // What no action committed (a handler written by hand does not take the unit up).
-        if let Some(held) = ran.left {
-            commit(eng, eng.unit().resume(held))?;
-        }
         // What the actions wrote, should the record not be readable for the answer below.
-        for answer in ran.answers {
+        for answer in answers {
             if let Value::Map(m) = answer {
                 after.extend(
                     m.iter()
@@ -574,16 +576,17 @@ pub(crate) fn transition(
     // An action that an `update` implies (D48) goes on in the unit of that update, where the
     // other fields of the call are already written: it runs on the record as edited, and the
     // edits and the action are stored together or not at all (`engine::implied`).
-    let (mut unit, joined) = match implied::adopt(def.name, &id)? {
-        Some(a) => (eng.unit().resume(a.held), Some(a.hand_on)),
+    let (mut unit, joined) = match implied::adopt(def.name, &id) {
+        // The action may write as many records as when it is called by itself, whatever the
+        // update and the actions before it wrote.
+        Some(a) => (eng.unit().resume(a.held).own_budget(), Some(a.hand_on)),
         None => (eng.unit(), None),
     };
     let mark = unit.mark();
     let patch = match act(eng, def, cmd, &id, &actor, input, &mut unit) {
         Ok(patch) => patch,
         Err(e) => {
-            // The update's unit goes back as it came: the refusal ends the update, unless the
-            // wrapper of this action answers for it.
+            // The update's unit goes back as it came, and the refusal ends the update.
             if joined.is_some() {
                 unit.rewind(mark);
                 implied::give_back(def.name, &id, unit.hold());
@@ -594,16 +597,7 @@ pub(crate) fn transition(
     match joined {
         // Another action of the same update follows: it, or the update, commits for all.
         Some(true) => implied::give_back(def.name, &id, unit.hold()),
-        // The edits of the update and this action, stored together. A commit that fails takes
-        // the edits with it, so it ends the update whatever a wrapper makes of the refusal.
-        Some(false) => match commit(eng, unit) {
-            Ok(()) => implied::stored(),
-            Err(e) => {
-                implied::lost(def.name, &id, &e);
-                return Err(e);
-            }
-        },
-        None => commit(eng, unit)?,
+        _ => commit(eng, unit)?,
     }
     let mut out: BTreeMap<String, Value> = patch
         .iter()

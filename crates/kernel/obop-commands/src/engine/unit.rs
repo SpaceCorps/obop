@@ -214,7 +214,8 @@ impl<'a> Unit<'a> {
     }
 
     /// This unit, which has done nothing yet, going on from where another stopped (`hold`): it
-    /// reads the other's writes, counts them against its own cap and commits them with its own.
+    /// reads the other's writes, counts them against its own cap (unless it takes a budget of
+    /// its own, `own_budget`) and commits them with its own.
     pub fn resume(mut self, held: Held) -> Self {
         debug_assert!(self.ops.is_empty(), "a unit resumes before its first write");
         self.overlay = held.overlay;
@@ -225,6 +226,13 @@ impl<'a> Unit<'a> {
         self.undo = held.undo;
         self.keyed = RefCell::new(held.keyed);
         self.tickets = held.tickets;
+        self
+    }
+
+    /// Give what follows a budget of its own: an action that goes on in the unit of an update
+    /// may write as many records as when it is called by itself, whatever was written before it.
+    pub fn own_budget(mut self) -> Self {
+        self.cap = self.written.saturating_add(MAX_EFFECT_RECORDS);
         self
     }
 

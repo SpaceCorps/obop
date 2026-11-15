@@ -2,9 +2,14 @@
 //! "a mixed update is applied completely or not at all"), also when the state it moves to is
 //! frozen by the D77 guard. The other fields are edits of the record as it was, so they are
 //! written first; the action the move implies runs after them, on the record as edited; and a
-//! refusal of any part (a field, the guard, a wrapper, the action's assertion) leaves nothing
-//! stored, no number taken. An agent's call that needs approval changes nothing, and the approved
-//! plan does all of it.
+//! refusal of any part (a field, the guard, a wrapper of the update, the action's assertion)
+//! leaves nothing stored, no number taken. An agent's call that needs approval changes nothing,
+//! and the approved plan does all of it.
+//!
+//! Only an action that is generic all the way shares the unit. One that a module wraps or binds
+//! to a handler of its own, and any action of a model whose `update` a module wrote by hand, is
+//! run by itself: an update that would mix it with an edit or another move is refused before
+//! anything is written.
 //!
 //! Every test runs on the memory and SQLite backends, and on PostgreSQL when
 //! `OBOP_TEST_POSTGRES_URL` is set.
@@ -756,91 +761,7 @@ fn leaving_a_frozen_state_takes_what_the_exit_allows_and_nothing_else() {
     });
 }
 
-// ---- wrappers, several moves, handlers written by hand ---------------------------------------
-
-#[test]
-fn the_wrappers_of_the_update_and_of_the_action_both_run_and_in_that_order() {
-    each(|r| {
-        // A module's rule on `update` (a wrapper) refuses before the action has run.
-        r.d.around(
-            &r.cmd("doc", "update"),
-            Box::new(|_, input, inner| match get(input, "name") {
-                Value::Text(s) if s == "forbidden" => Err("that name is not allowed".into()),
-                _ => inner(input),
-            }),
-        );
-        // The wrapper of the action sees the action run; when the handler it wraps has answered,
-        // the whole update is stored (it may then do what cannot be taken back).
-        let seen = Arc::new(Mutex::new(Vec::<String>::new()));
-        let (log, store, model) = (seen.clone(), r.store.clone(), format!("{}_doc", r.p));
-        r.d.around(
-            &r.cmd("doc", "cancel"),
-            Box::new(move |_, input, inner| {
-                let Value::Text(id) = get(input, "id").clone() else {
-                    return Err("missing id".into());
-                };
-                let stored = |f: &str| match store.field(&model, &id, f) {
-                    Some(Value::Text(s)) => s,
-                    _ => String::new(),
-                };
-                log.lock()
-                    .unwrap()
-                    .push(format!("before:{}:{}", stored("state"), stored("name")));
-                let out = inner(input)?;
-                log.lock()
-                    .unwrap()
-                    .push(format!("after:{}:{}", stored("state"), stored("name")));
-                Ok(out)
-            }),
-        );
-        let id = r.doc(5);
-        let e = r.err(
-            &user(),
-            "doc",
-            "update",
-            r.update(
-                &id,
-                vec![("state", t("cancelled")), ("name", t("forbidden"))],
-            ),
-        );
-        assert_eq!(e, "that name is not allowed");
-        r.untouched(&id, 5);
-        assert!(seen.lock().unwrap().is_empty(), "the action did not run");
-        r.ok(
-            &user(),
-            "doc",
-            "update",
-            r.update(&id, vec![("state", t("cancelled")), ("name", t("Fine"))]),
-        );
-        assert_eq!(
-            *seen.lock().unwrap(),
-            ["before:draft:Doc", "after:cancelled:Fine"]
-        );
-    });
-}
-
-#[test]
-fn a_wrapper_that_answers_for_a_refused_action_leaves_the_edits_to_the_update() {
-    each(|r| {
-        // The wrapper decides what a refusal of its action means. Here it answers without one:
-        // the update then stores its edits, as it did before, and the state has not moved.
-        r.d.around(
-            &r.cmd("doc", "post"),
-            Box::new(|_, input, inner| inner(input).or(Ok(Value::Null))),
-        );
-        let id = r.doc(0);
-        let v = r.ok(
-            &approver(),
-            "doc",
-            "update",
-            r.update(&id, vec![("state", t("posted")), ("name", t("Kept"))]),
-        );
-        assert_eq!(get(&v, "state"), &t("draft"));
-        assert_eq!(r.field("doc", &id, "state"), t("draft"));
-        assert_eq!(r.field("doc", &id, "name"), t("Kept"));
-        assert_eq!(r.field("doc", &id, "number"), Value::Null);
-    });
-}
+// ---- several moves, wrappers, handlers written by hand ---------------------------------------
 
 #[test]
 fn two_moves_and_an_edit_in_one_update_are_one_unit() {
@@ -884,139 +805,159 @@ fn two_moves_and_an_edit_in_one_update_are_one_unit() {
 }
 
 #[test]
-fn an_action_with_a_hand_written_handler_runs_after_the_checks_of_the_edits() {
+fn the_wrapper_of_the_update_runs_before_anything_and_the_unit_inside_it() {
     each(|r| {
-        r.create("ticket", vec![("title", t("Other")), ("code", t("TAKEN"))]);
-        // An edit the update refuses: the action has not run.
-        let id = r.create("ticket", vec![("title", t("T"))]);
+        // A module's rule on `update` (a wrapper) refuses before the action has run.
+        r.d.around(
+            &r.cmd("doc", "update"),
+            Box::new(|_, input, inner| match get(input, "name") {
+                Value::Text(s) if s == "forbidden" => Err("that name is not allowed".into()),
+                _ => inner(input),
+            }),
+        );
+        let id = r.doc(5);
         let e = r.err(
             &user(),
-            "ticket",
+            "doc",
             "update",
-            r.update(&id, vec![("state", t("closed")), ("code", t("TAKEN"))]),
+            r.update(
+                &id,
+                vec![("state", t("cancelled")), ("name", t("forbidden"))],
+            ),
         );
-        assert!(e.contains("code must be unique"), "{e}");
-        assert_eq!(r.field("ticket", &id, "state"), t("open"));
-        assert_eq!(r.field("ticket", &id, "code"), Value::Null);
-        // The action refuses: the edit is not stored.
-        let stuck = r.create("ticket", vec![("title", t("stuck"))]);
-        let e = r.err(
-            &user(),
-            "ticket",
-            "update",
-            r.update(&stuck, vec![("state", t("closed")), ("note", t("n"))]),
-        );
-        assert!(e.contains("the ticket is stuck"), "{e}");
-        assert_eq!(r.field("ticket", &stuck, "state"), t("open"));
-        assert_eq!(r.field("ticket", &stuck, "note"), Value::Null);
-        // Both fine: both stored, and the answer is the record after both.
-        let v = r.ok(
-            &user(),
-            "ticket",
-            "update",
-            r.update(&id, vec![("state", t("closed")), ("note", t("done"))]),
-        );
-        assert_eq!(get(&v, "state"), &t("closed"));
-        assert_eq!(get(&v, "note"), &t("done"));
-        assert_eq!(r.field("ticket", &id, "state"), t("closed"));
-        assert_eq!(r.field("ticket", &id, "note"), t("done"));
-    });
-}
-
-#[test]
-fn an_update_written_by_hand_stores_its_edits_and_the_move_follows_it() {
-    each(|r| {
-        // Both fine: the handler stores the edit, and the action then moves the record. The
-        // handler never sees the governed field.
-        let id = r.create("memo", vec![("title", t("M")), ("size", n(1))]);
+        assert_eq!(e, "that name is not allowed");
+        r.untouched(&id, 5);
+        // It lets the call through: the edit and the move are one unit inside it.
         r.ok(
             &user(),
-            "memo",
+            "doc",
             "update",
-            r.update(&id, vec![("state", t("filed")), ("title", t("N"))]),
+            r.update(&id, vec![("state", t("cancelled")), ("name", t("Fine"))]),
         );
-        assert_eq!(r.field("memo", &id, "state"), t("filed"));
-        assert_eq!(r.field("memo", &id, "title"), t("N"));
-        // The handler refuses: the action has not run.
-        let kept = r.create("memo", vec![("title", t("K")), ("size", n(1))]);
-        let e = r.err(
-            &user(),
-            "memo",
-            "update",
-            r.update(&kept, vec![("state", t("filed")), ("title", t("no"))]),
-        );
-        assert!(e.contains("the memo says no"), "{e}");
-        assert_eq!(r.field("memo", &kept, "state"), t("open"));
-        assert_eq!(r.field("memo", &kept, "title"), t("K"));
-        // The action refuses: the handler stored its edit before (it is its own unit of work),
-        // and the record has not moved. Never the other way round: a moved record whose edits
-        // were refused.
-        let empty = r.create("memo", vec![("title", t("E")), ("size", n(0))]);
-        let e = r.err(
-            &user(),
-            "memo",
-            "update",
-            r.update(&empty, vec![("state", t("filed")), ("title", t("F"))]),
-        );
-        assert!(e.contains("Nothing to file"), "{e}");
-        assert_eq!(r.field("memo", &empty, "state"), t("open"));
-        assert_eq!(r.field("memo", &empty, "title"), t("F"));
+        assert_eq!(r.field("doc", &id, "state"), t("cancelled"));
+        assert_eq!(r.field("doc", &id, "name"), t("Fine"));
     });
 }
 
+/// The refusal of an update that would mix `command` (run for a change of `field`) with
+/// something else.
+fn not_mixed(e: &str, field: &str, command: &str) {
+    assert!(
+        e.contains(&format!(
+            "`{field}` cannot be changed together with other fields"
+        )) && e.contains(command)
+            && e.contains("separate call"),
+        "{e}"
+    );
+}
+
 #[test]
-fn an_action_that_stores_before_it_answers_is_not_followed_by_another() {
+fn an_action_with_a_wrapper_is_run_by_itself_and_never_mixed() {
     each(|r| {
-        let task = |size: i64| r.create("task", vec![("title", t("T")), ("size", n(size))]);
-        let both = |id: &str| {
+        // The wrapper of `cancel` reads the store before and after the handler it wraps, as the
+        // wrappers of the built-in modules do (a rule of the module, money returned).
+        let seen = Arc::new(Mutex::new(Vec::<String>::new()));
+        let (log, store, model) = (seen.clone(), r.store.clone(), format!("{}_doc", r.p));
+        r.d.around(
+            &r.cmd("doc", "cancel"),
+            Box::new(move |_, input, inner| {
+                let Value::Text(id) = get(input, "id").clone() else {
+                    return Err("missing id".into());
+                };
+                let stored = |f: &str| match store.field(&model, &id, f) {
+                    Some(Value::Text(s)) => s,
+                    _ => String::new(),
+                };
+                log.lock()
+                    .unwrap()
+                    .push(format!("before:{}:{}", stored("state"), stored("name")));
+                let out = inner(input)?;
+                log.lock()
+                    .unwrap()
+                    .push(format!("after:{}:{}", stored("state"), stored("name")));
+                Ok(out)
+            }),
+        );
+        // With an edit: refused before the wrapper has run and before anything is written. The
+        // wrapper would have judged the record without the edit.
+        let id = r.doc(5);
+        let e = r.err(
+            &user(),
+            "doc",
+            "update",
+            r.update(&id, vec![("state", t("cancelled")), ("name", t("Fine"))]),
+        );
+        not_mixed(&e, "state", "doc.cancel");
+        r.untouched(&id, 5);
+        assert!(seen.lock().unwrap().is_empty(), "the action did not run");
+        // A form that saves the whole record and changes nothing but the state: the move alone.
+        r.ok(
+            &user(),
+            "doc",
+            "update",
             r.update(
-                id,
+                &id,
                 vec![
-                    ("priority", t("urgent")),
-                    ("state", t("closed")),
-                    ("title", t("Edited")),
+                    ("state", t("cancelled")),
+                    ("name", t("Doc")),
+                    ("amount", n(5)),
                 ],
-            )
-        };
-        let as_made = |id: &str| {
-            assert_eq!(r.field("task", id, "priority"), t("normal"));
-            assert_eq!(r.field("task", id, "state"), t("open"));
-            assert_eq!(r.field("task", id, "title"), t("T"));
-        };
-        // A wrapper on the last action: the first hands the unit on and the last commits for
-        // both, so the call is still one unit.
+            ),
+        );
+        assert_eq!(
+            *seen.lock().unwrap(),
+            ["before:draft:Doc", "after:cancelled:Doc"]
+        );
+        assert_eq!(r.field("doc", &id, "state"), t("cancelled"));
+        // The edit goes in a call of its own, before the move.
+        let id = r.doc(5);
+        r.ok(
+            &user(),
+            "doc",
+            "update",
+            r.update(&id, vec![("name", t("Fine"))]),
+        );
+        r.ok(
+            &user(),
+            "doc",
+            "update",
+            r.update(&id, vec![("state", t("cancelled"))]),
+        );
+        assert_eq!(r.field("doc", &id, "state"), t("cancelled"));
+        assert_eq!(r.field("doc", &id, "name"), t("Fine"));
+
+        // The wrapper decides what a refusal of its action means, as when the action is called
+        // by itself: here it answers without one, and the state has not moved.
+        r.d.around(
+            &r.cmd("doc", "post"),
+            Box::new(|_, input, inner| inner(input).or(Ok(Value::Null))),
+        );
+        let id = r.doc(0);
+        let v = r.ok(
+            &approver(),
+            "doc",
+            "update",
+            r.update(&id, vec![("state", t("posted"))]),
+        );
+        assert_eq!(get(&v, "state"), &t("draft"));
+        r.untouched(&id, 0);
+
+        // Two moves, one of them with a wrapper: refused, also when it is the last of the two
+        // and both would pass. One at a time they go through.
         r.d.around(
             &r.cmd("task", "close"),
             Box::new(|_, input, inner| inner(input)),
         );
-        let id = task(20);
-        let e = r.err(&user(), "task", "update", both(&id));
-        assert!(e.contains("Too large to close"), "{e}");
-        as_made(&id);
-        let id = task(5);
-        r.ok(&user(), "task", "update", both(&id));
-        assert_eq!(r.field("task", &id, "priority"), t("urgent"));
-        assert_eq!(r.field("task", &id, "state"), t("closed"));
-        assert_eq!(r.field("task", &id, "title"), t("Edited"));
-
-        // A wrapper on the first action: its handler would store the first move and the edit
-        // before the second action has run, and a refusal of the second could not take them
-        // back. The call is refused before anything runs, also when both actions would pass.
-        r.d.around(
-            &r.cmd("task", "escalate"),
-            Box::new(|_, input, inner| inner(input)),
+        let id = r.create("task", vec![("title", t("T")), ("size", n(5))]);
+        let e = r.err(
+            &user(),
+            "task",
+            "update",
+            r.update(&id, vec![("priority", t("urgent")), ("state", t("closed"))]),
         );
-        for size in [20, 5] {
-            let id = task(size);
-            let e = r.err(&user(), "task", "update", both(&id));
-            assert!(
-                e.contains("task.escalate") && e.contains("separate calls"),
-                "{e}"
-            );
-            as_made(&id);
-        }
-        // Sent one at a time, each move with an edit is one unit as before.
-        let id = task(5);
+        not_mixed(&e, "state", "task.close");
+        assert_eq!(r.field("task", &id, "priority"), t("normal"));
+        assert_eq!(r.field("task", &id, "state"), t("open"));
         r.ok(
             &user(),
             "task",
@@ -1027,35 +968,61 @@ fn an_action_that_stores_before_it_answers_is_not_followed_by_another() {
             &user(),
             "task",
             "update",
-            r.update(&id, vec![("state", t("closed")), ("title", t("Two"))]),
+            r.update(&id, vec![("state", t("closed"))]),
         );
         assert_eq!(r.field("task", &id, "priority"), t("urgent"));
         assert_eq!(r.field("task", &id, "state"), t("closed"));
-        assert_eq!(r.field("task", &id, "title"), t("Two"));
+        assert_eq!(r.field("task", &id, "title"), t("One"));
+    });
+}
 
-        // The same for an action whose handler was written by hand: it writes the store itself.
+#[test]
+fn an_action_with_a_handler_of_its_own_is_run_by_itself_and_never_mixed() {
+    each(|r| {
+        // `ticket.close` writes the store itself. With an edit: refused, nothing stored, and the
+        // handler has not run (it would have refused a stuck ticket in its own words).
+        let stuck = r.create("ticket", vec![("title", t("stuck"))]);
+        let e = r.err(
+            &user(),
+            "ticket",
+            "update",
+            r.update(&stuck, vec![("state", t("closed")), ("note", t("n"))]),
+        );
+        not_mixed(&e, "state", "ticket.close");
+        assert_eq!(r.field("ticket", &stuck, "state"), t("open"));
+        assert_eq!(r.field("ticket", &stuck, "note"), Value::Null);
+        // The move alone: the handler runs, and its refusal is the answer.
+        let e = r.err(
+            &user(),
+            "ticket",
+            "update",
+            r.update(&stuck, vec![("state", t("closed"))]),
+        );
+        assert!(e.contains("the ticket is stuck"), "{e}");
+        assert_eq!(r.field("ticket", &stuck, "state"), t("open"));
+        // The move alone and fine: stored, and the answer is the record as moved.
+        let id = r.create("ticket", vec![("title", t("T"))]);
+        let v = r.ok(
+            &user(),
+            "ticket",
+            "update",
+            r.update(&id, vec![("state", t("closed"))]),
+        );
+        assert_eq!(get(&v, "state"), &t("closed"));
+        assert_eq!(r.field("ticket", &id, "state"), t("closed"));
+
+        // With the generic action of the same model (`raise`, which comes after it): refused.
         let id = r.create("ticket", vec![("title", t("T"))]);
         let e = r.err(
             &user(),
             "ticket",
             "update",
-            r.update(
-                &id,
-                vec![
-                    ("state", t("closed")),
-                    ("urgency", t("high")),
-                    ("note", t("n")),
-                ],
-            ),
+            r.update(&id, vec![("state", t("closed")), ("urgency", t("high"))]),
         );
-        assert!(
-            e.contains("ticket.close") && e.contains("separate calls"),
-            "{e}"
-        );
+        not_mixed(&e, "state", "ticket.close");
         assert_eq!(r.field("ticket", &id, "state"), t("open"));
         assert_eq!(r.field("ticket", &id, "urgency"), t("low"));
-        assert_eq!(r.field("ticket", &id, "note"), Value::Null);
-        // The generic action of the same model by itself, with an edit.
+        // The generic action by itself, with an edit, is one unit as on any model.
         r.ok(
             &user(),
             "ticket",
@@ -1068,47 +1035,82 @@ fn an_action_that_stores_before_it_answers_is_not_followed_by_another() {
 }
 
 #[test]
-fn a_commit_that_fails_ends_the_update_whatever_the_wrapper_of_the_action_makes_of_it() {
-    // The commit of the edit and the move is one batch. When the store refuses it, the edit is
-    // gone with the unit: the update must not answer as if it had worked (a wrapper that answers
-    // for the refusal of its action), and the move must not be stored alone (a wrapper that runs
-    // its handler a second time).
-    for again in [false, true] {
-        let (flaky, backend) = obop_storage::testing::Flaky::memory();
-        let r = rig(Store::over(backend));
-        r.d.around(
-            &r.cmd("doc", "post"),
-            Box::new(move |_, input, inner| {
-                let first = inner(input);
-                if again {
-                    first.or_else(|_| inner(input))
-                } else {
-                    first.or(Ok(Value::Null))
-                }
-            }),
+fn an_update_written_by_hand_takes_one_move_and_nothing_else() {
+    each(|r| {
+        // `memo.update` writes the store itself and knows nothing of the actions. A move with
+        // another field: refused before the handler or the action has run (the handler would
+        // have refused the title "no" in its own words).
+        let id = r.create("memo", vec![("title", t("M")), ("size", n(1))]);
+        let e = r.err(
+            &user(),
+            "memo",
+            "update",
+            r.update(&id, vec![("state", t("filed")), ("title", t("no"))]),
         );
-        let id = r.doc(5);
-        let call = || {
-            r.call(
-                &approver(),
-                "doc",
-                "update",
-                r.update(&id, vec![("state", t("posted")), ("name", t("Kept"))]),
-            )
-        };
-        flaky.refuse_applies(1);
-        let out = call();
-        assert!(out.is_err(), "again {again}: {out:?}");
-        assert_eq!(flaky.refused(), 1, "again {again}: one batch, refused once");
-        r.untouched(&id, 5);
-        // Nothing of the call was stored, so it can be sent again, and no number was taken.
-        let v = match call() {
-            Ok(r) => r.value,
-            Err(e) => panic!("again {again}: {e:?}"),
-        };
-        assert_eq!(get(&v, "state"), &t("posted"));
-        assert_eq!(r.field("doc", &id, "state"), t("posted"));
-        assert_eq!(r.field("doc", &id, "name"), t("Kept"));
-        assert_eq!(r.field("doc", &id, "number"), t("D-0001"));
-    }
+        not_mixed(&e, "state", "memo.file");
+        assert_eq!(r.field("memo", &id, "state"), t("open"));
+        assert_eq!(r.field("memo", &id, "title"), t("M"));
+        // The move alone: the action runs by itself, and its refusal is the answer.
+        let empty = r.create("memo", vec![("title", t("E")), ("size", n(0))]);
+        let e = r.err(
+            &user(),
+            "memo",
+            "update",
+            r.update(&empty, vec![("state", t("filed"))]),
+        );
+        assert!(e.contains("Nothing to file"), "{e}");
+        assert_eq!(r.field("memo", &empty, "state"), t("open"));
+        r.ok(
+            &user(),
+            "memo",
+            "update",
+            r.update(&id, vec![("state", t("filed"))]),
+        );
+        assert_eq!(r.field("memo", &id, "state"), t("filed"));
+        // An edit alone goes to the handler as before.
+        r.ok(
+            &user(),
+            "memo",
+            "update",
+            r.update(&id, vec![("title", t("N"))]),
+        );
+        assert_eq!(r.field("memo", &id, "title"), t("N"));
+        let e = r.err(
+            &user(),
+            "memo",
+            "update",
+            r.update(&id, vec![("title", t("no"))]),
+        );
+        assert!(e.contains("the memo says no"), "{e}");
+    });
+}
+
+#[test]
+fn a_commit_that_the_store_refuses_stores_nothing_and_the_call_can_be_sent_again() {
+    // The edit, the move and the number are one batch. When the store refuses it, nothing of
+    // the call is stored and no number is taken.
+    let (flaky, backend) = obop_storage::testing::Flaky::memory();
+    let r = rig(Store::over(backend));
+    let id = r.doc(5);
+    let call = || {
+        r.call(
+            &approver(),
+            "doc",
+            "update",
+            r.update(&id, vec![("state", t("posted")), ("name", t("Kept"))]),
+        )
+    };
+    flaky.refuse_applies(1);
+    let out = call();
+    assert!(out.is_err(), "{out:?}");
+    assert_eq!(flaky.refused(), 1, "one batch, refused once");
+    r.untouched(&id, 5);
+    let v = match call() {
+        Ok(r) => r.value,
+        Err(e) => panic!("{e:?}"),
+    };
+    assert_eq!(get(&v, "state"), &t("posted"));
+    assert_eq!(r.field("doc", &id, "state"), t("posted"));
+    assert_eq!(r.field("doc", &id, "name"), t("Kept"));
+    assert_eq!(r.field("doc", &id, "number"), t("D-0001"));
 }

@@ -256,10 +256,10 @@ struct Registered {
     actor: bool,
     /// The command changes records.
     writes: bool,
-    /// The handler is the generic one of a declared action (`engine::crud::transition`): it goes
-    /// on in the unit of an update that implies it (`engine::implied`). A handler written by
-    /// hand stores what it writes before it answers.
-    generic_action: bool,
+    /// The handler is one of the generated ones, not one a module wrote by hand. Only the
+    /// generated `update` and the generic handler of an action share a unit of work
+    /// (`engine::implied`); a handler written by hand reads and writes the store itself.
+    generated: bool,
     handler: Handler,
 }
 
@@ -885,7 +885,7 @@ impl Dispatcher {
                 envelope: matches!(command, "search" | "bulk_create"),
                 actor,
                 writes: !matches!(command, "get" | "list" | "search"),
-                generic_action: generated && c.transition.is_some(),
+                generated,
                 handler,
             }),
         );
@@ -1419,12 +1419,31 @@ impl Dispatcher {
             let who = p.clone();
             steps.push(engine::implied::Step {
                 command: action.id.clone(),
-                hands_on: action.generic_action && wrapper.is_none(),
+                field: step.field.to_string(),
+                // Generic all the way: the generated `update`, the generic handler of the
+                // action, and no wrapper around it.
+                joins: c.generated
+                    && action.generated
+                    && action.transition.is_some()
+                    && wrapper.is_none(),
                 run: Box::new(move || match &wrapper {
                     Some(w) => w(&who, &i, &|x| (action.handler)(x)),
                     None => (action.handler)(&i),
                 }),
             });
+        }
+        // An `update` whose handler a module wrote by hand knows nothing of the actions and
+        // writes the store itself, so nothing can share a unit with it. Such an update carries
+        // one move and nothing else, or no move: the action then runs first, by itself, and the
+        // handler answers for the record as moved.
+        let mut first = Vec::new();
+        if !c.generated && !steps.is_empty() {
+            let edited = matches!(&input, Value::Map(m)
+                if m.keys().any(|k| k != "id" && !k.starts_with('_')));
+            if let Some(why) = engine::implied::not_mixed(&steps, edited) {
+                return Err(refusal(why, asked.as_ref().unwrap_or(&input)));
+            }
+            first = std::mem::take(&mut steps);
         }
         // One scope per run of a command, also when it implies nothing: a command that a wrapper
         // calls through the dispatcher must not see the actions or the unit of the call around it.
@@ -1438,10 +1457,12 @@ impl Dispatcher {
             }
         }
         let sent = asked.as_ref().unwrap_or(&input);
+        for step in &first {
+            (step.run)().map_err(|m| refusal(m, sent))?;
+        }
         let out = self.invoke(c, p, &input).map_err(|m| refusal(m, sent))?;
-        // An `update` written by hand does not know of the actions and has not taken them. They
-        // run now, after it: the edits are stored by then, so a refusal of an action leaves them
-        // (two units of work), and never a moved record with its edits refused.
+        // The generated `update` has taken the actions and run them. Should a wrapper around it
+        // have answered without calling it, the move it was asked for still happens.
         for step in engine::implied::take_steps() {
             (step.run)().map_err(|m| refusal(m, sent))?;
         }

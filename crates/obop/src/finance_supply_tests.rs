@@ -659,3 +659,59 @@ fn verifying_records_who_and_when_and_an_approved_vat_report_is_frozen() {
         json!({ "id": report }),
     );
 }
+
+#[test]
+fn cancelling_a_confirmed_order_takes_no_correction_in_the_same_update() {
+    // D48 with D77: the other fields of an update are edits of the record as it was, and a
+    // confirmed order is frozen. The update that cancels it cannot also change a field that is
+    // fixed there. Until 2026-11-15 the cancel ran first, in a transaction of its own, and the
+    // edit landed on the cancelled order. Two calls do it: cancel, then correct.
+    let app = app_with(&[]);
+    let sam = user(
+        "sam",
+        &["base.user", "sales.user", "invoicing.user", "product.user"],
+    );
+    let party = id(&ok(&app, &sam, "party.create", json!({"name": "Acme"})));
+    let order = id(&ok(
+        &app,
+        &sam,
+        "sale_order.create",
+        json!({"party_id": party, "currency": "EUR"}),
+    ));
+    ok(
+        &app,
+        &sam,
+        "sale_order_line.create",
+        json!({"order_id": order, "description": "Work", "quantity": 1, "unit_price_minor": 5000}),
+    );
+    ok(&app, &sam, "sale_order.confirm", json!({ "id": order }));
+    let state_and_currency = || {
+        let o = get(&app, &sam, "sale_order", &order);
+        (
+            o["state"].as_str().unwrap_or_default().to_string(),
+            o["currency"].as_str().unwrap_or_default().to_string(),
+        )
+    };
+    let e = refused(
+        &app,
+        &sam,
+        "sale_order.update",
+        json!({"id": order, "state": "cancelled", "currency": "SEK"}),
+        "immutable_record",
+    );
+    assert!(e.contains("currency"), "{e}");
+    assert_eq!(state_and_currency(), ("confirmed".into(), "EUR".into()));
+    ok(
+        &app,
+        &sam,
+        "sale_order.update",
+        json!({"id": order, "state": "cancelled"}),
+    );
+    ok(
+        &app,
+        &sam,
+        "sale_order.update",
+        json!({"id": order, "currency": "SEK"}),
+    );
+    assert_eq!(state_and_currency(), ("cancelled".into(), "SEK".into()));
+}

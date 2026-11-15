@@ -4,37 +4,24 @@
 //! change. The other fields of the call are edits of the record as it was, so the generated
 //! `update` checks and writes them into its unit first and then, without committing, offers the
 //! unit to each action in turn ([`run`]). The generic handler of an action takes it up
-//! ([`adopt`]), runs on the record as edited, and commits the edits and its own writes in one
-//! storage transaction. A refusal of any part drops the unit: nothing is stored, no number of a
-//! sequence is taken, and the caller gets that refusal.
+//! ([`adopt`]), runs on the record as edited, and hands the unit on to the action after it; the
+//! last one commits the edits and every action's writes in one storage transaction. A refusal
+//! of any part drops the unit: nothing is stored, no number of a sequence is taken, and the
+//! caller gets that refusal.
 //!
-//! Each action still runs through its own wrapper (`Dispatcher::around`), which may do what
-//! cannot be taken back once the handler it wraps has answered (return money, D62). So an action
-//! with a wrapper commits the unit before it answers, and so does the last action of the call; an
-//! action without one that is followed by another hands the unit on, and the last one commits for
-//! all. An action that stores its move before it answers (it has a wrapper, or its handler was
-//! written by hand) can therefore only be the last one: an update that would run another action
-//! after it is refused before anything is written, because a refusal of the later action could
-//! not take the earlier move back.
-//!
-//! What is left outside the one transaction, and where the store can end up with a part:
-//!
-//! - An action whose handler was written by hand writes the store itself and cannot take the
-//!   unit up. It runs after every check of the edits has passed, and the `update` commits the
-//!   edits when it has answered: two transactions. A refusal of the action stores nothing. If
-//!   the commit of the edits then fails (a fault of the store, or a uniqueness race that only
-//!   the index decides), the move is stored without the edits.
-//! - A wrapper that refuses after its handler has answered: the edits and the move are stored,
-//!   as the move is when the action is called by itself, and the caller gets the refusal. The
-//!   files the edits name are held all the same ([`Refused::stored`]).
-//!
-//! A commit of the joined unit that fails takes the edits of the update with it. It ends the
-//! update with that refusal, whatever the wrapper of the action makes of it, and the action
-//! cannot be run again in the same call ([`lost`]).
+//! Only an action that is generic all the way joins the unit ([`Step::joins`]): its handler is
+//! the generic one and no module has put a wrapper around it. Code a module wrote by hand (a
+//! wrapper, a handler of its own) reads and writes the store directly. It would judge the record
+//! without the edits the unit holds, the action would not see what the wrapper wrote, and what
+//! it stores before it answers (a move, money returned, D62) could not be taken back when a
+//! later part refused. So such an action is run by itself, as a call of the action runs it, and
+//! an update that would mix it with an edit or with another action is refused by the generated
+//! `update` before anything is written: the caller sends the move alone and the rest in another
+//! call.
 //!
 //! A thread-local carries the steps and the unit, as the write context, the fault scope and the
-//! language of a request are carried: the handlers and wrappers between the dispatcher and the
-//! engine take a `&Value` and need no new argument. A scope belongs to one run of one command
+//! language of a request are carried: the handlers between the dispatcher and the engine take a
+//! `&Value` and need no new argument. A scope belongs to one run of one command
 //! (`Dispatcher::run` opens it), so a command that a wrapper calls through the dispatcher never
 //! sees the steps or the unit of the call around it.
 
@@ -47,11 +34,13 @@ use std::marker::PhantomData;
 /// wrapper, as the principal of the call, with the input the guard built for it.
 pub(crate) struct Step {
     pub run: Box<dyn Fn() -> R<Value>>,
-    /// `model.command` of the action, for a refusal that names it.
+    /// `model.command` of the action and the governed field whose change implies it, for a
+    /// refusal that names them.
     pub command: String,
-    /// The action can hand the unit on to the action after it: its handler is the generic one
-    /// and it has no wrapper. Any other action stores its move before it answers.
-    pub hands_on: bool,
+    pub field: String,
+    /// The action goes on in the unit of the update: its handler is the generic one and it has
+    /// no wrapper. Any other action is run by itself.
+    pub joins: bool,
 }
 
 /// The unit of an update on offer to the action that runs now: for the record `model` `id`.
@@ -61,13 +50,6 @@ struct Offer {
     held: Held,
 }
 
-/// The unit of an update whose commit failed in the action of the record `model` `id`.
-struct Lost {
-    model: String,
-    id: String,
-    why: String,
-}
-
 #[derive(Default)]
 struct Scope {
     /// The actions of this call, until the handler of the update takes them.
@@ -75,9 +57,6 @@ struct Scope {
     offer: Option<Offer>,
     /// The action that runs now is followed by another: it hands the unit on.
     hand_on: bool,
-    /// An action committed the unit: the edits of the update are stored with its move.
-    stored: bool,
-    lost: Option<Lost>,
 }
 
 thread_local! {
@@ -113,7 +92,8 @@ pub(crate) fn open(steps: Vec<Step>) -> Open {
 }
 
 /// The actions the update of this call implies. They are handed out once: to the generated
-/// `update`, which runs them inside its unit of work ([`run`]).
+/// `update`, which runs them inside its unit of work ([`run`]) or, for an action that does not
+/// join a unit, by itself.
 pub(crate) fn take_steps() -> Vec<Step> {
     CURRENT.with(|c| {
         c.borrow_mut()
@@ -123,47 +103,44 @@ pub(crate) fn take_steps() -> Vec<Step> {
     })
 }
 
-/// What the actions of an update left when all of them answered.
-pub(crate) struct Ran {
-    /// What no action committed, for the update to commit.
-    pub left: Option<Held>,
-    /// What each action answered.
-    pub answers: Vec<Value>,
-}
-
-/// The refusal that ended the actions of an update.
-pub(crate) struct Refused {
-    pub why: String,
-    /// An action had committed the unit when the refusal came (its wrapper refused after its
-    /// handler had answered): the edits of the update are stored with the move.
-    pub stored: bool,
+/// The refusal of an update that would mix an action that is run by itself with an edit or with
+/// another action. `None` when every action joins the unit, or when the one action is all the
+/// update does.
+pub(crate) fn not_mixed(steps: &[Step], edited: bool) -> Option<String> {
+    let alone = steps.iter().find(|s| !s.joins)?;
+    if !edited && steps.len() == 1 {
+        return None;
+    }
+    Some(format!(
+        "`{field}` cannot be changed together with other fields in one update: the change runs \
+         {command}, which is not part of the update's unit of work, so the call could not be \
+         refused as a whole. Send `{field}` by itself and the other changes in a separate call",
+        field = alone.field,
+        command = alone.command,
+    ))
 }
 
 /// Run the actions an update of the record `model` `id` implies, each with the unit `held` on
-/// offer. At the first refusal the unit is dropped and the refusal returned.
-pub(crate) fn run(steps: &[Step], model: &str, id: &str, held: Held) -> Result<Ran, Refused> {
-    // Every action but the last must hand the unit on. One that stores its move before it
-    // answers would leave that move stored when an action after it refused, so such a call is
-    // refused here, before any action has run.
-    let last = steps.len().saturating_sub(1);
-    if let Some(i) = steps[..last].iter().position(|s| !s.hands_on) {
-        let (first, next) = (&steps[i].command, &steps[i + 1].command);
-        return Err(Refused {
-            why: format!(
-                "one update cannot run {first} and {next} together: {first} stores its change \
-                 before it answers, so the update could not be refused as a whole after it; \
-                 send the changes in separate calls"
-            ),
-            stored: false,
-        });
-    }
+/// offer; every one of them joins the unit ([`not_mixed`]). Returns what no action committed
+/// (for the update to commit) and what each action answered. At the first refusal the unit is
+/// dropped and the refusal returned.
+pub(crate) fn run(
+    steps: &[Step],
+    model: &str,
+    id: &str,
+    held: Held,
+) -> R<(Option<Held>, Vec<Value>)> {
+    debug_assert!(
+        steps.iter().all(|s| s.joins),
+        "only joining actions share a unit"
+    );
     let mut held = Some(held);
     let mut answers = Vec::with_capacity(steps.len());
     for (i, step) in steps.iter().enumerate() {
         // Nothing of the scope is borrowed while the action runs: it reads the scope itself.
         held = CURRENT.with(|c| match c.borrow_mut().as_mut() {
             Some(s) => {
-                s.hand_on = i < last;
+                s.hand_on = i + 1 < steps.len();
                 s.offer = held.take().map(|held| Offer {
                     model: model.to_string(),
                     id: id.to_string(),
@@ -176,34 +153,17 @@ pub(crate) fn run(steps: &[Step], model: &str, id: &str, held: Held) -> Result<R
             None => held.take(),
         });
         let answer = (step.run)();
-        let (back, stored, lost) = CURRENT.with(|c| match c.borrow_mut().as_mut() {
-            Some(s) => {
+        if let Some(back) = CURRENT.with(|c| {
+            c.borrow_mut().as_mut().and_then(|s| {
                 s.hand_on = false;
-                (
-                    s.offer.take().map(|o| o.held),
-                    s.stored,
-                    s.lost.take().map(|l| l.why),
-                )
-            }
-            None => (None, false, None),
-        });
-        if let Some(back) = back {
+                s.offer.take().map(|o| o.held)
+            })
+        }) {
             held = Some(back);
         }
-        // The commit of the unit failed and the edits went with it: the update ends with that
-        // refusal, also when the wrapper of the action answered for it.
-        if let Some(why) = lost {
-            return Err(Refused { why, stored: false });
-        }
-        match answer {
-            Ok(answer) => answers.push(answer),
-            Err(why) => return Err(Refused { why, stored }),
-        }
+        answers.push(answer?);
     }
-    Ok(Ran {
-        left: held,
-        answers,
-    })
+    Ok((held, answers))
 }
 
 /// A unit taken up by an action, and what the action does with it when it is done.
@@ -215,39 +175,27 @@ pub(crate) struct Adopted {
 
 /// For the generic handler of an action on the record `model` `id`: the unit of the update that
 /// implies it, when there is one on offer for that record. The action goes on in that unit.
-///
-/// Refused when the commit of that unit has failed in this call ([`lost`]): a wrapper that runs
-/// its handler again would otherwise store the move without the edits of the update.
-pub(crate) fn adopt(model: &str, id: &str) -> R<Option<Adopted>> {
+pub(crate) fn adopt(model: &str, id: &str) -> Option<Adopted> {
     CURRENT.with(|c| {
         let mut current = c.borrow_mut();
-        let Some(scope) = current.as_mut() else {
-            return Ok(None);
-        };
-        if let Some(lost) = scope
-            .lost
-            .as_ref()
-            .filter(|l| l.model == model && l.id == id)
-        {
-            return Err(lost.why.clone());
-        }
+        let scope = current.as_mut()?;
         if !scope
             .offer
             .as_ref()
             .is_some_and(|o| o.model == model && o.id == id)
         {
-            return Ok(None);
+            return None;
         }
-        Ok(scope.offer.take().map(|o| Adopted {
-            held: o.held,
+        let held = scope.offer.take()?.held;
+        Some(Adopted {
+            held,
             hand_on: scope.hand_on,
-        }))
+        })
     })
 }
 
 /// Give a unit that was taken up back to the update: with the action's writes, when another
-/// action follows, or as it came, when the action was refused (its wrapper decides what the
-/// refusal means for the call).
+/// action follows, or as it came, when the action was refused.
 pub(crate) fn give_back(model: &str, id: &str, held: Held) {
     CURRENT.with(|c| {
         if let Some(scope) = c.borrow_mut().as_mut() {
@@ -255,30 +203,6 @@ pub(crate) fn give_back(model: &str, id: &str, held: Held) {
                 model: model.to_string(),
                 id: id.to_string(),
                 held,
-            });
-        }
-    });
-}
-
-/// The action committed the unit it took up: the edits of the update are stored with its move.
-pub(crate) fn stored() {
-    CURRENT.with(|c| {
-        if let Some(scope) = c.borrow_mut().as_mut() {
-            scope.stored = true;
-        }
-    });
-}
-
-/// The commit of the unit the action of the record `model` `id` took up failed with `why`. The
-/// edits of the update went with the unit, so the update ends with this refusal ([`run`]) and
-/// the action is not run again in this call ([`adopt`]).
-pub(crate) fn lost(model: &str, id: &str, why: &str) {
-    CURRENT.with(|c| {
-        if let Some(scope) = c.borrow_mut().as_mut() {
-            scope.lost = Some(Lost {
-                model: model.to_string(),
-                id: id.to_string(),
-                why: why.to_string(),
             });
         }
     });

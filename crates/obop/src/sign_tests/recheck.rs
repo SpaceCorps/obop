@@ -1330,3 +1330,56 @@ async fn a_guess_at_the_evidence_is_refused_the_same_whether_it_is_right_or_wron
         .await;
     assert_eq!(s, 200, "{v}");
 }
+
+#[tokio::test]
+async fn a_send_is_not_mixed_with_a_change_of_what_is_sent() {
+    // `send` has a wrapper that judges the request as it is stored (a template request with an
+    // address). An update that moves the state to `sent` and swaps the template for a Document in
+    // the same call would pass that check and be stored as a Document request that `send` sent:
+    // no hash, no held copy, none of the checks of `send_document`. An action with a wrapper is
+    // run by itself (D48), so the call is refused and the request is as it was.
+    let f = fixture().await;
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_template/create",
+            json!({"name": "Employment (test)", "body": "text"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let tpl = v["value"]["id"].as_str().unwrap().to_string();
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_request/create",
+            json!({"title": "By template", "template_id": tpl, "signer_name": "Jane Test",
+                   "signer_email": "jane@example.test"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    let id = v["value"]["id"].as_str().unwrap().to_string();
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_request/update",
+            json!({"id": id, "state": "sent", "document_id": f.doc, "template_id": null}),
+        )
+        .await;
+    assert_eq!(s, 400, "{v}");
+    assert!(err(&v).contains("separate call"), "{v}");
+    let after = f.record("sign_request", &id);
+    assert_eq!(after["state"], "draft");
+    assert_eq!(after["template_id"], tpl.as_str());
+    assert!(after.get("document_id").is_none_or(J::is_null));
+    assert!(after.get("sent_on").is_none_or(J::is_null));
+    // The move alone still sends the template request.
+    let (s, v) = f
+        .api(
+            "mia",
+            "/api/sign_request/update",
+            json!({"id": id, "state": "sent"}),
+        )
+        .await;
+    assert_eq!(s, 200, "{v}");
+    assert_eq!(f.record("sign_request", &id)["state"], "sent");
+}

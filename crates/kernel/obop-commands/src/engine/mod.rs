@@ -296,6 +296,27 @@ mod tests {
         u.spend(MAX_EFFECT_RECORDS * 10).unwrap();
     }
 
+    /// An action that goes on in the unit of an update may write as many records as when it is
+    /// called by itself: what the update wrote before it does not count against its budget.
+    #[test]
+    fn a_unit_that_goes_on_with_a_budget_of_its_own_counts_from_where_it_took_over() {
+        use obop_registry::rules::MAX_EFFECT_RECORDS;
+        let eng = crate::Dispatcher::new().engine(&Store::new());
+        let held = |n: usize| {
+            let mut u = eng.unit();
+            u.spend(n).unwrap();
+            u.hold()
+        };
+        // Carried as it is, the three writes count.
+        let mut u = eng.unit().resume(held(3));
+        u.spend(MAX_EFFECT_RECORDS - 3).unwrap();
+        assert!(u.spend(1).is_err());
+        // With a budget of its own, the cap is counted from the three.
+        let mut u = eng.unit().resume(held(3)).own_budget();
+        u.spend(MAX_EFFECT_RECORDS).unwrap();
+        assert!(u.spend(1).is_err());
+    }
+
     /// Every unit of work, in every handler, starts from the engine (`Engine::unit*`), and the
     /// engine is built in one place (`Dispatcher::engine`). A path that built its own would be a
     /// unit the next change to the constructor does not reach, in the one place where the request
