@@ -303,9 +303,9 @@ fn core_version_requirement_kinds_limits() {
 #[test]
 fn a_bundled_package_that_uses_a_limit_must_declare_the_core_that_has_them() {
     // The bundled packages keep `^0.2` (OR-35 h) unless they use a limit key, as `accounting_se`
-    // does (`^0.2.1`). Any of them that gains a limit key must declare at least the core that has
-    // the keys, so that this test fails if one forgets.
-    let first = Version::new(0, 2, LIMITS_CORE_PATCH);
+    // does (`^0.2.1`), or a later key (the D95 hints need `^0.2.2`). Any of them that gains a limit
+    // key must refuse the cores before the one that has the keys, so that this test fails if one
+    // forgets.
     let before = Version::new(0, 2, LIMITS_CORE_PATCH - 1);
     let mut checked = 0;
     for listed in Bundled.list().unwrap() {
@@ -324,7 +324,7 @@ fn a_bundled_package_that_uses_a_limit_must_declare_the_core_that_has_them() {
         );
         if uses {
             assert!(
-                req.matches(&first) && !req.matches(&before),
+                !req.matches(&before),
                 "{} uses field limits and declares {}",
                 listed.id,
                 m.module.requires_core

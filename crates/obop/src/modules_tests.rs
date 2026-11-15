@@ -92,14 +92,14 @@ fn every_bundled_package_declares_its_metadata() {
         let id = &x.id;
         assert_eq!(x.license, "Apache-2.0", "{id}: first-party licence (OR-1)");
         assert!(obop_pkg::spdx::check(&x.license).is_ok(), "{id}");
-        // The bundled packages keep `^0.2` (OR-35 h, OR-37 b). The one exception is a package that
-        // uses the field-limit keys (D90), which only core 0.2.1 parses: it writes `^0.2.1`.
-        let expected = if id == "accounting_se" {
-            "^0.2.1"
-        } else {
-            "^0.2"
-        };
-        assert_eq!(x.requires_core, expected, "{id}");
+        // The bundled packages keep `^0.2` (OR-35 h, OR-37 b) unless they use keys of a later
+        // patch: the field-limit keys (D90) need `^0.2.1`, the UI hints and guards (D95, D77)
+        // `^0.2.2` (limits_tests checks that a package with limits refuses core 0.2.0).
+        assert!(
+            ["^0.2", "^0.2.1", "^0.2.2"].contains(&x.requires_core.as_str()),
+            "{id}: {}",
+            x.requires_core
+        );
         assert_eq!(x.author, "SpaceCorps", "{id}");
         assert!(
             !x.summary.is_empty() && x.summary.chars().count() <= 140,
@@ -151,7 +151,7 @@ fn every_bundled_package_declares_its_metadata() {
     let ts = listing.iter().find(|l| l.id == "timesheets").unwrap();
     assert_eq!(ts.license, "Apache-2.0");
     assert_eq!(ts.dependencies["projects"], ">=0.3, <1");
-    assert_eq!(ts.requires_core, "^0.2");
+    assert_eq!(ts.requires_core, "^0.2.2");
 }
 
 #[test]
@@ -363,7 +363,7 @@ fn the_check_command_applies_the_catalogue_rules_and_reports_warnings() {
             "built-in module that versions with the core",
         ),
         (
-            timesheets.replace("requires_core = \"^0.2\"", "requires_core = \">=9, <10\""),
+            timesheets.replace("requires_core = \"^0.2.2\"", "requires_core = \">=9, <10\""),
             "needs core >=9",
         ),
         (
@@ -396,7 +396,7 @@ fn the_check_command_applies_the_catalogue_rules_and_reports_warnings() {
     // An upload with a core mismatch is a warning for `check` (the author may prepare for a
     // later core) and an error at install time.
     let r = obop_pkg::check_package(
-        &timesheets.replace("requires_core = \"^0.2\"", "requires_core = \">=9, <10\""),
+        &timesheets.replace("requires_core = \"^0.2.2\"", "requires_core = \">=9, <10\""),
         &builtin,
         false,
     );
@@ -425,9 +425,9 @@ fn the_tree_list_and_plan_commands_run() {
     assert!(modules_plan(&o, "nope").is_err());
     let app = App::new();
     let t = app.installer.tree(Some("timesheets")).unwrap();
-    assert!(t.contains("timesheets 0.3.1"), "{t}");
+    assert!(t.contains("timesheets 0.4.0"), "{t}");
     assert!(
-        t.contains("projects >=0.3, <1  [not installed, marketplace offers 0.4.0]"),
+        t.contains("projects >=0.3, <1  [not installed, marketplace offers 0.5.0]"),
         "{t}"
     );
     let t = app.installer.tree(Some("field_service")).unwrap();
