@@ -93,5 +93,9 @@ describe("registrations", () => {
     expect(appPages.inventory.use(ctx("inventory", ["inventory_item"], "overview")).overview).toBe(
       true,
     );
+    // The launcher opens Inventory at its own address: the warehouse home, not the generic one.
+    const stock = ["inventory_item", "inventory_move"];
+    expect(appPages.inventory.use(ctx("inventory", stock, "")).page).toBeTruthy();
+    expect(appPages.inventory.use(ctx("inventory", stock, "inventory_move")).page).toBe(undefined);
   });
 });
