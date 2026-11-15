@@ -210,7 +210,8 @@ pub struct Pre {
     pub command: String,
     pub input: Value,
     /// The governed field the action sets. When the action has a registered handler the field
-    /// is dropped from the update, which would only repeat the write.
+    /// is dropped from the update, which would only repeat the write. So is every other field of
+    /// `input` but `id` (the fields the action needs, D95).
     pub field: &'static str,
 }
 
@@ -1385,6 +1386,11 @@ impl Dispatcher {
             let action = self.commands.read().unwrap().get(&step.command).cloned();
             if let Some(action) = action {
                 let mut i = step.input;
+                // The fields the action needs (D95) travel with it and are written by it.
+                let carried: Vec<String> = match &i {
+                    Value::Map(m) => m.keys().filter(|k| *k != "id").cloned().collect(),
+                    _ => Vec::new(),
+                };
                 if let Value::Map(m) = &mut i {
                     m.insert("_caller".into(), Value::text(&p.id));
                     if action.actor {
@@ -1396,6 +1402,9 @@ impl Dispatcher {
                 self.invoke(&action, p, &i).map_err(|m| refusal(m, &i))?;
                 if let Value::Map(m) = &mut input {
                     m.remove(step.field);
+                    for k in &carried {
+                        m.remove(k.as_str());
+                    }
                 }
             }
         }

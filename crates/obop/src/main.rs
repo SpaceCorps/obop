@@ -4183,12 +4183,44 @@ mod bundled_packages {
                 from,
                 "{cmd} refused, state unchanged"
             );
-            // The holder of the group also holds the app's user group, as a manager does: an
-            // action that stamps its own record (a D95 `set` effect) writes it under the model's
-            // write group.
-            let allowed = Principal::user("a", &[user_group.as_str(), group]);
+            // The action's own group is enough: a D95 `set` effect that stamps the record the
+            // action runs on is part of the action, not a write under the model's write group.
+            let allowed = Principal::user("a", &[group]);
             call(&app, &allowed, &cmd, by_id(&rec)).unwrap_or_else(|e| panic!("{cmd}: {e:?}"));
         }
+    }
+
+    /// An `update` that moves a governed field runs the action it implies with the fields that
+    /// action needs (D95 `needs`) taken from the same call: one call is enough for an agent.
+    #[test]
+    fn an_update_that_moves_the_state_gives_the_action_what_it_needs() {
+        let app = App::new();
+        let admin = Principal::user("root", &[ADMIN_GROUP]);
+        for m in install_order(&app, all_manifests()) {
+            app.installer
+                .install(&Bundled.fetch(&m.module.id).unwrap(), "marketplace", "test")
+                .unwrap();
+        }
+        let mut mk = Maker {
+            app: &app,
+            meta: models_of(&app, &admin),
+            pkg_models: BTreeSet::new(),
+            pkg_user: admin.clone(),
+            admin: admin.clone(),
+            made: HashMap::new(),
+        };
+        let rec = mk.fresh("helpdesk_ticket", "in_progress");
+        let mut fields = BTreeMap::new();
+        fields.insert("id".to_string(), Value::text(&rec));
+        fields.insert("state".to_string(), Value::text("resolved"));
+        fields.insert("resolution".to_string(), Value::text("New toner"));
+        call(&app, &admin, "helpdesk_ticket.update", Value::Map(fields))
+            .unwrap_or_else(|e| panic!("update with the needs: {e:?}"));
+        assert_eq!(state_of(&app, "helpdesk_ticket", &rec), "resolved");
+        assert_eq!(
+            app.store.field("helpdesk_ticket", &rec, "resolution"),
+            Some(Value::text("New toner"))
+        );
     }
 
     /// A dashboard and its widgets round-trip with the documented schema, and a widget kind or

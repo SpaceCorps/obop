@@ -222,3 +222,11 @@ write_group = "appointments.user"
   [model.action.ui]
   danger = true
   confirm = "Record that the attendee did not come?"
+
+[[migration]]
+from = "<0.3.0"
+op = "set_default"
+model = "appointments_resource"
+field = "active"
+value = true
+description = "Resources whose active flag was never set become active, so they can still be booked"

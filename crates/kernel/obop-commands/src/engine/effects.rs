@@ -398,8 +398,11 @@ impl Runner<'_> {
                     for (k, s) in set {
                         patch.insert((*k).into(), vars.value_for(s, &target, k)?);
                     }
+                    // A `set` on the record itself is part of the action, which its own group
+                    // already authorises; any other record needs the model's write group.
+                    let own = *t == Target::This;
                     for tid in ids {
-                        self.change(unit, &target, &tid, patch.clone())?;
+                        self.change_as(unit, &target, &tid, patch.clone(), own)?;
                     }
                 }
                 EffectKind::Adjust {
@@ -630,15 +633,23 @@ impl Runner<'_> {
     }
 
     /// Change fields of a record the way the generated `update` does, for the caller.
-    fn change(
+    fn change(&self, unit: &mut Unit<'_>, def: &Arc<ModelDef>, id: &str, patch: Fields) -> R<()> {
+        self.change_as(unit, def, id, patch, false)
+    }
+
+    /// `change`; `own` is a `set` effect on the record the action runs on (D95), which the
+    /// action's group authorises, so the model's write group is not asked for. The kinds, the
+    /// limits and the frozen checks still apply.
+    fn change_as(
         &self,
         unit: &mut Unit<'_>,
         def: &Arc<ModelDef>,
         id: &str,
         mut patch: Fields,
+        own: bool,
     ) -> R<()> {
         self.writable(def)?;
-        if !self.actor.holds(def.write_group) {
+        if !own && !self.actor.holds(def.write_group) {
             return Err(format!(
                 "changing a {} needs the {} group",
                 def.name, def.write_group
