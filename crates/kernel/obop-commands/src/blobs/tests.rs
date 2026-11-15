@@ -1036,3 +1036,61 @@ fn a_model_without_row_rules_is_read_by_everyone_who_may_read_the_model() {
     .unwrap();
     assert_eq!(e.svc.get(&bob, &b, None).unwrap().bytes, pdf(7));
 }
+
+#[test]
+fn a_move_with_a_wrapper_is_not_mixed_with_a_new_file_and_nothing_of_the_call_is_stored() {
+    let e = env();
+    let ann = user("ann");
+    // An action a module wraps is run by itself (D48, `engine::implied`): an update that brings
+    // a new image with the move is refused before anything is written, so no record names a file
+    // that nothing holds.
+    e.d.around("item.publish", Box::new(|_, input, inner| inner(input)));
+    let b1 = up(&e, &ann, "item.photo", &fx::png(64, 48, 1), "image/png");
+    let r = call(
+        &e,
+        &ann,
+        "item.create",
+        map(&[("title", "A"), ("photo", &b1)]),
+    )
+    .unwrap();
+    let rec = id_of_row(&r);
+    let b2 = up(&e, &ann, "item.photo", &fx::png(64, 48, 2), "image/png");
+    let out = call(
+        &e,
+        &ann,
+        "item.update",
+        map(&[("id", &rec), ("state", "published"), ("photo", &b2)]),
+    );
+    assert!(
+        out.is_err() && format!("{out:?}").contains("separate call"),
+        "{out:?}"
+    );
+    let stored = e.s.backend().get("item", &rec).unwrap().unwrap();
+    assert_eq!(stored["state"], "draft");
+    assert_eq!(stored["photo"], b1.as_str());
+    assert_eq!(e.s.blobs().info(&b1).unwrap().unwrap().owners.len(), 1);
+    assert!(e.s.blobs().info(&b2).unwrap().unwrap().owners.is_empty());
+    // One at a time: the image, then the move.
+    call(
+        &e,
+        &ann,
+        "item.update",
+        map(&[("id", &rec), ("photo", &b2)]),
+    )
+    .unwrap();
+    call(
+        &e,
+        &ann,
+        "item.update",
+        map(&[("id", &rec), ("state", "published")]),
+    )
+    .unwrap();
+    let stored = e.s.backend().get("item", &rec).unwrap().unwrap();
+    assert_eq!(stored["state"], "published");
+    assert_eq!(stored["photo"], b2.as_str());
+    assert_eq!(e.s.blobs().info(&b2).unwrap().unwrap().owners.len(), 1);
+    assert!(
+        e.s.blobs().info(&b1).unwrap().is_none(),
+        "nobody holds the old image"
+    );
+}

@@ -115,9 +115,9 @@ fn a_failed_call_prints_the_error_line_the_cli_guide_documents() {
     );
 }
 
-/// A call whose store refuses exits 75 and says what the refusal left: nothing changed when the
-/// first batch was refused, part of it applied when the second was (the stage moves with the first
-/// batch of `lead update stage=won`), nothing refused at all when the batch is past the last one.
+/// A call whose store refuses exits 75 and says what the refusal left: nothing changed when its
+/// batch was refused, and nothing is refused at all when the armed batch is past the last one (a
+/// `lead update` that moves the stage and edits a field is one batch).
 #[test]
 fn a_refused_call_of_the_binary_exits_75_and_says_what_was_changed() {
     let db = Dir::new("call");
@@ -141,8 +141,12 @@ fn a_refused_call_of_the_binary_exits_75_and_says_what_was_changed() {
     );
     assert_ne!(stage(&db, &id), "won");
 
-    // The second batch refused: the first committed, and the line says so.
-    let id = new_lead(&db, "Refused after the first batch");
+    // A move of the stage with an edit is one batch (D48: the move and the edits of an update are
+    // one unit of work), so a refusal armed for a second batch never comes and the call succeeds
+    // with both stored. No command a dev token may call takes two batches any more: the line for
+    // a call that was applied in part is tested in `error_seam_tests` of the binary's own crate,
+    // where a wrapper adds the second batch.
+    let id = new_lead(&db, "One batch");
     let o = call(
         &db,
         Some("apply:1"),
@@ -154,15 +158,8 @@ fn a_refused_call_of_the_binary_exits_75_and_says_what_was_changed() {
             "contact_name=Zed",
         ],
     );
-    assert_eq!(o.status.code(), Some(75), "{}", stderr(&o));
-    let line = error_line(&o);
-    assert!(
-        line.starts_with("error: storage_busy: ")
-            && line
-                .ends_with("(part of it was applied: do not repeat it blindly; try again in 1 s)"),
-        "{line}"
-    );
-    assert_eq!(stage(&db, &id), "won", "it said part of it was applied");
+    assert_eq!(o.status.code(), Some(0), "{}", stderr(&o));
+    assert_eq!(stage(&db, &id), "won");
 
     // A refusal beyond the last batch of the call touches nothing: it succeeds.
     let id = new_lead(&db, "Never refused");
@@ -243,8 +240,9 @@ fn a_refused_import_of_the_binary_exits_75_and_creates_nothing() {
     assert!(after.contains("Imported one") && after.contains("Imported two"));
 }
 
-/// The stdio MCP server: one line in, one tool error out, `partial` when the first batch of the
-/// call had committed. The server takes the line from standard input, as a client sends it.
+/// The stdio MCP server: one line in, one tool error out that says nothing was applied when the
+/// batch of the call was refused. The server takes the line from standard input, as a client sends
+/// it.
 #[test]
 fn a_refused_tool_call_of_the_binary_says_what_was_applied() {
     use std::io::Write;
@@ -288,14 +286,11 @@ fn a_refused_tool_call_of_the_binary_says_what_was_applied() {
     assert_eq!(b["retry_after"], 1);
     assert_ne!(stage(&db, &id), "won");
 
-    let id = new_lead(&db, "Stdio refused after the first batch");
+    // The move and the edit are one batch (D48), so a refusal armed for a second one never comes.
+    // The answer for a call that was applied in part is tested in `error_seam_tests` of the
+    // binary's own crate, where a wrapper adds the second batch.
+    let id = new_lead(&db, "Stdio one batch");
     let reply = tool_call("apply:1", &id);
-    assert_eq!(reply["result"]["isError"], true, "{reply}");
-    let b = &reply["result"]["structuredContent"];
-    assert_eq!(
-        (b["code"].as_str(), b["applied"].as_str()),
-        (Some("storage_busy"), Some("partial")),
-        "{reply}"
-    );
-    assert_eq!(stage(&db, &id), "won", "it said part of it was applied");
+    assert_eq!(reply["result"]["isError"], false, "{reply}");
+    assert_eq!(stage(&db, &id), "won");
 }

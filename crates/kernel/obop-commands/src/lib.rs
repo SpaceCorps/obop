@@ -204,7 +204,7 @@ pub struct Verdict {
 }
 
 /// An action the dispatcher runs ahead of an `update` that moves a governed field.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Pre {
     /// Command id, `model.action`.
     pub command: String,
@@ -256,6 +256,10 @@ struct Registered {
     actor: bool,
     /// The command changes records.
     writes: bool,
+    /// The handler is one of the generated ones, not one a module wrote by hand. Only the
+    /// generated `update` and the generic handler of an action share a unit of work
+    /// (`engine::implied`); a handler written by hand reads and writes the store itself.
+    generated: bool,
     handler: Handler,
 }
 
@@ -807,9 +811,7 @@ impl Dispatcher {
         command: &str,
         handler: Handler,
     ) {
-        // The generated `create` and `update` are what lets an effect write the model.
-        let writes = matches!(command, "create" | "update");
-        self.register_inner(module, model, command, handler, true, writes);
+        self.register_inner(module, model, command, handler, true, true);
     }
 
     fn register_inner(
@@ -819,8 +821,10 @@ impl Dispatcher {
         command: &str,
         handler: Handler,
         actor: bool,
-        generated_write: bool,
+        generated: bool,
     ) {
+        // The generated `create` and `update` are what lets an effect write the model.
+        let generated_write = generated && matches!(command, "create" | "update");
         let (index, m) = module
             .models
             .iter()
@@ -881,6 +885,7 @@ impl Dispatcher {
                 envelope: matches!(command, "search" | "bulk_create"),
                 actor,
                 writes: !matches!(command, "get" | "list" | "search"),
+                generated,
                 handler,
             }),
         );
@@ -1231,6 +1236,11 @@ impl Dispatcher {
             }
         }
         if (c.needs_approval || guard_approval) && p.kind == PrincipalKind::Agent {
+            // A call that mixes what cannot be stored as a whole gets no plan: the plan would
+            // be refused when a person approves it, and spent by that. The agent hears it now.
+            if let Some(why) = self.mixed(&c, p, &input, &pre) {
+                return Err(refusal(why, &input));
+            }
             // Dry-run: keep the restored input, hand back a plan id (D18, D42).
             let plan_id = uuid::Uuid::now_v7().to_string();
             self.plans
@@ -1373,6 +1383,94 @@ impl Dispatcher {
         }
     }
 
+    /// The actions an `update` of a governed field implies (D48), each ready to run as a call
+    /// of the action runs it. The fields that go to an action leave `input`, the input of the
+    /// update.
+    fn steps_of(
+        &self,
+        c: &Registered,
+        p: &Principal,
+        input: &mut Value,
+        pre: Vec<Pre>,
+    ) -> Vec<engine::implied::Step> {
+        let mut steps = Vec::with_capacity(pre.len());
+        for step in pre {
+            let action = self.commands.read().unwrap().get(&step.command).cloned();
+            let Some(action) = action else { continue };
+            let mut i = step.input;
+            // The fields the action needs (D95) travel with it and are written by it; the
+            // governed field is set by it, and the update would only repeat the write.
+            if let (Value::Map(of_update), Value::Map(of_action)) = (&mut *input, &i) {
+                of_update.remove(step.field);
+                for k in of_action.keys().filter(|k| *k != "id") {
+                    of_update.remove(k.as_str());
+                }
+            }
+            if let Value::Map(m) = &mut i {
+                m.insert("_caller".into(), Value::text(&p.id));
+                if action.actor {
+                    Actor::of(p).stamp(m);
+                }
+            }
+            // Through the action's own wrapper, like a call of the action (`invoke`): a drag of
+            // an order to "refunded" must return the money exactly as the refund action does.
+            let wrapper = self.around.read().unwrap().get(&action.id).cloned();
+            let who = p.clone();
+            steps.push(engine::implied::Step {
+                command: action.id.clone(),
+                field: step.field.to_string(),
+                // Generic all the way: the generated `update`, the generic handler of the
+                // action, and no wrapper around it.
+                joins: c.generated
+                    && action.generated
+                    && action.transition.is_some()
+                    && wrapper.is_none(),
+                run: Box::new(move || match &wrapper {
+                    Some(w) => w(&who, &i, &|x| (action.handler)(x)),
+                    None => (action.handler)(&i),
+                }),
+            });
+        }
+        steps
+    }
+
+    /// Handlers that need to know who is calling (audit trails) read `_caller`. The dispatcher
+    /// sets it after discarding anything a client sent under that name.
+    fn stamp_caller(c: &Registered, p: &Principal, input: &mut Value) {
+        if let Value::Map(m) = input {
+            m.insert("_caller".into(), Value::text(&p.id));
+            if c.actor {
+                Actor::of(p).stamp(m);
+            }
+        }
+    }
+
+    /// Why the run of this `update` would refuse the call for what it puts together, asked
+    /// without running anything: a move through an `update` that a module wrote by hand
+    /// (`implied::by_hand`), or an action that is run by itself together with an edit or with
+    /// another move (`implied::not_mixed`). For the second the generated `update` is asked
+    /// (`implied::ask`). It answers by the fields that were sent, not by their values: this is
+    /// asked for an agent, ahead of the wrapper of the update, and the answer must not tell
+    /// whether a value equals the stored one.
+    fn mixed(&self, c: &Registered, p: &Principal, input: &Value, pre: &[Pre]) -> Option<String> {
+        if pre.is_empty() {
+            return None;
+        }
+        let mut input = input.clone();
+        let steps = self.steps_of(c, p, &mut input, pre.to_vec());
+        if !c.generated {
+            return engine::implied::by_hand(&c.id, &steps);
+        }
+        // Only the generated `update` can be asked: it stops before it writes.
+        let update = c.id.strip_prefix(c.model) == Some(".update");
+        if !update || steps.iter().all(|s| s.joins) {
+            return None;
+        }
+        Self::stamp_caller(c, p, &mut input);
+        // Not through the wrapper of the update: only the generated handler is asked.
+        engine::implied::ask(steps, || (c.handler)(&input))
+    }
+
     fn run(
         &self,
         c: &Registered,
@@ -1382,41 +1480,34 @@ impl Dispatcher {
         pre: Vec<Pre>,
     ) -> Result<Response, CallError> {
         let mut input = input;
-        for step in pre {
-            let action = self.commands.read().unwrap().get(&step.command).cloned();
-            if let Some(action) = action {
-                let mut i = step.input;
-                // The fields the action needs (D95) travel with it and are written by it.
-                let carried: Vec<String> = match &i {
-                    Value::Map(m) => m.keys().filter(|k| *k != "id").cloned().collect(),
-                    _ => Vec::new(),
-                };
-                if let Value::Map(m) = &mut i {
-                    m.insert("_caller".into(), Value::text(&p.id));
-                    if action.actor {
-                        Actor::of(p).stamp(m);
-                    }
-                }
-                // Through the action's own wrapper, like a call of the action: a drag of an order
-                // to "refunded" must return the money exactly as the refund action does.
-                self.invoke(&action, p, &i).map_err(|m| refusal(m, &i))?;
-                if let Value::Map(m) = &mut input {
-                    m.remove(step.field);
-                    for k in &carried {
-                        m.remove(k.as_str());
-                    }
-                }
-            }
+        // The actions an `update` of a governed field implies (D48). They do not run here, ahead
+        // of the update: the handler of the update runs them in its own unit of work, after the
+        // other fields of the call are checked and written, so the edits and the move are stored
+        // together or not at all (`engine::implied`).
+        // A refusal is read against everything the caller sent, also the fields that go to an
+        // action below and so leave the input of the update.
+        let asked = (!pre.is_empty()).then(|| input.clone());
+        let steps = self.steps_of(c, p, &mut input, pre);
+        // An `update` whose handler a module wrote by hand knows nothing of the actions and
+        // writes the store itself, so nothing can share a unit with it, and whichever of the
+        // two ran first would stay stored when the other refused. Such an update takes no
+        // move: the caller calls the action.
+        if !c.generated
+            && let Some(why) = engine::implied::by_hand(&c.id, &steps)
+        {
+            return Err(refusal(why, asked.as_ref().unwrap_or(&input)));
         }
-        // Handlers that need to know who is calling (audit trails) read `_caller`. The dispatcher
-        // sets it after discarding anything a client sent under that name.
-        if let Value::Map(m) = &mut input {
-            m.insert("_caller".into(), Value::text(&p.id));
-            if c.actor {
-                Actor::of(p).stamp(m);
-            }
+        // One scope per run of a command, also when it implies nothing: a command that a wrapper
+        // calls through the dispatcher must not see the actions or the unit of the call around it.
+        let _scope = engine::implied::open(steps);
+        Self::stamp_caller(c, p, &mut input);
+        let sent = asked.as_ref().unwrap_or(&input);
+        let out = self.invoke(c, p, &input).map_err(|m| refusal(m, sent))?;
+        // The generated `update` has taken the actions and run them. Should a wrapper around it
+        // have answered without calling it, the move it was asked for still happens.
+        for step in engine::implied::take_steps() {
+            (step.run)().map_err(|m| refusal(m, sent))?;
         }
-        let out = self.invoke(c, p, &input).map_err(|m| refusal(m, &input))?;
         let observers: Vec<Arc<Observer>> = self
             .observers
             .read()
@@ -2040,6 +2131,8 @@ mod engine_tests;
 mod guard_tests;
 #[cfg(test)]
 mod hints_tests;
+#[cfg(test)]
+mod implied_tests;
 #[cfg(test)]
 mod import_map_tests;
 #[cfg(test)]

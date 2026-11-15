@@ -1000,9 +1000,18 @@ async fn an_agent_proposes_a_delete_a_human_approves_once() {
 
 /// A server whose store can be made to refuse calls, behind the guard, as PostgreSQL is.
 fn flaky_router() -> (Arc<obop_storage::testing::Flaky>, axum::Router) {
+    flaky_router_with(false)
+}
+
+/// `two_batches`: `lead.update` stores a second batch after its own
+/// (`error_seam_tests::lead_update_in_two_batches`).
+fn flaky_router_with(two_batches: bool) -> (Arc<obop_storage::testing::Flaky>, axum::Router) {
     let (flaky, backend) = obop_storage::testing::Flaky::memory();
     let app = App::with_store(obop_commands::Store::over(backend));
     app.seed_demo();
+    if two_batches {
+        crate::error_seam_tests::lead_update_in_two_batches(&app);
+    }
     let r = obop_http::router(
         obop_http::HttpState::with_mcp(
             app.dispatcher.clone(),
@@ -1017,10 +1026,10 @@ fn flaky_router() -> (Arc<obop_storage::testing::Flaky>, axum::Router) {
 #[tokio::test]
 async fn a_tool_call_the_store_refused_is_a_503_that_says_what_was_applied_never_a_200_tool_error()
 {
-    // D74: wherever in a tool call the store starts refusing (after the implicit action of the
-    // update committed, or before anything did), /mcp answers like REST: 503 with Retry-After and
-    // the applied marker, and the marker is true.
-    let (flaky, r) = flaky_router();
+    // D74: wherever in a tool call the store starts refusing (after the first of its two
+    // batches committed, or before anything did), /mcp answers like REST: 503 with Retry-After
+    // and the applied marker, and the marker is true.
+    let (flaky, r) = flaky_router_with(true);
     let sid = session(&r, "dev-admin").await;
     let (mut none, mut partial) = (0, 0);
     for k in 1..=10 {
@@ -1099,7 +1108,7 @@ async fn a_batch_of_tool_calls_that_met_a_refusal_after_a_commit_is_a_partial_50
     // A JSON-RPC batch (protocol 2025-03-26) is answered as a list; a refusal in it was a 200 with
     // a tool error in the list and no marker. The rule goes by the state of the request: a fault
     // was noted and a tool answered with an error.
-    let (flaky, r) = flaky_router();
+    let (flaky, r) = flaky_router_with(true);
     let (sid, _) = initialize(&r, "dev-admin", "2025-03-26").await;
     let (s, lead) = rest(
         &r,
@@ -1110,7 +1119,7 @@ async fn a_batch_of_tool_calls_that_met_a_refusal_after_a_commit_is_a_partial_50
     .await;
     assert_eq!(s, 200, "{lead}");
     let id = lead["value"]["id"].as_str().unwrap().to_string();
-    // The implicit action commits, the update after it is refused.
+    // The update commits (the move and the edit, one batch), the batch after it is refused.
     flaky.refuse_nth_apply(1);
     let resp = rpc(
         &r,

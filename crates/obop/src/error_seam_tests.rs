@@ -28,6 +28,30 @@ fn flaky_app() -> (Arc<Flaky>, App) {
     (flaky, app)
 }
 
+/// Makes `lead.update` a change of two atomic batches: when the update has stored its own, a
+/// wrapper stores a second one through the same handler. An update that moved the stage and
+/// edited another field was two batches by itself until the move and the edits became one unit
+/// of work (D48, `engine::implied`); a wrapper, a handler written by hand and a connector still
+/// meet a refusal between two batches, and the answer must still say which it was.
+pub(crate) fn lead_update_in_two_batches(app: &App) {
+    app.dispatcher.around(
+        "lead.update",
+        Box::new(|_, input, inner| {
+            let out = inner(input)?;
+            let mut second = input.clone();
+            if let obop_commands::Value::Map(m) = &mut second {
+                m.remove("contact_name");
+                m.insert(
+                    "contact_email".into(),
+                    obop_commands::Value::text("second@example.test"),
+                );
+            }
+            inner(&second)?;
+            Ok(out)
+        }),
+    );
+}
+
 fn router(app: &App) -> axum::Router {
     router_with(app, Arc::new(DevAuth))
 }
@@ -132,6 +156,7 @@ async fn a_refused_rest_call_is_a_503_that_says_nothing_was_changed() {
 #[tokio::test]
 async fn a_refusal_after_a_commit_is_a_partial_503_and_the_word_is_true() {
     let (flaky, app) = flaky_app();
+    lead_update_in_two_batches(&app);
     let r = router(&app);
     let (mut none, mut partial) = (0, 0);
     for k in 1..=10 {
@@ -143,7 +168,8 @@ async fn a_refusal_after_a_commit_is_a_partial_503_and_the_word_is_true() {
         .await;
         assert_eq!(s, 200, "{lead}");
         let id = lead["value"]["id"].as_str().unwrap().to_string();
-        // The implicit action commits, the update that follows meets a refusal.
+        // The update commits (the move and the edit, one batch), the batch after it meets a
+        // refusal.
         flaky.refuse_nth_apply(k - 1);
         let (s, h, b) = post(
             &r,
@@ -278,12 +304,14 @@ fn a_refused_command_line_call_prints_the_word_and_exits_with_75() {
     assert_eq!(e.1, 1, "{e:?}");
 }
 
-/// A refusal after the first of two batches of one call (the implicit action of a governed field
-/// commits, then the update meets the refusal): on the command line and on the stdio server the
-/// answer says `partial` exactly when the stage was changed, as the REST sweep does.
+/// A refusal after the first of two batches of one call (the update commits the move of the
+/// stage with its edit, then the batch a wrapper adds meets the refusal): on the command line and
+/// on the stdio server the answer says `partial` exactly when the stage was changed, as the REST
+/// sweep does.
 #[test]
 fn a_refusal_after_a_commit_says_partial_on_the_command_line_and_the_stdio_server() {
     let (flaky, app) = flaky_app();
+    lead_update_in_two_batches(&app);
     let p = admin();
     let (mut cli, mut stdio) = ([0, 0], [0, 0]);
     for k in 1..=10 {
