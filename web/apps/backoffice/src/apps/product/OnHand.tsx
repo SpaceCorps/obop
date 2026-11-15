@@ -1,6 +1,6 @@
-// "On hand" on a product, when Inventory is installed: the units in stock, summed on the server
-// over the product's stock items (`inventory_item.search` with `aggregate`), with the locations
-// that hold it and a link to its stock list.
+// "Stock by location" on a product, when Inventory is installed: where its units are, summed on
+// the server over the product's stock items (`inventory_item.search` with `aggregate`), with a
+// link to its stock list. The total is the "On hand" chip above it (RelatedChips).
 import { useEffect, useState } from "react";
 import { fmt, t } from "@obop/ui";
 import { aggregate } from "../../api.ts";
@@ -15,7 +15,7 @@ const ITEM = "inventory_item";
 export function OnHand({ row }: RecordExtProps) {
   const d = useData();
   const has = d.models.has(ITEM);
-  const [stock, setStock] = useState<{ units: number; places: [string, number][] } | null>(null);
+  const [stock, setStock] = useState<{ places: [string, number][] } | null>(null);
   useEffect(() => {
     if (!has) return;
     let live = true;
@@ -29,7 +29,7 @@ export function OnHand({ row }: RecordExtProps) {
         .map((g) => [String(g.key.location_id ?? ""), Number(g.measures["sum:quantity"] ?? 0)])
         .filter(([, n]) => n !== 0) as [string, number][];
       places.sort((x, y) => y[1] - x[1]);
-      setStock({ units: places.reduce((n, [, q]) => n + q, 0), places });
+      setStock({ places });
     });
     return () => {
       live = false;
@@ -38,16 +38,15 @@ export function OnHand({ row }: RecordExtProps) {
   if (!has || !stock) return null;
   const st = encodeState({ facets: [{ op: "is", f: "product_id", v: [row.id] }], group: [] });
   const href = d.linkTo(ITEM, { st });
-  const shown = stock.places.slice(0, 3);
+  const shown = stock.places.slice(0, 5);
   return (
-    <section className="sup-onhand" aria-label={t("On hand")}>
+    <section className="sup-onhand" aria-label={t("Stock by location")}>
       <div className="sup-onhand-head">
         <Icon name="inventory" size={18} />
-        <span className="sup-onhand-label">{t("On hand")}</span>
-        <strong className="sup-onhand-n">{fmt.integer(stock.units)}</strong>
+        <span className="sup-onhand-label">{t("Stock by location")}</span>
         {href && (
           <a href={href} className="sup-onhand-link">
-            {t("Stock")}
+            {t("All stock")}
             <Icon name="chevron-right" size={14} />
           </a>
         )}

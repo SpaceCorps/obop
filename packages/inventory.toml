@@ -191,7 +191,7 @@ write_group = "inventory.user"
   [model.ui]
   title = "{product_id} × {quantity}"
   subtitle = "{from_location_id} → {to_location_id} | → {to_location_id} | {from_location_id} →"
-  list = ["reference", "scheduled_on", "kind", "product_id", "from_location_id", "to_location_id", "quantity", "state"]
+  list = ["reference", "scheduled_on", "product_id", "from_location_id", "to_location_id", "quantity", "state"]
   card = ["reference", "product_id", "quantity", "kind", "scheduled_on"]
   quick_create = ["product_id", "quantity", "from_location_id", "to_location_id"]
   order = "scheduled_on desc, reference desc"

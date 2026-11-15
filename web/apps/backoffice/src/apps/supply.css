@@ -189,10 +189,6 @@
   color: var(--text-muted);
   font-size: var(--text-sm);
 }
-.sup-onhand-n {
-  font-size: var(--text-xl);
-  font-variant-numeric: tabular-nums;
-}
 .sup-onhand-link {
   display: inline-flex;
   align-items: center;

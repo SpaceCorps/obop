@@ -123,9 +123,11 @@ export function Components({ row }: RecordExtProps) {
       {needs.length === 0 ? (
         <div className="sup-avail-empty">
           <p className="hint">
-            {t(
-              "No components yet. Finishing the order then adds the product without using any stock.",
-            )}
+            {location
+              ? t("No components yet: finishing the order would add the product without using any.")
+              : t(
+                  "Add the components and a production location, and finishing the order moves the stock.",
+                )}
           </p>
           {canFill && (
             <Button icon="plus" loading={busy} onClick={() => void fill()}>

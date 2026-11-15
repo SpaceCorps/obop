@@ -137,7 +137,7 @@ delivery = "Livraison"
 internal = "Interne"
 scrap = "Rebut"
 adjustment = "Ajustement d’inventaire"
-production = "Production"
+production = "Fabrication"
 
 [labels.fr.model.inventory_move.field.origin]
 label = "Origine"

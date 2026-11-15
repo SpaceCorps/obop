@@ -1,10 +1,9 @@
 import { expect, test } from "../support/fixtures.ts";
 
-// Products (wave 2, supply): with Inventory installed a product shows the units on hand and the
-// locations that hold them, summed on the server (inventory_item.search with aggregate), with a
-// link to its stock list.
+// Products (wave 2, supply): with Inventory installed a product shows where its units are, per
+// location, summed on the server (inventory_item.search with aggregate), with a link to its stock.
 
-test("a product shows its units on hand and where they are", async ({ page, signIn, api, uid }) => {
+test("a product shows where its units are", async ({ page, signIn, api, uid }) => {
   const root = await api.token("root");
   await api.post("/api/marketplace_listing/install", { id: "inventory" }, root);
   try {
@@ -36,11 +35,12 @@ test("a product shows its units on hand and where they are", async ({ page, sign
     }
 
     await signIn("root", `/product/product?id=${product.id}`);
-    const onHand = page.getByRole("region", { name: "On hand" });
-    await expect(onHand.locator(".sup-onhand-n")).toHaveText("8");
+    const onHand = page.getByRole("region", { name: "Stock by location" });
+    await expect(onHand.getByRole("listitem").filter({ hasText: a.name })).toContainText("5");
+    await expect(onHand.getByRole("listitem").filter({ hasText: b.name })).toContainText("3");
     await expect(onHand).toContainText(a.name);
     await expect(onHand).toContainText(b.name);
-    await onHand.getByRole("link", { name: "Stock" }).click();
+    await onHand.getByRole("link", { name: "All stock" }).click();
     await expect(page).toHaveURL(/inventory_item/);
     await expect(page.getByRole("row").filter({ hasText: a.name })).toBeVisible();
   } finally {
