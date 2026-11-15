@@ -56,6 +56,7 @@ pub fn module() -> Module {
                 )
                 .kind(FieldKind::Number),
                 f("quantity", "Answer: the units on hand after the count").kind(FieldKind::Number),
+                f("ok", "Answer: whether the count was worked out").kind(FieldKind::Bool),
                 f("written", "Answer: whether a move was booked").kind(FieldKind::Bool),
                 f(
                     "move_id",
@@ -189,7 +190,13 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store) {
                 }
                 _ => return Err("counted is required: the units counted, a whole number".into()),
             };
-            let dry = matches!(map.get("dry_run"), Some(Value::Bool(true)));
+            // `obop call ... dry_run=true` sends text (docs/ISSUES.md Q9): a dry run must never
+            // write, so the text counts too.
+            let dry = match map.get("dry_run") {
+                Some(Value::Bool(b)) => *b,
+                Some(Value::Text(t)) => matches!(t.trim(), "true" | "1" | "yes"),
+                _ => false,
+            };
             let a = Actor::from_input(input);
             if a.agent && !dry {
                 return Err("an agent may only dry-run a stock count (dry_run=true); validating the move needs a person, so ask the person to apply it".into());

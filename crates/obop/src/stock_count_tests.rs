@@ -188,6 +188,15 @@ fn a_count_leaves_no_draft_difference_and_a_dry_run_writes_nothing() {
         (Some(-6), Some(false))
     );
     assert_eq!((s.on_hand(), s.moves().len()), (36, n));
+    // The command line sends `dry_run=true` as text: still a dry run.
+    let out = ok(
+        &s.app,
+        &s.keeper,
+        "stock_count.apply",
+        json!({"item": s.item, "counted": 30, "dry_run": "true"}),
+    );
+    assert_eq!(out["written"], false);
+    assert_eq!((s.on_hand(), s.moves().len()), (36, n));
     // Negative counts are refused in words.
     let e = run(
         &s.app,
