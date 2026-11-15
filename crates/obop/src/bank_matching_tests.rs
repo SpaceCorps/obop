@@ -301,3 +301,174 @@ fn a_dry_run_writes_nothing_and_an_agent_may_only_dry_run() {
         Err(CallError::Forbidden(_))
     ));
 }
+
+impl Fx {
+    /// A posted invoice of `amount` (no tax) with its ledger move, and the move's receivable item.
+    fn invoice_with_move(&self, amount: i64) -> (String, String, String) {
+        if !rows(&self.app, "accounting_journal")
+            .iter()
+            .any(|(_, j)| j["code"] == json!("S"))
+        {
+            let acc = |code: &str, t: &str| {
+                create(
+                    &self.app,
+                    "accounting_account",
+                    json!({"code": code, "name": format!("Test {code}"), "account_type": t}),
+                )
+            };
+            acc("3001", "income");
+            let vat = acc("2611", "liability_current");
+            create(
+                &self.app,
+                "accounting_tax",
+                json!({"name": "No tax", "rate_bp": 0, "scope": "sales", "tax_account_id": vat}),
+            );
+            create(
+                &self.app,
+                "accounting_journal",
+                json!({"name": "Sales", "code": "S", "kind": "sale"}),
+            );
+        }
+        let (inv, number) = self.invoice(&[amount]);
+        let r = call(
+            &self.app,
+            &admin(),
+            "invoice_posting.create_move",
+            json!({"invoice": inv, "journal": "S", "receivable_account": "1510",
+                   "revenue_account": "3001", "tax": "No tax", "date": "2026-09-14"}),
+        )
+        .unwrap();
+        let mid = r["move_id"].as_str().unwrap().to_string();
+        let item = rows(&self.app, "accounting_move_line")
+            .into_iter()
+            .find(|(_, l)| l["move_id"] == json!(mid) && l["debit"].as_i64().unwrap_or(0) > 0)
+            .unwrap()
+            .0;
+        (inv, number, item)
+    }
+
+    fn settles(&self, bank_line: &str) -> J {
+        rows(&self.app, "accounting_bank_statement_line")
+            .into_iter()
+            .find(|(id, _)| id == bank_line)
+            .unwrap()
+            .1
+            .get("settles_line_id")
+            .cloned()
+            .unwrap_or(J::Null)
+    }
+}
+
+#[test]
+fn paying_an_invoice_through_its_proposal_settles_its_receivable_item_once() {
+    let f = fixture();
+    let (_, number, item) = f.invoice_with_move(9_520);
+    let first = f.line(9_520, &format!("Payment {number}"));
+    f.book(json!({"bank_line": first, "invoice": number, "counter_account": "1510"}))
+        .unwrap();
+    assert_eq!(
+        f.settles(&first),
+        json!(item),
+        "the item is recorded as paid"
+    );
+    // The item's own proposal (a second transaction of the same amount) cannot pay it again.
+    let second = f.line(9_520, "Same amount again");
+    let r = call(
+        &f.app,
+        &admin(),
+        "accounting_bank_statement_line.update",
+        json!({"id": second, "settles_line_id": item}),
+    );
+    assert!(r.is_err(), "a second payment of the item is refused: {r:?}");
+    assert_eq!(f.settles(&second), J::Null);
+}
+
+#[test]
+fn an_item_paid_through_its_own_proposal_takes_its_invoice_out_of_the_proposals() {
+    let f = fixture();
+    let (inv, number, item) = f.invoice_with_move(4_200);
+    // The item path: record the item, then book without an invoice.
+    let paid = f.line(4_200, "Pays the item");
+    call(
+        &f.app,
+        &admin(),
+        "accounting_bank_statement_line.update",
+        json!({"id": paid, "settles_line_id": item}),
+    )
+    .unwrap();
+    f.book(json!({"bank_line": paid, "counter_account": "1510"}))
+        .unwrap();
+    let other = f.line(4_200, &format!("Payment {number}"));
+    let s = call(
+        &f.app,
+        &admin(),
+        "bank_matching.suggest",
+        json!({"bank_line": other}),
+    )
+    .unwrap();
+    let offered = s["suggestions"][0]["candidates"].as_array().unwrap();
+    assert!(
+        !offered.iter().any(|c| c["invoice_id"] == json!(inv)),
+        "{offered:?}"
+    );
+    let m = refusal(f.book(json!({"bank_line": other, "invoice": inv, "counter_account": "1510"})));
+    assert!(m.contains("already paid"), "{m}");
+    assert_eq!(f.settles(&other), J::Null);
+    assert_eq!(
+        rows(&f.app, "bank_matching").len(),
+        1,
+        "nothing more was written"
+    );
+}
+
+#[test]
+fn undoing_a_match_opens_the_item_again() {
+    let f = fixture();
+    let (_, number, item) = f.invoice_with_move(7_000);
+    let l = f.line(7_000, &format!("Payment {number}"));
+    let r = f
+        .book(json!({"bank_line": l, "invoice": number, "counter_account": "1510"}))
+        .unwrap();
+    let mid = r["move_id"].as_str().unwrap().to_string();
+    let bank_side = rows(&f.app, "accounting_move_line")
+        .into_iter()
+        .find(|(_, x)| x["move_id"] == json!(mid) && x["debit"].as_i64().unwrap_or(0) > 0)
+        .unwrap()
+        .0;
+    call(
+        &f.app,
+        &admin(),
+        "accounting_bank_statement_line.update",
+        json!({"id": l, "move_line_id": bank_side}),
+    )
+    .unwrap();
+    call(
+        &f.app,
+        &admin(),
+        "accounting_bank_statement_line.match",
+        json!({"id": l}),
+    )
+    .unwrap();
+    assert_eq!(f.settles(&l), json!(item));
+    call(
+        &f.app,
+        &admin(),
+        "accounting_bank_statement_line.unmatch",
+        json!({"id": l}),
+    )
+    .unwrap();
+    assert_eq!(
+        f.settles(&l),
+        J::Null,
+        "the undone match no longer pays the item"
+    );
+    // Another transaction may pay it now.
+    let again = f.line(7_000, "The right payment");
+    call(
+        &f.app,
+        &admin(),
+        "accounting_bank_statement_line.update",
+        json!({"id": again, "settles_line_id": item}),
+    )
+    .unwrap();
+}

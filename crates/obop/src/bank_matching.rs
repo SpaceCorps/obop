@@ -140,13 +140,62 @@ pub struct Candidate {
     pub basis: &'static str,
 }
 
-/// The posted invoices that are not yet linked to a bank line, with their amounts.
+/// The ledger move of an invoice that is not cancelled (`invoice_posting` links the two).
+fn live_move(
+    posting: &[(String, Fields)],
+    moves: &[(String, Fields)],
+    invoice_id: &str,
+) -> Option<String> {
+    posting
+        .iter()
+        .filter(|(_, l)| text(l, "invoice_id") == invoice_id)
+        .map(|(_, l)| text(l, "move_id"))
+        .find(|m| {
+            moves
+                .iter()
+                .any(|(mid, mf)| mid == m && text(mf, "state") != "cancelled")
+        })
+}
+
+/// The receivable item of an invoice: the one debit line of its live ledger move. None when the
+/// invoice has no move or its move has more than one debit line.
+fn receivable_item(
+    posting: &[(String, Fields)],
+    moves: &[(String, Fields)],
+    mlines: &[(String, Fields)],
+    invoice_id: &str,
+) -> Option<String> {
+    let m = live_move(posting, moves, invoice_id)?;
+    let debits: Vec<&String> = mlines
+        .iter()
+        .filter(|(_, l)| text(l, "move_id") == m && int(l, "debit") > 0)
+        .map(|(id, _)| id)
+        .collect();
+    match debits.as_slice() {
+        [one] => Some((*one).clone()),
+        _ => None,
+    }
+}
+
+/// The items bank transactions already settle (`accounting_bank_statement_line.settles_line_id`),
+/// each with the transaction that settles it.
+fn settled_items(env: Env<'_>) -> Result<Vec<(String, String)>, String> {
+    Ok(list(env, "accounting_bank_statement_line")?
+        .into_iter()
+        .map(|(id, f)| (text(&f, "settles_line_id"), id))
+        .filter(|(item, _)| !item.is_empty())
+        .collect())
+}
+
+/// The posted invoices that are not yet linked to a bank line and whose receivable item no bank
+/// transaction settles, with their amounts.
 pub fn candidates(env: Env<'_>) -> Result<Vec<Candidate>, String> {
     let taken: Vec<String> = list(env, MODEL)?
         .iter()
         .map(|(_, f)| text(f, "invoice_id"))
         .filter(|s| !s.is_empty())
         .collect();
+    let settled = settled_items(env)?;
     let moves = list(env, "accounting_move")?;
     let mlines = list(env, "accounting_move_line")?;
     let posting = list(env, "invoice_posting").unwrap_or_default();
@@ -156,16 +205,12 @@ pub fn candidates(env: Env<'_>) -> Result<Vec<Candidate>, String> {
         if text(&inv, "state") != "posted" || taken.contains(&id) {
             continue;
         }
-        let live_move = posting
-            .iter()
-            .filter(|(_, l)| text(l, "invoice_id") == id)
-            .map(|(_, l)| text(l, "move_id"))
-            .find(|m| {
-                moves
-                    .iter()
-                    .any(|(mid, mf)| mid == m && text(mf, "state") != "cancelled")
-            });
-        let (amount, basis) = match live_move {
+        if receivable_item(&posting, &moves, &mlines, &id)
+            .is_some_and(|item| settled.iter().any(|(s, _)| *s == item))
+        {
+            continue;
+        }
+        let (amount, basis) = match live_move(&posting, &moves, &id) {
             Some(m) => (
                 mlines
                     .iter()
@@ -297,6 +342,8 @@ pub struct Planned {
     pub amount: i64,
     pub lines: Vec<Line>,
     pub notes: Vec<String>,
+    /// The invoice's receivable item that the bank line is to settle (empty: none known).
+    pub settles_line_id: String,
 }
 
 fn pick(rows: &[(String, Fields)], what: &str, key: &str) -> Result<(String, Fields), String> {
@@ -371,6 +418,7 @@ pub fn plan(env: Env<'_>, p: &Principal, i: &Input) -> Result<Planned, String> {
     }
     let mut party_id = String::new();
     let mut invoice_id = String::new();
+    let mut settles_line_id = String::new();
     let mut notes = vec!["UNVERIFIED: nothing is checked against Swedish bookkeeping rules; the move is a draft, posting needs accounting.approver and the bank line itself is left as it is".to_string()];
     if !i.invoice.is_empty() {
         let invs = list(env, "invoice")?;
@@ -395,6 +443,30 @@ pub fn plan(env: Env<'_>, p: &Principal, i: &Input) -> Result<Planned, String> {
             return Err(
                 "this invoice is already matched to a bank line (nothing was written)".into(),
             );
+        }
+        let item = receivable_item(
+            &list(env, "invoice_posting").unwrap_or_default(),
+            &list(env, "accounting_move")?,
+            &list(env, "accounting_move_line")?,
+            &iid,
+        );
+        if let Some(item) = item {
+            if let Some((_, by)) = settled_items(env)?
+                .into_iter()
+                .find(|(s, by)| *s == item && *by != lid)
+            {
+                return Err(format!(
+                    "the invoice's receivable item is already paid by bank transaction {by} (nothing was written)"
+                ));
+            }
+            let own = text(&line, "settles_line_id");
+            if !own.is_empty() && own != item {
+                return Err(
+                    "the bank line already settles another item; undo that first (nothing was written)"
+                        .into(),
+                );
+            }
+            settles_line_id = item;
         }
         let c = candidates(env)?
             .into_iter()
@@ -450,6 +522,7 @@ pub fn plan(env: Env<'_>, p: &Principal, i: &Input) -> Result<Planned, String> {
         amount,
         lines,
         notes,
+        settles_line_id,
     })
 }
 
@@ -464,12 +537,39 @@ pub fn book(
     if dry_run {
         return Ok((pl, None));
     }
+    // The invoice's receivable item is recorded on the bank line first, so that the item's own
+    // proposal can no longer pay it a second time. The field is unique: a race is refused here,
+    // before anything else is written.
+    let settles = !pl.settles_line_id.is_empty()
+        && list(env, "accounting_bank_statement_line")?
+            .iter()
+            .any(|(id, f)| {
+                *id == pl.bank_line_id && text(f, "settles_line_id") != pl.settles_line_id
+            });
+    if settles {
+        call(
+            env,
+            p,
+            "accounting_bank_statement_line.update",
+            json!({"id": pl.bank_line_id, "settles_line_id": pl.settles_line_id}),
+        )?;
+    }
+    let undo = |env: Env<'_>| {
+        if settles {
+            let _ = call(
+                env,
+                p,
+                "accounting_bank_statement_line.update",
+                json!({"id": pl.bank_line_id, "settles_line_id": null}),
+            );
+        }
+    };
     let mut mv = json!({"journal_id": pl.journal_id, "date": pl.date, "reference": pl.reference,
         "narration": "Bank statement line"});
     if !pl.party_id.is_empty() {
         mv["partner_id"] = json!(pl.party_id);
     }
-    let made = call(env, p, "accounting_move.create", mv)?;
+    let made = call(env, p, "accounting_move.create", mv).inspect_err(|_| undo(env))?;
     let mid = made["id"]
         .as_str()
         .ok_or("accounting_move.create gave no id")?
@@ -484,6 +584,7 @@ pub fn book(
         .collect();
     if let Err(e) = crate::sie::bulk(env, p, "accounting_move_line", rows, None, false) {
         let _ = call(env, p, "accounting_move.cancel", json!({"id": mid}));
+        undo(env);
         return Err(format!(
             "the move lines were refused, the draft move {mid} was cancelled: {e}"
         ));
