@@ -17,11 +17,11 @@ test.describe("apps open on their home", () => {
       .click();
     await expect(page).toHaveURL(/#\/sales\/sale_order$/);
     const sales = page.getByRole("navigation", { name: "Sales menu" });
-    await expect(sales.getByRole("link", { name: "Sale orders" })).toHaveAttribute(
+    await expect(sales.getByRole("link", { name: "Quotations & orders" })).toHaveAttribute(
       "aria-current",
       "page",
     );
-    await expect(sales.getByRole("link", { name: /Sale order lines/ })).toHaveCount(0);
+    await expect(sales.getByRole("link", { name: /Order lines/ })).toHaveCount(0);
 
     // CRM: one list, with its quick searches in the sidebar.
     await page.goto("/#/");
@@ -31,27 +31,33 @@ test.describe("apps open on their home", () => {
       page.getByRole("navigation", { name: "CRM menu" }).getByRole("link", { name: "Open" }),
     ).toBeVisible();
 
-    // Mileage has two main lists: it opens on its generated overview.
+    // Mileage declares its home (D95): it opens on its trips.
     await page.goto("/#/");
     await page
       .locator(".home")
       .getByRole("link", { name: /^Mileage/ })
       .click();
-    await expect(page).toHaveURL(/#\/mileage\/overview$/);
-    await expect(page.getByRole("region", { name: "Mileage overview" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Needs attention" })).toBeVisible();
+    await expect(page).toHaveURL(/#\/mileage\/mileage_trip$/);
+
+    // Connectors has several main lists and no home: it opens on its generated overview.
+    await page.goto("/#/");
+    await page
+      .locator(".home")
+      .getByRole("link", { name: /^Connectors/ })
+      .click();
+    await expect(page).toHaveURL(/#\/connectors\/overview$/);
     await expect(
       page
-        .getByRole("navigation", { name: "Mileage menu" })
+        .getByRole("navigation", { name: "Connectors menu" })
         .getByRole("link", { name: "Overview" }),
     ).toHaveAttribute("aria-current", "page");
   });
 
   test("an app's address without a model opens its home", async ({ page, signIn }) => {
     await signIn("root", "/sales");
-    await expect(page.getByRole("region", { name: "Sale order" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Quotation / Order" })).toBeVisible();
     await page.goto("/#/mileage");
-    await expect(page.getByRole("region", { name: "Mileage overview" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Trip" })).toBeVisible();
   });
 
   test("the home groups the apps by what they are for and describes each", async ({

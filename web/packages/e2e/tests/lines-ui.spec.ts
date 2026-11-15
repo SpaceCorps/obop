@@ -7,7 +7,8 @@ import { expect, test } from "../support/fixtures.ts";
 // sheet; where it is wide, a table edited in place. The keys are the same in both: after "Add a
 // line" the product field has the focus, Enter picks, Enter saves.
 
-const panelOf = (page: Page) => page.getByRole("complementary", { name: "Sale order record" });
+const panelOf = (page: Page) =>
+  page.getByRole("complementary", { name: "Quotation / Order record" });
 const linesOf = (panel: Locator) => panel.getByRole("region", { name: "Lines" });
 
 /** Add one line by its product, with the keyboard only. */
@@ -36,7 +37,7 @@ test.describe("lines inside the form", () => {
 
     await signIn("root", "/sales/sale_order?view=list&id=new");
     const panel = panelOf(page);
-    await panel.getByLabel("Party").click();
+    await panel.getByLabel("Customer").click();
     await page.keyboard.type(customer.name);
     await page.getByRole("option", { name: customer.name }).click();
     // Before the order exists, the section says the first line saves it.
@@ -44,10 +45,12 @@ test.describe("lines inside the form", () => {
 
     // The first "Add a line" creates the order, then opens its first line.
     await addLine(page, panel, drill);
-    await expect(page.locator(".toast").filter({ hasText: "Sale order created" })).toBeVisible();
-    await expect(panel.getByLabel("Total")).toHaveValue(/249\.00/);
+    await expect(
+      page.locator(".toast").filter({ hasText: "Quotation / Order created" }),
+    ).toBeVisible();
+    await expect(panel.locator(".rec-figures")).toContainText(/249\.00/);
     await addLine(page, panel, charger);
-    await expect(panel.getByLabel("Total")).toHaveValue(/298\.00/);
+    await expect(panel.locator(".rec-figures")).toContainText(/298\.00/);
 
     const lines = linesOf(panel);
     await expect(lines.locator(".lines-count")).toHaveText("2");
@@ -91,7 +94,7 @@ test.describe("lines inside the form", () => {
 
     await signIn("root", `/sales/sale_order?view=list&id=${order.id}`);
     const panel = panelOf(page);
-    await expect(panel.getByLabel("Total")).toHaveValue(/1,?025\.00/);
+    await expect(panel.locator(".rec-figures")).toContainText(/1,?025\.00/);
     const lines = linesOf(panel);
     const cards = (await panel.locator(".lines.is-cards").count()) > 0;
 
@@ -106,7 +109,7 @@ test.describe("lines inside the form", () => {
       await lines.getByLabel("Quantity, line 1").fill("3");
       await page.keyboard.press("Enter");
     }
-    await expect(panel.getByLabel("Total")).toHaveValue(/1,?525\.00/);
+    await expect(panel.locator(".rec-figures")).toContainText(/1,?525\.00/);
     expect((await api.run("root", "sale_order_line.get", { id: work.id })).quantity).toBe(3);
 
     // Then the second line goes.
@@ -114,7 +117,7 @@ test.describe("lines inside the form", () => {
       await lines.getByRole("button", { name: "Edit line 2" }).click();
       await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click();
     } else await lines.getByRole("button", { name: "Delete line 2" }).click();
-    await expect(panel.getByLabel("Total")).toHaveValue(/1,?500\.00/);
+    await expect(panel.locator(".rec-figures")).toContainText(/1,?500\.00/);
     await expect(lines.locator(".lines-count")).toHaveText("1");
   });
 });

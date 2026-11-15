@@ -20,11 +20,11 @@ test.describe("field inputs", () => {
     await api.create("root", "party", { name: uid("Someone else") });
 
     await signIn("root", "/sales/sale_order?view=list&id=new");
-    const order = panelOf(page, "Sale order");
-    const party = order.getByRole("combobox", { name: "Party" });
+    const order = panelOf(page, "Quotation / Order");
+    const party = order.getByRole("combobox", { name: "Customer" });
     await party.click();
     await party.fill(name.split(" ").slice(1).join(" "));
-    const listbox = page.getByRole("listbox", { name: "Party options" });
+    const listbox = page.getByRole("listbox", { name: "Customer options" });
     // One highlighted option: the record that matches.
     await expect(listbox.getByRole("option", { selected: true })).toHaveCount(1);
     await expect(listbox.getByRole("option", { name: new RegExp(name) })).toBeVisible();
@@ -43,7 +43,7 @@ test.describe("field inputs", () => {
     await api.create("root", "product", { name: product, sku, list_price_minor: 12900 });
     // The SKU is the grey second line of the option; picking fills the description and the price.
     await signIn("root", "/sales/sale_order_line?view=list&id=new");
-    const line = panelOf(page, "Sale order line");
+    const line = panelOf(page, "Order line");
     const picker = line.getByRole("combobox", { name: "Product" });
     await picker.click();
     await picker.fill(sku);
@@ -60,8 +60,8 @@ test.describe("field inputs", () => {
   test("the picker makes a record from what was typed", async ({ page, signIn, api, uid }) => {
     const name = uid("Quick party");
     await signIn("root", "/sales/sale_order?view=list&id=new");
-    const order = panelOf(page, "Sale order");
-    const party = order.getByRole("combobox", { name: "Party" });
+    const order = panelOf(page, "Quotation / Order");
+    const party = order.getByRole("combobox", { name: "Customer" });
     await party.click();
     await party.fill(name);
     await page.getByRole("option", { name: `Create “${name}”` }).click();
@@ -71,7 +71,9 @@ test.describe("field inputs", () => {
     expect(made).toBeTruthy();
 
     await order.getByRole("button", { name: "Create", exact: true }).click();
-    await expect(page.locator(".toast").filter({ hasText: "Sale order created" })).toBeVisible();
+    await expect(
+      page.locator(".toast").filter({ hasText: "Quotation / Order created" }),
+    ).toBeVisible();
     const orders = await api.list("root", "sale_order");
     expect(orders.some((o: { party_id?: string }) => o.party_id === made.id)).toBe(true);
   });
@@ -105,7 +107,8 @@ test.describe("field inputs", () => {
     const saved = (await api.list("root", model)).find((r: { title: string }) => r.title === title);
     expect(saved.planned_minutes).toBe(90);
 
-    await page.getByRole("button", { name: "List", exact: true }).click();
+    // A model with one view has no view switcher: the list is already there.
+    await page.getByRole("button", { name: "Close record" }).click();
     await expect(page.getByRole("row", { name: new RegExp(title) })).toContainText("1 h 30");
   });
 });

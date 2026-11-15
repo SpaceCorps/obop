@@ -296,7 +296,8 @@ test("the owner uploads a picture in the back office and it appears in the shop"
 }) => {
   const towel = await listing(request, "linen-tea-towel");
   await backoffice(page, `/ecommerce/ecommerce_listing?id=${towel.id}`);
-  const field = page.locator(".blobfield").first();
+  // An image field is an avatar that is its own upload button (fields lane).
+  const field = page.locator(".avatarfield").first();
   await expect(field).toBeVisible();
   await field.locator('input[type="file"]').setInputFiles({
     name: "towel.png",

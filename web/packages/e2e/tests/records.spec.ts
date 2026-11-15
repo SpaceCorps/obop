@@ -45,7 +45,7 @@ test.describe("records in a built-in module (CRM leads)", () => {
     const qualify = panel.locator(".actionrow").getByRole("button", { name: "Qualify" });
     await expect(qualify).toHaveClass(/primary/);
     await qualify.click();
-    await expect(page.locator(".toast").filter({ hasText: "is now qualified" })).toBeVisible();
+    await expect(page.locator(".toast").filter({ hasText: "Lead qualified" })).toBeVisible();
     await expect(row).toContainText("Qualified");
   });
 
@@ -144,9 +144,7 @@ test.describe("records in a built-in module (CRM leads)", () => {
     await signIn("root", `/crm/lead?view=list&id=${lead.id}`);
     const panel = page.getByRole("complementary", { name: "Lead record" });
     await panel.getByRole("button", { name: "Mark won" }).click();
-    await expect(
-      page.locator(".toast").filter({ hasText: `Lead ${title} is now won` }),
-    ).toBeVisible();
+    await expect(page.locator(".toast").filter({ hasText: "Marked as won" })).toBeVisible();
     await expect(leadRow(page, title)).toContainText("Won");
   });
 });

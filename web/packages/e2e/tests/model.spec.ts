@@ -38,7 +38,9 @@ test.describe("the data model", () => {
     // The computed total is a key figure of the header, as text.
     await expect(panel.locator(".rec-figures")).toContainText(/1,?525\.00/);
     await panel.locator(".actionrow").getByRole("button", { name: "Confirm", exact: true }).click();
-    await expect(page.locator(".toast").filter({ hasText: "is now confirmed" })).toBeVisible();
+    await expect(
+      page.locator(".toast").filter({ hasText: "Order confirmed; a draft invoice is ready" }),
+    ).toBeVisible();
 
     const invoices = (await api.list("root", "invoice")).filter(
       (i) => i.sale_order_id === order.id,
@@ -55,7 +57,9 @@ test.describe("the data model", () => {
     const post = inv.locator(".actionrow").getByRole("button", { name: /^Post/ });
     await expect(post.locator(".approval-mark")).toBeVisible();
     await post.click();
-    await expect(page.locator(".toast").filter({ hasText: "is now posted" })).toBeVisible();
+    // The package asks first (`ui.confirm`), and its own toast says it is done (`ui.done`).
+    await page.getByRole("alertdialog").getByRole("button", { name: /^Post/ }).click();
+    await expect(page.locator(".toast").filter({ hasText: "Invoice posted" })).toBeVisible();
     const posted = await api.run("root", "invoice.get", { id: invoices[0].id });
     expect(posted.state).toBe("posted");
     expect(posted.number).toMatch(/^INV-\d{4}-\d{5}$/);

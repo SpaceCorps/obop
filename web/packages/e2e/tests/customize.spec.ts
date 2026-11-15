@@ -23,12 +23,7 @@ test.describe("Customize: marketplace, module builder and theme", () => {
       // The new app is in the launcher and works like a built-in one.
       await page.getByRole("button", { name: "Open the app launcher" }).click();
       await page.getByRole("dialog", { name: "Apps" }).getByRole("link", { name: "Fleet" }).click();
-      // Fleet has three lists: it opens on its overview, and the sidebar leads to the vehicles.
-      await expect(page).toHaveURL(/#\/fleet\/overview/);
-      await page
-        .getByRole("navigation", { name: "Fleet menu" })
-        .getByRole("link", { name: "Vehicles" })
-        .click();
+      // Fleet opens on its vehicles (the package's `home`, D95).
       await expect(page).toHaveURL(/#\/fleet\/fleet_vehicle/);
       await page
         .getByRole("button", { name: /^(New|Create the first vehicle)$/ })

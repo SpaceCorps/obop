@@ -18,7 +18,7 @@ async function seed(api: Api, scratchModule: (s: any) => Promise<string>) {
       { name: "amount_minor", kind: "money" },
     ],
   });
-  // One after the other: a list without a sort of its own shows the newest first (the id, D49).
+  // A model with no workflow and no date is master data: its list is in title order (listOrder).
   for (let n = 1; n <= COUNT; n++)
     await api.create("root", model, {
       title: `Row ${pad(n)}`,
@@ -66,7 +66,7 @@ test.describe("server-side list: paging, filter, sort", () => {
     await next.click();
     await expect(range(page)).toHaveText("26–50 of 120");
     await expect(page).toHaveURL(/page=2/);
-    await expect.poll(async () => (await rowTitles(page))[0]).toBe("Row 095");
+    await expect.poll(async () => (await rowTitles(page))[0]).toBe("Row 026");
     // The server did the paging: the last request asks for 25 records after the first 25.
     expect(seen.at(-1)).toMatchObject({ limit: 25, offset: 25 });
 
@@ -78,7 +78,7 @@ test.describe("server-side list: paging, filter, sort", () => {
     // The address alone restores the page, and a new search starts again on page one.
     await page.goto(`/#/${model}/${model}?view=list&page=3`);
     await expect(range(page)).toHaveText("51–75 of 120");
-    await expect.poll(async () => (await rowTitles(page))[0]).toBe("Row 070");
+    await expect.poll(async () => (await rowTitles(page))[0]).toBe("Row 051");
     const box = page.getByRole("combobox", { name: /^Search/ });
     await box.fill("Row 11");
     await box.press("Enter");
@@ -134,7 +134,7 @@ test.describe("server-side list: paging, filter, sort", () => {
     await box.fill("Row 07");
     await box.press("Enter");
     await expect(page.locator(".controlpanel .count")).toHaveText("10 records");
-    expect((await rowTitles(page))[0]).toBe("Row 079");
+    expect((await rowTitles(page))[0]).toBe("Row 070");
     await page.getByRole("button", { name: /^Remove filter/ }).click();
     await expect(page.locator(".controlpanel .count")).toHaveText("120 records");
 

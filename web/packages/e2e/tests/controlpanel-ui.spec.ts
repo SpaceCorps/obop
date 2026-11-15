@@ -79,11 +79,11 @@ test.describe("control panel", () => {
     // No lines yet: the empty state names the order and offers to add the first line.
     const number = (await api.run("root", "sale_order.get", { id: order.id })).number as string;
     await expect(
-      page.getByRole("heading", { name: `No sale order lines on ${number} yet` }),
+      page.getByRole("heading", { name: `No order lines on ${number} yet` }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "Add sale order line" }).click();
+    await page.getByRole("button", { name: "Add order line" }).click();
 
-    const panel = page.getByRole("complementary", { name: "Sale order line record" });
+    const panel = page.getByRole("complementary", { name: "Order line record" });
     await expect(panel).toBeVisible();
     // The order is already chosen: the form links to it.
     await expect(panel.getByRole("link", { name: `Open ${number}` })).toBeVisible();

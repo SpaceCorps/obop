@@ -160,8 +160,13 @@ test.describe("Connectors", () => {
         .first()
         .click();
       const flow = page.getByRole("complementary", { name: /record$/ });
-      await expect(flow.getByLabel("Fields denied")).toHaveValue(/tax_id/);
-      await expect(flow.getByLabel("Fields sent")).toHaveValue(/name,email/);
+      // A log record is read only: its values are a description list.
+      const value = (term: string) =>
+        flow
+          .locator("dt", { hasText: new RegExp(`^${term}$`) })
+          .locator("xpath=following-sibling::dd[1]");
+      await expect(value("Fields denied")).toHaveText(/tax_id/);
+      await expect(value("Fields sent")).toHaveText(/name,email/);
       const logs = await api.run("root", "data_flow_log.list");
       const released = logs.filter((l: any) => l.outcome === "released" && l.model === "party");
       expect(released.length).toBeGreaterThan(0);
