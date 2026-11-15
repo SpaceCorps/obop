@@ -16,6 +16,27 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 use tower::ServiceExt;
 
+/// Whether a manifest uses a key that core 0.2.2 added: the UI hints of D95 or a guard of D77.
+fn uses_core_0_2_2(m: &Manifest) -> bool {
+    m.module.home.is_some()
+        || m.module.launcher.is_some()
+        || m.model.iter().any(|x| {
+            x.ui.is_some()
+                || !x.child.is_empty()
+                || x.guard.is_some()
+                || x.field.iter().any(|f| {
+                    f.default.is_some()
+                        || f.fill_from.is_some()
+                        || f.readonly
+                        || f.ref_filter.is_some()
+                        || f.ui.is_some()
+                })
+                || x.action
+                    .iter()
+                    .any(|a| a.ui.is_some() || a.effect.iter().any(|e| e.kind == "set"))
+        })
+}
+
 fn bundled() -> Vec<Manifest> {
     Bundled
         .list()
@@ -92,9 +113,12 @@ fn every_bundled_package_declares_its_metadata() {
         let id = &x.id;
         assert_eq!(x.license, "Apache-2.0", "{id}: first-party licence (OR-1)");
         assert!(obop_pkg::spdx::check(&x.license).is_ok(), "{id}");
-        // The bundled packages keep `^0.2` (OR-35 h, OR-37 b). The one exception is a package that
-        // uses the field-limit keys (D90), which only core 0.2.1 parses: it writes `^0.2.1`.
-        let expected = if id == "accounting_se" {
+        // The bundled packages keep `^0.2` (OR-35 h, OR-37 b). The exceptions are packages that use
+        // keys a patch release added: the field limits (D90, core 0.2.1) write `^0.2.1`, and the
+        // UI hints and guards (D95, D77, core 0.2.2) write `^0.2.2`.
+        let expected = if uses_core_0_2_2(m) {
+            "^0.2.2"
+        } else if id == "accounting_se" {
             "^0.2.1"
         } else {
             "^0.2"
@@ -314,9 +338,10 @@ fn the_check_command_applies_the_catalogue_rules_and_reports_warnings() {
     let dir = std::env::temp_dir().join(format!("obop-catalog-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let text = std::fs::read_to_string(pk.join("fleet.toml")).unwrap();
-    let bare = text
-        .replace("license = \"Apache-2.0\"\n", "")
-        .replace("requires_core = \"^0.2\"\n", "requires_core = \">=0.2\"\n");
+    let bare = text.replace("license = \"Apache-2.0\"\n", "").replace(
+        "requires_core = \"^0.2.2\"\n",
+        "requires_core = \">=0.2\"\n",
+    );
     let f = dir.join("fleet.toml");
     std::fs::write(&f, bare).unwrap();
     let fs = f.to_string_lossy().to_string();
@@ -334,7 +359,7 @@ fn the_check_command_applies_the_catalogue_rules_and_reports_warnings() {
         r.errors.iter().any(|e| e.contains("has no upper bound")),
         "{r:?}"
     );
-    let no_range = text.replace("requires_core = \"^0.2\"\n", "");
+    let no_range = text.replace("requires_core = \"^0.2.2\"\n", "");
     for catalog in [false, true] {
         let r = obop_pkg::check_package(&no_range, &builtin, catalog);
         assert!(
@@ -433,7 +458,7 @@ fn the_tree_list_and_plan_commands_run() {
     let t = app.installer.tree(Some("field_service")).unwrap();
     assert!(t.contains("base ^0.2  [built in, core 0.2.2]"), "{t}");
     assert!(
-        t.contains("hr >=0.2, <1  [not installed, marketplace offers 0.3.0]"),
+        t.contains("hr >=0.2, <1  [not installed, marketplace offers 0.3.1]"),
         "{t}"
     );
 }

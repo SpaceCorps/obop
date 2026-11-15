@@ -24,7 +24,8 @@ const PACKAGES: [&str; 7] = [
 
 fn app() -> App {
     let app = App::new();
-    app.dispatcher.set_clock(std::sync::Arc::new(|| SEPTEMBER_14));
+    app.dispatcher
+        .set_clock(std::sync::Arc::new(|| SEPTEMBER_14));
     for id in PACKAGES {
         if app.installer.list().iter().any(|p| p.id == id) {
             continue;
@@ -57,6 +58,13 @@ fn ok(app: &App, p: &Principal, cmd: &str, input: J) -> J {
 
 fn id(v: &J) -> String {
     v["id"].as_str().unwrap().to_string()
+}
+
+/// Run an action and read the record back, so that what its effects wrote is in it.
+fn act(app: &App, p: &Principal, cmd: &str, rec: &str) -> J {
+    ok(app, p, cmd, json!({"id": rec}));
+    let model = cmd.split('.').next().unwrap();
+    ok(app, p, &format!("{model}.get"), json!({"id": rec}))
 }
 
 fn module(app: &App, id: &str) -> ModuleInfo {
@@ -246,12 +254,13 @@ fn publishing_an_article_stamps_the_day_once_and_only_the_server_writes_it() {
     )
     .unwrap_err();
     assert!(e.contains("set by the server"), "{e}");
-    let r = ok(&app, &kim, "knowledge_article.publish", json!({"id": a}));
+    let r = act(&app, &kim, "knowledge_article.publish", &a);
     assert_eq!(r["published_on"], TODAY);
     // Back to draft and out again: the first day stays.
-    app.dispatcher.set_clock(std::sync::Arc::new(|| SEPTEMBER_14 + 86_400 * 3));
+    app.dispatcher
+        .set_clock(std::sync::Arc::new(|| SEPTEMBER_14 + 86_400 * 3));
     ok(&app, &kim, "knowledge_article.unpublish", json!({"id": a}));
-    let r = ok(&app, &kim, "knowledge_article.publish", json!({"id": a}));
+    let r = act(&app, &kim, "knowledge_article.publish", &a);
     assert_eq!(r["published_on"], TODAY);
     // A form that sends the record back as it is still saves.
     ok(
@@ -292,12 +301,7 @@ fn documents_tiles_and_templates_start_with_sensible_values() {
     assert_eq!(w["aggregate"], "count");
 
     let sm = Principal::user("sm", &["sign.user", "sign.manager"]);
-    let t = ok(
-        &app,
-        &sm,
-        "sign_template.create",
-        json!({"name": "NDA"}),
-    );
+    let t = ok(&app, &sm, "sign_template.create", json!({"name": "NDA"}));
     assert_eq!(t["active"], true);
     // Sending from a template stamps the day; marking it signed by hand stamps that day too.
     let r = id(&ok(
@@ -307,14 +311,8 @@ fn documents_tiles_and_templates_start_with_sensible_values() {
         json!({"title": "NDA for Jane", "template_id": id(&t), "signer_name": "Jane Test",
                "signer_email": "jane@example.test"}),
     ));
-    assert_eq!(
-        ok(&app, &sm, "sign_request.send", json!({"id": r}))["sent_on"],
-        TODAY
-    );
-    assert_eq!(
-        ok(&app, &sm, "sign_request.sign", json!({"id": r}))["signed_on"],
-        TODAY
-    );
+    assert_eq!(act(&app, &sm, "sign_request.send", &r)["sent_on"], TODAY);
+    assert_eq!(act(&app, &sm, "sign_request.sign", &r)["signed_on"], TODAY);
     // A day typed by hand is kept.
     let r = id(&ok(
         &app,
@@ -324,7 +322,7 @@ fn documents_tiles_and_templates_start_with_sensible_values() {
                "signer_email": "joe@example.test", "sent_on": "2026-09-01"}),
     ));
     assert_eq!(
-        ok(&app, &sm, "sign_request.send", json!({"id": r}))["sent_on"],
+        act(&app, &sm, "sign_request.send", &r)["sent_on"],
         "2026-09-01"
     );
 }

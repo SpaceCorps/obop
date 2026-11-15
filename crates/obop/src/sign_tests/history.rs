@@ -1878,7 +1878,10 @@ async fn the_upgrade_from_the_package_before_the_history_adds_one_optional_field
     // The dependencies are what they were; the core it needs is the patch with the D95 hints of
     // 0.2.4, within the same 0.2 line.
     assert_eq!(
-        (old.module.requires_core.as_str(), new.module.requires_core.as_str()),
+        (
+            old.module.requires_core.as_str(),
+            new.module.requires_core.as_str()
+        ),
         ("^0.2", "^0.2.2")
     );
     assert_eq!(old.module.dependencies, new.module.dependencies);
