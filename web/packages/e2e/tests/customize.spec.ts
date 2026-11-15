@@ -112,6 +112,9 @@ test.describe("Customize: marketplace, module builder and theme", () => {
       await expect(page.locator(".toast").filter({ hasText: "created" })).toBeVisible();
 
       await page.getByRole("button", { name: "List", exact: true }).click();
+      // Closed, the record leaves the whole width to the list and its columns.
+      await page.keyboard.press("Escape");
+      await expect(panel).toHaveCount(0);
       const row = page.getByRole("row", { name: new RegExp(title) });
       await expect(row).toContainText("High");
       await expect(row).toContainText("€12.50");
