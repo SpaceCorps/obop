@@ -28,8 +28,8 @@ const field = (
 });
 
 describe("server messages", () => {
-  it("are shown exactly as received in English", () => {
-    expect(serverMessage("party.name is required")).toBe("party.name is required");
+  it("are shown as received in English, except that a field is named by its label (B12)", () => {
+    expect(serverMessage("party.name is required")).toBe("Name is required");
     expect(serverMessage("unknown field party.name")).toBe("unknown field party.name");
   });
 

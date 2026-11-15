@@ -57,7 +57,7 @@ fn the_callback_writes_the_person_and_the_epoch_the_sign_in_compared_and_nothing
         .unwrap();
     let (id, binder) = begun(&r, true);
     // A failed password try for somebody else left its own read in the record.
-    let csrf = r.o.view(&id, &binder).unwrap().csrf;
+    let csrf = r.o.view_plain(&id, &binder).unwrap().csrf;
     assert_eq!(
         r.o.login(&id, &binder, &csrf, "10.0.0.2", "bob", "nope")
             .unwrap(),
@@ -90,7 +90,10 @@ fn the_callback_writes_the_person_and_the_epoch_the_sign_in_compared_and_nothing
         "the session of the sign-in was ended"
     );
     // The page shows the person.
-    assert_eq!(r.o.view(&id, &binder).unwrap().user.as_deref(), Some("ada"));
+    assert_eq!(
+        r.o.view_plain(&id, &binder).unwrap().user.as_deref(),
+        Some("ada")
+    );
 }
 
 #[test]
@@ -286,14 +289,14 @@ fn the_cap_of_a_microsoft_only_phone_is_30_days_and_every_other_grant_keeps_90()
     // A page of a flow nobody is signed in on, and of an agent's connector, offers all four.
     let r = rig();
     let (id, binder) = begun(&r, true);
-    assert_eq!(r.o.view(&id, &binder).unwrap().max_days, 90);
+    assert_eq!(r.o.view_plain(&id, &binder).unwrap().max_days, 90);
     let (id, binder) = begun(&r, false);
-    assert_eq!(r.o.view(&id, &binder).unwrap().max_days, 90);
+    assert_eq!(r.o.view_plain(&id, &binder).unwrap().max_days, 90);
     // A signed-in person who signs in with a password: 90.
     let (id, binder) = begun(&r, true);
     r.o.microsoft_done(&id, MicrosoftOutcome::SignedIn(signed_in(&r, "ada")))
         .unwrap();
-    assert_eq!(r.o.view(&id, &binder).unwrap().max_days, 90);
+    assert_eq!(r.o.view_plain(&id, &binder).unwrap().max_days, 90);
     let _ = api();
 }
 
@@ -308,14 +311,14 @@ fn a_refused_read_of_the_account_gives_no_page_and_is_not_read_as_no_cap() {
     let (id, binder) = begun(&r, true);
     r.o.microsoft_done(&id, MicrosoftOutcome::SignedIn(signed_in(&r, "ada")))
         .unwrap();
-    assert_eq!(r.o.view(&id, &binder).unwrap().max_days, 90);
+    assert_eq!(r.o.view_plain(&id, &binder).unwrap().max_days, 90);
     flaky.refuse_model("auth_user", obop_storage::testing::Mode::Reads);
     assert!(
-        r.o.view(&id, &binder).is_err(),
+        r.o.view_plain(&id, &binder).is_err(),
         "a page after a refused read of the account"
     );
     flaky.allow_models();
-    assert_eq!(r.o.view(&id, &binder).unwrap().max_days, 90);
+    assert_eq!(r.o.view_plain(&id, &binder).unwrap().max_days, 90);
 }
 
 /// The same property without a clock. What keeps the lifetime of the row is that the callback
@@ -457,12 +460,12 @@ fn the_callback_keeps_the_lifetime_of_the_flow_and_does_not_renew_it() {
     r.o.microsoft_done(&id, MicrosoftOutcome::SignedIn(signed_in(&r, "ada")))
         .unwrap();
     assert!(
-        r.o.view(&id, &binder).is_ok(),
+        r.o.view_plain(&id, &binder).is_ok(),
         "the flow is there after the write"
     );
     std::thread::sleep(std::time::Duration::from_millis(2000));
     assert!(
-        r.o.view(&id, &binder).is_err(),
+        r.o.view_plain(&id, &binder).is_err(),
         "the callback renewed the lifetime of the flow"
     );
     assert!(record(&r, &id).is_none());

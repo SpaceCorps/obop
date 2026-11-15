@@ -5,6 +5,7 @@ summary = "Kontoplan, verifikationsserier, skatter, perioder och verifikationer.
 
 [labels.sv.model.accounting_account]
 name = "Konto"
+plural = "Kontoplan"
 description = "Ett konto i kontoplanen"
 
 [labels.sv.model.accounting_account.field.code]
@@ -47,6 +48,7 @@ description = "Interna kommentarer om hur kontot används"
 
 [labels.sv.model.accounting_journal]
 name = "Verifikationsserie"
+plural = "Verifikationsserier"
 description = "En serie som samlar verifikationer av ett slag (försäljning, inköp, bank, kassa, övrigt)"
 
 [labels.sv.model.accounting_journal.field.name]
@@ -82,6 +84,7 @@ description = "Om serien fortfarande kan ta emot verifikationer"
 
 [labels.sv.model.accounting_tax]
 name = "Skatt"
+plural = "Skatter"
 description = "En skattesats som verifikationsrader kan hänvisa till"
 
 [labels.sv.model.accounting_tax.field.name]
@@ -115,6 +118,7 @@ description = "Om skatten fortfarande kan väljas på nya rader"
 
 [labels.sv.model.accounting_fiscal_year]
 name = "Räkenskapsår"
+plural = "Räkenskapsår"
 description = "Ett räkenskapsår som öppnas och stängs som en helhet"
 
 [labels.sv.model.accounting_fiscal_year.field.name]
@@ -147,6 +151,7 @@ description = "Öppna ett stängt räkenskapsår för att rätta det (endast god
 
 [labels.sv.model.accounting_period]
 name = "Period"
+plural = "Perioder"
 description = "En bokföringsperiod (vanligtvis en månad) inom ett räkenskapsår"
 
 [labels.sv.model.accounting_period.field.fiscal_year_id]
@@ -183,6 +188,7 @@ description = "Öppna en stängd period (endast godkännare)"
 
 [labels.sv.model.accounting_move]
 name = "Verifikation"
+plural = "Verifikationer"
 description = "En verifikation: en daterad uppsättning debet- och kreditrader i en verifikationsserie"
 
 [labels.sv.model.accounting_move.field.journal_id]
@@ -221,7 +227,7 @@ reversed = "Återförd"
 
 [labels.sv.model.accounting_move.action.post]
 label = "Bokför"
-description = "Bokför en verifikation i utkast i huvudboken och ge den ett nummer (endast godkännare; nekas om debet och kredit inte är lika)"
+description = "Bokför en verifikation i utkast i huvudboken och ge den ett nummer (endast godkännare; nekas utan belopp eller om debet och kredit inte är lika)"
 
 [labels.sv.model.accounting_move.action.cancel]
 label = "Annullera"
@@ -233,6 +239,7 @@ description = "Markera en bokförd verifikation som återförd; motverifikatione
 
 [labels.sv.model.accounting_move_line]
 name = "Verifikationsrad"
+plural = "Verifikationsrader"
 description = "En debet- eller kreditrad i en verifikation"
 
 [labels.sv.model.accounting_move_line.field.move_id]
@@ -273,6 +280,7 @@ description = "Om raden har matchats mot en betalning"
 
 [labels.sv.model.accounting_bank_statement_line]
 name = "Kontoutdragsrad"
+plural = "Kontoutdragsrader"
 description = "En rad i ett kontoutdrag som väntar på att matchas mot verifikationer"
 
 [labels.sv.model.accounting_bank_statement_line.field.journal_id]
@@ -314,7 +322,7 @@ reconciled = "Avstämd"
 
 [labels.sv.model.accounting_bank_statement_line.action.match]
 label = "Matcha"
-description = "Registrera att raden motsvarar en verifikationsrad"
+description = "Registrera att raden motsvarar verifikationsraden som anges i move_line_id"
 
 [labels.sv.model.accounting_bank_statement_line.action.reconcile]
 label = "Stäm av"
@@ -331,3 +339,12 @@ description = "Summan av debetbeloppen på verifikationens rader (valutans minst
 [labels.sv.model.accounting_move.field.total_credit]
 label = "Totalt kredit"
 description = "Summan av kreditbeloppen på verifikationens rader (valutans minsta enhet)"
+
+[labels.sv.model.accounting_move.action.post.assert.has_amount]
+message = "Verifikationen saknar belopp: lägg till debet- och kreditrader innan den bokförs"
+
+[labels.sv.model.accounting_move.action.post.assert.balanced]
+message = "Verifikationen balanserar inte: summan av debet och kredit måste vara lika"
+
+[labels.sv.model.accounting_bank_statement_line.action.match.assert.has_line]
+message = "Välj verifikationsraden som den här banktransaktionen hör till"

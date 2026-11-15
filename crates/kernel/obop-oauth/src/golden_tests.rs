@@ -49,6 +49,7 @@ use crate::page::{
     CATALOGUE, LANGS, Rendered, consent_page, error_page, login_page, mfa_page, t as text,
 };
 use crate::redirect::RedirectForm;
+use obop_commands::brand::Shown;
 use sha2::{Digest, Sha256};
 
 fn sha(s: &str) -> String {
@@ -137,6 +138,7 @@ impl Case {
             preselected: self.preselected.iter().map(|g| (*g).into()).collect(),
             microsoft: self.microsoft,
             max_days: self.max_days,
+            brand: std::sync::Arc::new(Shown::not_set(None)),
         }
     }
 }
@@ -235,6 +237,12 @@ fn pages() -> Vec<(&'static str, Render)> {
     ]
 }
 
+/// The names of the kinds of page, in the order of the table, for the tests that render the same
+/// kinds with a brand (`brand_page_tests.rs`).
+pub(crate) fn kind_names() -> Vec<&'static str> {
+    pages().into_iter().map(|(kind, _)| kind).collect()
+}
+
 #[test]
 fn pins_the_pages_of_the_flow_are_what_they_were_before_the_brand() {
     let mut now = Vec::new();
@@ -285,6 +293,36 @@ fn pins_the_35_texts_that_name_the_product_are_unchanged() {
         CATALOGUE_PINS,
         &[("names_the_product_35_cells".into(), sha(&all))],
     );
+}
+
+/// The six keys that the branding work adds to the catalogue: the neutral twin of each of the five
+/// texts above, and the sentence for a client that is named like the instance.
+const NEW_KEYS: [&str; 6] = [
+    "login.lead.neutral",
+    "consent.who_body.neutral",
+    "consent.f2.neutral",
+    "consent.who_body_mobile.neutral",
+    "consent.who_body_mobile_loopback.neutral",
+    "consent.same_name",
+];
+
+/// The 42 cells of the six new keys, one pin each. Unlike the tables above these were not taken from
+/// `origin/main`: they are new, and several are claims about security (who can be verified, who may
+/// approve) that the pages of a branded instance make in place of the five texts that name the
+/// product. The pin makes any edit of one a visible diff, in the commit that explains why, so that a
+/// change of a word in a translation cannot invert a claim unseen; `the_new_texts_keep_the_claims_of_the_texts_they_stand_for`
+/// (`brand_page_tests.rs`) says in words which claims they are. The other columns are machine-drafted
+/// (docs/ISSUES.md BRN1): a native speaker's correction moves the pin of that cell and nothing else.
+#[test]
+fn pins_the_42_cells_of_the_six_texts_the_branding_work_adds() {
+    let mut now = Vec::new();
+    for key in NEW_KEYS {
+        for lang in LANGS {
+            now.push((format!("{key}/{lang}"), sha(text(lang, key))));
+        }
+    }
+    assert_eq!(now.len(), 42);
+    check("TWIN_PINS", TWIN_PINS, &now);
 }
 
 // The tables. Printed by `OBOP_PRINT_PINS=1` on origin/main 12a59a79 and pasted here.
@@ -387,4 +425,50 @@ const PAGE_PINS: &[(&str, &str)] = &[
 #[rustfmt::skip]
 const CATALOGUE_PINS: &[(&str, &str)] = &[
     ("names_the_product_35_cells", "a6adaab69bc2e356d3d626b7b8541a3afa1b1837cc9a2e9b15b676d584694423"),
+];
+
+#[rustfmt::skip]
+const TWIN_PINS: &[(&str, &str)] = &[
+    ("login.lead.neutral/en", "5d1ce67c4c497a3f02d0fbd0a8b162bf9d9bacc8dbd7e26cf72ac9613e78ef8d"),
+    ("login.lead.neutral/de", "9cffedc45001401cf1d409dec3baeca5a10d62ea9dc0305ac1ec41a97bdc955b"),
+    ("login.lead.neutral/fr", "4620509c771aa9151610556a632528144461ffa4638a94838d43c8e7d3945411"),
+    ("login.lead.neutral/pl", "de9737418c78793b0a7bfd7aeb2404bb9bf01c423728b501bba3891c1c34f40f"),
+    ("login.lead.neutral/fi", "4eba831693aa1c6c64842a6425279bd565c2ed6f5c204f8e1b1bb428464c656c"),
+    ("login.lead.neutral/sv", "c15f1683ab543a5834a9ce6595b3e295ffbc556679c16fa848d5b3e53b9dc944"),
+    ("login.lead.neutral/es", "7a942f7447d208f8d7f91fdd381c319f5deabc2611d23edec58c699363f4484b"),
+    ("consent.who_body.neutral/en", "db14601ecb29a6934d7ddb218f3fc7c85ab3b3c747470fc9c4abf52b35ef785c"),
+    ("consent.who_body.neutral/de", "7a5770a169e59ecb4e5a886cfb1e758f0a1d17277787e2b6df5f4d41361a3c02"),
+    ("consent.who_body.neutral/fr", "9dbc61aa04d8e877bdc83969aba9024555cb78a22ec6c62ea7bfc7c38d3b938f"),
+    ("consent.who_body.neutral/pl", "2d94f30983bca399803878c229a82bdf7c87abac85d79629cf086070aee84ed2"),
+    ("consent.who_body.neutral/fi", "a690c70a99ad05b68d1bed5d6d74f7ef019e4aeb2b1e4d6e74f322d1319c45b3"),
+    ("consent.who_body.neutral/sv", "105f4d8f2a266b99c8af121d240c898d0281585ada0159e9d35ddd017cbff9ea"),
+    ("consent.who_body.neutral/es", "d7e1547cc8a654d6692a18622c49efc543320f1a885fe2cf29cdc53df769aefa"),
+    ("consent.f2.neutral/en", "a6c42b09d92a75d31643e4d29b05258eafb30f3c03026c8abfb6bb310d0ac31b"),
+    ("consent.f2.neutral/de", "3b682708ff3bb3099c059a5e96578ced2170afc1118a88e9018e799eb05fa42b"),
+    ("consent.f2.neutral/fr", "4b190a40e5b64a73080074d6a6babeebb95fc06d3d83eec7eaaba5e4b093746f"),
+    ("consent.f2.neutral/pl", "689d4460fa1d2c5b5fd38c0362734a726b517b4a77aaeb349e8c0ddf00770474"),
+    ("consent.f2.neutral/fi", "284d4a6f46beddb620ed21d85b09090d838b356f6f8602b432970aa0234361ab"),
+    ("consent.f2.neutral/sv", "17fe6b175bc7408ef576a76a43399cd5a419571481931714a16b03368e45b1e4"),
+    ("consent.f2.neutral/es", "ed9d85093e6943a31d97c75ade2e15741bd83e75e4713999c3a296f2095e2fab"),
+    ("consent.who_body_mobile.neutral/en", "c09c17e4acd3091ba1c980bf8a121ef8d59e85129d63fcabdce7493de7980e5a"),
+    ("consent.who_body_mobile.neutral/de", "8e3b1700451ee16dca74a6b764b93180c45233927c046ee2614d7b69ba81308c"),
+    ("consent.who_body_mobile.neutral/fr", "4b6f1286bcb31f496f37cad766eb7e29d577509fdc2df7d88286256300770e1f"),
+    ("consent.who_body_mobile.neutral/pl", "b07b2eda15727f751cedf90dd35ab37c6f97ea7b3271ee33b078f7635992ef2e"),
+    ("consent.who_body_mobile.neutral/fi", "182e03a9fba1c9481418078de99bbb59880b43b2fcd2b822d61870bde1aacdd9"),
+    ("consent.who_body_mobile.neutral/sv", "7847bc95ccd900c7dae6d256991644b4281f8a6b762a34ce23089f52de4e0c6e"),
+    ("consent.who_body_mobile.neutral/es", "4f164abb0be0a5c2f104fd4dc08f2cac6ac3216c45f468986c03e435310a8abf"),
+    ("consent.who_body_mobile_loopback.neutral/en", "452b904a5cf1173e8994a7bfeb1592d43ee87a57a3504ba743c23d5ef8b04190"),
+    ("consent.who_body_mobile_loopback.neutral/de", "38cb2e8fc4118035f3716df25649bc87b4db87b573ed43f1f62798e40bd397e3"),
+    ("consent.who_body_mobile_loopback.neutral/fr", "5f6460c08dc7bdbf60b4ffb2e1abeb84b1c1902694c2744f7b63b1baaad1b3ea"),
+    ("consent.who_body_mobile_loopback.neutral/pl", "c58fa29f7a8c18c07ae6425a615d6cef9caf6b917da5e020363f3d80350a8534"),
+    ("consent.who_body_mobile_loopback.neutral/fi", "05ab64406e9f91e4d59d806577cfc7233f5e0d1cab6f7bfd1793a8810909dde2"),
+    ("consent.who_body_mobile_loopback.neutral/sv", "be8a895da0b7e64d54951b0b624e73257985d6a8bfff35562240fa14e44820c8"),
+    ("consent.who_body_mobile_loopback.neutral/es", "6c60495d9c4879f52c335d6659dc63b502eba27d617e493b67ecffde9634b13f"),
+    ("consent.same_name/en", "89c9b0a1e4f856dcdfda6bd27c48267f63eee1305c1aeea09eaad2d00ba54b7b"),
+    ("consent.same_name/de", "bbff96fa25ba38227579f1f81d95bc9dfb0e2509234d6e6fd78833c86fa07e3b"),
+    ("consent.same_name/fr", "22e460060319e265410713f7e38691a761bdea4149d6baa83b56ac08b4d22367"),
+    ("consent.same_name/pl", "d62d21f4b8a3a317fda0102bd38d4aecff8955f98e34cdb933a2f415cb1cd9c1"),
+    ("consent.same_name/fi", "a0c082ab24db2451e3506e734ced477f675b834698e3a62884de33c386e0f9ff"),
+    ("consent.same_name/sv", "e5e528df11ac637f4b3c3f9e8675f0de4b1dbb400dd8cb12f36b0b8c2e386690"),
+    ("consent.same_name/es", "304cb7113be65504fed625f901e6fd8136f82f72ee3cd7330769eacaf05113fa"),
 ];

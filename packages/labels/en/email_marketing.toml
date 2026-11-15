@@ -1,0 +1,54 @@
+# English names and plurals of email_marketing (D52, D95): [labels.en.model.<model>] name = "...", plural = "...".
+# The manifest stays the English source; this file only adds the display names it does not have.
+
+[labels.en.model.email_marketing_list]
+name = "Mailing list"
+plural = "Mailing lists"
+
+[labels.en.model.email_marketing_list.field.is_public]
+label = "Open to sign-up"
+
+[labels.en.model.email_marketing_contact]
+name = "Contact"
+plural = "Contacts"
+
+[labels.en.model.email_marketing_contact.field.list_id]
+label = "Mailing list"
+
+[labels.en.model.email_marketing_contact.field.consent_status]
+label = "Consent"
+
+[labels.en.model.email_marketing_contact.field.consent_status.options]
+opted_in = "Opted in"
+opted_out = "Opted out"
+
+[labels.en.model.email_marketing_campaign]
+name = "Campaign"
+plural = "Campaigns"
+
+[labels.en.model.email_marketing_campaign.field.list_id]
+label = "Mailing list"
+
+[labels.en.model.email_marketing_campaign.field.sent_count]
+label = "Sent"
+
+[labels.en.model.email_marketing_campaign.field.delivered_count]
+label = "Delivered"
+
+[labels.en.model.email_marketing_campaign.field.opened_count]
+label = "Opened"
+
+[labels.en.model.email_marketing_campaign.field.clicked_count]
+label = "Clicked"
+
+[labels.en.model.email_marketing_campaign.field.bounced_count]
+label = "Bounced"
+
+[labels.en.model.email_marketing_campaign.field.unsubscribed_count]
+label = "Unsubscribed"
+
+[labels.en.model.email_marketing_campaign.action.send]
+label = "Mark as sent"
+
+[labels.en.model.email_marketing_campaign.action.send_now]
+label = "Mark as sent"

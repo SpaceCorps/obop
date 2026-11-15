@@ -464,7 +464,63 @@ impl Runtime {
         }
     }
 
-    /// Encode prepared rows for the provider: one body per request.
+    /// The name that signs a Slack message: the name of the instance, which is `obop` when no brand
+    /// is set (docs/spec/branding.md, OT-16). A message that has left cannot be taken back, so the
+    /// name is asked for here, once for a send (once for a manual send of several models too, in
+    /// `send_all`) and before anything is recorded or sent: before the
+    /// flow is written to the flow log (which counts against the caps of the connection), before the
+    /// pseudonym map and before the run (section 4: a handler asks the reader first).
+    ///
+    /// The read is the uncached one (`Reader::fresh`), not the cell of `current()`. A caller of
+    /// `current()` that finds the first refill of a process running, and has no last good name, waits
+    /// for that refill and is given the default when it failed, with no fault noted on its thread
+    /// (docs/ISSUES.md PS3-9): a page can show that default, a message that has left cannot be taken
+    /// back. `fresh()` answers a store that cannot be read with the error, so the send is refused
+    /// with the fault (`storage_busy: ...`): the person who started it is told to try again, an event
+    /// is tried again, nothing leaves signed with a name the instance did not choose, and nothing is
+    /// recorded for a message that never left. A read that fails for a reason that is no fault of
+    /// the store (no code word: SQLite gives none) refuses the send with the same text and no code
+    /// word; an event is not tried again for it, since nothing says the next read will pass, and is
+    /// reported on stderr by [`Runtime::handle_event`], as an event that met a fault is. A stored
+    /// name that fails the read check is read as the default, by the one rule of section 4 for every
+    /// surface. The other providers sign nothing and ask nothing.
+    ///
+    /// Each call costs the two uncached reads of `fresh()`, the row and the theme setting, where the
+    /// cell of `current()` would have cost at most two in two seconds; a fault on the theme read
+    /// alone refuses the send (docs/ISSUES.md PS3-10).
+    fn signer(&self, p: &Provider) -> Result<String, String> {
+        if p.body_format != "slack" {
+            return Ok(String::new());
+        }
+        match self.dispatcher.brand().fresh() {
+            Ok(read) => Ok(read.shown().brand().name().to_string()),
+            // The pool has noted the fault on this thread, so the layer above answers a request by
+            // D74 and an earlier fault of the request stays the first; the text keeps the code word
+            // of the fault. An error that is not a fault of the store has no code word, and its text
+            // is not echoed.
+            Err(e) => Err(match obop_storage::fault::Fault::of_message(&e) {
+                Some(fault) => fault.message(Self::NAME_REFUSED),
+                None => Self::NAME_REFUSED.to_string(),
+            }),
+        }
+    }
+
+    /// What a send says when the name that signs a Slack message could not be read.
+    const NAME_REFUSED: &'static str =
+        "the name of the instance could not be read, so nothing was sent";
+
+    /// Is this refusal of an event one to report on stderr? An event has nobody to tell, and a
+    /// refusal of the flow is already in the flow log, so those are not. A fault of the store is
+    /// (the event is tried again before), and so is a name that could not be read for another
+    /// reason, which has no code word and would otherwise leave an event that went nowhere with no
+    /// trace anywhere.
+    fn event_refusal_is_reported(e: &str) -> bool {
+        Fault::is_transient(e) || e == Self::NAME_REFUSED
+    }
+
+    /// Encode prepared rows for the provider: one body per request. `signer` is the name that signs
+    /// a Slack message (see [`Runtime::signer`]); the other formats do not use it.
+    #[allow(clippy::too_many_arguments)]
     fn encode(
         &self,
         c: &Connection,
@@ -473,6 +529,7 @@ impl Runtime {
         id: &str,
         prepared: &[Map<String, J>],
         model: &str,
+        signer: &str,
     ) -> Vec<(String, Vec<u8>)> {
         match p.body_format {
             // One DocuSeal submission per record. The reference travels as the submitter's
@@ -529,7 +586,10 @@ impl Runtime {
                 })
                 .collect(),
             "slack" => {
-                let mut text = format!("obop: {event} ({model})");
+                // The message is signed with the name of the instance (`signer`, asked for before
+                // anything was recorded or sent): the prefix is fixed in the body, so a retry of the
+                // delivery sends the text it was made with.
+                let mut text = format!("{signer}: {event} ({model})");
                 for r in prepared.iter().take(10) {
                     let line = r
                         .iter()
@@ -598,7 +658,9 @@ impl Runtime {
         status == 408 || status == 425 || status == 429 || status >= 500
     }
 
-    /// Send prepared rows through the provider's engine. Records the outcome in `run`.
+    /// Send prepared rows through the provider's engine. Records the outcome in `run`. `signer` is
+    /// the name that signs a Slack message ([`Runtime::signer`], asked for before the run began).
+    #[allow(clippy::too_many_arguments)]
     fn send_prepared(
         &self,
         c: &Connection,
@@ -607,9 +669,10 @@ impl Runtime {
         event: &str,
         model: &str,
         prepared: &[Map<String, J>],
+        signer: &str,
     ) -> (usize, String) {
         let id = format!("msg_{}", random_hex(12));
-        let bodies = self.encode(c, p, event, &id, prepared, model);
+        let bodies = self.encode(c, p, event, &id, prepared, model, signer);
         let mut failed = String::new();
         let mut sent = 0;
         let n = bodies.len();
@@ -673,10 +736,38 @@ impl Runtime {
         event: &str,
         kind: &str,
     ) -> Result<J, String> {
+        self.send_signed(connection, model, ids, event, kind, None)
+    }
+
+    /// [`Runtime::send`] with the name that signs a Slack message already asked for (`Some`), as the
+    /// manual send of several models does, or asked for here (`None`). A send that asked again for
+    /// each model could meet a fault of the store after the first message had left, and would then
+    /// report "nothing was sent" for a send of which part had been (and a retry would send that part
+    /// again).
+    fn send_signed(
+        &self,
+        connection: &str,
+        model: &str,
+        ids: Option<&[String]>,
+        event: &str,
+        kind: &str,
+        asked: Option<&str>,
+    ) -> Result<J, String> {
         let (c, p) = self.connection(connection)?;
         if !matches!(p.engine, Engine::WebhookOut | Engine::CsvExport) {
             return Err(format!("{} does not send records", p.name));
         }
+        // The name that signs a Slack message is asked for first (section 4): `prepare` writes the
+        // flow to the log, and the flow of a message that never left would count against the caps
+        // of the connection. The other providers ask nothing.
+        let own;
+        let signer = match asked {
+            Some(name) => name,
+            None => {
+                own = self.signer(&p)?;
+                own.as_str()
+            }
+        };
         let rows = self.read_rows(&c, model, ids)?;
         let prepared = self
             .egress
@@ -696,7 +787,7 @@ impl Runtime {
             );
         }
         let run = self.try_start_run(&c, "outbound", kind)?;
-        let (sent, failed) = self.send_prepared(&c, &p, &run, event, model, &prepared.rows);
+        let (sent, failed) = self.send_prepared(&c, &p, &run, event, model, &prepared.rows, signer);
         let status = if failed.is_empty() {
             "succeeded"
         } else if failed.contains("will retry") {
@@ -742,11 +833,26 @@ impl Runtime {
         } else {
             ""
         };
-        for model in c.allowlist.keys().filter(|m| m.as_str() != receives) {
-            results.push(self.send(connection, model, None, "obop.manual", "manual")?);
-        }
-        if results.is_empty() {
+        let models: Vec<&String> = c
+            .allowlist
+            .keys()
+            .filter(|m| m.as_str() != receives)
+            .collect();
+        if models.is_empty() {
             return Err("there is nothing on the allowlist to send".into());
+        }
+        // The name that signs a Slack message is asked for once for the whole send, before the first
+        // message leaves: a read per model could be refused after the first message had gone.
+        let signer = self.signer(&p)?;
+        for model in models {
+            results.push(self.send_signed(
+                connection,
+                model,
+                None,
+                "obop.manual",
+                "manual",
+                Some(&signer),
+            )?);
         }
         if results.len() == 1 {
             return Ok(results.remove(0));
@@ -754,8 +860,20 @@ impl Runtime {
         Ok(json!({"results": results}))
     }
 
-    /// A command succeeded: deliver the record to the connections that subscribe to it.
+    /// A command succeeded: deliver the record to the connections that subscribe to it. What could
+    /// not be delivered and is worth a line (see [`Runtime::handle_event_with`]) is written to
+    /// stderr.
     pub fn handle_event(&self, command: &str, record: &str) {
+        self.handle_event_with(command, record, &mut |line| eprintln!("{line}"));
+    }
+
+    /// [`Runtime::handle_event`] that hands each line it would write to stderr to `report` instead,
+    /// at the moment it is made, so that a test can see them. A line is made for an event whose
+    /// connections could not be read, for a refusal that is a fault of the store (tried again
+    /// first) and for a name that could not be read for another reason (not tried again;
+    /// [`Runtime::event_refusal_is_reported`]); a refusal of the flow, which the flow log holds,
+    /// makes none.
+    pub fn handle_event_with(&self, command: &str, record: &str, report: &mut dyn FnMut(String)) {
         let Some((model, _)) = command.split_once('.') else {
             return;
         };
@@ -767,9 +885,9 @@ impl Runtime {
         ) {
             Ok(all) => all,
             Err(e) => {
-                eprintln!(
+                report(format!(
                     "connectors: the event {command} was not delivered, the connections could not be read: {e}"
-                );
+                ));
                 return;
             }
         };
@@ -788,11 +906,14 @@ impl Runtime {
             // A refusal of the flow is already in the flow log; an event has nobody to tell. A
             // busy store is not a refusal of the flow and is not logged as one: the event is tried
             // again (nothing was sent: the gate fails closed), and reported when it still cannot go.
+            // A name that could not be read for another reason is reported too, and not tried again.
             if let Err(e) = obop_storage::fault::patiently(4, Duration::from_millis(250), || {
                 self.send(&id, model, Some(&[record.to_string()]), command, "event")
-            }) && Fault::is_transient(&e)
+            }) && Self::event_refusal_is_reported(&e)
             {
-                eprintln!("connectors: the event {command} was not delivered to {id}: {e}");
+                report(format!(
+                    "connectors: the event {command} was not delivered to {id}: {e}"
+                ));
             }
         }
     }
@@ -1297,8 +1418,10 @@ impl Runtime {
                     notes.push("no test request is sent: this service takes records only".into());
                 } else if p.engine == Engine::WebhookOut {
                     // A test event carries no record and no personal data.
+                    let signer = self.signer(&p)?;
                     let run = self.start_run(&c, "outbound", "test");
-                    let (sent, failed) = self.send_prepared(&c, &p, &run, "obop.test", "", &[]);
+                    let (sent, failed) =
+                        self.send_prepared(&c, &p, &run, "obop.test", "", &[], &signer);
                     let (status, why) = if failed.is_empty() && sent > 0 {
                         ("succeeded", String::new())
                     } else {

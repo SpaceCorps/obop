@@ -1,10 +1,11 @@
 [labels.de.module]
 name = "Lager"
-description = "Lager, Lagerorte, Bestände und Lagerbewegungen. Das Validieren einer Bewegung zieht die Menge vom Bestand am Quellort ab und addiert sie in einem Schritt zum Bestand am Zielort; ein noch nicht vorhandener Bestand wird angelegt. Es gibt einen Bestand je Produkt, Lagerort und Charge. Negative Mengen sind erlaubt, etwa bei virtuellen Orten wie Lieferanten."
+description = "Lager, Lagerorte, Bestände und Lagerbewegungen. Das Validieren einer Bewegung zieht die Menge am Quellort ab und bucht sie in einem Schritt am Zielort zu; ein fehlender Bestand wird angelegt. Ein Bestand je Produkt, Lagerort und Charge; negative Mengen sind erlaubt. Die Menge ändert sich nur durch Bewegungen; erledigte und stornierte Bewegungen sind gesperrt."
 summary = "Lager, Lagerorte, Bestände und Lagerbewegungen."
 
 [labels.de.model.inventory_warehouse]
 name = "Lager"
+plural = "Lager"
 description = "Ein Gebäude oder Standort, an dem Ware gelagert wird"
 
 [labels.de.model.inventory_warehouse.field.name]
@@ -25,6 +26,7 @@ description = "Ob das Lager in Benutzung ist"
 
 [labels.de.model.inventory_location]
 name = "Lagerort"
+plural = "Lagerorte"
 description = "Ein Platz in einem Lager, an dem Ware liegen kann"
 
 [labels.de.model.inventory_location.field.name]
@@ -52,6 +54,7 @@ description = "Ob der Lagerort in Benutzung ist"
 
 [labels.de.model.inventory_item]
 name = "Bestand"
+plural = "Bestand"
 description = "Die Menge eines Produkts an einem Lagerort"
 
 [labels.de.model.inventory_item.field.product_id]
@@ -64,7 +67,7 @@ description = "Wo es gelagert wird"
 
 [labels.de.model.inventory_item.field.quantity]
 label = "Menge"
-description = "Vorrätige Stückzahl"
+description = "Vorrätige Stückzahl; ändert sich nur durch validierte Lagerbewegungen"
 
 [labels.de.model.inventory_item.field.reorder_level]
 label = "Meldebestand"
@@ -76,6 +79,7 @@ description = "Chargen- oder Losnummer, falls geführt"
 
 [labels.de.model.inventory_move]
 name = "Lagerbewegung"
+plural = "Lagerbewegungen"
 description = "Eine Bewegung eines Produkts zwischen Lagerorten oder in das Unternehmen hinein oder aus ihm heraus"
 
 [labels.de.model.inventory_move.field.reference]
@@ -118,3 +122,7 @@ description = "Bestätigen, dass die Ware wirklich bewegt wurde: die Menge verl�
 [labels.de.model.inventory_move.action.cancel]
 label = "Stornieren"
 description = "Eine Bewegung im Entwurf stornieren"
+
+[labels.de.model.inventory_item.field.below_reorder]
+description = "Ob die Menge den Meldebestand erreicht oder unterschritten hat (nein, wenn kein Meldebestand gesetzt ist)"
+label = "Niedriger Bestand"

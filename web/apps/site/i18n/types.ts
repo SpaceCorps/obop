@@ -35,7 +35,6 @@ export interface Messages {
     docsNav: string;
     breadcrumb: string;
     home: string;
-    signIn: string;
     startFree: string;
     search: string;
     searchPlaceholder: string;
@@ -128,7 +127,6 @@ export interface Messages {
     marketplace: string;
     categories: Record<Category, string>;
     status: { available: string; marketplace: string };
-    countLine: string;
     h: {
       purpose: string;
       package: string;
@@ -195,7 +193,78 @@ export interface Messages {
     agentsNone: string;
     approvalsLead: string;
     permissionsLead: string;
-    versionLabel: string;
+    /**
+     * The plain-words layer of the apps pages (the index and the top of every app page): short
+     * labels, no jargon. The technical layer above (`h`, `th`, `meta`, ...) sits under "For developers".
+     */
+    store: {
+      ready: string;
+      more: string;
+      open: string;
+      get: string;
+      canDo: string;
+      keeps: string;
+      safe: string;
+      /** One plain sentence that says what an AI agent is; it opens the section `safe`, once on every app page. */
+      safeWhat: string;
+      worksWith: string;
+      info: string;
+      developers: string;
+      category: string;
+      developer: string;
+      /** The row that says which obop versions an app works with, and its value (uses {version}). */
+      compat: string;
+      compatValue: string;
+      manifest: string;
+      /** Where a built-in app's code lives (its manifest row is a snapshot, not the real manifest). */
+      source: string;
+      /** The fact for an app that needs no other app. */
+      standalone: string;
+      /**
+       * The fact for an app that works with others: how many ({n}). One string per plural category
+       * of the language (`Intl.PluralRules`), so Polish can say "2 aplikacje" and "5 aplikacji".
+       */
+      worksCount: Record<"one" | "few" | "many" | "other", string>;
+      /** A built-in app's version in plain words (uses {version}): it moves with obop itself. */
+      sameAsObop: string;
+      directEdit: string;
+      /** Said on every action card that a person approves, next to the person icon. */
+      needsApproval: string;
+      /** Uses {n}: the folded rest of the action cards and of the cards for what it keeps. */
+      showMoreActions: string;
+      showMoreKeeps: string;
+      /**
+       * The Get box of a marketplace app: one plain sentence, the button that opens obop (where
+       * Customize and its Marketplace are), the label above the command line, and what it needs.
+       */
+      getLead: string;
+      openObop: string;
+      commandLine: string;
+      getNote: string;
+      /** A built-in app: the one quiet line under its information. */
+      included: string;
+      /** One plain line under the facts of an experimental app (maturity "experimental"). */
+      experimentalNote: string;
+      safeMasked: string;
+      /** The line about what an AI agent never sees; {list} is the kinds below that the app holds. */
+      safeWithheld: string;
+      /** The tail line of an app that holds a money field an AI agent can read (a price or a total). */
+      safeMoneyClear: string;
+      /** One kind of withheld detail, by the data class that is withheld (apps.ts `WITHHELD_CLASSES`). */
+      safeKinds: Record<"financial" | "confidential_hr" | "special_category" | "secret", string>;
+      safeApprove: string;
+      safeApproveNone: string;
+      /** The tail of the meta description of an app page in a language other than English. */
+      appMeta: string;
+      /** The label that opens the folded technical part under "For developers". */
+      developersShow: string;
+      /** The label of the same button while the part is open. */
+      developersHide: string;
+      /** Said under the purpose on a translated page, where the text is English. */
+      purposeEnglish: string;
+      /** The label that opens a long second paragraph under "What it is for". */
+      readMore: string;
+    };
     /** One-line taglines by module id. */
     taglines: Record<string, string>;
   };

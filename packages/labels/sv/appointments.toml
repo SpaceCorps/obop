@@ -5,6 +5,7 @@ summary = "Bokningsbara personer, rum och utrustning samt bokningar med start, s
 
 [labels.sv.model.appointments_resource]
 name = "Resurs"
+plural = "Resurser"
 description = "Något eller någon som kan bokas"
 
 [labels.sv.model.appointments_resource.field.name]
@@ -30,6 +31,7 @@ description = "Om resursen kan bokas"
 
 [labels.sv.model.appointments_appointment]
 name = "Bokning"
+plural = "Bokningar"
 description = "En bokning av en resurs vid en viss tid"
 
 [labels.sv.model.appointments_appointment.field.resource_id]
@@ -94,3 +96,6 @@ description = "Annullera en schemalagd bokning"
 [labels.sv.model.appointments_appointment.action.mark_no_show]
 label = "Markera som utebliven"
 description = "Registrera att deltagaren inte kom"
+
+[labels.sv.model.appointments_appointment.action.confirm.assert.ends_after_start]
+message = "Bokningen slutar innan den börjar: ange en sluttid efter starten"

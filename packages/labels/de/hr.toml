@@ -5,6 +5,7 @@ summary = "Mitarbeiter, Abteilungen und Abwesenheitsanträge; Gehalts- und Gesun
 
 [labels.de.model.hr_department]
 name = "Abteilung"
+plural = "Abteilungen"
 description = "Ein Team oder eine Abteilung des Unternehmens"
 
 [labels.de.model.hr_department.field.name]
@@ -21,6 +22,7 @@ description = "Kostenstellennummer, die das Finanzwesen verwendet"
 
 [labels.de.model.hr_employee]
 name = "Mitarbeiter"
+plural = "Mitarbeiter"
 description = "Eine im Unternehmen beschäftigte Person"
 
 [labels.de.model.hr_employee.field.name]
@@ -124,6 +126,7 @@ description = "Den Beschäftigungsdatensatz beenden; nur mit Entscheidung der Pe
 
 [labels.de.model.hr_leave_request]
 name = "Abwesenheitsantrag"
+plural = "Abwesenheiten"
 description = "Ein Antrag auf freie Tage"
 
 [labels.de.model.hr_leave_request.field.employee_id]
@@ -194,3 +197,15 @@ description = "Foto der Person (PNG, JPEG, WebP oder GIF; Metadaten wie der Stan
 [labels.de.model.hr_leave_request.field.requested_by]
 label = "Beantragt von"
 description = "Benutzername der Person, die die Abwesenheit beantragt; standardmäßig die Person, die den Antrag stellt. Nur sie und hr.manager sehen den Antrag"
+
+[labels.de.model.hr_leave_request.action.request.assert.dates_in_order]
+message = "Der letzte Tag der Abwesenheit liegt vor ihrem ersten Tag"
+
+[labels.de.model.hr_leave_request.action.request.assert.days_given]
+message = "Geben Sie die Zahl der Arbeitstage der Abwesenheit an"
+
+[labels.de.model.hr_leave_request.action.approve.assert.dates_in_order]
+message = "Der letzte Tag der Abwesenheit liegt vor ihrem ersten Tag"
+
+[labels.de.model.hr_leave_request.action.approve.assert.days_given]
+message = "Geben Sie die Zahl der Arbeitstage der Abwesenheit an"

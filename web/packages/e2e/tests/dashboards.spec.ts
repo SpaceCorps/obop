@@ -235,7 +235,9 @@ test.describe("dashboards", () => {
       await expect(form.getByText("Give the tile a title")).toBeVisible();
 
       await form.getByLabel("Title").fill("Lost amount");
-      await form.getByLabel("Records of").selectOption(model);
+      // The model is found by searching: the app is called Deals.
+      await form.getByRole("combobox", { name: "Records of" }).fill("Deals");
+      await form.getByRole("option", { name: /Deals/ }).first().click();
       await form.getByLabel("Combine by").selectOption("sum");
       // Only the number and money fields of the chosen model are offered to add up.
       await expect(form.getByLabel("Field to add up").locator("option")).toHaveText([
@@ -246,7 +248,8 @@ test.describe("dashboards", () => {
       await form.getByRole("button", { name: "Add a condition" }).click();
       await form.getByLabel("Field", { exact: true }).selectOption("stage");
       await form.getByLabel("Value").selectOption("lost");
-      await expect(form.getByText("stage = lost").first()).toBeVisible();
+      // The form says in words what the tile will show, with today's numbers.
+      await expect(form.locator(".wsentence")).toContainText("where Stage is Lost: €30.00");
       await form.getByRole("button", { name: "Add tile" }).click();
 
       await expect(page.locator(".toast").filter({ hasText: "Tile added" })).toBeVisible();

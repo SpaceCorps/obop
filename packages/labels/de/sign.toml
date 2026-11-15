@@ -5,6 +5,7 @@ summary = "Dokumentvorlagen und Signaturanfragen; ein PDF aus Dokumente lässt s
 
 [labels.de.model.sign_template]
 name = "Vorlage"
+plural = "Vorlagen"
 description = "Ein Dokument, das zur Unterzeichnung versendet werden kann"
 
 [labels.de.model.sign_template.field.name]
@@ -29,6 +30,7 @@ description = "Ob neue Anfragen die Vorlage verwenden können"
 
 [labels.de.model.sign_request]
 name = "Signaturanfrage"
+plural = "Signaturanfragen"
 description = "Eine Aufforderung an eine Person, ein Dokument zu unterzeichnen"
 
 [labels.de.model.sign_request.field.template_id]
@@ -53,7 +55,7 @@ description = "Name der Person, die unterzeichnen muss"
 
 [labels.de.model.sign_request.field.signer_email]
 label = "E-Mail Unterzeichner"
-description = "E-Mail-Adresse der unterzeichnenden Person; optional, obop versendet bei einer Anfrage zu einem Dokument keine E-Mail"
+description = "E-Mail-Adresse der unterzeichnenden Person; optional, bei einer Anfrage zu einem Dokument wird keine E-Mail versendet"
 
 [labels.de.model.sign_request.field.sent_on]
 label = "Gesendet am"
@@ -139,6 +141,7 @@ description = "Eine Anfrage zu einem Dokument in Dokumente senden: nimmt den SHA
 
 [labels.de.model.sign_link]
 name = "Unterschriftslink"
+plural = "Unterschriftslinks"
 description = "Ein Einmal-Link, mit dem eine Person eine Anfrage unterzeichnen kann; nur ein Hash des Geheimnisses wird gespeichert, deshalb wird der Link beim Erstellen einmal angezeigt"
 
 [labels.de.model.sign_link.field.request_id]

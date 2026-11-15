@@ -1,9 +1,11 @@
 [
   "Beta",
+  "DD",
   "Error",
   "Experimental",
   "Google Drive",
   "Kanban",
+  "MM",
   "Marketing",
   "No",
   "Total",
@@ -27,7 +29,11 @@
   "{field}: {values}",
   "{field}…",
   "{from} – {to}",
+  "{hours} h",
+  "{hours} h {minutes}",
+  "{minutes} min",
   "{name} ({count}):",
+  "{quantity} × {price}",
   "{row}, {column}: {value}",
   "{title}. {values}."
 ]

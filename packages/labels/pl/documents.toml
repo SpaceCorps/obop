@@ -5,6 +5,7 @@ summary = "Rejestr dokumentów firmowych z właścicielem, terminem ważności i
 
 [labels.pl.model.documents_folder]
 name = "Folder"
+plural = "Foldery"
 description = "Folder grupujący dokumenty"
 
 [labels.pl.model.documents_folder.field.name]
@@ -21,6 +22,7 @@ description = "Co należy do folderu"
 
 [labels.pl.model.documents_document]
 name = "Dokument"
+plural = "Dokumenty"
 description = "Umowa, regulamin, certyfikat lub inny zarejestrowany dokument"
 
 [labels.pl.model.documents_document.field.title]

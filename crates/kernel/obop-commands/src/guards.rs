@@ -178,9 +178,22 @@ fn update_guard(def: &ModelDef, eng: &Engine) -> Option<Guard> {
             };
             verdict.requires.push(chosen.group);
             verdict.approval |= chosen.approval;
+            // The fields the action needs (D95) that came with the update go to the action,
+            // which writes them in its own unit: one call is enough for an agent.
+            let mut step = std::collections::BTreeMap::new();
+            step.insert("id".to_string(), Value::text(&id));
+            if let Some(cmd) = def.commands.iter().find(|c| c.name == chosen.command)
+                && let Some(ui) = &cmd.ui
+            {
+                for n in &ui.needs {
+                    if let Some(v) = m.get(n.as_str()) {
+                        step.insert(n.clone(), v.clone());
+                    }
+                }
+            }
             verdict.pre.push(Pre {
                 command: format!("{}.{}", def.name, chosen.command),
-                input: Value::map([("id", Value::text(&id))]),
+                input: Value::Map(step),
                 field,
             });
             moved.push((field, to.to_string()));
@@ -224,13 +237,19 @@ fn action_guard(def: &ModelDef, eng: &Engine, command: &'static str) -> Guard {
         let actor = Actor::of(p);
         let look = lookup_fn(&eng);
         let reads = Plain(eng.backend());
-        let rec = Gate::new(&reads, &look, &actor).load(&def, &id)?;
+        let mut rec = Gate::new(&reads, &look, &actor).load(&def, &id)?;
         let cmd = def
             .commands
             .iter()
             .find(|c| c.name == command)
             .ok_or_else(|| format!("{}.{command} is not declared", def.name))?;
+        // The fields the action needs may come with its input (D95): the checks see them.
+        rec.extend(crate::engine::hints::needs_of(cmd, input));
         precheck(&def, &rec, cmd)?;
+        if let Some(n) = crate::engine::hints::need_missing(cmd, &rec) {
+            return Err(crate::engine::hints::need_message(&def, cmd, n));
+        }
+        crate::engine::hints::not_by(&def, cmd, &rec, &actor.id)?;
         let mut verdict = Verdict::default();
         let def = eng
             .def(def.name)
@@ -242,12 +261,23 @@ fn action_guard(def: &ModelDef, eng: &Engine, command: &'static str) -> Guard {
                 let Some(t) = eng.def(e.model()) else {
                     continue;
                 };
-                if matches!(
+                // A `set` on the record itself (D95) is part of the action: its own group
+                // authorises it, so the model's write group is not asked for.
+                let own = matches!(
                     e.kind,
-                    EffectKind::Create { .. }
-                        | EffectKind::Update { .. }
-                        | EffectKind::Adjust { .. }
-                ) {
+                    EffectKind::Update {
+                        target: obop_registry::Target::This,
+                        ..
+                    }
+                );
+                if !own
+                    && matches!(
+                        e.kind,
+                        EffectKind::Create { .. }
+                            | EffectKind::Update { .. }
+                            | EffectKind::Adjust { .. }
+                    )
+                {
                     if !p.allows(t.write_group) {
                         return Err(format!(
                             "{}.{} also changes {} records, which needs the {} group",
@@ -371,6 +401,8 @@ fn delete_guard(def: &ModelDef, eng: &Engine) -> Guard {
         let reads = Plain(eng.backend());
         let def = eng.def(name).ok_or_else(|| format!("no model {name}"))?;
         let rec = Gate::new(&reads, &look, &actor).load(&def, &id)?;
+        // A frozen record (D77) says so before anything else is said about it.
+        crate::engine::frozen::delete_refused(&eng, &def, &id)?;
         if let Some(field) = crate::engine::seq::holds_gapless_number(&def, &rec) {
             return Err(crate::engine::crud::gapless_message(&def, &id, field));
         }

@@ -44,6 +44,8 @@ serde_json = "1"
 rusqlite = { version = "0.40", features = ["bundled"] }
 sha2 = "0.11"
 base64 = "0.22"
+# `obop upload --url`: the one command that is a client of a running instance.
+ureq = "3"
 
 
 [lints]
@@ -52,6 +54,7 @@ workspace = true
 [dev-dependencies]
 obop-storage = { workspace = true, features = ["test-support"] }
 obop-auth = { workspace = true, features = ["test-support"] }
+obop-commands = { workspace = true, features = ["test-support"] }
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 # The brand route tests serve the router on a loopback socket and bound their waits.

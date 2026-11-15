@@ -18,9 +18,12 @@ const spec = (title: string): Omit<ModuleSpec, "id"> => ({
   ],
 });
 
-const bar = (page: Page) =>
-  page.getByRole("complementary", { name: /record$/ }).getByRole("list", { name: "State" });
-const step = (page: Page, name: string) => bar(page).getByRole("button", { name, exact: true });
+const panelOf = (page: Page) => page.getByRole("complementary", { name: /record$/ });
+const bar = (page: Page) => panelOf(page).getByRole("list", { name: "State" });
+/** The step the record is at: the status bar is a stepper that only shows the way (record form). */
+const current = (page: Page) => bar(page).locator("li[aria-current=step]");
+const actionRow = (page: Page) => panelOf(page).locator(".actionrow");
+const action = (page: Page, name: string | RegExp) => actionRow(page).getByRole("button", { name });
 const stateOf = async (api: Api, model: string, id: string) =>
   (await api.run("root", `${model}.get`, { id })).state;
 
@@ -35,15 +38,11 @@ test.describe("governed fields in the UI", () => {
     const model = await scratchModule(spec("Governed create"));
     const title = uid("Fresh");
     await signIn("root", `/${model}/${model}?view=list&id=new`);
-    const panel = page.getByRole("complementary", { name: /record$/ });
-    await expect(step(page, "New")).toHaveAttribute("aria-current", "step");
-    for (const other of ["Doing", "Done"]) {
-      await expect(step(page, other)).toHaveAttribute("aria-disabled", "true");
-      await step(page, other).click({ force: true }); // a click on a blocked step does nothing
-      await expect(step(page, "New")).toHaveAttribute("aria-current", "step");
-    }
-    await step(page, "Done").hover();
-    await expect(page.getByRole("tooltip")).toContainText(
+    const panel = panelOf(page);
+    await expect(current(page)).toHaveText("New");
+    // No step can be pressed: a governed state moves only through actions.
+    await expect(bar(page).getByRole("button")).toHaveCount(0);
+    await expect(panel.locator(".rec-starts")).toContainText(
       `A new ${model} starts as New; it moves on through actions`,
     );
 
@@ -54,7 +53,7 @@ test.describe("governed fields in the UI", () => {
     expect(stored?.state).toBe("new");
   });
 
-  test("the status bar enables only the moves an action allows and explains the others", async ({
+  test("the action row offers only the moves valid now, the next step first", async ({
     page,
     signIn,
     api,
@@ -65,38 +64,31 @@ test.describe("governed fields in the UI", () => {
     const rec = await api.create("root", model, { title: uid("Bar"), state: "new" });
     await signIn("root", `/${model}/${model}?view=list&id=${rec.id}`);
 
-    await expect(step(page, "New")).toHaveAttribute("aria-current", "step");
-    await expect(step(page, "Doing")).not.toHaveAttribute("aria-disabled", "true");
-    await expect(step(page, "Done")).toHaveAttribute("aria-disabled", "true");
-    await step(page, "Done").hover();
-    await expect(page.getByRole("tooltip")).toHaveText(
-      `No action moves a ${model} from New to Done`,
-    );
-    await step(page, "Done").click({ force: true });
-    expect(await stateOf(api, model, rec.id)).toBe("new");
+    await expect(current(page)).toHaveText("New");
+    // Only Start leads on from New: it is the one filled button, and no other move is offered.
+    await expect(actionRow(page).getByRole("button")).toHaveCount(1);
+    await expect(action(page, "Start")).toHaveClass(/primary/);
 
-    // Doing runs the start action; Done is then reachable and shows the approval mark.
-    await step(page, "Doing").click();
-    await expect(page.locator(".toast").filter({ hasText: "State: Doing" })).toBeVisible();
+    await action(page, "Start").click();
+    await expect(page.locator(".toast").filter({ hasText: "is now doing" })).toBeVisible();
     expect(await stateOf(api, model, rec.id)).toBe("doing");
-    await expect(step(page, "Done *")).toBeVisible();
-    await expect(step(page, "New")).toHaveAttribute("aria-disabled", "true");
-    await step(page, "Done *").click();
-    await expect(page.locator(".toast").filter({ hasText: "State: Done" })).toBeVisible();
+    await expect(current(page)).toHaveText("Doing");
+
+    // Finish needs a person's approval when an agent runs it: it carries the shield, not a star.
+    const finish = action(page, /^Finish/);
+    await expect(finish).toHaveClass(/primary/);
+    await expect(finish.locator(".approval-mark")).toHaveAttribute(
+      "aria-label",
+      "An agent needs a person's approval for this",
+    );
+    await finish.click();
+    await expect(page.locator(".toast").filter({ hasText: "is now done" })).toBeVisible();
     expect(await stateOf(api, model, rec.id)).toBe("done");
 
-    // The action buttons follow the state too: only Reopen is available now.
-    const actions = page.getByRole("complementary", { name: /record$/ });
-    await expect(actions.getByRole("button", { name: "Reopen *" })).not.toHaveAttribute(
-      "aria-disabled",
-      "true",
-    );
-    await expect(actions.getByRole("button", { name: "Start" })).toHaveAttribute(
-      "aria-disabled",
-      "true",
-    );
-    await actions.getByRole("button", { name: "Start" }).hover();
-    await expect(page.getByRole("tooltip")).toHaveText("Only available when State is New");
+    // Only Reopen is available now, and a move back is not the next step.
+    await expect(action(page, /^Reopen/)).toBeVisible();
+    await expect(action(page, /^Reopen/)).not.toHaveClass(/primary/);
+    await expect(action(page, "Start")).toHaveCount(0);
   });
 
   test("a stale page that tries a move the server now refuses shows the server's message", async ({
@@ -111,12 +103,12 @@ test.describe("governed fields in the UI", () => {
     const model = await scratchModule(spec("Governed stale"));
     const rec = await api.create("root", model, { title: uid("Stale"), state: "new" });
     await signIn("root", `/${model}/${model}?view=list&id=${rec.id}`);
-    await expect(step(page, "Doing")).not.toHaveAttribute("aria-disabled", "true");
+    await expect(action(page, "Start")).toBeVisible();
 
     // Someone else moves it on while this page is open.
     await api.run("root", `${model}.start`, { id: rec.id });
-    await step(page, "Doing").click();
-    const alert = page.getByRole("complementary", { name: /record$/ }).getByRole("alert");
+    await action(page, "Start").click();
+    const alert = panelOf(page).getByRole("alert");
     await expect(alert).toBeVisible();
     await expect(alert).toContainText(/new/);
     await expect(page.locator(".toast").filter({ hasText: /new/ })).toBeVisible();
@@ -145,14 +137,15 @@ test.describe("governed fields in the UI", () => {
     await expect(card("Done")).toHaveCount(0);
     expect(await stateOf(api, model, rec.id)).toBe("new");
 
-    // The Move to select lists every other state, with the unreachable ones disabled and explained.
-    const moveTo = card("New").getByLabel(/^Move .* to$/);
-    await expect(moveTo.locator("option", { hasText: "Done" })).toBeDisabled();
-    await expect(moveTo.locator("option", { hasText: "Done" })).toHaveAttribute(
-      "title",
-      `No action moves a ${model} from New to Done`,
-    );
-    await expect(moveTo.locator("option", { hasText: "Doing" })).toBeEnabled();
+    // The card's Move to menu lists every other state, the unreachable ones disabled and explained.
+    await card("New")
+      .getByRole("button", { name: /^Move .* to$/ })
+      .click();
+    const done = page.getByRole("menuitem", { name: /^Done/ });
+    await expect(done).toBeDisabled();
+    await expect(done).toHaveAttribute("title", `No action moves a ${model} from New to Done`);
+    await expect(page.getByRole("menuitem", { name: /^Doing/ })).toBeEnabled();
+    await page.keyboard.press("Escape");
     // The keyboard twin (Shift+Arrow) follows the same rules: one step right is allowed, the next is not.
     await card("New").focus();
     await page.keyboard.press("Shift+ArrowRight");
@@ -222,20 +215,12 @@ test.describe("governed fields for an agent", () => {
     );
     await page.goto(`/#/${model}/${model}?view=list&id=${rec.id}`);
 
-    await expect(step(page, "Done *")).toBeVisible();
-    await step(page, "Done *").click();
+    // The action proposes: the toast names the plan and nothing changes.
+    await action(page, /^Finish/).click();
     const toast = page.locator(".toast").filter({ hasText: "Approval needed" });
-    await expect(toast).toContainText("moving");
+    await expect(toast).toContainText("Finish");
     await expect(toast).toContainText(/plan [0-9a-f]{8}/);
     await expect(toast).toContainText("Nothing changes until a human approves it");
-    expect(await stateOf(api, model, rec.id)).toBe("doing");
-
-    // The action button proposes in the same way.
-    await page
-      .getByRole("complementary", { name: /record$/ })
-      .getByRole("button", { name: "Finish *" })
-      .click();
-    await expect(page.locator(".toast").filter({ hasText: "Approval needed" })).toHaveCount(2);
     expect(await stateOf(api, model, rec.id)).toBe("doing");
   });
 });

@@ -5,6 +5,7 @@ summary = "Tickets de soporte con prioridad, gravedad, objetivos de nivel de ser
 
 [labels.es.model.helpdesk_sla]
 name = "SLA"
+plural = "SLA"
 description = "Una política de nivel de servicio: con qué rapidez se deben responder y resolver los tickets de una prioridad"
 
 [labels.es.model.helpdesk_sla.field.name]
@@ -35,6 +36,7 @@ description = "Indica si la política se puede asignar a tickets nuevos"
 
 [labels.es.model.helpdesk_ticket]
 name = "Ticket"
+plural = "Tickets"
 description = "Una solicitud de atención al cliente"
 
 [labels.es.model.helpdesk_ticket.field.subject]

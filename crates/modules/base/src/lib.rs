@@ -1,62 +1,78 @@
 //! `base` implementation: the Contacts app foundation.
 
 use obop_commands::{Dispatcher, Store, Value};
-use obop_registry::{CommandDef, FieldDef as F, FieldKind, ModelDef, Module, ModuleMeta};
+use obop_registry::{CommandDef, FieldDef as F, FieldKind, ModelDef, ModelUi, Module, ModuleMeta};
 use obop_types::DataClass::*;
 
 pub fn module() -> Module {
     let m = Module {
         id: "base".into(),
         name: "Contacts".into(),
-        models: vec![ModelDef {
-            name: "party",
-            description: "A person or organisation the business deals with",
-            read_group: "base.user",
-            write_group: "base.user",
-            access: Option::None,
-            fields: vec![
-                F::new("name", "Display name", PublicDirectory, true, "base.user").required(),
-                F::new(
-                    "email",
-                    "Work email address",
-                    PublicDirectory,
-                    true,
-                    "base.user",
-                ),
-                F::new(
-                    "tax_id",
-                    "Tax identifier of a natural person",
-                    Financial,
-                    true,
-                    "base.user",
-                ),
-                F::new(
-                    "notes",
-                    "Free-text internal notes",
-                    Internal,
-                    true,
-                    "base.user",
-                )
-                .kind(FieldKind::LongText),
-                F::new(
-                    "photo",
-                    "Photo or logo of the contact (PNG, JPEG, WebP or GIF, up to 2 MiB)",
-                    Internal,
-                    true,
-                    "base.user",
-                )
-                .kind(FieldKind::Image(2 * 1024 * 1024)),
-            ],
-            commands: vec![
-                CommandDef::new(
-                    "erase",
-                    "Anonymise the party in place and record the erasure",
-                    "privacy.officer",
-                )
-                .approval(),
-            ],
-            ext: Default::default(),
-        }],
+        models: vec![
+            ModelDef {
+                name: "party",
+                description: "A person or organisation the business deals with",
+                read_group: "base.user",
+                write_group: "base.user",
+                access: Option::None,
+                fields: vec![
+                    F::new("name", "Display name", PublicDirectory, true, "base.user").required(),
+                    F::new(
+                        "email",
+                        "Work email address",
+                        PublicDirectory,
+                        true,
+                        "base.user",
+                    )
+                    .display("email"),
+                    F::new(
+                        "tax_id",
+                        "Tax identifier of a natural person",
+                        Financial,
+                        true,
+                        "base.user",
+                    ),
+                    F::new(
+                        "notes",
+                        "Free-text internal notes",
+                        Internal,
+                        true,
+                        "base.user",
+                    )
+                    .kind(FieldKind::LongText),
+                    F::new(
+                        "photo",
+                        "Photo or logo of the contact (PNG, JPEG, WebP or GIF, up to 2 MiB)",
+                        Internal,
+                        true,
+                        "base.user",
+                    )
+                    .kind(FieldKind::Image(2 * 1024 * 1024)),
+                ],
+                commands: vec![
+                    CommandDef::new(
+                        "erase",
+                        "Anonymise the party in place and record the erasure",
+                        "privacy.officer",
+                    )
+                    .approval()
+                    .danger()
+                    .confirm("Erase this contact's personal data? This cannot be undone.")
+                    .done("Personal data erased"),
+                ],
+                ext: Default::default(),
+            }
+            .with_ui(ModelUi {
+                title: Some("{name}".into()),
+                subtitle: Some("{email}".into()),
+                list: vec!["name".into(), "email".into()],
+                card: vec!["photo".into(), "name".into(), "email".into()],
+                quick_create: vec!["name".into(), "email".into()],
+                order: Some("name asc".into()),
+                default_view: Some("gallery".into()),
+                ..Default::default()
+            }),
+        ],
         network_destinations: vec![],
         description: String::new(),
         translations: Default::default(),
@@ -66,9 +82,11 @@ pub fn module() -> Module {
             &["contacts", "people", "companies", "gdpr"],
             "contacts",
             &[],
-        ),
+        )
+        .home("party"),
     };
     m.translated(&[
+        include_str!("../../../../packages/labels/en/base.toml"),
         include_str!("../../../../packages/labels/de/base.toml"),
         include_str!("../../../../packages/labels/fr/base.toml"),
         include_str!("../../../../packages/labels/pl/base.toml"),

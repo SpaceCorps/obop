@@ -11,6 +11,9 @@ mod assert_lang_tests;
 mod backup_cli;
 #[cfg(test)]
 mod backup_gate_tests;
+mod bank_matching;
+#[cfg(test)]
+mod bank_matching_tests;
 #[cfg(test)]
 mod blobs_tests;
 mod brand_cmd;
@@ -18,6 +21,10 @@ mod brand_cmd;
 mod brand_cmd_tests;
 #[cfg(test)]
 mod brand_commands_tests;
+#[cfg(test)]
+mod brand_docs_tests;
+#[cfg(test)]
+mod brand_enrol_tests;
 #[cfg(test)]
 mod brand_http_tests;
 #[cfg(test)]
@@ -39,6 +46,8 @@ mod drive_tests;
 #[cfg(test)]
 mod error_seam_tests;
 #[cfg(test)]
+mod finance_supply_tests;
+#[cfg(test)]
 mod health_tests;
 mod import_cmd;
 #[cfg(test)]
@@ -46,8 +55,12 @@ mod import_map_tests;
 mod import_oas;
 #[cfg(test)]
 mod import_oas_tests;
+mod import_timeline;
 #[cfg(test)]
 mod internal_tables_scan_tests;
+mod invoice_posting;
+#[cfg(test)]
+mod invoice_posting_tests;
 #[cfg(test)]
 mod kinds_tests;
 #[cfg(test)]
@@ -75,16 +88,28 @@ mod passkey_tests;
 #[cfg(test)]
 mod payments_tests;
 #[cfg(test)]
+mod people_collab_hints_tests;
+#[cfg(test)]
 mod public_site_tests;
 #[cfg(test)]
 mod recorded_tables_tests;
 #[cfg(test)]
 mod settings_cmd_tests;
+#[cfg(test)]
+mod shell_pin_tests;
+#[cfg(test)]
+mod shell_tests;
 mod sie;
 #[cfg(test)]
 mod sie_tests;
 #[cfg(test)]
 mod sign_tests;
+mod time_billing;
+#[cfg(test)]
+mod time_billing_tests;
+mod vat;
+#[cfg(test)]
+mod vat_tests;
 // The reader of the Rust source that the scans of obop-http use, compiled here too (it is a file of
 // that crate's tests and uses nothing of it): the scan of the tables the program names needs the
 // real `App`, which only this crate has. What this crate's scan does not use is left alone.
@@ -98,6 +123,9 @@ mod storage_cli;
 mod update_cmd;
 #[cfg(test)]
 mod update_tests;
+mod upload_cmd;
+#[cfg(test)]
+mod upload_cmd_tests;
 
 use app::{App, DevAuth};
 use obop_auth::Auth;
@@ -107,7 +135,7 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 const USAGE: &str = "usage: obop <command>
-  --version                                     the name, the core version and the commit the build was made from: obop 0.2.1 (abcdef012345)
+  --version                                     the name, the core version and the commit the build was made from: obop 0.2.2 (abcdef012345)
   modules labels TARGET LANG                    a label template (every translatable text, English values) for a module, bundled package or FILE
   modules check [--complete] [--catalog] [FILE...]
                                                 the install gate over linked modules, or over package files (no database):
@@ -150,13 +178,16 @@ const USAGE: &str = "usage: obop <command>
   admin sso only USER on|off                    make USER sign in with Microsoft only (needs a binding, one sign-in with the button
                                                 after it, and two other administrators who keep a password
                                                 and a second factor), or turn that off
-  admin brand status                            the instance branding (name, slug, logo, a title and a message per language): what is
-                                                in force and where each value comes from, the titles and messages that are stored,
-                                                and any stored field that fell back
+  admin brand status                            the instance branding (name, slug, logo, a title and a message per language, and the
+                                                title, logo address, accent and tab icon of the public shop): what is in force and
+                                                where each value comes from, the titles and messages that are stored, and any
+                                                stored field that fell back
   admin brand configure [--name N] [--slug S] [--title LANG=TEXT]... [--message LANG=TEXT]...
-                        [--logo-file FILE.svg | --clear-logo] [--from FILE.toml] [--dry-run]
+                        [--logo-file FILE.svg | --clear-logo] [--hide-product-docs on|off]
+                        [--from FILE.toml] [--dry-run]
                                                 set the fields given and keep the others (the first call needs --name); an empty text
-                                                clears a field (--title sv=); --from reads the [record] table of a values file;
+                                                clears a field (--title sv=); --hide-product-docs on hides the Brand book and the Guide
+                                                from the people of the instance; --from reads the [record] table of a values file;
                                                 --dry-run checks and writes nothing; every change is written to the security log
   admin brand clear [--dry-run]                 remove the branding
   admin brand check FILE.svg                    say whether FILE.svg is an artwork the branding accepts and its version, or every
@@ -304,6 +335,13 @@ const USAGE: &str = "usage: obop <command>
                                                 write a SIE 4 file (CP437) of the posted moves of the fiscal year that starts in
                                                 YYYY (calendar year if there is none), with the company of accounting_se_company
                                                 when installed; needs accounting.user. The typed command is sie_exchange.export
+  import timeline FILE [--vehicle V] [--since YYYY-MM-DD] [--dry-run] [--allow-straight-line] [--db URL] [--token TOKEN]
+                                                the drives in a Google Timeline export (Maps on the phone: Timeline, Export Timeline data)
+                                                become Mileage trips of the token's person, in state `ended`; you then set `purpose` on
+                                                the ones that were for work and submit them, and discard the rest. The server computes
+                                                the distance from the points. --dry-run lists the drives and writes nothing; a drive
+                                                with no recorded path (only its two ends) is skipped unless --allow-straight-line;
+                                                running it again on the same file creates nothing twice. Needs mileage.driver
   sie import FILE [--dry-run] [--post] [--default-account-types | --account-types FILE] [--db URL] [--token TOKEN]
                                                 import a SIE 4 file: missing accounts (types UNVERIFIED, you confirm them), one journal
                                                 per series, draft moves with series and number in `reference`. --post runs the real
@@ -329,6 +367,14 @@ const USAGE: &str = "usage: obop <command>
   call [--token TOKEN] <model> <command> [k=v...]
                                                 values are text, converted by field type; for list and search
                                                 filter, order and aggregate are JSON text (in single quotes)
+  upload FILE --field MODEL.FIELD [--record ID] [--content-type TYPE] [--url URL] [--token TOKEN]
+                                                store FILE as an upload for the image or file field MODEL.FIELD, with the checks of
+                                                POST /api/blobs (type, size, the groups of the field), and print its id, type, size
+                                                and SHA-256 as JSON; --record ID then sets that field of the record (the `update`
+                                                command, as you). The type is taken from the file name unless --content-type says it.
+                                                With --url https://HOST (or OBOP_URL) the file goes to that running instance over
+                                                its REST API, not into the database of --db. An upload that no record takes is
+                                                removed after a day
 global options
   --db URL              sqlite://obop.db (default, local), postgres://user:pass@host/db, memory:
                         (or OBOP_DATABASE_URL)
@@ -411,9 +457,15 @@ fn main() -> ExitCode {
     let (oas_from, args) = take_opt(&args, "--from");
     let (oas_documents, args) = take_opt(&args, "--documents");
     let (oas_types, args) = take_opt(&args, "--account-types");
+    let (tl_vehicle, args) = take_opt(&args, "--vehicle");
+    let (tl_since, args) = take_opt(&args, "--since");
     let (sie_year, args) = take_opt(&args, "--year");
     let (sso_tenant, args) = take_opt(&args, "--tenant");
     let (sso_client, args) = take_opt(&args, "--client-id");
+    let (up_field, args) = take_opt(&args, "--field");
+    let (up_record, args) = take_opt(&args, "--record");
+    let (up_type, args) = take_opt(&args, "--content-type");
+    let (up_url, args) = take_opt(&args, "--url");
     let (flags, args): (Vec<&str>, Vec<&str>) = args.into_iter().partition(|a| {
         matches!(
             *a,
@@ -432,6 +484,7 @@ fn main() -> ExitCode {
                 | "--post"
                 | "--allow-broken-chain"
                 | "--default-account-types"
+                | "--allow-straight-line"
         )
     });
     let has = |f: &str| flags.contains(&f);
@@ -598,6 +651,16 @@ fn main() -> ExitCode {
                 "usage: obop import oas --from OAS.db [--documents DIR] [--dry-run] [--post]",
             )),
         },
+        ["import", "timeline", file] => import_timeline::run_cli(
+            &opts,
+            &import_timeline::Args {
+                file,
+                vehicle: tl_vehicle,
+                since: tl_since,
+                dry_run: has("--dry-run"),
+                allow_straight_line: has("--allow-straight-line"),
+            },
+        ),
         ["sie", "export"] => match sie_year {
             Some(year) => sie::export_cli(
                 &opts,
@@ -657,6 +720,27 @@ fn main() -> ExitCode {
         ["commands"] => commands(&opts),
         ["openapi"] => openapi_cmd::run(out_file),
         ["call", model, command, kv @ ..] => call(&opts, model, command, kv),
+        ["upload", file] => {
+            let url = up_url.map(String::from).or_else(|| {
+                std::env::var("OBOP_URL")
+                    .ok()
+                    .filter(|u| !u.trim().is_empty())
+            });
+            upload_cmd::run(
+                &opts,
+                &upload_cmd::Args {
+                    file,
+                    field: up_field,
+                    record: up_record,
+                    content_type: up_type,
+                    url: url.as_deref(),
+                },
+            )
+        }
+        ["upload", ..] => {
+            eprintln!("{}", upload_cmd::USAGE);
+            Err(ExitCode::from(2))
+        }
         _ => {
             eprintln!("{USAGE}");
             Err(ExitCode::from(2))
@@ -1130,7 +1214,12 @@ fn agent_token(o: &Opts, user: &str, scopes: Option<&str>, label: Option<&str>) 
         .principal(user)
         .ok_or_else(|| fail(&format!("no user {user}")))?;
     let t = auth
-        .issue_agent_token(&owner, &csv(scopes), label.unwrap_or("agent"))
+        .issue_agent_token_by_operator(
+            &owner,
+            &csv(scopes),
+            label.unwrap_or("agent"),
+            &app.dispatcher.known_groups(),
+        )
         .map_err(|e| fail(&e))?;
     println!("{t}");
     eprintln!("shown once; store it like a password");
@@ -2954,7 +3043,7 @@ mod tests {
         let _guard = obop_storage::testing::TempPath::dir("obop-check");
         let dir = _guard.path().to_path_buf();
         let bad = dir.join("bad.toml");
-        std::fs::write(&bad, fleet.replace("0.3.0", "2")).unwrap();
+        std::fs::write(&bad, fleet.replace("0.3.2", "2")).unwrap();
         let good = root.join("packages/fleet.toml");
         let (bad_s, good_s) = (
             bad.to_string_lossy().to_string(),
@@ -3482,8 +3571,8 @@ mod bundled_packages {
             let fields: Vec<FieldInfo> = self.meta[model].fields.clone();
             let mut m = BTreeMap::new();
             for f in fields {
-                // Computed values and numbers are the system's to give.
-                if f.computed || f.sequence {
+                // Computed values, numbers and read-only fields (D95) are the system's to give.
+                if f.computed || f.sequence || f.hints.as_ref().is_some_and(|h| h.readonly) {
                     continue;
                 }
                 let v = match f.kind {
@@ -3508,6 +3597,9 @@ mod bundled_packages {
                     "longtext" => Value::text("a longer sample text"),
                     "number" => Value::Int(1),
                     "money" => Value::Int(12_345),
+                    // The sample periods (2026-01-31) are closed by the walk below, and an entry
+                    // dated in a closed period is frozen by its lock date (D77).
+                    "date" if model == "accounting_move" => Value::text("2026-02-15"),
                     "date" => Value::text("2026-01-31"),
                     "datetime" => Value::text("2026-01-31T09:30:00Z"),
                     "decimal" => Value::Text(match f.scale.unwrap_or(0) {
@@ -3612,7 +3704,20 @@ mod bundled_packages {
                 fields.remove("document_id");
                 fields.remove("document_file");
             }
-            self.app.store.insert(model, fields).unwrap()
+            let id = self.app.store.insert(model, fields).unwrap();
+            // An entry is posted only with an amount (accounting 0.3.1): one balanced line.
+            if model == "accounting_move" {
+                let account = self.record("accounting_account", &mut Vec::new());
+                let line = [
+                    ("move_id", Value::text(&id)),
+                    ("account_id", Value::text(&account)),
+                    ("debit", Value::Int(100)),
+                    ("credit", Value::Int(100)),
+                ];
+                let line = line.into_iter().map(|(k, v)| (k.to_string(), v)).collect();
+                self.app.store.insert("accounting_move_line", line).unwrap();
+            }
+            id
         }
     }
 
@@ -3732,8 +3837,14 @@ mod bundled_packages {
                     matches!(list.value, Value::List(l) if !l.is_empty()),
                     "{name}"
                 );
-                // A required field cannot be left out.
-                if let Some(req) = model.field.iter().find(|f| f.required) {
+                // A required field cannot be left out (one the server does not fill in itself:
+                // no D95 `default` or `fill_from`, and not a state that starts at its first option).
+                if let Some(req) = model.field.iter().find(|f| {
+                    f.required
+                        && f.default.is_none()
+                        && f.fill_from.is_none()
+                        && !model.action.iter().any(|a| a.field == f.name)
+                }) {
                     let Value::Map(mut input) = mk.input(name, None, &mut vec![name.to_string()])
                     else {
                         unreachable!()
@@ -4073,9 +4184,44 @@ mod bundled_packages {
                 from,
                 "{cmd} refused, state unchanged"
             );
+            // The action's own group is enough: a D95 `set` effect that stamps the record the
+            // action runs on is part of the action, not a write under the model's write group.
             let allowed = Principal::user("a", &[group]);
             call(&app, &allowed, &cmd, by_id(&rec)).unwrap_or_else(|e| panic!("{cmd}: {e:?}"));
         }
+    }
+
+    /// An `update` that moves a governed field runs the action it implies with the fields that
+    /// action needs (D95 `needs`) taken from the same call: one call is enough for an agent.
+    #[test]
+    fn an_update_that_moves_the_state_gives_the_action_what_it_needs() {
+        let app = App::new();
+        let admin = Principal::user("root", &[ADMIN_GROUP]);
+        for m in install_order(&app, all_manifests()) {
+            app.installer
+                .install(&Bundled.fetch(&m.module.id).unwrap(), "marketplace", "test")
+                .unwrap();
+        }
+        let mut mk = Maker {
+            app: &app,
+            meta: models_of(&app, &admin),
+            pkg_models: BTreeSet::new(),
+            pkg_user: admin.clone(),
+            admin: admin.clone(),
+            made: HashMap::new(),
+        };
+        let rec = mk.fresh("helpdesk_ticket", "in_progress");
+        let mut fields = BTreeMap::new();
+        fields.insert("id".to_string(), Value::text(&rec));
+        fields.insert("state".to_string(), Value::text("resolved"));
+        fields.insert("resolution".to_string(), Value::text("New toner"));
+        call(&app, &admin, "helpdesk_ticket.update", Value::Map(fields))
+            .unwrap_or_else(|e| panic!("update with the needs: {e:?}"));
+        assert_eq!(state_of(&app, "helpdesk_ticket", &rec), "resolved");
+        assert_eq!(
+            app.store.field("helpdesk_ticket", &rec, "resolution"),
+            Some(Value::text("New toner"))
+        );
     }
 
     /// A dashboard and its widgets round-trip with the documented schema, and a widget kind or

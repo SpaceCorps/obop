@@ -45,7 +45,8 @@ test.describe("accessibility smoke", () => {
     expect(await unnamedControls(page), "filter panel").toEqual([]);
     await page.keyboard.press("Escape");
 
-    await page.getByRole("button", { name: "Open record" }).first().click();
+    // A click anywhere in a row opens the record (the first column is its title).
+    await page.locator("table.list tbody td[data-c='1']").first().click();
     await expect(page.getByRole("complementary", { name: /record$/ })).toBeVisible();
     expect(await unnamedControls(page), "record panel").toEqual([]);
 

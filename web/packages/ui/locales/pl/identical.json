@@ -1,7 +1,11 @@
 [
   "Administrator",
   "Beta",
+  "DD",
   "Kanban",
+  "Link",
+  "Logo",
+  "MM",
   "Marketing",
   "Marketplace",
   "Problem",
@@ -18,5 +22,7 @@
   "option\u0004Problem",
   "option\u0004Spam",
   "{field} ≤ {to}",
-  "{field} ≥ {from}"
+  "{field} ≥ {from}",
+  "{minutes} min",
+  "{quantity} × {price}"
 ]

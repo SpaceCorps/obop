@@ -1,10 +1,11 @@
 [labels.es.module]
 name = "Inventario"
-description = "Almacenes, ubicaciones de stock, niveles de stock y movimientos de stock. Al validar un movimiento, la cantidad sale del artículo de stock de la ubicación de origen y se suma al de destino, en un solo paso; si el artículo aún no existe, se crea. Hay un artículo por producto, ubicación y lote. Se permiten cantidades negativas, como en ubicaciones virtuales como los proveedores."
+description = "Almacenes, ubicaciones, niveles y movimientos de stock. Al validar un movimiento, la cantidad sale del origen y se suma al destino en un solo paso; si el artículo no existe, se crea. Un artículo por producto, ubicación y lote; se permiten cantidades negativas. La cantidad solo cambia con movimientos; los hechos o cancelados quedan bloqueados."
 summary = "Almacenes, ubicaciones de stock, niveles de stock y movimientos de stock."
 
 [labels.es.model.inventory_warehouse]
 name = "Almacén"
+plural = "Almacenes"
 description = "Un edificio o lugar donde se guarda el stock"
 
 [labels.es.model.inventory_warehouse.field.name]
@@ -25,6 +26,7 @@ description = "Indica si el almacén está en uso"
 
 [labels.es.model.inventory_location]
 name = "Ubicación"
+plural = "Ubicaciones"
 description = "Un lugar dentro de un almacén donde puede haber stock"
 
 [labels.es.model.inventory_location.field.name]
@@ -52,6 +54,7 @@ description = "Indica si la ubicación está en uso"
 
 [labels.es.model.inventory_item]
 name = "Existencia"
+plural = "Existencias"
 description = "La cantidad de un producto que hay en una ubicación"
 
 [labels.es.model.inventory_item.field.product_id]
@@ -64,7 +67,7 @@ description = "Dónde se encuentra"
 
 [labels.es.model.inventory_item.field.quantity]
 label = "Cantidad"
-description = "Unidades disponibles"
+description = "Unidades disponibles; solo cambian con movimientos de stock validados"
 
 [labels.es.model.inventory_item.field.reorder_level]
 label = "Nivel de reaprovisionamiento"
@@ -76,6 +79,7 @@ description = "Número de lote, si se controla"
 
 [labels.es.model.inventory_move]
 name = "Movimiento"
+plural = "Movimientos de stock"
 description = "Un movimiento de un producto entre ubicaciones, o hacia dentro o fuera de la empresa"
 
 [labels.es.model.inventory_move.field.reference]
@@ -118,3 +122,7 @@ description = "Confirmar que la mercancía se movió de verdad: la cantidad sale
 [labels.es.model.inventory_move.action.cancel]
 label = "Cancelar"
 description = "Cancelar un movimiento en borrador"
+
+[labels.es.model.inventory_item.field.below_reorder]
+description = "Si la cantidad está en el nivel de reposición o por debajo (no, si no hay nivel definido)"
+label = "Stock bajo"

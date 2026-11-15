@@ -1,0 +1,10 @@
+# English names and plurals of dashboards (D52, D95): [labels.en.model.<model>] name = "...", plural = "...".
+# The manifest stays the English source; this file only adds the display names it does not have.
+
+[labels.en.model.dashboards_dashboard]
+name = "Dashboard"
+plural = "Dashboards"
+
+[labels.en.model.dashboards_widget]
+name = "Tile"
+plural = "Tiles"

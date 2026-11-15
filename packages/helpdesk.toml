@@ -1,6 +1,6 @@
 [module]
 id = "helpdesk"
-version = "0.4.0"
+version = "0.5.0"
 name = "Helpdesk"
 description = "Support tickets with priority, severity, service-level targets and an open, in progress, resolved and closed flow. Targets are recorded, not enforced or timed automatically. Every ticket gets a number from a series when it is created."
 author = "SpaceCorps"
@@ -11,13 +11,22 @@ repository = "https://github.com/SpaceCorps/obop"
 keywords = ["helpdesk", "tickets", "support", "sla"]
 categories = ["services"]
 maturity = "beta"
-requires_core = "^0.2"
+requires_core = "^0.2.2"
+changelog = "The app opens on Tickets; the SLA policies sit under Configuration. A new ticket is dated today with normal priority. Taking a ticket assigns it to you when nobody has it yet; resolving one asks how it was solved and dates it today. A closed ticket can no longer be changed."
+home = "helpdesk_ticket"
 
 [[model]]
 name = "helpdesk_sla"
 description = "A service-level policy: how fast tickets of a priority should be answered and solved"
 read_group = "helpdesk.agent"
 write_group = "helpdesk.manager"
+
+  [model.ui]
+  title = "{name}"
+  list = ["name", "priority", "first_response_minutes", "resolution_minutes", "active"]
+  order = "name asc"
+  default_view = "list"
+  menu = "configuration"
 
   [[model.field]]
   name = "name"
@@ -32,6 +41,8 @@ write_group = "helpdesk.manager"
   kind = "select"
   options = ["low", "normal", "high", "urgent"]
   required = true
+  [model.field.ui]
+  tones = { low = "neutral", normal = "neutral", high = "warn", urgent = "bad" }
 
   [[model.field]]
   name = "first_response_minutes"
@@ -39,6 +50,9 @@ write_group = "helpdesk.manager"
   class = "none"
   kind = "number"
   required = true
+  [model.field.ui]
+  display = "duration_minutes"
+  aggregate = "none"
 
   [[model.field]]
   name = "resolution_minutes"
@@ -46,18 +60,72 @@ write_group = "helpdesk.manager"
   class = "none"
   kind = "number"
   required = true
+  [model.field.ui]
+  display = "duration_minutes"
+  aggregate = "none"
 
   [[model.field]]
   name = "active"
   description = "Whether the policy can be attached to new tickets"
   class = "none"
   kind = "bool"
+  default = true
 
 [[model]]
 name = "helpdesk_ticket"
 description = "A customer support request"
 read_group = "helpdesk.agent"
 write_group = "helpdesk.agent"
+
+  [model.ui]
+  title = "{number} · {subject} | {subject}"
+  subtitle = "{requester_name} | {requester_email}"
+  list = ["number", "subject", "requester_name", "assignee", "priority", "due_on", "state"]
+  card = ["number", "subject", "requester_name", "assignee", "due_on", "priority"]
+  quick_create = ["subject", "requester_name", "priority"]
+  order = "opened_on desc, number desc"
+  default_view = "kanban"
+  menu = "main"
+  menu_order = 1
+  calendar = { start = "due_on", color = "priority" }
+  report = { rows = "category", cols = "state" }
+
+  [[model.ui.section]]
+  label = "Request"
+  fields = ["subject", "description", "category", "priority", "severity"]
+
+  [[model.ui.section]]
+  label = "Requester"
+  fields = ["requester_name", "requester_email"]
+
+  [[model.ui.section]]
+  label = "Handling"
+  fields = ["assignee", "sla_id", "opened_on", "first_response_on", "due_on"]
+
+  [[model.ui.section]]
+  label = "Resolution"
+  fields = ["resolution", "resolved_on"]
+  show_in = ["in_progress", "resolved", "closed"]
+
+  [[model.ui.filter]]
+  label = "Not closed"
+  where = "state != closed"
+
+  [[model.ui.filter]]
+  label = "Unassigned"
+  where = "assignee = null && state != closed"
+
+  [[model.ui.filter]]
+  label = "Mine"
+  where = "assignee = $user"
+
+  [[model.ui.filter]]
+  label = "Overdue"
+  where = "due_on != null && due_on < today && state != resolved && state != closed"
+
+  [model.guard]
+  immutable_when = ["closed"]
+  message = "A closed ticket cannot be changed. Open a new ticket if the problem comes back."
 
   [[model.field]]
   name = "number"
@@ -89,6 +157,8 @@ write_group = "helpdesk.agent"
   description = "Email address of the person asking for help"
   class = "internal"
   personal_data = true
+  [model.field.ui]
+  display = "email"
 
   [[model.field]]
   name = "category"
@@ -103,6 +173,9 @@ write_group = "helpdesk.agent"
   class = "none"
   kind = "select"
   options = ["low", "normal", "high", "urgent"]
+  default = "normal"
+  [model.field.ui]
+  tones = { low = "neutral", normal = "neutral", high = "warn", urgent = "bad" }
 
   [[model.field]]
   name = "severity"
@@ -110,10 +183,12 @@ write_group = "helpdesk.agent"
   class = "none"
   kind = "select"
   options = ["minor", "major", "critical"]
+  [model.field.ui]
+  tones = { minor = "neutral", major = "warn", critical = "bad" }
 
   [[model.field]]
   name = "assignee"
-  description = "Name of the agent working on the ticket"
+  description = "Name of the agent working on the ticket; taking the ticket fills in who took it when it is empty"
   class = "internal"
   personal_data = true
 
@@ -129,6 +204,7 @@ write_group = "helpdesk.agent"
   description = "Date the ticket was received (YYYY-MM-DD)"
   class = "none"
   kind = "date"
+  default = "today"
 
   [[model.field]]
   name = "first_response_on"
@@ -141,10 +217,12 @@ write_group = "helpdesk.agent"
   description = "Date by which it should be solved under the policy (YYYY-MM-DD)"
   class = "none"
   kind = "date"
+  [model.field.ui]
+  warn_before_days = 2
 
   [[model.field]]
   name = "resolved_on"
-  description = "Date the problem was solved (YYYY-MM-DD)"
+  description = "Date the problem was solved (YYYY-MM-DD); resolving sets it to today when it is empty"
   class = "none"
   kind = "date"
 
@@ -161,6 +239,8 @@ write_group = "helpdesk.agent"
   kind = "select"
   options = ["open", "in_progress", "resolved", "closed"]
   required = true
+  [model.field.ui]
+  tones = { open = "info", in_progress = "warn", resolved = "ok", closed = "neutral" }
 
   [[model.action]]
   name = "take"
@@ -168,6 +248,14 @@ write_group = "helpdesk.agent"
   field = "state"
   from = "open"
   to = "in_progress"
+  [model.action.ui]
+  primary = true
+  done = "Ticket taken"
+
+    [[model.action.effect]]
+    kind = "set"
+    set = { assignee = "$caller" }
+    when = "!is_set(assignee)"
 
   [[model.action]]
   name = "resolve"
@@ -175,6 +263,15 @@ write_group = "helpdesk.agent"
   field = "state"
   from = "in_progress"
   to = "resolved"
+  [model.action.ui]
+  primary = true
+  done = "Ticket resolved"
+  needs = ["resolution"]
+
+    [[model.action.effect]]
+    kind = "set"
+    set = { resolved_on = "$today" }
+    when = "!is_set(resolved_on)"
 
   [[model.action]]
   name = "close"
@@ -184,6 +281,10 @@ write_group = "helpdesk.agent"
   to = "closed"
   group = "helpdesk.manager"
   approval = true
+  [model.action.ui]
+  primary = true
+  confirm = "Close this ticket for good? A closed ticket can no longer be changed."
+  done = "Ticket closed"
 
   [[model.action]]
   name = "reopen"

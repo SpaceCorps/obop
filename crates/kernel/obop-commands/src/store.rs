@@ -243,6 +243,7 @@ impl Dispatcher {
             clock: self.clock.0.clone(),
             zones: self.zones.clone(),
             clock_replaced: self.clock_replaced.clone(),
+            currency: self.currency.clone(),
         }
     }
 

@@ -267,7 +267,9 @@ test.describe("views over many records do not load the table", () => {
     const sent = searches(page, model);
     await signIn("root", `/${model}/${model}?view=pivot`);
 
-    // Pivot: 75 records and EUR 75.00 per stage, 300 in all.
+    // Pivot: 75 records and EUR 75.00 per stage, 300 in all. (It opens on the date by month and
+    // the money measure; the rows are switched to the stage.)
+    await page.locator(".pivot").getByLabel("Rows").selectOption("state");
     const pivot = page.locator("table.pivot-table");
     await expect(pivot.getByRole("row", { name: /^New/ })).toContainText("75");
     await expect(pivot.locator("tfoot")).toContainText("300");
@@ -275,6 +277,7 @@ test.describe("views over many records do not load the table", () => {
 
     // Graph as a table of data.
     await page.goto(`/#/${model}/${model}?view=graph`);
+    await page.locator(".graph").getByLabel("Dimension").selectOption("state");
     await page.getByRole("button", { name: "Show data table" }).click();
     await expect(
       page.locator("table.pivot-table").getByRole("row", { name: /^Won/ }),
@@ -325,7 +328,7 @@ test.describe("views over many records do not load the table", () => {
     await fill(api, child, 45, (i) => ({ title: `Kid ${i}`, parent_id: p.id }));
     const sent = searches(page, child);
     await signIn("root", `/${parent}/${parent}?id=${p.id}`);
-    await expect(page.getByRole("link", { name: /\(45\)/ })).toBeVisible();
+    await expect(page.locator("a.smartbtn", { hasText: "45" })).toBeVisible();
     expect(sent.some((b) => b.aggregate)).toBe(true);
     expect(sent.some((b) => b.limit === 5000)).toBe(false);
   });
@@ -357,6 +360,7 @@ test.describe("changing the language keeps the screen", () => {
     const hash = await page.evaluate(() => location.hash);
 
     await page.getByRole("button", { name: "Account" }).click();
+    await page.getByRole("menuitem", { name: /Language/ }).click();
     await page.getByRole("menuitem", { name: "Deutsch" }).click();
     await expect(page.locator("html")).toHaveAttribute("lang", "de");
 
@@ -370,6 +374,7 @@ test.describe("changing the language keeps the screen", () => {
 
     // And back, still the same panel.
     await page.getByRole("button", { name: tr("de", "Account") }).click();
+    await page.getByRole("menuitem", { name: new RegExp(tr("de", "Language")) }).click();
     await page.getByRole("menuitem", { name: "English" }).click();
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
     expect(await panel.evaluate((el) => (el as any).__mark)).toBe("same node");

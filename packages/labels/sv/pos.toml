@@ -1,11 +1,12 @@
 [labels.sv.module]
 name = "Kassa"
-description = "Butikskassor: kassakonfiguration, kassapass med kassakontroll, order med rader och betalningar per betalsätt. Återbetalning och stängning av kassapass kräver en chefs godkännande. Totaler beräknas från raderna, kvitton får ett årligt löpnummer, betalning nekas tills betalningarna täcker totalen och skapar lagerrörelseutkast. Kortnummer får aldrig lagras. Kräver paketet Produkter."
-summary = "Butikskassor: kassapass med kassakontroll, order med rader och betalningar. Återbetalning och stängning kräver godkännande."
+description = "Butikskassor: kassakonfiguration, kassapass, order med rader och betalningar. Återbetalning och stängning av pass kräver en chefs godkännande. Totaler beräknas, kvitton får ett årligt löpnummer, betalning nekas tills totalen är täckt och skapar lagerrörelseutkast. Inställningarna för kassakontroll och återbetalning sparas bara; inget kontrollerar dem. Lagra aldrig kortnummer. Kräver Produkter."
+summary = "Butikskassor: kassapass, order med rader och betalningar. Återbetalning och stängning kräver godkännande."
 
 [labels.sv.model.pos_config]
 name = "Kassa"
-description = "En försäljningsplats (en kassa eller en butik) och dess regler"
+plural = "Kassor"
+description = "En försäljningsplats (en kassa eller en butik) och dess inställningar"
 
 [labels.sv.model.pos_config.field.name]
 label = "Namn"
@@ -21,7 +22,7 @@ description = "Text som skrivs ut överst på kvitton"
 
 [labels.sv.model.pos_config.field.cash_control]
 label = "Kassakontroll"
-description = "Om kassapass måste räkna kontanterna i kassalådan vid öppning och stängning"
+description = "Om kontanterna i kassalådan ska räknas vid öppning och stängning; sparas bara, inget kontrollerar det"
 
 [labels.sv.model.pos_config.field.default_opening_cash]
 label = "Ingående kassa (standard)"
@@ -29,7 +30,7 @@ description = "Kontanter som normalt lämnas kvar i kassalådan över natten (va
 
 [labels.sv.model.pos_config.field.allow_refunds]
 label = "Tillåt återbetalningar"
-description = "Om kassörer får föreslå återbetalningar vid den här kassan"
+description = "Om återbetalningar ska vara tillåtna vid den här kassan; sparas bara, inget kontrollerar det"
 
 [labels.sv.model.pos_config.field.active]
 label = "Aktiv"
@@ -37,6 +38,7 @@ description = "Om kassan används"
 
 [labels.sv.model.pos_session]
 name = "Kassapass"
+plural = "Kassapass"
 description = "Ett säljpass vid en kassa, från öppning till stängning av kassalådan"
 
 [labels.sv.model.pos_session.field.config_id]
@@ -88,7 +90,8 @@ label = "Stäng"
 description = "Stäng kassapasset när kassalådan har räknats (endast chef)"
 
 [labels.sv.model.pos_order]
-name = "Order"
+name = "Försäljning"
+plural = "Försäljningar"
 description = "En försäljning som slagits in i en kassa"
 
 [labels.sv.model.pos_order.field.session_id]
@@ -142,7 +145,8 @@ label = "Återbetala"
 description = "Återbetala en betald försäljning till kunden (endast chef)"
 
 [labels.sv.model.pos_order_line]
-name = "Orderrad"
+name = "Försäljningsrad"
+plural = "Försäljningsrader"
 description = "En produktrad i en försäljning"
 
 [labels.sv.model.pos_order_line.field.order_id]
@@ -175,6 +179,7 @@ description = "Radsumma efter rabatt: antal gånger styckpris minus rabatten (va
 
 [labels.sv.model.pos_payment]
 name = "Betalning"
+plural = "Betalningar"
 description = "En betalning mottagen för en försäljning; en försäljning kan betalas med flera betalsätt"
 
 [labels.sv.model.pos_payment.field.order_id]
@@ -207,3 +212,6 @@ description = "Referens från kortterminalen eller betaltjänsten; aldrig ett ko
 [labels.sv.model.pos_order.field.stock_location_id]
 label = "Lagerplats"
 description = "Var varorna lämnar lagret; vid betalning skapas lagerrörelserna från denna plats"
+
+[labels.sv.model.pos_order.action.pay.assert.covered]
+message = "Betalningarna täcker inte försäljningens summa: lägg till en betalning för resten"

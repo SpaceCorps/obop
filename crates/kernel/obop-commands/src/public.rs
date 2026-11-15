@@ -741,20 +741,31 @@ impl PublicApi {
         crate::blobs::serve(&self.store, &info, width).ok()
     }
 
-    /// The `site` object of the instance settings: the only settings the public side reads.
+    /// The `site` object of the instance settings, with the instance brand filled in where the
+    /// object leaves a key unset (docs/spec/branding.md, section 5): the only settings the public
+    /// side reads. The public site and shop read them by [`PublicApi::site_settings_read`], which
+    /// is this call and also says whether the answer is a stand-in; this is the form that returns
+    /// the object alone. Either way it is the one door, and the one place the brand reaches them.
+    ///
+    /// With a brand set, an unset `title` is the name, an unset `logo_url` the logo route with its
+    /// version, an unset `accent` the tile accent, and the record's artwork, when it has one, goes
+    /// to the shop's tab icon through the one reserved key `SITE_FAVICON_KEY`. An explicit key
+    /// always wins, and with no brand the object is what is stored. A key with the reserved name
+    /// that is stored in the settings is removed first: `setting.update` writes any key, and the
+    /// artwork is the reader's to hand over. The reader is asked once per call, and the site keeps
+    /// its answer for its own cache time, so a changed name reaches a page after that time and the
+    /// reader's own bound. A caller that keeps the answer asks [`PublicApi::site_settings_read`]
+    /// instead, which also says whether it may.
     pub fn site_settings(&self) -> serde_json::Map<String, J> {
-        self.store
-            .backend
-            .get("obop_setting", "instance")
-            .ok()
-            .flatten()
-            .and_then(|f| f.get("value").and_then(J::as_str).map(String::from))
-            .and_then(|t| serde_json::from_str::<J>(&t).ok())
-            .and_then(|v| match v.get("site") {
-                Some(J::Object(o)) => Some(o.clone()),
-                _ => None,
-            })
-            .unwrap_or_default()
+        self.site_settings_read().site
+    }
+
+    /// [`PublicApi::site_settings`] with what it does not say: whether the object is a stand-in
+    /// (`degraded`: the settings row could not be read, or the reader had no brand to give while the
+    /// store failed). A cache must not keep a degraded answer, or it would show the stand-in after the
+    /// store is back and the owner's explicit keys would be missing for as long as it kept it.
+    pub fn site_settings_read(&self) -> crate::SiteRead {
+        crate::brand::site_settings(&*self.store.backend, &self.d.brand())
     }
 
     /// Count a hit for the rate limit; `Err` carries seconds until the window ends. The count is

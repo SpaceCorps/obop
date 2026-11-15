@@ -5,6 +5,7 @@ summary = "Asiakirjapohjat ja allekirjoituspyynnöt; PDF allekirjoitetaan kertak
 
 [labels.fi.model.sign_template]
 name = "Asiakirjamalli"
+plural = "Asiakirjamallit"
 description = "Asiakirja, joka voidaan lähettää allekirjoitettavaksi"
 
 [labels.fi.model.sign_template.field.name]
@@ -29,6 +30,7 @@ description = "Voivatko uudet pyynnöt käyttää mallia"
 
 [labels.fi.model.sign_request]
 name = "Allekirjoituspyyntö"
+plural = "Allekirjoituspyynnöt"
 description = "Pyyntö, että yksi henkilö allekirjoittaa yhden asiakirjan"
 
 [labels.fi.model.sign_request.field.template_id]
@@ -53,7 +55,7 @@ description = "Allekirjoittavan henkilön nimi"
 
 [labels.fi.model.sign_request.field.signer_email]
 label = "Allekirjoittajan sähköposti"
-description = "Allekirjoittajan sähköpostiosoite; valinnainen, obop ei lähetä sähköpostia asiakirjaa koskevasta pyynnöstä"
+description = "Allekirjoittajan sähköpostiosoite; valinnainen, asiakirjaa koskevasta pyynnöstä ei lähetetä sähköpostia"
 
 [labels.fi.model.sign_request.field.sent_on]
 label = "Lähetetty"
@@ -139,6 +141,7 @@ description = "Lähetä pyyntö Asiakirjat-sovelluksen asiakirjasta: ottaa PDF:n
 
 [labels.fi.model.sign_link]
 name = "Allekirjoituslinkki"
+plural = "Allekirjoituslinkit"
 description = "Kertakäyttöinen linkki, jolla yksi henkilö voi allekirjoittaa yhden pyynnön; vain salaisuuden tiiviste säilytetään, joten linkki näytetään kerran, kun se luodaan"
 
 [labels.fi.model.sign_link.field.request_id]

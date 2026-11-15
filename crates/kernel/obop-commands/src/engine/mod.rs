@@ -15,6 +15,8 @@ pub(crate) mod bulk;
 pub(crate) mod computed;
 pub(crate) mod crud;
 pub(crate) mod effects;
+pub(crate) mod frozen;
+pub(crate) mod hints;
 pub(crate) mod seq;
 pub(crate) mod unit;
 
@@ -51,6 +53,8 @@ pub(crate) struct Engine {
     /// Set when a test replaced the clock: `$now` is then whole seconds of that clock, not the
     /// system time down to the microsecond.
     pub clock_replaced: Arc<AtomicBool>,
+    /// The instance currency, for the default `$instance.currency` (D95).
+    pub currency: Arc<RwLock<String>>,
 }
 
 impl Engine {
@@ -86,6 +90,16 @@ impl Engine {
         self.zones.read().unwrap().clone()
     }
 
+    /// The instance currency (D95 `$instance.currency`).
+    pub fn currency(&self) -> String {
+        let c = self.currency.read().unwrap();
+        if c.is_empty() {
+            crate::DEFAULT_CURRENCY.to_string()
+        } else {
+            c.clone()
+        }
+    }
+
     pub fn backend(&self) -> &dyn obop_storage::Backend {
         &*self.store.backend
     }
@@ -95,18 +109,23 @@ impl Engine {
     /// Every handler starts its unit here and not with `Unit::new(eng.backend())`, so what a unit
     /// needs to know about the call it serves (who writes, which rules guard the records) is
     /// added in this one place later and no handler changes (K18).
+    /// It checks the immutability guards of D77 before every write.
     pub fn unit(&self) -> unit::Unit<'_> {
-        unit::Unit::new(self.backend())
+        unit::Unit::new(self.backend()).guarded(self.def_look())
     }
 
     /// As `unit`, with another cap on the records the unit may touch (bulk work).
     pub fn unit_with_cap(&self, cap: usize) -> unit::Unit<'_> {
-        unit::Unit::with_cap(self.backend(), cap)
+        unit::Unit::with_cap(self.backend(), cap).guarded(self.def_look())
     }
 
     /// As `unit`, with no cap (sequence and counter work that is bounded by its own rules).
     pub fn unit_unbounded(&self) -> unit::Unit<'_> {
-        unit::Unit::unbounded(self.backend())
+        unit::Unit::unbounded(self.backend()).guarded(self.def_look())
+    }
+
+    fn def_look(&self) -> unit::DefLook<'_> {
+        Box::new(move |n: &str| self.def(n))
     }
 }
 

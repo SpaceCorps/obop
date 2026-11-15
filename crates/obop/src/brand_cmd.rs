@@ -15,7 +15,7 @@
 //! global options of the same names take one value each for `status incident`, so `main` hands the
 //! argument list to [`take_flags`] first. Only when the first two words are `admin brand` does it
 //! pull out the flags of this area (`--title`, `--message`, `--name`, `--slug`, `--logo-file`,
-//! `--clear-logo`); every other command line goes on untouched. `--db`, `--dry-run` and `--from`
+//! `--clear-logo`, `--hide-product-docs`); every other command line goes on untouched. `--db`, `--dry-run` and `--from`
 //! stay the global options and arrive as arguments of [`run`].
 //!
 //! **What a line may hold.** The lines about `--from FILE` name the field or the table and the
@@ -52,7 +52,8 @@ const OPERATOR: &str = "operator";
 pub(crate) const USAGE: &str = "usage:
   obop admin brand status
   obop admin brand configure [--name N] [--slug S] [--title LANG=TEXT]... [--message LANG=TEXT]...
-                             [--logo-file FILE.svg | --clear-logo] [--from FILE.toml] [--dry-run]
+                             [--logo-file FILE.svg | --clear-logo] [--hide-product-docs on|off]
+                             [--from FILE.toml] [--dry-run]
   obop admin brand clear [--dry-run]
   obop admin brand check FILE.svg
 (--db URL as for every command; LANG is one of en, de, fr, pl, fi, sv, es)";
@@ -126,6 +127,8 @@ pub struct Flags {
     pub messages: Vec<(String, String)>,
     pub logo_file: Option<String>,
     pub clear_logo: bool,
+    /// `--hide-product-docs on|off`: the one switch of the record.
+    pub hide_product_docs: Option<bool>,
 }
 
 impl Flags {
@@ -137,7 +140,7 @@ impl Flags {
 /// The global options that take a value: the ones `main` takes with `take_opt`, before it looks
 /// at the command. Here to find the words of the area past any of them; a test reads `main.rs` and
 /// holds this list to the `take_opt` calls in it, so a global option added there is added here.
-pub const VALUE_OPTIONS: [&str; 31] = [
+pub const VALUE_OPTIONS: [&str; 37] = [
     "--db",
     "--token",
     "--scopes",
@@ -166,9 +169,15 @@ pub const VALUE_OPTIONS: [&str; 31] = [
     "--from",
     "--documents",
     "--account-types",
+    "--vehicle",
+    "--since",
     "--tenant",
     "--client-id",
     "--year",
+    "--field",
+    "--record",
+    "--content-type",
+    "--url",
 ];
 
 /// Where the words `admin brand` stand: at the start of the command line, past any leading global
@@ -254,6 +263,16 @@ pub fn take_flags(args: Vec<&str>) -> Result<(Option<Flags>, Vec<&str>), String>
                 list.push((lang, text));
             }
             "--clear-logo" => flags.clear_logo = true,
+            "--hide-product-docs" => {
+                let on = match value(a, "on or off")? {
+                    "on" => true,
+                    "off" => false,
+                    _ => return Err(format!("{a} needs on or off")),
+                };
+                if flags.hide_product_docs.replace(on).is_some() {
+                    return Err(format!("{a} is given twice"));
+                }
+            }
             // `--from` stays a global option, which takes the next argument as its file. With none
             // it would yield no file, and the call would go on as if no file had been meant.
             "--from" => {
@@ -356,6 +375,9 @@ fn supplied(flags: &Flags, from: Option<&str>) -> Result<Vec<(String, String)>, 
     }
     if flags.clear_logo {
         add("logo_svg".into(), String::new())?;
+    }
+    if let Some(on) = flags.hide_product_docs {
+        add(brand::SWITCH.into(), on.to_string())?;
     }
     Ok(out)
 }
@@ -500,16 +522,47 @@ pub fn status_over(backend: Arc<dyn Backend>) -> Said {
 /// (the entries of the `effective` answer of `get`, so an entry a later slice adds shows here
 /// without a change), the titles and messages that are stored (a language that shows another
 /// language's title or the name through the fallback chain has no line of its own), and the stored
-/// fields that fell back to a default.
+/// fields that fell back to a default. At a terminal the authenticator issuer is read from the
+/// environment of the terminal's own process, which may not be the server's (spec, section 3).
 pub fn render_status(fresh: &Fresh) -> String {
+    render_status_with(fresh, brand::env_issuer())
+}
+
+/// As [`render_status`] with the value of `OBOP_MFA_ISSUER` given, so that a test does not depend on
+/// the environment of the process.
+pub fn render_status_with(fresh: &Fresh, issuer_variable: Option<String>) -> String {
     let shown = fresh.shown();
-    let effective: J = serde_json::from_str(&fresh.effective_json()).unwrap_or(J::Null);
+    let effective: J =
+        serde_json::from_str(&fresh.effective_json_with(issuer_variable)).unwrap_or(J::Null);
     let mut out = String::new();
-    out.push_str(if fresh.set() {
-        "brand: set\n"
+    // With no record the header says every value is the default, except what an explicit `site.*`
+    // key of the shop sets (that entry has the source `site`) and what the variable `OBOP_MFA_ISSUER`
+    // sets (the entry `authenticator_issuer` has the source `env`), and it names which of the two is
+    // in force. With no record those are the only sources besides `default` and `theme`. The theme's
+    // accent is not named: with a theme alone the header reads as it has since S1a, which the
+    // no-record outputs hold, and the entry says `(theme)` on its own line.
+    let sourced = |wanted: &str| {
+        effective
+            .as_object()
+            .is_some_and(|entries| entries.values().any(|entry| entry["source"] == wanted))
+    };
+    let exceptions: Vec<&str> = [
+        (sourced("site"), "a site.* key"),
+        (sourced("env"), "OBOP_MFA_ISSUER"),
+    ]
+    .into_iter()
+    .filter_map(|(in_force, name)| in_force.then_some(name))
+    .collect();
+    if fresh.set() {
+        out.push_str("brand: set\n");
+    } else if exceptions.is_empty() {
+        out.push_str("brand: not set (no record; every value is the default)\n");
     } else {
-        "brand: not set (no record; every value is the default)\n"
-    });
+        out.push_str(&format!(
+            "brand: not set (no record; every value is the default, except what {} sets)\n",
+            exceptions.join(" or ")
+        ));
+    }
     let mut line = |key: &str, raw: bool| {
         let entry = &effective[key];
         let Some(source) = entry["source"].as_str() else {
@@ -542,6 +595,11 @@ pub fn render_status(fresh: &Fresh) -> String {
                 line(&field, false);
             }
         }
+    }
+    // Off is the default and prints nothing, so the text of `status` is what it was for a brand
+    // that does not use the switch; a stored value that is not a boolean is under the fallbacks.
+    if shown.hide_product_docs() {
+        out.push_str("hide_product_docs: on\n");
     }
     if !shown.v().is_empty() {
         out.push_str(&format!("logo version: {}\n", shown.v()));

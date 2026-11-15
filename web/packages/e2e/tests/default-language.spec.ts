@@ -74,6 +74,7 @@ test.describe("the default language of an instance", () => {
 
     // The person picks German: that is a saved choice, and it beats the instance default.
     await page.getByRole("button", { name: tr("sv", "Account") }).click();
+    await page.getByRole("menuitem", { name: new RegExp(tr("sv", "Language")) }).click();
     await page.getByRole("menuitem", { name: "Deutsch" }).click();
     await expect(page.locator("html")).toHaveAttribute("lang", "de");
     await expect(page.getByRole("heading", { name: tr("de", "Your apps") })).toBeVisible();

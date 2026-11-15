@@ -9,3 +9,6 @@ declare module "*.generated/*.json" {
   const data: any;
   export default data;
 }
+
+// Style sheets imported for their effect (the theme's index.ts).
+declare module "*.css";

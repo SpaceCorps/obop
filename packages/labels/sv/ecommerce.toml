@@ -6,6 +6,7 @@ summary = "En webbutik: artiklar, leverans, rabattkoder och webborder, med en pu
 
 [labels.sv.model.ecommerce_category]
 name = "Kategori"
+plural = "Kategorier"
 description = "En grupp av artiklar som visas tillsammans i butiken"
 
 [labels.sv.model.ecommerce_category.field.name]
@@ -30,6 +31,7 @@ description = "Om kategorin syns för kunderna"
 
 [labels.sv.model.ecommerce_listing]
 name = "Butiksartikel"
+plural = "Butiksartiklar"
 description = "En produkt så som den visas i webbutiken"
 
 [labels.sv.model.ecommerce_listing.field.product_id]
@@ -91,6 +93,7 @@ description = "Om artikeln syns för kunderna"
 
 [labels.sv.model.ecommerce_listing_translation]
 name = "Översättning av butiksartikel"
+plural = "Översättningar av butiksartiklar"
 description = "En butiksartikel översatt till ett annat språk"
 
 [labels.sv.model.ecommerce_listing_translation.field.listing_id]
@@ -128,6 +131,7 @@ description = "Om översättningen visas; den nås bara medan dess artikel är p
 
 [labels.sv.model.ecommerce_shipping_method]
 name = "Leveranssätt"
+plural = "Leveranssätt"
 description = "Ett sätt att leverera ordrar, med pris"
 
 [labels.sv.model.ecommerce_shipping_method.field.name]
@@ -156,6 +160,7 @@ description = "Om kunderna kan välja det"
 
 [labels.sv.model.ecommerce_discount_code]
 name = "Rabattkod"
+plural = "Rabattkoder"
 description = "En kod som kunden anger i kassan för att få avdrag"
 
 [labels.sv.model.ecommerce_discount_code.field.code]
@@ -199,7 +204,8 @@ label = "Aktiv"
 description = "Om koden kan användas"
 
 [labels.sv.model.ecommerce_order]
-name = "Order"
+name = "Webborder"
+plural = "Webborder"
 description = "En order som lagts online"
 
 [labels.sv.model.ecommerce_order.field.number]
@@ -312,6 +318,7 @@ description = "Betala tillbaka en levererad order, till exempel efter en retur (
 
 [labels.sv.model.ecommerce_order_line]
 name = "Orderrad"
+plural = "Orderrader"
 description = "En produktrad i en webborder"
 
 [labels.sv.model.ecommerce_order_line.field.order_id]
@@ -352,6 +359,7 @@ description = "Text som beskriver huvudbilden för dem som inte kan se den"
 
 [labels.sv.model.ecommerce_listing_image]
 name = "Erbjudandebild"
+plural = "Erbjudandebilder"
 description = "En extra bild för ett erbjudandes galleri"
 
 [labels.sv.model.ecommerce_listing_image.field.listing_id]
@@ -384,6 +392,7 @@ description = "Bara erbjudanden i den här kategorin får rabatt; tomt betyder h
 
 [labels.sv.model.ecommerce_discount_use]
 name = "Kodanvändning"
+plural = "Kodanvändningar"
 description = "Hur många gånger en kund har använt en rabattkod (kunden sparas som en hash, aldrig som e-postadress)"
 
 [labels.sv.model.ecommerce_discount_use.field.code_id]
@@ -400,6 +409,7 @@ description = "Användningar hittills"
 
 [labels.sv.model.ecommerce_tax_rate]
 name = "Skattesats"
+plural = "Skattesatser"
 description = "En skattesats som butiken tillämpar på erbjudanden, beräknad på servern"
 
 [labels.sv.model.ecommerce_tax_rate.field.name]
@@ -477,6 +487,7 @@ description = "Skatt på den här raden, inkluderad i priserna eller pålagd (mi
 
 [labels.sv.model.ecommerce_payment]
 name = "Betalning"
+plural = "Betalningar"
 description = "En betalning för en webbeställning: vilken leverantör, dess referens, beloppet och vad som hände. Butiken ser aldrig kortuppgifter"
 
 [labels.sv.model.ecommerce_payment.field.order_id]

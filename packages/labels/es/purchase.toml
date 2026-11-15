@@ -5,6 +5,7 @@ summary = "Proveedores, pedidos de compra y líneas de pedido con un flujo de bo
 
 [labels.es.model.purchase_vendor]
 name = "Proveedor"
+plural = "Proveedores"
 description = "Condiciones de compra de un contacto al que compras"
 
 [labels.es.model.purchase_vendor.field.party_id]
@@ -33,11 +34,12 @@ description = "Indica si todavía compras a este proveedor"
 
 [labels.es.model.purchase_order]
 name = "Pedido"
+plural = "Pedidos de compra"
 description = "Una solicitud a un proveedor para que suministre bienes o servicios"
 
 [labels.es.model.purchase_order.field.reference]
-label = "Referencia"
-description = "Número de pedido impreso en el documento"
+label = "Referencia del proveedor"
+description = "Número de presupuesto o referencia del proveedor para este pedido, si lo hay"
 
 [labels.es.model.purchase_order.field.vendor_id]
 label = "Proveedor"
@@ -92,6 +94,7 @@ description = "Cancelar un pedido que aún no se envió"
 
 [labels.es.model.purchase_order_line]
 name = "Línea de pedido"
+plural = "Líneas de pedido"
 description = "Un producto o servicio de un pedido de compra"
 
 [labels.es.model.purchase_order_line.field.order_id]

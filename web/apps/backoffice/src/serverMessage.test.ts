@@ -332,3 +332,54 @@ describe("server messages use the package's own option labels", () => {
     expect(out).not.toContain("Avslutad");
   });
 });
+
+// B12: a refusal reads like a person wrote it, in English too: no engine suffix, no technical names.
+describe("server messages without engine text", () => {
+  const field = (name: string, labels?: Record<string, string>): FieldMeta => ({
+    name,
+    kind: "ref",
+    description: "",
+    class: "none",
+    personal_data: false,
+    required: true,
+    ...(labels ? { labels } : {}),
+  });
+  const order: ModelMeta = {
+    name: "sale_order",
+    description: "",
+    can_create: true,
+    can_update: true,
+    can_delete: true,
+    fields: [field("customer_id", { en: "Customer" })],
+    actions: [],
+  };
+
+  it("drops the assertion suffix", async () => {
+    await setLanguage("en", false);
+    expect(
+      serverMessage(
+        "An invoice with no amount cannot be posted (assertion total_minor > 0 failed)",
+      ),
+    ).toBe("An invoice with no amount cannot be posted");
+    expect(
+      serverMessage("Payments do not cover the total (assertion sum(x) >= total failed)"),
+    ).toBe("Payments do not cover the total");
+  });
+
+  it("names the field by its label in English", async () => {
+    await setLanguage("en", false);
+    registerMeta([{ id: "sales", name: "Sales", models: [order] }]);
+    expect(serverMessage("sale_order.customer_id is required")).toBe("Customer is required");
+    expect(serverMessage("sale_order.note is required")).toBe("Note is required");
+  });
+
+  it("says what was wrong inside a failed step of an action", async () => {
+    await setLanguage("en", false);
+    registerMeta([{ id: "sales", name: "Sales", models: [order] }]);
+    expect(
+      serverMessage(
+        "sale_order.confirm: effect 1 (create) failed, nothing was changed: sale_order.customer_id is required",
+      ),
+    ).toBe("Customer is required");
+  });
+});

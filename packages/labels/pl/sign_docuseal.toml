@@ -5,6 +5,7 @@ summary = "Odbiera zdarzenia podpisów DocuSeal obok wniosków. Podpis nadal rej
 
 [labels.pl.model.sign_docuseal_event]
 name = "Zdarzenie DocuSeal"
+plural = "Zdarzenia DocuSeal"
 description = "Zdarzenie zgłoszone przez DocuSeal w sprawie wniosku o podpis, zapisane przez złącze DocuSeal"
 
 [labels.pl.model.sign_docuseal_event.field.event]

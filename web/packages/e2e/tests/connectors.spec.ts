@@ -154,9 +154,19 @@ test.describe("Connectors", () => {
       // The audit trail has the flow, without the data.
       await detail.getByRole("button", { name: "Close" }).click();
       await page.goto("/#/connectors/data_flow_log");
-      const logRow = page.getByRole("row", { name: new RegExp(label) });
-      await expect(logRow.first()).toContainText("tax_id");
-      await expect(logRow.first()).toContainText("name,email");
+      // The list shows the columns that fit; the record of the flow has every field.
+      await page
+        .getByRole("row", { name: new RegExp(label) })
+        .first()
+        .click();
+      const flow = page.getByRole("complementary", { name: /record$/ });
+      // A log record is read only: its values are a description list.
+      const value = (term: string) =>
+        flow
+          .locator("dt", { hasText: new RegExp(`^${term}$`) })
+          .locator("xpath=following-sibling::dd[1]");
+      await expect(value("Fields denied")).toHaveText(/tax_id/);
+      await expect(value("Fields sent")).toHaveText(/name,email/);
       const logs = await api.run("root", "data_flow_log.list");
       const released = logs.filter((l: any) => l.outcome === "released" && l.model === "party");
       expect(released.length).toBeGreaterThan(0);

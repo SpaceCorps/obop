@@ -5,6 +5,7 @@ summary = "Strony, menu, wpisy na blogu i zgłoszenia z formularzy, udostępnian
 
 [labels.pl.model.website_page]
 name = "Strona"
+plural = "Strony"
 description = "Strona witryny internetowej"
 
 [labels.pl.model.website_page.field.title]
@@ -54,6 +55,7 @@ description = "Wycofuje opublikowaną stronę na stałe"
 
 [labels.pl.model.website_menu_item]
 name = "Pozycja menu"
+plural = "Menu"
 description = "Wpis w nawigacji witryny"
 
 [labels.pl.model.website_menu_item.field.label]
@@ -82,6 +84,7 @@ description = "Czy link otwiera się w nowym oknie"
 
 [labels.pl.model.website_blog_post]
 name = "Wpis na blogu"
+plural = "Wpisy na blogu"
 description = "Wpis na blogu"
 
 [labels.pl.model.website_blog_post.field.title]
@@ -139,6 +142,7 @@ description = "Wycofuje opublikowany wpis"
 
 [labels.pl.model.website_form_submission]
 name = "Zgłoszenie z formularza"
+plural = "Zgłoszenia z formularza"
 description = "Wiadomość wysłana przez odwiedzającego za pomocą formularza na stronie"
 
 [labels.pl.model.website_form_submission.field.form_name]
@@ -192,6 +196,7 @@ description = "Oznacza wiadomość jako spam"
 
 [labels.pl.model.website_page_translation]
 name = "Tłumaczenie strony"
+plural = "Tłumaczenia stron"
 description = "Strona przetłumaczona na inny język; strona publiczna pokazuje ją odwiedzającym czytającym w tym języku"
 
 [labels.pl.model.website_page_translation.field.page_id]
@@ -233,6 +238,7 @@ description = "Czy tłumaczenie jest pokazywane; dostępne tylko, gdy jego stron
 
 [labels.pl.model.website_blog_post_translation]
 name = "Tłumaczenie wpisu na blogu"
+plural = "Tłumaczenia wpisów na blogu"
 description = "Wpis na blogu przetłumaczony na inny język"
 
 [labels.pl.model.website_blog_post_translation.field.post_id]

@@ -4,7 +4,8 @@
 // `useLeaveHold`: the signing link that is shown once), both, or neither. Tested through the two ways
 // out the app uses: `go()` (the palette, the panel's close button) and the browser's own address
 // change (Back, a swipe, a typed address). The question is `nav.ask`, which App.tsx wires to its
-// confirm dialog; here it is a spy.
+// confirm dialog; here it is a spy. While a save is on its way (`nav.saving`) both ways out wait
+// for it and ask nothing about the changes that are being saved.
 import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -82,6 +83,7 @@ beforeEach(async () => {
   history.replaceState(null, "", "/");
   nav.ask = null;
   nav.dirty = null;
+  nav.saving = null;
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -95,6 +97,7 @@ afterEach(async () => {
   container.remove();
   nav.ask = null;
   nav.dirty = null;
+  nav.saving = null;
 });
 
 describe("go(): the palette, the panel's close button", () => {
@@ -358,5 +361,100 @@ describe("the browser's own address change: Back, a swipe", () => {
     await change();
     expect(ask).not.toHaveBeenCalled();
     expect(text()).toBe("elsewhere");
+  });
+});
+
+describe("a save that is on its way: Create, then Escape before the server has answered", () => {
+  // The record panel's state while it saves: the form is still dirty and `nav.saving` is a promise
+  // that settles when the save is over. `finish` is the end of the save.
+  let dirty: boolean;
+  let saving: Promise<void> | null;
+  let over: () => void;
+  const finish = async (saved: boolean, then?: () => void) => {
+    await act(async () => {
+      if (saved) dirty = false;
+      saving = null;
+      then?.();
+      over();
+    });
+    await settle();
+  };
+
+  beforeEach(() => {
+    dirty = true;
+    saving = new Promise<void>((done) => (over = done));
+    nav.dirty = () => dirty;
+    nav.saving = () => saving;
+  });
+
+  it("go() asks nothing while the save is on its way, and goes when it has worked", async () => {
+    const ask = answerWith(false);
+    await act(async () => go({ app: "crm", model: "lead" }));
+    await settle();
+    expect(ask, "asked to discard what is being saved").not.toHaveBeenCalled();
+    expect(text(), "left before the save was over").toBe("here");
+    await finish(true);
+    expect(ask).not.toHaveBeenCalled();
+    expect(text()).toBe("elsewhere");
+  });
+
+  it("go() asks the unsaved-changes question once the save was refused", async () => {
+    const ask = answerWith(false);
+    await act(async () => go({ app: "crm", model: "lead" }));
+    await settle();
+    expect(ask).not.toHaveBeenCalled();
+    await finish(false);
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(ask).toHaveBeenCalledWith(UNSAVED, "Leave and discard", "Keep editing");
+    expect(text()).toBe("here");
+  });
+
+  it("the way out follows the address the save itself goes to (a new record gets its id)", async () => {
+    const ask = answerWith(false);
+    await act(async () => go({ app: "crm", model: "lead" }));
+    await settle();
+    // The save is over and puts the saved record in the address, as `onSaved` does.
+    await finish(true, () => go({ app: "crm", model: "party", id: "saved" }));
+    expect(ask).not.toHaveBeenCalled();
+    expect(location.hash).toBe("#/crm/lead");
+    expect(text()).toBe("elsewhere");
+  });
+
+  it("go() to the address that is already shown does not wait (the save goes to its own record)", async () => {
+    expect(location.hash).toBe("");
+    await act(async () => go({}));
+    expect(location.hash, "held back although nothing is left behind").toBe("#/");
+  });
+
+  it("the browser's own address change waits too: the address is put back, then taken again", async () => {
+    const ask = answerWith(false);
+    const here = location.hash;
+    await act(async () => {
+      location.hash = "#/crm/lead";
+    });
+    await settle();
+    expect(ask).not.toHaveBeenCalled();
+    expect(location.hash).toBe(here || "#/");
+    expect(text()).toBe("here");
+    await finish(true);
+    await settle();
+    expect(ask).not.toHaveBeenCalled();
+    expect(location.hash).toBe("#/crm/lead");
+    expect(text()).toBe("elsewhere");
+  });
+
+  it("the browser's own address change asks once the save was refused", async () => {
+    const ask = answerWith(false);
+    const here = location.hash;
+    await act(async () => {
+      location.hash = "#/crm/lead";
+    });
+    await settle();
+    await finish(false);
+    await settle();
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(ask).toHaveBeenCalledWith(UNSAVED, "Leave and discard", "Keep editing");
+    expect(location.hash).toBe(here || "#/");
+    expect(text()).toBe("here");
   });
 });

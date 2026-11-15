@@ -29,22 +29,59 @@ fn root() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
+/// Whether a package uses a key of core 0.2.2: the UI hints (D95) or the guard (D77).
+fn uses_hints_or_guards(m: &Manifest) -> bool {
+    m.module.home.is_some()
+        || m.module.launcher.is_some()
+        || m.model.iter().any(|x| {
+            x.ui.is_some()
+                || !x.child.is_empty()
+                || x.guard.is_some()
+                || x.field.iter().any(|f| {
+                    f.default.is_some()
+                        || f.fill_from.is_some()
+                        || f.readonly
+                        || f.ref_filter.is_some()
+                        || f.ui.is_some()
+                })
+                || x.action
+                    .iter()
+                    .any(|a| a.ui.is_some() || a.effect.iter().any(|e| e.kind == "set"))
+        })
+}
+
 /// Every model that exists today, built in or parsed from a bundled package, carries the default
-/// per-model extensions: no history setting, no declared index, no guard. The record history,
-/// index and guard features read `ModelDef::ext`; until each lands, nothing may set it.
+/// per-model extensions: no history setting, no declared index. The record history and index
+/// features read `ModelDef::ext`; until each lands, nothing may set it. The UI hints (D95) and the
+/// command-layer guard (D77) have landed, so a model may declare those.
 #[test]
 fn every_existing_model_has_the_default_extensions() {
+    let bare = |ext: &ModelExt| ModelExt {
+        ui: None,
+        guard: None,
+        ..ext.clone()
+    };
     let mut seen = 0;
     for m in &App::new().modules {
         for def in &m.models {
-            assert_eq!(def.ext, ModelExt::default(), "built-in model {}", def.name);
+            assert_eq!(
+                bare(&def.ext),
+                ModelExt::default(),
+                "built-in model {}",
+                def.name
+            );
             seen += 1;
         }
     }
     for manifest in bundled() {
         let module = manifest.to_module().unwrap();
         for def in &module.models {
-            assert_eq!(def.ext, ModelExt::default(), "package model {}", def.name);
+            assert_eq!(
+                bare(&def.ext),
+                ModelExt::default(),
+                "package model {}",
+                def.name
+            );
             seen += 1;
         }
     }
@@ -58,7 +95,7 @@ fn every_existing_model_has_the_default_extensions() {
 #[test]
 fn the_core_version_is_the_workspace_version() {
     assert_eq!(obop_types::CORE_VERSION, env!("CARGO_PKG_VERSION"));
-    assert_eq!(obop_types::CORE_VERSION, "0.2.1");
+    assert_eq!(obop_types::CORE_VERSION, "0.2.2");
     let v = Version::parse(obop_types::CORE_VERSION).unwrap();
     // The compatibility policy: while below 1.0 a minor bump is breaking, so ^0.2 is 0.2.x.
     assert!(Req::parse("^0.2").unwrap().matches(&v));
@@ -76,9 +113,12 @@ fn every_bundled_package_declares_its_metadata() {
         let id = &x.id;
         assert_eq!(x.license, "Apache-2.0", "{id}: first-party licence (OR-1)");
         assert!(obop_pkg::spdx::check(&x.license).is_ok(), "{id}");
-        // The bundled packages keep `^0.2` (OR-35 h, OR-37 b). The one exception is a package that
-        // uses the field-limit keys (D90), which only core 0.2.1 parses: it writes `^0.2.1`.
-        let expected = if id == "accounting_se" {
+        // The bundled packages keep `^0.2` (OR-35 h, OR-37 b), except a package that uses keys a
+        // patch release added: the UI hints and guards (D95, D77) need `^0.2.2`, the field limits
+        // (D90) `^0.2.1`.
+        let expected = if uses_hints_or_guards(m) {
+            "^0.2.2"
+        } else if id == "accounting_se" {
             "^0.2.1"
         } else {
             "^0.2"
@@ -135,7 +175,7 @@ fn every_bundled_package_declares_its_metadata() {
     let ts = listing.iter().find(|l| l.id == "timesheets").unwrap();
     assert_eq!(ts.license, "Apache-2.0");
     assert_eq!(ts.dependencies["projects"], ">=0.3, <1");
-    assert_eq!(ts.requires_core, "^0.2");
+    assert_eq!(ts.requires_core, "^0.2.2");
 }
 
 #[test]
@@ -250,7 +290,7 @@ fn all_23_packages_install_with_their_dependencies_and_the_module_list_shows_eve
         by("projects")["dependents"],
         Value::List(vec![Value::text("timesheets")])
     );
-    assert_eq!(by("base")["version"], Value::text("0.2.1"));
+    assert_eq!(by("base")["version"], Value::text("0.2.2"));
     assert_eq!(by("base")["license"], Value::text("Apache-2.0"));
     let Value::List(base_dependents) = &by("base")["dependents"] else {
         panic!()
@@ -299,9 +339,10 @@ fn the_check_command_applies_the_catalogue_rules_and_reports_warnings() {
     let _guard = obop_storage::testing::TempPath::dir("obop-catalog");
     let dir = _guard.path().to_path_buf();
     let text = std::fs::read_to_string(pk.join("fleet.toml")).unwrap();
-    let bare = text
-        .replace("license = \"Apache-2.0\"\n", "")
-        .replace("requires_core = \"^0.2\"\n", "requires_core = \">=0.2\"\n");
+    let bare = text.replace("license = \"Apache-2.0\"\n", "").replace(
+        "requires_core = \"^0.2.2\"\n",
+        "requires_core = \">=0.2\"\n",
+    );
     let f = dir.join("fleet.toml");
     std::fs::write(&f, bare).unwrap();
     let fs = f.to_string_lossy().to_string();
@@ -319,7 +360,7 @@ fn the_check_command_applies_the_catalogue_rules_and_reports_warnings() {
         r.errors.iter().any(|e| e.contains("has no upper bound")),
         "{r:?}"
     );
-    let no_range = text.replace("requires_core = \"^0.2\"\n", "");
+    let no_range = text.replace("requires_core = \"^0.2.2\"\n", "");
     for catalog in [false, true] {
         let r = obop_pkg::check_package(&no_range, &builtin, catalog);
         assert!(
@@ -348,7 +389,7 @@ fn the_check_command_applies_the_catalogue_rules_and_reports_warnings() {
             "built-in module that versions with the core",
         ),
         (
-            timesheets.replace("requires_core = \"^0.2\"", "requires_core = \">=9, <10\""),
+            timesheets.replace("requires_core = \"^0.2.2\"", "requires_core = \">=9, <10\""),
             "needs core >=9",
         ),
         (
@@ -381,7 +422,7 @@ fn the_check_command_applies_the_catalogue_rules_and_reports_warnings() {
     // An upload with a core mismatch is a warning for `check` (the author may prepare for a
     // later core) and an error at install time.
     let r = obop_pkg::check_package(
-        &timesheets.replace("requires_core = \"^0.2\"", "requires_core = \">=9, <10\""),
+        &timesheets.replace("requires_core = \"^0.2.2\"", "requires_core = \">=9, <10\""),
         &builtin,
         false,
     );
@@ -410,15 +451,15 @@ fn the_tree_list_and_plan_commands_run() {
     assert!(modules_plan(&o, "nope").is_err());
     let app = App::new();
     let t = app.installer.tree(Some("timesheets")).unwrap();
-    assert!(t.contains("timesheets 0.3.0"), "{t}");
+    assert!(t.contains("timesheets 0.4.0"), "{t}");
     assert!(
-        t.contains("projects >=0.3, <1  [not installed, marketplace offers 0.4.0]"),
+        t.contains("projects >=0.3, <1  [not installed, marketplace offers 0.5.0]"),
         "{t}"
     );
     let t = app.installer.tree(Some("field_service")).unwrap();
-    assert!(t.contains("base ^0.2  [built in, core 0.2.1]"), "{t}");
+    assert!(t.contains("base ^0.2  [built in, core 0.2.2]"), "{t}");
     assert!(
-        t.contains("hr >=0.2, <1  [not installed, marketplace offers 0.3.0]"),
+        t.contains("hr >=0.2, <1  [not installed, marketplace offers 0.3.1]"),
         "{t}"
     );
 }
@@ -474,9 +515,9 @@ async fn the_core_version_is_served_and_an_agent_proposes_a_plan_that_one_approv
     let human = login.1["token"].as_str().unwrap().to_string();
     // The one core version, everywhere it is reported.
     let meta = get(&r, &human, "/api/meta").await;
-    assert_eq!(meta["core_version"], "0.2.1");
+    assert_eq!(meta["core_version"], "0.2.2");
     let api = get(&r, &human, "/api/openapi.json").await;
-    assert_eq!(api["info"]["version"], "0.2.1");
+    assert_eq!(api["info"]["version"], "0.2.2");
     // The plan over HTTP, read-only.
     let (s, plan) = post(
         &r,
@@ -488,7 +529,7 @@ async fn the_core_version_is_served_and_an_agent_proposes_a_plan_that_one_approv
     assert_eq!(s, 200, "{plan}");
     let v = &plan["value"];
     assert_eq!(v["ok"], true);
-    assert_eq!(v["core_version"], "0.2.1");
+    assert_eq!(v["core_version"], "0.2.2");
     assert_eq!(v["steps"][0]["id"], "projects");
     assert_eq!(v["steps"][0]["license"], "Apache-2.0");
     assert_eq!(v["steps"][1]["id"], "timesheets");

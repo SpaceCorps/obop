@@ -8,8 +8,10 @@
 //! and wrappers between the surface and the engine need no new argument, and the engine depends
 //! on no HTTP type. The scope belongs to the thread that opened it and is not `Send`.
 //!
-//! Only REST opens a scope. A call from MCP or the command line, or a handler called directly,
-//! runs with no scope: no language, nothing noted, the message of the manifest, exactly as before.
+//! REST opens a scope with the language of the request, and an MCP tool call opens one without a
+//! language (D95: so its refusal names `code`, `assert_key` and `message` too). The command line
+//! and a handler called directly run with no scope: no language, nothing noted, the message of the
+//! manifest, exactly as before.
 
 use std::cell::RefCell;
 use std::marker::PhantomData;
@@ -110,6 +112,21 @@ pub(crate) fn assertion_behind(message: &str) -> Option<Option<String>> {
                 .rev()
                 .find(|n| message.contains(&n.text))
                 .map(|n| n.key.clone())
+        })
+    })
+}
+
+/// The author's message of the assertion behind `message` (see [`assertion_behind`]), without
+/// the ` (assertion <expression> failed)` suffix (D95: the `message` of a REST and MCP refusal);
+/// `None` when no assertion refused with that text or the assertion has no message.
+pub(crate) fn assertion_message_behind(message: &str) -> Option<String> {
+    CURRENT.with(|c| {
+        c.borrow().as_ref().and_then(|s| {
+            let n = s.noted.iter().rev().find(|n| message.contains(&n.text))?;
+            let cut = n.text.rfind(" (assertion ")?;
+            n.text
+                .ends_with(" failed)")
+                .then(|| n.text[..cut].to_string())
         })
     })
 }

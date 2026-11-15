@@ -234,7 +234,12 @@ impl Runner<'_> {
         // them here.
         if depth > 0 {
             precheck(def, &rec, cmd)?;
+            if let Some(n) = super::hints::need_missing(cmd, &rec) {
+                return Err(super::hints::need_message(def, cmd, n));
+            }
         }
+        // Whoever the record names in `not_by` may not run the action, at any depth (D95).
+        super::hints::not_by(def, cmd, &rec, &self.actor.id)?;
         // Assertions look at the record as it is now, children included.
         if !cmd.asserts.is_empty() {
             let c = Computer::new(&*unit, &look, false);
@@ -258,6 +263,9 @@ impl Runner<'_> {
             .filter(|(k, v)| rec.get(*k) != Some(*v))
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
+        // The ticket of this action on this record: a frozen record may leave by it along an
+        // `exit_to` edge (D77).
+        unit.ticket(def.name, id, cmd.name);
         unit.merge(def.name, id, patch.clone())?;
         // Effects, in order.
         let mut created: HashMap<String, String> = HashMap::new();
@@ -390,8 +398,11 @@ impl Runner<'_> {
                     for (k, s) in set {
                         patch.insert((*k).into(), vars.value_for(s, &target, k)?);
                     }
+                    // A `set` on the record itself is part of the action, which its own group
+                    // already authorises; any other record needs the model's write group.
+                    let own = *t == Target::This;
                     for tid in ids {
-                        self.change(unit, &target, &tid, patch.clone())?;
+                        self.change_as(unit, &target, &tid, patch.clone(), own)?;
                     }
                 }
                 EffectKind::Adjust {
@@ -552,6 +563,7 @@ impl Runner<'_> {
                 Some(J::String(s)) if !s.is_empty() => Ok(vec![s.clone()]),
                 _ => Ok(vec![]),
             },
+            Target::This => Ok(vec![id.to_string()]),
             Target::Children(via) => {
                 let via = match via {
                     Some(v) => (*v).to_string(),
@@ -595,10 +607,21 @@ impl Runner<'_> {
                 def.name, def.write_group
             ));
         }
+        let look = |n: &str| self.look(n);
+        // A record an effect creates gets the defaults and fills of D95 like any other create.
+        {
+            let cx = super::hints::FillCtx {
+                eng: self.eng,
+                reads: &*unit,
+                look: &look,
+                actor: self.actor,
+                today: &self.today,
+            };
+            super::hints::fill_in(&cx, def, &mut f)?;
+        }
         kinds::canonicalise(def, &mut f, Path::Write)?;
         default_governed(def, &mut f);
         own_default(def, &mut f, self.actor);
-        let look = |n: &str| self.look(n);
         check_effect_fields(&*unit, &look, self.actor, def, &f, true, None)?;
         seq::assign(unit, def, &mut f, None, self.now)?;
         if let Some(why) = creator_blocked(&Gate::new(&*unit, &look, self.actor), def, &f) {
@@ -610,15 +633,23 @@ impl Runner<'_> {
     }
 
     /// Change fields of a record the way the generated `update` does, for the caller.
-    fn change(
+    fn change(&self, unit: &mut Unit<'_>, def: &Arc<ModelDef>, id: &str, patch: Fields) -> R<()> {
+        self.change_as(unit, def, id, patch, false)
+    }
+
+    /// `change`; `own` is a `set` effect on the record the action runs on (D95), which the
+    /// action's group authorises, so the model's write group is not asked for. The kinds, the
+    /// limits and the frozen checks still apply.
+    fn change_as(
         &self,
         unit: &mut Unit<'_>,
         def: &Arc<ModelDef>,
         id: &str,
         mut patch: Fields,
+        own: bool,
     ) -> R<()> {
         self.writable(def)?;
-        if !self.actor.holds(def.write_group) {
+        if !own && !self.actor.holds(def.write_group) {
             return Err(format!(
                 "changing a {} needs the {} group",
                 def.name, def.write_group

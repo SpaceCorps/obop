@@ -389,7 +389,7 @@ async fn with_a_brand_the_stored_artwork_is_served_with_the_fixed_headers_in_eve
         );
         assert_eq!(a.header("content-security-policy"), SPEC_CSP, "{}", l.name);
         assert_eq!(a.header("cache-control"), SPEC_CACHE_CONTROL, "{}", l.name);
-        // The constants that the shop favicon is to share (slice S1f, not built) say the same.
+        // The constants that the shop's tab icon shares (`obop-site`, `seo.rs`) say the same.
         assert_eq!(SPEC_CONTENT_TYPE, LOGO_CONTENT_TYPE);
         assert_eq!(SPEC_NOSNIFF, LOGO_NOSNIFF);
         assert_eq!(SPEC_CSP, LOGO_CSP);
@@ -843,8 +843,11 @@ async fn the_logo_route_has_the_cross_origin_headers_of_the_layer_and_none_of_it
             assert!(!logo.has("access-control-allow-credentials"), "{what}");
             assert_ne!(logo.header("access-control-allow-origin"), "*", "{what}");
             if origin == LISTED {
-                // Accepted: 204, the listed origin echoed (never `*`) with `Vary: Origin`, the
-                // methods of the layer, and no credentials.
+                // Accepted: 204, the listed origin echoed (never `*`) with `Vary: Origin`, a
+                // list of methods that includes `GET`, and no credentials. The list is the
+                // layer's, not the route's (the `Allow` below is the route's): that it is the
+                // same as for the other route is the comparison of the `access-control-*` headers
+                // above, and its wording is pinned by `cors_tests.rs`, not here.
                 assert_eq!(logo.status, 204, "{what}");
                 assert_eq!(logo.header("access-control-allow-origin"), LISTED, "{what}");
                 assert!(logo.header("access-control-allow-methods").contains("GET"));
@@ -1070,8 +1073,16 @@ async fn under_the_admin_prefix_the_route_is_still_at_the_root() {
         under.text()
     );
     assert!(!under.header("content-type").contains("svg"));
-    // The public site's own pages are not shadowed either.
-    assert_ne!(get(&l.router, "/favicon.svg").await.text(), artwork());
+    // The public site's own pages are not shadowed either: robots.txt is the shop's. Since slice S1f
+    // the shop's tab icon, `/favicon.svg`, is the record's artwork too, answered by the shop itself
+    // with the headers and the ETag of the logo route.
+    let robots = get(&l.router, "/robots.txt").await;
+    assert_eq!(robots.status, 200);
+    assert!(robots.text().contains("User-agent"), "{}", robots.text());
+    let tab = get(&l.router, "/favicon.svg").await;
+    assert_eq!(tab.status, 200);
+    assert_eq!(tab.text(), artwork());
+    assert_eq!(tab.header("etag"), at_root.header("etag"));
 }
 
 // ---- The store that fails (D74) -------------------------------------------------------------------
@@ -1113,12 +1124,11 @@ async fn while_the_cell_is_fresh_a_failing_store_is_not_met() {
 }
 
 /// The bound of the reader's cell: the constant `DEFAULT_BOUND` of
-/// `crates/kernel/obop-commands/src/brand/reader.rs` (not exported, and pinned at two seconds by
+/// `crates/kernel/obop-commands/src/brand/reader.rs`, itself (pinned at two seconds by
 /// `brand/tests/cache.rs`). The dispatcher's reader has this bound, and a test in this crate cannot
-/// make it shorter or expire the cell by hand. If the constant changes, the tests below that wait
-/// for the cell to go stale fail loudly (the request they expect to be refused is answered 200, or
-/// the wait is far too long), not silently.
-const READER_BOUND: std::time::Duration = std::time::Duration::from_secs(2);
+/// make it shorter or expire the cell by hand. The tests below that wait for the cell to go stale
+/// wait for the bound the reader has, and not for a copy of it that could drift.
+const READER_BOUND: std::time::Duration = obop_commands::brand::DEFAULT_BOUND;
 
 /// A `GET /healthz` that the runtime's worker must poll, answered within `bound`, and the answer.
 /// The test body runs on the thread that drives the runtime (`block_on`), not on a worker, so a
@@ -1495,6 +1505,10 @@ async fn a_first_read_that_times_out_in_the_store_is_answered_503_with_retry_aft
             f.refuse_next(1);
         }),
     );
+    // What the store has been asked for (and what it refused) before the first request: the
+    // refill's reads are counted from here.
+    let gets_before = flaky.reads().gets;
+    let refused_before = flaky.refused();
     let first = {
         let r = router.clone();
         tokio::spawn(async move { get(&r, PATH).await })
@@ -1522,13 +1536,33 @@ async fn a_first_read_that_times_out_in_the_store_is_answered_503_with_retry_aft
     let body: J = serde_json::from_slice(&first.body).unwrap();
     assert_eq!(body["code"], "storage_timeout", "{body}");
     assert!(!first.text().contains("<svg"), "not the logo");
+    // The noted timeout alone would give this answer, so the refusal is observed on its own: the
+    // refill read the row (one `get`, the one that was held), its next read, the theme setting, was
+    // refused by the double before it was counted, and nothing else was refused.
+    assert_eq!(
+        flaky.refused() - refused_before,
+        1,
+        "the refill's second read was refused"
+    );
+    assert_eq!(
+        flaky.reads().gets - gets_before,
+        1,
+        "the refill read the row and met the refusal at the theme setting"
+    );
 
     // Nothing was kept: the store answers, and so does the route (no row: the unknown-path 404).
+    // A refill that had ended well, with no row, would be kept for the bound and the request below
+    // would read nothing; a failed one is read again, the row and the theme setting, two more `get`s.
     flaky.allow_models();
     let unknown = get(&router, "/api/nothing").await;
     let healed = get(&router, PATH).await;
     assert_eq!(healed.status, 404);
     assert_eq!(healed.body, unknown.body);
+    assert_eq!(
+        flaky.reads().gets - gets_before,
+        3,
+        "the failed refill was not kept: the next request read the row and the theme setting again"
+    );
 }
 
 /// The store is never read on the thread that polls the request: the PostgreSQL client panics on an

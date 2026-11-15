@@ -28,26 +28,32 @@
 //!   slot only if the number in it is newer.
 //!
 //! A failed refill is never kept: the cell stays as it was, the owner gets the last good value of the
-//! cell as it is when the read fails (the default if there is none), and the next caller starts a
-//! refill of its own. When `apply` changes the row in this process it bumps a counter and, once its
+//! cell as it is when the read fails (the default if there is none, marked [`Shown::is_unread`] so
+//! that a cache above the reader can tell it from the answer "no brand is set"), and the next caller
+//! starts a refill of its own. When `apply` changes the row in this process it bumps a counter and, once its
 //! batch has committed, replaces the brand part of the cell; a refill stores its outcome only if the
 //! counter is the one it started under, so a refill that read the old row before the change cannot
 //! put the replaced brand back. The cell is dated by the start of the read, not by its end, so a slow
 //! store cannot keep an old row for longer than the bound after the flight ended.
 //!
-//! **`fresh()`** is the uncached read of the row and the theme that `get` makes: a store failure is
-//! an error, never `set: false`. **[`strict`]** reads the row alone, every time, for the text that is
-//! written into the person's own device.
+//! **`fresh()`** is the uncached read of the row and the theme that `get` makes (and the command
+//! line `obop admin brand status`, and the name that signs a Slack message, which is read for itself
+//! because a message that has left cannot be taken back, and `current()` can give a caller behind a
+//! failed first refill the default with no fault noted on its thread, docs/ISSUES.md PS3-9): a store
+//! failure is an error, never `set: false`. **[`strict`]** reads the row alone, every time, for the
+//! text that is written into the person's own device.
 //!
 //! The reader is a total function of what the store holds: it never panics on a row. Its own lines
 //! (the sink) are written after the refill lock is released, and the default sink ignores a stderr
 //! that cannot be written. It does not hide a store failure from D74: the read is not run inside
 //! `fault::detached`, so the request that met the fault is answered with the 503 by the layer above.
 
+use super::enrol::unfit_for_a_label;
 use super::row::{self, Fallback, Shown};
 use super::{MODEL, ROW_ID, SETTING_ID, SETTING_MODEL, UNREADABLE};
 use obop_brand::Brand;
 use obop_storage::{Backend, Fields};
+use serde_json::{Map, Value as J};
 use std::collections::HashSet;
 use std::io::Write;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -121,6 +127,9 @@ pub struct Reader {
 pub struct Fresh {
     shown: Shown,
     stored: Option<Fields>,
+    /// The `site` object of the instance settings, from the read that gave the theme (empty when
+    /// the settings hold none): what the public site's entries of `effective` are decided from.
+    site: Map<String, J>,
 }
 
 impl Fresh {
@@ -147,18 +156,23 @@ impl Fresh {
     pub fn stored(&self) -> Option<&Fields> {
         self.stored.as_ref()
     }
+
+    /// The `site` object of the instance settings as the read left it.
+    pub(crate) fn site(&self) -> &Map<String, J> {
+        &self.site
+    }
 }
 
 fn recover<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-/// Reads the row and then the theme setting. Either failing fails the unit, with the storage error
-/// unchanged.
-fn read_unit(backend: &dyn Backend) -> Result<(Option<Fields>, Option<String>), String> {
+/// Reads the row and then the instance settings (the theme the brand defers to, and the `site`
+/// object that `get` reports on). Either failing fails the unit, with the storage error unchanged.
+fn read_unit(backend: &dyn Backend) -> Result<(Option<Fields>, Option<Fields>), String> {
     let stored = backend.get(MODEL, ROW_ID)?;
     let setting = backend.get(SETTING_MODEL, SETTING_ID)?;
-    Ok((stored, row::accent_of(setting.as_ref())))
+    Ok((stored, setting))
 }
 
 impl Reader {
@@ -208,7 +222,8 @@ impl Reader {
     }
 
     /// The brand for display: see the module documentation for the cache. Never fails: a store that
-    /// cannot be read gives the last good value, and the default in a process that never had one.
+    /// cannot be read gives the last good value, and the default in a process that never had one
+    /// (that default answers [`Shown::is_unread`]).
     pub fn current(&self) -> Arc<Shown> {
         let Some(backend) = &self.backend else {
             return self.inert.clone();
@@ -247,7 +262,7 @@ impl Reader {
                     Some(slot) if slot.epoch > seen && slot.generation == generation => slot
                         .outcome
                         .clone()
-                        .unwrap_or_else(|| Arc::new(Shown::not_set(None))),
+                        .unwrap_or_else(|| Arc::new(Shown::unread())),
                     // The flight left nothing (its owner panicked), or an `apply` committed while
                     // it ran (its outcome may be the row that was replaced), or the slot is of a
                     // flight that had finished before this caller arrived (the lock was held by
@@ -272,7 +287,8 @@ impl Reader {
         };
         flight.slot = None;
         match read_unit(backend) {
-            Ok((stored, accent)) => {
+            Ok((stored, setting)) => {
+                let accent = row::accent_of(setting.as_ref());
                 let shown = Arc::new(row::read_row(stored.as_ref(), accent));
                 {
                     let mut cell = recover(&self.cell);
@@ -301,7 +317,7 @@ impl Reader {
                     generation: started,
                     epoch: self.finished.fetch_add(1, Ordering::AcqRel) + 1,
                 });
-                last_good.unwrap_or_else(|| Arc::new(Shown::not_set(None)))
+                last_good.unwrap_or_else(|| Arc::new(Shown::unread()))
             }
         }
     }
@@ -329,17 +345,22 @@ impl Reader {
             return Ok(Fresh {
                 shown: Shown::not_set(None),
                 stored: None,
+                site: Map::new(),
             });
         };
-        let (stored, accent) = read_unit(&**backend)?;
+        let (stored, setting) = read_unit(&**backend)?;
         Ok(Fresh {
-            shown: row::read_row(stored.as_ref(), accent),
+            shown: row::read_row(stored.as_ref(), row::accent_of(setting.as_ref())),
             stored,
+            site: row::site_of(setting.as_ref()),
         })
     }
 
     /// As the free function [`strict`] over this reader's store; an inert reader answers the
-    /// default brand.
+    /// default brand. A caller that writes the name into a device and may be handed an inert reader
+    /// (the passkey registration) must ask [`Reader::is_inert`] first and refuse with
+    /// [`no_reader_error`](super::no_reader_error): the default here is the answer of a reader with
+    /// nothing to read, not of a row that was read.
     pub fn strict(&self) -> Result<Brand, String> {
         match &self.backend {
             Some(b) => strict(&**b),
@@ -393,10 +414,19 @@ impl Reader {
     }
 
     /// Makes the cell stale without touching the last good value, as two seconds going by would.
-    /// For tests.
-    #[cfg(test)]
-    pub(crate) fn expire(&self) {
+    /// For tests, also those of other crates (the feature `test-support`): they hold a request to
+    /// the bound of the cell without waiting for the clock.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn expire(&self) {
         recover(&self.cell).at = None;
+    }
+
+    /// Makes the cell fresh for an hour, whatever its age, and keeps its value: the counterpart of
+    /// [`Reader::expire`]. For tests of other crates (the feature `test-support`) that hold what a
+    /// request costs while the cell is fresh, without a window of the clock to stay inside.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn hold_fresh(&self) {
+        recover(&self.cell).at = Some(Instant::now() + Duration::from_secs(3600));
     }
 
     /// Makes the value in the cell `by` older than it is. For tests.
@@ -426,9 +456,11 @@ impl Reader {
         recover(&self.refill).slot.is_none()
     }
 
-    /// How many callers have found a flight running with no last good value to serve. For tests.
-    #[cfg(test)]
-    pub(crate) fn waiting(&self) -> usize {
+    /// How many callers have found a flight running with no last good value to serve: a rendezvous
+    /// that is a condition and not a time. For tests, also those of other crates (the feature
+    /// `test-support`).
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn waiting(&self) -> usize {
         self.probe.waiting()
     }
 
@@ -444,8 +476,10 @@ impl Reader {
 /// the text that is written into the person's own device and cannot be corrected afterwards (the
 /// authenticator label, the passkey relying-party name). It fails when the store read fails (the
 /// storage error text, unchanged, so that a D74 code word reaches the layer above) or when the
-/// stored `name` fails the safety subset (a fixed message that starts with [`UNREADABLE`]). No row
-/// at all is not a failure: the default is the answer.
+/// stored `name` fails the safety subset (a name of nothing but spaces does, since S1c), or passes it
+/// and still cannot go into a label (a link character; see `enrol::unfit_for_a_label`, which also
+/// keeps an arm for white space only that no stored name reaches since S1c): a fixed message that starts
+/// with [`UNREADABLE`]. No row at all is not a failure: the default is the answer.
 pub fn strict(backend: &dyn Backend) -> Result<Brand, String> {
     let Some(stored) = backend.get(MODEL, ROW_ID)? else {
         return Ok(Brand::default());
@@ -454,15 +488,21 @@ pub fn strict(backend: &dyn Backend) -> Result<Brand, String> {
     if fallbacks.iter().any(|f| f.field == "name") {
         return Err(format!("{UNREADABLE}: the stored name cannot be shown"));
     }
+    if unfit_for_a_label(brand.name()) {
+        return Err(format!(
+            "{UNREADABLE}: the stored name cannot be used in a label"
+        ));
+    }
     Ok(brand)
 }
 
 /// What the tests need to see and to hold still inside the reader: a count of the callers that are
 /// about to block behind a flight (a rendezvous that is a condition and not a time) and a hook that
-/// runs inside `applied`. Outside a test build the probe has no state and no cost. It is a module
+/// runs inside `applied`. Outside a test build (and a build with the feature `test-support`, which
+/// the tests of other crates ask for) the probe has no state and no cost. It is a module
 /// with a `#[cfg]` on it, and not fields and statements with one, so that the scan of `obop-http`
 /// that lists every `#[cfg(test)]` on a construct of the code stays as it is.
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-support")))]
 mod probe {
     pub(super) struct Probe;
 
@@ -479,7 +519,7 @@ mod probe {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 mod probe {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
@@ -516,6 +556,8 @@ mod probe {
             }
         }
 
+        // Only the tests of this crate set a hook; a build for the tests of another crate has none.
+        #[allow(dead_code)]
         pub(super) fn set_gap(&self, hook: Hook) {
             *self.gap.lock().unwrap_or_else(|e| e.into_inner()) = Some(hook);
         }

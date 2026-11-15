@@ -81,7 +81,7 @@ impl Rig {
     fn consent(&self, p: &AuthorizeParams, groups: &[&str], days: u32) -> String {
         let v = self.o.validate_authorize(BASE, p).unwrap();
         let (id, binder) = self.o.begin(&v, "10.0.0.2", "en").unwrap();
-        let csrf = self.o.view(&id, &binder).unwrap().csrf;
+        let csrf = self.o.view_plain(&id, &binder).unwrap().csrf;
         assert_eq!(
             self.o
                 .login(&id, &binder, &csrf, "10.0.0.2", &self.user, PW)
@@ -479,7 +479,7 @@ fn the_consent_cannot_widen_beyond_what_the_owner_holds() {
         r.o.validate_authorize(BASE, &r.params(&c, REDIRECT))
             .unwrap();
     let (id, binder) = r.o.begin(&v, "10.0.0.2", "en").unwrap();
-    let csrf = r.o.view(&id, &binder).unwrap().csrf;
+    let csrf = r.o.view_plain(&id, &binder).unwrap().csrf;
     r.o.login(&id, &binder, &csrf, "10.0.0.2", "ada", PW)
         .unwrap();
     let bad = |g: &[&str], days| {
@@ -502,7 +502,7 @@ fn the_consent_cannot_widen_beyond_what_the_owner_holds() {
     assert_eq!(bad(&["sales.user"], 365), DecideOut::Retry("err.expiry"));
     assert!(matches!(bad(&["sales.user"], 1), DecideOut::Redirect(_)));
     // The flow was consumed by the answer.
-    assert_eq!(r.o.view(&id, &binder).unwrap_err(), FlowError::Gone);
+    assert_eq!(r.o.view_plain(&id, &binder).unwrap_err(), FlowError::Gone);
 }
 
 #[test]
@@ -513,10 +513,10 @@ fn a_flow_needs_its_browser_and_its_csrf_token_and_is_answered_once() {
         r.o.validate_authorize(BASE, &r.params(&c, REDIRECT))
             .unwrap();
     let (id, binder) = r.o.begin(&v, "10.0.0.2", "en").unwrap();
-    let csrf = r.o.view(&id, &binder).unwrap().csrf;
+    let csrf = r.o.view_plain(&id, &binder).unwrap().csrf;
     // Another browser does not hold the binder.
     assert_eq!(
-        r.o.view(&id, "not-the-binder").unwrap_err(),
+        r.o.view_plain(&id, "not-the-binder").unwrap_err(),
         FlowError::Forbidden
     );
     assert_eq!(
@@ -572,7 +572,7 @@ fn denying_sends_access_denied_and_leaves_no_code() {
         r.o.validate_authorize(BASE, &r.params(&c, REDIRECT))
             .unwrap();
     let (id, binder) = r.o.begin(&v, "10.0.0.2", "en").unwrap();
-    let csrf = r.o.view(&id, &binder).unwrap().csrf;
+    let csrf = r.o.view_plain(&id, &binder).unwrap().csrf;
     r.o.login(&id, &binder, &csrf, "10.0.0.2", "ada", PW)
         .unwrap();
     let DecideOut::Redirect(l) =
@@ -594,7 +594,7 @@ fn repeated_wrong_passwords_end_the_flow() {
         r.o.validate_authorize(BASE, &r.params(&c, REDIRECT))
             .unwrap();
     let (id, binder) = r.o.begin(&v, "10.0.0.2", "en").unwrap();
-    let csrf = r.o.view(&id, &binder).unwrap().csrf;
+    let csrf = r.o.view_plain(&id, &binder).unwrap().csrf;
     let mut last = Ok(LoginOut::Consent);
     for _ in 0..9 {
         last =
@@ -1032,12 +1032,40 @@ fn events_are_recorded_without_secrets() {
 
 #[test]
 fn metadata_documents_name_the_endpoints_and_s256_only() {
-    let m = authorization_server_metadata(BASE);
+    let m = authorization_server_metadata(BASE, &obop_brand::Brand::default());
     assert_eq!(m["issuer"], BASE);
     assert_eq!(m["token_endpoint"], "https://inst.test/oauth/token");
     assert_eq!(m["code_challenge_methods_supported"], json!(["S256"]));
     assert_eq!(m["token_endpoint_auth_methods_supported"], json!(["none"]));
     assert_eq!(m["authorization_response_iss_parameter_supported"], true);
+}
+
+/// S3 (docs/spec/branding.md, OT-10): the one link of the metadata that sends a client to the
+/// software's own documentation is optional in RFC 8414 and is left out when a brand is set; every
+/// other member is the same with and without a brand, and the document names no product: the
+/// instance's name is not in it.
+#[test]
+fn the_documentation_link_is_left_out_when_a_brand_is_set_and_nothing_else_moves() {
+    let plain = authorization_server_metadata(BASE, &obop_brand::Brand::default());
+    assert_eq!(
+        plain["service_documentation"],
+        "https://obop.dev/docs/agents/mcp/"
+    );
+    // A brand that is set, whatever its name (even `obop` itself: one predicate, section 2).
+    for name in ["MOHV", "obop"] {
+        let branded = authorization_server_metadata(BASE, &obop_brand::Brand::new(name));
+        assert!(
+            branded.get("service_documentation").is_none(),
+            "{name}: {branded}"
+        );
+        let mut without = plain.clone();
+        without
+            .as_object_mut()
+            .unwrap()
+            .remove("service_documentation");
+        assert_eq!(branded, without, "{name}: only the link differs");
+        assert!(!branded.to_string().contains("MOHV"), "{branded}");
+    }
 }
 
 #[test]

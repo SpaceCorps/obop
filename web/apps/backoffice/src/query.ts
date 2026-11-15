@@ -1,7 +1,8 @@
-import { compareText, fmt, t } from "@obop/ui";
-import { getTime, type FieldMeta, type Kind, type Row } from "./api.ts";
+import { compareText, fmt, getCurrency, t } from "@obop/ui";
+import { getTime, type FieldMeta, type Kind, type Row, type ServerOrder } from "./api.ts";
 import { compareDecimals, isDecimalText, sumDecimals } from "./decimals.ts";
 import { dayInZone } from "./instants.ts";
+import { shownNumber } from "./inputs/display.ts";
 import {
   decimalText,
   decimalToMinor,
@@ -16,6 +17,7 @@ import {
   validDate,
 } from "./format.ts";
 import { fieldTitle } from "./labels.ts";
+import { displayOf } from "./presentation.ts";
 
 /** One search condition. A list of them is the "facets"; the facets are ANDed. */
 export type Cond =
@@ -185,11 +187,11 @@ export function buildGroups(
   });
 }
 
-export const sumOf = (rows: Row[], field: string) =>
+export const sumOf = (rows: readonly Row[], field: string) =>
   rows.reduce((n, r) => n + (Number(r[field]) || 0), 0);
 
 /** The exact sum of a decimal column, as the server's text form (D72). */
-export const sumDecimalRows = (rows: Row[], field: string): string =>
+export const sumDecimalRows = (rows: readonly Row[], field: string): string =>
   sumDecimals(rows.map((r) => r[field]).filter(isDecimalText));
 
 export function formatSum(f: FieldMeta | undefined, n: number, currency?: string): string {
@@ -198,21 +200,50 @@ export function formatSum(f: FieldMeta | undefined, n: number, currency?: string
 
 /**
  * The total of a column. Money in different currencies is never added together: each currency gets
- * its own subtotal (docs/spec/ux.md 4.5).
+ * its own subtotal (docs/spec/ux.md 4.5). `currencyFor` names a record's currency (presentation.ts
+ * `currencyOf`); without it the record's own `currency` field decides. A record with no currency is
+ * in the instance's currency, so it is never a subtotal of its own beside that currency (B7).
  */
-export function formatSumRows(f: FieldMeta | undefined, rows: Row[]): string {
+export function formatSumRows(
+  f: FieldMeta | undefined,
+  rows: readonly Row[],
+  currencyFor: (row: Row) => string | undefined = rowCurrency,
+): string {
   if (!f) return "";
+  // A total of minutes reads as hours, of metres as km (D95 `ui.display`), decimals too.
+  const shown = displayOf(f);
+  if (
+    (f.kind === "number" || f.kind === "decimal") &&
+    (shown === "duration_minutes" || shown === "km_from_m")
+  ) {
+    const n = f.kind === "decimal" ? Number(sumDecimalRows(rows, f.name)) : sumOf(rows, f.name);
+    return shownNumber(shown, n) ?? integer(n);
+  }
   if (f.kind === "decimal") return decimalText(sumDecimalRows(rows, f.name), f);
   if (f.kind !== "money") return integer(sumOf(rows, f.name));
-  const byCurrency = new Map<string, number>();
-  for (const r of rows) {
-    const c = rowCurrency(r) ?? "";
-    byCurrency.set(c, (byCurrency.get(c) ?? 0) + (Number(r[f.name]) || 0));
-  }
   return fmt.list(
-    [...byCurrency].map(([c, n]) => money(n, c || undefined)),
+    sumByCurrency(rows, f.name, currencyFor).map(([c, n]) => money(n, c)),
     "conjunction",
   );
+}
+
+/** The sums of a money field per currency, largest group first; an empty currency is the instance's. */
+export function sumByCurrency(
+  rows: readonly Row[],
+  field: string,
+  currencyFor: (row: Row) => string | undefined = rowCurrency,
+): [string, number][] {
+  const byCurrency = new Map<string, { n: number; count: number }>();
+  for (const r of rows) {
+    const c = currencyFor(r) || getCurrency();
+    const b = byCurrency.get(c) ?? { n: 0, count: 0 };
+    b.n += Number(r[field]) || 0;
+    b.count++;
+    byCurrency.set(c, b);
+  }
+  return [...byCurrency]
+    .sort((a, b) => b[1].count - a[1].count)
+    .map(([c, b]): [string, number] => [c, b.n]);
 }
 
 /**
@@ -358,15 +389,42 @@ function compare(f: FieldMeta, a: Row, b: Row, lk: Lookup): number {
   }
 }
 
-export function sortRows(rows: Row[], sort: Sort | undefined, fields: FieldMeta[], lk: Lookup) {
-  const f = sort && fields.find((x) => x.name === sort.f);
-  if (!sort || !f) return rows;
-  const sign = sort.dir === "asc" ? 1 : -1;
+/**
+ * Rows in the order of `sort`. Without a sort of the person's own, `fallback` applies (the model's
+ * default order, `listOrder` in views/listLayout.ts), so a list loaded into the browser is in the same
+ * order as a list the server pages; `id` there orders by the id (UUIDv7, so by creation time).
+ */
+export function sortRows(
+  rows: Row[],
+  sort: Sort | undefined,
+  fields: FieldMeta[],
+  lk: Lookup,
+  fallback: readonly ServerOrder[] = [],
+) {
+  const keys: { f: FieldMeta | "id"; sign: number }[] = [];
+  const order = sort ? [{ field: sort.f, dir: sort.dir }] : fallback;
+  for (const o of order) {
+    const f = o.field === "id" ? "id" : fields.find((x) => x.name === o.field);
+    if (f) keys.push({ f, sign: o.dir === "asc" ? 1 : -1 });
+  }
+  if (!keys.length) return rows;
   return [...rows].sort((a, b) => {
-    const ea = isEmpty(a[f.name]);
-    const eb = isEmpty(b[f.name]);
-    if (ea || eb) return Number(ea) - Number(eb); // empty values always last
-    return sign * compare(f, a, b, lk);
+    for (const { f, sign } of keys) {
+      if (f === "id") {
+        const d = a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+        if (d) return sign * d;
+        continue;
+      }
+      const ea = isEmpty(a[f.name]);
+      const eb = isEmpty(b[f.name]);
+      if (ea || eb) {
+        if (ea !== eb) return Number(ea) - Number(eb); // empty values always last
+        continue;
+      }
+      const d = compare(f, a, b, lk);
+      if (d) return sign * d;
+    }
+    return 0;
   });
 }
 

@@ -36,7 +36,7 @@ test.describe("CSV import", () => {
     await dialog.getByLabel("Choose a CSV file").setInputFiles(file(bad));
     await expect(dialog.getByText(/Rows ready: 2\. Rows with problems: 2\./)).toBeVisible();
     const problems = dialog.getByRole("table", { name: "Problems found" });
-    await expect(problems).toContainText("lead.title is required");
+    await expect(problems).toContainText("Title is required");
     await expect(problems).toContainText("without a decimal point");
     await expect(dialog.getByRole("button", { name: "Import", exact: true })).toBeDisabled();
     expect((await api.list("root", "lead")).some((l) => l.title === a)).toBe(false);

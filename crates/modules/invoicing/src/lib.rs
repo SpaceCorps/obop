@@ -4,7 +4,9 @@
 //! invoice the next number of a gapless yearly series (D56, D57).
 
 use obop_commands::{Dispatcher, Store, Value};
-use obop_registry::{CommandDef, FieldDef as F, FieldKind, ModelDef, Module, ModuleMeta, Reset};
+use obop_registry::{
+    CommandDef, FieldDef as F, FieldKind, Guard, ModelDef, ModelUi, Module, ModuleMeta, Reset,
+};
 use obop_types::DataClass::None as NoClass;
 
 pub fn module() -> Module {
@@ -14,7 +16,7 @@ pub fn module() -> Module {
         models: vec![
             ModelDef {
                 name: "invoice",
-                description: "A customer invoice; posted invoices are corrected only by credit notes",
+                description: "A customer invoice; no action takes a posted invoice back to draft or cancels it",
                 read_group: "invoicing.user",
                 write_group: "invoicing.user",
                 access: None,
@@ -41,7 +43,8 @@ pub fn module() -> Module {
                         NoClass,
                         false,
                         "invoicing.user",
-                    ),
+                    )
+                    .default_value("$instance.currency"),
                     F::new(
                         "state",
                         "Lifecycle: draft, posted or cancelled",
@@ -49,7 +52,8 @@ pub fn module() -> Module {
                         false,
                         "invoicing.user",
                     )
-                    .select(&["draft", "posted", "cancelled"]),
+                    .select(&["draft", "posted", "cancelled"])
+                    .tones(&[("posted", "ok"), ("cancelled", "bad")]),
                     F::new(
                         "total_minor",
                         "Invoice total in minor units, the sum of the lines",
@@ -61,7 +65,7 @@ pub fn module() -> Module {
                     .computed("sum(lines.amount_minor)"),
                     F::new(
                         "number",
-                        "Gapless legal number such as INV-2026-00042, assigned when posted",
+                        "Number from a gapless yearly series, such as INV-2026-00042, assigned when posted",
                         NoClass,
                         false,
                         "invoicing.user",
@@ -72,20 +76,48 @@ pub fn module() -> Module {
                 commands: vec![
                     CommandDef::new(
                         "post",
-                        "Post a draft invoice and assign its legal number",
+                        "Post a draft invoice and give it the next number of the series",
                         "invoicing.manager",
                     )
                     .transition("state", Some("draft"), "posted")
                     .assertion_msg(
                         "total_minor > 0",
-                        "An invoice with no amount cannot be posted",
+                        "Add at least one line with an amount before posting the invoice.",
                     )
-                    .approval(),
+                    .approval()
+                    .primary()
+                    .confirm("Post this invoice? It gets its number and can no longer be changed.")
+                    .done("Invoice posted"),
                     CommandDef::new("cancel", "Cancel a draft invoice", "invoicing.user")
-                        .transition("state", Some("draft"), "cancelled"),
+                        .transition("state", Some("draft"), "cancelled")
+                        .danger()
+                        .confirm("Cancel this draft invoice?")
+                        .done("Invoice cancelled"),
                 ],
                 ext: Default::default(),
-            },
+            }
+            .with_ui(ModelUi {
+                title: Some("{number} | Draft · {party_id.name} | Draft invoice".into()),
+                subtitle: Some("{party_id.name}".into()),
+                list: vec![
+                    "number".into(),
+                    "party_id".into(),
+                    "state".into(),
+                    "total_minor".into(),
+                    "sale_order_id".into(),
+                ],
+                card: vec!["number".into(), "party_id".into(), "total_minor".into()],
+                card_sum: Some("total_minor".into()),
+                quick_create: vec!["party_id".into()],
+                order: Some("number desc".into()),
+                default_view: Some("list".into()),
+                ..Default::default()
+            })
+            // A posted invoice is final (no action takes it back), and so is a cancelled one.
+            .with_guard(
+                Guard::frozen_in("state", &["posted", "cancelled"])
+                    .message("A posted invoice cannot be changed."),
+            ),
             ModelDef {
                 name: "invoice_line",
                 description: "One product or service on an invoice",
@@ -116,7 +148,8 @@ pub fn module() -> Module {
                         NoClass,
                         false,
                         "invoicing.user",
-                    ),
+                    )
+                    .fill_from("product_id.name"),
                     F::new(
                         "quantity",
                         "Quantity invoiced",
@@ -125,7 +158,8 @@ pub fn module() -> Module {
                         "invoicing.user",
                     )
                     .kind(FieldKind::Number)
-                    .required(),
+                    .required()
+                    .default_int(1),
                     F::new(
                         "unit_price_minor",
                         "Price of one unit in minor currency units",
@@ -134,7 +168,9 @@ pub fn module() -> Module {
                         "invoicing.user",
                     )
                     .kind(FieldKind::Money)
-                    .required(),
+                    .required()
+                    .fill_from("product_id.list_price_minor")
+                    .aggregate("none"),
                     F::new(
                         "amount_minor",
                         "Line amount in minor units: quantity times unit price",
@@ -147,20 +183,35 @@ pub fn module() -> Module {
                 ],
                 commands: vec![],
                 ext: Default::default(),
-            },
+            }
+            .with_ui(ModelUi {
+                title: Some("{description} | {product_id.name}".into()),
+                list: vec![
+                    "product_id".into(),
+                    "description".into(),
+                    "quantity".into(),
+                    "unit_price_minor".into(),
+                    "amount_minor".into(),
+                ],
+                menu: Some("hidden".into()),
+                ..Default::default()
+            })
+            .with_guard(Guard::child_of("invoice_id")),
         ],
         network_destinations: vec![],
         description: String::new(),
         translations: Default::default(),
         meta: ModuleMeta::first_party(
-            "Customer invoices with a draft, posted and paid life cycle.",
+            "Customer invoices with a draft, posted and cancelled life cycle.",
             &["finance"],
             &["invoices", "billing"],
             "invoicing",
             &["base", "sales"],
-        ),
+        )
+        .home("invoice"),
     };
     m.translated(&[
+        include_str!("../../../../packages/labels/en/invoicing.toml"),
         include_str!("../../../../packages/labels/de/invoicing.toml"),
         include_str!("../../../../packages/labels/fr/invoicing.toml"),
         include_str!("../../../../packages/labels/pl/invoicing.toml"),
@@ -179,7 +230,7 @@ pub fn register(d: &Dispatcher, store: &Store) {
 }
 
 /// A demo draft invoice for `order_id` with one line. Written straight into the store, as
-/// seeds are, so it has no legal number until it is posted.
+/// seeds are, so it has no number until it is posted.
 pub fn seed(store: &Store, order_id: &str) -> String {
     let invoice = store
         .insert(
@@ -302,7 +353,7 @@ mod tests {
     }
 
     /// A plain `invoicing.user` can edit invoices but cannot post one by setting `state`; the
-    /// manager can, and the update runs the real post action, so the legal number is assigned.
+    /// manager can, and the update runs the real post action, so the number is assigned.
     #[test]
     fn posting_by_update_needs_the_manager_and_still_numbers_the_invoice() {
         let (d, s) = (Dispatcher::new(), Store::new());
@@ -374,5 +425,56 @@ mod tests {
             s.field("invoice", &id2, "state"),
             Some(Value::text("cancelled"))
         );
+    }
+
+    /// B22 for the built-in invoice: a posted invoice and its lines are fixed (D77), and a new
+    /// draft takes the instance currency (D95).
+    #[test]
+    fn a_posted_invoice_and_its_lines_cannot_be_changed() {
+        let (d, s) = (Dispatcher::new(), Store::new());
+        d.set_clock(std::sync::Arc::new(|| 1_790_000_000));
+        register(&d, &s);
+        let id = seed(&s, "o1");
+        let line = s
+            .insert(
+                "invoice_line",
+                [
+                    ("invoice_id".to_string(), Value::text(&id)),
+                    ("quantity".to_string(), Value::Int(1)),
+                    ("unit_price_minor".to_string(), Value::Int(500)),
+                ]
+                .into(),
+            )
+            .unwrap();
+        let m = Principal::user("m", &["invoicing.user", "invoicing.manager"]);
+        let call = |cmd: &str, i: Value| d.call(Surface::Rest, &m, &mut Vault::new(), cmd, &i);
+        let code = |r: Result<obop_commands::Response, CallError>| match r {
+            Err(e) => obop_commands::errors::classify(&e).code,
+            Ok(v) => panic!("expected a refusal, got {:?}", v.value),
+        };
+        let by_id = |i: &str| Value::map([("id", Value::text(i))]);
+        call("invoice.post", by_id(&id)).unwrap();
+        let set = |model: &str, i: &str, k: &str, v: Value| {
+            call(
+                &format!("{model}.update"),
+                Value::map([("id", Value::text(i)), (k, v)]),
+            )
+        };
+        assert_eq!(
+            code(set("invoice", &id, "currency", Value::text("USD"))),
+            "immutable_record"
+        );
+        assert_eq!(
+            code(set("invoice_line", &line, "quantity", Value::Int(9))),
+            "immutable_record"
+        );
+        assert_eq!(
+            code(call("invoice_line.delete", by_id(&line))),
+            "immutable_record"
+        );
+        assert_eq!(code(call("invoice.delete", by_id(&id))), "immutable_record");
+        let fresh = call("invoice.create", Value::map([])).unwrap().value;
+        let Value::Map(fresh) = fresh else { panic!() };
+        assert_eq!(fresh["currency"], Value::text("EUR"));
     }
 }

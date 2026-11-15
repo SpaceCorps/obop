@@ -5,9 +5,11 @@ use crate::Site;
 use crate::http::Resp;
 use crate::i18n::Lang;
 use crate::layout::{self, Ctx};
+use crate::settings::Favicon;
 use crate::shop::product_path;
 use crate::theme;
 use crate::util::{self, date_to_ts, esc, rfc3339};
+use obop_brand::logo::{LOGO_CONTENT_TYPE, LOGO_HEADERS, logo_etag};
 use obop_commands::PublicRecord;
 use serde_json::{Value as J, json};
 use std::collections::BTreeMap;
@@ -53,7 +55,14 @@ pub fn robots(ctx: &Ctx) -> Resp {
     doc(ctx, "text/plain; charset=utf-8", t, 600)
 }
 
+/// The tab icon, at `/favicon.svg` and `/favicon.ico` (one answer for both). When the instance
+/// brand has an artwork it is the brand's, answered with the headers of the logo route
+/// (docs/spec/branding.md, section 5); otherwise it is the shop's own tile, drawn from the logo text
+/// and the accent of the site.
 pub fn favicon(ctx: &Ctx) -> Resp {
+    if let Some(art) = &ctx.s.favicon {
+        return brand_favicon(ctx, art);
+    }
     let a = theme::resolve(&ctx.s.accent);
     let initial: String = ctx
         .s
@@ -69,6 +78,43 @@ pub fn favicon(ctx: &Ctx) -> Resp {
         esc(&initial)
     );
     doc(ctx, "image/svg+xml", svg, 86_400)
+}
+
+/// The artwork of the brand on the tab icon address, as the logo route answers it
+/// (`obop_brand::logo`): the artwork the reader re-serialised, `image/svg+xml`, `nosniff`, the
+/// sandbox policy, `no-cache` and an `ETag` that is the reader's version `v`, so the shop hashes
+/// nothing. A matching `If-None-Match` is a 304 with the same headers but the content type, and no
+/// body; it carries the length of the 200 as the logo route's 304 does (RFC 9110 section 8.6 allows
+/// it there and no other value), because the server layer sends `Content-Length: 0` with a `HEAD`
+/// 304 that has none, which says the 200 is empty. Nothing else of the shop's page headers is added:
+/// this is not a page.
+fn brand_favicon(ctx: &Ctx, art: &Favicon) -> Resp {
+    let etag = logo_etag(&art.v);
+    let same = ctx.req.header("if-none-match").is_some_and(|h| {
+        h.split(',')
+            .map(str::trim)
+            .any(|t| t == "*" || t.strip_prefix("W/").unwrap_or(t) == etag)
+    });
+    let mut r = if same {
+        Resp {
+            status: 304,
+            headers: Vec::new(),
+            body: Vec::new(),
+        }
+    } else {
+        Resp::new(200, LOGO_CONTENT_TYPE, art.svg.clone())
+    };
+    r = r.header("etag", &etag);
+    if same {
+        r = r.header("content-length", &art.svg.len().to_string());
+    }
+    for (name, value) in LOGO_HEADERS {
+        // A 304 carries the validators and the headers a cache may update, not the content type.
+        if !(same && name == "Content-Type") {
+            r = r.header(&name.to_ascii_lowercase(), value);
+        }
+    }
+    r
 }
 
 pub fn security_txt(ctx: &Ctx) -> Resp {

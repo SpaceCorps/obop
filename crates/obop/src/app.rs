@@ -64,6 +64,10 @@ impl App {
         );
         ::connectors::register(&d, &store, &connectors);
         crate::sie::command::register(&d, &store);
+        crate::vat::register(&d, &store);
+        crate::invoice_posting::register(&d, &store);
+        crate::time_billing::register(&d, &store);
+        crate::bank_matching::register(&d, &store);
         // The shop's payments reuse the connectors' hardened egress client and read the Stripe
         // keys from the instance's own sealed `stripe` connection.
         let payments = obop_payments::Payments::new(
@@ -191,6 +195,14 @@ impl App {
     pub fn set_zones_from_env(&self) -> Result<(), String> {
         let zones = obop_values::Zones::from_env().map_err(|e| e.to_string())?;
         self.dispatcher.set_zones(zones);
+        // The instance currency (D95 `$instance.currency`); EUR when unset.
+        if let Ok(c) = std::env::var("OBOP_CURRENCY")
+            && !c.trim().is_empty()
+        {
+            self.dispatcher
+                .set_currency(c.trim())
+                .map_err(|e| format!("OBOP_CURRENCY: {e}"))?;
+        }
         Ok(())
     }
 

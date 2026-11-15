@@ -5,6 +5,7 @@ summary = "Empleados, departamentos y solicitudes de ausencia, con salario y dat
 
 [labels.es.model.hr_department]
 name = "Departamento"
+plural = "Departamentos"
 description = "Un equipo o departamento de la empresa"
 
 [labels.es.model.hr_department.field.name]
@@ -21,6 +22,7 @@ description = "Código del centro de coste que usa finanzas"
 
 [labels.es.model.hr_employee]
 name = "Empleado"
+plural = "Empleados"
 description = "Una persona empleada por la empresa"
 
 [labels.es.model.hr_employee.field.name]
@@ -124,6 +126,7 @@ description = "Cerrar el registro laboral; solo se revierte con una decisión de
 
 [labels.es.model.hr_leave_request]
 name = "Solicitud de ausencia"
+plural = "Ausencias"
 description = "Una solicitud de tiempo libre"
 
 [labels.es.model.hr_leave_request.field.employee_id]
@@ -194,3 +197,15 @@ description = "Foto de la persona (PNG, JPEG, WebP o GIF; los metadatos como la 
 [labels.es.model.hr_leave_request.field.requested_by]
 label = "Solicitada por"
 description = "Nombre de usuario de la persona que pidió la ausencia; quien presenta la solicitud, salvo que se indique otra. Solo esa persona y hr.manager ven la solicitud"
+
+[labels.es.model.hr_leave_request.action.request.assert.dates_in_order]
+message = "El último día de la ausencia es anterior a su primer día"
+
+[labels.es.model.hr_leave_request.action.request.assert.days_given]
+message = "Indique el número de días laborables de la ausencia"
+
+[labels.es.model.hr_leave_request.action.approve.assert.dates_in_order]
+message = "El último día de la ausencia es anterior a su primer día"
+
+[labels.es.model.hr_leave_request.action.approve.assert.days_given]
+message = "Indique el número de días laborables de la ausencia"

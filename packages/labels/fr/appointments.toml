@@ -5,6 +5,7 @@ summary = "Personnes, salles et équipements réservables, et rendez-vous avec u
 
 [labels.fr.model.appointments_resource]
 name = "Ressource"
+plural = "Ressources"
 description = "Quelque chose ou quelqu’un qui peut être réservé"
 
 [labels.fr.model.appointments_resource.field.name]
@@ -30,6 +31,7 @@ description = "Indique si la ressource peut être réservée"
 
 [labels.fr.model.appointments_appointment]
 name = "Rendez-vous"
+plural = "Rendez-vous"
 description = "La réservation d’une ressource à un moment donné"
 
 [labels.fr.model.appointments_appointment.field.resource_id]
@@ -94,3 +96,6 @@ description = "Annule un rendez-vous planifié"
 [labels.fr.model.appointments_appointment.action.mark_no_show]
 label = "Marquer absent"
 description = "Enregistre que le participant ne s’est pas présenté"
+
+[labels.fr.model.appointments_appointment.action.confirm.assert.ends_after_start]
+message = "Le rendez-vous se termine avant de commencer : choisissez une heure de fin après le début"

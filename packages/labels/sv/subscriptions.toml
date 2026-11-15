@@ -5,6 +5,7 @@ summary = "Återkommande planer och kundabonnemang med flödet provperiod, aktiv
 
 [labels.sv.model.subscriptions_plan]
 name = "Plan"
+plural = "Planer"
 description = "Ett återkommande erbjudande som kunder kan prenumerera på"
 
 [labels.sv.model.subscriptions_plan.field.name]
@@ -38,6 +39,7 @@ description = "Om nya kunder kan välja planen"
 
 [labels.sv.model.subscriptions_subscription]
 name = "Abonnemang"
+plural = "Abonnemang"
 description = "En kunds återkommande abonnemang på en plan"
 
 [labels.sv.model.subscriptions_subscription.field.customer_id]

@@ -1,0 +1,41 @@
+# English names and plurals of hr (D52, D95): [labels.en.model.<model>] name = "...", plural = "...".
+# The manifest stays the English source; this file only adds the display names it does not have.
+
+[labels.en.model.hr_department]
+name = "Department"
+plural = "Departments"
+
+[labels.en.model.hr_department.field.head]
+label = "Department head"
+
+[labels.en.model.hr_employee]
+name = "Employee"
+plural = "Employees"
+
+[labels.en.model.hr_employee.field.reports_to_id]
+label = "Manager"
+
+[labels.en.model.hr_employee.field.national_id]
+label = "National ID"
+
+[labels.en.model.hr_employee.field.bank_iban]
+label = "Bank account (IBAN)"
+
+[labels.en.model.hr_leave_request]
+name = "Leave request"
+plural = "Time off"
+
+[labels.en.model.hr_leave_request.field.leave_kind]
+label = "Type of leave"
+
+[labels.en.model.hr_leave_request.field.start_on]
+label = "First day"
+
+[labels.en.model.hr_leave_request.field.end_on]
+label = "Last day"
+
+[labels.en.model.hr_leave_request.field.days]
+label = "Working days"
+
+[labels.en.model.hr_leave_request.field.is_sick_leave]
+label = "Sick leave"

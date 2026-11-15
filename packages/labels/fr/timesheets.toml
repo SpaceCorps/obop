@@ -1,10 +1,11 @@
 [labels.fr.module]
 name = "Feuilles de temps"
-description = "Temps passé sur les tâches de projet, saisi en minutes, avec un indicateur facturable et une étape d’approbation. Nécessite le package Projets. Chaque personne ne voit et ne modifie que ses propres saisies ; timesheets.manager les voit toutes."
+description = "Temps passé sur les tâches de projet, saisi en minutes, avec un indicateur facturable et une étape d’approbation. Approuver ou rejeter une saisie exige une approbation humaine ; les agents peuvent seulement le proposer. Nécessite le package Projets. Chaque personne ne voit et ne modifie que ses propres saisies ; timesheets.manager les voit toutes."
 summary = "Temps passé sur les tâches de projet, en minutes, avec un indicateur facturable et une étape d’approbation."
 
 [labels.fr.model.timesheets_entry]
 name = "Saisie de temps"
+plural = "Saisies de temps"
 description = "Le temps qu’une personne a passé sur une tâche un jour donné"
 
 [labels.fr.model.timesheets_entry.field.task_id]
@@ -50,7 +51,7 @@ description = "Soumet la saisie pour approbation"
 
 [labels.fr.model.timesheets_entry.action.approve]
 label = "Approuver"
-description = "Approuve une saisie soumise pour qu’elle puisse être facturée (responsable uniquement)"
+description = "Approuve une saisie soumise (responsable uniquement)"
 
 [labels.fr.model.timesheets_entry.action.reject]
 label = "Rejeter"

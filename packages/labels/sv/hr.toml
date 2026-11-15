@@ -5,6 +5,7 @@ summary = "Anställda, avdelningar och ledighetsansökningar, där lön- och hä
 
 [labels.sv.model.hr_department]
 name = "Avdelning"
+plural = "Avdelningar"
 description = "Ett team eller en avdelning i företaget"
 
 [labels.sv.model.hr_department.field.name]
@@ -21,6 +22,7 @@ description = "Kostnadsställeskod som ekonomi använder"
 
 [labels.sv.model.hr_employee]
 name = "Anställd"
+plural = "Anställda"
 description = "En person som är anställd av företaget"
 
 [labels.sv.model.hr_employee.field.name]
@@ -124,6 +126,7 @@ description = "Avsluta anställningsposten; ångra bara efter beslut av HR"
 
 [labels.sv.model.hr_leave_request]
 name = "Ledighetsansökan"
+plural = "Ledigheter"
 description = "En ansökan om ledighet"
 
 [labels.sv.model.hr_leave_request.field.employee_id]
@@ -194,3 +197,15 @@ description = "Foto av personen (PNG, JPEG, WebP eller GIF; metadata som plats t
 [labels.sv.model.hr_leave_request.field.requested_by]
 label = "Begärd av"
 description = "Användarnamn för personen som bad om ledigheten; den som lämnar in ansökan om inget annat anges. Bara den personen och hr.manager ser ansökan"
+
+[labels.sv.model.hr_leave_request.action.request.assert.dates_in_order]
+message = "Ledighetens sista dag ligger före dess första dag"
+
+[labels.sv.model.hr_leave_request.action.request.assert.days_given]
+message = "Ange hur många arbetsdagar ledigheten omfattar"
+
+[labels.sv.model.hr_leave_request.action.approve.assert.dates_in_order]
+message = "Ledighetens sista dag ligger före dess första dag"
+
+[labels.sv.model.hr_leave_request.action.approve.assert.days_given]
+message = "Ange hur många arbetsdagar ledigheten omfattar"

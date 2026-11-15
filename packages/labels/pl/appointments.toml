@@ -5,6 +5,7 @@ summary = "Zasoby do rezerwacji (osoby, sale, sprzęt) oraz spotkania z początk
 
 [labels.pl.model.appointments_resource]
 name = "Zasób"
+plural = "Zasoby"
 description = "Coś lub ktoś, kogo można zarezerwować"
 
 [labels.pl.model.appointments_resource.field.name]
@@ -30,6 +31,7 @@ description = "Czy zasób można rezerwować"
 
 [labels.pl.model.appointments_appointment]
 name = "Spotkanie"
+plural = "Spotkania"
 description = "Rezerwacja zasobu na określony czas"
 
 [labels.pl.model.appointments_appointment.field.resource_id]
@@ -94,3 +96,6 @@ description = "Anuluje zaplanowane spotkanie"
 [labels.pl.model.appointments_appointment.action.mark_no_show]
 label = "Oznacz nieobecność"
 description = "Rejestruje, że uczestnik nie przyszedł"
+
+[labels.pl.model.appointments_appointment.action.confirm.assert.ends_after_start]
+message = "Spotkanie kończy się, zanim się zacznie: ustaw godzinę zakończenia po rozpoczęciu"

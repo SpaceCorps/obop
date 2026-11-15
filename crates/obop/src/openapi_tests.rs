@@ -14,8 +14,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tower::ServiceExt;
 
-/// Commands of models that have no `list` command: registered on REST, absent from the document.
+/// Commands of models that have no `list` command, and the commands a module refuses for everyone
+/// (`Dispatcher::refuse_always`, D95: `can_delete` / `can_update` false in the metadata): registered
+/// on REST, absent from the document.
 const KNOWN_OMITTED: &[&str] = &[
+    "bank_matching.book",
+    "bank_matching.suggest",
     "import_map.get",
     "import_map.search",
     "instance_brand.clear",
@@ -25,11 +29,17 @@ const KNOWN_OMITTED: &[&str] = &[
     "instance_update.rollback",
     "instance_update.start",
     "instance_update.status",
+    "invoice_posting.create_move",
+    "mileage_point.delete",
+    "mileage_point.update",
+    "mileage_trip.delete",
     "module_plan.preview",
     "setting.get",
     "setting.update",
     "sie_exchange.export",
     "sie_exchange.import",
+    "time_billing.create_invoice",
+    "vat_computation.compute",
 ];
 
 /// The committed copy: `web/packages/client/openapi.json`, from the root of the workspace.
@@ -336,25 +346,36 @@ async fn pins_the_anonymous_openapi_document_as_an_instance_with_no_brand_sends_
     pin::check("OPENAPI_ANONYMOUS_PINS", OPENAPI_ANONYMOUS_PINS, &now);
 }
 
-// Printed by `OBOP_PRINT_PINS=1` on origin/main 12a59a79 and pasted here.
+// Printed by `OBOP_PRINT_PINS=1` and pasted here. First on origin/main 12a59a79; again on
+// `feat/agent-token-admin` (the D69 amendment of 2026-11-14), which moved the document on purpose:
+// the two paths `/api/auth/agent-tokens` and `/api/auth/agent-tokens/{id}/revoke`, the description
+// of the scopes of `issueAgentToken`, and two more kinds in the description of `security_event.kind`.
+// Again on `feat/ui-L9` (D95, 2026-11-15), on purpose: `info.version` 0.2.2 and the `message` key of
+// the error schema.
 #[rustfmt::skip]
 const OPENAPI_ANONYMOUS_PINS: &[(&str, &str)] = &[
-    ("dev/openapi", "dfb5fe807d7fdcba1a5a57aedb327f1f6fec2ffe6089d5ba2ce00405743a68f6"),
-    ("auth/openapi", "00ccf5de37ea58c660fe82c8033793864d1f7070ed4bc12bc0f5c486dfdf2162"),
+    ("dev/openapi", "d1b7773e2f91902681b0db0b9ca338701d5adc59e4a6461dfdf3e7aa78d377b3"),
+    ("auth/openapi", "616e8ce32ec207981409617e50638069128fed26e16f13ed87a3684d305aba73"),
 ];
 
-/// S1a: the brand row is in the store and the anonymous document is the one an instance with no
-/// row sends (see `with_a_brand_row_the_anonymous_documents_and_initialize_are_what_they_were`).
+/// With a brand row in the store the anonymous document is the one an instance with no row sends,
+/// byte for byte, headers included, but for its title (slice S3: `{name} API`, in place of
+/// "obop instance API"; `brand_docs_tests.rs` holds the difference member by member). With the
+/// title put back, the digest is the pinned one: nothing else of the document moved.
 #[tokio::test]
-async fn with_a_brand_row_the_anonymous_openapi_document_is_what_it_was() {
+async fn with_a_brand_row_the_anonymous_openapi_document_is_what_it_was_but_for_its_title() {
     use crate::mfa_tests::pin;
     let mut now = Vec::new();
     for inst in pin::instances().await {
         crate::brand_row_tests::set_brand(&inst.app);
-        now.push((
-            format!("{}/openapi", inst.name),
-            pin::sha(&pin::document(&inst.router, "/api/openapi.json").await),
-        ));
+        let text = pin::document(&inst.router, "/api/openapi.json").await;
+        let put_back = text.replacen(
+            "\"title\":\"MOHV API\"",
+            "\"title\":\"obop instance API\"",
+            1,
+        );
+        assert_ne!(text, put_back, "{}: the title is the name's", inst.name);
+        now.push((format!("{}/openapi", inst.name), pin::sha(&put_back)));
     }
     pin::check("OPENAPI_ANONYMOUS_PINS", OPENAPI_ANONYMOUS_PINS, &now);
 }

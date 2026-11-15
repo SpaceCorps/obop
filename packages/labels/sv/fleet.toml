@@ -1,10 +1,11 @@
 [labels.sv.module]
 name = "Fordonsflotta"
-description = "Fordon, förare och servicehistorik för en mindre fordonsflotta. Håller reda på status och servicetillfällen; den beräknar inte driftskostnader eller bränsleförbrukning."
+description = "Fordon, förare och servicehistorik för en mindre fordonsflotta. Håller reda på status och servicetillfällen; den beräknar inte driftskostnader eller bränsleförbrukning. En förares status och körkortets giltighet registreras bara: inget kontrollerar dem, inte heller när en förare kopplas till ett fordon."
 summary = "Fordon, förare och servicehistorik för en mindre fordonsflotta."
 
 [labels.sv.model.fleet_vehicle]
 name = "Fordon"
+plural = "Fordon"
 description = "Ett fordon som företaget använder"
 
 [labels.sv.model.fleet_vehicle.field.plate]
@@ -70,7 +71,8 @@ description = "Ta bort ett tillgängligt fordon ur flottan för gott (kräver go
 
 [labels.sv.model.fleet_vehicle_driver]
 name = "Förare"
-description = "En person som får köra flottans fordon"
+plural = "Förare"
+description = "En registrerad förare med körkortsuppgifter och statusen aktiv eller avstängd"
 
 [labels.sv.model.fleet_vehicle_driver.field.name]
 label = "Namn"
@@ -98,14 +100,15 @@ suspended = "Avstängd"
 
 [labels.sv.model.fleet_vehicle_driver.action.suspend]
 label = "Stäng av"
-description = "Stäng av en förare, till exempel efter ett utgånget körkort"
+description = "Markera en förare som avstängd, till exempel efter ett utgånget körkort"
 
 [labels.sv.model.fleet_vehicle_driver.action.reactivate]
 label = "Återaktivera"
-description = "Låt en avstängd förare köra igen"
+description = "Sätt en avstängd förare till aktiv igen"
 
 [labels.sv.model.fleet_vehicle_service]
 name = "Fordonsservice"
+plural = "Fordonsservice"
 description = "Ett underhålls-, reparations- eller besiktningsuppdrag för ett fordon"
 
 [labels.sv.model.fleet_vehicle_service.field.vehicle_id]
@@ -159,3 +162,11 @@ description = "Markera ett planerat uppdrag som klart"
 [labels.sv.model.fleet_vehicle_service.action.cancel]
 label = "Annullera"
 description = "Annullera ett planerat uppdrag"
+
+[labels.sv.model.fleet_vehicle.action.send_to_workshop]
+label = "Till verkstaden"
+description = "Skicka ett tillgängligt fordon till verkstaden för underhåll eller reparation"
+
+[labels.sv.model.fleet_vehicle.action.back_in_service]
+label = "Tillbaka från verkstaden"
+description = "Återföra ett fordon från verkstaden till de tillgängliga fordonen"

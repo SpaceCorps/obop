@@ -1,5 +1,5 @@
 //! The texts of the model `instance_brand` in six languages (docs/spec/branding.md, section 7: the
-//! admin labels are machine-drafted, "56 cells per language, 336 in six languages"). The D52 tests
+//! admin labels are machine-drafted, "58 cells per language, 348 in six languages" since S2). The D52 tests
 //! in the binary only ask that a cell exists and differs from the English one, so a wrong number, a
 //! wrong language name or an identifier that was translated would pass them. These tests tie each
 //! cell to the English text and the English text to the code:
@@ -187,7 +187,7 @@ fn limits_in(item: &str) -> Vec<u64> {
 fn the_numbers_in_the_english_texts_are_the_limits_of_the_code_and_every_translation_has_them() {
     let module = admin_module();
     let all = brand_slots(&module);
-    assert_eq!(all.len(), 56);
+    assert_eq!(all.len(), 58);
     let mut checked = 0;
     for slot in &all {
         let want = if slot.kind == SlotKind::FieldDescription {
@@ -211,7 +211,7 @@ fn the_numbers_in_the_english_texts_are_the_limits_of_the_code_and_every_transla
             checked += 1;
         }
     }
-    assert_eq!(checked, 336, "56 cells in each of six languages");
+    assert_eq!(checked, 348, "58 cells in each of six languages");
 }
 
 #[test]
@@ -350,7 +350,7 @@ fn the_text_of_effective_lists_the_keys_and_the_sources_of_the_answer_of_get() {
     };
     let with_row = r.get();
     let keys = keys_of(&with_row);
-    // The sources: a stored value, a stored theme accent, and the defaults.
+    // The sources: a stored value, an explicit `site.*` key, a stored theme accent, and the defaults.
     let mut sources: BTreeSet<String> = BTreeSet::new();
     let mut collect = |answer: &J| {
         for v in parsed(answer, "effective").as_object().unwrap().values() {
@@ -358,7 +358,7 @@ fn the_text_of_effective_lists_the_keys_and_the_sources_of_the_answer_of_get() {
         }
     };
     collect(&with_row);
-    let themed = json!({"theme": {"accent": "#0a8f7a"}}).to_string();
+    let themed = json!({"theme": {"accent": "#0a8f7a"}, "site": {"title": "Shop"}}).to_string();
     let mut f = obop_storage::Fields::new();
     f.insert("value".into(), json!(themed));
     r.store
@@ -371,9 +371,46 @@ fn the_text_of_effective_lists_the_keys_and_the_sources_of_the_answer_of_get() {
         .unwrap();
     collect(&r.get());
     collect(&rig().get());
+    // The source `env` is the variable `OBOP_MFA_ISSUER`, which `get` reads from the environment of
+    // the process; the answer with a value for it is built from the same read, so that no test
+    // changes the environment.
+    let with_variable: J = serde_json::from_str(
+        &obop_commands::brand::Reader::new(r.store.backend())
+            .fresh()
+            .unwrap()
+            .effective_json_with(Some("Acme".into())),
+    )
+    .unwrap();
+    for v in with_variable.as_object().unwrap().values() {
+        sources.insert(v["source"].as_str().unwrap().to_string());
+    }
+    // The source `unreadable` is the issuer of a stored name that failed the read check (no issuer
+    // is in force: an enrolment is refused).
+    let unreadable = rig();
+    let mut row = obop_storage::Fields::new();
+    row.insert("name".into(), json!("a<b"));
+    unreadable
+        .store
+        .backend()
+        .apply_checked(&[obop_storage::Op::Put {
+            model: "instance_brand".into(),
+            id: "instance".into(),
+            fields: row,
+        }])
+        .unwrap();
+    let without_name: J = serde_json::from_str(
+        &obop_commands::brand::Reader::new(unreadable.store.backend())
+            .fresh()
+            .unwrap()
+            .effective_json_with(None),
+    )
+    .unwrap();
+    for v in without_name.as_object().unwrap().values() {
+        sources.insert(v["source"].as_str().unwrap().to_string());
+    }
     assert_eq!(
         sources,
-        ["default", "record", "theme"]
+        ["default", "env", "record", "site", "theme", "unreadable"]
             .map(String::from)
             .into_iter()
             .collect::<BTreeSet<_>>(),
@@ -399,14 +436,40 @@ fn the_text_of_effective_lists_the_keys_and_the_sources_of_the_answer_of_get() {
         .filter(|k| !k.is_empty())
         .collect();
     assert_eq!(listed, keys, "the keys the English text lists");
+    // The sources are words of the text, not pieces of another word: the source `site` is not found
+    // in the key `site.title`. A word is a run of letters, digits, `_` and `.`, so `site.title,` is
+    // the word `site.title` and `record, site, theme` has the word `site`.
+    let words = |t: &str| -> BTreeSet<String> {
+        t.split(|c: char| !(c.is_alphanumeric() || c == '_' || c == '.'))
+            .filter(|w| !w.is_empty())
+            .map(str::to_string)
+            .collect()
+    };
+    let english = words(&slot.english);
     for source in &sources {
-        assert!(slot.english.contains(source.as_str()), "{source}");
+        assert!(
+            english.contains(source),
+            "the source {source} as a word of the English text: {}",
+            slot.english
+        );
     }
     for lang in TRANSLATED {
         let cell = text(&module, &slot, lang);
-        for word in listed.iter().chain(&sources) {
-            let word = in_translation(word);
-            assert!(cell.contains(word.as_str()), "({lang}) {word}: {cell:?}");
+        // The keys are whole words of the cell too, like the sources: the key `accent` is not found
+        // in `tile_accent` or in `site.accent`, so dropping it from a translation fails here.
+        let in_cell = words(cell);
+        for key in &listed {
+            let key = in_translation(key);
+            assert!(
+                in_cell.contains(key.as_str()),
+                "({lang}) the key {key} as a word: {cell:?}"
+            );
+        }
+        for source in &sources {
+            assert!(
+                in_cell.contains(source),
+                "({lang}) the source {source} as a word: {cell:?}"
+            );
         }
     }
 }

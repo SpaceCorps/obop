@@ -5,6 +5,7 @@ summary = "Projets, jalons et tâches avec responsables, échéances et flux de 
 
 [labels.fr.model.projects_project]
 name = "Projet"
+plural = "Projets"
 description = "Un ensemble de travaux avec un objectif"
 
 [labels.fr.model.projects_project.field.name]
@@ -58,6 +59,7 @@ description = "Rouvre un projet terminé"
 
 [labels.fr.model.projects_milestone]
 name = "Jalon"
+plural = "Jalons"
 description = "Un point de contrôle d’un projet"
 
 [labels.fr.model.projects_milestone.field.project_id]
@@ -95,6 +97,7 @@ description = "Enregistre qu’un jalon en attente a été manqué"
 
 [labels.fr.model.projects_task]
 name = "Tâche"
+plural = "Tâches"
 description = "Une unité de travail au sein d’un projet"
 
 [labels.fr.model.projects_task.field.title]
@@ -163,3 +166,23 @@ description = "Temps estimé, en minutes, pour toutes les tâches non annulées 
 [labels.fr.model.projects_project.field.progress]
 label = "Avancement"
 description = "Part des tâches du projet qui sont terminées, en pourcentage ; les tâches annulées ne comptent pas"
+
+[labels.fr.model.projects_milestone.action.reset]
+label = "Réinitialiser"
+description = "Remettre un jalon atteint en attente, par exemple s’il a été marqué par erreur"
+
+[labels.fr.model.projects_milestone.action.reset_missed]
+label = "Réinitialiser"
+description = "Remettre un jalon manqué en attente, par exemple si sa date a changé"
+
+[labels.fr.model.projects_task.action.complete_now]
+label = "Terminer"
+description = "Marquer une tâche à faire comme terminée sans la commencer d’abord"
+
+[labels.fr.model.projects_task.action.reopen]
+label = "Rouvrir"
+description = "Rouvrir une tâche terminée, de retour à faire"
+
+[labels.fr.model.projects_task.action.reopen_cancelled]
+label = "Rouvrir"
+description = "Rouvrir une tâche annulée, de retour à faire"

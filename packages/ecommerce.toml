@@ -1,6 +1,6 @@
 [module]
 id = "ecommerce"
-version = "0.5.0"
+version = "0.6.0"
 name = "eCommerce"
 description = "An online shop: categories, product listings with translations, shipping methods, discount codes, web orders with lines and a fulfilment flow of pending, paid, shipped, delivered, cancelled and refunded. When the instance runs with the public site enabled, visitors browse the published listings and place orders without an account; the server prices every order from the published listing and never trusts the browser. Orders take stock off the listing at checkout, apply discount codes and tax rates on the server, and are paid by bank transfer, by card through Stripe Checkout or in a local demo mode; the payment record, the provider reference and refunds are kept with the order. Refunds need a human approval from a manager; agents may only propose them. Customer name, email and addresses are personal data and are never public. Needs the Products package."
 author = "SpaceCorps"
@@ -11,7 +11,9 @@ repository = "https://github.com/SpaceCorps/obop"
 keywords = ["shop", "orders", "storefront"]
 categories = ["sales"]
 maturity = "beta"
-requires_core = "^0.2"
+requires_core = "^0.2.2"
+changelog = "The app opens on Orders, newest first, with the setup models under Configuration. A new listing takes its title, price and SKU from the product, and Published reads Show in shop. What checkout computes on an order (the totals, the tax, the day it was placed, how long its stock is held) can no longer be typed over, and a delivered, cancelled or refunded order and its lines can no longer be changed, except its tracking number and contact."
+home = "ecommerce_order"
 
 [module.dependencies]
 base = "^0.2"
@@ -22,6 +24,17 @@ name = "ecommerce_category"
 description = "A group of listings shown together in the shop"
 read_group = "ecommerce.user"
 write_group = "ecommerce.manager"
+
+  [model.ui]
+  title = "{name}"
+  subtitle = "{slug}"
+  list = ["name", "slug", "sequence", "published"]
+  quick_create = ["name", "slug"]
+  order = "sequence asc, name asc"
+  default_view = "list"
+  menu = "main"
+  menu_section = "Catalogue"
+  menu_order = 3
 
   [model.public]
   read = true
@@ -51,18 +64,58 @@ write_group = "ecommerce.manager"
   description = "Order among categories, lowest first"
   class = "none"
   kind = "number"
+  [model.field.ui]
+  aggregate = "none"
 
   [[model.field]]
   name = "published"
   description = "Whether the category is visible to shoppers"
   class = "none"
   kind = "bool"
+  default = true
 
 [[model]]
 name = "ecommerce_listing"
 description = "A product as it appears in the online shop"
 read_group = "ecommerce.user"
 write_group = "ecommerce.manager"
+
+  [model.ui]
+  title = "{title}"
+  subtitle = "{sku}"
+  list = ["title", "product_id", "category_id", "price", "stock_quantity", "published"]
+  card = ["image", "title", "price", "stock_quantity", "published"]
+  quick_create = ["product_id", "slug"]
+  order = "title asc"
+  default_view = "gallery"
+  menu = "main"
+  menu_section = "Catalogue"
+  menu_order = 2
+
+  [[model.ui.section]]
+  label = "In the shop"
+  fields = ["product_id", "title", "price", "compare_at_price", "image", "published"]
+
+  [[model.ui.section]]
+  label = "Stock"
+  fields = ["stock_policy", "stock_quantity"]
+
+  [[model.ui.section]]
+  label = "Product page"
+  fields = ["slug", "category_id", "summary", "description", "image_alt"]
+
+  [[model.ui.section]]
+  label = "Advanced"
+  fields = ["sku", "currency"]
+  collapsed = true
+
+  [[model.ui.filter]]
+  label = "In the shop"
+  where = "published = true"
+
+  [[model.ui.filter]]
+  label = "Out of stock"
+  where = "stock_quantity <= 0"
 
   [model.public]
   read = true
@@ -81,9 +134,10 @@ write_group = "ecommerce.manager"
 
   [[model.field]]
   name = "title"
-  description = "Title shown in the shop"
+  description = "Title shown in the shop; the product's name unless given"
   class = "none"
   required = true
+  fill_from = "product_id.name"
 
   [[model.field]]
   name = "slug"
@@ -101,6 +155,8 @@ write_group = "ecommerce.manager"
   description = "Description shown on the product page, in Markdown"
   class = "none"
   kind = "longtext"
+  [model.field.ui]
+  display = "markdown"
 
   [[model.field]]
   name = "image"
@@ -122,16 +178,21 @@ write_group = "ecommerce.manager"
 
   [[model.field]]
   name = "price"
-  description = "Shop price including tax (minor currency units, e.g. cents)"
+  description = "Shop price including tax (minor currency units, e.g. cents); the product's list price unless given"
   class = "none"
   kind = "money"
   required = true
+  fill_from = "product_id.list_price_minor"
+  [model.field.ui]
+  aggregate = "none"
 
   [[model.field]]
   name = "compare_at_price"
   description = "Previous price shown crossed out (minor currency units)"
   class = "none"
   kind = "money"
+  [model.field.ui]
+  aggregate = "none"
 
   [[model.field]]
   name = "currency"
@@ -140,8 +201,9 @@ write_group = "ecommerce.manager"
 
   [[model.field]]
   name = "sku"
-  description = "Stock keeping unit shown on the product page"
+  description = "Stock keeping unit shown on the product page; the product's SKU unless given"
   class = "none"
+  fill_from = "product_id.sku"
 
   [[model.field]]
   name = "stock_policy"
@@ -167,6 +229,14 @@ name = "ecommerce_listing_image"
 description = "An extra picture of a listing for its gallery"
 read_group = "ecommerce.user"
 write_group = "ecommerce.manager"
+
+  [model.ui]
+  title = "{alt}"
+  list = ["image", "alt", "sequence", "published"]
+  card = ["image", "alt"]
+  order = "sequence asc"
+  default_view = "gallery"
+  menu = "hidden"
 
   [model.public]
   read = true
@@ -199,18 +269,28 @@ write_group = "ecommerce.manager"
   description = "Order in the gallery, lowest first"
   class = "none"
   kind = "number"
+  [model.field.ui]
+  aggregate = "none"
 
   [[model.field]]
   name = "published"
   description = "Whether the picture is shown in the shop"
   class = "none"
   kind = "bool"
+  default = true
 
 [[model]]
 name = "ecommerce_listing_translation"
 description = "A listing translated into another language"
 read_group = "ecommerce.user"
 write_group = "ecommerce.manager"
+
+  [model.ui]
+  title = "{title}"
+  subtitle = "{lang}"
+  list = ["lang", "title", "published"]
+  quick_create = ["lang", "title"]
+  menu = "hidden"
 
   [model.public]
   read = true
@@ -249,18 +329,29 @@ write_group = "ecommerce.manager"
   description = "Translated description in Markdown"
   class = "none"
   kind = "longtext"
+  [model.field.ui]
+  display = "markdown"
 
   [[model.field]]
   name = "published"
   description = "Whether the translation is shown; it is only reachable while its listing is published"
   class = "none"
   kind = "bool"
+  default = true
 
 [[model]]
 name = "ecommerce_shipping_method"
 description = "A way of delivering orders with its price"
 read_group = "ecommerce.user"
 write_group = "ecommerce.manager"
+
+  [model.ui]
+  title = "{name}"
+  subtitle = "{carrier}"
+  list = ["name", "carrier", "price", "free_over", "delivery_days", "active"]
+  order = "price asc"
+  default_view = "list"
+  menu = "configuration"
 
   [model.public]
   read = true
@@ -285,30 +376,45 @@ write_group = "ecommerce.manager"
   class = "none"
   kind = "money"
   required = true
+  [model.field.ui]
+  aggregate = "none"
 
   [[model.field]]
   name = "free_over"
   description = "Order total above which delivery is free (minor currency units); empty means never"
   class = "none"
   kind = "money"
+  [model.field.ui]
+  aggregate = "none"
 
   [[model.field]]
   name = "delivery_days"
   description = "Usual number of days until delivery"
   class = "none"
   kind = "number"
+  [model.field.ui]
+  aggregate = "none"
 
   [[model.field]]
   name = "active"
   description = "Whether shoppers can choose it"
   class = "none"
   kind = "bool"
+  default = true
 
 [[model]]
 name = "ecommerce_discount_code"
 description = "A code a shopper enters at checkout for a reduction"
 read_group = "ecommerce.user"
 write_group = "ecommerce.manager"
+
+  [model.ui]
+  title = "{code}"
+  list = ["code", "kind", "value", "starts_on", "ends_on", "used_count", "max_uses", "active"]
+  quick_create = ["code", "kind", "value"]
+  order = "code asc"
+  default_view = "list"
+  menu = "configuration"
 
   [model.public]
   server_read = true
@@ -334,6 +440,8 @@ write_group = "ecommerce.manager"
   class = "none"
   kind = "number"
   required = true
+  [model.field.ui]
+  aggregate = "none"
 
   [[model.field]]
   name = "starts_on"
@@ -346,30 +454,39 @@ write_group = "ecommerce.manager"
   description = "Last day the code works (YYYY-MM-DD)"
   class = "none"
   kind = "date"
+  [model.field.ui]
+  warn_before_days = 7
 
   [[model.field]]
   name = "max_uses"
   description = "How many times the code may be used in total; empty means unlimited"
   class = "none"
   kind = "number"
+  [model.field.ui]
+  aggregate = "none"
 
   [[model.field]]
   name = "used_count"
   description = "How many times it has been used. The shop counts a use when the order is placed and gives it back when the order is cancelled or never paid"
   class = "none"
   kind = "number"
+  readonly = true
 
   [[model.field]]
   name = "minimum_order"
   description = "Smallest order total the code applies to (minor currency units)"
   class = "none"
   kind = "money"
+  [model.field.ui]
+  aggregate = "none"
 
   [[model.field]]
   name = "per_customer_limit"
   description = "How many times one customer (by email address) may use the code; empty means no limit"
   class = "none"
   kind = "number"
+  [model.field.ui]
+  aggregate = "none"
 
   [[model.field]]
   name = "category_id"
@@ -383,12 +500,17 @@ write_group = "ecommerce.manager"
   description = "Whether the code can be used"
   class = "none"
   kind = "bool"
+  default = true
 
 [[model]]
 name = "ecommerce_discount_use"
 description = "How many times one customer has used one discount code (the customer is kept as a hash, never as an email address)"
 read_group = "ecommerce.manager"
 write_group = "ecommerce.manager"
+
+  [model.ui]
+  title = "{code_id} · {count}"
+  menu = "hidden"
 
   [model.public]
   server_adjust = ["count"]
@@ -412,12 +534,20 @@ write_group = "ecommerce.manager"
   description = "Uses so far"
   class = "none"
   kind = "number"
+  readonly = true
 
 [[model]]
 name = "ecommerce_tax_rate"
 description = "A tax rate the shop applies to listings, computed on the server"
 read_group = "ecommerce.user"
 write_group = "ecommerce.manager"
+
+  [model.ui]
+  title = "{name} {country} | {name}"
+  list = ["name", "rate_bp", "country", "category_id", "included", "active"]
+  order = "name asc"
+  default_view = "list"
+  menu = "configuration"
 
   [model.public]
   server_read = true
@@ -434,6 +564,9 @@ write_group = "ecommerce.manager"
   class = "none"
   kind = "number"
   required = true
+  [model.field.ui]
+  display = "percent_bp"
+  aggregate = "none"
 
   [[model.field]]
   name = "country"
@@ -452,18 +585,73 @@ write_group = "ecommerce.manager"
   description = "Whether listing prices already include this tax (the usual way in the EU). If not, the tax is added on top at checkout"
   class = "none"
   kind = "bool"
+  default = true
 
   [[model.field]]
   name = "active"
   description = "Whether the rate is applied"
   class = "none"
   kind = "bool"
+  default = true
 
 [[model]]
 name = "ecommerce_order"
 description = "An order placed online"
 read_group = "ecommerce.user"
 write_group = "ecommerce.user"
+
+  [model.ui]
+  title = "{number}"
+  subtitle = "{customer_name} | {customer_email}"
+  list = ["number", "placed_on", "customer_name", "customer_email", "payment_method", "total", "state"]
+  card = ["number", "customer_name", "total", "placed_on"]
+  card_sum = "total"
+  order = "placed_on desc, number desc"
+  default_view = "list"
+  menu = "main"
+  menu_section = "Sales"
+  menu_order = 1
+  report = { rows = "placed_on", cols = "state", measure = "total" }
+
+  [[model.ui.section]]
+  label = "Customer"
+  fields = ["customer_name", "customer_email", "customer_id", "shipping_address", "billing_address", "country"]
+
+  [[model.ui.section]]
+  label = "Delivery"
+  fields = ["shipping_method_id", "tracking_reference"]
+
+  [[model.ui.section]]
+  label = "Amounts"
+  fields = ["subtotal", "discount_code", "discount_total", "shipping_total", "tax_total", "total", "currency"]
+
+  [[model.ui.section]]
+  label = "Payment"
+  fields = ["payment_method", "payment_reference"]
+
+  [[model.ui.section]]
+  label = "Checkout record"
+  fields = ["placed_on", "reserved_until", "stock_returned", "tax_summary", "discount_code_id", "discount_use_id"]
+  collapsed = true
+
+  [[model.ui.filter]]
+  label = "To ship"
+  where = "state = paid"
+
+  [[model.ui.filter]]
+  label = "Waiting for payment"
+  where = "state = pending"
+
+  [[model.child]]
+  model = "ecommerce_payment"
+  via = "order_id"
+  shape = "list"
+
+  [model.guard]
+  immutable_when = ["delivered", "cancelled", "refunded"]
+  mutable_fields = ["customer_id", "tracking_reference"]
+  exit_to = [{ to = "refunded", action = "refund_delivered" }]
+  message = "A delivered, cancelled or refunded order cannot be changed; only its contact and tracking number can."
 
   [model.public]
   submit = true
@@ -484,6 +672,8 @@ write_group = "ecommerce.user"
   class = "internal"
   personal_data = true
   required = true
+  [model.field.ui]
+  display = "email"
 
   [[model.field]]
   name = "customer_name"
@@ -504,6 +694,8 @@ write_group = "ecommerce.user"
   class = "internal"
   personal_data = true
   kind = "longtext"
+  [model.field.ui]
+  display = "address"
 
   [[model.field]]
   name = "billing_address"
@@ -511,6 +703,8 @@ write_group = "ecommerce.user"
   class = "internal"
   personal_data = true
   kind = "longtext"
+  [model.field.ui]
+  display = "address"
 
   [[model.field]]
   name = "shipping_method_id"
@@ -525,17 +719,20 @@ write_group = "ecommerce.user"
   class = "none"
   kind = "ref"
   to = "ecommerce_discount_code"
+  readonly = true
 
   [[model.field]]
   name = "discount_code"
   description = "The code the shopper entered, as it is shown on the order"
   class = "none"
+  readonly = true
 
   [[model.field]]
   name = "discount_use_id"
   description = "Which per-customer use counter this order counted against, so it can be given back"
   class = "internal"
   personal_data = true
+  readonly = true
 
   [[model.field]]
   name = "country"
@@ -548,18 +745,24 @@ write_group = "ecommerce.user"
   description = "The tax lines of the order as JSON: name, rate in basis points, whether included in the prices, amount"
   class = "none"
   kind = "longtext"
+  readonly = true
 
   [[model.field]]
   name = "stock_returned"
   description = "Set when the units of a cancelled, expired or refunded order were put back on the listings, so it happens once"
   class = "none"
   kind = "bool"
+  readonly = true
 
   [[model.field]]
   name = "reserved_until"
   description = "Unix time until which an unpaid order holds its stock; after that it is cancelled and the stock goes back"
   class = "none"
   kind = "number"
+  readonly = true
+  [model.field.ui]
+  display = "epoch_seconds"
+  aggregate = "none"
 
   [[model.field]]
   name = "payment_method"
@@ -573,6 +776,7 @@ write_group = "ecommerce.user"
   description = "Day the order was placed (YYYY-MM-DD)"
   class = "none"
   kind = "date"
+  readonly = true
 
   [[model.field]]
   name = "currency"
@@ -584,24 +788,28 @@ write_group = "ecommerce.user"
   description = "Sum of the lines at listing prices (minor currency units, computed by the shop at checkout)"
   class = "none"
   kind = "money"
+  readonly = true
 
   [[model.field]]
   name = "discount_total"
   description = "Reduction from the discount code (minor currency units)"
   class = "none"
   kind = "money"
+  readonly = true
 
   [[model.field]]
   name = "shipping_total"
   description = "Delivery charge (minor currency units)"
   class = "none"
   kind = "money"
+  readonly = true
 
   [[model.field]]
   name = "tax_total"
   description = "All tax on the order, both the part included in the prices and the part added on top (minor currency units)"
   class = "none"
   kind = "money"
+  readonly = true
 
   [[model.field]]
   name = "total"
@@ -633,6 +841,8 @@ write_group = "ecommerce.user"
   kind = "select"
   options = ["pending", "paid", "shipped", "delivered", "cancelled", "refunded"]
   required = true
+  [model.field.ui]
+  tones = { pending = "warn", paid = "info", shipped = "info", delivered = "ok", cancelled = "neutral", refunded = "neutral" }
 
   [[model.action]]
   name = "mark_paid"
@@ -640,6 +850,9 @@ write_group = "ecommerce.user"
   field = "state"
   from = "pending"
   to = "paid"
+  [model.action.ui]
+  primary = true
+  done = "Marked as paid"
 
   [[model.action]]
   name = "ship"
@@ -647,6 +860,10 @@ write_group = "ecommerce.user"
   field = "state"
   from = "paid"
   to = "shipped"
+  [model.action.ui]
+  primary = true
+  confirm = "Mark this order as shipped? Add the tracking number first if there is one."
+  done = "Shipped"
 
   [[model.action]]
   name = "deliver"
@@ -654,6 +871,9 @@ write_group = "ecommerce.user"
   field = "state"
   from = "shipped"
   to = "delivered"
+  [model.action.ui]
+  primary = true
+  done = "Delivered"
 
   [[model.action]]
   name = "cancel"
@@ -661,6 +881,9 @@ write_group = "ecommerce.user"
   field = "state"
   from = "pending"
   to = "cancelled"
+  [model.action.ui]
+  danger = true
+  confirm = "Cancel this order? Its stock goes back to the listings and it can no longer be changed."
 
   [[model.action]]
   name = "refund"
@@ -670,6 +893,11 @@ write_group = "ecommerce.user"
   to = "refunded"
   group = "ecommerce.manager"
   approval = true
+  [model.action.ui]
+  danger = true
+  confirm = "Refund this order? The money goes back to the shopper and the stock back to the listings."
+  done = "Refunded"
+  group = "refund"
 
   [[model.action]]
   name = "refund_delivered"
@@ -679,12 +907,26 @@ write_group = "ecommerce.user"
   to = "refunded"
   group = "ecommerce.manager"
   approval = true
+  [model.action.ui]
+  danger = true
+  confirm = "Refund this delivered order? The money goes back to the shopper; the goods do not go back on the shelf."
+  done = "Refunded"
+  group = "refund"
 
 [[model]]
 name = "ecommerce_order_line"
 description = "One product line of a web order"
 read_group = "ecommerce.user"
 write_group = "ecommerce.user"
+
+  [model.ui]
+  title = "{description} × {quantity} | {listing_id} × {quantity}"
+  list = ["description", "listing_id", "quantity", "unit_price", "discount_amount", "tax_amount", "subtotal"]
+  menu = "hidden"
+
+  [model.guard]
+  children_of = "order_id"
+  message = "The lines of a delivered, cancelled or refunded order cannot be changed."
 
   [model.public]
   submit = true
@@ -733,6 +975,8 @@ write_group = "ecommerce.user"
   class = "none"
   kind = "money"
   required = true
+  [model.field.ui]
+  aggregate = "none"
 
   [[model.field]]
   name = "subtotal"
@@ -756,6 +1000,9 @@ write_group = "ecommerce.user"
   description = "Tax rate of this line in basis points"
   class = "none"
   kind = "number"
+  [model.field.ui]
+  display = "percent_bp"
+  aggregate = "none"
 
   [[model.field]]
   name = "tax_amount"
@@ -768,6 +1015,14 @@ name = "ecommerce_payment"
 description = "A payment for a web order: which provider, its reference, the amount and what became of it. The shop never sees card data"
 read_group = "ecommerce.user"
 write_group = "ecommerce.manager"
+
+  [model.ui]
+  title = "{order_id} · {provider}"
+  list = ["order_id", "provider", "amount", "refunded_amount", "state"]
+  default_view = "list"
+  menu = "main"
+  menu_section = "Sales"
+  menu_order = 4
 
   [model.public]
   receipt_parent = "order_id"
@@ -806,6 +1061,8 @@ write_group = "ecommerce.manager"
   kind = "select"
   options = ["open", "succeeded", "failed", "expired", "cancelled", "refunded"]
   required = true
+  [model.field.ui]
+  tones = { open = "warn", succeeded = "ok", failed = "bad", expired = "neutral", cancelled = "neutral", refunded = "neutral" }
 
   [[model.field]]
   name = "amount"
@@ -843,6 +1100,9 @@ write_group = "ecommerce.manager"
   from = "open"
   to = "failed"
   group = "ecommerce.manager"
+  [model.action.ui]
+  danger = true
+  confirm = "Mark this payment as failed?"
 
   [[model.action]]
   name = "cancel"
@@ -851,3 +1111,6 @@ write_group = "ecommerce.manager"
   from = "open"
   to = "cancelled"
   group = "ecommerce.manager"
+  [model.action.ui]
+  danger = true
+  confirm = "Stop waiting for this payment?"

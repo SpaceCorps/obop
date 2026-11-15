@@ -5,6 +5,7 @@ summary = "DocuSeal-Signaturereignisse neben Sign-Anfragen empfangen. Eine Perso
 
 [labels.de.model.sign_docuseal_event]
 name = "DocuSeal-Ereignis"
+plural = "DocuSeal-Ereignisse"
 description = "Ein Ereignis, das DocuSeal zu einer Signaturanfrage gemeldet hat, geschrieben vom DocuSeal-Connector"
 
 [labels.de.model.sign_docuseal_event.field.event]

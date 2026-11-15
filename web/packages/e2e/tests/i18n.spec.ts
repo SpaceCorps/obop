@@ -22,6 +22,7 @@ test.describe("language choice", () => {
     await expect(page.getByRole("heading", { name: "Your apps" })).toBeVisible();
 
     await page.getByRole("button", { name: "Account" }).click();
+    await page.getByRole("menuitem", { name: /Language/ }).click();
     await page.getByRole("menuitem", { name: "Deutsch" }).click();
     await expect(page.locator("html")).toHaveAttribute("lang", "de");
     await expect(page.locator("html")).toHaveAttribute("dir", "ltr");
@@ -335,7 +336,7 @@ test.describe("pseudo-locale", () => {
         if (
           !el ||
           el.closest(
-            "script, style, [lang=en], td, th[scope=row], code, kbd, .avatar, .ktitle, .kval, .masked, .record header h2, .crumbs strong, .brand, .sr-only, option, .gname, .badge",
+            "script, style, [lang=en], td, th[scope=row], code, kbd, .avatar, .ktitle, .ksub, .kfacts, .kval, .masked, .record header h2, .crumbs strong, .brand, .sr-only, option, .gname, .badge",
           )
         )
           continue;

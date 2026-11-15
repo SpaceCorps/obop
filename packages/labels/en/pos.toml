@@ -1,0 +1,46 @@
+# English names and plurals of pos (D52, D95): [labels.en.model.<model>] name = "...", plural = "...".
+# The manifest stays the English source; this file only adds the display names it does not have.
+
+[labels.en.model.pos_config]
+name = "Till"
+plural = "Tills"
+
+[labels.en.model.pos_session]
+name = "Session"
+plural = "Sessions"
+
+[labels.en.model.pos_session.field.config_id]
+label = "Till"
+
+[labels.en.model.pos_session.action.close]
+label = "Close session"
+
+[labels.en.model.pos_order]
+name = "Sale"
+plural = "Sales"
+
+[labels.en.model.pos_order.field.session_id]
+label = "Session"
+
+[labels.en.model.pos_order.field.stock_location_id]
+label = "Stock location"
+
+[labels.en.model.pos_order.action.cancel]
+label = "Cancel sale"
+
+[labels.en.model.pos_order_line]
+name = "Sale line"
+plural = "Sale lines"
+
+[labels.en.model.pos_order_line.field.order_id]
+label = "Sale"
+
+[labels.en.model.pos_order_line.field.discount_bp]
+label = "Discount"
+
+[labels.en.model.pos_payment]
+name = "Payment"
+plural = "Payments"
+
+[labels.en.model.pos_payment.field.order_id]
+label = "Sale"

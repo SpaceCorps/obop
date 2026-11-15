@@ -22,6 +22,7 @@ import type { ModelMeta, Reply, Row } from "../api.ts";
 import type { App } from "../Chrome.tsx";
 import { useData, useRows } from "../data.tsx";
 import { fieldTitle, modelTitle } from "../labels.ts";
+import { stateFieldOf, summable } from "../presentation.ts";
 import { serverMessage } from "../serverMessage.ts";
 import type { Go, Route } from "../route.ts";
 import { BOARD } from "./route.ts";
@@ -46,10 +47,9 @@ export function starterWidgets(apps: App[]): WidgetValues[] {
     .slice(0, 4))
     out.push({ ...base, title: name(x), kind: "kpi", model_name: x.model.name });
   // Money totals of the first two models that hold an amount.
-  for (const x of models
-    .filter((m) => m.model.fields.some((f) => f.kind === "money"))
-    .slice(0, 2)) {
-    const f = x.model.fields.find((g) => g.kind === "money")!;
+  const moneyOf = (m: ModelMeta) => m.fields.find((f) => f.kind === "money" && summable(f, m));
+  for (const x of models.filter((m) => moneyOf(m.model)).slice(0, 2)) {
+    const f = moneyOf(x.model)!;
     out.push({
       ...base,
       title: t("{field} of {model}", { field: fieldTitle(f), model: inSentence(name(x)) }),
@@ -60,9 +60,7 @@ export function starterWidgets(apps: App[]): WidgetValues[] {
     });
   }
   const withSelect = models.filter((m) => m.model.fields.some((f) => f.kind === "select"));
-  const stateOf = (m: ModelMeta) =>
-    m.fields.find((f) => f.kind === "select" && ["state", "stage", "status"].includes(f.name)) ??
-    m.fields.find((f) => f.kind === "select")!;
+  const stateOf = (m: ModelMeta) => stateFieldOf(m) ?? m.fields.find((f) => f.kind === "select")!;
   const first = withSelect[0];
   if (first) {
     const g = stateOf(first.model);
@@ -73,7 +71,7 @@ export function starterWidgets(apps: App[]): WidgetValues[] {
       model_name: first.model.name,
       group_by: g.name,
     });
-    const money = first.model.fields.find((f) => f.kind === "money");
+    const money = moneyOf(first.model);
     out.push({
       ...base,
       title: money
@@ -278,11 +276,15 @@ export function DashboardsApp({
   }
 
   async function move(w: Widget, delta: -1 | 1) {
-    const i = widgets.findIndex((x) => x.id === w.id);
+    // Number tiles sit in their own strip above the charts, so a tile moves among its own kind.
+    const isKpi = (x: Widget) => x.kind === "kpi";
+    const group = widgets.filter((x) => isKpi(x) === isKpi(w));
+    const i = group.findIndex((x) => x.id === w.id);
     const j = i + delta;
-    if (j < 0 || j >= widgets.length) return;
-    const order = [...widgets];
-    [order[i], order[j]] = [order[j]!, order[i]!];
+    if (j < 0 || j >= group.length) return;
+    [group[i], group[j]] = [group[j]!, group[i]!];
+    const others = widgets.filter((x) => isKpi(x) !== isKpi(w));
+    const order = isKpi(w) ? [...group, ...others] : [...others, ...group];
     // Renumber everything that changed, so equal or missing positions cannot tie.
     for (const [k, x] of order.entries()) {
       const position = (k + 1) * 10;
@@ -351,6 +353,23 @@ export function DashboardsApp({
   }
 
   const loading = !boards.loaded || !tiles.loaded;
+  const kpis = widgets.filter((w) => w.kind === "kpi");
+  const charts = widgets.filter((w) => w.kind !== "kpi");
+  const card = (w: Widget, i: number, n: number) => (
+    <WidgetCard
+      key={w.id}
+      widget={w}
+      edit={edit}
+      first={i === 0}
+      last={i === n - 1}
+      onEdit={() => setForm({ widget: w })}
+      onRemove={() => {
+        setFailure(null);
+        setRemoving(w);
+      }}
+      onMove={(delta) => void move(w, delta)}
+    />
+  );
 
   return (
     <section className="main panel dash" aria-label={t("Dashboards")}>
@@ -436,23 +455,16 @@ export function DashboardsApp({
                 }
               />
             ) : (
-              <div className="wgrid">
-                {widgets.map((w, i) => (
-                  <WidgetCard
-                    key={w.id}
-                    widget={w}
-                    edit={edit}
-                    first={i === 0}
-                    last={i === widgets.length - 1}
-                    onEdit={() => setForm({ widget: w })}
-                    onRemove={() => {
-                      setFailure(null);
-                      setRemoving(w);
-                    }}
-                    onMove={(delta) => void move(w, delta)}
-                  />
-                ))}
-              </div>
+              <>
+                {kpis.length > 0 && (
+                  <div className="kpistrip wstrip">
+                    {kpis.map((w, i) => card(w, i, kpis.length))}
+                  </div>
+                )}
+                {charts.length > 0 && (
+                  <div className="wgrid">{charts.map((w, i) => card(w, i, charts.length))}</div>
+                )}
+              </>
             )}
           </>
         )}

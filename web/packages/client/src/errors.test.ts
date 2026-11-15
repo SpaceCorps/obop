@@ -254,6 +254,25 @@ describe("ObopApiError.fromResponse", () => {
     });
   });
 
+  test("an assertion's refusal gives its key and the author's sentence alone", async () => {
+    const e = await ObopApiError.fromResponse(
+      new Response(
+        JSON.stringify({
+          error: "Say why (assertion is_set(reason) failed)",
+          code: "assertion_failed",
+          assert_key: "needs_reason",
+          message: "Say why",
+        }),
+        { status: 400 },
+      ),
+    );
+    expect(e).toMatchObject({
+      message: "Say why (assertion is_set(reason) failed)",
+      assertKey: "needs_reason",
+      assertMessage: "Say why",
+    });
+  });
+
   test("the X-Obop-Applied header is used when the body does not say", async () => {
     const e = await ObopApiError.fromResponse(
       new Response("{}", { status: 503, headers: { "x-obop-applied": "partial" } }),

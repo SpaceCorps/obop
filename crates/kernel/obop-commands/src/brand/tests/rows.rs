@@ -90,6 +90,7 @@ fn a_name_that_breaks_the_safety_subset_falls_back() {
     let long = "x".repeat(41);
     for (name, code) in [
         ("", "empty"),
+        ("   ", "empty"),
         ("a\u{200b}b", "unsafe_character"),
         ("a\u{202e}b", "unsafe_character"),
         ("a\u{00a0}b", "unsafe_character"),
@@ -416,6 +417,139 @@ fn the_fallback_chain_of_titles_and_messages() {
     ]);
     assert_eq!(shown.brand().title("sv"), "Acme English");
     assert_eq!(fields_of(&shown), ["title_sv"]);
+}
+
+/// The back office sign-in picks the message in TypeScript (`brandMessage` in `@obop/ui`, from the
+/// `messages` of the meta tag); the OAuth page picks it here. The two are tested against the same
+/// cases, in `web/packages/ui/src/brand.fixtures.json` (spec section 13, "Fallback chain": the
+/// chain is a second implementation in TypeScript, tested against the cases of the Rust test).
+#[test]
+fn the_page_script_and_the_server_choose_the_same_message() {
+    const FIXTURES: &str =
+        include_str!("../../../../../../web/packages/ui/src/brand.fixtures.json");
+    let all: serde_json::Value = serde_json::from_str(FIXTURES).unwrap();
+    let cases = all["message"].as_array().unwrap();
+    assert!(cases.len() >= 15, "the fixture file lost its cases");
+    for (i, case) in cases.iter().enumerate() {
+        let mut pairs: Vec<(String, J)> = vec![("name".into(), s("Acme"))];
+        for (lang, text) in case["messages"].as_object().unwrap() {
+            pairs.push((format!("message_{lang}"), s(text.as_str().unwrap())));
+        }
+        let borrowed: Vec<(&str, J)> = pairs.iter().map(|(k, v)| (k.as_str(), v.clone())).collect();
+        let (shown, _) = shown_of(&borrowed);
+        let lang = case["lang"].as_str().unwrap();
+        let want = case["want"].as_str().unwrap();
+        assert_eq!(
+            shown.brand().message(lang).unwrap_or(""),
+            want,
+            "case {}: {} shown in {lang}",
+            i + 1,
+            case["messages"]
+        );
+        // And what the shell writes into the tag is what the script reads: the languages that
+        // are set, nothing else.
+        let tag_langs: Vec<&str> = shown.brand().messages().map(|(l, _)| l).collect();
+        let mut set: Vec<&str> = case["messages"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect();
+        set.sort_by_key(|l| obop_brand::LANGS.iter().position(|x| x == l));
+        assert_eq!(tag_langs, set, "case {}", i + 1);
+    }
+}
+
+/// The Identity tab counts the characters of each text against the longest the policy allows
+/// (`LIMITS` in `web/apps/backoffice/src/identity.ts`, tested against the same file by
+/// `identity.test.ts`); the server is the judge, so a number that drifts is a form that stops a text
+/// the server would take, or one that lets through a text it refuses.
+#[test]
+fn the_longest_texts_of_the_form_are_those_of_the_policy() {
+    const FIXTURES: &str =
+        include_str!("../../../../../../web/packages/ui/src/brand.fixtures.json");
+    let all: serde_json::Value = serde_json::from_str(FIXTURES).unwrap();
+    let limits = &all["limits"];
+    assert_eq!(limits["name"], crate::brand::NAME_MAX);
+    assert_eq!(limits["slug"], crate::brand::SLUG_MAX);
+    assert_eq!(limits["title"], crate::brand::TITLE_MAX);
+    assert_eq!(limits["message"], crate::brand::MESSAGE_MAX);
+    assert_eq!(limits["logo_bytes"], crate::brand::ARTWORK_MAX_BYTES);
+}
+
+/// A title or a message of nothing but spaces is a row written around the command (`configure`
+/// refuses it): it is as empty as a blank name, so it falls back to unset, the chain goes on to the
+/// English text, the name or no message, and `get` lists it as `empty`. An absent one is no failure,
+/// and one with spaces around a text is shown as stored.
+#[test]
+fn a_title_or_a_message_of_nothing_but_spaces_is_unset_and_listed() {
+    let (shown, _) = shown_of(&[
+        ("name", s("Acme")),
+        ("title_en", s("Acme English")),
+        ("title_sv", s("   ")),
+        ("title_de", s("")),
+        ("message_en", s("Welcome")),
+        ("message_sv", s(" ")),
+        ("message_de", s("  Hallo  ")),
+    ]);
+    assert_eq!(fields_of(&shown), ["title_sv", "message_sv"]);
+    assert!(shown.fallbacks().iter().all(|f| f.code == "empty"));
+    assert_eq!(shown.brand().stored_title("sv"), "");
+    assert_eq!(
+        shown.brand().title("sv"),
+        "Acme English",
+        "the chain goes on"
+    );
+    assert_eq!(shown.brand().message("sv"), Some("Welcome"));
+    assert_eq!(
+        shown.brand().message("de"),
+        Some("  Hallo  "),
+        "spaces around a text are no blank"
+    );
+    // With nothing else to fall back on: the name, and no message.
+    let (shown, _) = shown_of(&[
+        ("name", s("Acme")),
+        ("title_en", s("   ")),
+        ("message_en", s("  ")),
+    ]);
+    assert_eq!(fields_of(&shown), ["title_en", "message_en"]);
+    assert_eq!(shown.brand().title("en"), "Acme");
+    assert_eq!(shown.brand().message("en"), None);
+}
+
+/// The write check refuses a name or a title that starts with a space, so a text of nothing but
+/// spaces is a row written around the command (a restore, an import, a direct edit, an older
+/// binary). The read check calls it empty: the name falls back to `obop`, a title to the name, a
+/// message to none, so no page shows a blank brand line next to the logo, and a blank title does not
+/// hide the name.
+#[test]
+fn a_text_of_nothing_but_spaces_is_empty_and_falls_back_like_an_empty_one() {
+    let (shown, _) = shown_of(&[
+        ("name", s("   ")),
+        ("title_en", s("   ")),
+        ("title_sv", s(" ")),
+        ("message_en", s("  ")),
+    ]);
+    assert!(shown.is_set());
+    assert_eq!(shown.brand().name(), "obop", "the name fell back");
+    for lang in ["en", "sv", "de"] {
+        assert_eq!(shown.brand().title(lang), "obop", "{lang}");
+    }
+    assert_eq!(shown.brand().message("en"), None);
+    assert_eq!(
+        fields_of(&shown),
+        ["name", "title_en", "title_sv", "message_en"]
+    );
+    assert!(shown.fallbacks().iter().all(|f| f.code == "empty"));
+    // With a name that is good, a blank title is the name; nothing else falls back.
+    let (shown, _) = shown_of(&[("name", s("Acme")), ("title_en", s("   "))]);
+    assert_eq!(shown.brand().name(), "Acme");
+    assert_eq!(shown.brand().title("en"), "Acme");
+    assert_eq!(fields_of(&shown), ["title_en"]);
+    // Spaces between words are the text.
+    let (shown, _) = shown_of(&[("name", s("Acme Co")), ("title_en", s("Acme Co Mileage"))]);
+    assert_eq!(shown.brand().title("en"), "Acme Co Mileage");
+    assert!(shown.fallbacks().is_empty());
 }
 
 #[test]
