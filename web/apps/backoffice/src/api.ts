@@ -18,7 +18,146 @@ export type Command = {
   from?: string | null;
   /** The state the action moves the record to. */
   to?: string | null;
+  /** D95 hints for the record panel (PROPOSED); absent until the package declares them. */
+  ui?: ActionUi;
 };
+
+// ---- D95: UI hints in /api/meta (PROPOSED) -----------------------------------------------------
+// Every key is optional: the server sends a hint only when a package declares it, and the back
+// office falls back to the heuristics of presentation.ts, where the shapes are documented too.
+
+/** How a value is drawn (it changes the display, never what is stored). */
+export type FieldDisplay =
+  | "time_of_day"
+  | "duration_minutes"
+  | "percent"
+  | "percent_bp"
+  | "km_from_m"
+  | "epoch_seconds"
+  | "markdown"
+  | "tel"
+  | "email"
+  | "url"
+  | "address";
+/** The meaning of a select option's colour. */
+export type ValueTone = "ok" | "bad" | "warn" | "info" | "neutral";
+/** The kinds of view a model can open on. */
+export type ViewHint =
+  | "list"
+  | "kanban"
+  | "calendar"
+  | "pivot"
+  | "graph"
+  | "gallery"
+  | "grid"
+  | "timeline"
+  | "tree";
+/** Where a model sits in its app's sidebar. */
+export type MenuPlace = "main" | "configuration" | "reporting" | "hidden";
+
+/** `[model.field.ui]`. */
+export type FieldUi = {
+  display?: FieldDisplay;
+  /** Whether totals add the field up: `none` for a price or a rate. */
+  aggregate?: "sum" | "avg" | "none";
+  /** Option value -> tone; overrides the word lists of presentation.ts `toneOf`. */
+  tones?: Record<string, ValueTone>;
+  /** A due-like date turns amber this many days before it (red once past). */
+  warn_before_days?: number;
+  /** Left out of lists, cards and the form (still readable through the API). */
+  hidden?: boolean;
+  /** Where the currency of a money field comes from: a path such as `journal_id.currency`. */
+  currency_from?: string;
+};
+
+/**
+ * `default` of a field: a literal, or one of `today`, `today+N`, `$user`, `$employee`,
+ * `$instance.currency`, `$open:<model>`.
+ */
+export type FieldDefault = string | number | boolean;
+
+/** `[[model.ui.section]]`. */
+export type UiSection = {
+  label: string;
+  fields: string[];
+  collapsed?: boolean;
+  /** Shown only while the record's state is one of these. */
+  show_in?: string[];
+};
+/** `[[model.ui.filter]]`: a saved filter offered by the control panel. */
+export type UiFilter = { label: string; where: string };
+
+/** `[model.ui]`. */
+export type ModelUi = {
+  /** A template such as `{code} {name}`; alternatives separated by `|`, the first fully set wins. */
+  title?: string;
+  subtitle?: string;
+  /** Field names, in order. */
+  list?: string[];
+  card?: string[];
+  /** The money or number field the kanban column sums. */
+  card_sum?: string;
+  /** The fields the quick-create form asks for. */
+  quick_create?: string[];
+  /** `date desc, number desc`. */
+  order?: string;
+  default_view?: ViewHint;
+  menu?: MenuPlace;
+  menu_section?: string;
+  menu_order?: number;
+  calendar?: { start: string; end?: string; color?: string };
+  report?: { rows?: string; cols?: string; measure?: string };
+  section?: UiSection[];
+  filter?: UiFilter[];
+  /** Where a record is seen on the public site: `/blog/{slug}`. */
+  public_url?: string;
+};
+
+/** The D77 guard of a model, as meta exposes it: when its records are frozen. */
+export type ModelGuard = {
+  /** Records whose `field` is one of `values` are frozen. */
+  immutable_when?: { field: string; values: string[] };
+  /** Stored fields that stay editable on a frozen record. */
+  mutable_fields?: string[];
+  /** The only moves a frozen record may make. */
+  exit_to?: { to: string; action: string; may_change?: string[] }[];
+  no_delete_when?: { field: string; values: string[] };
+  /** Records dated on or before the lock date are frozen. */
+  lock_date?: { field: string; closed_by?: string; setting?: string };
+  /** A ref field of this model: a record is frozen while its parent is. */
+  children_of?: string;
+  /** Records can be created and read, never changed or deleted. */
+  append_only?: boolean;
+  /** What the lock banner says ("Posted entries cannot be changed. Reverse it to correct it."). */
+  message?: string;
+};
+
+/** A child model drawn inside its parent's form (lines, a compact list, images, translations). */
+export type ChildMeta = {
+  model: string;
+  /** The child's ref field that points at the parent. */
+  via: string;
+  shape?: "lines" | "list" | "images" | "translations";
+};
+
+/** `[model.action.ui]`. */
+export type ActionUi = {
+  /** The main button of the record in the states this action leaves. */
+  primary?: boolean;
+  /** Goes to the overflow menu behind a confirm. */
+  danger?: boolean;
+  /** The question asked before it runs. */
+  confirm?: string;
+  /** The toast after it ran. */
+  done?: string;
+  /** Actions with the same group show as one entry (the variant valid for the state runs). */
+  group?: string;
+  /** Fields the action input may carry, asked for in a small dialog (`reject_reason`). */
+  needs?: string[];
+  /** A field naming a person who may not run the action on this record (`driver`). */
+  not_by?: string;
+};
+
 export type Row = Record<string, unknown> & { id: string };
 
 export type Kind =
@@ -79,6 +218,8 @@ export type FieldMeta = {
   unique?: boolean;
   /** A number the server assigns; never sent (D57). */
   sequence?: boolean;
+  /** The number comes from a gapless series (posted entries, receipts); absent: it may skip. */
+  gapless?: boolean;
   /**
    * Only for `text` and `longtext` (D52 amendment): `model.field` of a select. The value is drawn with
    * the label of the option it equals there, while `shows_option_when` (an expression on the same
@@ -86,6 +227,16 @@ export type FieldMeta = {
    */
   shows_option_of?: string;
   shows_option_when?: string;
+  /** D95 (PROPOSED): display hints. */
+  ui?: FieldUi;
+  /** D95: what the server fills in on create when the field is missing. */
+  default?: FieldDefault;
+  /** D95: a path such as `product_id.list_price_minor` the field is filled from on create. */
+  fill_from?: string;
+  /** D95: set by the server only; refused on create and update. */
+  readonly?: boolean;
+  /** D95: an expression a picked record must satisfy (`active = true && project_id = $project_id`). */
+  ref_filter?: string;
 };
 /** Row-level access rules of a model (D58): which records the person sees. */
 export type AccessMeta = {
@@ -116,6 +267,16 @@ export type ModelMeta = {
   actions: Command[];
   /** Present when the person sees only some of the records (D58). */
   access?: AccessMeta;
+  /** D95 (PROPOSED): presentation hints. */
+  ui?: ModelUi;
+  /** D77 as D95 exposes it: when records are frozen. */
+  guard?: ModelGuard;
+  /** D95: the child models drawn inside the form; absent: the client's mirror of `resolve_child`. */
+  children?: ChildMeta[];
+  /** D95: the English plural ("Journal entries"); absent: humanised from the name. */
+  plural?: string;
+  /** D95: the plural per language (D52). */
+  plural_labels?: Translations;
 };
 export type ModuleMeta = {
   id: string;
@@ -124,6 +285,17 @@ export type ModuleMeta = {
   descriptions?: Translations;
   /** The one-line card text per language (D52); absent when untranslated. */
   summaries?: Translations;
+  /** The English one-line card text (D55); absent when the module declares none. */
+  summary?: string;
+  /** D55: finance, sales, supply-chain, people, services, marketing, productivity, platform, other. */
+  categories?: string[];
+  /** D55: how settled the module is. */
+  maturity?: "stable" | "beta" | "experimental";
+  /** D95 (PROPOSED): where the app opens: a model name or `overview`. */
+  home?: string;
+  /** D95: false keeps the app off the launcher (it lives under another app). */
+  launcher?: boolean;
+  /** Models in the module's declaration order (F4), never alphabetical. */
   models: ModelMeta[];
 };
 
