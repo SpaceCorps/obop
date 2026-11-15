@@ -490,11 +490,14 @@ fn shape_of(f: &FieldM) -> Option<J> {
             "unique_with": f.unique_with,
         })),
         // Numbers typed by hand that a rename moves into a numbered field: the counter goes on
-        // after the highest of them (`counter_after_rename`).
+        // after the highest of them (`counter_after_rename`). A numbered field is always unique
+        // (`obop_commands` `seq::unique_specs`), so two equal old texts are named before the
+        // batch runs (`check_unique`) instead of failing on the index.
         "sequence" => Some(json!({
             "kind": "sequence",
             "format": f.format,
             "reset": f.reset,
+            "unique": true,
         })),
         _ => None,
     }
@@ -1088,6 +1091,28 @@ mod tests {
         .unwrap();
         let again = build_ops(&*b, &steps).unwrap();
         assert!(again.iter().all(|o| !matches!(o, Op::Put { .. })));
+    }
+
+    #[test]
+    fn a_rename_into_a_numbered_field_names_two_records_that_would_share_a_number() {
+        // A numbered field is unique (`obop_commands` `seq::unique_specs`), so two old
+        // references typed alike would break its index; the update says which two.
+        let new = m(
+            "0.3.0",
+            "[[model.field]]\nname = \"number\"\ndescription = \"d\"\nclass = \"none\"\nkind = \"sequence\"\nformat = \"MO-{seq:05}\"",
+            "[[migration]]\nfrom = \"<0.3.0\"\nop = \"rename_field\"\nmodel = \"mig_item\"\nfield = \"reference\"\nto = \"number\"\ndescription = \"d\"",
+        );
+        let steps = steps_for(&new, &Version::new(0, 2, 0));
+        let b = obop_storage::open("memory:").unwrap();
+        for (id, r) in [("11", "MO-0011"), ("12", "MO-0011"), ("13", "MO-0013")] {
+            b.insert("mig_item", id, &rec(&[("reference", json!(r))]))
+                .unwrap();
+        }
+        let e = build_ops(&*b, &steps).unwrap_err();
+        assert!(
+            e.contains("mig_item 11 and 12") && e.contains("MO-0011") && e.contains("unique"),
+            "{e}"
+        );
     }
 
     fn m(version: &str, fields: &str, migrations: &str) -> Manifest {
