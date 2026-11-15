@@ -279,7 +279,7 @@ label = "Ingående moms"
 description = "Periodens avdragsgilla ingående moms i öre, summan av ingående rader"
 
 [labels.sv.model.accounting_se_vat_report.field.vat_to_pay]
-label = "Moms att betala"
+label = "Moms att betala eller få tillbaka"
 description = "Utgående moms minus ingående moms i öre; negativt betyder återbetalning (ruta 49)"
 
 [labels.sv.model.accounting_se_vat_report.field.boxes_confirmed]

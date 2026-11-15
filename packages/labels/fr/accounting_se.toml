@@ -279,7 +279,7 @@ label = "TVA déductible"
 description = "TVA déductible de la période en öre, somme des lignes de TVA déductible"
 
 [labels.fr.model.accounting_se_vat_report.field.vat_to_pay]
-label = "TVA à payer"
+label = "TVA à payer ou à récupérer"
 description = "TVA collectée moins TVA déductible en öre ; négatif signifie remboursement (case 49)"
 
 [labels.fr.model.accounting_se_vat_report.field.boxes_confirmed]

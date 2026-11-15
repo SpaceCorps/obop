@@ -139,4 +139,61 @@ test.describe("Accounting Sweden: the VAT return", () => {
       expect(report.state).toBe("draft");
     });
   });
+
+  test("a VAT code that feeds a box without a tax is named, with the way to fix it, before computing", async ({
+    page,
+    signIn,
+    api,
+    uid,
+  }) => {
+    await withPackages(api, async () => {
+      const tag = uid("U").replace(/\s+/g, "");
+      const b05 = await box(api, "05", "Momspliktig forsaljning", "base");
+      const code = `U${tag.slice(-8)}`;
+      const untaxed = await api.create("root", "accounting_se_vat_code", {
+        code,
+        label: "Sale without a tax yet",
+        treatment: "sale_domestic",
+        rate_bp: 2500,
+        base_box_id: b05.id,
+        base_side: "credit",
+      });
+      try {
+        const name = uid("2032-Q1");
+        await api.create("root", "accounting_se_vat_report", {
+          name,
+          period_kind: "quarter",
+          start_on: "2032-01-01",
+          end_on: "2032-03-31",
+        });
+        await signIn("root", "/accounting_se/accounting_se_vat_report?view=list");
+        await page.getByText(name, { exact: true }).first().click();
+        const ret = page.locator("section.vat-return");
+        const notice = ret.locator(".notice, [role=status], [role=alert]").filter({
+          hasText: "Some VAT codes cannot be computed yet",
+        });
+        await expect(notice).toContainText(code);
+        await expect(notice.getByRole("link", { name: "Open VAT codes" })).toBeVisible();
+        await expect(ret.getByRole("button", { name: "Compute from ledger" })).toBeDisabled();
+        // The server says the same in its own words.
+        const refused = await api.post(
+          "/api/vat_computation/compute",
+          {
+            report: (
+              await api.run("root", "accounting_se_vat_report.search", {
+                filter: [{ field: "name", op: "eq", value: name }],
+              })
+            ).rows[0].id,
+          },
+          await api.token("root"),
+        );
+        expect(refused.status).toBe(400);
+        expect(JSON.stringify(refused.json)).toContain(
+          `code ${code}: maps to a box but has no tax_id`,
+        );
+      } finally {
+        await api.run("root", "accounting_se_vat_code.delete", { id: untaxed.id });
+      }
+    });
+  });
 });

@@ -279,7 +279,7 @@ label = "Ostojen vero"
 description = "Jakson vähennyskelpoinen ostojen vero örinä, ostorivien summa"
 
 [labels.fi.model.accounting_se_vat_report.field.vat_to_pay]
-label = "Maksettava alv"
+label = "Maksettava tai palautettava alv"
 description = "Myynnin vero miinus ostojen vero örinä; negatiivinen tarkoittaa palautusta (ruutu 49)"
 
 [labels.fi.model.accounting_se_vat_report.field.boxes_confirmed]
