@@ -9,8 +9,10 @@ import {
   askHost,
   hostAllows,
   hostAnswers,
+  hostSavesFiles,
   hostState,
   leaveHost,
+  savesIn,
   setHostAsk,
   setHostState,
   subscribe,
@@ -69,6 +71,21 @@ describe("inside a host", () => {
     expect(hostAnswers("host.settings")).toBe(false);
   });
 
+  it("saves no file until the host lists file.save", () => {
+    // A browser saves a download itself.
+    expect(hostSavesFiles()).toBe(true);
+    setHostState({ embedded: true, info: null });
+    expect(hostSavesFiles()).toBe(false);
+    setHostState({ embedded: true, info: info() });
+    expect(hostSavesFiles()).toBe(false);
+    const later = info({
+      commands: ["host.info", "file.save"] as unknown as HostInfo["commands"],
+    });
+    setHostState({ embedded: true, info: later });
+    expect(hostSavesFiles()).toBe(true);
+    expect(savesIn({ embedded: false, info: null })).toBe(true);
+    expect(savesIn({ embedded: true, info: info() })).toBe(false);
+  });
   it("sends a listed command through the bridge and an unlisted one not at all", async () => {
     const sent = vi.fn(async () => ({}));
     setHostAsk(sent as never);

@@ -93,6 +93,19 @@ export function hostAnswers(command: string): boolean {
 }
 
 /**
+ * Whether a file the page offers as a download reaches the person: always in a browser; inside a
+ * host only when the host has said that it answers `file.save`. While this is false the embed code
+ * stops every download and says so (`downloads.ts`), and the page reports no saved file.
+ */
+export function savesIn(s: HostState): boolean {
+  return !s.embedded || answersIn(s, "file.save");
+}
+
+export function hostSavesFiles(): boolean {
+  return savesIn(state);
+}
+
+/**
  * Asks the host to run `command`. The promise ends in the command's result or in a `BridgeError`;
  * a command the host did not list (and every command outside a host) is not sent at all.
  */

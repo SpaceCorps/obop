@@ -176,6 +176,8 @@ test.describe("inside the host app", () => {
     // A download would have been announced by now.
     await page.waitForTimeout(500);
     expect(saved()).toBe(0);
+    // Nothing was saved, so the page does not say that it exported anything.
+    await expect(page.getByText(/Exported \d+ record/)).toHaveCount(0);
     expect(host.paramsOf("host.info")).toHaveLength(1);
   });
 

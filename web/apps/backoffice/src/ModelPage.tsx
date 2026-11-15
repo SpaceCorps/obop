@@ -448,7 +448,8 @@ export function ModelPage({
     const body = got.rows.map((r) =>
       cols.map((f) => csvCell(plainText(f, r[f.name], d.refText, rowCurrency(r)))).join(","),
     );
-    download(`${model.name}.csv`, [head, ...body].join("\r\n") + "\r\n");
+    // Inside the phone host app no file was saved, and the app's notice has said so.
+    if (!download(`${model.name}.csv`, [head, ...body].join("\r\n") + "\r\n")) return;
     d.notify(
       got.truncated
         ? t("Exported the first {count} of {total} records only", {
