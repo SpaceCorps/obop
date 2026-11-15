@@ -51,6 +51,8 @@ const MILEAGE_SIDE = [
   "src/native/actions.ts",
   "src/native/config.ts",
   "src/native/devices.ts",
+  "src/native/language.ts",
+  "src/native/phone-language.ts",
   "src/native/recorder.ts",
   "src/native/runtime.ts",
   "src/native/store.ts",
@@ -62,6 +64,10 @@ const MILEAGE_PACKAGES = ["@obop/trip-core", "@obop/ui-native"];
 /** `from -> to`: known, with the reason. */
 const KNOWN: Record<string, string> = {
   "src/native/auth.ts -> src/core/identity.ts": "Binding and Owner (types) of the outbox owner",
+  "src/native/auth.ts -> src/i18n/index.ts":
+    "getLanguage: the language of the app, sent with the call that asks whose device this is",
+  "src/native/auth.ts -> src/native/language.ts":
+    "languageStore.known(): the `lang` that the sign-in pages of the instance are asked for",
 };
 
 function violations(): string[] {

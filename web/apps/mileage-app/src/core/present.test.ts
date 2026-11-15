@@ -2,10 +2,12 @@ import { describe, expect, test } from "vite-plus/test";
 import { en } from "../i18n/en.ts";
 import { t } from "../i18n/index.ts";
 import {
+  APP_PROBLEM_CODES,
   canDiscard,
   canSubmit,
   formatDistance,
   formatMetres,
+  isServerProblem,
   signalBannerProps,
   tripStatus,
 } from "./present.ts";
@@ -310,5 +312,28 @@ describe("the catalogue", () => {
       expect(text.length, key).toBeGreaterThan(0);
       for (const match of text.matchAll(/\{([^}]*)\}/g)) expect(match[1], key).toMatch(/^\w+$/);
     }
+  });
+});
+
+describe("whose words a problem holds", () => {
+  test("a code that the app also raises itself is not called the server's", () => {
+    // state_conflict is answered by the server and also raised by engine.ts; discarded and
+    // unexpected_answer are found by the app. Nothing stored says who wrote the words.
+    expect([...APP_PROBLEM_CODES].sort()).toEqual([
+      "discarded",
+      "state_conflict",
+      "unexpected_answer",
+    ]);
+    for (const code of APP_PROBLEM_CODES) expect(isServerProblem(code), code).toBe(false);
+    for (const code of ["bad_request", "gone", "unknown", "forbidden", "validation"]) {
+      expect(isServerProblem(code), code).toBe(true);
+    }
+  });
+
+  test("the two titles and the two labels of the line differ", () => {
+    expect(t("trip.problem.title")).toBe("The server refused a step");
+    expect(t("trip.problem.title.app")).not.toContain("server");
+    expect(t("trip.problem.details", { message: "x" })).toBe("Details from the server: x");
+    expect(t("trip.problem.details.app", { message: "x" })).toBe("Details: x");
   });
 });

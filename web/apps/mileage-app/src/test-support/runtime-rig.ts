@@ -183,6 +183,14 @@ export function keychainMock() {
   };
 }
 
+/**
+ * A phone that reports no language. The language store of the app (`native/language.ts`), which
+ * the sign-in asks for the `lang` of the pages, then knows none: the request carries no `lang`.
+ */
+export function phoneLanguageMock() {
+  return { phoneLanguageTags: (): string[] => [] };
+}
+
 export function databaseMock() {
   return {
     openDatabase: async () => {

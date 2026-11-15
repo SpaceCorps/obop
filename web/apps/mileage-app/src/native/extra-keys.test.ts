@@ -22,6 +22,12 @@ vi.mock("./platform-deps.ts", () => ({
   deviceInfo: () => ({ name: "Test phone", platform: "ios", appVersion: "0.1.0" }),
   appVersion: () => "0.1.0",
 }));
+// `native/auth.ts` imports the language store, which reads the phone's languages through React
+// Native and its stored choice through the secure store. Nothing here asks it anything.
+vi.mock("./phone-language.ts", () => ({ phoneLanguageTags: (): string[] => [] }));
+vi.mock("./keychain.ts", () => ({
+  keychain: { get: async () => null, set: async () => undefined, delete: async () => undefined },
+}));
 
 const HTTP = "http://192.168.1.5:18080";
 

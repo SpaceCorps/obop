@@ -20,6 +20,9 @@ vi.mock("./keychain.ts", async () =>
 vi.mock("./database.ts", async () =>
   (await import("../test-support/runtime-rig.ts")).databaseMock(),
 );
+vi.mock("./phone-language.ts", async () =>
+  (await import("../test-support/runtime-rig.ts")).phoneLanguageMock(),
+);
 vi.mock("./platform-deps.ts", async () =>
   (await import("../test-support/runtime-rig.ts")).platformDepsMock(),
 );

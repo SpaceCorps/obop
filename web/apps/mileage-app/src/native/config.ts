@@ -9,3 +9,6 @@ export const SCOPE: readonly string[] = ["mileage.driver"];
 
 /** The name of the background location task. The task is defined once, at the top of `task.ts`. */
 export const LOCATION_TASK = "obop-mileage-location";
+
+/** The choice of the language of the app (`system`, `en`, `sv`): a setting, not a secret, kept where it can be read before the database opens. */
+export const LANGUAGE_KEY_NAME = "obop.mileage.language";
