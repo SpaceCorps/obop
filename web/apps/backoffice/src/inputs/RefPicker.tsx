@@ -258,6 +258,9 @@ export function RefPicker(p: RefPickerProps) {
     const name = other ? textTitleOf(other) : undefined;
     return other?.can_create && name ? { field: f.name, to: f.to, name } : undefined;
   })();
+  // A boolean for the list below: the object above is new on every render, and a list that
+  // changes on every render would reset the highlighted option (Enter would pick nothing).
+  const makesRef = !!viaRef;
   const labelName = target
     ? (titleFields.find((f) => f?.kind === "text" && !f.computed && !f.sequence)?.name ??
       (titleFields[0]?.kind === "ref" ? undefined : labelField(target)?.name))
@@ -268,10 +271,10 @@ export function RefPicker(p: RefPickerProps) {
     const list: Item[] = [];
     if (!field.required && !q) list.push({ kind: "none" });
     for (const o of options) list.push({ kind: "rec", ...o });
-    if (canCreate && q && (labelName || viaRef) && !exact) list.push({ kind: "create", text: q });
+    if (canCreate && q && (labelName || makesRef) && !exact) list.push({ kind: "create", text: q });
     if (canCreate) list.push({ kind: "edit", text: q });
     return list;
-  }, [options, q, canCreate, labelName, viaRef, exact, field.required]);
+  }, [options, q, canCreate, labelName, makesRef, exact, field.required]);
 
   // One highlighted option: the current value when it is listed, else the first record.
   useEffect(() => {
