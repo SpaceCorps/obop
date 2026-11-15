@@ -9,7 +9,7 @@ import { expect, test } from "../support/fixtures.ts";
 
 const panelOf = (page: Page) =>
   page.getByRole("complementary", { name: "Quotation / Order record" });
-const linesOf = (panel: Locator) => panel.getByRole("region", { name: "Lines" });
+const linesOf = (panel: Locator) => panel.getByRole("region", { name: "Order lines" });
 
 /** Add one line by its product, with the keyboard only. */
 async function addLine(page: Page, panel: Locator, product: string) {

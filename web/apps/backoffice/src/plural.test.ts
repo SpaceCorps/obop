@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { provideCatalogue, setLanguage } from "@obop/ui";
 import type { ModelMeta } from "./api.ts";
-import { englishPlural, pluralTitle } from "./plural.ts";
+import { englishPlural, linesHeading, pluralTitle } from "./plural.ts";
 
 afterEach(async () => {
   provideCatalogue("en", {});
@@ -51,5 +51,24 @@ describe("pluralTitle", () => {
     expect(
       pluralTitle(model({ plural_labels: { de: "Verkaufsaufträge" } }), "Verkaufsauftrag"),
     ).toBe("Verkaufsaufträge");
+  });
+});
+
+describe("linesHeading", () => {
+  const line = (more: Partial<ModelMeta> = {}) =>
+    model({ name: "manufacturing_order_line", ...more });
+  it("the package's plural heads the table, and Lines where it declares none", () => {
+    expect(linesHeading(line({ plural: "Components" }), "Component")).toBe("Components");
+    expect(linesHeading(line(), "Manufacturing order line")).toBe("Lines");
+    expect(linesHeading(model({ name: "sale_order_tag" }), "Tag")).toBe("Tag");
+  });
+  it("another language takes its own plural, and Lines without one", async () => {
+    provideCatalogue("de", {});
+    await setLanguage("de");
+    const de = { de: "Auftragskomponenten" };
+    expect(linesHeading(line({ plural: "Components", plural_labels: de }), "x")).toBe(
+      "Auftragskomponenten",
+    );
+    expect(linesHeading(line({ plural: "Components" }), "x")).toBe("Lines");
   });
 });
