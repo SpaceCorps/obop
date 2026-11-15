@@ -601,3 +601,32 @@ li[data-current] .rp-title {
   border-color: var(--accent-line);
   background: var(--accent-soft);
 }
+
+/* ---------- A value read one way and typed another (TypedBox) ---------- */
+.typedbox {
+  position: relative;
+  display: block;
+  min-inline-size: 0;
+}
+.typedbox.showing input {
+  color: transparent;
+}
+.typedshow {
+  position: absolute;
+  inset: 1px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 0.75rem;
+  overflow: hidden;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.moneyin .typedshow {
+  padding-inline-end: 1.9rem;
+}
+.unitin .typedshow {
+  padding-inline-end: 2.4rem;
+}

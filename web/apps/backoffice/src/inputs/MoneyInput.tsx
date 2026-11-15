@@ -4,6 +4,7 @@
 import { useId } from "react";
 import { fmt, getCurrency, t } from "@obop/ui";
 import { useTypedText, type BaseInputProps } from "./common.ts";
+import { TypedBox } from "./TypedBox.tsx";
 
 /** "€" for EUR, "$" for USD, "zł" for PLN in the active format locale. */
 export function currencySymbol(currency: string): string {
@@ -56,22 +57,25 @@ export function MoneyInput({
   return (
     <div className="moneyfield">
       <div className="moneyin">
-        <input
-          {...common}
-          aria-describedby={
-            [common["aria-describedby"], read?.ambiguous ? hintId : ""].filter(Boolean).join(" ") ||
-            undefined
-          }
-          type="text"
-          inputMode="decimal"
-          className="num"
-          placeholder={field.required && !readOnly ? fmt.moneyInput(0, cur) : ""}
-          value={box.text}
-          readOnly={readOnly}
-          onFocus={box.onFocus}
-          onBlur={box.onBlur}
-          onChange={(e) => box.onChange(e.target.value)}
-        />
+        <TypedBox shown={box.shown}>
+          <input
+            {...common}
+            aria-describedby={
+              [common["aria-describedby"], read?.ambiguous ? hintId : ""]
+                .filter(Boolean)
+                .join(" ") || undefined
+            }
+            type="text"
+            inputMode="decimal"
+            className="num"
+            placeholder={field.required && !readOnly ? fmt.moneyInput(0, cur) : ""}
+            value={box.text}
+            readOnly={readOnly}
+            onFocus={box.onFocus}
+            onBlur={box.onBlur}
+            onChange={(e) => box.onChange(e.target.value)}
+          />
+        </TypedBox>
         <span aria-hidden="true">{currencySymbol(cur)}</span>
       </div>
       {read?.ambiguous && !compact && (

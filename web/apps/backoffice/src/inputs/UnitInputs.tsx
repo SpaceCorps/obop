@@ -7,6 +7,7 @@ import { getTime } from "../api.ts";
 import { decimalInput, splitDecimal } from "../decimals.ts";
 import { epochToInstant, fromZonedInput, instantToEpoch, toZonedInput } from "../instants.ts";
 import { isInt, useTypedText, type BaseInputProps } from "./common.ts";
+import { TypedBox } from "./TypedBox.tsx";
 import {
   clockText,
   durationClock,
@@ -65,22 +66,24 @@ export function DurationInput({ value, onChange, readOnly, common, compact }: Ba
   const say = read !== null && box.text.trim() !== durationClock(read);
   return (
     <div className="durationfield">
-      <input
-        {...common}
-        aria-describedby={
-          [common["aria-describedby"], say ? hintId : ""].filter(Boolean).join(" ") || undefined
-        }
-        type="text"
-        inputMode="text"
-        className="num"
-        placeholder={readOnly ? "" : t("1:30")}
-        title={t("Type 1:30, 1.5h or 90 (minutes)")}
-        value={box.text}
-        readOnly={readOnly}
-        onFocus={box.onFocus}
-        onBlur={box.onBlur}
-        onChange={(e) => box.onChange(e.target.value)}
-      />
+      <TypedBox shown={box.shown}>
+        <input
+          {...common}
+          aria-describedby={
+            [common["aria-describedby"], say ? hintId : ""].filter(Boolean).join(" ") || undefined
+          }
+          type="text"
+          inputMode="text"
+          className="num"
+          placeholder={readOnly ? "" : t("1:30")}
+          title={t("Type 1:30, 1.5h or 90 (minutes)")}
+          value={box.text}
+          readOnly={readOnly}
+          onFocus={box.onFocus}
+          onBlur={box.onBlur}
+          onChange={(e) => box.onChange(e.target.value)}
+        />
+      </TypedBox>
       {say && !compact && (
         <small className="hint" id={hintId} role="status">
           {t("Read as {duration}", { duration: durationText(read) })}
@@ -189,17 +192,19 @@ export function KmInput({ field, value, onChange, readOnly, common }: BaseInputP
   );
   return (
     <Unit unit="km">
-      <input
-        {...common}
-        type="text"
-        inputMode="decimal"
-        className="num"
-        value={box.text}
-        readOnly={readOnly}
-        onFocus={box.onFocus}
-        onBlur={box.onBlur}
-        onChange={(e) => box.onChange(e.target.value)}
-      />
+      <TypedBox shown={box.shown}>
+        <input
+          {...common}
+          type="text"
+          inputMode="decimal"
+          className="num"
+          value={box.text}
+          readOnly={readOnly}
+          onFocus={box.onFocus}
+          onBlur={box.onBlur}
+          onChange={(e) => box.onChange(e.target.value)}
+        />
+      </TypedBox>
     </Unit>
   );
 }

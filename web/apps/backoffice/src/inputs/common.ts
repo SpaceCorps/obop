@@ -27,10 +27,13 @@ export type BaseInputProps = {
 };
 
 /**
- * Text that reads one way and is typed another. While the box has the focus it holds exactly what
- * the person types; `emit` turns that into what the form keeps (the stored unit, or the text itself
- * when it does not read, so the form's own check names the problem). Without the focus it shows
- * `show(value)`.
+ * Text that reads one way and is typed another. The box always holds the typing form ("1:30",
+ * "12450.00"); while it does not have the focus, `shown` is the reading form ("1 h 30",
+ * "12,450.00") that <TypedBox> draws over it. The box's own value never changes as it takes the
+ * focus, so a selection, a select-all or an automated fill behaves as in any other box. While it
+ * has the focus it holds exactly what the person types; `emit` turns that into what the form keeps
+ * (the stored unit, or the text itself when it does not read, so the form's own check names the
+ * problem).
  */
 export function useTypedText(
   value: Edit,
@@ -41,11 +44,15 @@ export function useTypedText(
 ) {
   const [focused, setFocused] = useState(false);
   const [text, setText] = useState("");
+  const typing = edit(String(value));
+  const reading = show(String(value));
   return {
     focused,
-    text: focused ? text : show(String(value)),
+    text: focused ? text : typing,
+    /** The reading form to draw over the box, or null when it reads as it is typed. */
+    shown: !focused && reading !== typing ? reading : null,
     onFocus: () => {
-      setText(edit(String(value)));
+      setText(typing);
       setFocused(true);
     },
     onBlur: () => setFocused(false),
