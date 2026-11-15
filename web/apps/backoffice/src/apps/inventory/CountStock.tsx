@@ -130,7 +130,9 @@ function CountDialog({ row, onClose }: { row: RecordExtProps["row"]; onClose: ()
           onFocus={(e) => e.currentTarget.select()}
         />
         <p className="hint">
-          {t("The stock is set to the counted figure now; the difference is booked as a stock count move.")}
+          {t(
+            "The stock is set to the counted figure now; the difference is booked as a stock count move.",
+          )}
         </p>
         {error && (
           <p role="alert" className="error">
