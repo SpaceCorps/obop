@@ -144,7 +144,8 @@ export function TopBar(props: {
   const languages: MenuItem = {
     label: t("Language"),
     icon: "globe",
-    value: LANG_INFO[i18n.lang as keyof typeof LANG_INFO]?.native,
+    // The current language by its own name; the translators' pseudo-locales are not named.
+    value: isPseudo(i18n.lang) ? undefined : LANG_INFO[i18n.lang]?.native,
     items: LANGS.map((l) => ({
       label: LANG_INFO[l].native,
       icon: i18n.lang === l ? ("check" as const) : undefined,
