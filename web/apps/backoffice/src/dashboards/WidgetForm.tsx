@@ -162,6 +162,7 @@ export function WidgetForm(p: {
     const pre = presets(
       m,
       m.fields.filter((f) => f.class !== "secret"),
+      ix,
     );
     set({
       model_name: name,
