@@ -165,7 +165,7 @@
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  --tg-gutter: 3.5rem;
+  --tg-gutter: 4.25rem;
 }
 .tg-head,
 .tg-allday {

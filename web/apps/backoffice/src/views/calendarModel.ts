@@ -169,6 +169,21 @@ export function hhmm(min: number): string {
   return `${String(min >= 1440 ? 24 : h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
+/**
+ * A time of day the way the region writes it ("14:30", "2:30 PM"); `hhmm` where the browser has no
+ * such format. Midnight at the end of a day is "24:00" in either case.
+ */
+export function clockOf(min: number, locale: string): string {
+  if (min >= 1440) return hhmm(1440);
+  try {
+    return new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit" }).format(
+      new Date(2000, 0, 1, Math.floor(min / 60), Math.round(min % 60)),
+    );
+  } catch {
+    return hhmm(min);
+  }
+}
+
 // ---- the month: bars in lanes ------------------------------------------------------------------
 
 /** The part of an event inside one week row, on lane `lane` (0 is the top). */

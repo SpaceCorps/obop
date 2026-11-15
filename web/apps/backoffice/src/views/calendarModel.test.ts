@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import type { Command, FieldMeta, ModelMeta, Row } from "../api.ts";
 import {
   calendarSpec,
+  clockOf,
   eventOf,
   hhmm,
   isGone,
@@ -132,10 +133,13 @@ describe("events", () => {
     expect(isGone(m, { id: "2", state: "confirmed" })).toBe(false);
   });
 
-  it("times read as HH:MM", () => {
+  it("times read as HH:MM, and on screen the way the region writes them", () => {
     expect(hhmm(0)).toBe("00:00");
     expect(hhmm(570)).toBe("09:30");
     expect(hhmm(1440)).toBe("24:00");
+    expect(clockOf(870, "de-DE")).toBe("14:30");
+    expect(clockOf(870, "en-US")).toMatch(/^2:30\sPM$/);
+    expect(clockOf(1440, "en-US")).toBe("24:00");
   });
 
   it("a move writes the date, the start and the end or the duration", () => {

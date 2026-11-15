@@ -1,12 +1,15 @@
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent } from "react";
 import { fmt, t } from "@obop/ui";
-import { hhmm, placeDay, snap, visibleHours, type CalEvent } from "./calendarModel.ts";
+import { clockOf, placeDay, snap, visibleHours, type CalEvent } from "./calendarModel.ts";
 import { CardMenu } from "./CardMenu.tsx";
 
 /** The height of one hour in the grid, in CSS pixels. */
 const HOUR = 48;
 /** A pointer that moved less than this is a click, not a drag. */
 const SLOP = 4;
+
+/** A time of day in the region's way of writing it. */
+const hhmm = (min: number) => clockOf(min, fmt.locale);
 
 type Drag = {
   kind: "move" | "resize" | "create";
