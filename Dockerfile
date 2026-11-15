@@ -41,7 +41,7 @@ COPY docs/MODULES.md ./docs/MODULES.md
 # The website reports the core version, which is the workspace version in Cargo.toml (D55).
 COPY Cargo.toml ./Cargo.toml
 RUN corepack prepare pnpm@12.6.0 --activate \
- && pnpm install --frozen-lockfile --filter '!@obop/mileage-app' \
+ && pnpm install --frozen-lockfile --filter '!@obop/mileage-app' --filter '!@obop/ui-native' --filter '!@obop/storybook' \
  && OBOP_ADMIN_BASE=/admin/ pnpm --filter @obop/backoffice exec vp build \
  && pnpm --filter @obop/platform exec vp build \
  && pnpm --filter @obop/site exec vp build \
