@@ -1,10 +1,11 @@
 [labels.pl.module]
 name = "Magazyn"
-description = "Magazyny, lokalizacje, stany i operacje magazynowe. Zrealizowanie operacji zdejmuje ilość ze stanu w lokalizacji źródłowej i dodaje ją w docelowej, w jednym kroku; brakująca pozycja jest tworzona. Jest jedna pozycja na produkt, lokalizację i partię; ilości ujemne są dozwolone."
+description = "Magazyny, lokalizacje, stany i operacje magazynowe. Zrealizowanie operacji zdejmuje ilość ze stanu w lokalizacji źródłowej i dodaje ją w docelowej, w jednym kroku; brakująca pozycja jest tworzona. Jest jedna pozycja na produkt, lokalizację i partię; ilości ujemne są dozwolone. Ilość zmienia się tylko przez operacje; zrealizowane i anulowane są zablokowane."
 summary = "Magazyny, lokalizacje magazynowe, stany magazynowe i operacje magazynowe."
 
 [labels.pl.model.inventory_warehouse]
 name = "Magazyn"
+plural = "Magazyny"
 description = "Budynek lub miejsce, w którym przechowywane są towary"
 
 [labels.pl.model.inventory_warehouse.field.name]
@@ -25,6 +26,7 @@ description = "Czy magazyn jest używany"
 
 [labels.pl.model.inventory_location]
 name = "Lokalizacja"
+plural = "Lokalizacje"
 description = "Miejsce wewnątrz magazynu, w którym mogą znajdować się towary"
 
 [labels.pl.model.inventory_location.field.name]
@@ -52,6 +54,7 @@ description = "Czy lokalizacja jest używana"
 
 [labels.pl.model.inventory_item]
 name = "Stan magazynowy"
+plural = "Stany magazynowe"
 description = "Ilość jednego produktu przechowywana w jednej lokalizacji"
 
 [labels.pl.model.inventory_item.field.product_id]
@@ -64,7 +67,7 @@ description = "Gdzie jest przechowywany"
 
 [labels.pl.model.inventory_item.field.quantity]
 label = "Ilość"
-description = "Liczba sztuk na stanie"
+description = "Liczba sztuk na stanie; zmienia się tylko przez zrealizowane operacje magazynowe"
 
 [labels.pl.model.inventory_item.field.reorder_level]
 label = "Minimalny stan"
@@ -76,6 +79,7 @@ description = "Numer partii, jeśli jest śledzona"
 
 [labels.pl.model.inventory_move]
 name = "Operacja magazynowa"
+plural = "Operacje magazynowe"
 description = "Przemieszczenie produktu między lokalizacjami albo do firmy lub z firmy"
 
 [labels.pl.model.inventory_move.field.reference]
@@ -118,3 +122,7 @@ description = "Potwierdza, że towar faktycznie został przemieszczony: ilość 
 [labels.pl.model.inventory_move.action.cancel]
 label = "Anuluj"
 description = "Anuluje roboczą operację"
+
+[labels.pl.model.inventory_item.field.below_reorder]
+description = "Czy ilość jest równa poziomowi ponownego zamówienia lub niższa (nie, gdy poziom nie jest ustawiony)"
+label = "Niski stan"

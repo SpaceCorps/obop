@@ -34,11 +34,13 @@ test.describe("the data model", () => {
     expect((await api.run("root", "sale_order.get", { id: order.id })).total_minor).toBe(152500);
 
     await signIn("root", `/sales/sale_order?view=list&id=${order.id}`);
-    const panel = panelOf(page, "Sale order");
-    await expect(panel.getByLabel("Total")).toHaveValue(/1,?525\.00/);
-    await expect(panel.getByLabel("Total")).toHaveAttribute("readonly", "");
-    await panel.getByRole("button", { name: "Confirm", exact: true }).click();
-    await expect(page.locator(".toast").filter({ hasText: "Confirm done" })).toBeVisible();
+    const panel = panelOf(page, "Quotation / Order");
+    // The computed total is a key figure of the header, as text.
+    await expect(panel.locator(".rec-figures")).toContainText(/1,?525\.00/);
+    await panel.locator(".actionrow").getByRole("button", { name: "Confirm", exact: true }).click();
+    await expect(
+      page.locator(".toast").filter({ hasText: "Order confirmed; a draft invoice is ready" }),
+    ).toBeVisible();
 
     const invoices = (await api.list("root", "invoice")).filter(
       (i) => i.sale_order_id === order.id,
@@ -49,15 +51,21 @@ test.describe("the data model", () => {
     expect(invoices[0].number).toBeFalsy();
 
     await page.goto(`/#/invoicing/invoice?view=list&id=${invoices[0].id}`);
-    const inv = panelOf(page, "Invoice");
-    await expect(inv.getByLabel("Total")).toHaveValue(/1,?525\.00/);
-    await inv.getByRole("button", { name: "Post *", exact: true }).click();
-    await expect(page.locator(".toast").filter({ hasText: "Post done" })).toBeVisible();
+    const inv = panelOf(page, "Customer invoice");
+    await expect(inv.locator(".rec-figures")).toContainText(/1,?525\.00/);
+    // Post needs a person's approval when an agent runs it: a shield, not an asterisk.
+    const post = inv.locator(".actionrow").getByRole("button", { name: /^Post/ });
+    await expect(post.locator(".approval-mark")).toBeVisible();
+    await post.click();
+    // The package asks first (`ui.confirm`), and its own toast says it is done (`ui.done`).
+    await page.getByRole("alertdialog").getByRole("button", { name: /^Post/ }).click();
+    await expect(page.locator(".toast").filter({ hasText: "Invoice posted" })).toBeVisible();
     const posted = await api.run("root", "invoice.get", { id: invoices[0].id });
     expect(posted.state).toBe("posted");
     expect(posted.number).toMatch(/^INV-\d{4}-\d{5}$/);
-    await expect(inv.getByLabel("Number")).toHaveValue(posted.number);
-    await expect(inv.getByLabel("Number")).toHaveAttribute("readonly", "");
+    // The number is the server's: the header names the invoice by it, and the form shows it as text.
+    await expect(inv.locator("h2")).toHaveText(posted.number);
+    await expect(inv.locator(".field.ro", { hasText: "Number" })).toContainText(posted.number);
   });
 
   test("a second posted invoice gets the next number of the series", async ({ api, uid }) => {

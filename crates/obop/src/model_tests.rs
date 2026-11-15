@@ -187,9 +187,9 @@ fn an_entry_posts_only_when_balanced_gets_a_gapless_number_and_totals_follow_the
         get(&app, &clerk, "accounting_move", &b)["number"],
         "JE/2026/00002"
     );
-    // A numbered entry cannot be deleted, and a clerk cannot post.
+    // A numbered entry cannot be deleted (a posted one is frozen, D77), and a clerk cannot post.
     let e = run(&app, &admin(), "accounting_move.delete", json!({"id": b})).unwrap_err();
-    assert!(e.contains("gapless number"), "{e}");
+    assert!(e.contains("is posted and cannot be deleted"), "{e}");
     assert_eq!(
         run(&app, &clerk, "accounting_move.post", json!({"id": a})).unwrap_err(),
         "forbidden"
@@ -310,7 +310,7 @@ fn validating_a_stock_move_changes_the_quantities_at_both_ends_and_nowhere_else(
         &app,
         &boss,
         "inventory_item.create",
-        json!({"product_id": bolt, "location_id": shelf, "quantity": 1}),
+        json!({"product_id": bolt, "location_id": shelf}),
     )
     .unwrap_err();
     assert!(
@@ -786,7 +786,7 @@ fn updating_expenses_brings_the_approval_of_approve_and_refuse() {
     assert_eq!(bundled.matches(flagged).count(), 2, "approve and refuse");
     let old = bundled
         .replace(flagged, "group = \"expenses.manager\"\n")
-        .replace("version = \"0.3.1\"", "version = \"0.3.0\"");
+        .replace("version = \"0.4.0\"", "version = \"0.3.0\"");
     assert_ne!(old, bundled);
     app.installer.install(&old, "upload", "test").unwrap();
 
@@ -812,7 +812,7 @@ fn updating_expenses_brings_the_approval_of_approve_and_refuse() {
     );
 
     let updated = app.installer.install(&bundled, "upload", "test").unwrap();
-    assert_eq!(updated.version, "0.3.1");
+    assert_eq!(updated.version, "0.4.0");
     let c = claim();
     plan_of(run(
         &app,
@@ -1057,7 +1057,14 @@ fn the_sale_flow_is_atomic_on_a_real_sqlite_file() {
     app.dispatcher
         .set_clock(std::sync::Arc::new(|| SEPTEMBER_2026));
     let sales = user("sam", &["base.user", "sales.user", "invoicing.user"]);
-    let order = id(&ok(&app, &sales, "sale_order.create", json!({})));
+    // Confirming needs a customer and a line (B26).
+    let party = id(&ok(&app, &sales, "party.create", json!({"name": "Acme"})));
+    let order = id(&ok(
+        &app,
+        &sales,
+        "sale_order.create",
+        json!({"party_id": party}),
+    ));
     ok(
         &app,
         &sales,

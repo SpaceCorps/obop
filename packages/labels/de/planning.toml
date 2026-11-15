@@ -5,6 +5,7 @@ summary = "Schichten für Mitarbeiter mit Rollen und Schichtvorlagen; offene Sch
 
 [labels.de.model.planning_role]
 name = "Rolle"
+plural = "Rollen"
 description = "Eine Rolle, für die eine Schicht geplant wird, zum Beispiel Kassierer oder Elektriker"
 
 [labels.de.model.planning_role.field.name]
@@ -17,6 +18,7 @@ description = "Was die Rolle umfasst"
 
 [labels.de.model.planning_template]
 name = "Vorlage"
+plural = "Vorlagen"
 description = "Ein benanntes Schichtmuster mit Rolle, Beginn und Ende; keine Aktion erzeugt daraus Schichten"
 
 [labels.de.model.planning_template.field.name]
@@ -37,6 +39,7 @@ description = "Ende in Minuten seit Mitternacht (1020 ist 17:00)"
 
 [labels.de.model.planning_shift]
 name = "Schicht"
+plural = "Schichten"
 description = "Ein Arbeitsabschnitt an einem Tag für eine Rolle, optional einem Mitarbeiter zugewiesen"
 
 [labels.de.model.planning_shift.field.name]
@@ -72,7 +75,7 @@ label = "Status"
 description = "Schichtstatus: offen, veröffentlicht, bestätigt"
 
 [labels.de.model.planning_shift.field.state.options]
-open = "Offen"
+open = "Nicht veröffentlicht"
 published = "Veröffentlicht"
 confirmed = "Bestätigt"
 

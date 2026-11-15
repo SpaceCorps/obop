@@ -241,3 +241,16 @@ export function instantShort(
 
 /** Compare two canonical instants (they are fixed-width text, so text order is time order). */
 export const compareInstants = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
+/** Seconds since 1970 (UTC) as a canonical instant; empty when out of range. */
+export function epochToInstant(seconds: number): string {
+  if (!Number.isFinite(seconds)) return "";
+  const ms = Math.trunc(seconds) * 1000;
+  return ms < MIN_MS || ms > MAX_MS ? "" : canonical(ms, 0);
+}
+
+/** A canonical instant as whole seconds since 1970 (UTC); `null` when it is not one. */
+export function instantToEpoch(iso: string): number | null {
+  const p = parseCanonical(iso);
+  return p ? Math.floor(p.ms / 1000) : null;
+}

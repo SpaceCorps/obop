@@ -2237,6 +2237,7 @@ impl Installer {
                         .iter()
                         .map(|(a, b)| (a.clone(), b.clone()))
                         .collect(),
+                    ui: Default::default(),
                 };
                 // For a listing, "update available" compares the installed version to the
                 // offered one, which is this listing.
@@ -3318,10 +3319,78 @@ mod tests {
                 .iter()
                 .map(|a| a.id.as_str())
                 .collect::<Vec<_>>(),
-            ["fleet_vehicle.dispatch", "fleet_vehicle.return_to_pool"]
+            [
+                "fleet_vehicle.dispatch",
+                "fleet_vehicle.return_to_pool",
+                "fleet_vehicle.send_to_workshop",
+                "fleet_vehicle.back_in_service"
+            ]
         );
         let driver = model.fields.iter().find(|f| f.name == "driver").unwrap();
         assert_eq!((driver.class, driver.personal_data), ("internal", true));
+    }
+
+    #[test]
+    fn meta_keeps_the_declared_order_of_models_and_actions() {
+        let store = Store::new();
+        let (d, inst) = setup(&store);
+        inst.install(
+            include_str!("../../../../packages/projects.toml"),
+            "marketplace",
+            "root",
+        )
+        .unwrap();
+        let projects = d
+            .meta(
+                Surface::Rest,
+                &Principal::user("m", &["projects.user", "projects.manager"]),
+            )
+            .into_iter()
+            .find(|m| m.id == "projects")
+            .unwrap();
+        let names: Vec<&str> = projects.models.iter().map(|m| m.name.as_str()).collect();
+        assert_eq!(
+            names,
+            ["projects_project", "projects_milestone", "projects_task"],
+            "the order of projects.toml, not the alphabet"
+        );
+        let actions = |model: &str| -> Vec<String> {
+            projects
+                .models
+                .iter()
+                .find(|m| m.name == model)
+                .unwrap()
+                .actions
+                .iter()
+                .map(|a| a.id.clone())
+                .collect()
+        };
+        assert_eq!(
+            actions("projects_project"),
+            [
+                "projects_project.start",
+                "projects_project.finish",
+                "projects_project.reopen"
+            ]
+        );
+        assert_eq!(
+            actions("projects_task"),
+            [
+                "projects_task.begin",
+                "projects_task.complete",
+                "projects_task.cancel",
+                "projects_task.complete_now",
+                "projects_task.reopen",
+                "projects_task.reopen_cancelled"
+            ]
+        );
+        // The catalogue data of D55 that the interface shows.
+        assert_eq!(
+            projects.summary,
+            "Projects, milestones and tasks with assignees, deadlines and status flows."
+        );
+        assert_eq!(projects.categories, ["services", "productivity"]);
+        assert_eq!(projects.maturity, "beta");
     }
 
     #[test]
@@ -3425,7 +3494,7 @@ mod tests {
                 .unwrap_err()
                 .contains("already installed")
         );
-        let newer = fleet.replace("version = \"0.3.1\"", "version = \"0.4.0\"");
+        let newer = fleet.replace("version = \"0.3.2\"", "version = \"0.4.0\"");
         assert_eq!(
             inst.install(&newer, "upload", "r").unwrap().version,
             "0.4.0"
@@ -4014,6 +4083,19 @@ write_group = "gadget.manager"
         let e = handler_error(set(&agent, "closed"));
         assert!(e.contains("it can only go to: in_progress"), "{e}");
         set(&agent, "in_progress").unwrap();
+        // Resolving needs the resolution (D95 `needs`): without it the move is refused.
+        let e = handler_error(set(&agent, "resolved"));
+        assert!(e.contains("needs resolution"), "{e}");
+        call(
+            &d,
+            &agent,
+            "helpdesk_ticket.update",
+            Value::map([
+                ("id", Value::text(&id)),
+                ("resolution", Value::text("new toner")),
+            ]),
+        )
+        .unwrap();
         set(&agent, "resolved").unwrap();
         // Closing needs helpdesk.manager and, for an agent, an approval.
         let e = handler_error(set(&agent, "closed"));
@@ -4222,7 +4304,7 @@ label = "Ota käyttöön"
 
     fn fleet_with_labels(version: &str, labels: &str) -> String {
         Manifest::combine(
-            &include_str!("../../../../packages/fleet.toml").replace("0.3.1", version),
+            &include_str!("../../../../packages/fleet.toml").replace("0.3.2", version),
             labels,
         )
     }

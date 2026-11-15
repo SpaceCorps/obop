@@ -1,19 +1,32 @@
 import { useMemo, useState } from "react";
-import { Button, Dialog, Input, Notice, Select, Textarea, msg, rich, t } from "@obop/ui";
+import { Button, Dialog, Input, Notice, Select, Textarea, fmt, inSentence, msg, t } from "@obop/ui";
 import type { FieldMeta, ModelMeta } from "../api.ts";
-import { useData } from "../data.tsx";
+import { useData, useRows } from "../data.tsx";
+import { readPref, writePref } from "../favorites.ts";
 import { optionLabel } from "../format.ts";
 import { fieldTitle, modelTitle } from "../labels.ts";
-import { groupable, measurable } from "../query.ts";
+import { stateFieldOf, summable, type MetaIndex } from "../presentation.ts";
+import { useReportIndex } from "../views/PivotView.tsx";
+import {
+  currenciesOf,
+  defaultRows,
+  dimensionsOf,
+  formatMeasure,
+  isDated,
+  type MeasureSel,
+} from "../reports.ts";
+import { useReportRows } from "../useAggregate.ts";
 import {
   FILTER_HELP,
   OP_NAME,
+  conditionsText,
   formatFilter,
   parseFilter,
   toServerFilter,
   type Condition,
   type WidgetOp,
 } from "./filter.ts";
+import { ModelPicker } from "./ModelPicker.tsx";
 import { KINDS, type Widget, type WidgetKind } from "./widget.ts";
 
 const KIND_NAME: Record<WidgetKind, string> = {
@@ -54,18 +67,42 @@ type Draft = {
 
 export type WidgetValues = Omit<Widget, "id" | "dashboard_id" | "position">;
 
-/** Models a dashboard can read: every app's models except the dashboards themselves. */
-function useReadable() {
-  const d = useData();
-  return useMemo(() => {
-    const out: { model: ModelMeta; text: string }[] = [];
-    for (const a of d.apps) {
-      if (a.id === "customize" || a.id === "dashboards") continue;
-      for (const m of a.module.models)
-        out.push({ model: m, text: `${a.name} › ${modelTitle(m, a.module.id)}` });
-    }
-    return out;
-  }, [d.apps, d.lang]);
+const RECENT = "dashboards.recent-models";
+const isChart = (k: WidgetKind) => k === "bar" || k === "line" || k === "pie";
+
+/** The money a tile adds up first, and the field it splits by first, for a model. */
+function presets(
+  model: ModelMeta,
+  fields: FieldMeta[],
+  ix?: { index: MetaIndex; setup: (model: string) => boolean },
+) {
+  const money = fields.find((f) => f.kind === "money" && summable(f, model));
+  const dims = dimensionsOf(fields);
+  const state = stateFieldOf(model);
+  const split =
+    (state && dims.find((f) => f.name === state.name)) ??
+    defaultRows(model, dims, ix?.index, ix?.setup)?.field;
+  const dates = dims.filter(isDated);
+  const date = dates.find((f) => f.required) ?? dates[0];
+  const rows = defaultRows(model, dims, ix?.index, ix?.setup);
+  const ref = rows && rows.field.kind === "ref" ? rows.field : undefined;
+  return { money, split, date, ref, state: state && dims.find((f) => f.name === state.name) };
+}
+
+/** A title from what the tile shows, until the person writes their own. */
+function autoTitle(draft: Draft, model: ModelMeta | undefined, moduleId: string): string {
+  if (!model) return "";
+  const name = modelTitle(model, moduleId);
+  const measure = model.fields.find((f) => f.name === draft.measure_field);
+  const by = model.fields.find((f) => f.name === draft.group_by);
+  const what =
+    draft.aggregate === "sum" && measure
+      ? t("{field} of {model}", { field: fieldTitle(measure), model: inSentence(name) })
+      : name;
+  if (draft.kind === "kpi" || !by) return what;
+  return draft.aggregate === "sum" && measure
+    ? t("{measure} by {field}", { measure: fieldTitle(measure), field: inSentence(fieldTitle(by)) })
+    : t("{model} by {field}", { model: name, field: inSentence(fieldTitle(by)) });
 }
 
 export function WidgetForm(p: {
@@ -73,41 +110,145 @@ export function WidgetForm(p: {
   onSave: (values: WidgetValues) => Promise<string | null>;
   onClose: () => void;
 }) {
-  const readable = useReadable();
+  const d = useData();
   const w = p.initial;
   const parsed = parseFilter(w?.filter ?? "");
   const [draft, setDraft] = useState<Draft>(() => ({
     title: w?.title ?? "",
     kind: w?.kind ?? "kpi",
-    model_name: w?.model_name ?? readable[0]?.model.name ?? "",
+    model_name: w?.model_name ?? "",
     aggregate: w?.aggregate ?? "count",
     measure_field: w?.measure_field ?? "",
     group_by: w?.group_by ?? "",
     conds: "conds" in parsed ? parsed.conds : [],
     raw: "error" in parsed ? (w?.filter ?? "") : null,
   }));
+  const [titled, setTitled] = useState(!!w);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const tiles = useRows("dashboards_widget");
+  const ix = useReportIndex();
+  const recent = useMemo(() => {
+    const mine = readPref<string[]>(RECENT, []);
+    const used = (tiles.rows as unknown as Widget[]).map((x) => x.model_name);
+    return [...new Set([...mine, ...used])];
+  }, [tiles.rows]);
+
+  const info = d.models.get(draft.model_name);
+  const model = info?.model;
+  const moduleId = info?.module.id ?? "";
+  // A widget saved for a model this person cannot see can still be edited, but its fields are unknown.
+  const fields = useMemo(() => model?.fields.filter((f) => f.class !== "secret") ?? [], [model]);
+  const measures = fields.filter(
+    (f) =>
+      (f.kind === "money" || f.kind === "decimal" || f.kind === "number") &&
+      (summable(f, model) || f.name === draft.measure_field),
+  );
+  const dims = dimensionsOf(fields);
+  const chart = isChart(draft.kind);
+  const text = draft.raw ?? formatFilter(draft.conds);
+  const title = titled ? draft.title : autoTitle(draft, model, moduleId);
+
   const set = (patch: Partial<Draft>) => setDraft((x) => ({ ...x, ...patch }));
 
-  const model = readable.find((r) => r.model.name === draft.model_name)?.model;
-  // A widget saved for a model this person cannot see can still be edited, but its fields are unknown.
-  const fields = model?.fields.filter((f) => f.class !== "secret") ?? [];
-  const measures = measurable(fields);
-  const dims = groupable(fields);
-  const chart = draft.kind === "bar" || draft.kind === "line" || draft.kind === "pie";
-
-  const text = draft.raw ?? formatFilter(draft.conds);
-
   function changeModel(name: string) {
-    set({ model_name: name, measure_field: "", group_by: "", conds: [], raw: null });
+    const m = d.models.get(name)?.model;
+    writePref(
+      RECENT,
+      [name, ...readPref<string[]>(RECENT, []).filter((x) => x !== name)].slice(0, 8),
+    );
+    if (!m) return set({ model_name: name, measure_field: "", group_by: "", conds: [], raw: null });
+    const pre = presets(
+      m,
+      m.fields.filter((f) => f.class !== "secret"),
+      ix,
+    );
+    set({
+      model_name: name,
+      aggregate: pre.money ? "sum" : "count",
+      measure_field: pre.money?.name ?? "",
+      group_by: isChart(draft.kind) || draft.kind === "table" ? (pre.split?.name ?? "") : "",
+      conds: [],
+      raw: null,
+    });
   }
+
+  function changeKind(kind: WidgetKind) {
+    const pre = model ? presets(model, fields, ix) : undefined;
+    set({
+      kind,
+      group_by:
+        kind === "kpi"
+          ? ""
+          : draft.group_by ||
+            (isChart(kind)
+              ? (((kind === "line" ? pre?.date : undefined) ?? pre?.split)?.name ?? "")
+              : ""),
+    });
+  }
+
+  // The templates a model suggests: one click sets what to show, add up and split by.
+  const templates = useMemo(() => {
+    if (!model) return [];
+    const pre = presets(model, fields, ix);
+    const sum = pre.money
+      ? { aggregate: "sum" as const, measure_field: pre.money.name }
+      : { aggregate: "count" as const, measure_field: "" };
+    const out: { label: string; values: Partial<Draft> }[] = [
+      {
+        label: t("Number of records"),
+        values: { kind: "kpi", aggregate: "count", measure_field: "", group_by: "" },
+      },
+    ];
+    if (pre.money)
+      out.push({
+        label: t("Total {field}", { field: inSentence(fieldTitle(pre.money)) }),
+        values: { kind: "kpi", ...sum, group_by: "" },
+      });
+    if (pre.state)
+      out.push({
+        label: t("By {field}", { field: inSentence(fieldTitle(pre.state)) }),
+        values: { kind: "bar", ...sum, group_by: pre.state.name },
+      });
+    if (pre.date)
+      out.push({
+        label: t("Per month of {field}", { field: inSentence(fieldTitle(pre.date)) }),
+        values: { kind: "line", ...sum, group_by: pre.date.name },
+      });
+    if (pre.ref)
+      out.push({
+        label: t("Top {field}", { field: inSentence(fieldTitle(pre.ref)) }),
+        values: { kind: "bar", ...sum, group_by: pre.ref.name },
+      });
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model, fields, d.lang]);
+
+  // The live sentence: what the tile will show, with the numbers of today.
+  const checked = useMemo(() => {
+    if (!model) return null;
+    const re = parseFilter(text);
+    if ("error" in re) return null;
+    const sf = toServerFilter(re.conds, model);
+    return "filter" in sf ? { conds: re.conds, filter: sf.filter } : null;
+  }, [model, text, d.lang]);
+  const measureF = fields.find((f) => f.name === draft.measure_field);
+  const measure: MeasureSel =
+    draft.aggregate === "sum" && measureF ? { field: measureF, op: "sum" } : null;
+  const live = useReportRows({
+    server: true,
+    enabled: !!model && !!checked && (draft.aggregate === "count" || !!measureF),
+    model: model ?? ({ name: "", fields: [] } as unknown as ModelMeta),
+    filter: checked?.filter ?? [],
+    dims: [],
+    measure,
+  });
 
   async function save() {
     const errs: Record<string, string> = {};
-    if (!draft.title.trim()) errs.title = t("Give the tile a title");
-    if (!model) errs.model = t("Pick a model");
+    if (!title.trim()) errs.title = t("Give the tile a title");
+    if (!model) errs.model = t("Pick what the tile reads");
     if (draft.aggregate === "sum" && !draft.measure_field)
       errs.measure = t("Pick a field to add up");
     if (chart && !draft.group_by) errs.group = t("A chart needs a field to split by");
@@ -128,7 +269,7 @@ export function WidgetForm(p: {
     setBusy(true);
     setError(null);
     const err = await p.onSave({
-      title: draft.title.trim(),
+      title: title.trim(),
       kind: draft.kind,
       model_name: draft.model_name,
       aggregate: draft.aggregate,
@@ -162,18 +303,41 @@ export function WidgetForm(p: {
           void save();
         }}
       >
-        <Input
-          label={t("Title")}
-          value={draft.title}
-          error={errors.title}
-          required
-          onChange={(e) => set({ title: e.target.value })}
+        <ModelPicker
+          label={t("Records of")}
+          value={draft.model_name}
+          recent={recent}
+          error={errors.model}
+          onChange={changeModel}
         />
+        {!model && draft.model_name && (
+          <Notice tone="warning" title={t("No access")}>
+            {t("You cannot see the data this tile reads.")}
+          </Notice>
+        )}
+        {templates.length > 0 && (
+          <div className="wtemplates" role="group" aria-label={t("Suggestions")}>
+            <span className="wtemplates-label">{t("Suggestions")}</span>
+            {templates.map((x) => (
+              <button
+                key={x.label}
+                type="button"
+                className="chip wtemplate"
+                onClick={() => {
+                  set(x.values);
+                  if (!titled) set({ title: "" });
+                }}
+              >
+                {x.label}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="wform-row">
           <Select
             label={t("Shows")}
             value={draft.kind}
-            onChange={(e) => set({ kind: e.target.value as WidgetKind })}
+            onChange={(e) => changeKind(e.target.value as WidgetKind)}
           >
             {KINDS.map((k) => (
               <option key={k} value={k}>
@@ -182,28 +346,17 @@ export function WidgetForm(p: {
             ))}
           </Select>
           <Select
-            label={t("Records of")}
-            value={draft.model_name}
-            error={errors.model}
-            onChange={(e) => changeModel(e.target.value)}
-          >
-            {!model && draft.model_name && (
-              <option value={draft.model_name}>{t("No access")}</option>
-            )}
-            {readable.map((r) => (
-              <option key={r.model.name} value={r.model.name}>
-                {r.text}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div className="wform-row">
-          <Select
             label={t("Combine by")}
             value={draft.aggregate}
-            onChange={(e) =>
-              set({ aggregate: e.target.value as "count" | "sum", measure_field: "" })
-            }
+            onChange={(e) => {
+              const aggregate = e.target.value as "count" | "sum";
+              const money = model && presets(model, fields, ix).money;
+              set({
+                aggregate,
+                measure_field:
+                  aggregate === "sum" ? draft.measure_field || (money?.name ?? "") : "",
+              });
+            }}
           >
             <option value="count">{t("Count of records")}</option>
             <option value="sum" disabled={measures.length === 0}>
@@ -228,26 +381,26 @@ export function WidgetForm(p: {
             </Select>
           )}
         </div>
-        <Select
-          label={chart ? t("Split by") : t("Split by (optional)")}
-          value={draft.group_by}
-          error={errors.group}
-          hint={
-            draft.kind === "kpi"
-              ? t("A number tile shows one value; leave this empty.")
-              : draft.kind === "table"
+        {draft.kind !== "kpi" && (
+          <Select
+            label={chart ? t("Split by") : t("Split by (optional)")}
+            value={draft.group_by}
+            error={errors.group}
+            hint={
+              draft.kind === "table"
                 ? t("Empty shows the first records instead of totals.")
                 : undefined
-          }
-          onChange={(e) => set({ group_by: e.target.value })}
-        >
-          <option value="">{chart ? t("Choose a field") : t("Nothing")}</option>
-          {dims.map((f) => (
-            <option key={f.name} value={f.name}>
-              {f.kind === "date" ? t("{field} (month)", { field: fieldTitle(f) }) : fieldTitle(f)}
-            </option>
-          ))}
-        </Select>
+            }
+            onChange={(e) => set({ group_by: e.target.value })}
+          >
+            <option value="">{chart ? t("Choose a field") : t("Nothing")}</option>
+            {dims.map((f) => (
+              <option key={f.name} value={f.name}>
+                {isDated(f) ? t("{field} (month)", { field: fieldTitle(f) }) : fieldTitle(f)}
+              </option>
+            ))}
+          </Select>
+        )}
 
         <fieldset className="wfilter">
           <legend>{t("Only records where")}</legend>
@@ -297,17 +450,32 @@ export function WidgetForm(p: {
               )}
             </>
           )}
-          <p className="hint">
-            {rich(
-              "Saved as <code>{filter}</code>.",
-              {
-                filter: text || t("(all records)"),
-              },
-              { code: (c) => <code>{c}</code> },
-            )}{" "}
-            {draft.raw === null && t(FILTER_HELP)}
-          </p>
         </fieldset>
+
+        {model && (
+          <Sentence
+            draft={draft}
+            model={model}
+            moduleId={moduleId}
+            conds={checked?.conds ?? null}
+            count={live.loaded && !live.error ? live.total : null}
+            total={live.loaded && !live.error ? live.rows : null}
+            measure={measure}
+            text={text}
+          />
+        )}
+
+        <Input
+          label={t("Title")}
+          value={title}
+          error={errors.title}
+          required
+          hint={!titled && title ? t("Made from your choices; type to change it.") : undefined}
+          onChange={(e) => {
+            setTitled(true);
+            set({ title: e.target.value });
+          }}
+        />
         {error && (
           <Notice tone="danger" title={t("Could not save the tile")}>
             {error}
@@ -316,6 +484,90 @@ export function WidgetForm(p: {
         <button type="submit" hidden />
       </form>
     </Dialog>
+  );
+}
+
+/** "Counts 2 deal records where Stage is Won. Split by Stage." — what the tile will show. */
+function Sentence(p: {
+  draft: Draft;
+  model: ModelMeta;
+  moduleId: string;
+  conds: Condition[] | null;
+  count: number | null;
+  total: ReturnType<typeof useReportRows>["rows"] | null;
+  measure: MeasureSel;
+  text: string;
+}) {
+  const d = useData();
+  const { draft, model } = p;
+  const name = inSentence(modelTitle(model, p.moduleId));
+  const by = model.fields.find((f) => f.name === draft.group_by);
+  if (p.conds === null)
+    return (
+      <p className="wsentence" role="status">
+        {t("Fix the conditions to see what this tile shows.")}
+      </p>
+    );
+  if (draft.aggregate === "sum" && !p.measure)
+    return (
+      <p className="wsentence" role="status">
+        {t("Pick a field to add up.")}
+      </p>
+    );
+  const conditions = p.conds.length ? conditionsText(p.conds, model, d.refText) : "";
+  const count = p.count ?? 0;
+  const rows = p.total ?? [];
+  const amount = fmt.list(
+    (rows.length ? currenciesOf(rows) : [undefined]).map((cur) =>
+      formatMeasure(
+        p.measure,
+        rows.filter((r) => r.currency === cur).reduce((n, r) => n + r.value, 0),
+        cur,
+      ),
+    ),
+    "conjunction",
+  );
+  const field = p.measure ? inSentence(fieldTitle(p.measure.field)) : "";
+  const main =
+    p.count === null
+      ? t("Counting…")
+      : !p.measure
+        ? conditions
+          ? t(
+              "{count, plural, one {Counts # {model} record where {conditions}.} other {Counts # {model} records where {conditions}.}}",
+              { count, model: name, conditions },
+            )
+          : t("{count, plural, one {Counts # {model} record.} other {Counts # {model} records.}}", {
+              count,
+              model: name,
+            })
+        : conditions
+          ? t(
+              "{count, plural, one {Adds up {field} over # {model} record where {conditions}: {amount}.} other {Adds up {field} over # {model} records where {conditions}: {amount}.}}",
+              { count, model: name, conditions, field, amount },
+            )
+          : t(
+              "{count, plural, one {Adds up {field} over # {model} record: {amount}.} other {Adds up {field} over # {model} records: {amount}.}}",
+              { count, model: name, field, amount },
+            );
+  const split =
+    draft.kind === "kpi" || !by
+      ? ""
+      : isDated(by)
+        ? t("One value per month of {field}.", { field: inSentence(fieldTitle(by)) })
+        : t("One value per {field}.", { field: inSentence(fieldTitle(by)) });
+  return (
+    <div className="wsentence" role="status" aria-live="polite">
+      <p>
+        {main} {split}
+      </p>
+      {p.text && (
+        <details className="wraw">
+          <summary>{t("Filter as text")}</summary>
+          <code>{p.text}</code>
+        </details>
+      )}
+    </div>
   );
 }
 

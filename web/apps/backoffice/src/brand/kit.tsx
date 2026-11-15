@@ -11,11 +11,11 @@ export function useThemeVersion(): number {
       attributes: true,
       attributeFilter: ["style", "data-theme", "data-density", "data-radius"],
     });
-    const mq = matchMedia("(prefers-color-scheme: dark)");
-    mq.addEventListener("change", bump);
+    const mq = typeof matchMedia === "function" ? matchMedia("(prefers-color-scheme: dark)") : null;
+    mq?.addEventListener("change", bump);
     return () => {
       mo.disconnect();
-      mq.removeEventListener("change", bump);
+      mq?.removeEventListener("change", bump);
     };
   }, []);
   return v;

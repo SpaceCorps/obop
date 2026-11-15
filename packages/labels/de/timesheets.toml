@@ -5,6 +5,7 @@ summary = "Auf Projektaufgaben verwendete Zeit in Minuten, mit Kennzeichen für 
 
 [labels.de.model.timesheets_entry]
 name = "Zeiteintrag"
+plural = "Zeiteinträge"
 description = "Zeit, die eine Person an einem Tag für eine Aufgabe aufgewendet hat"
 
 [labels.de.model.timesheets_entry.field.task_id]

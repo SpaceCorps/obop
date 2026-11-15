@@ -284,7 +284,8 @@ test.describe("phone widths", () => {
 
         const rows = await api.list("root", model);
         await open(page, `/${model}/${model}?view=list&id=${rows[0].id}`);
-        await expect(page.getByRole("button", { name: "Save" })).toBeVisible();
+        // A record with nothing to save gives a phone's form bar back to the form (record form).
+        await expect(page.locator("aside.record h2")).toBeVisible();
         await check(page, "record", label);
         // On a phone the record is a sheet (a dialog), so it is found by its class.
         await page.locator("aside.record").evaluate((el) => el.scrollTo(0, el.scrollHeight));
@@ -294,13 +295,16 @@ test.describe("phone widths", () => {
         await expect(page.getByRole("button", { name: "Create" })).toBeVisible();
         await check(page, "record-new", label);
 
+        // On a phone Import and Export sit in the ⋯ menu of the title row.
         await open(page, `/${model}/${model}?view=list`);
-        const importBtn = page.getByRole("button", { name: "Import" });
-        if (await importBtn.isVisible()) {
-          await importBtn.click();
-          await check(page, "import", label);
-          await page.keyboard.press("Escape");
-        }
+        await page.getByRole("button", { name: "More actions" }).click();
+        await check(page, "more-menu", label);
+        await page.getByRole("menuitem", { name: "Import from a CSV file" }).click();
+        await expect(
+          page.getByRole("dialog", { name: /^Import .* from a CSV file$/ }),
+        ).toBeVisible();
+        await check(page, "import", label);
+        await page.keyboard.press("Escape");
 
         for (const tab of [
           "theme",

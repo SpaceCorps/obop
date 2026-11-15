@@ -5,6 +5,7 @@ summary = "Plany cykliczne i subskrypcje klientów z obiegiem okres próbny, akt
 
 [labels.pl.model.subscriptions_plan]
 name = "Plan"
+plural = "Plany"
 description = "Oferta cykliczna, na którą klienci mogą się subskrybować"
 
 [labels.pl.model.subscriptions_plan.field.name]
@@ -38,6 +39,7 @@ description = "Czy nowi klienci mogą wybrać ten plan"
 
 [labels.pl.model.subscriptions_subscription]
 name = "Subskrypcja"
+plural = "Subskrypcje"
 description = "Cykliczna subskrypcja planu przez klienta"
 
 [labels.pl.model.subscriptions_subscription.field.customer_id]

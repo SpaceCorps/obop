@@ -5,6 +5,7 @@ summary = "Varattavat henkilöt, tilat ja laitteet sekä ajanvaraukset, joilla o
 
 [labels.fi.model.appointments_resource]
 name = "Resurssi"
+plural = "Resurssit"
 description = "Jotain tai joku, joka voidaan varata"
 
 [labels.fi.model.appointments_resource.field.name]
@@ -30,6 +31,7 @@ description = "Voiko resurssin varata"
 
 [labels.fi.model.appointments_appointment]
 name = "Ajanvaraus"
+plural = "Ajanvaraukset"
 description = "Resurssin varaus tiettyyn aikaan"
 
 [labels.fi.model.appointments_appointment.field.resource_id]
@@ -94,3 +96,6 @@ description = "Peruuta ajoitettu ajanvaraus"
 [labels.fi.model.appointments_appointment.action.mark_no_show]
 label = "Merkitse: ei saapunut"
 description = "Kirjaa, ettei osallistuja saapunut"
+
+[labels.fi.model.appointments_appointment.action.confirm.assert.ends_after_start]
+message = "Ajanvaraus päättyy ennen kuin se alkaa: aseta päättymisaika alkamisen jälkeen"

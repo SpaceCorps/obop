@@ -5,6 +5,7 @@ summary = "Fahrzeuge, Fahrer und Servicehistorie für einen kleinen Fuhrpark."
 
 [labels.de.model.fleet_vehicle]
 name = "Fahrzeug"
+plural = "Fahrzeuge"
 description = "Ein Fahrzeug, das das Unternehmen betreibt"
 
 [labels.de.model.fleet_vehicle.field.plate]
@@ -70,6 +71,7 @@ description = "Ein verfügbares Fahrzeug endgültig aus dem Fuhrpark nehmen (bra
 
 [labels.de.model.fleet_vehicle_driver]
 name = "Fahrer"
+plural = "Fahrer"
 description = "Ein erfasster Fahrer mit Führerscheindaten und dem Status aktiv oder gesperrt"
 
 [labels.de.model.fleet_vehicle_driver.field.name]
@@ -106,6 +108,7 @@ description = "Einen gesperrten Fahrer wieder auf aktiv setzen"
 
 [labels.de.model.fleet_vehicle_service]
 name = "Fahrzeugservice"
+plural = "Fahrzeugservices"
 description = "Eine Wartung, Reparatur oder Inspektion an einem Fahrzeug"
 
 [labels.de.model.fleet_vehicle_service.field.vehicle_id]
@@ -159,3 +162,11 @@ description = "Einen geplanten Auftrag als erledigt markieren"
 [labels.de.model.fleet_vehicle_service.action.cancel]
 label = "Stornieren"
 description = "Einen geplanten Auftrag stornieren"
+
+[labels.de.model.fleet_vehicle.action.send_to_workshop]
+label = "In die Werkstatt"
+description = "Ein verfügbares Fahrzeug zur Wartung oder Reparatur in die Werkstatt schicken"
+
+[labels.de.model.fleet_vehicle.action.back_in_service]
+label = "Zurück aus der Werkstatt"
+description = "Ein Fahrzeug aus der Werkstatt in den verfügbaren Bestand zurückgeben"

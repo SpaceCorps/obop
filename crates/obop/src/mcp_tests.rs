@@ -873,6 +873,16 @@ async fn tool_results_carry_structured_content_and_errors_are_tool_errors() {
     };
     assert_eq!(s, 200);
     assert_eq!(meta["result"]["structuredContent"], rest_meta);
+    // Both carry each module's catalogue data (D55) and keep its declared model order.
+    let crm = rest_meta["modules"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["id"] == "crm")
+        .unwrap();
+    assert!(!crm["summary"].as_str().unwrap().is_empty(), "{crm}");
+    assert!(!crm["categories"].as_array().unwrap().is_empty(), "{crm}");
+    assert_eq!(crm["maturity"], "stable");
 }
 
 #[tokio::test]

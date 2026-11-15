@@ -27,3 +27,29 @@ export function remember(
 export function remembered(last: Last | null, model: string, id: string): Row | undefined {
   return last && last.model === model && last.id === id ? last.row : undefined;
 }
+
+// ---- the trail of records (plan 2.6 item 4: "Sales › SO-00001 › Ada Example") --------------------
+
+/** One record of the trail, as a link back to it. */
+export type Crumb = { key: string; label: string; href: string };
+
+/**
+ * The records the person went through by following links inside record panels, oldest first, the
+ * open one last. A record opened any other way (from a list, a search, the address bar) starts a
+ * new trail; a record already on the trail cuts it back to that record.
+ */
+export function extendTrail(
+  trail: readonly Crumb[],
+  next: Crumb,
+  /** The record whose panel held the link that was followed, if one was. */
+  from: string | null,
+): Crumb[] {
+  const back = trail.findIndex((c) => c.key === next.key);
+  if (back >= 0) return [...trail.slice(0, back), next];
+  const at = from ? trail.findIndex((c) => c.key === from) : -1;
+  if (at < 0) return [next];
+  return [...trail.slice(0, at + 1), next].slice(-5);
+}
+
+/** The trail kept across panels: the panel of each record replaces the one before it. */
+export const trailStore: { trail: Crumb[]; from: string | null } = { trail: [], from: null };

@@ -6,6 +6,7 @@ summary = "Una tienda online: fichas, envíos, códigos de descuento y pedidos w
 
 [labels.es.model.ecommerce_category]
 name = "Categoría"
+plural = "Categorías"
 description = "Un grupo de fichas que se muestran juntas en la tienda"
 
 [labels.es.model.ecommerce_category.field.name]
@@ -30,6 +31,7 @@ description = "Indica si la categoría es visible para los compradores"
 
 [labels.es.model.ecommerce_listing]
 name = "Ficha de producto"
+plural = "Fichas de producto"
 description = "Un producto tal como aparece en la tienda online"
 
 [labels.es.model.ecommerce_listing.field.product_id]
@@ -91,6 +93,7 @@ description = "Indica si la ficha es visible para los compradores"
 
 [labels.es.model.ecommerce_listing_translation]
 name = "Traducción de la ficha"
+plural = "Traducciones de fichas"
 description = "Una ficha traducida a otro idioma"
 
 [labels.es.model.ecommerce_listing_translation.field.listing_id]
@@ -128,6 +131,7 @@ description = "Indica si la traducción se muestra; solo es accesible mientras s
 
 [labels.es.model.ecommerce_shipping_method]
 name = "Método de envío"
+plural = "Métodos de envío"
 description = "Una forma de entregar los pedidos con su precio"
 
 [labels.es.model.ecommerce_shipping_method.field.name]
@@ -156,6 +160,7 @@ description = "Indica si los compradores pueden elegirlo"
 
 [labels.es.model.ecommerce_discount_code]
 name = "Código de descuento"
+plural = "Códigos de descuento"
 description = "Un código que el comprador introduce al finalizar la compra para obtener una rebaja"
 
 [labels.es.model.ecommerce_discount_code.field.code]
@@ -199,7 +204,8 @@ label = "Activo"
 description = "Indica si el código se puede usar"
 
 [labels.es.model.ecommerce_order]
-name = "Pedido"
+name = "Pedido web"
+plural = "Pedidos web"
 description = "Un pedido hecho online"
 
 [labels.es.model.ecommerce_order.field.number]
@@ -312,6 +318,7 @@ description = "Devolver el dinero de un pedido entregado, por ejemplo tras una d
 
 [labels.es.model.ecommerce_order_line]
 name = "Línea de pedido"
+plural = "Líneas de pedido"
 description = "Una línea de producto de un pedido web"
 
 [labels.es.model.ecommerce_order_line.field.order_id]
@@ -352,6 +359,7 @@ description = "Texto que describe la imagen principal para quienes no pueden ver
 
 [labels.es.model.ecommerce_listing_image]
 name = "Imagen de la oferta"
+plural = "Imágenes de la oferta"
 description = "Una imagen adicional de una oferta para su galería"
 
 [labels.es.model.ecommerce_listing_image.field.listing_id]
@@ -384,6 +392,7 @@ description = "Solo las ofertas de esta categoría reciben la reducción; vacío
 
 [labels.es.model.ecommerce_discount_use]
 name = "Uso de código"
+plural = "Usos de código"
 description = "Cuántas veces un cliente ha usado un código de descuento (el cliente se guarda como hash, nunca como correo electrónico)"
 
 [labels.es.model.ecommerce_discount_use.field.code_id]
@@ -400,6 +409,7 @@ description = "Usos hasta ahora"
 
 [labels.es.model.ecommerce_tax_rate]
 name = "Tipo de impuesto"
+plural = "Tipos de impuesto"
 description = "Un tipo de impuesto que la tienda aplica a las ofertas, calculado en el servidor"
 
 [labels.es.model.ecommerce_tax_rate.field.name]
@@ -477,6 +487,7 @@ description = "Impuesto de esta línea, incluido en los precios o añadido (unid
 
 [labels.es.model.ecommerce_payment]
 name = "Pago"
+plural = "Pagos"
 description = "Un pago de un pedido web: qué proveedor, su referencia, el importe y qué ocurrió. La tienda nunca ve datos de tarjeta"
 
 [labels.es.model.ecommerce_payment.field.order_id]

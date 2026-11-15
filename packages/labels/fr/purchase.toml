@@ -5,6 +5,7 @@ summary = "Fournisseurs, commandes d’achat et lignes de commande avec un flux 
 
 [labels.fr.model.purchase_vendor]
 name = "Fournisseur"
+plural = "Fournisseurs"
 description = "Les conditions d’achat d’un contact chez qui vous achetez"
 
 [labels.fr.model.purchase_vendor.field.party_id]
@@ -33,11 +34,12 @@ description = "Indique si vous achetez toujours chez ce fournisseur"
 
 [labels.fr.model.purchase_order]
 name = "Commande"
+plural = "Commandes d’achat"
 description = "Une demande faite à un fournisseur de livrer des biens ou des services"
 
 [labels.fr.model.purchase_order.field.reference]
-label = "Référence"
-description = "Numéro de commande imprimé sur le document"
+label = "Référence fournisseur"
+description = "Numéro de devis ou de référence du fournisseur pour cette commande, le cas échéant"
 
 [labels.fr.model.purchase_order.field.vendor_id]
 label = "Fournisseur"
@@ -92,6 +94,7 @@ description = "Annule une commande qui n’a pas encore été envoyée"
 
 [labels.fr.model.purchase_order_line]
 name = "Ligne de commande"
+plural = "Lignes de commande"
 description = "Un produit ou un service d’une commande d’achat"
 
 [labels.fr.model.purchase_order_line.field.order_id]

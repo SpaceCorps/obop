@@ -5,6 +5,7 @@ summary = "Support-Tickets mit Priorität, Schweregrad, Service-Level-Zielen und
 
 [labels.de.model.helpdesk_sla]
 name = "SLA"
+plural = "SLAs"
 description = "Eine Service-Level-Richtlinie: wie schnell Tickets einer Priorität beantwortet und gelöst werden sollen"
 
 [labels.de.model.helpdesk_sla.field.name]
@@ -35,6 +36,7 @@ description = "Ob die Richtlinie neuen Tickets zugeordnet werden kann"
 
 [labels.de.model.helpdesk_ticket]
 name = "Ticket"
+plural = "Tickets"
 description = "Eine Support-Anfrage eines Kunden"
 
 [labels.de.model.helpdesk_ticket.field.subject]

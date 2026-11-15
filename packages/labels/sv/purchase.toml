@@ -5,6 +5,7 @@ summary = "Leverantörer, inköpsorder och orderrader med flödet utkast, skicka
 
 [labels.sv.model.purchase_vendor]
 name = "Leverantör"
+plural = "Leverantörer"
 description = "Inköpsvillkor för en kontakt som du köper från"
 
 [labels.sv.model.purchase_vendor.field.party_id]
@@ -33,11 +34,12 @@ description = "Om du fortfarande köper från leverantören"
 
 [labels.sv.model.purchase_order]
 name = "Inköpsorder"
+plural = "Inköpsorder"
 description = "En beställning hos en leverantör av varor eller tjänster"
 
 [labels.sv.model.purchase_order.field.reference]
-label = "Referens"
-description = "Ordernummer som skrivs ut på dokumentet"
+label = "Leverantörens referens"
+description = "Leverantörens offert- eller referensnummer för ordern, om det finns"
 
 [labels.sv.model.purchase_order.field.vendor_id]
 label = "Leverantör"
@@ -92,6 +94,7 @@ description = "Annullera en order som ännu inte skickats"
 
 [labels.sv.model.purchase_order_line]
 name = "Inköpsorderrad"
+plural = "Inköpsorderrader"
 description = "En produkt eller tjänst på en inköpsorder"
 
 [labels.sv.model.purchase_order_line.field.order_id]

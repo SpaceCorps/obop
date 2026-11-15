@@ -5,6 +5,7 @@ summary = "Plan comptable, journaux, taxes, périodes fiscales et écritures. Co
 
 [labels.fr.model.accounting_account]
 name = "Compte"
+plural = "Plan comptable"
 description = "Un compte du plan comptable"
 
 [labels.fr.model.accounting_account.field.code]
@@ -47,6 +48,7 @@ description = "Remarques internes sur l’utilisation du compte"
 
 [labels.fr.model.accounting_journal]
 name = "Journal"
+plural = "Journaux"
 description = "Un journal qui regroupe les écritures d’un même type (ventes, achats, banque, caisse, opérations diverses)"
 
 [labels.fr.model.accounting_journal.field.name]
@@ -82,6 +84,7 @@ description = "Indique si le journal peut encore recevoir des écritures"
 
 [labels.fr.model.accounting_tax]
 name = "Taxe"
+plural = "Taxes"
 description = "Un taux de taxe auquel les lignes d’écriture peuvent faire référence"
 
 [labels.fr.model.accounting_tax.field.name]
@@ -115,6 +118,7 @@ description = "Indique si la taxe peut encore être choisie sur de nouvelles lig
 
 [labels.fr.model.accounting_fiscal_year]
 name = "Exercice fiscal"
+plural = "Exercices fiscaux"
 description = "Un exercice fiscal, ouvert et clôturé dans son ensemble"
 
 [labels.fr.model.accounting_fiscal_year.field.name]
@@ -147,6 +151,7 @@ description = "Rouvre un exercice fiscal clôturé pour le corriger (approbateur
 
 [labels.fr.model.accounting_period]
 name = "Période"
+plural = "Périodes"
 description = "Une période comptable (en général un mois) à l’intérieur d’un exercice fiscal"
 
 [labels.fr.model.accounting_period.field.fiscal_year_id]
@@ -183,6 +188,7 @@ description = "Rouvre une période clôturée (approbateur uniquement)"
 
 [labels.fr.model.accounting_move]
 name = "Écriture"
+plural = "Écritures"
 description = "Une écriture comptable : un ensemble daté de lignes de débit et de crédit dans un journal"
 
 [labels.fr.model.accounting_move.field.journal_id]
@@ -221,7 +227,7 @@ reversed = "Extournée"
 
 [labels.fr.model.accounting_move.action.post]
 label = "Comptabiliser"
-description = "Comptabilise une écriture en brouillon au grand livre et la numérote (approbateur uniquement ; refusé si le débit et le crédit ne sont pas égaux)"
+description = "Comptabilise une écriture en brouillon au grand livre et la numérote (approbateur uniquement ; refusé sans montant ou si le débit et le crédit ne sont pas égaux)"
 
 [labels.fr.model.accounting_move.action.cancel]
 label = "Annuler"
@@ -233,6 +239,7 @@ description = "Marque une écriture comptabilisée comme extournée ; l’écri
 
 [labels.fr.model.accounting_move_line]
 name = "Ligne d’écriture"
+plural = "Lignes d’écriture"
 description = "Une ligne de débit ou de crédit d’une écriture comptable"
 
 [labels.fr.model.accounting_move_line.field.move_id]
@@ -273,6 +280,7 @@ description = "Indique si la ligne a été rapprochée d’un paiement"
 
 [labels.fr.model.accounting_bank_statement_line]
 name = "Ligne de relevé bancaire"
+plural = "Lignes de relevé bancaire"
 description = "Une ligne de relevé bancaire en attente d’association à des écritures"
 
 [labels.fr.model.accounting_bank_statement_line.field.journal_id]
@@ -314,7 +322,7 @@ reconciled = "Rapprochée"
 
 [labels.fr.model.accounting_bank_statement_line.action.match]
 label = "Associer"
-description = "Enregistre que la ligne correspond à une ligne d’écriture"
+description = "Enregistre que la ligne correspond à la ligne d’écriture indiquée dans move_line_id"
 
 [labels.fr.model.accounting_bank_statement_line.action.reconcile]
 label = "Rapprocher"
@@ -331,3 +339,12 @@ description = "Somme des montants au débit des lignes de l’écriture (plus pe
 [labels.fr.model.accounting_move.field.total_credit]
 label = "Total crédit"
 description = "Somme des montants au crédit des lignes de l’écriture (plus petite unité monétaire)"
+
+[labels.fr.model.accounting_move.action.post.assert.has_amount]
+message = "L’écriture n’a pas de montant : ajoutez des lignes de débit et de crédit avant de la comptabiliser"
+
+[labels.fr.model.accounting_move.action.post.assert.balanced]
+message = "L’écriture n’est pas équilibrée : le total du débit et le total du crédit doivent être égaux"
+
+[labels.fr.model.accounting_bank_statement_line.action.match.assert.has_line]
+message = "Choisissez la ligne d’écriture à laquelle correspond cette transaction bancaire"

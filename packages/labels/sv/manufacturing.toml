@@ -1,10 +1,11 @@
 [labels.sv.module]
 name = "Tillverkning"
-description = "Stycklistor och tillverkningsorder med flödet utkast, bekräftad, pågår och klar. Komponenternas lagersaldo förbrukas inte automatiskt."
+description = "Stycklistor och tillverkningsorder med flödet utkast, bekräftad, pågår och klar. Komponenternas lagersaldo förbrukas inte automatiskt. Klara och avbrutna order är låsta."
 summary = "Stycklistor och tillverkningsorder med flödet utkast, bekräftad, pågår och klar."
 
 [labels.sv.model.manufacturing_bom]
 name = "Stycklista"
+plural = "Stycklistor"
 description = "Ett recept: komponenterna som behövs för att tillverka en produkt"
 
 [labels.sv.model.manufacturing_bom.field.product_id]
@@ -29,6 +30,7 @@ description = "Om receptet kan användas för nya order"
 
 [labels.sv.model.manufacturing_bom_line]
 name = "Stycklisterad"
+plural = "Komponenter"
 description = "En komponent i en stycklista"
 
 [labels.sv.model.manufacturing_bom_line.field.bom_id]
@@ -45,6 +47,7 @@ description = "Antal enheter av komponenten som används per omgång"
 
 [labels.sv.model.manufacturing_order]
 name = "Tillverkningsorder"
+plural = "Tillverkningsorder"
 description = "En instruktion att tillverka ett antal av en produkt"
 
 [labels.sv.model.manufacturing_order.field.reference]

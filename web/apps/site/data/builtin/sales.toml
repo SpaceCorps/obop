@@ -1,7 +1,7 @@
 # Snapshot of crates/modules/sales/src/lib.rs (built-in).
 [module]
 id = "sales"
-version = "0.2.1"
+version = "0.2.2"
 name = "Sales"
 description = "Quotations and confirmed orders for customers, with lines. Confirming an order creates a draft invoice with the same lines (the caller needs the invoicing.user group)."
 summary = "Quotations and sales orders for your customers."

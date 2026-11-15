@@ -46,6 +46,8 @@ mod drive_tests;
 #[cfg(test)]
 mod error_seam_tests;
 #[cfg(test)]
+mod finance_supply_tests;
+#[cfg(test)]
 mod health_tests;
 mod import_cmd;
 #[cfg(test)]
@@ -85,6 +87,8 @@ mod ops;
 mod passkey_tests;
 #[cfg(test)]
 mod payments_tests;
+#[cfg(test)]
+mod people_collab_hints_tests;
 #[cfg(test)]
 mod public_site_tests;
 #[cfg(test)]
@@ -131,7 +135,7 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 const USAGE: &str = "usage: obop <command>
-  --version                                     the name, the core version and the commit the build was made from: obop 0.2.1 (abcdef012345)
+  --version                                     the name, the core version and the commit the build was made from: obop 0.2.2 (abcdef012345)
   modules labels TARGET LANG                    a label template (every translatable text, English values) for a module, bundled package or FILE
   modules check [--complete] [--catalog] [FILE...]
                                                 the install gate over linked modules, or over package files (no database):
@@ -3037,7 +3041,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("obop-check-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let bad = dir.join("bad.toml");
-        std::fs::write(&bad, fleet.replace("0.3.1", "2")).unwrap();
+        std::fs::write(&bad, fleet.replace("0.3.2", "2")).unwrap();
         let good = root.join("packages/fleet.toml");
         let (bad_s, good_s) = (
             bad.to_string_lossy().to_string(),
@@ -3566,8 +3570,8 @@ mod bundled_packages {
             let fields: Vec<FieldInfo> = self.meta[model].fields.clone();
             let mut m = BTreeMap::new();
             for f in fields {
-                // Computed values and numbers are the system's to give.
-                if f.computed || f.sequence {
+                // Computed values, numbers and read-only fields (D95) are the system's to give.
+                if f.computed || f.sequence || f.hints.as_ref().is_some_and(|h| h.readonly) {
                     continue;
                 }
                 let v = match f.kind {
@@ -3592,6 +3596,9 @@ mod bundled_packages {
                     "longtext" => Value::text("a longer sample text"),
                     "number" => Value::Int(1),
                     "money" => Value::Int(12_345),
+                    // The sample periods (2026-01-31) are closed by the walk below, and an entry
+                    // dated in a closed period is frozen by its lock date (D77).
+                    "date" if model == "accounting_move" => Value::text("2026-02-15"),
                     "date" => Value::text("2026-01-31"),
                     "datetime" => Value::text("2026-01-31T09:30:00Z"),
                     "decimal" => Value::Text(match f.scale.unwrap_or(0) {
@@ -3696,7 +3703,20 @@ mod bundled_packages {
                 fields.remove("document_id");
                 fields.remove("document_file");
             }
-            self.app.store.insert(model, fields).unwrap()
+            let id = self.app.store.insert(model, fields).unwrap();
+            // An entry is posted only with an amount (accounting 0.3.1): one balanced line.
+            if model == "accounting_move" {
+                let account = self.record("accounting_account", &mut Vec::new());
+                let line = [
+                    ("move_id", Value::text(&id)),
+                    ("account_id", Value::text(&account)),
+                    ("debit", Value::Int(100)),
+                    ("credit", Value::Int(100)),
+                ];
+                let line = line.into_iter().map(|(k, v)| (k.to_string(), v)).collect();
+                self.app.store.insert("accounting_move_line", line).unwrap();
+            }
+            id
         }
     }
 
@@ -3816,8 +3836,14 @@ mod bundled_packages {
                     matches!(list.value, Value::List(l) if !l.is_empty()),
                     "{name}"
                 );
-                // A required field cannot be left out.
-                if let Some(req) = model.field.iter().find(|f| f.required) {
+                // A required field cannot be left out (one the server does not fill in itself:
+                // no D95 `default` or `fill_from`, and not a state that starts at its first option).
+                if let Some(req) = model.field.iter().find(|f| {
+                    f.required
+                        && f.default.is_none()
+                        && f.fill_from.is_none()
+                        && !model.action.iter().any(|a| a.field == f.name)
+                }) {
                     let Value::Map(mut input) = mk.input(name, None, &mut vec![name.to_string()])
                     else {
                         unreachable!()
@@ -4157,9 +4183,44 @@ mod bundled_packages {
                 from,
                 "{cmd} refused, state unchanged"
             );
+            // The action's own group is enough: a D95 `set` effect that stamps the record the
+            // action runs on is part of the action, not a write under the model's write group.
             let allowed = Principal::user("a", &[group]);
             call(&app, &allowed, &cmd, by_id(&rec)).unwrap_or_else(|e| panic!("{cmd}: {e:?}"));
         }
+    }
+
+    /// An `update` that moves a governed field runs the action it implies with the fields that
+    /// action needs (D95 `needs`) taken from the same call: one call is enough for an agent.
+    #[test]
+    fn an_update_that_moves_the_state_gives_the_action_what_it_needs() {
+        let app = App::new();
+        let admin = Principal::user("root", &[ADMIN_GROUP]);
+        for m in install_order(&app, all_manifests()) {
+            app.installer
+                .install(&Bundled.fetch(&m.module.id).unwrap(), "marketplace", "test")
+                .unwrap();
+        }
+        let mut mk = Maker {
+            app: &app,
+            meta: models_of(&app, &admin),
+            pkg_models: BTreeSet::new(),
+            pkg_user: admin.clone(),
+            admin: admin.clone(),
+            made: HashMap::new(),
+        };
+        let rec = mk.fresh("helpdesk_ticket", "in_progress");
+        let mut fields = BTreeMap::new();
+        fields.insert("id".to_string(), Value::text(&rec));
+        fields.insert("state".to_string(), Value::text("resolved"));
+        fields.insert("resolution".to_string(), Value::text("New toner"));
+        call(&app, &admin, "helpdesk_ticket.update", Value::Map(fields))
+            .unwrap_or_else(|e| panic!("update with the needs: {e:?}"));
+        assert_eq!(state_of(&app, "helpdesk_ticket", &rec), "resolved");
+        assert_eq!(
+            app.store.field("helpdesk_ticket", &rec, "resolution"),
+            Some(Value::text("New toner"))
+        );
     }
 
     /// A dashboard and its widgets round-trip with the documented schema, and a widget kind or

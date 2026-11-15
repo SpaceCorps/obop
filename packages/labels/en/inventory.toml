@@ -1,0 +1,36 @@
+# English names and plurals of inventory (D52, D95): [labels.en.model.<model>] name = "...", plural = "...".
+# The manifest stays the English source; this file only adds the display names it does not have.
+
+[labels.en.model.inventory_warehouse]
+name = "Warehouse"
+plural = "Warehouses"
+
+[labels.en.model.inventory_location]
+name = "Location"
+plural = "Locations"
+
+[labels.en.model.inventory_location.field.kind]
+label = "Type"
+
+[labels.en.model.inventory_item]
+name = "Stock item"
+plural = "Stock"
+
+[labels.en.model.inventory_item.field.quantity]
+label = "On hand"
+
+[labels.en.model.inventory_item.field.below_reorder]
+label = "Low stock"
+
+[labels.en.model.inventory_move]
+name = "Stock move"
+plural = "Stock moves"
+
+[labels.en.model.inventory_move.field.from_location_id]
+label = "From"
+
+[labels.en.model.inventory_move.field.to_location_id]
+label = "To"
+
+[labels.en.model.inventory_move.field.scheduled_on]
+label = "Scheduled date"

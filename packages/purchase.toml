@@ -1,6 +1,6 @@
 [module]
 id = "purchase"
-version = "0.3.0"
+version = "0.3.1"
 name = "Purchase"
 description = "Vendors, purchase orders and order lines with a draft, sent, confirmed, received and cancelled flow. An order has a number from a series, its total is the sum of its lines, and receiving the goods creates a draft stock move per line at the receiving location (the warehouse validates them)."
 author = "SpaceCorps"
@@ -11,7 +11,9 @@ repository = "https://github.com/SpaceCorps/obop"
 keywords = ["purchase", "vendors", "orders"]
 categories = ["supply-chain"]
 maturity = "beta"
-requires_core = "^0.2"
+requires_core = "^0.2.2"
+home = "purchase_order"
+changelog = "Received and cancelled orders and their lines are frozen. The vendor reference of an order is optional; a new order is dated today in the instance currency, and a line takes the cost of its product as its unit price when none is given. New vendors start active, and inactive vendors and locations are no longer offered for new orders; vendors whose active flag was never set become active. English names, list, card and form hints."
 
 [module.dependencies]
 base = "^0.2"
@@ -23,6 +25,15 @@ name = "purchase_vendor"
 description = "Purchasing terms for a contact you buy from"
 read_group = "purchase.user"
 write_group = "purchase.manager"
+
+  [model.ui]
+  title = "{party_id}"
+  subtitle = "{vendor_reference}"
+  list = ["party_id", "vendor_reference", "payment_terms_days", "lead_time_days", "active"]
+  quick_create = ["party_id", "vendor_reference"]
+  default_view = "list"
+  menu = "main"
+  menu_order = 2
 
   [[model.field]]
   name = "party_id"
@@ -43,11 +54,17 @@ write_group = "purchase.manager"
   class = "none"
   kind = "number"
 
+    [model.field.ui]
+    aggregate = "none"
+
   [[model.field]]
   name = "lead_time_days"
   description = "Usual days between order and delivery"
   class = "none"
   kind = "number"
+
+    [model.field.ui]
+    aggregate = "none"
 
   [[model.field]]
   name = "iban"
@@ -61,12 +78,49 @@ write_group = "purchase.manager"
   description = "Whether you still buy from this vendor"
   class = "none"
   kind = "bool"
+  default = true
 
 [[model]]
 name = "purchase_order"
 description = "A request to a vendor to supply goods or services"
 read_group = "purchase.user"
 write_group = "purchase.user"
+
+  [model.ui]
+  title = "{number}"
+  subtitle = "{vendor_id} · {ordered_on} | {vendor_id}"
+  list = ["number", "vendor_id", "reference", "ordered_on", "expected_on", "total", "state"]
+  card = ["number", "vendor_id", "expected_on", "total"]
+  card_sum = "total"
+  quick_create = ["vendor_id", "expected_on"]
+  order = "number desc"
+  default_view = "list"
+  menu = "main"
+  menu_order = 1
+  calendar = { start = "expected_on", color = "state" }
+  report = { rows = "vendor_id", cols = "state", measure = "total" }
+
+  [[model.child]]
+  model = "purchase_order_line"
+  via = "order_id"
+  shape = "lines"
+
+  [[model.ui.filter]]
+  label = "To send"
+  where = "state = draft"
+
+  [[model.ui.filter]]
+  label = "To receive"
+  where = "state = confirmed"
+
+  [[model.ui.filter]]
+  label = "Late"
+  where = "expected_on < today && state = confirmed"
+
+  [model.guard]
+  immutable_when = ["received", "cancelled"]
+  mutable_fields = ["notes"]
+  message = "A received or cancelled order cannot be changed; only its notes can."
 
   [[model.field]]
   name = "number"
@@ -77,9 +131,8 @@ write_group = "purchase.user"
 
   [[model.field]]
   name = "reference"
-  description = "Order number printed on the document"
+  description = "The vendor's quote or reference number for this order, if any"
   class = "none"
-  required = true
 
   [[model.field]]
   name = "vendor_id"
@@ -88,12 +141,14 @@ write_group = "purchase.user"
   kind = "ref"
   to = "purchase_vendor"
   required = true
+  ref_filter = "active = true"
 
   [[model.field]]
   name = "ordered_on"
   description = "Date the order was placed (YYYY-MM-DD)"
   class = "none"
   kind = "date"
+  default = "today"
 
   [[model.field]]
   name = "expected_on"
@@ -101,10 +156,14 @@ write_group = "purchase.user"
   class = "none"
   kind = "date"
 
+    [model.field.ui]
+    warn_before_days = 3
+
   [[model.field]]
   name = "currency"
   description = "ISO 4217 currency code, for example EUR"
   class = "none"
+  default = "$instance.currency"
 
   [[model.field]]
   name = "receive_location_id"
@@ -112,6 +171,7 @@ write_group = "purchase.user"
   class = "none"
   kind = "ref"
   to = "inventory_location"
+  ref_filter = "active = true"
 
   [[model.field]]
   name = "total"
@@ -119,6 +179,9 @@ write_group = "purchase.user"
   class = "none"
   kind = "money"
   computed = "sum(lines.amount)"
+
+    [model.field.ui]
+    currency_from = "currency"
 
   [[model.field]]
   name = "notes"
@@ -134,12 +197,19 @@ write_group = "purchase.user"
   options = ["draft", "sent", "confirmed", "received", "cancelled"]
   required = true
 
+    [model.field.ui]
+    tones = { sent = "info", confirmed = "info", received = "ok", cancelled = "neutral" }
+
   [[model.action]]
   name = "send"
   description = "Send a draft order to the vendor as a request for quotation"
   field = "state"
   from = "draft"
   to = "sent"
+
+    [model.action.ui]
+    primary = true
+    done = "Marked as sent"
 
   [[model.action]]
   name = "confirm"
@@ -149,6 +219,11 @@ write_group = "purchase.user"
   to = "confirmed"
   group = "purchase.manager"
   approval = true
+
+    [model.action.ui]
+    primary = true
+    confirm = "Confirm this order with the vendor?"
+    done = "Order confirmed"
 
   [[model.action]]
   name = "receive"
@@ -164,6 +239,11 @@ write_group = "purchase.user"
     when = "is_set(receive_location_id)"
     map = { product_id = "$line.product_id", to_location_id = "$self.receive_location_id", quantity = "$line.quantity", scheduled_on = "$self.expected_on" }
 
+    [model.action.ui]
+    primary = true
+    confirm = "Receive the goods? With a receiving location set, a draft stock move is made for each line for the warehouse to validate, and the order can no longer be changed."
+    done = "Order received"
+
   [[model.action]]
   name = "cancel"
   description = "Cancel an order that was not yet sent"
@@ -171,11 +251,28 @@ write_group = "purchase.user"
   from = "draft"
   to = "cancelled"
 
+    [model.action.ui]
+    danger = true
+    confirm = "Cancel this order?"
+    done = "Order cancelled"
+
 [[model]]
 name = "purchase_order_line"
 description = "One product or service on a purchase order"
 read_group = "purchase.user"
 write_group = "purchase.user"
+
+  [model.ui]
+  title = "{product_id} × {quantity}"
+  subtitle = "{order_id}"
+  list = ["product_id", "description", "quantity", "unit_price", "amount", "received_quantity"]
+  quick_create = ["product_id", "quantity", "unit_price"]
+  default_view = "list"
+  menu = "hidden"
+
+  [model.guard]
+  children_of = "order_id"
+  message = "The lines of a received or cancelled order cannot be changed."
 
   [[model.field]]
   name = "order_id"
@@ -204,6 +301,7 @@ write_group = "purchase.user"
   class = "none"
   kind = "number"
   required = true
+  default = 1
 
   [[model.field]]
   name = "unit_price"
@@ -211,6 +309,11 @@ write_group = "purchase.user"
   class = "none"
   kind = "money"
   required = true
+  fill_from = "product_id.cost_minor"
+
+    [model.field.ui]
+    aggregate = "none"
+    currency_from = "order_id.currency"
 
   [[model.field]]
   name = "amount"
@@ -219,8 +322,19 @@ write_group = "purchase.user"
   kind = "money"
   computed = "quantity * unit_price"
 
+    [model.field.ui]
+    currency_from = "order_id.currency"
+
   [[model.field]]
   name = "received_quantity"
   description = "Units received so far"
   class = "none"
   kind = "number"
+
+[[migration]]
+from = "<0.3.1"
+op = "set_default"
+model = "purchase_vendor"
+field = "active"
+value = true
+description = "Vendors whose active flag was never set become active, so they are still offered for new orders"

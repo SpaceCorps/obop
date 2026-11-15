@@ -1,18 +1,19 @@
 [module]
 id = "expenses"
-version = "0.3.1"
+version = "0.4.0"
 name = "Expenses"
-description = "Employee expense claims with a draft, submitted, approved and paid flow. Paying is a separate permission. Approving, refusing and paying need a human approval; agents may only propose them. Receipts are referenced by note, not stored. A claim has a number from a yearly series, and an employee sees and edits only their own claims; managers and finance see all."
+description = "Employee expense claims with a draft, submitted, approved and paid flow. Paying is a separate permission. Approving, refusing and paying need a human approval; agents may only propose them. A claim can carry a photo or scan of its receipt. An approved, paid or refused claim can no longer be changed, except its receipt and the payment details. A claim has a number from a yearly series, and an employee sees and edits only their own claims; managers and finance see all."
 author = "SpaceCorps"
 summary = "Employee expense claims with a draft, submitted, approved and paid flow."
-changelog = "Approving and refusing a claim now need a human approval, like paying: an AI agent can only propose them. People are not affected."
+changelog = "A claim can carry its receipt as a file (a photo or a scan). Approved, paid and refused claims are frozen: only the receipt, the receipt note and the payment details can still change. A new claim starts with you as the employee, today as the date and the instance currency; paying records today as the paid date when none was given. English names, list, card and form hints, and the filters My claims, To approve and To pay."
 license = "Apache-2.0"
 homepage = "https://github.com/SpaceCorps/obop"
 repository = "https://github.com/SpaceCorps/obop"
 keywords = ["expenses", "claims", "reimbursement"]
 categories = ["finance", "people"]
 maturity = "beta"
-requires_core = "^0.2"
+requires_core = "^0.2.2"
+home = "expenses_expense"
 
 [[model]]
 name = "expenses_expense"
@@ -23,6 +24,46 @@ write_group = "expenses.user"
   [model.access]
   own = "employee"
   see_all_group = ["expenses.manager", "expenses.finance"]
+
+  [model.ui]
+  title = "{description}"
+  subtitle = "{employee} · {spent_on}"
+  list = ["number", "spent_on", "employee", "description", "category", "amount", "state"]
+  card = ["description", "employee", "amount", "category", "spent_on"]
+  card_sum = "amount"
+  quick_create = ["description", "amount", "category"]
+  order = "spent_on desc, number desc"
+  default_view = "kanban"
+  menu = "main"
+  calendar = { start = "spent_on", color = "category" }
+  report = { rows = "employee", cols = "category", measure = "amount" }
+
+  [[model.ui.section]]
+  label = "Receipt"
+  fields = ["receipt", "receipt_note"]
+
+  [[model.ui.section]]
+  label = "Payment"
+  fields = ["paid_on", "payment_reference"]
+  show_in = ["approved", "paid"]
+
+  [[model.ui.filter]]
+  label = "My claims"
+  where = "employee = $user"
+
+  [[model.ui.filter]]
+  label = "To approve"
+  where = "state = submitted"
+
+  [[model.ui.filter]]
+  label = "To pay"
+  where = "state = approved"
+
+  [model.guard]
+  immutable_when = ["approved", "paid", "refused"]
+  mutable_fields = ["receipt", "receipt_note", "paid_on", "payment_reference"]
+  exit_to = ["paid"]
+  message = "An approved, paid or refused claim cannot be changed, except its receipt and the payment details."
 
   [[model.field]]
   name = "number"
@@ -44,6 +85,7 @@ write_group = "expenses.user"
   class = "internal"
   personal_data = true
   required = true
+  default = "$user"
 
   [[model.field]]
   name = "spent_on"
@@ -51,6 +93,7 @@ write_group = "expenses.user"
   class = "none"
   kind = "date"
   required = true
+  default = "today"
 
   [[model.field]]
   name = "category"
@@ -68,10 +111,21 @@ write_group = "expenses.user"
   kind = "money"
   required = true
 
+    [model.field.ui]
+    currency_from = "currency"
+
   [[model.field]]
   name = "currency"
   description = "ISO 4217 currency code, for example EUR"
   class = "none"
+  default = "$instance.currency"
+
+  [[model.field]]
+  name = "receipt"
+  description = "A photo or scan of the receipt (PDF or image); served only as a download to people who may read the claim"
+  class = "financial"
+  personal_data = true
+  kind = "file"
 
   [[model.field]]
   name = "receipt_note"
@@ -102,12 +156,19 @@ write_group = "expenses.user"
   options = ["draft", "submitted", "approved", "paid", "refused"]
   required = true
 
+    [model.field.ui]
+    tones = { submitted = "warn", approved = "info", paid = "ok", refused = "bad" }
+
   [[model.action]]
   name = "submit"
   description = "Submit the claim for approval"
   field = "state"
   from = "draft"
   to = "submitted"
+
+    [model.action.ui]
+    primary = true
+    done = "Submitted for approval"
 
   [[model.action]]
   name = "approve"
@@ -118,14 +179,28 @@ write_group = "expenses.user"
   group = "expenses.manager"
   approval = true
 
+    [model.action.ui]
+    primary = true
+    done = "Claim approved"
+
   [[model.action]]
   name = "pay"
-  description = "Record the reimbursement as paid (finance only)"
+  description = "Record the reimbursement as paid (finance only); the paid date is today unless it was given"
   field = "state"
   from = "approved"
   to = "paid"
   group = "expenses.finance"
   approval = true
+
+    [[model.action.effect]]
+    kind = "set"
+    set = { paid_on = "$today" }
+    when = "!is_set(paid_on)"
+
+    [model.action.ui]
+    primary = true
+    confirm = "Record this claim as paid?"
+    done = "Claim marked as paid"
 
   [[model.action]]
   name = "refuse"
@@ -135,3 +210,8 @@ write_group = "expenses.user"
   to = "refused"
   group = "expenses.manager"
   approval = true
+
+    [model.action.ui]
+    danger = true
+    confirm = "Refuse this claim? A refused claim can no longer be changed."
+    done = "Claim refused"

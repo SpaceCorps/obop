@@ -5,6 +5,7 @@ summary = "Paneles y widgets guardados como datos, para que el backoffice los mu
 
 [labels.es.model.dashboards_dashboard]
 name = "Panel de control"
+plural = "Paneles de control"
 description = "Un panel de control: una colección ordenada de widgets con título"
 
 [labels.es.model.dashboards_dashboard.field.title]
@@ -29,6 +30,7 @@ description = "Orden entre paneles, de menor a mayor"
 
 [labels.es.model.dashboards_widget]
 name = "Tarjeta"
+plural = "Tarjetas"
 description = "Una tarjeta de un panel, definida por lo que lee y cómo lo agrega"
 
 [labels.es.model.dashboards_widget.field.dashboard_id]

@@ -18,7 +18,11 @@ test.describe("edges of the screen", () => {
       title: "Long form",
       fields: [{ name: "title", required: true }, ...many],
     });
-    const r = await api.create("root", model, { title: uid("Long") });
+    // Filled in, so no section of the form starts folded (an empty optional section does).
+    const r = await api.create("root", model, {
+      title: uid("Long"),
+      ...Object.fromEntries(many.map((f) => [f.name, "filled"])),
+    });
     await signIn("root", `/${model}/${model}?view=list&id=${r.id}`);
     const panel = page.getByRole("complementary", { name: /record$/ });
     const save = panel.getByRole("button", { name: "Save" });
@@ -75,13 +79,14 @@ test.describe("edges of the screen", () => {
       title: "Scroll board",
       fields: [
         { name: "title", required: true },
-        { name: "state", kind: "select" as const, options: ["new", "won"] },
+        { name: "state", kind: "select" as const, options: ["new", "doing"] },
       ],
     });
+    // An open stage: a finished one (won, done) with more than ten cards starts folded.
     for (let i = 0; i < 25; i++)
-      await api.create("root", model, { title: uid("Card"), state: "won" });
+      await api.create("root", model, { title: uid("Card"), state: "doing" });
     await signIn("root", `/${model}/${model}?view=kanban`);
-    const col = page.getByRole("region", { name: /^Won, 25 cards$/i });
+    const col = page.getByRole("region", { name: /^Doing, 25 cards$/i });
     await expect(col.locator(".kcard")).toHaveCount(25);
 
     const seen = await col.evaluate(async (el) => {

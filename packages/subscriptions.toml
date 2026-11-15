@@ -1,6 +1,6 @@
 [module]
 id = "subscriptions"
-version = "0.2.0"
+version = "0.3.0"
 name = "Subscriptions"
 description = "Recurring plans and customer subscriptions with a trial, active, past due and cancelled flow. It records the next invoice date; it does not create invoices on its own."
 author = "SpaceCorps"
@@ -11,7 +11,9 @@ repository = "https://github.com/SpaceCorps/obop"
 keywords = ["subscriptions", "recurring", "plans"]
 categories = ["sales", "finance"]
 maturity = "beta"
-requires_core = "^0.2"
+requires_core = "^0.2.2"
+changelog = "The app opens on Subscriptions and names each one after its customer and plan. A new subscription starts today with one seat and takes the plan's price and the instance currency; the three cancel actions show as one Cancel subscription. A cancelled subscription can no longer be changed, except for the reason."
+home = "subscriptions_subscription"
 
 [module.dependencies]
 base = "^0.2"
@@ -21,6 +23,14 @@ name = "subscriptions_plan"
 description = "A recurring offer customers can subscribe to"
 read_group = "subscriptions.user"
 write_group = "subscriptions.manager"
+
+  [model.ui]
+  title = "{name}"
+  subtitle = "{code}"
+  list = ["name", "code", "interval", "price", "trial_days", "active"]
+  order = "name asc"
+  default_view = "list"
+  menu = "configuration"
 
   [[model.field]]
   name = "name"
@@ -40,6 +50,8 @@ write_group = "subscriptions.manager"
   kind = "select"
   options = ["monthly", "quarterly", "yearly"]
   required = true
+  [model.field.ui]
+  tones = { monthly = "neutral", quarterly = "neutral", yearly = "neutral" }
 
   [[model.field]]
   name = "price"
@@ -47,24 +59,63 @@ write_group = "subscriptions.manager"
   class = "none"
   kind = "money"
   required = true
+  [model.field.ui]
+  aggregate = "none"
 
   [[model.field]]
   name = "trial_days"
   description = "Length of the free trial in days"
   class = "none"
   kind = "number"
+  [model.field.ui]
+  aggregate = "none"
 
   [[model.field]]
   name = "active"
   description = "Whether new customers can pick the plan"
   class = "none"
   kind = "bool"
+  default = true
 
 [[model]]
 name = "subscriptions_subscription"
 description = "A customer's recurring subscription to a plan"
 read_group = "subscriptions.user"
 write_group = "subscriptions.manager"
+
+  [model.ui]
+  title = "{customer_id} · {plan_id}"
+  list = ["customer_id", "plan_id", "started_on", "next_invoice_on", "seats", "recurring_amount", "state"]
+  card = ["customer_id", "plan_id", "recurring_amount", "next_invoice_on"]
+  card_sum = "recurring_amount"
+  quick_create = ["customer_id", "plan_id"]
+  default_view = "kanban"
+  menu = "main"
+  menu_order = 1
+  calendar = { start = "next_invoice_on", color = "plan_id" }
+  report = { rows = "plan_id", cols = "state", measure = "recurring_amount" }
+
+  [[model.ui.section]]
+  label = "Billing"
+  fields = ["recurring_amount", "currency", "seats", "next_invoice_on"]
+
+  [[model.ui.section]]
+  label = "Cancellation"
+  fields = ["cancel_reason"]
+  show_in = ["cancelled"]
+
+  [[model.ui.filter]]
+  label = "Trial ends this week"
+  where = "state = trial && trial_ends_on != null && trial_ends_on <= today+7"
+
+  [[model.ui.filter]]
+  label = "Invoice due"
+  where = "state != cancelled && next_invoice_on != null && next_invoice_on <= today"
+
+  [model.guard]
+  immutable_when = ["cancelled"]
+  mutable_fields = ["cancel_reason"]
+  message = "A cancelled subscription cannot be changed. Start a new subscription instead."
 
   [[model.field]]
   name = "customer_id"
@@ -87,36 +138,44 @@ write_group = "subscriptions.manager"
   description = "Date the subscription began (YYYY-MM-DD)"
   class = "none"
   kind = "date"
+  default = "today"
 
   [[model.field]]
   name = "trial_ends_on"
   description = "Date the free trial ends (YYYY-MM-DD)"
   class = "none"
   kind = "date"
+  [model.field.ui]
+  warn_before_days = 7
 
   [[model.field]]
   name = "next_invoice_on"
   description = "Date the next invoice is due (YYYY-MM-DD)"
   class = "none"
   kind = "date"
+  [model.field.ui]
+  warn_before_days = 7
 
   [[model.field]]
   name = "recurring_amount"
-  description = "Amount billed each interval after discounts (minor currency units, e.g. cents)"
+  description = "Amount billed each interval after discounts (minor currency units, e.g. cents); the plan's price unless given"
   class = "none"
   kind = "money"
   required = true
+  fill_from = "plan_id.price"
 
   [[model.field]]
   name = "currency"
-  description = "ISO 4217 currency code, for example EUR"
+  description = "ISO 4217 currency code, for example EUR; the instance currency unless given"
   class = "none"
+  default = "$instance.currency"
 
   [[model.field]]
   name = "seats"
   description = "Number of licences or users covered"
   class = "none"
   kind = "number"
+  default = 1
 
   [[model.field]]
   name = "cancel_reason"
@@ -131,6 +190,8 @@ write_group = "subscriptions.manager"
   kind = "select"
   options = ["trial", "active", "past_due", "cancelled"]
   required = true
+  [model.field.ui]
+  tones = { trial = "info", active = "ok", past_due = "warn", cancelled = "neutral" }
 
   [[model.action]]
   name = "activate"
@@ -138,6 +199,8 @@ write_group = "subscriptions.manager"
   field = "state"
   from = "trial"
   to = "active"
+  [model.action.ui]
+  primary = true
 
   [[model.action]]
   name = "mark_past_due"
@@ -152,6 +215,8 @@ write_group = "subscriptions.manager"
   field = "state"
   from = "past_due"
   to = "active"
+  [model.action.ui]
+  primary = true
 
   [[model.action]]
   name = "cancel_trial"
@@ -160,6 +225,10 @@ write_group = "subscriptions.manager"
   from = "trial"
   to = "cancelled"
   approval = true
+  [model.action.ui]
+  danger = true
+  confirm = "Cancel this subscription? It cannot be changed afterwards."
+  group = "cancel"
 
   [[model.action]]
   name = "cancel"
@@ -168,6 +237,10 @@ write_group = "subscriptions.manager"
   from = "active"
   to = "cancelled"
   approval = true
+  [model.action.ui]
+  danger = true
+  confirm = "Cancel this subscription? It cannot be changed afterwards."
+  group = "cancel"
 
   [[model.action]]
   name = "cancel_overdue"
@@ -176,3 +249,7 @@ write_group = "subscriptions.manager"
   from = "past_due"
   to = "cancelled"
   approval = true
+  [model.action.ui]
+  danger = true
+  confirm = "Cancel this subscription? It cannot be changed afterwards."
+  group = "cancel"

@@ -1,5 +1,6 @@
 import type { FieldMeta } from "./api.ts";
 import { optionLabel } from "./format.ts";
+import { toneClassOf } from "./presentation.ts";
 import { Badge as UiBadge, Button, Dialog, t } from "@obop/ui";
 
 // The primitives live in @obop/ui; this file holds the few pieces that know about obop metadata.
@@ -37,31 +38,13 @@ export {
 } from "@obop/ui";
 export type { ToastItem } from "@obop/ui";
 
-const OK = new Set([
-  "done",
-  "won",
-  "posted",
-  "confirmed",
-  "closed",
-  "available",
-  "running",
-  "resolved",
-  "active",
-  "paid",
-]);
-const BAD = new Set(["lost", "cancelled", "canceled", "failed", "rejected"]);
-const WARN = new Set(["doing", "in_service", "maintenance", "in_progress", "qualified", "pending"]);
-const NEUTRAL = new Set(["draft", "new", "open", "todo", "planned", "none", ""]);
-
-/** Status-like words keep a meaning-carrying colour, any other option takes a palette colour. */
+/**
+ * The badge class of a select value: the colour that means something for a status (governed, or
+ * named state, stage or status) and for priority words, a neutral palette tint for anything else,
+ * so a category never looks like an alarm. One rule for every view: presentation.ts `toneClassOf`.
+ */
 export function toneClass(f: FieldMeta | undefined, value: string): string {
-  const v = value.toLowerCase();
-  if (OK.has(v)) return "t-ok";
-  if (BAD.has(v)) return "t-bad";
-  if (WARN.has(v)) return "t-warn";
-  if (NEUTRAL.has(v)) return "t-neutral";
-  const i = f?.options?.indexOf(value) ?? 0;
-  return `t-${(Math.max(i, 0) % 6) + 1}`;
+  return toneClassOf(f, value);
 }
 
 export function Badge({ field, value }: { field?: FieldMeta; value: string }) {

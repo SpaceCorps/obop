@@ -5,6 +5,7 @@ summary = "Uppdrag hos kunder som utförs av en tekniker, med använda reservdel
 
 [labels.sv.model.field_service_job]
 name = "Uppdrag"
+plural = "Uppdrag"
 description = "Ett uppdrag hos en kund"
 
 [labels.sv.model.field_service_job.field.name]
@@ -118,6 +119,7 @@ description = "Annullera ett uppdrag som inte har påbörjats"
 
 [labels.sv.model.field_service_part]
 name = "Reservdel"
+plural = "Reservdelar"
 description = "En reservdel eller produkt som använts i ett uppdrag"
 
 [labels.sv.model.field_service_part.field.job_id]
@@ -139,3 +141,6 @@ description = "Pris per enhet som debiteras kunden (valutans minsta enhet, till 
 [labels.sv.model.field_service_part.field.note]
 label = "Anteckning"
 description = "Kommentar om delen, till exempel serienummer"
+
+[labels.sv.model.field_service_job.action.complete.assert.signed]
+message = "Kunden måste först godkänna uppdraget: fyll i vem som skrev under och vilken dag"

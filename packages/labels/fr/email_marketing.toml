@@ -5,6 +5,7 @@ summary = "Listes, contacts avec consentement et campagnes. Aucun e-mail n’est
 
 [labels.fr.model.email_marketing_list]
 name = "Liste"
+plural = "Listes"
 description = "Une liste de diffusion à laquelle des contacts peuvent appartenir"
 
 [labels.fr.model.email_marketing_list.field.name]
@@ -21,6 +22,7 @@ description = "Indique si les visiteurs peuvent s’abonner eux-mêmes"
 
 [labels.fr.model.email_marketing_contact]
 name = "Contact"
+plural = "Contacts"
 description = "Une personne figurant sur une liste de diffusion"
 
 [labels.fr.model.email_marketing_contact.field.list_id]
@@ -55,6 +57,7 @@ description = "Où le consentement a été recueilli, par exemple formulaire d�
 
 [labels.fr.model.email_marketing_campaign]
 name = "Campagne"
+plural = "Campagnes"
 description = "Un envoi adressé à une liste"
 
 [labels.fr.model.email_marketing_campaign.field.name]
@@ -132,11 +135,11 @@ label = "Planifier"
 description = "Marque la campagne comme planifiée pour le jour prévu"
 
 [labels.fr.model.email_marketing_campaign.action.send]
-label = "Envoyer"
+label = "Marquer comme envoyée"
 description = "Marque la campagne planifiée comme envoyée ; aucun e-mail n’est envoyé (responsable uniquement)"
 
 [labels.fr.model.email_marketing_campaign.action.send_now]
-label = "Envoyer maintenant"
+label = "Marquer comme envoyée"
 description = "Marque une campagne en brouillon comme envoyée ; aucun e-mail n’est envoyé (responsable uniquement)"
 
 [labels.fr.model.email_marketing_campaign.action.unschedule]

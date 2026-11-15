@@ -1,9 +1,22 @@
-import { useState } from "react";
-import { fmt, getCurrency, msg, t } from "@obop/ui";
-import { getTime, type FieldMeta } from "./api.ts";
+import { useMemo, useState } from "react";
+import { fmt, getCurrency, msg, t, useI18n } from "@obop/ui";
+import { getTime, type FieldMeta, type ModelMeta } from "./api.ts";
 import { loadFavorites, saveFavorites, type Favorite } from "./favorites.ts";
 import { FieldInput } from "./fields.tsx";
+import {
+  boolFields,
+  dateFilters,
+  isOn,
+  optionFields,
+  optionText,
+  quickFilters,
+  rangeFields,
+  todayIn,
+  toggleQuick,
+  type QuickFilter,
+} from "./filters.ts";
 import { optionLabel } from "./format.ts";
+import { stateFieldOf } from "./presentation.ts";
 import { fieldTitle } from "./labels.ts";
 import {
   addFacet,
@@ -18,48 +31,132 @@ import { Icon } from "./ui.tsx";
 
 type Props = {
   model: string;
+  /** The model's metadata, for the generated filters; without it the panel builds a bare one. */
+  meta?: ModelMeta;
   fields: FieldMeta[];
   state: ViewState;
   view: string;
   setState: (s: ViewState) => void;
   applyFavorite: (f: Favorite) => void;
+  /** The signed-in user name, for "Mine". */
+  user?: string;
+  /** The quick filters, when the caller has them already (ControlPanel names chips with them). */
+  quick?: QuickFilter[];
 };
 
-/** The Odoo-style dropdown: Filters, Group By and Favorites side by side. */
+/** The model the panel works on: the metadata, or a bare one around the fields (the brand book). */
+export const metaOr = (meta: ModelMeta | undefined, model: string, fields: FieldMeta[]) =>
+  meta ?? {
+    name: model,
+    description: "",
+    can_create: false,
+    can_update: false,
+    can_delete: false,
+    fields,
+    actions: [],
+  };
+
+/**
+ * The quick filters of a model (filters.ts): saved, Open, Overdue, Mine, Archived and the date
+ * ranges of its main dates, worked out for today in the instance's zone.
+ */
+export function useQuickFilters(meta: ModelMeta, fields: FieldMeta[], user?: string) {
+  const { lang } = useI18n();
+  const today = todayIn(getTime().zone);
+  return useMemo(() => {
+    const ctx = { user, today, firstDay: fmt.firstDay() };
+    return [
+      ...quickFilters(meta, fields, ctx),
+      ...rangeFields(fields).flatMap((f) => dateFilters(f, ctx)),
+    ];
+    // The labels are translated: a new language makes them again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meta, fields, user, today, lang]);
+}
+
+/** Filters, Group by (with Sort) and Favorites side by side; one column on a phone. */
 export function FilterPanel(p: Props) {
+  const meta = metaOr(p.meta, p.model, p.fields);
+  const own = useQuickFilters(meta, p.fields, p.user);
+  const quick = p.quick ?? own;
   return (
     <div className="fpanel" role="group" aria-label={t("Filters, group by and favorites")}>
-      <FiltersSection {...p} />
+      <FiltersSection {...p} meta={meta} quick={quick} />
       <GroupSection {...p} />
       <FavoritesSection {...p} />
     </div>
   );
 }
 
-function FiltersSection({ fields, state, setState }: Props) {
-  const quick = fields.filter((f) => f.kind === "select").slice(0, 2);
-  const bools = fields.filter((f) => f.kind === "bool").slice(0, 2);
+function FiltersSection({
+  meta,
+  fields,
+  state,
+  setState,
+  quick,
+}: Props & { meta: ModelMeta; quick: QuickFilter[] }) {
+  // The status as checkboxes (it is what a list is most often narrowed by), any other selection
+  // as a row of pills.
+  const options = optionFields(meta, fields);
+  const status = stateFieldOf(meta);
+  const state1 = options.find((f) => f.name === status?.name) ?? (status ? undefined : options[0]);
+  const others = options.filter((f) => f !== state1);
+  const bools = boolFields(fields);
+  const plain = quick.filter((q) => q.kind !== "date");
+  const dated = rangeFields(fields)
+    .map((f) => ({ f, ranges: quick.filter((q) => q.kind === "date" && q.field === f.name) }))
+    .filter((x) => x.ranges.length > 0);
   const picked = (f: string, v: string) =>
     state.facets.some((c) => c.op === "is" && c.f === f && c.v.includes(v));
+  const toggle = (q: QuickFilter) => setState({ ...state, facets: toggleQuick(state.facets, q) });
   return (
     <section aria-labelledby="fp-filters">
       <h4 id="fp-filters">{t("Filters")}</h4>
-      {quick.map((f) => (
-        <div key={f.name} role="group" aria-label={fieldTitle(f)} className="fp-group">
-          {f.options?.map((o) => (
+      {plain.length > 0 && (
+        <div className="fp-group" role="group" aria-label={t("Quick filters")}>
+          {plain.map((q) => (
+            <label key={q.key} className="fp-item">
+              <input type="checkbox" checked={isOn(state.facets, q)} onChange={() => toggle(q)} />
+              <span>{q.label}</span>
+            </label>
+          ))}
+        </div>
+      )}
+      {state1 && (
+        <div role="group" aria-label={fieldTitle(state1)} className="fp-group">
+          {state1.options?.map((o) => (
             <label key={o} className="fp-item">
               <input
                 type="checkbox"
-                checked={picked(f.name, o)}
+                checked={picked(state1.name, o)}
                 onChange={() =>
-                  setState({ ...state, facets: toggleOption(state.facets, f.name, o) })
+                  setState({ ...state, facets: toggleOption(state.facets, state1.name, o) })
                 }
               />
-              <span>
-                {t("{field}: {values}", { field: fieldTitle(f), values: optionLabel(o, f) })}
-              </span>
+              <span>{optionText(state1, o)}</span>
             </label>
           ))}
+        </div>
+      )}
+      {others.map((f) => (
+        <div key={f.name} className="fp-dates" role="group" aria-label={fieldTitle(f)}>
+          <span className="fp-sub">{fieldTitle(f)}</span>
+          <div className="fp-pills">
+            {f.options?.map((o) => (
+              <button
+                key={o}
+                type="button"
+                className="fp-pill"
+                aria-pressed={picked(f.name, o)}
+                aria-label={optionText(f, o)}
+                onClick={() =>
+                  setState({ ...state, facets: toggleOption(state.facets, f.name, o) })
+                }
+              >
+                {optionLabel(o, f)}
+              </button>
+            ))}
+          </div>
         </div>
       ))}
       {bools.map((f) => (
@@ -88,6 +185,25 @@ function FiltersSection({ fields, state, setState }: Props) {
               </span>
             </label>
           ))}
+        </div>
+      ))}
+      {dated.map(({ f, ranges }) => (
+        <div key={f.name} className="fp-dates" role="group" aria-label={fieldTitle(f)}>
+          <span className="fp-sub">{fieldTitle(f)}</span>
+          <div className="fp-pills">
+            {ranges.map((q) => (
+              <button
+                key={q.key}
+                type="button"
+                className="fp-pill"
+                aria-pressed={isOn(state.facets, q)}
+                aria-label={q.label}
+                onClick={() => toggle(q)}
+              >
+                {q.range}
+              </button>
+            ))}
+          </div>
         </div>
       ))}
       <CustomFilter
@@ -132,9 +248,11 @@ const opsFor = (f: FieldMeta) =>
   ]!;
 
 function CustomFilter({ fields, onAdd }: { fields: FieldMeta[]; onAdd: (c: Cond) => void }) {
+  // Images and files have nothing to filter on.
+  const usable = fields.filter((x) => x.kind !== "image" && x.kind !== "file");
   const [open, setOpen] = useState(false);
-  const [fname, setFname] = useState(fields[0]?.name ?? "");
-  const f = fields.find((x) => x.name === fname) ?? fields[0];
+  const [fname, setFname] = useState(usable[0]?.name ?? "");
+  const f = usable.find((x) => x.name === fname) ?? usable[0];
   const [op, setOp] = useState("");
   const [v, setV] = useState("");
   const [min, setMin] = useState("");
@@ -199,7 +317,7 @@ function CustomFilter({ fields, onAdd }: { fields: FieldMeta[]; onAdd: (c: Cond)
                 reset();
               }}
             >
-              {fields.map((x) => (
+              {usable.map((x) => (
                 <option key={x.name} value={x.name}>
                   {fieldTitle(x)}
                 </option>
@@ -297,15 +415,34 @@ function CustomFilter({ fields, onAdd }: { fields: FieldMeta[]; onAdd: (c: Cond)
   );
 }
 
-function GroupSection({ fields, state, setState }: Props) {
+/** The kinds a sort can follow (the list's column heads sort the same ones). */
+const SORTABLE = new Set([
+  "text",
+  "number",
+  "money",
+  "decimal",
+  "date",
+  "datetime",
+  "select",
+  "bool",
+  "ref",
+]);
+
+function GroupSection({ fields, state, view, setState }: Props) {
   const gf = groupable(fields);
+  // A board has one grouping: its columns. A pick replaces it.
+  const single = view === "kanban";
   const toggle = (name: string) =>
     setState({
       ...state,
-      group: state.group.includes(name)
-        ? state.group.filter((g) => g !== name)
-        : [...state.group, name],
+      group: single
+        ? [name]
+        : state.group.includes(name)
+          ? state.group.filter((g) => g !== name)
+          : [...state.group, name],
     });
+  const sortable = fields.filter((f) => SORTABLE.has(f.kind) && f.class !== "secret");
+  const sort = state.sort;
   return (
     <section aria-labelledby="fp-group">
       <h4 id="fp-group">{t("Group by")}</h4>
@@ -314,14 +451,59 @@ function GroupSection({ fields, state, setState }: Props) {
         const i = state.group.indexOf(f.name);
         return (
           <label key={f.name} className="fp-item">
-            <input type="checkbox" checked={i >= 0} onChange={() => toggle(f.name)} />
+            <input
+              type={single ? "radio" : "checkbox"}
+              name={single ? "fp-group-by" : undefined}
+              checked={single ? (state.group[0] ?? "") === f.name : i >= 0}
+              onChange={() => toggle(f.name)}
+            />
             <span>
               {f.kind === "date" ? t("{field}: Month", { field: fieldTitle(f) }) : fieldTitle(f)}
             </span>
-            {i >= 0 && state.group.length > 1 && <span className="chip">{i + 1}</span>}
+            {!single && i >= 0 && state.group.length > 1 && <span className="chip">{i + 1}</span>}
           </label>
         );
       })}
+      {view !== "pivot" && view !== "graph" && sortable.length > 0 && (
+        <div className="fp-sort">
+          <h4 id="fp-sort">{t("Sort by")}</h4>
+          <div className="fp-row">
+            <select
+              aria-labelledby="fp-sort"
+              value={sort?.f ?? ""}
+              onChange={(e) =>
+                setState({
+                  ...state,
+                  sort: e.target.value ? { f: e.target.value, dir: sort?.dir ?? "asc" } : undefined,
+                })
+              }
+            >
+              <option value="">{t("Default order")}</option>
+              {sortable.map((f) => (
+                <option key={f.name} value={f.name}>
+                  {fieldTitle(f)}
+                </option>
+              ))}
+            </select>
+            {sort && (
+              <button
+                type="button"
+                className="btn small"
+                aria-label={sort.dir === "asc" ? t("Ascending") : t("Descending")}
+                onClick={() =>
+                  setState({
+                    ...state,
+                    sort: { f: sort.f, dir: sort.dir === "asc" ? "desc" : "asc" },
+                  })
+                }
+              >
+                <Icon name={sort.dir === "asc" ? "arrow-up" : "arrow-down"} size={14} />
+                {sort.dir === "asc" ? t("Ascending") : t("Descending")}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </section>
   );
 }

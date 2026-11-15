@@ -1,10 +1,11 @@
 [labels.fi.module]
 name = "Valmistus"
-description = "Osaluettelot ja valmistustilaukset luonnos-, vahvistettu-, käynnissä- ja valmis-kulussa. Komponenttien varastosaldoa ei kuluteta automaattisesti."
+description = "Osaluettelot ja valmistustilaukset luonnos-, vahvistettu-, käynnissä- ja valmis-kulussa. Komponenttien varastosaldoa ei kuluteta automaattisesti. Valmiit ja perutut tilaukset lukitaan."
 summary = "Osaluettelot ja valmistustilaukset luonnos-, vahvistettu-, käynnissä- ja valmis-kulussa."
 
 [labels.fi.model.manufacturing_bom]
 name = "Osaluettelo"
+plural = "Osaluettelot"
 description = "Resepti: tuotteen valmistukseen tarvittavat komponentit"
 
 [labels.fi.model.manufacturing_bom.field.product_id]
@@ -29,6 +30,7 @@ description = "Voiko reseptiä käyttää uusiin tilauksiin"
 
 [labels.fi.model.manufacturing_bom_line]
 name = "Osaluettelon rivi"
+plural = "Komponentit"
 description = "Osaluettelon yksi komponentti"
 
 [labels.fi.model.manufacturing_bom_line.field.bom_id]
@@ -45,6 +47,7 @@ description = "Komponentin yksiköt yhtä ajoa kohti"
 
 [labels.fi.model.manufacturing_order]
 name = "Valmistustilaus"
+plural = "Valmistustilaukset"
 description = "Ohje valmistaa tietty määrä tuotetta"
 
 [labels.fi.model.manufacturing_order.field.reference]

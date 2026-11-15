@@ -1,6 +1,6 @@
 [module]
 id = "fleet"
-version = "0.3.1"
+version = "0.3.2"
 name = "Fleet"
 description = "Vehicles, drivers and service history for a small fleet. Tracks status and service records; it does not compute running costs or fuel use. A driver's status and licence expiry are only recorded: nothing checks them, not even when a driver is assigned to a vehicle."
 author = "SpaceCorps"
@@ -11,13 +11,40 @@ repository = "https://github.com/SpaceCorps/obop"
 keywords = ["fleet", "vehicles", "drivers"]
 categories = ["supply-chain"]
 maturity = "beta"
-requires_core = "^0.2"
+requires_core = "^0.2.2"
+home = "fleet_vehicle"
+changelog = "Clearer screens: the app opens on Vehicles, with business names (Drivers, Services, VIN, Odometer), list and card columns, saved filters, licence expiry warnings and a cost total on services. A vehicle can now be sent to the workshop and brought back, so the Maintenance column is used. A new service takes the vehicle's odometer reading when none is given."
 
 [[model]]
 name = "fleet_vehicle"
 description = "A vehicle the business operates"
 read_group = "fleet.user"
 write_group = "fleet.manager"
+
+  [model.ui]
+  title = "{plate}"
+  subtitle = "{model}"
+  list = ["plate", "model", "driver_id", "fuel", "odometer_km", "state"]
+  card = ["plate", "model", "driver_id", "fuel", "odometer_km"]
+  quick_create = ["plate", "model", "fuel"]
+  order = "plate asc"
+  default_view = "kanban"
+  menu = "main"
+  menu_order = 1
+  report = { rows = "fuel", cols = "state" }
+
+  [[model.ui.filter]]
+  label = "Available"
+  where = "state = available"
+
+  [[model.ui.filter]]
+  label = "In the workshop"
+  where = "state = maintenance"
+
+  [[model.child]]
+  model = "fleet_vehicle_service"
+  via = "vehicle_id"
+  shape = "list"
 
   [[model.field]]
   name = "plate"
@@ -48,6 +75,9 @@ write_group = "fleet.manager"
   class = "none"
   kind = "number"
 
+    [model.field.ui]
+    aggregate = "none"
+
   [[model.field]]
   name = "acquired_on"
   description = "Date the vehicle entered the fleet (YYYY-MM-DD)"
@@ -59,6 +89,9 @@ write_group = "fleet.manager"
   description = "Name of the driver currently using the vehicle, as free text"
   class = "internal"
   personal_data = true
+
+    [model.field.ui]
+    hidden = true
 
   [[model.field]]
   name = "driver_id"
@@ -74,6 +107,9 @@ write_group = "fleet.manager"
   kind = "select"
   options = ["available", "in_service", "maintenance", "retired"]
 
+    [model.field.ui]
+    tones = { available = "ok", in_service = "info", maintenance = "warn", retired = "neutral" }
+
   [[model.action]]
   name = "dispatch"
   description = "Put an available vehicle in service"
@@ -81,12 +117,20 @@ write_group = "fleet.manager"
   from = "available"
   to = "in_service"
 
+    [model.action.ui]
+    primary = true
+    done = "The vehicle is in service"
+
   [[model.action]]
   name = "return_to_pool"
   description = "Return a vehicle in service to the available pool"
   field = "state"
   from = "in_service"
   to = "available"
+
+    [model.action.ui]
+    primary = true
+    done = "The vehicle is back in the pool"
 
   [[model.action]]
   name = "retire"
@@ -97,11 +141,56 @@ write_group = "fleet.manager"
   group = "fleet.approver"
   approval = true
 
+    [model.action.ui]
+    danger = true
+    confirm = "Retire this vehicle for good? No step brings it back."
+    done = "The vehicle is retired"
+
+  [[model.action]]
+  name = "send_to_workshop"
+  description = "Send an available vehicle to the workshop for maintenance or repair"
+  field = "state"
+  from = "available"
+  to = "maintenance"
+
+    [model.action.ui]
+    done = "The vehicle is in the workshop"
+
+  [[model.action]]
+  name = "back_in_service"
+  description = "Return a vehicle from the workshop to the available pool"
+  field = "state"
+  from = "maintenance"
+  to = "available"
+
+    [model.action.ui]
+    primary = true
+    done = "The vehicle is back in the pool"
+
 [[model]]
 name = "fleet_vehicle_driver"
 description = "A driver on record, with licence details and an active or suspended status"
 read_group = "fleet.user"
 write_group = "fleet.manager"
+
+  [model.ui]
+  title = "{name}"
+  subtitle = "{phone}"
+  list = ["name", "phone", "licence_number", "licence_expiry", "state"]
+  card = ["name", "phone", "licence_expiry"]
+  quick_create = ["name", "phone"]
+  order = "name asc"
+  default_view = "list"
+  menu = "main"
+  menu_order = 2
+
+  [[model.ui.filter]]
+  label = "Licence expiring"
+  where = "state = active && licence_expiry != null && licence_expiry <= today+30"
+
+  [[model.ui.filter]]
+  label = "Suspended"
+  where = "state = suspended"
 
   [[model.field]]
   name = "name"
@@ -115,6 +204,9 @@ write_group = "fleet.manager"
   description = "Work phone number of the driver"
   class = "internal"
   personal_data = true
+
+    [model.field.ui]
+    display = "tel"
 
   [[model.field]]
   name = "licence_number"
@@ -131,6 +223,9 @@ write_group = "fleet.manager"
   kind = "date"
   group = "fleet.manager"
 
+    [model.field.ui]
+    warn_before_days = 30
+
   [[model.field]]
   name = "state"
   description = "Driver status: active, suspended"
@@ -139,12 +234,20 @@ write_group = "fleet.manager"
   options = ["active", "suspended"]
   required = true
 
+    [model.field.ui]
+    tones = { active = "ok", suspended = "bad" }
+
   [[model.action]]
   name = "suspend"
   description = "Mark a driver as suspended, for example after an expired licence"
   field = "state"
   from = "active"
   to = "suspended"
+
+    [model.action.ui]
+    danger = true
+    confirm = "Suspend this driver?"
+    done = "The driver is suspended"
 
   [[model.action]]
   name = "reactivate"
@@ -153,11 +256,37 @@ write_group = "fleet.manager"
   from = "suspended"
   to = "active"
 
+    [model.action.ui]
+    primary = true
+    done = "The driver is active again"
+
 [[model]]
 name = "fleet_vehicle_service"
 description = "A maintenance, repair or inspection job on a vehicle"
 read_group = "fleet.user"
 write_group = "fleet.user"
+
+  [model.ui]
+  title = "{vehicle_id} · {kind} · {service_on} | {vehicle_id} · {service_on} | {vehicle_id}"
+  subtitle = "{workshop}"
+  list = ["vehicle_id", "kind", "service_on", "workshop", "cost", "state"]
+  card = ["vehicle_id", "kind", "service_on", "cost"]
+  card_sum = "cost"
+  quick_create = ["vehicle_id", "kind", "service_on"]
+  order = "service_on desc"
+  default_view = "list"
+  menu = "main"
+  menu_order = 3
+  calendar = { start = "service_on", color = "state" }
+  report = { rows = "vehicle_id", cols = "kind", measure = "cost" }
+
+  [[model.ui.filter]]
+  label = "Planned"
+  where = "state = planned"
+
+  [[model.ui.filter]]
+  label = "Done"
+  where = "state = done"
 
   [[model.field]]
   name = "vehicle_id"
@@ -181,18 +310,26 @@ write_group = "fleet.user"
   class = "none"
   kind = "date"
   required = true
+  default = "today"
 
   [[model.field]]
   name = "odometer_km"
   description = "Odometer reading in kilometres when serviced"
   class = "none"
   kind = "number"
+  fill_from = "vehicle_id.odometer_km"
+
+    [model.field.ui]
+    aggregate = "none"
 
   [[model.field]]
   name = "cost"
   description = "Total invoiced by the workshop (minor currency units, e.g. cents)"
   class = "none"
   kind = "money"
+
+    [model.field.ui]
+    aggregate = "sum"
 
   [[model.field]]
   name = "workshop"
@@ -213,6 +350,9 @@ write_group = "fleet.user"
   options = ["planned", "done", "cancelled"]
   required = true
 
+    [model.field.ui]
+    tones = { planned = "info", done = "ok", cancelled = "neutral" }
+
   [[model.action]]
   name = "complete"
   description = "Mark a planned job as done"
@@ -220,9 +360,18 @@ write_group = "fleet.user"
   from = "planned"
   to = "done"
 
+    [model.action.ui]
+    primary = true
+    done = "The service is done"
+
   [[model.action]]
   name = "cancel"
   description = "Cancel a planned job"
   field = "state"
   from = "planned"
   to = "cancelled"
+
+    [model.action.ui]
+    danger = true
+    confirm = "Cancel this service?"
+    done = "The service is cancelled"

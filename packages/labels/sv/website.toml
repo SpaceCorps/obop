@@ -5,6 +5,7 @@ summary = "Sidor, menyer, blogginlägg och formulärsvar, som en publik webbplat
 
 [labels.sv.model.website_page]
 name = "Sida"
+plural = "Sidor"
 description = "En sida på webbplatsen"
 
 [labels.sv.model.website_page.field.title]
@@ -54,6 +55,7 @@ description = "Ta en publicerad sida ur bruk för gott"
 
 [labels.sv.model.website_menu_item]
 name = "Menyval"
+plural = "Meny"
 description = "Ett val i webbplatsens navigering"
 
 [labels.sv.model.website_menu_item.field.label]
@@ -82,6 +84,7 @@ description = "Om länken öppnas i ett nytt fönster"
 
 [labels.sv.model.website_blog_post]
 name = "Blogginlägg"
+plural = "Blogginlägg"
 description = "Ett blogginlägg"
 
 [labels.sv.model.website_blog_post.field.title]
@@ -139,6 +142,7 @@ description = "Ta ett publicerat inlägg ur bruk"
 
 [labels.sv.model.website_form_submission]
 name = "Formulärsvar"
+plural = "Formulärsvar"
 description = "Ett meddelande som en besökare skickade via ett formulär på webbplatsen"
 
 [labels.sv.model.website_form_submission.field.form_name]
@@ -192,6 +196,7 @@ description = "Markera meddelandet som skräppost"
 
 [labels.sv.model.website_page_translation]
 name = "Sidöversättning"
+plural = "Sidöversättningar"
 description = "En sida översatt till ett annat språk; den publika webbplatsen visar den för besökare som läser det språket"
 
 [labels.sv.model.website_page_translation.field.page_id]
@@ -233,6 +238,7 @@ description = "Om översättningen visas; den nås bara medan dess sida är publ
 
 [labels.sv.model.website_blog_post_translation]
 name = "Blogginläggsöversättning"
+plural = "Blogginläggsöversättningar"
 description = "Ett blogginlägg översatt till ett annat språk"
 
 [labels.sv.model.website_blog_post_translation.field.post_id]

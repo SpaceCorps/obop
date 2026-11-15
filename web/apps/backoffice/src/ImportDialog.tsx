@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { Badge, Button, Dialog, Notice, Select, Table, fmt, t } from "@obop/ui";
 import { call, type ModelMeta } from "./api.ts";
 import { useData } from "./data.tsx";
+import { csvCell, download } from "./format.ts";
 import { fieldTitle } from "./labels.ts";
 import { serverMessage } from "./serverMessage.ts";
 
@@ -168,6 +169,18 @@ export function ImportDialog({
               <Button icon="upload" disabled={busy} onClick={() => input.current?.click()}>
                 {fileName ? t("Choose another file") : t("Choose a CSV file")}
               </Button>
+              {!fileName && (
+                // An empty file with the right first line: fill it in a spreadsheet and pick it.
+                <Button
+                  variant="ghost"
+                  icon="download"
+                  onClick={() =>
+                    download(`${model.name}-template.csv`, `${columns.map(csvCell).join(",")}\r\n`)
+                  }
+                >
+                  {t("Download a template")}
+                </Button>
+              )}
               {fileName && <span className="mono import-file">{fileName}</span>}
             </div>
             <Select

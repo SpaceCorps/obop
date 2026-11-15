@@ -5,6 +5,7 @@ summary = "Pulpity i kafelki zapisane jako dane, które interfejs wyświetla jak
 
 [labels.pl.model.dashboards_dashboard]
 name = "Pulpit"
+plural = "Pulpity"
 description = "Pulpit: uporządkowany zbiór kafelków z tytułem"
 
 [labels.pl.model.dashboards_dashboard.field.title]
@@ -29,6 +30,7 @@ description = "Kolejność wśród pulpitów, od najniższej"
 
 [labels.pl.model.dashboards_widget]
 name = "Kafelek"
+plural = "Kafelki"
 description = "Jeden kafelek pulpitu, określony tym, co czytać i jak to agregować"
 
 [labels.pl.model.dashboards_widget.field.dashboard_id]

@@ -145,12 +145,14 @@ export const APP_COPY: AppCopy[] = [
     tagline: "Quotations and orders",
     purpose:
       "Write quotes for customers and turn them into confirmed orders. Each order can name a contact and has lines, a total and a currency. Confirming an order prepares a draft invoice with the same lines, for Invoicing to post. The person who confirms also needs access to Invoicing.",
-    // What confirm and cancel do (crates/modules/sales/src/lib.rs:56-103): confirm creates a draft invoice and its lines,
-    // cancel has no effect (:91-95), reset_to_draft then confirm creates a second invoice, and the order and its
-    // lines stay writable by sales.user (:18, :109), so an edit after confirming does not reach the invoice.
+    // What confirm and cancel do (crates/modules/sales/src/lib.rs): confirm asserts a customer and a line and
+    // creates a draft invoice with its lines; a confirmed order and its lines are frozen by the D77 guard, with
+    // cancel as the way out (`Guard::frozen_in("state", &["confirmed"]).exit("cancelled", "cancel", ..)`,
+    // `Guard::child_of("order_id")`); reset_to_draft leaves only "cancelled", and confirming again prepares
+    // another invoice.
     cards: {
       "sale_order.confirm": {
-        text: "Confirm a draft order and prepare its draft invoice. A confirmed order can still be edited; the invoice does not follow. If the order is put back to draft and confirmed again, another draft invoice is prepared.",
+        text: "Confirm a draft order and prepare its draft invoice. Refused without a customer or a line. A confirmed order and its lines can no longer be changed; cancel it to correct it. If a cancelled order is put back to draft and confirmed again, another draft invoice is prepared.",
       },
       "sale_order.cancel": {
         text: "Cancel an order. Its draft invoice, if it has one, is not cancelled.",
@@ -163,7 +165,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Invoicing",
     tagline: "Bill your customers",
     purpose:
-      "Prepare invoices for your customers as drafts, then post each one: posting gives it its own number, in a yearly series with no gaps. Posting needs a person with the right permission: an AI agent can prepare the draft and propose posting it, but cannot post it. Posting does not lock an invoice: its lines and amounts can still be changed afterwards.",
+      "Prepare invoices for your customers as drafts, then post each one: posting gives it its own number, in a yearly series with no gaps. Posting needs a person with the right permission: an AI agent can prepare the draft and propose posting it, but cannot post it. A posted or cancelled invoice and its lines can no longer be changed or deleted.",
     cards: {
       invoice: {
         text: "A customer invoice: its lines, a total that adds them up, and a number once it is posted.",
@@ -178,12 +180,10 @@ export const APP_COPY: AppCopy[] = [
     // that no action leaves "posted" (the actions are post and cancel, and cancel only from draft). The
     // module gives a gapless number of the year (`.sequence(.., true, Reset::Year).assign_on("post")`)
     // and makes no claim about the law, so the site says that. A post is refused for an invoice with no
-    // amount (lib.rs, the post guard). Posting locks nothing:
-    // invoice and invoice_line have `ext: Default::default()` (lib.rs:87, :149), so no immutable_when (the guard
-    // exists in crates/kernel/obop-registry/src/ext.rs:112-128, and no module or package uses it), and
-    // invoicing.user writes the lines (:93).
+    // amount (lib.rs, the post guard). Posting freezes the invoice and its lines: the D77 command-layer
+    // guard `Guard::frozen_in("state", &["posted", "cancelled"])` and `Guard::child_of("invoice_id")`.
     packageText:
-      "Customer invoices with lines: drafts, posting with a gapless yearly number, cancellation. Posting does not lock an invoice. There are no credit notes, and payments are not tracked.",
+      "Customer invoices with lines: drafts, posting with a gapless yearly number, cancellation. A posted invoice can no longer be changed. There are no credit notes, and payments are not tracked.",
     modelText: {
       invoice: "A customer invoice. A posted invoice cannot go back to draft.",
     },
@@ -401,8 +401,9 @@ export const APP_COPY: AppCopy[] = [
     },
     // The retire action only sets the state to retired and needs fleet.approver (packages/fleet.toml:91-100);
     // no action leaves "retired", and like every model a vehicle has a delete command, so "the record stays"
-    // is not said. No action reaches "maintenance" either (:77-100), and a governed state
-    // starts at its first option and moves only through actions (crates/kernel/obop-commands/src/guards.rs:65, :158).
+    // is not said. Since fleet 0.3.2, send_to_workshop and back_in_service move an available vehicle to
+    // "maintenance" and back, so the manifest's description of the state is true and is shown as it is; a
+    // governed state starts at its first option and moves only through actions (crates/kernel/obop-commands/src/guards.rs:65, :158).
     // A driver's state (active, suspended) only moves through suspend and reactivate (:134-154): nothing reads
     // it or licence_expiry, fleet_vehicle.driver_id is a plain ref (:63-68) and dispatch has no assert or effect
     // (:77-82), so the manifest's "authorised to drive" and "allow ... to drive again" (:102, :151) are not said.
@@ -410,10 +411,6 @@ export const APP_COPY: AppCopy[] = [
     // the state is required, with the options active and suspended (:134-140).
     modelText: {
       fleet_vehicle_driver: "A driver of fleet vehicles, with a status of active or suspended",
-    },
-    fieldText: {
-      "fleet_vehicle.state":
-        "Availability: available, in service or retired. The option maintenance exists, but no step moves a vehicle into it.",
     },
   },
   {
@@ -427,12 +424,11 @@ export const APP_COPY: AppCopy[] = [
       inventory_move: "Stock move",
     },
     // validate subtracts at the source and adds at the destination, with no check that the source holds
-    // enough (packages/inventory.toml:190-210; the package text allows negative quantities, :5). No action
-    // leaves "done" (:181-189), but inventory_move is written by inventory.user (:129) and has no lock, so a
-    // done move's record can be edited or deleted and the stock does not follow.
+    // enough (packages/inventory.toml; the package text allows negative quantities). No action leaves "done",
+    // and the D77 guard (immutable_when done, cancelled) freezes a done or cancelled move.
     cards: {
       "inventory_move.validate": {
-        text: "Confirm that the goods moved: the quantity leaves the source item and arrives at the destination item (stock managers only). Nothing checks that the source holds enough, so stock can go below zero. No action reverses a done move, but its record can still be edited or deleted, and the stock does not follow.",
+        text: "Confirm that the goods moved: the quantity leaves the source item and arrives at the destination item (stock managers only). Nothing checks that the source holds enough, so stock can go below zero. A done move can no longer be changed or deleted; correct the stock with a new move.",
       },
     },
   },
@@ -442,7 +438,7 @@ export const APP_COPY: AppCopy[] = [
     name: "Purchase",
     tagline: "Vendors and purchase orders",
     purpose:
-      "Keep your vendors and the purchase orders you place with them, with order lines and a flow from draft to received. The order total is added up from its lines. A received order can still be edited; stock moves already prepared do not follow.",
+      "Keep your vendors and the purchase orders you place with them, with order lines and a flow from draft to received. The order total is added up from its lines. A received or cancelled order and its lines can no longer be changed.",
     cards: {
       "purchase_order.send": {
         text: "Mark the order as sent to the vendor. By itself, this does not contact the vendor.",
@@ -463,11 +459,11 @@ export const APP_COPY: AppCopy[] = [
     tagline: "Bills of materials",
     purpose:
       "Define what a product is made of and plan manufacturing orders from draft to done. An order goes through draft, confirmed, in progress and done. The stock of the components is not used up automatically.",
-    // A flag nothing reads: the only asserts in the packages are accounting.toml:346, pos.toml:226 and
-    // sign.toml:202, and a search of crates/ and web/apps/backoffice/src finds no reader of it.
+    // active is a D95 ref_filter on manufacturing_order.bom_id (active = true): an inactive bill of
+    // materials cannot be chosen for a new order.
     fieldText: {
       "manufacturing_bom.active":
-        "Marks the recipe as in use or not. A label only; nothing checks it.",
+        "Marks the recipe as in use or not. An inactive recipe cannot be chosen for a new order.",
     },
     modelNames: {
       manufacturing_bom: "Bill of materials",
@@ -637,7 +633,7 @@ export const APP_COPY: AppCopy[] = [
         text: "A point of sale: a till or a shop, with its name, currency and receipt header.",
       },
       "pos_order.pay": {
-        text: "Mark the sale as fully paid. Refused until the payments cover the total; a paid sale can still be edited afterwards. If the sale has a stock location, a draft record of the goods leaving is prepared for each line, for the warehouse to confirm. You need access to Inventory.",
+        text: "Mark the sale as fully paid. Refused until the payments cover the total; a paid sale and its lines can no longer be changed, only refunded. If the sale has a stock location, a draft record of the goods leaving is prepared for each line, for the warehouse to confirm. You need access to Inventory.",
         limit: "The payments are checked only when the sale is paid.",
       },
       "pos_order.refund": {
@@ -887,19 +883,20 @@ export const APP_COPY: AppCopy[] = [
     name: "Accounting",
     tagline: "Ledger and journals",
     purpose:
-      "Record what your business earns and spends, and post each entry to the ledger. An entry is a set of debit and credit lines; its totals are checked only at posting. Closing a month or year is only a label; it does not stop new entries. Tax amounts are typed in by hand.",
+      "Record what your business earns and spends, and post each entry to the ledger. An entry is a set of debit and credit lines, checked when it is posted. A posted entry is corrected by reversing it, and a closed period takes no new entries. Tax amounts are typed in by hand.",
     modelNames: {
       accounting_move: "Journal entry",
       accounting_move_line: "Journal entry line",
     },
     // Post, reverse, close and reopen are for accounting.approver (packages/accounting.toml:195, :204, :255, :264, :344, :361).
-    // The balance is asserted once, when post runs (:346); the lines of a posted entry are written by
-    // accounting.user (:271, :368) and no lock stops them, and an entry without lines has two zero totals. Nothing in
+    // The balance and an amount are asserted when post runs (has_amount, balanced); a posted, cancelled or
+    // reversed entry and its lines are frozen by the D77 guard, and so is an entry dated in a closed period
+    // (lock_date closed_by accounting_period); closed periods and fiscal years are frozen until reopened. Nothing in
     // crates/ or web/apps/backoffice/src reads reconcile, reconciled, due_on, price_included, tax_account_id or
     // default_account_id (the importers only write reconcile: crates/obop/src/import_oas/mod.rs:924,
     // crates/obop/src/sie/import.rs:507), and a journal's currency is a text field with no check (:99-101).
-    // deprecated, active (journal, tax): the only assert in the package is the balance
-    // (packages/accounting.toml:346) and nothing in crates/ or web/apps/backoffice/src reads these flags.
+    // deprecated is read by nothing; active on journals and taxes is a D95 ref_filter (active = true), so the
+    // server refuses an inactive journal or tax on a new entry or line.
     fieldText: {
       "accounting_account.reconcile": "A label only; nothing uses it.",
       "accounting_move_line.reconciled": "A label only; nothing uses it.",
@@ -912,27 +909,24 @@ export const APP_COPY: AppCopy[] = [
         "The entry line this statement line was matched to, if you set it. Optional: matching does not require it.",
       "accounting_account.deprecated":
         "A label only: entries can still be posted to a deprecated account.",
-      "accounting_journal.active":
-        "A label only: entries can still be booked in an inactive journal.",
-      "accounting_tax.active": "A label only: an inactive tax can still be put on a line.",
+      "accounting_journal.active": "An inactive journal cannot be chosen for a new entry.",
+      "accounting_tax.active": "An inactive tax cannot be put on a line.",
     },
     cards: {
       "accounting_fiscal_year.close": {
-        text: "Mark the fiscal year as closed (needs the approving role). This is a label only: entries can still be posted into it.",
+        text: "Mark the fiscal year as closed (needs the approving role). A closed fiscal year can no longer be changed until it is reopened.",
       },
       "accounting_fiscal_year.reopen": {
         text: "Mark a closed fiscal year as open again (needs the approving role).",
       },
       "accounting_period.close": {
-        text: "Mark the period as closed (needs the approving role). This is a label only: entries can still be posted into it.",
+        text: "Mark the period as closed (needs the approving role). Entries dated in a closed period can no longer be created or changed until it is reopened.",
       },
       "accounting_period.reopen": {
         text: "Mark a closed period as open again (needs the approving role).",
       },
       "accounting_move.post": {
-        text: "Post a draft entry to the ledger and give it its next number (needs the approving role). Refused unless the debits equal the credits when you post. A posted entry can still be edited afterwards.",
-        limit:
-          "An entry with no lines has debits and credits of zero, which are equal, so it can be posted.",
+        text: "Post a draft entry to the ledger and give it its next number (needs the approving role). Refused unless the entry has an amount and the debits equal the credits. A posted entry and its lines can no longer be changed; reverse it to correct it.",
       },
       "accounting_move.reverse": {
         text: "Mark a posted entry as reversed (needs the approving role). The opposite entry is booked separately.",
@@ -985,17 +979,18 @@ export const APP_COPY: AppCopy[] = [
     name: "Expenses",
     tagline: "Claims and approvals",
     purpose:
-      "Employees file expense claims that move from draft to submitted, approved and marked paid. Marking a claim paid is for the finance role; an AI agent can only propose it. By itself, the app does not pay anyone. Receipts are mentioned in a note, not stored.",
+      "Employees file expense claims that move from draft to submitted, approved and marked paid. Marking a claim paid is for the finance role; an AI agent can only propose it. By itself, the app does not pay anyone. A claim can carry a photo or scan of its receipt.",
     // The four actions only change the state; the pay action says "Record the reimbursement as paid"
-    // (packages/expenses.toml:104-135). There is no assert and no lock; the access rule only filters what an
-    // employee sees (:22-24), and the approve group is expenses.manager with no check of whose claim it is.
+    // (packages/expenses.toml). The D77 guard freezes approved, paid and refused claims except the receipt and
+    // the payment details; the access rule only filters what an employee sees, and the approve group is
+    // expenses.manager with no check of whose claim it is.
     cards: {
       "expenses_expense.approve": {
-        text: "Approve a submitted claim (manager only). This does not lock the claim, and a manager can approve their own.",
+        text: "Approve a submitted claim (manager only). An approved claim can no longer be changed, except its receipt and payment details; a manager can approve their own.",
         keep: true,
       },
       "expenses_expense.pay": {
-        text: "Mark an approved claim as paid (finance only). By itself, this does not pay anyone, and a paid claim can still be changed or deleted by the employee.",
+        text: "Mark an approved claim as paid (finance only). By itself, this does not pay anyone. A paid claim can no longer be changed or deleted.",
       },
     },
     // "Submit the claim for approval" is the manifest's text, which the product translates: it is kept

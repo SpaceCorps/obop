@@ -364,7 +364,7 @@ test.describe("website without JavaScript", () => {
     // What it works with is a count (the names are the "Works with" section below the strip).
     await expect(page.locator(".app-facts dd")).toHaveText([
       "Stable",
-      "0.2.1",
+      "0.2.2",
       "2 apps",
       "Apache-2.0",
     ]);
@@ -472,7 +472,7 @@ test.describe("website without JavaScript", () => {
     await expect(page.locator(".app-info")).not.toContainText("^0.2");
     // A built-in app's version moves with obop itself, said so without the word "core".
     await expect(page.locator(".app-info")).toContainText(
-      s.sameAsObop.replace("{version}", "0.2.1"),
+      s.sameAsObop.replace("{version}", "0.2.2"),
     );
     await expect(page.locator(".app-info")).not.toContainText(/core/i);
     await expect(page.locator(".app-info dt", { hasText: s.source })).toBeVisible();
@@ -1201,18 +1201,18 @@ test.describe("website without JavaScript", () => {
     });
     expect(edge.cards).toBe(2);
     expect(edge.gap).toBeLessThan(2);
-    // CRM has four actions: all shown, no fold for a single card. Fleet has seven: five are shown
+    // CRM has four actions: all shown, no fold for a single card. Fleet has nine: five are shown
     // (its two marked cards, Retire and Suspend, and the first three others: a store page shows a few
-    // cards, not the manual) and the other two are in a fold that counts them.
+    // cards, not the manual) and the other four are in a fold that counts them.
     await page.goto(`${base()}/apps/crm/`);
     await expect(page.locator("#can-do ~ .app-cards .app-card")).toHaveCount(4);
     await expect(page.locator("#can-do ~ .app-more")).toHaveCount(0);
     await page.goto(`${base()}/apps/fleet/`);
     await expect(page.locator("#can-do ~ .app-cards .app-card")).toHaveCount(5);
     await expect(page.locator("#can-do ~ .app-more > summary")).toHaveText(
-      messages.en.apps.store.showMoreActions.replace("{n}", "2"),
+      messages.en.apps.store.showMoreActions.replace("{n}", "4"),
     );
-    await expect(page.locator("#can-do ~ .app-more .app-card")).toHaveCount(2);
+    await expect(page.locator("#can-do ~ .app-more .app-card")).toHaveCount(4);
   });
 
   test("a card that needs a person's approval is never behind a tap, on any app page", async ({
@@ -2050,7 +2050,7 @@ test.describe("crawlers and agents", () => {
     expect(sv).toContain(messages.sv.apps.store.purposeEnglish);
     expect(sv).toContain("Fakturering");
     expect(app).toContain("### Models");
-    expect(app).toContain(`- **${messages.en.apps.meta.version}:** 0.4.0`);
+    expect(app).toContain(`- **${messages.en.apps.meta.version}:** 0.5.0`);
     // The page breaks a table token after an underscore or a dot with <wbr>; the copy, and
     // llms-full.txt which agents read, keep the plain token in backticks and no HTML tag.
     expect(app).toContain("`requester_email`");
@@ -2075,7 +2075,7 @@ test.describe("crawlers and agents", () => {
     expect(urls).toHaveLength(28);
     // The list is pinned, and every row can fail: it catches the sentence it was written for and
     // leaves alone the true sentences that stand where it was (claims.ts).
-    expect(CLAIMS).toHaveLength(60);
+    expect(CLAIMS).toHaveLength(57);
     for (const { re, example, fine, why } of CLAIMS) {
       expect(example, `${re}: ${why}`).toMatch(re);
       for (const ok of fine ?? []) expect(ok, `${re} must leave this alone`).not.toMatch(re);
@@ -2105,7 +2105,9 @@ test.describe("crawlers and agents", () => {
       for (const { re, why } of CLAIMS) expect(text, `${url} ${re}: ${why}`).not.toMatch(re);
     // And the HTML of the pages that carried the worst of them says what is true.
     const html = await (await request.get(`${base()}/apps/accounting/`)).text();
-    expect(html).toContain("This is a label only: entries can still be posted into it.");
+    expect(html).toContain(
+      "Entries dated in a closed period can no longer be created or changed until it is reopened.",
+    );
     expect(await (await request.get(`${base()}/apps/purchase/`)).text()).toContain(
       "By itself, this does not contact the vendor.",
     );
@@ -2174,10 +2176,6 @@ test.describe("crawlers and agents", () => {
       { slug: "pos", text: "The payments are checked only when the sale is paid." },
       { slug: "pos", text: "obop does not check that the drawer was counted." },
       {
-        slug: "accounting",
-        text: "An entry with no lines has debits and credits of zero, which are equal, so it can be posted.",
-      },
-      {
         slug: "contacts",
         text: "The erase does not touch the list of placeholders an AI agent holds;",
       },
@@ -2216,7 +2214,7 @@ test.describe("crawlers and agents", () => {
     );
     const pos = await (await request.get(`${base()}/apps/pos.md`)).text();
     expect(pos.slice(0, pos.indexOf("\n## For developers\n"))).toContain(
-      "a paid sale can still be edited afterwards",
+      "a paid sale and its lines can no longer be changed, only refunded",
     );
     // On a translated page the list is English, inside the English note.
     const de = await (await request.get(`${base()}/de/apps/pos/`)).text();

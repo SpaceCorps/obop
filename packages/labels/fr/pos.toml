@@ -4,7 +4,8 @@ description = "Caisses de magasin : sessions, commandes avec lignes et paiement
 summary = "Caisses de magasin : sessions, commandes et paiements. Remboursements et clôture exigent une approbation."
 
 [labels.fr.model.pos_config]
-name = "Configuration"
+name = "Caisse"
+plural = "Caisses"
 description = "Un point de vente (une caisse ou un magasin) et ses réglages"
 
 [labels.fr.model.pos_config.field.name]
@@ -37,6 +38,7 @@ description = "Indique si le point de vente est utilisé"
 
 [labels.fr.model.pos_session]
 name = "Session"
+plural = "Sessions"
 description = "Une période de vente à un point de vente, de l’ouverture à la fermeture du tiroir-caisse"
 
 [labels.fr.model.pos_session.field.config_id]
@@ -88,7 +90,8 @@ label = "Clôturer"
 description = "Clôture la session une fois le tiroir compté (responsable uniquement)"
 
 [labels.fr.model.pos_order]
-name = "Commande"
+name = "Vente"
+plural = "Ventes"
 description = "Une vente enregistrée à un point de vente"
 
 [labels.fr.model.pos_order.field.session_id]
@@ -142,7 +145,8 @@ label = "Rembourser"
 description = "Rembourse une vente payée au client (responsable uniquement)"
 
 [labels.fr.model.pos_order_line]
-name = "Ligne de commande"
+name = "Ligne de vente"
+plural = "Lignes de vente"
 description = "Une ligne de produit d’une vente"
 
 [labels.fr.model.pos_order_line.field.order_id]
@@ -175,6 +179,7 @@ description = "Total de la ligne après remise : quantité multipliée par le pr
 
 [labels.fr.model.pos_payment]
 name = "Paiement"
+plural = "Paiements"
 description = "Un paiement reçu pour une vente ; une vente peut être réglée avec plusieurs modes de paiement"
 
 [labels.fr.model.pos_payment.field.order_id]
@@ -207,3 +212,6 @@ description = "Référence du terminal de paiement ou du prestataire de paiement
 [labels.fr.model.pos_order.field.stock_location_id]
 label = "Emplacement de stock"
 description = "D’où les marchandises sortent du stock ; le paiement crée les mouvements de stock depuis cet emplacement"
+
+[labels.fr.model.pos_order.action.pay.assert.covered]
+message = "Les paiements ne couvrent pas le total de la vente : ajoutez un paiement pour le reste"

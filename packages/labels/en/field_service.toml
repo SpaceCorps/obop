@@ -1,0 +1,31 @@
+# English names and plurals of field_service (D52, D95): [labels.en.model.<model>] name = "...", plural = "...".
+# The manifest stays the English source; this file only adds the display names it does not have.
+
+[labels.en.model.field_service_job]
+name = "Job"
+plural = "Jobs"
+
+[labels.en.model.field_service_job.field.technician_id]
+label = "Technician"
+
+[labels.en.model.field_service_job.field.scheduled_on]
+label = "Day"
+
+[labels.en.model.field_service_job.field.scheduled_start_minute]
+label = "Start"
+
+[labels.en.model.field_service_job.field.planned_minutes]
+label = "Planned time"
+
+[labels.en.model.field_service_job.field.site_contact_name]
+label = "Contact on site"
+
+[labels.en.model.field_service_job.field.site_contact_phone]
+label = "Phone on site"
+
+[labels.en.model.field_service_job.field.state.options]
+en_route = "On the way"
+
+[labels.en.model.field_service_part]
+name = "Part"
+plural = "Parts"

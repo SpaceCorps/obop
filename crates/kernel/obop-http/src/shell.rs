@@ -25,6 +25,12 @@
 //! runs gets the last good brand. With no row and no default language the answer is the file
 //! service's answer, byte for byte.
 //!
+//! **The web app manifest** (PWA basics). The build carries a default `manifest.webmanifest` with the
+//! product's name and icon, linked from `index.html`. When the instance has a brand, the manifest
+//! is made from it instead, at request time: the name, a short name, the logo's address with its
+//! version as the icon and the theme accent as `theme_color`, with `start_url` and `scope` the
+//! directory the back office is served from. Like the shell it says `Cache-Control: no-cache`.
+//!
 //! The shell is the one document that must never be reused without asking the server: its
 //! content depends on the build on disk, on this setting and on the brand row, so every HTML
 //! answer of the service says `Cache-Control: no-cache`.
@@ -64,6 +70,13 @@ pub use obop_oauth::page::LANGS;
 
 /// The name of the meta tag the page reads.
 pub const META_NAME: &str = "obop-default-language";
+
+/// The file name of the web app manifest (`/manifest.webmanifest`, `/admin/manifest.webmanifest`).
+pub const MANIFEST_FILE: &str = "manifest.webmanifest";
+
+/// The theme colour of a manifest whose brand has no accent: the product's (tokens.css
+/// `--accent-fill-l`).
+const DEFAULT_THEME_COLOR: &str = "#6d3fd0";
 
 /// The largest HTML document this service will rewrite. A real shell is a few kilobytes; a larger
 /// document is served as it is, without the tag.
@@ -415,6 +428,40 @@ impl Public {
     }
 }
 
+/// A short name for a home screen icon: the whole name when it is short, else its first word, cut
+/// to twelve characters (what a phone shows under an icon).
+fn short_name(name: &str) -> String {
+    const MAX: usize = 12;
+    if name.chars().count() <= MAX {
+        return name.to_string();
+    }
+    let first = name.split_whitespace().next().unwrap_or(name);
+    first.chars().take(MAX).collect()
+}
+
+/// The web app manifest of a branded instance: one JSON document with the brand's name, a short
+/// name, the logo as an SVG icon at its versioned address, the accent as `theme_color` (the
+/// product's when the theme has none) and the back office's own directory as start and scope.
+fn manifest_json(public: &Public) -> String {
+    let theme = public.accent.as_deref().unwrap_or(DEFAULT_THEME_COLOR);
+    serde_json::json!({
+        "name": public.name,
+        "short_name": short_name(&public.name),
+        "id": "./",
+        "start_url": "./",
+        "scope": "./",
+        "display": "standalone",
+        "theme_color": theme,
+        "icons": [{
+            "src": logo_url(&public.v),
+            "sizes": "any",
+            "type": "image/svg+xml",
+            "purpose": "any"
+        }]
+    })
+    .to_string()
+}
+
 /// Whether a `<meta>` declares the character encoding of the document: a `charset` attribute, or
 /// `http-equiv="content-type"` (an ASCII case-insensitive match of the whole value, as the HTML
 /// standard has it: a value with a space around it declares nothing).
@@ -734,12 +781,44 @@ impl Shell {
         }
     }
 
+    /// The manifest made from the brand, for a `GET` or `HEAD` of the manifest file while a
+    /// brand is set; `None` otherwise, and the file of the build answers.
+    async fn branded_manifest(&self, asked: &Asked) -> Option<Response> {
+        if !matches!(asked.method, Method::GET | Method::HEAD)
+            || !asked
+                .uri
+                .path()
+                .rsplit('/')
+                .next()
+                .is_some_and(|f| f == MANIFEST_FILE)
+        {
+            return None;
+        }
+        let shown = self.shown().await?;
+        if !shown.is_set() {
+            return None;
+        }
+        let body = manifest_json(&Public::of(&shown));
+        let mut resp = Response::new(Body::from(body.clone()));
+        let h = resp.headers_mut();
+        h.insert(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static("application/manifest+json"),
+        );
+        h.insert(header::CONTENT_LENGTH, HeaderValue::from(body.len()));
+        h.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"));
+        Some(for_method(resp, asked))
+    }
+
     /// The answer to one request.
     pub async fn serve(&self, req: Request) -> Response {
         if self.language.is_none() && self.brand.is_none() {
             return no_cache(self.ask(req).await);
         }
         let asked = Asked::of(&req);
+        if let Some(manifest) = self.branded_manifest(&asked).await {
+            return manifest;
+        }
         let first = self.ask(req).await;
         // `304` and `412` carry no `Content-Type`: the file they speak of may be the shell. (A `416`
         // does, the file's own, so it is told from a script by it and needs no arm here.)
@@ -2263,5 +2342,52 @@ mod tests {
         assert!(inert.brand.is_none());
         let (with_store, _) = branded_shell(&build, None, &[]);
         assert!(with_store.brand.is_some());
+    }
+
+    #[test]
+    fn a_short_name_is_the_name_or_its_first_word_cut_to_twelve() {
+        assert_eq!(short_name("MOHV"), "MOHV");
+        assert_eq!(short_name("Twelve chars"), "Twelve chars");
+        assert_eq!(short_name("Nordlicht Werkzeuge GmbH"), "Nordlicht");
+        assert_eq!(short_name("Werkzeugmaschinenbau AG"), "Werkzeugmasc");
+    }
+
+    #[tokio::test]
+    async fn a_branded_instance_serves_a_manifest_made_from_its_brand() {
+        let build = Build::new("manifest-branded");
+        std::fs::write(build.0.join(MANIFEST_FILE), "{\"name\":\"obop\"}").unwrap();
+        let (shell, reader) = branded_shell(&build, None, &[("name", "Nordlicht Werkzeuge GmbH")]);
+        let v = reader.current().v().to_string();
+        for path in ["/manifest.webmanifest", "/admin/manifest.webmanifest"] {
+            let (status, headers, body) = get(&shell, "GET", path, &[]).await;
+            assert_eq!(status, StatusCode::OK, "{path}");
+            assert_eq!(headers[header::CONTENT_TYPE], "application/manifest+json");
+            assert_eq!(headers[header::CACHE_CONTROL], "no-cache");
+            let m: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            assert_eq!(m["name"], "Nordlicht Werkzeuge GmbH");
+            assert_eq!(m["short_name"], "Nordlicht");
+            assert_eq!(m["display"], "standalone");
+            assert_eq!(m["start_url"], "./");
+            assert_eq!(m["theme_color"], DEFAULT_THEME_COLOR);
+            assert_eq!(m["icons"][0]["src"], logo_url(&v));
+            let (status, _, body) = get(&shell, "HEAD", path, &[]).await;
+            assert_eq!(status, StatusCode::OK);
+            assert!(body.is_empty());
+        }
+    }
+
+    #[tokio::test]
+    async fn without_a_brand_the_manifest_is_the_file_of_the_build() {
+        let build = Build::new("manifest-plain");
+        std::fs::write(build.0.join(MANIFEST_FILE), "{\"name\":\"obop\"}").unwrap();
+        for shell in [
+            Shell::new(build.path(), None),
+            Shell::new(build.path(), Some("sv")),
+            branded_shell(&build, None, &[]).0,
+        ] {
+            let (status, _, body) = get(&shell, "GET", "/manifest.webmanifest", &[]).await;
+            assert_eq!(status, StatusCode::OK);
+            assert_eq!(body, b"{\"name\":\"obop\"}");
+        }
     }
 }

@@ -1,10 +1,11 @@
 [labels.es.module]
 name = "Fabricación"
-description = "Listas de materiales y órdenes de fabricación con un flujo de borrador, confirmada, en curso y hecha. El stock de componentes no se consume automáticamente."
+description = "Listas de materiales y órdenes de fabricación con un flujo de borrador, confirmada, en curso y hecha. El stock de componentes no se consume automáticamente. Las órdenes hechas o canceladas quedan bloqueadas."
 summary = "Listas de materiales y órdenes de fabricación con un flujo de borrador, confirmada, en curso y hecha."
 
 [labels.es.model.manufacturing_bom]
 name = "Lista de materiales"
+plural = "Listas de materiales"
 description = "Una receta: los componentes necesarios para fabricar un producto"
 
 [labels.es.model.manufacturing_bom.field.product_id]
@@ -29,6 +30,7 @@ description = "Indica si la receta se puede usar en órdenes nuevas"
 
 [labels.es.model.manufacturing_bom_line]
 name = "Línea de lista de materiales"
+plural = "Componentes"
 description = "Un componente de una lista de materiales"
 
 [labels.es.model.manufacturing_bom_line.field.bom_id]
@@ -44,7 +46,8 @@ label = "Cantidad"
 description = "Unidades del componente usadas por ejecución"
 
 [labels.es.model.manufacturing_order]
-name = "Pedido"
+name = "Orden de fabricación"
+plural = "Órdenes de fabricación"
 description = "Una instrucción para producir una cantidad de un producto"
 
 [labels.es.model.manufacturing_order.field.reference]

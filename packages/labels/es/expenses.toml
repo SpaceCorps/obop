@@ -1,10 +1,11 @@
 [labels.es.module]
 name = "Gastos"
-description = "Notas de gastos de empleados con un flujo de borrador, enviada, aprobada y pagada. Pagar es un permiso aparte. Aprobar, rechazar y pagar requieren aprobación humana; los agentes solo pueden proponerlo. Los justificantes se referencian por nota, no se guardan. Una nota tiene un número de una serie anual, y cada empleado ve y edita solo sus propias notas; los responsables y finanzas ven todas."
+description = "Notas de gastos con un flujo de borrador, enviada, aprobada y pagada. Pagar es un permiso aparte. Aprobar, rechazar y pagar requieren aprobación humana; los agentes solo lo proponen. Justificante en foto o escaneo; las notas aprobadas, pagadas o rechazadas quedan bloqueadas. Número de una serie anual; cada empleado ve solo sus notas, los responsables y finanzas ven todas."
 summary = "Notas de gastos de empleados con un flujo de borrador, enviada, aprobada y pagada."
 
 [labels.es.model.expenses_expense]
 name = "Gasto"
+plural = "Gastos"
 description = "Un importe que un empleado gastó por la empresa y quiere que se le reembolse"
 
 [labels.es.model.expenses_expense.field.description]
@@ -72,7 +73,7 @@ description = "Aprobar una solicitud enviada (solo responsables)"
 
 [labels.es.model.expenses_expense.action.pay]
 label = "Pagar"
-description = "Registrar el reembolso como pagado (solo finanzas)"
+description = "Registrar el reembolso como pagado (solo finanzas); la fecha de pago es hoy si no se indica otra"
 
 [labels.es.model.expenses_expense.action.refuse]
 label = "Rechazar"
@@ -81,3 +82,7 @@ description = "Rechazar una solicitud enviada (solo responsables)"
 [labels.es.model.expenses_expense.field.number]
 label = "Número"
 description = "Número de gasto como EXP-2026-0042, asignado al crear la nota; la serie empieza de nuevo cada año"
+
+[labels.es.model.expenses_expense.field.receipt]
+description = "Foto o escaneo del justificante (PDF o imagen); solo lo descarga quien puede leer la nota"
+label = "Justificante"

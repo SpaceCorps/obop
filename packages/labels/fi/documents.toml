@@ -5,6 +5,7 @@ summary = "Yrityksen asiakirjarekisteri omistajan, voimassaolon ja luottamuksell
 
 [labels.fi.model.documents_folder]
 name = "Kansio"
+plural = "Kansiot"
 description = "Kansio, johon asiakirjat ryhmitellään"
 
 [labels.fi.model.documents_folder.field.name]
@@ -21,6 +22,7 @@ description = "Mitä kansioon kuuluu"
 
 [labels.fi.model.documents_document]
 name = "Asiakirja"
+plural = "Asiakirjat"
 description = "Sopimus, ohjeistus, todistus tai muu rekisteröity asiakirja"
 
 [labels.fi.model.documents_document.field.title]

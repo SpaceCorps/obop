@@ -5,6 +5,7 @@ summary = "Reçoit les événements de signature DocuSeal à côté des demandes
 
 [labels.fr.model.sign_docuseal_event]
 name = "Événement DocuSeal"
+plural = "Événements DocuSeal"
 description = "Un événement signalé par DocuSeal au sujet d'une demande de signature, écrit par le connecteur DocuSeal"
 
 [labels.fr.model.sign_docuseal_event.field.event]

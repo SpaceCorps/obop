@@ -2,12 +2,14 @@
   "Administration",
   "App",
   "Beta",
+  "DD",
   "Dimension",
   "Filter",
   "Google Drive",
   "Guide",
   "Indigo",
   "Kanban",
+  "MM",
   "Passkeys",
   "Policy",
   "Problem",
@@ -36,5 +38,7 @@
   "option\u0004Problem",
   "text",
   "{field} ≤ {to}",
-  "{field} ≥ {from}"
+  "{field} ≥ {from}",
+  "{minutes} min",
+  "{quantity} × {price}"
 ]

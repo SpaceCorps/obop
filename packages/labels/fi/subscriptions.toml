@@ -5,6 +5,7 @@ summary = "Toistuvat paketit ja asiakkaiden kestotilaukset kokeilu-, aktiivinen-
 
 [labels.fi.model.subscriptions_plan]
 name = "Paketti"
+plural = "Paketit"
 description = "Toistuva tarjous, jonka asiakkaat voivat tilata"
 
 [labels.fi.model.subscriptions_plan.field.name]
@@ -38,6 +39,7 @@ description = "Voivatko uudet asiakkaat valita paketin"
 
 [labels.fi.model.subscriptions_subscription]
 name = "Kestotilaus"
+plural = "Kestotilaukset"
 description = "Asiakkaan toistuva tilaus pakettiin"
 
 [labels.fi.model.subscriptions_subscription.field.customer_id]
