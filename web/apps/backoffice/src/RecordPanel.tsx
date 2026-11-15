@@ -9,7 +9,7 @@ import type { Command, FieldMeta, ModelMeta, Row } from "./api.ts";
 import { ActionDialog } from "./ActionDialog.tsx";
 import { useData } from "./data.tsx";
 import { fromEdit, toEdit, validate, type Edit } from "./edit.ts";
-import { recordExtensionOf } from "./extensions.ts";
+import { recordExtensionOf, withoutOverridden } from "./extensions.ts";
 import { FormBody, flushLines, linesDirty, newLinesRegistry } from "./FormBody.tsx";
 import { isMasked, isState, optionLabel, rowCurrency } from "./format.ts";
 import { actionTitle, fieldTitle } from "./labels.ts";
@@ -208,7 +208,7 @@ export function RecordPanel({
     },
   });
   const chips = row ? subtitleOf(model, row, ctx).split(" · ").filter(Boolean).slice(0, 3) : [];
-  const actions = row ? nextActions(model, row) : NO_ACTIONS;
+  const actions = row ? withoutOverridden(nextActions(model, row), ext.overrides) : NO_ACTIONS;
   const mayDelete = !!row && model.can_delete && !deleteBlocked(model, row);
 
   // The trail of records: a link followed inside this panel makes the next panel a step deeper.
