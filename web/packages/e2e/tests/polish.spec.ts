@@ -357,6 +357,7 @@ test.describe("changing the language keeps the screen", () => {
     const hash = await page.evaluate(() => location.hash);
 
     await page.getByRole("button", { name: "Account" }).click();
+    await page.getByRole("menuitem", { name: /Language/ }).click();
     await page.getByRole("menuitem", { name: "Deutsch" }).click();
     await expect(page.locator("html")).toHaveAttribute("lang", "de");
 
@@ -370,6 +371,7 @@ test.describe("changing the language keeps the screen", () => {
 
     // And back, still the same panel.
     await page.getByRole("button", { name: tr("de", "Account") }).click();
+    await page.getByRole("menuitem", { name: new RegExp(tr("de", "Language")) }).click();
     await page.getByRole("menuitem", { name: "English" }).click();
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
     expect(await panel.evaluate((el) => (el as any).__mark)).toBe("same node");

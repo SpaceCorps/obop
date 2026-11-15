@@ -48,9 +48,10 @@ async function goHome(page: Page) {
   await expect(page.locator(".home")).toBeVisible();
 }
 
-/** Customize > Theme, where Language & region lives, through the theme button of the top bar. */
+/** Customize > Theme, where Language & region lives, through Theme in the account menu. */
 async function openLanguageSettings(page: Page, lang: string) {
-  await page.getByRole("button", { name: say(lang, "Theme"), exact: true }).click();
+  await page.getByRole("button", { name: say(lang, "Account"), exact: true }).click();
+  await page.getByRole("menuitem", { name: say(lang, "Theme"), exact: true }).click();
   await expect(page.getByRole("region", { name: say(lang, "Language & region") })).toBeVisible();
 }
 
@@ -62,6 +63,7 @@ async function pickInSettings(page: Page, from: string, to: string) {
 
 async function pickInAccountMenu(page: Page, from: string, to: string) {
   await page.getByRole("button", { name: say(from, "Account"), exact: true }).click();
+  await page.getByRole("menuitem", { name: new RegExp(say(from, "Language")) }).click();
   await page.getByRole("menuitem", { name: NATIVE[to] }).click();
   await expect(page.locator("html")).toHaveAttribute("lang", to);
 }
@@ -143,7 +145,11 @@ async function switchInSettings(page: Page, api: Api, from: string, to: string) 
   await expect(palette).toHaveCount(0);
 
   // The sidebar of an app: its header, its label for screen readers and the top bar.
-  await page.locator(".home .app-grid:not(.small) a.app-tile", { hasText: invoicingTo }).click();
+  // By its name: another app's summary may mention invoicing.
+  await page
+    .locator(".home .app-grid:not(.small) a.app-tile")
+    .filter({ has: page.locator("strong").getByText(invoicingTo, { exact: true }) })
+    .click();
   await expect(page.locator("nav.sidebar .side-head strong")).toHaveText(invoicingTo);
   await expect(page.locator("nav.sidebar")).toHaveAttribute(
     "aria-label",

@@ -236,6 +236,7 @@ test.describe("a text field that shows the label of an option", () => {
       // Switching the language leaves the panel and its picker as they are, and the next look at the
       // options is in the new language, not in the one the list was first made in.
       await page.getByRole("button", { name: tr("sv", "Account") }).click();
+      await page.getByRole("menuitem", { name: new RegExp(tr("sv", "Language")) }).click();
       await page.getByRole("menuitem", { name: "Deutsch" }).click();
       await expect(page.locator("html")).toHaveAttribute("lang", "de");
       await expect(picker).toBeVisible();

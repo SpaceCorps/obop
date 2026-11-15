@@ -22,6 +22,7 @@ test.describe("language choice", () => {
     await expect(page.getByRole("heading", { name: "Your apps" })).toBeVisible();
 
     await page.getByRole("button", { name: "Account" }).click();
+    await page.getByRole("menuitem", { name: /Language/ }).click();
     await page.getByRole("menuitem", { name: "Deutsch" }).click();
     await expect(page.locator("html")).toHaveAttribute("lang", "de");
     await expect(page.locator("html")).toHaveAttribute("dir", "ltr");

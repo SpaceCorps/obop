@@ -17,7 +17,7 @@ import {
   type Reply,
   type Row,
 } from "./api.ts";
-import { t, useI18n } from "@obop/ui";
+import { t, useI18n, type ToastAction } from "@obop/ui";
 import type { App } from "./Chrome.tsx";
 import { isEmpty, shownLabel } from "./format.ts";
 import { registerMeta } from "./serverMessage.ts";
@@ -126,7 +126,8 @@ type Ctx = {
   lang: string;
   /** Counts successful writes, so server-side queries know when to ask again. */
   mutations: number;
-  notify: (text: string, tone?: Tone) => void;
+  /** A toast; `opts.action` adds a link or a button at its end ("Open" the record an action made). */
+  notify: (text: string, tone?: Tone, opts?: { action?: ToastAction }) => void;
   confirm: (message: string, confirmLabel?: string, cancelLabel?: string) => Promise<boolean>;
   /** The label of one record: the first text field, or the short id. */
   recordLabel: (model: string, row: Row) => string;
@@ -190,7 +191,7 @@ export function DataProvider(props: {
   token: string;
   modules: ModuleMeta[];
   apps: App[];
-  notify: (text: string, tone?: Tone) => void;
+  notify: Ctx["notify"];
   confirm: Ctx["confirm"];
   linkFor: Ctx["linkTo"];
   children: ReactNode;

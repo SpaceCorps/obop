@@ -39,7 +39,7 @@ test.describe("launcher and command palette", () => {
 
     await palette.getByRole("textbox").fill("quotation");
     await expect(
-      palette.getByRole("option", { name: /Sales › Quotation \/ Order List/ }),
+      palette.getByRole("option", { name: /Sales › Quotations & orders List/ }),
     ).toBeVisible();
     await page.keyboard.press("Enter");
 

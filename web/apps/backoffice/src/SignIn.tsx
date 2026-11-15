@@ -64,6 +64,8 @@ export function SignIn({
     null,
   );
   const [asking, setAsking] = useState(false);
+  // "Forgot your password?" is open: obop sends no mail yet, so the way back is an administrator.
+  const [forgot, setForgot] = useState(false);
   const [microsoft, setMicrosoft] = useState(false);
   // The browser is on its way to Microsoft: the button waits, so that a second click does not
   // begin a second sign-in.
@@ -261,6 +263,24 @@ export function SignIn({
             autoComplete="current-password"
             required
           />
+          <div className="signin-forgot">
+            <button
+              type="button"
+              className="linklike"
+              aria-expanded={forgot}
+              aria-controls="signin-forgot-help"
+              onClick={() => setForgot(!forgot)}
+            >
+              {t("Forgot your password?")}
+            </button>
+            {forgot && (
+              <p id="signin-forgot-help" className="hint" role="status">
+                {t(
+                  "Ask your administrator to reset it. They give you a temporary password, and you choose a new one when you sign in.",
+                )}
+              </p>
+            )}
+          </div>
           {error && <Notice tone="danger" title={error} />}
           <Button type="submit" variant="primary" size="lg" loading={busy}>
             {t("Sign in")}
