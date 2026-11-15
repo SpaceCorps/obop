@@ -119,6 +119,9 @@ mod vat_tests;
 mod src_scan;
 #[cfg(test)]
 mod sso_tests;
+mod stock_count;
+#[cfg(test)]
+mod stock_count_tests;
 mod storage_cli;
 mod update_cmd;
 #[cfg(test)]

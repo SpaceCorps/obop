@@ -1,21 +1,23 @@
-// "Count stock" on a stock item: type what is really on the shelf, and the difference is booked as
-// a stock count move (kind `adjustment`) that is validated at once. The quantity itself is never
-// typed in (it is read-only on the server); only moves change it.
+// "Count stock" on a stock item: type what is really on the shelf. The server sets the stock to
+// that figure (`stock_count.apply`): it works out the difference from the stock at that moment and
+// books it as a validated stock count move, so a move made meanwhile cannot leave the stock off
+// the count. Applying a count needs the group that validates moves; the quantity itself is never
+// typed in.
 import { useState } from "react";
 import { fmt, t } from "@obop/ui";
 import type { RecordExtProps } from "../../extensions.ts";
 import { useData } from "../../data.tsx";
 import { serverMessage } from "../../serverMessage.ts";
 import { Button, Dialog, Input } from "../../ui.tsx";
-import { makeMove, mayValidate, MOVE } from "./moves.ts";
+import { mayValidate, MOVE } from "./moves.ts";
 import "../supply.css";
 
 export function CountStockAction({ row, busy }: RecordExtProps) {
   const d = useData();
   const [open, setOpen] = useState(false);
   const move = d.models.get(MOVE)?.model;
-  // Counting writes a move: the person needs to be able to make one.
-  if (!move?.can_create || !row.product_id || !row.location_id) return null;
+  // A count books and validates a move at once: only someone who may validate moves applies one.
+  if (!move?.can_create || !mayValidate(move) || !row.product_id || !row.location_id) return null;
   return (
     <>
       <Button variant="primary" icon="edit" disabled={busy} onClick={() => setOpen(true)}>
@@ -28,7 +30,6 @@ export function CountStockAction({ row, busy }: RecordExtProps) {
 
 function CountDialog({ row, onClose }: { row: RecordExtProps["row"]; onClose: () => void }) {
   const d = useData();
-  const move = d.models.get(MOVE)?.model;
   const onHand = Number(row.quantity ?? 0);
   const [counted, setCounted] = useState(String(onHand));
   const [error, setError] = useState("");
@@ -51,22 +52,28 @@ function CountDialog({ row, onClose }: { row: RecordExtProps["row"]; onClose: ()
     }
     setBusy(true);
     setError("");
-    const body: Record<string, unknown> = {
-      kind: "adjustment",
-      origin: t("Stock count"),
-      product_id: row.product_id,
-      quantity: Math.abs(diff!),
-      ...(diff! > 0 ? { to_location_id: row.location_id } : { from_location_id: row.location_id }),
-    };
-    const out = await makeMove(d.run, move, body);
+    const out = await d.run("stock_count.apply", { item: row.id, counted: n });
     setBusy(false);
-    if (out.kind === "error") {
-      setError(serverMessage(out.message));
+    if (out.kind !== "ok") {
+      setError(
+        out.kind === "error"
+          ? serverMessage(out.message)
+          : t("The move was proposed and waits for approval."),
+      );
       return;
     }
     await d.changed("inventory_item");
-    if (out.kind === "done") d.notify(t("Stock set to {count}", { count: fmt.integer(n) }), "ok");
-    else d.notify(t("Count saved as a draft move. {why}", { why: out.why }), "info");
+    await d.changed(MOVE);
+    const r = out.value as { quantity?: number; notes?: string[] };
+    const now = Number(r.quantity ?? n);
+    if (now === n) d.notify(t("Stock set to {count}", { count: fmt.integer(n) }), "ok");
+    else
+      d.notify(
+        t("Stock is {count}: another move changed it meanwhile. Count again.", {
+          count: fmt.integer(now),
+        }),
+        "info",
+      );
     onClose();
   }
 
@@ -123,9 +130,7 @@ function CountDialog({ row, onClose }: { row: RecordExtProps["row"]; onClose: ()
           onFocus={(e) => e.currentTarget.select()}
         />
         <p className="hint">
-          {mayValidate(move)
-            ? t("The difference is booked as a stock count move, and the stock changes now.")
-            : t("The difference is saved as a stock count move for a stock manager to validate.")}
+          {t("The stock is set to the counted figure now; the difference is booked as a stock count move.")}
         </p>
         {error && (
           <p role="alert" className="error">
