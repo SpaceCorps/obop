@@ -19,7 +19,14 @@ const LINE = "accounting_se_vat_report_line";
 const REPORT = "accounting_se_vat_report";
 const CODE = "accounting_se_vat_code";
 
-type Data = { boxes: Row[]; lines: Row[]; currency: string; untaxed: string[] };
+type Data = {
+  boxes: Row[];
+  lines: Row[];
+  currency: string;
+  untaxed: string[];
+  /** code -> record id, so each code in the notice opens where its tax is chosen. */
+  codeIds: Record<string, string>;
+};
 
 /** The VAT codes that feed a box but name no tax: no ledger line can carry them (the compute refuses). */
 export function untaxedCodes(codes: readonly Row[]): string[] {
@@ -96,6 +103,10 @@ export function VatReturnPanel({ row }: RecordExtProps) {
         lines: lines.rows,
         currency: typeof cur === "string" && /^[A-Z]{3}$/.test(cur) ? cur : "SEK",
         untaxed: "error" in codes ? [] : untaxedCodes(codes.rows),
+        codeIds:
+          "error" in codes
+            ? {}
+            : Object.fromEntries(codes.rows.map((c) => [String(c.code ?? ""), c.id])),
       });
     })();
     return () => {
@@ -175,6 +186,21 @@ export function VatReturnPanel({ row }: RecordExtProps) {
               { codes: data.untaxed.join(", ") },
             )}
           </p>
+          <ul className="vat-untaxed" aria-label={t("Codes without a tax")}>
+            {data.untaxed.map((code) => (
+              <li key={code}>
+                <a
+                  href={
+                    data.codeIds[code]
+                      ? href({ app: "accounting_se", model: CODE, id: data.codeIds[code] })
+                      : codesHref
+                  }
+                >
+                  {t("Choose the tax of {code}", { code })}
+                </a>
+              </li>
+            ))}
+          </ul>
           <a className="btn vat-fix" href={codesHref}>
             {t("Open VAT codes")}
           </a>

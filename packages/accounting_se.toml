@@ -288,7 +288,7 @@ write_group = "accounting.manager"
 
   [model.ui]
   title = "{code} {label}"
-  list = ["code", "label", "treatment", "rate_bp", "base_box_id", "vat_box_id", "active", "review"]
+  list = ["code", "label", "treatment", "rate_bp", "tax_id", "base_box_id", "vat_box_id", "active", "review"]
   order = "code asc"
   default_view = "list"
   menu = "configuration"
