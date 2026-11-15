@@ -69,37 +69,67 @@
   margin: 0;
   padding: 0 1.25rem 1.5rem;
 }
+.chart-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  padding: 0.25rem 0 0.75rem;
+}
 .chart-title {
-  padding: 0.25rem 0 0.5rem;
   font-weight: var(--weight-semibold);
 }
-.chartsvg {
-  display: block;
+.chart-note {
+  margin: var(--space-2) 0 0;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+.switcher.small button {
+  min-block-size: var(--control-h-sm);
+  padding-inline: 0.6rem;
+  font-size: var(--text-xs);
+}
+
+/* ---------- Charts (charts/Chart.tsx): drawn at the container's pixel size ---------- */
+.chartbox {
+  --chart-other: color-mix(in oklab, var(--text-muted) 45%, var(--surface));
   inline-size: 100%;
-  max-inline-size: 54rem;
-  block-size: auto;
+  min-inline-size: 0;
+  max-inline-size: 60rem;
+}
+.chartsvg,
+.piesvg {
+  display: block;
+  max-inline-size: 100%;
+  overflow: visible;
 }
 .chartsvg .grid {
   stroke: var(--border);
   stroke-width: 1;
 }
+.chartsvg .grid.zero {
+  stroke: var(--border-strong);
+}
 .chartsvg .axis,
 .piesvg .axis {
   fill: var(--text-muted);
   font-family: var(--font-sans);
-  font-size: 11px;
+  font-size: 12px;
 }
 .chartsvg .vlabel-t {
   fill: var(--text);
   font-family: var(--font-sans);
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
 }
 .chartsvg .line {
   fill: none;
   stroke: var(--chart-1);
   stroke-width: 2.5;
   stroke-linejoin: round;
+  stroke-linecap: round;
 }
 .chartsvg .area {
   fill: color-mix(in oklab, var(--chart-1) 14%, transparent);
@@ -109,17 +139,20 @@
   stroke: var(--chart-1);
   stroke-width: 2.5;
 }
-/* The tap target around a line chart's 5-unit dot. */
+/* The tap target around a mark: a line's band, a horizontal bar's row. */
 .chartsvg .hit {
   fill: transparent;
 }
-.mark {
+.mark[role="button"] {
   cursor: pointer;
 }
-.mark:hover rect,
-.mark:hover path,
-.mark:hover .dot {
-  filter: brightness(1.12);
+.mark[role="button"]:hover rect:not(.hit),
+.mark[role="button"]:hover path,
+.mark[role="button"]:hover .dot {
+  filter: brightness(1.1) saturate(1.05);
+}
+.mark[role="button"]:hover .hit {
+  fill: color-mix(in oklab, var(--accent-fill) 6%, transparent);
 }
 .mark:focus-visible {
   outline: 2px solid var(--focus);
@@ -129,23 +162,24 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 2rem;
+  gap: var(--space-5) var(--space-8);
 }
 .piesvg {
-  inline-size: min(20rem, 100%);
-  block-size: auto;
+  flex: none;
 }
 .pie-total {
   fill: var(--text);
   font-family: var(--font-sans);
-  font-size: 19px;
+  font-size: 18px;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 .legend {
   display: flex;
+  flex: 1 1 14rem;
   flex-direction: column;
-  gap: 0.4rem;
-  min-inline-size: 14rem;
+  gap: 0.45rem;
+  min-inline-size: min(14rem, 100%);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -154,16 +188,21 @@
   display: flex;
   align-items: center;
   gap: 0.6rem;
+  min-inline-size: 0;
   font-size: var(--text-sm);
 }
 .swatch-sq {
   flex: none;
-  inline-size: 0.8rem;
-  block-size: 0.8rem;
+  inline-size: 0.75rem;
+  block-size: 0.75rem;
   border-radius: 3px;
 }
 .legend .lname {
   flex: 1;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .legend .lval {
   font-variant-numeric: tabular-nums lining-nums;
@@ -172,6 +211,154 @@
 .legend .lpct {
   min-inline-size: 2.5rem;
   text-align: end;
+}
+
+/* ---------- Report bar: a dimension with its period, the sort of the total ---------- */
+.dimpick {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-inline-size: 0;
+}
+.dimpick .period {
+  inline-size: auto;
+  min-block-size: var(--control-h-sm);
+  font-size: var(--text-sm);
+}
+.sortbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.sortbtn:hover {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.sortmark {
+  font-size: var(--text-xs);
+}
+/* A pivot's figure headers line up with their figures, at every width. */
+.pivot-table th.num {
+  text-align: end;
+}
+.pivot-table thead tr.curs th {
+  font-size: var(--text-xs);
+  letter-spacing: 0.02em;
+}
+
+/* ---------- Key figures (charts/KpiTile.tsx) ---------- */
+.kpistrip {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(13rem, 100%), 1fr));
+  gap: var(--space-4);
+}
+.kpi {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-inline-size: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  color: inherit;
+  text-decoration: none;
+  container-type: inline-size;
+}
+.kpi.plain {
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  box-shadow: none;
+}
+.kpi-label {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  overflow-wrap: anywhere;
+}
+.kpi .kpi-value {
+  font-size: clamp(1.25rem, 12cqi, var(--text-3xl));
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.kpi-more {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+.kpi-caption {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+/* A plain tile inside a card keeps a little room around it for the hover and the focus ring. */
+.kpi.plain.kpi-link {
+  margin: calc(var(--space-1) * -1);
+  padding: var(--space-1);
+}
+a.kpi-link:hover .kpi-value {
+  color: var(--accent-ink);
+}
+a.kpi-link:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.kpi.tone-ok .kpi-value {
+  color: var(--success-ink);
+}
+.kpi.tone-warn .kpi-value {
+  color: var(--warning-ink);
+}
+.kpi.tone-bad .kpi-value {
+  color: var(--danger-ink);
+}
+.kpi.tone-info .kpi-value {
+  color: var(--info-ink);
+}
+.kpi-wait {
+  display: grid;
+  gap: var(--space-2);
+  padding-block: 0.2rem;
+}
+.kpi-wait .skel {
+  display: block;
+  inline-size: 60%;
+  block-size: 1.6rem;
+  border-radius: var(--radius-xs);
+  background: linear-gradient(
+    90deg,
+    var(--surface-3) 25%,
+    color-mix(in oklab, var(--border) 60%, var(--surface-3)) 50%,
+    var(--surface-3) 75%
+  );
+  background-size: 200% 100%;
+  animation: ui-shimmer 1.4s linear infinite;
+}
+.kpi-wait .skel.short {
+  inline-size: 40%;
+  block-size: 0.75rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  .kpi-wait .skel {
+    animation: none;
+  }
 }
 
 @media (max-width: 40rem) {
@@ -186,18 +373,34 @@
   .chart {
     padding-inline: var(--space-4);
   }
-  /* 15 units of the 360-unit phone drawing: about 12 px at 320 and 15 px at 390, under the chart's
-     15 px title. */
-  .chartsvg .axis,
-  .chartsvg .vlabel-t {
-    font-size: 15px;
+  /* A dimension and its period on one row, the selects in the column of the other pickers. */
+  .viewbar > .dimpick {
+    display: flex;
+    flex: 1 1 100%;
   }
-  /* A slanted first x label may reach past the chart's start into the padding of .chart. */
-  .chartsvg {
-    overflow: visible;
+  .viewbar > .dimpick > .inline-field {
+    display: grid;
+    flex: 1 1 auto;
+    grid-template-columns: 5.5rem minmax(0, 1fr);
+    min-inline-size: 0;
   }
-  .piesvg .axis {
-    font-size: 14px;
+  .viewbar > .dimpick > .inline-field > select {
+    inline-size: 100%;
+  }
+  .viewbar > .dimpick > .period {
+    flex: none;
+  }
+  /* Columns shares its row with the button that swaps it with the rows. */
+  .viewbar > .dimpick.cols {
+    flex: 1 1 0;
+    min-inline-size: 0;
+  }
+  .kpistrip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+  }
+  .kpi {
+    padding: var(--space-3);
   }
 }
 /* Touch targets the control height tokens do not reach. */
