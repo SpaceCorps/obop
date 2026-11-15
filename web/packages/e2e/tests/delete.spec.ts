@@ -141,7 +141,7 @@ test.describe("delete", () => {
       .click();
 
     const done = page.getByRole("alertdialog", { name: "Delete finished" });
-    await expect(done.getByRole("status")).toHaveText("1 party deleted, 1 still in use.");
+    await expect(done.getByRole("status")).toHaveText("1 contact deleted, 1 still in use.");
     await expect(done.locator("li", { hasText: `${stem} free` })).toContainText("deleted");
     await expect(done.locator("li", { hasText: `${stem} used` })).toContainText("still in use");
     await expect(done.getByRole("link")).toHaveCount(1);

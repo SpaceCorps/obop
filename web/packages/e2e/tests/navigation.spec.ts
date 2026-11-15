@@ -38,7 +38,9 @@ test.describe("launcher and command palette", () => {
     await expect(palette.getByRole("textbox")).toBeFocused();
 
     await palette.getByRole("textbox").fill("quotation");
-    await expect(palette.getByRole("option", { name: /Sales › Quotation \/ Order List/ })).toBeVisible();
+    await expect(
+      palette.getByRole("option", { name: /Sales › Quotation \/ Order List/ }),
+    ).toBeVisible();
     await page.keyboard.press("Enter");
 
     await expect(palette).toHaveCount(0);
