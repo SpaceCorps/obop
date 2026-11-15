@@ -348,7 +348,7 @@ Progress `reimbursement_state` (`not_due`, `to_reimburse`, `in_payroll`, `reimbu
 
 **Purpose.** Everything an employee does for themselves, for any number of employees at no cost (there are no seats, OR-2). Each page is a UI client of the commands of its backing module (4.13).
 
-**MVP.** The pages below. **Later.** Native apps: React Native (Expo) apps are allowed as obop clients (OR-34) and the proposal limits them to cases a PWA cannot serve (Proposed, D87, [mobile.md](mobile.md)); the first is Mileage, which is not a self-service page.
+**MVP.** The pages below. **Later.** Native apps: React Native (Expo) apps are allowed as obop clients (OR-34) and the proposal limits them to cases a PWA cannot serve (Proposed, D87, [mobile.md](mobile.md)); the first is Mileage, which is not a self-service page. The phone client is planned as one host app that holds modules, Mileage the first (Proposed: a direction relayed to the project and not yet confirmed by the owner; D93, [mobile-host.md](mobile-host.md)).
 
 | Page | Backing module | Scope |
 |---|---|---|
