@@ -34,7 +34,7 @@ test.describe("the data model", () => {
     expect((await api.run("root", "sale_order.get", { id: order.id })).total_minor).toBe(152500);
 
     await signIn("root", `/sales/sale_order?view=list&id=${order.id}`);
-    const panel = panelOf(page, "Sale order");
+    const panel = panelOf(page, "Quotation / Order");
     await expect(panel.getByLabel("Total")).toHaveValue(/1,?525\.00/);
     await expect(panel.getByLabel("Total")).toHaveAttribute("readonly", "");
     await panel.getByRole("button", { name: "Confirm", exact: true }).click();
@@ -49,7 +49,7 @@ test.describe("the data model", () => {
     expect(invoices[0].number).toBeFalsy();
 
     await page.goto(`/#/invoicing/invoice?view=list&id=${invoices[0].id}`);
-    const inv = panelOf(page, "Invoice");
+    const inv = panelOf(page, "Customer invoice");
     await expect(inv.getByLabel("Total")).toHaveValue(/1,?525\.00/);
     await inv.getByRole("button", { name: "Post *", exact: true }).click();
     await expect(page.locator(".toast").filter({ hasText: "Post done" })).toBeVisible();

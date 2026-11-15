@@ -21,6 +21,8 @@ pub struct ModelExt {
     /// reserved name (a module installed before the name was reserved) never has it, so that
     /// field stays an ordinary, writable field.
     pub system_fields: bool,
+    /// `[model.ui]` and `[[model.child]]` (D95); `None`: none declared.
+    pub ui: Option<std::sync::Arc<crate::ui::ModelUi>>,
 }
 
 /// Record history of one model (D75). A model that does not turn it off keeps the full history,
@@ -101,15 +103,19 @@ pub struct Exit {
     pub may_change: Vec<&'static str>,
 }
 
-/// A date field and the setting that holds the lock date; records dated on or before it are frozen.
+/// A date field and where its lock comes from (exactly one of the two): `setting`, a dotted key of
+/// the instance settings that holds a lock date (records dated on or before it are frozen), or
+/// `closed_by`, a model of periods (`start_on`, `end_on` and a select with the option `closed`;
+/// records dated inside a closed period are frozen).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LockDate {
     pub field: &'static str,
-    pub setting: &'static str,
+    pub setting: Option<&'static str>,
+    pub closed_by: Option<&'static str>,
 }
 
 /// The guard a model declares (D77): when its records are frozen, and what may still change.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Guard {
     /// The records in these states are frozen.
     pub immutable_when: Option<StateSet>,
@@ -125,4 +131,7 @@ pub struct Guard {
     pub children_of: Option<&'static str>,
     /// Records can be created and read, never changed or deleted.
     pub append_only: bool,
+    /// What an interface says about a frozen record ("A posted invoice cannot be changed."); plain
+    /// English, at most 200 characters. Display only (D95).
+    pub message: Option<&'static str>,
 }

@@ -1,0 +1,37 @@
+# English names and plurals of the built-in Connectors module (D52, D95).
+
+[labels.en.model.connector_provider]
+name = "Connector"
+plural = "Catalog"
+
+[labels.en.model.provider_policy]
+name = "Connector setting"
+plural = "Connector settings"
+
+[labels.en.model.connection]
+name = "Connection"
+plural = "Connections"
+
+[labels.en.model.consent]
+name = "Consent"
+plural = "Consents"
+
+[labels.en.model.sync_run]
+name = "Sync run"
+plural = "Sync runs"
+
+[labels.en.model.data_flow_log]
+name = "Data flow"
+plural = "Activity"
+
+[labels.en.model.processing_register]
+name = "Processing record"
+plural = "Processing register"
+
+[labels.en.model.egress_policy]
+name = "Egress rule"
+plural = "Egress rules"
+
+[labels.en.model.privacy_preview]
+name = "Privacy preview"
+plural = "Privacy previews"

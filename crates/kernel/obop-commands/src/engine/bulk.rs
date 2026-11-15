@@ -425,10 +425,33 @@ fn create_row(
     let mut f = to_fields(&given);
     // An import rounds a decimal that has too many fractional digits when its field declares
     // how (`round`); a create never does.
+    super::hints::refuse_readonly(def, &f, None)?;
+    {
+        let today = super::hints::today(eng);
+        let cx = super::hints::FillCtx {
+            eng,
+            reads: &*unit,
+            look,
+            actor,
+            today: &today,
+        };
+        super::hints::fill_in(&cx, def, &mut f)?;
+    }
     kinds::canonicalise(def, &mut f, Path::Import)?;
     default_governed(def, &mut f);
     own_default(def, &mut f, actor);
     check_fields(unit, look, actor, def, &f, true)?;
+    {
+        let today = super::hints::today(eng);
+        let cx = super::hints::FillCtx {
+            eng,
+            reads: &*unit,
+            look,
+            actor,
+            today: &today,
+        };
+        super::hints::check_ref_filters(&cx, def, &f, None)?;
+    }
     seq::assign(unit, def, &mut f, None, eng.now())?;
     if let Some(why) = creator_blocked(&Gate::new(unit, look, actor), def, &f) {
         return Err(why);

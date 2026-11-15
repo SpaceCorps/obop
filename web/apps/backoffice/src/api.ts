@@ -315,6 +315,15 @@ export function setTime(zone: string | undefined, tzdb = ""): void {
 export function getCoreVersion(): string {
   return coreVersion;
 }
+let instanceCurrency = "";
+/**
+ * The instance currency (D95: `currency` of `/api/meta`, `OBOP_CURRENCY` on the server, EUR by
+ * default); empty until the metadata has been read or from an older server. Pass it as
+ * presentation.ts `PresentCtx.instanceCurrency`.
+ */
+export function getInstanceCurrency(): string {
+  return instanceCurrency;
+}
 
 export type Reply =
   | { kind: "ok"; value: unknown; denied: string[] }
@@ -379,9 +388,11 @@ export async function meta(
     modules: ModuleMeta[];
     core_version?: string;
     time?: { zone?: string; tzdb_version?: string };
+    currency?: string;
   } | null;
   if (!body || !Array.isArray(body.modules)) return "failed";
   if (body.core_version) coreVersion = body.core_version;
+  if (body.currency) instanceCurrency = body.currency;
   setTime(body.time?.zone, body.time?.tzdb_version);
   const modules = body.modules;
   // An older server may not send the kind yet: money by name, everything else text.

@@ -37,13 +37,15 @@ test.describe("launcher and command palette", () => {
     await expect(palette).toBeVisible();
     await expect(palette.getByRole("textbox")).toBeFocused();
 
-    await palette.getByRole("textbox").fill("sale order");
-    await expect(palette.getByRole("option", { name: /Sales › Sale order List/ })).toBeVisible();
+    await palette.getByRole("textbox").fill("quotation");
+    await expect(
+      palette.getByRole("option", { name: /Sales › Quotation \/ Order List/ }),
+    ).toBeVisible();
     await page.keyboard.press("Enter");
 
     await expect(palette).toHaveCount(0);
     await expect(page).toHaveURL(/#\/sales\/sale_order$/);
-    await expect(page.getByRole("region", { name: "Sale order" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Quotation / Order" })).toBeVisible();
 
     // Toggles closed with the same shortcut.
     await page.keyboard.press("ControlOrMeta+k");

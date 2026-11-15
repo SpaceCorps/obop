@@ -1,0 +1,14 @@
+# English names and plurals of the built-in Products module (D52, D95).
+
+[labels.en.model.product]
+name = "Product"
+plural = "Products"
+
+[labels.en.model.product.field.sku]
+label = "SKU"
+
+[labels.en.model.product.field.list_price_minor]
+label = "Sales price"
+
+[labels.en.model.product.field.cost_minor]
+label = "Cost"
