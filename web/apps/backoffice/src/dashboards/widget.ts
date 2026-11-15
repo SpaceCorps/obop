@@ -1,16 +1,9 @@
 import { t } from "@obop/ui";
-import {
-  aggregate,
-  search,
-  type FieldMeta,
-  type ModelMeta,
-  type Row,
-  type ServerFilter,
-} from "../api.ts";
+import { search, type FieldMeta, type ModelMeta, type Row, type ServerFilter } from "../api.ts";
 import { isEmpty } from "../format.ts";
 import { fieldTitle } from "../labels.ts";
-import { domainOf, groupLabel, groupable, measurable, type Lookup } from "../query.ts";
-import { groupByFor, keyOf, measuresFor, valueOfGroup } from "../useAggregate.ts";
+import { currencySplit, dimensionsOf, type Dim, type MeasureSel } from "../reports.ts";
+import { fetchReport, type ReportAnswer } from "../useAggregate.ts";
 import { parseFilter, toServerFilter, type Condition } from "./filter.ts";
 
 export type WidgetKind = "kpi" | "bar" | "line" | "pie" | "table";
@@ -38,6 +31,9 @@ export type Dashboard = {
   shared?: boolean | null;
   position?: number | null;
 };
+
+/** The kinds of field a tile can add up. */
+const SUMMABLE_KINDS = new Set<FieldMeta["kind"]>(["number", "money", "decimal"]);
 
 /** What a widget reads, checked against the models this person can see. */
 export type Resolved =
@@ -70,7 +66,7 @@ export function resolve(w: Widget, models: Map<string, { model: ModelMeta }>): R
       return { ok: false, reason: "invalid", detail: t("A sum needs a measure field") };
     measure = model.fields.find((f) => f.name === w.measure_field);
     if (!measure) return { ok: false, reason: "noaccess", detail: String(w.measure_field) };
-    if (!measurable([measure]).length)
+    if (!SUMMABLE_KINDS.has(measure.kind))
       return {
         ok: false,
         reason: "invalid",
@@ -81,7 +77,7 @@ export function resolve(w: Widget, models: Map<string, { model: ModelMeta }>): R
   if (!isEmpty(w.group_by)) {
     dim = model.fields.find((f) => f.name === w.group_by);
     if (!dim) return { ok: false, reason: "noaccess", detail: String(w.group_by) };
-    if (!groupable([dim]).length)
+    if (!dimensionsOf([dim]).length)
       return {
         ok: false,
         reason: "invalid",
@@ -92,18 +88,28 @@ export function resolve(w: Widget, models: Map<string, { model: ModelMeta }>): R
   return { ok: true, model, conds: parsed.conds, filter: sf.filter, measure, dim };
 }
 
-export type Point = { key: string; label: string; value: number };
+/** What a resolved widget measures: the count, or the sum of its field. */
+export const widgetMeasure = (r: Extract<Resolved, { ok: true }>): MeasureSel =>
+  r.measure ? { field: r.measure, op: "sum" } : null;
+
+/** What a resolved widget splits by: its field, a date or instant by month. */
+export const widgetDim = (r: Extract<Resolved, { ok: true }>): Dim | undefined =>
+  r.dim
+    ? {
+        field: r.dim,
+        ...(r.dim.kind === "date" || r.dim.kind === "datetime" ? { bucket: "month" as const } : {}),
+      }
+    : undefined;
 
 export type WidgetData =
-  | { kind: "kpi"; value: number; measure?: FieldMeta; total: number; truncated: boolean }
   | {
-      kind: "series";
-      /** The server's groups (D4): the value of each group key; the card labels them. */
-      groups: { key: string; value: number }[];
-      measure?: FieldMeta;
-      dim: FieldMeta;
-      total: number;
-      truncated: boolean;
+      kind: "report";
+      /** The server's groups (D4), with the value that tells each group's currency. */
+      answer: ReportAnswer;
+      measure: MeasureSel;
+      dim?: Dim;
+      /** The field the groups are split by for their currency, when the measure is money. */
+      split?: string;
     }
   | { kind: "rows"; rows: Row[]; model: ModelMeta; total: number };
 
@@ -112,32 +118,19 @@ export type Fetched =
   | { state: "noaccess"; detail: string }
   | { state: "error"; message: string };
 
-/** The labelled points of a chart from the server's groups (labels of refs arrive later). */
-export function buildPoints(
-  groups: { key: string; value: number }[],
-  dim: FieldMeta,
-  lk: Lookup,
-): Point[] {
-  const value = new Map(groups.map((g) => [g.key, g.value]));
-  return domainOf(dim, [...value.keys()], lk).map((key) => ({
-    key,
-    label: groupLabel(dim, key, lk),
-    value: value.get(key) ?? 0,
-  }));
-}
-
 /** Ask the server for what a widget needs and shape it. Never throws. */
 export async function fetchWidget(
   token: string,
   w: Widget,
   r: Extract<Resolved, { ok: true }>,
 ): Promise<Fetched> {
-  const { model, filter, measure, dim } = r;
+  const { model, filter } = r;
   const fail = (e: { error: string }): Fetched =>
     /unknown field /.test(e.error)
       ? { state: "noaccess", detail: e.error }
       : { state: "error", message: e.error };
 
+  const dim = widgetDim(r);
   if (w.kind === "table" && !dim) {
     const res = await search(token, model.name, {
       filter: filter.length ? filter : undefined,
@@ -148,35 +141,18 @@ export async function fetchWidget(
   }
   // Counts and sums are computed by the server over every matching record (D4), under this
   // person's access rules: a field they cannot read answers "unknown field" and shows "No access".
-  const res = await aggregate(token, model.name, {
+  const measure = widgetMeasure(r);
+  const split = currencySplit(model, measure)?.field;
+  const res = await fetchReport(token, {
+    model: model.name,
     filter,
-    group_by: dim ? [groupByFor(dim)] : [],
-    measures: measuresFor(measure),
+    dims: dim && w.kind !== "kpi" ? [dim] : [],
+    measure,
+    split,
   });
   if ("error" in res) return fail(res);
-  if (w.kind === "kpi")
-    return {
-      state: "ready",
-      data: {
-        kind: "kpi",
-        value: measure ? (res.groups[0] ? valueOfGroup(res.groups[0], measure) : 0) : res.total,
-        measure,
-        total: res.total,
-        truncated: false,
-      },
-    };
   return {
     state: "ready",
-    data: {
-      kind: "series",
-      groups: res.groups.map((g) => ({
-        key: keyOf(g.key[dim!.name]),
-        value: valueOfGroup(g, measure),
-      })),
-      measure,
-      dim: dim!,
-      total: res.total,
-      truncated: false,
-    },
+    data: { kind: "report", answer: res, measure, dim: w.kind === "kpi" ? undefined : dim, split },
   };
 }

@@ -1,122 +1,165 @@
-import { useId, useMemo, useState } from "react";
-import { fmt as fmtLocale, getCurrency, t } from "@obop/ui";
-import type { FieldMeta } from "../api.ts";
+import { useMemo, useState } from "react";
+import { fmt, inSentence, t } from "@obop/ui";
+import type { FieldMeta, ModelMeta } from "../api.ts";
+import { Chart, foldOther, MAX_BARS, OTHER_KEY, type ChartDatum } from "../charts/Chart.tsx";
 import { useData } from "../data.tsx";
 import { fieldTitle } from "../labels.ts";
-import { PHONE_QUERY, useMedia } from "../media.ts";
+import { stateFieldOf, toneClassOf } from "../presentation.ts";
+import { domainOf, type Cond, type GraphCfg, type Lookup } from "../query.ts";
 import {
-  condForKey,
-  currencyOf,
-  domainOf,
-  groupKey,
-  groupLabel,
-  groupable,
-  orderKeys,
-  type GraphCfg,
-} from "../query.ts";
+  cellValue,
+  compactMeasure,
+  currenciesOf,
+  defaultRows,
+  dimAxisLabel,
+  dimCond,
+  dimLabel,
+  dimRef,
+  dimensionsOf,
+  dimTitle,
+  fillPeriods,
+  formatMeasure,
+  isDated,
+  measureTitle,
+  orderDimKeys,
+  parseDim,
+  type Cell,
+  type Dim,
+  type MeasureSel,
+  type ReportRow,
+} from "../reports.ts";
 import { Icon } from "../ui.tsx";
-import { fmt, MeasurePicker, measureName, measureOf } from "./PivotView.tsx";
-import {
-  groupByFor,
-  keyOf,
-  measuresFor,
-  useAggregate,
-  useCurrencyOf,
-  valueOfGroup,
-} from "../useAggregate.ts";
+import { useReportRows, useTitleLookup } from "../useAggregate.ts";
 import { AggState } from "./AggState.tsx";
-import { kanbanField } from "./KanbanView.tsx";
+import { DimPicker, MeasurePicker, useMeasures } from "./PivotView.tsx";
 import type { ViewProps } from "./types.ts";
 
-export type Datum = { key: string; label: string; value: number };
+/** Whether the groups of a dimension carry a meaning that their badge colours show. */
+export function tonedDim(model: ModelMeta, f: FieldMeta): boolean {
+  return f.kind === "select" && (!!f.ui?.tones || stateFieldOf(model)?.name === f.name);
+}
 
-const color = (i: number) => `var(--chart-${(i % 8) + 1})`;
+/**
+ * The points of a chart from a report's rows in one currency: every option of a select or a
+ * yes/no (zero where none), every period of a date between the first and the last, the refs
+ * that have records. Labels are short on the axis and full in tooltips.
+ */
+export function chartPoints(
+  model: ModelMeta,
+  dim: Dim,
+  m: MeasureSel,
+  rows: readonly ReportRow[],
+  lk: Lookup,
+): ChartDatum[] {
+  const cells = new Map<string, Cell>();
+  for (const r of rows) {
+    const k = r.keys[0] ?? "";
+    const c = cells.get(k) ?? { count: 0, value: 0 };
+    c.count += r.count;
+    c.value += r.value;
+    cells.set(k, c);
+  }
+  const present = [...cells.keys()];
+  const f = dim.field;
+  const keys =
+    f.kind === "select" || f.kind === "bool"
+      ? domainOf(f, present, lk)
+      : isDated(f)
+        ? fillPeriods(orderDimKeys(dim, present, lk), dim.bucket ?? "month")
+        : orderDimKeys(dim, present, lk);
+  const toned = tonedDim(model, f);
+  return keys.map((key) => ({
+    key,
+    label: dimAxisLabel(dim, key, lk),
+    full: dimLabel(dim, key, lk),
+    value: cellValue(m, cells.get(key)),
+    tone: toned ? toneClassOf(f, key, model) : undefined,
+  }));
+}
 
-const compact = (m: FieldMeta | undefined, n: number, currency?: string) => {
-  const cur = currency ?? getCurrency();
-  return m?.kind === "money"
-    ? new Intl.NumberFormat(fmtLocale.locale, {
-        style: "currency",
-        currency: cur,
-        notation: "compact",
-        maximumFractionDigits: 1,
-      }).format(n / 10 ** fmtLocale.exponent(cur))
-    : new Intl.NumberFormat(fmtLocale.locale, {
-        notation: "compact",
-        maximumFractionDigits: 1,
-      }).format(n);
-};
-
-/** A "nice" axis maximum and tick step for the largest value. */
-function niceScale(max: number, step = 4): { top: number; ticks: number[] } {
-  if (max <= 0) return { top: 1, ticks: [0, 1] };
-  const raw = max / step;
-  const pow = 10 ** Math.floor(Math.log10(raw));
-  const unit = [1, 2, 2.5, 5, 10].map((k) => k * pow).find((u) => u >= raw) ?? raw;
-  const top = Math.ceil(max / unit) * unit;
-  const ticks: number[] = [];
-  for (let v = 0; v <= top + unit / 2; v += unit) ticks.push(v);
-  return { top, ticks };
+/** The condition behind "Other": none of the groups the chart shows. */
+export function otherCond(dim: Dim, data: ChartDatum[], keep: number): Cond | null {
+  if (dim.field.kind !== "select" && dim.field.kind !== "ref") return null;
+  const shown = foldOther(data, keep)
+    .filter((x) => x.key !== OTHER_KEY)
+    .map((x) => x.key);
+  return { op: "isnot", f: dim.field.name, v: shown };
 }
 
 export function GraphView(p: ViewProps) {
   const d = useData();
-  const { fields, rows } = p;
+  const { fields, model } = p;
   const cfg: GraphCfg = p.state.graph ?? {};
-  const gfs = groupable(fields);
-  const dim = gfs.find((f) => f.name === cfg.dim) ?? kanbanField(fields, undefined)!;
-  const m = measureOf(fields, cfg.measure);
-  const type = cfg.type ?? (dim.kind === "date" ? "line" : "bar");
+  const dims = useMemo(() => dimensionsOf(fields), [fields]);
+  const { opts, measure: m, index, setup } = useMeasures(model, fields, cfg.measure);
+  const dim = parseDim(cfg.dim, dims) ?? defaultRows(model, dims, index, setup);
+  const type = cfg.type ?? (dim && isDated(dim.field) ? "line" : "bar");
   const [asTable, setAsTable] = useState(false);
-  const id = useId();
+  const lk = useTitleLookup();
+  const [pickedCur, setPickedCur] = useState<string | undefined>();
   const set = (patch: Partial<GraphCfg>) => p.setState({ ...p.state, graph: { ...cfg, ...patch } });
 
-  const agg = useAggregate({
-    enabled: !!p.server,
-    model: p.model.name,
+  const report = useReportRows({
+    server: !!p.server,
+    model,
     filter: p.server?.filter ?? [],
-    groupBy: [groupByFor(dim)],
-    measures: measuresFor(m),
+    dims: dim ? [dim] : [],
+    measure: m,
+    rows: p.rows,
   });
-  const money = useCurrencyOf(!!p.server, p.model, p.server?.filter ?? []);
+  const curs = currenciesOf(report.rows);
+  const cur = curs.includes(pickedCur) ? pickedCur : curs[0];
+  const dimKey = dim ? dimRef(dim) : "";
 
-  const data = useMemo<Datum[]>(() => {
-    // The value of each group: summed on the server (D4), or counted from the rows in the browser.
-    const values = new Map<string, number>();
-    if (p.server)
-      for (const g of agg.groups) values.set(keyOf(g.key[dim.name]), valueOfGroup(g, m));
-    else
-      for (const r of rows) {
-        const k = groupKey(dim, r);
-        values.set(k, (values.get(k) ?? 0) + (m ? Number(r[m.name]) || 0 : 1));
-      }
-    const present = [...values.keys()];
-    const keys =
-      dim.kind === "select" || dim.kind === "bool"
-        ? domainOf(dim, present, d.lookup)
-        : orderKeys(dim, present, d.lookup);
-    return keys.map((key) => ({
-      key,
-      label: groupLabel(dim, key, d.lookup),
-      value: values.get(key) ?? 0,
-    }));
+  const byCur = useMemo(
+    () =>
+      dim
+        ? curs.map((c) => ({
+            cur: c,
+            data: chartPoints(
+              model,
+              dim,
+              m,
+              report.rows.filter((r) => r.currency === c),
+              lk,
+            ),
+          }))
+        : [],
+    // The refs stand for the dimension and the currencies; ref labels arrive with `version`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [p.server, agg.groups, rows, dim, m, d.version, d.lang]);
+    [report.rows, dimKey, curs.join(), model, lk, d.lang],
+  );
 
-  const total = data.reduce((n, x) => n + Math.max(x.value, 0), 0);
-  const cur = p.server ? money : currencyOf(rows);
+  if (!dim) return <p className="hint pad">{t("Nothing to group these records by.")}</p>;
+
+  const all = byCur.find((x) => x.cur === cur)?.data ?? [];
+  // A series in time has no place for records without a date: the table lists them, the chart says so.
+  const undated = isDated(dim.field) && all.some((x) => x.key === "" && x.value !== 0);
+  const data = isDated(dim.field) ? all.filter((x) => x.key !== "") : all;
+  const format = (n: number) => formatMeasure(m, n, cur);
+  const total = all.reduce((n, x) => n + Math.max(x.value, 0), 0);
   const name = t("{measure} by {dimension}", {
-    measure: measureName(m),
-    dimension: fieldTitle(dim),
+    measure: measureTitle(m),
+    dimension: dimTitle(dim),
   });
   const chart =
     type === "pie" ? t("Donut chart") : type === "line" ? t("Line chart") : t("Bar chart");
   const summary = t("{chart}. {name}: {values}.", {
     chart,
     name,
-    values: data.map((x) => `${x.label} ${fmt(m, x.value, cur.currency)}`).join(", "),
+    values: data.map((x) => `${x.full ?? x.label} ${format(x.value)}`).join(", "),
   });
-  const drill = (key: string) => p.drill([condForKey(dim, key)]);
+  const keep = type === "pie" ? 7 : 8;
+  const pick = (key: string) => {
+    if (key !== OTHER_KEY) return p.drill([dimCond(dim, key)]);
+    const c = otherCond(dim, data, keep);
+    if (c) p.drill([c]);
+  };
+  const toned = tonedDim(model, dim.field);
+  const distinctTones = new Set(data.map((x) => x.tone)).size === data.length;
+  const colors =
+    toned && (type !== "pie" || distinctTones) ? "tone" : type === "pie" ? "palette" : "single";
+  const empty = data.length === 0 || report.rows.length === 0;
 
   return (
     <div className="graph">
@@ -128,29 +171,28 @@ export function GraphView(p: ViewProps) {
             </button>
           ))}
         </div>
-        <label className="inline-field">
-          <span>{t("Dimension")}</span>
-          <select value={dim.name} onChange={(e) => set({ dim: e.target.value })}>
-            {gfs.map((f) => (
-              <option key={f.name} value={f.name}>
-                {f.kind === "date" ? t("{field} (month)", { field: fieldTitle(f) }) : fieldTitle(f)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <MeasurePicker
-          fields={fields}
-          value={m?.name}
-          onChange={(v) => set({ measure: v === "count" ? undefined : v })}
+        <DimPicker
+          label={t("Dimension")}
+          dims={dims}
+          value={dim}
+          onChange={(v) => set({ dim: v })}
         />
+        <MeasurePicker opts={opts} value={m} onChange={(measure) => set({ measure })} />
         <span className="grow" />
         <button className="btn small" aria-pressed={asTable} onClick={() => setAsTable(!asTable)}>
           <Icon name={asTable ? "graph" : "list"} size={13} />{" "}
           {asTable ? t("Show chart") : t("Show data table")}
         </button>
       </div>
-      <AggState agg={p.server ? agg : { ...agg, loaded: true, error: undefined }}>
-        {data.length === 0 ? (
+      {report.mixed && (
+        <p className="notice-bar" role="status">
+          {t(
+            "These records use more than one currency; the amounts are added up as if they were one.",
+          )}
+        </p>
+      )}
+      <AggState agg={report}>
+        {empty ? (
           <p className="hint pad">{t("No data to chart.")}</p>
         ) : asTable ? (
           <div className="tablewrap">
@@ -158,23 +200,33 @@ export function GraphView(p: ViewProps) {
               <caption className="sr-only">{name}</caption>
               <thead>
                 <tr>
-                  <th scope="col">{fieldTitle(dim)}</th>
-                  <th scope="col" className="num">
-                    {measureName(m)}
-                  </th>
-                  <th scope="col" className="num">
-                    {t("Share")}
-                  </th>
+                  <th scope="col">{dimTitle(dim)}</th>
+                  {byCur.map((x) => (
+                    <th key={x.cur ?? ""} scope="col" className="num">
+                      {byCur.length > 1 ? `${measureTitle(m)} (${x.cur})` : measureTitle(m)}
+                    </th>
+                  ))}
+                  {byCur.length === 1 && (
+                    <th scope="col" className="num">
+                      {t("Share")}
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody>
-                {data.map((x) => (
+                {(byCur[0]?.data ?? []).map((x, i) => (
                   <tr key={x.key || "none"}>
-                    <th scope="row">{x.label}</th>
-                    <td className="num">{fmt(m, x.value, cur.currency)}</td>
-                    <td className="num">
-                      {total ? fmtLocale.percent(Math.max(x.value, 0) / total, 0) : "–"}
-                    </td>
+                    <th scope="row">{x.full ?? x.label}</th>
+                    {byCur.map((c) => (
+                      <td key={c.cur ?? ""} className="num">
+                        {formatMeasure(m, c.data[i]?.value ?? 0, c.cur)}
+                      </td>
+                    ))}
+                    {byCur.length === 1 && (
+                      <td className="num">
+                        {total ? fmt.percent(Math.max(x.value, 0) / total, 0) : "–"}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -182,252 +234,47 @@ export function GraphView(p: ViewProps) {
           </div>
         ) : (
           <figure className="chart">
-            <figcaption className="chart-title">{name}</figcaption>
-            {type === "pie" ? (
-              <Pie
-                data={data}
-                m={m}
-                cur={cur.currency}
-                total={total}
-                id={id}
-                title={chart}
-                summary={summary}
-                onPick={drill}
-              />
-            ) : (
-              <Cartesian
-                data={data}
-                m={m}
-                cur={cur.currency}
-                type={type}
-                id={id}
-                title={chart}
-                summary={summary}
-                onPick={drill}
-              />
+            <figcaption className="chart-head">
+              <span className="chart-title">{name}</span>
+              {curs.length > 1 && (
+                <span className="switcher small" role="group" aria-label={t("Currency")}>
+                  {curs.map((c) => (
+                    <button key={c ?? ""} aria-pressed={c === cur} onClick={() => setPickedCur(c)}>
+                      {c}
+                    </button>
+                  ))}
+                </span>
+              )}
+            </figcaption>
+            <Chart
+              kind={type}
+              data={data}
+              format={format}
+              compact={(n) => compactMeasure(m, n, cur)}
+              title={chart}
+              summary={summary}
+              onPick={pick}
+              ordered={isDated(dim.field)}
+              colors={colors}
+              maxHeight={type === "pie" ? undefined : 360}
+            />
+            {undated && (
+              <p className="chart-note">
+                {t("Records without {field} are not in the chart; the data table lists them.", {
+                  field: inSentence(fieldTitle(dim.field)),
+                })}
+              </p>
+            )}
+            {data.length > MAX_BARS && type === "bar" && !isDated(dim.field) && (
+              <p className="chart-note">
+                {t("The {count} largest are shown; the rest are added up as Other.", {
+                  count: keep,
+                })}
+              </p>
             )}
           </figure>
         )}
       </AggState>
-    </div>
-  );
-}
-
-export type ChartProps = {
-  data: Datum[];
-  m: FieldMeta | undefined;
-  id: string;
-  /** The short name of the chart ("Bar chart"); `summary` is the long description. */
-  title: string;
-  summary: string;
-  /** The currency of money values, when the records share one. */
-  cur?: string;
-  onPick: (key: string) => void;
-};
-
-const activate = (fn: () => void) => ({
-  role: "button" as const,
-  tabIndex: 0,
-  onClick: fn,
-  onKeyDown: (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      fn();
-    }
-  },
-});
-
-export function Cartesian({
-  data,
-  m,
-  type,
-  id,
-  title,
-  summary,
-  cur,
-  onPick,
-}: ChartProps & { type: "bar" | "line" }) {
-  // The drawing is scaled to the screen. A phone gets a narrower one, so the 15-unit type of
-  // charts.css comes out at 12 to 15 px instead of 7.
-  const narrow = useMedia(PHONE_QUERY);
-  const W = narrow ? 360 : 640;
-  const H = narrow ? 300 : 340;
-  const max = Math.max(...data.map((x) => x.value), 0);
-  const { top, ticks } = niceScale(max);
-  // At that size a fixed margin would cut money ticks such as "€7.5K", so a phone's left margin
-  // fits the longest tick label (about 10 units a character).
-  const tickChars = Math.max(...ticks.map((tick) => compact(m, tick, cur).length));
-  const M = narrow
-    ? { l: Math.min(Math.max(tickChars * 10 + 12, 32), 120), r: 8, t: 20, b: 72 }
-    : { l: 64, r: 16, t: 20, b: 64 };
-  const iw = W - M.l - M.r;
-  const ih = H - M.t - M.b;
-  const band = iw / data.length;
-  const y = (v: number) => M.t + ih - (Math.max(v, 0) / top) * ih;
-  const cx = (i: number) => M.l + band * i + band / 2;
-  const cut = narrow ? 9 : 13;
-  const trunc = (s: string) => (s.length > cut + 1 ? `${s.slice(0, cut)}…` : s);
-  // Labels slant when they would run into each other: past 6 on a wide chart; on a phone as soon
-  // as the longest one (about 8.5 units a character) is wider than its band. Values above the
-  // marks show only while they fit too.
-  const widest = (texts: string[]) => Math.max(...texts.map((s) => s.length));
-  const rotate = narrow ? widest(data.map((x) => trunc(x.label))) * 8.5 > band : data.length > 6;
-  const values = narrow
-    ? widest(data.map((x) => compact(m, x.value, cur))) * 10 <= band
-    : data.length <= 12;
-  const pts = data.map((x, i) => `${cx(i)},${y(x.value)}`).join(" ");
-  const mark = (x: Datum) =>
-    t("{label}: {value}. Show records.", { label: x.label, value: fmt(m, x.value, cur) });
-  return (
-    <svg
-      viewBox={`0 0 ${W} ${H}`}
-      className="chartsvg"
-      role="group"
-      aria-labelledby={`${id}-t`}
-      aria-describedby={`${id}-d`}
-    >
-      <title id={`${id}-t`}>{title}</title>
-      <desc id={`${id}-d`}>{summary}</desc>
-      {ticks.map((tick) => (
-        <g key={tick}>
-          <line x1={M.l} x2={W - M.r} y1={y(tick)} y2={y(tick)} className="grid" />
-          <text x={M.l - 8} y={y(tick)} className="axis" textAnchor="end" dominantBaseline="middle">
-            {compact(m, tick, cur)}
-          </text>
-        </g>
-      ))}
-      {type === "line" && (
-        <>
-          <polygon
-            points={`${cx(0)},${y(0)} ${pts} ${cx(data.length - 1)},${y(0)}`}
-            className="area"
-          />
-          <polyline points={pts} className="line" />
-        </>
-      )}
-      {data.map((x, i) => (
-        <g key={x.key || "none"}>
-          {type === "bar" ? (
-            <g {...activate(() => onPick(x.key))} aria-label={mark(x)} className="mark">
-              <title>{`${x.label}: ${fmt(m, x.value, cur)}`}</title>
-              <rect
-                x={cx(i) - Math.min(band * 0.36, 44)}
-                width={Math.min(band * 0.72, 88)}
-                y={y(x.value)}
-                height={Math.max(y(0) - y(x.value), 0)}
-                rx={5}
-                style={{ fill: color(i) }}
-              />
-            </g>
-          ) : (
-            <g {...activate(() => onPick(x.key))} aria-label={mark(x)} className="mark">
-              <title>{`${x.label}: ${fmt(m, x.value, cur)}`}</title>
-              {/* The 5-unit dot alone is too small to tap: a transparent target around it. */}
-              <circle cx={cx(i)} cy={y(x.value)} r={22} className="hit" />
-              <circle cx={cx(i)} cy={y(x.value)} r={5} className="dot" />
-            </g>
-          )}
-          {values && (
-            <text x={cx(i)} y={y(x.value) - 9} textAnchor="middle" className="vlabel-t">
-              {compact(m, x.value, cur)}
-            </text>
-          )}
-          <text
-            x={cx(i)}
-            y={H - M.b + 18}
-            className="axis"
-            textAnchor={rotate ? "end" : "middle"}
-            transform={rotate ? `rotate(-35 ${cx(i)} ${H - M.b + 18})` : undefined}
-          >
-            {trunc(x.label) !== x.label && <title>{x.label}</title>}
-            {trunc(x.label)}
-          </text>
-        </g>
-      ))}
-    </svg>
-  );
-}
-
-function arc(cx: number, cy: number, r0: number, r1: number, a0: number, a1: number): string {
-  const p = (r: number, a: number) => `${cx + r * Math.cos(a)} ${cy + r * Math.sin(a)}`;
-  const large = a1 - a0 > Math.PI ? 1 : 0;
-  return `M ${p(r1, a0)} A ${r1} ${r1} 0 ${large} 1 ${p(r1, a1)} L ${p(r0, a1)} A ${r0} ${r0} 0 ${large} 0 ${p(r0, a0)} Z`;
-}
-
-export function Pie({
-  data,
-  m,
-  total,
-  id,
-  title,
-  summary,
-  cur,
-  onPick,
-}: ChartProps & { total: number }) {
-  const slices = data.map((x, i) => ({ ...x, i })).filter((x) => x.value > 0);
-  let angle = -Math.PI / 2;
-  return (
-    <div className="piewrap">
-      <svg
-        viewBox="0 0 300 300"
-        className="piesvg"
-        role="group"
-        aria-labelledby={`${id}-t`}
-        aria-describedby={`${id}-d`}
-      >
-        <title id={`${id}-t`}>{title}</title>
-        <desc id={`${id}-d`}>{summary}</desc>
-        {slices.map((s) => {
-          const share = s.value / total;
-          const a0 = angle;
-          angle += share * Math.PI * 2;
-          const text = t("{label}: {value}, {share}. Show records.", {
-            label: s.label,
-            value: fmt(m, s.value, cur),
-            share: fmtLocale.percent(share, 0),
-          });
-          return (
-            <g
-              key={s.key || "none"}
-              {...activate(() => onPick(s.key))}
-              aria-label={text}
-              className="mark"
-            >
-              <title>{text.replace(t(" Show records."), "")}</title>
-              {slices.length === 1 ? (
-                <circle
-                  cx={150}
-                  cy={150}
-                  r={105}
-                  fill="none"
-                  strokeWidth={70}
-                  style={{ stroke: color(s.i) }}
-                />
-              ) : (
-                <path d={arc(150, 150, 70, 140, a0, angle - 0.012)} style={{ fill: color(s.i) }} />
-              )}
-            </g>
-          );
-        })}
-        <text x={150} y={146} textAnchor="middle" className="pie-total">
-          {fmt(m, total, cur)}
-        </text>
-        <text x={150} y={168} textAnchor="middle" className="axis">
-          {t("total")}
-        </text>
-      </svg>
-      <ul className="legend">
-        {data.map((x, i) => (
-          <li key={x.key || "none"}>
-            <span className="swatch-sq" style={{ background: color(i) }} aria-hidden="true" />
-            <span className="lname">{x.label}</span>
-            <span className="lval">{fmt(m, x.value, cur)}</span>
-            <span className="lpct dim">
-              {total ? fmtLocale.percent(Math.max(x.value, 0) / total, 0) : ""}
-            </span>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }
