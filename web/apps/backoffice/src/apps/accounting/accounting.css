@@ -359,6 +359,13 @@
 .acc-prop-text .hint {
   font-size: var(--text-xs);
 }
+.acc-prop-warn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--warning-ink);
+  font-size: var(--text-xs);
+}
 .acc-prop-amount {
   font-weight: var(--weight-semibold);
   white-space: nowrap;
@@ -424,5 +431,13 @@
   .acc-rec-head .crumbs > a,
   .acc-rec-head .crumbs > .ico {
     display: none;
+  }
+}
+/* On a phone or any touch screen the configuration links are touch targets too. */
+@media (max-width: 40rem), (pointer: coarse) {
+  .acc-overview .ov-config a {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 2.75rem;
   }
 }

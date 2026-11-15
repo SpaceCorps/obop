@@ -311,6 +311,10 @@ description = "Bankkonto von Zahler oder Empfänger"
 label = "Buchungszeile"
 description = "Die Buchungszeile, der diese Kontoauszugszeile zugeordnet wurde"
 
+[labels.de.model.accounting_bank_statement_line.field.settles_line_id]
+label = "Beglichener offener Posten"
+description = "Der offene Forderungs- oder Verbindlichkeitsposten, den diese Zahlung begleicht; zwei Banktransaktionen können nicht denselben Posten begleichen"
+
 [labels.de.model.accounting_bank_statement_line.field.state]
 label = "Status"
 description = "Zuordnungsstatus: nicht zugeordnet, zugeordnet, abgeglichen"

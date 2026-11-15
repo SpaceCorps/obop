@@ -6,7 +6,10 @@
 // - Match: `accounting_bank_statement_line.update` (the journal item) then `.match`, two calls so
 //   that the state moves by itself (D48);
 // - Book: `bank_matching.book` writes a draft entry, bank account against the account chosen,
-//   then the transaction is matched to the entry's bank line as above.
+//   then the transaction is matched to the entry's bank line as above;
+// - Pay an open item: the transaction first records the item it settles (`settles_line_id`,
+//   unique, so the server refuses a second payment of the same item), then it is booked as above.
+//   An item that a transaction settles is not offered again.
 // Keyboard: j and k (or the arrow keys) move between transactions, Enter runs the first proposal.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Icon, Select, fmt, getCurrency, t } from "@obop/ui";
@@ -168,15 +171,32 @@ export function ReconcileView(p: ModelPageProps) {
     if (ok) done(t("Matched “{label}”", { label: String(bankLine.label ?? "") }));
   }
 
-  /** Book the transaction as a draft entry against `account`, then match it to the bank side. */
-  async function book(bankLine: Row, account: string, invoice = "") {
+  /**
+   * Book the transaction as a draft entry against `account`, then match it to the bank side. With
+   * `settles`, the open item it pays is recorded first: a second payment of it is refused there.
+   */
+  async function book(bankLine: Row, account: string, invoice = "", settles = "") {
     setBusy(true);
+    if (settles) {
+      const s = await call(d.token, `${BANK_LINE}.update`, {
+        id: bankLine.id,
+        settles_line_id: settles,
+      });
+      if (s.kind !== "ok") {
+        setBusy(false);
+        fail(s);
+        setReload((n) => n + 1);
+        return;
+      }
+    }
     const r = await call(d.token, "bank_matching.book", {
       bank_line: bankLine.id,
       counter_account: account,
       ...(invoice ? { invoice } : {}),
     });
     if (r.kind !== "ok") {
+      if (settles)
+        await call(d.token, `${BANK_LINE}.update`, { id: bankLine.id, settles_line_id: null });
       setBusy(false);
       fail(r);
       return;
@@ -321,7 +341,7 @@ export function ReconcileView(p: ModelPageProps) {
                 phone={phone}
                 onBack={() => setDetail(false)}
                 onMatch={(item) => void match(line, item)}
-                onBook={(account, invoice) => void book(line, account, invoice)}
+                onBook={(account, invoice, settles) => void book(line, account, invoice, settles)}
                 runRef={runRef}
                 position={t("{n} of {count}", {
                   n: fmt.integer(index + 1),
@@ -346,7 +366,7 @@ function LineDetail(p: {
   position: string;
   onBack: () => void;
   onMatch: (item: Row) => void;
-  onBook: (account: string, invoice?: string) => void;
+  onBook: (account: string, invoice?: string, settles?: string) => void;
   runRef: React.MutableRefObject<() => void>;
 }) {
   const d = useData();
@@ -375,12 +395,22 @@ function LineDetail(p: {
       ]);
       if (!live) return;
       if ("error" in items) return setProposals({ state: "error", message: items.error });
-      // Items already matched to another transaction are not offered again.
-      const taken = await search(d.token, BANK_LINE, {
-        filter: [{ field: "move_line_id", op: "in", value: items.rows.map((i) => i.id) }],
-        limit: 50,
-      });
-      const used = new Set("error" in taken ? [] : taken.rows.map((r) => String(r.move_line_id)));
+      // Items already matched to another transaction, or paid by one, are not offered again.
+      const ids = items.rows.map((i) => i.id);
+      const [taken, paid] = await Promise.all([
+        search(d.token, BANK_LINE, {
+          filter: [{ field: "move_line_id", op: "in", value: ids }],
+          limit: 50,
+        }),
+        search(d.token, BANK_LINE, {
+          filter: [{ field: "settles_line_id", op: "in", value: ids }],
+          limit: 50,
+        }),
+      ]);
+      const used = new Set([
+        ...("error" in taken ? [] : taken.rows.map((r) => String(r.move_line_id))),
+        ...("error" in paid ? [] : paid.rows.map((r) => String(r.settles_line_id))),
+      ]);
       const open = items.rows.filter((i) => !used.has(i.id));
       const moves = open.length
         ? await search(d.token, MOVE, {
@@ -430,7 +460,7 @@ function LineDetail(p: {
   const run = (x: Proposal) => {
     if (x.kind === "item") {
       if (x.onBank) p.onMatch(x.item);
-      else p.onBook(String(x.item.account_id));
+      else p.onBook(String(x.item.account_id), "", x.item.id);
     } else if (receivable) p.onBook(receivable.id, x.invoiceId);
   };
   p.runRef.current = () => {
@@ -500,6 +530,14 @@ function LineDetail(p: {
                           ? t("Already booked on the bank account: match it.")
                           : t("Open item: book the payment against it.")}
                       </span>
+                      {typeof x.move?.date === "string" &&
+                        typeof line.date === "string" &&
+                        x.move.date > line.date && (
+                          <span className="acc-prop-warn">
+                            <Icon name="warning" size={12} />
+                            {t("Dated after this transaction: check that it is the right one.")}
+                          </span>
+                        )}
                     </>
                   ) : (
                     <>
@@ -512,9 +550,7 @@ function LineDetail(p: {
                     </>
                   )}
                 </div>
-                <span className="acc-prop-amount tabular">
-                  {money(Math.abs(amount), p.currency)}
-                </span>
+                <span className="acc-prop-amount tabular">{money(amount, p.currency)}</span>
                 <Button
                   variant={i === 0 ? "primary" : "secondary"}
                   disabled={p.busy || (x.kind === "invoice" && !receivable)}

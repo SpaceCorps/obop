@@ -108,6 +108,7 @@ export function AccountingOverview({ app }: { app: App }) {
   }, [d.token, d.mutations]);
 
   const kindField = model(JOURNAL)?.fields.find((f) => f.name === "kind");
+  const toMatch = state.kind === "ready" && state.cards.some((c) => c.toMatch.count > 0);
   const moveModel = model(MOVE);
   const menu = useMemo(() => appMenu(app.module), [app.module]);
   const listOf = (name: string, facets: Cond[], extra: { id?: string } = {}) =>
@@ -140,7 +141,8 @@ export function AccountingOverview({ app }: { app: App }) {
           {moveModel?.can_create && (
             <div className="ov-actions">
               <Button
-                variant="primary"
+                // One primary action per screen: while a bank card asks to match, that is the one.
+                variant={toMatch ? "secondary" : "primary"}
                 icon="plus"
                 onClick={() => (location.hash = href({ app: app.id, model: MOVE, id: "new" }))}
               >

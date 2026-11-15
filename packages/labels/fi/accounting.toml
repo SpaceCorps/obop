@@ -311,6 +311,10 @@ description = "Maksajan tai saajan pankkitili"
 label = "Kirjausrivi"
 description = "Kirjausrivi, johon tämä tiliotteen rivi kohdistettiin"
 
+[labels.fi.model.accounting_bank_statement_line.field.settles_line_id]
+label = "Maksettu avoin erä"
+description = "Avoin myynti- tai ostoreskontran erä, jonka tämä maksu suorittaa; kaksi pankkitapahtumaa ei voi suorittaa samaa erää"
+
 [labels.fi.model.accounting_bank_statement_line.field.state]
 label = "Tila"
 description = "Kohdistuksen tila: kohdistamaton, kohdistettu, täsmäytetty"

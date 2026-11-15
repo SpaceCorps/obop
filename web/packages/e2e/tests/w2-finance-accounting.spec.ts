@@ -167,6 +167,85 @@ test.describe("Accounting: journal cards and matching bank transactions", () => 
     });
   });
 
+  test("an open item that one payment settled is not offered to the next, and the server refuses a second settle", async ({
+    page,
+    signIn,
+    api,
+    uid,
+  }) => {
+    await withAccounting(api, async () => {
+      const { fees, receivable, journal } = await bankJournal(api, uid);
+      // An invoice item: the customer owes 952.00 on the receivables account.
+      const reference = uid("INV");
+      const move = await api.create("root", "accounting_move", {
+        journal_id: journal.id,
+        date: "2026-11-02",
+        reference,
+      });
+      const item = await api.create("root", "accounting_move_line", {
+        move_id: move.id,
+        account_id: receivable.id,
+        label: reference,
+        debit: 95200,
+        credit: 0,
+      });
+      await api.create("root", "accounting_move_line", {
+        move_id: move.id,
+        account_id: fees.id,
+        label: reference,
+        debit: 0,
+        credit: 95200,
+      });
+      const first = await api.create("root", "accounting_bank_statement_line", {
+        journal_id: journal.id,
+        date: "2026-11-10",
+        label: uid("Payment one"),
+        amount: 95200,
+      });
+      const second = await api.create("root", "accounting_bank_statement_line", {
+        journal_id: journal.id,
+        date: "2026-11-11",
+        label: uid("Payment two"),
+        amount: 95200,
+      });
+
+      await signIn(
+        "root",
+        `/accounting/accounting_bank_statement_line?view=reconcile&section=${journal.id}`,
+      );
+      const detail = page.locator(".acc-rec-detail");
+      await expect(detail).toContainText(first.label);
+      const proposal = detail.locator(".acc-prop").first();
+      await expect(proposal).toContainText("Open item: book the payment against it.");
+      await expect(proposal).toContainText("€952.00");
+      await page.locator(".acc-rec-card").click();
+      await page.keyboard.press("Enter");
+      await expect(
+        page.locator(".toast").filter({ hasText: "Booked as a draft entry and matched" }),
+      ).toBeVisible();
+
+      // The next transaction of the same amount is not offered the paid item.
+      await expect(detail).toContainText(second.label);
+      await expect(detail).toContainText("No open item has this amount");
+
+      const paid = (
+        await api.run("root", "accounting_bank_statement_line.search", {
+          filter: [{ field: "id", op: "eq", value: first.id }],
+        })
+      ).rows[0];
+      expect(paid.state).toBe("matched");
+      expect(paid.settles_line_id).toBe(item.id);
+      // The rule is the server's: a second transaction cannot settle the same item.
+      const refused = await api.post(
+        "/api/accounting_bank_statement_line/update",
+        { id: second.id, settles_line_id: item.id },
+        await api.token("root"),
+      );
+      expect(refused.status).toBe(400);
+      expect(JSON.stringify(refused.json)).toContain("unique");
+    });
+  });
+
   test("on a phone the transactions and the proposals are two screens", async ({
     page,
     signIn,
