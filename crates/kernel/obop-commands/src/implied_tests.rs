@@ -144,7 +144,8 @@ fn module(p: &str) -> Module {
                         .assertion_msg("size < 10", "Too large to close"),
                 ],
             ),
-            // Its action is bound to a handler that writes the store itself.
+            // `close` is bound to a handler that writes the store itself; `raise` has the
+            // generic one and comes after it (the fields go in name order).
             model(
                 name("ticket"),
                 vec![
@@ -152,12 +153,16 @@ fn module(p: &str) -> Module {
                     f("note"),
                     f("code").unique(),
                     f("state").select(&["open", "closed"]),
+                    f("urgency").select(&["low", "high"]),
                 ],
-                vec![CommandDef::new("close", "Close", U).transition(
-                    "state",
-                    Some("open"),
-                    "closed",
-                )],
+                vec![
+                    CommandDef::new("close", "Close", U).transition(
+                        "state",
+                        Some("open"),
+                        "closed",
+                    ),
+                    CommandDef::new("raise", "Raise", U).transition("urgency", Some("low"), "high"),
+                ],
             ),
             // Its `update` is bound to a handler that writes the store itself.
             model(
@@ -193,8 +198,14 @@ fn each(f: impl Fn(&Rig)) {
         urls.push(u);
     }
     for url in urls {
+        f(&rig(Store::open(&url).unwrap()));
+    }
+}
+
+/// The module of these tests registered over `store`, under a prefix of its own.
+fn rig(store: Store) -> Rig {
+    {
         let p = format!("i{}", &uuid::Uuid::now_v7().simple().to_string()[22..]);
-        let store = Store::open(&url).unwrap();
         let d = Dispatcher::new();
         let module = module(&p);
         let v = obop_registry::check_module(&module);
@@ -202,7 +213,8 @@ fn each(f: impl Fn(&Rig)) {
         d.register_crud(&module, &store);
         for mo in &module.models {
             for c in &mo.commands {
-                if mo.name.ends_with("_ticket") {
+                // `ticket.close` is bound by hand below.
+                if mo.name.ends_with("_ticket") && c.name == "close" {
                     continue;
                 }
                 d.register_transition(&module, mo.name, c.name, &store);
@@ -261,7 +273,7 @@ fn each(f: impl Fn(&Rig)) {
                 Ok(m(vec![("id", t(id))]))
             }),
         );
-        f(&Rig { d, store, p });
+        Rig { d, store, p }
     }
 }
 
@@ -950,4 +962,153 @@ fn an_update_written_by_hand_stores_its_edits_and_the_move_follows_it() {
         assert_eq!(r.field("memo", &empty, "state"), t("open"));
         assert_eq!(r.field("memo", &empty, "title"), t("F"));
     });
+}
+
+#[test]
+fn an_action_that_stores_before_it_answers_is_not_followed_by_another() {
+    each(|r| {
+        let task = |size: i64| r.create("task", vec![("title", t("T")), ("size", n(size))]);
+        let both = |id: &str| {
+            r.update(
+                id,
+                vec![
+                    ("priority", t("urgent")),
+                    ("state", t("closed")),
+                    ("title", t("Edited")),
+                ],
+            )
+        };
+        let as_made = |id: &str| {
+            assert_eq!(r.field("task", id, "priority"), t("normal"));
+            assert_eq!(r.field("task", id, "state"), t("open"));
+            assert_eq!(r.field("task", id, "title"), t("T"));
+        };
+        // A wrapper on the last action: the first hands the unit on and the last commits for
+        // both, so the call is still one unit.
+        r.d.around(
+            &r.cmd("task", "close"),
+            Box::new(|_, input, inner| inner(input)),
+        );
+        let id = task(20);
+        let e = r.err(&user(), "task", "update", both(&id));
+        assert!(e.contains("Too large to close"), "{e}");
+        as_made(&id);
+        let id = task(5);
+        r.ok(&user(), "task", "update", both(&id));
+        assert_eq!(r.field("task", &id, "priority"), t("urgent"));
+        assert_eq!(r.field("task", &id, "state"), t("closed"));
+        assert_eq!(r.field("task", &id, "title"), t("Edited"));
+
+        // A wrapper on the first action: its handler would store the first move and the edit
+        // before the second action has run, and a refusal of the second could not take them
+        // back. The call is refused before anything runs, also when both actions would pass.
+        r.d.around(
+            &r.cmd("task", "escalate"),
+            Box::new(|_, input, inner| inner(input)),
+        );
+        for size in [20, 5] {
+            let id = task(size);
+            let e = r.err(&user(), "task", "update", both(&id));
+            assert!(
+                e.contains("task.escalate") && e.contains("separate calls"),
+                "{e}"
+            );
+            as_made(&id);
+        }
+        // Sent one at a time, each move with an edit is one unit as before.
+        let id = task(5);
+        r.ok(
+            &user(),
+            "task",
+            "update",
+            r.update(&id, vec![("priority", t("urgent")), ("title", t("One"))]),
+        );
+        r.ok(
+            &user(),
+            "task",
+            "update",
+            r.update(&id, vec![("state", t("closed")), ("title", t("Two"))]),
+        );
+        assert_eq!(r.field("task", &id, "priority"), t("urgent"));
+        assert_eq!(r.field("task", &id, "state"), t("closed"));
+        assert_eq!(r.field("task", &id, "title"), t("Two"));
+
+        // The same for an action whose handler was written by hand: it writes the store itself.
+        let id = r.create("ticket", vec![("title", t("T"))]);
+        let e = r.err(
+            &user(),
+            "ticket",
+            "update",
+            r.update(
+                &id,
+                vec![
+                    ("state", t("closed")),
+                    ("urgency", t("high")),
+                    ("note", t("n")),
+                ],
+            ),
+        );
+        assert!(
+            e.contains("ticket.close") && e.contains("separate calls"),
+            "{e}"
+        );
+        assert_eq!(r.field("ticket", &id, "state"), t("open"));
+        assert_eq!(r.field("ticket", &id, "urgency"), t("low"));
+        assert_eq!(r.field("ticket", &id, "note"), Value::Null);
+        // The generic action of the same model by itself, with an edit.
+        r.ok(
+            &user(),
+            "ticket",
+            "update",
+            r.update(&id, vec![("urgency", t("high")), ("note", t("n"))]),
+        );
+        assert_eq!(r.field("ticket", &id, "urgency"), t("high"));
+        assert_eq!(r.field("ticket", &id, "note"), t("n"));
+    });
+}
+
+#[test]
+fn a_commit_that_fails_ends_the_update_whatever_the_wrapper_of_the_action_makes_of_it() {
+    // The commit of the edit and the move is one batch. When the store refuses it, the edit is
+    // gone with the unit: the update must not answer as if it had worked (a wrapper that answers
+    // for the refusal of its action), and the move must not be stored alone (a wrapper that runs
+    // its handler a second time).
+    for again in [false, true] {
+        let (flaky, backend) = obop_storage::testing::Flaky::memory();
+        let r = rig(Store::over(backend));
+        r.d.around(
+            &r.cmd("doc", "post"),
+            Box::new(move |_, input, inner| {
+                let first = inner(input);
+                if again {
+                    first.or_else(|_| inner(input))
+                } else {
+                    first.or(Ok(Value::Null))
+                }
+            }),
+        );
+        let id = r.doc(5);
+        let call = || {
+            r.call(
+                &approver(),
+                "doc",
+                "update",
+                r.update(&id, vec![("state", t("posted")), ("name", t("Kept"))]),
+            )
+        };
+        flaky.refuse_applies(1);
+        let out = call();
+        assert!(out.is_err(), "again {again}: {out:?}");
+        assert_eq!(flaky.refused(), 1, "again {again}: one batch, refused once");
+        r.untouched(&id, 5);
+        // Nothing of the call was stored, so it can be sent again, and no number was taken.
+        let v = match call() {
+            Ok(r) => r.value,
+            Err(e) => panic!("again {again}: {e:?}"),
+        };
+        assert_eq!(get(&v, "state"), &t("posted"));
+        assert_eq!(r.field("doc", &id, "state"), t("posted"));
+        assert_eq!(r.field("doc", &id, "name"), t("Kept"));
+        assert_eq!(r.field("doc", &id, "number"), t("D-0001"));
+    }
 }

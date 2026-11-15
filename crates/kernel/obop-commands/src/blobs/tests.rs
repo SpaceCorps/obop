@@ -1036,3 +1036,51 @@ fn a_model_without_row_rules_is_read_by_everyone_who_may_read_the_model() {
     .unwrap();
     assert_eq!(e.svc.get(&bob, &b, None).unwrap().bytes, pdf(7));
 }
+
+#[test]
+fn the_file_of_an_edit_is_held_when_the_wrapper_of_the_move_refuses_after_it_was_stored() {
+    let e = env();
+    let ann = user("ann");
+    // The wrapper refuses when its handler has stored the move, as one does whose own step after
+    // the handler fails. The update that implied the move had its edit stored with it (D48: one
+    // unit), so the answer is a refusal over a stored record.
+    e.d.around(
+        "item.publish",
+        Box::new(|_, input, inner| {
+            inner(input)?;
+            Err("after the handler".into())
+        }),
+    );
+    let b1 = up(&e, &ann, "item.photo", &fx::png(64, 48, 1), "image/png");
+    let r = call(
+        &e,
+        &ann,
+        "item.create",
+        map(&[("title", "A"), ("photo", &b1)]),
+    )
+    .unwrap();
+    let rec = id_of_row(&r);
+    let b2 = up(&e, &ann, "item.photo", &fx::png(64, 48, 2), "image/png");
+    let out = call(
+        &e,
+        &ann,
+        "item.update",
+        map(&[("id", &rec), ("state", "published"), ("photo", &b2)]),
+    );
+    assert!(
+        format!("{out:?}").contains("after the handler") && out.is_err(),
+        "{out:?}"
+    );
+    let stored = e.s.backend().get("item", &rec).unwrap().unwrap();
+    assert_eq!(stored["state"], "published");
+    assert_eq!(stored["photo"], b2.as_str());
+    // The record names the new image, so the record holds it and the old one is let go, as
+    // after any stored edit: the next gc must not delete the file the record points at.
+    assert_eq!(e.s.blobs().info(&b2).unwrap().unwrap().owners.len(), 1);
+    assert!(
+        e.s.blobs().info(&b1).unwrap().is_none(),
+        "nobody holds the old image"
+    );
+    e.s.blobs().gc(0).unwrap();
+    assert!(e.s.blobs().info(&b2).unwrap().is_some(), "gc keeps it");
+}

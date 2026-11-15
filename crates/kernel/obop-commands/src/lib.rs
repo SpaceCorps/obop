@@ -256,6 +256,10 @@ struct Registered {
     actor: bool,
     /// The command changes records.
     writes: bool,
+    /// The handler is the generic one of a declared action (`engine::crud::transition`): it goes
+    /// on in the unit of an update that implies it (`engine::implied`). A handler written by
+    /// hand stores what it writes before it answers.
+    generic_action: bool,
     handler: Handler,
 }
 
@@ -807,9 +811,7 @@ impl Dispatcher {
         command: &str,
         handler: Handler,
     ) {
-        // The generated `create` and `update` are what lets an effect write the model.
-        let writes = matches!(command, "create" | "update");
-        self.register_inner(module, model, command, handler, true, writes);
+        self.register_inner(module, model, command, handler, true, true);
     }
 
     fn register_inner(
@@ -819,8 +821,10 @@ impl Dispatcher {
         command: &str,
         handler: Handler,
         actor: bool,
-        generated_write: bool,
+        generated: bool,
     ) {
+        // The generated `create` and `update` are what lets an effect write the model.
+        let generated_write = generated && matches!(command, "create" | "update");
         let (index, m) = module
             .models
             .iter()
@@ -881,6 +885,7 @@ impl Dispatcher {
                 envelope: matches!(command, "search" | "bulk_create"),
                 actor,
                 writes: !matches!(command, "get" | "list" | "search"),
+                generic_action: generated && c.transition.is_some(),
                 handler,
             }),
         );
@@ -1413,7 +1418,8 @@ impl Dispatcher {
             let wrapper = self.around.read().unwrap().get(&action.id).cloned();
             let who = p.clone();
             steps.push(engine::implied::Step {
-                wrapped: wrapper.is_some(),
+                command: action.id.clone(),
+                hands_on: action.generic_action && wrapper.is_none(),
                 run: Box::new(move || match &wrapper {
                     Some(w) => w(&who, &i, &|x| (action.handler)(x)),
                     None => (action.handler)(&i),

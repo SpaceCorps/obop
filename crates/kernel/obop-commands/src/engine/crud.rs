@@ -497,13 +497,24 @@ pub(crate) fn update(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Valu
         // The move. Every check of the edits has passed and they are written in the unit, not
         // in the store: each action takes the unit up, runs on the record as edited and commits
         // the edits with its own writes. A refusal ends the call here with nothing stored.
-        let (left, answers) = implied::run(&steps, def.name, &id, unit.hold())?;
+        let ran = match implied::run(&steps, def.name, &id, unit.hold()) {
+            Ok(ran) => ran,
+            Err(refused) => {
+                // The one refusal that comes after the store was written: the wrapper of the
+                // last action refused when its handler had stored the edits with the move. The
+                // files the edits name are then held like those of any stored edit.
+                if refused.stored && edited {
+                    crate::blobs::hold_updated(&eng.store, def, &id, &cur, &after);
+                }
+                return Err(refused.why);
+            }
+        };
         // What no action committed (a handler written by hand does not take the unit up).
-        if let Some(held) = left {
+        if let Some(held) = ran.left {
             commit(eng, eng.unit().resume(held))?;
         }
         // What the actions wrote, should the record not be readable for the answer below.
-        for answer in answers {
+        for answer in ran.answers {
             if let Value::Map(m) = answer {
                 after.extend(
                     m.iter()
@@ -563,7 +574,7 @@ pub(crate) fn transition(
     // An action that an `update` implies (D48) goes on in the unit of that update, where the
     // other fields of the call are already written: it runs on the record as edited, and the
     // edits and the action are stored together or not at all (`engine::implied`).
-    let (mut unit, joined) = match implied::adopt(def.name, &id) {
+    let (mut unit, joined) = match implied::adopt(def.name, &id)? {
         Some(a) => (eng.unit().resume(a.held), Some(a.hand_on)),
         None => (eng.unit(), None),
     };
@@ -583,7 +594,16 @@ pub(crate) fn transition(
     match joined {
         // Another action of the same update follows: it, or the update, commits for all.
         Some(true) => implied::give_back(def.name, &id, unit.hold()),
-        _ => commit(eng, unit)?,
+        // The edits of the update and this action, stored together. A commit that fails takes
+        // the edits with it, so it ends the update whatever a wrapper makes of the refusal.
+        Some(false) => match commit(eng, unit) {
+            Ok(()) => implied::stored(),
+            Err(e) => {
+                implied::lost(def.name, &id, &e);
+                return Err(e);
+            }
+        },
+        None => commit(eng, unit)?,
     }
     let mut out: BTreeMap<String, Value> = patch
         .iter()
