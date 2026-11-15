@@ -1,57 +1,71 @@
 //! `product`: what the business sells.
 
 use obop_commands::{Dispatcher, Store, Value};
-use obop_registry::{FieldDef as F, FieldKind, ModelDef, Module, ModuleMeta};
+use obop_registry::{FieldDef as F, FieldKind, ModelDef, ModelUi, Module, ModuleMeta};
 use obop_types::DataClass::None as NoClass;
 
 pub fn module() -> Module {
     let m = Module {
         id: "product".into(),
         name: "Products".into(),
-        models: vec![ModelDef {
-            name: "product",
-            description: "A good or service the business sells",
-            read_group: "product.user",
-            write_group: "product.manager",
-            access: None,
-            fields: vec![
-                F::new("name", "Product name", NoClass, false, "product.user").required(),
-                F::new(
-                    "sku",
-                    "Stock keeping unit; no two products share one",
-                    NoClass,
-                    false,
-                    "product.user",
-                )
-                .unique(),
-                F::new(
-                    "list_price_minor",
-                    "List price in minor currency units",
-                    NoClass,
-                    false,
-                    "product.user",
-                )
-                .kind(FieldKind::Money),
-                F::new(
-                    "image",
-                    "Picture of the product (PNG, JPEG, WebP or GIF, up to 5 MiB)",
-                    NoClass,
-                    false,
-                    "product.user",
-                )
-                .kind(FieldKind::Image(0)),
-                F::new(
-                    "cost_minor",
-                    "Unit cost in minor currency units",
-                    NoClass,
-                    false,
-                    "product.cost_viewer",
-                )
-                .kind(FieldKind::Money),
-            ],
-            commands: vec![],
-            ext: Default::default(),
-        }],
+        models: vec![
+            ModelDef {
+                name: "product",
+                description: "A good or service the business sells",
+                read_group: "product.user",
+                write_group: "product.manager",
+                access: None,
+                fields: vec![
+                    F::new("name", "Product name", NoClass, false, "product.user").required(),
+                    F::new(
+                        "sku",
+                        "Stock keeping unit; no two products share one",
+                        NoClass,
+                        false,
+                        "product.user",
+                    )
+                    .unique(),
+                    F::new(
+                        "list_price_minor",
+                        "List price in minor currency units",
+                        NoClass,
+                        false,
+                        "product.user",
+                    )
+                    .kind(FieldKind::Money)
+                    .aggregate("none"),
+                    F::new(
+                        "image",
+                        "Picture of the product (PNG, JPEG, WebP or GIF, up to 5 MiB)",
+                        NoClass,
+                        false,
+                        "product.user",
+                    )
+                    .kind(FieldKind::Image(0)),
+                    F::new(
+                        "cost_minor",
+                        "Unit cost in minor currency units",
+                        NoClass,
+                        false,
+                        "product.cost_viewer",
+                    )
+                    .kind(FieldKind::Money)
+                    .aggregate("none"),
+                ],
+                commands: vec![],
+                ext: Default::default(),
+            }
+            .with_ui(ModelUi {
+                title: Some("{name}".into()),
+                subtitle: Some("{sku}".into()),
+                list: vec!["name".into(), "sku".into(), "list_price_minor".into()],
+                card: vec!["image".into(), "name".into(), "list_price_minor".into()],
+                quick_create: vec!["name".into(), "sku".into(), "list_price_minor".into()],
+                order: Some("name asc".into()),
+                default_view: Some("gallery".into()),
+                ..Default::default()
+            }),
+        ],
         network_destinations: vec![],
         description: String::new(),
         translations: Default::default(),
@@ -61,9 +75,11 @@ pub fn module() -> Module {
             &["products", "catalogue", "pricing"],
             "products",
             &["base"],
-        ),
+        )
+        .home("product"),
     };
     m.translated(&[
+        include_str!("../../../../packages/labels/en/product.toml"),
         include_str!("../../../../packages/labels/de/product.toml"),
         include_str!("../../../../packages/labels/fr/product.toml"),
         include_str!("../../../../packages/labels/pl/product.toml"),

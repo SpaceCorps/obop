@@ -192,9 +192,14 @@ pub(crate) fn run(
     input: &Value,
 ) -> Result<Value, String> {
     let id = text(input, "id");
-    let Some(trip) = db.get(policy::TRIP, &id)? else {
+    let Some(mut trip) = db.get(policy::TRIP, &id)? else {
         return Err(policy::no_such(policy::TRIP, &id));
     };
+    // The reason that came with reject or discard (D95 `needs`) is written with the action.
+    let reason = policy::reason_in(action, input)?;
+    if let Some((field, r)) = &reason {
+        trip.insert((*field).into(), J::from(r.clone()));
+    }
     // The dispatcher has checked the group and the guard the policy; this is the same decision
     // again on the record as it is now, with the roles the guard decided for the caller (a plan
     // that was approved later runs as the agent that proposed it) and the standing of the person
@@ -219,6 +224,9 @@ pub(crate) fn run(
         _ => policy::DISCARDED,
     };
     patch.insert("state".into(), J::from(to));
+    if let Some((field, r)) = reason {
+        patch.insert(field.into(), J::from(r));
+    }
     match action {
         "submit" => {
             // A reason from an earlier round must not stand for this one.

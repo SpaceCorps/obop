@@ -377,6 +377,8 @@ fn delete_guard(def: &ModelDef, eng: &Engine) -> Guard {
         let reads = Plain(eng.backend());
         let def = eng.def(name).ok_or_else(|| format!("no model {name}"))?;
         let rec = Gate::new(&reads, &look, &actor).load(&def, &id)?;
+        // A frozen record (D77) says so before anything else is said about it.
+        crate::engine::frozen::delete_refused(&eng, &def, &id)?;
         if let Some(field) = crate::engine::seq::holds_gapless_number(&def, &rec) {
             return Err(crate::engine::crud::gapless_message(&def, &id, field));
         }

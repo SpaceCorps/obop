@@ -2059,6 +2059,7 @@ dependencies = [
  "obop-commands",
  "obop-registry",
  "obop-types",
+ "product",
 ]
 
 [[package]]

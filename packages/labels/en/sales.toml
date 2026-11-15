@@ -1,0 +1,35 @@
+# English names and plurals of the built-in Sales module (D52, D95).
+
+[labels.en.model.sale_order]
+name = "Quotation / Order"
+plural = "Quotations & orders"
+
+[labels.en.model.sale_order.field.party_id]
+label = "Customer"
+
+[labels.en.model.sale_order.field.total_minor]
+label = "Total"
+
+[labels.en.model.sale_order.field.state.options]
+draft = "Quotation"
+confirmed = "Sales order"
+cancelled = "Cancelled"
+
+[labels.en.model.sale_order.action.confirm]
+label = "Confirm order"
+
+[labels.en.model.sale_order.action.cancel]
+label = "Cancel order"
+
+[labels.en.model.sale_order.action.reset_to_draft]
+label = "Back to quotation"
+
+[labels.en.model.sale_order_line]
+name = "Order line"
+plural = "Order lines"
+
+[labels.en.model.sale_order_line.field.unit_price_minor]
+label = "Unit price"
+
+[labels.en.model.sale_order_line.field.amount_minor]
+label = "Amount"

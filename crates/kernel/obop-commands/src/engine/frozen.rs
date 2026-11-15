@@ -401,6 +401,20 @@ pub(crate) fn on_delete(
     }
 }
 
+/// Whether deleting the stored record `id` of `def` is refused by its guard: for the delete guard
+/// of the dispatcher, so the refusal is the guard's and comes before "other records refer to it".
+pub(crate) fn delete_refused(eng: &super::Engine, def: &ModelDef, id: &str) -> R<()> {
+    if def.guard().is_none() {
+        return Ok(());
+    }
+    let u = eng.unit();
+    let Some(cur) = u.stored(def.name, id)? else {
+        return Ok(());
+    };
+    let look = |n: &str| eng.def(n);
+    on_delete(&u, &look, def, id, &cur)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

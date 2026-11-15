@@ -501,7 +501,11 @@ fn action(db: Db, name: &'static str) -> Guard {
     Box::new(move |p: &Principal, input| {
         let who = Who::of(p);
         let id = id_of(input)?;
-        let trip = visible_trip(&db, &who, &id)?;
+        let mut trip = visible_trip(&db, &who, &id)?;
+        // The reason may come with the action (D95 `needs`): the checks see it.
+        if let Some((field, reason)) = policy::reason_in(name, input)? {
+            trip.insert(field.into(), J::from(reason));
+        }
         // The run of an approved plan: the approver stands behind the action, and is held to the
         // same rule as a caller before the plan is spent.
         let approver = policy::Approver::of(input);

@@ -1,0 +1,30 @@
+# English names and plurals of the built-in Invoicing module (D52, D95).
+
+[labels.en.model.invoice]
+name = "Customer invoice"
+plural = "Customer invoices"
+
+[labels.en.model.invoice.field.party_id]
+label = "Customer"
+
+[labels.en.model.invoice.field.sale_order_id]
+label = "Sales order"
+
+[labels.en.model.invoice.field.total_minor]
+label = "Total"
+
+[labels.en.model.invoice.action.post]
+label = "Post"
+
+[labels.en.model.invoice.action.cancel]
+label = "Cancel invoice"
+
+[labels.en.model.invoice_line]
+name = "Invoice line"
+plural = "Invoice lines"
+
+[labels.en.model.invoice_line.field.unit_price_minor]
+label = "Unit price"
+
+[labels.en.model.invoice_line.field.amount_minor]
+label = "Amount"
