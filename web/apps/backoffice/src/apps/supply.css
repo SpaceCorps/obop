@@ -163,6 +163,11 @@
   min-inline-size: 0;
   overflow-wrap: anywhere;
 }
+.sup-shortlist li > :last-child,
+.sup-onhand-places li > :last-child {
+  flex: none;
+  white-space: nowrap;
+}
 
 /* On hand, on a product. */
 .sup-onhand {

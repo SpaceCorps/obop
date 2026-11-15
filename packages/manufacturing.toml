@@ -122,7 +122,7 @@ write_group = "manufacturing.user"
   [model.ui]
   title = "{number} · {product_id} × {quantity} | {number} · {bom_id} × {quantity} | {number}"
   subtitle = "{location_id} · {planned_on} | {planned_on}"
-  list = ["number", "product_id", "quantity", "location_id", "planned_on", "deadline", "state"]
+  list = ["number", "bom_id", "quantity", "location_id", "planned_on", "deadline", "state"]
   card = ["number", "product_id", "quantity", "deadline"]
   quick_create = ["bom_id", "quantity", "location_id"]
   order = "planned_on desc, number desc"
