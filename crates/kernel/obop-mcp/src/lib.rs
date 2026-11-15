@@ -449,6 +449,9 @@ pub fn meta_json(d: &Dispatcher, surface: Surface, p: &Principal) -> J {
                             if let Some(n) = f.max_bytes {
                                 o["max_bytes"] = json!(n);
                             }
+                            if f.gapless {
+                                o["gapless"] = json!(true);
+                            }
                             // Length and range limits (D90). `max_length` is always there for
                             // a text field: the field's own, else the default of the kind.
                             if let Some(n) = f.max_length {
@@ -509,6 +512,17 @@ pub fn meta_json(d: &Dispatcher, surface: Surface, p: &Principal) -> J {
             translations(&mut mo, &m.labels, &m.descriptions);
             if !m.summaries.is_empty() {
                 mo["summaries"] = json!(m.summaries);
+            }
+            // The catalogue data of D55 the interface shows: the English card summary, the
+            // categories (the launcher groups by them) and the maturity (a banner when not stable).
+            if !m.summary.is_empty() {
+                mo["summary"] = json!(m.summary);
+            }
+            if !m.categories.is_empty() {
+                mo["categories"] = json!(m.categories);
+            }
+            if !m.maturity.is_empty() {
+                mo["maturity"] = json!(m.maturity);
             }
             mo
         })

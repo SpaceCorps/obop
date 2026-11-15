@@ -330,6 +330,13 @@ pub(crate) struct ModelMeta {
     description: &'static str,
     pub(crate) fields: Vec<FieldDef>,
     module_description: String,
+    /// The module's catalogue summary, categories and maturity (D55), for the interface.
+    module_summary: String,
+    module_categories: Vec<String>,
+    module_maturity: String,
+    /// The model's place in its module's declaration (`Module::models`): the interface lists
+    /// models in this order, so an app opens on the model its module declares first.
+    index: usize,
     translations: Arc<Translations>,
     /// The generated `create` and `update` are bound for this model (`register_crud`). An action
     /// effect writes a record the way those two commands do, for the caller, so it reaches only a
@@ -373,6 +380,9 @@ pub struct FieldInfo {
     pub unique: bool,
     /// Numbered by the system (D57).
     pub sequence: bool,
+    /// The numbers come from a gapless series (a posted entry, a receipt): the interface lists
+    /// such records rather than putting them on a board.
+    pub gapless: bool,
     /// A text field shown, in the back office, with the label of the option of the select field
     /// `model.field` that its value equals (D52 amendment). Display only: values are as stored.
     pub shows_option_of: Option<String>,
@@ -456,6 +466,12 @@ pub struct ModuleInfo {
     pub descriptions: Texts,
     /// The card summary per language (D52); empty when untranslated.
     pub summaries: Texts,
+    /// The English card summary, the categories and the maturity (`stable`, `beta`,
+    /// `experimental`) the module declares (D55); empty when it declares none.
+    pub summary: String,
+    pub categories: Vec<String>,
+    pub maturity: String,
+    /// Models in the module's declaration order (not alphabetical).
     pub models: Vec<ModelInfo>,
 }
 
@@ -546,7 +562,8 @@ impl Dispatcher {
                 .filter(|(_, m)| &m.module == module)
                 .map(|(n, _)| n)
                 .collect();
-            names.sort();
+            // The module's declaration order, so the first model is the one it declares first.
+            names.sort_by_key(|n| (models[n.as_str()].index, n.as_str()));
             for name in names {
                 let m = &models[name];
                 let Some(list) = cmds.get(&format!("{name}.list")) else {
@@ -581,7 +598,17 @@ impl Dispatcher {
                         }
                     })
                     .collect();
-                actions.sort_by(|a, b| a.id.cmp(&b.id));
+                // The order of `ModelDef::commands`: the module declares its actions in the
+                // order a record moves through them.
+                let place = |id: &str| {
+                    let short = &id[name.len() + 1..];
+                    m.def
+                        .commands
+                        .iter()
+                        .position(|c| c.name == short)
+                        .unwrap_or(usize::MAX)
+                };
+                actions.sort_by(|a, b| (place(&a.id), &a.id).cmp(&(place(&b.id), &b.id)));
                 let mtr = m.translations.models.get(name.as_str());
                 infos.push(ModelInfo {
                     name: name.clone(),
@@ -622,6 +649,7 @@ impl Dispatcher {
                                 computed: f.computed.is_some(),
                                 unique: f.unique.is_some() || f.sequence.is_some(),
                                 sequence: f.sequence.is_some(),
+                                gapless: f.sequence.as_ref().is_some_and(|s| s.gapless),
                                 shows_option_of: f.shows_option.as_ref().map(|s| s.target()),
                                 shows_option_when: f
                                     .shows_option
@@ -669,6 +697,13 @@ impl Dispatcher {
                             m.translations.summaries.clone(),
                         )
                     });
+                let (summary, categories, maturity) = first.map_or_else(Default::default, |m| {
+                    (
+                        m.module_summary.clone(),
+                        m.module_categories.clone(),
+                        m.module_maturity.clone(),
+                    )
+                });
                 out.push(ModuleInfo {
                     id: module.clone(),
                     name,
@@ -676,6 +711,9 @@ impl Dispatcher {
                     labels,
                     descriptions,
                     summaries,
+                    summary,
+                    categories,
+                    maturity,
                     models: infos,
                 });
             }
@@ -724,10 +762,11 @@ impl Dispatcher {
         actor: bool,
         generated_write: bool,
     ) {
-        let m = module
+        let (index, m) = module
             .models
             .iter()
-            .find(|m| m.name == model)
+            .enumerate()
+            .find(|(_, m)| m.name == model)
             .unwrap_or_else(|| panic!("{}: no model {model}", module.id));
         let c = m
             .all_commands()
@@ -748,6 +787,10 @@ impl Dispatcher {
                     module: module.id.clone(),
                     module_name: module.name.clone(),
                     module_description: module.description.clone(),
+                    module_summary: module.meta.summary.clone(),
+                    module_categories: module.meta.categories.clone(),
+                    module_maturity: module.meta.maturity.clone(),
+                    index,
                     translations: module.translations.clone(),
                     description: m.description,
                     fields: m.fields.clone(),

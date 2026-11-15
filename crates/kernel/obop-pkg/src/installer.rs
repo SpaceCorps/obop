@@ -3325,6 +3325,66 @@ mod tests {
     }
 
     #[test]
+    fn meta_keeps_the_declared_order_of_models_and_actions() {
+        let store = Store::new();
+        let (d, inst) = setup(&store);
+        inst.install(
+            include_str!("../../../../packages/projects.toml"),
+            "marketplace",
+            "root",
+        )
+        .unwrap();
+        let projects = d
+            .meta(
+                Surface::Rest,
+                &Principal::user("m", &["projects.user", "projects.manager"]),
+            )
+            .into_iter()
+            .find(|m| m.id == "projects")
+            .unwrap();
+        let names: Vec<&str> = projects.models.iter().map(|m| m.name.as_str()).collect();
+        assert_eq!(
+            names,
+            ["projects_project", "projects_milestone", "projects_task"],
+            "the order of projects.toml, not the alphabet"
+        );
+        let actions = |model: &str| -> Vec<String> {
+            projects
+                .models
+                .iter()
+                .find(|m| m.name == model)
+                .unwrap()
+                .actions
+                .iter()
+                .map(|a| a.id.clone())
+                .collect()
+        };
+        assert_eq!(
+            actions("projects_project"),
+            [
+                "projects_project.start",
+                "projects_project.finish",
+                "projects_project.reopen"
+            ]
+        );
+        assert_eq!(
+            actions("projects_task"),
+            [
+                "projects_task.begin",
+                "projects_task.complete",
+                "projects_task.cancel"
+            ]
+        );
+        // The catalogue data of D55 that the interface shows.
+        assert_eq!(
+            projects.summary,
+            "Projects, milestones and tasks with assignees, deadlines and status flows."
+        );
+        assert_eq!(projects.categories, ["services", "productivity"]);
+        assert_eq!(projects.maturity, "beta");
+    }
+
+    #[test]
     fn non_admins_cannot_see_or_run_module_commands() {
         let (d, _) = setup(&Store::new());
         let user = Principal::user("u", &["base.user"]);
