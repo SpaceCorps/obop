@@ -964,6 +964,14 @@ button.avatar {
   .check-row:not(:has(.hint)) {
     padding-block: calc((2.75rem - 1lh) / 2);
   }
+  /* The close button of a dialog or sheet: 44 px to tap, drawn where the small one sat (the negative
+     margins keep the head as tall as before and the cross in its place). */
+  .dialog-head > .icon-btn {
+    inline-size: 2.75rem;
+    block-size: 2.75rem;
+    margin-block: calc((var(--control-h-sm) - 2.75rem) / 2);
+    margin-inline-end: calc((var(--control-h-sm) - 2.75rem) / 2);
+  }
   :is(td, th) > input[type="checkbox"]:not([role="switch"])::before {
     content: "";
     position: absolute;
