@@ -112,6 +112,7 @@
   flex: 1 1 12rem;
 }
 .sup-receipts > a {
+  color: var(--accent-ink);
   font-weight: var(--weight-medium);
 }
 /* On a touch screen the link is a full touch target. */
@@ -221,6 +222,7 @@
   gap: 2px;
   margin-inline-start: auto;
   min-block-size: 2.75rem;
+  color: var(--accent-ink);
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
 }
