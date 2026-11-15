@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 pub mod expr;
 pub mod ext;
+pub mod guard;
 pub mod labels;
 pub mod limits;
 pub mod rules;
@@ -878,6 +879,7 @@ pub fn check_module(m: &Module) -> Vec<Violation> {
     // install checks them against the dependencies (`check_module_in`).
     v.extend(rules::check_rules(m, &|_| None, false));
     v.extend(ui::check(m, &|_| None, false));
+    v.extend(guard::check(m, &|_| None, false));
     v
 }
 
@@ -890,6 +892,7 @@ pub fn check_installed_module(m: &Module) -> Vec<Violation> {
     let mut v = check_basics(m, false);
     v.extend(rules::check_rules(m, &|_| None, false));
     v.extend(ui::check(m, &|_| None, false));
+    v.extend(guard::check(m, &|_| None, false));
     v
 }
 
@@ -902,6 +905,7 @@ pub fn check_module_in(
     let mut v = check_basics(m, true);
     v.extend(rules::check_rules(m, lookup, true));
     v.extend(ui::check(m, lookup, true));
+    v.extend(guard::check(m, lookup, true));
     v
 }
 
@@ -1777,10 +1781,12 @@ mod tests {
             no_delete_when: None,
             lock_date: Some(LockDate {
                 field: "date",
-                setting: "accounting.lock_date",
+                setting: Some("accounting.lock_date"),
+                closed_by: None,
             }),
             children_of: None,
             append_only: false,
+            message: None,
         };
         assert_eq!(guard("posted"), guard("posted"));
         assert_ne!(guard("posted"), guard("paid"));

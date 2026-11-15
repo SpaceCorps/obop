@@ -156,6 +156,62 @@ pub struct ModelM {
     /// `<model>_<x>` with one ref to it.
     #[serde(default)]
     pub child: Vec<ChildM>,
+    /// `[model.guard]` (D77, command-layer check): when records are frozen and what may still
+    /// change.
+    pub guard: Option<GuardM>,
+}
+
+/// `[model.guard]` (D77).
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GuardM {
+    pub immutable_when: Option<StatesM>,
+    #[serde(default)]
+    pub mutable_fields: Vec<String>,
+    #[serde(default)]
+    pub exit_to: Vec<ExitM>,
+    pub no_delete_when: Option<StatesM>,
+    pub lock_date: Option<LockDateM>,
+    pub children_of: Option<String>,
+    #[serde(default)]
+    pub append_only: bool,
+    pub message: Option<String>,
+}
+
+/// States of a governed select: `["posted"]` (the model's one governed select) or
+/// `{ field = "state", values = ["posted"] }`.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum StatesM {
+    Values(Vec<String>),
+    Full { field: String, values: Vec<String> },
+}
+
+/// An exit edge: `"cancelled"` (the one action that moves a frozen record there) or
+/// `{ to = "cancelled", action = "cancel", may_change = [...] }`.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum ExitM {
+    To(String),
+    Full(ExitFull),
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExitFull {
+    pub to: String,
+    pub action: Option<String>,
+    #[serde(default)]
+    pub may_change: Vec<String>,
+}
+
+/// `lock_date = { field = "date", closed_by = "accounting_period" }` or `{ field, setting }`.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LockDateM {
+    pub field: String,
+    pub setting: Option<String>,
+    pub closed_by: Option<String>,
 }
 
 /// `[model.ui]` (D95).
@@ -2058,6 +2114,129 @@ impl Manifest {
         Ok((!ui.is_empty()).then(|| std::sync::Arc::new(ui)))
     }
 
+    /// `[model.guard]`, read: the short forms resolved against the model's actions. The gate
+    /// (`obop_registry::guard::check`) checks the rest.
+    fn model_guard(
+        m: &ModelM,
+        commands: &[CommandDef],
+    ) -> Result<Option<obop_registry::Guard>, String> {
+        use obop_registry::ext::{Exit, LockDate, StateSet};
+        let Some(g) = &m.guard else {
+            return Ok(None);
+        };
+        let at = |key: &str, e: String| format!("{}.guard.{key}: {e}", m.name);
+        // The governed select fields of the model, for the short forms.
+        let mut governed: Vec<&str> = commands
+            .iter()
+            .filter_map(|c| c.transition.map(|t| t.field))
+            .collect();
+        governed.sort_unstable();
+        governed.dedup();
+        let states = |key: &str, s: &StatesM| -> Result<StateSet, String> {
+            let (field, values) = match s {
+                StatesM::Full { field, values } => (intern(field), values),
+                StatesM::Values(values) => match governed.as_slice() {
+                    [one] => (intern(one), values),
+                    [] => {
+                        return Err(at(
+                            key,
+                            "no action of the model moves a state; a guard follows a governed state".into(),
+                        ));
+                    }
+                    _ => {
+                        return Err(at(
+                            key,
+                            format!(
+                                "the model has several governed fields ({}): write {key} = {{ field = \"...\", values = [...] }}",
+                                governed.join(", ")
+                            ),
+                        ));
+                    }
+                },
+            };
+            Ok(StateSet {
+                field,
+                values: values.iter().map(|v| intern(v)).collect(),
+            })
+        };
+        let immutable_when = g
+            .immutable_when
+            .as_ref()
+            .map(|s| states("immutable_when", s))
+            .transpose()?;
+        let mut exit_to = Vec::new();
+        for e in &g.exit_to {
+            let (to, action, may_change) = match e {
+                ExitM::To(to) => (to.as_str(), None, &[][..]),
+                ExitM::Full(f) => (f.to.as_str(), f.action.as_deref(), &f.may_change[..]),
+            };
+            let action = match action {
+                Some(a) => intern(a),
+                None => {
+                    // The one declared action that moves a frozen record to `to`.
+                    let frozen = immutable_when.as_ref().ok_or_else(|| {
+                        at(
+                            "exit_to",
+                            "an exit leaves an immutable state: declare immutable_when".into(),
+                        )
+                    })?;
+                    let found: Vec<&'static str> = commands
+                        .iter()
+                        .filter(|c| {
+                            c.transition.is_some_and(|t| {
+                                t.field == frozen.field
+                                    && t.to == to
+                                    && t.from.is_none_or(|f| frozen.values.contains(&f))
+                            })
+                        })
+                        .map(|c| c.name)
+                        .collect();
+                    match found.as_slice() {
+                        [one] => *one,
+                        [] => {
+                            return Err(at(
+                                "exit_to",
+                                format!("no action moves a frozen record to {to:?}"),
+                            ));
+                        }
+                        _ => {
+                            return Err(at(
+                                "exit_to",
+                                format!(
+                                    "several actions move a frozen record to {to:?} ({}): name one with {{ to, action }}",
+                                    found.join(", ")
+                                ),
+                            ));
+                        }
+                    }
+                }
+            };
+            exit_to.push(Exit {
+                to: intern(to),
+                action,
+                may_change: may_change.iter().map(|f| intern(f)).collect(),
+            });
+        }
+        Ok(Some(obop_registry::Guard {
+            immutable_when,
+            mutable_fields: g.mutable_fields.iter().map(|f| intern(f)).collect(),
+            exit_to,
+            no_delete_when: g
+                .no_delete_when
+                .as_ref()
+                .map(|s| states("no_delete_when", s))
+                .transpose()?,
+            lock_date: g.lock_date.as_ref().map(|l| LockDate {
+                field: intern(&l.field),
+                setting: l.setting.as_deref().map(intern),
+                closed_by: l.closed_by.as_deref().map(intern),
+            }),
+            children_of: g.children_of.as_deref().map(intern),
+            append_only: g.append_only,
+            message: g.message.as_deref().map(intern),
+        }))
+    }
+
     /// The models as registry data, rules included. Syntax errors in expressions, formats and
     /// effects are reported here, with the model, field or action they are in.
     fn build_models(&self) -> Result<Vec<ModelDef>, String> {
@@ -2142,6 +2321,7 @@ impl Manifest {
                     .map(intern)
                     .collect(),
             });
+            let guard = Self::model_guard(m, &commands)?;
             out.push(ModelDef {
                 name: intern(&m.name),
                 description: intern(&m.description),
@@ -2159,6 +2339,7 @@ impl Manifest {
                         retention_days: m.history_retention_days,
                     },
                     ui: Self::model_ui(m)?,
+                    guard,
                     ..ModelExt::default()
                 },
             });

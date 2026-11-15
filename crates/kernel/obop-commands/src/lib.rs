@@ -479,6 +479,9 @@ pub struct ModelInfo {
     /// The plural of the model's name per language (D95), English included when the module has
     /// an `en` label table.
     pub plurals: Texts,
+    /// The immutability guard (D77), so an interface can show which records are locked; `None`
+    /// when the model declares none.
+    pub guard: Option<obop_registry::Guard>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -662,6 +665,7 @@ impl Dispatcher {
                             .collect()
                     },
                     plurals: mtr.map(|t| t.plurals.clone()).unwrap_or_default(),
+                    guard: m.def.ext.guard.clone(),
                     name: name.clone(),
                     description: m.description,
                     labels: mtr.map(|t| t.entry.labels.clone()).unwrap_or_default(),
@@ -2023,6 +2027,8 @@ pub mod names {
 mod assert_lang_tests;
 #[cfg(test)]
 mod engine_tests;
+#[cfg(test)]
+mod guard_tests;
 #[cfg(test)]
 mod hints_tests;
 #[cfg(test)]

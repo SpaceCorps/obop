@@ -560,6 +560,7 @@ mod tests {
             ui: None,
             children: Vec::new(),
             plurals: Default::default(),
+            guard: None,
         }
     }
 

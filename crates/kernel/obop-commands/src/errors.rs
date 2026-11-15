@@ -335,8 +335,8 @@ pub fn coded(code: &'static str, message: &str) -> String {
 /// `locale::assertion_behind`).
 pub(crate) fn wrap(context: &str, m: &str) -> String {
     match split_code(m) {
-        Some((r, rest)) if r.code == code::LIMIT_VIOLATED => {
-            coded(code::LIMIT_VIOLATED, &format!("{context}: {rest}"))
+        Some((r, rest)) if r.code == code::LIMIT_VIOLATED || r.code == code::IMMUTABLE_RECORD => {
+            coded(r.code, &format!("{context}: {rest}"))
         }
         _ => format!("{context}: {m}"),
     }

@@ -30,6 +30,8 @@ pub use marketplace::{Bundled, Chain, Http, Listing, Marketplace};
 #[cfg(test)]
 mod dependency_tests;
 #[cfg(test)]
+mod guard_tests;
+#[cfg(test)]
 mod ledger_tests;
 #[cfg(test)]
 mod limits_tests;

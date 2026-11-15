@@ -263,6 +263,9 @@ impl Runner<'_> {
             .filter(|(k, v)| rec.get(*k) != Some(*v))
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
+        // The ticket of this action on this record: a frozen record may leave by it along an
+        // `exit_to` edge (D77).
+        unit.ticket(def.name, id, cmd.name);
         unit.merge(def.name, id, patch.clone())?;
         // Effects, in order.
         let mut created: HashMap<String, String> = HashMap::new();

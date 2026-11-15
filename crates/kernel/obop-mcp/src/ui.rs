@@ -159,4 +159,57 @@ pub fn model_hints(o: &mut J, x: &ModelInfo) {
     if !x.plurals.is_empty() {
         o["plural_labels"] = json!(x.plurals);
     }
+    if let Some(g) = &x.guard {
+        o["guard"] = guard(g);
+    }
+}
+
+/// `[model.guard]` (D77) in the shape of `ModelGuard` in `web/apps/backoffice/src/api.ts`: each
+/// key only when declared.
+pub fn guard(g: &obop_registry::Guard) -> J {
+    let states = |s: &obop_registry::StateSet| json!({"field": s.field, "values": s.values});
+    let mut m = Map::new();
+    if let Some(s) = &g.immutable_when {
+        m.insert("immutable_when".into(), states(s));
+    }
+    if !g.mutable_fields.is_empty() {
+        m.insert("mutable_fields".into(), json!(g.mutable_fields));
+    }
+    if !g.exit_to.is_empty() {
+        let e: Vec<J> = g
+            .exit_to
+            .iter()
+            .map(|e| {
+                let mut o = json!({"to": e.to, "action": e.action});
+                if !e.may_change.is_empty() {
+                    o["may_change"] = json!(e.may_change);
+                }
+                o
+            })
+            .collect();
+        m.insert("exit_to".into(), J::Array(e));
+    }
+    if let Some(s) = &g.no_delete_when {
+        m.insert("no_delete_when".into(), states(s));
+    }
+    if let Some(l) = &g.lock_date {
+        let mut o = json!({"field": l.field});
+        if let Some(s) = l.setting {
+            o["setting"] = json!(s);
+        }
+        if let Some(c) = l.closed_by {
+            o["closed_by"] = json!(c);
+        }
+        m.insert("lock_date".into(), o);
+    }
+    if let Some(c) = g.children_of {
+        m.insert("children_of".into(), json!(c));
+    }
+    if g.append_only {
+        m.insert("append_only".into(), json!(true));
+    }
+    if let Some(t) = g.message {
+        m.insert("message".into(), json!(t));
+    }
+    J::Object(m)
 }

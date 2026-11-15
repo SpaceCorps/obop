@@ -529,6 +529,9 @@ pub(crate) fn transition(
         .ok_or_else(|| format!("{}.{command} is not declared", def.name))?;
     let look = lookup_fn(eng);
     let mut unit = eng.unit();
+    // The action's ticket on this record comes first, so the fields it needs may be written on a
+    // frozen record that it takes out along an `exit_to` edge with them in `may_change` (D77).
+    unit.ticket(def.name, &id, cmd.name);
     // The fields the action needs (D95 `needs`), from its input, are written first in the same
     // unit, so the assertions and the transition see them and an agent needs one call.
     let mut needs = hints::needs_of(cmd, input);
