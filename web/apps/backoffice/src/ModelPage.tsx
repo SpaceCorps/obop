@@ -26,6 +26,7 @@ import { EmptyState, Skeleton } from "./ui.tsx";
 import { useRecord, useServerRows } from "./useServer.ts";
 import { dateFields } from "./views/CalendarView.tsx";
 import { kanbanField } from "./views/KanbanView.tsx";
+import { listOrder } from "./views/listLayout.ts";
 import { VIEW_REGISTRY, viewOf } from "./views/registry.ts";
 import type { ViewProps } from "./views/types.ts";
 import { governedNames, moveRecord } from "./workflow.ts";
@@ -127,10 +128,12 @@ export function ModelPage({
   // the filter is expressible. Anything else (an any-field search, a "contains" on a select, grouping
   // the list, a sort by a ref) loads the records, up to 5,000, and works in the browser. See
   // serverQuery.ts.
+  // Without a sort of the person's own, the list starts in the model's default order (L2.4).
+  const order = useMemo(() => listOrder(model, fields), [model, fields]);
   // i18n-memo-ok: a range bound is read the same in every language and region (a dot or a comma is
   // taken as the decimal mark); the only reader of the i18n store is fmt.exponent(), the digits of
   // the instance currency, which a change of language or region does not change
-  const plan = useMemo(() => toServer(state, fields), [state, fields]);
+  const plan = useMemo(() => toServer(state, fields, order), [state, fields, order]);
   const grouped = state.group.length > 0;
   const serverMode = view === "list" && onServer(plan, state);
   const aggMode = view !== "list" && plan.rest.length === 0;
@@ -198,10 +201,16 @@ export function ModelPage({
     () =>
       serverMode || aggMode
         ? []
-        : sortRows(applyFacets(rows, state.facets, fields, d.lookup), state.sort, fields, d.lookup),
+        : sortRows(
+            applyFacets(rows, state.facets, fields, d.lookup),
+            state.sort,
+            fields,
+            d.lookup,
+            order,
+          ),
     // lookup changes when ref labels load
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [serverMode, aggMode, rows, state.facets, state.sort, fields, d.version, d.lang],
+    [serverMode, aggMode, rows, state.facets, state.sort, fields, order, d.version, d.lang],
   );
   const paging = view === "list" && !grouped;
   const shown: Row[] = aggMode
@@ -487,9 +496,9 @@ export function ModelPage({
           title={title}
           onClose={close}
           onSaved={(id) =>
-            // A new record sits at the end of an unsorted list: show the page it is on.
-            route.id === "new" && paging && !state.sort
-              ? put({ id, page: String(Math.max(1, Math.ceil((total + 1) / pageSize))) })
+            // A list in its default order shows the newest first: a new record is on the first page.
+            route.id === "new" && paging && !state.sort && order[0]?.dir === "desc"
+              ? put({ id, page: "" })
               : put({ id })
           }
         />

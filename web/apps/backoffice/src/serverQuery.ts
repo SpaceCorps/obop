@@ -109,7 +109,15 @@ function convert(c: Cond, f: FieldMeta | undefined): ServerFilter[] | null {
   }
 }
 
-export function toServer(state: ViewState, fields: FieldMeta[]): ServerPlan {
+/**
+ * `fallback` is the order without a sort of the person's own: the model's default order
+ * (views/listLayout.ts `listOrder`), so the server pages a list in the order it starts in.
+ */
+export function toServer(
+  state: ViewState,
+  fields: FieldMeta[],
+  fallback: readonly ServerOrder[] = [],
+): ServerPlan {
   const filter: ServerFilter[] = [];
   const rest: Cond[] = [];
   for (const c of state.facets) {
@@ -122,7 +130,11 @@ export function toServer(state: ViewState, fields: FieldMeta[]): ServerPlan {
   // A sort on a field the person cannot read is ignored, like the browser does.
   const sortOnServer = !sf || sf.kind !== "ref";
   const order: ServerOrder[] =
-    state.sort && sf && sf.kind !== "ref" ? [{ field: sf.name, dir: state.sort.dir }] : [];
+    state.sort && sf
+      ? sf.kind !== "ref"
+        ? [{ field: sf.name, dir: state.sort.dir }]
+        : []
+      : [...fallback];
   return { filter, order, rest, sortOnServer };
 }
 
