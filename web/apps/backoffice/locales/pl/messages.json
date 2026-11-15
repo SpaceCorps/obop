@@ -2359,5 +2359,9 @@
   "Could not copy. Select the token and copy it yourself.": "Nie udało się skopiować. Zaznacz token i skopiuj go samodzielnie.",
   "You have no permission groups to give to a token.": "Nie masz grup uprawnień, które można nadać tokenowi.",
   "Agent token issued": "Wydano token agenta",
-  "Agent token revoked": "Unieważniono token agenta"
+  "Agent token revoked": "Unieważniono token agenta",
+  "This app": "Ta aplikacja",
+  "Downloads are not available in the app yet.": "Pobieranie plików nie jest jeszcze dostępne w aplikacji.",
+  "Copy the codes or write them down.": "Skopiuj kody lub je zapisz.",
+  "Sign-in with Microsoft is not available in this app yet. To sign in that way, use your browser.": "Logowanie przez Microsoft nie jest jeszcze dostępne w tej aplikacji. Aby zalogować się w ten sposób, użyj przeglądarki."
 }

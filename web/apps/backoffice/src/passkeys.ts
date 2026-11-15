@@ -3,6 +3,8 @@
    ceremony, and turns the answer back into JSON for the server. Nothing here decides anything:
    the origin, the relying party and every check are the server's. */
 
+import { hostAllows } from "./host/state.ts";
+
 export type Reauth = { password: string; code?: string; recovery_code?: string };
 
 export type Passkey = {
@@ -42,7 +44,8 @@ export function passkeysSupported(): boolean {
   return (
     typeof window !== "undefined" &&
     typeof window.PublicKeyCredential === "function" &&
-    !!navigator.credentials
+    !!navigator.credentials &&
+    hostAllows("passkeys")
   );
 }
 

@@ -2359,5 +2359,9 @@
   "Could not copy. Select the token and copy it yourself.": "Det gick inte att kopiera. Markera token och kopiera den själv.",
   "You have no permission groups to give to a token.": "Du har inga behörighetsgrupper att ge en token.",
   "Agent token issued": "Agenttoken utfärdad",
-  "Agent token revoked": "Agenttoken återkallad"
+  "Agent token revoked": "Agenttoken återkallad",
+  "This app": "Den här appen",
+  "Downloads are not available in the app yet.": "Nedladdningar är inte tillgängliga i appen ännu.",
+  "Copy the codes or write them down.": "Kopiera koderna eller skriv ned dem.",
+  "Sign-in with Microsoft is not available in this app yet. To sign in that way, use your browser.": "Inloggning med Microsoft är inte tillgänglig i den här appen ännu. Använd webbläsaren om du vill logga in på det sättet."
 }

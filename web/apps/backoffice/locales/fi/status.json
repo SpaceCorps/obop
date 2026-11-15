@@ -2359,5 +2359,9 @@
   "Could not copy. Select the token and copy it yourself.": "machine-drafted",
   "You have no permission groups to give to a token.": "machine-drafted",
   "Agent token issued": "machine-drafted",
-  "Agent token revoked": "machine-drafted"
+  "Agent token revoked": "machine-drafted",
+  "This app": "machine-drafted",
+  "Downloads are not available in the app yet.": "machine-drafted",
+  "Copy the codes or write them down.": "machine-drafted",
+  "Sign-in with Microsoft is not available in this app yet. To sign in that way, use your browser.": "machine-drafted"
 }
