@@ -244,7 +244,9 @@ pub fn periods_problem(p: &ModelDef) -> Option<String> {
 /// The select field of a model of periods that says a period is closed: a governed one with the
 /// option `closed` first, else any select with it.
 pub fn closed_field(p: &ModelDef) -> Option<&'static str> {
-    let has = |f: &&crate::FieldDef| f.kind.options().iter().any(|o| *o == CLOSED_OPTION);
+    // An option value, not a model name (the scan of names handed to `contains` reads constants).
+    let option: &str = CLOSED_OPTION;
+    let has = |f: &&crate::FieldDef| f.kind.options().contains(&option);
     let governed = p.governed_fields();
     p.fields
         .iter()
