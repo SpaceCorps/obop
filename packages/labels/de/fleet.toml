@@ -1,6 +1,6 @@
 [labels.de.module]
 name = "Fuhrpark"
-description = "Fahrzeuge, Fahrer und Servicehistorie für einen kleinen Fuhrpark. Erfasst Status und Serviceeinträge; Betriebskosten und Kraftstoffverbrauch werden nicht berechnet."
+description = "Fahrzeuge, Fahrer und Servicehistorie für einen kleinen Fuhrpark. Erfasst Status und Serviceeinträge; Betriebskosten und Kraftstoffverbrauch werden nicht berechnet. Status und Führerscheinablauf eines Fahrers werden nur erfasst: Nichts prüft sie, auch nicht, wenn ein Fahrer einem Fahrzeug zugewiesen wird."
 summary = "Fahrzeuge, Fahrer und Servicehistorie für einen kleinen Fuhrpark."
 
 [labels.de.model.fleet_vehicle]
@@ -70,7 +70,7 @@ description = "Ein verfügbares Fahrzeug endgültig aus dem Fuhrpark nehmen (bra
 
 [labels.de.model.fleet_vehicle_driver]
 name = "Fahrer"
-description = "Eine Person, die Fuhrparkfahrzeuge fahren darf"
+description = "Ein erfasster Fahrer mit Führerscheindaten und dem Status aktiv oder gesperrt"
 
 [labels.de.model.fleet_vehicle_driver.field.name]
 label = "Name"
@@ -98,11 +98,11 @@ suspended = "Gesperrt"
 
 [labels.de.model.fleet_vehicle_driver.action.suspend]
 label = "Sperren"
-description = "Einen Fahrer sperren, zum Beispiel nach Ablauf des Führerscheins"
+description = "Einen Fahrer als gesperrt markieren, zum Beispiel nach Ablauf des Führerscheins"
 
 [labels.de.model.fleet_vehicle_driver.action.reactivate]
 label = "Reaktivieren"
-description = "Einem gesperrten Fahrer das Fahren wieder erlauben"
+description = "Einen gesperrten Fahrer wieder auf aktiv setzen"
 
 [labels.de.model.fleet_vehicle_service]
 name = "Fahrzeugservice"

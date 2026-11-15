@@ -31,7 +31,7 @@ use crate::webauthn::sha256;
 use crate::{Auth, Change, Epoch, bump_epoch, epoch_of, hex, random_bytes, str_list};
 use obop_commands::{
     ADMIN_GROUP, AnonGroup, AnonLine, LoginOutcome, MfaError, Principal, SsoApi, SsoEndpoints,
-    SsoError, SsoIdentity, SsoLeg, SsoProvider,
+    SsoError, SsoFlowSignIn, SsoIdentity, SsoLeg, SsoProvider,
 };
 use obop_storage::Fields;
 use serde_json::{Value as J, json};
@@ -377,10 +377,14 @@ impl Auth {
         crate::admin::admin_of(p).map_err(|_| SsoError::NotFound)
     }
 
-    /// The binding a one-time code was issued for, if it is still the account's and the provider
-    /// that vouched for it is still on and still the tenant of that binding. Read again when the
-    /// code is spent: unbinding, switching the provider off or clearing it ends a code that is
-    /// in the air (the person has up to 60 seconds).
+    /// The binding a sign-in was made for, if it is still the account's and the provider that
+    /// vouched for it is still on and still the tenant of that binding. Read again when the
+    /// one-time code of the back office is spent (the person has up to 60 seconds), when a phone
+    /// sign-in on the OAuth pages finishes (no code stands between its halves), and when the
+    /// second step of such a sign-in is asked for again: unbinding, switching the provider off or
+    /// clearing it stops a sign-in that is in the air from going on. (A `mfa_token` that was
+    /// minted before lives its five minutes: unbinding ends it through the credential epoch, a
+    /// switch-off or a clear does not, as on the web.)
     fn binding_holds(&self, user: &str, link_id: &str) -> Result<Option<&'static str>, MfaError> {
         let link = self
             .backend
@@ -875,6 +879,170 @@ fn describe_sso(e: SsoError) -> String {
     }
 }
 
+/// Where a sign-in came in: the back office's own page (the one-time code and its cookie), or the
+/// OAuth sign-in pages of a mobile app (the phone sign-in). Only the line in the log tells them
+/// apart.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Via {
+    BackOffice,
+    OAuthPages,
+}
+
+/// The account a verified identity is bound to, as `account_of` found it.
+struct Found {
+    user: String,
+    /// The id of the binding.
+    link: String,
+    /// The credential epoch of the account when it was looked at.
+    epoch: Epoch,
+}
+
+impl Auth {
+    /// The account a verified identity may sign in as: the provider as it is now, the binding of
+    /// the identity, the account enabled. Every refusal is written to the log here and is
+    /// `Refused`. The first half of a sign-in; [`Auth::finish_sign_in`] is the second.
+    fn account_of(&self, identity: &SsoIdentity) -> Result<Found, SsoError> {
+        let refuse = |user: &str, why: &str| -> SsoError {
+            self.event(user, "oidc_refused", "-", why);
+            SsoError::Refused(why.to_string())
+        };
+        // The tenant of the identity is the pinned one (verified), but a provider changed since
+        // the flow began is not the one it was checked against.
+        let Some(p) = self.provider_record()? else {
+            return Err(refuse("-", "no provider is configured"));
+        };
+        let v = Self::view(&p);
+        if !v.enabled || v.tenant != identity.tenant {
+            return Err(refuse(
+                "-",
+                "the provider was changed or switched off during the sign-in",
+            ));
+        }
+        let id = link_key(&identity.issuer, &identity.tenant, &identity.oid);
+        let link = self.backend.get(LINK_TABLE, &id).map_err(unavailable)?;
+        let Some(link) = link.map(J::Object) else {
+            return Err(refuse(
+                "-",
+                &format!(
+                    "no account is bound to object id {} in tenant {}",
+                    identity.oid, identity.tenant
+                ),
+            ));
+        };
+        let user = link["user"].as_str().unwrap_or("").to_string();
+        let u = match self.user_record(&user) {
+            Ok(u) => u,
+            Err(MfaError::NotFound) => {
+                return Err(refuse(&user, "the account of the binding does not exist"));
+            }
+            Err(e) => return Err(unavailable(format!("{e:?}"))),
+        };
+        if u["disabled"].as_bool() == Some(true) {
+            return Err(refuse(&user, "the account is disabled"));
+        }
+        let epoch = epoch_of(&u);
+        Ok(Found {
+            user,
+            link: id,
+            epoch,
+        })
+    }
+
+    /// The second half of a sign-in: the account, its binding and the provider as they are now
+    /// (disabled, removed, changed or unbound since the identity was looked at is no sign-in), the
+    /// credential epoch compared with `pending`, and what the password step gives next (a whole
+    /// session, a session limited to enrolment, or the demand for an obop second factor).
+    fn finish_sign_in(
+        &self,
+        name: &str,
+        pending: &Epoch,
+        mfa: bool,
+        link_id: &str,
+        via: Via,
+    ) -> Result<LoginOutcome, MfaError> {
+        // The account as it is now: disabled, removed or changed since the callback is no sign-in.
+        let u = self.user_record(name).map_err(|e| match e {
+            MfaError::NotFound => MfaError::Expired,
+            other => other,
+        })?;
+        if u["disabled"].as_bool() == Some(true) {
+            self.event(
+                name,
+                "oidc_refused",
+                "-",
+                "the account was disabled before the sign-in finished",
+            );
+            return Err(MfaError::Expired);
+        }
+        if epoch_of(&u) != *pending {
+            self.event(
+                name,
+                "oidc_refused",
+                "-",
+                "the credentials of the account changed before the sign-in finished",
+            );
+            return Err(MfaError::Expired);
+        }
+        // The binding and the provider as they are now, not as they were when the identity was
+        // looked at.
+        if let Some(why) = self.binding_holds(name, link_id)? {
+            self.event(name, "oidc_refused", "-", why);
+            return Err(MfaError::Expired);
+        }
+        // The first sign-in on a binding is what lets an administrator make the account
+        // Microsoft-only. A refused write only means the administrator is asked to sign in again.
+        // (A sign-in on the OAuth pages of a phone app counts: it is a real Microsoft sign-in.)
+        if let Ok(Some((id, _))) = self.link_of(name) {
+            let mut p = Fields::new();
+            p.insert(
+                "last_login_at".into(),
+                J::from(obop_commands::audit::rfc3339(self.now())),
+            );
+            let _ = self.backend.update(LINK_TABLE, &id, &p);
+        }
+        let sso_only = u["sso_only"].as_bool() == Some(true);
+        self.purge_tokens();
+        let out = if sso_only && mfa {
+            // Microsoft says a second factor was used, and for an account that has no other way in
+            // that is its second factor: whole session, no obop code asked.
+            self.session_outcome(name, false, pending)
+                .map_err(SessionError::mfa)?
+        } else {
+            // A refusal at this point (the account went while the sign-in finished) is answered
+            // like any other expired sign-in; only the store's own trouble is a 503.
+            self.after_first_factor(name, pending).map_err(|e| {
+                if e == "invalid username or password" {
+                    MfaError::Expired
+                } else {
+                    MfaError::Unavailable(e)
+                }
+            })?
+        };
+        self.event(
+            name,
+            "oidc_login",
+            name,
+            &format!(
+                "signed in with Microsoft{}; the provider {} a second factor{}",
+                match via {
+                    Via::BackOffice => "",
+                    Via::OAuthPages => " on the OAuth sign-in pages of an app",
+                },
+                if mfa { "reports" } else { "does not report" },
+                match &out {
+                    LoginOutcome::Session {
+                        mfa_enrolment_required: true,
+                        ..
+                    } => "; the session is limited to enrolment",
+                    LoginOutcome::MfaRequired { .. } => "; an obop second factor is asked",
+                    _ => "",
+                }
+            ),
+        );
+        Ok(out)
+    }
+}
+
 impl SsoApi for Auth {
     fn offered(&self) -> bool {
         self.provider_record()
@@ -960,49 +1128,12 @@ impl SsoApi for Auth {
         if binder.len() < MIN_BINDER {
             return Err(invalid("the browser secret of the sign-in is missing"));
         }
-        let refuse = |user: &str, why: &str| -> SsoError {
-            self.event(user, "oidc_refused", "-", why);
-            SsoError::Refused(why.to_string())
-        };
-        // The tenant of the identity is the pinned one (verified), but a provider changed since
-        // the flow began is not the one it was checked against.
-        let Some(p) = self.provider_record()? else {
-            return Err(refuse("-", "no provider is configured"));
-        };
-        let v = Self::view(&p);
-        if !v.enabled || v.tenant != identity.tenant {
-            return Err(refuse(
-                "-",
-                "the provider was changed or switched off during the sign-in",
-            ));
-        }
-        let id = link_key(&identity.issuer, &identity.tenant, &identity.oid);
-        let link = self.backend.get(LINK_TABLE, &id).map_err(unavailable)?;
-        let Some(link) = link.map(J::Object) else {
-            return Err(refuse(
-                "-",
-                &format!(
-                    "no account is bound to object id {} in tenant {}",
-                    identity.oid, identity.tenant
-                ),
-            ));
-        };
-        let user = link["user"].as_str().unwrap_or("").to_string();
-        let u = match self.user_record(&user) {
-            Ok(u) => u,
-            Err(MfaError::NotFound) => {
-                return Err(refuse(&user, "the account of the binding does not exist"));
-            }
-            Err(e) => return Err(unavailable(format!("{e:?}"))),
-        };
-        if u["disabled"].as_bool() == Some(true) {
-            return Err(refuse(&user, "the account is disabled"));
-        }
+        let found = self.account_of(identity)?;
         let code = format!("obopsso_{}", hex(&random_bytes::<32>()));
         let rec = json!({
-            "user": user,
-            "link": id,
-            "epoch": epoch_of(&u),
+            "user": found.user,
+            "link": found.link,
+            "epoch": found.epoch,
             "mfa": identity.mfa(),
             "binder": binder_hash(binder),
             "expires_at": self.now() + CODE_SECS,
@@ -1033,7 +1164,39 @@ impl SsoApi for Auth {
         }
         let pending: Epoch = rec["epoch"].as_str().map(String::from);
         let mfa = rec["mfa"].as_bool() == Some(true);
-        // The account as it is now: disabled, removed or changed since the callback is no sign-in.
+        let out = self.finish_sign_in(
+            &name,
+            &pending,
+            mfa,
+            rec["link"].as_str().unwrap_or(""),
+            Via::BackOffice,
+        )?;
+        Ok((name, out))
+    }
+
+    fn sign_in_for_flow(&self, identity: &SsoIdentity) -> Result<SsoFlowSignIn, MfaError> {
+        let found = self.account_of(identity).map_err(|e| match e {
+            SsoError::Unavailable(m) => MfaError::Unavailable(m),
+            // The reason is in the log already (`account_of` wrote it).
+            _ => MfaError::Expired,
+        })?;
+        let mfa = identity.mfa();
+        // The epoch handed back is the one `finish_sign_in` compares (and `session_outcome`
+        // compares again): never one read after it.
+        let outcome =
+            self.finish_sign_in(&found.user, &found.epoch, mfa, &found.link, Via::OAuthPages)?;
+        Ok(SsoFlowSignIn {
+            user: found.user,
+            outcome,
+            epoch: found.epoch,
+            mfa,
+            auth_time: identity.auth_time,
+        })
+    }
+
+    fn second_step_for_flow(&self, user: &str, epoch: Option<&str>) -> Result<String, MfaError> {
+        let name = user.trim().to_lowercase();
+        let pending: Epoch = epoch.map(String::from);
         let u = self.user_record(&name).map_err(|e| match e {
             MfaError::NotFound => MfaError::Expired,
             other => other,
@@ -1043,7 +1206,7 @@ impl SsoApi for Auth {
                 &name,
                 "oidc_refused",
                 "-",
-                "the account was disabled before the sign-in finished",
+                "the account was disabled before the second step of the sign-in",
             );
             return Err(MfaError::Expired);
         }
@@ -1052,61 +1215,42 @@ impl SsoApi for Auth {
                 &name,
                 "oidc_refused",
                 "-",
-                "the credentials of the account changed before the sign-in finished",
+                "the credentials of the account changed before the second step of the sign-in",
             );
             return Err(MfaError::Expired);
         }
-        // The binding and the provider as they are now, not as they were when the code was made.
-        if let Some(why) = self.binding_holds(&name, rec["link"].as_str().unwrap_or(""))? {
+        // The binding and the provider as they are now, as the web exchange asks before it mints
+        // the same token: an account unbound, a provider switched off, cleared or changed since
+        // the first step gets no fresh token. (A token minted before this call is not withdrawn:
+        // unbinding ends it through the epoch, the others do not, as on the web.)
+        let Some((link_id, _)) = self
+            .link_of(&name)
+            .map_err(|e| MfaError::Unavailable(describe_sso(e)))?
+        else {
+            self.event(
+                &name,
+                "oidc_refused",
+                "-",
+                "the account was unbound before the second step of the sign-in",
+            );
+            return Err(MfaError::Expired);
+        };
+        if let Some(why) = self.binding_holds(&name, &link_id)? {
             self.event(&name, "oidc_refused", "-", why);
             return Err(MfaError::Expired);
         }
-        // The first sign-in on a binding is what lets an administrator make the account
-        // Microsoft-only. A refused write only means the administrator is asked to sign in again.
-        if let Ok(Some((id, _))) = self.link_of(&name) {
-            let mut p = Fields::new();
-            p.insert(
-                "last_login_at".into(),
-                J::from(obop_commands::audit::rfc3339(self.now())),
-            );
-            let _ = self.backend.update(LINK_TABLE, &id, &p);
+        if !self.has_second_factor(&name) {
+            return Err(MfaError::Expired);
         }
-        let sso_only = u["sso_only"].as_bool() == Some(true);
-        self.purge_tokens();
-        let out = if sso_only && mfa {
-            // Microsoft says a second factor was used, and for an account that has no other way in
-            // that is its second factor: whole session, no obop code asked.
-            self.session_outcome(&name, false, &pending)
-                .map_err(SessionError::mfa)?
-        } else {
-            // A refusal at this point (the account went while the sign-in finished) is answered
-            // like any other expired sign-in; only the store's own trouble is a 503.
-            self.after_first_factor(&name, &pending).map_err(|e| {
-                if e == "invalid username or password" {
-                    MfaError::Expired
-                } else {
-                    MfaError::Unavailable(e)
-                }
-            })?
-        };
-        self.event(
-            &name,
-            "oidc_login",
-            &name,
-            &format!(
-                "signed in with Microsoft; the provider {} a second factor{}",
-                if mfa { "reports" } else { "does not report" },
-                match &out {
-                    LoginOutcome::Session {
-                        mfa_enrolment_required: true,
-                        ..
-                    } => "; the session is limited to enrolment",
-                    LoginOutcome::MfaRequired { .. } => "; an obop second factor is asked",
-                    _ => "",
-                }
-            ),
-        );
-        Ok((name, out))
+        match self.after_first_factor(&name, &pending) {
+            Ok(LoginOutcome::MfaRequired { mfa_token }) => Ok(mfa_token),
+            // The factor went between the two looks: no session comes out of this call.
+            Ok(LoginOutcome::Session { token, .. }) => {
+                self.revoke(&token);
+                Err(MfaError::Expired)
+            }
+            Err(e) => Err(MfaError::Unavailable(e)),
+        }
     }
 
     fn audit(&self, user: &str, kind: &str, detail: &str) {

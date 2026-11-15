@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { fmt, inSentence, t } from "@obop/ui";
 import { LOAD_LIMIT, search, type FieldMeta, type Row } from "../api.ts";
+import { matches, PHONE_QUERY } from "../media.ts";
 import { useData } from "../data.tsx";
 import { isoDate, validDate } from "../format.ts";
 import { fieldTitle } from "../labels.ts";
@@ -84,7 +85,7 @@ export function CalendarView(p: ViewProps) {
   const [fname, setFname] = useState(dfs[0]?.name ?? "");
   const df = dfs.find((f) => f.name === fname) ?? dfs[0]!;
   const [mode, setMode] = useState<"month" | "week">(() =>
-    matchMedia("(max-width: 40rem)").matches ? "week" : "month",
+    matches(PHONE_QUERY) ? "week" : "month",
   );
   const [cursor, setCursor] = useState(() => new Date());
   const today = isoDate(new Date());
@@ -191,63 +192,66 @@ export function CalendarView(p: ViewProps) {
         </div>
       </div>
       {mode === "month" ? (
-        <div
-          className="monthgrid"
-          role="grid"
-          aria-label={heading}
-          style={{ gridTemplateRows: `auto repeat(${rowsInView}, minmax(5.5rem, 1fr))` }}
-        >
-          <div role="row" className="dayhead-row">
-            {days.slice(0, 7).map((day) => (
-              <div key={day.getDay()} role="columnheader" className="dayhead">
-                {fmt.dateOf(day, { weekday: "short" })}
+        // Up to tablet width only this box scrolls sideways, not the bar above it (views.css).
+        <div className="cal-scroll">
+          <div
+            className="monthgrid"
+            role="grid"
+            aria-label={heading}
+            style={{ gridTemplateRows: `auto repeat(${rowsInView}, minmax(5.5rem, 1fr))` }}
+          >
+            <div role="row" className="dayhead-row">
+              {days.slice(0, 7).map((day) => (
+                <div key={day.getDay()} role="columnheader" className="dayhead">
+                  {fmt.dateOf(day, { weekday: "short" })}
+                </div>
+              ))}
+            </div>
+            {Array.from({ length: 6 }, (_, w) => (
+              <div role="row" className="weekrow" key={w}>
+                {days.slice(w * 7, w * 7 + 7).map((day) => {
+                  const iso = isoDate(day);
+                  const evs = byDay.get(iso) ?? [];
+                  const out = day.getMonth() !== cursor.getMonth();
+                  return (
+                    <div
+                      role="gridcell"
+                      key={iso}
+                      className={`daycell${out ? " out" : ""}${iso === today ? " today" : ""}`}
+                      aria-label={fmt.dateOf(day, { dateStyle: "full" })}
+                    >
+                      <button
+                        className="daynum"
+                        onClick={() => create(iso)}
+                        disabled={!p.canCreate}
+                        aria-label={
+                          p.canCreate
+                            ? t("New record on {date}", {
+                                date: fmt.dateOf(day, { dateStyle: "full" }),
+                              })
+                            : fmt.dateOf(day, { dateStyle: "full" })
+                        }
+                      >
+                        {day.getDate()}
+                      </button>
+                      {evs.slice(0, 3).map(chip)}
+                      {evs.length > 3 && (
+                        <button
+                          className="more"
+                          onClick={() => {
+                            setCursor(day);
+                            setMode("week");
+                          }}
+                        >
+                          {t("+{count} more", { count: evs.length - 3 })}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             ))}
           </div>
-          {Array.from({ length: 6 }, (_, w) => (
-            <div role="row" className="weekrow" key={w}>
-              {days.slice(w * 7, w * 7 + 7).map((day) => {
-                const iso = isoDate(day);
-                const evs = byDay.get(iso) ?? [];
-                const out = day.getMonth() !== cursor.getMonth();
-                return (
-                  <div
-                    role="gridcell"
-                    key={iso}
-                    className={`daycell${out ? " out" : ""}${iso === today ? " today" : ""}`}
-                    aria-label={fmt.dateOf(day, { dateStyle: "full" })}
-                  >
-                    <button
-                      className="daynum"
-                      onClick={() => create(iso)}
-                      disabled={!p.canCreate}
-                      aria-label={
-                        p.canCreate
-                          ? t("New record on {date}", {
-                              date: fmt.dateOf(day, { dateStyle: "full" }),
-                            })
-                          : fmt.dateOf(day, { dateStyle: "full" })
-                      }
-                    >
-                      {day.getDate()}
-                    </button>
-                    {evs.slice(0, 3).map(chip)}
-                    {evs.length > 3 && (
-                      <button
-                        className="more"
-                        onClick={() => {
-                          setCursor(day);
-                          setMode("week");
-                        }}
-                      >
-                        {t("+{count} more", { count: evs.length - 3 })}
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          ))}
         </div>
       ) : (
         <ul className="weeklist">

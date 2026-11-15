@@ -302,8 +302,9 @@ fn core_version_requirement_kinds_limits() {
 
 #[test]
 fn a_bundled_package_that_uses_a_limit_must_declare_the_core_that_has_them() {
-    // The 23 bundled packages keep `^0.2` (OR-35 k). Any of them that gains a limit key must
-    // declare at least the core that has the keys, so that this test fails if one forgets.
+    // The bundled packages keep `^0.2` (OR-35 h) unless they use a limit key, as `accounting_se`
+    // does (`^0.2.1`). Any of them that gains a limit key must declare at least the core that has
+    // the keys, so that this test fails if one forgets.
     let first = Version::new(0, 2, LIMITS_CORE_PATCH);
     let before = Version::new(0, 2, LIMITS_CORE_PATCH - 1);
     let mut checked = 0;
@@ -331,7 +332,7 @@ fn a_bundled_package_that_uses_a_limit_must_declare_the_core_that_has_them() {
         }
         checked += 1;
     }
-    assert_eq!(checked, 23);
+    assert_eq!(checked, 24);
 }
 
 // ---- upgrades -----------------------------------------------------------------------------

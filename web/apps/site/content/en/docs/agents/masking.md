@@ -6,7 +6,7 @@ lead: "Agents can work with people's data without seeing it. This page explains 
 
 ## What an agent receives
 
-For a field that holds personal data, the server replaces the value with a token built from the field name and a counter, such as `EMAIL_1`, `NAME_2` or `CONTACT_EMAIL_7`. Fields in a sensitive data class are left out and named in `denied` (REST) or `withheld_fields` (MCP).
+For a field that holds personal data, the server replaces a value written as a string (text, long text, a date, a choice, a reference and the like) with a token built from the field name and a counter, such as `EMAIL_1`, `NAME_2` or `CONTACT_EMAIL_7`; any other value of such a field (a number, a yes/no value, a list or an empty one) shows `[masked]`. Fields in a sensitive data class (confidential HR, special category, financial) or in the secret class are left out and named in `denied`, over REST and over MCP.
 
 ```json
 {
@@ -17,10 +17,10 @@ For a field that holds personal data, the server replaces the value with a token
 
 ## Rules of the tokens
 
-- **The same value gets the same token** within one session: one agent token on one server process. Two records that mention the same email show the same token, so the agent can see they match.
+- **The same value in a field of the same name gets the same token** within one table: one agent token (or MCP session). Two records with the same email in `email` show the same token, so the agent can see they match; the same email in `contact_email` gets another token. Each `obop call` starts a new table.
 - **Counters are shared**, so a token's number says nothing about the record. Do not parse it.
-- **They are not stable across sessions.** A restart of the server, or a different agent token, starts a new table. A token an agent remembers from yesterday may not resolve today.
-- **They never leave the permission path.** A token only resolves if the agent could read the record the value came from.
+- **They are not stable across agent tokens or MCP sessions.** A different agent token or a new MCP session starts a new table, and a table is forgotten 24 hours after its last change (REST), 2 hours after the session's last request (MCP over HTTP) or when `obop mcp` stops; a restart of the server does not lose a table over REST or MCP on HTTP. A token an agent remembers from yesterday may not resolve today.
+- **They resolve only in the table that showed them.** The server does not check that the agent can still read the record a token came from; any caller with at least one permission group can pass back a token it was shown.
 
 ## Passing tokens back
 
@@ -32,9 +32,9 @@ curl -s -X POST http://127.0.0.1:8080/api/lead/create \
   -d '{"title":"Support renewal","contact_name":"NAME_5","contact_email":"EMAIL_4"}'
 ```
 
-A person opening that lead sees the real name and email. The agent only ever handled the tokens. A token the server cannot resolve is refused with `400 {"error":"invalid token"}`.
+A person opening that lead sees the real name and email. The agent only ever handled the tokens. A token is replaced only when a text value in the request, such as a field's value, is exactly that token and the token is in the agent's table. A token the server does not know (for example one from a forgotten table) is not refused: it is saved as the literal text, so check the record.
 
-If the agent types a real value instead (for example because a user told it), the value is saved as given and shown to the agent as a new token afterwards.
+If the agent types a real value instead (for example because a user told it), the value is saved as given and shown to the agent as a token afterwards.
 
 ## Filtering by a masked field
 

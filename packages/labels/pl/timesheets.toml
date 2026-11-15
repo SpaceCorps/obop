@@ -1,6 +1,6 @@
 [labels.pl.module]
 name = "Ewidencja czasu pracy"
-description = "Czas poświęcony na zadania projektowe, wpisywany w minutach, ze znacznikiem do fakturowania i krokiem zatwierdzenia. Wymaga pakietu Projekty. Wykonawca widzi i edytuje tylko własne wpisy; timesheets.manager widzi wszystkie."
+description = "Czas poświęcony na zadania projektowe, wpisywany w minutach, ze znacznikiem do fakturowania i krokiem zatwierdzenia. Zatwierdzenie i odrzucenie wpisu wymagają akceptacji człowieka; agenci mogą je tylko zaproponować. Wymaga pakietu Projekty. Wykonawca widzi i edytuje tylko własne wpisy; timesheets.manager widzi wszystkie."
 summary = "Czas poświęcony na zadania projektowe w minutach, ze znacznikiem do fakturowania i krokiem zatwierdzenia."
 
 [labels.pl.model.timesheets_entry]
@@ -50,7 +50,7 @@ description = "Przesyła wpis do zatwierdzenia"
 
 [labels.pl.model.timesheets_entry.action.approve]
 label = "Zatwierdź"
-description = "Zatwierdza przesłany wpis, aby można go było rozliczyć (tylko kierownik)"
+description = "Zatwierdza przesłany wpis (tylko kierownik)"
 
 [labels.pl.model.timesheets_entry.action.reject]
 label = "Zwróć do poprawy"

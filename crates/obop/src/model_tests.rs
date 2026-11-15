@@ -667,6 +667,165 @@ fn timesheets_are_private_to_their_worker() {
     assert_eq!(list(&app, &manager, "timesheets_entry").len(), 2);
 }
 
+/// Approving or refusing an expense claim and approving or rejecting a time entry are steps an
+/// agent may only propose (D48): the agent gets a plan and nothing moves until a person approves
+/// it. A person with the manager group runs the same actions directly. The same holds when the
+/// agent sets `state` through `update`, which runs the action implicitly.
+#[test]
+fn agents_only_propose_approving_or_refusing_expenses_and_time_entries() {
+    let app = app_with(&["expenses", "timesheets"]);
+    let state = |p: &Principal, model: &str, rec: &str| get(&app, p, model, rec)["state"].clone();
+
+    // Expenses.
+    let ann = user("ann", &["expenses.user"]);
+    let boss = user("mia", &["expenses.user", "expenses.manager"]);
+    let bot = Principal::agent(
+        "mia",
+        &["expenses.user", "expenses.manager"],
+        &["expenses.user", "expenses.manager"],
+    );
+    let claim = || {
+        let c = id(&ok(
+            &app,
+            &ann,
+            "expenses_expense.create",
+            json!({"description": "Taxi", "spent_on": "2026-09-01", "category": "travel", "amount": 1500}),
+        ));
+        ok(&app, &ann, "expenses_expense.submit", json!({"id": c}));
+        c
+    };
+    for (action, to) in [("approve", "approved"), ("refuse", "refused")] {
+        let c = claim();
+        let cmd = format!("expenses_expense.{action}");
+        let plan = plan_of(run(&app, &bot, &cmd, json!({"id": c})));
+        assert_eq!(state(&boss, "expenses_expense", &c), "submitted", "{cmd}");
+        approve(&app, &boss, &plan).unwrap();
+        assert_eq!(state(&boss, "expenses_expense", &c), to, "{cmd}");
+        // Through `update`, the same: a plan, not a change.
+        let c = claim();
+        let plan = plan_of(run(
+            &app,
+            &bot,
+            "expenses_expense.update",
+            json!({"id": c, "state": to}),
+        ));
+        assert_eq!(state(&boss, "expenses_expense", &c), "submitted", "{cmd}");
+        approve(&app, &boss, &plan).unwrap();
+        assert_eq!(state(&boss, "expenses_expense", &c), to, "{cmd}");
+        // A person runs it directly.
+        let c = claim();
+        ok(&app, &boss, &cmd, json!({"id": c}));
+        assert_eq!(state(&boss, "expenses_expense", &c), to, "{cmd}");
+    }
+
+    // Timesheets.
+    let task = id(&ok(
+        &app,
+        &user("a", &["projects.user"]),
+        "projects_task.create",
+        json!({"title": "t"}),
+    ));
+    let worker = user("bob", &["timesheets.user", "projects.user"]);
+    let manager = user(
+        "kim",
+        &["timesheets.user", "timesheets.manager", "projects.user"],
+    );
+    let groups = ["timesheets.user", "timesheets.manager", "projects.user"];
+    let ts_bot = Principal::agent("kim", &groups, &groups);
+    let entry = || {
+        let e = id(&ok(
+            &app,
+            &worker,
+            "timesheets_entry.create",
+            json!({"task_id": task, "worked_on": "2026-09-14", "minutes": 60}),
+        ));
+        ok(&app, &worker, "timesheets_entry.submit", json!({"id": e}));
+        e
+    };
+    for (action, to) in [("approve", "approved"), ("reject", "draft")] {
+        let e = entry();
+        let cmd = format!("timesheets_entry.{action}");
+        let plan = plan_of(run(&app, &ts_bot, &cmd, json!({"id": e})));
+        assert_eq!(
+            state(&manager, "timesheets_entry", &e),
+            "submitted",
+            "{cmd}"
+        );
+        approve(&app, &manager, &plan).unwrap();
+        assert_eq!(state(&manager, "timesheets_entry", &e), to, "{cmd}");
+        let e = entry();
+        let plan = plan_of(run(
+            &app,
+            &ts_bot,
+            "timesheets_entry.update",
+            json!({"id": e, "state": to}),
+        ));
+        assert_eq!(
+            state(&manager, "timesheets_entry", &e),
+            "submitted",
+            "{cmd}"
+        );
+        approve(&app, &manager, &plan).unwrap();
+        assert_eq!(state(&manager, "timesheets_entry", &e), to, "{cmd}");
+        let e = entry();
+        ok(&app, &manager, &cmd, json!({"id": e}));
+        assert_eq!(state(&manager, "timesheets_entry", &e), to, "{cmd}");
+    }
+}
+
+/// The approval flags reach an instance that installed Expenses 0.3.0 only through an update to
+/// the bundled version, which is why the version moved: before the update the agent's approve
+/// runs, after it the agent gets a plan. The update needs no data step.
+#[test]
+fn updating_expenses_brings_the_approval_of_approve_and_refuse() {
+    let app = App::new();
+    app.dispatcher
+        .set_clock(std::sync::Arc::new(|| SEPTEMBER_2026));
+    let bundled = Bundled.fetch("expenses").unwrap();
+    let flagged = "group = \"expenses.manager\"\n  approval = true\n";
+    assert_eq!(bundled.matches(flagged).count(), 2, "approve and refuse");
+    let old = bundled
+        .replace(flagged, "group = \"expenses.manager\"\n")
+        .replace("version = \"0.3.1\"", "version = \"0.3.0\"");
+    assert_ne!(old, bundled);
+    app.installer.install(&old, "upload", "test").unwrap();
+
+    let ann = user("ann", &["expenses.user"]);
+    let groups = ["expenses.user", "expenses.manager"];
+    let boss = user("mia", &groups);
+    let bot = Principal::agent("mia", &groups, &groups);
+    let claim = || {
+        let c = id(&ok(
+            &app,
+            &ann,
+            "expenses_expense.create",
+            json!({"description": "Taxi", "spent_on": "2026-09-01", "category": "travel", "amount": 1500}),
+        ));
+        ok(&app, &ann, "expenses_expense.submit", json!({"id": c}));
+        c
+    };
+    let c = claim();
+    ok(&app, &bot, "expenses_expense.approve", json!({"id": c}));
+    assert_eq!(
+        get(&app, &boss, "expenses_expense", &c)["state"],
+        "approved"
+    );
+
+    let updated = app.installer.install(&bundled, "upload", "test").unwrap();
+    assert_eq!(updated.version, "0.3.1");
+    let c = claim();
+    plan_of(run(
+        &app,
+        &bot,
+        "expenses_expense.approve",
+        json!({"id": c}),
+    ));
+    assert_eq!(
+        get(&app, &boss, "expenses_expense", &c)["state"],
+        "submitted"
+    );
+}
+
 #[test]
 fn a_dashboard_is_private_until_it_is_shared_and_its_tiles_follow_it() {
     let app = app_with(&["dashboards"]);

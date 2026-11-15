@@ -152,6 +152,7 @@ macro_rules! bundle {
 
 const BUNDLED: &[Bundle] = &[
     bundle!("accounting"),
+    bundle!("accounting_se"),
     bundle!("appointments"),
     bundle!("dashboards"),
     bundle!("documents"),
@@ -319,6 +320,7 @@ mod tests {
             ids,
             [
                 "accounting",
+                "accounting_se",
                 "appointments",
                 "dashboards",
                 "documents",

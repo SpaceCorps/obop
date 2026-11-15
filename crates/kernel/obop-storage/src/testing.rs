@@ -8,6 +8,7 @@ use crate::{
     HistoryStats, J, LockGuard, Op, PartitionEnsured, Result, Row, RowSink, Sealer, Swap, Track,
     Tracking, WriteCtx, guarded,
 };
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU8, Ordering::SeqCst};
 
@@ -138,12 +139,24 @@ pub struct Flaky {
     /// Inserts into the model fail with this server error (no fault noted: it is not a refusal of
     /// the pool but a statement that failed, such as a full disk) until `allow_models`.
     insert_error: std::sync::Mutex<Option<(String, String)>>,
+    /// Reads (`get`) of the model fail with this error (no fault noted either) until
+    /// `allow_models`.
+    get_error: std::sync::Mutex<Option<(String, String)>>,
     /// The batches that reached `apply_tracked`: see [`Flaky::seen_writes`].
     seen: std::sync::Mutex<Vec<SeenWrite>>,
     /// See [`Flaky::reads`].
     reads: std::sync::Mutex<Reads>,
+    /// See [`Flaky::models_asked`].
+    asked: std::sync::Mutex<BTreeSet<String>>,
+    /// See [`Flaky::gets_of`].
+    got: std::sync::Mutex<BTreeMap<String, u64>>,
     /// Run once, right before the next atomic batch is applied.
     before_apply: std::sync::Mutex<Option<AfterInsert>>,
+    /// Run once, right before the next compare-and-set of a short-lived value is tried.
+    before_kv_swap: std::sync::Mutex<Option<AfterInsert>>,
+    /// Run once, right before the next read of a short-lived value whose key starts with the
+    /// prefix.
+    before_kv_get: std::sync::Mutex<Option<(String, AfterInsert)>>,
 }
 
 /// A batch as `apply_tracked` received it: the context, the steps and the tracked models.
@@ -170,6 +183,11 @@ pub struct Reads {
     /// returned.
     pub keyed: u64,
     pub keyed_rows: u64,
+    /// Calls of `count`.
+    pub counts: u64,
+    /// Calls that read a short-lived value or a counter (`kv_get`, `kv_scan`, `counter_get`,
+    /// `counter_ttl_ms`).
+    pub kv_reads: u64,
 }
 
 /// What [`Flaky::after_the_next_insert_into`] runs, with the wrapped backend.
@@ -197,9 +215,14 @@ impl Flaky {
             after_insert: std::sync::Mutex::new(None),
             after_get: std::sync::Mutex::new(None),
             insert_error: std::sync::Mutex::new(None),
+            get_error: std::sync::Mutex::new(None),
             seen: std::sync::Mutex::new(Vec::new()),
             reads: std::sync::Mutex::new(Reads::default()),
+            asked: std::sync::Mutex::new(BTreeSet::new()),
+            got: std::sync::Mutex::new(BTreeMap::new()),
             before_apply: std::sync::Mutex::new(None),
+            before_kv_swap: std::sync::Mutex::new(None),
+            before_kv_get: std::sync::Mutex::new(None),
         })
     }
 
@@ -244,6 +267,34 @@ impl Flaky {
         *self.reads.lock().unwrap() = Reads::default();
     }
 
+    /// Every model a call through this backend has named, read or written, refused calls
+    /// included, since it was made: a record of the tables the program asks the storage for, for
+    /// the test that holds that list to what the installer reserves. Counters and short-lived
+    /// values (`counter_*`, `kv_*`) name no model and are not in it; the records of `export` and
+    /// `total` are not asked for by model.
+    pub fn models_asked(&self) -> BTreeSet<String> {
+        self.asked.lock().unwrap().clone()
+    }
+
+    /// How many times `get` was called for `model` through this backend since it was made, calls
+    /// that were refused included (a refused read is still a read that was asked for): the count
+    /// of the reads of one record, for the test that holds a caller to "once" or "at most once".
+    pub fn gets_of(&self, model: &str) -> u64 {
+        self.got.lock().unwrap().get(model).copied().unwrap_or(0)
+    }
+
+    fn ask(&self, model: &str) {
+        if !model.is_empty() {
+            self.asked.lock().unwrap().insert(model.to_string());
+        }
+    }
+
+    fn ask_ops(&self, ops: &[Op]) {
+        for op in ops {
+            self.ask(op.model());
+        }
+    }
+
     /// How many calls were refused so far.
     pub fn refused(&self) -> i64 {
         self.refused.load(SeqCst)
@@ -259,6 +310,7 @@ impl Flaky {
         *self.target.lock().unwrap() = None;
         *self.after_get.lock().unwrap() = None;
         *self.insert_error.lock().unwrap() = None;
+        *self.get_error.lock().unwrap() = None;
         self.after_write.store(0, SeqCst);
         self.after_budget.store(0, SeqCst);
         self.next.store(0, SeqCst);
@@ -280,6 +332,19 @@ impl Flaky {
         *self.before_apply.lock().unwrap() = Some(then);
     }
 
+    /// Run `then` once, with the wrapped backend, right before the next `kv_swap` is tried: another
+    /// request changing the value (or the account it rests on) between a read and its
+    /// compare-and-set, with no thread and no sleep.
+    pub fn before_the_next_kv_swap(&self, then: AfterInsert) {
+        *self.before_kv_swap.lock().unwrap() = Some(then);
+    }
+
+    /// Run `then` once, with the wrapped backend, right before the next `kv_get` of a key that
+    /// starts with `prefix`: another request changing something between two steps of this one.
+    pub fn before_the_next_kv_get_of(&self, prefix: &str, then: AfterInsert) {
+        *self.before_kv_get.lock().unwrap() = Some((prefix.to_string(), then));
+    }
+
     fn run_before_apply(&self) {
         let hook = self.before_apply.lock().unwrap().take();
         if let Some(f) = hook {
@@ -296,6 +361,16 @@ impl Flaky {
     /// nor a refusal of the pool (`could not extend file: No space left on device`).
     pub fn fail_inserts_into(&self, model: &str, message: &str) {
         *self.insert_error.lock().unwrap() = Some((model.to_string(), message.to_string()));
+    }
+
+    /// Fail every `get` of `model` with `message`, a read error that is neither a refusal of the
+    /// pool nor noted as a fault on the thread: the store is up and cannot answer this read (a
+    /// statement that failed, a row that cannot be decoded, `no such table: obop_setting`). The text
+    /// decides how the layers above take it, so a test passes one that starts with no code word of D74
+    /// to make it a non-transient error. The call is counted in [`Flaky::reads`] and in
+    /// [`Flaky::gets_of`]. Until [`Flaky::allow_models`].
+    pub fn fail_gets_of(&self, model: &str, message: &str) {
+        *self.get_error.lock().unwrap() = Some((model.to_string(), message.to_string()));
     }
 
     /// Let `skip` successful `get`s of `model` through, then run `then` right after the next one,
@@ -416,6 +491,7 @@ impl Flaky {
     }
 
     fn gate_m(&self, write: bool, model: &str) -> Result<()> {
+        self.ask(model);
         // `refuse_call_after`: let `n` calls through, then refuse the next one, once.
         let once = self.once.try_update(SeqCst, SeqCst, |n| match n {
             n if n > 0 => Some(n - 1),
@@ -498,8 +574,19 @@ impl Backend for Flaky {
         Ok(())
     }
     fn get(&self, model: &str, id: &str) -> Result<Option<Fields>> {
+        *self
+            .got
+            .lock()
+            .unwrap()
+            .entry(model.to_string())
+            .or_default() += 1;
         self.gate_m(false, model)?;
         self.reads.lock().unwrap().gets += 1;
+        if let Some((m, message)) = &*self.get_error.lock().unwrap()
+            && m == model
+        {
+            return Err(message.clone());
+        }
         let found = self.inner.get(model, id)?;
         let hook = {
             let mut g = self.after_get.lock().unwrap();
@@ -559,6 +646,7 @@ impl Backend for Flaky {
     }
     fn count(&self, model: &str) -> Result<usize> {
         self.gate_m(false, model)?;
+        self.reads.lock().unwrap().counts += 1;
         self.inner.count(model)
     }
     fn delete(&self, model: &str, id: &str) -> Result<bool> {
@@ -566,20 +654,24 @@ impl Backend for Flaky {
         self.inner.delete(model, id)
     }
     fn insert_many(&self, rows: &[(String, String, Fields)]) -> Result<()> {
+        rows.iter().for_each(|(model, _, _)| self.ask(model));
         self.gate(true)?;
         self.inner.insert_many(rows)
     }
     fn apply(&self, ops: &[Op]) -> Result<()> {
+        self.ask_ops(ops);
         self.gate_apply()?;
         self.run_before_apply();
         self.inner.apply(ops)
     }
     fn apply_checked(&self, ops: &[Op]) -> std::result::Result<(), ApplyError> {
+        self.ask_ops(ops);
         self.gate_apply().map_err(ApplyError::Storage)?;
         self.run_before_apply();
         self.inner.apply_checked(ops)
     }
     fn apply_ctx(&self, ctx: &WriteCtx, ops: &[Op]) -> std::result::Result<(), ApplyError> {
+        self.ask_ops(ops);
         self.gate_apply().map_err(ApplyError::Storage)?;
         self.inner.apply_ctx(ctx, ops)
     }
@@ -589,6 +681,7 @@ impl Backend for Flaky {
         ops: &[Op],
         tracking: &Tracking,
     ) -> std::result::Result<(), ApplyError> {
+        self.ask_ops(ops);
         self.gate_apply().map_err(ApplyError::Storage)?;
         self.seen
             .lock()
@@ -641,6 +734,7 @@ impl Backend for Flaky {
         fallback_at: &str,
         batch: usize,
     ) -> Result<Backfilled> {
+        models.iter().for_each(|m| self.ask(m));
         self.gate(true)?;
         self.inner.backfill_sysfields(models, fallback_at, batch)
     }
@@ -666,6 +760,7 @@ impl Backend for Flaky {
         Ok(rows)
     }
     fn ensure_unique(&self, name: &str, model: &str, fields: &[&str]) -> Result<()> {
+        self.ask(model);
         self.gate(true)?;
         self.inner.ensure_unique(name, model, fields)
     }
@@ -681,10 +776,12 @@ impl Backend for Flaky {
     }
     fn counter_get(&self, key: &str) -> Result<u64> {
         self.gate(false)?;
+        self.reads.lock().unwrap().kv_reads += 1;
         self.inner.counter_get(key)
     }
     fn counter_ttl_ms(&self, key: &str) -> Result<Option<u64>> {
         self.gate(false)?;
+        self.reads.lock().unwrap().kv_reads += 1;
         self.inner.counter_ttl_ms(key)
     }
     fn counter_reset(&self, key: &str) -> Result<()> {
@@ -718,10 +815,25 @@ impl Backend for Flaky {
         self.inner.kv_put_new(key, value, ttl_ms)
     }
     fn kv_get(&self, key: &str) -> Result<Option<String>> {
+        let hook = {
+            let mut slot = self.before_kv_get.lock().unwrap();
+            if slot
+                .as_ref()
+                .is_some_and(|(p, _)| key.starts_with(p.as_str()))
+            {
+                slot.take().map(|(_, f)| f)
+            } else {
+                None
+            }
+        };
+        if let Some(f) = hook {
+            f(&*self.inner);
+        }
         if self.vanish.swap(false, SeqCst) {
             let _ = self.inner.kv_delete(key);
         }
         self.gate(false)?;
+        self.reads.lock().unwrap().kv_reads += 1;
         self.inner.kv_get(key)
     }
     fn kv_delete(&self, key: &str) -> Result<bool> {
@@ -730,6 +842,7 @@ impl Backend for Flaky {
     }
     fn kv_scan(&self, prefix: &str) -> Result<Vec<(String, String)>> {
         self.gate(false)?;
+        self.reads.lock().unwrap().kv_reads += 1;
         self.inner.kv_scan(prefix)
     }
     fn purge_expired(&self) -> Result<usize> {
@@ -745,10 +858,15 @@ impl Backend for Flaky {
         self.inner.total()
     }
     fn swap_fields(&self, swaps: &[Swap]) -> Result<usize> {
+        swaps.iter().for_each(|s| self.ask(&s.model));
         self.gate(true)?;
         self.inner.swap_fields(swaps)
     }
     fn kv_swap(&self, key: &str, old: &str, new: &str) -> Result<bool> {
+        let hook = self.before_kv_swap.lock().unwrap().take();
+        if let Some(f) = hook {
+            f(&*self.inner);
+        }
         self.gate(true)?;
         self.inner.kv_swap(key, old, new)
     }
@@ -758,7 +876,13 @@ impl Backend for Flaky {
         next: &mut dyn FnMut() -> Result<Option<Vec<Row>>>,
     ) -> Result<usize> {
         self.gate(true)?;
-        self.inner.import(wipe, next)
+        self.inner.import(wipe, &mut || {
+            let rows = next()?;
+            if let Some(rows) = &rows {
+                rows.iter().for_each(|(model, _, _)| self.ask(model));
+            }
+            Ok(rows)
+        })
     }
 }
 
@@ -958,6 +1082,132 @@ mod tests {
 
     fn fields(v: serde_json::Value) -> Fields {
         v.as_object().cloned().unwrap()
+    }
+
+    /// `gets_of` counts the `get`s of one model, and a `get` that was refused or failed is still
+    /// a read that was asked for: a caller held to "once" is held to the reads it asked for, not
+    /// to those that were answered. Other calls on the model are not gets.
+    #[test]
+    fn gets_of_counts_the_gets_of_one_model_refused_and_failed_ones_included() {
+        let (flaky, db) = Flaky::memory();
+        assert_eq!(flaky.gets_of("m"), 0);
+        db.get("m", "a").unwrap();
+        db.get("other", "a").unwrap();
+        assert_eq!((flaky.gets_of("m"), flaky.gets_of("other")), (1, 1));
+        // Not gets: a list, a count, a find and a write of the model.
+        db.list("m").unwrap();
+        db.count("m").unwrap();
+        db.find("m", "f", &json!(1)).unwrap();
+        db.insert("m", "a", &Fields::new()).unwrap();
+        assert_eq!(flaky.gets_of("m"), 1);
+        // A get the pool refuses.
+        flaky.refuse_model("m", Mode::Reads);
+        assert!(db.get("m", "a").is_err());
+        assert_eq!(flaky.refused(), 1, "the call was refused");
+        assert_eq!(flaky.gets_of("m"), 2, "and still counted");
+        assert_eq!(
+            flaky.gets_of("other"),
+            1,
+            "the refusal was of the other model"
+        );
+        // A get that fails with a plain error of the store.
+        flaky.allow_models();
+        flaky.fail_gets_of("m", "a read error that is not transient");
+        assert!(db.get("m", "a").is_err());
+        assert_eq!(flaky.gets_of("m"), 3, "a failed get is counted");
+        fault::clear();
+    }
+
+    /// The models a call names are noted for every way of naming one: a keyed call, a batch, a
+    /// refused call, a backfill, a unique rule and an import. Counters name none.
+    #[test]
+    fn the_models_a_call_names_are_noted_whatever_the_way_it_names_them() {
+        let (flaky, db) = Flaky::memory();
+        assert!(flaky.models_asked().is_empty());
+        db.insert("m_insert", "a", &Fields::new()).unwrap();
+        db.get("m_get", "a").unwrap();
+        db.list("m_list").unwrap();
+        db.scan("m_scan", &mut |_, _| Ok(true)).unwrap();
+        db.update("m_update", "a", &Fields::new()).unwrap();
+        db.count("m_count").unwrap();
+        db.delete("m_delete", "a").unwrap();
+        db.find("m_find", "f", &json!(1)).unwrap();
+        db.find_unique("m_unique", &["f"], &[json!(1)]).unwrap();
+        db.insert_many(&[("m_many".into(), "a".into(), Fields::new())])
+            .unwrap();
+        db.apply(&[Op::Insert {
+            model: "m_apply".into(),
+            id: "a".into(),
+            fields: Fields::new(),
+        }])
+        .unwrap();
+        db.apply_checked(&[Op::add("m_checked", "a", "n", 1).or_create(Fields::new())])
+            .unwrap();
+        db.apply_ctx(
+            &WriteCtx::system("test"),
+            &[Op::add("m_ctx", "a", "n", 1).or_create(Fields::new())],
+        )
+        .unwrap();
+        db.ensure_unique("u", "m_rule", &["f"]).unwrap();
+        db.backfill_sysfields(
+            &["m_backfill".to_string()],
+            "2026-01-01T00:00:00.000000Z",
+            10,
+        )
+        .unwrap();
+        db.swap_fields(&[Swap {
+            model: "m_swap".into(),
+            id: "a".into(),
+            field: "f".into(),
+            old: "x".into(),
+            new: "y".into(),
+        }])
+        .unwrap();
+        db.counter_add("not_a_model", 1000, false).unwrap();
+        db.kv_put("not_a_model_either", "v", None).unwrap();
+        // A refused call is asked for all the same.
+        flaky.refuse_next(1);
+        assert!(db.get("m_refused", "a").is_err());
+        let mut rows = Some(vec![(
+            "m_import".to_string(),
+            "a".to_string(),
+            Fields::new(),
+        )]);
+        db.import(false, &mut || Ok(rows.take())).unwrap();
+        let want: BTreeSet<String> = [
+            "m_insert",
+            "m_get",
+            "m_list",
+            "m_scan",
+            "m_update",
+            "m_count",
+            "m_delete",
+            "m_find",
+            "m_unique",
+            "m_many",
+            "m_apply",
+            "m_checked",
+            "m_ctx",
+            "m_rule",
+            "m_backfill",
+            "m_refused",
+            "m_swap",
+            "m_import",
+        ]
+        .map(String::from)
+        .into();
+        assert_eq!(flaky.models_asked(), want);
+
+        // A `Flaky` under a `Tracked` is reached by `apply_tracked`: the models of that batch count.
+        let below = Flaky::new(Arc::new(crate::memory::Memory::default()));
+        let above = crate::tracked::Tracked::new(below.clone());
+        above
+            .apply_ctx(
+                &WriteCtx::system("test"),
+                &[Op::add("m_tracked", "a", "n", 1).or_create(Fields::new())],
+            )
+            .unwrap();
+        assert!(below.models_asked().contains("m_tracked"));
     }
 
     #[test]

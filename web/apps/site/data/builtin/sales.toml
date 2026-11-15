@@ -3,7 +3,7 @@
 id = "sales"
 version = "0.2.1"
 name = "Sales"
-description = "Quotations and confirmed orders for customers."
+description = "Quotations and confirmed orders for customers, with lines. Confirming an order creates a draft invoice with the same lines (the caller needs the invoicing.user group)."
 summary = "Quotations and sales orders for your customers."
 author = "SpaceCorps"
 license = "Apache-2.0"
@@ -25,6 +25,13 @@ read_group = "sales.user"
 write_group = "sales.user"
 
 [[model.field]]
+name = "number"
+description = "Order number such as SO-00042, assigned when the order is created"
+class = "none"
+kind = "sequence"
+format = "SO-{seq:05}"
+
+[[model.field]]
 name = "party_id"
 description = "Customer party id"
 class = "none"
@@ -40,9 +47,10 @@ options = ["draft", "confirmed", "cancelled"]
 
 [[model.field]]
 name = "total_minor"
-description = "Order total in minor units"
+description = "Order total in minor units, the sum of the lines"
 class = "none"
 kind = "money"
+computed = "sum(lines.amount_minor)"
 
 [[model.field]]
 name = "currency"
@@ -68,3 +76,50 @@ description = "Put a cancelled order back to draft"
 field = "state"
 from = "cancelled"
 to = "draft"
+
+[[model]]
+name = "sale_order_line"
+description = "One product or service on a sale order"
+read_group = "sales.user"
+write_group = "sales.user"
+
+[[model.field]]
+name = "order_id"
+description = "The sale order the line belongs to"
+class = "none"
+kind = "ref"
+to = "sale_order"
+required = true
+
+[[model.field]]
+name = "product_id"
+description = "The product sold"
+class = "none"
+kind = "ref"
+to = "product"
+
+[[model.field]]
+name = "description"
+description = "What is sold, as it appears on the invoice"
+class = "none"
+
+[[model.field]]
+name = "quantity"
+description = "Quantity sold"
+class = "none"
+kind = "number"
+required = true
+
+[[model.field]]
+name = "unit_price_minor"
+description = "Price of one unit in minor currency units"
+class = "none"
+kind = "money"
+required = true
+
+[[model.field]]
+name = "amount_minor"
+description = "Line amount in minor units: quantity times unit price"
+class = "none"
+kind = "money"
+computed = "quantity * unit_price_minor"

@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "packages": [
+    {
+      "id": "tiny",
+      "name": "Tiny",
+      "version": "1.0.0",
+      "requires_core": "^0.2",
+      "description": "A tiny package",
+      "dependencies": [
+        {
+          "id": "base",
+          "requires": "^0.2"
+        }
+      ],
+      "models": [
+        {
+          "name": "tiny_item",
+          "description": "An item",
+          "read_group": "base.user",
+          "write_group": "base.user",
+          "state_field": null,
+          "actions": [],
+          "fields": [
+            {
+              "name": "title",
+              "kind": "text",
+              "description": "Title",
+              "data_class": "none",
+              "permission_group": "base.user",
+              "personal_data": false,
+              "required": true,
+              "unique": false,
+              "unique_with": [],
+              "options": [],
+              "to": null,
+              "precision": null,
+              "scale": null,
+              "round": null,
+              "limits": {
+                "min_length": null,
+                "max_length": 80,
+                "min": null,
+                "max": null
+              },
+              "computed": null,
+              "assigned": null
+            },
+            {
+              "name": "price",
+              "kind": "decimal",
+              "description": "Price",
+              "data_class": "none",
+              "permission_group": "base.user",
+              "personal_data": false,
+              "required": false,
+              "unique": false,
+              "unique_with": [],
+              "options": [],
+              "to": null,
+              "precision": 12,
+              "scale": 2,
+              "round": "half_up",
+              "limits": {
+                "min_length": null,
+                "max_length": null,
+                "min": "0.00",
+                "max": null
+              },
+              "computed": null,
+              "assigned": null
+            },
+            {
+              "name": "owner",
+              "kind": "ref",
+              "description": "Owner",
+              "data_class": "internal",
+              "permission_group": "base.user",
+              "personal_data": true,
+              "required": false,
+              "unique": false,
+              "unique_with": [],
+              "options": [],
+              "to": "user",
+              "precision": null,
+              "scale": null,
+              "round": null,
+              "limits": null,
+              "computed": null,
+              "assigned": null
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

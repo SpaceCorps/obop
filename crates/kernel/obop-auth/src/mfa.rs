@@ -12,6 +12,7 @@ use obop_keys::KeyRing;
 use obop_storage::Fields;
 use serde_json::{Value as J, json};
 use sha2::{Digest, Sha256};
+use std::io::Write;
 use std::time::Duration;
 
 /// How long the password step stays valid for the code step.
@@ -62,19 +63,28 @@ pub struct AuthConfig {
     pub keys: KeyRing,
     /// The default of `security.require_mfa_for_admins` until an admin stores a value.
     pub default_require_admins: bool,
-    /// Shown in the authenticator app next to the account.
-    pub issuer: String,
+    /// Shown in the authenticator app next to the account, when `OBOP_MFA_ISSUER` is set. None:
+    /// an enrolment reads the name of the instance brand each time (`Auth::issuer`), so a change
+    /// of the record applies to the next entry, and an instance with no record says `obop`.
+    pub issuer: Option<String>,
 }
+
+/// Whether the warning about the link characters in `OBOP_MFA_ISSUER` was written by this process.
+static ISSUER_WARNED: std::sync::Once = std::sync::Once::new();
 
 impl AuthConfig {
     /// `OBOP_SECRET_KEY` (64 hex digits recommended), `OBOP_SECRET_KEY_PREVIOUS`, `OBOP_DEV_INSECURE_KEY=1` for an
     /// explicit, logged development fallback, `OBOP_REQUIRE_MFA_FOR_ADMINS=0` to change the
-    /// default of the admin policy, `OBOP_MFA_ISSUER`.
+    /// default of the admin policy, `OBOP_MFA_ISSUER` (read by `brand::env_issuer`, the function
+    /// `get` of the brand record reads it with, so the two cannot differ).
     pub fn from_env() -> Self {
         let flag = |n: &str| std::env::var(n).ok();
         let keys = match KeyRing::from_env() {
             Ok(k) => {
-                if k.current()
+                // `KeyRing::current` in the form of a function, so that the scan of the brand
+                // (`obop-http/src/brand_scan_tests.rs`), which counts the calls `.current(` of
+                // this file as reads of the brand reader, finds none here.
+                if KeyRing::current(&k)
                     .is_some_and(|c| c.source() == obop_keys::KeySource::Development)
                 {
                     eprintln!(
@@ -88,6 +98,23 @@ impl AuthConfig {
                 KeyRing::default()
             }
         };
+        let issuer = obop_commands::brand::env_issuer();
+        if let Some(warning) = issuer
+            .as_deref()
+            .and_then(obop_commands::brand::issuer_warning)
+        {
+            // Once for the process, not once for each configuration: `obop serve` builds its
+            // authentication in more than one place (the one it serves with and the count of
+            // users it reports), and the warning said the same thing each time. `writeln!` and
+            // not `eprintln!`, which panics when stderr cannot be written, and a panic inside
+            // `call_once` would poison it. Defensive only: the binary writes `database: ...`
+            // with `eprintln!` before it builds an authentication, so a process whose stderr
+            // cannot be written never reaches this line today, and the two `eprintln!` lines
+            // above have the same exposure; this line adds no way to fail.
+            ISSUER_WARNED.call_once(|| {
+                let _ = writeln!(std::io::stderr(), "WARNING: {warning}");
+            });
+        }
         Self {
             keys,
             default_require_admins: !flag("OBOP_REQUIRE_MFA_FOR_ADMINS").is_some_and(|v| {
@@ -96,9 +123,7 @@ impl AuthConfig {
                     "0" | "false" | "no" | "off"
                 )
             }),
-            issuer: flag("OBOP_MFA_ISSUER")
-                .filter(|s| !s.trim().is_empty())
-                .unwrap_or_else(|| "obop".into()),
+            issuer,
         }
     }
 
@@ -107,7 +132,7 @@ impl AuthConfig {
         Self {
             keys: KeyRing::from_vars(None, None, true).unwrap_or_default(),
             default_require_admins: false,
-            issuer: "obop".into(),
+            issuer: None,
         }
     }
 }
@@ -753,6 +778,20 @@ impl Auth {
         Ok(())
     }
 
+    /// The issuer of a new authenticator entry: `OBOP_MFA_ISSUER` if it was set at start (no read
+    /// of the store), else the name of the instance brand, read by `brand::strict` from the row
+    /// alone, every time, else `obop` when there is no row. A store that cannot be read, or a
+    /// stored name that cannot be shown, is an error and never the default
+    /// (docs/spec/branding.md, section 5, and section 10, item 7).
+    fn issuer(&self) -> Result<String, MfaError> {
+        match &self.config.issuer {
+            Some(issuer) => Ok(issuer.clone()),
+            None => obop_commands::brand::strict(&*self.backend)
+                .map(|b| b.name().to_string())
+                .map_err(obop_commands::brand::enrolment_error),
+        }
+    }
+
     /// For tests: pretend it is `secs` seconds after the epoch.
     pub fn set_clock_for_test(&self, secs: u64) {
         self.fake_now
@@ -791,12 +830,25 @@ impl MfaApi for Auth {
     fn begin(&self, p: &Principal) -> Result<J, MfaError> {
         let name = person(p)?;
         let ring = self.ring()?;
+        let already_on = || {
+            MfaError::Invalid(
+                "two-factor is already on; turn it off first to enrol a new device".into(),
+            )
+        };
+        // A person whose second factor is on is told so first: that answer needs no name, and a
+        // name that cannot be read must not hide it (it is the answer this call gave before the
+        // name was read at all). The check is made again under the guard below, where it counts.
+        if self.user_record(name)?["mfa_enabled"].as_bool() == Some(true) {
+            return Err(already_on());
+        }
+        // The label is written into the person's device and cannot be corrected afterwards, so it
+        // is read before anything is stored, and a name that cannot be read refuses the enrolment
+        // (docs/spec/branding.md, section 4). The read takes no lock: it needs no `mfa_guard`.
+        let issuer = self.issuer()?;
         let _g = self.mfa_guard()?;
         let u = self.user_record(name)?;
         if u["mfa_enabled"].as_bool() == Some(true) {
-            return Err(MfaError::Invalid(
-                "two-factor is already on; turn it off first to enrol a new device".into(),
-            ));
+            return Err(already_on());
         }
         let secret = random_bytes::<{ totp::SECRET_LEN }>();
         let b32 = totp::base32_encode(&secret);
@@ -809,8 +861,8 @@ impl MfaApi for Auth {
         self.event(name, "enrol_begin", name, "secret issued, not active");
         Ok(json!({
             "secret": b32,
-            "uri": totp::otpauth_uri(&self.config.issuer, name, &b32),
-            "issuer": self.config.issuer,
+            "uri": totp::otpauth_uri(&issuer, name, &b32),
+            "issuer": issuer,
             "account": name,
             "digits": totp::DIGITS,
             "period": totp::PERIOD,

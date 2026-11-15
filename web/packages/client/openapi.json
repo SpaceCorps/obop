@@ -528,14 +528,14 @@
         "type": "object"
       },
       "invoice": {
-        "description": "A customer invoice; posted invoices are corrected only by credit notes",
+        "description": "A customer invoice; no action takes a posted invoice back to draft or cancels it",
         "properties": {
           "currency": {
             "description": "ISO 4217 currency code",
             "type": "string"
           },
           "number": {
-            "description": "Gapless legal number such as INV-2026-00042, assigned when posted (a number the system assigns; read-only)",
+            "description": "Number from a gapless yearly series, such as INV-2026-00042, assigned when posted (a number the system assigns; read-only)",
             "readOnly": true,
             "type": "string"
           },
@@ -1343,6 +1343,18 @@
           "users_may_use": {
             "description": "People with connectors.user may connect their own accounts",
             "type": "boolean"
+          },
+          "workspace_id": {
+            "description": "Google Drive: the drive the instance works in (root is My Drive, empty is none)",
+            "type": "string"
+          },
+          "workspace_name": {
+            "description": "Google Drive: the name of that drive, for display",
+            "type": "string"
+          },
+          "write_group": {
+            "description": "Google Drive: permission group that may create folders, Docs and uploads there; empty means platform.admin",
+            "type": "string"
           }
         },
         "type": "object"
@@ -1427,7 +1439,7 @@
             "type": "string"
           },
           "kind": {
-            "description": "What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, device_limit, mileage_route_read, mileage_discard_stuck, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless, oidc_provider_configured, oidc_provider_cleared, oidc_bind, oidc_unbind, oidc_sso_only, oidc_start, oidc_login, oidc_refused, oidc_cancelled, oidc_error",
+            "description": "What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, device_limit, mileage_route_read, mileage_discard_stuck, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless, oidc_provider_configured, oidc_provider_cleared, oidc_bind, oidc_unbind, oidc_sso_only, oidc_start, oidc_login, oidc_refused, oidc_cancelled, oidc_error, sign_link_issued, sign_signed, sign_refused, plan_lost, user_create, user_groups, user_offboard, agent_token_issued, agent_token_revoked, drive_connected, drive_connect_failed, drive_disconnected, drive_import, drive_import_failed, drive_create, drive_create_failed, drive_upload, drive_upload_failed, migration_run, migration_rollback, drill_recorded, storage_attested, brand_configured, brand_cleared",
             "type": "string"
           },
           "user": {
@@ -1703,7 +1715,7 @@
                     "type": "string"
                   },
                   "scopes": {
-                    "description": "Permission groups, each one the issuer holds.",
+                    "description": "Permission groups by name, each one the issuer holds; an administrator may name any registered group. Never `*`.",
                     "items": {
                       "type": "string"
                     },
@@ -1781,6 +1793,198 @@
           }
         ],
         "summary": "A signed-in human issues a scoped agent token"
+      }
+    },
+    "/api/auth/agent-tokens": {
+      "get": {
+        "operationId": "listAgentTokens",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "delegable": {
+                      "description": "Permission groups the caller may delegate: their own, and every registered group for an administrator.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "tokens": {
+                      "items": {
+                        "properties": {
+                          "created_at": {
+                            "description": "Unix seconds.",
+                            "type": "integer"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "scopes": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The tokens (never a token itself) and the groups."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "The agent tokens the signed-in human issued that still work, and the groups they may put on a new one"
+      }
+    },
+    "/api/auth/agent-tokens/{id}/revoke": {
+      "post": {
+        "operationId": "revokeAgentToken",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "revoked": {
+                      "type": "boolean"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Revoked."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "End one agent token the signed-in human issued"
       }
     },
     "/api/auth/login": {
@@ -10192,7 +10396,7 @@
             "bearerAuth": []
           }
         ],
-        "summary": "Post a draft invoice and assign its legal number",
+        "summary": "Post a draft invoice and give it the next number of the series",
         "tags": [
           "Invoicing"
         ]
@@ -22666,6 +22870,21 @@
                         "users_may_use": {
                           "description": "People with connectors.user may connect their own accounts",
                           "type": "boolean"
+                        },
+                        "workspace_id": {
+                          "description": "Google Drive: the drive the instance works in (root is My Drive, empty is none)",
+                          "maxLength": 2048,
+                          "type": "string"
+                        },
+                        "workspace_name": {
+                          "description": "Google Drive: the name of that drive, for display",
+                          "maxLength": 2048,
+                          "type": "string"
+                        },
+                        "write_group": {
+                          "description": "Google Drive: permission group that may create folders, Docs and uploads there; empty means platform.admin",
+                          "maxLength": 2048,
+                          "type": "string"
                         }
                       },
                       "required": [
@@ -22897,6 +23116,21 @@
                   "users_may_use": {
                     "description": "People with connectors.user may connect their own accounts",
                     "type": "boolean"
+                  },
+                  "workspace_id": {
+                    "description": "Google Drive: the drive the instance works in (root is My Drive, empty is none)",
+                    "maxLength": 2048,
+                    "type": "string"
+                  },
+                  "workspace_name": {
+                    "description": "Google Drive: the name of that drive, for display",
+                    "maxLength": 2048,
+                    "type": "string"
+                  },
+                  "write_group": {
+                    "description": "Google Drive: permission group that may create folders, Docs and uploads there; empty means platform.admin",
+                    "maxLength": 2048,
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -23722,6 +23956,21 @@
                   "users_may_use": {
                     "description": "People with connectors.user may connect their own accounts",
                     "type": "boolean"
+                  },
+                  "workspace_id": {
+                    "description": "Google Drive: the drive the instance works in (root is My Drive, empty is none)",
+                    "maxLength": 2048,
+                    "type": "string"
+                  },
+                  "workspace_name": {
+                    "description": "Google Drive: the name of that drive, for display",
+                    "maxLength": 2048,
+                    "type": "string"
+                  },
+                  "write_group": {
+                    "description": "Google Drive: permission group that may create folders, Docs and uploads there; empty means platform.admin",
+                    "maxLength": 2048,
+                    "type": "string"
                   }
                 },
                 "required": [

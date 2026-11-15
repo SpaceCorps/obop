@@ -1,6 +1,6 @@
 [labels.es.module]
 name = "Flota"
-description = "Vehículos, conductores e historial de mantenimiento de una flota pequeña. Registra el estado y los servicios; no calcula costes de uso ni consumo de combustible."
+description = "Vehículos, conductores e historial de mantenimiento de una flota pequeña. Registra el estado y los servicios; no calcula costes de uso ni consumo de combustible. El estado de un conductor y la caducidad de su permiso solo se registran: nada los comprueba, tampoco al asignar un conductor a un vehículo."
 summary = "Vehículos, conductores e historial de mantenimiento de una flota pequeña."
 
 [labels.es.model.fleet_vehicle]
@@ -70,7 +70,7 @@ description = "Retirar definitivamente de la flota un vehículo disponible (requ
 
 [labels.es.model.fleet_vehicle_driver]
 name = "Conductor"
-description = "Una persona autorizada para conducir los vehículos de la flota"
+description = "Un conductor registrado, con los datos de su permiso y un estado activo o suspendido"
 
 [labels.es.model.fleet_vehicle_driver.field.name]
 label = "Nombre"
@@ -98,11 +98,11 @@ suspended = "Suspendido"
 
 [labels.es.model.fleet_vehicle_driver.action.suspend]
 label = "Suspender"
-description = "Suspender a un conductor, por ejemplo por un permiso caducado"
+description = "Marcar a un conductor como suspendido, por ejemplo por un permiso caducado"
 
 [labels.es.model.fleet_vehicle_driver.action.reactivate]
 label = "Reactivar"
-description = "Permitir que un conductor suspendido vuelva a conducir"
+description = "Volver a poner como activo a un conductor suspendido"
 
 [labels.es.model.fleet_vehicle_service]
 name = "Servicio de vehículo"

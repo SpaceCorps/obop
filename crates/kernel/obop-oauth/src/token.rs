@@ -6,7 +6,7 @@
 //! The same holds for a code that is presented twice.
 
 use crate::client::Class;
-use crate::flow::{is_challenge, is_verifier};
+use crate::flow::{MAX_DAYS, is_challenge, is_verifier, max_days};
 use crate::util::{clean_text, ct_eq, rand_hex, s256, sha_hex};
 use crate::{OAuth, OAuthError, api_resource, mcp_resource, redirect};
 use obop_commands::devices::{self as dev, never_for_mobile};
@@ -320,7 +320,21 @@ impl OAuth {
             ));
         }
         let now = self.now();
-        let days = rec["days"].as_u64().unwrap_or(1).clamp(1, 90);
+        let mut days = rec["days"]
+            .as_u64()
+            .unwrap_or(1)
+            .clamp(1, u64::from(MAX_DAYS));
+        if class.is_mobile() {
+            // The kind of the account as it is now, not as the code was made: a phone grant of an
+            // account that signs in with Microsoft only lasts at most 30 days. A refused read is a
+            // 503 that gives the code back, never "no cap". (A change of the setting between this
+            // read and the batch below bumps the credential epoch, which the batch expects.)
+            let only = self
+                .tokens()
+                .is_microsoft_only(owner)
+                .map_err(|_| give_back(storage_busy()))?;
+            days = days.min(u64::from(max_days(only)));
+        }
         let grant_id = format!("og_{}", rand_hex::<12>());
         let client_name = rec["client_name"].as_str().unwrap_or("");
         let device_id = class.is_mobile().then(|| uuid::Uuid::now_v7().to_string());

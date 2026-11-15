@@ -8,6 +8,7 @@ import { useData } from "../data.tsx";
 import { readPref, writePref } from "../favorites.ts";
 import { csvCell, download, isState, optionLabel, plainText, rowCurrency } from "../format.ts";
 import { fieldTitle } from "../labels.ts";
+import { PHONE_QUERY, useMedia } from "../media.ts";
 import { buildGroups, formatSumRows, type Group } from "../query.ts";
 import { DeleteDialog } from "../DeleteDialog.tsx";
 import { nounFor } from "../remove.ts";
@@ -60,6 +61,35 @@ export function ListView(p: ViewProps) {
   const [exporting, setExporting] = useState<{ done: number; total: number } | null>(null);
   const cancelExport = useRef(false);
   const grid = useRef<HTMLTableSectionElement>(null);
+  // A phone shows one block per record (views.css): a tap opens it instead of editing in place.
+  const phone = useMedia(PHONE_QUERY);
+  // There the column heads are a strip of sort buttons that scrolls sideways. As on the tab strips,
+  // each end that hides a button is marked (data-more) and views.css fades it, so a cut-off head
+  // reads as more to scroll to. scrollLeft is negative in right-to-left, hence Math.abs.
+  const sortStrip = useRef<HTMLTableRowElement>(null);
+  const colKey = cols.map((f) => f.name).join(" ");
+  useEffect(() => {
+    const s = sortStrip.current;
+    if (!s || !phone) return;
+    const mark = () => {
+      const max = s.scrollWidth - s.clientWidth;
+      const from = Math.abs(s.scrollLeft);
+      const more = [from > 1 && "start", from < max - 1 && "end"].filter(Boolean).join(" ");
+      if (more) s.dataset.more = more;
+      else delete s.dataset.more;
+    };
+    mark();
+    s.addEventListener("scroll", mark, { passive: true });
+    // The strip and its heads: a new language changes the heads' widths and not the strip's. jsdom
+    // has no ResizeObserver.
+    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(mark) : undefined;
+    for (const el of [s, ...s.children]) ro?.observe(el);
+    return () => {
+      s.removeEventListener("scroll", mark);
+      ro?.disconnect();
+      delete s.dataset.more;
+    };
+  }, [phone, colKey]);
 
   const live = useMemo(() => {
     const ids = new Set(rows.map((r) => r.id));
@@ -218,8 +248,8 @@ export function ListView(p: ViewProps) {
   };
 
   function clickCell(r: Row, f: FieldMeta, ci: number) {
-    // The first column opens the record; the other cells edit in place when allowed.
-    if (p.canUpdate && ci > 0 && !isMaskedVal(r[f.name]) && !f.computed && !f.sequence)
+    // The first column opens the record; other cells edit in place when allowed, except on a phone.
+    if (!phone && p.canUpdate && ci > 0 && !isMaskedVal(r[f.name]) && !f.computed && !f.sequence)
       setEditing({ id: r.id, field: f.name });
     else p.onOpen(r.id);
   }
@@ -375,9 +405,11 @@ export function ListView(p: ViewProps) {
             </button>
           </div>
         ) : (
-          <span className="hint">
-            {p.canUpdate ? t("Click a cell to edit it, the first column opens the record.") : ""}
-          </span>
+          !phone && (
+            <span className="hint">
+              {p.canUpdate ? t("Click a cell to edit it, the first column opens the record.") : ""}
+            </span>
+          )
         )}
         {exporting && (
           <span className="hint" role="status" aria-live="polite">
@@ -443,7 +475,7 @@ export function ListView(p: ViewProps) {
           aria-rowcount={p.total + 1}
         >
           <thead>
-            <tr role="row">
+            <tr role="row" ref={sortStrip}>
               <th className="selcol" role="columnheader" scope="col">
                 <input
                   type="checkbox"
@@ -525,7 +557,12 @@ export function ListView(p: ViewProps) {
                   </td>
                   {firstAgg >= 0 &&
                     cols.slice(firstAgg).map((f) => (
-                      <td key={f.name} role="gridcell" className="num agg">
+                      <td
+                        key={f.name}
+                        role="gridcell"
+                        className="num agg"
+                        data-label={isAgg(f) ? fieldTitle(f) : undefined}
+                      >
                         {isAgg(f) ? formatSumRows(f, it.g.rows) : ""}
                       </td>
                     ))}
@@ -547,6 +584,10 @@ export function ListView(p: ViewProps) {
                     data-c={0}
                     tabIndex={pos.r === it.ri && pos.c === 0 ? 0 : -1}
                     onFocus={() => setPos({ r: it.ri, c: 0 })}
+                    // The whole cell selects, not only the 17 px box (the box itself has onChange).
+                    onClick={(e) => {
+                      if (e.target === e.currentTarget) toggle(it.row.id);
+                    }}
                   >
                     <input
                       type="checkbox"
@@ -564,8 +605,9 @@ export function ListView(p: ViewProps) {
                         role="gridcell"
                         data-r={it.ri}
                         data-c={ci + 1}
+                        data-label={fieldTitle(f)}
                         tabIndex={pos.r === it.ri && pos.c === ci + 1 ? 0 : -1}
-                        className={`${isAgg(f) ? "num" : ""}${edit ? " editing" : ""}${p.canUpdate && ci > 0 ? " editable" : ""}`}
+                        className={`${isAgg(f) ? "num" : ""}${edit ? " editing" : ""}${!phone && p.canUpdate && ci > 0 ? " editable" : ""}`}
                         onFocus={() => setPos({ r: it.ri, c: ci + 1 })}
                         onClick={() => !edit && clickCell(it.row, f, ci)}
                       >
@@ -587,6 +629,7 @@ export function ListView(p: ViewProps) {
                                       it.row[f.name] as string,
                                       o,
                                       p.title,
+                                      it.row,
                                     );
                                     return {
                                       disabled: !m.allowed && !m.current,
@@ -642,7 +685,12 @@ export function ListView(p: ViewProps) {
                   <span className="hint">({rows.length})</span>
                 </td>
                 {cols.slice(firstAgg).map((f) => (
-                  <td key={f.name} role="gridcell" className="num agg">
+                  <td
+                    key={f.name}
+                    role="gridcell"
+                    className="num agg"
+                    data-label={isAgg(f) ? fieldTitle(f) : undefined}
+                  >
                     {isAgg(f) ? formatSumRows(f, rows) : ""}
                   </td>
                 ))}

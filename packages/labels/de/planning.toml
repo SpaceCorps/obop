@@ -1,7 +1,7 @@
 [labels.de.module]
 name = "Planung"
-description = "Schichten für Mitarbeiter, mit Rollen und wiederverwendbaren Vorlagen. Eine Schicht hat einen Tag sowie Beginn und Ende in Minuten seit Mitternacht (0 bis 1439; 540 ist 09:00). Eine Schicht ohne Mitarbeiter ist eine offene Schicht. Ablauf: offen, veröffentlicht, vom Mitarbeiter bestätigt. Benötigt das Paket Personal."
-summary = "Schichten für Mitarbeiter mit Rollen und wiederverwendbaren Vorlagen; offene Schichten werden veröffentlicht und bestätigt."
+description = "Schichten für Mitarbeiter, mit Rollen und Schichtvorlagen. Eine Vorlage hält nur Name, Rolle und Zeiten fest: Keine Aktion erzeugt daraus eine Schicht. Eine Schicht hat einen Tag sowie Beginn und Ende in Minuten seit Mitternacht (0 bis 1439; 540 ist 09:00). Eine Schicht ohne Mitarbeiter ist eine offene Schicht. Ablauf: offen, veröffentlicht, vom Mitarbeiter bestätigt. Benötigt das Paket Personal."
+summary = "Schichten für Mitarbeiter mit Rollen und Schichtvorlagen; offene Schichten werden veröffentlicht und bestätigt."
 
 [labels.de.model.planning_role]
 name = "Rolle"
@@ -17,7 +17,7 @@ description = "Was die Rolle umfasst"
 
 [labels.de.model.planning_template]
 name = "Vorlage"
-description = "Ein wiederverwendbares Schichtmuster, das in Schichten kopiert wird"
+description = "Ein benanntes Schichtmuster mit Rolle, Beginn und Ende; keine Aktion erzeugt daraus Schichten"
 
 [labels.de.model.planning_template.field.name]
 label = "Name"

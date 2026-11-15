@@ -15,9 +15,11 @@
 //!   for one payment leave it in one state and the order is marked paid once.
 //! - **Not paid means given back.** An order whose payment fails, expires, is cancelled or is
 //!   never paid returns its units to the listings and its discount use to the code, once.
-//! - **Refunds** run inside the order's `refund` action (a wrapper on the command, so they
-//!   happen only when it really runs, after any human approval): the provider is asked first, and
-//!   an order whose refund the provider refused stays paid.
+//! - **Refunds** run inside the order's `refund` and `refund_delivered` actions (a wrapper on
+//!   the command, so they happen only when it really runs, after any human approval): the
+//!   provider is asked first, and an order whose refund the provider refused keeps its `state`
+//!   (paid, or delivered for `refund_delivered`; a delivered order has already been marked
+//!   `stock_returned`, because delivered goods do not go back on the shelf).
 //!
 //! Receipts by email are out of scope (there is no mail sender); the confirmation page shows the
 //! receipt and has a printable one.
@@ -840,7 +842,9 @@ impl Payments {
                 Ok(out)
             }),
         );
-        // Refund: the provider is asked first. If it refuses, the order stays paid.
+        // Refund: the provider is asked first. If it refuses, the order keeps its `state` (paid
+        // for `refund`, delivered for `refund_delivered`; the delivered order is already marked
+        // `stock_returned`).
         for (cmd, restock) in [
             ("ecommerce_order.refund", true),
             ("ecommerce_order.refund_delivered", false),

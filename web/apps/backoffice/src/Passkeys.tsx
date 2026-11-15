@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useState, type FormEvent } from "react";
-import { Badge, Button, Checkbox, Input, Notice, Switch, fmt, t } from "@obop/ui";
+import { Badge, Button, Checkbox, Input, Notice, Switch, fmt, t, twoFactorMessage } from "@obop/ui";
 import { Icon } from "./ui.tsx";
 import {
   listPasskeys,
@@ -30,6 +30,10 @@ export function passkeyMessage(f: Failure): string {
   if (f.status === 429) return t("Too many attempts. Wait a minute and try again.");
   if (f.status === 401) return t("The passkey or code was not accepted. Try again.");
   if (f.status === 404) return t("You are not allowed to do this.");
+  // The instance branding could not be read, so the passkey was not registered (docs/spec/branding.md,
+  // section 4). The server's own sentence is English and says nothing of the repair, and waiting does
+  // not mend a stored name: the wording is the one of the authenticator setup, the same string.
+  if (f.code === "brand_unavailable") return twoFactorMessage(f);
   // 400 and 503 carry a sentence that says exactly what to change (the policy, the address).
   return f.message || t("Something went wrong. Try again.");
 }

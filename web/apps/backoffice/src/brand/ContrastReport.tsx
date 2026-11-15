@@ -4,9 +4,10 @@ import { Badge, Icon, Notice, SURFACES, fmt as loc, resolveAccent, t, type Check
 const fmt = (n: number) =>
   `${loc.number(n, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}:1`;
 
-function Cell({ c }: { c: Check }) {
+/** `label` is the column name, shown above the ratio when the table stacks on a phone. */
+function Cell({ c, label }: { c: Check; label: string }) {
   return (
-    <td className="num">
+    <td role="cell" className="num" data-label={label}>
       <span className={`ratio ${c.pass ? "pass" : "fail"}`}>
         <Icon name={c.pass ? "check" : "close"} size={13} />
         <span className="tabular">{fmt(c.ratio)}</span>
@@ -51,29 +52,35 @@ export function ContrastReport({ accent }: { accent: string }) {
         </p>
       )}
       <div className="table-wrap">
-        <table className="table dense">
+        <table className="table dense stack-sm" role="table">
           <caption className="sr-only">{t("Contrast ratios of the accent colour")}</caption>
-          <thead>
-            <tr>
-              <th scope="col">{t("Pair")}</th>
-              <th scope="col" className="num">
+          <thead role="rowgroup">
+            <tr role="row">
+              <th scope="col" role="columnheader">
+                {t("Pair")}
+              </th>
+              <th scope="col" role="columnheader" className="num">
                 {t("Light")}
               </th>
-              <th scope="col" className="num">
+              <th scope="col" role="columnheader" className="num">
                 {t("Dark")}
               </th>
-              <th scope="col" className="num">
+              <th scope="col" role="columnheader" className="num">
                 {t("Needs")}
               </th>
             </tr>
           </thead>
-          <tbody>
+          <tbody role="rowgroup">
             {rows.map(({ light, dark }) => (
-              <tr key={light.id}>
-                <th scope="row">{t(light.label)}</th>
-                <Cell c={light} />
-                <Cell c={dark} />
-                <td className="num dim tabular">{fmt(light.min)}</td>
+              <tr role="row" key={light.id}>
+                <th scope="row" role="rowheader">
+                  {t(light.label)}
+                </th>
+                <Cell c={light} label={t("Light")} />
+                <Cell c={dark} label={t("Dark")} />
+                <td role="cell" className="num dim tabular" data-label={t("Needs")}>
+                  {fmt(light.min)}
+                </td>
               </tr>
             ))}
           </tbody>
