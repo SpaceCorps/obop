@@ -57,6 +57,11 @@ struct Scope {
     offer: Option<Offer>,
     /// The action that runs now is followed by another: it hands the unit on.
     hand_on: bool,
+    /// The scope of a question, not of a run ([`ask`]): the generated `update` says whether
+    /// the call is mixed and stops before it writes.
+    asking: bool,
+    /// What the update answered to the question.
+    answer: Option<String>,
 }
 
 thread_local! {
@@ -101,6 +106,52 @@ pub(crate) fn take_steps() -> Vec<Step> {
             .map(|s| std::mem::take(&mut s.steps))
             .unwrap_or_default()
     })
+}
+
+/// Ask the generated `update` whether a call with these actions is one it refuses as mixed
+/// ([`not_mixed`]). `update` calls its handler, which reads the record, decides and stops:
+/// nothing is written and no action runs. The dispatcher asks before it stores the plan of an
+/// agent: a plan for a call that can only be refused would be refused when a person approves
+/// it, and spent by that. `None` also when the handler was refused before it could say (what
+/// refused it refuses the run too).
+pub(crate) fn ask(steps: Vec<Step>, update: impl FnOnce()) -> Option<String> {
+    let scope = Scope {
+        steps,
+        asking: true,
+        ..Scope::default()
+    };
+    let _open = Open {
+        previous: CURRENT.with(|c| c.borrow_mut().replace(scope)),
+        _not_send: PhantomData,
+    };
+    update();
+    CURRENT.with(|c| c.borrow_mut().as_mut().and_then(|s| s.answer.take()))
+}
+
+/// For the generated `update`, with what [`not_mixed`] said: true when the dispatcher only
+/// asks ([`ask`]). The answer is kept for it, and the update stops here.
+pub(crate) fn answer(mixed: &Option<String>) -> bool {
+    CURRENT.with(|c| match c.borrow_mut().as_mut() {
+        Some(s) if s.asking => {
+            s.answer.clone_from(mixed);
+            true
+        }
+        _ => false,
+    })
+}
+
+/// The refusal of an update whose handler a module wrote by hand and that moves a governed
+/// field. The handler knows nothing of the action and writes the store itself, so the two
+/// could not be refused as a whole: the caller calls the action by its name.
+pub(crate) fn by_hand(update: &str, steps: &[Step]) -> Option<String> {
+    let step = steps.first()?;
+    Some(format!(
+        "`{field}` cannot be changed by {update}: the change runs {command}, which is not part \
+         of this update's unit of work, so the call could not be refused as a whole. Call \
+         {command}",
+        field = step.field,
+        command = step.command,
+    ))
 }
 
 /// The refusal of an update that would mix an action that is run by itself with an edit or with

@@ -7,9 +7,9 @@
 //! and the approved plan does all of it.
 //!
 //! Only an action that is generic all the way shares the unit. One that a module wraps or binds
-//! to a handler of its own, and any action of a model whose `update` a module wrote by hand, is
-//! run by itself: an update that would mix it with an edit or another move is refused before
-//! anything is written.
+//! to a handler of its own is run by itself: an update that would mix it with an edit or
+//! another move is refused before anything is written, and an agent gets no plan for it. An
+//! `update` that a module wrote by hand takes no move at all: the action is called by its name.
 //!
 //! Every test runs on the memory and SQLite backends, and on PostgreSQL when
 //! `OBOP_TEST_POSTGRES_URL` is set.
@@ -80,7 +80,8 @@ fn module(p: &str) -> Module {
                 )],
             ),
             // Posting is final and numbers the record from a gapless series; a posted record
-            // leaves only by `void`, which takes its reason.
+            // leaves only by `void`, which takes its reason. The exit also names `code`, which
+            // the action does not need.
             model(
                 doc,
                 vec![
@@ -108,12 +109,17 @@ fn module(p: &str) -> Module {
                     CommandDef::new("void", "Void", U)
                         .transition("state", Some("posted"), "void")
                         .needs(&["reason"]),
+                    // The way back out of a cancelled record needs approval.
+                    CommandDef::new("reopen", "Reopen", APPROVER)
+                        .approval()
+                        .transition("state", Some("cancelled"), "draft"),
                 ],
             )
             .with_guard(
                 Guard::frozen_in("state", &["posted", "cancelled"])
                     .mutable(&["note"])
-                    .exit("void", "void", &["reason"])
+                    .exit("void", "void", &["reason", "code"])
+                    .exit("draft", "reopen", &[])
                     .lock_by_closed("date", period),
             ),
             // A child with a state of its own.
@@ -741,6 +747,24 @@ fn leaving_a_frozen_state_takes_what_the_exit_allows_and_nothing_else() {
         assert_eq!(r.field("doc", &id, "state"), t("posted"));
         assert_eq!(r.field("doc", &id, "reason"), Value::Null);
         assert_eq!(r.field("doc", &id, "name"), t("Doc"));
+        // A field the exit names but the action does not need is an edit like any other: it
+        // is judged against the record before the move, where it is fixed.
+        let why = r.frozen(
+            &user(),
+            "doc",
+            "update",
+            r.update(
+                &id,
+                vec![
+                    ("state", t("void")),
+                    ("reason", t("Wrong customer")),
+                    ("code", t("C-1")),
+                ],
+            ),
+        );
+        assert!(why.contains("code is fixed"), "{why}");
+        assert_eq!(r.field("doc", &id, "state"), t("posted"));
+        assert_eq!(r.field("doc", &id, "code"), Value::Null);
         // What the action needs (the exit lets it change that) and a mutable field go with it.
         r.ok(
             &user(),
@@ -758,6 +782,42 @@ fn leaving_a_frozen_state_takes_what_the_exit_allows_and_nothing_else() {
         assert_eq!(r.field("doc", &id, "state"), t("void"));
         assert_eq!(r.field("doc", &id, "reason"), t("Wrong customer"));
         assert_eq!(r.field("doc", &id, "note"), t("see the mail"));
+
+        // An exit that needs approval, asked for by an agent together with an edit of a fixed
+        // field: the frozen record is judged when the update runs, so the agent gets a plan,
+        // and the refusal comes when a person approves it. Nothing is stored.
+        let id = r.doc(5);
+        r.ok(
+            &user(),
+            "doc",
+            "update",
+            r.update(&id, vec![("state", t("cancelled"))]),
+        );
+        let plan = plan_of(r.call(
+            &bot(),
+            "doc",
+            "update",
+            r.update(&id, vec![("state", t("draft")), ("name", t("X"))]),
+        ));
+        match r.d.approve(&approver(), &mut Vault::new(), &plan) {
+            Err(e) => {
+                let k = errors::classify(&e);
+                assert_eq!(k.code, "immutable_record", "{:?}", k.body);
+            }
+            Ok(v) => panic!("expected a refusal, got {:?}", v.value),
+        }
+        assert_eq!(r.field("doc", &id, "state"), t("cancelled"));
+        assert_eq!(r.field("doc", &id, "name"), t("Doc"));
+        // The move by itself goes through when it is approved.
+        let plan = plan_of(r.call(
+            &bot(),
+            "doc",
+            "update",
+            r.update(&id, vec![("state", t("draft"))]),
+        ));
+        r.d.approve(&approver(), &mut Vault::new(), &plan)
+            .unwrap_or_else(|e| panic!("the approval: {e:?}"));
+        assert_eq!(r.field("doc", &id, "state"), t("draft"));
     });
 }
 
@@ -891,6 +951,7 @@ fn an_action_with_a_wrapper_is_run_by_itself_and_never_mixed() {
         r.untouched(&id, 5);
         assert!(seen.lock().unwrap().is_empty(), "the action did not run");
         // A form that saves the whole record and changes nothing but the state: the move alone.
+        // It sends a null for a field the record never had, which is no change either.
         r.ok(
             &user(),
             "doc",
@@ -901,6 +962,8 @@ fn an_action_with_a_wrapper_is_run_by_itself_and_never_mixed() {
                     ("state", t("cancelled")),
                     ("name", t("Doc")),
                     ("amount", n(5)),
+                    ("note", Value::Null),
+                    ("reason", Value::Null),
                 ],
             ),
         );
@@ -1035,11 +1098,88 @@ fn an_action_with_a_handler_of_its_own_is_run_by_itself_and_never_mixed() {
 }
 
 #[test]
-fn an_update_written_by_hand_takes_one_move_and_nothing_else() {
+fn an_agent_gets_no_plan_for_an_update_that_can_only_be_refused() {
     each(|r| {
-        // `memo.update` writes the store itself and knows nothing of the actions. A move with
-        // another field: refused before the handler or the action has run (the handler would
-        // have refused the title "no" in its own words).
+        // `post` needs approval, so an agent's update that posts is kept as a plan for a person.
+        // With a wrapper around `post` the action is run by itself: a plan that mixes it with
+        // an edit could only be refused when it is approved, and would be spent by that. The
+        // agent is refused now, and no plan is made.
+        r.d.around(
+            &r.cmd("doc", "post"),
+            Box::new(|_, input, inner| inner(input)),
+        );
+        let id = r.doc(5);
+        let e = r.err(
+            &bot(),
+            "doc",
+            "update",
+            r.update(&id, vec![("state", t("posted")), ("name", t("X"))]),
+        );
+        not_mixed(&e, "state", "doc.post");
+        r.untouched(&id, 5);
+        // The whole record with nothing changed but the state is the move alone: a plan, which
+        // does the move when a person approves it.
+        let plan = plan_of(r.call(
+            &bot(),
+            "doc",
+            "update",
+            r.update(
+                &id,
+                vec![
+                    ("state", t("posted")),
+                    ("name", t("Doc")),
+                    ("amount", n(5)),
+                    ("note", Value::Null),
+                ],
+            ),
+        ));
+        r.untouched(&id, 5);
+        r.d.approve(&approver(), &mut Vault::new(), &plan)
+            .unwrap_or_else(|e| panic!("the approval: {e:?}"));
+        assert_eq!(r.field("doc", &id, "state"), t("posted"));
+        assert_eq!(r.field("doc", &id, "number"), t("D-0001"));
+        // A plan that was good when it was made and is mixed when it is approved (the name
+        // changed since) is refused then, with nothing stored.
+        let id = r.doc(5);
+        let plan = plan_of(r.call(
+            &bot(),
+            "doc",
+            "update",
+            r.update(&id, vec![("state", t("posted")), ("name", t("Doc"))]),
+        ));
+        r.ok(
+            &user(),
+            "doc",
+            "update",
+            r.update(&id, vec![("name", t("Renamed"))]),
+        );
+        match r.d.approve(&approver(), &mut Vault::new(), &plan) {
+            Err(CallError::Handler(e)) => not_mixed(&e, "state", "doc.post"),
+            other => panic!("expected a refusal, got {other:?}"),
+        }
+        assert_eq!(r.field("doc", &id, "state"), t("draft"));
+        assert_eq!(r.field("doc", &id, "name"), t("Renamed"));
+        assert_eq!(r.field("doc", &id, "number"), Value::Null);
+    });
+}
+
+/// The refusal of a move through an `update` that a module wrote by hand.
+fn by_hand(e: &str, field: &str, update: &str, command: &str) {
+    assert!(
+        e.contains(&format!("`{field}` cannot be changed by {update}"))
+            && e.contains(&format!("Call {command}")),
+        "{e}"
+    );
+}
+
+#[test]
+fn an_update_written_by_hand_takes_no_move() {
+    each(|r| {
+        // `memo.update` writes the store itself and knows nothing of the actions, so it and
+        // the action could not be refused as a whole: whichever ran first would stay stored
+        // when the other refused. A move through it is refused before the handler or the
+        // action has run (the handler would have refused the title "no" in its own words).
+        let (update, file) = (r.cmd("memo", "update"), r.cmd("memo", "file"));
         let id = r.create("memo", vec![("title", t("M")), ("size", n(1))]);
         let e = r.err(
             &user(),
@@ -1047,25 +1187,24 @@ fn an_update_written_by_hand_takes_one_move_and_nothing_else() {
             "update",
             r.update(&id, vec![("state", t("filed")), ("title", t("no"))]),
         );
-        not_mixed(&e, "state", "memo.file");
-        assert_eq!(r.field("memo", &id, "state"), t("open"));
-        assert_eq!(r.field("memo", &id, "title"), t("M"));
-        // The move alone: the action runs by itself, and its refusal is the answer.
-        let empty = r.create("memo", vec![("title", t("E")), ("size", n(0))]);
+        by_hand(&e, "state", &update, &file);
+        // Also the move alone, and also when a wrapper of the update would refuse the caller:
+        // the action has not run.
         let e = r.err(
-            &user(),
-            "memo",
-            "update",
-            r.update(&empty, vec![("state", t("filed"))]),
-        );
-        assert!(e.contains("Nothing to file"), "{e}");
-        assert_eq!(r.field("memo", &empty, "state"), t("open"));
-        r.ok(
             &user(),
             "memo",
             "update",
             r.update(&id, vec![("state", t("filed"))]),
         );
+        by_hand(&e, "state", &update, &file);
+        assert_eq!(r.field("memo", &id, "state"), t("open"));
+        assert_eq!(r.field("memo", &id, "title"), t("M"));
+        // The action is called by its name, and its refusal is its own.
+        let empty = r.create("memo", vec![("title", t("E")), ("size", n(0))]);
+        let e = r.err(&user(), "memo", "file", m(vec![("id", t(&empty))]));
+        assert!(e.contains("Nothing to file"), "{e}");
+        assert_eq!(r.field("memo", &empty, "state"), t("open"));
+        r.ok(&user(), "memo", "file", m(vec![("id", t(&id))]));
         assert_eq!(r.field("memo", &id, "state"), t("filed"));
         // An edit alone goes to the handler as before.
         r.ok(
