@@ -610,9 +610,22 @@
             "description": "Name of the contact person (personal data: agents see it masked)",
             "type": "string"
           },
+          "expected_close": {
+            "description": "Day the deal is expected to close (YYYY-MM-DD)",
+            "format": "date",
+            "type": "string"
+          },
           "expected_revenue_minor": {
             "description": "Expected revenue in minor units",
             "type": "integer"
+          },
+          "lost_reason": {
+            "description": "Why the opportunity was lost",
+            "type": "string"
+          },
+          "party_id": {
+            "description": "The customer: the contact record that a quotation made from the lead is for",
+            "type": "string"
           },
           "stage": {
             "description": "Pipeline stage: new, qualified, won or lost (moves only through the model's actions)",
@@ -1368,6 +1381,10 @@
         "properties": {
           "currency": {
             "description": "ISO 4217 currency code",
+            "type": "string"
+          },
+          "lead_id": {
+            "description": "The CRM opportunity the quotation was made for; its customer unless one is given",
             "type": "string"
           },
           "number": {
@@ -12040,9 +12057,23 @@
                           "maxLength": 2048,
                           "type": "string"
                         },
+                        "expected_close": {
+                          "description": "Day the deal is expected to close (YYYY-MM-DD)",
+                          "format": "date",
+                          "type": "string"
+                        },
                         "expected_revenue_minor": {
                           "description": "Expected revenue in minor units",
                           "type": "integer"
+                        },
+                        "lost_reason": {
+                          "description": "Why the opportunity was lost",
+                          "maxLength": 100000,
+                          "type": "string"
+                        },
+                        "party_id": {
+                          "description": "The customer: the contact record that a quotation made from the lead is for",
+                          "type": "string"
                         },
                         "stage": {
                           "description": "Pipeline stage: new, qualified, won or lost (moves only through the model's actions)",
@@ -12243,9 +12274,23 @@
                     "maxLength": 2048,
                     "type": "string"
                   },
+                  "expected_close": {
+                    "description": "Day the deal is expected to close (YYYY-MM-DD)",
+                    "format": "date",
+                    "type": "string"
+                  },
                   "expected_revenue_minor": {
                     "description": "Expected revenue in minor units",
                     "type": "integer"
+                  },
+                  "lost_reason": {
+                    "description": "Why the opportunity was lost",
+                    "maxLength": 100000,
+                    "type": "string"
+                  },
+                  "party_id": {
+                    "description": "The customer: the contact record that a quotation made from the lead is for",
+                    "type": "string"
                   },
                   "stage": {
                     "description": "Pipeline stage: new, qualified, won or lost (moves only through the model's actions)",
@@ -13533,11 +13578,25 @@
                     "maxLength": 2048,
                     "type": "string"
                   },
+                  "expected_close": {
+                    "description": "Day the deal is expected to close (YYYY-MM-DD)",
+                    "format": "date",
+                    "type": "string"
+                  },
                   "expected_revenue_minor": {
                     "description": "Expected revenue in minor units",
                     "type": "integer"
                   },
                   "id": {
+                    "type": "string"
+                  },
+                  "lost_reason": {
+                    "description": "Why the opportunity was lost",
+                    "maxLength": 100000,
+                    "type": "string"
+                  },
+                  "party_id": {
+                    "description": "The customer: the contact record that a quotation made from the lead is for",
                     "type": "string"
                   },
                   "stage": {
@@ -23730,6 +23789,10 @@
                           "maxLength": 2048,
                           "type": "string"
                         },
+                        "lead_id": {
+                          "description": "The CRM opportunity the quotation was made for; its customer unless one is given",
+                          "type": "string"
+                        },
                         "party_id": {
                           "description": "Customer party id",
                           "type": "string"
@@ -24165,6 +24228,10 @@
                   "currency": {
                     "description": "ISO 4217 currency code",
                     "maxLength": 2048,
+                    "type": "string"
+                  },
+                  "lead_id": {
+                    "description": "The CRM opportunity the quotation was made for; its customer unless one is given",
                     "type": "string"
                   },
                   "party_id": {
@@ -25072,6 +25139,10 @@
                     "type": "string"
                   },
                   "id": {
+                    "type": "string"
+                  },
+                  "lead_id": {
+                    "description": "The CRM opportunity the quotation was made for; its customer unless one is given",
                     "type": "string"
                   },
                   "party_id": {
