@@ -3,6 +3,7 @@ import { StyleSheet, View } from "react-native";
 import type { WebProblem } from "../core/shell.ts";
 import { errorSentence } from "../core/words.ts";
 import { t } from "../i18n/index.ts";
+import { ButtonRow } from "./ButtonRow.tsx";
 
 export type ErrorScreenProps = {
   /** The stored origin of the server. */
@@ -34,7 +35,7 @@ export function ErrorScreen({
       <Screen
         title={t("error.title")}
         footer={
-          <>
+          <ButtonRow>
             <Button
               label={t("error.retry")}
               onPress={onRetry}
@@ -48,7 +49,7 @@ export function ErrorScreen({
               disabled={retrying}
               testID="error-change-server"
             />
-          </>
+          </ButtonRow>
         }
       >
         <Banner

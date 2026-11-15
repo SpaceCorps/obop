@@ -5,6 +5,7 @@ import { addressText, isCleartext } from "../core/address.ts";
 import { isTestBuild, type Build } from "../core/build.ts";
 import { dayText, type ServerRecord } from "../core/server-record.ts";
 import { t } from "../i18n/index.ts";
+import { ButtonRow } from "./ButtonRow.tsx";
 
 export type SettingsSheetProps = {
   server: ServerRecord;
@@ -57,7 +58,7 @@ export function SettingsSheet({
         title={t("settings.title")}
         onBack={onClose}
         footer={
-          <>
+          <ButtonRow>
             <Button
               label={t("settings.openInBrowser")}
               variant="secondary"
@@ -70,7 +71,7 @@ export function SettingsSheet({
               onPress={onChangeServer}
               testID="settings-change-server"
             />
-          </>
+          </ButtonRow>
         }
       >
         <Group title={t("settings.server")}>
