@@ -57,10 +57,6 @@ fn visible_trip(db: &Db, who: &Who, id: &str) -> Result<Fields, String> {
     }
 }
 
-fn refuse(msg: &'static str) -> Guard {
-    Box::new(move |_, _| Err(msg.into()))
-}
-
 fn driver_filter(who: &Who) -> Value {
     Value::map([
         ("field", Value::text("driver")),
@@ -555,13 +551,11 @@ pub fn install(d: &Dispatcher, module: &str, db: Db, clock: Clock) {
     d.add_guard(module, &id(t, "create"), true, create_trip());
     d.add_guard(module, &id(t, "bulk_create"), true, bulk_trips());
     d.add_guard(module, &id(t, "update"), true, update_trip(db.clone()));
-    d.add_guard(
+    // Refused for everyone, and said so in the metadata (`can_delete: false`, D95).
+    d.refuse_always(
         module,
         &id(t, "delete"),
-        true,
-        refuse(
-            "a trip is kept for the audit and cannot be deleted; the driver discards it, an administrator discards a stuck one",
-        ),
+        "a trip is kept for the audit and cannot be deleted; the driver discards it, an administrator discards a stuck one",
     );
     d.add_guard(module, &id(pt, "create"), true, create_point(db.clone()));
     d.add_guard(
@@ -570,17 +564,15 @@ pub fn install(d: &Dispatcher, module: &str, db: Db, clock: Clock) {
         true,
         bulk_points(db.clone(), clock),
     );
-    d.add_guard(
+    d.refuse_always(
         module,
         &id(pt, "update"),
-        true,
-        refuse("a point is never changed after it is stored"),
+        "a point is never changed after it is stored",
     );
-    d.add_guard(
+    d.refuse_always(
         module,
         &id(pt, "delete"),
-        true,
-        refuse("a point is never deleted by a command; the retention job thins them"),
+        "a point is never deleted by a command; the retention job thins them",
     );
     for a in policy::ACTIONS {
         d.add_guard(module, &id(t, a), true, action(db.clone(), a));

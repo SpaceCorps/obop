@@ -21,8 +21,10 @@
 //! code word, so that the CLI and MCP print it as they always did. REST opens a request scope
 //! (`locale::scope`) in which the engine notes the assertion that refused; `classify` finds the
 //! note in the text of the error (the engine may wrap it) and answers 400 with
-//! `{"error": <text>, "code": "assertion_failed", "hint", "assert_key"}`, `assert_key` only when the
-//! assertion has a key. Outside that scope the answer is the plain 400 above.
+//! `{"error": <text>, "code": "assertion_failed", "hint", "assert_key", "message"}`, `assert_key`
+//! only when the assertion has a key, and `message` the author's sentence without the expression
+//! (D95; `ASSERTION_FALLBACK` for an assertion without a message). An MCP tool call opens such a
+//! scope too. Outside a scope (the command line) the answer is the plain 400 above.
 //!
 //! # Storage faults (D74)
 //!
@@ -100,6 +102,10 @@ pub mod code {
     /// D90: a value is outside a limit of its field (`max_length`, `min_length`, `min`,
     /// `max`, or the default length of a text field).
     pub const LIMIT_VIOLATED: &str = "limit_violated";
+    /// D95: the write sets a field that only the server sets (`readonly`).
+    pub const READONLY_FIELD: &str = "readonly_field";
+    /// D95: a ref names a record its field's `ref_filter` does not allow.
+    pub const REF_NOT_ALLOWED: &str = "ref_not_allowed";
     /// Step 2: the caller is known and may not do this.
     pub const DENIED: &str = "denied";
     /// Step 2: the caller must confirm their identity again.
@@ -243,6 +249,20 @@ pub const TABLE: &[Row] = &[
         hint: "A value is outside the limits of its field (max_length, min_length, min and max in GET /api/meta; a text field with no max_length has the default of its kind). Nothing was changed. Shorten the text or change the number so that it fits, then retry.",
     },
     Row {
+        code: code::READONLY_FIELD,
+        status: 400,
+        retry_after: None,
+        origin: "D95",
+        hint: "The field is set by the server (readonly in GET /api/meta). Nothing was changed. Leave the field out, or send it back unchanged, then retry.",
+    },
+    Row {
+        code: code::REF_NOT_ALLOWED,
+        status: 400,
+        retry_after: None,
+        origin: "D95",
+        hint: "The record named in the field does not satisfy the field's ref_filter (GET /api/meta). Nothing was changed. Pick a record that does, then retry.",
+    },
+    Row {
         code: code::DENIED,
         status: 403,
         retry_after: None,
@@ -292,6 +312,9 @@ pub const TABLE: &[Row] = &[
         hint: HINT_TIMEOUT,
     },
 ];
+
+/// The `message` of a refusal by an assertion that has no message of its own (D95).
+pub const ASSERTION_FALLBACK: &str = "A condition of this action does not hold.";
 
 /// The row of a code, if it has one.
 pub fn row(code: &str) -> Option<&'static Row> {
@@ -698,7 +721,11 @@ fn handler(m: &str, debug: impl Fn() -> String) -> Classified {
     // An assertion that refused this REST call: the text is the author's message, unchanged.
     if let Some(key) = crate::locale::assertion_behind(m) {
         let r = row(code::ASSERTION_FAILED).expect("the table has assertion_failed");
-        let mut body = json!({"error": m, "code": r.code, "hint": r.hint});
+        // `message` is the author's sentence alone, without the expression (D95), for a person;
+        // `error` keeps the whole text for an agent and for the clients that read it.
+        let message = crate::locale::assertion_message_behind(m)
+            .unwrap_or_else(|| ASSERTION_FALLBACK.to_string());
+        let mut body = json!({"error": m, "code": r.code, "hint": r.hint, "message": message});
         if let Some(key) = key {
             body["assert_key"] = json!(key);
         }
@@ -922,6 +949,8 @@ mod tests {
             ("use_search", 400),
             ("assertion_failed", 400),
             ("limit_violated", 400),
+            ("readonly_field", 400),
+            ("ref_not_allowed", 400),
             ("denied", 403),
             ("reauth_required", 400),
             ("incomplete", 409),
@@ -1296,7 +1325,7 @@ mod tests {
         assert_eq!((c.status, c.code), (400, "assertion_failed"));
         assert_eq!(
             c.body,
-            json!({"error": text, "code": "assertion_failed", "hint": hint, "assert_key": "needs_total"})
+            json!({"error": text, "code": "assertion_failed", "hint": hint, "assert_key": "needs_total", "message": "Fyll i en summa"})
         );
         assert_eq!(c.hint, Some(hint));
         assert_eq!(c.cli, format!("Handler({text:?})"));
@@ -1316,6 +1345,13 @@ mod tests {
         ));
         assert_eq!(c.code, "assertion_failed");
         assert!(c.body.get("assert_key").is_none(), "{}", c.body);
+        assert_eq!(c.body["message"], "Anything goes");
+
+        // An assertion without a message of its own says only that a condition does not hold.
+        locale::note_assertion("assertion failed: total > 0", None);
+        let c = classify(&CallError::Handler("assertion failed: total > 0".into()));
+        assert_eq!(c.code, "assertion_failed");
+        assert_eq!(c.body["message"], ASSERTION_FALLBACK);
 
         // Another refusal of the same request is not that assertion.
         let other = classify(&CallError::Handler("name is required".into()));

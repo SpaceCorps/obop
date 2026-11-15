@@ -36,4 +36,6 @@ mod limits_tests;
 #[cfg(test)]
 mod public_tests;
 #[cfg(test)]
+mod ui_tests;
+#[cfg(test)]
 mod update_tests;

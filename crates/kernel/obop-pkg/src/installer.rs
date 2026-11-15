@@ -2237,6 +2237,7 @@ impl Installer {
                         .iter()
                         .map(|(a, b)| (a.clone(), b.clone()))
                         .collect(),
+                    ui: Default::default(),
                 };
                 // For a listing, "update available" compares the installed version to the
                 // offered one, which is this listing.

@@ -4,6 +4,7 @@
 use super::access::{Gate, creator_blocked};
 use super::computed::Computer;
 use super::effects::{lookup_fn, run_action};
+use super::hints::{self, FillCtx};
 use super::seq;
 use super::unit::{Plain, R, Reads, Unit};
 use super::{Actor, Engine};
@@ -383,12 +384,23 @@ pub(crate) fn create(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Valu
         return Err(system_error(def, k));
     }
     let mut f = to_fields(&given);
+    hints::refuse_readonly(def, &f, None)?;
+    let look = lookup_fn(eng);
+    let mut unit = eng.unit();
+    let today = hints::today(eng);
+    let cx = FillCtx {
+        eng,
+        reads: &unit,
+        look: &look,
+        actor: &actor,
+        today: &today,
+    };
+    hints::fill_in(&cx, def, &mut f)?;
     kinds::canonicalise(def, &mut f, Path::Write)?;
     default_governed(def, &mut f);
     own_default(def, &mut f, &actor);
-    let look = lookup_fn(eng);
-    let mut unit = eng.unit();
     check_fields(&unit, &look, &actor, def, &f, true)?;
+    hints::check_ref_filters(&cx, def, &f, None)?;
     seq::assign(&mut unit, def, &mut f, None, eng.now())?;
     if let Some(why) = creator_blocked(&Gate::new(&unit, &look, &actor), def, &f) {
         return Err(why);
@@ -442,6 +454,7 @@ pub(crate) fn update(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Valu
         }
     }
     kinds::canonicalise(def, &mut patch, Path::Write)?;
+    hints::refuse_readonly(def, &patch, Some(&cur))?;
     check_fields_against(&unit, &look, &actor, def, &patch, false, Some(&cur))?;
     let changed: Fields = patch
         .iter()
@@ -451,6 +464,15 @@ pub(crate) fn update(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Valu
     if !changed.is_empty() {
         let mut after = cur.clone();
         after.extend(changed.clone());
+        let today = hints::today(eng);
+        let cx = FillCtx {
+            eng,
+            reads: &unit,
+            look: &look,
+            actor: &actor,
+            today: &today,
+        };
+        hints::check_ref_filters(&cx, def, &after, Some(&changed))?;
         // The caller may not move a record out of their own sight.
         if let Some(why) = creator_blocked(&Gate::new(&unit, &look, &actor), def, &after) {
             return Err(why);
@@ -507,6 +529,38 @@ pub(crate) fn transition(
         .ok_or_else(|| format!("{}.{command} is not declared", def.name))?;
     let look = lookup_fn(eng);
     let mut unit = eng.unit();
+    // The fields the action needs (D95 `needs`), from its input, are written first in the same
+    // unit, so the assertions and the transition see them and an agent needs one call.
+    let mut needs = hints::needs_of(cmd, input);
+    if !needs.is_empty() {
+        let cur = Gate::new(&unit, &look, &actor).load(def, &id)?;
+        kinds::canonicalise(def, &mut needs, Path::Write)?;
+        check_fields_against(&unit, &look, &actor, def, &needs, false, Some(&cur))?;
+        let changed: Fields = needs
+            .into_iter()
+            .filter(|(k, v)| cur.get(k) != Some(v))
+            .collect();
+        if !changed.is_empty() {
+            let mut after = cur.clone();
+            after.extend(changed.clone());
+            let today = hints::today(eng);
+            let cx = FillCtx {
+                eng,
+                reads: &unit,
+                look: &look,
+                actor: &actor,
+                today: &today,
+            };
+            hints::check_ref_filters(&cx, def, &after, Some(&changed))?;
+            unit.merge(def.name, &id, changed)?;
+        }
+    }
+    {
+        let rec = Gate::new(&unit, &look, &actor).load(def, &id)?;
+        if let Some(n) = hints::need_missing(cmd, &rec) {
+            return Err(hints::need_message(def, cmd, n));
+        }
+    }
     let patch = run_action(eng, &actor, &mut unit, def, cmd, &id, 0)?;
     seq::check_unique(&unit, &look)?;
     commit(eng, unit)?;

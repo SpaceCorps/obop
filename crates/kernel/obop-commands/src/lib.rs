@@ -183,6 +183,8 @@ pub struct CommandInfo {
     /// Display name per language (D52); empty in the command catalog, set in `meta`.
     pub labels: Texts,
     pub descriptions: Texts,
+    /// `[model.action.ui]` (D95); `None` in the command catalog and when none is declared.
+    pub ui: Option<Arc<obop_registry::ActionUi>>,
 }
 
 /// What a guard decides about one call (D48).
@@ -300,7 +302,16 @@ pub struct Dispatcher {
     clock_replaced: Arc<std::sync::atomic::AtomicBool>,
     /// The time zone database and the platform zone (D72).
     zones: engine::SharedZones,
+    /// The instance currency (D95 `$instance.currency`, `currency` in `/api/meta`); empty until
+    /// set, which reads as [`DEFAULT_CURRENCY`].
+    currency: Arc<std::sync::RwLock<String>>,
+    /// Commands a module refuses for everyone (`refuse_always`): the metadata says the caller
+    /// cannot do them (`can_delete: false`), so the interface agrees with the server.
+    never: std::sync::RwLock<HashMap<String, String>>,
 }
+
+/// The instance currency when none is configured (the first target is Germany, OR-7).
+pub const DEFAULT_CURRENCY: &str = "EUR";
 
 /// The clock of the engine; tests replace it to cross a year end.
 #[derive(Clone)]
@@ -332,6 +343,8 @@ pub(crate) struct ModelMeta {
     module_description: String,
     /// The module's catalogue summary, categories and maturity (D55), for the interface.
     module_summary: String,
+    /// `[module] home` and `launcher` (D95).
+    module_ui: obop_registry::ModuleUi,
     module_categories: Vec<String>,
     module_maturity: String,
     /// The model's place in its module's declaration (`Module::models`): the interface lists
@@ -401,6 +414,9 @@ pub struct FieldInfo {
     /// `(at most 2000 characters)` or `(from 0 to 100)`; empty when it declares none (the default
     /// of its kind is in `max_length`, not in the description).
     pub limits_note: String,
+    /// The D95 hints: `default`, `fill_from`, `readonly`, `ref_filter` and `ui`; `None` when the
+    /// field declares none.
+    pub hints: Option<Arc<obop_registry::FieldHints>>,
 }
 
 impl FieldInfo {
@@ -454,6 +470,15 @@ pub struct ModelInfo {
     pub descriptions: Texts,
     /// Records the caller sees are limited by these rules (D58); none: all of the model.
     pub access: Option<AccessInfo>,
+    /// `[model.ui]` (D95); `None` when the model declares none.
+    pub ui: Option<Arc<obop_registry::ModelUi>>,
+    /// The child models drawn inside this model's form (D95): those the `resolve_child` rule finds
+    /// (a model `<name>_<x>` with one ref to this one) and the declared ones, that the caller
+    /// may list.
+    pub children: Vec<obop_registry::ChildDecl>,
+    /// The plural of the model's name per language (D95), English included when the module has
+    /// an `en` label table.
+    pub plurals: Texts,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -473,6 +498,8 @@ pub struct ModuleInfo {
     pub maturity: String,
     /// Models in the module's declaration order (not alphabetical).
     pub models: Vec<ModelInfo>,
+    /// `[module] home` and `launcher` (D95).
+    pub ui: obop_registry::ModuleUi,
 }
 
 impl Dispatcher {
@@ -539,6 +566,7 @@ impl Dispatcher {
                     transition: c.transition,
                     labels: Texts::new(),
                     descriptions: Texts::new(),
+                    ui: None,
                 }
             })
             .collect()
@@ -572,7 +600,11 @@ impl Dispatcher {
                 if !visible(list) {
                     continue;
                 }
-                let can = |c: &str| cmds.get(&format!("{name}.{c}")).is_some_and(|r| visible(r));
+                let never = self.never.read().unwrap();
+                let can = |c: &str| {
+                    let id = format!("{name}.{c}");
+                    !never.contains_key(&id) && cmds.get(&id).is_some_and(|r| visible(r))
+                };
                 let mut actions: Vec<CommandInfo> = cmds
                     .iter()
                     .filter(|(id, c)| {
@@ -595,6 +627,12 @@ impl Dispatcher {
                             transition: c.transition,
                             labels: tr.map(|t| t.labels.clone()).unwrap_or_default(),
                             descriptions: tr.map(|t| t.descriptions.clone()).unwrap_or_default(),
+                            ui: m
+                                .def
+                                .commands
+                                .iter()
+                                .find(|d| d.name == &id[name.len() + 1..])
+                                .and_then(|d| d.ui.clone()),
                         }
                     })
                     .collect();
@@ -611,6 +649,19 @@ impl Dispatcher {
                 actions.sort_by(|a, b| (place(&a.id), &a.id).cmp(&(place(&b.id), &b.id)));
                 let mtr = m.translations.models.get(name.as_str());
                 infos.push(ModelInfo {
+                    ui: m.def.ext.ui.clone(),
+                    children: {
+                        let all: Vec<&obop_registry::ModelDef> =
+                            models.values().map(|x| &*x.def).collect();
+                        obop_registry::ui::children_of(&m.def, &all)
+                            .into_iter()
+                            .filter(|c| {
+                                cmds.get(&format!("{}.list", c.model))
+                                    .is_some_and(|r| visible(r))
+                            })
+                            .collect()
+                    },
+                    plurals: mtr.map(|t| t.plurals.clone()).unwrap_or_default(),
                     name: name.clone(),
                     description: m.description,
                     labels: mtr.map(|t| t.entry.labels.clone()).unwrap_or_default(),
@@ -661,6 +712,7 @@ impl Dispatcher {
                                 min: f.lower_bound(),
                                 max: f.upper_bound(),
                                 limits_note: f.limits_note(),
+                                hints: f.hints.clone(),
                             }
                         })
                         .collect(),
@@ -704,7 +756,9 @@ impl Dispatcher {
                         m.module_maturity.clone(),
                     )
                 });
+                let ui = first.map(|m| m.module_ui.clone()).unwrap_or_default();
                 out.push(ModuleInfo {
+                    ui,
                     id: module.clone(),
                     name,
                     description,
@@ -788,6 +842,7 @@ impl Dispatcher {
                     module_name: module.name.clone(),
                     module_description: module.description.clone(),
                     module_summary: module.meta.summary.clone(),
+                    module_ui: module.meta.ui.clone(),
                     module_categories: module.meta.categories.clone(),
                     module_maturity: module.meta.maturity.clone(),
                     index,
@@ -967,6 +1022,7 @@ impl Dispatcher {
             }
         }
         self.order.write().unwrap().retain(|x| x != module);
+        self.never.write().unwrap().retain(|_, m| m != module);
         self.refresh_lock_models();
     }
 
@@ -1003,6 +1059,40 @@ impl Dispatcher {
     /// The time zone settings in force.
     pub fn zones(&self) -> Arc<obop_values::Zones> {
         self.zones.read().unwrap().clone()
+    }
+
+    /// Set the instance currency (D95): three capital letters (ISO 4217). The server sets it from
+    /// `OBOP_CURRENCY` at start.
+    pub fn set_currency(&self, code: &str) -> Result<(), String> {
+        if code.len() != 3 || !code.bytes().all(|b| b.is_ascii_uppercase()) {
+            return Err(format!(
+                "the currency {code:?} must be three capital letters (ISO 4217), such as EUR or SEK"
+            ));
+        }
+        *self.currency.write().unwrap() = code.to_string();
+        Ok(())
+    }
+
+    /// The instance currency (D95): what `set_currency` set, else [`DEFAULT_CURRENCY`].
+    pub fn currency(&self) -> String {
+        let c = self.currency.read().unwrap();
+        if c.is_empty() {
+            DEFAULT_CURRENCY.to_string()
+        } else {
+            c.clone()
+        }
+    }
+
+    /// Refuse the command `id` of `module` for every caller with `reason` (a trip is never
+    /// deleted), and say so in the metadata: `can_delete`, `can_update` or `can_create` is then
+    /// false for everyone (D95), so the interface offers nothing the server refuses. Added like
+    /// `add_guard`, after the guards already on the command; removed with the module.
+    pub fn refuse_always(&self, module: &str, id: &str, reason: &'static str) {
+        self.add_guard(module, id, true, Box::new(move |_, _| Err(reason.into())));
+        self.never
+            .write()
+            .unwrap()
+            .insert(id.to_string(), module.to_string());
     }
 
     /// Every permission group the registered models, fields and commands refer to (the
@@ -1933,6 +2023,8 @@ pub mod names {
 mod assert_lang_tests;
 #[cfg(test)]
 mod engine_tests;
+#[cfg(test)]
+mod hints_tests;
 #[cfg(test)]
 mod import_map_tests;
 #[cfg(test)]

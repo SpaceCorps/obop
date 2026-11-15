@@ -15,6 +15,7 @@ pub(crate) mod bulk;
 pub(crate) mod computed;
 pub(crate) mod crud;
 pub(crate) mod effects;
+pub(crate) mod hints;
 pub(crate) mod seq;
 pub(crate) mod unit;
 
@@ -51,6 +52,8 @@ pub(crate) struct Engine {
     /// Set when a test replaced the clock: `$now` is then whole seconds of that clock, not the
     /// system time down to the microsecond.
     pub clock_replaced: Arc<AtomicBool>,
+    /// The instance currency, for the default `$instance.currency` (D95).
+    pub currency: Arc<RwLock<String>>,
 }
 
 impl Engine {
@@ -84,6 +87,16 @@ impl Engine {
 
     pub fn zones(&self) -> Arc<Zones> {
         self.zones.read().unwrap().clone()
+    }
+
+    /// The instance currency (D95 `$instance.currency`).
+    pub fn currency(&self) -> String {
+        let c = self.currency.read().unwrap();
+        if c.is_empty() {
+            crate::DEFAULT_CURRENCY.to_string()
+        } else {
+            c.clone()
+        }
     }
 
     pub fn backend(&self) -> &dyn obop_storage::Backend {

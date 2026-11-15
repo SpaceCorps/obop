@@ -12,6 +12,7 @@ pub mod labels;
 pub mod limits;
 pub mod rules;
 pub mod template;
+pub mod ui;
 pub use ext::{
     CondOp, Exit, Guard, History, IndexCond, IndexDef, IndexKind, LockDate, ModelExt, StateSet,
 };
@@ -23,6 +24,9 @@ pub use limits::{
 pub use rules::{
     Access, Assertion, Computed, Effect, EffectKind, Lit, Locator, Reset, SeqFormat, SequenceSpec,
     ShowsOption, ShowsWhen, Src, Target, Unique,
+};
+pub use ui::{
+    ActionUi, ChildDecl, DefaultLit, DefaultSpec, FieldHints, FieldUi, Filter, ModelUi, ModuleUi,
 };
 
 /// Registry metadata uses `&'static str`. Modules installed at runtime build their names from
@@ -262,6 +266,9 @@ pub struct FieldDef {
     /// Length and range limits (D90); `None`: none declared (a text field still has the default
     /// length, see [`FieldDef::effective_max_length`]).
     pub limits: Option<Arc<Limits>>,
+    /// UI hints and the rules that come with them (D95): `default`, `fill_from`, `readonly`,
+    /// `ref_filter` and `[model.field.ui]`; `None`: none declared.
+    pub hints: Option<Arc<FieldHints>>,
 }
 
 #[derive(Debug, Clone)]
@@ -281,6 +288,9 @@ pub struct CommandDef {
     pub effects: Vec<Effect>,
     /// Conditions that must hold before the action runs (D56).
     pub asserts: Vec<Assertion>,
+    /// `[model.action.ui]` (D95): how the interface offers the action, the fields its input may
+    /// carry (`needs`) and who may not run it (`not_by`); `None`: none declared.
+    pub ui: Option<Arc<ActionUi>>,
 }
 
 /// A declared state transition: set `field` to `to`, only when it currently equals `from` (if
@@ -314,6 +324,7 @@ impl CommandDef {
             transition: None,
             effects: Vec::new(),
             asserts: Vec::new(),
+            ui: None,
         }
     }
 
@@ -355,6 +366,7 @@ impl FieldDef {
             sequence: None,
             shows_option: None,
             limits: None,
+            hints: None,
         }
     }
 
@@ -790,6 +802,8 @@ pub struct ModuleMeta {
     pub maturity: String,
     /// Module id and semver requirement, in declaration order.
     pub dependencies: Vec<(String, String)>,
+    /// `[module] home` and `launcher` (D95).
+    pub ui: ModuleUi,
 }
 
 impl ModuleMeta {
@@ -825,6 +839,7 @@ impl ModuleMeta {
                 .iter()
                 .map(|d| (d.to_string(), format!("^{major}.{minor}")))
                 .collect(),
+            ui: ModuleUi::default(),
         }
     }
 }
@@ -862,6 +877,7 @@ pub fn check_module(m: &Module) -> Vec<Violation> {
     // Rules (D56 to D58). Effects on models outside the module cannot be resolved here; the
     // install checks them against the dependencies (`check_module_in`).
     v.extend(rules::check_rules(m, &|_| None, false));
+    v.extend(ui::check(m, &|_| None, false));
     v
 }
 
@@ -873,6 +889,7 @@ pub fn check_module(m: &Module) -> Vec<Violation> {
 pub fn check_installed_module(m: &Module) -> Vec<Violation> {
     let mut v = check_basics(m, false);
     v.extend(rules::check_rules(m, &|_| None, false));
+    v.extend(ui::check(m, &|_| None, false));
     v
 }
 
@@ -884,6 +901,7 @@ pub fn check_module_in(
 ) -> Vec<Violation> {
     let mut v = check_basics(m, true);
     v.extend(rules::check_rules(m, lookup, true));
+    v.extend(ui::check(m, lookup, true));
     v
 }
 
@@ -1126,6 +1144,7 @@ mod tests {
             sequence: None,
             shows_option: None,
             limits: None,
+            hints: None,
         }
     }
 
@@ -1186,6 +1205,7 @@ mod tests {
             transition: None,
             effects: vec![],
             asserts: vec![],
+            ui: None,
         });
         assert_eq!(check_module(&m).len(), 1);
     }

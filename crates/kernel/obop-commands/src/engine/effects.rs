@@ -234,7 +234,12 @@ impl Runner<'_> {
         // them here.
         if depth > 0 {
             precheck(def, &rec, cmd)?;
+            if let Some(n) = super::hints::need_missing(cmd, &rec) {
+                return Err(super::hints::need_message(def, cmd, n));
+            }
         }
+        // Whoever the record names in `not_by` may not run the action, at any depth (D95).
+        super::hints::not_by(def, cmd, &rec, &self.actor.id)?;
         // Assertions look at the record as it is now, children included.
         if !cmd.asserts.is_empty() {
             let c = Computer::new(&*unit, &look, false);
@@ -552,6 +557,7 @@ impl Runner<'_> {
                 Some(J::String(s)) if !s.is_empty() => Ok(vec![s.clone()]),
                 _ => Ok(vec![]),
             },
+            Target::This => Ok(vec![id.to_string()]),
             Target::Children(via) => {
                 let via = match via {
                     Some(v) => (*v).to_string(),
@@ -595,10 +601,21 @@ impl Runner<'_> {
                 def.name, def.write_group
             ));
         }
+        let look = |n: &str| self.look(n);
+        // A record an effect creates gets the defaults and fills of D95 like any other create.
+        {
+            let cx = super::hints::FillCtx {
+                eng: self.eng,
+                reads: &*unit,
+                look: &look,
+                actor: self.actor,
+                today: &self.today,
+            };
+            super::hints::fill_in(&cx, def, &mut f)?;
+        }
         kinds::canonicalise(def, &mut f, Path::Write)?;
         default_governed(def, &mut f);
         own_default(def, &mut f, self.actor);
-        let look = |n: &str| self.look(n);
         check_effect_fields(&*unit, &look, self.actor, def, &f, true, None)?;
         seq::assign(unit, def, &mut f, None, self.now)?;
         if let Some(why) = creator_blocked(&Gate::new(&*unit, &look, self.actor), def, &f) {

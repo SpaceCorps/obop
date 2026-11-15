@@ -21,6 +21,8 @@ pub struct ModelExt {
     /// reserved name (a module installed before the name was reserved) never has it, so that
     /// field stays an ordinary, writable field.
     pub system_fields: bool,
+    /// `[model.ui]` and `[[model.child]]` (D95); `None`: none declared.
+    pub ui: Option<std::sync::Arc<crate::ui::ModelUi>>,
 }
 
 /// Record history of one model (D75). A model that does not turn it off keeps the full history,

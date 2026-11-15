@@ -224,13 +224,19 @@ fn action_guard(def: &ModelDef, eng: &Engine, command: &'static str) -> Guard {
         let actor = Actor::of(p);
         let look = lookup_fn(&eng);
         let reads = Plain(eng.backend());
-        let rec = Gate::new(&reads, &look, &actor).load(&def, &id)?;
+        let mut rec = Gate::new(&reads, &look, &actor).load(&def, &id)?;
         let cmd = def
             .commands
             .iter()
             .find(|c| c.name == command)
             .ok_or_else(|| format!("{}.{command} is not declared", def.name))?;
+        // The fields the action needs may come with its input (D95): the checks see them.
+        rec.extend(crate::engine::hints::needs_of(cmd, input));
         precheck(&def, &rec, cmd)?;
+        if let Some(n) = crate::engine::hints::need_missing(cmd, &rec) {
+            return Err(crate::engine::hints::need_message(&def, cmd, n));
+        }
+        crate::engine::hints::not_by(&def, cmd, &rec, &actor.id)?;
         let mut verdict = Verdict::default();
         let def = eng
             .def(def.name)
