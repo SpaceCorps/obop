@@ -775,6 +775,50 @@ not_by = "submitted_by"              # server: the person in this text field may
 
 **In Rust** (built-in modules): `FieldDef::default_value("today+7")`, `default_int(n)`, `default_bool(b)`, `fill_from("ref.field")`, `readonly()`, `ref_filter("...")`, `display("...")`, `aggregate("...")`, `tones(&[("lost", "bad")])`, `warn_before_days(n)`, `hidden()`, `currency_from("...")`; `CommandDef::primary()`, `danger()`, `confirm("...")`, `done("...")`, `in_group("...")`, `needs(&["..."])`, `not_by("...")`, `ui(ActionUi {..})`; `ModelDef::with_ui(ModelUi {..})` (children in `ModelUi::children`); `ModuleMeta::home("...")`, `off_launcher()`; `Effect::set_self(model, &[("field", "$today")]).when("...")`; `Dispatcher::refuse_always(module, "model.command", reason)` for a command that is refused for everyone, so `can_*` in meta says so.
 
+### 3.11 `[model.guard]`: records that are frozen (D77)
+
+PROPOSED (D77, the command-layer part). A guard says when a record can no longer be changed: a posted invoice, a confirmed order, an entry in a closed month, the lines of any of them, a log. The command layer checks it on every write of every surface (the generated update and delete, `bulk_create`, the fields an action `needs`, every effect) and refuses with **409 `immutable_record`** and a sentence. A package that uses it writes `requires_core = "^0.2.2"`. `/api/meta` serves `guard`, so the interface can show the lock.
+
+```toml
+[model.guard]
+immutable_when = ["posted", "cancelled"]     # states of the model's governed select (or { field, values })
+mutable_fields = ["note"]                    # still editable on a frozen record
+exit_to = ["reversed"]                       # the one action that moves a frozen record there
+# exit_to = [{ to = "cancelled", action = "cancel", may_change = ["cancel_reason"] }]
+no_delete_when = ["cancelled"]               # never deleted in these states (frozen ones never are)
+lock_date = { field = "date", closed_by = "accounting_period" }   # or setting = "accounting.lock_date"
+message = "A posted entry cannot be changed. Reverse it to correct it."
+
+[[model]]
+name = "accounting_move_line"
+# ...
+[model.guard]
+children_of = "move_id"                      # frozen while the move is
+```
+
+A record is **frozen** when its state is in `immutable_when`, when its `lock_date` field falls on or before the date in the setting (or inside a period of the `closed_by` model whose select says `closed`), or when the parent named in `children_of` is frozen (up to four parents). Frozenness is decided by the record as it was stored when the call began, so an action that posts a record may still write what posting writes. On a frozen record:
+
+- `update` may change only `mutable_fields`; sending the record back unchanged is fine;
+- its state moves only along an `exit_to` edge, by that edge's action, which may also change its `may_change` fields (the fields it `needs` included);
+- `delete` is refused; so is deleting a record in a `no_delete_when` state;
+- its children cannot be added, changed, moved or deleted, and no record can be moved onto it;
+- a new or changed `lock_date` field may not fall in the locked range.
+
+`append_only = true` stands alone: records are created and read, never changed or deleted.
+
+| Key | Rules (the gate refuses with `<module>.<model>.guard.<key>`) |
+|---|---|
+| `immutable_when`, `no_delete_when` | A select that an action of the model moves; values among its options; for `immutable_when`, not the first option (a record is born unfrozen). The list form needs exactly one governed select. |
+| `mutable_fields` | Stored fields (not computed, numbered, governed, the lock field or the `children_of` field). |
+| `exit_to` | Needs `immutable_when`. The action is a declared action that moves the same field to `to` and starts in an immutable state or in any state. Every action that can start in an immutable state must be listed, so no action is refused at run time for a reason the package could state. `may_change`: stored fields. |
+| `lock_date` | `field`: a date field (not a datetime). Exactly one of `setting` (one to four dotted lowercase words; the value in the instance settings is a date `YYYY-MM-DD`) and `closed_by` (a model with date fields `start_on`, `end_on` and a select with the option `closed`). |
+| `children_of` | A ref field of this model whose target model has a guard; at most four parents, no cycle. |
+| `message` | Plain text of at most 200 characters; what the interface says about a frozen record. Display only. |
+
+**In Rust** (built-in modules): `ModelDef::with_guard(Guard::frozen_in("state", &["posted"]).exit("cancelled", "cancel", &[]).mutable(&["note"]).lock_by_closed("date", "accounting_period").message("..."))`, `Guard::child_of("order_id")`, `Guard::append_only()`, `.no_delete_in(..)`, `.lock_by_setting(..)`.
+
+Not built yet (D77): the database trigger that holds the same rule for writes outside the command layer, the guard rows and the role split. A handler that writes the store directly is not held to the guard.
+
 ## 4. Field kinds and their JSON
 
 Values travel as JSON on REST and MCP, and as `key=value` text on the CLI (which converts `number`, `money` and `bool` using the metadata; a decimal or an instant stays text, exactly as written). The server validates every create and update (HTTP 400, `<model>.<field> must be <description>`); existing records are not re-validated.
