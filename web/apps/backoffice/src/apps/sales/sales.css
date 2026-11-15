@@ -1,0 +1,70 @@
+/* Sales: the invoice note on a confirmed order, and the printed quotation. */
+.so-invoice {
+  margin-block-start: var(--space-3);
+}
+.so-print {
+  display: none;
+}
+@media print {
+  body:has(.so-print) * {
+    visibility: hidden;
+  }
+  body:has(.so-print) .so-print,
+  body:has(.so-print) .so-print * {
+    visibility: visible;
+  }
+  body:has(.so-print) .so-print {
+    display: block;
+    position: absolute;
+    inset: 0 0 auto 0;
+    padding: 12mm;
+    font-size: 11pt;
+  }
+  .so-print header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-block-end: 8mm;
+  }
+  .so-print h1 {
+    font-size: 20pt;
+  }
+  .so-print-no {
+    font-size: 14pt;
+    font-weight: var(--weight-semibold);
+  }
+  .so-print-meta {
+    display: flex;
+    gap: 12mm;
+    margin: 0 0 8mm;
+  }
+  .so-print-meta dt {
+    font-size: 9pt;
+    color: var(--text-muted);
+  }
+  .so-print-meta dd {
+    margin: 0;
+    font-weight: var(--weight-semibold);
+  }
+  .so-print table {
+    inline-size: 100%;
+    border-collapse: collapse;
+  }
+  .so-print th,
+  .so-print td {
+    padding: 2mm 0;
+    border-block-end: 1px solid var(--border);
+    text-align: start;
+  }
+  .so-print .num {
+    text-align: end;
+    padding-inline-start: 4mm;
+    white-space: nowrap;
+  }
+  .so-print tfoot th,
+  .so-print tfoot td {
+    border-block-end: 0;
+    font-weight: var(--weight-bold);
+    font-size: 12pt;
+  }
+}
