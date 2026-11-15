@@ -298,9 +298,22 @@ function names(): string[] {
 /** In the catalogue and read by no screen today. The review does not need to read them first. */
 const NOT_USED_YET = ["common.close", "unit.minutes", "unit.trips"];
 
+/**
+ * Templates that start like a key and are none, by file. `core/host-config.ts` (the check of the
+ * app's identity) writes its refusals for the developer as `storage.${key} must be ...`; no screen
+ * shows them and the catalogue has no `storage.*`.
+ */
+const NOT_KEYS: Readonly<Record<string, readonly string[]>> = {
+  "src/core/host-config.ts": ["storage"],
+};
+
 describe("the keys of the catalogue and the sources", () => {
   const sources = appSources();
-  const families = new Set(sources.flatMap((s) => [...keyFamilies(s.text)]));
+  const families = new Set(
+    sources.flatMap((s) =>
+      [...keyFamilies(s.text)].filter((family) => !NOT_KEYS[s.path]?.includes(family)),
+    ),
+  );
   const underAFamily = (name: string) =>
     [...families].some((f) => name.startsWith(`${f}.`) && !name.slice(f.length + 1).includes("."));
   const used = (name: string) => underAFamily(name) || sources.some((s) => mentions(s.text, name));
@@ -313,6 +326,17 @@ describe("the keys of the catalogue and the sources", () => {
   test("the list of sentences not used yet is exact: a name on it that is read is a stale entry", () => {
     for (const name of NOT_USED_YET) expect(names(), name).toContain(name);
     expect(names().filter((name) => NOT_USED_YET.includes(name) && used(name))).toEqual([]);
+  });
+
+  test("the templates listed as no keys are still in their files, and the catalogue has no such key", () => {
+    for (const [path, prefixes] of Object.entries(NOT_KEYS)) {
+      const source = sources.find((s) => s.path === path);
+      expect(source, path).toBeDefined();
+      for (const prefix of prefixes) {
+        expect([...keyFamilies(source!.text)], `${path}: ${prefix}`).toContain(prefix);
+        expect(names().filter((name) => name.startsWith(`${prefix}.`))).toEqual([]);
+      }
+    }
   });
 
   test("the families that the sources build keys from are the ones this test knows", () => {
