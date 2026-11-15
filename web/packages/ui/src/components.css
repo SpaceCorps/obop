@@ -184,7 +184,11 @@
 }
 
 /* ---------- Form controls ---------- */
+/* position: relative holds the visually hidden status line of a field (.sr-only is absolute):
+   without it the line was placed against the page and made a form in a side panel as tall as
+   the whole form, so the page scrolled (B1). */
 .field {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;

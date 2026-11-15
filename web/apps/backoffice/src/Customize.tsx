@@ -93,19 +93,40 @@ const MODEL_TABS: Record<string, { tab: (typeof TABS)[number]["id"]; heading?: s
   marketplace_listing: { tab: "modules" },
 };
 
-/** Scroll the section whose heading reads `text` into view once it is drawn (it may load late). */
+/**
+ * Scroll the section whose heading reads `text` into view, and keep it there while the sections
+ * above it load and push it down (about two seconds), unless the person scrolls first.
+ */
 function revealHeading(text: string): () => void {
-  let tries = 0;
-  let frame = 0;
+  let timer = 0;
+  let stop = false;
+  const started = Date.now();
+  const quit = () => {
+    stop = true;
+  };
   const look = () => {
+    if (stop) return;
     const h = [...document.querySelectorAll<HTMLElement>(".content h2, .content h3")].find(
       (x) => x.textContent?.trim() === text,
     );
-    if (h) h.scrollIntoView({ block: "start" });
-    else if (++tries < 120) frame = requestAnimationFrame(look);
+    if (h) {
+      // Where "start" puts it: the top of the scrolling panel, or of the window on a phone.
+      const top = Math.max(h.closest(".content")?.getBoundingClientRect().top ?? 0, 0);
+      if (Math.abs(h.getBoundingClientRect().top - top) > 24) h.scrollIntoView({ block: "start" });
+    }
+    if (Date.now() - started < 2500) timer = window.setTimeout(look, 100);
   };
-  frame = requestAnimationFrame(look);
-  return () => cancelAnimationFrame(frame);
+  addEventListener("wheel", quit, { once: true, passive: true });
+  addEventListener("touchstart", quit, { once: true, passive: true });
+  addEventListener("keydown", quit, { once: true });
+  timer = window.setTimeout(look, 50);
+  return () => {
+    stop = true;
+    window.clearTimeout(timer);
+    removeEventListener("wheel", quit);
+    removeEventListener("touchstart", quit);
+    removeEventListener("keydown", quit);
+  };
 }
 
 export function Customize(p: Props) {
