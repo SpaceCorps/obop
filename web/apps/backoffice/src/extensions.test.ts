@@ -10,6 +10,7 @@ import {
   withoutOverridden,
 } from "./extensions.ts";
 import type { Command } from "./api.ts";
+import type { Route } from "./route.ts";
 import "./registrations.ts";
 
 const app = (id: string, models: string[]): App => ({
@@ -72,5 +73,25 @@ describe("registrations", () => {
     expect(appHomeOf(app("dashboards", ["dashboards_dashboard"]))).toBe("#/dashboards/board");
     expect(appHomeOf(app("dashboards", ["dashboards_widget"]))).toBeUndefined();
     expect(appHomeOf(app("crm", ["lead"]))).toBeUndefined();
+  });
+  it("an app's own overview page says so, so the sidebar marks Overview", () => {
+    const ctx = (appId: string, models: string[], model: string) => ({
+      app: app(appId, models),
+      route: { app: appId, model, view: "", id: "", tab: "", st: "", page: "" } as Route,
+      go: () => {},
+      token: "",
+      email: "",
+      ready: true,
+    });
+    const journals = ["accounting_journal", "accounting_move"];
+    const home = appPages.accounting.use(ctx("accounting", journals, "overview"));
+    expect(home.page).toBeTruthy();
+    expect(home.overview).toBe(true);
+    expect(appPages.accounting.use(ctx("accounting", journals, "accounting_move")).overview).toBe(
+      undefined,
+    );
+    expect(appPages.inventory.use(ctx("inventory", ["inventory_item"], "overview")).overview).toBe(
+      true,
+    );
   });
 });

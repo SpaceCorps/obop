@@ -12,7 +12,7 @@ const InventoryHome = lazy(() =>
 registerAppPages("inventory", {
   use: (ctx) => {
     if (!ctx || !isOverview(ctx.route)) return {};
-    return { page: <InventoryHome app={ctx.app} route={ctx.route} go={ctx.go} /> };
+    return { page: <InventoryHome app={ctx.app} route={ctx.route} go={ctx.go} />, overview: true };
   },
 });
 

@@ -445,7 +445,7 @@ export function App() {
                     app={app}
                     route={route}
                     current={!extPage && !isOverview(route) && !atHome ? model?.name : undefined}
-                    overview={!extPage && (isOverview(route) || atHome)}
+                    overview={(!extPage || !!ext.overview) && (isOverview(route) || atHome)}
                     user={email}
                   />
                   {ext.navAfter?.map((l) => (

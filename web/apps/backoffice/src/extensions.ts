@@ -151,6 +151,11 @@ export type AppPagesResult = {
    * generic page. While it is set no model link is marked current.
    */
   page?: ReactNode | null;
+  /**
+   * The page drawn is the app's own overview, so the sidebar marks its Overview entry current as
+   * it does on the generic overview. Absent: an app page marks no entry.
+   */
+  overview?: boolean;
 };
 
 export type AppPages = {

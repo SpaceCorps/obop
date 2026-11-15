@@ -24,12 +24,8 @@ registerAppPages("accounting", {
   use: (ctx) => {
     if (!ctx || !hasJournals(ctx.app.module.models)) return {};
     const atHome = !ctx.route.model;
-    return {
-      page:
-        isOverview(ctx.route) || (atHome && appHome(ctx.app.module) === OVERVIEW) ? (
-          <AccountingOverview app={ctx.app} />
-        ) : null,
-    };
+    const home = isOverview(ctx.route) || (atHome && appHome(ctx.app.module) === OVERVIEW);
+    return home ? { page: <AccountingOverview app={ctx.app} />, overview: true } : {};
   },
 });
 
