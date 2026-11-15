@@ -326,7 +326,7 @@ export function RecordPanel({
           masked={masked}
           changed={changed}
           governed={governed}
-          onEdit={(name, v) => setDraft({ ...draft, [name]: v })}
+          onEdit={(name, v) => setDraft((x) => ({ ...x, [name]: v }))}
           clearField={clearField}
           onMove={(f, to) => void moveField(f, to)}
           onSubmit={() => void save()}

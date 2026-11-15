@@ -6,7 +6,7 @@ import type { FieldMeta, ModelMeta, Row } from "./api.ts";
 import { useData } from "./data.tsx";
 import { fromEdit, type Edit } from "./edit.ts";
 import { recordExtensionOf, type RecordSectionProps } from "./extensions.ts";
-import { FieldInput, RefLabel } from "./fields.tsx";
+import { FieldFormProvider, FieldInput, formOrder, RefLabel } from "./fields.tsx";
 import { optionLabel, shownLabel } from "./format.ts";
 import { fieldTitle, fieldTitleByName } from "./labels.ts";
 import { LinesSection } from "./LinesSection.tsx";
@@ -103,119 +103,140 @@ export function FormBody(p: FormBodyProps) {
         if (p.dirty || creating) p.onSubmit();
       }}
     >
-      {fields
-        // A computed value or a number does not exist before the record is saved.
-        .filter((f) => f !== statusField && !(creating && (f.computed || f.sequence)))
-        .map((f) => {
-          const isMasked_ = p.masked(f);
-          const fid = `f-${model.name}-${f.name}`;
-          const err = p.invalid[f.name]
-            ? errorOf(fromEdit(f, value(f), currency, !creating && !p.changed(f)))
-            : p.refused[f.name] !== undefined
-              ? serverMessage(p.refused[f.name]!)
-              : undefined;
-          return (
-            <div key={f.name} className={`field${f.kind === "bool" ? " inline" : ""}`}>
-              <label className="flabel" htmlFor={fid}>
-                {fieldTitle(f)}
-                {f.required && (
-                  <span className="req" title={t("Required")} aria-hidden="true">
-                    *
-                  </span>
-                )}
-                {f.personal_data && (
-                  <span
-                    className="shield"
-                    title={t("Personal data ({class}). Agents see it masked.", {
-                      class: f.class,
-                    })}
-                    role="img"
-                    aria-label={t("Personal data, {class}", { class: f.class })}
-                  >
-                    <Icon name="shield" size={13} />
-                  </span>
-                )}
-                {f.class === "financial" && <span className="chip">{t("financial")}</span>}
-                {f.computed && (
-                  <span className="chip" title={t("Calculated by the server; it cannot be edited")}>
-                    {t("calculated")}
-                  </span>
-                )}
-                {f.sequence && (
-                  <span
-                    className="chip"
-                    title={t("A number the server assigns; it cannot be edited")}
-                  >
-                    {t("numbered")}
-                  </span>
-                )}
-              </label>
-              {isMasked_ ? (
-                <div className="maskedfield">
-                  <span className="masked" id={fid}>
-                    {String(row?.[f.name])}
-                  </span>
-                  <span className="hint">{t("Masked for this session")}</span>
-                  {canEdit && (
-                    <button type="button" className="linkbtn" onClick={() => p.onEdit(f.name, "")}>
-                      {t("Replace")}
-                    </button>
+      {/* The inputs see the rest of the record: fill_from, the slug, a document named after its file. */}
+      <FieldFormProvider
+        value={{
+          model,
+          peek: (name) => {
+            const f = fields.find((x) => x.name === name);
+            return f ? value(f) : undefined;
+          },
+          fill: (values) => {
+            for (const [name, v] of Object.entries(values)) p.onEdit(name, v);
+          },
+        }}
+      >
+        {formOrder(fields)
+          // A computed value or a number does not exist before the record is saved.
+          .filter((f) => f !== statusField && !(creating && (f.computed || f.sequence)))
+          .map((f) => {
+            const isMasked_ = p.masked(f);
+            const fid = `f-${model.name}-${f.name}`;
+            const err = p.invalid[f.name]
+              ? errorOf(fromEdit(f, value(f), currency, !creating && !p.changed(f)))
+              : p.refused[f.name] !== undefined
+                ? serverMessage(p.refused[f.name]!)
+                : undefined;
+            return (
+              <div key={f.name} className={`field${f.kind === "bool" ? " inline" : ""}`}>
+                <label className="flabel" htmlFor={fid}>
+                  {fieldTitle(f)}
+                  {f.required && (
+                    <span className="req" title={t("Required")} aria-hidden="true">
+                      *
+                    </span>
                   )}
-                </div>
-              ) : p.governed(f) ? (
-                <GovernedValue
-                  model={model}
-                  field={f}
-                  row={row}
-                  title={title}
-                  id={fid}
-                  busy={busy}
-                  onMove={(to) => p.onMove(f, to)}
-                />
-              ) : (
-                <FieldInput
-                  field={f}
-                  id={fid}
-                  value={value(f)}
-                  readOnly={!canEdit || !!f.computed || !!f.sequence}
-                  shown={row ? shownLabel(f, row[f.name], row) : undefined}
-                  altHint={(() => {
-                    const alt = model.fields.find((x) => x.name === `${f.name}_alt`);
-                    return alt
-                      ? { title: fieldTitle(alt), empty: !String(value(alt)).trim() }
-                      : undefined;
-                  })()}
-                  currency={currency}
-                  invalid={!!err}
-                  describedBy={err ? `${fid}-err` : undefined}
-                  unchanged={!creating && !p.changed(f)}
-                  onChange={(v) => {
-                    p.onEdit(f.name, v);
-                    if (err) p.clearField(f.name);
-                  }}
-                />
-              )}
-              {f.kind === "ref" &&
-                !isMasked_ &&
-                String(value(f)) &&
-                d.linkTo(f.to ?? "", { id: String(value(f)) }) && (
-                  <a
-                    className="reflink small"
-                    href={d.linkTo(f.to ?? "", { id: String(value(f)) })!}
-                  >
-                    {rich("Open {name}", {
-                      name: <RefLabel field={f} id={String(value(f))} link={false} />,
-                    })}
-                  </a>
+                  {f.personal_data && (
+                    <span
+                      className="shield"
+                      title={t("Personal data ({class}). Agents see it masked.", {
+                        class: f.class,
+                      })}
+                      role="img"
+                      aria-label={t("Personal data, {class}", { class: f.class })}
+                    >
+                      <Icon name="shield" size={13} />
+                    </span>
+                  )}
+                  {f.class === "financial" && <span className="chip">{t("financial")}</span>}
+                  {f.computed && (
+                    <span
+                      className="chip"
+                      title={t("Calculated by the server; it cannot be edited")}
+                    >
+                      {t("calculated")}
+                    </span>
+                  )}
+                  {f.sequence && (
+                    <span
+                      className="chip"
+                      title={t("A number the server assigns; it cannot be edited")}
+                    >
+                      {t("numbered")}
+                    </span>
+                  )}
+                </label>
+                {isMasked_ ? (
+                  <div className="maskedfield">
+                    <span className="masked" id={fid}>
+                      {String(row?.[f.name])}
+                    </span>
+                    <span className="hint">{t("Masked for this session")}</span>
+                    {canEdit && (
+                      <button
+                        type="button"
+                        className="linkbtn"
+                        onClick={() => p.onEdit(f.name, "")}
+                      >
+                        {t("Replace")}
+                      </button>
+                    )}
+                  </div>
+                ) : p.governed(f) ? (
+                  <GovernedValue
+                    model={model}
+                    field={f}
+                    row={row}
+                    title={title}
+                    id={fid}
+                    busy={busy}
+                    onMove={(to) => p.onMove(f, to)}
+                  />
+                ) : (
+                  <FieldInput
+                    field={f}
+                    id={fid}
+                    value={value(f)}
+                    readOnly={!canEdit || !!f.computed || !!f.sequence}
+                    shown={row ? shownLabel(f, row[f.name], row) : undefined}
+                    altHint={(() => {
+                      const alt = model.fields.find((x) => x.name === `${f.name}_alt`);
+                      return alt
+                        ? { title: fieldTitle(alt), empty: !String(value(alt)).trim() }
+                        : undefined;
+                    })()}
+                    currency={currency}
+                    invalid={!!err}
+                    describedBy={err ? `${fid}-err` : undefined}
+                    unchanged={!creating && !p.changed(f)}
+                    onChange={(v) => {
+                      p.onEdit(f.name, v);
+                      if (err) p.clearField(f.name);
+                    }}
+                  />
                 )}
-              {err && (
-                <p id={`${fid}-err`} role="alert" className="error">
-                  {err}
-                </p>
-              )}
-            </div>
-          );
-        })}
+                {f.kind === "ref" &&
+                  !isMasked_ &&
+                  String(value(f)) &&
+                  d.linkTo(f.to ?? "", { id: String(value(f)) }) && (
+                    <a
+                      className="reflink small"
+                      href={d.linkTo(f.to ?? "", { id: String(value(f)) })!}
+                    >
+                      {rich("Open {name}", {
+                        name: <RefLabel field={f} id={String(value(f))} link={false} />,
+                      })}
+                    </a>
+                  )}
+                {err && (
+                  <p id={`${fid}-err`} role="alert" className="error">
+                    {err}
+                  </p>
+                )}
+              </div>
+            );
+          })}
+      </FieldFormProvider>
       <SectionSlot
         model={model}
         fields={fields}
