@@ -540,7 +540,7 @@ export function ListView(p: ViewProps) {
     const href = recordHref(row);
     // A record without its own value in the column yet (a draft without its number) is named by
     // the rest of its title, greyed: "Draft · Payroll · 31 Dec".
-    const unset = asTitle && !!f && f.name === cols[0]?.name && isEmpty(v);
+    const unset = asTitle && !!f && isEmpty(v);
     const body = (
       <>
         {img !== null && <BlobThumb id={String(img)} alt="" size={28} className="row-avatar" />}
@@ -1226,7 +1226,11 @@ function PhoneCard(p: {
 }) {
   const { row, roles } = p;
   const state = roles.state && !isEmpty(row[roles.state.name]) ? roles.state : undefined;
-  const meta = cardMeta(roles, row);
+  // A title made of the ref and the date (a draft without its number) already says them.
+  const bare = !!roles.title && isEmpty(row[roles.title.name]);
+  const meta = cardMeta(roles, row).filter(
+    (f) => !bare || (f.kind !== "ref" && f.kind !== "date" && f.kind !== "datetime"),
+  );
   const amount = roles.money && !isEmpty(row[roles.money.name]) ? p.money(roles.money) : "";
   return (
     <div className="lc">
