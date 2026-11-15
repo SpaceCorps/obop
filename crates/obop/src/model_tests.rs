@@ -773,6 +773,12 @@ fn agents_only_propose_approving_or_refusing_expenses_and_time_entries() {
     }
 }
 
+/// The `version` of a package document.
+fn version_of(doc: &str) -> String {
+    let v = doc.split("version = \"").nth(1).expect("a version");
+    v[..v.find('"').expect("a closing quote")].to_string()
+}
+
 /// The approval flags reach an instance that installed Expenses 0.3.0 only through an update to
 /// the bundled version, which is why the version moved: before the update the agent's approve
 /// runs, after it the agent gets a plan. The update needs no data step.
@@ -786,7 +792,10 @@ fn updating_expenses_brings_the_approval_of_approve_and_refuse() {
     assert_eq!(bundled.matches(flagged).count(), 2, "approve and refuse");
     let old = bundled
         .replace(flagged, "group = \"expenses.manager\"\n")
-        .replace("version = \"0.4.0\"", "version = \"0.3.0\"");
+        .replace(
+            &format!("version = \"{}\"", version_of(&bundled)),
+            "version = \"0.3.0\"",
+        );
     assert_ne!(old, bundled);
     app.installer.install(&old, "upload", "test").unwrap();
 
@@ -812,7 +821,7 @@ fn updating_expenses_brings_the_approval_of_approve_and_refuse() {
     );
 
     let updated = app.installer.install(&bundled, "upload", "test").unwrap();
-    assert_eq!(updated.version, "0.4.0");
+    assert_eq!(updated.version, version_of(&bundled));
     let c = claim();
     plan_of(run(
         &app,
