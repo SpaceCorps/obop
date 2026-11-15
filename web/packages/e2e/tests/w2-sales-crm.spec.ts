@@ -73,4 +73,34 @@ test.describe("CRM to Sales", () => {
     const after = await api.run("root", "lead.get", { id: lead.id });
     expect(after.lost_reason).toBe("Chose a cheaper offer");
   });
+
+  test("dropping a lead on Lost on the board asks for the reason", async ({
+    page,
+    api,
+    signIn,
+    uid,
+  }) => {
+    const title = uid("Board deal");
+    const lead = await api.create("root", "lead", { title });
+    await signIn("root", "/crm/lead?view=kanban");
+    const board = page.getByRole("group", { name: /board by/ });
+    const column = (stage: string) =>
+      board.getByRole("region", { name: new RegExp(`^${stage}, \\d+ cards?$`, "i") });
+    await column("New")
+      .locator(".kcard", { hasText: title })
+      .dragTo(column("Lost").locator("header"));
+    const dlg = page.getByRole("dialog", { name: "Mark lost" });
+    await expect(dlg.getByLabel("Lost reason")).toBeVisible();
+    // Nothing moved yet, and no engine text was shown.
+    expect((await api.run("root", "lead.get", { id: lead.id })).stage).toBe("new");
+    await expect(page.getByText(/needs lost_reason/)).toHaveCount(0);
+    await dlg.getByLabel("Lost reason").fill("No budget this year");
+    await dlg.getByRole("button", { name: "Mark lost" }).click();
+    await expect
+      .poll(async () => (await api.run("root", "lead.get", { id: lead.id })).stage)
+      .toBe("lost");
+    expect((await api.run("root", "lead.get", { id: lead.id })).lost_reason).toBe(
+      "No budget this year",
+    );
+  });
 });
