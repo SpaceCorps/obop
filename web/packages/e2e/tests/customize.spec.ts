@@ -30,7 +30,7 @@ test.describe("Customize: marketplace, module builder and theme", () => {
         .click();
       const panel = page.getByRole("complementary", { name: "Vehicle record" });
       await panel.getByLabel("Plate").fill(plate);
-      await panel.getByLabel("Odometer km").fill("120000");
+      await panel.getByLabel("Odometer (km)").fill("120000");
       await panel.getByRole("button", { name: "Create" }).click();
       // Wait for the save: switching views while the form is still dirty would ask to discard it.
       await expect(page.locator(".toast").filter({ hasText: "created" })).toBeVisible();

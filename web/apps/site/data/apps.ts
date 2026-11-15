@@ -401,8 +401,9 @@ export const APP_COPY: AppCopy[] = [
     },
     // The retire action only sets the state to retired and needs fleet.approver (packages/fleet.toml:91-100);
     // no action leaves "retired", and like every model a vehicle has a delete command, so "the record stays"
-    // is not said. No action reaches "maintenance" either (:77-100), and a governed state
-    // starts at its first option and moves only through actions (crates/kernel/obop-commands/src/guards.rs:65, :158).
+    // is not said. Since fleet 0.3.2, send_to_workshop and back_in_service move an available vehicle to
+    // "maintenance" and back, so the manifest's description of the state is true and is shown as it is; a
+    // governed state starts at its first option and moves only through actions (crates/kernel/obop-commands/src/guards.rs:65, :158).
     // A driver's state (active, suspended) only moves through suspend and reactivate (:134-154): nothing reads
     // it or licence_expiry, fleet_vehicle.driver_id is a plain ref (:63-68) and dispatch has no assert or effect
     // (:77-82), so the manifest's "authorised to drive" and "allow ... to drive again" (:102, :151) are not said.
@@ -410,10 +411,6 @@ export const APP_COPY: AppCopy[] = [
     // the state is required, with the options active and suspended (:134-140).
     modelText: {
       fleet_vehicle_driver: "A driver of fleet vehicles, with a status of active or suspended",
-    },
-    fieldText: {
-      "fleet_vehicle.state":
-        "Availability: available, in service or retired. The option maintenance exists, but no step moves a vehicle into it.",
     },
   },
   {
