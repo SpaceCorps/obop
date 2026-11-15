@@ -311,6 +311,10 @@ description = "Betalarens eller mottagarens bankkonto"
 label = "Verifikationsrad"
 description = "Verifikationsraden som kontoutdragsraden matchades mot"
 
+[labels.sv.model.accounting_bank_statement_line.field.settles_line_id]
+label = "Reglerad öppen post"
+description = "Den öppna kund- eller leverantörsposten som betalningen reglerar; två banktransaktioner kan inte reglera samma post"
+
 [labels.sv.model.accounting_bank_statement_line.field.state]
 label = "Status"
 description = "Matchningsstatus: ej matchad, matchad, avstämd"

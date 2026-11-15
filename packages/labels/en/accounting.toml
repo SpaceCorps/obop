@@ -126,6 +126,9 @@ label = "Counterparty IBAN"
 [labels.en.model.accounting_bank_statement_line.field.move_line_id]
 label = "Matched journal item"
 
+[labels.en.model.accounting_bank_statement_line.field.settles_line_id]
+label = "Settled open item"
+
 [labels.en.model.accounting_bank_statement_line.field.state.options]
 unmatched = "To match"
 matched = "Matched"

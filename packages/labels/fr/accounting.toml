@@ -311,6 +311,10 @@ description = "Compte bancaire du payeur ou du bénéficiaire"
 label = "Ligne d’écriture"
 description = "La ligne d’écriture à laquelle cette ligne de relevé a été associée"
 
+[labels.fr.model.accounting_bank_statement_line.field.settles_line_id]
+label = "Poste ouvert réglé"
+description = "Le poste ouvert client ou fournisseur que ce paiement règle ; deux transactions bancaires ne peuvent pas régler le même poste"
+
 [labels.fr.model.accounting_bank_statement_line.field.state]
 label = "Statut"
 description = "Statut de rapprochement : non rapprochée, associée, rapprochée"

@@ -3613,6 +3613,9 @@ mod bundled_packages {
                         Some(s) if f.name == state_field(model) => Value::text(s),
                         _ => Value::text(f.options[0]),
                     },
+                    // An optional unique reference (a bank line's settled item) stays empty: the
+                    // shared sample record of its target could be named only once.
+                    "ref" if f.unique && !f.required => continue,
                     "ref" => {
                         let to = f.to.expect("ref has a target");
                         if open.iter().any(|o| o == to) {

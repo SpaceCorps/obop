@@ -279,7 +279,7 @@ label = "VAT naliczony"
 description = "Podlegający odliczeniu VAT naliczony za okres w öre, suma wierszy VAT naliczonego"
 
 [labels.pl.model.accounting_se_vat_report.field.vat_to_pay]
-label = "VAT do zapłaty"
+label = "VAT do zapłaty lub zwrotu"
 description = "VAT należny minus VAT naliczony w öre; ujemny oznacza zwrot (pole 49)"
 
 [labels.pl.model.accounting_se_vat_report.field.boxes_confirmed]

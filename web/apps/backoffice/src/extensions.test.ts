@@ -34,7 +34,10 @@ describe("registrations", () => {
     expect(recordExtensionOf("sign_request").actions).toHaveLength(1);
     expect(recordExtensionOf("sign_request").panels).toHaveLength(2);
     expect(modelPageOf("documents_document")).toBeTypeOf("function");
-    expect(Object.keys(appPages).sort()).toEqual(["connectors", "dashboards", "documents"]);
+    // Every app's registration file adds to this; the test names some, not all of them.
+    expect(Object.keys(appPages)).toEqual(
+      expect.arrayContaining(["connectors", "dashboards", "documents"]),
+    );
   });
   it("a model without one gets empty lists", () => {
     expect(recordExtensionOf("lead")).toEqual({ actions: [], panels: [], sections: [] });

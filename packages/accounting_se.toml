@@ -1,6 +1,6 @@
 [module]
 id = "accounting_se"
-version = "0.2.1"
+version = "0.2.3"
 name = "Accounting Sweden"
 description = "Swedish localisation of Accounting, ported from the domain model of open-accounting-sweden: company data (organisation number, VAT number, F-tax, start of the fiscal year), voucher series (verifikationsserier) tied to journals, Swedish VAT (moms) codes with the box and the account each code feeds, the boxes of the VAT return, and a VAT report per period that anyone may propose and only the stricter accounting.approver group may approve. UNVERIFIED: nothing in this package has been checked against Skatteverket (form SKV 4700) or the SIE specification. Every VAT box and every VAT code starts as unverified, the package ships no box or code rows, and a report cannot be approved until the approver confirms that the boxes were compared with the official form. The package contains no chart of accounts: the BAS chart is not redistributed here (decision D34), account numbers are chosen by the user, and a later version takes a BAS file supplied by the licensee. Amounts are money fields in minor units (ore) and rates are in basis points. Nothing is filed with Skatteverket from here."
 author = "SpaceCorps"
@@ -13,10 +13,10 @@ categories = ["finance"]
 maturity = "experimental"
 requires_core = "^0.2.2"
 home = "accounting_se_vat_report"
-changelog = "An approved or filed VAT report and its lines are frozen; only its notes can still change. Verifying a box or a VAT code records who verified it and when, and those two fields are no longer typed by hand. Approving a report asks for the confirmation that the boxes were checked against SKV 4700 in the same step. Amounts follow the currency of the company (normally SEK), a new company starts in SEK with a calendar year, and the app opens on the VAT reports with the configuration in its own menu. English names for the VAT treatments."
+changelog = "Runs with Accounting 0.3 and 0.4. Box 49 is called VAT to pay or get back everywhere, with one sign: below zero is VAT you get back. A VAT report card shows the name, the due date and box 49, no longer three unlabelled amounts. An approved or filed VAT report and its lines are frozen; only its notes can still change. Verifying a box or a VAT code records who verified it and when, and those two fields are no longer typed by hand. Approving a report asks for the confirmation that the boxes were checked against SKV 4700 in the same step. Amounts follow the currency of the company (normally SEK), a new company starts in SEK with a calendar year, and the app opens on the VAT reports with the configuration in its own menu. English names for the VAT treatments."
 
 [module.dependencies]
-accounting = "^0.3"
+accounting = ">=0.3, <0.5"
 
 [[model]]
 name = "accounting_se_company"
@@ -466,7 +466,7 @@ write_group = "accounting.user"
   title = "{name}"
   subtitle = "{start_on} → {end_on}"
   list = ["name", "period_kind", "start_on", "end_on", "due_on", "output_vat", "input_vat", "vat_to_pay", "state"]
-  card = ["name", "due_on", "output_vat", "input_vat", "vat_to_pay"]
+  card = ["name", "due_on", "vat_to_pay"]
   card_sum = "vat_to_pay"
   quick_create = ["name", "period_kind", "start_on", "end_on"]
   order = "start_on desc"

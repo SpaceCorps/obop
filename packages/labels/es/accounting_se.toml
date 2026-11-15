@@ -279,7 +279,7 @@ label = "IVA soportado"
 description = "IVA soportado deducible del periodo en öre, suma de las líneas soportadas"
 
 [labels.es.model.accounting_se_vat_report.field.vat_to_pay]
-label = "IVA a pagar"
+label = "IVA a pagar o a devolver"
 description = "IVA repercutido menos IVA soportado en öre; negativo significa devolución (casilla 49)"
 
 [labels.es.model.accounting_se_vat_report.field.boxes_confirmed]

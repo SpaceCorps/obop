@@ -311,6 +311,10 @@ description = "Rachunek bankowy płatnika lub odbiorcy"
 label = "Pozycja operacji"
 description = "Pozycja operacji, do której dopasowano tę pozycję wyciągu"
 
+[labels.pl.model.accounting_bank_statement_line.field.settles_line_id]
+label = "Rozliczona pozycja otwarta"
+description = "Otwarta pozycja należności lub zobowiązania, którą rozlicza ta płatność; dwie transakcje bankowe nie mogą rozliczyć tej samej pozycji"
+
 [labels.pl.model.accounting_bank_statement_line.field.state]
 label = "Status"
 description = "Status dopasowania: niedopasowane, dopasowane, uzgodnione"

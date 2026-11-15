@@ -279,7 +279,7 @@ label = "Vorsteuer"
 description = "Abziehbare Vorsteuer der Periode in Öre, Summe der Eingangszeilen"
 
 [labels.de.model.accounting_se_vat_report.field.vat_to_pay]
-label = "Zu zahlende Umsatzsteuer"
+label = "Zu zahlende oder zu erstattende Umsatzsteuer"
 description = "Ausgangsumsatzsteuer minus Vorsteuer in Öre; negativ bedeutet Erstattung (Feld 49)"
 
 [labels.de.model.accounting_se_vat_report.field.boxes_confirmed]

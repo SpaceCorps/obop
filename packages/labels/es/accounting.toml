@@ -311,6 +311,10 @@ description = "Cuenta bancaria del ordenante o del beneficiario"
 label = "Línea de movimiento"
 description = "La línea de asiento con la que se cruzó esta línea de extracto"
 
+[labels.es.model.accounting_bank_statement_line.field.settles_line_id]
+label = "Partida abierta liquidada"
+description = "La partida abierta de cliente o proveedor que liquida este pago; dos transacciones bancarias no pueden liquidar la misma partida"
+
 [labels.es.model.accounting_bank_statement_line.field.state]
 label = "Estado"
 description = "Estado del cruce: sin cruzar, cruzada, conciliada"
