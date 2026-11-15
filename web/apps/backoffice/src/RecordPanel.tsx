@@ -524,6 +524,7 @@ export function RecordPanel({
           sections={sections}
           fixed={fixed}
           editable={editable}
+          locked={!!lock}
           onEdit={(name, v) => setDraft((x) => ({ ...x, [name]: v }))}
           clearField={clearField}
           onMove={(f, to) => void moveField(f, to)}

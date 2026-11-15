@@ -87,6 +87,8 @@ export type FormBodyProps = {
   fixed: (f: FieldMeta) => boolean;
   /** Some field can be written: the Save bar is drawn. */
   editable: boolean;
+  /** The record is frozen (D77 guard): its banner says why, so no "read only for you" note. */
+  locked?: boolean;
   /** A field was edited. */
   onEdit: (name: string, v: Edit) => void;
   /** The error of a field is cleared once it is edited again. */
@@ -340,7 +342,8 @@ export function FormBody(p: FormBodyProps) {
           </span>
         </footer>
       ) : (
-        !creating && (
+        !creating &&
+        !p.locked && (
           <p className="hint rec-readonly">
             <Icon name="lock" size={13} /> {t("Read only for you")}
           </p>
