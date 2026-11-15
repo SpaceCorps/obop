@@ -97,9 +97,15 @@ test.describe("control panel", () => {
       )
       .toHaveLength(1);
 
+    // The page has heard of it: the form shows the saved line. Until then the form is still the
+    // new one, and it closes only when its save is over (records.spec.ts).
+    await expect(panel.getByRole("heading", { name: "Context line" })).toBeVisible();
+
     // The top New does the same once the list has a line.
     await page.keyboard.press("Escape");
+    await expect(panel).toHaveCount(0);
     await page.getByRole("button", { name: "New", exact: true }).click();
+    await expect(panel.getByRole("heading", { name: "New order line" })).toBeVisible();
     await expect(panel.getByRole("link", { name: `Open ${number}` })).toBeVisible();
   });
 
