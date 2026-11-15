@@ -534,18 +534,13 @@ fn memory_with_nothing_tracked_is_as_before() {
 
 #[test]
 fn sqlite_with_nothing_tracked_is_as_before() {
-    let dir = std::env::temp_dir().join(format!("obop-golden-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let path = dir.join("golden.db");
+    let dir = crate::testing::TempPath::dir("obop-golden");
+    let path = dir.path().join("golden.db");
     let url = format!("sqlite://{}", path.display());
     let b = open(&url).unwrap();
     let snap = snapshot(&*b, script(&*b), &|| sqlite_raw(&path));
     check("sqlite", snap);
     drop(b);
-    for ext in ["", "-wal", "-shm"] {
-        let _ = std::fs::remove_file(format!("{}{ext}", path.display()));
-    }
-    let _ = std::fs::remove_dir(&dir);
     // An in-memory SQLite database does the same.
     let m = open("sqlite::memory:").unwrap();
     let again = snapshot(&*m, script(&*m), &|| J::Null);

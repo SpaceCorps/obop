@@ -2591,15 +2591,8 @@ fn flow_on(e: &Env) {
 
 #[test]
 fn the_flow_works_on_sqlite() {
-    let path = std::env::temp_dir().join(format!(
-        "obop-connectors-flow-{}.sqlite",
-        std::process::id()
-    ));
-    let _ = std::fs::remove_file(&path);
-    flow_on(&env_on(
-        Store::open(&format!("sqlite://{}", path.display())).unwrap(),
-    ));
-    let _ = std::fs::remove_file(&path);
+    let path = obop_storage::testing::TempPath::new("obop-connectors-flow");
+    flow_on(&env_on(Store::open(&path.url()).unwrap()));
 }
 
 /// Runs only when `OBOP_TEST_POSTGRES_URL` is set (a throwaway database).

@@ -52,6 +52,8 @@ Thumbs.db
 /.work/
 *.log
 web/site/
+# A test of obop-ops that needs a relative path makes this in the crate directory
+/crates/kernel/obop-ops/obop-sched-*/
 
 # Playwright output (web/packages/e2e)
 test-results/
