@@ -1,2 +1,33 @@
 # English names and plurals of projects (D52, D95): [labels.en.model.<model>] name = "...", plural = "...".
 # The manifest stays the English source; this file only adds the display names it does not have.
+
+[labels.en.model.projects_project]
+name = "Project"
+plural = "Projects"
+
+[labels.en.model.projects_project.field.estimate_minutes]
+label = "Estimate"
+
+[labels.en.model.projects_milestone]
+name = "Milestone"
+plural = "Milestones"
+
+[labels.en.model.projects_milestone.action.reset_missed]
+label = "Reset"
+
+[labels.en.model.projects_task]
+name = "Task"
+plural = "Tasks"
+
+[labels.en.model.projects_task.field.estimate_minutes]
+label = "Estimate"
+
+[labels.en.model.projects_task.field.state.options]
+todo = "To do"
+doing = "In progress"
+
+[labels.en.model.projects_task.action.complete_now]
+label = "Complete"
+
+[labels.en.model.projects_task.action.reopen_cancelled]
+label = "Reopen"

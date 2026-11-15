@@ -5,6 +5,7 @@ summary = "Projektitehtäviin käytetty aika minuutteina, laskutettavuusmerkint�
 
 [labels.fi.model.timesheets_entry]
 name = "Tuntikirjaus"
+plural = "Tuntikirjaukset"
 description = "Yhden henkilön yhdelle tehtävälle yhtenä päivänä käyttämä aika"
 
 [labels.fi.model.timesheets_entry.field.task_id]

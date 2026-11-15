@@ -5,6 +5,7 @@ summary = "Työntekijöiden työvuorot rooleineen ja vuoromalleineen; avoimet vu
 
 [labels.fi.model.planning_role]
 name = "Rooli"
+plural = "Roolit"
 description = "Rooli, jolle vuoro suunnitellaan, esimerkiksi kassanhoitaja tai sähköasentaja"
 
 [labels.fi.model.planning_role.field.name]
@@ -17,6 +18,7 @@ description = "Mitä rooliin kuuluu"
 
 [labels.fi.model.planning_template]
 name = "Vuoromalli"
+plural = "Vuoromallit"
 description = "Nimetty vuoromalli, jossa on rooli sekä alku- ja loppuaika; mikään toiminto ei luo siitä vuoroja"
 
 [labels.fi.model.planning_template.field.name]
@@ -37,6 +39,7 @@ description = "Päättymisaika minuutteina keskiyöstä (1020 tarkoittaa kello 1
 
 [labels.fi.model.planning_shift]
 name = "Vuoro"
+plural = "Vuorot"
 description = "Yhden päivän työjakso yhdelle roolille, tarvittaessa työntekijälle määrättynä"
 
 [labels.fi.model.planning_shift.field.name]
@@ -72,7 +75,7 @@ label = "Tila"
 description = "Vuoron tila: avoin, julkaistu, vahvistettu"
 
 [labels.fi.model.planning_shift.field.state.options]
-open = "Avoin"
+open = "Julkaisematon"
 published = "Julkaistu"
 confirmed = "Vahvistettu"
 

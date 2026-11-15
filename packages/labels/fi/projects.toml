@@ -5,6 +5,7 @@ summary = "Projektit, välitavoitteet ja tehtävät vastuuhenkilöineen, määr�
 
 [labels.fi.model.projects_project]
 name = "Projekti"
+plural = "Projektit"
 description = "Tavoitteellinen työkokonaisuus"
 
 [labels.fi.model.projects_project.field.name]
@@ -58,6 +59,7 @@ description = "Avaa päättynyt projekti uudelleen"
 
 [labels.fi.model.projects_milestone]
 name = "Välitavoite"
+plural = "Välitavoitteet"
 description = "Projektin tarkistuspiste"
 
 [labels.fi.model.projects_milestone.field.project_id]
@@ -95,6 +97,7 @@ description = "Kirjaa, että odottava välitavoite myöhästyi"
 
 [labels.fi.model.projects_task]
 name = "Tehtävä"
+plural = "Tehtävät"
 description = "Projektin sisäinen työyksikkö"
 
 [labels.fi.model.projects_task.field.title]
@@ -163,3 +166,23 @@ description = "Kaikkiin projektin peruuttamattomiin tehtäviin arvioitu aika min
 [labels.fi.model.projects_project.field.progress]
 label = "Edistyminen"
 description = "Valmiiden tehtävien osuus projektin tehtävistä prosentteina; peruutettuja tehtäviä ei lasketa"
+
+[labels.fi.model.projects_milestone.action.reset]
+label = "Palauta"
+description = "Palauta saavutettu välitavoite odottavaksi, esimerkiksi jos se merkittiin vahingossa"
+
+[labels.fi.model.projects_milestone.action.reset_missed]
+label = "Palauta"
+description = "Palauta saavuttamatta jäänyt välitavoite odottavaksi, esimerkiksi jos sen päivämäärä siirtyi"
+
+[labels.fi.model.projects_task.action.complete_now]
+label = "Merkitse valmiiksi"
+description = "Merkitse tekemätön tehtävä valmiiksi aloittamatta sitä ensin"
+
+[labels.fi.model.projects_task.action.reopen]
+label = "Avaa uudelleen"
+description = "Avaa valmis tehtävä uudelleen, takaisin tekemättömäksi"
+
+[labels.fi.model.projects_task.action.reopen_cancelled]
+label = "Avaa uudelleen"
+description = "Avaa peruutettu tehtävä uudelleen, takaisin tekemättömäksi"

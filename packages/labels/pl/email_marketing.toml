@@ -5,6 +5,7 @@ summary = "Listy mailingowe, kontakty ze zgodą i kampanie. Żaden e-mail nie je
 
 [labels.pl.model.email_marketing_list]
 name = "Lista"
+plural = "Listy"
 description = "Lista mailingowa, do której mogą należeć kontakty"
 
 [labels.pl.model.email_marketing_list.field.name]
@@ -21,6 +22,7 @@ description = "Czy odwiedzający mogą sami się zapisać"
 
 [labels.pl.model.email_marketing_contact]
 name = "Kontakt"
+plural = "Kontakty"
 description = "Osoba na liście mailingowej"
 
 [labels.pl.model.email_marketing_contact.field.list_id]
@@ -55,6 +57,7 @@ description = "Skąd pozyskano zgodę, na przykład formularz zapisu na stronie"
 
 [labels.pl.model.email_marketing_campaign]
 name = "Kampania"
+plural = "Kampanie"
 description = "Jedna wysyłka mailingowa do listy"
 
 [labels.pl.model.email_marketing_campaign.field.name]
@@ -132,11 +135,11 @@ label = "Zaplanuj"
 description = "Oznacza kampanię jako zaplanowaną na wyznaczony dzień"
 
 [labels.pl.model.email_marketing_campaign.action.send]
-label = "Wyślij"
+label = "Oznacz jako wysłaną"
 description = "Oznacza zaplanowaną kampanię jako wysłaną; żaden e-mail nie jest wysyłany (tylko kierownik)"
 
 [labels.pl.model.email_marketing_campaign.action.send_now]
-label = "Wyślij teraz"
+label = "Oznacz jako wysłaną"
 description = "Oznacza roboczą kampanię jako wysłaną; żaden e-mail nie jest wysyłany (tylko kierownik)"
 
 [labels.pl.model.email_marketing_campaign.action.unschedule]

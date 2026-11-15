@@ -1,2 +1,32 @@
 # English names and plurals of planning (D52, D95): [labels.en.model.<model>] name = "...", plural = "...".
 # The manifest stays the English source; this file only adds the display names it does not have.
+
+[labels.en.model.planning_role]
+name = "Role"
+plural = "Roles"
+
+[labels.en.model.planning_template]
+name = "Shift template"
+plural = "Shift templates"
+
+[labels.en.model.planning_template.field.start_minute]
+label = "Start"
+
+[labels.en.model.planning_template.field.end_minute]
+label = "End"
+
+[labels.en.model.planning_shift]
+name = "Shift"
+plural = "Shifts"
+
+[labels.en.model.planning_shift.field.work_date]
+label = "Day"
+
+[labels.en.model.planning_shift.field.start_minute]
+label = "Start"
+
+[labels.en.model.planning_shift.field.end_minute]
+label = "End"
+
+[labels.en.model.planning_shift.field.state.options]
+open = "Not published"

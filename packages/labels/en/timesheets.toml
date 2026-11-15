@@ -1,2 +1,12 @@
 # English names and plurals of timesheets (D52, D95): [labels.en.model.<model>] name = "...", plural = "...".
 # The manifest stays the English source; this file only adds the display names it does not have.
+
+[labels.en.model.timesheets_entry]
+name = "Time entry"
+plural = "Time entries"
+
+[labels.en.model.timesheets_entry.field.minutes]
+label = "Time"
+
+[labels.en.model.timesheets_entry.field.worked_on]
+label = "Day"

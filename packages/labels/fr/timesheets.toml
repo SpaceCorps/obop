@@ -5,6 +5,7 @@ summary = "Temps passé sur les tâches de projet, en minutes, avec un indicateu
 
 [labels.fr.model.timesheets_entry]
 name = "Saisie de temps"
+plural = "Saisies de temps"
 description = "Le temps qu’une personne a passé sur une tâche un jour donné"
 
 [labels.fr.model.timesheets_entry.field.task_id]

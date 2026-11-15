@@ -1,6 +1,6 @@
 [module]
 id = "planning"
-version = "0.2.1"
+version = "0.3.0"
 name = "Planning"
 description = "Shifts for employees, with roles and shift templates. A template only records a name, a role and times: no action creates a shift from it. A shift has a day and a start and end in minutes since midnight (0 to 1439; 540 is 09:00). A shift with no employee is an open shift. Workflow: open, published, confirmed by the employee. Needs the Human Resources package."
 author = "SpaceCorps"
@@ -11,7 +11,9 @@ repository = "https://github.com/SpaceCorps/obop"
 keywords = ["planning", "shifts", "rota"]
 categories = ["people"]
 maturity = "beta"
-requires_core = "^0.2"
+requires_core = "^0.2.2"
+changelog = "The app opens on Shifts, shown on a timeline by employee; roles and templates sit under Configuration. Start and end read as times of day and are never added up, and a time outside 00:00 to 23:59 is refused. A shift can be given only to an employee who has not left. The first state reads Not published."
+home = "planning_shift"
 
 [module.dependencies]
 hr = ">=0.2, <1"
@@ -21,6 +23,13 @@ name = "planning_role"
 description = "A role a shift is planned for, for example cashier or electrician"
 read_group = "planning.user"
 write_group = "planning.manager"
+
+  [model.ui]
+  title = "{name}"
+  list = ["name", "note"]
+  order = "name asc"
+  default_view = "list"
+  menu = "configuration"
 
   [[model.field]]
   name = "name"
@@ -39,6 +48,14 @@ name = "planning_template"
 description = "A named shift pattern with a role and start and end times; no action creates shifts from it"
 read_group = "planning.user"
 write_group = "planning.manager"
+
+  [model.ui]
+  title = "{name}"
+  subtitle = "{role_id}"
+  list = ["name", "role_id", "start_minute", "end_minute"]
+  order = "start_minute asc"
+  default_view = "list"
+  menu = "configuration"
 
   [[model.field]]
   name = "name"
@@ -59,6 +76,11 @@ write_group = "planning.manager"
   class = "none"
   kind = "number"
   required = true
+  min = 0
+  max = 1439
+  [model.field.ui]
+  display = "time_of_day"
+  aggregate = "none"
 
   [[model.field]]
   name = "end_minute"
@@ -66,12 +88,42 @@ write_group = "planning.manager"
   class = "none"
   kind = "number"
   required = true
+  min = 0
+  max = 1439
+  [model.field.ui]
+  display = "time_of_day"
+  aggregate = "none"
 
 [[model]]
 name = "planning_shift"
 description = "A slot of work on one day for one role, optionally assigned to an employee"
 read_group = "planning.user"
 write_group = "planning.manager"
+
+  [model.ui]
+  title = "{name} · {employee_id} | {name}"
+  subtitle = "{role_id}"
+  list = ["work_date", "start_minute", "end_minute", "name", "role_id", "employee_id", "state"]
+  card = ["name", "employee_id", "role_id", "work_date", "start_minute", "end_minute"]
+  quick_create = ["name", "work_date", "employee_id"]
+  order = "work_date asc, start_minute asc"
+  default_view = "timeline"
+  menu = "main"
+  menu_order = 1
+  calendar = { start = "work_date", color = "employee_id" }
+  report = { rows = "employee_id", cols = "role_id" }
+
+  [[model.ui.filter]]
+  label = "Open shifts"
+  where = "employee_id = null"
+
+  [[model.ui.filter]]
+  label = "Not published"
+  where = "state = open"
+
+  [[model.ui.filter]]
+  label = "Coming up"
+  where = "work_date >= today"
 
   [[model.field]]
   name = "name"
@@ -93,6 +145,7 @@ write_group = "planning.manager"
   personal_data = true
   kind = "ref"
   to = "hr_employee"
+  ref_filter = "state != offboarded"
 
   [[model.field]]
   name = "work_date"
@@ -100,6 +153,7 @@ write_group = "planning.manager"
   class = "none"
   kind = "date"
   required = true
+  default = "today"
 
   [[model.field]]
   name = "start_minute"
@@ -107,6 +161,11 @@ write_group = "planning.manager"
   class = "none"
   kind = "number"
   required = true
+  min = 0
+  max = 1439
+  [model.field.ui]
+  display = "time_of_day"
+  aggregate = "none"
 
   [[model.field]]
   name = "end_minute"
@@ -114,6 +173,11 @@ write_group = "planning.manager"
   class = "none"
   kind = "number"
   required = true
+  min = 0
+  max = 1439
+  [model.field.ui]
+  display = "time_of_day"
+  aggregate = "none"
 
   [[model.field]]
   name = "note"
@@ -128,6 +192,8 @@ write_group = "planning.manager"
   kind = "select"
   options = ["open", "published", "confirmed"]
   required = true
+  [model.field.ui]
+  tones = { open = "info", published = "warn", confirmed = "ok" }
 
   [[model.action]]
   name = "publish"
@@ -136,6 +202,9 @@ write_group = "planning.manager"
   from = "open"
   to = "published"
   group = "planning.manager"
+  [model.action.ui]
+  primary = true
+  done = "Published"
 
   [[model.action]]
   name = "unpublish"
@@ -151,3 +220,6 @@ write_group = "planning.manager"
   field = "state"
   from = "published"
   to = "confirmed"
+  [model.action.ui]
+  primary = true
+  done = "Confirmed"

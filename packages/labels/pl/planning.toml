@@ -5,6 +5,7 @@ summary = "Zmiany pracowników z rolami i szablonami zmian; zmiany otwarte są p
 
 [labels.pl.model.planning_role]
 name = "Rola"
+plural = "Role"
 description = "Rola, na którą planuje się zmianę, na przykład kasjer lub elektryk"
 
 [labels.pl.model.planning_role.field.name]
@@ -17,6 +18,7 @@ description = "Na czym polega rola"
 
 [labels.pl.model.planning_template]
 name = "Szablon"
+plural = "Szablony"
 description = "Nazwany wzorzec zmiany z rolą oraz godziną rozpoczęcia i zakończenia; żadna akcja nie tworzy z niego zmian"
 
 [labels.pl.model.planning_template.field.name]
@@ -37,6 +39,7 @@ description = "Koniec w minutach od północy (1020 to 17:00)"
 
 [labels.pl.model.planning_shift]
 name = "Zmiana"
+plural = "Zmiany"
 description = "Przedział pracy w jednym dniu dla jednej roli, opcjonalnie przypisany do pracownika"
 
 [labels.pl.model.planning_shift.field.name]
@@ -72,7 +75,7 @@ label = "Status"
 description = "Status zmiany: otwarte, opublikowane, potwierdzone"
 
 [labels.pl.model.planning_shift.field.state.options]
-open = "Otwarte"
+open = "Nieopublikowana"
 published = "Opublikowane"
 confirmed = "Potwierdzone"
 

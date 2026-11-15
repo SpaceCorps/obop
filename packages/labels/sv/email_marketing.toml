@@ -5,6 +5,7 @@ summary = "Utskickslistor, kontakter med samtycke och kampanjer. Ingen e-post sk
 
 [labels.sv.model.email_marketing_list]
 name = "Utskickslista"
+plural = "Utskickslistor"
 description = "En utskickslista som kontakter kan tillhöra"
 
 [labels.sv.model.email_marketing_list.field.name]
@@ -21,6 +22,7 @@ description = "Om besökare kan prenumerera själva"
 
 [labels.sv.model.email_marketing_contact]
 name = "Kontakt"
+plural = "Kontakter"
 description = "En person på en utskickslista"
 
 [labels.sv.model.email_marketing_contact.field.list_id]
@@ -55,6 +57,7 @@ description = "Var samtycket inhämtades, till exempel anmälningsformulär på 
 
 [labels.sv.model.email_marketing_campaign]
 name = "Kampanj"
+plural = "Kampanjer"
 description = "Ett utskick till en lista"
 
 [labels.sv.model.email_marketing_campaign.field.name]
@@ -132,11 +135,11 @@ label = "Schemalägg"
 description = "Markera kampanjen som schemalagd till dess dag"
 
 [labels.sv.model.email_marketing_campaign.action.send]
-label = "Skicka"
+label = "Markera som skickad"
 description = "Markera den schemalagda kampanjen som skickad; ingen e-post skickas (endast chef)"
 
 [labels.sv.model.email_marketing_campaign.action.send_now]
-label = "Skicka nu"
+label = "Markera som skickad"
 description = "Markera en kampanj i utkast som skickad; ingen e-post skickas (endast chef)"
 
 [labels.sv.model.email_marketing_campaign.action.unschedule]

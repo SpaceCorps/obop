@@ -1,2 +1,19 @@
 # English names and plurals of subscriptions (D52, D95): [labels.en.model.<model>] name = "...", plural = "...".
 # The manifest stays the English source; this file only adds the display names it does not have.
+
+[labels.en.model.subscriptions_plan]
+name = "Plan"
+plural = "Plans"
+
+[labels.en.model.subscriptions_subscription]
+name = "Subscription"
+plural = "Subscriptions"
+
+[labels.en.model.subscriptions_subscription.action.cancel_trial]
+label = "Cancel subscription"
+
+[labels.en.model.subscriptions_subscription.action.cancel]
+label = "Cancel subscription"
+
+[labels.en.model.subscriptions_subscription.action.cancel_overdue]
+label = "Cancel subscription"

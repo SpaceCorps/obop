@@ -5,6 +5,7 @@ summary = "Projekty, kamienie milowe i zadania z osobami przypisanymi, terminami
 
 [labels.pl.model.projects_project]
 name = "Projekt"
+plural = "Projekty"
 description = "Zbiór prac prowadzących do określonego celu"
 
 [labels.pl.model.projects_project.field.name]
@@ -58,6 +59,7 @@ description = "Ponownie otwiera zakończony projekt"
 
 [labels.pl.model.projects_milestone]
 name = "Kamień milowy"
+plural = "Kamienie milowe"
 description = "Punkt kontrolny w projekcie"
 
 [labels.pl.model.projects_milestone.field.project_id]
@@ -95,6 +97,7 @@ description = "Rejestruje, że oczekujący kamień milowy nie został osiągnię
 
 [labels.pl.model.projects_task]
 name = "Zadanie"
+plural = "Zadania"
 description = "Jednostka pracy w projekcie"
 
 [labels.pl.model.projects_task.field.title]
@@ -163,3 +166,23 @@ description = "Czas oszacowany na wszystkie niepodlegające anulowaniu zadania p
 [labels.pl.model.projects_project.field.progress]
 label = "Postęp"
 description = "Odsetek zadań projektu, które są wykonane, w procentach; anulowane zadania nie są liczone"
+
+[labels.pl.model.projects_milestone.action.reset]
+label = "Przywróć"
+description = "Przywróć osiągnięty kamień milowy do stanu oczekującego, na przykład gdy oznaczono go przez pomyłkę"
+
+[labels.pl.model.projects_milestone.action.reset_missed]
+label = "Przywróć"
+description = "Przywróć nieosiągnięty kamień milowy do stanu oczekującego, na przykład gdy zmienił się jego termin"
+
+[labels.pl.model.projects_task.action.complete_now]
+label = "Zakończ"
+description = "Oznacz zadanie do zrobienia jako zakończone bez wcześniejszego rozpoczęcia"
+
+[labels.pl.model.projects_task.action.reopen]
+label = "Otwórz ponownie"
+description = "Otwórz ponownie zakończone zadanie, z powrotem do zrobienia"
+
+[labels.pl.model.projects_task.action.reopen_cancelled]
+label = "Otwórz ponownie"
+description = "Otwórz ponownie anulowane zadanie, z powrotem do zrobienia"

@@ -1,2 +1,31 @@
 # English names and plurals of helpdesk (D52, D95): [labels.en.model.<model>] name = "...", plural = "...".
 # The manifest stays the English source; this file only adds the display names it does not have.
+
+[labels.en.model.helpdesk_sla]
+name = "SLA policy"
+plural = "SLA policies"
+
+[labels.en.model.helpdesk_sla.field.first_response_minutes]
+label = "First response within"
+
+[labels.en.model.helpdesk_sla.field.resolution_minutes]
+label = "Resolution within"
+
+[labels.en.model.helpdesk_ticket]
+name = "Ticket"
+plural = "Tickets"
+
+[labels.en.model.helpdesk_ticket.field.requester_name]
+label = "Requester"
+
+[labels.en.model.helpdesk_ticket.field.requester_email]
+label = "Requester email"
+
+[labels.en.model.helpdesk_ticket.field.sla_id]
+label = "SLA policy"
+
+[labels.en.model.helpdesk_ticket.field.first_response_on]
+label = "First response on"
+
+[labels.en.model.helpdesk_ticket.action.close]
+label = "Close ticket"

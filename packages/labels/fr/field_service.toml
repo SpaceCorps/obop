@@ -5,6 +5,7 @@ summary = "Interventions sur site chez des clients, réalisées par un technicie
 
 [labels.fr.model.field_service_job]
 name = "Intervention"
+plural = "Interventions"
 description = "Une intervention sur site pour un client"
 
 [labels.fr.model.field_service_job.field.name]
@@ -118,6 +119,7 @@ description = "Annule une intervention qui n’a pas commencé"
 
 [labels.fr.model.field_service_part]
 name = "Pièce"
+plural = "Pièces"
 description = "Une pièce ou un produit utilisé lors d’une intervention"
 
 [labels.fr.model.field_service_part.field.job_id]
@@ -139,3 +141,6 @@ description = "Prix par unité facturé au client (plus petite unité monétaire
 [labels.fr.model.field_service_part.field.note]
 label = "Note"
 description = "Remarque sur la pièce, par exemple le numéro de série"
+
+[labels.fr.model.field_service_job.action.complete.assert.signed]
+message = "Le client doit d’abord valider cette intervention : indiquez qui a signé et à quelle date"
