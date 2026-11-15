@@ -157,7 +157,17 @@ impl Actor {
         Self {
             id: p.id.strip_suffix("/agent").unwrap_or(&p.id).to_string(),
             admin: p.allows(ADMIN_GROUP),
-            groups: p.groups.iter().filter(|g| p.allows(g)).cloned().collect(),
+            // The groups `allows` grants: those held, and for a scoped principal the groups of its
+            // scopes too, which an administrator holds through `platform.admin` without holding
+            // them by name (an administrator's agent scoped to `purchase.user` may run the
+            // purchase actions and their effects, as the dispatcher already lets it).
+            groups: p
+                .groups
+                .iter()
+                .chain(p.scopes.iter().flatten())
+                .filter(|g| p.allows(g))
+                .cloned()
+                .collect(),
             caller: p.id.clone(),
             agent: p.kind == crate::PrincipalKind::Agent,
         }
@@ -265,6 +275,30 @@ impl Civil {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_administrators_scoped_agent_holds_its_scopes_and_nothing_else() {
+        let p = Principal::agent(
+            "root/agent",
+            &[ADMIN_GROUP],
+            &["purchase.user", "inventory.user"],
+        );
+        let a = Actor::of(&p);
+        assert!(!a.admin);
+        assert!(a.holds("purchase.user") && a.holds("inventory.user"));
+        assert!(!a.holds("purchase.manager"));
+        // A person's agent still gets only the scopes the person holds.
+        let p = Principal::agent(
+            "ann/agent",
+            &["purchase.user"],
+            &["purchase.user", "hr.user"],
+        );
+        let a = Actor::of(&p);
+        assert!(a.holds("purchase.user") && !a.holds("hr.user"));
+        // An unscoped person keeps exactly the groups held.
+        let a = Actor::of(&Principal::user("bo", &["sales.user"]));
+        assert!(a.holds("sales.user") && !a.holds("purchase.user"));
+    }
 
     #[test]
     fn civil_time_is_right_across_leap_days_and_year_ends() {
