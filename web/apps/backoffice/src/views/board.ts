@@ -322,6 +322,15 @@ export function boardLayout(
     out.date = base.date;
     const end = rangeEndOf(fields, fieldIn(fields, base.date));
     if (end && ok(end.name)) out.dateEnd = end.name;
+    // The chip is the end of a range ("Dec 18"): it shows the whole range ("Dec 14 – 18").
+    const start = fields.find(
+      (f) =>
+        (f.kind === "date" || f.kind === "datetime") && rangeEndOf(fields, f)?.name === base.date,
+    );
+    if (!end && start && fields.includes(start)) {
+      out.date = start.name;
+      out.dateEnd = base.date;
+    }
   }
   if (ok(base.avatar)) out.avatar = base.avatar;
   if (ok(base.progress)) out.progress = base.progress;

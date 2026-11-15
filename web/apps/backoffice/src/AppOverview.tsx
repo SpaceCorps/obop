@@ -104,7 +104,10 @@ async function currencyResolver(
 
 /** Money per currency as one line: "€1,200.00 and SEK 4,000.00". */
 function moneyLine(by: Map<string, number>): string | undefined {
-  const parts = [...by].filter(([, n]) => n !== 0).map(([c, n]) => fmt.money(n, c));
+  // Each amount stays on one line: a minus sign and a no-break space never let "SEK" wrap off.
+  const parts = [...by]
+    .filter(([, n]) => n !== 0)
+    .map(([c, n]) => fmt.money(n, c).replace(/^-/, "\u2212").replace(/\s/g, "\u00a0"));
   return parts.length ? fmt.list(parts, "conjunction") : undefined;
 }
 

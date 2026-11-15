@@ -28,8 +28,10 @@ import {
 import { dayInZone } from "../instants.ts";
 import { fieldTitle, fieldTitleByName } from "../labels.ts";
 import { PHONE_QUERY, useMedia } from "../media.ts";
+import { shownNumber } from "../inputs/display.ts";
 import {
   currencyOf,
+  displayOf,
   listColumns,
   stateFieldOf,
   titleOf,
@@ -275,6 +277,12 @@ export function ListView(p: ViewProps) {
   function cellText(f: FieldMeta, r: Row) {
     return plainText(f, r[f.name], d.refText, f.kind === "money" ? currencyFor(r) : undefined);
   }
+  /** A value as a person reads it on a card: minutes as "1 h 30", metres as km. */
+  function readText(f: FieldMeta, r: Row) {
+    const shown =
+      f.kind === "number" || f.kind === "decimal" ? shownNumber(displayOf(f), r[f.name]) : null;
+    return shown ?? cellText(f, r);
+  }
   /** A value as a phone card's second line reads it: dates in the region's words, refs by name. */
   function shortText(f: FieldMeta, r: Row): string {
     const v = r[f.name];
@@ -284,7 +292,7 @@ export function ListView(p: ViewProps) {
     if (f.kind === "datetime") return instantText(v);
     if (f.kind === "money") return fmt.money(v, currencyFor(r));
     if (f.kind === "select") return optionLabel(String(v), f);
-    return cellText(f, r);
+    return readText(f, r);
   }
   async function exportCsv() {
     // Selected rows of this page, else everything the search matches, fetched page by page.
@@ -974,7 +982,7 @@ export function ListView(p: ViewProps) {
                         money={(f) =>
                           f.kind === "money"
                             ? fmt.money(it.row[f.name], currencyFor(it.row))
-                            : cellText(f, it.row)
+                            : readText(f, it.row)
                         }
                         today={today}
                       />

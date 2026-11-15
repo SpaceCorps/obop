@@ -210,7 +210,7 @@ const wordy = (f: FieldMeta) =>
 const KIND_WIDTH: Partial<Record<FieldMeta["kind"], number>> = {
   ref: 180,
   date: 124,
-  datetime: 168,
+  datetime: 196,
   money: 136,
   decimal: 128,
   number: 104,
@@ -262,14 +262,14 @@ export function fitColumns(
     cols = trimColumns(cols, 1, state, measure);
     widths = widthsOf(cols);
   }
-  // Room left over: a first column that is a name takes half (at most 400 px more); the rest goes
+  // Room left over: a first column that is a name takes a third (at most 320 px more); the rest goes
   // to the columns of words (names, subjects, refs) in proportion, else to every column, so a
   // short number ("MO-0018") never gets the room a description needs.
   const extra = Number.isFinite(width) ? Math.floor(width - total()) : 0;
   if (extra > 0 && widths.length) {
     const titleTakes = widths.length > 1 && wordy(cols[0]!);
     const toTitle =
-      widths.length === 1 ? extra : titleTakes ? Math.min(Math.floor(extra / 2), 400) : 0;
+      widths.length === 1 ? extra : titleTakes ? Math.min(Math.floor(extra / 3), 320) : 0;
     const rest = extra - toTitle;
     const takers = cols.map((f, i) => i > 0 && wordy(f));
     const anyTaker = takers.some(Boolean);
