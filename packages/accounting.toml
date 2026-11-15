@@ -1,6 +1,6 @@
 [module]
 id = "accounting"
-version = "0.3.1"
+version = "0.3.2"
 name = "Accounting"
 description = "Chart of accounts, journals, tax rates, journal entries with debit and credit lines, fiscal years and periods, and bank statement lines. Amounts are money fields in minor currency units and tax rates are numbers in basis points (2000 means 20.00 percent). An entry shows its total debit and total credit, and posting is refused unless they are equal; a posted entry gets the next number of a gapless yearly series. Tax amounts are still entered by whoever books the entry. Account and journal codes are unique. Posting an entry and closing a period or fiscal year need a human approval and the stricter accounting.approver group; agents may only propose them."
 author = "SpaceCorps"
@@ -555,6 +555,8 @@ write_group = "accounting.user"
 
   [model.guard]
   children_of = "move_id"
+  # Reconciling a bank line marks the posted entry line it was matched to.
+  mutable_fields = ["reconciled"]
   message = "The lines of a posted, cancelled or reversed entry, or of an entry dated in a closed period, cannot be changed."
 
   [[model.field]]
@@ -729,7 +731,7 @@ write_group = "accounting.user"
 
   [[model.action]]
   name = "reconcile"
-  description = "Reconcile a matched line (manager only)"
+  description = "Reconcile a matched line and mark the entry line it was matched to as reconciled (manager only)"
   field = "state"
   from = "matched"
   to = "reconciled"
@@ -739,6 +741,14 @@ write_group = "accounting.user"
     primary = true
     confirm = "Reconcile this bank transaction? It can no longer be changed."
     done = "Reconciled"
+
+    # The entry line carries the flag that open-item views read. There is no way back from
+    # reconciled yet (`unmatch` starts at matched), so nothing clears the flag.
+    [[model.action.effect]]
+    kind = "update"
+    model = "accounting_move_line"
+    ref = "move_line_id"
+    set = { reconciled = true }
 
   [[model.action]]
   name = "unmatch"

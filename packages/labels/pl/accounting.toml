@@ -326,7 +326,7 @@ description = "Rejestruje, że pozycja odpowiada pozycji operacji wskazanej w mo
 
 [labels.pl.model.accounting_bank_statement_line.action.reconcile]
 label = "Uzgodnij"
-description = "Uzgadnia dopasowaną pozycję (tylko kierownik)"
+description = "Uzgadnia dopasowaną pozycję i oznacza powiązaną pozycję księgowania jako uzgodnioną (tylko kierownik)"
 
 [labels.pl.model.accounting_bank_statement_line.action.unmatch]
 label = "Cofnij dopasowanie"

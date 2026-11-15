@@ -326,7 +326,7 @@ description = "Enregistre que la ligne correspond à la ligne d’écriture indi
 
 [labels.fr.model.accounting_bank_statement_line.action.reconcile]
 label = "Rapprocher"
-description = "Rapproche une ligne associée (responsable uniquement)"
+description = "Rapproche une ligne associée et marque comme rapprochée la ligne d’écriture correspondante (responsable uniquement)"
 
 [labels.fr.model.accounting_bank_statement_line.action.unmatch]
 label = "Dissocier"

@@ -326,7 +326,7 @@ description = "Merkitse, että rivi vastaa kentässä move_line_id annettua kirj
 
 [labels.fi.model.accounting_bank_statement_line.action.reconcile]
 label = "Täsmäytä"
-description = "Täsmäytä kohdistettu rivi (vain esihenkilö)"
+description = "Täsmäytä kohdistettu rivi ja merkitse kohdistettu kirjausrivi täsmätyksi (vain esihenkilö)"
 
 [labels.fi.model.accounting_bank_statement_line.action.unmatch]
 label = "Poista kohdistus"

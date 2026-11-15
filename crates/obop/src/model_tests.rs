@@ -196,6 +196,116 @@ fn an_entry_posts_only_when_balanced_gets_a_gapless_number_and_totals_follow_the
     );
 }
 
+#[test]
+fn reconciling_a_bank_line_marks_the_entry_line_it_was_matched_to_as_reconciled() {
+    let app = app_with(&["accounting"]);
+    let clerk = user("clerk", &["accounting.user"]);
+    let approver = user("chief", &["accounting.user", "accounting.approver"]);
+    let manager = user("boss", &["accounting.user", "accounting.manager"]);
+    let journal = id(&ok(
+        &app,
+        &manager,
+        "accounting_journal.create",
+        json!({"name": "Bank", "code": "BNK", "kind": "bank"}),
+    ));
+    let account = |code: &str, kind: &str| {
+        id(&ok(
+            &app,
+            &manager,
+            "accounting_account.create",
+            json!({"code": code, "name": code, "account_type": kind}),
+        ))
+    };
+    let (bank, receivable) = (
+        account("1930", "asset_cash"),
+        account("1510", "asset_receivable"),
+    );
+    // A posted entry: the customer paid 500 into the bank.
+    let entry = id(&ok(
+        &app,
+        &clerk,
+        "accounting_move.create",
+        json!({"journal_id": journal, "date": "2026-09-15"}),
+    ));
+    for (account_id, debit, credit) in [(&bank, 500, 0), (&receivable, 0, 500)] {
+        ok(
+            &app,
+            &clerk,
+            "accounting_move_line.create",
+            json!({"move_id": entry, "account_id": account_id, "debit": debit, "credit": credit}),
+        );
+    }
+    ok(
+        &app,
+        &approver,
+        "accounting_move.post",
+        json!({"id": entry}),
+    );
+    let lines = list(&app, &clerk, "accounting_move_line");
+    let bank_line = id(lines
+        .iter()
+        .find(|l| l["account_id"] == bank.as_str())
+        .unwrap());
+    let other_line = id(lines
+        .iter()
+        .find(|l| l["account_id"] == receivable.as_str())
+        .unwrap());
+    let reconciled = |line: &str| {
+        get(&app, &clerk, "accounting_move_line", line)["reconciled"].as_bool() == Some(true)
+    };
+    // The bank reports the 500 and the clerk matches it to the bank line of the entry.
+    let statement = id(&ok(
+        &app,
+        &clerk,
+        "accounting_bank_statement_line.create",
+        json!({"journal_id": journal, "date": "2026-09-15", "label": "Customer payment",
+               "amount": 500, "move_line_id": bank_line}),
+    ));
+    ok(
+        &app,
+        &clerk,
+        "accounting_bank_statement_line.match",
+        json!({"id": statement}),
+    );
+    // Matched is not reconciled yet, and only a manager can reconcile.
+    assert!(!reconciled(&bank_line));
+    assert_eq!(
+        run(
+            &app,
+            &clerk,
+            "accounting_bank_statement_line.reconcile",
+            json!({"id": statement})
+        )
+        .unwrap_err(),
+        "forbidden"
+    );
+    assert!(!reconciled(&bank_line));
+    // Reconciling marks the matched entry line, and only that one.
+    ok(
+        &app,
+        &manager,
+        "accounting_bank_statement_line.reconcile",
+        json!({"id": statement}),
+    );
+    assert_eq!(
+        get(&app, &clerk, "accounting_bank_statement_line", &statement)["state"],
+        "reconciled"
+    );
+    assert!(reconciled(&bank_line));
+    assert!(!reconciled(&other_line));
+    // Only the flag may change on a line of a posted entry; its amounts stay frozen.
+    assert!(
+        run(
+            &app,
+            &clerk,
+            "accounting_move_line.update",
+            json!({"id": bank_line, "debit": 999})
+        )
+        .unwrap_err()
+        .contains("immutable_record")
+    );
+}
+
 // ---- inventory and purchase ---------------------------------------------------------------
 
 fn stock_setup(app: &App) -> (String, String, String, String) {

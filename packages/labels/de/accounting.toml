@@ -326,7 +326,7 @@ description = "Festhalten, dass die Zeile der in move_line_id genannten Buchungs
 
 [labels.de.model.accounting_bank_statement_line.action.reconcile]
 label = "Abgleichen"
-description = "Eine zugeordnete Zeile abgleichen (nur Führungskräfte)"
+description = "Eine zugeordnete Zeile abgleichen und die zugeordnete Buchungszeile als abgeglichen markieren (nur Führungskräfte)"
 
 [labels.de.model.accounting_bank_statement_line.action.unmatch]
 label = "Zuordnung aufheben"

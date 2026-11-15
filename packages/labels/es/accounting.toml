@@ -326,7 +326,7 @@ description = "Registrar que la línea corresponde a la línea de asiento indica
 
 [labels.es.model.accounting_bank_statement_line.action.reconcile]
 label = "Conciliar"
-description = "Conciliar una línea cruzada (solo responsables)"
+description = "Conciliar una línea cruzada y marcar como conciliada la línea del asiento asociada (solo responsables)"
 
 [labels.es.model.accounting_bank_statement_line.action.unmatch]
 label = "Desemparejar"

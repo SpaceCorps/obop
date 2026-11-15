@@ -326,7 +326,7 @@ description = "Registrera att raden motsvarar verifikationsraden som anges i mov
 
 [labels.sv.model.accounting_bank_statement_line.action.reconcile]
 label = "Stäm av"
-description = "Stäm av en matchad rad (endast chef)"
+description = "Stäm av en matchad rad och markera den kopplade verifikationsraden som avstämd (endast chef)"
 
 [labels.sv.model.accounting_bank_statement_line.action.unmatch]
 label = "Ta bort matchning"
