@@ -935,7 +935,7 @@
 .list-frame .content {
   max-block-size: 28rem;
 }
-/* On a phone the real list lets the page scroll (views.css); the demo is a frame of fixed height
+/* On a phone the real list lets the page scroll (list.css); the demo is a frame of fixed height
    inside the page, so it scrolls itself. */
 @media (max-width: 40rem) {
   .list-frame .content.view-list {

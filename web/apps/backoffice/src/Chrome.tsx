@@ -23,7 +23,8 @@ import type { ModuleMeta, Settings } from "./api.ts";
 import { appColor } from "./theme.ts";
 import { modulesHref } from "./modules/route.ts";
 import { href } from "./route.ts";
-import { boardHref } from "./dashboards/route.ts";
+import { appHomeOf } from "./extensions.ts";
+import "./registrations.ts";
 import { productDocsVisible } from "./productDocs.ts";
 import { appTitle, modelTitle } from "./labels.ts";
 
@@ -69,11 +70,12 @@ export function buildApps(modules: ModuleMeta[], settings: Settings, isAdmin: bo
   return apps;
 }
 
-/** Where an app opens: its first list, or for Dashboards the overview. */
+/**
+ * Where an app opens: the page its registration names (extensions.ts: the Dashboards overview),
+ * else its first model in the module's declaration order.
+ */
 export function appHref(app: App): string {
-  return app.id === "dashboards" && app.module.models.some((m) => m.name === "dashboards_dashboard")
-    ? boardHref(app.id)
-    : href({ app: app.id, model: app.module.models[0]?.name });
+  return appHomeOf(app) ?? href({ app: app.id, model: app.module.models[0]?.name });
 }
 
 export function AppIcon({

@@ -248,7 +248,7 @@ export function Cartesian({
   onPick,
 }: ChartProps & { type: "bar" | "line" }) {
   // The drawing is scaled to the screen. A phone gets a narrower one, so the 15-unit type of
-  // views.css comes out at 12 to 15 px instead of 7.
+  // charts.css comes out at 12 to 15 px instead of 7.
   const narrow = useMedia(PHONE_QUERY);
   const W = narrow ? 360 : 640;
   const H = narrow ? 300 : 340;

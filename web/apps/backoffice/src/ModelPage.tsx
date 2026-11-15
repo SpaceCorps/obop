@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Button, fmt, inSentence, msg, t } from "@obop/ui";
+import { fmt, inSentence, t } from "@obop/ui";
 import { search, type ModelMeta, type Row } from "./api.ts";
 import { collect } from "./bulk.ts";
 import type { App } from "./Chrome.tsx";
@@ -7,7 +7,6 @@ import { ControlPanel, type ViewDef } from "./ControlPanel.tsx";
 import { useData, useRows } from "./data.tsx";
 import { loadFavorites, readPref, writePref, type Favorite } from "./favorites.ts";
 import { isState, visibleFields } from "./format.ts";
-import { DriveBrowser, takePendingDriveDefaults, useDriveStatus } from "./DriveBrowser.tsx";
 import { ImportDialog } from "./ImportDialog.tsx";
 import { fieldTitle, fieldTitleByName, modelTitle } from "./labels.ts";
 import { serverMessage } from "./serverMessage.ts";
@@ -25,13 +24,17 @@ import type { Go, Route } from "./route.ts";
 import { isWithheldError, onServer, toServer } from "./serverQuery.ts";
 import { EmptyState, Skeleton } from "./ui.tsx";
 import { useRecord, useServerRows } from "./useServer.ts";
-import { CalendarView, dateFields } from "./views/CalendarView.tsx";
-import { GraphView } from "./views/GraphView.tsx";
-import { KanbanView, kanbanField } from "./views/KanbanView.tsx";
-import { ListView } from "./views/ListView.tsx";
-import { PivotView } from "./views/PivotView.tsx";
+import { dateFields } from "./views/CalendarView.tsx";
+import { kanbanField } from "./views/KanbanView.tsx";
+import { VIEW_REGISTRY, viewOf } from "./views/registry.ts";
 import type { ViewProps } from "./views/types.ts";
 import { governedNames, moveRecord } from "./workflow.ts";
+
+/** What a page that wraps ModelPage (a registration of extensions.ts) may do with it. */
+export type ModelPageApi = {
+  /** Open the new record form with some fields filled in. */
+  openNew: (defaults?: Record<string, unknown>) => void;
+};
 
 type Props = {
   app: App;
@@ -42,15 +45,18 @@ type Props = {
   extra?: ReactNode;
   /** Replaces the generic "New" form, for a record an app creates with its own guided flow. */
   onNew?: () => void;
+  /**
+   * Asked once, when the page opens on a new record (`id=new`): the values the form starts with
+   * (a file picked on another page). `null`: none.
+   */
+  takeNewDefaults?: () => Record<string, unknown> | null;
+  /** Drawn after the page and its dialogs: an app's own dialog, which may open the new form. */
+  after?: (page: ModelPageApi) => ReactNode;
 };
 
-const VIEWS: Record<string, ViewDef> = {
-  list: { id: "list", label: msg("List"), icon: "list" },
-  kanban: { id: "kanban", label: msg("Kanban"), icon: "kanban" },
-  calendar: { id: "calendar", label: msg("Calendar"), icon: "calendar" },
-  pivot: { id: "pivot", label: msg("Pivot"), icon: "pivot" },
-  graph: { id: "graph", label: msg("Graph"), icon: "graph" },
-};
+const VIEWS: Record<string, ViewDef> = Object.fromEntries(
+  Object.values(VIEW_REGISTRY).map((v) => [v.id, { id: v.id, label: v.label, icon: v.icon }]),
+);
 
 const PAGE_SIZES = [25, 50, 100, 200];
 
@@ -62,7 +68,16 @@ function storedView(model: string): string {
   }
 }
 
-export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Props) {
+export function ModelPage({
+  app,
+  model,
+  route,
+  go,
+  extra: appExtra,
+  onNew,
+  takeNewDefaults,
+  after,
+}: Props) {
   const d = useData();
   const title = modelTitle(model, app.module.id);
   const state = useMemo(() => decodeState(route.st), [route.st]);
@@ -71,13 +86,9 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
   // import into an empty model turns the empty state into the list, and that mount must not close it.
   const [extraDialog, setExtraDialog] = useState<ReactNode>(null);
   const [importing, setImporting] = useState(false);
-  const [drive, setDrive] = useState(false);
-  // A file imported on the Drive page opens the new record form with its values.
-  const [newDefaults, setNewDefaults] = useState<Record<string, unknown>>(() => {
-    const v =
-      route.id === "new" && model.name === "documents_document" ? takePendingDriveDefaults() : null;
-    return v ? { ...v, kind: "contract", confidentiality: "internal" } : {};
-  });
+  const [newDefaults, setNewDefaults] = useState<Record<string, unknown>>(
+    () => (route.id === "new" ? takeNewDefaults?.() : null) ?? {},
+  );
   const [pageSize, setPageSizeState] = useState(() => {
     const n = readPref<number>("obop-pagesize", 100);
     return PAGE_SIZES.includes(n) ? n : 100;
@@ -221,15 +232,6 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
     put,
   ]);
 
-  // Documents can be brought in from the connected Google Drive.
-  const driveField = model.fields.some((f) => f.name === "attachment" && f.kind === "file")
-    ? `${model.name}.attachment`
-    : "";
-  const { may: mayDrive, canSetUp: canSetUpDrive } = useDriveStatus(
-    d.token,
-    model.name === "documents_document" && !!driveField,
-  );
-
   const open = (id: string) => put({ id });
   const close = useCallback(() => put({ id: "" }), [put]);
   const openNew = (defaults: Record<string, unknown> = {}) => {
@@ -353,6 +355,7 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
   };
 
   const filtering = state.facets.length > 0;
+  const View = viewOf(view).component;
   const kf = view === "kanban" ? kanbanField(fields, state.group[0]) : undefined;
   const loaded = serverMode || aggMode ? srv.loaded : store.loaded;
   const error = serverMode || aggMode ? srv.error : store.error;
@@ -400,19 +403,6 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
                     ))}
                   </select>
                 </label>
-              )}
-              {mayDrive && driveField && (
-                <Button icon="documents" onClick={() => setDrive(true)}>
-                  {t("From Google Drive")}
-                </Button>
-              )}
-              {canSetUpDrive && driveField && (
-                <Button
-                  icon="documents"
-                  onClick={() => go({ app: "connectors", model: "google_drive" })}
-                >
-                  {t("Connect Google Drive")}
-                </Button>
               )}
               {appExtra}
             </>
@@ -476,31 +466,13 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
                   : undefined
               }
             />
-          ) : view === "kanban" ? (
-            <KanbanView {...vp} />
-          ) : view === "pivot" ? (
-            <PivotView {...vp} />
-          ) : view === "graph" ? (
-            <GraphView {...vp} />
-          ) : view === "calendar" ? (
-            <CalendarView {...vp} />
           ) : (
-            <ListView {...vp} />
+            <View {...vp} />
           )}
         </div>
       </section>
       {extraDialog}
-      {drive && (
-        <DriveBrowser
-          token={d.token}
-          field={driveField}
-          onClose={() => setDrive(false)}
-          onPicked={(v) => {
-            setDrive(false);
-            openNew({ ...v, kind: "contract", confidentiality: "internal" });
-          }}
-        />
-      )}
+      {after?.({ openNew })}
       {importing && (
         <ImportDialog model={model} title={title} onClose={() => setImporting(false)} />
       )}

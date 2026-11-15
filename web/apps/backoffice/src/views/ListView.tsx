@@ -61,10 +61,10 @@ export function ListView(p: ViewProps) {
   const [exporting, setExporting] = useState<{ done: number; total: number } | null>(null);
   const cancelExport = useRef(false);
   const grid = useRef<HTMLTableSectionElement>(null);
-  // A phone shows one block per record (views.css): a tap opens it instead of editing in place.
+  // A phone shows one block per record (list.css): a tap opens it instead of editing in place.
   const phone = useMedia(PHONE_QUERY);
   // There the column heads are a strip of sort buttons that scrolls sideways. As on the tab strips,
-  // each end that hides a button is marked (data-more) and views.css fades it, so a cut-off head
+  // each end that hides a button is marked (data-more) and list.css fades it, so a cut-off head
   // reads as more to scroll to. scrollLeft is negative in right-to-left, hence Math.abs.
   const sortStrip = useRef<HTMLTableRowElement>(null);
   const colKey = cols.map((f) => f.name).join(" ");

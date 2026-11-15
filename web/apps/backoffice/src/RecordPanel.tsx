@@ -1,27 +1,23 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { describeFor, inSentence, rich, t, useFocusTrap } from "@obop/ui";
-import { aggregate, type FieldMeta, type ModelMeta, type Row } from "./api.ts";
+// The record panel: the state of one record's form and the commands it runs. What it draws is in
+// RecordHeader.tsx (title, status, actions), RelatedChips.tsx and FormBody.tsx (F2 of the UI plan);
+// what an app adds to it is registered in extensions.ts.
+import { useEffect, useRef, useState } from "react";
+import { inSentence, t, useFocusTrap } from "@obop/ui";
+import type { FieldMeta, ModelMeta, Row } from "./api.ts";
 import { useData } from "./data.tsx";
 import { fromEdit, toEdit, validate, type Edit } from "./edit.ts";
-import { FieldInput, RefLabel } from "./fields.tsx";
-import { isMasked, isState, optionLabel, rowCurrency, shownLabel } from "./format.ts";
-import { actionTitle, appTitle, fieldTitle, fieldTitleByName, modelTitle } from "./labels.ts";
+import { recordExtensionOf } from "./extensions.ts";
+import { FormBody } from "./FormBody.tsx";
+import { isMasked, isState, optionLabel, rowCurrency } from "./format.ts";
+import { actionTitle, fieldTitle } from "./labels.ts";
 import { serverMessage } from "./serverMessage.ts";
 import { DeleteDialog } from "./DeleteDialog.tsx";
-import { SignByLinkNote, SignLinkAction, SignLinks } from "./SignLinks.tsx";
-import { REQUEST_MODEL } from "./signLinks.ts";
-import { encodeState } from "./query.ts";
 import { PHONE_QUERY, SHEET_QUERY, useMedia, useScrollLock } from "./media.ts";
+import { RecordHeader } from "./RecordHeader.tsx";
+import { RelatedChips } from "./RelatedChips.tsx";
 import { nav } from "./route.ts";
-import { Badge, Button, Icon, IconButton, Kbd, Menu, Tooltip } from "./ui.tsx";
-import {
-  canMove,
-  hiddenForRecord,
-  initialOption,
-  isGoverned,
-  moveRecord,
-  notForRecord,
-} from "./workflow.ts";
+import "./registrations.ts";
+import { hiddenForRecord, initialOption, isGoverned, moveRecord } from "./workflow.ts";
 
 type Props = {
   model: ModelMeta;
@@ -36,67 +32,6 @@ type Props = {
 
 const without = <V,>(m: Record<string, V>, name: string): Record<string, V> =>
   Object.fromEntries(Object.entries(m).filter(([k]) => k !== name));
-
-/** The sentence of a failed check, or nothing when the value is fine. */
-const errorOf = (r: { value: unknown } | { error: string }): string | undefined =>
-  "error" in r ? r.error : undefined;
-
-/**
- * A smart button: the related records of one model, with their number from the server (D4), so
- * a related model with thousands of records is never loaded just to be counted.
- */
-function SmartLink({
-  rel: r,
-  id,
-}: {
-  rel: { model: string; field: string; title: string };
-  id: string;
-}) {
-  const d = useData();
-  const n = useCount(d.token, r.model, r.field, id, d.mutations);
-  const st = encodeState({ facets: [{ op: "is", f: r.field, v: [id] }], group: [] });
-  const to = d.linkTo(r.model, { st });
-  const text = `${r.title} (${n === null ? "…" : n})`;
-  return to ? (
-    <a
-      className="smartbtn"
-      href={to}
-      title={t("{model} linked through {field}", {
-        model: r.title,
-        field: fieldTitleByName(r.field, d.models.get(r.model)?.model.fields),
-      })}
-    >
-      {text}
-    </a>
-  ) : (
-    <span className="smartbtn disabled">{text}</span>
-  );
-}
-
-/** How many records of `model` point at `id` through `field`; `null` until known. */
-function useCount(
-  token: string,
-  model: string,
-  field: string,
-  id: string,
-  mutations: number,
-): number | null {
-  const [n, setN] = useState<{ key: string; n: number } | null>(null);
-  const key = `${model}.${field}=${id}`;
-  useEffect(() => {
-    let live = true;
-    void aggregate(token, model, {
-      filter: [{ field, op: "eq", value: id }],
-      measures: [{ op: "count" }],
-    }).then((r) => {
-      if (live) setN({ key, n: "error" in r ? 0 : r.total });
-    });
-    return () => {
-      live = false;
-    };
-  }, [token, model, field, id, key, mutations]);
-  return n && n.key === key ? n.n : null;
-}
 
 /** The record opens in a floating side panel, so the list stays in view (docs/spec/ux.md 4.1). */
 export function RecordPanel({
@@ -132,15 +67,17 @@ export function RecordPanel({
   useScrollLock(sheet);
   const statusField = fields.find(isState);
   const canEdit = creating ? model.can_create : model.can_update;
+  // What the model's registrations add (extensions.ts): the Sign app's signing links.
+  const ext = recordExtensionOf(model.name);
   // An action that is not for this record at all has no button (a Document request is not marked
   // signed by hand); `notForRecord` greys out the ones that are only wrong for now.
   const shownActions = row
     ? model.actions.filter((a) => !hiddenForRecord(model, a, row))
     : model.actions;
   // On a phone Delete sits at the end of the form instead, so it no longer holds the action row
-  // open, except on a request, where the row also carries the signing-link button.
+  // open, except where a registration adds a button to the row (the signing link of a request).
   const actionRow =
-    model.actions.length > 0 || (model.can_delete && (!phone || model.name === REQUEST_MODEL));
+    model.actions.length > 0 || (model.can_delete && (!phone || ext.actions.length > 0));
 
   // A governed field (D48) starts at its first option and then moves only through actions.
   const governed = (f: FieldMeta) => isGoverned(model, f);
@@ -203,7 +140,8 @@ export function RecordPanel({
     else setError({ raw: message });
   }
 
-  async function save() {
+  /** Save or create; the id of the saved record, or null when nothing was saved. */
+  async function save(): Promise<string | null> {
     setError(null);
     const editable = fields.filter((f) => !masked(f));
     const errs = validate(
@@ -216,7 +154,10 @@ export function RecordPanel({
     );
     setInvalid(Object.fromEntries(Object.keys(errs).map((name) => [name, true as const])));
     setRefused({});
-    if (Object.keys(errs).length) return d.notify(t("Fix the highlighted fields first"), "error");
+    if (Object.keys(errs).length) {
+      d.notify(t("Fix the highlighted fields first"), "error");
+      return null;
+    }
     const body: Record<string, unknown> = {};
     for (const f of editable) {
       const r = fromEdit(f, value(f), currency);
@@ -238,7 +179,9 @@ export function RecordPanel({
       d.notify(creating ? t("{model} created", { model: title }) : t("Saved"));
       setDraft({});
       dirtyRef.current = false;
-      onSaved(String((r.value as Row).id ?? row?.id));
+      const id = String((r.value as Row).id ?? row?.id);
+      onSaved(id);
+      return id;
     } else if (r.kind === "approval") {
       d.notify(
         t(
@@ -250,6 +193,7 @@ export function RecordPanel({
         "info",
       );
     } else failure(r.message);
+    return null;
   }
 
   async function setStatus(s: string) {
@@ -305,26 +249,25 @@ export function RecordPanel({
     }
   }
 
-  const related = useMemo(() => {
-    const out: { model: string; module: string; field: string; title: string; app: string }[] = [];
-    for (const [name, info] of d.models)
-      if (name !== model.name)
-        for (const f of info.model.fields)
-          if (f.kind === "ref" && f.to === model.name)
-            out.push({
-              model: name,
-              module: info.module.id,
-              field: f.name,
-              title: modelTitle(info.model, info.module.id),
-              app: appTitle(info.module),
-            });
-    // Two apps can both have an "Order": say which one.
-    const models = new Map<string, Set<string>>();
-    for (const r of out) models.set(r.title, (models.get(r.title) ?? new Set()).add(r.model));
-    return out.map((r) =>
-      (models.get(r.title)?.size ?? 0) > 1 ? { ...r, title: `${r.app}: ${r.title}` } : r,
-    );
-  }, [d.models, model.name, d.lang]);
+  async function moveField(f: FieldMeta, to: string) {
+    if (!row) return;
+    setBusy(true);
+    setError(null);
+    const out = await moveRecord(d.run, model, f, row, to, title);
+    setBusy(false);
+    if (out.kind === "ok")
+      d.notify(
+        t("{field}: {values}", {
+          field: fieldTitle(f),
+          values: optionLabel(to, f),
+        }),
+      );
+    else if (out.kind === "approval") d.notify(out.message, "info");
+    else {
+      setError({ raw: out.raw });
+      d.notify(out.message, "error");
+    }
+  }
 
   return (
     <>
@@ -337,370 +280,67 @@ export function RecordPanel({
         ref={panel}
         tabIndex={-1}
       >
-        <header>
-          {phone && (
-            <IconButton
-              icon="chevron-left"
-              label={t("Back to list")}
-              tooltip={false}
-              className="back"
-              onClick={onClose}
-            />
-          )}
-          <div>
-            <h2>
-              {creating
-                ? t("New {model}", { model: inSentence(title) })
-                : d.recordLabel(model.name, row)}
-            </h2>
-            {!creating && <span className="hint">{title}</span>}
-          </div>
-          {!phone && <IconButton icon="close" label={t("Close record")} onClick={onClose} />}
-        </header>
-        {statusField && (
-          <ol className="statusbar" aria-label={fieldTitle(statusField)}>
-            {statusField.options?.map((s, idx, all) => {
-              const on = String(value(statusField)) === s;
-              const current = all.indexOf(String(value(statusField)));
-              const gov = governed(statusField);
-              const cls = on ? "on" : idx < current ? "done" : "";
-              if (!gov) {
-                const click = creating || model.can_update;
-                return (
-                  <li key={s}>
-                    <button
-                      className={cls}
-                      aria-current={on ? "step" : undefined}
-                      disabled={!click || busy}
-                      onClick={() =>
-                        creating ? setDraft({ ...draft, [statusField.name]: s }) : void setStatus(s)
-                      }
-                    >
-                      {optionLabel(s, statusField)}
-                    </button>
-                  </li>
-                );
-              }
-              // Governed: a step is a move, enabled only when an action the person may run leads there.
-              const mv = creating
-                ? {
-                    allowed: false,
-                    current: on,
-                    needsApproval: false,
-                    reason: t("A new {noun} starts as {state}; it moves on through actions", {
-                      noun: inSentence(title),
-                      state: optionLabel(initialOption(statusField), statusField),
-                    }),
-                  }
-                : canMove(model, statusField, row[statusField.name] as string, s, title, row);
-              const blocked = !mv.allowed;
-              const text = `${optionLabel(s, statusField)}${mv.allowed && mv.needsApproval ? " *" : ""}`;
-              const btn = (
-                <button
-                  className={`${cls}${blocked && !on ? " blocked" : ""}`}
-                  aria-current={on ? "step" : undefined}
-                  aria-disabled={(blocked && !on) || busy || undefined}
-                  data-needs-approval={mv.needsApproval || undefined}
-                  title={
-                    mv.allowed && mv.needsApproval
-                      ? t("Needs a human's approval when an agent does it")
-                      : undefined
-                  }
-                  onClick={() => {
-                    if (mv.allowed && !busy) void setStatus(s);
-                  }}
-                >
-                  {text}
-                </button>
-              );
-              return (
-                <li key={s}>
-                  {mv.reason && !on ? (
-                    <Tooltip
-                      label={mv.reason}
-                      side="top"
-                      align={idx === 0 ? "start" : idx === all.length - 1 ? "end" : "center"}
-                    >
-                      {btn}
-                    </Tooltip>
-                  ) : (
-                    btn
-                  )}
-                </li>
-              );
-            })}
-          </ol>
-        )}
-        {!creating && related.length > 0 && (
-          <div className="smart" role="group" aria-label={t("Related records")}>
-            {related.map((r) => (
-              <SmartLink key={`${r.model}.${r.field}`} rel={r} id={row.id} />
-            ))}
-          </div>
-        )}
-        {!creating && actionRow && (
-          <div className="actionrow">
-            {shownActions.map((a, ai) => {
-              const f = a.field ? fields.find((x) => x.name === a.field) : undefined;
-              const at = f ? String(row[f.name] ?? "") : "";
-              const why =
-                f && a.to && at === a.to
-                  ? t("Already {state}", { state: optionLabel(a.to, f) })
-                  : f && a.from && at !== a.from
-                    ? t("Only available when {field} is {state}", {
-                        field: fieldTitle(f),
-                        state: optionLabel(a.from, f),
-                      })
-                    : notForRecord(model, a, row);
-              const btn = (
-                <Button
-                  key={a.id}
-                  title={
-                    why
-                      ? undefined
-                      : `${describeFor(a)}${a.needs_approval ? ` ${t("(needs a human's approval when an agent runs it)")}` : ""}`
-                  }
-                  aria-disabled={why || busy ? true : undefined}
-                  onClick={() => {
-                    if (!why && !busy) void act(a.id, a.needs_approval);
-                  }}
-                >
-                  {actionTitle(a)}
-                  {a.needs_approval ? " *" : ""}
-                </Button>
-              );
-              return why ? (
-                <Tooltip
-                  key={a.id}
-                  label={why}
-                  side="top"
-                  align={ai === 0 ? "start" : ai === shownActions.length - 1 ? "end" : "center"}
-                >
-                  {btn}
-                </Tooltip>
-              ) : (
-                btn
-              );
-            })}
-            {model.name === REQUEST_MODEL && (
-              <SignLinkAction row={row} fields={fields} disabled={busy} />
-            )}
-            {model.can_delete && !phone && (
-              <Button
-                variant="ghost"
-                className="danger-text"
-                icon="trash"
-                disabled={busy}
-                onClick={() => setDeleting(true)}
-              >
-                {t("Delete")}
-              </Button>
-            )}
-          </div>
-        )}
-        {!creating && model.name === REQUEST_MODEL && <SignByLinkNote row={row} />}
-        {!creating && model.name === REQUEST_MODEL && <SignLinks request={row} />}
-        <form
-          className="fields"
-          noValidate
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (dirty || creating) void save();
+        <RecordHeader
+          model={model}
+          fields={fields}
+          row={row}
+          title={title}
+          label={row ? d.recordLabel(model.name, row) : ""}
+          phone={phone}
+          busy={busy}
+          statusField={statusField}
+          value={value}
+          governed={governed}
+          pickStatus={(s) => {
+            if (statusField) setDraft({ ...draft, [statusField.name]: s });
           }}
-        >
-          {fields
-            // A computed value or a number does not exist before the record is saved.
-            .filter((f) => f !== statusField && !(creating && (f.computed || f.sequence)))
-            .map((f) => {
-              const isMasked_ = masked(f);
-              const fid = `f-${model.name}-${f.name}`;
-              const err = invalid[f.name]
-                ? errorOf(fromEdit(f, value(f), currency, !creating && !changed(f)))
-                : refused[f.name] !== undefined
-                  ? serverMessage(refused[f.name]!)
-                  : undefined;
-              return (
-                <div key={f.name} className={`field${f.kind === "bool" ? " inline" : ""}`}>
-                  <label className="flabel" htmlFor={fid}>
-                    {fieldTitle(f)}
-                    {f.required && (
-                      <span className="req" title={t("Required")} aria-hidden="true">
-                        *
-                      </span>
-                    )}
-                    {f.personal_data && (
-                      <span
-                        className="shield"
-                        title={t("Personal data ({class}). Agents see it masked.", {
-                          class: f.class,
-                        })}
-                        role="img"
-                        aria-label={t("Personal data, {class}", { class: f.class })}
-                      >
-                        <Icon name="shield" size={13} />
-                      </span>
-                    )}
-                    {f.class === "financial" && <span className="chip">{t("financial")}</span>}
-                    {f.computed && (
-                      <span
-                        className="chip"
-                        title={t("Calculated by the server; it cannot be edited")}
-                      >
-                        {t("calculated")}
-                      </span>
-                    )}
-                    {f.sequence && (
-                      <span
-                        className="chip"
-                        title={t("A number the server assigns; it cannot be edited")}
-                      >
-                        {t("numbered")}
-                      </span>
-                    )}
-                  </label>
-                  {isMasked_ ? (
-                    <div className="maskedfield">
-                      <span className="masked" id={fid}>
-                        {String(row?.[f.name])}
-                      </span>
-                      <span className="hint">{t("Masked for this session")}</span>
-                      {canEdit && (
-                        <button
-                          type="button"
-                          className="linkbtn"
-                          onClick={() => setDraft({ ...draft, [f.name]: "" })}
-                        >
-                          {t("Replace")}
-                        </button>
-                      )}
-                    </div>
-                  ) : governed(f) ? (
-                    <GovernedValue
-                      model={model}
-                      field={f}
-                      row={row}
-                      title={title}
-                      id={fid}
-                      busy={busy}
-                      onMove={async (to) => {
-                        if (!row) return;
-                        setBusy(true);
-                        setError(null);
-                        const out = await moveRecord(d.run, model, f, row, to, title);
-                        setBusy(false);
-                        if (out.kind === "ok")
-                          d.notify(
-                            t("{field}: {values}", {
-                              field: fieldTitle(f),
-                              values: optionLabel(to, f),
-                            }),
-                          );
-                        else if (out.kind === "approval") d.notify(out.message, "info");
-                        else {
-                          setError({ raw: out.raw });
-                          d.notify(out.message, "error");
-                        }
-                      }}
-                    />
-                  ) : (
-                    <FieldInput
-                      field={f}
-                      id={fid}
-                      value={value(f)}
-                      readOnly={!canEdit || !!f.computed || !!f.sequence}
-                      shown={row ? shownLabel(f, row[f.name], row) : undefined}
-                      altHint={(() => {
-                        const alt = model.fields.find((x) => x.name === `${f.name}_alt`);
-                        return alt
-                          ? { title: fieldTitle(alt), empty: !String(value(alt)).trim() }
-                          : undefined;
-                      })()}
-                      currency={currency}
-                      invalid={!!err}
-                      describedBy={err ? `${fid}-err` : undefined}
-                      unchanged={!creating && !changed(f)}
-                      onChange={(v) => {
-                        setDraft({ ...draft, [f.name]: v });
-                        if (err) clearField(f.name);
-                      }}
-                    />
-                  )}
-                  {f.kind === "ref" &&
-                    !isMasked_ &&
-                    String(value(f)) &&
-                    d.linkTo(f.to ?? "", { id: String(value(f)) }) && (
-                      <a
-                        className="reflink small"
-                        href={d.linkTo(f.to ?? "", { id: String(value(f)) })!}
-                      >
-                        {rich("Open {name}", {
-                          name: <RefLabel field={f} id={String(value(f))} link={false} />,
-                        })}
-                      </a>
-                    )}
-                  {err && (
-                    <p id={`${fid}-err`} role="alert" className="error">
-                      {err}
-                    </p>
-                  )}
-                </div>
-              );
-            })}
-          {withheld.length > 0 && (
-            <p className="hint withheld">
-              <Icon name="shield" size={13} />{" "}
-              {t("Withheld from you: {fields}", {
-                fields: withheld
-                  .map((w) => fieldTitleByName(w.split(".")[1] ?? w, fields))
-                  .join(", "),
-              })}
-            </p>
-          )}
-          {error && (
-            <p role="alert" className="error banner">
-              {serverMessage(error.raw)}
-            </p>
-          )}
-          {/* On a phone Delete waits at the end of the form, away from the status pills. */}
-          {!creating && phone && model.can_delete && (
-            <Button
-              variant="ghost"
-              className="danger-text record-delete"
-              icon="trash"
-              disabled={busy}
-              onClick={() => setDeleting(true)}
-            >
-              {t("Delete")}
-            </Button>
-          )}
-          <footer className="formbar">
-            <Button
-              type="submit"
-              variant="primary"
-              loading={busy}
-              disabled={(!dirty && !creating) || !canEdit}
-            >
-              {creating ? t("Create") : t("Save")}
-            </Button>
-            <Button
-              onClick={() => {
-                if (dirty) {
-                  setDraft({});
-                  setInvalid({});
-                  setRefused({});
-                  setError(null);
-                } else onClose();
-              }}
-            >
-              {dirty ? t("Discard") : t("Close")}
-            </Button>
-            {!canEdit && <span className="hint">{t("Read only for you")}</span>}
-            <span className="grow" />
-            <span className="hint kbd-hint">
-              {rich("<kbd>⌘S</kbd> save <kbd>Esc</kbd> close", {}, { kbd: (c) => <Kbd>{c}</Kbd> })}
-            </span>
-          </footer>
-        </form>
+          setStatus={(s) => void setStatus(s)}
+          act={(id, needsApproval) => void act(id, needsApproval)}
+          actionRow={actionRow}
+          shownActions={shownActions}
+          extensions={ext}
+          onDelete={() => setDeleting(true)}
+          onClose={onClose}
+          between={!creating && <RelatedChips model={model} id={row.id} />}
+        />
+        {!creating &&
+          ext.panels.map((Panel, i) => (
+            <Panel key={i} model={model} fields={fields} row={row} busy={busy} />
+          ))}
+        <FormBody
+          model={model}
+          fields={fields}
+          row={row}
+          title={title}
+          canEdit={canEdit}
+          phone={phone}
+          busy={busy}
+          dirty={dirty}
+          statusField={statusField}
+          currency={currency}
+          withheld={withheld}
+          error={error}
+          invalid={invalid}
+          refused={refused}
+          value={value}
+          masked={masked}
+          changed={changed}
+          governed={governed}
+          onEdit={(name, v) => setDraft({ ...draft, [name]: v })}
+          clearField={clearField}
+          onMove={(f, to) => void moveField(f, to)}
+          onSubmit={() => void save()}
+          onDiscard={() => {
+            if (dirty) {
+              setDraft({});
+              setInvalid({});
+              setRefused({});
+              setError(null);
+            } else onClose();
+          }}
+          onDelete={() => setDeleting(true)}
+          save={save}
+        />
         {deleting && row && (
           <DeleteDialog
             model={model}
@@ -712,48 +352,5 @@ export function RecordPanel({
         )}
       </aside>
     </>
-  );
-}
-
-/** A governed field on the form: its value as a badge, and the moves the person may make. */
-function GovernedValue(p: {
-  model: ModelMeta;
-  field: FieldMeta;
-  row: Row | null;
-  title: string;
-  id: string;
-  busy: boolean;
-  onMove: (to: string) => void;
-}) {
-  const { model, field: f, row } = p;
-  const current = row ? String(row[f.name] ?? "") : initialOption(f);
-  return (
-    <div className="governed" id={p.id}>
-      {current ? <Badge field={f} value={current} /> : <span className="dim">—</span>}
-      {row ? (
-        <Menu
-          ariaLabel={t("Move {field}", { field: fieldTitle(f) })}
-          triggerClassName="btn small"
-          trigger={<>{t("Move to…")}</>}
-          items={(f.options ?? [])
-            .filter((o) => o !== current)
-            .map((o) => {
-              const mv = canMove(model, f, current, o, p.title, row ?? undefined);
-              return {
-                label: `${optionLabel(o, f)}${mv.needsApproval ? " *" : ""}`,
-                disabled: p.busy || !mv.allowed,
-                description: mv.reason || undefined,
-                onSelect: () => p.onMove(o),
-              };
-            })}
-        />
-      ) : (
-        <span className="hint">
-          {t("Starts as {state}; it moves on through actions.", {
-            state: optionLabel(initialOption(f), f),
-          })}
-        </span>
-      )}
-    </div>
   );
 }

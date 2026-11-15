@@ -9,11 +9,9 @@ import {
   type Settings,
 } from "./api.ts";
 import { AppIcon, Launcher, Palette, TopBar, appBlurb, appHref, buildApps } from "./Chrome.tsx";
-import { DriveLibrary, setPendingDriveDefaults, useDriveStatus } from "./DriveBrowser.tsx";
-import { ConnectorsApp, ConnectorsNav } from "./connectors/ConnectorsApp.tsx";
-import { BOARD, boardHref } from "./dashboards/route.ts";
 import { DataProvider, type Tone } from "./data.tsx";
 import { ErrorBoundary, OfflineBanner, OfflineNotice } from "./ErrorBoundary.tsx";
+import { modelPageOf, useAppPages, type NavLink } from "./extensions.ts";
 import { modelTitle } from "./labels.ts";
 import { ModelPage } from "./ModelPage.tsx";
 import { parseModulesRoute } from "./modules/route.ts";
@@ -24,9 +22,10 @@ import {
   setProductDocsHidden,
   useProductDocsVisible,
 } from "./productDocs.ts";
-import { href, nav, useRoute } from "./route.ts";
+import { href, isOverview, nav, useRoute } from "./route.ts";
 import { EnrolmentGate } from "./Security.tsx";
 import { PasswordGate } from "./SecurityAccount.tsx";
+import "./registrations.ts";
 import { SignIn } from "./SignIn.tsx";
 import {
   ConfirmDialog,
@@ -41,11 +40,9 @@ import { applyTheme, resolveTheme } from "./theme.ts";
 
 // The big screens load on demand, so the first paint is small and a route shows a skeleton while its
 // code arrives.
-/** The route name of the Google Drive page inside the Documents app. */
-const DRIVE = "drive";
 const Customize = lazy(() => import("./Customize.tsx").then((m) => ({ default: m.Customize })));
-const DashboardsApp = lazy(() =>
-  import("./dashboards/DashboardsApp.tsx").then((m) => ({ default: m.DashboardsApp })),
+const AppOverview = lazy(() =>
+  import("./AppOverview.tsx").then((m) => ({ default: m.AppOverview })),
 );
 
 /** What every route shows while it loads. */
@@ -226,21 +223,13 @@ export function App() {
   // Everyone may set their own theme and read the brand book; the rest of Customize is for admins.
   const personalCustomize =
     route.app === "customize" && !isAdmin && isPersonalTab(route.tab || route.model, docsVisible);
-  const hasBoards = !!app?.module.models.some((m) => m.name === "dashboards_dashboard");
-  const onBoard =
-    app?.id === "dashboards" && hasBoards && (route.model === "" || route.model === BOARD);
-  const driveField =
-    app?.id === "documents" &&
-    app.module.models.some(
-      (m) =>
-        m.name === "documents_document" &&
-        m.fields.some((f) => f.name === "attachment" && f.kind === "file"),
-    )
-      ? "documents_document.attachment"
-      : "";
-  const { may: mayDrive } = useDriveStatus(token, !!driveField && ready);
-  const onDrive = !!driveField && mayDrive && route.model === DRIVE;
+  // What the open app adds to the shell: sidebar entries and pages of its own (extensions.ts).
+  const ext = useAppPages(
+    app && app.id !== "customize" ? { app, route, go, token, email, ready } : null,
+  );
+  const extPage = ext.page ?? null;
   const model = app?.module.models.find((m) => m.name === route.model) ?? app?.module.models[0];
+  const Page = (model && modelPageOf(model.name)) ?? ModelPage;
 
   const linkFor = useCallback(
     (name: string, opts?: { id?: string; st?: string }) => {
@@ -374,19 +363,11 @@ export function App() {
                 <AppIcon app={app} size={32} />
                 <strong>{app.name}</strong>
               </div>
-              {app.id === "connectors" ? (
-                <ConnectorsNav app={app} route={route} />
-              ) : (
+              {ext.nav ?? (
                 <>
-                  {hasBoards && app.id === "dashboards" && (
-                    <a
-                      href={boardHref(app.id)}
-                      aria-current={onBoard ? "page" : undefined}
-                      title={t("Tiles drawn from your dashboards")}
-                    >
-                      {t("Overview")}
-                    </a>
-                  )}
+                  {ext.navBefore?.map((l) => (
+                    <NavEntry key={l.key} link={l} />
+                  ))}
                   <span className="overline side-label" aria-hidden="true">
                     {t("Records")}
                   </span>
@@ -394,23 +375,15 @@ export function App() {
                     <a
                       key={m.name}
                       href={href({ app: app.id, model: m.name })}
-                      aria-current={
-                        !onBoard && !onDrive && model?.name === m.name ? "page" : undefined
-                      }
+                      aria-current={!extPage && model?.name === m.name ? "page" : undefined}
                       title={describeFor(m)}
                     >
                       {modelTitle(m, app.module.id)}
                     </a>
                   ))}
-                  {driveField && mayDrive && (
-                    <a
-                      href={href({ app: app.id, model: DRIVE })}
-                      aria-current={onDrive ? "page" : undefined}
-                      title={t("The files and folders of the Drive connected to this instance.")}
-                    >
-                      {t("Google Drive")}
-                    </a>
-                  )}
+                  {ext.navAfter?.map((l) => (
+                    <NavEntry key={l.key} link={l} />
+                  ))}
                 </>
               )}
             </nav>
@@ -456,21 +429,12 @@ export function App() {
                   onModulesChanged={() => void refresh()}
                   notify={notify}
                 />
-              ) : app?.id === "connectors" ? (
-                <ConnectorsApp app={app} route={route} go={go} />
-              ) : onDrive ? (
-                <DriveLibrary
-                  token={token}
-                  field={driveField}
-                  onPicked={(v) => {
-                    setPendingDriveDefaults(v);
-                    go({ app: "documents", model: "documents_document", id: "new" });
-                  }}
-                />
-              ) : onBoard && app ? (
-                <DashboardsApp app={app} route={route} go={go} owner={email} />
+              ) : extPage ? (
+                extPage
+              ) : app && isOverview(route) ? (
+                <AppOverview app={app} route={route} go={go} />
               ) : app && model ? (
-                <ModelPage
+                <Page
                   key={model.name}
                   app={app}
                   model={model}
@@ -492,6 +456,15 @@ export function App() {
         <ToastRegion items={toasts} onDismiss={dismiss} />
       </div>
     </DataProvider>
+  );
+}
+
+/** A sidebar entry an app adds (extensions.ts). */
+function NavEntry({ link }: { link: NavLink }) {
+  return (
+    <a href={link.href} aria-current={link.current ? "page" : undefined} title={link.title}>
+      {link.label}
+    </a>
   );
 }
 

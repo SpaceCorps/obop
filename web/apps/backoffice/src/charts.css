@@ -1,0 +1,214 @@
+/* ---------- Pivot and graph ---------- */
+.viewbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.85rem 1.25rem;
+}
+.pivot-table {
+  inline-size: auto;
+  min-inline-size: min(40rem, calc(100% - 2.5rem));
+  margin: 0 1.25rem 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  /* clip rounds the corners without making the table a scroll container, so the row labels below
+     stick to the edge of the scrolling .tablewrap instead (hidden is the fallback). */
+  overflow: hidden;
+  overflow: clip;
+}
+.pivot-table th,
+.pivot-table td {
+  padding: 0.4rem 0.9rem;
+  white-space: nowrap;
+}
+/* The row labels stay in view while wide columns scroll sideways. */
+.pivot-table :is(thead th:first-child, tbody th, tfoot th) {
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 1;
+}
+/* Opaque, so the scrolled cells pass under it; the row hover still reaches it. */
+.pivot-table tbody th {
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+}
+.pivot-table tbody tr:hover th {
+  background: var(--surface-2);
+}
+.pivot-table .total {
+  background: var(--accent-soft);
+  font-weight: var(--weight-semibold);
+}
+.pivot-table tfoot th,
+.pivot-table tfoot td {
+  border-block-start: 2px solid var(--border);
+  background: var(--surface-2);
+  font-weight: var(--weight-semibold);
+}
+.cellbtn {
+  padding: 0.15rem 0.4rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: inherit;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-weight: inherit;
+  cursor: pointer;
+}
+.cellbtn:hover {
+  background: var(--accent-soft-strong);
+  color: var(--accent-ink);
+}
+.pivot-table tbody th .cellbtn {
+  margin-inline-start: -0.4rem;
+}
+.chart {
+  margin: 0;
+  padding: 0 1.25rem 1.5rem;
+}
+.chart-title {
+  padding: 0.25rem 0 0.5rem;
+  font-weight: var(--weight-semibold);
+}
+.chartsvg {
+  display: block;
+  inline-size: 100%;
+  max-inline-size: 54rem;
+  block-size: auto;
+}
+.chartsvg .grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.chartsvg .axis,
+.piesvg .axis {
+  fill: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 11px;
+}
+.chartsvg .vlabel-t {
+  fill: var(--text);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+}
+.chartsvg .line {
+  fill: none;
+  stroke: var(--chart-1);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+}
+.chartsvg .area {
+  fill: color-mix(in oklab, var(--chart-1) 14%, transparent);
+}
+.chartsvg .dot {
+  fill: var(--surface);
+  stroke: var(--chart-1);
+  stroke-width: 2.5;
+}
+/* The tap target around a line chart's 5-unit dot. */
+.chartsvg .hit {
+  fill: transparent;
+}
+.mark {
+  cursor: pointer;
+}
+.mark:hover rect,
+.mark:hover path,
+.mark:hover .dot {
+  filter: brightness(1.12);
+}
+.mark:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.piewrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2rem;
+}
+.piesvg {
+  inline-size: min(20rem, 100%);
+  block-size: auto;
+}
+.pie-total {
+  fill: var(--text);
+  font-family: var(--font-sans);
+  font-size: 19px;
+  font-weight: 700;
+}
+.legend {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-inline-size: 14rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: var(--text-sm);
+}
+.swatch-sq {
+  flex: none;
+  inline-size: 0.8rem;
+  block-size: 0.8rem;
+  border-radius: 3px;
+}
+.legend .lname {
+  flex: 1;
+}
+.legend .lval {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-weight: var(--weight-semibold);
+}
+.legend .lpct {
+  min-inline-size: 2.5rem;
+  text-align: end;
+}
+
+@media (max-width: 40rem) {
+  .pivot-table {
+    min-inline-size: calc(100% - 2 * var(--space-4));
+  }
+  /* Total reads as strong as the rows it adds up, not as a small grey head. */
+  .pivot-table tfoot th {
+    color: var(--text);
+    font-size: var(--text-base);
+  }
+  .chart {
+    padding-inline: var(--space-4);
+  }
+  /* 15 units of the 360-unit phone drawing: about 12 px at 320 and 15 px at 390, under the chart's
+     15 px title. */
+  .chartsvg .axis,
+  .chartsvg .vlabel-t {
+    font-size: 15px;
+  }
+  /* A slanted first x label may reach past the chart's start into the padding of .chart. */
+  .chartsvg {
+    overflow: visible;
+  }
+  .piesvg .axis {
+    font-size: 14px;
+  }
+}
+/* Touch targets the control height tokens do not reach. */
+@media (max-width: 40rem), (pointer: coarse) {
+  .pivot-table td:has(> .cellbtn) {
+    padding-block: 0;
+  }
+  .pivot-table td .cellbtn {
+    display: block;
+    inline-size: 100%;
+    min-block-size: 2.75rem;
+    text-align: end;
+  }
+}

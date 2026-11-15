@@ -192,7 +192,7 @@ export function CalendarView(p: ViewProps) {
         </div>
       </div>
       {mode === "month" ? (
-        // Up to tablet width only this box scrolls sideways, not the bar above it (views.css).
+        // Up to tablet width only this box scrolls sideways, not the bar above it (calendar.css).
         <div className="cal-scroll">
           <div
             className="monthgrid"
