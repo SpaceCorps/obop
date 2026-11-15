@@ -375,7 +375,11 @@ export function App() {
                     <a
                       key={m.name}
                       href={href({ app: app.id, model: m.name })}
-                      aria-current={!extPage && model?.name === m.name ? "page" : undefined}
+                      aria-current={
+                        !extPage && !isOverview(route) && model?.name === m.name
+                          ? "page"
+                          : undefined
+                      }
                       title={describeFor(m)}
                     >
                       {modelTitle(m, app.module.id)}
