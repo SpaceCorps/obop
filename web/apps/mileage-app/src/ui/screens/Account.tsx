@@ -1,10 +1,13 @@
 import { Banner, Button, Field, Row, Screen, Text } from "@obop/ui-native";
 import { useEffect, useState } from "react";
-import { Alert } from "react-native";
-import { unsentSentence } from "../../core/present.ts";
+import { Alert, View } from "react-native";
+import { deviceStateText, unsentSentence } from "../../core/present.ts";
 import { hasWork } from "../../core/store.ts";
 import { t, tp } from "../../i18n/index.ts";
+import { CHOICES, type Choice } from "../../i18n/language.ts";
+import { LANGUAGES } from "../../i18n/languages.ts";
 import { signOut, unsentSummary } from "../../native/actions.ts";
+import { languageStore } from "../../native/language.ts";
 import { databaseInfo } from "../../native/store.ts";
 import {
   readDevice,
@@ -15,16 +18,25 @@ import {
 import { appVersion } from "../../native/platform-deps.ts";
 import type { Runtime } from "../../native/runtime.ts";
 import { announce } from "../announce.ts";
-import { useOutbox, useSyncStatus } from "../hooks.ts";
+import { useLanguageChoice, useOutbox, useSyncStatus } from "../hooks.ts";
+import { languageNoteKey } from "../language-note.ts";
 import type { Nav } from "../router.ts";
+
+/** The name of a choice: the languages by their own names (never translated), the third by a sentence. */
+const choiceLabel = (choice: Choice): string =>
+  choice === "system" ? t("language.system") : LANGUAGES[choice].name;
 
 export function Account({ rt, nav }: { rt: Runtime; nav: Nav }) {
   const { trips } = useOutbox(rt);
+  const languageChoice = useLanguageChoice();
   const sync = useSyncStatus(rt);
   const [device, setDevice] = useState<DeviceView | null>(null);
   const [deviceError, setDeviceError] = useState(false);
   const [leaveError, setLeaveError] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  // The choice of language is applied at once; whether it was stored decides the note under it.
+  const [languageStored, setLanguageStored] = useState<boolean | null>(null);
+  const languageNote = languageNoteKey(languageStored);
   const [name, setName] = useState("");
   const [saved, setSaved] = useState(false);
   const [cipher, setCipher] = useState<string | null>(null);
@@ -178,10 +190,34 @@ export function Account({ rt, nav }: { rt: Runtime; nav: Nav }) {
             disabled={name.trim() === "" || name.trim() === device.name}
             onPress={save}
           />
-          <Row title={device.platform} subtitle={device.appVersion} value={device.state} />
+          <Row
+            title={device.platform}
+            subtitle={device.appVersion}
+            value={deviceStateText(device.state)}
+          />
         </>
       ) : null}
       <Text tone="muted">{t("account.device.list")}</Text>
+
+      <Text variant="heading">{t("language.title")}</Text>
+      <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+        {CHOICES.map((choice) => (
+          <Button
+            key={choice}
+            label={choiceLabel(choice)}
+            variant={choice === languageChoice ? "primary" : "secondary"}
+            selected={choice === languageChoice}
+            onPress={() => {
+              void languageStore.choose(choice).then(setLanguageStored);
+            }}
+            testID={`language-${choice}`}
+          />
+        ))}
+      </View>
+      <Text tone="muted">{t("language.note")}</Text>
+      {languageNote ? (
+        <Banner tone="warning" title={t(languageNote)} testID="language-unsaved" />
+      ) : null}
 
       {leaveError ? (
         <Banner tone="danger" title={t("account.leave.error")} testID="leave-error" />

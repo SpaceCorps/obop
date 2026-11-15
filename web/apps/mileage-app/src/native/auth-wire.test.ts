@@ -62,6 +62,15 @@ vi.mock("expo-web-browser", () => ({
   },
 }));
 vi.mock("expo-constants", () => ({ default: { expoConfig: { extra: {} } } }));
+
+// The language store (`native/language.ts`) is the real one. The two things it needs from a phone
+// are stand-ins: the languages the phone reports, and the secure store that keeps the choice.
+const phone = vi.hoisted(() => ({ languages: [] as string[] }));
+vi.mock("./phone-language.ts", () => ({ phoneLanguageTags: () => phone.languages }));
+vi.mock("./keychain.ts", () => ({
+  keychain: { get: async () => null, set: async () => undefined, delete: async () => undefined },
+}));
+
 vi.mock("./platform-deps.ts", async () => {
   const { createHash } = await import("node:crypto");
   return {
@@ -122,6 +131,7 @@ beforeEach(() => {
   net.state.ownerUser = "dave";
   browser.opened.length = 0;
   browser.outcome = "success";
+  phone.languages = [];
   vi.stubGlobal("fetch", net.handle);
 });
 
@@ -163,6 +173,23 @@ describe("the registration and the address of the sign-in page", () => {
     await expect(signIn(host, "not an address")).rejects.toBeInstanceOf(SignInError);
     expect(net.state.calls).toEqual([]);
     expect(browser.opened).toEqual([]);
+  });
+
+  test("the pages are asked for the language the app knows, and for none when it knows none", async () => {
+    browser.outcome = "cancel";
+    const lang = async (languages: string[]) => {
+      phone.languages = languages;
+      browser.opened.length = 0;
+      const { host } = await rig();
+      await expect(signIn(host, BASE)).rejects.toMatchObject({ reason: "cancelled" });
+      return new URL(browser.opened[0]!.url).searchParams.get("lang");
+    };
+    // A phone in a language the app has: the pages are asked for it.
+    expect(await lang(["sv-SE", "en-SE"])).toBe("sv");
+    // A phone in a language the app does not have, or one that reports none: no `lang`, the
+    // browser's own language decides (docs/spec/mobile.md 8.9).
+    expect(await lang(["de-DE", "sv-SE"])).toBeNull();
+    expect(await lang([])).toBeNull();
   });
 });
 

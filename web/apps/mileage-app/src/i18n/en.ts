@@ -1,11 +1,14 @@
 /**
- * Every sentence the app shows, in one catalogue (docs/spec/mobile.md 6: English first; the label
- * tables of the other six shipped languages are step 6). A new language is another object with the
- * same keys: `Messages` makes the compiler check that none is missing. Placeholders are `{name}`.
+ * Every sentence the app shows, in one catalogue: this is the English source (docs/spec/mobile.md
+ * 8.9). Another language is another object with the same keys, typed `Translation<...>` with the
+ * plural forms that language needs (`sv.ts`), so the compiler reports a missing or an extra key, and
+ * `check.ts` (run by the tests) reports what a type cannot: placeholders, empty texts, a text that
+ * was left in English. Placeholders are `{name}`.
  *
  * A sentence that depends on a count has one key per plural form (`name.one`, `name.other`; a
- * language adds the forms it has) and is read with `tp(name, count)`. Numbers and dates are
- * formatted with `Intl` in `index.ts`, not written into a sentence.
+ * language adds the forms it has: Polish would add `few` and `many`) and is read with
+ * `tp(name, count)`. Numbers and dates are formatted with `Intl` in `index.ts`, not written into a
+ * sentence. `name.ios` is the version of a sentence for iOS, read with `tOn`.
  */
 export const en = {
   "common.back": "Back",
@@ -26,7 +29,7 @@ export const en = {
   "error.database.hint":
     "Nothing was deleted. Try again. While the trips cannot be opened, new positions are not saved. If the location service is still running, stop it here. If Try again keeps failing, the key of the trips may be lost and they cannot be read: the way out is Settings, Apps, obop Mileage, Storage, Clear storage, which deletes the trips that were not sent.",
   "error.database.hint.ios":
-    "Nothing was deleted. Try again. If the phone has only just started, unlock it once and try again. While the trips cannot be opened, new positions are not saved. If the location service is still running, stop it here. If Try again keeps failing, the key of the trips may be lost and they cannot be read: the way out is to delete the app from the Home Screen and install it again, which deletes the trips that were not sent.",
+    "Nothing was deleted. Try again. If the phone has only just started, unlock it once and try again. While the trips cannot be opened, new positions are not saved. If the location service is still running, stop it here. If Try again keeps failing, the key of the trips may be lost and they cannot be read: the way out is to delete the app from the phone (touch and hold the app icon, choose Remove App, then Delete App) and install it again, which deletes the trips that were not sent.",
   "error.database.stop": "Stop the location service",
   "error.database.stopped": "The location service was stopped.",
 
@@ -84,7 +87,7 @@ export const en = {
   "home.waiting.message.other":
     "{count} trips are on this phone and not on the server yet. They are safe.",
   "home.problem.title": "A trip needs your attention",
-  "home.problem.message": "The server refused a step. Open the trip to see why.",
+  "home.problem.message": "A step could not be done. Open the trip to see why.",
   "home.problem.action": "Open trips",
   "home.trips": "Trips",
   "home.account": "Account",
@@ -217,6 +220,7 @@ export const en = {
   "trip.incomplete.message":
     "The server has not received every point of this trip yet. The phone keeps trying. If it does not finish, discard the trip and record it again.",
   "trip.problem.title": "The server refused a step",
+  "trip.problem.title.app": "A step could not be done",
   "trip.problem.hint": "Nothing is lost. You can try again, or discard the trip.",
   "trip.problem.hint.unknown": "Nothing is lost. You can try again.",
   "trip.problem.generic": "The server refused this step.",
@@ -230,6 +234,7 @@ export const en = {
     'The server answered "not found" and the phone cannot tell what that means for this trip. The points are still on this phone and nothing is deleted. Try again later, or ask your administrator.',
   "trip.problem.invalid_response": "The server answered in a way the app does not understand.",
   "trip.problem.details": "Details from the server: {message}",
+  "trip.problem.details.app": "Details: {message}",
   "trip.action.failed": "That did not work. Try again.",
   "trip.notfound": "This trip is not on this phone any more.",
   "discard.title": "Discard this trip?",
@@ -264,6 +269,8 @@ export const en = {
   "account.device.revoke": "Remove this phone",
   "account.device.revoke.title": "Remove this phone?",
   "account.device.revoke.message": "The instance ends this sign-in and the app signs out.",
+  "account.device.state.active": "Active",
+  "account.device.state.revoked": "Removed",
   "account.device.list":
     "Other phones are listed in the back office, under Customize, Security, Devices. An app can only see its own phone.",
   "account.device.error": "Could not read this phone from the server.",
@@ -301,9 +308,37 @@ export const en = {
   "account.upload.unavailable": "The server is busy, will retry",
   "account.upload.signed_out": "Signed out",
   "account.upload.now": "Upload now",
+
+  "language.title": "Language",
+  "language.system": "Follow the phone",
+  "language.note":
+    "The language of the app. The name of the app and the texts of the system dialogs follow the language of the phone.",
+  "language.unsaved":
+    "The language was changed, but it could not be saved on this phone. The next time the app starts it may use the language that was saved before, or the language of the phone.",
 } as const;
 
-export type MessageKey = keyof typeof en;
+type EnglishKey = keyof typeof en;
 
-/** The shape every language has: all the keys, plain text. */
-export type Messages = Record<MessageKey, string>;
+/** The keys that have plural forms: `name` where the catalogue holds `name.one`, `name.other`, and so on. */
+export type PluralKey = EnglishKey extends infer K
+  ? K extends `${infer Base}.other`
+    ? Base
+    : never
+  : never;
+
+/** The keys read with `t` (and `tOn`): every key that is not a plural form. */
+export type MessageKey = Exclude<EnglishKey, `${PluralKey}.${"one" | "other"}`>;
+
+/** The plural categories of CLDR; a language uses some of them, and every language uses `other`. */
+export const PLURAL_CATEGORIES = ["zero", "one", "two", "few", "many", "other"] as const;
+export type PluralCategory = (typeof PLURAL_CATEGORIES)[number];
+
+/**
+ * What a language other than English must have: every plain key, and for every plural key one form
+ * per category the language needs (always `other`). `Translation<"one">` is Swedish; Polish would be
+ * `Translation<"one" | "few" | "many">`. Missing keys, extra keys and a missing or unneeded plural
+ * form are compile errors for an object typed with it (`tsc` runs in `vp check`).
+ */
+export type Translation<Category extends PluralCategory> = Readonly<
+  Record<MessageKey, string> & Record<`${PluralKey}.${Category | "other"}`, string>
+>;

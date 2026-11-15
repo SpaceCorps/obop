@@ -5,6 +5,7 @@ import {
   canSubmit,
   formatDistance,
   integrityLines,
+  isServerProblem,
   statusText,
   tripStatus,
 } from "../../core/present.ts";
@@ -17,7 +18,7 @@ import type { Nav } from "../router.ts";
 const when = (iso: string | null): string | undefined =>
   iso === null ? undefined : formatDateTime(iso);
 
-/** The sentence for a refusal, by its code; the server's own words go on a separate line. */
+/** The sentence for a refusal, by its code; the server's own words (when it was the server) go on a separate line. */
 const problemText = (code: string): string => {
   switch (code) {
     case "state_conflict":
@@ -123,7 +124,9 @@ export function TripDetail({ rt, nav, id }: { rt: Runtime; nav: Nav; id: string 
         <>
           <Banner
             tone="danger"
-            title={t("trip.problem.title")}
+            title={t(
+              isServerProblem(trip.problem.code) ? "trip.problem.title" : "trip.problem.title.app",
+            )}
             message={`${problemText(trip.problem.code)} ${t(
               trip.problem.code === "unknown" ? "trip.problem.hint.unknown" : "trip.problem.hint",
             )}`}
@@ -134,7 +137,14 @@ export function TripDetail({ rt, nav, id }: { rt: Runtime; nav: Nav; id: string 
             testID="problem"
           />
           <Text tone="muted" testID="problem-details">
-            {t("trip.problem.details", { message: trip.problem.message })}
+            {t(
+              isServerProblem(trip.problem.code)
+                ? "trip.problem.details"
+                : "trip.problem.details.app",
+              {
+                message: trip.problem.message,
+              },
+            )}
           </Text>
         </>
       ) : null}

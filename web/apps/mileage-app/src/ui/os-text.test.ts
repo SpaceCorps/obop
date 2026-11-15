@@ -1,8 +1,7 @@
-import { readFileSync, readdirSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { describe, expect, test, vi } from "vite-plus/test";
+import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 import { en } from "../i18n/en.ts";
-import { t } from "../i18n/index.ts";
+import { setLanguage, t } from "../i18n/index.ts";
+import { screenSources } from "../test-support/app-sources.ts";
 
 const platform = vi.hoisted(() => ({ OS: "ios" }));
 vi.mock("react-native", () => ({ Platform: platform }));
@@ -10,24 +9,31 @@ vi.mock("react-native", () => ({ Platform: platform }));
 const { tOs } = await import("./os-text.ts");
 
 describe("tOs", () => {
+  afterEach(() => setLanguage("en"));
+
   test("follows the system the app runs on", () => {
     platform.OS = "ios";
     expect(tOs("guide.body")).toContain("app switcher");
     platform.OS = "android";
     expect(tOs("guide.body")).toBe(t("guide.body"));
   });
+
+  test("follows the language too: the iOS and the Android sentence in Swedish", () => {
+    setLanguage("sv");
+    platform.OS = "ios";
+    expect(tOs("guide.body")).toContain("appväxlaren");
+    expect(tOs("guide.body")).not.toContain("Obegränsad");
+    platform.OS = "android";
+    expect(tOs("guide.body")).toContain("Obegränsad");
+    expect(tOs("guide.body")).toBe(t("guide.body"));
+  });
 });
 
 describe("the screens and the iOS sentences of the catalogue", () => {
-  const dir = fileURLToPath(new URL("./screens/", import.meta.url));
   const used = new Set<string>();
   // The screens, and App.tsx (the Failed screen is there).
-  const sources = readdirSync(dir)
-    .filter((name) => /\.tsx?$/.test(name))
-    .map((file) => readFileSync(dir + file, "utf8"));
-  sources.push(readFileSync(fileURLToPath(new URL("../../App.tsx", import.meta.url)), "utf8"));
-  for (const source of sources) {
-    for (const match of source.matchAll(/\btOs\(\s*"([\w.]+)"/g)) used.add(match[1]!);
+  for (const { text } of screenSources()) {
+    for (const match of text.matchAll(/\btOs\(\s*"([\w.]+)"/g)) used.add(match[1]!);
   }
   const iosBases = Object.keys(en)
     .filter((key) => key.endsWith(".ios"))

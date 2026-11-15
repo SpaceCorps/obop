@@ -11,6 +11,8 @@ import type { StartupConfig } from "./src/core/startup-config.ts";
 // - the task module and the root component are stand-ins that note when they are loaded;
 // - `expo`'s `registerRootComponent` notes that it was called, with what, and what the host's
 //   configuration was at that moment;
+// - the language store (`src/native/language.ts`, which reads the phone's languages and the secure
+//   store) is a stand-in that notes when it is loaded and when it is started;
 // - the host (`startHost`, `hostConfig`) and the startup configuration are the real ones.
 //
 // Not pinned by any test, and said here so that nobody takes the tests below for more:
@@ -44,6 +46,16 @@ beforeEach(() => {
   vi.doMock("./App.tsx", () => {
     seen.events.push("App");
     return { default: function App() {} };
+  });
+  vi.doMock("./src/native/language.ts", () => {
+    seen.events.push("language");
+    return {
+      languageStore: {
+        start: async () => {
+          seen.events.push("language start");
+        },
+      },
+    };
   });
   vi.doMock("expo", async () => {
     seen.events.push("expo");
@@ -84,6 +96,13 @@ describe("the entry of the app", () => {
     expect(seen.events.filter((e) => e === "register")).toHaveLength(1);
     expect(seen.hostAtRegister).toBe(startup);
     expect(seen.registered).toEqual([App]);
+  });
+
+  test("starts the language store once, before the app is handed to the system", async () => {
+    // The start sets the phone's language at once, so the first screen is drawn in it.
+    await import("./index.ts");
+    expect(seen.events.filter((e) => e === "language start")).toHaveLength(1);
+    expect(seen.events.indexOf("language start")).toBeLessThan(seen.events.indexOf("register"));
   });
 
   test("is the file that the package names as its entry", () => {
