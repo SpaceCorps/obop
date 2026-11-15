@@ -62,6 +62,8 @@ export function ActionDialog(p: ActionDialogProps) {
         noValidate
         onSubmit={(e) => {
           e.preventDefault();
+          // A record made from a picker of this dialog submits its own form, not this one.
+          if (e.target !== e.currentTarget) return;
           submit();
         }}
       >

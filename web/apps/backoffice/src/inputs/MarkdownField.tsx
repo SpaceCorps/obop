@@ -186,7 +186,10 @@ function Editor({
   onFull,
 }: BaseInputProps & { wide: boolean; rows: number; onFull?: () => void }) {
   const area = useRef<HTMLTextAreaElement>(null);
-  const [tab, setTab] = useState<"write" | "preview">("write");
+  // A saved text opens as it reads (Preview); an empty one opens to be written.
+  const [tab, setTab] = useState<"write" | "preview">(() =>
+    String(value).trim() ? "preview" : "write",
+  );
   const previewId = useId();
   const text = String(value);
   const apply = (run: Edit) => {
@@ -260,7 +263,18 @@ function Editor({
             } else common.onKeyDown?.(e);
           }}
         />
-        <div className="mdpreview" id={previewId} aria-label={t("Preview")} role="region">
+        {/* A click in the text being read starts writing (a link still opens). */}
+        <div
+          className="mdpreview"
+          id={previewId}
+          aria-label={t("Preview")}
+          role="region"
+          onClick={(e) => {
+            if (tab !== "preview" || (e.target as Element).closest("a")) return;
+            setTab("write");
+            requestAnimationFrame(() => area.current?.focus());
+          }}
+        >
           <MarkdownView text={text} />
         </div>
       </div>

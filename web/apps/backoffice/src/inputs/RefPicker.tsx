@@ -91,6 +91,34 @@ function haystack(target: ModelMeta, row: Row, title: string, second: string): s
 
 const toServer = (c: RefCond): ServerFilter => ({ field: c.field, op: c.op, value: c.value });
 
+/** The next control of the form after `el` (the field after a picker), or null. */
+function nextFocusable(el: HTMLElement | null): HTMLElement | null {
+  const form = el?.closest("form");
+  if (!el || !form) return null;
+  const all = [
+    ...form.querySelectorAll<HTMLElement>(
+      "input:not([type=hidden]):not([disabled]), select:not([disabled]), textarea:not([disabled])",
+    ),
+  ].filter((x) => !x.closest(".refpicker")?.contains(el) || x === el);
+  const at = all.indexOf(el);
+  return at >= 0 ? (all[at + 1] ?? null) : null;
+}
+
+/** How many archived records match what was typed (they are not offered). */
+function archivedMatches(
+  rows: readonly Row[],
+  words: string[],
+  target: ModelMeta,
+  ctx: PresentCtx,
+) {
+  if (!words.length) return 0;
+  return rows.filter(
+    (r) =>
+      r.active === false &&
+      words.every((w) => haystack(target, r, titleOf(target, r, ctx), "").includes(w)),
+  ).length;
+}
+
 export function RefPicker(p: RefPickerProps) {
   const { field, value, onChange, readOnly } = p;
   const d = useData();
@@ -126,7 +154,10 @@ export function RefPicker(p: RefPickerProps) {
     [d.refText, d.store, d.models, moduleId, d.version],
   );
   const rowById = (id: string): Row | undefined =>
-    rows.find((r) => r.id === id) ?? remote?.rows.find((r) => r.id === id);
+    rows.find((r) => r.id === id) ??
+    remote?.rows.find((r) => r.id === id) ??
+    // A record made a moment ago is in the store before this render has its rows.
+    d.store.cached(to)?.find((r) => r.id === id);
   const titleById = (id: string): string => {
     const r = rowById(id);
     return r && target ? titleOf(target, r, ctx) : d.refText(to, id);
@@ -199,6 +230,14 @@ export function RefPicker(p: RefPickerProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, remote, q, target, ctx, current, JSON.stringify(conds), serverMode, hasActive, d.lang]);
 
+  const archived = useMemo(
+    () =>
+      hasActive && target && !serverMode
+        ? archivedMatches(rows, fold(q).split(/\s+/).filter(Boolean), target, ctx)
+        : 0,
+    [hasActive, target, serverMode, rows, q, ctx, d.lang],
+  );
+
   const labelName = target
     ? (titleFieldsOf(target)
         .map((n) => target.fields.find((f) => f.name === n))
@@ -221,7 +260,9 @@ export function RefPicker(p: RefPickerProps) {
     if (!open) return;
     const at = items.findIndex((it) => it.kind === "rec" && it.id === current);
     const first = items.findIndex((it) => it.kind === "rec");
-    setActive(q ? Math.max(0, first) : at >= 0 ? at : Math.max(0, first));
+    // Typing that matches nothing highlights nothing: Enter never creates a record by surprise;
+    // "Create “x”" takes a click or the arrow keys.
+    setActive(q ? first : at >= 0 ? at : Math.max(0, first));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, q, items.length]);
 
@@ -335,8 +376,11 @@ export function RefPicker(p: RefPickerProps) {
       e.preventDefault();
       e.stopPropagation();
       close();
-    } else if (e.key === "Tab") close();
-    else p.onKeyDown?.(e);
+    } else if (e.key === "Tab") {
+      close();
+      // A list cell's editor saves and moves on with Tab (InlineEdit): it must see the key too.
+      p.onKeyDown?.(e);
+    } else p.onKeyDown?.(e);
   };
 
   const shown = open && query !== null ? query : current ? titleById(current) : "";
@@ -398,6 +442,13 @@ export function RefPicker(p: RefPickerProps) {
             {options.length === 0 && (
               <li className="rp-empty" role="presentation">
                 {!loaded || (serverMode && q && remote?.q !== q) ? t("Searching…") : t("No match")}
+              </li>
+            )}
+            {archived > 0 && (
+              <li className="rp-empty" role="presentation">
+                {archived === 1
+                  ? t("1 archived match is not offered")
+                  : t("{count} archived matches are not offered", { count: archived })}
               </li>
             )}
             {items.map((it, i) => {
@@ -489,7 +540,9 @@ export function RefPicker(p: RefPickerProps) {
               onSaved={(id) => {
                 setStacked(null);
                 pick(id);
-                input.current?.focus();
+                // Focus moves on to the next field of the form, not back into this list.
+                const next = nextFocusable(input.current);
+                (next ?? input.current)?.focus();
               }}
             />
           </Suspense>

@@ -1057,6 +1057,8 @@ export type DialogProps = {
  * then underneath its parent on the page and in the stack; dialogStack.test.tsx pins this).
  */
 const openDialogs: object[] = [];
+/** An open list or calendar of a control inside a dialog: Escape is its own first. */
+const POPUP_OPEN = '[role="combobox"][aria-expanded="true"], [aria-haspopup][aria-expanded="true"]';
 /** The Escape presses a dialog has taken, so a second dialog's listener cannot take the same one. */
 const takenEscapes = new WeakSet<Event>();
 
@@ -1096,6 +1098,9 @@ export function Dialog({
     const key = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || takenEscapes.has(e)) return;
       if (openDialogs[openDialogs.length - 1] !== place.current) return;
+      // A picker's list or a date's calendar open inside the dialog closes first, on its own.
+      const target = e.target instanceof Node ? e.target : null;
+      if (target && ref.current?.contains(target) && ref.current.querySelector(POPUP_OPEN)) return;
       takenEscapes.add(e);
       e.stopPropagation();
       onClose();

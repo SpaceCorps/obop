@@ -252,6 +252,72 @@ function ChildSection(props: SectionProps) {
   };
   const dirty = (key: string) => freshKey(key) || changedFields(key).length > 0;
 
+  // The panel asks whether a line edit is waiting (leaving, closing the tab) and saves it on Save.
+  // An untouched new row (Enter opened it) is nothing to lose.
+  const regKey = `${model.name}.${via}`;
+  const pendingRows = () =>
+    [...new Set([...s.drafts.keys(), ...s.fresh])].filter(
+      (k) => (freshKey(k) ? s.touched.has(k) : changedFields(k).length > 0) && !s.saving.has(k),
+    );
+  const regRef = useRef({ pendingRows, commit: (_k: string) => Promise.resolve(true) });
+  regRef.current.pendingRows = pendingRows;
+  regRef.current.commit = (k: string) => commit(k, false);
+  useEffect(() => {
+    const reg = slot.lines;
+    if (!reg) return;
+    reg.dirty.set(regKey, () => regRef.current.pendingRows().length > 0);
+    reg.flush.set(regKey, async () => {
+      const rows = regRef.current.pendingRows();
+      const done = await Promise.all(rows.map((k) => regRef.current.commit(k)));
+      return done.every(Boolean);
+    });
+    return () => {
+      reg.dirty.delete(regKey);
+      reg.flush.delete(regKey);
+    };
+  }, [slot.lines, regKey]);
+
+  /**
+   * What a row held when its sheet opened: Cancel puts it back (edits typed in the table before stay),
+   * and only a row the sheet itself started (Add in card mode) goes away.
+   */
+  const sheetSnap = useRef<{
+    key: string;
+    draft?: Record<string, Edit>;
+    touched: boolean;
+    auto?: Set<string>;
+    madeHere: boolean;
+  } | null>(null);
+  const openSheet = (key: string, madeHere = false) => {
+    const dr = s.drafts.get(key);
+    const auto = s.auto.get(key);
+    sheetSnap.current = {
+      key,
+      ...(dr ? { draft: { ...dr } } : {}),
+      touched: s.touched.has(key),
+      ...(auto ? { auto: new Set(auto) } : {}),
+      madeHere,
+    };
+    setSheet(key);
+  };
+  const cancelSheet = (key: string) => {
+    const snap = sheetSnap.current;
+    sheetSnap.current = null;
+    if (!snap || snap.key !== key || snap.madeHere) {
+      if (dirty(key)) revert(key);
+      return;
+    }
+    if (snap.draft) s.drafts.set(key, snap.draft);
+    else s.drafts.delete(key);
+    if (snap.auto) s.auto.set(key, snap.auto);
+    else s.auto.delete(key);
+    if (snap.touched) s.touched.add(key);
+    else s.touched.delete(key);
+    s.invalid.delete(key);
+    s.errors.delete(key);
+    render();
+  };
+
   /** The rows as stored values with the drafts applied, for sums and the balance. */
   const live = (): Record<string, unknown>[] => {
     const now = savedNow();
@@ -271,6 +337,7 @@ function ChildSection(props: SectionProps) {
   };
 
   function setValue(key: string, f: FieldMeta, v: Edit) {
+    const before = val(key, f);
     const draft = { ...s.drafts.get(key), [f.name]: v };
     s.touched.add(key);
     s.auto.get(key)?.delete(f.name);
@@ -285,12 +352,28 @@ function ChildSection(props: SectionProps) {
         picked,
         label: picked ? d.recordLabel(f.to, picked) : "",
       });
+      // What the record picked before would have filled: a field that still holds it was not
+      // changed by the person, so it follows the new pick (a saved line's description and price).
+      const was =
+        typeof before === "string" && before && before !== v
+          ? d.store.peek(f.to)?.find((r) => r.id === before)
+          : undefined;
+      const wasFills = was
+        ? fillsFor({
+            child: model,
+            ref: f,
+            target: index.get(f.to),
+            picked: was,
+            label: d.recordLabel(f.to, was),
+          })
+        : {};
       const auto = s.auto.get(key) ?? new Set<string>();
       for (const [name, value] of Object.entries(fills)) {
         const g = fieldOf(name);
         if (!g || !editableField(model, g, via)) continue;
         const now = name in draft ? draft[name]! : base(key, g);
-        if (now === "" || now === false || auto.has(name)) {
+        const followed = name in wasFills && now === toEdit(g, wasFills[name], currency);
+        if (now === "" || now === false || auto.has(name) || followed) {
           draft[name] = toEdit(g, value, currency);
           auto.add(name);
         }
@@ -362,7 +445,7 @@ function ChildSection(props: SectionProps) {
     s.fresh = [...s.fresh, key];
     // Measured now: on a panel that has just opened the observer may not have answered yet.
     const w = Math.round(box.current?.getBoundingClientRect().width ?? width);
-    if (shape !== "lines" || cardsAt(w)) setSheet(key);
+    if (shape !== "lines" || cardsAt(w)) openSheet(key, true);
     else if (focus) s.focus = { key };
     render();
   }
@@ -612,7 +695,7 @@ function ChildSection(props: SectionProps) {
         setSheet(null);
       }}
       onClose={() => {
-        if (dirty(sheetKey)) revert(sheetKey);
+        cancelSheet(sheetKey);
         setSheet(null);
       }}
     />
@@ -722,7 +805,7 @@ function ChildSection(props: SectionProps) {
                   bad={!!s.errors.get(key) || !!s.invalid.get(key)?.size}
                   busy={s.saving.has(key)}
                   no={i + 1}
-                  onOpen={() => setSheet(key)}
+                  onOpen={() => openSheet(key)}
                 />
               ))}
             </ul>
@@ -773,11 +856,17 @@ function ChildSection(props: SectionProps) {
                           .join(" ") || undefined
                       }
                       aria-busy={s.saving.has(key) || undefined}
-                      onKeyDown={(e) => onKey(key, e)}
+                      onKeyDown={(e) => {
+                        // Keys pressed in a dialog opened from the row reach it through React only.
+                        if (e.currentTarget.contains(e.target as Node)) onKey(key, e);
+                      }}
                       onBlur={(e) => {
                         const next = e.relatedTarget as Node | null;
                         if (next && e.currentTarget.contains(next)) return;
                         if (sheet === key) return;
+                        // A dialog opened from the row ("Create and edit…" in its picker) keeps it.
+                        if (next instanceof Element && next.closest('[role="dialog"], .overlay'))
+                          return;
                         // A new line nobody typed in (Enter on the last row opened it) goes away.
                         if (freshKey(key) && !s.touched.has(key)) revert(key);
                         else void commit(key, false);
@@ -830,7 +919,7 @@ function ChildSection(props: SectionProps) {
                               icon="more"
                               size="sm"
                               label={t("Edit line {n}", { n: no })}
-                              onClick={() => setSheet(key)}
+                              onClick={() => openSheet(key)}
                             />
                           )}
                           {rowDeletable(key) && (
@@ -1120,8 +1209,12 @@ function ImageGrid(p: {
   const [drag, setDrag] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
   const [order, setOrder] = useState<string[] | null>(null);
-  // A new answer from the server replaces the order kept while the moves were saved.
-  useEffect(() => setOrder(null), [rows]);
+  // A new answer from the server replaces the order kept while the moves were saved: a change of
+  // the ids or their places, not a new array of the same rows (every render makes one).
+  const serverOrder = pos
+    ? rows.map((r) => `${r.id}:${String(r[pos.name] ?? "")}`).join(",")
+    : rows.map((r) => r.id).join(",");
+  useEffect(() => setOrder(null), [serverOrder]);
   const ids = order ?? rows.map((r) => r.id);
   const byId = new Map(rows.map((r) => [r.id, r]));
   const moveable = p.canMove && !!pos;
@@ -1129,11 +1222,22 @@ function ImageGrid(p: {
   async function place(next: string[]) {
     if (!pos) return;
     setOrder(next);
-    // Each image whose place changed gets its new number, one `update` each.
+    // Each image whose place changed gets its new number, one `update` each. A refusal stops the
+    // rest, says why and puts the server's order back; an approval says so.
     for (const [i, id] of next.entries()) {
       const r = byId.get(id);
-      if (r && numeric(r[pos.name]) !== i + 1)
-        await d.run(`${model.name}.update`, { id, [pos.name]: i + 1 });
+      if (!r || numeric(r[pos.name]) === i + 1) continue;
+      const res = await d.run(`${model.name}.update`, { id, [pos.name]: i + 1 });
+      if (res.kind === "approval") {
+        d.notify(t(APPROVAL, { plan: res.planId.slice(0, 8) }), "info");
+        setOrder(null);
+        return;
+      }
+      if (res.kind !== "ok") {
+        d.notify(serverMessage(res.message), "error");
+        setOrder(null);
+        return;
+      }
     }
   }
   const moveTo = (id: string, to: number) => {
