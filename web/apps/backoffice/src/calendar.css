@@ -461,8 +461,9 @@
     flex: 1 1 0;
     justify-content: center;
   }
+  /* A day with several events keeps its name beside the first one, not in the middle. */
   .weeklist li {
-    align-items: center;
+    align-items: flex-start;
     gap: var(--space-2);
     padding-block: var(--space-2);
     padding-inline: var(--space-3) var(--space-2);
@@ -470,6 +471,7 @@
   .wk-day {
     flex: none;
     inline-size: 3.25rem;
+    padding-block-start: 0.15rem;
   }
   .weeklist .cal-ev {
     min-block-size: 2.75rem;

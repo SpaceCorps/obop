@@ -206,8 +206,11 @@ type Quick = {
   busy?: boolean;
 };
 
-/** A card just made with the quick form: shown first in its column until the search changes. */
-type Fresh = { key: string; row: Row; at: number };
+/**
+ * A card just made with the quick form: shown first in its column until the search changes or the
+ * next write (a move would otherwise leave a stale copy on top of the column it left).
+ */
+type Fresh = { key: string; row: Row; mutation: number };
 
 /** The sentence of a column's sums ("€12,400.00 and SEK 3,000.00"); negative sums show too. */
 const sumSentence = (sums: Map<string, number>) =>
@@ -262,6 +265,11 @@ export function KanbanView(p: ViewProps) {
   // A new search drops the card made a moment ago from the top of its column.
   const searchSig = JSON.stringify([model.name, server?.filter, gf?.name, p.state.facets]);
   useEffect(() => setFresh(null), [searchSig]);
+  useEffect(() => {
+    if (fresh && d.mutations > fresh.mutation) setFresh(null);
+    // only when a write happens
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [d.mutations]);
   // The new card scrolls into view once it is drawn.
   useEffect(() => {
     if (!fresh) return;
@@ -485,7 +493,8 @@ export function KanbanView(p: ViewProps) {
     const r = await d.run(`${model.name}.create`, body);
     if (r.kind === "ok") {
       const row = r.value as Row;
-      if (row?.id) setFresh({ key: quick.key, row, at: Date.now() });
+      // `d` is the context of the render that sent it: the create itself was the next write.
+      if (row?.id) setFresh({ key: quick.key, row, mutation: d.mutations + 1 });
       // The form stays for the next card, emptied but for what the column fills in.
       const values: Record<string, Edit> = {};
       for (const f of plan.fields)

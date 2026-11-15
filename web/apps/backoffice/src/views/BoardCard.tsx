@@ -77,7 +77,25 @@ function Cover({ id, alt }: { id: string; alt: string }) {
   const [src, setSrc] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const box = useRef<HTMLDivElement>(null);
+  // Fetched once the card comes near the screen, so a long gallery asks only for what it shows.
+  const [seen, setSeen] = useState(typeof IntersectionObserver === "undefined");
   useEffect(() => {
+    const el = box.current;
+    if (seen || !el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setSeen(true);
+          io.disconnect();
+        }
+      },
+      { rootMargin: "300px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [seen]);
+  useEffect(() => {
+    if (!seen) return;
     let live = true;
     const width = box.current?.clientWidth || 280;
     void blobUrl(d.token, id, thumbWidth(width)).then((u) => {
@@ -88,7 +106,7 @@ function Cover({ id, alt }: { id: string; alt: string }) {
     return () => {
       live = false;
     };
-  }, [d.token, id]);
+  }, [d.token, id, seen]);
   return (
     <div className="kcover" ref={box} data-state={src ? "ready" : failed ? "failed" : "loading"}>
       {src ? (
@@ -98,6 +116,24 @@ function Cover({ id, alt }: { id: string; alt: string }) {
       )}
     </div>
   );
+}
+
+/** Up to two letters for a record without a picture: "Hanna Vogt" is "HV". */
+function initials(name: string): string {
+  const words = name.split(/[\s@._/-]+/).filter((w) => /\p{L}/u.test(w));
+  return (
+    words
+      .slice(0, 2)
+      .map((w) => [...w].find((c) => /\p{L}/u.test(c))!.toUpperCase())
+      .join("") || "?"
+  );
+}
+
+/** A stable small number from a text, to give each placeholder its own calm tint. */
+function hash(s: string): number {
+  let h = 0;
+  for (const c of s) h = (h * 31 + c.codePointAt(0)!) >>> 0;
+  return h;
 }
 
 export type NextStep = {
@@ -274,8 +310,8 @@ export function BoardCard(p: BoardCardProps) {
     >
       {coverId && <Cover id={coverId} alt={p.title} />}
       {p.cover && !coverId && (
-        <div className="kcover empty" aria-hidden="true">
-          <Icon name="grid" size={20} />
+        <div className={`kcover empty t-${(hash(p.title) % 6) + 1}`} aria-hidden="true">
+          <span className="kinitials">{initials(p.title)}</span>
         </div>
       )}
       <div className="khead">

@@ -149,7 +149,17 @@ export function CalendarView(p: ViewProps) {
   const days = Array.from({ length: mode === "month" ? 42 : 7 }, (_, i) => addDays(start, i));
   const isoDays = days.map(isoDate);
   const visible = useVisibleRecords(p, spec, isoDays[0]!, isoDays[isoDays.length - 1]!);
-  const rows = p.server ? visible.rows : p.rows;
+  // A moved event stays where it was dropped until the next answer of the server has it.
+  const [moved, setMoved] = useState<Record<string, Record<string, unknown>>>({});
+  const loadedRows = p.server ? visible.rows : p.rows;
+  useEffect(() => setMoved({}), [loadedRows]);
+  const rows = useMemo(
+    () =>
+      Object.keys(moved).length
+        ? loadedRows.map((r) => (moved[r.id] ? { ...r, ...moved[r.id] } : r))
+        : loadedRows,
+    [loadedRows, moved],
+  );
 
   const events = useMemo(
     () => rows.map((r) => eventOf(spec, r)).filter((e): e is CalEvent => !!e),
@@ -332,10 +342,15 @@ export function CalendarView(p: ViewProps) {
       onOpen={p.onOpen}
       onMove={
         canMove
-          ? (e, day, s, end) =>
-              void p.update(e.row.id, movePatch(spec, day, s, end)).then((err) => {
-                if (err) d.notify(err, "error");
-              })
+          ? (e, day, s, end) => {
+              const patch = movePatch(spec, day, s, end);
+              setMoved((m) => ({ ...m, [e.row.id]: patch }));
+              void p.update(e.row.id, patch).then((err) => {
+                if (!err) return;
+                setMoved(({ [e.row.id]: _, ...rest }) => rest);
+                d.notify(err, "error");
+              });
+            }
           : undefined
       }
       onCreate={p.canCreate ? (day, s, end) => p.newWith(movePatch(spec, day, s, end)) : undefined}

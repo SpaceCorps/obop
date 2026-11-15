@@ -114,7 +114,7 @@ export function TimeGrid(p: TimeGridProps) {
     if (!d) return;
     if (!d.moved && Math.hypot(e.clientX - d.x0, e.clientY - d.y0) < SLOP) return;
     d.moved = true;
-    const delta = snap(((e.clientY - d.y0) / HOUR) * 60 + 1440) - 1440;
+    const delta = Math.round(((e.clientY - d.y0) / HOUR) * 4) * 15;
     if (d.kind === "move") {
       const len = d.e0 - d.s0;
       const s = Math.max(0, Math.min(1440 - len, d.s0 + delta));
@@ -221,7 +221,7 @@ export function TimeGrid(p: TimeGridProps) {
   const header = (day: string) => {
     const d = new Date(`${day}T12:00:00`);
     return (
-      <div key={day} className={`tg-dayhead${day === p.today ? " today" : ""}`} role="columnheader">
+      <div key={day} className={`tg-dayhead${day === p.today ? " today" : ""}`}>
         <span>{fmt.dateOf(d, { weekday: "short" })}</span>
         <b>{d.getDate()}</b>
       </div>
@@ -229,16 +229,21 @@ export function TimeGrid(p: TimeGridProps) {
   };
 
   return (
-    <div className="tg" role="grid" aria-label={t("Week")}>
-      <div className="tg-head" role="row">
+    <div className="tg" role="group" aria-label={t("Week")}>
+      <div className="tg-head" aria-hidden="true">
         <div className="tg-gutter" />
         {p.days.map(header)}
       </div>
       {allDay.length > 0 && (
-        <div className="tg-allday" role="row">
+        <div className="tg-allday">
           <div className="tg-gutter">{t("All day")}</div>
           {p.days.map((day) => (
-            <div key={day} className="tg-allday-cell" role="gridcell">
+            <div
+              key={day}
+              className="tg-allday-cell"
+              role="group"
+              aria-label={fmt.dateOf(new Date(`${day}T12:00:00`), { dateStyle: "full" })}
+            >
               {allDay
                 .filter((ev) => ev.start <= day && day <= ev.end)
                 .map((ev) => (
@@ -286,7 +291,7 @@ export function TimeGrid(p: TimeGridProps) {
               <div
                 key={day}
                 className={`tg-day${day === p.today ? " today" : ""}`}
-                role="gridcell"
+                role="group"
                 aria-label={fmt.dateOf(new Date(`${day}T12:00:00`), { dateStyle: "full" })}
                 onPointerDown={(pe) => {
                   if (!p.onCreate) return;
@@ -321,7 +326,7 @@ export function TimeGrid(p: TimeGridProps) {
                         >
                           <CardMenu
                             className="tg-more"
-                            label={t("{count} more", { count: o.events.length })}
+                            label={t("+{count} more", { count: o.events.length })}
                             trigger={`+${o.events.length}`}
                             items={o.events.map((ev) => ({
                               label: `${hhmm(ev.startMin!)}–${hhmm(ev.endMin!)} ${p.label(ev)}`,
