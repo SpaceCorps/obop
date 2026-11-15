@@ -3909,7 +3909,7 @@ export interface components {
         sale_order: {
             /** @description ISO 4217 currency code */
             currency?: string;
-            /** @description The CRM opportunity the quotation was made for; its customer unless one is given */
+            /** @description The CRM lead the quotation was made for; its customer unless one is given */
             lead_id?: string;
             /** @description Order number such as SO-00042, assigned when the order is created (a number the system assigns; read-only) */
             readonly number?: string;
@@ -16559,7 +16559,7 @@ export interface operations {
                     rows?: {
                         /** @description ISO 4217 currency code */
                         currency?: string;
-                        /** @description The CRM opportunity the quotation was made for; its customer unless one is given */
+                        /** @description The CRM lead the quotation was made for; its customer unless one is given */
                         lead_id?: string;
                         /** @description Customer party id */
                         party_id?: string;
@@ -16819,7 +16819,7 @@ export interface operations {
                 "application/json": {
                     /** @description ISO 4217 currency code */
                     currency?: string;
-                    /** @description The CRM opportunity the quotation was made for; its customer unless one is given */
+                    /** @description The CRM lead the quotation was made for; its customer unless one is given */
                     lead_id?: string;
                     /** @description Customer party id */
                     party_id?: string;
@@ -17339,7 +17339,7 @@ export interface operations {
                     /** @description ISO 4217 currency code */
                     currency?: string;
                     id: string;
-                    /** @description The CRM opportunity the quotation was made for; its customer unless one is given */
+                    /** @description The CRM lead the quotation was made for; its customer unless one is given */
                     lead_id?: string;
                     /** @description Customer party id */
                     party_id?: string;

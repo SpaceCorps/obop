@@ -102,7 +102,7 @@ pub fn module() -> Module {
                     CommandDef::new("mark_lost", "Move the lead to the lost stage", "crm.user")
                         .transition("stage", Option::None, "lost")
                         .danger()
-                        .confirm("Mark this opportunity as lost?")
+                        .confirm("Mark this lead as lost?")
                         .needs(&["lost_reason"])
                         .done("Marked as lost"),
                     CommandDef::new("reopen", "Move the lead back to the new stage", "crm.user")

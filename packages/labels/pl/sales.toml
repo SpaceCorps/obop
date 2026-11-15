@@ -11,8 +11,8 @@ label = "Klient"
 description = "Klient oferty lub zamówienia"
 
 [labels.pl.model.sale_order.field.lead_id]
-label = "Szansa sprzedaży"
-description = "Szansa sprzedaży z CRM, dla której utworzono ofertę; jej klient, jeśli nie podano innego"
+label = "Lead"
+description = "Lead z CRM, dla którego utworzono ofertę; jego klient, jeśli nie podano innego"
 
 [labels.pl.model.sale_order.field.state]
 label = "Status"

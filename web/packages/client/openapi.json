@@ -1384,7 +1384,7 @@
             "type": "string"
           },
           "lead_id": {
-            "description": "The CRM opportunity the quotation was made for; its customer unless one is given",
+            "description": "The CRM lead the quotation was made for; its customer unless one is given",
             "type": "string"
           },
           "number": {
@@ -23790,7 +23790,7 @@
                           "type": "string"
                         },
                         "lead_id": {
-                          "description": "The CRM opportunity the quotation was made for; its customer unless one is given",
+                          "description": "The CRM lead the quotation was made for; its customer unless one is given",
                           "type": "string"
                         },
                         "party_id": {
@@ -24231,7 +24231,7 @@
                     "type": "string"
                   },
                   "lead_id": {
-                    "description": "The CRM opportunity the quotation was made for; its customer unless one is given",
+                    "description": "The CRM lead the quotation was made for; its customer unless one is given",
                     "type": "string"
                   },
                   "party_id": {
@@ -25142,7 +25142,7 @@
                     "type": "string"
                   },
                   "lead_id": {
-                    "description": "The CRM opportunity the quotation was made for; its customer unless one is given",
+                    "description": "The CRM lead the quotation was made for; its customer unless one is given",
                     "type": "string"
                   },
                   "party_id": {

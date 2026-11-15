@@ -38,7 +38,7 @@ pub fn module() -> Module {
                     .fill_from("lead_id.party_id"),
                     F::new(
                         "lead_id",
-                        "The CRM opportunity the quotation was made for; its customer unless one is given",
+                        "The CRM lead the quotation was made for; its customer unless one is given",
                         NoClass,
                         false,
                         "sales.user",

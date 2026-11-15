@@ -26,4 +26,4 @@ label = "Unit price"
 label = "Amount"
 
 [labels.en.model.sale_order.field.lead_id]
-label = "Opportunity"
+label = "Lead"

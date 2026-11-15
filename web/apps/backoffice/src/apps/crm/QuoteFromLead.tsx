@@ -1,8 +1,8 @@
-// "New quotation" on an opportunity (UI plan 3.3, W3 #3): a sale order is created with `lead_id`
-// set, and the server fills its customer from the lead (`fill_from = lead_id.party_id`). An
-// opportunity without a customer asks for one first and keeps it (`lead.update`), so the next
-// quotation needs no question. Both are plain commands: `obop sale_order create --lead_id …`
-// does the same from the CLI, REST or MCP.
+// "New quotation" on a lead (UI plan 3.3, W3 #3): a sale order is created with `lead_id` set, and
+// the server fills its customer from the lead (`fill_from = lead_id.party_id`). A lead without a
+// customer asks for one first and keeps it (`lead.update`), so the next quotation needs no question.
+// Both are plain commands: `obop call sale_order create lead_id=…` on the command line,
+// `POST /api/sale_order/create {"lead_id": …}` over REST and the MCP tool `sale_order__create`.
 import { useState } from "react";
 import { Button, Dialog, t } from "@obop/ui";
 import type { Reply } from "../../api.ts";
@@ -90,7 +90,7 @@ export function QuoteFromLead({ row, fields, busy }: RecordExtProps) {
               autoFocus
             />
             <p className="hint">
-              {t("The quotation is made out to this contact, and the opportunity keeps it.")}
+              {t("The quotation is made out to this contact, and the lead keeps it.")}
             </p>
           </div>
         </Dialog>

@@ -11,8 +11,8 @@ label = "Asiakas"
 description = "Tarjouksen tai tilauksen asiakas"
 
 [labels.fi.model.sale_order.field.lead_id]
-label = "Myyntimahdollisuus"
-description = "CRM:n myyntimahdollisuus, jolle tarjous tehtiin; sen asiakas, ellei toista anneta"
+label = "Liidi"
+description = "CRM:n liidi, jolle tarjous tehtiin; sen asiakas, ellei toista anneta"
 
 [labels.fi.model.sale_order.field.state]
 label = "Tila"
