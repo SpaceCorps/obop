@@ -190,6 +190,7 @@ export function VatReturnPanel({ row }: RecordExtProps) {
             {data.untaxed.map((code) => (
               <li key={code}>
                 <a
+                  className="btn small"
                   href={
                     data.codeIds[code]
                       ? href({ app: "accounting_se", model: CODE, id: data.codeIds[code] })
