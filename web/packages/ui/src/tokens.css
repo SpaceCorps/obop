@@ -336,12 +336,13 @@
   --card-pad: var(--space-4);
 }
 /* A finger needs 44 px (Apple) and never less than 24 (WCAG 2.2): phones and touch screens keep these
-   whatever density is chosen. It comes after the compact block so it wins over it. */
+   whatever density is chosen, the small controls too (a card action, "Add a line", a toast's
+   Dismiss). It comes after the compact block so it wins over it. */
 @media (max-width: 40rem), (pointer: coarse) {
   :root,
   :root[data-density="compact"] {
     --control-h: 2.75rem;
-    --control-h-sm: 2.25rem;
+    --control-h-sm: 2.75rem;
     --control-h-lg: 3rem;
   }
 }
