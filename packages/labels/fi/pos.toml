@@ -89,6 +89,9 @@ closed = "Suljettu"
 label = "Sulje"
 description = "Sulje kassavuoro, kun laatikko on laskettu (vain esihenkilö)"
 
+[labels.fi.model.pos_session.action.close.assert.difference_explained]
+message = "Kassaeroa ei ole selitetty: kirjoita syy muistiinpanoon ennen sulkemista"
+
 [labels.fi.model.pos_order]
 name = "Kassamyynti"
 plural = "Kassamyynnit"

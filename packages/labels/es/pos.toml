@@ -89,6 +89,9 @@ closed = "Cerrado"
 label = "Cerrar"
 description = "Cerrar la sesión una vez contado el cajón (solo responsables)"
 
+[labels.es.model.pos_session.action.close.assert.difference_explained]
+message = "La diferencia de caja no está explicada: indica el motivo en la nota antes de cerrar"
+
 [labels.es.model.pos_order]
 name = "Venta"
 plural = "Ventas"

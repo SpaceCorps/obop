@@ -22,6 +22,18 @@ description = "E-Mail-Adresse der Kontaktperson"
 label = "Erwarteter Umsatz"
 description = "Erwarteter Umsatz in der kleinsten Währungseinheit"
 
+[labels.de.model.lead.field.party_id]
+label = "Kunde"
+description = "Der Kunde: der Kontakt, für den ein Angebot aus dem Lead erstellt wird"
+
+[labels.de.model.lead.field.expected_close]
+label = "Voraussichtlicher Abschluss"
+description = "Tag, an dem das Geschäft voraussichtlich abgeschlossen wird (JJJJ-MM-TT)"
+
+[labels.de.model.lead.field.lost_reason]
+label = "Verlustgrund"
+description = "Warum die Verkaufschance verloren wurde"
+
 [labels.de.model.lead.field.stage]
 label = "Phase"
 description = "Phase in der Pipeline: neu, qualifiziert, gewonnen oder verloren"

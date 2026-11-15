@@ -13,6 +13,7 @@ obop-registry.workspace = true
 obop-commands.workspace = true
 
 [dev-dependencies]
+crm.workspace = true
 invoicing.workspace = true
 product.workspace = true
 

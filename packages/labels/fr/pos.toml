@@ -89,6 +89,9 @@ closed = "Clôturée"
 label = "Clôturer"
 description = "Clôture la session une fois le tiroir compté (responsable uniquement)"
 
+[labels.fr.model.pos_session.action.close.assert.difference_explained]
+message = "L'écart de caisse n'est pas expliqué : indiquez-en la raison dans la note avant de clôturer"
+
 [labels.fr.model.pos_order]
 name = "Vente"
 plural = "Ventes"

@@ -89,6 +89,9 @@ closed = "Abgeschlossen"
 label = "Abschließen"
 description = "Die Sitzung abschließen, sobald die Schublade gezählt ist (nur Führungskräfte)"
 
+[labels.de.model.pos_session.action.close.assert.difference_explained]
+message = "Die Kassendifferenz ist nicht erklärt: vor dem Abschließen im Notizfeld begründen"
+
 [labels.de.model.pos_order]
 name = "Verkauf"
 plural = "Verkäufe"

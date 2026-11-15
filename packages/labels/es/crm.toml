@@ -22,6 +22,18 @@ description = "Correo electrónico de la persona de contacto"
 label = "Ingresos previstos"
 description = "Ingresos esperados en unidades menores"
 
+[labels.es.model.lead.field.party_id]
+label = "Cliente"
+description = "El cliente: el contacto para el que se crea un presupuesto a partir de la oportunidad"
+
+[labels.es.model.lead.field.expected_close]
+label = "Cierre previsto"
+description = "Día en que se espera cerrar el trato (AAAA-MM-DD)"
+
+[labels.es.model.lead.field.lost_reason]
+label = "Motivo de pérdida"
+description = "Por qué se perdió la oportunidad"
+
 [labels.es.model.lead.field.stage]
 label = "Etapa"
 description = "Etapa del embudo: nueva, cualificada, ganada o perdida"

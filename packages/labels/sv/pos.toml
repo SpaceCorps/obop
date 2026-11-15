@@ -89,6 +89,9 @@ closed = "Stängt"
 label = "Stäng"
 description = "Stäng kassapasset när kassalådan har räknats (endast chef)"
 
+[labels.sv.model.pos_session.action.close.assert.difference_explained]
+message = "Kassadifferensen är inte förklarad: ange orsaken i anteckningen innan du stänger"
+
 [labels.sv.model.pos_order]
 name = "Försäljning"
 plural = "Försäljningar"

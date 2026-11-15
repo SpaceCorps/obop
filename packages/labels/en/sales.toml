@@ -24,3 +24,6 @@ label = "Unit price"
 
 [labels.en.model.sale_order_line.field.amount_minor]
 label = "Amount"
+
+[labels.en.model.sale_order.field.lead_id]
+label = "Lead"

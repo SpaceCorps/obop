@@ -42,13 +42,13 @@ describe("registrations", () => {
     );
   });
   it("a model without one gets empty lists", () => {
-    expect(recordExtensionOf("lead")).toEqual({
+    expect(recordExtensionOf("no_such_model")).toEqual({
       actions: [],
       panels: [],
       sections: [],
       overrides: [],
     });
-    expect(modelPageOf("lead")).toBeUndefined();
+    expect(modelPageOf("no_such_model")).toBeUndefined();
   });
   it("merges registrations for one model in order", () => {
     const A = () => null;

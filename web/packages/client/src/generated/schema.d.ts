@@ -3493,8 +3493,17 @@ export interface components {
             contact_email?: string;
             /** @description Name of the contact person (personal data: agents see it masked) */
             contact_name?: string;
+            /**
+             * Format: date
+             * @description Day the deal is expected to close (YYYY-MM-DD)
+             */
+            expected_close?: string;
             /** @description Expected revenue in minor units */
             expected_revenue_minor?: number;
+            /** @description Why the opportunity was lost */
+            lost_reason?: string;
+            /** @description The customer: the contact record that a quotation made from the lead is for */
+            party_id?: string;
             /**
              * @description Pipeline stage: new, qualified, won or lost (moves only through the model's actions)
              * @enum {string}
@@ -3900,6 +3909,8 @@ export interface components {
         sale_order: {
             /** @description ISO 4217 currency code */
             currency?: string;
+            /** @description The CRM lead the quotation was made for; its customer unless one is given */
+            lead_id?: string;
             /** @description Order number such as SO-00042, assigned when the order is created (a number the system assigns; read-only) */
             readonly number?: string;
             /** @description Customer party id */
@@ -9926,8 +9937,17 @@ export interface operations {
                         contact_email?: string;
                         /** @description Name of the contact person (personal data: agents see it masked) */
                         contact_name?: string;
+                        /**
+                         * Format: date
+                         * @description Day the deal is expected to close (YYYY-MM-DD)
+                         */
+                        expected_close?: string;
                         /** @description Expected revenue in minor units */
                         expected_revenue_minor?: number;
+                        /** @description Why the opportunity was lost */
+                        lost_reason?: string;
+                        /** @description The customer: the contact record that a quotation made from the lead is for */
+                        party_id?: string;
                         /**
                          * @description Pipeline stage: new, qualified, won or lost (moves only through the model's actions)
                          * @enum {string}
@@ -10032,8 +10052,17 @@ export interface operations {
                     contact_email?: string;
                     /** @description Name of the contact person (personal data: agents see it masked) */
                     contact_name?: string;
+                    /**
+                     * Format: date
+                     * @description Day the deal is expected to close (YYYY-MM-DD)
+                     */
+                    expected_close?: string;
                     /** @description Expected revenue in minor units */
                     expected_revenue_minor?: number;
+                    /** @description Why the opportunity was lost */
+                    lost_reason?: string;
+                    /** @description The customer: the contact record that a quotation made from the lead is for */
+                    party_id?: string;
                     /**
                      * @description Pipeline stage: new, qualified, won or lost (moves only through the model's actions)
                      * @enum {string}
@@ -10787,9 +10816,18 @@ export interface operations {
                     contact_email?: string;
                     /** @description Name of the contact person (personal data: agents see it masked) */
                     contact_name?: string;
+                    /**
+                     * Format: date
+                     * @description Day the deal is expected to close (YYYY-MM-DD)
+                     */
+                    expected_close?: string;
                     /** @description Expected revenue in minor units */
                     expected_revenue_minor?: number;
                     id: string;
+                    /** @description Why the opportunity was lost */
+                    lost_reason?: string;
+                    /** @description The customer: the contact record that a quotation made from the lead is for */
+                    party_id?: string;
                     /**
                      * @description Pipeline stage: new, qualified, won or lost (moves only through the model's actions)
                      * @enum {string}
@@ -16521,6 +16559,8 @@ export interface operations {
                     rows?: {
                         /** @description ISO 4217 currency code */
                         currency?: string;
+                        /** @description The CRM lead the quotation was made for; its customer unless one is given */
+                        lead_id?: string;
                         /** @description Customer party id */
                         party_id?: string;
                         /**
@@ -16779,6 +16819,8 @@ export interface operations {
                 "application/json": {
                     /** @description ISO 4217 currency code */
                     currency?: string;
+                    /** @description The CRM lead the quotation was made for; its customer unless one is given */
+                    lead_id?: string;
                     /** @description Customer party id */
                     party_id?: string;
                     /**
@@ -17297,6 +17339,8 @@ export interface operations {
                     /** @description ISO 4217 currency code */
                     currency?: string;
                     id: string;
+                    /** @description The CRM lead the quotation was made for; its customer unless one is given */
+                    lead_id?: string;
                     /** @description Customer party id */
                     party_id?: string;
                     /**

@@ -1,6 +1,6 @@
 [module]
 id = "pos"
-version = "0.4.0"
+version = "0.4.1"
 name = "Point of Sale"
 description = "Shop tills: a point-of-sale configuration, sessions that are opened and closed, orders with lines, and payment lines per method. A refund and the closing of a session need a human approval from a manager; agents may only propose them. Line subtotals and the order total are computed from the lines, receipts get a gapless yearly number, and paying is refused until the payments cover the total; change and cash differences are still entered, and the cash control and refund settings of a point of sale are only recorded: nothing checks them. Paying also creates a draft stock move per line from the order's stock location, for the warehouse to validate. Card numbers must never be stored; keep only the payment provider's reference. Needs the Products package."
 author = "SpaceCorps"
@@ -12,7 +12,7 @@ keywords = ["pos", "retail", "till"]
 categories = ["sales"]
 maturity = "experimental"
 requires_core = "^0.2.2"
-changelog = "The app opens on Sessions; a till is called a till and sits under Configuration. A new session starts today, for you, with the till's opening cash; a new sale goes to the one open session, dated today; a line takes the product's name and price. Closing a session stamps the closing day. A paid, refunded or cancelled sale, its lines and its payments can no longer be changed, and neither can a closed session except its note."
+changelog = "The app opens on Sessions; a till is called a till and sits under Configuration. A new session starts today, for you, with the till's opening cash; a new sale goes to the one open session, dated today; a line takes the product's name and price. Closing a session stamps the closing day. A paid, refunded or cancelled sale, its lines and its payments can no longer be changed, and neither can a closed session except its note. A session whose counted cash differs from the expected cash closes only with a note that explains the difference."
 home = "pos_session"
 
 [module.dependencies]
@@ -200,6 +200,7 @@ write_group = "pos.user"
   to = "closed"
   group = "pos.manager"
   approval = true
+  assert = [{ expr = "cash_difference == 0 || is_set(note)", message = "The cash difference is not explained: give the reason in the note before closing", key = "difference_explained" }]
   [model.action.ui]
   primary = true
   confirm = "Close this session? Count the cash in the drawer first; a closed session cannot be changed."

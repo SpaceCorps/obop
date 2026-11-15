@@ -7,8 +7,12 @@ name = "Myyntitilaus"
 description = "Asiakkaalle tehty tarjous tai vahvistettu tilaus"
 
 [labels.fi.model.sale_order.field.party_id]
-label = "Osapuoli"
-description = "Asiakasosapuolen tunniste"
+label = "Asiakas"
+description = "Tarjouksen tai tilauksen asiakas"
+
+[labels.fi.model.sale_order.field.lead_id]
+label = "Liidi"
+description = "CRM:n liidi, jolle tarjous tehtiin; sen asiakas, ellei toista anneta"
 
 [labels.fi.model.sale_order.field.state]
 label = "Tila"
