@@ -1057,7 +1057,14 @@ fn the_sale_flow_is_atomic_on_a_real_sqlite_file() {
     app.dispatcher
         .set_clock(std::sync::Arc::new(|| SEPTEMBER_2026));
     let sales = user("sam", &["base.user", "sales.user", "invoicing.user"]);
-    let order = id(&ok(&app, &sales, "sale_order.create", json!({})));
+    // Confirming needs a customer and a line (B26).
+    let party = id(&ok(&app, &sales, "party.create", json!({"name": "Acme"})));
+    let order = id(&ok(
+        &app,
+        &sales,
+        "sale_order.create",
+        json!({"party_id": party}),
+    ));
     ok(
         &app,
         &sales,

@@ -30,21 +30,37 @@ fn root() -> std::path::PathBuf {
 }
 
 /// Every model that exists today, built in or parsed from a bundled package, carries the default
-/// per-model extensions: no history setting, no declared index, no guard. The record history,
-/// index and guard features read `ModelDef::ext`; until each lands, nothing may set it.
+/// per-model extensions: no history setting, no declared index. The record history and index
+/// features read `ModelDef::ext`; until each lands, nothing may set it. The UI hints (D95) and the
+/// command-layer guard (D77) have landed, so a model may declare those.
 #[test]
 fn every_existing_model_has_the_default_extensions() {
+    let bare = |ext: &ModelExt| ModelExt {
+        ui: None,
+        guard: None,
+        ..ext.clone()
+    };
     let mut seen = 0;
     for m in &App::new().modules {
         for def in &m.models {
-            assert_eq!(def.ext, ModelExt::default(), "built-in model {}", def.name);
+            assert_eq!(
+                bare(&def.ext),
+                ModelExt::default(),
+                "built-in model {}",
+                def.name
+            );
             seen += 1;
         }
     }
     for manifest in bundled() {
         let module = manifest.to_module().unwrap();
         for def in &module.models {
-            assert_eq!(def.ext, ModelExt::default(), "package model {}", def.name);
+            assert_eq!(
+                bare(&def.ext),
+                ModelExt::default(),
+                "package model {}",
+                def.name
+            );
             seen += 1;
         }
     }
