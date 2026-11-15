@@ -109,8 +109,8 @@ test.describe("mileage review", () => {
     await signIn("mina", `/mileage/mileage_trip?view=list&id=${submitted}`);
     const record = page.getByRole("complementary", { name: /record$/ });
     await expect(record).toBeVisible();
-    // The distance is the server's; the status bar says where the trip stands.
-    await expect(record.getByLabel("Distance m")).toHaveValue("200.15");
+    // The distance is the server's (200.15 m, shown in km); the status bar says where the trip stands.
+    await expect(record.getByLabel("Distance", { exact: true })).toHaveValue("0.2");
     await expect(record.locator("[aria-current=step]")).toContainText("In review");
     const hidden = await api.post(
       "/api/mileage_trip/get",

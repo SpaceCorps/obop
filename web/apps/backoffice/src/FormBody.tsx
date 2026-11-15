@@ -8,7 +8,7 @@ import type { FieldMeta, ModelMeta, Row } from "./api.ts";
 import { useData } from "./data.tsx";
 import { fromEdit, type Edit } from "./edit.ts";
 import { recordExtensionOf, type RecordSectionProps } from "./extensions.ts";
-import { Cell, FieldInput, RefLabel } from "./fields.tsx";
+import { Cell, FieldFormProvider, FieldInput, formOrder, RefLabel } from "./fields.tsx";
 import { optionLabel, shownLabel } from "./format.ts";
 import { shortcut } from "./keys.ts";
 import { fieldTitle, fieldTitleByName } from "./labels.ts";
@@ -232,6 +232,19 @@ export function FormBody(p: FormBodyProps) {
         if (p.dirty || creating) p.onSubmit();
       }}
     >
+      {/* The inputs see the rest of the record: fill_from, the slug, a document named after its file. */}
+      <FieldFormProvider
+        value={{
+          model,
+          peek: (name) => {
+            const f = (fields.find((x) => x.name === name) ?? model.fields.find((x) => x.name === name));
+            return f ? value(f) : undefined;
+          },
+          fill: (values) => {
+            for (const [name, v] of Object.entries(values)) p.onEdit(name, v);
+          },
+        }}
+      >
       {p.sections.map((s) => {
         const shown = s.fields.some(wrong) || (open[s.key] ?? !s.collapsed);
         const Grid = asList ? "dl" : "div";
@@ -243,7 +256,7 @@ export function FormBody(p: FormBodyProps) {
                 {t("Contains personal data. Agents see it masked.")}
               </p>
             )}
-            <Grid className="fgrid">{s.fields.map(field)}</Grid>
+            <Grid className="fgrid">{formOrder(s.fields).map(field)}</Grid>
           </>
         );
         if (!s.label)
@@ -277,6 +290,7 @@ export function FormBody(p: FormBodyProps) {
           </section>
         );
       })}
+      </FieldFormProvider>
       <SectionSlot
         model={model}
         fields={fields}
