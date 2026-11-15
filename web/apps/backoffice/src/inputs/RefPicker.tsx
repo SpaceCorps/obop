@@ -248,11 +248,12 @@ export function RefPicker(p: RefPickerProps) {
   const titleFields = target
     ? titleFieldsOf(target).map((n) => target.fields.find((f) => f.name === n))
     : [];
-  // A record named by a ref (a vendor is its contact): the typed name is the name of that record,
-  // made or found first, never another text field of this one ("Our customer number").
+  // A record named by one ref and nothing else (a vendor is its contact): the typed name is the
+  // name of that record, made or found first, never another text field of this one ("Our customer
+  // number"). A title of several parts (a stock item is a product at a location) makes nothing.
   const viaRef = (() => {
     const f = titleFields[0];
-    if (!target || f?.kind !== "ref" || !f.to) return undefined;
+    if (!target || titleFields.length !== 1 || f?.kind !== "ref" || !f.to) return undefined;
     const other = d.models.get(f.to)?.model;
     const name = other ? textTitleOf(other) : undefined;
     return other?.can_create && name ? { field: f.name, to: f.to, name } : undefined;
