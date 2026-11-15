@@ -364,7 +364,7 @@ function LineDetail(p: {
       const [items, sug] = await Promise.all([
         search(d.token, ITEM, {
           filter: [
-            { field: "reconciled", op: "eq", value: false },
+            { field: "reconciled", op: "ne", value: true },
             { field: side, op: "eq", value: Math.abs(amount) },
           ],
           limit: 20,

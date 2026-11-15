@@ -321,7 +321,7 @@ function JournalCardView(p: {
           c.toMatch.count > 0 ? (
             <a className="btn primary" href={p.reconcileHref}>
               <Icon name="check" size={16} />
-              {t("Match {count} transactions", { count: fmt.integer(c.toMatch.count) })}
+              {t("Match transactions ({count})", { count: fmt.integer(c.toMatch.count) })}
             </a>
           ) : (
             <span className="acc-done">
