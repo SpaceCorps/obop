@@ -89,6 +89,9 @@ closed = "Zamknięte"
 label = "Zamknij"
 description = "Zamyka sesję po przeliczeniu szuflady (tylko kierownik)"
 
+[labels.pl.model.pos_session.action.close.assert.difference_explained]
+message = "Różnica w kasie nie jest wyjaśniona: przed zamknięciem podaj przyczynę w notatce"
+
 [labels.pl.model.pos_order]
 name = "Sprzedaż"
 plural = "Sprzedaże"

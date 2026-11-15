@@ -30,6 +30,7 @@ import { formatDate, majorString, money, parseMoney } from "../../format.ts";
 import { useMedia } from "../../media.ts";
 import type { Go } from "../../route.ts";
 import { serverMessage } from "../../serverMessage.ts";
+import { PrintSheet } from "../sales/PrintSheet.tsx";
 import {
   addProduct,
   byCode,
@@ -377,10 +378,21 @@ function Terminal(p: {
         <div className="pos-bar-title">
           <h1>{title}</h1>
           <p>
-            {t("Opened {date} by {cashier}", {
-              date: formatDate(p.session.opened_on),
-              cashier: str(p.session.cashier),
-            })}
+            <span>
+              {t("Opened {date} by {cashier}", {
+                date: formatDate(p.session.opened_on),
+                cashier: str(p.session.cashier),
+              })}
+            </span>
+            {/* Always on the till: this register is not a certified fiscal till (no TSE). */}
+            <span
+              className="pos-bar-fiscal"
+              title={t(
+                "This register records sales and payments. It is not a certified fiscal till: it has no technical security device (TSE).",
+              )}
+            >
+              <Badge tone="warning">{t("Not for fiscal use")}</Badge>
+            </span>
           </p>
         </div>
         <div className="pos-bar-actions">
@@ -597,6 +609,18 @@ function CartPanel(p: {
                 tooltip={false}
                 onClick={() => p.onChange(setQty(p.lines, i, l.qty + 1))}
               />
+              <button
+                type="button"
+                className="pos-line-disc"
+                aria-expanded={editing === i}
+                aria-label={t("Discount on {product}", { product: l.name })}
+                onClick={() => {
+                  setEditing(editing === i ? null : i);
+                  setPct(l.discountBp ? String(l.discountBp / 100) : "");
+                }}
+              >
+                %
+              </button>
             </div>
             {editing === i && (
               <form
@@ -854,8 +878,7 @@ function Receipt(p: {
   currency?: string;
   onNext: () => void;
 }) {
-  const { order, lines, tenders, change } = p.done;
-  const header = str(p.config?.receipt_header);
+  const { change } = p.done;
   return (
     <Dialog
       open
@@ -879,53 +902,68 @@ function Receipt(p: {
           <strong>{money(change, p.currency)}</strong>
         </div>
       )}
-      <article className="pos-receipt pos-print" aria-label={t("Receipt")}>
-        {header && <pre className="pos-receipt-head">{header}</pre>}
-        <p className="pos-receipt-meta">
-          <span>{str(order.receipt_number)}</span>
-          <span>{formatDate(order.ordered_on)}</span>
-        </p>
-        <table>
-          <tbody>
-            {lines.map((l, i) => (
-              <tr key={i}>
-                <td>
-                  {l.qty} × {l.name}
-                  {l.discountBp > 0 && (
-                    <span className="pos-receipt-sub">
-                      {t("{pct} % off", { pct: (l.discountBp / 100).toLocaleString() })}
-                    </span>
-                  )}
-                </td>
-                <td className="tabular">{money(lineTotal(l), p.currency)}</td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr className="pos-receipt-total">
-              <th scope="row">{t("Total")}</th>
-              <td className="tabular">{money(num(order.total), p.currency)}</td>
-            </tr>
-            {tenders.map((x, i) => (
-              <tr key={`t${i}`}>
-                <th scope="row">
-                  {METHODS.find((m) => m.value === x.method)?.label() ?? x.method}
-                </th>
-                <td className="tabular">
-                  {money(x.amount + (x.method === "cash" ? change : 0), p.currency)}
-                </td>
-              </tr>
-            ))}
-            {change > 0 && (
-              <tr>
-                <th scope="row">{t("Change")}</th>
-                <td className="tabular">{money(change, p.currency)}</td>
-              </tr>
-            )}
-          </tfoot>
-        </table>
+      <article className="pos-receipt" aria-label={t("Receipt")}>
+        <ReceiptBody {...p} />
       </article>
+      {/* The copy on paper: once, 80 mm wide, outside the dialog (PrintSheet). */}
+      <PrintSheet>
+        <article className="pos-receipt pos-receipt-paper">
+          <ReceiptBody {...p} />
+        </article>
+      </PrintSheet>
     </Dialog>
+  );
+}
+
+/** What a receipt says: the header, the number and day, the lines, the total and the payments. */
+function ReceiptBody(p: { done: Done; config: Row | undefined; currency?: string }) {
+  const { order, lines, tenders, change } = p.done;
+  const header = str(p.config?.receipt_header);
+  return (
+    <>
+      {header && <pre className="pos-receipt-head">{header}</pre>}
+      <p className="pos-receipt-meta">
+        <span>{str(order.receipt_number)}</span>
+        <span>{formatDate(order.ordered_on)}</span>
+      </p>
+      <table>
+        <tbody>
+          {lines.map((l, i) => (
+            <tr key={i}>
+              <td>
+                {l.qty} × {l.name}
+                {l.discountBp > 0 && (
+                  <span className="pos-receipt-sub">
+                    {t("{pct} % off", { pct: (l.discountBp / 100).toLocaleString() })}
+                  </span>
+                )}
+              </td>
+              <td className="tabular">{money(lineTotal(l), p.currency)}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr className="pos-receipt-total">
+            <th scope="row">{t("Total")}</th>
+            <td className="tabular">{money(num(order.total), p.currency)}</td>
+          </tr>
+          {tenders.map((x, i) => (
+            <tr key={`t${i}`}>
+              <th scope="row">{METHODS.find((m) => m.value === x.method)?.label() ?? x.method}</th>
+              <td className="tabular">
+                {money(x.amount + (x.method === "cash" ? change : 0), p.currency)}
+              </td>
+            </tr>
+          ))}
+          {change > 0 && (
+            <tr>
+              <th scope="row">{t("Change")}</th>
+              <td className="tabular">{money(change, p.currency)}</td>
+            </tr>
+          )}
+        </tfoot>
+      </table>
+    </>
   );
 }
 
@@ -983,9 +1021,13 @@ function CloseDialog(p: {
   }, [cashSales]);
   const closing = parseMoney(counted, p.currency);
   const diff = closing === null ? null : closing - expected;
+  // A difference closes only with a note that explains it (the close action asserts the same).
+  const [tried, setTried] = useState(false);
+  const noteMissing = !!diff && !note.trim();
 
   const closeIt = async () => {
     if (closing === null) return;
+    if (noteMissing) return setTried(true);
     setBusy(true);
     try {
       // The count is an update of its own; the state moves only through the close action.
@@ -1074,7 +1116,8 @@ function CloseDialog(p: {
           )}
           <Textarea
             label={t("Note")}
-            hint={diff ? t("Explain the difference.") : undefined}
+            hint={diff && !(tried && noteMissing) ? t("Explain the difference.") : undefined}
+            error={tried && noteMissing ? t("Explain the difference before closing.") : undefined}
             rows={2}
             value={note}
             onChange={(e) => setNote(e.target.value)}

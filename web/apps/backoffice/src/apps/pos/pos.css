@@ -128,6 +128,10 @@
   overflow-wrap: break-word;
 }
 .pos-bar-title p {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
   color: var(--text-muted);
   font-size: var(--text-sm);
 }
@@ -167,11 +171,16 @@
   border-radius: var(--radius-pill);
   background: var(--surface);
   color: var(--text-muted);
-  box-shadow: var(--shadow-1);
+  /* The second shadow is a backdrop in the panel's colour up to the top edge of the grid area, so
+     tiles that scroll under the bar do not show above or beside it. */
+  --pos-search-backdrop: 0 calc(-1 * var(--space-5)) 0 var(--space-5) var(--surface);
+  box-shadow: var(--shadow-1), var(--pos-search-backdrop);
 }
 .pos-search:focus-within {
   border-color: var(--accent-fill);
-  box-shadow: 0 0 0 3px var(--ring);
+  box-shadow:
+    0 0 0 3px var(--ring),
+    var(--pos-search-backdrop);
 }
 .pos-search input {
   flex: 1;
@@ -367,6 +376,20 @@
   border: 1px solid var(--border-control);
   border-radius: var(--radius-pill);
 }
+/* The discount of a line, next to its steppers, so a cashier sees it can be given. */
+.pos-line-qty .pos-line-disc {
+  margin-inline-start: auto;
+  padding-inline: var(--space-3);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+.pos-line-qty .pos-line-disc[aria-expanded="true"] {
+  border-color: var(--accent-fill);
+  background: var(--accent-soft);
+}
 .pos-qty {
   min-inline-size: 2.5rem;
   text-align: center;
@@ -509,6 +532,11 @@
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-1) var(--space-2) var(--space-1) var(--space-4);
+}
+/* Removing a part payment is a full touch target. */
+.pos-tenders .icon-btn.small {
+  min-inline-size: 2.75rem;
+  min-block-size: 2.75rem;
 }
 .pos-tenders li + li {
   border-block-start: 1px solid var(--border);
@@ -678,20 +706,23 @@
   }
 }
 
-/* Print only the receipt. */
+/* The receipt on paper (PrintSheet, print.css): 80 mm wide, no frame, the paper's colours. */
 @media print {
-  body:has(.pos-print) * {
-    visibility: hidden;
-  }
-  body:has(.pos-print) .pos-print,
-  body:has(.pos-print) .pos-print * {
-    visibility: visible;
-  }
-  body:has(.pos-print) .pos-print {
-    position: absolute;
-    inset: 0 auto auto 0;
+  .pos-receipt-paper {
     inline-size: 80mm;
+    margin: 0;
+    padding: 4mm;
     border: 0;
-    padding: 0;
+    border-radius: 0;
+    background: Canvas;
+    font-size: 10pt;
+  }
+  .pos-receipt-paper .pos-receipt-head,
+  .pos-receipt-paper .pos-receipt-sub {
+    color: var(--print-muted);
+  }
+  .pos-receipt-paper .pos-receipt-total th,
+  .pos-receipt-paper .pos-receipt-total td {
+    border-block-start-color: var(--print-rule);
   }
 }

@@ -51,6 +51,8 @@ test.describe("point of sale register", () => {
       await expect(page.getByLabel("Cash in the drawer")).toHaveValue("150.00");
       await page.getByRole("button", { name: "Open register" }).click();
       await expect(page.getByRole("heading", { name: till.name })).toBeVisible();
+      // The till always says it is not a certified fiscal till.
+      await expect(page.getByText("Not for fiscal use")).toBeVisible();
 
       // Find the product by its code, as a scanner types it, then tap its tile once more.
       const search = page.getByLabel("Search products or scan a code");
@@ -69,6 +71,20 @@ test.describe("point of sale register", () => {
       await expect(receipt).toContainText(/R-\d{4}-\d{6}/);
       await expect(receipt).toContainText("2 × " + product.name);
       await expect(receipt).toContainText("€498.00");
+      // On an 80 mm roll the receipt prints once, alone, dark on white.
+      const roll = await page.pdf({ width: "80mm", height: "200mm" });
+      expect((roll.toString("latin1").match(/\/Type\s*\/Page[^s]/g) ?? []).length).toBe(1);
+      await page.emulateMedia({ media: "print" });
+      const shown = await page.evaluate(() =>
+        [...document.body.children]
+          .filter((el) => getComputedStyle(el).display !== "none")
+          .map((el) => el.className),
+      );
+      expect(shown).toEqual(["print-sheet"]);
+      await expect(page.locator(".print-sheet .pos-receipt-paper")).toContainText(
+        "2 × " + product.name,
+      );
+      await page.emulateMedia({ media: "screen" });
 
       const orders = (await api.list("root", "pos_order")).filter(
         (o) => o.state === "paid" && o.total === 49800,
@@ -83,12 +99,19 @@ test.describe("point of sale register", () => {
       await page.getByRole("button", { name: "Close register" }).click();
       const close = page.getByRole("dialog", { name: "Close the register" });
       await expect(close.getByLabel("Cash counted")).toHaveValue("150.00");
+      // A difference closes only with a note that explains it.
+      await close.getByLabel("Cash counted").fill("140.00");
+      await expect(close).toContainText("€10.00 is missing from the drawer.");
+      await close.getByRole("button", { name: "Close register" }).click();
+      await expect(close).toContainText("Explain the difference before closing.");
+      await close.getByLabel("Note").fill("Change given twice");
       await close.getByRole("button", { name: "Close register" }).click();
       await expect(page.getByRole("heading", { name: "Open the register" })).toBeVisible();
       const session = (await api.list("root", "pos_session")).find((s) => s.config_id === till.id);
       expect(session.state).toBe("closed");
-      expect(session.closing_cash).toBe(15000);
-      expect(session.cash_difference).toBe(0);
+      expect(session.closing_cash).toBe(14000);
+      expect(session.cash_difference).toBe(-1000);
+      expect(session.note).toBe("Change given twice");
     });
   });
 
