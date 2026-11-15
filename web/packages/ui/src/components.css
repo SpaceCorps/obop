@@ -451,7 +451,11 @@ th > input[type="checkbox"] {
   cursor: pointer;
 }
 
+/* The hidden input is pinned over the switch itself. Positioned against nothing it sat at the top
+   of the nearest positioned ancestor (or the page), and focusing it scrolled the page to that
+   spot, far from the switch (B1). */
 .switch {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 0.6rem;
@@ -460,9 +464,12 @@ th > input[type="checkbox"] {
 }
 .switch input {
   position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  margin: 0;
   opacity: 0;
-  inline-size: 1px;
-  block-size: 1px;
+  cursor: pointer;
 }
 .switch .track {
   position: relative;
@@ -909,6 +916,33 @@ button.avatar {
 .menu-sep {
   margin-block: 0.3rem;
 }
+/* An entry that opens its own list (Language), and the Back entry at the top of that list. */
+.menu-item .menu-value {
+  flex: none;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+.menu-item .menu-chev {
+  flex: none;
+  color: var(--text-subtle);
+}
+.menu-back {
+  margin-block-end: 0.25rem;
+  border-block-end: 1px solid var(--border);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  color: var(--text-muted);
+  font-weight: var(--weight-medium);
+}
+/* Inside a submenu the entries without an icon keep the room of one, so the tick of the current
+   choice does not push its entry out of line. */
+.menu-list:has(> .menu-back) > .menu-item:not(.menu-back):not(:has(> .ico))::before {
+  content: "";
+  flex: none;
+  inline-size: 16px;
+}
+:dir(rtl) :is(.menu-chev, .menu-back > .ico) {
+  transform: scaleX(-1);
+}
 
 /* A finger needs 44 px: on a phone or a touch screen the labels around small controls grow to that
    height. A checkbox in a table cell gets a larger invisible hit area instead. Labels that sit side by
@@ -1133,17 +1167,29 @@ button.avatar {
   }
 }
 
+/* Toasts sit at the bottom right on a wide screen, above whatever bar the open sheet has at its
+   foot (`--toast-offset`, its height), and at the top centre on a phone or a narrow tablet, where
+   the bottom belongs to the keyboard and the form's buttons. */
 .toasts {
   position: fixed;
-  inset-block-end: var(--space-5);
-  inset-inline: 0;
+  inset-block-end: calc(var(--space-5) + var(--toast-offset, 0px));
+  inset-inline: auto var(--space-5);
   z-index: var(--z-toast);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  align-items: center;
-  padding-inline: var(--space-3);
+  align-items: flex-end;
+  max-inline-size: calc(100% - 2 * var(--space-5));
   pointer-events: none;
+}
+@media (max-width: 48rem) {
+  .toasts {
+    inset-block: calc(env(safe-area-inset-top, 0px) + 3.75rem) auto;
+    inset-inline: 0;
+    align-items: center;
+    max-inline-size: none;
+    padding-inline: var(--space-3);
+  }
 }
 .toast {
   display: flex;
@@ -1171,6 +1217,20 @@ button.avatar {
 .toast-text {
   flex: 1;
   overflow-wrap: anywhere;
+}
+.toast-action {
+  flex: none;
+  padding: 0.3rem 0.55rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--accent-ink);
+  font: inherit;
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+.toast-action:hover {
+  background: var(--accent-soft);
 }
 
 /* ---------- Table ---------- */

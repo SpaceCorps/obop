@@ -703,6 +703,14 @@ export type MenuItem =
       hint?: string;
       /** A second line under the label, for example why the item is disabled. Also the tooltip. */
       description?: string;
+    }
+  | {
+      /** An entry that opens a list of its own in the same menu, with a Back entry on top. */
+      label: string;
+      items: MenuItem[];
+      icon?: IconName;
+      /** The current choice, shown at the end of the entry ("English"). */
+      value?: string;
     };
 
 /** An action menu: arrow keys move, Enter or Space picks, Escape closes and returns focus. */
@@ -720,19 +728,29 @@ export function Menu({
   triggerClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
+  // The entry whose own list is shown (a submenu), by its label; null: the top list.
+  const [sub, setSub] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const btn = useRef<HTMLButtonElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const id = useId();
   const close = useCallback((refocus = true) => {
     setOpen(false);
+    setSub(null);
     if (refocus) btn.current?.focus();
   }, []);
   useDismiss(ref, open, () => close(true));
   useEffect(() => {
     if (open)
       list.current?.querySelector<HTMLElement>('[role="menuitem"]:not([disabled])')?.focus();
-  }, [open]);
+  }, [open, sub]);
+  const parent = sub
+    ? items.find(
+        (it): it is Extract<MenuItem, { items: MenuItem[] }> =>
+          typeof it === "object" && "items" in it && it.label === sub,
+      )
+    : undefined;
+  const shown: MenuItem[] = parent ? parent.items : items;
   return (
     <div className="dropdown" ref={ref}>
       <button
@@ -765,13 +783,44 @@ export function Menu({
             if (e.key === "Tab") close(false);
           }}
         >
-          {items.map((it, i) =>
+          {parent && (
+            <button
+              type="button"
+              role="menuitem"
+              className="menu-item menu-back"
+              onClick={() => setSub(null)}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowLeft") setSub(null);
+              }}
+            >
+              <Icon name="chevron-left" size={16} />
+              <span>{parent.label}</span>
+            </button>
+          )}
+          {shown.map((it, i) =>
             it === "separator" ? (
               <hr key={i} className="menu-sep" />
             ) : "heading" in it ? (
               <div key={`h${i}`} className="menu-head" role="presentation">
                 {it.heading}
               </div>
+            ) : "items" in it ? (
+              <button
+                key={it.label}
+                type="button"
+                role="menuitem"
+                aria-haspopup="menu"
+                className="menu-item menu-sub"
+                onClick={() => setSub(it.label)}
+                onKeyDown={(e) => {
+                  if (e.key === "ArrowRight") setSub(it.label);
+                }}
+              >
+                {it.icon && <Icon name={it.icon} size={16} />}
+                <span>{it.label}</span>
+                {it.value && <small className="menu-value">{it.value}</small>}
+                <Icon name="chevron-right" size={14} className="menu-chev" />
+              </button>
             ) : (
               <button
                 key={it.label}
@@ -816,15 +865,28 @@ export function Tooltip({
   const [show, setShow] = useState(false);
   const id = useId();
   const timer = useRef<number | undefined>(undefined);
-  const on = () => {
+  const wrap = useRef<HTMLSpanElement>(null);
+  // A control that has opened its menu or popover (aria-expanded) needs no tip on top of it.
+  const expanded = (children.props as { "aria-expanded"?: unknown })["aria-expanded"];
+  const isExpanded = expanded === true || expanded === "true";
+  const on = (delay = 350) => {
     window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => setShow(true), 350);
+    timer.current = window.setTimeout(() => setShow(true), delay);
   };
   const off = () => {
     window.clearTimeout(timer.current);
     setShow(false);
   };
   useEffect(() => () => window.clearTimeout(timer.current), []);
+  // Any press anywhere else closes a shown tip: on a touch screen nothing else would (B16).
+  useEffect(() => {
+    if (!show) return;
+    const down = (e: PointerEvent) => {
+      if (e.pointerType !== "mouse" || !wrap.current?.contains(e.target as Node)) off();
+    };
+    addEventListener("pointerdown", down, true);
+    return () => removeEventListener("pointerdown", down, true);
+  }, [show]);
   const body = useRef<HTMLSpanElement>(null);
   // Where the tip has to go to stay readable: the other side when it would leave the visible area
   // above or below, and a sideways shift when it would leave it at a side (a button in a corner).
@@ -841,20 +903,33 @@ export function Tooltip({
   const shown = fit?.side ?? side;
   return (
     <span
+      ref={wrap}
       className="tip"
-      onMouseEnter={on}
-      onMouseLeave={off}
+      // Only a mouse hovers. A finger's tap sends mouse events as well, and the tip it left behind
+      // stayed over the menu the tap had opened (B16).
+      onPointerEnter={(e) => e.pointerType === "mouse" && on()}
+      onPointerLeave={(e) => e.pointerType === "mouse" && off()}
+      onPointerDown={(e) => e.pointerType === "mouse" && off()}
+      // On a touch screen a tap shows the tip only on a control that is greyed out, where it says
+      // why (a status step that cannot be chosen); it goes again after a moment.
+      onPointerUp={(e) => {
+        if (e.pointerType === "mouse") return;
+        if ((e.target as Element).closest('[aria-disabled="true"]')) {
+          on(0);
+          window.setTimeout(off, 2500);
+        }
+      }}
       // Focus from the keyboard opens the tip, focus a script moves (a dialog's first control, the
-      // opener a closed dialog returns to) does not: on a phone nothing would close it again. :hover
-      // keeps the tip for a tap, which focuses and hovers at once (the reason a status step is greyed).
+      // opener a closed dialog returns to) or a tap gives does not: on a phone nothing would close
+      // it again.
       onFocus={(e) => {
-        if ((e.target as Element).matches(":focus-visible, :hover")) setShow(true);
+        if ((e.target as Element).matches(":focus-visible")) setShow(true);
       }}
       onBlur={off}
       onKeyDown={(e) => e.key === "Escape" && off()}
     >
-      {cloneElement(children, show ? { "aria-describedby": id } : {})}
-      {show && (
+      {cloneElement(children, show && !isExpanded ? { "aria-describedby": id } : {})}
+      {show && !isExpanded && (
         <span
           ref={body}
           role="tooltip"
@@ -1071,7 +1146,9 @@ export function Dialog({
 }
 
 export type ToastTone = "ok" | "error" | "info";
-export type ToastItem = { id: number; text: string; tone: ToastTone };
+/** A link or a button at the end of a toast ("Open" the record an action made). */
+export type ToastAction = { label: string; href?: string; onClick?: () => void };
+export type ToastItem = { id: number; text: string; tone: ToastTone; action?: ToastAction };
 
 /** One polite live region, so screen readers hear every toast. */
 export function ToastRegion({
@@ -1084,7 +1161,7 @@ export function ToastRegion({
   return (
     <div className="toasts" role="status" aria-live="polite" aria-atomic="false">
       {items.map((t) => (
-        <Toast key={t.id} tone={t.tone} onDismiss={() => onDismiss(t.id)}>
+        <Toast key={t.id} tone={t.tone} action={t.action} onDismiss={() => onDismiss(t.id)}>
           {t.text}
         </Toast>
       ))}
@@ -1095,10 +1172,12 @@ export function ToastRegion({
 export function Toast({
   tone = "ok",
   children,
+  action,
   onDismiss,
 }: {
   tone?: ToastTone;
   children: ReactNode;
+  action?: ToastAction;
   onDismiss?: () => void;
 }) {
   const icon: IconName = tone === "ok" ? "check-circle" : tone === "error" ? "warning" : "info";
@@ -1106,6 +1185,23 @@ export function Toast({
     <div className={cx("toast panel", tone)}>
       <Icon name={icon} size={18} className="toast-icon" />
       <span className="toast-text">{children}</span>
+      {action &&
+        (action.href ? (
+          <a className="toast-action" href={action.href} onClick={() => onDismiss?.()}>
+            {action.label}
+          </a>
+        ) : (
+          <button
+            type="button"
+            className="toast-action"
+            onClick={() => {
+              action.onClick?.();
+              onDismiss?.();
+            }}
+          >
+            {action.label}
+          </button>
+        ))}
       {onDismiss && (
         <button
           type="button"
