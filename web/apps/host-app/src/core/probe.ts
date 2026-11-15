@@ -36,7 +36,10 @@ export type ProbeProblem =
   | "no_answer"
   /** Something answers, but not with the document. */
   | "not_obop"
-  /** A 503. */
+  /**
+   * A 5xx: the server, or a proxy in front of it, answers with a fault. A proxy answers 502 or 504
+   * while the instance behind it restarts, so this is not "not an obop server".
+   */
   | "busy"
   /** The address forwards to one that is not encrypted, or to one the address rule refuses. */
   | "forward_cleartext";
@@ -102,7 +105,7 @@ export function classifyProbe(
     }
     return { kind: "forwarded", address: addressText(forwarded), origin: forwarded.origin };
   }
-  if (status === 503) return { kind: "refused", problem: "busy" };
+  if (status >= 500 && status <= 599) return { kind: "refused", problem: "busy" };
   if (status !== 200 || !/\bjson\b/i.test(contentType)) {
     return { kind: "refused", problem: "not_obop" };
   }

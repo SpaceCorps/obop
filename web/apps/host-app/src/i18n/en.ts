@@ -35,9 +35,9 @@ export const en = {
   "address.problem.cleartext_public":
     "This build speaks plain http only to this device or your local network. Use https:// for this address.",
   "address.probe.no_answer": "No answer from {host}. Check the address and your connection.",
-  "address.probe.not_obop":
-    "{host} answers, but not as an obop server. If obop runs under a path, for example /admin, add it.",
-  "address.probe.busy": "The server is busy. Try again in a moment.",
+  "address.probe.not_obop": "{host} answers, but not as an obop server. Check the address.",
+  "address.probe.busy":
+    "{host} answers with a server error. If it is your obop server, it may be starting or stopped: try again in a moment.",
   "address.probe.forward_cleartext":
     "{host} forwards to an address that is not encrypted. The app does not follow it.",
   "address.forwarded.title": "This address forwards to {origin}.",

@@ -82,7 +82,14 @@ describe("the sentence under the address field", () => {
       const text = shown(
         addressSentence({ kind: "probe", problem, host: "shop.example.com" }, PLAIN),
       );
-      if (problem !== "busy") expect(text, problem).toContain("shop.example.com");
+      expect(text, problem).toContain("shop.example.com");
+    }
+  });
+
+  test("no verdict of the probe hints at a path: the probe asks the root of the origin", () => {
+    for (const problem of PROBES) {
+      const text = shown(addressSentence({ kind: "probe", problem, host: "h" }, PLAIN));
+      expect(text, problem).not.toContain("/admin");
     }
   });
 

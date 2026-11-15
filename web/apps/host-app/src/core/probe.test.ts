@@ -54,8 +54,14 @@ describe("the probe", () => {
     });
   });
 
-  test("a 503 is a busy server", () => {
-    expect(classify({ status: 503, body: "" })).toEqual({ kind: "refused", problem: "busy" });
+  test("a 5xx is a busy server: a proxy answers 502 or 504 while the instance restarts", () => {
+    for (const status of [500, 502, 503, 504, 599]) {
+      expect(classify({ status, body: "" }), String(status)).toEqual({
+        kind: "refused",
+        problem: "busy",
+      });
+    }
+    expect(classify({ status: 600, body: "" })).toEqual({ kind: "refused", problem: "not_obop" });
   });
 
   test("anything that is not the document is not an obop server", () => {
@@ -64,7 +70,6 @@ describe("the probe", () => {
     expect(classify({ body: '{"status":"ok"}' })).toEqual(notObop);
     expect(classify({ status: 401, body: "" })).toEqual(notObop);
     expect(classify({ status: 404 })).toEqual(notObop);
-    expect(classify({ status: 500 })).toEqual(notObop);
     // The right text under another content type, and a page of a website.
     expect(classify({ contentType: "text/html" })).toEqual(notObop);
     expect(
